@@ -431,6 +431,54 @@ class ProtonMailAnalyzer:
             except:
                 pass
 
+    async def cleanup_cache(self, folder="INBOX"):
+        """Sync cache with IMAP server by removing deleted messages"""
+        try:
+            logging.info("Starting cache cleanup...")
+            self.connect()
+            self.imap.select(folder)
+            
+            # Get all cached message IDs
+            cached_ids = self.cache.get_cached_ids(folder)
+            logging.info(f"Found {len(cached_ids)} messages in cache")
+            
+            # Get all current IMAP message IDs
+            _, messages = self.imap.search(None, "ALL")
+            message_nums = messages[0].split()
+            current_ids = set()
+            
+            # Fetch Message-IDs from IMAP
+            for num in message_nums:
+                _, msg_data = self.imap.fetch(num, "(RFC822.HEADER)")
+                email_header = email.message_from_bytes(msg_data[0][1])
+                message_id = email_header['Message-ID']
+                if not message_id:
+                    message_id = hashlib.sha256(msg_data[0][1]).hexdigest()
+                current_ids.add(message_id)
+            
+            logging.info(f"Found {len(current_ids)} messages on IMAP server")
+            
+            # Find deleted messages
+            deleted_ids = cached_ids - current_ids
+            if deleted_ids:
+                logging.info(f"Found {len(deleted_ids)} deleted messages to remove from cache")
+                # Remove deleted messages from cache
+                for message_id in deleted_ids:
+                    self.cache.delete_email(message_id)
+                logging.info("Cache cleanup completed")
+            else:
+                logging.info("No deleted messages found in cache")
+                
+        except Exception as e:
+            logging.error(f"Error in cleanup_cache: {e}", exc_info=True)
+            raise
+        finally:
+            try:
+                self.imap.close()
+                self.imap.logout()
+            except:
+                pass
+
 class ProtonMailTUI(App):
     CSS = """
     Screen {
@@ -521,6 +569,12 @@ class ProtonMailTUI(App):
         color: $text;
         text-style: bold;
     }
+
+    #summary-table .selected {
+        background: $accent-darken-2;
+        color: $text;
+        text-style: bold;
+    }
     """
     
     BINDINGS = [
@@ -528,9 +582,11 @@ class ProtonMailTUI(App):
         Binding("d", "toggle_domain_mode", "Toggle Domain Mode", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("D", "delete_selected", "Delete Selected", show=True),
+        Binding("space", "toggle_selection", "Toggle Selection", show=True),
     ]
 
     show_domains = reactive(False)
+    selected_rows = set()  # Track selected rows
     
     class StatusUpdate(Message):
         """Status update message"""
@@ -616,6 +672,10 @@ class ProtonMailTUI(App):
                     group_by_domain=self.show_domains,
                     status_callback=self.update_status
                 )
+            
+            # Run cache cleanup before processing
+            self.update_status("Cleaning up cache...")
+            await self.analyzer.cleanup_cache()
             
             logging.info("Processing emails...")
             await self.analyzer.process_emails()
@@ -744,16 +804,63 @@ class ProtonMailTUI(App):
         """Refresh email data"""
         self.run_worker(self.load_data())
 
+    def action_toggle_selection(self) -> None:
+        """Toggle selection of current row"""
+        focused = self.focused
+        if not focused or not isinstance(focused, DataTable) or focused.id != "summary-table":
+            return
+
+        if focused.cursor_row is not None:
+            if focused.cursor_row in self.selected_rows:
+                self.selected_rows.remove(focused.cursor_row)
+                # Remove highlighting
+                row_data = focused.get_row_at(focused.cursor_row)
+                focused.update_cell_at((focused.cursor_row, 0), row_data[0])
+            else:
+                self.selected_rows.add(focused.cursor_row)
+                # Add highlighting
+                row_data = focused.get_row_at(focused.cursor_row)
+                focused.update_cell_at((focused.cursor_row, 0), f"[reverse]{row_data[0]}[/]")
+            
+            self.update_status(f"Selected {len(self.selected_rows)} groups")
+
     async def action_delete_selected(self) -> None:
-        """Delete selected group or message"""
+        """Delete selected groups or message"""
         focused = self.focused
         if not focused or not isinstance(focused, DataTable):
             return
 
         try:
             if focused.id == "summary-table":
-                # Delete entire group
-                if focused.cursor_row is not None:
+                if self.selected_rows:  # Handle multiple selections
+                    total = len(self.selected_rows)
+                    self.update_status(f"Deleting {total} selected groups...")
+                    
+                    # Convert to list and sort in reverse to avoid index shifting
+                    rows_to_delete = []
+                    for row_idx in sorted(list(self.selected_rows), reverse=True):
+                        row = focused.get_row_at(row_idx)
+                        if row:
+                            sender = row[0]
+                            logging.info(f"Queuing deletion of {sender}")
+                            rows_to_delete.append((row_idx, sender))
+                    
+                    # Delete each group
+                    for row_idx, sender in rows_to_delete:
+                        logging.info(f"Deleting {sender}")
+                        await self.analyzer.delete_sender_emails(sender)
+                    
+                    # Clear selections and update UI
+                    self.selected_rows.clear()
+                    
+                    # Refresh the entire summary table
+                    logging.info("Updating statistics and refreshing display")
+                    self.current_stats = self.analyzer.get_sender_statistics()
+                    self.update_summary_table()
+                    self.query_one("#details-table").clear()
+                    self.update_status(f"Deleted {total} groups")
+                
+                elif focused.cursor_row is not None:  # Single selection delete
                     row = focused.get_row_at(focused.cursor_row)
                     if row:
                         sender = row[0]
