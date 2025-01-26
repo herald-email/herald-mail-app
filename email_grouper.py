@@ -136,6 +136,19 @@ class EmailCache:
             logging.error(f"Error reading cache: {e}")
             raise
 
+    def delete_sender_emails(self, sender: str, folder: str):
+        """Delete all emails from a specific sender"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM emails WHERE sender = ? AND folder = ?",
+                (sender, folder)
+            )
+
+    def delete_email(self, message_id: str):
+        """Delete a specific email by message ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM emails WHERE message_id = ?", (message_id,))
+
 class EmailGroup(Static):
     """Widget to display email details"""
     def __init__(self, emails, *args, **kwargs):
@@ -304,9 +317,12 @@ class ProtonMailAnalyzer:
         stats = {}
         
         for sender, emails in self.emails_by_sender.items():
+            if not emails:  # Skip empty lists
+                continue
+                
             stats[sender] = {
                 'total_emails': len(emails),
-                'avg_size': sum(email['size'] for email in emails) / len(emails),
+                'avg_size': sum(email['size'] for email in emails) / max(len(emails), 1),  # Avoid division by zero
                 'with_attachments': sum(1 for email in emails if email['has_attachments']),
                 'first_email': min((email['date'] for email in emails if email['date']), default=None),
                 'last_email': max((email['date'] for email in emails if email['date']), default=None)
@@ -321,6 +337,72 @@ class ProtonMailAnalyzer:
         for sender, emails in self._raw_emails_by_sender.items():
             key = extract_domain(sender) if self.group_by_domain else sender
             self.emails_by_sender[key].extend(emails)
+
+    async def delete_sender_emails(self, sender: str, folder="INBOX"):
+        """Delete all emails from a sender in both IMAP and cache"""
+        try:
+            self.connect()
+            self.imap.select(folder)
+            
+            # Search for all emails from sender
+            _, messages = self.imap.search(None, f'FROM "{sender}"')
+            message_nums = messages[0].split()
+            
+            # Delete from IMAP
+            for num in message_nums:
+                self.imap.store(num, '+FLAGS', '\\Deleted')
+            self.imap.expunge()
+            
+            # Delete from cache
+            self.cache.delete_sender_emails(sender, folder)
+            
+            # Remove from memory
+            if sender in self.emails_by_sender:
+                del self.emails_by_sender[sender]
+                
+        finally:
+            try:
+                self.imap.close()
+                self.imap.logout()
+            except:
+                pass
+
+    async def delete_email(self, sender: str, email_data: dict, folder="INBOX"):
+        """Delete specific email in both IMAP and cache"""
+        try:
+            self.connect()
+            self.imap.select(folder)
+            
+            # Extract just the email address if in "Name <email>" format
+            if '<' in sender:
+                sender = sender.split('<')[1].split('>')[0]
+
+            # Use simpler search criteria - just FROM and DATE
+            if email_data['date']:
+                date_str = email_data['date'].strftime("%d-%b-%Y")
+                search_criteria = f'(FROM {sender} ON {date_str})'
+            else:
+                search_criteria = f'(FROM {sender})'
+            
+            _, messages = self.imap.search(None, search_criteria)
+            message_nums = messages[0].split()
+            
+            if message_nums:
+                # Delete first matching email
+                self.imap.store(message_nums[0], '+FLAGS', '\\Deleted')
+                self.imap.expunge()
+            
+            # Remove from memory
+            emails = self.emails_by_sender[sender]
+            if email_data in emails:
+                emails.remove(email_data)
+                
+        finally:
+            try:
+                self.imap.close()
+                self.imap.logout()
+            except:
+                pass
 
 class ProtonMailTUI(App):
     CSS = """
@@ -364,6 +446,12 @@ class ProtonMailTUI(App):
         height: 100%;
         border: solid $primary;
         display: block;
+        overflow: scroll;  /* Change to scroll */
+        min-width: 50;
+        scrollbar-size: 1 2;  /* Horizontal scrollbar more visible */
+        scrollbar-gutter: stable;
+        overflow-y: scroll;
+        overflow-x: scroll;
     }
 
     #summary-table > .datatable--cursor {
@@ -382,7 +470,13 @@ class ProtonMailTUI(App):
         height: 100%;
         border: solid $primary;
         display: block;
-        margin-left: 1;  /* Add some spacing between tables */
+        margin-left: 1;
+        overflow: scroll;  /* Change to scroll */
+        min-width: 50;
+        scrollbar-size: 1 2;  /* Horizontal scrollbar more visible */
+        scrollbar-gutter: stable;
+        overflow-y: scroll;
+        overflow-x: scroll;
     }
 
     #details-table > .datatable--header {
@@ -395,6 +489,7 @@ class ProtonMailTUI(App):
         Binding("q", "quit", "Quit", show=True),
         Binding("d", "toggle_domain_mode", "Toggle Domain Mode", show=True),
         Binding("r", "refresh", "Refresh", show=True),
+        Binding("D", "delete_selected", "Delete Selected", show=True),
     ]
 
     show_domains = reactive(False)
@@ -609,6 +704,66 @@ class ProtonMailTUI(App):
     def action_refresh(self) -> None:
         """Refresh email data"""
         self.run_worker(self.load_data())
+
+    async def action_delete_selected(self) -> None:
+        """Delete selected group or message"""
+        focused = self.focused
+        if not focused or not isinstance(focused, DataTable):
+            return
+
+        try:
+            if focused.id == "summary-table":
+                # Delete entire group
+                if focused.cursor_row is not None:
+                    row = focused.get_row_at(focused.cursor_row)
+                    if row:
+                        sender = row[0]
+                        self.update_status(f"Deleting all emails from {sender}...")
+                        await self.analyzer.delete_sender_emails(sender)
+                        self.current_stats = self.analyzer.get_sender_statistics()
+                        self.update_summary_table()
+                        self.query_one("#details-table").clear()
+                        self.update_status(f"Deleted all emails from {sender}")
+
+            elif focused.id == "details-table":
+                if focused.cursor_row is not None:
+                    summary_table = self.query_one("#summary-table")
+                    row = summary_table.get_row_at(summary_table.cursor_row)
+                    if row:
+                        sender = row[0]
+                        emails = self.analyzer.emails_by_sender[sender]
+                        if focused.cursor_row < len(emails):
+                            email_data = emails[focused.cursor_row]
+                            self.update_status(f"Deleting email...")
+                            await self.analyzer.delete_email(sender, email_data)
+                            self.current_stats = self.analyzer.get_sender_statistics()
+                            self.update_summary_table()
+                            
+                            # Refresh details view directly instead of using event
+                            details_table = self.query_one("#details-table")
+                            details_table.clear()
+                            
+                            # Get updated emails list
+                            updated_emails = self.analyzer.emails_by_sender[sender]
+                            sorted_emails = sorted(
+                                updated_emails,
+                                key=lambda x: x['date'] if x['date'] else datetime.min,
+                                reverse=True
+                            )
+                            
+                            for email in sorted_emails:
+                                details_table.add_row(
+                                    email['date'].strftime('%Y-%m-%d %H:%M') if email['date'] else 'N/A',
+                                    email['subject'] or "No Subject",
+                                    f"{email['size'] / 1024:.1f} KB",
+                                    "Yes" if email['has_attachments'] else "No"
+                                )
+                            
+                            self.update_status(f"Deleted email from {sender}")
+
+        except Exception as e:
+            logging.error(f"Error deleting: {e}", exc_info=True)
+            self.update_status(f"Error deleting: {str(e)}")
 
 def check_file_permissions(config_path):
     """Check if the config file has secure permissions"""
