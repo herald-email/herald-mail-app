@@ -345,7 +345,7 @@ class ProtonMailTUI(App):
 
     #status-message {
         dock: top;
-        height: 3;
+        height: 4;
         content-align: center middle;
         background: $boost;
         color: $text;
@@ -353,16 +353,41 @@ class ProtonMailTUI(App):
     }
 
     #main-container {
-        background: $panel;
-        height: 1fr;
+        layout: grid;
+        grid-size: 2;  /* Two columns */
+        grid-columns: 3fr 2fr;  /* Left panel wider than right */
         padding: 1;
     }
 
-    DataTable {
+    #summary-table {
         width: 100%;
-        height: 1fr;
+        height: 100%;
         border: solid $primary;
         display: block;
+    }
+
+    #summary-table > .datatable--cursor {
+        background: $accent;
+        color: $text;
+    }
+
+    #summary-table:focus > .datatable--cursor {
+        background: $accent;
+        color: $text;
+        text-style: bold;
+    }
+
+    #details-table {
+        width: 100%;
+        height: 100%;
+        border: solid $primary;
+        display: block;
+        margin-left: 1;  /* Add some spacing between tables */
+    }
+
+    #details-table > .datatable--header {
+        background: $primary;
+        color: $text;
     }
     """
     
@@ -390,25 +415,41 @@ class ProtonMailTUI(App):
         yield Header("ProtonMail Analyzer")
         yield Static("Initializing...", id="status-message")
         
-        # Main container for the data
+        # Main container with two columns
         with Container(id="main-container"):
-            table = DataTable(id="summary-table")
+            # Summary table (left side)
+            table = DataTable(id="summary-table", cursor_type="row")
+            table.add_column("Domain/Sender", width=40)
             table.add_columns(
-                "Domain/Sender",
                 "Total Emails",
                 "Avg Size (KB)",
                 "With Attachments",
                 "Date Range"
             )
+            table.can_focus = True
             yield table
+            
+            # Details table (right side)
+            details = DataTable(id="details-table")
+            details.add_column("Date", width=20)  # Fixed width for date
+            details.add_column("Subject", width=40)  # Limited width for subject
+            details.add_columns(
+                "Size",
+                "Attachments"
+            )
+            yield details
             
         yield Footer()
     
-    async def on_mount(self) -> None:
+    def on_mount(self) -> None:
         """Load initial data when app starts"""
         self.title = "ProtonMail Analyzer"
         setup_logging()
         logging.info("App mounted")
+        
+        # Make summary table focusable after mount
+        table = self.query_one("#summary-table")
+        table.focus()
         
         # Update status synchronously first
         self.update_status("Starting up...")
@@ -513,23 +554,46 @@ class ProtonMailTUI(App):
     
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the summary table"""
-        table = event.data_table
-        sender = table.get_cell_at((event.row_key, 0))
-        
-        # Get emails for this sender
-        emails = self.analyzer.emails_by_sender[sender]
-        
-        # Update details table
-        details_table = self.query_one("#email-details DataTable")
-        details_table.clear()
-        
-        for email in sorted(emails, key=lambda x: x['date'] if x['date'] else datetime.min, reverse=True):
-            details_table.add_row(
-                email['subject'],
-                email['date'].strftime('%Y-%m-%d %H:%M') if email['date'] else 'N/A',
-                f"{email['size'] / 1024:.1f} KB",
-                "Yes" if email['has_attachments'] else "No"
+        if event.data_table.id != "summary-table":
+            return
+
+        try:
+            # Convert RowKey to integer index
+            sender = event.data_table.get_row(event.row_key)[0]
+            logging.info(f"Selected sender: {sender}")
+            
+            # Get emails for this sender
+            emails = self.analyzer.emails_by_sender[sender]
+            logging.info(f"Found {len(emails)} emails for sender")
+            
+            # Update details table
+            details_table = self.query_one("#details-table")
+            details_table.clear()
+            
+            # Sort emails by date
+            sorted_emails = sorted(
+                emails, 
+                key=lambda x: x['date'] if x['date'] else datetime.min, 
+                reverse=True
             )
+            
+            for email in sorted_emails:
+                details_table.add_row(
+                    email['date'].strftime('%Y-%m-%d %H:%M') if email['date'] else 'N/A',  # Date first
+                    email['subject'] or "No Subject",
+                    f"{email['size'] / 1024:.1f} KB",
+                    "Yes" if email['has_attachments'] else "No"
+                )
+            
+            details_table.refresh()
+            self.refresh(layout=True)
+            
+            self.update_status(f"Showing {len(emails)} emails from {sender}")
+            logging.info(f"Updated details table with {len(sorted_emails)} rows")
+            
+        except Exception as e:
+            logging.error(f"Error showing email details: {e}", exc_info=True)
+            self.update_status(f"Error showing details: {str(e)}")
     
     def action_toggle_domain_mode(self) -> None:
         """Toggle between domain and email address mode"""
