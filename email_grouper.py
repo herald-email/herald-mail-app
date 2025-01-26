@@ -334,38 +334,65 @@ class ProtonMailAnalyzer:
         """Regroup emails based on current grouping mode"""
         self.emails_by_sender.clear()
         
+        # Skip empty senders
         for sender, emails in self._raw_emails_by_sender.items():
-            key = extract_domain(sender) if self.group_by_domain else sender
-            self.emails_by_sender[key].extend(emails)
+            if emails:  # Only add non-empty lists
+                key = extract_domain(sender) if self.group_by_domain else sender
+                self.emails_by_sender[key].extend(emails)
 
     async def delete_sender_emails(self, sender: str, folder="INBOX"):
         """Delete all emails from a sender in both IMAP and cache"""
         try:
+            logging.info(f"Starting deletion of all emails from {sender}")
             self.connect()
             self.imap.select(folder)
             
-            # Search for all emails from sender
-            _, messages = self.imap.search(None, f'FROM "{sender}"')
+            # Extract email address if in "Name <email>" format
+            original_sender = sender
+            if '<' in sender:
+                sender = sender.split('<')[1].split('>')[0]
+                logging.info(f"Extracted email address: {sender} from {original_sender}")
+
+            # Use simpler search criteria
+            search_criteria = f'FROM {sender}'
+            logging.info(f"Searching with criteria: {search_criteria}")
+            _, messages = self.imap.search(None, search_criteria)
             message_nums = messages[0].split()
             
-            # Delete from IMAP
-            for num in message_nums:
-                self.imap.store(num, '+FLAGS', '\\Deleted')
-            self.imap.expunge()
+            logging.info(f"Found {len(message_nums)} messages to delete")
+            if message_nums:
+                # Delete all matching emails
+                for num in message_nums:
+                    logging.info(f"Deleting message number {num}")
+                    self.imap.store(num, '+FLAGS', '\\Deleted')
+                self.imap.expunge()
+                logging.info("Expunged deleted messages")
             
             # Delete from cache
-            self.cache.delete_sender_emails(sender, folder)
+            logging.info("Deleting from cache")
+            self.cache.delete_sender_emails(original_sender, folder)
             
-            # Remove from memory
-            if sender in self.emails_by_sender:
-                del self.emails_by_sender[sender]
+            # Remove from both raw and grouped data
+            logging.info("Removing from memory")
+            if original_sender in self._raw_emails_by_sender:
+                del self._raw_emails_by_sender[original_sender]
+                logging.info("Removed from raw data")
+            if original_sender in self.emails_by_sender:
+                del self.emails_by_sender[original_sender]
+                logging.info("Removed from grouped data")
+            
+            logging.info(f"Successfully completed deletion for {original_sender}")
                 
+        except Exception as e:
+            logging.error(f"Error in delete_sender_emails: {e}", exc_info=True)
+            raise
         finally:
             try:
                 self.imap.close()
                 self.imap.logout()
-            except:
-                pass
+                logging.info("Closed IMAP connection")
+            except Exception as e:
+                logging.error(f"Error closing IMAP connection: {e}")
 
     async def delete_email(self, sender: str, email_data: dict, folder="INBOX"):
         """Delete specific email in both IMAP and cache"""
@@ -483,6 +510,17 @@ class ProtonMailTUI(App):
         background: $primary;
         color: $text;
     }
+
+    #details-table > .datatable--cursor {
+        background: $accent;
+        color: $text;
+    }
+
+    #details-table:focus > .datatable--cursor {
+        background: $accent;
+        color: $text;
+        text-style: bold;
+    }
     """
     
     BINDINGS = [
@@ -525,13 +563,14 @@ class ProtonMailTUI(App):
             yield table
             
             # Details table (right side)
-            details = DataTable(id="details-table")
-            details.add_column("Date", width=20)  # Fixed width for date
-            details.add_column("Subject", width=40)  # Limited width for subject
+            details = DataTable(id="details-table", cursor_type="row")
+            details.add_column("Date", width=20)
+            details.add_column("Subject", width=40)
             details.add_columns(
                 "Size",
                 "Attachments"
             )
+            details.can_focus = True
             yield details
             
         yield Footer()
