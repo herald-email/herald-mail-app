@@ -811,16 +811,22 @@ class ProtonMailTUI(App):
             return
 
         if focused.cursor_row is not None:
+            row_data = focused.get_row_at(focused.cursor_row)
+            if not row_data:
+                return
+
+            sender = row_data[0]
+            # Remove any existing Rich markup
+            clean_sender = sender.replace("[reverse]", "").replace("[/]", "")
+            
             if focused.cursor_row in self.selected_rows:
+                # Deselect: Remove from set and remove highlighting
                 self.selected_rows.remove(focused.cursor_row)
-                # Remove highlighting
-                row_data = focused.get_row_at(focused.cursor_row)
-                focused.update_cell_at((focused.cursor_row, 0), row_data[0])
+                focused.update_cell_at((focused.cursor_row, 0), clean_sender)
             else:
+                # Select: Add to set and add highlighting
                 self.selected_rows.add(focused.cursor_row)
-                # Add highlighting
-                row_data = focused.get_row_at(focused.cursor_row)
-                focused.update_cell_at((focused.cursor_row, 0), f"[reverse]{row_data[0]}[/]")
+                focused.update_cell_at((focused.cursor_row, 0), f"[reverse]{clean_sender}[/]")
             
             self.update_status(f"Selected {len(self.selected_rows)} groups")
 
@@ -849,15 +855,15 @@ class ProtonMailTUI(App):
                     for row_idx, sender in rows_to_delete:
                         logging.info(f"Deleting {sender}")
                         await self.analyzer.delete_sender_emails(sender)
+                        # Remove row from UI immediately
+                        focused.remove_row(row_idx)
                     
-                    # Clear selections and update UI
+                    # Clear selections
                     self.selected_rows.clear()
                     
-                    # Refresh the entire summary table
-                    logging.info("Updating statistics and refreshing display")
-                    self.current_stats = self.analyzer.get_sender_statistics()
-                    self.update_summary_table()
-                    self.query_one("#details-table").clear()
+                    # Force a complete reload of data
+                    logging.info("Forcing complete data reload")
+                    await self.load_data()
                     self.update_status(f"Deleted {total} groups")
                 
                 elif focused.cursor_row is not None:  # Single selection delete
