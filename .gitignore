@@ -1,7 +1,41 @@
-email_cache.db
-*.log
-proton.yaml
+# Python files
 .venv
-.DS_Store
 __pycache__/
 *.pyc
+
+# Go binaries
+bin/
+mail-processor
+*.exe
+
+# Log files
+*.log
+mail_processor_*.log
+protonmail_analyzer_*.log
+
+# Database files
+email_cache.db
+*.db
+
+# Configuration (contains credentials)
+proton.yaml
+config.yaml
+*.yaml
+
+# Go build cache
+.cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
