@@ -131,9 +131,14 @@ func (m *Model) updateSummaryTable() {
 		return sortedStats[i].stats.TotalEmails > sortedStats[j].stats.TotalEmails
 	})
 
-	// Build table rows
+	// Build table rows and mapping
 	var rows []table.Row
+	m.rowToSender = make(map[int]string) // Clear and rebuild mapping
 	for i, item := range sortedStats {
+		// Store original sender for deletion
+		m.rowToSender[i] = item.sender
+
+		// Sanitize for display
 		sender := sanitizeText(item.sender)
 		stats := item.stats
 
@@ -173,17 +178,15 @@ func (m *Model) updateSummaryTable() {
 
 // updateDetailsTable updates the details table for the selected sender
 func (m *Model) updateDetailsTable() {
-	if m.summaryTable.Cursor() >= len(m.summaryTable.Rows()) {
+	// Get original sender from row mapping (before sanitization)
+	cursor := m.summaryTable.Cursor()
+	sender, ok := m.rowToSender[cursor]
+	if !ok || sender == "" {
+		logger.Debug("No sender mapping found for cursor %d", cursor)
+		m.detailsTable.SetRows([]table.Row{})
 		return
 	}
 
-	selectedRow := m.summaryTable.SelectedRow()
-	if len(selectedRow) < 2 {
-		return
-	}
-
-	// Sender is in column 1 (column 0 is the checkmark)
-	sender := selectedRow[1]
 	m.selectedSender = sender
 
 	// Get emails for this sender
@@ -270,32 +273,52 @@ func (m *Model) toggleSelection() {
 // deleteSelected deletes the selected senders or current sender
 func (m *Model) deleteSelected() tea.Cmd {
 	return func() tea.Msg {
+		var deletedCount int
+
 		if len(m.selectedRows) > 0 {
 			// Delete multiple selected senders
-			rows := m.summaryTable.Rows()
 			for cursor := range m.selectedRows {
-				if cursor < len(rows) && len(rows[cursor]) > 1 {
-					// Sender is in column 1 (column 0 is the checkmark)
-					sender := rows[cursor][1]
-					if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
-						// Log error but continue
-						continue
-					}
+				// Get original sender from mapping (before sanitization)
+				sender, ok := m.rowToSender[cursor]
+				if !ok || sender == "" {
+					logger.Warn("No sender mapping found for row %d", cursor)
+					continue
 				}
+
+				logger.Info("Deleting emails from: %s", sender)
+				if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
+					logger.Error("Failed to delete emails from %s: %v", sender, err)
+					continue
+				}
+				deletedCount++
 			}
 			m.selectedRows = make(map[int]bool)
 		} else {
-			// Delete current sender
-			if m.summaryTable.Cursor() < len(m.summaryTable.Rows()) {
-				selectedRow := m.summaryTable.SelectedRow()
-				if len(selectedRow) > 1 {
-					// Sender is in column 1 (column 0 is the checkmark)
-					sender := selectedRow[1]
-					if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
-						return LoadCompleteMsg{Error: err}
-					}
-				}
+			// Delete current sender using row mapping
+			cursor := m.summaryTable.Cursor()
+			logger.Info("Deletion requested: cursor=%d, total mappings=%d", cursor, len(m.rowToSender))
+
+			// Debug: print all mappings
+			for i, s := range m.rowToSender {
+				logger.Debug("Row %d -> Sender '%s'", i, s)
 			}
+
+			sender, ok := m.rowToSender[cursor]
+			if !ok || sender == "" {
+				logger.Warn("No sender selected for deletion at cursor %d", cursor)
+				return LoadCompleteMsg{Error: fmt.Errorf("no sender selected")}
+			}
+
+			logger.Info("Deleting emails from: '%s' (length=%d bytes)", sender, len(sender))
+			if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
+				logger.Error("Failed to delete emails: %v", err)
+				return LoadCompleteMsg{Error: err}
+			}
+			deletedCount = 1
+		}
+
+		if deletedCount > 0 {
+			logger.Info("Deleted emails from %d sender(s), reloading...", deletedCount)
 		}
 
 		// Reload data

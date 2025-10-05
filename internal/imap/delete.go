@@ -10,24 +10,76 @@ import (
 
 // DeleteSenderEmails deletes all emails from a sender in both IMAP and cache
 func (c *Client) DeleteSenderEmails(sender, folder string) error {
-	logger.Info("Starting deletion of all emails from %s", sender)
+	logger.Info("Starting deletion of all emails from '%s' (len=%d) in folder %s", sender, len(sender), folder)
+
+	// Ensure we have a valid connection
+	if c.client == nil {
+		logger.Info("No active IMAP connection, reconnecting...")
+		if err := c.Connect(); err != nil {
+			return fmt.Errorf("failed to reconnect to IMAP: %w", err)
+		}
+	}
 
 	// Select folder
-	_, err := c.client.Select(folder, false)
+	mbox, err := c.client.Select(folder, false)
 	if err != nil {
-		return fmt.Errorf("failed to select folder %s: %w", folder, err)
+		// Try reconnecting if select fails
+		logger.Warn("Failed to select folder, attempting to reconnect...")
+		if err := c.Connect(); err != nil {
+			return fmt.Errorf("failed to reconnect to IMAP: %w", err)
+		}
+		mbox, err = c.client.Select(folder, false)
+		if err != nil {
+			return fmt.Errorf("failed to select folder %s after reconnect: %w", folder, err)
+		}
 	}
 
-	// Search for emails from sender
-	criteria := imap.NewSearchCriteria()
-	criteria.Header.Add("From", sender)
+	logger.Info("Folder '%s' has %d total messages", folder, mbox.Messages)
 
-	seqNums, err := c.client.Search(criteria)
-	if err != nil {
-		return fmt.Errorf("failed to search for emails from %s: %w", sender, err)
+	// Get all messages and filter by sender manually
+	// This is more reliable than IMAP search which can be inconsistent
+	var seqNums []uint32
+
+	if mbox.Messages > 0 {
+		seqset := new(imap.SeqSet)
+		seqset.AddRange(1, mbox.Messages)
+
+		messages := make(chan *imap.Message, 10)
+		done := make(chan error, 1)
+
+		go func() {
+			done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
+		}()
+
+		matchCount := 0
+		for msg := range messages {
+			if msg.Envelope != nil && len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+				addr := msg.Envelope.From[0]
+				// Build sender the same way as in processMessage
+				fromAddr := ""
+				if addr.MailboxName != "" && addr.HostName != "" {
+					fromAddr = addr.MailboxName + "@" + addr.HostName
+				}
+
+				// Log first 5 messages for debugging
+				if matchCount < 5 {
+					logger.Debug("Message %d: from='%s' (len=%d) vs target='%s' (len=%d) match=%v",
+						msg.SeqNum, fromAddr, len(fromAddr), sender, len(sender), fromAddr == sender)
+				}
+
+				if fromAddr == sender {
+					seqNums = append(seqNums, msg.SeqNum)
+					matchCount++
+				}
+			}
+		}
+
+		if err := <-done; err != nil {
+			return fmt.Errorf("failed to fetch messages: %w", err)
+		}
 	}
 
-	logger.Info("Found %d messages from %s to delete", len(seqNums), sender)
+	logger.Info("Found %d messages from '%s' to delete", len(seqNums), sender)
 
 	if len(seqNums) > 0 {
 		// Mark messages as deleted

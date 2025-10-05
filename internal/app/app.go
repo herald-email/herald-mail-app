@@ -35,6 +35,7 @@ type Model struct {
 
 	// UI State
 	loading        bool
+	deleting       bool
 	loadingSpinner int
 	startTime      time.Time
 	progressInfo   models.ProgressInfo
@@ -54,6 +55,7 @@ type Model struct {
 	groupByDomain  bool
 	selectedSender string
 	selectedRows   map[int]bool
+	rowToSender    map[int]string // Maps row index to original sender (before sanitization)
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -178,6 +180,7 @@ func New(cfg *config.Config) *Model {
 		loading:            true,
 		startTime:          time.Now(),
 		selectedRows:       make(map[int]bool),
+		rowToSender:        make(map[int]string),
 		summaryTable:       summaryTable,
 		detailsTable:       detailsTable,
 		logViewer:          logViewer,
@@ -228,6 +231,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LoadCompleteMsg:
 		m.loading = false
+		m.deleting = false
 		if msg.Error != nil {
 			logger.Error("Error loading data: %v", msg.Error)
 			return m, tea.Quit
@@ -316,7 +320,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "D":
-		if !m.loading {
+		if !m.loading && !m.deleting {
+			m.deleting = true
 			return m, m.deleteSelected()
 		}
 		return m, nil
@@ -436,7 +441,11 @@ func (m *Model) renderMainView() string {
 	for _, stats := range m.stats {
 		totalEmails += stats.TotalEmails
 	}
-	status := fmt.Sprintf("Ready | %d senders | %d emails", len(m.stats), totalEmails)
+	status := "Ready"
+	if m.deleting {
+		status = "Deleting..."
+	}
+	status += fmt.Sprintf(" | %d senders | %d emails", len(m.stats), totalEmails)
 	if len(m.selectedRows) > 0 {
 		status += fmt.Sprintf(" | %d selected", len(m.selectedRows))
 	}
