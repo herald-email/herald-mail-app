@@ -62,24 +62,40 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 		}
 	}
 
-	logger.Info("Found %d messages from '%s' to delete", len(seqNums), sender)
+	logger.Info("Found %d messages from '%s' to move to Trash", len(seqNums), sender)
 
 	if len(seqNums) > 0 {
-		// Mark messages as deleted
 		seqset := new(imap.SeqSet)
 		seqset.AddNum(seqNums...)
 
+		// Try to copy to Trash folder
+		trashFolders := []string{"Trash", "Deleted Items", "[Gmail]/Trash", "INBOX.Trash"}
+		moved := false
+
+		for _, trashFolder := range trashFolders {
+			if err := c.client.Copy(seqset, trashFolder); err == nil {
+				logger.Info("Copied %d messages to %s", len(seqNums), trashFolder)
+				moved = true
+				break
+			}
+		}
+
+		if !moved {
+			logger.Warn("Could not copy to any Trash folder, marking as deleted instead")
+		}
+
+		// Mark messages as deleted (remove from source folder)
 		store := imap.FormatFlagsOp(imap.AddFlags, true)
 		if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
 			return fmt.Errorf("failed to mark messages as deleted: %w", err)
 		}
 
-		// Expunge to permanently delete
+		// Expunge to remove from source folder
 		if err := c.client.Expunge(nil); err != nil {
-			return fmt.Errorf("failed to expunge deleted messages: %w", err)
+			return fmt.Errorf("failed to expunge: %w", err)
 		}
 
-		logger.Info("Successfully deleted %d messages from IMAP", len(seqNums))
+		logger.Info("Successfully moved %d messages from %s to Trash", len(seqNums), sender)
 	}
 
 	// Delete from cache
@@ -91,11 +107,11 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 	return nil
 }
 
-// DeleteEmail deletes a specific email by MessageID
+// DeleteEmail moves a specific email to Trash by MessageID
 func (c *Client) DeleteEmail(messageID string, folder string) error {
-	logger.Info("Deleting message with ID: %s", messageID)
+	logger.Info("Moving message to Trash: %s", messageID)
 
-	// Select folder (connection is kept open, no need to reconnect)
+	// Select source folder (connection is kept open, no need to reconnect)
 	_, err := c.client.Select(folder, false)
 	if err != nil {
 		return fmt.Errorf("failed to select folder %s: %w", folder, err)
@@ -113,21 +129,43 @@ func (c *Client) DeleteEmail(messageID string, folder string) error {
 	logger.Info("Found %d messages with Message-ID %s", len(seqNums), messageID)
 
 	if len(seqNums) > 0 {
-		// Delete from IMAP
+		// Move to Trash
 		seqset := new(imap.SeqSet)
 		seqset.AddNum(seqNums[0])
 
-		store := imap.FormatFlagsOp(imap.AddFlags, true)
-		if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
-			return fmt.Errorf("failed to mark message as deleted: %w", err)
+		// Copy to Trash folder (try common Trash folder names)
+		trashFolders := []string{"Trash", "Deleted Items", "[Gmail]/Trash", "INBOX.Trash"}
+		moved := false
+
+		for _, trashFolder := range trashFolders {
+			if err := c.client.Copy(seqset, trashFolder); err == nil {
+				logger.Info("Copied message to %s", trashFolder)
+				moved = true
+				break
+			}
 		}
 
-		// Expunge to permanently delete
+		if !moved {
+			logger.Warn("Could not copy to any Trash folder, marking as deleted instead")
+			// Fallback: mark as deleted
+			store := imap.FormatFlagsOp(imap.AddFlags, true)
+			if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+				return fmt.Errorf("failed to mark message as deleted: %w", err)
+			}
+		} else {
+			// Mark original as deleted after successful copy
+			store := imap.FormatFlagsOp(imap.AddFlags, true)
+			if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+				logger.Warn("Failed to mark original as deleted: %v", err)
+			}
+		}
+
+		// Expunge to remove from source folder
 		if err := c.client.Expunge(nil); err != nil {
-			return fmt.Errorf("failed to expunge deleted message: %w", err)
+			return fmt.Errorf("failed to expunge: %w", err)
 		}
 
-		logger.Info("Successfully deleted message with ID: %s from IMAP", messageID)
+		logger.Info("Successfully moved message with ID: %s to Trash", messageID)
 	} else {
 		logger.Warn("Message not found in IMAP with ID: %s (likely already deleted)", messageID)
 	}
