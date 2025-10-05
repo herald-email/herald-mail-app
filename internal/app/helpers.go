@@ -3,10 +3,12 @@ package app
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -22,46 +24,84 @@ func (m *Model) tickSpinner() tea.Cmd {
 	})
 }
 
+// listenForProgress listens for progress updates from the IMAP client
+func (m *Model) listenForProgress() tea.Cmd {
+	return func() tea.Msg {
+		info := <-m.progressCh
+		return LoadingMsg{Info: info}
+	}
+}
+
 // startLoading starts the data loading process
 func (m *Model) startLoading() tea.Cmd {
 	return func() tea.Msg {
-		logger.Info("Starting data loading process...")
-		
-		// Connect to IMAP
-		logger.Info("Connecting to IMAP server...")
-		if err := m.imapClient.Connect(); err != nil {
-			logger.Error("Failed to connect to IMAP: %v", err)
-			return LoadCompleteMsg{Error: fmt.Errorf("failed to connect: %w", err)}
-		}
-		defer func() {
-			logger.Debug("Closing IMAP connection...")
-			m.imapClient.Close()
+		go func() {
+			logger.Info("Starting data loading process...")
+			
+			// Send initial progress
+			logger.Debug("Sending connecting progress...")
+			m.progressCh <- models.ProgressInfo{
+				Phase:   "connecting", 
+				Message: "Connecting to IMAP server...",
+			}
+			logger.Debug("Connecting progress sent")
+			time.Sleep(200 * time.Millisecond) // Allow UI to catch up
+			
+			// Connect to IMAP
+			logger.Info("Connecting to IMAP server...")
+			if err := m.imapClient.Connect(); err != nil {
+				logger.Error("Failed to connect to IMAP: %v", err)
+				// Send error through progress channel instead
+				return
+			}
+			defer func() {
+				logger.Debug("Closing IMAP connection...")
+				m.imapClient.Close()
+			}()
+
+			// Process emails first (this will send its own progress updates)
+			logger.Info("Processing emails...")
+			logger.Debug("Starting ProcessEmails...")
+			if err := m.imapClient.ProcessEmails("INBOX"); err != nil {
+				logger.Error("Failed to process emails: %v", err)
+				return
+			}
+			logger.Debug("ProcessEmails completed")
+
+			// Clean up cache after processing (remove emails that no longer exist on server)
+			logger.Info("Cleaning up stale cache entries...")
+			m.progressCh <- models.ProgressInfo{
+				Phase:   "cleanup",
+				Message: "Cleaning up cache...",
+			}
+			if err := m.imapClient.CleanupCache("INBOX"); err != nil {
+				logger.Warn("Cache cleanup failed (non-critical): %v", err)
+				// Don't return - this is not critical
+			}
+			logger.Debug("Cache cleanup completed")
+
+			// Get statistics
+			m.progressCh <- models.ProgressInfo{
+				Phase:   "finalizing",
+				Message: "Generating statistics...",
+			}
+			logger.Info("Generating statistics...")
+			stats, err := m.imapClient.GetSenderStatistics("INBOX")
+			if err != nil {
+				logger.Error("Failed to get statistics: %v", err)
+				return
+			}
+
+			// Send completion through progress channel
+			m.progressCh <- models.ProgressInfo{
+				Phase:   "complete",
+				Message: fmt.Sprintf("Found %d senders", len(stats)),
+			}
+			logger.Info("Data loading completed successfully. Found %d senders", len(stats))
 		}()
-
-		// Clean up cache first
-		logger.Info("Cleaning up cache...")
-		if err := m.imapClient.CleanupCache("INBOX"); err != nil {
-			logger.Error("Failed to cleanup cache: %v", err)
-			return LoadCompleteMsg{Error: fmt.Errorf("failed to cleanup cache: %w", err)}
-		}
-
-		// Process emails
-		logger.Info("Processing emails...")
-		if err := m.imapClient.ProcessEmails("INBOX"); err != nil {
-			logger.Error("Failed to process emails: %v", err)
-			return LoadCompleteMsg{Error: fmt.Errorf("failed to process emails: %w", err)}
-		}
-
-		// Get statistics
-		logger.Info("Generating statistics...")
-		stats, err := m.imapClient.GetSenderStatistics("INBOX")
-		if err != nil {
-			logger.Error("Failed to get statistics: %v", err)
-			return LoadCompleteMsg{Error: fmt.Errorf("failed to get statistics: %w", err)}
-		}
-
-		logger.Info("Data loading completed successfully. Found %d senders", len(stats))
-		return LoadCompleteMsg{Stats: stats}
+		
+		// Return immediately - progress will come through the channel
+		return nil
 	}
 }
 
@@ -267,4 +307,43 @@ func getPhaseIcon(phase string) string {
 	default:
 		return "⚙️"
 	}
+}
+
+// calculateTextWidth estimates the visual width of text with emojis
+func calculateTextWidth(text string) int {
+	width := 0
+	for _, r := range text {
+		// Emojis and wide characters typically take 2 spaces
+		if r > 127 {
+			width += 2
+		} else {
+			width += 1
+		}
+	}
+	return width
+}
+
+// renderProgressBar creates a visual progress bar
+func (m *Model) renderProgressBar(percent int, width int) string {
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+
+	filled := (percent * width) / 100
+	empty := width - filled
+
+	// Create the bar with filled and empty segments
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
+	
+	// Style the progress bar
+	progressBarStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")).  // Green for filled
+		Background(lipgloss.Color("235")). // Dark background
+		Padding(0, 1).
+		Margin(0, 2)
+
+	return progressBarStyle.Render(fmt.Sprintf("[%s] %d%%", bar, percent))
 }

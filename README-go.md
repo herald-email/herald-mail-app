@@ -80,12 +80,17 @@ make run
 The application automatically creates detailed log files named `mail_processor_YYYYMMDD_HHMMSS.log`. 
 
 **Log Levels:**
-- **Normal**: Logs to file only
-- **Debug/Verbose**: Logs to both console and file for real-time debugging
+- **Normal**: Basic logging to file only
+- **Debug/Verbose**: Detailed logging to file (keeps TUI clean)
 
 **To enable debug logging:**
 ```bash
 ./bin/mail-processor -debug
+```
+
+**Note**: All logging goes to file only to keep the TUI interface clean. Monitor the log file in real-time with:
+```bash
+tail -f mail_processor_*.log
 ```
 
 **Log file contents include:**

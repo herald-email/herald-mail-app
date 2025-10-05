@@ -2,7 +2,6 @@ package logger
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
@@ -14,6 +13,7 @@ var (
 	debugLogger *log.Logger
 	logFile     *os.File
 	debugMode   bool
+	logCallback func(level, message string)
 )
 
 // Init initializes the logging system
@@ -30,18 +30,8 @@ func Init(debug bool) error {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	// Create loggers with different outputs
-	var writers []io.Writer
-	
-	if debug {
-		// In debug mode, write to both file and stdout
-		writers = []io.Writer{logFile, os.Stdout}
-	} else {
-		// Normal mode, write only to file
-		writers = []io.Writer{logFile}
-	}
-	
-	multiWriter := io.MultiWriter(writers...)
+	// Always write only to file (no console output to keep TUI clean)
+	multiWriter := logFile
 
 	// Create different loggers for different levels
 	infoLogger = log.New(multiWriter, "INFO  ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -51,7 +41,7 @@ func Init(debug bool) error {
 	Info("=== Mail Processor Started ===")
 	Info("Logging to file: %s", filename)
 	if debug {
-		Info("Debug mode enabled - logs will also appear on console")
+		Info("Debug mode enabled - detailed logging active")
 	}
 	
 	return nil
@@ -65,31 +55,54 @@ func Close() {
 	}
 }
 
+// SetLogCallback sets a callback function to receive log messages
+func SetLogCallback(callback func(level, message string)) {
+	logCallback = callback
+}
+
 // Info logs an info message
 func Info(format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
 	if infoLogger != nil {
-		infoLogger.Printf(format, args...)
+		infoLogger.Print(message)
+	}
+	if logCallback != nil {
+		logCallback("INFO", message)
 	}
 }
 
 // Error logs an error message
 func Error(format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
 	if errorLogger != nil {
-		errorLogger.Printf(format, args...)
+		errorLogger.Print(message)
+	}
+	if logCallback != nil {
+		logCallback("ERROR", message)
 	}
 }
 
 // Debug logs a debug message (only if debug mode is enabled)
 func Debug(format string, args ...interface{}) {
-	if debugMode && debugLogger != nil {
-		debugLogger.Printf(format, args...)
+	if debugMode {
+		message := fmt.Sprintf(format, args...)
+		if debugLogger != nil {
+			debugLogger.Print(message)
+		}
+		if logCallback != nil {
+			logCallback("DEBUG", message)
+		}
 	}
 }
 
 // Warn logs a warning message
 func Warn(format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
 	if infoLogger != nil {
-		infoLogger.Printf("WARN: "+format, args...)
+		infoLogger.Print("WARN: " + message)
+	}
+	if logCallback != nil {
+		logCallback("WARN", message)
 	}
 }
 

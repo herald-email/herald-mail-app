@@ -28,40 +28,43 @@ type LoadCompleteMsg struct {
 
 // Model represents the main application state
 type Model struct {
-	cfg            *config.Config
-	imapClient     *imap.Client
-	cache          *cache.Cache
-	
+	cfg        *config.Config
+	imapClient *imap.Client
+	cache      *cache.Cache
+	progressCh chan models.ProgressInfo
+
 	// UI State
 	loading        bool
 	loadingSpinner int
 	startTime      time.Time
 	progressInfo   models.ProgressInfo
-	
+	showLogs       bool
+
 	// Data
 	stats          map[string]*models.SenderStats
 	emailsBySender map[string][]*models.EmailData
-	
+
 	// Tables
-	summaryTable   table.Model
-	detailsTable   table.Model
-	
+	summaryTable table.Model
+	detailsTable table.Model
+	logViewer    *LogViewer
+
 	// Display options
 	groupByDomain  bool
 	selectedSender string
 	selectedRows   map[int]bool
-	
+
 	// Styles
-	baseStyle      lipgloss.Style
-	headerStyle    lipgloss.Style
-	loadingStyle   lipgloss.Style
-	progressStyle  lipgloss.Style
+	baseStyle     lipgloss.Style
+	headerStyle   lipgloss.Style
+	loadingStyle  lipgloss.Style
+	progressStyle lipgloss.Style
 }
 
 // New creates a new application model
 func New(cfg *config.Config) *Model {
 	logger.Info("Creating new application model")
-	
+
 	// Create cache
 	logger.Debug("Initializing cache database...")
 	cache, err := cache.New("email_cache.db")
@@ -92,10 +95,11 @@ func New(cfg *config.Config) *Model {
 		Bold(true).
 		Foreground(lipgloss.Color("86")).
 		Background(lipgloss.Color("235")).
-		Padding(1, 2).
+		Padding(1, 3).
 		Margin(1, 0).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("86"))
+		BorderForeground(lipgloss.Color("86")).
+		Align(lipgloss.Center)
 
 	progressStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
@@ -137,19 +141,29 @@ func New(cfg *config.Config) *Model {
 	summaryTable.SetStyles(s)
 	detailsTable.SetStyles(s)
 
+	// Create log viewer
+	logViewer := NewLogViewer(80, 15)
+
+	// Set up log callback to capture logs in TUI
+	logger.SetLogCallback(func(level, message string) {
+		logViewer.AddLog(level, message)
+	})
+
 	return &Model{
-		cfg:            cfg,
-		imapClient:     imapClient,
-		cache:          cache,
-		loading:        true,
-		startTime:      time.Now(),
-		selectedRows:   make(map[int]bool),
-		summaryTable:   summaryTable,
-		detailsTable:   detailsTable,
-		baseStyle:      baseStyle,
-		headerStyle:    headerStyle,
-		loadingStyle:   loadingStyle,
-		progressStyle:  progressStyle,
+		cfg:           cfg,
+		imapClient:    imapClient,
+		cache:         cache,
+		progressCh:    progressCh,
+		loading:       true,
+		startTime:     time.Now(),
+		selectedRows:  make(map[int]bool),
+		summaryTable:  summaryTable,
+		detailsTable:  detailsTable,
+		logViewer:     logViewer,
+		baseStyle:     baseStyle,
+		headerStyle:   headerStyle,
+		loadingStyle:  loadingStyle,
+		progressStyle: progressStyle,
 	}
 }
 
@@ -158,6 +172,7 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.startLoading(),
 		m.tickSpinner(),
+		m.listenForProgress(),
 	)
 }
 
@@ -168,11 +183,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
-		
+
 	case LoadingMsg:
 		m.progressInfo = msg.Info
-		return m, nil
-		
+		// Check if this is completion
+		if msg.Info.Phase == "complete" {
+			// Get final statistics
+			stats, err := m.imapClient.GetSenderStatistics("INBOX")
+			if err != nil {
+				logger.Error("Failed to get final statistics: %v", err)
+				return m, tea.Quit
+			}
+			m.loading = false
+			m.stats = stats
+			m.updateSummaryTable()
+			return m, nil
+		}
+		// Continue listening for more progress updates
+		return m, m.listenForProgress()
+
 	case LoadCompleteMsg:
 		m.loading = false
 		if msg.Error != nil {
@@ -182,12 +211,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stats = msg.Stats
 		m.updateSummaryTable()
 		return m, nil
-		
+
 	case tea.WindowSizeMsg:
 		m.summaryTable.SetWidth(msg.Width / 2)
 		m.detailsTable.SetWidth(msg.Width / 2)
 		return m, nil
-		
+
 	case tickMsg:
 		if m.loading {
 			m.loadingSpinner = (m.loadingSpinner + 1) % len(spinnerChars)
@@ -196,12 +225,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update tables
+	// Update tables and log viewer
 	var cmd tea.Cmd
 	m.summaryTable, cmd = m.summaryTable.Update(msg)
 	cmds = append(cmds, cmd)
-	
+
 	m.detailsTable, cmd = m.detailsTable.Update(msg)
+	cmds = append(cmds, cmd)
+
+	// Update log viewer
+	_, cmd = m.logViewer.Update(msg)
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
@@ -221,39 +254,39 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.cleanup()
 		return m, tea.Quit
-		
+
 	case "d":
 		if !m.loading {
 			m.toggleDomainMode()
 		}
 		return m, nil
-		
+
 	case "r":
 		if !m.loading {
 			m.loading = true
 			m.startTime = time.Now()
-			return m, tea.Batch(m.startLoading(), m.tickSpinner())
+			return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
 		}
 		return m, nil
-		
+
 	case " ":
 		if !m.loading && m.summaryTable.Focused() {
 			m.toggleSelection()
 		}
 		return m, nil
-		
+
 	case "D":
 		if !m.loading {
 			return m, m.deleteSelected()
 		}
 		return m, nil
-		
+
 	case "enter":
 		if !m.loading && m.summaryTable.Focused() {
 			m.updateDetailsTable()
 		}
 		return m, nil
-		
+
 	case "tab":
 		if !m.loading {
 			if m.summaryTable.Focused() {
@@ -265,6 +298,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case "l", "L":
+		if !m.loading {
+			m.showLogs = !m.showLogs
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -274,72 +313,99 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) renderLoadingView() string {
 	elapsed := time.Since(m.startTime)
 	spinner := spinnerChars[m.loadingSpinner]
-	
+
 	var content strings.Builder
-	
+
 	// Header
 	content.WriteString(m.headerStyle.Render("📧 ProtonMail Analyzer") + "\n\n")
-	
-	// Loading banner
-	banner := fmt.Sprintf("%s %s", getPhaseIcon(m.progressInfo.Phase), m.progressInfo.Message)
+
+	// Loading banner (manually pad to center with emoji compensation)
+	icon := getPhaseIcon(m.progressInfo.Phase)
+	message := m.progressInfo.Message
+	if message == "" {
+		message = "Starting up..."
+	}
+	banner := fmt.Sprintf(" %s %s ", icon, message) // Add extra space to compensate for emoji width
 	content.WriteString(m.loadingStyle.Render(banner) + "\n")
-	
-	// Progress info
+
+	// Progress info with visual progress bar
 	progressText := fmt.Sprintf("%s Elapsed: %.1fs", spinner, elapsed.Seconds())
 	if m.progressInfo.Total > 0 {
 		percent := 0
 		if m.progressInfo.Current > 0 {
 			percent = (m.progressInfo.Current * 100) / m.progressInfo.Total
 		}
-		progressText = fmt.Sprintf("Progress: %d/%d (%d%%) | Elapsed: %.1fs | %s", 
+		progressText = fmt.Sprintf("Progress: %d/%d (%d%%) | Elapsed: %.1fs | %s",
 			m.progressInfo.Current, m.progressInfo.Total, percent, elapsed.Seconds(), spinner)
-		
+
 		// Add ETA if processing
 		if m.progressInfo.Current > 0 && m.progressInfo.Phase == "processing" {
 			avgTime := elapsed.Seconds() / float64(m.progressInfo.Current)
-			remaining := float64(m.progressInfo.Total - m.progressInfo.Current) * avgTime
+			remaining := float64(m.progressInfo.Total-m.progressInfo.Current) * avgTime
 			progressText += fmt.Sprintf(" | ETA: %.0fs", remaining)
 		}
+
+		// Add visual progress bar
+		progressBar := m.renderProgressBar(percent, 50)
+		content.WriteString(m.progressStyle.Render(progressText) + "\n")
+		content.WriteString(progressBar + "\n\n")
+	} else {
+		content.WriteString(m.progressStyle.Render(progressText) + "\n\n")
 	}
-	
-	content.WriteString(m.progressStyle.Render(progressText) + "\n\n")
-	
+
 	// Instructions
 	content.WriteString("Press 'q' to quit")
-	
+
 	return content.String()
 }
 
 // renderMainView renders the main application view
 func (m *Model) renderMainView() string {
 	var content strings.Builder
-	
+
 	// Header
 	mode := "Email"
 	if m.groupByDomain {
 		mode = "Domain"
 	}
-	header := fmt.Sprintf("📧 ProtonMail Analyzer - %s Mode", mode)
+	logIndicator := ""
+	if m.showLogs {
+		logIndicator = " | Logs: ON"
+	}
+	header := fmt.Sprintf("📧 ProtonMail Analyzer - %s Mode%s", mode, logIndicator)
 	content.WriteString(m.headerStyle.Render(header) + "\n\n")
-	
+
 	// Status
 	status := fmt.Sprintf("Ready | %d senders", len(m.stats))
 	if len(m.selectedRows) > 0 {
 		status += fmt.Sprintf(" | %d selected", len(m.selectedRows))
 	}
 	content.WriteString(status + "\n\n")
-	
-	// Tables side by side
-	summaryView := m.baseStyle.Render(m.summaryTable.View())
-	detailsView := m.baseStyle.Render(m.detailsTable.View())
-	
-	tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, " ", detailsView)
-	content.WriteString(tablesView + "\n\n")
-	
-	// Help
-	help := "q: quit | d: toggle domain mode | r: refresh | space: select | D: delete | enter: show details | tab: switch table"
-	content.WriteString(help)
-	
+
+	if m.showLogs {
+		// Show logs view
+		logTitle := m.headerStyle.Render("📋 Real-time Logs")
+		content.WriteString(logTitle + "\n")
+
+		logView := m.baseStyle.Render(m.logViewer.View())
+		content.WriteString(logView + "\n\n")
+
+		// Help for log view
+		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode"
+		content.WriteString(help)
+	} else {
+		// Show tables side by side
+		summaryView := m.baseStyle.Render(m.summaryTable.View())
+		detailsView := m.baseStyle.Render(m.detailsTable.View())
+
+		tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, " ", detailsView)
+		content.WriteString(tablesView + "\n\n")
+
+		// Help for table view
+		help := "q: quit | l: toggle logs | d: toggle domain mode | r: refresh | space: select | D: delete | enter: show details | tab: switch table"
+		content.WriteString(help)
+	}
+
 	return content.String()
 }
 

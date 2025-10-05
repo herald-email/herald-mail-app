@@ -120,6 +120,12 @@ func (c *Client) CleanupCache(folder string) error {
 
 	logger.Info("Found %d messages in cache", len(cachedIDs))
 
+	// Skip cleanup if cache is empty
+	if len(cachedIDs) == 0 {
+		logger.Info("Cache is empty, skipping cleanup")
+		return nil
+	}
+
 	// Get all current IMAP message IDs
 	currentIDs := make(map[string]bool)
 	

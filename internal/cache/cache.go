@@ -39,6 +39,7 @@ func (c *Cache) initDB() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS emails (
 			message_id TEXT PRIMARY KEY,
+			uid INTEGER,
 			sender TEXT,
 			subject TEXT,
 			date DATETIME,
@@ -49,7 +50,18 @@ func (c *Cache) initDB() error {
 		)
 	`
 	_, err := c.db.Exec(query)
-	return err
+	if err != nil {
+		return err
+	}
+	
+	// Add UID column to existing table if it doesn't exist
+	_, err = c.db.Exec(`ALTER TABLE emails ADD COLUMN uid INTEGER`)
+	if err != nil {
+		// Column might already exist, that's okay
+		logger.Debug("UID column might already exist: %v", err)
+	}
+	
+	return nil
 }
 
 // GetCachedIDs returns all cached message IDs for a folder
@@ -90,14 +102,18 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 		email.MessageID,
 		email.Sender,
 		email.Subject,
-		email.Date,
+		email.Date.Format(time.RFC3339),
 		email.Size,
 		hasAttachments,
 		email.Folder,
-		time.Now(),
+		time.Now().Format(time.RFC3339),
 	)
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to cache email %s: %w", email.MessageID, err)
+	}
+
+	return nil
 }
 
 // GetAllEmails retrieves all cached emails for a folder
@@ -213,4 +229,52 @@ func extractDomain(emailAddress string) string {
 	}
 
 	return domain
+}
+
+// GetNewestCachedDate returns the date of the newest cached email in a folder
+func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
+	query := `SELECT MAX(date) FROM emails WHERE folder = ?`
+	
+	var dateStr string
+	err := c.db.QueryRow(query, folder).Scan(&dateStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return time.Time{}, nil // No cached emails
+		}
+		return time.Time{}, err
+	}
+	
+	if dateStr == "" {
+		return time.Time{}, nil
+	}
+	
+	// Parse the RFC3339 formatted date
+	date, err := time.Parse(time.RFC3339, dateStr)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse cached date: %w", err)
+	}
+	
+	return date, nil
+}
+
+// GetCachedUIDs returns all cached UIDs for a folder
+func (c *Cache) GetCachedUIDs(folder string) (map[uint32]bool, error) {
+	query := `SELECT uid FROM emails WHERE folder = ? AND uid IS NOT NULL`
+	
+	rows, err := c.db.Query(query, folder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query cached UIDs: %w", err)
+	}
+	defer rows.Close()
+
+	uids := make(map[uint32]bool)
+	for rows.Next() {
+		var uid uint32
+		if err := rows.Scan(&uid); err != nil {
+			continue // Skip invalid entries
+		}
+		uids[uid] = true
+	}
+
+	return uids, rows.Err()
 }
