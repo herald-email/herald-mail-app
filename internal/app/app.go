@@ -37,6 +37,8 @@ type Model struct {
 	loading          bool
 	deleting         bool
 	deletionProgress models.DeletionResult
+	deletionsPending int // Number of deletions waiting to complete
+	deletionsTotal   int // Total deletions in current batch
 	loadingSpinner   int
 	startTime        time.Time
 	progressInfo     models.ProgressInfo
@@ -263,23 +265,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.DeletionResult:
 		// Update deletion progress
 		m.deletionProgress = msg
+		m.deletionsPending--
+
 		if msg.Error != nil {
 			logger.Error("Deletion error: %v", msg.Error)
-			m.deleting = false
 		} else {
-			logger.Info("Deletion complete: %s", msg.Sender)
-			// Reload data after successful deletion
+			if msg.Sender != "" {
+				logger.Info("Deletion complete: %s", msg.Sender)
+			} else {
+				logger.Info("Deletion complete: message %s", msg.MessageID)
+			}
+		}
+
+		// Check if all deletions are complete
+		if m.deletionsPending <= 0 {
+			logger.Info("All %d deletions complete, reloading data...", m.deletionsTotal)
+			m.deleting = false
+			m.deletionsPending = 0
+			m.deletionsTotal = 0
+
+			// Reload data after all deletions complete
 			stats, err := m.imapClient.GetSenderStatistics("INBOX")
 			if err != nil {
 				logger.Error("Failed to reload after deletion: %v", err)
-				m.deleting = false
 				return m, nil
 			}
 			m.stats = stats
 			m.updateSummaryTable()
 			m.updateDetailsTable()
-			m.deleting = false
+			return m, nil
 		}
+
 		// Continue listening for more results
 		return m, m.listenForDeletionResults()
 
@@ -485,12 +501,13 @@ func (m *Model) renderMainView() string {
 	}
 	status := "Ready"
 	if m.deleting {
+		completed := m.deletionsTotal - m.deletionsPending
 		if m.deletionProgress.Sender != "" {
-			status = fmt.Sprintf("Deleting: %s", m.deletionProgress.Sender)
+			status = fmt.Sprintf("Deleting: %s (%d/%d)", m.deletionProgress.Sender, completed, m.deletionsTotal)
 		} else if m.deletionProgress.MessageID != "" {
-			status = fmt.Sprintf("Deleting message: %s", m.deletionProgress.MessageID)
+			status = fmt.Sprintf("Deleting message (%d/%d)", completed, m.deletionsTotal)
 		} else {
-			status = "Deleting..."
+			status = fmt.Sprintf("Deleting... (%d/%d)", completed, m.deletionsTotal)
 		}
 	}
 	status += fmt.Sprintf(" | %d senders | %d emails", len(m.stats), totalEmails)

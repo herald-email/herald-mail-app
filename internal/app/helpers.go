@@ -309,6 +309,9 @@ func (m *Model) toggleSelection() {
 
 // deleteSelected deletes the selected senders or individual messages via queue
 func (m *Model) deleteSelected() tea.Cmd {
+	// Count how many deletions we're queueing
+	deletionCount := 0
+
 	// Send deletion requests to the queue
 	go func() {
 		// Check if details table is focused - delete individual messages
@@ -361,6 +364,24 @@ func (m *Model) deleteSelected() tea.Cmd {
 			}
 		}
 	}()
+
+	// Calculate deletion count before goroutine clears the maps
+	if m.detailsTable.Focused() {
+		if len(m.selectedMessages) > 0 {
+			deletionCount = len(m.selectedMessages)
+		} else {
+			deletionCount = 1
+		}
+	} else if len(m.selectedRows) > 0 {
+		deletionCount = len(m.selectedRows)
+	} else {
+		deletionCount = 1
+	}
+
+	// Set pending counters
+	m.deletionsPending = deletionCount
+	m.deletionsTotal = deletionCount
+	logger.Info("Queued %d deletion(s)", deletionCount)
 
 	// Start listening for deletion results
 	return m.listenForDeletionResults()
