@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -133,7 +134,7 @@ func (m *Model) updateSummaryTable() {
 	// Build table rows
 	var rows []table.Row
 	for i, item := range sortedStats {
-		sender := item.sender
+		sender := sanitizeText(item.sender)
 		stats := item.stats
 
 		// Format date range
@@ -188,11 +189,15 @@ func (m *Model) updateDetailsTable() {
 	// Get emails for this sender
 	emails, err := m.imapClient.GetEmailsBySender("INBOX")
 	if err != nil {
+		logger.Warn("Failed to get emails for sender %s: %v", sender, err)
+		m.detailsTable.SetRows([]table.Row{})
 		return
 	}
 
 	senderEmails := emails[sender]
 	if len(senderEmails) == 0 {
+		logger.Debug("No emails found for sender: %s", sender)
+		m.detailsTable.SetRows([]table.Row{})
 		return
 	}
 
@@ -209,7 +214,7 @@ func (m *Model) updateDetailsTable() {
 			dateStr = email.Date.Format("06-01-02 15:04")
 		}
 
-		subject := email.Subject
+		subject := sanitizeText(email.Subject)
 		if subject == "" {
 			subject = "No Subject"
 		}
@@ -364,6 +369,24 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 		Margin(0, 2)
 
 	return progressBarStyle.Render(fmt.Sprintf("[%s] %d%%", bar, percent))
+}
+
+// sanitizeText removes emoji and symbols while preserving all language text
+func sanitizeText(text string) string {
+	var result strings.Builder
+	for _, r := range text {
+		// Keep letters, numbers, punctuation, and spaces from any language
+		// Remove only emoji, symbols, and other graphical characters
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsPunct(r) || unicode.IsSpace(r) {
+			result.WriteRune(r)
+		} else {
+			// Replace emoji/symbols with space
+			result.WriteRune(' ')
+		}
+	}
+	// Clean up multiple consecutive spaces
+	cleaned := strings.Join(strings.Fields(result.String()), " ")
+	return cleaned
 }
 
 // handleNavigation handles up/down navigation for the focused table
