@@ -123,12 +123,12 @@ func New(cfg *config.Config) *Model {
 		table.WithHeight(11),
 	)
 
-	// Details table: ~67 chars total (right side) - added selection column
+	// Details table: ~69 chars total (right side) - added selection column
 	detailsTable := table.New(
 		table.WithColumns([]table.Column{
 			{Title: "✓", Width: 2},
-			{Title: "Date", Width: 14},
-			{Title: "Subject", Width: 33},
+			{Title: "Date", Width: 16},
+			{Title: "Subject", Width: 32},
 			{Title: "Size", Width: 8},
 			{Title: "Att", Width: 3},
 		}),
@@ -220,6 +220,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.stats = stats
 			m.updateSummaryTable()
+			m.updateDetailsTable() // Show details for first sender
 			return m, nil
 		}
 		// Continue listening for more progress updates
@@ -233,6 +234,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.stats = msg.Stats
 		m.updateSummaryTable()
+		m.updateDetailsTable() // Show details for first sender
 		return m, nil
 
 	case tea.WindowSizeMsg:

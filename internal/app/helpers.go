@@ -177,11 +177,12 @@ func (m *Model) updateDetailsTable() {
 	}
 
 	selectedRow := m.summaryTable.SelectedRow()
-	if len(selectedRow) == 0 {
+	if len(selectedRow) < 2 {
 		return
 	}
 
-	sender := selectedRow[0]
+	// Sender is in column 1 (column 0 is the checkmark)
+	sender := selectedRow[1]
 	m.selectedSender = sender
 
 	// Get emails for this sender
@@ -212,8 +213,8 @@ func (m *Model) updateDetailsTable() {
 		if subject == "" {
 			subject = "No Subject"
 		}
-		if len(subject) > 33 {
-			subject = subject[:30] + "..."
+		if len(subject) > 32 {
+			subject = subject[:29] + "..."
 		}
 
 		attachments := "N"
@@ -268,8 +269,9 @@ func (m *Model) deleteSelected() tea.Cmd {
 			// Delete multiple selected senders
 			rows := m.summaryTable.Rows()
 			for cursor := range m.selectedRows {
-				if cursor < len(rows) {
-					sender := rows[cursor][0]
+				if cursor < len(rows) && len(rows[cursor]) > 1 {
+					// Sender is in column 1 (column 0 is the checkmark)
+					sender := rows[cursor][1]
 					if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
 						// Log error but continue
 						continue
@@ -281,8 +283,9 @@ func (m *Model) deleteSelected() tea.Cmd {
 			// Delete current sender
 			if m.summaryTable.Cursor() < len(m.summaryTable.Rows()) {
 				selectedRow := m.summaryTable.SelectedRow()
-				if len(selectedRow) > 0 {
-					sender := selectedRow[0]
+				if len(selectedRow) > 1 {
+					// Sender is in column 1 (column 0 is the checkmark)
+					sender := selectedRow[1]
 					if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
 						return LoadCompleteMsg{Error: err}
 					}
