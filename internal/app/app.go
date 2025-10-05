@@ -39,6 +39,7 @@ type Model struct {
 	startTime      time.Time
 	progressInfo   models.ProgressInfo
 	showLogs       bool
+	windowHeight   int
 
 	// Data
 	stats          map[string]*models.SenderStats
@@ -55,10 +56,12 @@ type Model struct {
 	selectedRows   map[int]bool
 
 	// Styles
-	baseStyle     lipgloss.Style
-	headerStyle   lipgloss.Style
-	loadingStyle  lipgloss.Style
-	progressStyle lipgloss.Style
+	baseStyle          lipgloss.Style
+	headerStyle        lipgloss.Style
+	loadingStyle       lipgloss.Style
+	progressStyle      lipgloss.Style
+	activeTableStyle   table.Styles
+	inactiveTableStyle table.Styles
 }
 
 // New creates a new application model
@@ -130,18 +133,32 @@ func New(cfg *config.Config) *Model {
 		table.WithHeight(11),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
+	// Create active table style (blue highlight)
+	activeStyle := table.DefaultStyles()
+	activeStyle.Header = activeStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		BorderBottom(true).
 		Bold(false)
-	s.Selected = s.Selected.
+	activeStyle.Selected = activeStyle.Selected.
 		Foreground(lipgloss.Color("229")).
 		Background(lipgloss.Color("57")).
 		Bold(false)
-	summaryTable.SetStyles(s)
-	detailsTable.SetStyles(s)
+
+	// Create inactive table style (gray highlight)
+	inactiveStyle := table.DefaultStyles()
+	inactiveStyle.Header = inactiveStyle.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+	inactiveStyle.Selected = inactiveStyle.Selected.
+		Foreground(lipgloss.Color("250")).
+		Background(lipgloss.Color("238")).
+		Bold(false)
+
+	summaryTable.SetStyles(activeStyle)
+	detailsTable.SetStyles(inactiveStyle)
 
 	// Create log viewer
 	logViewer := NewLogViewer(80, 15)
@@ -152,20 +169,22 @@ func New(cfg *config.Config) *Model {
 	})
 
 	return &Model{
-		cfg:           cfg,
-		imapClient:    imapClient,
-		cache:         cache,
-		progressCh:    progressCh,
-		loading:       true,
-		startTime:     time.Now(),
-		selectedRows:  make(map[int]bool),
-		summaryTable:  summaryTable,
-		detailsTable:  detailsTable,
-		logViewer:     logViewer,
-		baseStyle:     baseStyle,
-		headerStyle:   headerStyle,
-		loadingStyle:  loadingStyle,
-		progressStyle: progressStyle,
+		cfg:                cfg,
+		imapClient:         imapClient,
+		cache:              cache,
+		progressCh:         progressCh,
+		loading:            true,
+		startTime:          time.Now(),
+		selectedRows:       make(map[int]bool),
+		summaryTable:       summaryTable,
+		detailsTable:       detailsTable,
+		logViewer:          logViewer,
+		baseStyle:          baseStyle,
+		headerStyle:        headerStyle,
+		loadingStyle:       loadingStyle,
+		progressStyle:      progressStyle,
+		activeTableStyle:   activeStyle,
+		inactiveTableStyle: inactiveStyle,
 	}
 }
 
@@ -215,11 +234,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		m.windowHeight = msg.Height
+
 		// Use fixed widths based on actual column sizes instead of 50/50 split
 		// Summary table: 35+6+7+6+20 = 74 + borders/padding = ~80
 		// Details table: 16+35+8+3 = 62 + borders/padding = ~68
 		m.summaryTable.SetWidth(80)
 		m.detailsTable.SetWidth(68)
+
+		// Set table height to 90% of window height
+		// Account for header (3 lines), status (2 lines), help (2 lines) = ~7 lines overhead
+		tableHeight := int(float64(msg.Height) * 0.9) - 7
+		if tableHeight < 5 {
+			tableHeight = 5 // Minimum height
+		}
+		m.summaryTable.SetHeight(tableHeight)
+		m.detailsTable.SetHeight(tableHeight)
+
 		return m, nil
 
 	case tickMsg:
@@ -296,10 +327,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.loading {
 			if m.summaryTable.Focused() {
 				m.summaryTable.Blur()
+				m.summaryTable.SetStyles(m.inactiveTableStyle)
 				m.detailsTable.Focus()
+				m.detailsTable.SetStyles(m.activeTableStyle)
 			} else {
 				m.detailsTable.Blur()
+				m.detailsTable.SetStyles(m.inactiveTableStyle)
 				m.summaryTable.Focus()
+				m.summaryTable.SetStyles(m.activeTableStyle)
 			}
 		}
 		return m, nil
