@@ -350,44 +350,25 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 
 // handleNavigation handles up/down navigation for the focused table
 func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
+	var cmd tea.Cmd
 
 	if m.summaryTable.Focused() {
-		// Navigate summary table
-		cursor := m.summaryTable.Cursor()
-		newCursor := cursor + direction
-
-		// Clamp to valid range
-		if newCursor < 0 {
-			newCursor = 0
+		// Let the table handle navigation properly (including scrolling)
+		if direction > 0 {
+			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+		} else {
+			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyMsg{Type: tea.KeyUp})
 		}
-		rows := m.summaryTable.Rows()
-		if newCursor >= len(rows) {
-			newCursor = len(rows) - 1
-		}
-
-		// Move cursor
-		m.summaryTable.SetCursor(newCursor)
-
 		// Auto-update details table on navigation
 		m.updateDetailsTable()
 	} else if m.detailsTable.Focused() {
-		// Navigate details table
-		cursor := m.detailsTable.Cursor()
-		newCursor := cursor + direction
-
-		// Clamp to valid range
-		if newCursor < 0 {
-			newCursor = 0
+		// Let the table handle navigation properly (including scrolling)
+		if direction > 0 {
+			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+		} else {
+			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyMsg{Type: tea.KeyUp})
 		}
-		rows := m.detailsTable.Rows()
-		if newCursor >= len(rows) {
-			newCursor = len(rows) - 1
-		}
-
-		// Move cursor
-		m.detailsTable.SetCursor(newCursor)
 	}
 
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }

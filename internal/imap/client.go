@@ -3,6 +3,8 @@ package imap
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
+	"log"
 	"net/mail"
 	"strings"
 	"time"
@@ -14,6 +16,8 @@ import (
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
+
+var discardLogger = log.New(io.Discard, "", 0)
 
 // Client wraps the IMAP client with business logic
 type Client struct {
@@ -37,12 +41,16 @@ func New(cfg *config.Config, cache *cache.Cache, progressCh chan models.Progress
 func (c *Client) Connect() error {
 	// Connect to IMAP server
 	addr := fmt.Sprintf("%s:%d", c.cfg.Server.Host, c.cfg.Server.Port)
-	
+
 	var err error
 	c.client, err = client.Dial(addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to IMAP server: %w", err)
 	}
+
+	// Suppress IMAP protocol errors that are logged to stderr
+	// These are parsing errors on malformed emails that we handle gracefully
+	c.client.ErrorLog = discardLogger
 
 	// Create TLS config for localhost/ProtonMail Bridge
 	tlsConfig := &tls.Config{

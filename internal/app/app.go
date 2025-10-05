@@ -105,7 +105,7 @@ func New(cfg *config.Config) *Model {
 		Foreground(lipgloss.Color("241")).
 		Margin(0, 2)
 
-	// Create tables
+	// Create tables with height adjusted for terminal layout
 	summaryTable := table.New(
 		table.WithColumns([]table.Column{
 			{Title: "Domain/Sender", Width: 40},
@@ -115,7 +115,7 @@ func New(cfg *config.Config) *Model {
 			{Title: "Date Range", Width: 20},
 		}),
 		table.WithFocused(true),
-		table.WithHeight(15),
+		table.WithHeight(11),
 	)
 
 	detailsTable := table.New(
@@ -125,7 +125,7 @@ func New(cfg *config.Config) *Model {
 			{Title: "Size", Width: 10},
 			{Title: "Attachments", Width: 12},
 		}),
-		table.WithHeight(15),
+		table.WithHeight(11),
 	)
 
 	s := table.DefaultStyles()
@@ -411,11 +411,17 @@ func (m *Model) renderMainView() string {
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
 
 		tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, " ", detailsView)
-		content.WriteString(tablesView + "\n\n")
+		content.WriteString(tablesView + "\n")
+
+		// Add spacing before help text
+		content.WriteString("\n")
 
 		// Help for table view
 		help := "q: quit | l: toggle logs | d: toggle domain mode | r: refresh | ↑/k ↓/j: navigate | space: select | D: delete | enter: show details | tab: switch table"
 		content.WriteString(help)
+
+		// Add bottom padding to prevent overlap
+		content.WriteString("\n")
 	}
 
 	return content.String()
