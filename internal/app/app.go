@@ -172,7 +172,7 @@ func New(cfg *config.Config) *Model {
 	detailsTable.SetStyles(inactiveStyle)
 
 	// Create log viewer
-	logViewer := NewLogViewer(80, 15)
+	logViewer := NewLogViewer(140, 15)
 
 	// Set up log callback to capture logs in TUI
 	logger.SetLogCallback(func(level, message string) {
