@@ -270,11 +270,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Error != nil {
 			logger.Error("Deletion error: %v", msg.Error)
 		} else {
+			// Remove from local cache immediately for instant UI update
 			if msg.Sender != "" {
 				logger.Info("Deletion complete: %s", msg.Sender)
-			} else {
+				// Remove sender from stats
+				delete(m.stats, msg.Sender)
+			} else if msg.MessageID != "" {
 				logger.Info("Deletion complete: message %s", msg.MessageID)
+				// Remove individual message from cache
+				// We don't have sender info here, so we'll update on full reload
 			}
+
+			// Update UI immediately
+			m.updateSummaryTable()
+			m.updateDetailsTable()
 		}
 
 		// Check if all deletions are complete
@@ -284,7 +293,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
 
-			// Reload data after all deletions complete
+			// Reload data after all deletions complete to sync with server
 			stats, err := m.imapClient.GetSenderStatistics("INBOX")
 			if err != nil {
 				logger.Error("Failed to reload after deletion: %v", err)
