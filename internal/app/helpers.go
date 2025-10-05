@@ -194,26 +194,26 @@ func (m *Model) updateDetailsTable() {
 	for _, email := range senderEmails {
 		dateStr := "N/A"
 		if !email.Date.IsZero() {
-			dateStr = email.Date.Format("2006-01-02 15:04")
+			dateStr = email.Date.Format("06-01-02 15:04")
 		}
 
 		subject := email.Subject
 		if subject == "" {
 			subject = "No Subject"
 		}
-		if len(subject) > 40 {
-			subject = subject[:37] + "..."
+		if len(subject) > 35 {
+			subject = subject[:32] + "..."
 		}
 
-		attachments := "No"
+		attachments := "N"
 		if email.HasAttachments {
-			attachments = "Yes"
+			attachments = "Y"
 		}
 
 		row := table.Row{
 			dateStr,
 			subject,
-			fmt.Sprintf("%.1f KB", float64(email.Size)/1024),
+			fmt.Sprintf("%.1f", float64(email.Size)/1024),
 			attachments,
 		}
 		rows = append(rows, row)

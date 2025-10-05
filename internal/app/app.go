@@ -105,25 +105,27 @@ func New(cfg *config.Config) *Model {
 		Foreground(lipgloss.Color("241")).
 		Margin(0, 2)
 
-	// Create tables with height adjusted for terminal layout
+	// Create tables optimized for side-by-side display
+	// Summary table: ~78 chars total (left side)
 	summaryTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Domain/Sender", Width: 40},
-			{Title: "Total Emails", Width: 12},
-			{Title: "Avg Size (KB)", Width: 12},
-			{Title: "With Attachments", Width: 15},
+			{Title: "Sender/Domain", Width: 35},
+			{Title: "Count", Width: 6},
+			{Title: "Avg KB", Width: 7},
+			{Title: "Attach", Width: 6},
 			{Title: "Date Range", Width: 20},
 		}),
 		table.WithFocused(true),
 		table.WithHeight(11),
 	)
 
+	// Details table: ~65 chars total (right side)
 	detailsTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Date", Width: 20},
-			{Title: "Subject", Width: 40},
-			{Title: "Size", Width: 10},
-			{Title: "Attachments", Width: 12},
+			{Title: "Date", Width: 16},
+			{Title: "Subject", Width: 35},
+			{Title: "Size", Width: 8},
+			{Title: "Att", Width: 3},
 		}),
 		table.WithHeight(11),
 	)
