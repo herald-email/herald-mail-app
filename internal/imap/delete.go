@@ -2,7 +2,6 @@ package imap
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/emersion/go-imap"
 	"mail-processor/internal/logger"
@@ -92,9 +91,9 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 	return nil
 }
 
-// DeleteEmail deletes a specific email using IMAP search
-func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) error {
-	logger.Info("Deleting specific email from %s dated %v", sender, emailDate)
+// DeleteEmail deletes a specific email by MessageID
+func (c *Client) DeleteEmail(messageID string, folder string) error {
+	logger.Info("Deleting message with ID: %s", messageID)
 
 	// Select folder (connection is kept open, no need to reconnect)
 	_, err := c.client.Select(folder, false)
@@ -102,28 +101,19 @@ func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) 
 		return fmt.Errorf("failed to select folder %s: %w", folder, err)
 	}
 
-	// Use IMAP search like Python version: FROM sender ON date
+	// Search by Message-ID header
 	criteria := imap.NewSearchCriteria()
-	criteria.Header.Add("From", sender)
-
-	// Add date criteria - search for messages sent on this specific day
-	if !emailDate.IsZero() {
-		// SentSince is inclusive (>= date at 00:00)
-		dayStart := time.Date(emailDate.Year(), emailDate.Month(), emailDate.Day(), 0, 0, 0, 0, emailDate.Location())
-		criteria.SentSince = dayStart
-		// SentBefore is exclusive (< date at 00:00 next day)
-		criteria.SentBefore = dayStart.AddDate(0, 0, 1)
-	}
+	criteria.Header.Add("Message-ID", messageID)
 
 	seqNums, err := c.client.Search(criteria)
 	if err != nil {
-		return fmt.Errorf("failed to search for email: %w", err)
+		return fmt.Errorf("failed to search for message: %w", err)
 	}
 
-	logger.Info("Found %d messages matching sender %s on %s", len(seqNums), sender, emailDate.Format("2006-01-02"))
+	logger.Info("Found %d messages with Message-ID %s", len(seqNums), messageID)
 
 	if len(seqNums) > 0 {
-		// Delete first matching message (like Python version)
+		// Delete from IMAP
 		seqset := new(imap.SeqSet)
 		seqset.AddNum(seqNums[0])
 
@@ -137,10 +127,16 @@ func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) 
 			return fmt.Errorf("failed to expunge deleted message: %w", err)
 		}
 
-		logger.Info("Successfully deleted 1 message from %s on %s", sender, emailDate.Format("2006-01-02"))
+		logger.Info("Successfully deleted message with ID: %s from IMAP", messageID)
 	} else {
-		logger.Warn("No messages found matching sender=%s on %s", sender, emailDate.Format("2006-01-02"))
-		return fmt.Errorf("message not found")
+		logger.Warn("Message not found in IMAP with ID: %s (likely already deleted)", messageID)
+	}
+
+	// Delete from cache regardless (message might be already deleted from IMAP)
+	if err := c.cache.DeleteEmail(messageID); err != nil {
+		logger.Warn("Failed to delete from cache: %v", err)
+	} else {
+		logger.Info("Removed message from cache: %s", messageID)
 	}
 
 	return nil

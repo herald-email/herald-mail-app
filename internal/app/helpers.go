@@ -310,9 +310,8 @@ func (m *Model) deleteSelected() tea.Cmd {
 			if len(m.selectedMessages) > 0 {
 				// Delete all selected messages (across all senders)
 				for messageID := range m.selectedMessages {
-					// Find the email by message ID
+					// Find the email by message ID to get subject for logging
 					var email *models.EmailData
-					var sender string
 
 					// Search through all senders' emails
 					allEmails, err := m.imapClient.GetEmailsBySender("INBOX")
@@ -322,11 +321,10 @@ func (m *Model) deleteSelected() tea.Cmd {
 					}
 
 					found := false
-					for s, emails := range allEmails {
+					for _, emails := range allEmails {
 						for _, e := range emails {
 							if e.MessageID == messageID {
 								email = e
-								sender = s
 								found = true
 								break
 							}
@@ -341,8 +339,8 @@ func (m *Model) deleteSelected() tea.Cmd {
 						continue
 					}
 
-					logger.Info("Deleting individual message: %s from %s", email.Subject, sender)
-					if err := m.imapClient.DeleteEmail(sender, email.Date, "INBOX"); err != nil {
+					logger.Info("Deleting individual message: %s (ID: %s)", email.Subject, email.MessageID)
+					if err := m.imapClient.DeleteEmail(email.MessageID, "INBOX"); err != nil {
 						logger.Error("Failed to delete message: %v", err)
 						continue
 					}
@@ -354,9 +352,8 @@ func (m *Model) deleteSelected() tea.Cmd {
 				cursor := m.detailsTable.Cursor()
 				if cursor < len(m.detailsEmails) {
 					email := m.detailsEmails[cursor]
-					sender := m.selectedSender
-					logger.Info("Deleting individual message: %s from %s", email.Subject, sender)
-					if err := m.imapClient.DeleteEmail(sender, email.Date, "INBOX"); err != nil {
+					logger.Info("Deleting individual message: %s (ID: %s)", email.Subject, email.MessageID)
+					if err := m.imapClient.DeleteEmail(email.MessageID, "INBOX"); err != nil {
 						logger.Error("Failed to delete message: %v", err)
 						return LoadCompleteMsg{Error: err}
 					}
