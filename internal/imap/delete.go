@@ -12,26 +12,10 @@ import (
 func (c *Client) DeleteSenderEmails(sender, folder string) error {
 	logger.Info("Starting deletion of all emails from '%s' (len=%d) in folder %s", sender, len(sender), folder)
 
-	// Ensure we have a valid connection
-	if c.client == nil {
-		logger.Info("No active IMAP connection, reconnecting...")
-		if err := c.Connect(); err != nil {
-			return fmt.Errorf("failed to reconnect to IMAP: %w", err)
-		}
-	}
-
-	// Select folder
+	// Select folder (connection is kept open, no need to reconnect)
 	mbox, err := c.client.Select(folder, false)
 	if err != nil {
-		// Try reconnecting if select fails
-		logger.Warn("Failed to select folder, attempting to reconnect...")
-		if err := c.Connect(); err != nil {
-			return fmt.Errorf("failed to reconnect to IMAP: %w", err)
-		}
-		mbox, err = c.client.Select(folder, false)
-		if err != nil {
-			return fmt.Errorf("failed to select folder %s after reconnect: %w", folder, err)
-		}
+		return fmt.Errorf("failed to select folder %s: %w", folder, err)
 	}
 
 	logger.Info("Folder '%s' has %d total messages", folder, mbox.Messages)
@@ -108,24 +92,27 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 	return nil
 }
 
-// DeleteEmail deletes a specific email
+// DeleteEmail deletes a specific email using IMAP search
 func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) error {
 	logger.Info("Deleting specific email from %s dated %v", sender, emailDate)
 
-	// Select folder
+	// Select folder (connection is kept open, no need to reconnect)
 	_, err := c.client.Select(folder, false)
 	if err != nil {
 		return fmt.Errorf("failed to select folder %s: %w", folder, err)
 	}
 
-	// Search for specific email
+	// Use IMAP search like Python version: FROM sender ON date
 	criteria := imap.NewSearchCriteria()
 	criteria.Header.Add("From", sender)
-	
-	// Add date criteria if available
+
+	// Add date criteria - search for messages sent on this specific day
 	if !emailDate.IsZero() {
-		criteria.SentSince = emailDate.Truncate(24 * time.Hour)
-		criteria.SentBefore = emailDate.Add(24 * time.Hour).Truncate(24 * time.Hour)
+		// SentSince is inclusive (>= date at 00:00)
+		dayStart := time.Date(emailDate.Year(), emailDate.Month(), emailDate.Day(), 0, 0, 0, 0, emailDate.Location())
+		criteria.SentSince = dayStart
+		// SentBefore is exclusive (< date at 00:00 next day)
+		criteria.SentBefore = dayStart.AddDate(0, 0, 1)
 	}
 
 	seqNums, err := c.client.Search(criteria)
@@ -133,8 +120,10 @@ func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) 
 		return fmt.Errorf("failed to search for email: %w", err)
 	}
 
+	logger.Info("Found %d messages matching sender %s on %s", len(seqNums), sender, emailDate.Format("2006-01-02"))
+
 	if len(seqNums) > 0 {
-		// Delete first matching email
+		// Delete first matching message (like Python version)
 		seqset := new(imap.SeqSet)
 		seqset.AddNum(seqNums[0])
 
@@ -148,7 +137,10 @@ func (c *Client) DeleteEmail(sender string, emailDate time.Time, folder string) 
 			return fmt.Errorf("failed to expunge deleted message: %w", err)
 		}
 
-		logger.Info("Successfully deleted email from %s", sender)
+		logger.Info("Successfully deleted 1 message from %s on %s", sender, emailDate.Format("2006-01-02"))
+	} else {
+		logger.Warn("No messages found matching sender=%s on %s", sender, emailDate.Format("2006-01-02"))
+		return fmt.Errorf("message not found")
 	}
 
 	return nil

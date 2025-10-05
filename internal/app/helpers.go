@@ -55,10 +55,8 @@ func (m *Model) startLoading() tea.Cmd {
 				// Send error through progress channel instead
 				return
 			}
-			defer func() {
-				logger.Debug("Closing IMAP connection...")
-				m.imapClient.Close()
-			}()
+			// Keep connection open for future operations (don't close after loading)
+			logger.Debug("IMAP connection established and will remain open")
 
 			// Process emails first (this will send its own progress updates)
 			logger.Info("Processing emails...")
@@ -157,7 +155,7 @@ func (m *Model) updateSummaryTable() {
 		}
 
 		// Add selection indicator in first column
-		checkmark := ""
+		checkmark := " "
 		if m.selectedRows[i] {
 			checkmark = "✓"
 		}
@@ -209,6 +207,12 @@ func (m *Model) updateDetailsTable() {
 		return senderEmails[i].Date.After(senderEmails[j].Date)
 	})
 
+	// Store emails for deletion
+	m.detailsEmails = senderEmails
+
+	// Debug: log selected messages
+	logger.Debug("updateDetailsTable: %d messages shown, %d selected globally", len(senderEmails), len(m.selectedMessages))
+
 	// Build table rows
 	var rows []table.Row
 	for _, email := range senderEmails {
@@ -230,9 +234,14 @@ func (m *Model) updateDetailsTable() {
 			attachments = "Y"
 		}
 
-		// Empty selection column for details table (selection only on summary)
+		// Add selection checkmark (based on message ID, not row index)
+		checkmark := " "
+		if email.MessageID != "" && m.selectedMessages[email.MessageID] {
+			checkmark = "✓"
+		}
+
 		row := table.Row{
-			"",
+			checkmark,
 			dateStr,
 			subject,
 			fmt.Sprintf("%.1f", float64(email.Size)/1024),
@@ -258,24 +267,103 @@ func (m *Model) toggleDomainMode() {
 	m.loading = false
 }
 
-// toggleSelection toggles selection of the current row
+// toggleSelection toggles selection of the current row in active table
 func (m *Model) toggleSelection() {
-	cursor := m.summaryTable.Cursor()
-	if m.selectedRows[cursor] {
-		delete(m.selectedRows, cursor)
-	} else {
-		m.selectedRows[cursor] = true
+	if m.summaryTable.Focused() {
+		cursor := m.summaryTable.Cursor()
+		if m.selectedRows[cursor] {
+			delete(m.selectedRows, cursor)
+		} else {
+			m.selectedRows[cursor] = true
+		}
+		// Refresh the table to show/hide checkmarks
+		m.updateSummaryTable()
+	} else if m.detailsTable.Focused() {
+		cursor := m.detailsTable.Cursor()
+		if cursor < len(m.detailsEmails) {
+			messageID := m.detailsEmails[cursor].MessageID
+			if messageID == "" {
+				logger.Warn("Cannot select message with empty MessageID")
+				return
+			}
+			if m.selectedMessages[messageID] {
+				logger.Debug("Deselecting message: %s", messageID)
+				delete(m.selectedMessages, messageID)
+			} else {
+				logger.Debug("Selecting message: %s", messageID)
+				m.selectedMessages[messageID] = true
+			}
+			logger.Debug("Total selected messages: %d", len(m.selectedMessages))
+			// Refresh the table to show/hide checkmarks
+			m.updateDetailsTable()
+		}
 	}
-	// Refresh the table to show/hide checkmarks
-	m.updateSummaryTable()
 }
 
-// deleteSelected deletes the selected senders or current sender
+// deleteSelected deletes the selected senders or individual messages
 func (m *Model) deleteSelected() tea.Cmd {
 	return func() tea.Msg {
 		var deletedCount int
 
-		if len(m.selectedRows) > 0 {
+		// Check if details table is focused - delete individual messages
+		if m.detailsTable.Focused() {
+			if len(m.selectedMessages) > 0 {
+				// Delete all selected messages (across all senders)
+				for messageID := range m.selectedMessages {
+					// Find the email by message ID
+					var email *models.EmailData
+					var sender string
+
+					// Search through all senders' emails
+					allEmails, err := m.imapClient.GetEmailsBySender("INBOX")
+					if err != nil {
+						logger.Error("Failed to get emails: %v", err)
+						continue
+					}
+
+					found := false
+					for s, emails := range allEmails {
+						for _, e := range emails {
+							if e.MessageID == messageID {
+								email = e
+								sender = s
+								found = true
+								break
+							}
+						}
+						if found {
+							break
+						}
+					}
+
+					if !found || email == nil {
+						logger.Warn("Message not found: %s", messageID)
+						continue
+					}
+
+					logger.Info("Deleting individual message: %s from %s", email.Subject, sender)
+					if err := m.imapClient.DeleteEmail(sender, email.Date, "INBOX"); err != nil {
+						logger.Error("Failed to delete message: %v", err)
+						continue
+					}
+					deletedCount++
+				}
+				m.selectedMessages = make(map[string]bool)
+			} else {
+				// Delete current message
+				cursor := m.detailsTable.Cursor()
+				if cursor < len(m.detailsEmails) {
+					email := m.detailsEmails[cursor]
+					sender := m.selectedSender
+					logger.Info("Deleting individual message: %s from %s", email.Subject, sender)
+					if err := m.imapClient.DeleteEmail(sender, email.Date, "INBOX"); err != nil {
+						logger.Error("Failed to delete message: %v", err)
+						return LoadCompleteMsg{Error: err}
+					}
+					deletedCount = 1
+				}
+			}
+		} else if len(m.selectedRows) > 0 {
 			// Delete multiple selected senders
 			for cursor := range m.selectedRows {
 				// Get original sender from mapping (before sanitization)

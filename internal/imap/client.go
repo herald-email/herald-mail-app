@@ -242,9 +242,16 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
 	}
 
+	// Use UID as MessageID if envelope MessageId is empty
+	// UID is guaranteed to be unique within a folder
+	messageID := msg.Envelope.MessageId
+	if messageID == "" && msg.Uid > 0 {
+		messageID = fmt.Sprintf("uid-%d", msg.Uid)
+	}
+
 	// Extract email data from Envelope
 	emailData := &models.EmailData{
-		MessageID:      msg.Envelope.MessageId,
+		MessageID:      messageID,
 		Sender:         sender,
 		Subject:        msg.Envelope.Subject,
 		Date:           msg.Envelope.Date,

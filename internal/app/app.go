@@ -52,10 +52,12 @@ type Model struct {
 	logViewer    *LogViewer
 
 	// Display options
-	groupByDomain  bool
-	selectedSender string
-	selectedRows   map[int]bool
-	rowToSender    map[int]string // Maps row index to original sender (before sanitization)
+	groupByDomain      bool
+	selectedSender     string
+	selectedRows       map[int]bool              // Selected rows in summary table
+	selectedMessages   map[string]bool           // Selected messages by MessageID (across all senders)
+	rowToSender        map[int]string            // Maps row index to original sender (before sanitization)
+	detailsEmails      []*models.EmailData       // Current emails shown in details table
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -180,6 +182,7 @@ func New(cfg *config.Config) *Model {
 		loading:            true,
 		startTime:          time.Now(),
 		selectedRows:       make(map[int]bool),
+		selectedMessages:   make(map[string]bool),
 		rowToSender:        make(map[int]string),
 		summaryTable:       summaryTable,
 		detailsTable:       detailsTable,
@@ -314,7 +317,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case " ":
-		if !m.loading && m.summaryTable.Focused() {
+		if !m.loading {
 			m.toggleSelection()
 		}
 		return m, nil
@@ -447,7 +450,10 @@ func (m *Model) renderMainView() string {
 	}
 	status += fmt.Sprintf(" | %d senders | %d emails", len(m.stats), totalEmails)
 	if len(m.selectedRows) > 0 {
-		status += fmt.Sprintf(" | %d selected", len(m.selectedRows))
+		status += fmt.Sprintf(" | %d senders selected", len(m.selectedRows))
+	}
+	if len(m.selectedMessages) > 0 {
+		status += fmt.Sprintf(" | %d messages selected", len(m.selectedMessages))
 	}
 	content.WriteString(status + "\n\n")
 

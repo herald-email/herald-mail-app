@@ -120,7 +120,7 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 // GetAllEmails retrieves all cached emails for a folder
 func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*models.EmailData, error) {
 	query := `
-		SELECT sender, subject, date, size, has_attachments 
+		SELECT message_id, sender, subject, date, size, has_attachments
 		FROM emails WHERE folder = ?
 	`
 	rows, err := c.db.Query(query, folder)
@@ -130,17 +130,18 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 	defer rows.Close()
 
 	emailsBySender := make(map[string][]*models.EmailData)
-	
+
 	for rows.Next() {
-		var sender, subject string
+		var messageID, sender, subject string
 		var date time.Time
 		var size, hasAttachments int
 
-		if err := rows.Scan(&sender, &subject, &date, &size, &hasAttachments); err != nil {
+		if err := rows.Scan(&messageID, &sender, &subject, &date, &size, &hasAttachments); err != nil {
 			return nil, err
 		}
 
 		email := &models.EmailData{
+			MessageID:      messageID,
 			Sender:         sender,
 			Subject:        subject,
 			Date:           date,
