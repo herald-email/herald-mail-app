@@ -304,6 +304,18 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showLogs = !m.showLogs
 		}
 		return m, nil
+
+	case "up", "k":
+		if !m.loading {
+			return m.handleNavigation(-1)
+		}
+		return m, nil
+
+	case "down", "j":
+		if !m.loading {
+			return m.handleNavigation(1)
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -391,7 +403,7 @@ func (m *Model) renderMainView() string {
 		content.WriteString(logView + "\n\n")
 
 		// Help for log view
-		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode"
+		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode | ↑/k ↓/j: navigate"
 		content.WriteString(help)
 	} else {
 		// Show tables side by side
@@ -402,7 +414,7 @@ func (m *Model) renderMainView() string {
 		content.WriteString(tablesView + "\n\n")
 
 		// Help for table view
-		help := "q: quit | l: toggle logs | d: toggle domain mode | r: refresh | space: select | D: delete | enter: show details | tab: switch table"
+		help := "q: quit | l: toggle logs | d: toggle domain mode | r: refresh | ↑/k ↓/j: navigate | space: select | D: delete | enter: show details | tab: switch table"
 		content.WriteString(help)
 	}
 

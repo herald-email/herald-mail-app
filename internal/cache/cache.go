@@ -6,6 +6,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
 

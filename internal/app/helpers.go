@@ -337,7 +337,7 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 
 	// Create the bar with filled and empty segments
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
-	
+
 	// Style the progress bar
 	progressBarStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("86")).  // Green for filled
@@ -346,4 +346,48 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 		Margin(0, 2)
 
 	return progressBarStyle.Render(fmt.Sprintf("[%s] %d%%", bar, percent))
+}
+
+// handleNavigation handles up/down navigation for the focused table
+func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	if m.summaryTable.Focused() {
+		// Navigate summary table
+		cursor := m.summaryTable.Cursor()
+		newCursor := cursor + direction
+
+		// Clamp to valid range
+		if newCursor < 0 {
+			newCursor = 0
+		}
+		rows := m.summaryTable.Rows()
+		if newCursor >= len(rows) {
+			newCursor = len(rows) - 1
+		}
+
+		// Move cursor
+		m.summaryTable.SetCursor(newCursor)
+
+		// Auto-update details table on navigation
+		m.updateDetailsTable()
+	} else if m.detailsTable.Focused() {
+		// Navigate details table
+		cursor := m.detailsTable.Cursor()
+		newCursor := cursor + direction
+
+		// Clamp to valid range
+		if newCursor < 0 {
+			newCursor = 0
+		}
+		rows := m.detailsTable.Rows()
+		if newCursor >= len(rows) {
+			newCursor = len(rows) - 1
+		}
+
+		// Move cursor
+		m.detailsTable.SetCursor(newCursor)
+	}
+
+	return m, tea.Batch(cmds...)
 }
