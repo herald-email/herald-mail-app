@@ -215,8 +215,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
-		m.summaryTable.SetWidth(msg.Width / 2)
-		m.detailsTable.SetWidth(msg.Width / 2)
+		// Use fixed widths based on actual column sizes instead of 50/50 split
+		// Summary table: 35+6+7+6+20 = 74 + borders/padding = ~80
+		// Details table: 16+35+8+3 = 62 + borders/padding = ~68
+		m.summaryTable.SetWidth(80)
+		m.detailsTable.SetWidth(68)
 		return m, nil
 
 	case tickMsg:
@@ -408,11 +411,12 @@ func (m *Model) renderMainView() string {
 		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode | ↑/k ↓/j: navigate"
 		content.WriteString(help)
 	} else {
-		// Show tables side by side
+		// Show tables side by side with minimal spacing
 		summaryView := m.baseStyle.Render(m.summaryTable.View())
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
 
-		tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, " ", detailsView)
+		// Use 2 spaces between tables instead of proportional spacing
+		tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
 		content.WriteString(tablesView + "\n")
 
 		// Add spacing before help text
