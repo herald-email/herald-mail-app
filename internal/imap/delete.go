@@ -137,7 +137,7 @@ func (c *Client) CleanupCache(folder string) error {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchRFC822Header}, messages)
+			done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
 		}()
 
 		for msg := range messages {

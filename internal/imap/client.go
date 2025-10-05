@@ -111,12 +111,12 @@ func (c *Client) ProcessEmails(folder string) error {
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(1, mbox.Messages)
 
-	// Fetch message IDs for all messages
+	// Fetch message IDs for all messages (using Envelope which contains Message-ID)
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
-	
+
 	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchRFC822Header}, messages)
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
 	}()
 
 	processed := 0
@@ -188,7 +188,7 @@ func (c *Client) ProcessEmails(folder string) error {
 	return nil
 }
 
-// processMessage processes a single message
+// processMessage processes a single message using Envelope (avoids parsing errors)
 func (c *Client) processMessage(seqNum uint32, folder string) error {
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(seqNum)
@@ -196,49 +196,53 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	messages := make(chan *imap.Message, 1)
 	done := make(chan error, 1)
 
+	// Fetch using Envelope + basic fields to avoid RFC822 parsing issues
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, imap.FetchRFC822Size, imap.FetchBodyStructure}
+
 	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchRFC822}, messages)
+		done <- c.client.Fetch(seqset, items, messages)
 	}()
 
 	msg := <-messages
 	if err := <-done; err != nil {
-		return err
+		logger.Warn("Error fetching message %d: %v, skipping", seqNum, err)
+		return nil // Skip problematic messages
 	}
 
-	if msg == nil {
-		return fmt.Errorf("no message received")
-	}
-
-	// Parse email
-	if len(msg.Body) == 0 {
-		return fmt.Errorf("empty message body")
-	}
-
-	var bodyReader = msg.Body[&imap.BodySectionName{}]
-	if bodyReader == nil {
-		return fmt.Errorf("no body section")
-	}
-
-	mailMsg, err := mail.ReadMessage(bodyReader)
-	if err != nil {
-		return fmt.Errorf("failed to parse email: %w", err)
-	}
-
-	// Extract email data
-	emailData := &models.EmailData{
-		MessageID:      extractMessageIDFromMail(mailMsg),
-		Sender:         extractSender(mailMsg),
-		Subject:        mailMsg.Header.Get("Subject"),
-		Date:           parseDate(mailMsg.Header.Get("Date")),
-		Size:           int(msg.Size),
-		HasAttachments: hasAttachments(mailMsg),
-		Folder:         folder,
-	}
-
-	// Validate sender
-	if emailData.Sender == "" {
-		logger.Warn("Empty sender for message %d", seqNum)
+	if msg == nil || msg.Envelope == nil {
+		logger.Warn("No envelope for message %d, skipping", seqNum)
 		return nil
+	}
+
+	// Extract sender from envelope
+	sender := ""
+	if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+		addr := msg.Envelope.From[0]
+		if addr.MailboxName != "" && addr.HostName != "" {
+			sender = addr.MailboxName + "@" + addr.HostName
+		}
+	}
+
+	if sender == "" {
+		logger.Warn("Empty sender for message %d, skipping", seqNum)
+		return nil
+	}
+
+	// Check for attachments from body structure
+	hasAttach := false
+	if msg.BodyStructure != nil {
+		hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
+	}
+
+	// Extract email data from Envelope
+	emailData := &models.EmailData{
+		MessageID:      msg.Envelope.MessageId,
+		Sender:         sender,
+		Subject:        msg.Envelope.Subject,
+		Date:           msg.Envelope.Date,
+		Size:           int(msg.Size),
+		HasAttachments: hasAttach,
+		Folder:         folder,
 	}
 
 	// Cache the email
@@ -316,6 +320,12 @@ func (c *Client) sendProgress(info models.ProgressInfo) {
 // Helper functions
 
 func extractMessageID(msg *imap.Message) string {
+	// Use Envelope.MessageId which is much faster and more reliable
+	if msg.Envelope != nil && msg.Envelope.MessageId != "" {
+		return msg.Envelope.MessageId
+	}
+
+	// Fallback to body parsing if envelope not available
 	if len(msg.Body) == 0 {
 		return ""
 	}
@@ -380,4 +390,25 @@ func parseDate(dateStr string) time.Time {
 func hasAttachments(msg *mail.Message) bool {
 	contentType := msg.Header.Get("Content-Type")
 	return strings.Contains(strings.ToLower(contentType), "multipart")
+}
+
+// checkBodyStructureForAttachments recursively checks if a body structure contains attachments
+func checkBodyStructureForAttachments(bs *imap.BodyStructure) bool {
+	if bs == nil {
+		return false
+	}
+
+	// Check if this part is an attachment
+	if bs.Disposition == "attachment" {
+		return true
+	}
+
+	// Check nested parts for multipart messages
+	for _, part := range bs.Parts {
+		if checkBodyStructureForAttachments(part) {
+			return true
+		}
+	}
+
+	return false
 }
