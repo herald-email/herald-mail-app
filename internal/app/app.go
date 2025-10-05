@@ -427,8 +427,12 @@ func (m *Model) renderMainView() string {
 	header := fmt.Sprintf("📧 ProtonMail Analyzer - %s Mode%s", mode, logIndicator)
 	content.WriteString(m.headerStyle.Render(header) + "\n\n")
 
-	// Status
-	status := fmt.Sprintf("Ready | %d senders", len(m.stats))
+	// Status - calculate total emails from all senders
+	totalEmails := 0
+	for _, stats := range m.stats {
+		totalEmails += stats.TotalEmails
+	}
+	status := fmt.Sprintf("Ready | %d senders | %d emails", len(m.stats), totalEmails)
 	if len(m.selectedRows) > 0 {
 		status += fmt.Sprintf(" | %d selected", len(m.selectedRows))
 	}
