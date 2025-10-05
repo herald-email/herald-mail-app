@@ -109,10 +109,11 @@ func New(cfg *config.Config) *Model {
 		Margin(0, 2)
 
 	// Create tables optimized for side-by-side display
-	// Summary table: ~78 chars total (left side)
+	// Summary table: ~82 chars total (left side) - added selection column
 	summaryTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Sender/Domain", Width: 35},
+			{Title: "✓", Width: 2},
+			{Title: "Sender/Domain", Width: 33},
 			{Title: "Count", Width: 6},
 			{Title: "Avg KB", Width: 7},
 			{Title: "Attach", Width: 6},
@@ -122,11 +123,12 @@ func New(cfg *config.Config) *Model {
 		table.WithHeight(11),
 	)
 
-	// Details table: ~65 chars total (right side)
+	// Details table: ~67 chars total (right side) - added selection column
 	detailsTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Date", Width: 16},
-			{Title: "Subject", Width: 35},
+			{Title: "✓", Width: 2},
+			{Title: "Date", Width: 14},
+			{Title: "Subject", Width: 33},
 			{Title: "Size", Width: 8},
 			{Title: "Att", Width: 3},
 		}),

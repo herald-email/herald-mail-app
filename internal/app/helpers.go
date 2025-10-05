@@ -122,13 +122,17 @@ func (m *Model) updateSummaryTable() {
 		sortedStats = append(sortedStats, senderStat{sender, stats})
 	}
 
+	// Sort by email count (descending), then by sender name (ascending) for stable order
 	sort.Slice(sortedStats, func(i, j int) bool {
+		if sortedStats[i].stats.TotalEmails == sortedStats[j].stats.TotalEmails {
+			return sortedStats[i].sender < sortedStats[j].sender
+		}
 		return sortedStats[i].stats.TotalEmails > sortedStats[j].stats.TotalEmails
 	})
 
 	// Build table rows
 	var rows []table.Row
-	for _, item := range sortedStats {
+	for i, item := range sortedStats {
 		sender := item.sender
 		stats := item.stats
 
@@ -136,17 +140,24 @@ func (m *Model) updateSummaryTable() {
 		dateRange := "N/A"
 		if !stats.FirstEmail.IsZero() && !stats.LastEmail.IsZero() {
 			if stats.FirstEmail.Year() == stats.LastEmail.Year() {
-				dateRange = fmt.Sprintf("%s - %s", 
-					stats.FirstEmail.Format("Jan"), 
+				dateRange = fmt.Sprintf("%s - %s",
+					stats.FirstEmail.Format("Jan"),
 					stats.LastEmail.Format("Jan 2006"))
 			} else {
-				dateRange = fmt.Sprintf("%s - %s", 
-					stats.FirstEmail.Format("Jan 2006"), 
+				dateRange = fmt.Sprintf("%s - %s",
+					stats.FirstEmail.Format("Jan 2006"),
 					stats.LastEmail.Format("Jan 2006"))
 			}
 		}
 
+		// Add selection indicator in first column
+		checkmark := ""
+		if m.selectedRows[i] {
+			checkmark = "✓"
+		}
+
 		row := table.Row{
+			checkmark,
 			sender,
 			fmt.Sprintf("%d", stats.TotalEmails),
 			fmt.Sprintf("%.1f", stats.AvgSize/1024),
@@ -201,8 +212,8 @@ func (m *Model) updateDetailsTable() {
 		if subject == "" {
 			subject = "No Subject"
 		}
-		if len(subject) > 35 {
-			subject = subject[:32] + "..."
+		if len(subject) > 33 {
+			subject = subject[:30] + "..."
 		}
 
 		attachments := "N"
@@ -210,7 +221,9 @@ func (m *Model) updateDetailsTable() {
 			attachments = "Y"
 		}
 
+		// Empty selection column for details table (selection only on summary)
 		row := table.Row{
+			"",
 			dateStr,
 			subject,
 			fmt.Sprintf("%.1f", float64(email.Size)/1024),
@@ -244,6 +257,8 @@ func (m *Model) toggleSelection() {
 	} else {
 		m.selectedRows[cursor] = true
 	}
+	// Refresh the table to show/hide checkmarks
+	m.updateSummaryTable()
 }
 
 // deleteSelected deletes the selected senders or current sender
