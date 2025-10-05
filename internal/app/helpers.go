@@ -33,21 +33,28 @@ func (m *Model) listenForProgress() tea.Cmd {
 	}
 }
 
+// listenForDeletionResults listens for deletion results from the worker
+func (m *Model) listenForDeletionResults() tea.Cmd {
+	return func() tea.Msg {
+		return <-m.deletionResultCh
+	}
+}
+
 // startLoading starts the data loading process
 func (m *Model) startLoading() tea.Cmd {
 	return func() tea.Msg {
 		go func() {
 			logger.Info("Starting data loading process...")
-			
+
 			// Send initial progress
 			logger.Debug("Sending connecting progress...")
 			m.progressCh <- models.ProgressInfo{
-				Phase:   "connecting", 
+				Phase:   "connecting",
 				Message: "Connecting to IMAP server...",
 			}
 			logger.Debug("Connecting progress sent")
 			time.Sleep(200 * time.Millisecond) // Allow UI to catch up
-			
+
 			// Connect to IMAP
 			logger.Info("Connecting to IMAP server...")
 			if err := m.imapClient.Connect(); err != nil {
@@ -98,7 +105,7 @@ func (m *Model) startLoading() tea.Cmd {
 			}
 			logger.Info("Data loading completed successfully. Found %d senders", len(stats))
 		}()
-		
+
 		// Return immediately - progress will come through the channel
 		return nil
 	}
@@ -257,11 +264,11 @@ func (m *Model) updateDetailsTable() {
 func (m *Model) toggleDomainMode() {
 	m.groupByDomain = !m.groupByDomain
 	m.imapClient.SetGroupByDomain(m.groupByDomain)
-	
+
 	// Reload statistics
 	m.loading = true
 	m.startTime = time.Now()
-	
+
 	// Note: In a real implementation, you'd want to reload the data
 	// For now, we'll just update the display
 	m.loading = false
@@ -300,51 +307,19 @@ func (m *Model) toggleSelection() {
 	}
 }
 
-// deleteSelected deletes the selected senders or individual messages
+// deleteSelected deletes the selected senders or individual messages via queue
 func (m *Model) deleteSelected() tea.Cmd {
-	return func() tea.Msg {
-		var deletedCount int
-
+	// Send deletion requests to the queue
+	go func() {
 		// Check if details table is focused - delete individual messages
 		if m.detailsTable.Focused() {
 			if len(m.selectedMessages) > 0 {
 				// Delete all selected messages (across all senders)
 				for messageID := range m.selectedMessages {
-					// Find the email by message ID to get subject for logging
-					var email *models.EmailData
-
-					// Search through all senders' emails
-					allEmails, err := m.imapClient.GetEmailsBySender("INBOX")
-					if err != nil {
-						logger.Error("Failed to get emails: %v", err)
-						continue
+					m.deletionRequestCh <- models.DeletionRequest{
+						MessageID: messageID,
+						Folder:    "INBOX",
 					}
-
-					found := false
-					for _, emails := range allEmails {
-						for _, e := range emails {
-							if e.MessageID == messageID {
-								email = e
-								found = true
-								break
-							}
-						}
-						if found {
-							break
-						}
-					}
-
-					if !found || email == nil {
-						logger.Warn("Message not found: %s", messageID)
-						continue
-					}
-
-					logger.Info("Deleting individual message: %s (ID: %s)", email.Subject, email.MessageID)
-					if err := m.imapClient.DeleteEmail(email.MessageID, "INBOX"); err != nil {
-						logger.Error("Failed to delete message: %v", err)
-						continue
-					}
-					deletedCount++
 				}
 				m.selectedMessages = make(map[string]bool)
 			} else {
@@ -352,12 +327,10 @@ func (m *Model) deleteSelected() tea.Cmd {
 				cursor := m.detailsTable.Cursor()
 				if cursor < len(m.detailsEmails) {
 					email := m.detailsEmails[cursor]
-					logger.Info("Deleting individual message: %s (ID: %s)", email.Subject, email.MessageID)
-					if err := m.imapClient.DeleteEmail(email.MessageID, "INBOX"); err != nil {
-						logger.Error("Failed to delete message: %v", err)
-						return LoadCompleteMsg{Error: err}
+					m.deletionRequestCh <- models.DeletionRequest{
+						MessageID: email.MessageID,
+						Folder:    "INBOX",
 					}
-					deletedCount = 1
 				}
 			}
 		} else if len(m.selectedRows) > 0 {
@@ -370,54 +343,68 @@ func (m *Model) deleteSelected() tea.Cmd {
 					continue
 				}
 
-				logger.Info("Deleting emails from: %s", sender)
-				if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
-					logger.Error("Failed to delete emails from %s: %v", sender, err)
-					continue
+				m.deletionRequestCh <- models.DeletionRequest{
+					Sender: sender,
+					Folder: "INBOX",
 				}
-				deletedCount++
 			}
 			m.selectedRows = make(map[int]bool)
 		} else {
 			// Delete current sender using row mapping
 			cursor := m.summaryTable.Cursor()
-			logger.Info("Deletion requested: cursor=%d, total mappings=%d", cursor, len(m.rowToSender))
-
-			// Debug: print all mappings
-			for i, s := range m.rowToSender {
-				logger.Debug("Row %d -> Sender '%s'", i, s)
-			}
-
 			sender, ok := m.rowToSender[cursor]
-			if !ok || sender == "" {
-				logger.Warn("No sender selected for deletion at cursor %d", cursor)
-				return LoadCompleteMsg{Error: fmt.Errorf("no sender selected")}
+			if ok && sender != "" {
+				m.deletionRequestCh <- models.DeletionRequest{
+					Sender: sender,
+					Folder: "INBOX",
+				}
 			}
+		}
+	}()
 
-			logger.Info("Deleting emails from: '%s' (length=%d bytes)", sender, len(sender))
-			if err := m.imapClient.DeleteSenderEmails(sender, "INBOX"); err != nil {
-				logger.Error("Failed to delete emails: %v", err)
-				return LoadCompleteMsg{Error: err}
-			}
-			deletedCount = 1
+	// Start listening for deletion results
+	return m.listenForDeletionResults()
+}
+
+// deletionWorker processes deletion requests from the queue
+func (m *Model) deletionWorker() {
+	for req := range m.deletionRequestCh {
+		result := models.DeletionResult{
+			MessageID: req.MessageID,
+			Sender:    req.Sender,
+			Folder:    req.Folder,
 		}
 
-		if deletedCount > 0 {
-			logger.Info("Deleted emails from %d sender(s), reloading...", deletedCount)
+		// Perform deletion based on what's provided
+		if req.MessageID != "" {
+			// Delete individual message
+			logger.Info("Deleting message: %s", req.MessageID)
+			err := m.imapClient.DeleteEmail(req.MessageID, req.Folder)
+			result.Error = err
+			result.DeletedCount = 1
+		} else if req.Sender != "" {
+			// Delete all messages from sender
+			logger.Info("Deleting all messages from: %s", req.Sender)
+			err := m.imapClient.DeleteSenderEmails(req.Sender, req.Folder)
+			result.Error = err
+			// We don't know the count here, would need to update DeleteSenderEmails to return it
 		}
 
-		// Reload data
-		stats, err := m.imapClient.GetSenderStatistics("INBOX")
-		if err != nil {
-			return LoadCompleteMsg{Error: err}
+		// Send result back
+		if req.Response != nil {
+			req.Response <- result
 		}
 
-		return LoadCompleteMsg{Stats: stats}
+		// Also send to result channel for UI updates
+		m.deletionResultCh <- result
 	}
 }
 
 // cleanup cleans up resources
 func (m *Model) cleanup() {
+	if m.deletionRequestCh != nil {
+		close(m.deletionRequestCh)
+	}
 	if m.imapClient != nil {
 		m.imapClient.Close()
 	}

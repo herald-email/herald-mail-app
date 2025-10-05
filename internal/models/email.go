@@ -34,3 +34,19 @@ type ProgressInfo struct {
 	NewEmails       int
 	Message         string
 }
+
+type DeletionResult struct {
+	MessageID    string `json:"message_id"`
+	Sender       string `json:"sender"`
+	Folder       string `json:"folder"`
+	DeletedCount int    `json:"deleted_count"`
+	Error        error
+}
+
+// Deletion Request
+type DeletionRequest struct {
+	MessageID string `json:"message_id"`
+	Sender    string `json:"sender"`
+	Folder    string `json:"folder"`
+	Response  chan DeletionResult
+}

@@ -34,13 +34,18 @@ type Model struct {
 	progressCh chan models.ProgressInfo
 
 	// UI State
-	loading        bool
-	deleting       bool
-	loadingSpinner int
-	startTime      time.Time
-	progressInfo   models.ProgressInfo
-	showLogs       bool
-	windowHeight   int
+	loading          bool
+	deleting         bool
+	deletionProgress models.DeletionResult
+	loadingSpinner   int
+	startTime        time.Time
+	progressInfo     models.ProgressInfo
+	showLogs         bool
+	windowHeight     int
+
+	// Deletion channels
+	deletionRequestCh chan models.DeletionRequest
+	deletionResultCh  chan models.DeletionResult
 
 	// Data
 	stats          map[string]*models.SenderStats
@@ -174,7 +179,11 @@ func New(cfg *config.Config) *Model {
 		logViewer.AddLog(level, message)
 	})
 
-	return &Model{
+	// Create deletion channels
+	deletionRequestCh := make(chan models.DeletionRequest, 10)
+	deletionResultCh := make(chan models.DeletionResult, 10)
+
+	m := &Model{
 		cfg:                cfg,
 		imapClient:         imapClient,
 		cache:              cache,
@@ -193,7 +202,14 @@ func New(cfg *config.Config) *Model {
 		progressStyle:      progressStyle,
 		activeTableStyle:   activeStyle,
 		inactiveTableStyle: inactiveStyle,
+		deletionRequestCh:  deletionRequestCh,
+		deletionResultCh:   deletionResultCh,
 	}
+
+	// Start deletion worker goroutine
+	go m.deletionWorker()
+
+	return m
 }
 
 // Init implements tea.Model
@@ -243,6 +259,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateSummaryTable()
 		m.updateDetailsTable() // Show details for first sender
 		return m, nil
+
+	case models.DeletionResult:
+		// Update deletion progress
+		m.deletionProgress = msg
+		if msg.Error != nil {
+			logger.Error("Deletion error: %v", msg.Error)
+			m.deleting = false
+		} else {
+			logger.Info("Deletion complete: %s", msg.Sender)
+			// Reload data after successful deletion
+			stats, err := m.imapClient.GetSenderStatistics("INBOX")
+			if err != nil {
+				logger.Error("Failed to reload after deletion: %v", err)
+				m.deleting = false
+				return m, nil
+			}
+			m.stats = stats
+			m.updateSummaryTable()
+			m.updateDetailsTable()
+			m.deleting = false
+		}
+		// Continue listening for more results
+		return m, m.listenForDeletionResults()
 
 	case tea.WindowSizeMsg:
 		m.windowHeight = msg.Height
@@ -446,7 +485,13 @@ func (m *Model) renderMainView() string {
 	}
 	status := "Ready"
 	if m.deleting {
-		status = "Deleting..."
+		if m.deletionProgress.Sender != "" {
+			status = fmt.Sprintf("Deleting: %s", m.deletionProgress.Sender)
+		} else if m.deletionProgress.MessageID != "" {
+			status = fmt.Sprintf("Deleting message: %s", m.deletionProgress.MessageID)
+		} else {
+			status = "Deleting..."
+		}
 	}
 	status += fmt.Sprintf(" | %d senders | %d emails", len(m.stats), totalEmails)
 	if len(m.selectedRows) > 0 {
