@@ -265,13 +265,20 @@ func (m *Model) toggleDomainMode() {
 	m.groupByDomain = !m.groupByDomain
 	m.imapClient.SetGroupByDomain(m.groupByDomain)
 
-	// Reload statistics
-	m.loading = true
-	m.startTime = time.Now()
+	logger.Info("Toggling domain mode to: %v", m.groupByDomain)
 
-	// Note: In a real implementation, you'd want to reload the data
-	// For now, we'll just update the display
-	m.loading = false
+	// Reload statistics with new grouping mode
+	stats, err := m.imapClient.GetSenderStatistics("INBOX")
+	if err != nil {
+		logger.Error("Failed to reload statistics after toggling domain mode: %v", err)
+		return
+	}
+
+	// Update stats and refresh tables
+	m.stats = stats
+	m.selectedRows = make(map[int]bool) // Clear selections as row indices will change
+	m.updateSummaryTable()
+	m.updateDetailsTable()
 }
 
 // toggleSelection toggles selection of the current row in active table
@@ -337,7 +344,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 				}
 			}
 		} else if len(m.selectedRows) > 0 {
-			// Delete multiple selected senders
+			// Delete multiple selected senders (or domains in domain mode)
 			for cursor := range m.selectedRows {
 				// Get original sender from mapping (before sanitization)
 				sender, ok := m.rowToSender[cursor]
@@ -347,19 +354,21 @@ func (m *Model) deleteSelected() tea.Cmd {
 				}
 
 				m.deletionRequestCh <- models.DeletionRequest{
-					Sender: sender,
-					Folder: "INBOX",
+					Sender:   sender,
+					IsDomain: m.groupByDomain,
+					Folder:   "INBOX",
 				}
 			}
 			m.selectedRows = make(map[int]bool)
 		} else {
-			// Delete current sender using row mapping
+			// Delete current sender using row mapping (or domain in domain mode)
 			cursor := m.summaryTable.Cursor()
 			sender, ok := m.rowToSender[cursor]
 			if ok && sender != "" {
 				m.deletionRequestCh <- models.DeletionRequest{
-					Sender: sender,
-					Folder: "INBOX",
+					Sender:   sender,
+					IsDomain: m.groupByDomain,
+					Folder:   "INBOX",
 				}
 			}
 		}
@@ -404,11 +413,18 @@ func (m *Model) deletionWorker() {
 			result.Error = err
 			result.DeletedCount = 1
 		} else if req.Sender != "" {
-			// Delete all messages from sender
-			logger.Info("Deleting all messages from: %s", req.Sender)
-			err := m.imapClient.DeleteSenderEmails(req.Sender, req.Folder)
-			result.Error = err
-			// We don't know the count here, would need to update DeleteSenderEmails to return it
+			if req.IsDomain {
+				// Delete all messages from domain
+				logger.Info("Deleting all messages from domain: %s", req.Sender)
+				err := m.imapClient.DeleteDomainEmails(req.Sender, req.Folder)
+				result.Error = err
+			} else {
+				// Delete all messages from sender
+				logger.Info("Deleting all messages from sender: %s", req.Sender)
+				err := m.imapClient.DeleteSenderEmails(req.Sender, req.Folder)
+				result.Error = err
+			}
+			// We don't know the count here, would need to update Delete*Emails to return it
 		}
 
 		// Send result back

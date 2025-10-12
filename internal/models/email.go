@@ -47,6 +47,7 @@ type DeletionResult struct {
 type DeletionRequest struct {
 	MessageID string `json:"message_id"`
 	Sender    string `json:"sender"`
+	IsDomain  bool   `json:"is_domain"` // True if Sender is a domain, not a full email
 	Folder    string `json:"folder"`
 	Response  chan DeletionResult
 }

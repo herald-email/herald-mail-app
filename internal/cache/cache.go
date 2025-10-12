@@ -175,6 +175,14 @@ func (c *Cache) DeleteEmail(messageID string) error {
 	return err
 }
 
+// DeleteDomainEmails removes all emails from a specific domain
+func (c *Cache) DeleteDomainEmails(domain, folder string) error {
+	query := "DELETE FROM emails WHERE sender LIKE ? AND folder = ?"
+	pattern := "%@" + domain
+	_, err := c.db.Exec(query, pattern, folder)
+	return err
+}
+
 // extractDomain extracts the second-level domain from an email address
 func extractDomain(emailAddress string) string {
 	// Simple domain extraction - can be enhanced with more sophisticated logic

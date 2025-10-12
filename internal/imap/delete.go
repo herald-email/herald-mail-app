@@ -107,6 +107,104 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 	return nil
 }
 
+// DeleteDomainEmails deletes all emails from a domain in both IMAP and cache
+func (c *Client) DeleteDomainEmails(domain, folder string) error {
+	logger.Info("Starting deletion of all emails from domain '%s' in folder %s", domain, folder)
+
+	// Select folder (connection is kept open, no need to reconnect)
+	mbox, err := c.client.Select(folder, false)
+	if err != nil {
+		return fmt.Errorf("failed to select folder %s: %w", folder, err)
+	}
+
+	logger.Info("Folder '%s' has %d total messages", folder, mbox.Messages)
+
+	// Get all messages and filter by domain manually
+	var seqNums []uint32
+
+	if mbox.Messages > 0 {
+		seqset := new(imap.SeqSet)
+		seqset.AddRange(1, mbox.Messages)
+
+		messages := make(chan *imap.Message, 10)
+		done := make(chan error, 1)
+
+		go func() {
+			done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
+		}()
+
+		matchCount := 0
+		for msg := range messages {
+			if msg.Envelope != nil && len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+				addr := msg.Envelope.From[0]
+				// Build sender the same way as in processMessage
+				fromAddr := ""
+				if addr.MailboxName != "" && addr.HostName != "" {
+					fromAddr = addr.MailboxName + "@" + addr.HostName
+				}
+
+				// Check if the sender's domain matches
+				if addr.HostName == domain {
+					seqNums = append(seqNums, msg.SeqNum)
+					matchCount++
+					// Log first 5 matches for debugging
+					if matchCount <= 5 {
+						logger.Debug("Match %d: from='%s' domain='%s'", matchCount, fromAddr, addr.HostName)
+					}
+				}
+			}
+		}
+
+		if err := <-done; err != nil {
+			return fmt.Errorf("failed to fetch messages: %w", err)
+		}
+	}
+
+	logger.Info("Found %d messages from domain '%s' to move to Trash", len(seqNums), domain)
+
+	if len(seqNums) > 0 {
+		seqset := new(imap.SeqSet)
+		seqset.AddNum(seqNums...)
+
+		// Try to copy to Trash folder
+		trashFolders := []string{"Trash", "Deleted Items", "[Gmail]/Trash", "INBOX.Trash"}
+		moved := false
+
+		for _, trashFolder := range trashFolders {
+			if err := c.client.Copy(seqset, trashFolder); err == nil {
+				logger.Info("Copied %d messages to %s", len(seqNums), trashFolder)
+				moved = true
+				break
+			}
+		}
+
+		if !moved {
+			logger.Warn("Could not copy to any Trash folder, marking as deleted instead")
+		}
+
+		// Mark messages as deleted (remove from source folder)
+		store := imap.FormatFlagsOp(imap.AddFlags, true)
+		if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+			return fmt.Errorf("failed to mark messages as deleted: %w", err)
+		}
+
+		// Expunge to remove from source folder
+		if err := c.client.Expunge(nil); err != nil {
+			return fmt.Errorf("failed to expunge: %w", err)
+		}
+
+		logger.Info("Successfully moved %d messages from domain %s to Trash", len(seqNums), domain)
+	}
+
+	// Delete from cache
+	if err := c.cache.DeleteDomainEmails(domain, folder); err != nil {
+		return fmt.Errorf("failed to delete from cache: %w", err)
+	}
+
+	logger.Info("Successfully completed deletion for domain %s", domain)
+	return nil
+}
+
 // DeleteEmail moves a specific email to Trash by MessageID
 func (c *Client) DeleteEmail(messageID string, folder string) error {
 	logger.Info("Moving message to Trash: %s", messageID)
