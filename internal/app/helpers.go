@@ -213,11 +213,14 @@ func (m *Model) updateSummaryTable() {
 
 // updateDetailsTable updates the details table for the selected sender
 func (m *Model) updateDetailsTable() {
-	// Get original sender from row mapping (before sanitization)
+	// Get original sender from row mapping; fall back to row 0 if cursor is out of range
+	// (happens when switching to a folder that has fewer rows than the previous one)
 	cursor := m.summaryTable.Cursor()
 	sender, ok := m.rowToSender[cursor]
 	if !ok || sender == "" {
-		logger.Debug("No sender mapping found for cursor %d", cursor)
+		sender, ok = m.rowToSender[0]
+	}
+	if !ok || sender == "" {
 		m.detailsTable.SetRows([]table.Row{})
 		return
 	}

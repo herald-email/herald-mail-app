@@ -256,19 +256,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		// Fetch counts for all folders in background
-		folders := msg.Folders
-		return m, func() tea.Msg {
-			status, err := m.backend.GetFolderStatus(folders)
-			if err != nil {
-				logger.Warn("Failed to get folder status: %v", err)
-				return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+		// Only fetch counts on first load to avoid flickering on every folder switch
+		if len(m.folderStatus) == 0 {
+			folders := msg.Folders
+			return m, func() tea.Msg {
+				status, err := m.backend.GetFolderStatus(folders)
+				if err != nil {
+					logger.Warn("Failed to get folder status: %v", err)
+					return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+				}
+				return FolderStatusMsg{Status: status}
 			}
-			return FolderStatusMsg{Status: status}
 		}
+		return m, nil
 
 	case FolderStatusMsg:
-		m.folderStatus = msg.Status
+		// Merge rather than replace so partial results don't wipe existing counts
+		for folder, st := range msg.Status {
+			m.folderStatus[folder] = st
+		}
 		return m, nil
 
 	case LoadingMsg:
@@ -283,6 +289,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.stats = stats
 			m.updateSummaryTable()
+			m.summaryTable.GotoTop()
 			m.updateDetailsTable()
 			return m, func() tea.Msg {
 				folders, err := m.backend.ListFolders()
