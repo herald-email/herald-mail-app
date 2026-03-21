@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/app"
+	"mail-processor/internal/backend"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 )
@@ -58,8 +59,15 @@ func main() {
 	logger.Debug("Server: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	logger.Debug("Username: %s", cfg.Credentials.Username)
 
+	// Create the backend
+	b, err := backend.NewLocal(cfg)
+	if err != nil {
+		logger.Error("Failed to create backend: %v", err)
+		log.Fatalf("Failed to create backend: %v", err)
+	}
+
 	// Create the TUI application
-	app := app.New(cfg)
+	app := app.New(b)
 
 	logger.Info("Starting TUI application...")
 

@@ -8,9 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/config"
-	"mail-processor/internal/imap"
+	"mail-processor/internal/backend"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -28,10 +26,8 @@ type LoadCompleteMsg struct {
 
 // Model represents the main application state
 type Model struct {
-	cfg        *config.Config
-	imapClient *imap.Client
-	cache      *cache.Cache
-	progressCh chan models.ProgressInfo
+	backend    backend.Backend
+	progressCh <-chan models.ProgressInfo
 
 	// UI State
 	loading          bool
@@ -77,24 +73,9 @@ type Model struct {
 	inactiveTableStyle table.Styles
 }
 
-// New creates a new application model
-func New(cfg *config.Config) *Model {
+// New creates a new application model backed by the given Backend.
+func New(b backend.Backend) *Model {
 	logger.Info("Creating new application model")
-
-	// Create cache
-	logger.Debug("Initializing cache database...")
-	cache, err := cache.New("email_cache.db")
-	if err != nil {
-		logger.Error("Failed to create cache: %v", err)
-		panic(fmt.Sprintf("Failed to create cache: %v", err))
-	}
-	logger.Info("Cache database initialized successfully")
-
-	// Create progress channel
-	progressCh := make(chan models.ProgressInfo, 100)
-
-	// Create IMAP client
-	imapClient := imap.New(cfg, cache, progressCh)
 
 	// Setup styles
 	baseStyle := lipgloss.NewStyle().
@@ -188,10 +169,8 @@ func New(cfg *config.Config) *Model {
 	deletionResultCh := make(chan models.DeletionResult, 10)
 
 	m := &Model{
-		cfg:                cfg,
-		imapClient:         imapClient,
-		cache:              cache,
-		progressCh:         progressCh,
+		backend:            b,
+		progressCh:         b.Progress(),
 		loading:            true,
 		startTime:          time.Now(),
 		selectedRows:       make(map[int]bool),
@@ -238,7 +217,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if this is completion
 		if msg.Info.Phase == "complete" {
 			// Get final statistics
-			stats, err := m.imapClient.GetSenderStatistics("INBOX")
+			stats, err := m.backend.GetSenderStatistics("INBOX")
 			if err != nil {
 				logger.Error("Failed to get final statistics: %v", err)
 				return m, tea.Quit
@@ -296,7 +275,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsTotal = 0
 
 			// Reload data after all deletions complete to sync with server
-			stats, err := m.imapClient.GetSenderStatistics("INBOX")
+			stats, err := m.backend.GetSenderStatistics("INBOX")
 			if err != nil {
 				logger.Error("Failed to reload after deletion: %v", err)
 				return m, nil

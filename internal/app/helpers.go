@@ -40,73 +40,10 @@ func (m *Model) listenForDeletionResults() tea.Cmd {
 	}
 }
 
-// startLoading starts the data loading process
+// startLoading kicks off the backend's load sequence for INBOX.
 func (m *Model) startLoading() tea.Cmd {
 	return func() tea.Msg {
-		go func() {
-			logger.Info("Starting data loading process...")
-
-			// Send initial progress
-			logger.Debug("Sending connecting progress...")
-			m.progressCh <- models.ProgressInfo{
-				Phase:   "connecting",
-				Message: "Connecting to IMAP server...",
-			}
-			logger.Debug("Connecting progress sent")
-			time.Sleep(200 * time.Millisecond) // Allow UI to catch up
-
-			// Connect to IMAP
-			logger.Info("Connecting to IMAP server...")
-			if err := m.imapClient.Connect(); err != nil {
-				logger.Error("Failed to connect to IMAP: %v", err)
-				// Send error through progress channel instead
-				return
-			}
-			// Keep connection open for future operations (don't close after loading)
-			logger.Debug("IMAP connection established and will remain open")
-
-			// Process emails first (this will send its own progress updates)
-			logger.Info("Processing emails...")
-			logger.Debug("Starting ProcessEmails...")
-			if err := m.imapClient.ProcessEmails("INBOX"); err != nil {
-				logger.Error("Failed to process emails: %v", err)
-				return
-			}
-			logger.Debug("ProcessEmails completed")
-
-			// Clean up cache after processing (remove emails that no longer exist on server)
-			logger.Info("Cleaning up stale cache entries...")
-			m.progressCh <- models.ProgressInfo{
-				Phase:   "cleanup",
-				Message: "Cleaning up cache...",
-			}
-			if err := m.imapClient.CleanupCache("INBOX"); err != nil {
-				logger.Warn("Cache cleanup failed (non-critical): %v", err)
-				// Don't return - this is not critical
-			}
-			logger.Debug("Cache cleanup completed")
-
-			// Get statistics
-			m.progressCh <- models.ProgressInfo{
-				Phase:   "finalizing",
-				Message: "Generating statistics...",
-			}
-			logger.Info("Generating statistics...")
-			stats, err := m.imapClient.GetSenderStatistics("INBOX")
-			if err != nil {
-				logger.Error("Failed to get statistics: %v", err)
-				return
-			}
-
-			// Send completion through progress channel
-			m.progressCh <- models.ProgressInfo{
-				Phase:   "complete",
-				Message: fmt.Sprintf("Found %d senders", len(stats)),
-			}
-			logger.Info("Data loading completed successfully. Found %d senders", len(stats))
-		}()
-
-		// Return immediately - progress will come through the channel
+		m.backend.Load("INBOX")
 		return nil
 	}
 }
@@ -195,7 +132,7 @@ func (m *Model) updateDetailsTable() {
 	m.selectedSender = sender
 
 	// Get emails for this sender
-	emails, err := m.imapClient.GetEmailsBySender("INBOX")
+	emails, err := m.backend.GetEmailsBySender("INBOX")
 	if err != nil {
 		logger.Warn("Failed to get emails for sender %s: %v", sender, err)
 		m.detailsTable.SetRows([]table.Row{})
@@ -267,12 +204,12 @@ func (m *Model) updateDetailsTable() {
 // toggleDomainMode switches between domain and email grouping
 func (m *Model) toggleDomainMode() {
 	m.groupByDomain = !m.groupByDomain
-	m.imapClient.SetGroupByDomain(m.groupByDomain)
+	m.backend.SetGroupByDomain(m.groupByDomain)
 
 	logger.Info("Toggling domain mode to: %v", m.groupByDomain)
 
 	// Reload statistics with new grouping mode
-	stats, err := m.imapClient.GetSenderStatistics("INBOX")
+	stats, err := m.backend.GetSenderStatistics("INBOX")
 	if err != nil {
 		logger.Error("Failed to reload statistics after toggling domain mode: %v", err)
 		return
@@ -413,19 +350,19 @@ func (m *Model) deletionWorker() {
 		if req.MessageID != "" {
 			// Delete individual message
 			logger.Info("Deleting message: %s", req.MessageID)
-			err := m.imapClient.DeleteEmail(req.MessageID, req.Folder)
+			err := m.backend.DeleteEmail(req.MessageID, req.Folder)
 			result.Error = err
 			result.DeletedCount = 1
 		} else if req.Sender != "" {
 			if req.IsDomain {
 				// Delete all messages from domain
 				logger.Info("Deleting all messages from domain: %s", req.Sender)
-				err := m.imapClient.DeleteDomainEmails(req.Sender, req.Folder)
+				err := m.backend.DeleteDomainEmails(req.Sender, req.Folder)
 				result.Error = err
 			} else {
 				// Delete all messages from sender
 				logger.Info("Deleting all messages from sender: %s", req.Sender)
-				err := m.imapClient.DeleteSenderEmails(req.Sender, req.Folder)
+				err := m.backend.DeleteSenderEmails(req.Sender, req.Folder)
 				result.Error = err
 			}
 			// We don't know the count here, would need to update Delete*Emails to return it
@@ -446,11 +383,8 @@ func (m *Model) cleanup() {
 	if m.deletionRequestCh != nil {
 		close(m.deletionRequestCh)
 	}
-	if m.imapClient != nil {
-		m.imapClient.Close()
-	}
-	if m.cache != nil {
-		m.cache.Close()
+	if m.backend != nil {
+		m.backend.Close()
 	}
 }
 
