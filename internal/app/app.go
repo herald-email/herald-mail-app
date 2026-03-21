@@ -13,6 +13,13 @@ import (
 	"mail-processor/internal/models"
 )
 
+// Panel focus constants
+const (
+	panelSidebar = 0
+	panelSummary = 1
+	panelDetails = 2
+)
+
 // LoadingMsg represents a loading state update
 type LoadingMsg struct {
 	Info models.ProgressInfo
@@ -22,6 +29,11 @@ type LoadingMsg struct {
 type LoadCompleteMsg struct {
 	Stats map[string]*models.SenderStats
 	Error error
+}
+
+// FoldersLoadedMsg carries the folder list fetched after connect
+type FoldersLoadedMsg struct {
+	Folders []string
 }
 
 // Model represents the main application state
@@ -58,11 +70,18 @@ type Model struct {
 
 	// Display options
 	groupByDomain      bool
+	currentFolder      string
 	selectedSender     string
 	selectedRows       map[int]bool              // Selected rows in summary table
 	selectedMessages   map[string]bool           // Selected messages by MessageID (across all senders)
 	rowToSender        map[int]string            // Maps row index to original sender (before sanitization)
 	detailsEmails      []*models.EmailData       // Current emails shown in details table
+
+	// Sidebar
+	folders       []string
+	showSidebar   bool
+	sidebarCursor int
+	focusedPanel  int // panelSidebar, panelSummary, panelDetails
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -173,6 +192,10 @@ func New(b backend.Backend) *Model {
 		progressCh:         b.Progress(),
 		loading:            true,
 		startTime:          time.Now(),
+		currentFolder:      "INBOX",
+		folders:            []string{"INBOX"},
+		showSidebar:        true,
+		focusedPanel:       panelSummary,
 		selectedRows:       make(map[int]bool),
 		selectedMessages:   make(map[string]bool),
 		rowToSender:        make(map[int]string),
@@ -212,12 +235,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 
+	case FoldersLoadedMsg:
+		m.folders = msg.Folders
+		return m, nil
+
 	case LoadingMsg:
 		m.progressInfo = msg.Info
 		// Check if this is completion
 		if msg.Info.Phase == "complete" {
 			// Get final statistics
-			stats, err := m.backend.GetSenderStatistics("INBOX")
+			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
 			if err != nil {
 				logger.Error("Failed to get final statistics: %v", err)
 				return m, tea.Quit
@@ -226,7 +253,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stats = stats
 			m.updateSummaryTable()
 			m.updateDetailsTable() // Show details for first sender
-			return m, nil
+			// Fetch folder list now that we're connected
+			return m, func() tea.Msg {
+				folders, err := m.backend.ListFolders()
+				if err != nil {
+					logger.Warn("Failed to list folders: %v", err)
+					return FoldersLoadedMsg{Folders: []string{"INBOX"}}
+				}
+				return FoldersLoadedMsg{Folders: folders}
+			}
 		}
 		// Continue listening for more progress updates
 		return m, m.listenForProgress()
@@ -240,7 +275,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.stats = msg.Stats
 		m.updateSummaryTable()
-		m.updateDetailsTable() // Show details for first sender
+		m.updateDetailsTable()
 		return m, nil
 
 	case models.DeletionResult:
@@ -275,7 +310,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsTotal = 0
 
 			// Reload data after all deletions complete to sync with server
-			stats, err := m.backend.GetSenderStatistics("INBOX")
+			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
 			if err != nil {
 				logger.Error("Failed to reload after deletion: %v", err)
 				return m, nil
@@ -331,6 +366,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cleanup()
 		return m, tea.Quit
 
+	case "f":
+		if !m.loading {
+			m.showSidebar = !m.showSidebar
+			if m.windowWidth > 0 {
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
+			// If sidebar was hidden and focus was on it, move to summary
+			if !m.showSidebar && m.focusedPanel == panelSidebar {
+				m.setFocusedPanel(panelSummary)
+			}
+		}
+		return m, nil
+
 	case "d":
 		if !m.loading {
 			m.toggleDomainMode()
@@ -359,24 +407,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
-		if !m.loading && m.summaryTable.Focused() {
-			m.updateDetailsTable()
+		if !m.loading {
+			if m.focusedPanel == panelSidebar {
+				m.selectSidebarFolder()
+				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
+			} else if m.focusedPanel == panelSummary {
+				m.updateDetailsTable()
+			}
 		}
 		return m, nil
 
 	case "tab":
 		if !m.loading {
-			if m.summaryTable.Focused() {
-				m.summaryTable.Blur()
-				m.summaryTable.SetStyles(m.inactiveTableStyle)
-				m.detailsTable.Focus()
-				m.detailsTable.SetStyles(m.activeTableStyle)
-			} else {
-				m.detailsTable.Blur()
-				m.detailsTable.SetStyles(m.inactiveTableStyle)
-				m.summaryTable.Focus()
-				m.summaryTable.SetStyles(m.activeTableStyle)
-			}
+			m.cyclePanel()
 		}
 		return m, nil
 
@@ -505,23 +548,20 @@ func (m *Model) renderMainView() string {
 		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode | ↑/k ↓/j: navigate"
 		content.WriteString(help)
 	} else {
-		// Show tables side by side with minimal spacing
 		summaryView := m.baseStyle.Render(m.summaryTable.View())
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
 
-		// Use 2 spaces between tables instead of proportional spacing
-		tablesView := lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
-		content.WriteString(tablesView + "\n")
+		var tablesView string
+		if m.showSidebar {
+			sidebarView := m.baseStyle.Render(m.renderSidebar())
+			tablesView = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
+		} else {
+			tablesView = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
+		}
+		content.WriteString(tablesView + "\n\n")
 
-		// Add spacing before help text
-		content.WriteString("\n")
-
-		// Help for table view
-		help := "q: quit | l: toggle logs | d: toggle domain mode | r: refresh | ↑/k ↓/j: navigate | space: select | D: delete | enter: show details | tab: switch table"
-		content.WriteString(help)
-
-		// Add bottom padding to prevent overlap
-		content.WriteString("\n")
+		help := "q: quit | f: sidebar | l: logs | d: domain | r: refresh | ↑/k ↓/j: nav | space: select | D: delete | enter: details/select | tab: switch panel"
+		content.WriteString(help + "\n")
 	}
 
 	return content.String()

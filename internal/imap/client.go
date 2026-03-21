@@ -82,6 +82,26 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// ListFolders returns all mailbox names from the server
+func (c *Client) ListFolders() ([]string, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	mailboxes := make(chan *imap.MailboxInfo, 20)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.List("", "*", mailboxes)
+	}()
+	var folders []string
+	for m := range mailboxes {
+		folders = append(folders, m.Name)
+	}
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("failed to list folders: %w", err)
+	}
+	return folders, nil
+}
+
 // ProcessEmails reads and processes all emails from specified folder
 func (c *Client) ProcessEmails(folder string) error {
 	logger.Info("Starting to process emails in folder: %s", folder)

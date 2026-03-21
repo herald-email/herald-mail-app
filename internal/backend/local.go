@@ -113,6 +113,10 @@ func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
 	return b.imapClient.DeleteEmail(messageID, folder)
 }
 
+func (b *LocalBackend) ListFolders() ([]string, error) {
+	return b.imapClient.ListFolders()
+}
+
 func (b *LocalBackend) SetGroupByDomain(v bool) {
 	b.imapClient.SetGroupByDomain(v)
 }

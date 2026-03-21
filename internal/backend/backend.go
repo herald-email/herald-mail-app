@@ -26,6 +26,9 @@ type Backend interface {
 	// DeleteEmail removes a single email by Message-ID.
 	DeleteEmail(messageID, folder string) error
 
+	// ListFolders returns all mailbox names available on the server.
+	ListFolders() ([]string, error)
+
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
 

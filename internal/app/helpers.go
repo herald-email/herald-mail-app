@@ -40,10 +40,10 @@ func (m *Model) listenForDeletionResults() tea.Cmd {
 	}
 }
 
-// startLoading kicks off the backend's load sequence for INBOX.
+// startLoading kicks off the backend's load sequence for the current folder.
 func (m *Model) startLoading() tea.Cmd {
 	return func() tea.Msg {
-		m.backend.Load("INBOX")
+		m.backend.Load(m.currentFolder)
 		return nil
 	}
 }
@@ -132,7 +132,7 @@ func (m *Model) updateDetailsTable() {
 	m.selectedSender = sender
 
 	// Get emails for this sender
-	emails, err := m.backend.GetEmailsBySender("INBOX")
+	emails, err := m.backend.GetEmailsBySender(m.currentFolder)
 	if err != nil {
 		logger.Warn("Failed to get emails for sender %s: %v", sender, err)
 		m.detailsTable.SetRows([]table.Row{})
@@ -209,7 +209,7 @@ func (m *Model) toggleDomainMode() {
 	logger.Info("Toggling domain mode to: %v", m.groupByDomain)
 
 	// Reload statistics with new grouping mode
-	stats, err := m.backend.GetSenderStatistics("INBOX")
+	stats, err := m.backend.GetSenderStatistics(m.currentFolder)
 	if err != nil {
 		logger.Error("Failed to reload statistics after toggling domain mode: %v", err)
 		return
@@ -269,7 +269,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 				for messageID := range m.selectedMessages {
 					m.deletionRequestCh <- models.DeletionRequest{
 						MessageID: messageID,
-						Folder:    "INBOX",
+						Folder:    m.currentFolder,
 					}
 				}
 				m.selectedMessages = make(map[string]bool)
@@ -280,7 +280,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 					email := m.detailsEmails[cursor]
 					m.deletionRequestCh <- models.DeletionRequest{
 						MessageID: email.MessageID,
-						Folder:    "INBOX",
+						Folder:    m.currentFolder,
 					}
 				}
 			}
@@ -478,9 +478,14 @@ func (m *Model) updateTableDimensions(width, height int) {
 	// Total rendering overhead:
 	//   bubbles/table default cell style Padding(0,1) adds 2 chars per cell
 	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
-	//   2-space gap between tables
-	// overhead = summaryNumCols*2 + detailsNumCols*2 + 4 + 2 = 12 + 10 + 4 + 2 = 28
-	const overhead = 28
+	//   2-space gap between the two tables
+	// base = summaryNumCols*2 + detailsNumCols*2 + 4 + 2 = 12 + 10 + 4 + 2 = 28
+	// sidebar (when visible): 20 content + 2 border + 2 gap = 24
+	const sidebarContentWidth = 20
+	overhead := 28
+	if m.showSidebar {
+		overhead += sidebarContentWidth + 2 + 2 // content + border + gap
+	}
 
 	// Space remaining for the two variable-width columns (Sender/Domain and Subject)
 	variable := width - overhead - summaryFixedCols - detailsFixedCols
@@ -534,9 +539,102 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.logViewer.SetSize(logWidth, tableHeight)
 }
 
-// handleNavigation handles up/down navigation for the focused table
+// setFocusedPanel updates focus state and table styles for the given panel
+func (m *Model) setFocusedPanel(panel int) {
+	m.focusedPanel = panel
+	if panel == panelSummary {
+		m.summaryTable.Focus()
+		m.summaryTable.SetStyles(m.activeTableStyle)
+		m.detailsTable.Blur()
+		m.detailsTable.SetStyles(m.inactiveTableStyle)
+	} else if panel == panelDetails {
+		m.detailsTable.Focus()
+		m.detailsTable.SetStyles(m.activeTableStyle)
+		m.summaryTable.Blur()
+		m.summaryTable.SetStyles(m.inactiveTableStyle)
+	} else {
+		// sidebar or any non-table panel
+		m.summaryTable.Blur()
+		m.summaryTable.SetStyles(m.inactiveTableStyle)
+		m.detailsTable.Blur()
+		m.detailsTable.SetStyles(m.inactiveTableStyle)
+	}
+}
+
+// cyclePanel advances focus to the next panel in order
+func (m *Model) cyclePanel() {
+	panels := []int{panelSummary, panelDetails}
+	if m.showSidebar {
+		panels = []int{panelSidebar, panelSummary, panelDetails}
+	}
+	for i, p := range panels {
+		if p == m.focusedPanel {
+			m.setFocusedPanel(panels[(i+1)%len(panels)])
+			return
+		}
+	}
+	m.setFocusedPanel(panels[0])
+}
+
+// selectSidebarFolder switches to the folder at sidebarCursor
+func (m *Model) selectSidebarFolder() {
+	if m.sidebarCursor >= 0 && m.sidebarCursor < len(m.folders) {
+		m.currentFolder = m.folders[m.sidebarCursor]
+		m.loading = true
+		m.startTime = time.Now()
+		m.stats = nil
+		m.selectedRows = make(map[int]bool)
+		m.selectedMessages = make(map[string]bool)
+		logger.Info("Switching to folder: %s", m.currentFolder)
+	}
+}
+
+// renderSidebar renders the folder list sidebar content (without border)
+func (m *Model) renderSidebar() string {
+	const contentWidth = 20
+	var sb strings.Builder
+
+	for i, folder := range m.folders {
+		name := folder
+		if len(name) > contentWidth-1 {
+			name = name[:contentWidth-4] + "..."
+		}
+		line := fmt.Sprintf("%-*s", contentWidth, name)
+
+		if i == m.sidebarCursor {
+			if m.focusedPanel == panelSidebar {
+				line = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("229")).
+					Background(lipgloss.Color("57")).
+					Render(line)
+			} else {
+				line = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("250")).
+					Background(lipgloss.Color("238")).
+					Render(line)
+			}
+		}
+		sb.WriteString(line + "\n")
+	}
+	return sb.String()
+}
+
+// handleNavigation handles up/down navigation for the focused panel
 func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	if m.focusedPanel == panelSidebar {
+		if direction > 0 {
+			if m.sidebarCursor < len(m.folders)-1 {
+				m.sidebarCursor++
+			}
+		} else {
+			if m.sidebarCursor > 0 {
+				m.sidebarCursor--
+			}
+		}
+		return m, nil
+	}
 
 	if m.summaryTable.Focused() {
 		// Let the table handle navigation properly (including scrolling)
