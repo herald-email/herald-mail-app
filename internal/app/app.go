@@ -245,9 +245,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LoadingMsg:
 		m.progressInfo = msg.Info
-		// Check if this is completion
-		if msg.Info.Phase == "complete" {
-			// Get final statistics
+		switch msg.Info.Phase {
+		case "complete":
 			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
 			if err != nil {
 				logger.Error("Failed to get final statistics: %v", err)
@@ -256,8 +255,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.stats = stats
 			m.updateSummaryTable()
-			m.updateDetailsTable() // Show details for first sender
-			// Fetch folder list now that we're connected
+			m.updateDetailsTable()
 			return m, func() tea.Msg {
 				folders, err := m.backend.ListFolders()
 				if err != nil {
@@ -266,9 +264,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FoldersLoadedMsg{Folders: folders}
 			}
+		case "error":
+			// Stop loading; keep existing data so the user can still navigate
+			logger.Error("Load error: %s", msg.Info.Message)
+			m.loading = false
+			if m.stats == nil {
+				m.stats = map[string]*models.SenderStats{}
+			}
+			m.updateSummaryTable()
+			m.updateDetailsTable()
+			return m, nil
+		default:
+			return m, m.listenForProgress()
 		}
-		// Continue listening for more progress updates
-		return m, m.listenForProgress()
 
 	case LoadCompleteMsg:
 		m.loading = false

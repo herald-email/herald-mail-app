@@ -116,9 +116,17 @@ func (c *Client) ProcessEmails(folder string) error {
 
 	totalMessages := int(mbox.Messages)
 	logger.Info("Found %d messages in folder %s", totalMessages, folder)
-	logger.Debug("Mailbox status - Messages: %d, Recent: %d, Unseen: %d", 
+	logger.Debug("Mailbox status - Messages: %d, Recent: %d, Unseen: %d",
 		mbox.Messages, mbox.Recent, mbox.Unseen)
-	
+
+	if totalMessages == 0 {
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "complete",
+			Message: fmt.Sprintf("Folder %s is empty", folder),
+		})
+		return nil
+	}
+
 	c.sendProgress(models.ProgressInfo{
 		Phase:   "scanning",
 		Total:   totalMessages,
