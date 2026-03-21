@@ -4,16 +4,17 @@ This document describes the long-term direction for this project. It evolves fro
 
 ## Implementation Order
 
-1. Fix responsive terminal width (hardcoded values today)
-2. Refactor to daemon/UI split architecture
-3. Multi-folder sidebar (collapsible)
-4. Timeline/thread view + tab navigation
-5. Compose and reply (after timeline)
-6. AI-powered inbox classification via Ollama
-7. Chat panel (talk to your emails with AI)
-8. MCP server hook
-9. SSH app mode (charmbracelet/wish)
-10. Image rendering (iTerm2 inline images)
+1. Fix responsive terminal width (hardcoded values today) ✓
+2. Refactor to daemon/UI split architecture ✓
+3. Multi-folder sidebar (collapsible tree, counts) ✓
+4. Status bar showing active folder, unread/total counts, selection state
+5. Timeline/thread view + tab navigation
+6. Compose and reply (after timeline)
+7. AI-powered inbox classification via Ollama
+8. Chat panel (talk to your emails with AI)
+9. MCP server hook
+10. SSH app mode (charmbracelet/wish)
+11. Image rendering (iTerm2 inline images)
 
 ---
 
@@ -43,6 +44,16 @@ Keyboard (number keys) and mouse clickable.
 - Fold/unfold thread replies inline
 - Star/pin important threads to top
 - Actions: delete thread, delete individual email, forward (before full compose is built)
+
+### Status Bar
+A persistent top/bottom bar replacing the current ad-hoc status line:
+
+- **Active folder** — breadcrumb style, e.g. `Labels / Health`
+- **Folder counts** — `12 unread / 340 total` pulled from the sidebar status cache
+- **Selection state** — `3 senders selected`, `7 messages selected`, or blank when nothing is selected
+- **Mode indicator** — `Domain mode` / `Sender mode`, `Logs ON` when log overlay is open
+- **Deletion progress** — replaces the inline text currently in the status line: `Deleting 3/5…`
+- **Key hints** — condensed one-liner that changes based on which panel is focused (sidebar / summary / details)
 
 ### Multi-Folder Sidebar
 - Collapsible left panel, toggled by a keyboard shortcut
