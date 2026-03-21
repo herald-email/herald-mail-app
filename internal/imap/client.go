@@ -37,8 +37,12 @@ func New(cfg *config.Config, cache *cache.Cache, progressCh chan models.Progress
 	}
 }
 
-// Connect establishes connection to IMAP server
+// Connect establishes connection to IMAP server. It is a no-op if already connected.
 func (c *Client) Connect() error {
+	if c.client != nil {
+		return nil // reuse existing connection
+	}
+
 	// Connect to IMAP server
 	addr := fmt.Sprintf("%s:%d", c.cfg.Server.Host, c.cfg.Server.Port)
 

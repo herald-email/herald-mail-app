@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"mail-processor/internal/cache"
@@ -17,6 +18,7 @@ type LocalBackend struct {
 	imapClient *imap.Client
 	cache      *cache.Cache
 	progressCh chan models.ProgressInfo
+	loading    atomic.Bool
 }
 
 // NewLocal creates a LocalBackend. The caller must call Close() when done.
@@ -38,7 +40,12 @@ func NewLocal(cfg *config.Config) (*LocalBackend, error) {
 // connect → process new emails → cleanup stale cache → send "complete".
 // All progress is sent through Progress().
 func (b *LocalBackend) Load(folder string) {
+	if !b.loading.CompareAndSwap(false, true) {
+		logger.Warn("Load already in progress, ignoring request for folder: %s", folder)
+		return
+	}
 	go func() {
+		defer b.loading.Store(false)
 		b.progressCh <- models.ProgressInfo{
 			Phase:   "connecting",
 			Message: "Connecting to IMAP server...",
