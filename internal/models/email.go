@@ -7,6 +7,7 @@ import (
 // EmailData represents a cached email message
 type EmailData struct {
 	MessageID      string    `db:"message_id"`
+	UID            uint32    `db:"uid"`
 	Sender         string    `db:"sender"`
 	Subject        string    `db:"subject"`
 	Date           time.Time `db:"date"`

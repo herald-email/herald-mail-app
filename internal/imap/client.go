@@ -145,10 +145,7 @@ func (c *Client) ProcessEmails(folder string) error {
 		mbox.Messages, mbox.Recent, mbox.Unseen)
 
 	if totalMessages == 0 {
-		c.sendProgress(models.ProgressInfo{
-			Phase:   "complete",
-			Message: fmt.Sprintf("Folder %s is empty", folder),
-		})
+		logger.Info("Folder %s is empty, skipping fetch", folder)
 		return nil
 	}
 
@@ -240,10 +237,10 @@ func (c *Client) ProcessEmails(folder string) error {
 			})
 		}
 	} else {
-		c.sendProgress(models.ProgressInfo{
-			Phase:   "complete",
-			Message: "No new emails to process",
-		})
+		// Do NOT send "complete" here — Load() owns that signal.
+		// Sending "complete" from ProcessEmails leaves a stale message in the
+		// buffered channel that poisons the next folder switch.
+		logger.Info("No new emails in %s (all %d cached)", folder, len(cachedIDs))
 	}
 
 	return nil
@@ -305,6 +302,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	// Extract email data from Envelope
 	emailData := &models.EmailData{
 		MessageID:      messageID,
+		UID:            msg.Uid,
 		Sender:         sender,
 		Subject:        msg.Envelope.Subject,
 		Date:           msg.Envelope.Date,

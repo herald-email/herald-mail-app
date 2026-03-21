@@ -89,11 +89,11 @@ func (c *Cache) GetCachedIDs(folder string) (map[string]bool, error) {
 // CacheEmail stores email data in cache
 func (c *Cache) CacheEmail(email *models.EmailData) error {
 	query := `
-		INSERT OR REPLACE INTO emails 
-		(message_id, sender, subject, date, size, has_attachments, folder, last_updated)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT OR REPLACE INTO emails
+		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	
+
 	hasAttachments := 0
 	if email.HasAttachments {
 		hasAttachments = 1
@@ -101,6 +101,7 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 
 	_, err := c.db.Exec(query,
 		email.MessageID,
+		email.UID,
 		email.Sender,
 		email.Subject,
 		email.Date.Format(time.RFC3339),
@@ -175,11 +176,13 @@ func (c *Cache) DeleteEmail(messageID string) error {
 	return err
 }
 
-// DeleteDomainEmails removes all emails from a specific domain
+// DeleteDomainEmails removes all emails from a specific domain (including subdomains).
+// e.g. domain "example.com" deletes sender "user@example.com" and "user@mail.example.com".
 func (c *Cache) DeleteDomainEmails(domain, folder string) error {
-	query := "DELETE FROM emails WHERE sender LIKE ? AND folder = ?"
-	pattern := "%@" + domain
-	_, err := c.db.Exec(query, pattern, folder)
+	query := "DELETE FROM emails WHERE (sender LIKE ? OR sender LIKE ?) AND folder = ?"
+	exact := "%@" + domain
+	subdomain := "%@%." + domain
+	_, err := c.db.Exec(query, exact, subdomain, folder)
 	return err
 }
 
@@ -244,26 +247,23 @@ func extractDomain(emailAddress string) string {
 // GetNewestCachedDate returns the date of the newest cached email in a folder
 func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
 	query := `SELECT MAX(date) FROM emails WHERE folder = ?`
-	
-	var dateStr string
-	err := c.db.QueryRow(query, folder).Scan(&dateStr)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return time.Time{}, nil // No cached emails
-		}
+
+	// MAX() always returns a single row; use NullString to handle the NULL case
+	// when the folder has no emails.
+	var dateStr sql.NullString
+	if err := c.db.QueryRow(query, folder).Scan(&dateStr); err != nil {
 		return time.Time{}, err
 	}
-	
-	if dateStr == "" {
+
+	if !dateStr.Valid || dateStr.String == "" {
 		return time.Time{}, nil
 	}
-	
-	// Parse the RFC3339 formatted date
-	date, err := time.Parse(time.RFC3339, dateStr)
+
+	date, err := time.Parse(time.RFC3339, dateStr.String)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to parse cached date: %w", err)
 	}
-	
+
 	return date, nil
 }
 

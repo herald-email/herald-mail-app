@@ -2,6 +2,7 @@ package imap
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/emersion/go-imap"
 	"mail-processor/internal/logger"
@@ -143,8 +144,8 @@ func (c *Client) DeleteDomainEmails(domain, folder string) error {
 					fromAddr = addr.MailboxName + "@" + addr.HostName
 				}
 
-				// Check if the sender's domain matches
-				if addr.HostName == domain {
+				// Check if the sender's domain matches (exact or subdomain)
+				if addr.HostName == domain || strings.HasSuffix(addr.HostName, "."+domain) {
 					seqNums = append(seqNums, msg.SeqNum)
 					matchCount++
 					// Log first 5 matches for debugging
