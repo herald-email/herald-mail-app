@@ -79,6 +79,7 @@ type Model struct {
 
 	// Sidebar
 	folders       []string
+	folderTree    []*folderNode
 	showSidebar   bool
 	sidebarCursor int
 	focusedPanel  int // panelSidebar, panelSummary, panelDetails
@@ -194,6 +195,7 @@ func New(b backend.Backend) *Model {
 		startTime:          time.Now(),
 		currentFolder:      "INBOX",
 		folders:            []string{"INBOX"},
+		folderTree:         buildFolderTree([]string{"INBOX"}),
 		showSidebar:        true,
 		focusedPanel:       panelSummary,
 		selectedRows:       make(map[int]bool),
@@ -237,6 +239,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FoldersLoadedMsg:
 		m.folders = msg.Folders
+		m.folderTree = buildFolderTree(msg.Folders)
+		m.sidebarCursor = 0
 		return m, nil
 
 	case LoadingMsg:
@@ -395,7 +399,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case " ":
 		if !m.loading {
-			m.toggleSelection()
+			if m.focusedPanel == panelSidebar {
+				m.toggleSidebarNode()
+			} else {
+				m.toggleSelection()
+			}
 		}
 		return m, nil
 
