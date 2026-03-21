@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -574,6 +575,10 @@ func (m *Model) updateTableDimensions(width, height int) {
 	if m.showSidebar {
 		sidebarExtra = sidebarContentWidth + 2 + 2 // content + border + gap
 	}
+	chatExtra := 0
+	if m.showChat {
+		chatExtra = chatPanelWidth + 2 + 2 // content + border + gap
+	}
 
 	// --- Cleanup tab: two side-by-side tables ---
 	// Fixed (non-resizable) column widths:
@@ -586,7 +591,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 
 	// Total rendering overhead for two tables:
 	//   summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gap = 12+10+4+2 = 28
-	cleanupOverhead := 28 + sidebarExtra
+	cleanupOverhead := 28 + sidebarExtra + chatExtra
 
 	cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
 	if cleanupVariable < 24 {
@@ -628,7 +633,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 	// Fixed cols: Date(16) + Size(7) + Att(3) + Tag(4) = 30; numCols=6; overhead=6*2+2=14
 	const timelineFixedCols = 30
 	const timelineNumCols = 6
-	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra
+	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra
 	timelineVariable := width - timelineOverhead
 	if timelineVariable < 24 {
 		timelineVariable = 24
@@ -832,20 +837,22 @@ func (m *Model) renderStatusBar() string {
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	var hints string
-	if m.showLogs {
+	if m.focusedPanel == panelChat && m.showChat {
+		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
+	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  q: quit"
+		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  a: AI tag  │  f: sidebar  │  l: logs  │  q: quit"
+		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  f: hide  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().
@@ -881,9 +888,21 @@ func (m *Model) cyclePanel() {
 	if m.showSidebar {
 		panels = []int{panelSidebar, panelSummary, panelDetails}
 	}
+	if m.showChat {
+		panels = append(panels, panelChat)
+	}
 	for i, p := range panels {
 		if p == m.focusedPanel {
-			m.setFocusedPanel(panels[(i+1)%len(panels)])
+			next := panels[(i+1)%len(panels)]
+			if next == panelChat {
+				m.focusedPanel = panelChat
+				m.chatInput.Focus()
+				m.summaryTable.Blur()
+				m.detailsTable.Blur()
+			} else {
+				m.chatInput.Blur()
+				m.setFocusedPanel(next)
+			}
 			return
 		}
 	}
@@ -930,6 +949,9 @@ func (m *Model) selectSidebarFolder() {
 
 // sidebarContentWidth is the fixed display width of sidebar content (excluding border)
 const sidebarContentWidth = 26
+
+// chatPanelWidth is the fixed display width of the chat panel content (excluding border)
+const chatPanelWidth = 36
 
 // renderSidebar renders the folder tree sidebar content (without border)
 func (m *Model) renderSidebar() string {
@@ -1201,6 +1223,144 @@ func (m *Model) renderComposeView() string {
 	}
 
 	return sb.String()
+}
+
+// submitChat sends the current chat input to Ollama with email context
+func (m *Model) submitChat() tea.Cmd {
+	question := strings.TrimSpace(m.chatInput.Value())
+	if question == "" {
+		return nil
+	}
+	m.chatInput.SetValue("")
+	m.chatWaiting = true
+
+	// Append user message to history
+	m.chatMessages = append(m.chatMessages, ai.ChatMessage{
+		Role:    "user",
+		Content: question,
+	})
+
+	// Build system prompt with email context
+	var ctx strings.Builder
+	ctx.WriteString(fmt.Sprintf("You are an email assistant. The user is viewing folder: %s.\n", m.currentFolder))
+	if st, ok := m.folderStatus[m.currentFolder]; ok {
+		ctx.WriteString(fmt.Sprintf("Folder has %d total emails, %d unread.\n", st.Total, st.Unseen))
+	}
+	if len(m.timelineEmails) > 0 {
+		ctx.WriteString("Recent emails (newest first):\n")
+		limit := 20
+		if len(m.timelineEmails) < limit {
+			limit = len(m.timelineEmails)
+		}
+		for _, e := range m.timelineEmails[:limit] {
+			ctx.WriteString(fmt.Sprintf("  - From: %s | Subject: %s | Date: %s\n",
+				e.Sender, e.Subject, e.Date.Format("2006-01-02")))
+		}
+	}
+
+	systemMsg := ai.ChatMessage{Role: "system", Content: ctx.String()}
+	messages := append([]ai.ChatMessage{systemMsg}, m.chatMessages...)
+
+	classifier := m.classifier
+	return func() tea.Msg {
+		if classifier == nil {
+			return ChatResponseMsg{Err: fmt.Errorf("AI not configured")}
+		}
+		reply, err := classifier.Chat(messages)
+		return ChatResponseMsg{Content: reply, Err: err}
+	}
+}
+
+// renderChatPanel renders the chat panel content (without border)
+func (m *Model) renderChatPanel() string {
+	w := chatPanelWidth
+	var sb strings.Builder
+
+	// Title
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")).
+		Bold(true).
+		Width(w)
+	sb.WriteString(titleStyle.Render("Chat") + "\n")
+	sb.WriteString(strings.Repeat("─", w) + "\n")
+
+	// Message history — show last messages that fit in height
+	msgStyle := lipgloss.NewStyle().Width(w)
+	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Width(w)
+	aiStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("87")).Width(w)
+
+	// Calculate how many lines we have for history
+	// Total height = tableHeight; minus title(1) + divider(1) + divider2(1) + input(1) = 4
+	historyLines := m.windowHeight - 6 - 4 // same tableHeight formula minus chat chrome
+	if historyLines < 3 {
+		historyLines = 3
+	}
+
+	// Collect rendered message lines (newest-last)
+	var msgLines []string
+	for _, msg := range m.chatMessages {
+		prefix := "AI: "
+		style := aiStyle
+		if msg.Role == "user" {
+			prefix = "You: "
+			style = userStyle
+		}
+		// Wrap text
+		text := prefix + msg.Content
+		wrapped := wrapText(text, w)
+		for _, line := range wrapped {
+			msgLines = append(msgLines, style.Render(line))
+		}
+		msgLines = append(msgLines, "")
+	}
+	// Show only the last historyLines
+	if len(msgLines) > historyLines {
+		msgLines = msgLines[len(msgLines)-historyLines:]
+	}
+	// Pad to fill space
+	for len(msgLines) < historyLines {
+		msgLines = append([]string{msgStyle.Render("")}, msgLines...)
+	}
+	for _, line := range msgLines {
+		sb.WriteString(line + "\n")
+	}
+
+	sb.WriteString(strings.Repeat("─", w) + "\n")
+
+	// Input field
+	if m.chatWaiting {
+		waitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+		sb.WriteString(waitStyle.Render("Thinking..."))
+	} else {
+		sb.WriteString(m.chatInput.View())
+	}
+
+	return sb.String()
+}
+
+// wrapText wraps text to fit within width characters
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+	var lines []string
+	for len(text) > 0 {
+		if len(text) <= width {
+			lines = append(lines, text)
+			break
+		}
+		// Find last space within width
+		cut := width
+		for cut > 0 && text[cut-1] != ' ' {
+			cut--
+		}
+		if cut == 0 {
+			cut = width
+		}
+		lines = append(lines, text[:cut])
+		text = strings.TrimLeft(text[cut:], " ")
+	}
+	return lines
 }
 
 // handleNavigation handles up/down navigation for the focused panel

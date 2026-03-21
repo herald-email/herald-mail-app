@@ -99,6 +99,47 @@ Tag:`, sender, subject)
 	return normalizeCategory(strings.TrimSpace(result.Response)), nil
 }
 
+// ChatMessage is a single turn in a conversation
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type chatRequest struct {
+	Model    string        `json:"model"`
+	Messages []ChatMessage `json:"messages"`
+	Stream   bool          `json:"stream"`
+}
+
+type chatResponse struct {
+	Message ChatMessage `json:"message"`
+}
+
+// Chat sends a multi-turn conversation to Ollama and returns the assistant reply
+func (c *Classifier) Chat(messages []ChatMessage) (string, error) {
+	body, err := json.Marshal(chatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   false,
+	})
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.client.Post(c.host+"/api/chat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("ollama chat failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+	var result chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(result.Message.Content), nil
+}
+
 // Ping checks whether Ollama is running and the model is available
 func (c *Classifier) Ping() error {
 	resp, err := c.client.Get(c.host + "/api/tags")

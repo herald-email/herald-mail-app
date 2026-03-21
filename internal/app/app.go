@@ -22,6 +22,7 @@ const (
 	panelSidebar = 0
 	panelSummary = 1
 	panelDetails = 2
+	panelChat    = 3
 )
 
 // Tab constants
@@ -74,6 +75,12 @@ type ClassifyProgressMsg struct {
 // ClassifyDoneMsg signals classification is complete
 type ClassifyDoneMsg struct{}
 
+// ChatResponseMsg carries an Ollama chat reply
+type ChatResponseMsg struct {
+	Content string
+	Err     error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -124,6 +131,12 @@ type Model struct {
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
+
+	// Chat panel
+	showChat     bool
+	chatMessages []ai.ChatMessage // conversation history
+	chatInput    textinput.Model
+	chatWaiting  bool // waiting for Ollama response
 
 	// AI classification
 	classifier      *ai.Classifier
@@ -264,6 +277,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		logViewer.AddLog(level, message)
 	})
 
+	// Chat input
+	chatInput := textinput.New()
+	chatInput.Placeholder = "Ask about your emails..."
+	chatInput.CharLimit = 512
+
 	// Compose inputs
 	composeTo := textinput.New()
 	composeTo.Placeholder = "recipient@example.com"
@@ -302,6 +320,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		detailsTable:       detailsTable,
 		timelineTable:      timelineTable,
 		logViewer:          logViewer,
+		chatInput:          chatInput,
 		classifier:         classifier,
 		classifications:    make(map[string]string),
 		classifyCh:         make(chan ClassifyProgressMsg, 50),
@@ -407,6 +426,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTimelineTable()
 		m.updateSummaryTable()
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
+		return m, nil
+
+	case ChatResponseMsg:
+		m.chatWaiting = false
+		content := msg.Content
+		if msg.Err != nil {
+			content = "Error: " + msg.Err.Error()
+		}
+		m.chatMessages = append(m.chatMessages, ai.ChatMessage{
+			Role:    "assistant",
+			Content: content,
+		})
 		return m, nil
 
 	case LoadingMsg:
@@ -520,6 +551,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Route messages to chat input when chat panel is focused
+	if m.focusedPanel == panelChat && m.showChat {
+		var cmd tea.Cmd
+		m.chatInput, cmd = m.chatInput.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	}
+
 	// Route all messages to compose inputs when on compose tab
 	if m.activeTab == tabCompose {
 		var cmd tea.Cmd
@@ -567,6 +606,20 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "q" || msg.String() == "ctrl+c" {
 		m.cleanup()
 		return m, tea.Quit
+	}
+
+	// Chat panel intercepts Enter/Esc when focused
+	if m.focusedPanel == panelChat && m.showChat {
+		switch msg.String() {
+		case "enter":
+			if !m.chatWaiting {
+				return m, m.submitChat()
+			}
+		case "esc", "tab":
+			m.chatInput.Blur()
+			m.setFocusedPanel(panelSummary)
+		}
+		return m, nil
 	}
 
 	// Compose tab gets its own key handler
@@ -678,6 +731,25 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l", "L":
 		if !m.loading {
 			m.showLogs = !m.showLogs
+		}
+		return m, nil
+
+	case "c":
+		// Toggle chat panel
+		if !m.loading {
+			m.showChat = !m.showChat
+			if m.windowWidth > 0 {
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
+			if m.showChat {
+				m.focusedPanel = panelChat
+				m.chatInput.Focus()
+				m.summaryTable.Blur()
+				m.detailsTable.Blur()
+			} else {
+				m.chatInput.Blur()
+				m.setFocusedPanel(panelSummary)
+			}
 		}
 		return m, nil
 
@@ -799,25 +871,29 @@ func (m *Model) renderMainView() string {
 	content.WriteString(m.renderTabBar() + "\n\n")
 
 	// Content area
+	var mainContent string
 	if m.showLogs {
-		logView := m.baseStyle.Render(m.logViewer.View())
-		content.WriteString(logView + "\n")
+		mainContent = m.baseStyle.Render(m.logViewer.View())
 	} else if m.activeTab == tabTimeline {
-		content.WriteString(m.renderTimelineView() + "\n")
+		mainContent = m.renderTimelineView()
 	} else if m.activeTab == tabCompose {
-		content.WriteString(m.renderComposeView() + "\n")
+		mainContent = m.renderComposeView()
 	} else {
 		// Cleanup tab
 		summaryView := m.baseStyle.Render(m.summaryTable.View())
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
-		var tablesView string
 		if m.showSidebar {
 			sidebarView := m.baseStyle.Render(m.renderSidebar())
-			tablesView = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
 		} else {
-			tablesView = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
 		}
-		content.WriteString(tablesView + "\n")
+	}
+	if m.showChat {
+		chatView := m.baseStyle.Render(m.renderChatPanel())
+		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, "  ", chatView) + "\n")
+	} else {
+		content.WriteString(mainContent + "\n")
 	}
 
 	// Status bar + key hints (persistent bottom bar)
