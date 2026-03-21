@@ -332,6 +332,41 @@ func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
 	return date, nil
 }
 
+// SearchEmails returns emails in a folder where sender or subject contains the query (case-insensitive)
+func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) {
+	like := "%" + query + "%"
+	rows, err := c.db.Query(`
+		SELECT message_id, uid, sender, subject, date, size, has_attachments
+		FROM emails
+		WHERE folder = ? AND (sender LIKE ? OR subject LIKE ?)
+		ORDER BY date DESC LIMIT 100`, folder, like, like)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var emails []*models.EmailData
+	for rows.Next() {
+		var msgID, sender, subject string
+		var uid uint32
+		var date time.Time
+		var size, hasAtt int
+		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt); err != nil {
+			return nil, err
+		}
+		emails = append(emails, &models.EmailData{
+			MessageID:      msgID,
+			UID:            uid,
+			Sender:         sender,
+			Subject:        subject,
+			Date:           date,
+			Size:           size,
+			HasAttachments: hasAtt == 1,
+			Folder:         folder,
+		})
+	}
+	return emails, rows.Err()
+}
+
 // GetEmailByID returns a single email by message ID
 func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
 	row := c.db.QueryRow(`SELECT message_id, uid, sender, subject, date, size, has_attachments, folder
