@@ -1,12 +1,12 @@
 # Mail Processor
 
-A fast, efficient email analysis tool written in Go that helps you identify and delete frequent email senders from your IMAP mailbox.
+A terminal-based email client and inbox cleanup tool written in Go, connecting to IMAP servers (primarily ProtonMail Bridge). Helps you identify and delete frequent email senders, manage subscriptions, and keep your inbox clean.
 
 ![Mail Processor Interface](static/go-version.png)
 
 ## Features
 
-- **High Performance**: Built in Go for speed and efficiency (~5x faster than Python version)
+- **Fast**: Built in Go — low memory footprint, quick startup
 - **Beautiful TUI**: Modern terminal interface using Bubble Tea
 - **Smart Caching**: SQLite-based caching for faster subsequent runs
 - **Email Grouping**: Group by sender or domain for bulk analysis
@@ -39,7 +39,7 @@ tar -xzf mail-processor_*.tar.gz
 
 ### Build from Source
 
-**Prerequisites**: Go 1.21 or higher
+**Prerequisites**: Go 1.23 or higher, GCC/Clang (required for SQLite CGO)
 
 ```bash
 # Clone the repository
@@ -148,16 +148,6 @@ chmod 600 proton.yaml
 - **Secure Connections**: TLS encryption for IMAP connections
 - **Config Security**: File permission checks for credential files
 
-## Performance Comparison
-
-| Feature | Python Version | Go Version |
-|---------|---------------|------------|
-| Startup Time | ~2-3s | ~0.5s |
-| Memory Usage | ~50-100MB | ~20-30MB |
-| Processing Speed | ~100 emails/s | ~500+ emails/s |
-| Binary Size | N/A (requires Python) | ~15MB standalone |
-| UI Responsiveness | Can block | Non-blocking |
-
 ## Development
 
 ### Project Structure
@@ -228,7 +218,7 @@ This will automatically build and publish binaries for:
 - [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components (table)
 - [go-imap](https://github.com/emersion/go-imap) - IMAP client library
 - [go-sqlite3](https://github.com/mattn/go-sqlite3) - SQLite driver
-- [Viper](https://github.com/spf13/viper) - Configuration management
+- [yaml.v3](https://github.com/go-yaml/yaml) - Configuration parsing
 
 ## Troubleshooting
 
@@ -264,10 +254,6 @@ tail -f mail_processor_*.log
 ```
 
 Or use the built-in log viewer by pressing `l` in the TUI.
-
-## Migration from Python Version
-
-The Go version maintains compatibility with the Python version's cache database, so you can switch between versions without losing cached data.
 
 ## Contributing
 

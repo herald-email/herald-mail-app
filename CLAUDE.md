@@ -4,46 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains email analysis tools that connect to IMAP servers to help users identify and delete frequent email senders. Two implementations are available:
-
-1. **Python Version** (`email_grouper.py`) - Original implementation using Textual TUI
-2. **Go Version** (`main.go` + `internal/`) - High-performance rewrite using Bubble Tea
-
-Both provide interactive TUI experiences for managing email cleanup.
+A terminal-based email client and inbox cleanup tool written in Go, connecting to IMAP servers via ProtonMail Bridge. Built with Bubble Tea TUI framework.
 
 ## Architecture
 
-### Core Components
+### Go Implementation
 
-1. **ProtonMailAnalyzer** (`email_grouper.py:177-517`) - Main class that handles IMAP connections, email processing, and deletion operations
-2. **EmailCache** (`email_grouper.py:54-150`) - SQLite-based caching system to avoid re-processing emails on subsequent runs
-3. **ProtonMailTUI** (`email_grouper.py:519-967`) - Textual-based terminal user interface with dual-pane layout
+The app initializes in `main.go` -> `app.New()` -> starts a Bubble Tea program with alt-screen. On startup it connects to IMAP, processes new emails into SQLite cache, runs `CleanupCache` to sync stale entries, then renders the main view.
+
+A persistent IMAP connection is held open for the lifetime of the app (not reconnected per operation). A background `deletionWorker` goroutine reads from a buffered channel and processes deletions serially, sending results back through a result channel for UI updates.
+
+### Project Structure
+
+```
+internal/
+├── app/
+│   ├── app.go       # Bubble Tea Model: Init/Update/View, state, message types
+│   ├── helpers.go   # Table updates, deletion queue, navigation, domain toggle
+│   └── logs.go      # LogViewer TUI component (viewport-based)
+├── cache/
+│   └── cache.go     # SQLite CRUD: GetCachedIDs, CacheEmail, GetAllEmails, Delete*
+├── config/
+│   └── config.go    # YAML config load/validate, file permission check
+├── imap/
+│   ├── client.go    # IMAP connect, ProcessEmails, GetSenderStatistics
+│   └── delete.go    # DeleteSenderEmails, DeleteDomainEmails, DeleteEmail, CleanupCache
+├── logger/
+│   └── logger.go    # File-based logger with callback for TUI log viewer
+└── models/
+    └── email.go     # EmailData, SenderStats, ProgressInfo, DeletionRequest/Result
+```
 
 ### Key Features
 
 - **Email Grouping**: Groups emails by sender or domain for bulk analysis
-- **Caching**: Uses SQLite to cache email metadata for faster subsequent launches
-- **Interactive Deletion**: Supports single email or bulk sender deletion
-- **TUI Interface**: Split-pane view showing sender summary and individual email details
+- **SQLite Caching**: Caches email metadata in `email_cache.db`; only fetches new messages on subsequent launches
+- **Interactive Deletion**: Single email, selected senders, or domain-wide deletion (copies to Trash then expunges)
+- **TUI Interface**: Split-pane view (summary table | details table) with real-time log viewer overlay
+- **Domain Mode**: `d` key toggles grouping by domain (e.g. `example.com`) vs full email address
 
 ## Common Commands
 
-### Python Version
+### Go Version
 ```bash
-# Run Python version
-python email_grouper.py
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Go Version  
-```bash
-# Build and run Go version
+# Build and run
 make build && ./bin/mail-processor
 
 # Or run directly
 make run
+
+# CLI flags
+./bin/mail-processor -debug              # Enable debug logging
+./bin/mail-processor -config custom.yaml # Custom config file
+./bin/mail-processor -help
 
 # Development
 make deps     # Install dependencies
@@ -52,7 +65,7 @@ make test     # Run tests
 ```
 
 ### Configuration
-Both versions use the same `proton.yaml` configuration file:
+Both versions use `proton.yaml`:
 ```yaml
 credentials:
   username: "your_email@mail.com"
@@ -62,68 +75,76 @@ server:
   port: 993
 ```
 
+Config file permissions are checked at startup; warns if group/others have access (chmod 600 recommended).
+
 ### Dependencies
 
-**Python Version:**
-- pyyaml>=6.0
-- textual>=0.38.1
+Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 
-**Go Version:**
-- Go 1.21+
-- Dependencies managed via go.mod
+| Library | Version | Purpose |
+|---------|---------|---------|
+| `charmbracelet/bubbletea` | v1.3.4 | TUI framework (Elm architecture) |
+| `charmbracelet/bubbles` | v0.21.0 | Table and viewport components |
+| `charmbracelet/lipgloss` | v1.1.0 | Terminal styling |
+| `emersion/go-imap` | v1.2.1 | IMAP client |
+| `mattn/go-sqlite3` | v1.14.18 | SQLite driver (CGO) |
+| `gopkg.in/yaml.v3` | v3.0.1 | Config parsing |
+
+## Key TUI Bindings
+
+| Key | Action |
+|-----|--------|
+| `q` / `ctrl+c` | Quit |
+| `d` | Toggle domain/sender grouping mode |
+| `r` | Refresh (reconnect + re-process) |
+| `D` | Delete selected or current sender/message |
+| `space` | Toggle selection (sender row or individual message) |
+| `tab` | Switch focus between summary and details tables |
+| `enter` | Load details for currently highlighted sender |
+| `up`/`k`, `down`/`j` | Navigate |
+| `l` / `L` | Toggle real-time log viewer overlay |
 
 ## Development Notes
 
 ### Database Schema
-The SQLite cache stores emails with these fields:
-- message_id (PRIMARY KEY)
-- sender, subject, date, size, has_attachments, folder, last_updated
+```sql
+CREATE TABLE emails (
+    message_id      TEXT PRIMARY KEY,
+    uid             INTEGER,
+    sender          TEXT,
+    subject         TEXT,
+    date            DATETIME,
+    size            INTEGER,
+    has_attachments INTEGER,
+    folder          TEXT,
+    last_updated    DATETIME
+)
+```
+Cache file: `email_cache.db` (created in working directory).
 
-### Key TUI Bindings
-- `q` - Quit application
-- `d` - Toggle domain/sender grouping mode
-- `r` - Refresh email data
-- `D` - Delete selected emails/senders
-- `space` - Toggle selection for multi-delete
+### Logging
+- Log file: `mail_processor_YYYYMMDD_HHMMSS.log` (created in working directory)
+- Always writes to file only (no console output, preserves TUI)
+- TUI log viewer receives logs via `logger.SetLogCallback`
+- `-debug` or `-verbose` flags enable DEBUG-level entries
 
-### Error Handling
-- Logs are written to timestamped files: `protonmail_analyzer_YYYYMMDD_HHMMSS.log`
-- Cache cleanup runs automatically to sync with IMAP server state
-- IMAP connections use SSL with disabled certificate verification for local bridges
+### Deletion Flow
+1. `deleteSelected()` sends `DeletionRequest` structs to `deletionRequestCh`
+2. `deletionWorker()` goroutine calls the appropriate `imap.Client.Delete*` method
+3. Delete methods: fetch all envelope headers, match by sender/domain/message-ID, copy to Trash (tries `Trash`, `Deleted Items`, `[Gmail]/Trash`, `INBOX.Trash`), mark `\Deleted`, expunge, then delete from SQLite cache
+4. Result sent to `deletionResultCh`; UI updates immediately, then reloads stats after all pending deletions finish
 
 ### Code Patterns
+
+**Go Version:**
+- **Progress updates**: IMAP goroutine sends `models.ProgressInfo` to a buffered channel; `listenForProgress()` blocks until a message arrives then triggers re-render
+- **Domain extraction**: `cache.extractDomain()` handles compound TLDs (`co.uk`, `com.au`, etc.)
+- **Text sanitization**: `sanitizeText()` strips emoji/symbols while preserving Unicode letters (table display)
+- **TLS**: `InsecureSkipVerify: true` is intentional for local IMAP bridge (e.g. ProtonMail Bridge)
+- **Message-ID fallback**: If envelope `Message-Id` is empty, uses `uid-{UID}` as cache key
+- **Attachment detection**: Recursively checks `BodyStructure.Disposition == "attachment"`
 
 **Python Version:**
 - Async/await pattern for IMAP operations to avoid blocking the TUI
 - Worker threads in Textual for background email processing
 - SQLite transactions for cache consistency
-
-**Go Version:**
-- Goroutines for concurrent email processing
-- Channels for progress updates between goroutines
-- Bubble Tea's Elm architecture for UI state management
-- Structured logging and proper error handling
-
-## Go Implementation Details
-
-### Project Structure
-```
-internal/
-├── app/           # Bubble Tea TUI application
-├── cache/         # SQLite caching layer  
-├── config/        # YAML configuration handling
-├── imap/          # IMAP client and operations
-└── models/        # Data structures and types
-```
-
-### Key Libraries
-- **Bubble Tea**: TUI framework with Elm architecture
-- **Lipgloss**: Terminal styling and layout
-- **go-imap**: IMAP client library
-- **go-sqlite3**: SQLite database driver
-
-### Performance Benefits
-- ~5x faster email processing than Python version
-- Lower memory usage (~20-30MB vs 50-100MB)
-- Single binary distribution
-- Better error handling and recovery
