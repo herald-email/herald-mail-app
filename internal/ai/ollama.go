@@ -1,0 +1,138 @@
+package ai
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// Category represents an AI-assigned email category
+type Category = string
+
+const (
+	CategorySubscription  Category = "sub"
+	CategoryNewsletter    Category = "news"
+	CategoryImportant     Category = "imp"
+	CategoryTransactional Category = "txn"
+	CategorySocial        Category = "soc"
+	CategorySpam          Category = "spam"
+	CategoryUnknown       Category = ""
+)
+
+// Classifier uses a local Ollama instance to tag emails
+type Classifier struct {
+	host   string
+	model  string
+	client *http.Client
+}
+
+// New creates a Classifier talking to the given Ollama host
+func New(host, model string) *Classifier {
+	if host == "" {
+		host = "http://localhost:11434"
+	}
+	if model == "" {
+		model = "gemma2:2b"
+	}
+	return &Classifier{
+		host:  strings.TrimRight(host, "/"),
+		model: model,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+type generateRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+	Stream bool   `json:"stream"`
+}
+
+type generateResponse struct {
+	Response string `json:"response"`
+}
+
+// Classify returns a short category tag for an email given its sender + subject.
+// Returns CategoryUnknown on any error (so callers can skip gracefully).
+func (c *Classifier) Classify(sender, subject string) (Category, error) {
+	prompt := fmt.Sprintf(`You are an email tagger. Given the sender and subject below, respond with EXACTLY ONE of these tags and nothing else:
+sub       (marketing / unwanted subscription)
+news      (newsletter you signed up for)
+imp       (important: bills, legal, personal, work)
+txn       (receipt, booking confirmation, notification)
+soc       (social media)
+spam      (spam)
+
+Sender: %s
+Subject: %s
+
+Tag:`, sender, subject)
+
+	body, err := json.Marshal(generateRequest{
+		Model:  c.model,
+		Prompt: prompt,
+		Stream: false,
+	})
+	if err != nil {
+		return CategoryUnknown, err
+	}
+
+	resp, err := c.client.Post(c.host+"/api/generate", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return CategoryUnknown, fmt.Errorf("ollama request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return CategoryUnknown, fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+
+	var result generateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return CategoryUnknown, err
+	}
+
+	return normalizeCategory(strings.TrimSpace(result.Response)), nil
+}
+
+// Ping checks whether Ollama is running and the model is available
+func (c *Classifier) Ping() error {
+	resp, err := c.client.Get(c.host + "/api/tags")
+	if err != nil {
+		return fmt.Errorf("ollama not reachable at %s: %w", c.host, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func normalizeCategory(raw string) Category {
+	raw = strings.ToLower(raw)
+	raw = strings.TrimPrefix(raw, "tag:")
+	raw = strings.TrimSpace(raw)
+	// Accept the first word only (model might add explanation)
+	if idx := strings.IndexAny(raw, " \t\n"); idx > 0 {
+		raw = raw[:idx]
+	}
+	switch raw {
+	case "sub", "subscription":
+		return CategorySubscription
+	case "news", "newsletter":
+		return CategoryNewsletter
+	case "imp", "important":
+		return CategoryImportant
+	case "txn", "transactional":
+		return CategoryTransactional
+	case "soc", "social":
+		return CategorySocial
+	case "spam":
+		return CategorySpam
+	}
+	return CategoryUnknown
+}

@@ -35,7 +35,7 @@ func (c *Cache) Close() error {
 	return c.db.Close()
 }
 
-// initDB creates the cache table if it doesn't exist
+// initDB creates the cache tables if they don't exist
 func (c *Cache) initDB() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS emails (
@@ -50,19 +50,84 @@ func (c *Cache) initDB() error {
 			last_updated DATETIME
 		)
 	`
-	_, err := c.db.Exec(query)
-	if err != nil {
+	if _, err := c.db.Exec(query); err != nil {
 		return err
 	}
-	
+
 	// Add UID column to existing table if it doesn't exist
-	_, err = c.db.Exec(`ALTER TABLE emails ADD COLUMN uid INTEGER`)
-	if err != nil {
-		// Column might already exist, that's okay
+	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN uid INTEGER`); err != nil {
 		logger.Debug("UID column might already exist: %v", err)
 	}
-	
+
+	// Classifications table
+	classQuery := `
+		CREATE TABLE IF NOT EXISTS email_classifications (
+			message_id   TEXT PRIMARY KEY,
+			category     TEXT NOT NULL DEFAULT '',
+			classified_at DATETIME NOT NULL
+		)
+	`
+	if _, err := c.db.Exec(classQuery); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// SetClassification stores or updates an AI classification for a message
+func (c *Cache) SetClassification(messageID, category string) error {
+	_, err := c.db.Exec(
+		`INSERT OR REPLACE INTO email_classifications (message_id, category, classified_at) VALUES (?, ?, ?)`,
+		messageID, category, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetClassifications returns a map of message_id → category for a folder
+func (c *Cache) GetClassifications(folder string) (map[string]string, error) {
+	rows, err := c.db.Query(`
+		SELECT ec.message_id, ec.category
+		FROM email_classifications ec
+		JOIN emails e ON e.message_id = ec.message_id
+		WHERE e.folder = ?`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var id, cat string
+		if err := rows.Scan(&id, &cat); err != nil {
+			return nil, err
+		}
+		result[id] = cat
+	}
+	return result, rows.Err()
+}
+
+// GetUnclassifiedIDs returns message IDs in a folder that have no classification yet
+func (c *Cache) GetUnclassifiedIDs(folder string) ([]string, error) {
+	rows, err := c.db.Query(`
+		SELECT e.message_id
+		FROM emails e
+		LEFT JOIN email_classifications ec ON ec.message_id = e.message_id
+		WHERE e.folder = ? AND ec.message_id IS NULL
+		ORDER BY e.date DESC`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // GetCachedIDs returns all cached message IDs for a folder
@@ -265,6 +330,29 @@ func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
 	}
 
 	return date, nil
+}
+
+// GetEmailByID returns a single email by message ID
+func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
+	row := c.db.QueryRow(`SELECT message_id, uid, sender, subject, date, size, has_attachments, folder
+	                       FROM emails WHERE message_id = ?`, messageID)
+	var msgID, sender, subject, folder string
+	var uid uint32
+	var date time.Time
+	var size, hasAtt int
+	if err := row.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder); err != nil {
+		return nil, err
+	}
+	return &models.EmailData{
+		MessageID:      msgID,
+		UID:            uid,
+		Sender:         sender,
+		Subject:        subject,
+		Date:           date,
+		Size:           size,
+		HasAttachments: hasAtt == 1,
+		Folder:         folder,
+	}, nil
 }
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending

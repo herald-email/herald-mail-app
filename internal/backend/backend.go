@@ -35,6 +35,18 @@ type Backend interface {
 	// GetTimelineEmails returns all emails for a folder sorted by date descending.
 	GetTimelineEmails(folder string) ([]*models.EmailData, error)
 
+	// GetClassifications returns AI category tags for emails in a folder.
+	GetClassifications(folder string) (map[string]string, error)
+
+	// SetClassification stores an AI category for a single message.
+	SetClassification(messageID, category string) error
+
+	// GetUnclassifiedIDs returns message IDs in a folder without a classification.
+	GetUnclassifiedIDs(folder string) ([]string, error)
+
+	// GetEmailByID returns a single cached email by message ID.
+	GetEmailByID(messageID string) (*models.EmailData, error)
+
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
 

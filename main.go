@@ -10,6 +10,7 @@ import (
 	"mail-processor/internal/app"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/config"
+	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
 	appsmtp "mail-processor/internal/smtp"
 )
@@ -70,8 +71,11 @@ func main() {
 	// Create SMTP client for compose/reply
 	mailer := appsmtp.New(cfg)
 
+	// Create AI classifier (talks to local Ollama; nil-safe if not configured)
+	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
+
 	// Create the TUI application
-	app := app.New(b, mailer, cfg.Credentials.Username)
+	app := app.New(b, mailer, cfg.Credentials.Username, classifier)
 
 	logger.Info("Starting TUI application...")
 

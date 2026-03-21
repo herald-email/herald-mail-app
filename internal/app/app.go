@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -62,6 +63,17 @@ type ComposeStatusMsg struct {
 	Err     error
 }
 
+// ClassifyProgressMsg carries a single classification result
+type ClassifyProgressMsg struct {
+	MessageID string
+	Category  string
+	Done      int
+	Total     int
+}
+
+// ClassifyDoneMsg signals classification is complete
+type ClassifyDoneMsg struct{}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -84,6 +96,9 @@ type Model struct {
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
 	deletionResultCh  chan models.DeletionResult
+
+	// Classification channel (buffered; one result per email)
+	classifyCh chan ClassifyProgressMsg
 
 	// Data
 	stats          map[string]*models.SenderStats
@@ -109,6 +124,13 @@ type Model struct {
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
+
+	// AI classification
+	classifier      *ai.Classifier
+	classifying     bool
+	classifications map[string]string // messageID → category
+	classifyTotal   int
+	classifyDone    int
 
 	// Compose
 	mailer          *appsmtp.Client
@@ -138,7 +160,7 @@ type Model struct {
 }
 
 // New creates a new application model backed by the given Backend.
-func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string) *Model {
+func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifier *ai.Classifier) *Model {
 	logger.Info("Creating new application model")
 
 	// Setup styles
@@ -228,6 +250,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string) *Model {
 			{Title: "Date", Width: 16},
 			{Title: "Size KB", Width: 7},
 			{Title: "Att", Width: 3},
+			{Title: "Tag", Width: 4},
 		}),
 		table.WithHeight(11),
 	)
@@ -279,6 +302,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string) *Model {
 		detailsTable:       detailsTable,
 		timelineTable:      timelineTable,
 		logViewer:          logViewer,
+		classifier:         classifier,
+		classifications:    make(map[string]string),
+		classifyCh:         make(chan ClassifyProgressMsg, 50),
 		mailer:             mailer,
 		fromAddress:        fromAddress,
 		composeTo:          composeTo,
@@ -365,6 +391,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ClassifyProgressMsg:
+		m.classifyDone = msg.Done
+		m.classifyTotal = msg.Total
+		if m.classifications == nil {
+			m.classifications = make(map[string]string)
+		}
+		m.classifications[msg.MessageID] = msg.Category
+		// Refresh tables to show updated tags
+		m.updateTimelineTable()
+		return m, m.listenForClassification()
+
+	case ClassifyDoneMsg:
+		m.classifying = false
+		m.updateTimelineTable()
+		m.updateSummaryTable()
+		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
+		return m, nil
+
 	case LoadingMsg:
 		m.progressInfo = msg.Info
 		switch msg.Info.Phase {
@@ -376,6 +420,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.loading = false
 			m.stats = stats
+			m.loadClassifications()
 			m.updateSummaryTable()
 			m.summaryTable.GotoTop()
 			m.updateDetailsTable()
@@ -633,6 +678,16 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l", "L":
 		if !m.loading {
 			m.showLogs = !m.showLogs
+		}
+		return m, nil
+
+	case "a":
+		// Trigger AI classification for current folder
+		if !m.loading && !m.classifying && m.classifier != nil {
+			m.classifying = true
+			m.classifyDone = 0
+			m.classifyTotal = 0
+			return m, m.startClassification()
 		}
 		return m, nil
 

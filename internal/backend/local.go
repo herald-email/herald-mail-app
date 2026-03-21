@@ -132,6 +132,22 @@ func (b *LocalBackend) GetTimelineEmails(folder string) ([]*models.EmailData, er
 	return b.cache.GetEmailsSortedByDate(folder)
 }
 
+func (b *LocalBackend) GetClassifications(folder string) (map[string]string, error) {
+	return b.cache.GetClassifications(folder)
+}
+
+func (b *LocalBackend) SetClassification(messageID, category string) error {
+	return b.cache.SetClassification(messageID, category)
+}
+
+func (b *LocalBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
+	return b.cache.GetUnclassifiedIDs(folder)
+}
+
+func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error) {
+	return b.cache.GetEmailByID(messageID)
+}
+
 func (b *LocalBackend) SetGroupByDomain(v bool) {
 	b.imapClient.SetGroupByDomain(v)
 }

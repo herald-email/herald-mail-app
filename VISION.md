@@ -10,7 +10,7 @@ This document describes the long-term direction for this project. It evolves fro
 4. Status bar showing active folder, unread/total counts, selection state ✓
 5. Timeline/thread view + tab navigation ✓
 6. Compose and reply (after timeline) ✓
-7. AI-powered inbox classification via Ollama
+7. AI-powered inbox classification via Ollama ✓
 8. Chat panel (talk to your emails with AI)
 9. MCP server hook
 10. SSH app mode (charmbracelet/wish)

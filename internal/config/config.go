@@ -21,6 +21,10 @@ type Config struct {
 		Host string `yaml:"host"`
 		Port int    `yaml:"port"`
 	} `yaml:"smtp"`
+	Ollama struct {
+		Host  string `yaml:"host"`  // default: http://localhost:11434
+		Model string `yaml:"model"` // default: gemma2:2b
+	} `yaml:"ollama"`
 }
 
 // Load reads and parses the configuration file

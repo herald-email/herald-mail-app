@@ -625,9 +625,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.detailsTable.SetHeight(tableHeight)
 
 	// --- Timeline tab: single full-width table ---
-	// Fixed cols: Date(16) + Size(7) + Att(3) = 26; numCols=5; overhead=5*2+2=12
-	const timelineFixedCols = 26
-	const timelineNumCols = 5
+	// Fixed cols: Date(16) + Size(7) + Att(3) + Tag(4) = 30; numCols=6; overhead=6*2+2=14
+	const timelineFixedCols = 30
+	const timelineNumCols = 6
 	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra
 	timelineVariable := width - timelineOverhead
 	if timelineVariable < 24 {
@@ -649,6 +649,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		{Title: "Date", Width: 16},
 		{Title: "Size KB", Width: 7},
 		{Title: "Att", Width: 3},
+		{Title: "Tag", Width: 4},
 	})
 	m.timelineTable.SetWidth(timelineFixedCols + tSenderWidth + tSubjectWidth + timelineNumCols*2)
 	m.timelineTable.SetHeight(tableHeight)
@@ -705,12 +706,17 @@ func (m *Model) updateTimelineTable() {
 		if email.HasAttachments {
 			att = "Y"
 		}
+		tag := ""
+		if m.classifications != nil {
+			tag = m.classifications[email.MessageID]
+		}
 		rows = append(rows, table.Row{
 			sender,
 			subject,
 			dateStr,
 			fmt.Sprintf("%.1f", float64(email.Size)/1024),
 			att,
+			tag,
 		})
 	}
 	m.timelineTable.SetRows(rows)
@@ -800,6 +806,11 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, fmt.Sprintf("%d senders  %d emails", len(m.stats), total))
 	}
 
+	// Classification progress
+	if m.classifying {
+		parts = append(parts, fmt.Sprintf("Tagging… %d/%d", m.classifyDone, m.classifyTotal))
+	}
+
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")
@@ -826,7 +837,7 @@ func (m *Model) renderKeyHints() string {
 	} else if m.activeTab == tabCompose {
 		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  f: sidebar  │  l: logs  │  q: quit"
+		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  a: AI tag  │  f: sidebar  │  l: logs  │  q: quit"
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
@@ -980,6 +991,56 @@ func (m *Model) renderSidebar() string {
 		sb.WriteString(line + "\n")
 	}
 	return sb.String()
+}
+
+// startClassification starts background AI classification for unclassified emails
+func (m *Model) startClassification() tea.Cmd {
+	folder := m.currentFolder
+	return func() tea.Msg {
+		ids, err := m.backend.GetUnclassifiedIDs(folder)
+		if err != nil || len(ids) == 0 {
+			return ClassifyDoneMsg{}
+		}
+		total := len(ids)
+		for i, id := range ids {
+			email, err := m.backend.GetEmailByID(id)
+			if err != nil {
+				continue
+			}
+			cat, err := m.classifier.Classify(email.Sender, email.Subject)
+			if err != nil {
+				logger.Warn("Classification failed for %s: %v", id, err)
+				continue
+			}
+			_ = m.backend.SetClassification(id, cat)
+			m.classifyCh <- ClassifyProgressMsg{
+				MessageID: id,
+				Category:  cat,
+				Done:      i + 1,
+				Total:     total,
+			}
+		}
+		return ClassifyDoneMsg{}
+	}
+}
+
+// listenForClassification waits for the next classification result
+func (m *Model) listenForClassification() tea.Cmd {
+	return func() tea.Msg {
+		return <-m.classifyCh
+	}
+}
+
+// loadClassifications fetches existing AI tags from cache for the current folder
+func (m *Model) loadClassifications() {
+	tags, err := m.backend.GetClassifications(m.currentFolder)
+	if err != nil {
+		logger.Warn("Failed to load classifications: %v", err)
+		return
+	}
+	for id, cat := range tags {
+		m.classifications[id] = cat
+	}
 }
 
 // handleComposeKey handles all key input when on the compose tab
