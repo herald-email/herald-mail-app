@@ -467,19 +467,23 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.windowWidth = width
 	m.windowHeight = height
 
-	// Structural overhead per render:
-	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
-	//   2-space gap between tables
-	const overhead = 6
-
 	// Fixed (non-resizable) column widths:
 	//   Summary: checkmark(2) + count(6) + avgkb(7) + attach(6) + daterange(20) = 41
 	//   Details: checkmark(2) + date(16) + size(8) + att(3) = 29
-	const summaryFixed = 41
-	const detailsFixed = 29
+	const summaryFixedCols = 41
+	const summaryNumCols = 6
+	const detailsFixedCols = 29
+	const detailsNumCols = 5
+
+	// Total rendering overhead:
+	//   bubbles/table default cell style Padding(0,1) adds 2 chars per cell
+	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
+	//   2-space gap between tables
+	// overhead = summaryNumCols*2 + detailsNumCols*2 + 4 + 2 = 12 + 10 + 4 + 2 = 28
+	const overhead = 28
 
 	// Space remaining for the two variable-width columns (Sender/Domain and Subject)
-	variable := width - overhead - summaryFixed - detailsFixed
+	variable := width - overhead - summaryFixedCols - detailsFixedCols
 	if variable < 24 {
 		variable = 24
 	}
@@ -502,7 +506,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		{Title: "Attach", Width: 6},
 		{Title: "Date Range", Width: 20},
 	})
-	m.summaryTable.SetWidth(summaryFixed + senderWidth)
+	m.summaryTable.SetWidth(summaryFixedCols + senderWidth + summaryNumCols*2)
 
 	m.subjectColWidth = subjectWidth
 	m.detailsTable.SetColumns([]table.Column{
@@ -512,7 +516,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		{Title: "Size", Width: 8},
 		{Title: "Att", Width: 3},
 	})
-	m.detailsTable.SetWidth(detailsFixed + subjectWidth)
+	m.detailsTable.SetWidth(detailsFixedCols + subjectWidth + detailsNumCols*2)
 
 	// Height: full terminal minus chrome (header 2, status 2, help 2, padding 1 = 7)
 	tableHeight := height - 7
