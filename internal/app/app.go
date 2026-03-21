@@ -43,7 +43,9 @@ type Model struct {
 	startTime        time.Time
 	progressInfo     models.ProgressInfo
 	showLogs         bool
+	windowWidth      int
 	windowHeight     int
+	subjectColWidth  int
 
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
@@ -309,23 +311,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.listenForDeletionResults()
 
 	case tea.WindowSizeMsg:
-		m.windowHeight = msg.Height
-
-		// Use fixed widths based on actual column sizes instead of 50/50 split
-		// Summary table: 35+6+7+6+20 = 74 + borders/padding = ~80
-		// Details table: 16+35+8+3 = 62 + borders/padding = ~68
-		m.summaryTable.SetWidth(80)
-		m.detailsTable.SetWidth(68)
-
-		// Set table height to 90% of window height
-		// Account for header (3 lines), status (2 lines), help (2 lines) = ~7 lines overhead
-		tableHeight := int(float64(msg.Height) * 0.9) - 7
-		if tableHeight < 5 {
-			tableHeight = 5 // Minimum height
-		}
-		m.summaryTable.SetHeight(tableHeight)
-		m.detailsTable.SetHeight(tableHeight)
-
+		m.updateTableDimensions(msg.Width, msg.Height)
 		return m, nil
 
 	case tickMsg:

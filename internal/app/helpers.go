@@ -232,8 +232,12 @@ func (m *Model) updateDetailsTable() {
 		if subject == "" {
 			subject = "No Subject"
 		}
-		if len(subject) > 32 {
-			subject = subject[:29] + "..."
+		maxLen := m.subjectColWidth
+		if maxLen <= 0 {
+			maxLen = 32
+		}
+		if len(subject) > maxLen {
+			subject = subject[:maxLen-3] + "..."
 		}
 
 		attachments := "N"
@@ -519,6 +523,77 @@ func sanitizeText(text string) string {
 	// Clean up multiple consecutive spaces
 	cleaned := strings.Join(strings.Fields(result.String()), " ")
 	return cleaned
+}
+
+// updateTableDimensions recalculates table and column sizes based on terminal dimensions
+func (m *Model) updateTableDimensions(width, height int) {
+	if width == 0 {
+		return
+	}
+	m.windowWidth = width
+	m.windowHeight = height
+
+	// Structural overhead per render:
+	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
+	//   2-space gap between tables
+	const overhead = 6
+
+	// Fixed (non-resizable) column widths:
+	//   Summary: checkmark(2) + count(6) + avgkb(7) + attach(6) + daterange(20) = 41
+	//   Details: checkmark(2) + date(16) + size(8) + att(3) = 29
+	const summaryFixed = 41
+	const detailsFixed = 29
+
+	// Space remaining for the two variable-width columns (Sender/Domain and Subject)
+	variable := width - overhead - summaryFixed - detailsFixed
+	if variable < 24 {
+		variable = 24
+	}
+
+	// 40% to sender column, 60% to subject column
+	senderWidth := variable * 40 / 100
+	if senderWidth < 12 {
+		senderWidth = 12
+	}
+	subjectWidth := variable - senderWidth
+	if subjectWidth < 12 {
+		subjectWidth = 12
+	}
+
+	m.summaryTable.SetColumns([]table.Column{
+		{Title: "✓", Width: 2},
+		{Title: "Sender/Domain", Width: senderWidth},
+		{Title: "Count", Width: 6},
+		{Title: "Avg KB", Width: 7},
+		{Title: "Attach", Width: 6},
+		{Title: "Date Range", Width: 20},
+	})
+	m.summaryTable.SetWidth(summaryFixed + senderWidth)
+
+	m.subjectColWidth = subjectWidth
+	m.detailsTable.SetColumns([]table.Column{
+		{Title: "✓", Width: 2},
+		{Title: "Date", Width: 16},
+		{Title: "Subject", Width: subjectWidth},
+		{Title: "Size", Width: 8},
+		{Title: "Att", Width: 3},
+	})
+	m.detailsTable.SetWidth(detailsFixed + subjectWidth)
+
+	// Height: full terminal minus chrome (header 2, status 2, help 2, padding 1 = 7)
+	tableHeight := height - 7
+	if tableHeight < 5 {
+		tableHeight = 5
+	}
+	m.summaryTable.SetHeight(tableHeight)
+	m.detailsTable.SetHeight(tableHeight)
+
+	// Update log viewer to match
+	logWidth := width - 4
+	if logWidth < 20 {
+		logWidth = 20
+	}
+	m.logViewer.SetSize(logWidth, tableHeight)
 }
 
 // handleNavigation handles up/down navigation for the focused table
