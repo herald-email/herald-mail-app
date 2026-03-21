@@ -43,6 +43,12 @@ type DeletionResult struct {
 	Error        error
 }
 
+// FolderStatus holds message counts for a mailbox
+type FolderStatus struct {
+	Total  int
+	Unseen int
+}
+
 // Deletion Request
 type DeletionRequest struct {
 	MessageID string `json:"message_id"`

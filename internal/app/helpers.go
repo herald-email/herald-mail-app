@@ -573,8 +573,6 @@ func (m *Model) updateTableDimensions(width, height int) {
 	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
 	//   2-space gap between the two tables
 	// base = summaryNumCols*2 + detailsNumCols*2 + 4 + 2 = 12 + 10 + 4 + 2 = 28
-	// sidebar (when visible): 20 content + 2 border + 2 gap = 24
-	const sidebarContentWidth = 20
 	overhead := 28
 	if m.showSidebar {
 		overhead += sidebarContentWidth + 2 + 2 // content + border + gap
@@ -707,9 +705,11 @@ func (m *Model) selectSidebarFolder() {
 	logger.Info("Switching to folder: %s", m.currentFolder)
 }
 
+// sidebarContentWidth is the fixed display width of sidebar content (excluding border)
+const sidebarContentWidth = 26
+
 // renderSidebar renders the folder tree sidebar content (without border)
 func (m *Model) renderSidebar() string {
-	const contentWidth = 20
 	items := flattenTree(m.folderTree)
 	var sb strings.Builder
 
@@ -727,8 +727,16 @@ func (m *Model) renderSidebar() string {
 			icon = "  "
 		}
 
-		prefixLen := len(indent) + 2 // icon is always 2 display cells
-		available := contentWidth - prefixLen
+		// Build count suffix if status is available
+		countSuffix := ""
+		if item.node.fullPath != "" {
+			if st, ok := m.folderStatus[item.node.fullPath]; ok {
+				countSuffix = fmt.Sprintf(" %d/%d", st.Unseen, st.Total)
+			}
+		}
+
+		prefixLen := len(indent) + 2 // icon is 2 display cells
+		available := sidebarContentWidth - prefixLen - len(countSuffix)
 		if available < 1 {
 			available = 1
 		}
@@ -736,9 +744,13 @@ func (m *Model) renderSidebar() string {
 		name := item.node.name
 		runes := []rune(name)
 		if len(runes) > available {
-			name = string(runes[:available-3]) + "..."
+			if available > 3 {
+				name = string(runes[:available-3]) + "..."
+			} else {
+				name = string(runes[:available])
+			}
 		}
-		line := fmt.Sprintf("%s%s%-*s", indent, icon, available, name)
+		line := fmt.Sprintf("%s%s%-*s%s", indent, icon, available, name, countSuffix)
 
 		if i == m.sidebarCursor {
 			if m.focusedPanel == panelSidebar {

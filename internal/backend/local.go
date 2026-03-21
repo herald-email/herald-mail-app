@@ -117,6 +117,10 @@ func (b *LocalBackend) ListFolders() ([]string, error) {
 	return b.imapClient.ListFolders()
 }
 
+func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
+	return b.imapClient.GetFolderStatus(folders)
+}
+
 func (b *LocalBackend) SetGroupByDomain(v bool) {
 	b.imapClient.SetGroupByDomain(v)
 }

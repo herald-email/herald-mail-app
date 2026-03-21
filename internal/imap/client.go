@@ -82,6 +82,27 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
+func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	result := make(map[string]models.FolderStatus)
+	items := []imap.StatusItem{imap.StatusMessages, imap.StatusUnseen}
+	for _, folder := range folders {
+		status, err := c.client.Status(folder, items)
+		if err != nil {
+			logger.Warn("Failed to get status for folder %s: %v", folder, err)
+			continue
+		}
+		result[folder] = models.FolderStatus{
+			Total:  int(status.Messages),
+			Unseen: int(status.Unseen),
+		}
+	}
+	return result, nil
+}
+
 // ListFolders returns all mailbox names from the server
 func (c *Client) ListFolders() ([]string, error) {
 	if c.client == nil {

@@ -29,6 +29,9 @@ type Backend interface {
 	// ListFolders returns all mailbox names available on the server.
 	ListFolders() ([]string, error)
 
+	// GetFolderStatus returns MESSAGES and UNSEEN counts for the given folders.
+	GetFolderStatus(folders []string) (map[string]models.FolderStatus, error)
+
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
 

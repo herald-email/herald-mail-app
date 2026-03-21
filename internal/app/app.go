@@ -36,6 +36,11 @@ type FoldersLoadedMsg struct {
 	Folders []string
 }
 
+// FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
+type FolderStatusMsg struct {
+	Status map[string]models.FolderStatus
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -80,6 +85,7 @@ type Model struct {
 	// Sidebar
 	folders       []string
 	folderTree    []*folderNode
+	folderStatus  map[string]models.FolderStatus
 	showSidebar   bool
 	sidebarCursor int
 	focusedPanel  int // panelSidebar, panelSummary, panelDetails
@@ -196,6 +202,7 @@ func New(b backend.Backend) *Model {
 		currentFolder:      "INBOX",
 		folders:            []string{"INBOX"},
 		folderTree:         buildFolderTree([]string{"INBOX"}),
+		folderStatus:       make(map[string]models.FolderStatus),
 		showSidebar:        true,
 		focusedPanel:       panelSummary,
 		selectedRows:       make(map[int]bool),
@@ -240,7 +247,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case FoldersLoadedMsg:
 		m.folders = msg.Folders
 		m.folderTree = buildFolderTree(msg.Folders)
+		// Keep cursor on the active folder
+		items := flattenTree(m.folderTree)
 		m.sidebarCursor = 0
+		for i, item := range items {
+			if item.node.fullPath == m.currentFolder {
+				m.sidebarCursor = i
+				break
+			}
+		}
+		// Fetch counts for all folders in background
+		folders := msg.Folders
+		return m, func() tea.Msg {
+			status, err := m.backend.GetFolderStatus(folders)
+			if err != nil {
+				logger.Warn("Failed to get folder status: %v", err)
+				return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+			}
+			return FolderStatusMsg{Status: status}
+		}
+
+	case FolderStatusMsg:
+		m.folderStatus = msg.Status
 		return m, nil
 
 	case LoadingMsg:
