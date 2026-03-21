@@ -7,9 +7,9 @@ This document describes the long-term direction for this project. It evolves fro
 1. Fix responsive terminal width (hardcoded values today) ✓
 2. Refactor to daemon/UI split architecture ✓
 3. Multi-folder sidebar (collapsible tree, counts) ✓
-4. Status bar showing active folder, unread/total counts, selection state
-5. Timeline/thread view + tab navigation
-6. Compose and reply (after timeline)
+4. Status bar showing active folder, unread/total counts, selection state ✓
+5. Timeline/thread view + tab navigation ✓
+6. Compose and reply (after timeline) ✓
 7. AI-powered inbox classification via Ollama
 8. Chat panel (talk to your emails with AI)
 9. MCP server hook

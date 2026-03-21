@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	appsmtp "mail-processor/internal/smtp"
 )
 
 // Panel focus constants
@@ -24,6 +27,7 @@ const (
 const (
 	tabCleanup  = 0
 	tabTimeline = 1
+	tabCompose  = 2
 )
 
 // LoadingMsg represents a loading state update
@@ -50,6 +54,12 @@ type FolderStatusMsg struct {
 // TimelineLoadedMsg carries emails sorted by date for the timeline tab
 type TimelineLoadedMsg struct {
 	Emails []*models.EmailData
+}
+
+// ComposeStatusMsg carries the result of a send attempt
+type ComposeStatusMsg struct {
+	Message string
+	Err     error
 }
 
 // Model represents the main application state
@@ -98,7 +108,17 @@ type Model struct {
 	timelineSubjectWidth int
 
 	// Tabs
-	activeTab int // tabCleanup or tabTimeline
+	activeTab int // tabCleanup, tabTimeline, or tabCompose
+
+	// Compose
+	mailer          *appsmtp.Client
+	fromAddress     string
+	composeTo       textinput.Model
+	composeSubject  textinput.Model
+	composeBody     textarea.Model
+	composeField    int    // 0=To, 1=Subject, 2=Body
+	composeStatus   string // last send result message
+	composePreview  bool   // show glamour markdown preview
 
 	// Sidebar
 	folders       []string
@@ -118,7 +138,7 @@ type Model struct {
 }
 
 // New creates a new application model backed by the given Backend.
-func New(b backend.Backend) *Model {
+func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string) *Model {
 	logger.Info("Creating new application model")
 
 	// Setup styles
@@ -221,6 +241,22 @@ func New(b backend.Backend) *Model {
 		logViewer.AddLog(level, message)
 	})
 
+	// Compose inputs
+	composeTo := textinput.New()
+	composeTo.Placeholder = "recipient@example.com"
+	composeTo.CharLimit = 256
+	composeTo.Focus()
+
+	composeSubject := textinput.New()
+	composeSubject.Placeholder = "Subject"
+	composeSubject.CharLimit = 512
+
+	composeBody := textarea.New()
+	composeBody.Placeholder = "Write your message here (Markdown supported)..."
+	composeBody.SetWidth(80)
+	composeBody.SetHeight(15)
+	composeBody.CharLimit = 0 // unlimited
+
 	// Create deletion channels
 	deletionRequestCh := make(chan models.DeletionRequest, 10)
 	deletionResultCh := make(chan models.DeletionResult, 10)
@@ -243,6 +279,11 @@ func New(b backend.Backend) *Model {
 		detailsTable:       detailsTable,
 		timelineTable:      timelineTable,
 		logViewer:          logViewer,
+		mailer:             mailer,
+		fromAddress:        fromAddress,
+		composeTo:          composeTo,
+		composeSubject:     composeSubject,
+		composeBody:        composeBody,
 		baseStyle:          baseStyle,
 		headerStyle:        headerStyle,
 		loadingStyle:       loadingStyle,
@@ -312,6 +353,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TimelineLoadedMsg:
 		m.timelineEmails = msg.Emails
 		m.updateTimelineTable()
+		return m, nil
+
+	case ComposeStatusMsg:
+		m.composeStatus = msg.Message
+		if msg.Err == nil && msg.Message != "" {
+			// Clear the compose fields on success
+			m.composeTo.SetValue("")
+			m.composeSubject.SetValue("")
+			m.composeBody.SetValue("")
+		}
 		return m, nil
 
 	case LoadingMsg:
@@ -424,6 +475,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Route all messages to compose inputs when on compose tab
+	if m.activeTab == tabCompose {
+		var cmd tea.Cmd
+		switch m.composeField {
+		case 0:
+			m.composeTo, cmd = m.composeTo.Update(msg)
+		case 1:
+			m.composeSubject, cmd = m.composeSubject.Update(msg)
+		case 2:
+			m.composeBody, cmd = m.composeBody.Update(msg)
+		}
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	}
+
 	// Update tables and log viewer
 	var cmd tea.Cmd
 	m.summaryTable, cmd = m.summaryTable.Update(msg)
@@ -452,6 +518,17 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Global quit always works
+	if msg.String() == "q" || msg.String() == "ctrl+c" {
+		m.cleanup()
+		return m, tea.Quit
+	}
+
+	// Compose tab gets its own key handler
+	if m.activeTab == tabCompose {
+		return m.handleComposeKey(msg)
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.cleanup()
@@ -489,6 +566,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailsTable.Blur()
 			m.detailsTable.SetStyles(m.inactiveTableStyle)
 			return m, m.loadTimelineEmails()
+		}
+		return m, nil
+
+	case "3":
+		if !m.loading && m.activeTab != tabCompose {
+			m.activeTab = tabCompose
+			m.timelineTable.Blur()
+			m.summaryTable.Blur()
+			m.detailsTable.Blur()
+			m.composeField = 0
+			m.composeTo.Focus()
+			m.composeSubject.Blur()
+			m.composeBody.Blur()
 		}
 		return m, nil
 
@@ -543,6 +633,27 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l", "L":
 		if !m.loading {
 			m.showLogs = !m.showLogs
+		}
+		return m, nil
+
+	case "R":
+		// Reply: open compose pre-filled from selected timeline email
+		if !m.loading && m.activeTab == tabTimeline {
+			cursor := m.timelineTable.Cursor()
+			if cursor < len(m.timelineEmails) {
+				email := m.timelineEmails[cursor]
+				m.activeTab = tabCompose
+				m.composeTo.SetValue(email.Sender)
+				subject := email.Subject
+				if !strings.HasPrefix(strings.ToLower(subject), "re:") {
+					subject = "Re: " + subject
+				}
+				m.composeSubject.SetValue(subject)
+				m.composeField = 2
+				m.composeTo.Blur()
+				m.composeSubject.Blur()
+				m.composeBody.Focus()
+			}
 		}
 		return m, nil
 
@@ -638,6 +749,8 @@ func (m *Model) renderMainView() string {
 		content.WriteString(logView + "\n")
 	} else if m.activeTab == tabTimeline {
 		content.WriteString(m.renderTimelineView() + "\n")
+	} else if m.activeTab == tabCompose {
+		content.WriteString(m.renderComposeView() + "\n")
 	} else {
 		// Cleanup tab
 		summaryView := m.baseStyle.Render(m.summaryTable.View())

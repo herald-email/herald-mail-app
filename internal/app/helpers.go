@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -736,15 +737,17 @@ func (m *Model) renderTabBar() string {
 		Background(lipgloss.Color("57")).
 		Bold(true)
 
-	var t1, t2 string
-	if m.activeTab == tabCleanup {
-		t1 = active.Render("1  Cleanup")
-		t2 = inactive.Render("2  Timeline")
-	} else {
-		t1 = inactive.Render("1  Cleanup")
-		t2 = active.Render("2  Timeline")
+	tab := func(n int, label string) string {
+		if m.activeTab == n {
+			return active.Render(label)
+		}
+		return inactive.Render(label)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, t1, t2)
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		tab(tabCleanup, "1  Cleanup"),
+		tab(tabTimeline, "2  Timeline"),
+		tab(tabCompose, "3  Compose"),
+	)
 }
 
 // renderStatusBar renders the persistent bottom status bar
@@ -820,16 +823,18 @@ func (m *Model) renderKeyHints() string {
 	var hints string
 	if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+	} else if m.activeTab == tabCompose {
+		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		hints = "1/2: switch tab  │  ↑/k ↓/j: navigate  │  f: sidebar  │  l: logs  │  q: quit"
+		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  f: sidebar  │  l: logs  │  q: quit"
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
-			hints = "1/2: switch tab  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open folder  │  f: hide  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  f: hide  │  q: quit"
 		case panelDetails:
-			hints = "1/2: switch tab  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  l: logs  │  q: quit"
 		default: // panelSummary
-			hints = "1/2: switch tab  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  l: logs  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().
@@ -974,6 +979,166 @@ func (m *Model) renderSidebar() string {
 		}
 		sb.WriteString(line + "\n")
 	}
+	return sb.String()
+}
+
+// handleComposeKey handles all key input when on the compose tab
+func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "1":
+		m.activeTab = tabCleanup
+		m.timelineTable.Blur()
+		m.composeBody.Blur()
+		m.setFocusedPanel(m.focusedPanel)
+		return m, nil
+	case "2":
+		m.activeTab = tabTimeline
+		m.timelineTable.Focus()
+		m.timelineTable.SetStyles(m.activeTableStyle)
+		m.summaryTable.Blur()
+		m.detailsTable.Blur()
+		m.composeBody.Blur()
+		return m, m.loadTimelineEmails()
+	case "3":
+		return m, nil // already here
+	case "tab":
+		m.cycleComposeField()
+		return m, nil
+	case "ctrl+s":
+		return m, m.sendCompose()
+	case "ctrl+p":
+		m.composePreview = !m.composePreview
+		return m, nil
+	case "esc":
+		m.composeStatus = ""
+		return m, nil
+	}
+	// Forward all other keys to the focused field
+	var cmd tea.Cmd
+	switch m.composeField {
+	case 0:
+		m.composeTo, cmd = m.composeTo.Update(msg)
+	case 1:
+		m.composeSubject, cmd = m.composeSubject.Update(msg)
+	case 2:
+		m.composeBody, cmd = m.composeBody.Update(msg)
+	}
+	return m, cmd
+}
+
+// cycleComposeField advances focus to the next compose input field
+func (m *Model) cycleComposeField() {
+	m.composeField = (m.composeField + 1) % 3
+	switch m.composeField {
+	case 0:
+		m.composeTo.Focus()
+		m.composeSubject.Blur()
+		m.composeBody.Blur()
+	case 1:
+		m.composeTo.Blur()
+		m.composeSubject.Focus()
+		m.composeBody.Blur()
+	case 2:
+		m.composeTo.Blur()
+		m.composeSubject.Blur()
+		m.composeBody.Focus()
+	}
+}
+
+// sendCompose sends the composed message via SMTP
+func (m *Model) sendCompose() tea.Cmd {
+	from := m.fromAddress
+	to := m.composeTo.Value()
+	subject := m.composeSubject.Value()
+	body := m.composeBody.Value()
+	return func() tea.Msg {
+		if to == "" {
+			return ComposeStatusMsg{Message: "Error: To field is empty"}
+		}
+		if subject == "" {
+			return ComposeStatusMsg{Message: "Error: Subject is empty"}
+		}
+		err := m.mailer.Send(from, to, subject, body)
+		if err != nil {
+			return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
+		}
+		return ComposeStatusMsg{Message: "Message sent!"}
+	}
+}
+
+// renderComposeView renders the compose tab content
+func (m *Model) renderComposeView() string {
+	var sb strings.Builder
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Width(10)
+	activeFieldStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("57"))
+	inactiveFieldStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240"))
+
+	// To field
+	toStyle := inactiveFieldStyle
+	if m.composeField == 0 {
+		toStyle = activeFieldStyle
+	}
+	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Render("To:"),
+		toStyle.Render(m.composeTo.View()),
+	) + "\n")
+
+	// Subject field
+	subStyle := inactiveFieldStyle
+	if m.composeField == 1 {
+		subStyle = activeFieldStyle
+	}
+	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Render("Subject:"),
+		subStyle.Render(m.composeSubject.View()),
+	) + "\n")
+
+	// Divider
+	divWidth := m.windowWidth - 4
+	if divWidth < 10 {
+		divWidth = 10
+	}
+	sb.WriteString(strings.Repeat("─", divWidth) + "\n")
+
+	// Body / Preview
+	if m.composePreview {
+		previewLabel := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86")).
+			Render("  Preview (Ctrl+P to edit)  ")
+		sb.WriteString(previewLabel + "\n")
+		body := m.composeBody.Value()
+		if body == "" {
+			body = "_empty body_"
+		}
+		if rendered, err := glamour.Render(body, "dark"); err == nil {
+			sb.WriteString(rendered)
+		} else {
+			sb.WriteString(body + "\n")
+		}
+	} else {
+		bodyStyle := inactiveFieldStyle
+		if m.composeField == 2 {
+			bodyStyle = activeFieldStyle
+		}
+		sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
+	}
+
+	// Status message
+	if m.composeStatus != "" {
+		color := "86"
+		if strings.HasPrefix(m.composeStatus, "Error") || strings.HasPrefix(m.composeStatus, "Send failed") {
+			color = "196"
+		}
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(m.composeStatus) + "\n")
+	}
+
 	return sb.String()
 }
 

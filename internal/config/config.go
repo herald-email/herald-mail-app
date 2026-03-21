@@ -17,6 +17,10 @@ type Config struct {
 		Host string `yaml:"host"`
 		Port int    `yaml:"port"`
 	} `yaml:"server"`
+	SMTP struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+	} `yaml:"smtp"`
 }
 
 // Load reads and parses the configuration file

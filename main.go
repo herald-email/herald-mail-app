@@ -11,6 +11,7 @@ import (
 	"mail-processor/internal/backend"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
+	appsmtp "mail-processor/internal/smtp"
 )
 
 func main() {
@@ -66,8 +67,11 @@ func main() {
 		log.Fatalf("Failed to create backend: %v", err)
 	}
 
+	// Create SMTP client for compose/reply
+	mailer := appsmtp.New(cfg)
+
 	// Create the TUI application
-	app := app.New(b)
+	app := app.New(b, mailer, cfg.Credentials.Username)
 
 	logger.Info("Starting TUI application...")
 
