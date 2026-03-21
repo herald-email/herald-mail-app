@@ -128,6 +128,10 @@ func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.Fold
 	return b.imapClient.GetFolderStatus(folders)
 }
 
+func (b *LocalBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
+	return b.cache.GetEmailsSortedByDate(folder)
+}
+
 func (b *LocalBackend) SetGroupByDomain(v bool) {
 	b.imapClient.SetGroupByDomain(v)
 }

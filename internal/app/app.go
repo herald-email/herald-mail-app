@@ -20,6 +20,12 @@ const (
 	panelDetails = 2
 )
 
+// Tab constants
+const (
+	tabCleanup  = 0
+	tabTimeline = 1
+)
+
 // LoadingMsg represents a loading state update
 type LoadingMsg struct {
 	Info models.ProgressInfo
@@ -39,6 +45,11 @@ type FoldersLoadedMsg struct {
 // FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
 type FolderStatusMsg struct {
 	Status map[string]models.FolderStatus
+}
+
+// TimelineLoadedMsg carries emails sorted by date for the timeline tab
+type TimelineLoadedMsg struct {
+	Emails []*models.EmailData
 }
 
 // Model represents the main application state
@@ -69,18 +80,25 @@ type Model struct {
 	emailsBySender map[string][]*models.EmailData
 
 	// Tables
-	summaryTable table.Model
-	detailsTable table.Model
-	logViewer    *LogViewer
+	summaryTable  table.Model
+	detailsTable  table.Model
+	timelineTable table.Model
+	logViewer     *LogViewer
 
 	// Display options
-	groupByDomain      bool
-	currentFolder      string
-	selectedSender     string
-	selectedRows       map[int]bool              // Selected rows in summary table
-	selectedMessages   map[string]bool           // Selected messages by MessageID (across all senders)
-	rowToSender        map[int]string            // Maps row index to original sender (before sanitization)
-	detailsEmails      []*models.EmailData       // Current emails shown in details table
+	groupByDomain        bool
+	currentFolder        string
+	selectedSender       string
+	selectedRows         map[int]bool        // Selected rows in summary table
+	selectedMessages     map[string]bool     // Selected messages by MessageID (across all senders)
+	rowToSender          map[int]string      // Maps row index to original sender (before sanitization)
+	detailsEmails        []*models.EmailData // Current emails shown in details table
+	timelineEmails       []*models.EmailData // All emails sorted by date for timeline tab
+	timelineSenderWidth  int
+	timelineSubjectWidth int
+
+	// Tabs
+	activeTab int // tabCleanup or tabTimeline
 
 	// Sidebar
 	folders       []string
@@ -182,6 +200,19 @@ func New(b backend.Backend) *Model {
 	summaryTable.SetStyles(activeStyle)
 	detailsTable.SetStyles(inactiveStyle)
 
+	// Timeline table: full-width chronological email list
+	timelineTable := table.New(
+		table.WithColumns([]table.Column{
+			{Title: "Sender", Width: 20},
+			{Title: "Subject", Width: 40},
+			{Title: "Date", Width: 16},
+			{Title: "Size KB", Width: 7},
+			{Title: "Att", Width: 3},
+		}),
+		table.WithHeight(11),
+	)
+	timelineTable.SetStyles(inactiveStyle)
+
 	// Create log viewer
 	logViewer := NewLogViewer(140, 15)
 
@@ -210,6 +241,7 @@ func New(b backend.Backend) *Model {
 		rowToSender:        make(map[int]string),
 		summaryTable:       summaryTable,
 		detailsTable:       detailsTable,
+		timelineTable:      timelineTable,
 		logViewer:          logViewer,
 		baseStyle:          baseStyle,
 		headerStyle:        headerStyle,
@@ -277,6 +309,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case TimelineLoadedMsg:
+		m.timelineEmails = msg.Emails
+		m.updateTimelineTable()
+		return m, nil
+
 	case LoadingMsg:
 		m.progressInfo = msg.Info
 		switch msg.Info.Phase {
@@ -291,7 +328,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateSummaryTable()
 			m.summaryTable.GotoTop()
 			m.updateDetailsTable()
-			return m, func() tea.Msg {
+			listFoldersCmd := func() tea.Msg {
 				folders, err := m.backend.ListFolders()
 				if err != nil {
 					logger.Warn("Failed to list folders: %v", err)
@@ -299,6 +336,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FoldersLoadedMsg{Folders: folders}
 			}
+			if m.activeTab == tabTimeline {
+				return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails())
+			}
+			return m, listFoldersCmd
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)
@@ -391,6 +432,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.detailsTable, cmd = m.detailsTable.Update(msg)
 	cmds = append(cmds, cmd)
 
+	m.timelineTable, cmd = m.timelineTable.Update(msg)
+	cmds = append(cmds, cmd)
+
 	// Update log viewer
 	_, cmd = m.logViewer.Update(msg)
 	cmds = append(cmds, cmd)
@@ -423,6 +467,28 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.showSidebar && m.focusedPanel == panelSidebar {
 				m.setFocusedPanel(panelSummary)
 			}
+		}
+		return m, nil
+
+	case "1":
+		if !m.loading && m.activeTab != tabCleanup {
+			m.activeTab = tabCleanup
+			m.timelineTable.Blur()
+			m.timelineTable.SetStyles(m.inactiveTableStyle)
+			m.setFocusedPanel(m.focusedPanel)
+		}
+		return m, nil
+
+	case "2":
+		if !m.loading && m.activeTab != tabTimeline {
+			m.activeTab = tabTimeline
+			m.timelineTable.Focus()
+			m.timelineTable.SetStyles(m.activeTableStyle)
+			m.summaryTable.Blur()
+			m.summaryTable.SetStyles(m.inactiveTableStyle)
+			m.detailsTable.Blur()
+			m.detailsTable.SetStyles(m.inactiveTableStyle)
+			return m, m.loadTimelineEmails()
 		}
 		return m, nil
 
@@ -482,12 +548,22 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		if !m.loading {
+			if m.activeTab == tabTimeline {
+				var cmd tea.Cmd
+				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
+				return m, cmd
+			}
 			return m.handleNavigation(-1)
 		}
 		return m, nil
 
 	case "down", "j":
 		if !m.loading {
+			if m.activeTab == tabTimeline {
+				var cmd tea.Cmd
+				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+				return m, cmd
+			}
 			return m.handleNavigation(1)
 		}
 		return m, nil
@@ -551,57 +627,21 @@ func (m *Model) renderMainView() string {
 	var content strings.Builder
 
 	// Header
-	mode := "Email"
-	if m.groupByDomain {
-		mode = "Domain"
-	}
-	logIndicator := ""
+	content.WriteString(m.headerStyle.Render("ProtonMail Analyzer") + "\n")
+
+	// Tab bar
+	content.WriteString(m.renderTabBar() + "\n\n")
+
+	// Content area
 	if m.showLogs {
-		logIndicator = " | Logs: ON"
-	}
-	header := fmt.Sprintf("📧 ProtonMail Analyzer - %s Mode%s", mode, logIndicator)
-	content.WriteString(m.headerStyle.Render(header) + "\n\n")
-
-	// Status - calculate total emails from all senders
-	totalEmails := 0
-	for _, stats := range m.stats {
-		totalEmails += stats.TotalEmails
-	}
-	status := "Ready"
-	if m.deleting {
-		completed := m.deletionsTotal - m.deletionsPending
-		if m.deletionProgress.Sender != "" {
-			status = fmt.Sprintf("Deleting: %s (%d/%d)", m.deletionProgress.Sender, completed, m.deletionsTotal)
-		} else if m.deletionProgress.MessageID != "" {
-			status = fmt.Sprintf("Deleting message (%d/%d)", completed, m.deletionsTotal)
-		} else {
-			status = fmt.Sprintf("Deleting... (%d/%d)", completed, m.deletionsTotal)
-		}
-	}
-	status += fmt.Sprintf(" | %d senders | %d emails", len(m.stats), totalEmails)
-	if len(m.selectedRows) > 0 {
-		status += fmt.Sprintf(" | %d senders selected", len(m.selectedRows))
-	}
-	if len(m.selectedMessages) > 0 {
-		status += fmt.Sprintf(" | %d messages selected", len(m.selectedMessages))
-	}
-	content.WriteString(status + "\n\n")
-
-	if m.showLogs {
-		// Show logs view
-		logTitle := m.headerStyle.Render("📋 Real-time Logs")
-		content.WriteString(logTitle + "\n")
-
 		logView := m.baseStyle.Render(m.logViewer.View())
-		content.WriteString(logView + "\n\n")
-
-		// Help for log view
-		help := "q: quit | l: toggle logs | r: refresh | d: toggle domain mode | ↑/k ↓/j: navigate"
-		content.WriteString(help)
+		content.WriteString(logView + "\n")
+	} else if m.activeTab == tabTimeline {
+		content.WriteString(m.renderTimelineView() + "\n")
 	} else {
+		// Cleanup tab
 		summaryView := m.baseStyle.Render(m.summaryTable.View())
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
-
 		var tablesView string
 		if m.showSidebar {
 			sidebarView := m.baseStyle.Render(m.renderSidebar())
@@ -609,11 +649,12 @@ func (m *Model) renderMainView() string {
 		} else {
 			tablesView = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
 		}
-		content.WriteString(tablesView + "\n\n")
-
-		help := "q: quit | f: sidebar | l: logs | d: domain | r: refresh | ↑/k ↓/j: nav | space: select | D: delete | enter: details/select | tab: switch panel"
-		content.WriteString(help + "\n")
+		content.WriteString(tablesView + "\n")
 	}
+
+	// Status bar + key hints (persistent bottom bar)
+	content.WriteString(m.renderStatusBar() + "\n")
+	content.WriteString(m.renderKeyHints())
 
 	return content.String()
 }

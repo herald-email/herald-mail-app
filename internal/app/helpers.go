@@ -563,6 +563,18 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.windowWidth = width
 	m.windowHeight = height
 
+	// Chrome: header(1) + tabbar+blank(2) + content + blank(1) + statusbar(1) + keyhints(1) = 6
+	tableHeight := height - 6
+	if tableHeight < 5 {
+		tableHeight = 5
+	}
+
+	sidebarExtra := 0
+	if m.showSidebar {
+		sidebarExtra = sidebarContentWidth + 2 + 2 // content + border + gap
+	}
+
+	// --- Cleanup tab: two side-by-side tables ---
 	// Fixed (non-resizable) column widths:
 	//   Summary: checkmark(2) + count(6) + avgkb(7) + attach(6) + daterange(20) = 41
 	//   Details: checkmark(2) + date(16) + size(8) + att(3) = 29
@@ -571,28 +583,19 @@ func (m *Model) updateTableDimensions(width, height int) {
 	const detailsFixedCols = 29
 	const detailsNumCols = 5
 
-	// Total rendering overhead:
-	//   bubbles/table default cell style Padding(0,1) adds 2 chars per cell
-	//   baseStyle NormalBorder adds 2 chars (left+right) per table = 4 total
-	//   2-space gap between the two tables
-	// base = summaryNumCols*2 + detailsNumCols*2 + 4 + 2 = 12 + 10 + 4 + 2 = 28
-	overhead := 28
-	if m.showSidebar {
-		overhead += sidebarContentWidth + 2 + 2 // content + border + gap
-	}
+	// Total rendering overhead for two tables:
+	//   summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gap = 12+10+4+2 = 28
+	cleanupOverhead := 28 + sidebarExtra
 
-	// Space remaining for the two variable-width columns (Sender/Domain and Subject)
-	variable := width - overhead - summaryFixedCols - detailsFixedCols
-	if variable < 24 {
-		variable = 24
+	cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
+	if cleanupVariable < 24 {
+		cleanupVariable = 24
 	}
-
-	// 40% to sender column, 60% to subject column
-	senderWidth := variable * 40 / 100
+	senderWidth := cleanupVariable * 40 / 100
 	if senderWidth < 12 {
 		senderWidth = 12
 	}
-	subjectWidth := variable - senderWidth
+	subjectWidth := cleanupVariable - senderWidth
 	if subjectWidth < 12 {
 		subjectWidth = 12
 	}
@@ -617,13 +620,37 @@ func (m *Model) updateTableDimensions(width, height int) {
 	})
 	m.detailsTable.SetWidth(detailsFixedCols + subjectWidth + detailsNumCols*2)
 
-	// Height: full terminal minus chrome (header 2, status 2, help 2, padding 1 = 7)
-	tableHeight := height - 7
-	if tableHeight < 5 {
-		tableHeight = 5
-	}
 	m.summaryTable.SetHeight(tableHeight)
 	m.detailsTable.SetHeight(tableHeight)
+
+	// --- Timeline tab: single full-width table ---
+	// Fixed cols: Date(16) + Size(7) + Att(3) = 26; numCols=5; overhead=5*2+2=12
+	const timelineFixedCols = 26
+	const timelineNumCols = 5
+	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra
+	timelineVariable := width - timelineOverhead
+	if timelineVariable < 24 {
+		timelineVariable = 24
+	}
+	tSenderWidth := timelineVariable * 30 / 100
+	if tSenderWidth < 10 {
+		tSenderWidth = 10
+	}
+	tSubjectWidth := timelineVariable - tSenderWidth
+	if tSubjectWidth < 14 {
+		tSubjectWidth = 14
+	}
+	m.timelineSenderWidth = tSenderWidth
+	m.timelineSubjectWidth = tSubjectWidth
+	m.timelineTable.SetColumns([]table.Column{
+		{Title: "Sender", Width: tSenderWidth},
+		{Title: "Subject", Width: tSubjectWidth},
+		{Title: "Date", Width: 16},
+		{Title: "Size KB", Width: 7},
+		{Title: "Att", Width: 3},
+	})
+	m.timelineTable.SetWidth(timelineFixedCols + tSenderWidth + tSubjectWidth + timelineNumCols*2)
+	m.timelineTable.SetHeight(tableHeight)
 
 	// Update log viewer to match
 	logWidth := width - 4
@@ -631,6 +658,183 @@ func (m *Model) updateTableDimensions(width, height int) {
 		logWidth = 20
 	}
 	m.logViewer.SetSize(logWidth, tableHeight)
+}
+
+// loadTimelineEmails returns a Cmd that fetches all emails sorted by date
+func (m *Model) loadTimelineEmails() tea.Cmd {
+	folder := m.currentFolder
+	return func() tea.Msg {
+		emails, err := m.backend.GetTimelineEmails(folder)
+		if err != nil {
+			logger.Error("Failed to load timeline emails: %v", err)
+			return TimelineLoadedMsg{Emails: nil}
+		}
+		return TimelineLoadedMsg{Emails: emails}
+	}
+}
+
+// updateTimelineTable rebuilds the timeline table rows from m.timelineEmails
+func (m *Model) updateTimelineTable() {
+	var rows []table.Row
+	for _, email := range m.timelineEmails {
+		dateStr := "N/A"
+		if !email.Date.IsZero() {
+			dateStr = email.Date.Format("06-01-02 15:04")
+		}
+		subject := sanitizeText(email.Subject)
+		if subject == "" {
+			subject = "(no subject)"
+		}
+		maxSubj := m.timelineSubjectWidth
+		if maxSubj <= 0 {
+			maxSubj = 40
+		}
+		if len([]rune(subject)) > maxSubj {
+			subject = string([]rune(subject)[:maxSubj-3]) + "..."
+		}
+		sender := sanitizeText(email.Sender)
+		maxSend := m.timelineSenderWidth
+		if maxSend <= 0 {
+			maxSend = 20
+		}
+		if len([]rune(sender)) > maxSend {
+			sender = string([]rune(sender)[:maxSend-3]) + "..."
+		}
+		att := "N"
+		if email.HasAttachments {
+			att = "Y"
+		}
+		rows = append(rows, table.Row{
+			sender,
+			subject,
+			dateStr,
+			fmt.Sprintf("%.1f", float64(email.Size)/1024),
+			att,
+		})
+	}
+	m.timelineTable.SetRows(rows)
+}
+
+// renderTimelineView renders the timeline tab content
+func (m *Model) renderTimelineView() string {
+	timelineView := m.baseStyle.Render(m.timelineTable.View())
+	if m.showSidebar {
+		sidebarView := m.baseStyle.Render(m.renderSidebar())
+		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", timelineView)
+	}
+	return timelineView
+}
+
+// renderTabBar renders the tab navigation bar
+func (m *Model) renderTabBar() string {
+	inactive := lipgloss.NewStyle().
+		Padding(0, 2).
+		Foreground(lipgloss.Color("245"))
+	active := lipgloss.NewStyle().
+		Padding(0, 2).
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(true)
+
+	var t1, t2 string
+	if m.activeTab == tabCleanup {
+		t1 = active.Render("1  Cleanup")
+		t2 = inactive.Render("2  Timeline")
+	} else {
+		t1 = inactive.Render("1  Cleanup")
+		t2 = active.Render("2  Timeline")
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, t1, t2)
+}
+
+// renderStatusBar renders the persistent bottom status bar
+func (m *Model) renderStatusBar() string {
+	// Folder breadcrumb
+	folderParts := strings.Split(m.currentFolder, "/")
+	breadcrumb := strings.Join(folderParts, " › ")
+
+	parts := []string{breadcrumb}
+
+	// Folder counts
+	if st, ok := m.folderStatus[m.currentFolder]; ok {
+		parts = append(parts, fmt.Sprintf("%d unread / %d total", st.Unseen, st.Total))
+	}
+
+	// Mode (cleanup tab only)
+	if m.activeTab == tabCleanup {
+		if m.groupByDomain {
+			parts = append(parts, "Domain mode")
+		} else {
+			parts = append(parts, "Sender mode")
+		}
+	}
+
+	// Selection state
+	if len(m.selectedRows) > 0 {
+		parts = append(parts, fmt.Sprintf("%d senders selected", len(m.selectedRows)))
+	} else if len(m.selectedMessages) > 0 {
+		parts = append(parts, fmt.Sprintf("%d messages selected", len(m.selectedMessages)))
+	}
+
+	// Deletion progress
+	if m.deleting {
+		completed := m.deletionsTotal - m.deletionsPending
+		if m.deletionProgress.Sender != "" {
+			parts = append(parts, fmt.Sprintf("Deleting %s  %d/%d", m.deletionProgress.Sender, completed, m.deletionsTotal))
+		} else {
+			parts = append(parts, fmt.Sprintf("Deleting…  %d/%d", completed, m.deletionsTotal))
+		}
+	}
+
+	// Timeline email count
+	if m.activeTab == tabTimeline {
+		parts = append(parts, fmt.Sprintf("%d emails", len(m.timelineEmails)))
+	} else if m.stats != nil {
+		total := 0
+		for _, s := range m.stats {
+			total += s.TotalEmails
+		}
+		parts = append(parts, fmt.Sprintf("%d senders  %d emails", len(m.stats), total))
+	}
+
+	// Logs indicator
+	if m.showLogs {
+		parts = append(parts, "Logs ON")
+	}
+
+	line := strings.Join(parts, "  │  ")
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")).
+		Background(lipgloss.Color("237")).
+		Width(w).
+		Padding(0, 1).
+		Render(line)
+}
+
+// renderKeyHints renders the context-sensitive key hint line
+func (m *Model) renderKeyHints() string {
+	var hints string
+	if m.showLogs {
+		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+	} else if m.activeTab == tabTimeline {
+		hints = "1/2: switch tab  │  ↑/k ↓/j: navigate  │  f: sidebar  │  l: logs  │  q: quit"
+	} else {
+		switch m.focusedPanel {
+		case panelSidebar:
+			hints = "1/2: switch tab  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open folder  │  f: hide  │  q: quit"
+		case panelDetails:
+			hints = "1/2: switch tab  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  l: logs  │  q: quit"
+		default: // panelSummary
+			hints = "1/2: switch tab  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  l: logs  │  q: quit"
+		}
+	}
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("243")).
+		Render(hints)
 }
 
 // setFocusedPanel updates focus state and table styles for the given panel

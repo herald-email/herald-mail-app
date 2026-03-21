@@ -267,6 +267,39 @@ func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
 	return date, nil
 }
 
+// GetEmailsSortedByDate returns all emails for a folder sorted by date descending
+func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error) {
+	query := `SELECT message_id, uid, sender, subject, date, size, has_attachments
+	          FROM emails WHERE folder = ? ORDER BY date DESC`
+	rows, err := c.db.Query(query, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var emails []*models.EmailData
+	for rows.Next() {
+		var messageID, sender, subject string
+		var uid uint32
+		var date time.Time
+		var size, hasAttachments int
+		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments); err != nil {
+			return nil, err
+		}
+		emails = append(emails, &models.EmailData{
+			MessageID:      messageID,
+			UID:            uid,
+			Sender:         sender,
+			Subject:        subject,
+			Date:           date,
+			Size:           size,
+			HasAttachments: hasAttachments == 1,
+			Folder:         folder,
+		})
+	}
+	return emails, rows.Err()
+}
+
 // GetCachedUIDs returns all cached UIDs for a folder
 func (c *Cache) GetCachedUIDs(folder string) (map[uint32]bool, error) {
 	query := `SELECT uid FROM emails WHERE folder = ? AND uid IS NOT NULL`

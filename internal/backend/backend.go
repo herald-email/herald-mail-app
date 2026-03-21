@@ -32,6 +32,9 @@ type Backend interface {
 	// GetFolderStatus returns MESSAGES and UNSEEN counts for the given folders.
 	GetFolderStatus(folders []string) (map[string]models.FolderStatus, error)
 
+	// GetTimelineEmails returns all emails for a folder sorted by date descending.
+	GetTimelineEmails(folder string) ([]*models.EmailData, error)
+
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
 
