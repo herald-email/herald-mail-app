@@ -353,8 +353,21 @@ func (m *Model) toggleSelection() {
 
 // deleteSelected deletes the selected senders or individual messages via queue
 func (m *Model) deleteSelected() tea.Cmd {
-	// Count how many deletions we're queueing
+	// Calculate deletion count before launching the goroutine; the goroutine
+	// clears m.selectedMessages and m.selectedRows, so reading them afterward
+	// would be a data race.
 	deletionCount := 0
+	if m.detailsTable.Focused() {
+		if len(m.selectedMessages) > 0 {
+			deletionCount = len(m.selectedMessages)
+		} else {
+			deletionCount = 1
+		}
+	} else if len(m.selectedRows) > 0 {
+		deletionCount = len(m.selectedRows)
+	} else {
+		deletionCount = 1
+	}
 
 	// Send deletion requests to the queue
 	go func() {
@@ -393,7 +406,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 				m.deletionRequestCh <- models.DeletionRequest{
 					Sender:   sender,
 					IsDomain: m.groupByDomain,
-					Folder:   "INBOX",
+					Folder:   m.currentFolder,
 				}
 			}
 			m.selectedRows = make(map[int]bool)
@@ -405,24 +418,11 @@ func (m *Model) deleteSelected() tea.Cmd {
 				m.deletionRequestCh <- models.DeletionRequest{
 					Sender:   sender,
 					IsDomain: m.groupByDomain,
-					Folder:   "INBOX",
+					Folder:   m.currentFolder,
 				}
 			}
 		}
 	}()
-
-	// Calculate deletion count before goroutine clears the maps
-	if m.detailsTable.Focused() {
-		if len(m.selectedMessages) > 0 {
-			deletionCount = len(m.selectedMessages)
-		} else {
-			deletionCount = 1
-		}
-	} else if len(m.selectedRows) > 0 {
-		deletionCount = len(m.selectedRows)
-	} else {
-		deletionCount = 1
-	}
 
 	// Set pending counters
 	m.deletionsPending = deletionCount
