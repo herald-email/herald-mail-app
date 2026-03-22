@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
+	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -629,11 +630,23 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.summaryTable.SetHeight(tableHeight)
 	m.detailsTable.SetHeight(tableHeight)
 
-	// --- Timeline tab: single full-width table ---
+	// --- Timeline tab: single full-width table (or split with preview) ---
 	// Fixed cols: Date(16) + Size(7) + Att(3) + Tag(4) = 30; numCols=6; overhead=6*2+2=14
 	const timelineFixedCols = 30
 	const timelineNumCols = 6
-	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra
+
+	// Reserve half the available width for the email preview panel when one is open.
+	availableForTimeline := width - sidebarExtra - chatExtra
+	previewWidth := 0
+	if m.selectedTimelineEmail != nil {
+		previewWidth = availableForTimeline / 2
+		if previewWidth < 40 {
+			previewWidth = 40
+		}
+	}
+	m.emailPreviewWidth = previewWidth
+
+	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra + previewWidth
 	timelineVariable := width - timelineOverhead
 	if timelineVariable < 24 {
 		timelineVariable = 24
@@ -727,14 +740,87 @@ func (m *Model) updateTimelineTable() {
 	m.timelineTable.SetRows(rows)
 }
 
-// renderTimelineView renders the timeline tab content
+// renderTimelineView renders the timeline tab content.
+// When an email is selected, it splits into a list on the left and preview on the right.
 func (m *Model) renderTimelineView() string {
-	timelineView := m.baseStyle.Render(m.timelineTable.View())
+	tableView := m.baseStyle.Render(m.timelineTable.View())
+
+	var mainContent string
+	if m.selectedTimelineEmail != nil {
+		previewPanel := m.renderEmailPreview()
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, tableView, previewPanel)
+	} else {
+		mainContent = tableView
+	}
+
 	if m.showSidebar {
 		sidebarView := m.baseStyle.Render(m.renderSidebar())
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", timelineView)
+		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)
 	}
-	return timelineView
+	return mainContent
+}
+
+// renderEmailPreview renders the right-hand email body preview panel.
+func (m *Model) renderEmailPreview() string {
+	w := m.emailPreviewWidth
+	if w <= 0 {
+		w = 40
+	}
+	innerW := w - 4 // left border + padding
+
+	var sb strings.Builder
+
+	// Header block
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	email := m.selectedTimelineEmail
+	sb.WriteString(dimStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
+	sb.WriteString(dimStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
+	sb.WriteString(dimStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+	sb.WriteString(strings.Repeat("─", innerW) + "\n")
+
+	if m.emailBodyLoading {
+		sb.WriteString(dimStyle.Render("Loading…"))
+	} else if m.emailBody != nil {
+		// Inline images via iTerm2 protocol
+		for _, img := range m.emailBody.InlineImages {
+			sb.WriteString(iterm2.Render(img.Data, innerW))
+		}
+
+		// Plain-text body
+		body := m.emailBody.TextPlain
+		if body == "" {
+			body = "(No plain text — HTML only)"
+		}
+		// Trim trailing whitespace and wrap to panel width
+		body = strings.TrimRight(body, "\r\n\t ")
+		sb.WriteString(strings.Join(wrapText(body, innerW), "\n"))
+	}
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("238")).
+		PaddingLeft(1)
+
+	return panelStyle.Render(sb.String())
+}
+
+// truncate shortens s to at most n runes.
+func truncate(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n-1]) + "…"
+}
+
+// loadEmailBodyCmd returns a tea.Cmd that fetches the email body in the background.
+func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
+	return func() tea.Msg {
+		body, err := m.backend.FetchEmailBody(folder, uid)
+		return EmailBodyMsg{Body: body, Err: err}
+	}
 }
 
 // renderTabBar renders the tab navigation bar
@@ -844,7 +930,11 @@ func (m *Model) renderKeyHints() string {
 	} else if m.activeTab == tabCompose {
 		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  R: reply  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
+		if m.selectedTimelineEmail != nil {
+			hints = "esc: close preview  │  ↑/k ↓/j: navigate  │  R: reply  │  q: quit"
+		} else {
+			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
+		}
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
@@ -1338,27 +1428,35 @@ func (m *Model) renderChatPanel() string {
 	return sb.String()
 }
 
-// wrapText wraps text to fit within width characters
+// wrapText wraps text to fit within width runes.
+// Uses rune-based indexing so multi-byte characters (CJK, accented, emoji)
+// are never split mid-codepoint.
 func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
 	var lines []string
-	for len(text) > 0 {
-		if len(text) <= width {
-			lines = append(lines, text)
+	runes := []rune(text)
+	for len(runes) > 0 {
+		if len(runes) <= width {
+			lines = append(lines, string(runes))
 			break
 		}
 		// Find last space within width
 		cut := width
-		for cut > 0 && text[cut-1] != ' ' {
+		for cut > 0 && runes[cut-1] != ' ' {
 			cut--
 		}
 		if cut == 0 {
 			cut = width
 		}
-		lines = append(lines, text[:cut])
-		text = strings.TrimLeft(text[cut:], " ")
+		lines = append(lines, string(runes[:cut]))
+		// Trim leading spaces from the remainder
+		rest := runes[cut:]
+		for len(rest) > 0 && rest[0] == ' ' {
+			rest = rest[1:]
+		}
+		runes = rest
 	}
 	return lines
 }

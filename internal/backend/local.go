@@ -148,6 +148,10 @@ func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error)
 	return b.cache.GetEmailByID(messageID)
 }
 
+func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
+	return b.imapClient.FetchEmailBody(uid, folder)
+}
+
 func (b *LocalBackend) SetGroupByDomain(v bool) {
 	b.imapClient.SetGroupByDomain(v)
 }

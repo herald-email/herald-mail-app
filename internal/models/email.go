@@ -50,6 +50,20 @@ type FolderStatus struct {
 	Unseen int
 }
 
+// EmailBody holds the fetched body content of a single email message.
+type EmailBody struct {
+	TextPlain    string
+	TextHTML     string
+	InlineImages []InlineImage
+}
+
+// InlineImage is an image MIME part embedded inline in an email body.
+type InlineImage struct {
+	ContentID string
+	MIMEType  string
+	Data      []byte
+}
+
 // Deletion Request
 type DeletionRequest struct {
 	MessageID string `json:"message_id"`

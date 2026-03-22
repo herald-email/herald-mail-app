@@ -17,31 +17,50 @@ A persistent IMAP connection is held open for the lifetime of the app (not recon
 ### Project Structure
 
 ```
+cmd/
+├── ssh-server/main.go  # Serve the TUI over SSH via charmbracelet/wish (port 2222)
+└── mcp-server/main.go  # MCP JSON-RPC stdio server exposing email tools to Claude
 internal/
+├── ai/
+│   └── ollama.go    # Ollama HTTP client: Classify() + Chat() via /api/generate and /api/chat
 ├── app/
-│   ├── app.go       # Bubble Tea Model: Init/Update/View, state, message types
-│   ├── helpers.go   # Table updates, deletion queue, navigation, domain toggle
+│   ├── app.go       # Bubble Tea Model: Init/Update/View, state, all message types
+│   ├── helpers.go   # Tables, deletion queue, navigation, render functions, classify/chat
 │   └── logs.go      # LogViewer TUI component (viewport-based)
+├── backend/
+│   ├── backend.go   # Backend interface decoupling UI from IMAP
+│   └── local.go     # LocalBackend: direct IMAP + SQLite cache
 ├── cache/
-│   └── cache.go     # SQLite CRUD: GetCachedIDs, CacheEmail, GetAllEmails, Delete*
+│   └── cache.go     # SQLite CRUD: emails table + email_classifications table
 ├── config/
-│   └── config.go    # YAML config load/validate, file permission check
+│   └── config.go    # YAML config load/validate; fields: credentials, server, smtp, ollama
 ├── imap/
-│   ├── client.go    # IMAP connect, ProcessEmails, GetSenderStatistics
+│   ├── body.go      # FetchEmailBody: MIME parse text/plain + inline images by UID
+│   ├── client.go    # IMAP connect, ProcessEmails, GetSenderStatistics, FetchEmailBody
 │   └── delete.go    # DeleteSenderEmails, DeleteDomainEmails, DeleteEmail, CleanupCache
+├── iterm2/
+│   └── render.go    # iTerm2 inline image protocol (OSC 1337); IsSupported() + Render()
 ├── logger/
 │   └── logger.go    # File-based logger with callback for TUI log viewer
-└── models/
-    └── email.go     # EmailData, SenderStats, ProgressInfo, DeletionRequest/Result
+├── models/
+│   └── email.go     # EmailData, EmailBody, InlineImage, SenderStats, ProgressInfo, DeletionRequest/Result
+└── smtp/
+    └── client.go    # SMTP send (TLS-first, then STARTTLS fallback)
 ```
 
 ### Key Features
 
-- **Email Grouping**: Groups emails by sender or domain for bulk analysis
-- **SQLite Caching**: Caches email metadata in `email_cache.db`; only fetches new messages on subsequent launches
-- **Interactive Deletion**: Single email, selected senders, or domain-wide deletion (copies to Trash then expunges)
-- **TUI Interface**: Split-pane view (summary table | details table) with real-time log viewer overlay
-- **Domain Mode**: `d` key toggles grouping by domain (e.g. `example.com`) vs full email address
+- **Tab 1 — Cleanup**: Groups emails by sender or domain for bulk analysis and deletion
+- **Tab 2 — Timeline**: Chronological email list; press Enter to open body preview (split view)
+- **Tab 3 — Compose**: Write and send email with Markdown preview (glamour) via SMTP
+- **SQLite Caching**: `email_cache.db` — only fetches new messages on subsequent launches
+- **Interactive Deletion**: Single email, selected senders, or domain-wide (copies to Trash then expunges)
+- **AI Classification**: Ollama-powered `Classify()` tags emails; `a` runs on current folder
+- **Chat Panel**: Right-side slide-out (`c` key) — converse with your emails via Ollama
+- **Multi-folder Sidebar**: Collapsible IMAP folder tree (`f` key)
+- **MCP Server**: `cmd/mcp-server` exposes list/search/stats/classify tools over stdio to Claude
+- **SSH App Mode**: `cmd/ssh-server` serves the full TUI over SSH on port 2222
+- **iTerm2 Images**: Inline image rendering in the email body preview on iTerm2
 
 ## Common Commands
 
@@ -65,14 +84,20 @@ make test     # Run tests
 ```
 
 ### Configuration
-Both versions use `proton.yaml`:
+`proton.yaml` (all sections):
 ```yaml
 credentials:
   username: "your_email@mail.com"
   password: "your_password"
 server:
-  host: "imap.mail.com"
-  port: 993
+  host: "127.0.0.1"   # IMAP host (ProtonMail Bridge default)
+  port: 1143           # IMAP port (use 993 for standard TLS)
+smtp:
+  host: "127.0.0.1"   # SMTP host (ProtonMail Bridge default)
+  port: 1025           # SMTP port
+ollama:
+  host: "http://localhost:11434"  # Ollama API base URL
+  model: "gemma2"                 # Model for classification and chat
 ```
 
 Config file permissions are checked at startup; warns if group/others have access (chmod 600 recommended).
@@ -81,28 +106,39 @@ Config file permissions are checked at startup; warns if group/others have acces
 
 Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `charmbracelet/bubbletea` | v1.3.4 | TUI framework (Elm architecture) |
-| `charmbracelet/bubbles` | v0.21.0 | Table and viewport components |
-| `charmbracelet/lipgloss` | v1.1.0 | Terminal styling |
-| `emersion/go-imap` | v1.2.1 | IMAP client |
-| `mattn/go-sqlite3` | v1.14.18 | SQLite driver (CGO) |
-| `gopkg.in/yaml.v3` | v3.0.1 | Config parsing |
+| Library | Purpose |
+|---------|---------|
+| `charmbracelet/bubbletea` | TUI framework (Elm architecture) |
+| `charmbracelet/bubbles` | Table, viewport, textinput, textarea components |
+| `charmbracelet/lipgloss` | Terminal styling |
+| `charmbracelet/glamour` | Markdown rendering in Compose preview |
+| `charmbracelet/wish` | SSH server wrapping the TUI (`cmd/ssh-server`) |
+| `emersion/go-imap` | IMAP client |
+| `mattn/go-sqlite3` | SQLite driver (CGO) |
+| `gopkg.in/yaml.v3` | Config parsing |
+| `mark3labs/mcp-go` | MCP JSON-RPC server (`cmd/mcp-server`) |
 
 ## Key TUI Bindings
 
 | Key | Action |
 |-----|--------|
 | `q` / `ctrl+c` | Quit |
-| `d` | Toggle domain/sender grouping mode |
+| `1` / `2` / `3` | Switch to Cleanup / Timeline / Compose tab |
+| `d` | Toggle domain/sender grouping mode (Cleanup tab) |
 | `r` | Refresh (reconnect + re-process) |
 | `D` | Delete selected or current sender/message |
 | `space` | Toggle selection (sender row or individual message) |
-| `tab` | Switch focus between summary and details tables |
-| `enter` | Load details for currently highlighted sender |
+| `tab` | Cycle focus between panels |
+| `enter` | Load details (Cleanup) or open body preview (Timeline) |
+| `esc` | Close email preview (Timeline) |
 | `up`/`k`, `down`/`j` | Navigate |
+| `f` | Toggle folder sidebar |
 | `l` / `L` | Toggle real-time log viewer overlay |
+| `c` | Toggle AI chat panel |
+| `a` | Run AI classification on current folder |
+| `R` | Reply: open Compose pre-filled from highlighted Timeline email |
+| `ctrl+s` | Send email (Compose tab) |
+| `ctrl+p` | Toggle Markdown preview (Compose tab) |
 
 ## Development Notes
 
@@ -118,7 +154,13 @@ CREATE TABLE emails (
     has_attachments INTEGER,
     folder          TEXT,
     last_updated    DATETIME
-)
+);
+
+CREATE TABLE email_classifications (
+    message_id    TEXT PRIMARY KEY,
+    category      TEXT NOT NULL DEFAULT '',
+    classified_at DATETIME NOT NULL
+);
 ```
 Cache file: `email_cache.db` (created in working directory).
 
@@ -136,15 +178,14 @@ Cache file: `email_cache.db` (created in working directory).
 
 ### Code Patterns
 
-**Go Version:**
 - **Progress updates**: IMAP goroutine sends `models.ProgressInfo` to a buffered channel; `listenForProgress()` blocks until a message arrives then triggers re-render
+- **Classification channel**: `classifyCh chan ClassifyProgressMsg` (buffered 50); `listenForClassification()` reads one result at a time per Cmd, same pattern as progress
+- **Body fetch**: `FetchEmailBody()` does `UidFetch` with `imap.BodySectionName{}` (full message), then MIME-parses text/plain + inline images; dispatched as a `tea.Cmd`, result is `EmailBodyMsg`
+- **iTerm2 images**: `iterm2.Render()` emits `\033]1337;File=...\a`; only called when `iterm2.IsSupported()` (`$TERM_PROGRAM` contains "iTerm"); non-iTerm2 terminals get empty string
 - **Domain extraction**: `cache.extractDomain()` handles compound TLDs (`co.uk`, `com.au`, etc.)
 - **Text sanitization**: `sanitizeText()` strips emoji/symbols while preserving Unicode letters (table display)
 - **TLS**: `InsecureSkipVerify: true` is intentional for local IMAP bridge (e.g. ProtonMail Bridge)
 - **Message-ID fallback**: If envelope `Message-Id` is empty, uses `uid-{UID}` as cache key
 - **Attachment detection**: Recursively checks `BodyStructure.Disposition == "attachment"`
-
-**Python Version:**
-- Async/await pattern for IMAP operations to avoid blocking the TUI
-- Worker threads in Textual for background email processing
-- SQLite transactions for cache consistency
+- **SSH server**: Each `wish` SSH session gets its own `LocalBackend` (own IMAP connection + shared Ollama classifier)
+- **MCP server**: Reads directly from `email_cache.db` — no live IMAP needed; 4 tools: `list_recent_emails`, `search_emails`, `get_sender_stats`, `get_email_classifications`

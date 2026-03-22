@@ -75,6 +75,12 @@ type ClassifyProgressMsg struct {
 // ClassifyDoneMsg signals classification is complete
 type ClassifyDoneMsg struct{}
 
+// EmailBodyMsg carries the result of fetching an email body from IMAP
+type EmailBodyMsg struct {
+	Body *models.EmailBody
+	Err  error
+}
+
 // ChatResponseMsg carries an Ollama chat reply
 type ChatResponseMsg struct {
 	Content string
@@ -131,6 +137,12 @@ type Model struct {
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
+
+	// Email body preview (timeline tab)
+	selectedTimelineEmail *models.EmailData
+	emailBody             *models.EmailBody
+	emailBodyLoading      bool
+	emailPreviewWidth     int // computed in updateTableDimensions
 
 	// Chat panel
 	showChat     bool
@@ -428,6 +440,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
 		return m, nil
 
+	case EmailBodyMsg:
+		m.emailBodyLoading = false
+		if msg.Err != nil {
+			logger.Warn("Failed to fetch email body: %v", msg.Err)
+			m.emailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
+		} else {
+			m.emailBody = msg.Body
+		}
+		return m, nil
+
 	case ChatResponseMsg:
 		m.chatWaiting = false
 		content := msg.Content
@@ -628,10 +650,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "q", "ctrl+c":
-		m.cleanup()
-		return m, tea.Quit
-
 	case "f":
 		if !m.loading {
 			m.showSidebar = !m.showSidebar
@@ -716,9 +734,28 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
 				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
+			} else if m.activeTab == tabTimeline {
+				cursor := m.timelineTable.Cursor()
+				if cursor < len(m.timelineEmails) {
+					email := m.timelineEmails[cursor]
+					m.selectedTimelineEmail = email
+					m.emailBody = nil
+					m.emailBodyLoading = true
+					m.updateTableDimensions(m.windowWidth, m.windowHeight)
+					return m, m.loadEmailBodyCmd(email.Folder, email.UID)
+				}
 			} else if m.focusedPanel == panelSummary {
 				m.updateDetailsTable()
 			}
+		}
+		return m, nil
+
+	case "esc":
+		if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {
+			m.selectedTimelineEmail = nil
+			m.emailBody = nil
+			m.emailBodyLoading = false
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		}
 		return m, nil
 
@@ -754,12 +791,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "a":
-		// Trigger AI classification for current folder
+		// Trigger AI classification for current folder.
+		// Must batch listenForClassification() alongside startClassification()
+		// so the classifyCh channel is drained; otherwise the goroutine blocks
+		// once the buffer (50) fills and ClassifyDoneMsg is never returned.
 		if !m.loading && !m.classifying && m.classifier != nil {
 			m.classifying = true
 			m.classifyDone = 0
 			m.classifyTotal = 0
-			return m, m.startClassification()
+			return m, tea.Batch(m.startClassification(), m.listenForClassification())
 		}
 		return m, nil
 

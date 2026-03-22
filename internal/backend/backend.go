@@ -1,6 +1,8 @@
 package backend
 
-import "mail-processor/internal/models"
+import (
+	"mail-processor/internal/models"
+)
 
 // Backend defines the contract between the UI and email backend logic.
 // This decouples the Bubble Tea model from any specific IMAP implementation
@@ -46,6 +48,9 @@ type Backend interface {
 
 	// GetEmailByID returns a single cached email by message ID.
 	GetEmailByID(messageID string) (*models.EmailData, error)
+
+	// FetchEmailBody fetches the full MIME body of an email by UID from the IMAP server.
+	FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error)
 
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
