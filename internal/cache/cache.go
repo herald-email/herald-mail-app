@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -186,7 +187,7 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 // GetAllEmails retrieves all cached emails for a folder
 func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*models.EmailData, error) {
 	query := `
-		SELECT message_id, sender, subject, date, size, has_attachments
+		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments
 		FROM emails WHERE folder = ?
 	`
 	rows, err := c.db.Query(query, folder)
@@ -199,20 +200,23 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 
 	for rows.Next() {
 		var messageID, sender, subject string
+		var uid uint32
 		var date time.Time
 		var size, hasAttachments int
 
-		if err := rows.Scan(&messageID, &sender, &subject, &date, &size, &hasAttachments); err != nil {
+		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments); err != nil {
 			return nil, err
 		}
 
 		email := &models.EmailData{
 			MessageID:      messageID,
+			UID:            uid,
 			Sender:         sender,
 			Subject:        subject,
 			Date:           date,
 			Size:           size,
 			HasAttachments: hasAttachments == 1,
+			Folder:         folder,
 		}
 
 		// Group by domain if requested
@@ -332,13 +336,21 @@ func (c *Cache) GetNewestCachedDate(folder string) (time.Time, error) {
 	return date, nil
 }
 
+// escapeLike escapes LIKE special characters (%, _, \) so they are treated literally.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
 // SearchEmails returns emails in a folder where sender or subject contains the query (case-insensitive)
 func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) {
-	like := "%" + query + "%"
+	like := "%" + escapeLike(query) + "%"
 	rows, err := c.db.Query(`
-		SELECT message_id, uid, sender, subject, date, size, has_attachments
+		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments
 		FROM emails
-		WHERE folder = ? AND (sender LIKE ? OR subject LIKE ?)
+		WHERE folder = ? AND (sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\')
 		ORDER BY date DESC LIMIT 100`, folder, like, like)
 	if err != nil {
 		return nil, err
@@ -369,7 +381,7 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 
 // GetEmailByID returns a single email by message ID
 func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
-	row := c.db.QueryRow(`SELECT message_id, uid, sender, subject, date, size, has_attachments, folder
+	row := c.db.QueryRow(`SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder
 	                       FROM emails WHERE message_id = ?`, messageID)
 	var msgID, sender, subject, folder string
 	var uid uint32
@@ -392,7 +404,7 @@ func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending
 func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error) {
-	query := `SELECT message_id, uid, sender, subject, date, size, has_attachments
+	query := `SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments
 	          FROM emails WHERE folder = ? ORDER BY date DESC`
 	rows, err := c.db.Query(query, folder)
 	if err != nil {

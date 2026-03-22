@@ -27,9 +27,9 @@ const (
 
 // Tab constants
 const (
-	tabCleanup  = 0
-	tabTimeline = 1
-	tabCompose  = 2
+	tabTimeline = 0
+	tabCompose  = 1
+	tabCleanup  = 2
 )
 
 // LoadingMsg represents a loading state update
@@ -134,6 +134,11 @@ type Model struct {
 	timelineEmails       []*models.EmailData // All emails sorted by date for timeline tab
 	timelineSenderWidth  int
 	timelineSubjectWidth int
+
+	// Thread grouping (timeline tab)
+	threadGroups    []threadGroup
+	threadRowMap    []timelineRowRef // maps table cursor index → row descriptor
+	expandedThreads map[string]bool  // normalised subject → expanded?
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
@@ -264,7 +269,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		Background(lipgloss.Color("238")).
 		Bold(false)
 
-	summaryTable.SetStyles(activeStyle)
+	summaryTable.SetStyles(inactiveStyle)
 	detailsTable.SetStyles(inactiveStyle)
 
 	// Timeline table: full-width chronological email list
@@ -279,7 +284,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		}),
 		table.WithHeight(11),
 	)
-	timelineTable.SetStyles(inactiveStyle)
+	timelineTable.SetStyles(activeStyle)
+	timelineTable.Focus()
 
 	// Create log viewer
 	logViewer := NewLogViewer(140, 15)
@@ -335,6 +341,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		chatInput:          chatInput,
 		classifier:         classifier,
 		classifications:    make(map[string]string),
+		expandedThreads:    make(map[string]bool),
 		classifyCh:         make(chan ClassifyProgressMsg, 50),
 		mailer:             mailer,
 		fromAddress:        fromAddress,
@@ -485,10 +492,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FoldersLoadedMsg{Folders: folders}
 			}
-			if m.activeTab == tabTimeline {
-				return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails())
-			}
-			return m, listFoldersCmd
+			// Always load timeline since it's the default startup tab
+			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails())
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)
@@ -664,15 +669,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "1":
-		if !m.loading && m.activeTab != tabCleanup {
-			m.activeTab = tabCleanup
-			m.timelineTable.Blur()
-			m.timelineTable.SetStyles(m.inactiveTableStyle)
-			m.setFocusedPanel(m.focusedPanel)
-		}
-		return m, nil
-
-	case "2":
 		if !m.loading && m.activeTab != tabTimeline {
 			m.activeTab = tabTimeline
 			m.timelineTable.Focus()
@@ -685,7 +681,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "3":
+	case "2":
 		if !m.loading && m.activeTab != tabCompose {
 			m.activeTab = tabCompose
 			m.timelineTable.Blur()
@@ -695,6 +691,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.composeTo.Focus()
 			m.composeSubject.Blur()
 			m.composeBody.Blur()
+		}
+		return m, nil
+
+	case "3":
+		if !m.loading && m.activeTab != tabCleanup {
+			m.activeTab = tabCleanup
+			m.timelineTable.Blur()
+			m.timelineTable.SetStyles(m.inactiveTableStyle)
+			m.setFocusedPanel(m.focusedPanel)
 		}
 		return m, nil
 
@@ -736,8 +741,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
 			} else if m.activeTab == tabTimeline {
 				cursor := m.timelineTable.Cursor()
-				if cursor < len(m.timelineEmails) {
-					email := m.timelineEmails[cursor]
+				if cursor < len(m.threadRowMap) {
+					ref := m.threadRowMap[cursor]
+					if ref.kind == rowKindThread {
+						key := ref.group.normalizedSubject
+						m.expandedThreads[key] = !m.expandedThreads[key]
+						m.updateTimelineTable()
+						return m, nil
+					}
+					email := ref.group.emails[ref.emailIdx]
 					m.selectedTimelineEmail = email
 					m.emailBody = nil
 					m.emailBodyLoading = true
@@ -792,13 +804,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "a":
 		// Trigger AI classification for current folder.
-		// Must batch listenForClassification() alongside startClassification()
-		// so the classifyCh channel is drained; otherwise the goroutine blocks
-		// once the buffer (50) fills and ClassifyDoneMsg is never returned.
+		// A fresh channel is allocated on each run so startClassification can
+		// safely close it when done (unblocking listenForClassification) without
+		// risking a send-on-closed-channel on any subsequent 'a' press.
 		if !m.loading && !m.classifying && m.classifier != nil {
 			m.classifying = true
 			m.classifyDone = 0
 			m.classifyTotal = 0
+			m.classifyCh = make(chan ClassifyProgressMsg, 50)
 			return m, tea.Batch(m.startClassification(), m.listenForClassification())
 		}
 		return m, nil
@@ -807,8 +820,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Reply: open compose pre-filled from selected timeline email
 		if !m.loading && m.activeTab == tabTimeline {
 			cursor := m.timelineTable.Cursor()
-			if cursor < len(m.timelineEmails) {
-				email := m.timelineEmails[cursor]
+			if cursor < len(m.threadRowMap) {
+				ref := m.threadRowMap[cursor]
+				var email *models.EmailData
+				if ref.kind == rowKindThread {
+					email = ref.group.emails[0]
+				} else {
+					email = ref.group.emails[ref.emailIdx]
+				}
 				m.activeTab = tabCompose
 				m.composeTo.SetValue(email.Sender)
 				subject := email.Subject

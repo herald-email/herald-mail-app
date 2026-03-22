@@ -12,12 +12,36 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
-	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
 
 var spinnerChars = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// --- Thread grouping types ---
+
+// threadGroup holds all emails that share the same normalised subject.
+type threadGroup struct {
+	normalizedSubject string
+	emails            []*models.EmailData // newest first (inherited from sorted input)
+}
+
+// timelineRowKind distinguishes collapsed thread headers from individual email rows.
+type timelineRowKind int
+
+const (
+	rowKindThread timelineRowKind = iota // collapsed thread header (>1 email, not expanded)
+	rowKindEmail                         // individual email row
+)
+
+// timelineRowRef maps a table-cursor position to a thread group and email.
+type timelineRowRef struct {
+	kind     timelineRowKind
+	group    *threadGroup
+	emailIdx int // index into group.emails; meaningful only for rowKindEmail
+}
+
+// --- Folder tree types ---
 
 // folderNode represents one node in the folder tree
 type folderNode struct {
@@ -354,83 +378,77 @@ func (m *Model) toggleSelection() {
 	}
 }
 
-// deleteSelected deletes the selected senders or individual messages via queue
+// deleteSelected deletes the selected senders or individual messages via queue.
+// All model state is read and mutations performed here (on the Update goroutine)
+// before a background goroutine is launched, avoiding data races.
 func (m *Model) deleteSelected() tea.Cmd {
-	// Calculate deletion count before launching the goroutine; the goroutine
-	// clears m.selectedMessages and m.selectedRows, so reading them afterward
-	// would be a data race.
-	deletionCount := 0
-	if m.detailsTable.Focused() {
-		if len(m.selectedMessages) > 0 {
-			deletionCount = len(m.selectedMessages)
-		} else {
-			deletionCount = 1
-		}
-	} else if len(m.selectedRows) > 0 {
-		deletionCount = len(m.selectedRows)
-	} else {
-		deletionCount = 1
+	type deleteTarget struct {
+		messageID string
+		sender    string
+		isDomain  bool
+		folder    string
 	}
 
-	// Send deletion requests to the queue
-	go func() {
-		// Check if details table is focused - delete individual messages
-		if m.detailsTable.Focused() {
-			if len(m.selectedMessages) > 0 {
-				// Delete all selected messages (across all senders)
-				for messageID := range m.selectedMessages {
-					m.deletionRequestCh <- models.DeletionRequest{
-						MessageID: messageID,
-						Folder:    m.currentFolder,
-					}
-				}
-				m.selectedMessages = make(map[string]bool)
-			} else {
-				// Delete current message
-				cursor := m.detailsTable.Cursor()
-				if cursor < len(m.detailsEmails) {
-					email := m.detailsEmails[cursor]
-					m.deletionRequestCh <- models.DeletionRequest{
-						MessageID: email.MessageID,
-						Folder:    m.currentFolder,
-					}
-				}
-			}
-		} else if len(m.selectedRows) > 0 {
-			// Delete multiple selected senders (or domains in domain mode)
-			for cursor := range m.selectedRows {
-				// Get original sender from mapping (before sanitization)
-				sender, ok := m.rowToSender[cursor]
-				if !ok || sender == "" {
-					logger.Warn("No sender mapping found for row %d", cursor)
-					continue
-				}
+	folder := m.currentFolder
+	var targets []deleteTarget
 
-				m.deletionRequestCh <- models.DeletionRequest{
-					Sender:   sender,
-					IsDomain: m.groupByDomain,
-					Folder:   m.currentFolder,
-				}
+	if m.detailsTable.Focused() {
+		if len(m.selectedMessages) > 0 {
+			// Delete all selected messages (across all senders)
+			for messageID := range m.selectedMessages {
+				targets = append(targets, deleteTarget{messageID: messageID, folder: folder})
 			}
-			m.selectedRows = make(map[int]bool)
+			m.selectedMessages = make(map[string]bool) // safe: still on Update goroutine
 		} else {
-			// Delete current sender using row mapping (or domain in domain mode)
-			cursor := m.summaryTable.Cursor()
+			// Delete current message
+			cursor := m.detailsTable.Cursor()
+			if cursor < len(m.detailsEmails) {
+				email := m.detailsEmails[cursor]
+				targets = append(targets, deleteTarget{messageID: email.MessageID, folder: folder})
+			}
+		}
+	} else if len(m.selectedRows) > 0 {
+		// Delete multiple selected senders (or domains in domain mode)
+		for cursor := range m.selectedRows {
 			sender, ok := m.rowToSender[cursor]
-			if ok && sender != "" {
-				m.deletionRequestCh <- models.DeletionRequest{
-					Sender:   sender,
-					IsDomain: m.groupByDomain,
-					Folder:   m.currentFolder,
-				}
+			if !ok || sender == "" {
+				logger.Warn("No sender mapping found for row %d", cursor)
+				continue
+			}
+			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+		}
+		m.selectedRows = make(map[int]bool) // safe: still on Update goroutine
+	} else {
+		// Delete current sender using row mapping (or domain in domain mode)
+		cursor := m.summaryTable.Cursor()
+		sender, ok := m.rowToSender[cursor]
+		if ok && sender != "" {
+			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+		}
+	}
+
+	if len(targets) == 0 {
+		return nil
+	}
+
+	// Send deletion requests to the queue from a goroutine so we don't block
+	// the Update loop. targets is a local copy; no model state is accessed.
+	ch := m.deletionRequestCh
+	go func() {
+		for _, t := range targets {
+			ch <- models.DeletionRequest{
+				MessageID: t.messageID,
+				Sender:    t.sender,
+				IsDomain:  t.isDomain,
+				Folder:    t.folder,
 			}
 		}
 	}()
 
 	// Set pending counters
-	m.deletionsPending = deletionCount
-	m.deletionsTotal = deletionCount
-	logger.Info("Queued %d deletion(s)", deletionCount)
+	m.deletionsPending = len(targets)
+	m.deletionsTotal = len(targets)
+	logger.Info("Queued %d deletion(s)", len(targets))
 
 	// Start listening for deletion results
 	return m.listenForDeletionResults()
@@ -479,9 +497,10 @@ func (m *Model) deletionWorker() {
 
 // cleanup cleans up resources
 func (m *Model) cleanup() {
-	if m.deletionRequestCh != nil {
-		close(m.deletionRequestCh)
-	}
+	// Do not close deletionRequestCh: the goroutine spawned by deleteSelected
+	// may still be sending to it, and closing a channel while a sender is
+	// active causes a panic. The deletion worker goroutine will be terminated
+	// when the process exits.
 	if m.backend != nil {
 		m.backend.Close()
 	}
@@ -646,7 +665,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.emailPreviewWidth = previewWidth
 
-	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra + previewWidth
+	previewBorder := 0
+	if previewWidth > 0 {
+		previewBorder = 1 // renderEmailPreview uses BorderLeft (+1 width)
+	}
+	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra + previewWidth + previewBorder
 	timelineVariable := width - timelineOverhead
 	if timelineVariable < 24 {
 		timelineVariable = 24
@@ -693,10 +716,73 @@ func (m *Model) loadTimelineEmails() tea.Cmd {
 	}
 }
 
-// updateTimelineTable rebuilds the timeline table rows from m.timelineEmails
+// normalizeSubject strips common reply/forward prefixes (case-insensitive) so that
+// "Re: Re: Hello" and "Fwd: Hello" both map to "hello".
+func normalizeSubject(s string) string {
+	prefixes := []string{"re:", "fwd:", "fw:", "aw:", "tr:"}
+	s = strings.TrimSpace(strings.ToLower(s))
+	for {
+		changed := false
+		for _, p := range prefixes {
+			if strings.HasPrefix(s, p) {
+				s = strings.TrimSpace(s[len(p):])
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	return s
+}
+
+// buildThreadGroups groups emails by normalised subject.
+// emails must already be sorted newest-first; group order is determined by each
+// group's most-recent email, so groups are also implicitly newest-first.
+func buildThreadGroups(emails []*models.EmailData) []threadGroup {
+	type entry struct {
+		ns  string
+		idx int // index into groups slice
+	}
+	var groups []threadGroup
+	seen := make(map[string]int) // normalised subject → index in groups
+
+	for _, e := range emails {
+		ns := normalizeSubject(e.Subject)
+		if idx, ok := seen[ns]; ok {
+			groups[idx].emails = append(groups[idx].emails, e)
+		} else {
+			seen[ns] = len(groups)
+			groups = append(groups, threadGroup{
+				normalizedSubject: ns,
+				emails:            []*models.EmailData{e},
+			})
+		}
+	}
+	return groups
+}
+
+// updateTimelineTable rebuilds the timeline table rows from m.timelineEmails,
+// grouping them into collapsed threads where appropriate.
 func (m *Model) updateTimelineTable() {
-	var rows []table.Row
-	for _, email := range m.timelineEmails {
+	maxSubj := m.timelineSubjectWidth
+	if maxSubj <= 0 {
+		maxSubj = 40
+	}
+	maxSend := m.timelineSenderWidth
+	if maxSend <= 0 {
+		maxSend = 20
+	}
+
+	trunc := func(s string, n int) string {
+		r := []rune(s)
+		if len(r) <= n {
+			return s
+		}
+		return string(r[:n-3]) + "..."
+	}
+
+	emailRow := func(email *models.EmailData, senderPrefix string) table.Row {
 		dateStr := "N/A"
 		if !email.Date.IsZero() {
 			dateStr = email.Date.Format("06-01-02 15:04")
@@ -705,21 +791,7 @@ func (m *Model) updateTimelineTable() {
 		if subject == "" {
 			subject = "(no subject)"
 		}
-		maxSubj := m.timelineSubjectWidth
-		if maxSubj <= 0 {
-			maxSubj = 40
-		}
-		if len([]rune(subject)) > maxSubj {
-			subject = string([]rune(subject)[:maxSubj-3]) + "..."
-		}
-		sender := sanitizeText(email.Sender)
-		maxSend := m.timelineSenderWidth
-		if maxSend <= 0 {
-			maxSend = 20
-		}
-		if len([]rune(sender)) > maxSend {
-			sender = string([]rune(sender)[:maxSend-3]) + "..."
-		}
+		sender := senderPrefix + sanitizeText(email.Sender)
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
@@ -728,15 +800,88 @@ func (m *Model) updateTimelineTable() {
 		if m.classifications != nil {
 			tag = m.classifications[email.MessageID]
 		}
-		rows = append(rows, table.Row{
-			sender,
-			subject,
+		return table.Row{
+			trunc(sender, maxSend),
+			trunc(subject, maxSubj),
 			dateStr,
 			fmt.Sprintf("%.1f", float64(email.Size)/1024),
 			att,
 			tag,
-		})
+		}
 	}
+
+	// Build thread groups from the full email list
+	m.threadGroups = buildThreadGroups(m.timelineEmails)
+	m.threadRowMap = m.threadRowMap[:0]
+
+	var rows []table.Row
+	for gi := range m.threadGroups {
+		g := &m.threadGroups[gi]
+		expanded := m.expandedThreads[g.normalizedSubject]
+
+		if len(g.emails) == 1 {
+			// Single-email thread: show as a plain row
+			rows = append(rows, emailRow(g.emails[0], ""))
+			m.threadRowMap = append(m.threadRowMap, timelineRowRef{
+				kind: rowKindEmail, group: g, emailIdx: 0,
+			})
+			continue
+		}
+
+		if !expanded {
+			// Collapsed thread header: newest email's sender, subject with [N] prefix
+			newest := g.emails[0]
+			dateStr := "N/A"
+			if !newest.Date.IsZero() {
+				dateStr = newest.Date.Format("06-01-02 15:04")
+			}
+			subject := sanitizeText(newest.Subject)
+			if subject == "" {
+				subject = "(no subject)"
+			}
+			totalSize := 0
+			anyAtt := false
+			for _, e := range g.emails {
+				totalSize += e.Size
+				if e.HasAttachments {
+					anyAtt = true
+				}
+			}
+			att := "N"
+			if anyAtt {
+				att = "Y"
+			}
+			tag := ""
+			if m.classifications != nil {
+				tag = m.classifications[newest.MessageID]
+			}
+			threadSubj := fmt.Sprintf("[%d] %s", len(g.emails), subject)
+			rows = append(rows, table.Row{
+				trunc(sanitizeText(newest.Sender), maxSend),
+				trunc(threadSubj, maxSubj),
+				dateStr,
+				fmt.Sprintf("%.1f", float64(totalSize)/1024),
+				att,
+				tag,
+			})
+			m.threadRowMap = append(m.threadRowMap, timelineRowRef{
+				kind: rowKindThread, group: g,
+			})
+		} else {
+			// Expanded: show each email with an indent prefix on all but the first
+			for ei, email := range g.emails {
+				prefix := ""
+				if ei > 0 {
+					prefix = "  ↳ "
+				}
+				rows = append(rows, emailRow(email, prefix))
+				m.threadRowMap = append(m.threadRowMap, timelineRowRef{
+					kind: rowKindEmail, group: g, emailIdx: ei,
+				})
+			}
+		}
+	}
+
 	m.timelineTable.SetRows(rows)
 }
 
@@ -781,9 +926,10 @@ func (m *Model) renderEmailPreview() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
-		// Inline images via iTerm2 protocol
+		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
 		for _, img := range m.emailBody.InlineImages {
-			sb.WriteString(iterm2.Render(img.Data, innerW))
+			label := fmt.Sprintf("[image  %s  %d KB]", img.MIMEType, len(img.Data)/1024)
+			sb.WriteString(dimStyle.Render(label) + "\n")
 		}
 
 		// Plain-text body
@@ -841,9 +987,9 @@ func (m *Model) renderTabBar() string {
 		return inactive.Render(label)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		tab(tabCleanup, "1  Cleanup"),
-		tab(tabTimeline, "2  Timeline"),
-		tab(tabCompose, "3  Compose"),
+		tab(tabTimeline, "1  Timeline"),
+		tab(tabCompose, "2  Compose"),
+		tab(tabCleanup, "3  Cleanup"),
 	)
 }
 
@@ -1105,10 +1251,14 @@ func (m *Model) renderSidebar() string {
 	return sb.String()
 }
 
-// startClassification starts background AI classification for unclassified emails
+// startClassification starts background AI classification for unclassified emails.
+// It closes the captured classifyCh when done so any outstanding
+// listenForClassification cmd unblocks and returns ClassifyDoneMsg.
 func (m *Model) startClassification() tea.Cmd {
 	folder := m.currentFolder
+	ch := m.classifyCh // capture the current channel
 	return func() tea.Msg {
+		defer close(ch) // unblock the listener when we're done
 		ids, err := m.backend.GetUnclassifiedIDs(folder)
 		if err != nil || len(ids) == 0 {
 			return ClassifyDoneMsg{}
@@ -1125,7 +1275,7 @@ func (m *Model) startClassification() tea.Cmd {
 				continue
 			}
 			_ = m.backend.SetClassification(id, cat)
-			m.classifyCh <- ClassifyProgressMsg{
+			ch <- ClassifyProgressMsg{
 				MessageID: id,
 				Category:  cat,
 				Done:      i + 1,
@@ -1136,10 +1286,16 @@ func (m *Model) startClassification() tea.Cmd {
 	}
 }
 
-// listenForClassification waits for the next classification result
+// listenForClassification waits for the next classification result.
+// Returns ClassifyDoneMsg when the channel is closed (classification finished).
 func (m *Model) listenForClassification() tea.Cmd {
+	ch := m.classifyCh // capture so it survives a channel replacement
 	return func() tea.Msg {
-		return <-m.classifyCh
+		msg, ok := <-ch
+		if !ok {
+			return ClassifyDoneMsg{} // channel closed — classification is done
+		}
+		return msg
 	}
 }
 
@@ -1159,12 +1315,6 @@ func (m *Model) loadClassifications() {
 func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "1":
-		m.activeTab = tabCleanup
-		m.timelineTable.Blur()
-		m.composeBody.Blur()
-		m.setFocusedPanel(m.focusedPanel)
-		return m, nil
-	case "2":
 		m.activeTab = tabTimeline
 		m.timelineTable.Focus()
 		m.timelineTable.SetStyles(m.activeTableStyle)
@@ -1172,8 +1322,15 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailsTable.Blur()
 		m.composeBody.Blur()
 		return m, m.loadTimelineEmails()
+	case "2":
+		return m, nil // already on compose
 	case "3":
-		return m, nil // already here
+		m.activeTab = tabCleanup
+		m.timelineTable.Blur()
+		m.timelineTable.SetStyles(m.inactiveTableStyle)
+		m.composeBody.Blur()
+		m.setFocusedPanel(m.focusedPanel)
+		return m, nil
 	case "tab":
 		m.cycleComposeField()
 		return m, nil
@@ -1225,6 +1382,9 @@ func (m *Model) sendCompose() tea.Cmd {
 	subject := m.composeSubject.Value()
 	body := m.composeBody.Value()
 	return func() tea.Msg {
+		if m.mailer == nil {
+			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
+		}
 		if to == "" {
 			return ComposeStatusMsg{Message: "Error: To field is empty"}
 		}

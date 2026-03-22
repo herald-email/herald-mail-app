@@ -2,6 +2,9 @@ package app
 
 import (
 	"testing"
+	"time"
+
+	"mail-processor/internal/models"
 )
 
 // --- sanitizeText ---
@@ -146,5 +149,93 @@ func TestFlattenTree_EmptyTree(t *testing.T) {
 	items := flattenTree(nil)
 	if len(items) != 0 {
 		t.Errorf("expected empty slice for nil roots, got %d items", len(items))
+	}
+}
+
+// --- normalizeSubject ---
+
+func TestNormalizeSubject(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"Re: Hello", "hello"},
+		{"RE: RE: Hello", "hello"},
+		{"Fwd: Hello", "hello"},
+		{"FWD: Fw: Hello", "hello"},
+		{"Aw: Tr: Hello", "hello"},
+		{"Hello World", "hello world"},
+		{"  Re:  spaced  ", "spaced"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizeSubject(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeSubject(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- buildThreadGroups ---
+
+func makeEmail(subject string, date time.Time) *models.EmailData {
+	return &models.EmailData{
+		MessageID: subject + date.String(),
+		Subject:   subject,
+		Date:      date,
+		Sender:    "sender@example.com",
+	}
+}
+
+func TestBuildThreadGroups_Grouping(t *testing.T) {
+	now := time.Now()
+	emails := []*models.EmailData{
+		makeEmail("Re: Hello", now),
+		makeEmail("Other", now.Add(-time.Hour)),
+		makeEmail("Hello", now.Add(-2*time.Hour)),
+	}
+	groups := buildThreadGroups(emails)
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+	// First group: "hello" (most recent email first)
+	if groups[0].normalizedSubject != "hello" {
+		t.Errorf("group[0] subject = %q, want %q", groups[0].normalizedSubject, "hello")
+	}
+	if len(groups[0].emails) != 2 {
+		t.Errorf("group[0] emails count = %d, want 2", len(groups[0].emails))
+	}
+	// Second group: "other"
+	if groups[1].normalizedSubject != "other" {
+		t.Errorf("group[1] subject = %q, want %q", groups[1].normalizedSubject, "other")
+	}
+}
+
+func TestBuildThreadGroups_Order(t *testing.T) {
+	now := time.Now()
+	// Older thread first in input, newer thread second
+	emails := []*models.EmailData{
+		makeEmail("Newer", now),
+		makeEmail("Older", now.Add(-24*time.Hour)),
+	}
+	groups := buildThreadGroups(emails)
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+	if groups[0].normalizedSubject != "newer" {
+		t.Errorf("expected newer group first, got %q", groups[0].normalizedSubject)
+	}
+}
+
+func TestBuildThreadGroups_SingleEmail(t *testing.T) {
+	emails := []*models.EmailData{makeEmail("Solo", time.Now())}
+	groups := buildThreadGroups(emails)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if len(groups[0].emails) != 1 {
+		t.Errorf("expected 1 email in group, got %d", len(groups[0].emails))
 	}
 }

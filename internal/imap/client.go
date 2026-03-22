@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emersion/go-imap"
@@ -19,13 +20,16 @@ import (
 
 var discardLogger = log.New(io.Discard, "", 0)
 
-// Client wraps the IMAP client with business logic
+// Client wraps the IMAP client with business logic.
+// mu serializes all operations that use the underlying IMAP connection;
+// the go-imap client is not safe for concurrent use.
 type Client struct {
-	cfg        *config.Config
-	client     *client.Client
-	cache      *cache.Cache
+	cfg           *config.Config
+	client        *client.Client
+	cache         *cache.Cache
 	groupByDomain bool
-	progressCh chan models.ProgressInfo
+	progressCh    chan models.ProgressInfo
+	mu            sync.Mutex
 }
 
 // New creates a new IMAP client
@@ -88,6 +92,8 @@ func (c *Client) Close() error {
 
 // GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
 func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
@@ -109,6 +115,8 @@ func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStat
 
 // ListFolders returns all mailbox names from the server
 func (c *Client) ListFolders() ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
@@ -129,6 +137,8 @@ func (c *Client) ListFolders() ([]string, error) {
 
 // ProcessEmails reads and processes all emails from specified folder
 func (c *Client) ProcessEmails(folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	logger.Info("Starting to process emails in folder: %s", folder)
 	
 	// Select folder

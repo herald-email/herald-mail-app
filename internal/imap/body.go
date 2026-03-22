@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/emersion/go-imap"
+	"golang.org/x/net/html"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -20,6 +21,8 @@ import (
 // FetchEmailBody retrieves the full MIME body of the email identified by uid
 // in the given folder. It returns parsed plain text and any inline images.
 func (c *Client) FetchEmailBody(uid uint32, folder string) (*models.EmailBody, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
@@ -70,7 +73,106 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 	}
 	result := &models.EmailBody{}
 	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result)
+	// If there is no plain-text part, convert HTML to readable text
+	if result.TextPlain == "" && result.TextHTML != "" {
+		result.TextPlain = htmlToText(result.TextHTML)
+	}
 	return result, nil
+}
+
+// htmlToText converts an HTML string to readable plain text using a lazy-newline
+// accumulator. Newlines are never emitted immediately after a block element;
+// instead they are queued and only flushed immediately before the next real text.
+// This means any number of nested empty divs produces at most one blank line,
+// and trailing newlines at end-of-body are suppressed entirely.
+func htmlToText(htmlStr string) string {
+	doc, err := html.Parse(strings.NewReader(htmlStr))
+	if err != nil {
+		return html.UnescapeString(stripTags(htmlStr))
+	}
+
+	var sb strings.Builder
+	pendingNL := 0 // queued newlines (0-2); flushed before the next real text
+
+	addNL := func(n int) {
+		if n > pendingNL {
+			pendingNL = n
+		}
+		if pendingNL > 2 {
+			pendingNL = 2
+		}
+	}
+
+	writeText := func(s string) {
+		if s == "" {
+			return
+		}
+		if sb.Len() > 0 {
+			for i := 0; i < pendingNL; i++ {
+				sb.WriteByte('\n')
+			}
+		}
+		pendingNL = 0
+		sb.WriteString(s)
+	}
+
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		switch n.Type {
+		case html.TextNode:
+			writeText(strings.Join(strings.Fields(n.Data), " "))
+			return
+		case html.ElementNode:
+			tag := strings.ToLower(n.Data)
+			if tag == "style" || tag == "script" || tag == "head" {
+				return
+			}
+			if tag == "br" {
+				addNL(1)
+				return
+			}
+			if tag == "td" || tag == "th" {
+				writeText(" ")
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				writeText(" ")
+				return
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+			switch tag {
+			case "p", "h1", "h2", "h3", "h4", "h5", "h6":
+				addNL(2) // blank line after headings/paragraphs
+			case "div", "section", "article", "blockquote", "li", "tr":
+				addNL(1) // newline after other block elements
+			}
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return strings.TrimSpace(sb.String())
+}
+
+// stripTags is a naive fallback that removes all < > delimited tags.
+func stripTags(s string) string {
+	var sb strings.Builder
+	inTag := false
+	for _, r := range s {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
 }
 
 func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.EmailBody) {

@@ -10,6 +10,8 @@ import (
 
 // DeleteSenderEmails deletes all emails from a sender in both IMAP and cache
 func (c *Client) DeleteSenderEmails(sender, folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	logger.Info("Starting deletion of all emails from '%s' (len=%d) in folder %s", sender, len(sender), folder)
 
 	// Select folder (connection is kept open, no need to reconnect)
@@ -110,6 +112,8 @@ func (c *Client) DeleteSenderEmails(sender, folder string) error {
 
 // DeleteDomainEmails deletes all emails from a domain in both IMAP and cache
 func (c *Client) DeleteDomainEmails(domain, folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	logger.Info("Starting deletion of all emails from domain '%s' in folder %s", domain, folder)
 
 	// Select folder (connection is kept open, no need to reconnect)
@@ -208,6 +212,8 @@ func (c *Client) DeleteDomainEmails(domain, folder string) error {
 
 // DeleteEmail moves a specific email to Trash by MessageID
 func (c *Client) DeleteEmail(messageID string, folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	logger.Info("Moving message to Trash: %s", messageID)
 
 	// Select source folder (connection is kept open, no need to reconnect)
@@ -281,6 +287,8 @@ func (c *Client) DeleteEmail(messageID string, folder string) error {
 
 // CleanupCache syncs cache with IMAP server by removing deleted messages
 func (c *Client) CleanupCache(folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	logger.Info("Starting cache cleanup for folder %s", folder)
 
 	// Select folder

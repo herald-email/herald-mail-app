@@ -1,127 +1,167 @@
 # Mail Processor
 
-A terminal-based email client and inbox cleanup tool written in Go, connecting to IMAP servers (primarily ProtonMail Bridge). Helps you identify and delete frequent email senders, manage subscriptions, and keep your inbox clean.
-
-![Mail Processor Interface](static/go-version.png)
-
-## Features
-
-- **Fast**: Built in Go — low memory footprint, quick startup
-- **Beautiful TUI**: Modern terminal interface using Bubble Tea
-- **Smart Caching**: SQLite-based caching for faster subsequent runs
-- **Email Grouping**: Group by sender or domain for bulk analysis
-- **Interactive Selection**: Select individual messages across multiple senders
-- **Async Deletion**: Non-blocking deletion with progress feedback
-- **Move to Trash**: Safely moves emails to Trash instead of permanent deletion
-- **Real-time Logs**: Toggle log view to monitor operations
-- **Cross-platform**: Works on Linux, macOS, and Windows
+A fast terminal email client built for inbox management. Read emails, clean up subscriptions, compose replies, and use AI to classify and chat with your inbox — all from the terminal.
 
 ## Quick Start
 
-### Download Pre-built Binary
-
-Download the latest release for your platform from [GitHub Releases](https://github.com/zoomacode/mail-processor/releases):
-
-- **Linux**: `mail-processor_vX.X.X_Linux_x86_64.tar.gz` or `mail-processor_vX.X.X_Linux_arm64.tar.gz`
-- **macOS Intel**: `mail-processor_vX.X.X_Darwin_x86_64.tar.gz`
-- **macOS Apple Silicon**: `mail-processor_vX.X.X_Darwin_arm64.tar.gz`
-- **Windows**: `mail-processor_vX.X.X_Windows_x86_64.zip`
-
-Extract and run:
-```bash
-# Linux/macOS
-tar -xzf mail-processor_*.tar.gz
-./mail-processor
-
-# Windows
-# Extract the .zip file and run mail-processor.exe
-```
-
 ### Build from Source
 
-**Prerequisites**: Go 1.23 or higher, GCC/Clang (required for SQLite CGO)
+**Prerequisites**: Go 1.23+, GCC/Clang (for SQLite)
 
 ```bash
-# Clone the repository
 git clone https://github.com/zoomacode/mail-processor.git
 cd mail-processor
-
-# Build
 make build
-
-# Run
 ./bin/mail-processor
 ```
 
 ## Configuration
 
-Create a `proton.yaml` file in the same directory as the executable:
+Create `proton.yaml` in the same directory as the binary:
 
 ```yaml
 credentials:
   username: "your_email@mail.com"
-  password: "your_password"
+  password: "your_bridge_password"
 server:
-  host: "127.0.0.1"  # ProtonMail Bridge (or your IMAP server)
-  port: 1143         # Default ProtonMail Bridge port (use 993 for standard IMAP)
+  host: "127.0.0.1"   # ProtonMail Bridge default
+  port: 1143           # Use 993 for standard IMAP TLS
+smtp:
+  host: "127.0.0.1"   # For sending email
+  port: 1025
+ollama:
+  host: "http://localhost:11434"   # For AI features (optional)
+  model: "gemma2"
 ```
 
-**Security Note**: Set proper file permissions:
-```bash
-chmod 600 proton.yaml
+Secure the file: `chmod 600 proton.yaml`
+
+On first launch, all emails are fetched into a local SQLite cache. Subsequent launches only sync new messages, so startup is fast.
+
+---
+
+## The Interface
+
+The app has three tabs. Switch between them with `1`, `2`, `3`.
+
+```
+ 1  Timeline    2  Compose    3  Cleanup
 ```
 
-## Usage
+---
 
-### Run the Application
-```bash
-# Basic usage
-./bin/mail-processor
+## Tab 1 — Timeline
 
-# With debug logging
-./bin/mail-processor -debug
+Your inbox as a chronological list. Emails with the same subject are grouped into collapsed threads.
 
-# Custom config file
-./bin/mail-processor -config /path/to/config.yaml
+**Reading email:**
+- `↑`/`↓` or `k`/`j` — navigate the list
+- `Enter` — open the email body (splits the screen; plain text or converted from HTML)
+- `Esc` — close the preview
 
-# Show help
-./bin/mail-processor -help
-```
+**Threads:**
+- A thread header showing `[3] Subject` means 3 emails share that subject
+- `Enter` on a thread header — expands it to show individual emails
+- `Enter` again on the header — collapses it back
 
-### Keyboard Shortcuts
+**Replying:**
+- `R` — opens Compose pre-filled with the sender's address and `Re:` subject
+
+**Deleting:**
+- `D` — moves the highlighted email to Trash
+
+---
+
+## Tab 2 — Compose
+
+Write and send email.
+
+- `Tab` cycles between: **To**, **Subject**, **Body** fields
+- `Ctrl+P` — toggle Markdown preview (body is rendered with formatting)
+- `Ctrl+S` — send the email via SMTP
+- `Esc` — cancel and return to Timeline
+
+---
+
+## Tab 3 — Cleanup
+
+Find and delete bulk senders. The left panel groups all emails by sender (or domain), sorted by volume. The right panel shows individual messages for the highlighted sender.
+
+**Grouping:**
+- `d` — toggle between grouping by full sender address vs. by domain
+  (e.g. `news@promo.example.com` grouped under `example.com`)
+
+**Selecting and deleting:**
+- `Space` — select/deselect the highlighted sender or individual message
+- `Enter` — load individual messages for the highlighted sender
+- `D` — delete all emails from selected senders (or selected individual messages)
+
+Deletion moves emails to Trash and runs in the background. The status bar shows progress; you can keep navigating while it runs.
+
+---
+
+## Folder Sidebar
+
+Press `f` to open/close a folder tree on the left. Navigate with `↑`/`↓`, press `Enter` to switch to a folder. The app syncs and displays the selected folder's emails.
+
+---
+
+## AI Features
+
+Requires [Ollama](https://ollama.com) running locally with the configured model pulled.
+
+**Classification:**
+- `a` — classify all unclassified emails in the current folder
+- Categories appear as a label next to each email in the Cleanup tab
+
+**Chat panel:**
+- `c` — open/close a chat panel on the right side
+- Ask questions about your inbox in plain language (e.g. "Which senders have the most emails?")
+- `Enter` to send, the response streams back in the panel
+
+---
+
+## Global Keys
 
 | Key | Action |
 |-----|--------|
-| `q` | Quit application |
-| `l` | Toggle real-time logs view |
-| `d` | Toggle domain/sender grouping mode |
-| `r` | Refresh email data |
-| `↑/k` `↓/j` | Navigate up/down |
-| `tab` | Switch between tables |
-| `space` | Toggle selection (multi-select) |
-| `D` | Delete selected emails/senders |
-| `enter` | Focus details table |
+| `1` / `2` / `3` | Switch to Timeline / Compose / Cleanup |
+| `q` / `Ctrl+C` | Quit |
+| `r` | Refresh (reconnect and sync new emails) |
+| `f` | Toggle folder sidebar |
+| `c` | Toggle AI chat panel |
+| `a` | Run AI classification on current folder |
+| `l` / `L` | Toggle live log viewer |
+| `↑`/`k`, `↓`/`j` | Navigate |
+| `Tab` | Cycle focus between panels |
 
-### Features in Action
+---
 
-**Left Table**: Shows senders grouped by email or domain
-- Shows total email count, average size, attachments
-- Select multiple senders with `space`
-- Press `D` to delete all emails from selected senders
+## Running Over SSH
 
-**Right Table**: Shows individual emails from selected sender
-- Select individual messages with `space` (across multiple senders)
-- Press `D` to delete selected individual messages
+A built-in SSH server serves the full TUI on port 2222:
 
-**Async Deletion**:
-- Deletions run in background queue
-- Status line shows current deletion progress
-- UI remains responsive - you can quit anytime with `q`
+```bash
+./bin/ssh-server
+ssh localhost -p 2222
+```
 
-**Real-time Logs**: Press `l` to toggle log view
-- Monitor IMAP operations
-- See cache statistics
-- Debug connection issues
+---
+
+## Troubleshooting
+
+**No emails appear on first launch** — the initial sync can take a moment for large mailboxes. Watch the progress bar at the bottom.
+
+**"(image)" in email body** — inline images are shown as text descriptors; the app is terminal-only.
+
+**Deletion not working** — press `l` to open the log viewer for details. The app looks for a Trash/Deleted Items folder automatically.
+
+**AI features not working** — ensure Ollama is running (`ollama serve`) and the model is pulled (`ollama pull gemma2`).
+
+**Debug mode:**
+```bash
+./bin/mail-processor -debug
+```
 
 ## Architecture
 
