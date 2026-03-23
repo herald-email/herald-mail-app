@@ -4,17 +4,18 @@ This document describes the long-term direction for this project. It evolves fro
 
 ## Implementation Order
 
-1. Fix responsive terminal width (hardcoded values today) ✓
-2. Refactor to daemon/UI split architecture ✓
-3. Multi-folder sidebar (collapsible tree, counts) ✓
-4. Status bar showing active folder, unread/total counts, selection state ✓
-5. Timeline/thread view + tab navigation ✓
-6. Compose and reply (after timeline) ✓
-7. AI-powered inbox classification via Ollama ✓
-8. Chat panel (talk to your emails with AI) ✓
-9. MCP server hook ✓
-10. SSH app mode (charmbracelet/wish) ✓
-11. Image rendering (iTerm2 inline images) ✓
+- [x] Fix responsive terminal width (hardcoded values today)
+- [x] Refactor to daemon/UI split architecture
+- [x] Multi-folder sidebar (collapsible tree, counts)
+- [x] Status bar showing active folder, unread/total counts, selection state
+- [x] Timeline/thread view + tab navigation
+- [x] Compose and reply (after timeline)
+- [x] AI-powered inbox classification via Ollama
+- [x] Chat panel (talk to your emails with AI)
+- [x] MCP server hook
+- [x] SSH app mode (charmbracelet/wish)
+- [x] Image rendering (iTerm2 inline images)
+- [ ] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
 
 ---
 
