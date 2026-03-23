@@ -866,12 +866,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
+				// Close preview when navigating so the cursor is always visible
 				if m.selectedTimelineEmail != nil {
-					// Scroll body preview up
-					if m.bodyScrollOffset > 0 {
-						m.bodyScrollOffset--
-					}
-					return m, nil
+					m.selectedTimelineEmail = nil
+					m.emailBody = nil
+					m.emailBodyLoading = false
+					m.bodyWrappedLines = nil
+					m.bodyScrollOffset = 0
+					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 				}
 				var cmd tea.Cmd
 				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
@@ -884,10 +886,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
+				// Close preview when navigating so the cursor is always visible
 				if m.selectedTimelineEmail != nil {
-					// Scroll body preview down
-					m.bodyScrollOffset++
-					return m, nil
+					m.selectedTimelineEmail = nil
+					m.emailBody = nil
+					m.emailBodyLoading = false
+					m.bodyWrappedLines = nil
+					m.bodyScrollOffset = 0
+					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 				}
 				var cmd tea.Cmd
 				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
