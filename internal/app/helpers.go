@@ -719,6 +719,27 @@ func (m *Model) updateTableDimensions(width, height int) {
 		logWidth = 20
 	}
 	m.logViewer.SetSize(logWidth, tableHeight)
+
+	// Update compose field widths (B4/B5)
+	// Label is 10 wide, borders add 2, so input width = total - chatExtra - 12
+	composeInputWidth := width - chatExtra - 12
+	if composeInputWidth < 10 {
+		composeInputWidth = 10
+	}
+	m.composeTo.Width = composeInputWidth
+	m.composeSubject.Width = composeInputWidth
+	// Body: no label, borders add 2
+	composeBodyWidth := width - chatExtra - 2
+	if composeBodyWidth < 10 {
+		composeBodyWidth = 10
+	}
+	// Reserve rows for: To(3) + Subject(3) + divider(1) + status(1) + body border top/bot(2) = 10
+	composeBodyHeight := tableHeight - 10
+	if composeBodyHeight < 3 {
+		composeBodyHeight = 3
+	}
+	m.composeBody.SetWidth(composeBodyWidth)
+	m.composeBody.SetHeight(composeBodyHeight)
 }
 
 // loadTimelineEmails returns a Cmd that fetches all emails sorted by date
@@ -793,9 +814,15 @@ func (m *Model) updateTimelineTable() {
 	}
 
 	trunc := func(s string, n int) string {
+		if n <= 0 {
+			return ""
+		}
 		r := []rune(s)
 		if len(r) <= n {
 			return s
+		}
+		if n <= 3 {
+			return string(r[:n])
 		}
 		return string(r[:n-3]) + "..."
 	}
@@ -968,8 +995,13 @@ func (m *Model) renderEmailPreview() string {
 		sb.WriteString(strings.Join(m.bodyWrappedLines, "\n"))
 	}
 
+	panelHeight := m.windowHeight - 6
+	if panelHeight < 5 {
+		panelHeight = 5
+	}
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
+		Height(panelHeight).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("238")).
@@ -1255,7 +1287,26 @@ func (m *Model) renderSidebar() string {
 	items := flattenTree(m.folderTree)
 	var sb strings.Builder
 
+	// Limit rendered rows to tableHeight to prevent overflow at small terminal heights
+	maxRows := m.windowHeight - 6
+	if maxRows < 5 {
+		maxRows = 5
+	}
+	startIdx := 0
+	if len(items) > maxRows {
+		startIdx = m.sidebarCursor - maxRows + 1
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx+maxRows > len(items) {
+			startIdx = len(items) - maxRows
+		}
+	}
+
 	for i, item := range items {
+		if i < startIdx || i >= startIdx+maxRows {
+			continue
+		}
 		indent := strings.Repeat("  ", item.depth)
 
 		var icon string
@@ -1309,7 +1360,7 @@ func (m *Model) renderSidebar() string {
 		}
 		sb.WriteString(line + "\n")
 	}
-	return sb.String()
+	return strings.TrimSuffix(sb.String(), "\n")
 }
 
 // startClassification starts background AI classification for unclassified emails.
