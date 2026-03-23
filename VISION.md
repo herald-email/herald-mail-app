@@ -20,6 +20,7 @@ This document describes the long-term direction for this project. It evolves fro
 - [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [ ] Forward email with address input
 - [ ] Deletion confirmation prompt
+- [ ] Automatic new-email sync (IMAP IDLE + background polling)
 
 ---
 
@@ -229,6 +230,40 @@ accounts:
 
 ### OAuth2 (future)
 Gmail and Outlook prefer OAuth2 over app passwords. A future phase adds a `vendor_auth` flow that opens a browser for the OAuth dance and stores the refresh token in the system keychain.
+
+---
+
+## Automatic New-Email Sync
+
+### IMAP IDLE (primary mechanism)
+IMAP IDLE (`RFC 2177`) is the proper push-like mechanism: the client sends an `IDLE` command and the server sends unsolicited `EXISTS` or `EXPUNGE` responses when the mailbox changes, without the client having to poll. This is far more efficient than periodic polling and is supported by all major servers (ProtonMail Bridge, Gmail, Outlook, Fastmail).
+
+Implementation plan:
+- Maintain a **dedicated IDLE connection** for the active folder alongside the existing command connection (go-imap supports this via a second `client.Client`)
+- When the server sends `EXISTS` (new message count increased), trigger an incremental fetch of only the new messages and append them to the cache and timeline in-place
+- The TUI receives a new message type (e.g. `NewEmailsMsg`) and inserts the rows at the top of the timeline without a full reload
+- On `EXPUNGE` (message deleted elsewhere), remove the matching row from the cache and timeline
+- IDLE must be re-issued every 29 minutes (server timeout); the background goroutine handles the keepalive automatically
+
+### Background polling (fallback)
+For servers or configurations where IDLE is unavailable or unreliable:
+- Configurable poll interval (default: 60 seconds) in `proton.yaml` under `sync.interval`
+- Polling checks only the active folder; other folders are checked less frequently (e.g. every 5 minutes) to keep the sidebar counts fresh
+- Polling is also used for **non-active folders** even when IDLE is active on the current folder
+
+### Configuration
+```yaml
+sync:
+  idle: true          # Use IMAP IDLE when available (default: true)
+  interval: 60        # Fallback poll interval in seconds (default: 60)
+  background: true    # Sync other folders in background (default: true)
+  notify: true        # Show a status bar flash on new email arrival (default: true)
+```
+
+### UX
+- A subtle indicator in the status bar shows sync state: `↻ live` when IDLE is active, `↻ 42s` counting down to the next poll
+- New emails slide into the top of the timeline with a brief highlight so the user notices them without being interrupted
+- An unread badge on the folder sidebar updates automatically as new mail arrives
 
 ---
 
