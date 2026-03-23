@@ -149,8 +149,9 @@ type Model struct {
 	emailBodyLoading      bool
 	emailPreviewWidth     int // computed in updateTableDimensions
 	// Cached wrapped body lines — invalidated when body or panel width changes.
-	bodyWrappedLines []string
-	bodyWrappedWidth int
+	bodyWrappedLines  []string
+	bodyWrappedWidth  int
+	bodyScrollOffset  int // first visible line in preview body
 
 	// Chat panel
 	showChat          bool
@@ -770,6 +771,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.selectedTimelineEmail = email
 					m.emailBody = nil
 					m.emailBodyLoading = true
+					m.bodyScrollOffset = 0
 					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 					return m, m.loadEmailBodyCmd(email.Folder, email.UID)
 				}
@@ -864,6 +866,13 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
+				if m.selectedTimelineEmail != nil {
+					// Scroll body preview up
+					if m.bodyScrollOffset > 0 {
+						m.bodyScrollOffset--
+					}
+					return m, nil
+				}
 				var cmd tea.Cmd
 				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
 				return m, cmd
@@ -875,6 +884,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
+				if m.selectedTimelineEmail != nil {
+					// Scroll body preview down
+					m.bodyScrollOffset++
+					return m, nil
+				}
 				var cmd tea.Cmd
 				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
 				return m, cmd

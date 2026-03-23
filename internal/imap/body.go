@@ -73,25 +73,25 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 	}
 	result := &models.EmailBody{}
 	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result)
-	// If there is no plain-text part, convert HTML to readable text
+	// If there is no plain-text part, convert HTML to markdown
 	if result.TextPlain == "" && result.TextHTML != "" {
-		result.TextPlain = htmlToText(result.TextHTML)
+		result.TextPlain = htmlToMarkdown(result.TextHTML)
+		result.IsFromHTML = true
 	}
 	return result, nil
 }
 
-// htmlToText converts an HTML string to readable plain text using a lazy-newline
-// accumulator. Newlines are never emitted immediately after a block element;
-// instead they are queued and only flushed immediately before the next real text.
-// This means any number of nested empty divs produces at most one blank line,
-// and trailing newlines at end-of-body are suppressed entirely.
-func htmlToText(htmlStr string) string {
+// htmlToMarkdown converts an HTML string to GitHub-flavoured Markdown.
+// Links become [text](url), bold/italic are preserved, headings use #-syntax,
+// and list items use -. Non-breaking spaces are normalised to regular spaces.
+// Consecutive blank lines are collapsed to at most one.
+func htmlToMarkdown(htmlStr string) string {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
 	if err != nil {
 		return html.UnescapeString(stripTags(htmlStr))
 	}
 
-	var sb strings.Builder
+	var out strings.Builder
 	pendingNL := 0 // queued newlines (0-2); flushed before the next real text
 
 	addNL := func(n int) {
@@ -107,55 +107,169 @@ func htmlToText(htmlStr string) string {
 		if s == "" {
 			return
 		}
-		if sb.Len() > 0 {
+		if out.Len() > 0 {
 			for i := 0; i < pendingNL; i++ {
-				sb.WriteByte('\n')
+				out.WriteByte('\n')
+			}
+			// Add a word-boundary space between adjacent inline text fragments
+			// when neither side already has whitespace or punctuation.
+			if pendingNL == 0 {
+				str := out.String()
+				last := str[len(str)-1]
+				first := s[0]
+				if last != ' ' && last != '\n' && last != '(' && last != '[' && last != '*' && last != '`' &&
+					first != ' ' && first != '\n' && first != '.' && first != ',' &&
+					first != '!' && first != '?' && first != ')' && first != ']' &&
+					first != ':' && first != ';' && first != '*' && first != '`' {
+					out.WriteByte(' ')
+				}
 			}
 		}
 		pendingNL = 0
-		sb.WriteString(s)
+		out.WriteString(s)
+	}
+
+	// collectText extracts plain text from a subtree (used for link labels etc.)
+	var collectText func(*html.Node) string
+	collectText = func(n *html.Node) string {
+		var sb strings.Builder
+		var inner func(*html.Node)
+		inner = func(n *html.Node) {
+			if n.Type == html.TextNode {
+				t := strings.Join(strings.Fields(strings.ReplaceAll(n.Data, "\u00a0", " ")), " ")
+				if t != "" {
+					if sb.Len() > 0 {
+						sb.WriteByte(' ')
+					}
+					sb.WriteString(t)
+				}
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				inner(c)
+			}
+		}
+		inner(n)
+		return sb.String()
 	}
 
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		switch n.Type {
 		case html.TextNode:
-			writeText(strings.Join(strings.Fields(n.Data), " "))
+			t := strings.ReplaceAll(n.Data, "\u00a0", " ")
+			writeText(strings.Join(strings.Fields(t), " "))
 			return
 		case html.ElementNode:
 			tag := strings.ToLower(n.Data)
-			if tag == "style" || tag == "script" || tag == "head" {
+			switch tag {
+			case "style", "script", "head", "img":
 				return
-			}
-			if tag == "br" {
+			case "br":
 				addNL(1)
 				return
-			}
-			if tag == "td" || tag == "th" {
-				writeText(" ")
+			case "a":
+				var href string
+				for _, attr := range n.Attr {
+					if attr.Key == "href" {
+						href = attr.Val
+						break
+					}
+				}
+				text := collectText(n)
+				if text == "" {
+					return
+				}
+				if href != "" && href != "#" && !strings.HasPrefix(href, "javascript") {
+					writeText(fmt.Sprintf("[%s](%s)", text, href))
+				} else {
+					writeText(text)
+				}
+				return
+			case "strong", "b":
+				text := collectText(n)
+				if text != "" {
+					writeText("**" + text + "**")
+				}
+				return
+			case "em", "i":
+				text := collectText(n)
+				if text != "" {
+					writeText("*" + text + "*")
+				}
+				return
+			case "code":
+				text := collectText(n)
+				if text != "" {
+					writeText("`" + text + "`")
+				}
+				return
+			case "h1":
+				addNL(2)
+				writeText("# ")
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				addNL(2)
+				return
+			case "h2":
+				addNL(2)
+				writeText("## ")
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				addNL(2)
+				return
+			case "h3", "h4", "h5", "h6":
+				addNL(2)
+				writeText("### ")
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				addNL(2)
+				return
+			case "li":
+				addNL(1)
+				writeText("- ")
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				addNL(1)
+				return
+			case "td", "th":
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					walk(c)
 				}
 				writeText(" ")
 				return
+			case "tr":
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				addNL(1)
+				return
+			default:
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				switch tag {
+				case "p", "div", "section", "article", "blockquote", "ul", "ol":
+					addNL(2)
+				}
+				return
 			}
+		default:
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				walk(c)
 			}
-			switch tag {
-			case "p", "h1", "h2", "h3", "h4", "h5", "h6":
-				addNL(2) // blank line after headings/paragraphs
-			case "div", "section", "article", "blockquote", "li", "tr":
-				addNL(1) // newline after other block elements
-			}
-			return
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
 		}
 	}
 	walk(doc)
-	return strings.TrimSpace(sb.String())
+	result := out.String()
+	// Collapse 3+ consecutive newlines to 2
+	for strings.Contains(result, "\n\n\n") {
+		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(result)
 }
 
 // stripTags is a naive fallback that removes all < > delimited tags.

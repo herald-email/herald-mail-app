@@ -779,19 +779,24 @@ func normalizeSubject(s string) string {
 // emails must already be sorted newest-first; group order is determined by each
 // group's most-recent email, so groups are also implicitly newest-first.
 func buildThreadGroups(emails []*models.EmailData) []threadGroup {
-	type entry struct {
-		ns  string
-		idx int // index into groups slice
-	}
 	var groups []threadGroup
-	seen := make(map[string]int) // normalised subject → index in groups
+	seen := make(map[string]int) // (normalised subject + "\n" + sender) → index in groups
 
 	for _, e := range emails {
 		ns := normalizeSubject(e.Subject)
-		if idx, ok := seen[ns]; ok {
+		if ns == "" {
+			// Empty subjects are never grouped; each stands alone.
+			groups = append(groups, threadGroup{
+				normalizedSubject: ns,
+				emails:            []*models.EmailData{e},
+			})
+			continue
+		}
+		key := ns + "\n" + strings.ToLower(e.Sender)
+		if idx, ok := seen[key]; ok {
 			groups[idx].emails = append(groups[idx].emails, e)
 		} else {
-			seen[ns] = len(groups)
+			seen[key] = len(groups)
 			groups = append(groups, threadGroup{
 				normalizedSubject: ns,
 				emails:            []*models.EmailData{e},
@@ -973,32 +978,87 @@ func (m *Model) renderEmailPreview() string {
 	sb.WriteString(dimStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
-	if m.emailBodyLoading {
-		sb.WriteString(dimStyle.Render("Loading…"))
-	} else if m.emailBody != nil {
-		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
-		for _, img := range m.emailBody.InlineImages {
-			label := fmt.Sprintf("[image  %s  %d KB]", img.MIMEType, len(img.Data)/1024)
-			sb.WriteString(dimStyle.Render(label) + "\n")
-		}
-
-		// Plain-text body — wrap once and cache; re-wrap only if panel width changed
-		body := m.emailBody.TextPlain
-		if body == "" {
-			body = "(No plain text — HTML only)"
-		}
-		body = strings.TrimRight(body, "\r\n\t ")
-		if m.bodyWrappedLines == nil || m.bodyWrappedWidth != innerW {
-			m.bodyWrappedLines = wrapText(body, innerW)
-			m.bodyWrappedWidth = innerW
-		}
-		sb.WriteString(strings.Join(m.bodyWrappedLines, "\n"))
-	}
-
 	panelHeight := m.windowHeight - 6
 	if panelHeight < 5 {
 		panelHeight = 5
 	}
+	// Header block is 4 rows (From + Date + Subj + separator).
+	// Reserve 1 row for scroll indicator → maxBodyLines = panelHeight - 4 - 1.
+	maxBodyLines := panelHeight - 5
+	if maxBodyLines < 1 {
+		maxBodyLines = 1
+	}
+
+	if m.emailBodyLoading {
+		sb.WriteString(dimStyle.Render("Loading…"))
+	} else if m.emailBody != nil {
+		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
+		imageLines := 0
+		for _, img := range m.emailBody.InlineImages {
+			label := fmt.Sprintf("[image  %s  %d KB]", img.MIMEType, len(img.Data)/1024)
+			sb.WriteString(dimStyle.Render(label) + "\n")
+			imageLines++
+		}
+
+		// Body — wrap/render once and cache; re-render only if panel width changed
+		body := m.emailBody.TextPlain
+		if body == "" {
+			body = "(No plain text — HTML only)"
+		}
+		if m.bodyWrappedLines == nil || m.bodyWrappedWidth != innerW {
+			if m.emailBody.IsFromHTML {
+				// Render markdown (converted from HTML) via glamour at panel width
+				renderer, rerr := glamour.NewTermRenderer(
+					glamour.WithStandardStyle("dark"),
+					glamour.WithWordWrap(innerW),
+				)
+				if rerr == nil {
+					if rendered, err := renderer.Render(body); err == nil {
+						rendered = strings.TrimRight(rendered, "\n")
+						m.bodyWrappedLines = strings.Split(rendered, "\n")
+					} else {
+						m.bodyWrappedLines = wrapLines(body, innerW)
+					}
+				} else {
+					m.bodyWrappedLines = wrapLines(body, innerW)
+				}
+			} else {
+				m.bodyWrappedLines = wrapLines(body, innerW)
+			}
+			m.bodyWrappedWidth = innerW
+		}
+
+		// Clamp scroll offset
+		visibleLines := maxBodyLines - imageLines
+		if visibleLines < 1 {
+			visibleLines = 1
+		}
+		totalLines := len(m.bodyWrappedLines)
+		maxOffset := totalLines - visibleLines
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.bodyScrollOffset > maxOffset {
+			m.bodyScrollOffset = maxOffset
+		}
+
+		end := m.bodyScrollOffset + visibleLines
+		if end > totalLines {
+			end = totalLines
+		}
+		sb.WriteString(strings.Join(m.bodyWrappedLines[m.bodyScrollOffset:end], "\n"))
+
+		// Scroll indicator
+		if totalLines > visibleLines {
+			pct := 0
+			if maxOffset > 0 {
+				pct = m.bodyScrollOffset * 100 / maxOffset
+			}
+			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%", m.bodyScrollOffset+1, totalLines, pct)
+			sb.WriteString("\n" + dimStyle.Render(indicator))
+		}
+	}
+
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(panelHeight).
@@ -1707,6 +1767,31 @@ func (m *Model) renderChatPanel() string {
 	}
 
 	return sb.String()
+}
+
+// wrapLines splits text on newlines first, then word-wraps each paragraph to
+// fit within width runes. Consecutive blank lines are collapsed to one blank
+// line, so over-spaced HTML-converted bodies look reasonable.
+func wrapLines(text string, width int) []string {
+	// Normalize CRLF and strip trailing whitespace
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.TrimRight(text, "\n\t ")
+
+	var result []string
+	consecutiveBlanks := 0
+	for _, para := range strings.Split(text, "\n") {
+		para = strings.TrimRight(para, " \t")
+		if para == "" {
+			consecutiveBlanks++
+			if consecutiveBlanks <= 1 {
+				result = append(result, "")
+			}
+			continue
+		}
+		consecutiveBlanks = 0
+		result = append(result, wrapText(para, width)...)
+	}
+	return result
 }
 
 // wrapText wraps text to fit within width runes.

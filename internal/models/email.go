@@ -55,6 +55,7 @@ type EmailBody struct {
 	TextPlain    string
 	TextHTML     string
 	InlineImages []InlineImage
+	IsFromHTML   bool // TextPlain was converted from HTML; render via markdown
 }
 
 // InlineImage is an image MIME part embedded inline in an email body.
