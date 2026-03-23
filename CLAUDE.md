@@ -83,6 +83,77 @@ make fmt      # Format code
 make test     # Run tests
 ```
 
+### TUI Testing with tmux
+
+**Always verify visual/layout changes using tmux.** The TUI renders differently at different terminal sizes; a change that looks correct in code can break layout at 80×24 or produce garbage at 50×15. tmux lets you spin up headless sessions at exact dimensions, send keystrokes, and capture rendered output — all without interrupting your working terminal.
+
+#### Quick workflow
+
+```bash
+# 1. Build a test binary
+go build -o /tmp/mail-processor-test .
+
+# 2. Start a headless session at a specific size (WIDTHxHEIGHT)
+tmux new-session -d -s test -x 220 -y 50
+
+# 3. Launch the app inside it
+tmux send-keys -t test './tmp/mail-processor-test -config proton.yaml' Enter
+sleep 5   # wait for IMAP connect + initial load
+
+# 4. Capture a screenshot (plain text, ANSI escape codes included with -e)
+tmux capture-pane -t test -p -e > /tmp/cap.txt
+cat /tmp/cap.txt
+
+# 5. Send keystrokes to navigate (no Enter suffix = no newline)
+tmux send-keys -t test '2' ''   # switch to Timeline tab
+sleep 0.5
+tmux send-keys -t test 'jjjj' ''   # navigate down
+sleep 0.3
+tmux send-keys -t test '' ''    # open body preview (Enter)
+sleep 2
+tmux capture-pane -t test -p -e > /tmp/cap_body.txt
+
+# 6. Resize and re-test
+tmux resize-window -t test -x 80 -y 24
+sleep 0.3
+tmux capture-pane -t test -p -e > /tmp/cap_80.txt
+
+# 7. Kill the session when done
+tmux kill-session -t test
+```
+
+#### Sizes to always check
+
+| Size | Why |
+|------|-----|
+| 220×50 | Wide terminal — all columns and panels should be fully visible |
+| 80×24 | Standard SSH/default — most common real-world size |
+| 50×15 | Narrow/small — layout stress test; minimum-size guard should trigger |
+
+#### Key sequences
+
+| Action | Keys |
+|--------|------|
+| Tab 1 Timeline | `1` |
+| Tab 2 Compose | `2` |
+| Tab 3 Cleanup | `3` |
+| Open body preview | `Enter` (send as `''`) |
+| Close preview | `Escape` |
+| Toggle sidebar | `f` |
+| Toggle chat | `c` |
+| Toggle logs | `l` |
+| Navigate | `j` / `k` |
+| Domain mode | `d` (Cleanup tab) |
+| Markdown preview | `C-p` (Compose tab) |
+
+#### What to look for in captures
+
+- **Overflow**: content bleeding past terminal edge (columns sum > terminal width)
+- **Truncation**: useful text cut off too aggressively vs too late
+- **Empty states**: blank areas where a helpful message should appear
+- **Loading indicators**: panels that stay blank while an async fetch is in progress
+- **Key hints**: status bar correctly reflects available keys for the active tab/panel
+
 ### Configuration
 `proton.yaml` (all sections):
 ```yaml
@@ -123,7 +194,7 @@ Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | Key | Action |
 |-----|--------|
 | `q` / `ctrl+c` | Quit |
-| `1` / `2` / `3` | Switch to Cleanup / Timeline / Compose tab |
+| `1` / `2` / `3` | Switch to Timeline / Compose / Cleanup tab |
 | `d` | Toggle domain/sender grouping mode (Cleanup tab) |
 | `r` | Refresh (reconnect + re-process) |
 | `D` | Delete selected or current sender/message |

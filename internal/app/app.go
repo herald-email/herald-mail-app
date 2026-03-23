@@ -148,12 +148,17 @@ type Model struct {
 	emailBody             *models.EmailBody
 	emailBodyLoading      bool
 	emailPreviewWidth     int // computed in updateTableDimensions
+	// Cached wrapped body lines — invalidated when body or panel width changes.
+	bodyWrappedLines []string
+	bodyWrappedWidth int
 
 	// Chat panel
-	showChat     bool
-	chatMessages []ai.ChatMessage // conversation history
-	chatInput    textinput.Model
-	chatWaiting  bool // waiting for Ollama response
+	showChat          bool
+	chatMessages      []ai.ChatMessage // conversation history
+	chatWrappedLines  [][]string       // cached wrapText output per message; nil = invalid
+	chatWrappedWidth  int              // width at which chatWrappedLines was built
+	chatInput         textinput.Model
+	chatWaiting       bool // waiting for Ollama response
 
 	// AI classification
 	classifier      *ai.Classifier
@@ -455,6 +460,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.emailBody = msg.Body
 		}
+		m.bodyWrappedLines = nil // invalidate wrap cache
 		return m, nil
 
 	case ChatResponseMsg:
@@ -467,6 +473,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Role:    "assistant",
 			Content: content,
 		})
+		m.chatWrappedLines = nil // invalidate wrap cache
 		return m, nil
 
 	case LoadingMsg:
@@ -568,6 +575,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.updateTableDimensions(msg.Width, msg.Height)
+		m.chatWrappedLines = nil // invalidate on resize
 		return m, nil
 
 	case tickMsg:
@@ -620,7 +628,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model
+const minTermWidth = 60
+const minTermHeight = 15
+
 func (m *Model) View() string {
+	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
+		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
+	}
+	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
+		return fmt.Sprintf("\n  Terminal too short (%d rows). Please resize to at least %d rows.", m.windowHeight, minTermHeight)
+	}
 	if m.loading {
 		return m.renderLoadingView()
 	}
@@ -767,6 +784,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedTimelineEmail = nil
 			m.emailBody = nil
 			m.emailBodyLoading = false
+			m.bodyWrappedLines = nil
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		}
 		return m, nil
@@ -939,7 +957,12 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderComposeView()
 	} else {
 		// Cleanup tab
-		summaryView := m.baseStyle.Render(m.summaryTable.View())
+		var summaryView string
+		if m.stats != nil && len(m.stats) == 0 {
+			summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
+		} else {
+			summaryView = m.baseStyle.Render(m.summaryTable.View())
+		}
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
 		if m.showSidebar {
 			sidebarView := m.baseStyle.Render(m.renderSidebar())

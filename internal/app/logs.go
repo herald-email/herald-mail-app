@@ -66,7 +66,7 @@ func (lv *LogViewer) AddLog(level, message string) {
 	lv.logs = append(lv.logs, entry)
 
 	// Keep only last 1000 entries to prevent memory issues
-	if len(lv.logs) > 1000 {
+	if len(lv.logs) >= 1000 {
 		lv.logs = lv.logs[len(lv.logs)-1000:]
 	}
 

@@ -296,9 +296,7 @@ func (m *Model) updateDetailsTable() {
 		if maxLen <= 0 {
 			maxLen = 32
 		}
-		if len(subject) > maxLen {
-			subject = subject[:maxLen-3] + "..."
-		}
+		subject = truncate(subject, maxLen)
 
 		attachments := "N"
 		if email.HasAttachments {
@@ -614,16 +612,18 @@ func (m *Model) updateTableDimensions(width, height int) {
 	cleanupOverhead := 28 + sidebarExtra + chatExtra
 
 	cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
-	if cleanupVariable < 24 {
-		cleanupVariable = 24
+	if cleanupVariable < 0 {
+		cleanupVariable = 0
 	}
 	senderWidth := cleanupVariable * 40 / 100
-	if senderWidth < 12 {
-		senderWidth = 12
-	}
 	subjectWidth := cleanupVariable - senderWidth
-	if subjectWidth < 12 {
-		subjectWidth = 12
+	if cleanupVariable >= 24 {
+		if senderWidth < 12 {
+			senderWidth = 12
+		}
+		if subjectWidth < 12 {
+			subjectWidth = 12
+		}
 	}
 
 	m.summaryTable.SetColumns([]table.Column{
@@ -654,14 +654,29 @@ func (m *Model) updateTableDimensions(width, height int) {
 	const timelineFixedCols = 30
 	const timelineNumCols = 6
 
-	// Reserve half the available width for the email preview panel when one is open.
+	// Reserve roughly half the available width for the email preview panel.
+	// The preview is only shown when there is enough room: the table's fixed
+	// overhead (timelineFixedCols + separators + baseStyle border = 44) plus the
+	// preview's border (1) must still leave at least one column for variable content.
+	// Minimum useful preview width is 25 cols.
+	const timelineTableFixedOverhead = timelineFixedCols + timelineNumCols*2 + 2 // = 44
+	const minPreviewWidth = 25
 	availableForTimeline := width - sidebarExtra - chatExtra
 	previewWidth := 0
 	if m.selectedTimelineEmail != nil {
-		previewWidth = availableForTimeline / 2
-		if previewWidth < 40 {
-			previewWidth = 40
+		// Cap preview so the table always has at least 0 variable cols (no overflow).
+		// previewBorder(1) is included in the cap.
+		maxPreview := availableForTimeline - timelineTableFixedOverhead - 1
+		if maxPreview >= minPreviewWidth {
+			previewWidth = availableForTimeline / 2
+			if previewWidth < minPreviewWidth {
+				previewWidth = minPreviewWidth
+			}
+			if previewWidth > maxPreview {
+				previewWidth = maxPreview
+			}
 		}
+		// If maxPreview < minPreviewWidth there is not enough room; preview stays 0.
 	}
 	m.emailPreviewWidth = previewWidth
 
@@ -669,18 +684,21 @@ func (m *Model) updateTableDimensions(width, height int) {
 	if previewWidth > 0 {
 		previewBorder = 1 // renderEmailPreview uses BorderLeft (+1 width)
 	}
-	timelineOverhead := timelineFixedCols + timelineNumCols*2 + 2 + sidebarExtra + chatExtra + previewWidth + previewBorder
+	timelineOverhead := timelineTableFixedOverhead + sidebarExtra + chatExtra + previewWidth + previewBorder
 	timelineVariable := width - timelineOverhead
-	if timelineVariable < 24 {
-		timelineVariable = 24
+	if timelineVariable < 0 {
+		timelineVariable = 0
 	}
 	tSenderWidth := timelineVariable * 30 / 100
-	if tSenderWidth < 10 {
-		tSenderWidth = 10
-	}
 	tSubjectWidth := timelineVariable - tSenderWidth
-	if tSubjectWidth < 14 {
-		tSubjectWidth = 14
+	// Enforce display minimums only when the budget permits; never cause overflow.
+	if timelineVariable >= 24 {
+		if tSenderWidth < 10 {
+			tSenderWidth = 10
+		}
+		if tSubjectWidth < 14 {
+			tSubjectWidth = 14
+		}
 	}
 	m.timelineSenderWidth = tSenderWidth
 	m.timelineSubjectWidth = tSubjectWidth
@@ -888,7 +906,12 @@ func (m *Model) updateTimelineTable() {
 // renderTimelineView renders the timeline tab content.
 // When an email is selected, it splits into a list on the left and preview on the right.
 func (m *Model) renderTimelineView() string {
-	tableView := m.baseStyle.Render(m.timelineTable.View())
+	var tableView string
+	if m.timelineEmails != nil && len(m.timelineEmails) == 0 {
+		tableView = m.emptyStateView("No emails in this folder  •  press r to refresh")
+	} else {
+		tableView = m.baseStyle.Render(m.timelineTable.View())
+	}
 
 	var mainContent string
 	if m.selectedTimelineEmail != nil {
@@ -932,14 +955,17 @@ func (m *Model) renderEmailPreview() string {
 			sb.WriteString(dimStyle.Render(label) + "\n")
 		}
 
-		// Plain-text body
+		// Plain-text body — wrap once and cache; re-wrap only if panel width changed
 		body := m.emailBody.TextPlain
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
-		// Trim trailing whitespace and wrap to panel width
 		body = strings.TrimRight(body, "\r\n\t ")
-		sb.WriteString(strings.Join(wrapText(body, innerW), "\n"))
+		if m.bodyWrappedLines == nil || m.bodyWrappedWidth != innerW {
+			m.bodyWrappedLines = wrapText(body, innerW)
+			m.bodyWrappedWidth = innerW
+		}
+		sb.WriteString(strings.Join(m.bodyWrappedLines, "\n"))
 	}
 
 	panelStyle := lipgloss.NewStyle().
@@ -950,6 +976,23 @@ func (m *Model) renderEmailPreview() string {
 		PaddingLeft(1)
 
 	return panelStyle.Render(sb.String())
+}
+
+// emptyStateView returns a placeholder string the same height as the content
+// area, with msg centred vertically. Used when a table has no rows to display.
+func (m *Model) emptyStateView(msg string) string {
+	h := m.windowHeight - 6
+	if h < 5 {
+		h = 5
+	}
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	mid := h / 2
+	var sb strings.Builder
+	for i := 0; i < mid; i++ {
+		sb.WriteString("\n")
+	}
+	sb.WriteString(dim.Render(msg))
+	return sb.String()
 }
 
 // truncate shortens s to at most n runes.
@@ -1019,7 +1062,25 @@ func (m *Model) renderStatusBar() string {
 	if len(m.selectedRows) > 0 {
 		parts = append(parts, fmt.Sprintf("%d senders selected", len(m.selectedRows)))
 	} else if len(m.selectedMessages) > 0 {
-		parts = append(parts, fmt.Sprintf("%d messages selected", len(m.selectedMessages)))
+		// Count how many distinct sender/domain keys have selected messages
+		keySet := map[string]bool{}
+		for key, emails := range m.emailsBySender {
+			for _, e := range emails {
+				if m.selectedMessages[e.MessageID] {
+					keySet[key] = true
+					break
+				}
+			}
+		}
+		groupLabel := "sender"
+		if m.groupByDomain {
+			groupLabel = "domain"
+		}
+		if len(keySet) > 1 {
+			parts = append(parts, fmt.Sprintf("%d messages from %d %ss selected", len(m.selectedMessages), len(keySet), groupLabel))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d messages selected", len(m.selectedMessages)))
+		}
 	}
 
 	// Deletion progress
@@ -1074,7 +1135,7 @@ func (m *Model) renderKeyHints() string {
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  c: chat  │  q: quit"
+		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
 		if m.selectedTimelineEmail != nil {
 			hints = "esc: close preview  │  ↑/k ↓/j: navigate  │  R: reply  │  q: quit"
@@ -1084,9 +1145,9 @@ func (m *Model) renderKeyHints() string {
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  f: hide  │  c: chat  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  c: chat  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
 			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit"
 		}
@@ -1216,8 +1277,8 @@ func (m *Model) renderSidebar() string {
 			}
 		}
 
-		prefixLen := len(indent) + 2 // icon is 2 display cells
-		available := sidebarContentWidth - prefixLen - len(countSuffix)
+		prefixLen := len([]rune(indent)) + 2 // icon is 2 display cells
+		available := sidebarContentWidth - prefixLen - len([]rune(countSuffix))
 		if available < 1 {
 			available = 1
 		}
@@ -1489,6 +1550,7 @@ func (m *Model) submitChat() tea.Cmd {
 		Role:    "user",
 		Content: question,
 	})
+	m.chatWrappedLines = nil // invalidate wrap cache
 
 	// Build system prompt with email context
 	var ctx strings.Builder
@@ -1546,19 +1608,27 @@ func (m *Model) renderChatPanel() string {
 		historyLines = 3
 	}
 
+	// Rebuild wrap cache if stale
+	if m.chatWrappedLines == nil || m.chatWrappedWidth != w {
+		m.chatWrappedLines = make([][]string, len(m.chatMessages))
+		for i, msg := range m.chatMessages {
+			prefix := "AI: "
+			if msg.Role == "user" {
+				prefix = "You: "
+			}
+			m.chatWrappedLines[i] = wrapText(prefix+msg.Content, w)
+		}
+		m.chatWrappedWidth = w
+	}
+
 	// Collect rendered message lines (newest-last)
 	var msgLines []string
-	for _, msg := range m.chatMessages {
-		prefix := "AI: "
+	for i, msg := range m.chatMessages {
 		style := aiStyle
 		if msg.Role == "user" {
-			prefix = "You: "
 			style = userStyle
 		}
-		// Wrap text
-		text := prefix + msg.Content
-		wrapped := wrapText(text, w)
-		for _, line := range wrapped {
+		for _, line := range m.chatWrappedLines[i] {
 			msgLines = append(msgLines, style.Render(line))
 		}
 		msgLines = append(msgLines, "")
