@@ -123,6 +123,36 @@ Batch flow: present a list of detected subscriptions, let user select and choose
 
 ---
 
+## Search
+
+### In-folder search (local, fast)
+- `/` key opens a search bar at the bottom of the Timeline and Cleanup tabs
+- Searches cached metadata (sender, subject) instantly via SQLite `LIKE`
+- Results replace the current list view; `Esc` clears the search and restores the full list
+- Matched terms highlighted in the results
+
+### Full-text search (body content)
+- Extend the local cache to store a plain-text snippet or full body text per email
+- SQLite FTS5 virtual table for ranked full-text search across all cached emails
+- Search bar prefix `/b ` to switch into body-search mode
+- Results show a one-line excerpt with the matched phrase
+
+### Cross-folder search
+- Search across all locally cached folders in a single query
+- Results grouped by folder with a folder breadcrumb per row
+- Selecting a result switches the active folder and highlights the email
+
+### IMAP server-side search (fallback / deep search)
+- When the local cache is incomplete (e.g. emails older than the sync window), fall back to IMAP `SEARCH` command
+- Triggered explicitly with a `S` key or a "search server" prompt when local results are sparse
+- Results fetched and temporarily added to the cache
+
+### Saved searches / filters
+- Save a search query as a named virtual folder in the sidebar
+- Persisted in the SQLite database; re-executed on demand with `r`
+
+---
+
 ## Contact Book
 
 - Start simple: build from To/From/CC headers seen in sent and received mail
