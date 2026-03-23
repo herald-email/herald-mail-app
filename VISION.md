@@ -18,6 +18,8 @@ This document describes the long-term direction for this project. It evolves fro
 - [ ] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
 - [ ] Multi-account support (multiple IMAP accounts in one session)
 - [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
+- [ ] Forward email with address input
+- [ ] Deletion confirmation prompt
 
 ---
 
@@ -227,6 +229,24 @@ accounts:
 
 ### OAuth2 (future)
 Gmail and Outlook prefer OAuth2 over app passwords. A future phase adds a `vendor_auth` flow that opens a browser for the OAuth dance and stores the refresh token in the system keychain.
+
+---
+
+## Forward and Deletion UX
+
+### Forward email
+- `F` key in Timeline opens Compose pre-filled with:
+  - `To` field empty and focused — user types the recipient address
+  - Subject prefixed with `Fwd:`
+  - Body quoted with a forwarding header (From / Date / Subject / original body text)
+- If the email body is already loaded in the preview panel, it is included in the quote; otherwise only the metadata header is pre-filled
+
+### Deletion confirmation
+- `D` never deletes immediately — it opens an inline prompt in the status bar:
+  `Delete 3 senders? [y] confirm  [n/Esc] cancel`
+- The prompt describes exactly what would be deleted (N message(s), N sender(s), a specific sender name, or a domain)
+- `y` or `Y` confirms and proceeds; any other key or `Esc` cancels silently
+- This applies to all deletion paths: single message, selected messages, single sender, selected senders, domain
 
 ---
 
