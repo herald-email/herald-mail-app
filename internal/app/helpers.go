@@ -979,12 +979,20 @@ func (m *Model) renderEmailPreview() string {
 
 	var sb strings.Builder
 
+	// Focus-aware colors: brighter when preview panel has focus
+	borderColor := "238"
+	headerColor := "245"
+	if m.focusedPanel == panelPreview {
+		borderColor = "39"
+		headerColor = "255"
+	}
+
 	// Header block
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 	email := m.selectedTimelineEmail
-	sb.WriteString(dimStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
-	sb.WriteString(dimStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
-	sb.WriteString(dimStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+	sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
+	sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
+	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
 	panelHeight := m.windowHeight - 6
@@ -998,6 +1006,7 @@ func (m *Model) renderEmailPreview() string {
 		maxBodyLines = 1
 	}
 
+	dimStyle := headerStyle
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
@@ -1073,7 +1082,7 @@ func (m *Model) renderEmailPreview() string {
 		Height(panelHeight).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("238")).
+		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 
 	return panelStyle.Render(sb.String())
@@ -1243,10 +1252,12 @@ func (m *Model) renderKeyHints() string {
 	} else if m.activeTab == tabCompose {
 		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		if m.selectedTimelineEmail != nil {
-			hints = "esc: close preview  │  ↑/k ↓/j: navigate  │  R: reply  │  q: quit"
+		if m.focusedPanel == panelPreview {
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  esc: close preview  │  R: reply  │  q: quit"
+		} else if m.selectedTimelineEmail != nil {
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  q: quit"
 		} else {
-			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  tab: panels  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
 		}
 	} else {
 		switch m.focusedPanel {
@@ -1266,50 +1277,94 @@ func (m *Model) renderKeyHints() string {
 // setFocusedPanel updates focus state and table styles for the given panel
 func (m *Model) setFocusedPanel(panel int) {
 	m.focusedPanel = panel
-	if panel == panelSummary {
+	switch panel {
+	case panelSummary:
 		m.summaryTable.Focus()
 		m.summaryTable.SetStyles(m.activeTableStyle)
 		m.detailsTable.Blur()
 		m.detailsTable.SetStyles(m.inactiveTableStyle)
-	} else if panel == panelDetails {
+		m.timelineTable.Blur()
+		m.timelineTable.SetStyles(m.inactiveTableStyle)
+		m.chatInput.Blur()
+	case panelDetails:
 		m.detailsTable.Focus()
 		m.detailsTable.SetStyles(m.activeTableStyle)
 		m.summaryTable.Blur()
 		m.summaryTable.SetStyles(m.inactiveTableStyle)
-	} else {
-		// sidebar or any non-table panel
+		m.timelineTable.Blur()
+		m.timelineTable.SetStyles(m.inactiveTableStyle)
+		m.chatInput.Blur()
+	case panelTimeline:
+		m.timelineTable.Focus()
+		m.timelineTable.SetStyles(m.activeTableStyle)
 		m.summaryTable.Blur()
 		m.summaryTable.SetStyles(m.inactiveTableStyle)
 		m.detailsTable.Blur()
 		m.detailsTable.SetStyles(m.inactiveTableStyle)
+		m.chatInput.Blur()
+	case panelChat:
+		m.chatInput.Focus()
+		m.timelineTable.Blur()
+		m.timelineTable.SetStyles(m.inactiveTableStyle)
+		m.summaryTable.Blur()
+		m.summaryTable.SetStyles(m.inactiveTableStyle)
+		m.detailsTable.Blur()
+		m.detailsTable.SetStyles(m.inactiveTableStyle)
+	default:
+		// panelSidebar, panelPreview, or any other non-table panel
+		m.summaryTable.Blur()
+		m.summaryTable.SetStyles(m.inactiveTableStyle)
+		m.detailsTable.Blur()
+		m.detailsTable.SetStyles(m.inactiveTableStyle)
+		m.timelineTable.Blur()
+		m.timelineTable.SetStyles(m.inactiveTableStyle)
+		m.chatInput.Blur()
 	}
 }
 
-// cyclePanel advances focus to the next panel in order
-func (m *Model) cyclePanel() {
-	panels := []int{panelSummary, panelDetails}
-	if m.showSidebar {
-		panels = []int{panelSidebar, panelSummary, panelDetails}
-	}
-	if m.showChat {
-		panels = append(panels, panelChat)
-	}
-	for i, p := range panels {
-		if p == m.focusedPanel {
-			next := panels[(i+1)%len(panels)]
-			if next == panelChat {
-				m.focusedPanel = panelChat
-				m.chatInput.Focus()
-				m.summaryTable.Blur()
-				m.detailsTable.Blur()
-			} else {
-				m.chatInput.Blur()
-				m.setFocusedPanel(next)
-			}
-			return
+// cyclePanel advances (forward=true) or retreats (forward=false) focus through visible panels
+func (m *Model) cyclePanel(forward bool) {
+	var panels []int
+	if m.activeTab == tabTimeline {
+		if m.showSidebar {
+			panels = append(panels, panelSidebar)
+		}
+		panels = append(panels, panelTimeline)
+		if m.selectedTimelineEmail != nil {
+			panels = append(panels, panelPreview)
+		}
+		if m.showChat {
+			panels = append(panels, panelChat)
+		}
+	} else {
+		// Cleanup / other tabs
+		if m.showSidebar {
+			panels = append(panels, panelSidebar)
+		}
+		panels = append(panels, panelSummary, panelDetails)
+		if m.showChat {
+			panels = append(panels, panelChat)
 		}
 	}
-	m.setFocusedPanel(panels[0])
+	if len(panels) == 0 {
+		return
+	}
+	// Find current index
+	cur := 0
+	for i, p := range panels {
+		if p == m.focusedPanel {
+			cur = i
+			break
+		}
+	}
+	// Step forward or backward with wrap
+	var next int
+	if forward {
+		next = (cur + 1) % len(panels)
+	} else {
+		next = (cur - 1 + len(panels)) % len(panels)
+	}
+	m.setFocusedPanel(panels[next])
 }
 
 // toggleSidebarNode expands/collapses the node at sidebarCursor

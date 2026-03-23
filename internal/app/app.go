@@ -19,10 +19,12 @@ import (
 
 // Panel focus constants
 const (
-	panelSidebar = 0
-	panelSummary = 1
-	panelDetails = 2
-	panelChat    = 3
+	panelSidebar  = 0
+	panelSummary  = 1
+	panelDetails  = 2
+	panelChat     = 3
+	panelTimeline = 4
+	panelPreview  = 5
 )
 
 // Tab constants
@@ -337,7 +339,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		folderTree:         buildFolderTree([]string{"INBOX"}),
 		folderStatus:       make(map[string]models.FolderStatus),
 		showSidebar:        true,
-		focusedPanel:       panelSummary,
+		focusedPanel:       panelTimeline,
 		selectedRows:       make(map[int]bool),
 		selectedMessages:   make(map[string]bool),
 		rowToSender:        make(map[int]string),
@@ -690,12 +692,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "1":
 		if !m.loading && m.activeTab != tabTimeline {
 			m.activeTab = tabTimeline
-			m.timelineTable.Focus()
-			m.timelineTable.SetStyles(m.activeTableStyle)
-			m.summaryTable.Blur()
-			m.summaryTable.SetStyles(m.inactiveTableStyle)
-			m.detailsTable.Blur()
-			m.detailsTable.SetStyles(m.inactiveTableStyle)
+			m.setFocusedPanel(panelTimeline)
 			return m, m.loadTimelineEmails()
 		}
 		return m, nil
@@ -716,9 +713,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		if !m.loading && m.activeTab != tabCleanup {
 			m.activeTab = tabCleanup
-			m.timelineTable.Blur()
-			m.timelineTable.SetStyles(m.inactiveTableStyle)
-			m.setFocusedPanel(m.focusedPanel)
+			m.setFocusedPanel(panelSummary)
 		}
 		return m, nil
 
@@ -788,13 +783,21 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.emailBody = nil
 			m.emailBodyLoading = false
 			m.bodyWrappedLines = nil
+			m.bodyScrollOffset = 0
+			m.setFocusedPanel(panelTimeline)
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		}
 		return m, nil
 
 	case "tab":
 		if !m.loading {
-			m.cyclePanel()
+			m.cyclePanel(true)
+		}
+		return m, nil
+
+	case "shift+tab":
+		if !m.loading {
+			m.cyclePanel(false)
 		}
 		return m, nil
 
@@ -867,40 +870,34 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
-				// Close preview when navigating so the cursor is always visible
-				if m.selectedTimelineEmail != nil {
-					m.selectedTimelineEmail = nil
-					m.emailBody = nil
-					m.emailBodyLoading = false
-					m.bodyWrappedLines = nil
-					m.bodyScrollOffset = 0
-					m.updateTableDimensions(m.windowWidth, m.windowHeight)
+				if m.focusedPanel == panelPreview {
+					if m.bodyScrollOffset > 0 {
+						m.bodyScrollOffset--
+					}
+				} else {
+					var cmd tea.Cmd
+					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
+					return m, cmd
 				}
-				var cmd tea.Cmd
-				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
-				return m, cmd
+			} else {
+				return m.handleNavigation(-1)
 			}
-			return m.handleNavigation(-1)
 		}
 		return m, nil
 
 	case "down", "j":
 		if !m.loading {
 			if m.activeTab == tabTimeline {
-				// Close preview when navigating so the cursor is always visible
-				if m.selectedTimelineEmail != nil {
-					m.selectedTimelineEmail = nil
-					m.emailBody = nil
-					m.emailBodyLoading = false
-					m.bodyWrappedLines = nil
-					m.bodyScrollOffset = 0
-					m.updateTableDimensions(m.windowWidth, m.windowHeight)
+				if m.focusedPanel == panelPreview {
+					m.bodyScrollOffset++
+				} else {
+					var cmd tea.Cmd
+					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+					return m, cmd
 				}
-				var cmd tea.Cmd
-				m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
-				return m, cmd
+			} else {
+				return m.handleNavigation(1)
 			}
-			return m.handleNavigation(1)
 		}
 		return m, nil
 	}

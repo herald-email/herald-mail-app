@@ -362,6 +362,135 @@ done
 
 ---
 
+### TC-16 — Compose: Markdown email and send
+
+**Prerequisites:** Live SMTP configured in `proton.yaml`.
+
+**Steps:**
+1. Switch to Compose (`2`).
+2. Tab to the To field, type a recipient address.
+3. Tab to Subject, type a subject line.
+4. Tab to Body, type text with Markdown: `**bold word** and a [link](https://example.com)`.
+5. Press `Ctrl+P` to open the Markdown preview.
+6. Capture screenshot.
+7. Press `Ctrl+P` again to return to edit mode.
+8. Press `Ctrl+S` to send.
+9. Capture screenshot after send attempt.
+
+**Expect (preview):**
+- Rendered output shows `**bold word**` as bold and `[link](https://example.com)` as a clickable-style link
+- Preview occupies the body area without overflowing
+
+**Expect (send):**
+- Status bar shows a send confirmation message (e.g. `Email sent!`) or an error if SMTP is misconfigured
+- Compose fields are cleared (or retained — either is acceptable; note actual behaviour)
+
+---
+
+### TC-17 — AI chat panel interactions
+
+**Prerequisites:** Ollama running at configured host with the configured model loaded.
+
+**Steps:**
+1. Open Timeline (`1`), wait for load.
+2. Press `c` to open the chat panel.
+3. Capture screenshot — panel open, empty history.
+4. Type a query: `summarise my recent emails` and press Enter.
+5. Wait up to 10 seconds for a response.
+6. Capture screenshot — response visible.
+7. Press `c` to close the chat panel.
+8. Capture screenshot — panel closed.
+
+**Expect (panel open):**
+- Chat panel renders on the right; main content narrows proportionally
+- Input field is focused; typing is echoed correctly
+
+**Expect (after response):**
+- "You: summarise my recent emails" visible in chat history
+- AI response rendered below it; long lines wrap within the panel
+- No layout corruption in the main panel
+
+**Expect (closed):**
+- Chat panel disappears; main content re-expands to original width
+- Focus returns to timeline table (cursor still on the same row)
+
+---
+
+### TC-18 — AI classification (`a` key)
+
+**Prerequisites:** Ollama running with the configured model.
+
+**Steps:**
+1. Switch to Cleanup tab (`3`).
+2. Press `a` to trigger AI classification on the current folder.
+3. Watch the status bar for progress messages.
+4. Wait for classification to complete (status bar returns to normal).
+5. Press `l` to open the log viewer and inspect entries.
+6. Press `l` to close.
+
+**Expect:**
+- Status bar cycles through progress messages (e.g. `Classifying 1/N…`)
+- No crash or freeze; progress completes
+- Log viewer shows `INFO` entries indicating categories assigned
+- Classified emails in the Cleanup table show a category tag (if the table includes that column)
+
+---
+
+### TC-19 — Panel focus cycling with Tab / Shift+Tab (Timeline)
+
+**Steps:**
+1. Switch to Timeline (`1`), wait for load.
+2. Press Enter on any email to open the body preview.
+3. Press `Tab` once — capture screenshot.
+4. Press `Tab` again — capture screenshot.
+5. Press `Shift+Tab` — capture screenshot (should go back one step).
+6. While preview panel is focused (step 3), press `j` twice — capture.
+7. Press `Tab` to return focus to timeline table — press `j` twice — capture.
+
+**Expect (step 3 — preview focused):**
+- Preview panel border and header become noticeably brighter / different colour
+- Status bar hints update to show `j/k: scroll`
+
+**Expect (step 4 — timeline focused again):**
+- Preview border returns to dim colour
+- Status bar hints return to `j/k: navigate`
+
+**Expect (step 5 — Shift+Tab):**
+- Focus moves back to preview panel (reverse cycle)
+
+**Expect (step 6 — j while preview focused):**
+- Preview body scrolls down; timeline cursor does NOT move
+
+**Expect (step 7 — j while timeline focused):**
+- Timeline cursor moves down; preview body does NOT scroll
+
+---
+
+### TC-20 — Preview stays open during timeline navigation
+
+**Steps:**
+1. Switch to Timeline (`1`), wait for load.
+2. Navigate to email N (use `j`/`k`) and press Enter — note the sender/subject in the preview.
+3. Capture screenshot — preview shows email N.
+4. Press `j` to move cursor to email N+1 — capture screenshot.
+5. Press `j` again to email N+2 — capture screenshot.
+6. Press Enter on email N+2 — wait for body load — capture screenshot.
+7. Press Escape — capture screenshot.
+
+**Expect (step 4 and 5):**
+- Timeline cursor moves to N+1 / N+2
+- Preview panel **remains visible** and still shows email N's content (not closed, not replaced)
+
+**Expect (step 6):**
+- Preview reloads and shows email N+2's From/Subject/body
+- Loading indicator appears briefly if body fetch is slow
+
+**Expect (step 7):**
+- Preview panel closes; layout returns to full-width timeline
+- Cursor remains on email N+2
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:
