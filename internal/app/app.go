@@ -134,6 +134,7 @@ type Model struct {
 	timelineEmails       []*models.EmailData // All emails sorted by date for timeline tab
 	timelineSenderWidth  int
 	timelineSubjectWidth int
+	sidebarTooWide       bool // set by layout when sidebar + terminal width leaves < 16 variable cols
 
 	// Thread grouping (timeline tab)
 	threadGroups    []threadGroup
@@ -984,7 +985,7 @@ func (m *Model) renderMainView() string {
 			summaryView = m.baseStyle.Render(m.summaryTable.View())
 		}
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
-		if m.showSidebar {
+		if m.showSidebar && !m.sidebarTooWide {
 			sidebarView := m.baseStyle.Render(m.renderSidebar())
 			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
 		} else {

@@ -589,9 +589,18 @@ func (m *Model) updateTableDimensions(width, height int) {
 		tableHeight = 5
 	}
 
+	// Determine how much space the sidebar would consume.
+	// If the sidebar leaves fewer than 16 variable cols for the timeline, treat it
+	// as hidden in the layout (sidebarTooWide=true). The user's showSidebar preference
+	// is preserved — pressing f will toggle it back when the terminal is widened.
+	sidebarWouldConsume := sidebarContentWidth + 2 + 2 // content + border + gap
+	const minTimelineVariableCols = 16
+	m.sidebarTooWide = m.showSidebar &&
+		(width-sidebarWouldConsume) < (minTermWidth+minTimelineVariableCols)
+
 	sidebarExtra := 0
-	if m.showSidebar {
-		sidebarExtra = sidebarContentWidth + 2 + 2 // content + border + gap
+	if m.showSidebar && !m.sidebarTooWide {
+		sidebarExtra = sidebarWouldConsume
 	}
 	chatExtra := 0
 	if m.showChat {
@@ -953,7 +962,7 @@ func (m *Model) renderTimelineView() string {
 		mainContent = tableView
 	}
 
-	if m.showSidebar {
+	if m.showSidebar && !m.sidebarTooWide {
 		sidebarView := m.baseStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)
 	}
@@ -1001,7 +1010,7 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Body — wrap/render once and cache; re-render only if panel width changed
-		body := m.emailBody.TextPlain
+		body := stripInvisibleChars(m.emailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -1204,6 +1213,11 @@ func (m *Model) renderStatusBar() string {
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")
+	}
+
+	// Sidebar auto-hidden indicator
+	if m.sidebarTooWide {
+		parts = append(parts, "sidebar hidden (too narrow — widen terminal or press f)")
 	}
 
 	line := strings.Join(parts, "  │  ")
@@ -1795,6 +1809,24 @@ func wrapLines(text string, width int) []string {
 }
 
 // wrapText wraps text to fit within width runes.
+// stripInvisibleChars removes zero-width and formatting Unicode characters that
+// appear as visible noise in terminal output (e.g. U+034F, U+200B, U+FEFF).
+// Regular whitespace (space, tab, newline) is preserved.
+func stripInvisibleChars(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\t' || r == '\n' || r == '\r' || r == ' ':
+			b.WriteRune(r) // preserve normal whitespace
+		case unicode.Is(unicode.Cf, r): // format characters (zero-width, BOM, etc.)
+			// skip
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // Uses rune-based indexing so multi-byte characters (CJK, accented, emoji)
 // are never split mid-codepoint.
 func wrapText(text string, width int) []string {
