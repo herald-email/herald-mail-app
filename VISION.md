@@ -16,6 +16,8 @@ This document describes the long-term direction for this project. It evolves fro
 - [x] SSH app mode (charmbracelet/wish)
 - [x] Image rendering (iTerm2 inline images)
 - [ ] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
+- [ ] Multi-account support (multiple IMAP accounts in one session)
+- [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 
 ---
 
@@ -177,6 +179,54 @@ Ties into the daemon architecture: MCP server is just another client of the daem
 ## SSH App Mode
 
 `charmbracelet/wish` lets you serve the Bubble Tea TUI over SSH on a custom port. With the daemon architecture in place, this is a small addition — the TUI becomes one of several possible clients.
+
+---
+
+## Multi-Account Support
+
+The app currently hard-codes a single IMAP+SMTP connection from one config file. The goal is to manage multiple accounts (e.g. personal ProtonMail + work Gmail) in a single session.
+
+### Account model
+- `proton.yaml` gains a top-level `accounts:` list; each entry has a `name`, IMAP credentials, SMTP credentials, and an optional `vendor` shorthand
+- A default single-account config (current format) continues to work unchanged
+- Each account gets its own IMAP connection, its own SQLite cache file, and its own set of folders
+
+### UI changes
+- The folder sidebar groups folders under an account header (e.g. `● personal` / `● work`)
+- Switching between account folders works identically to switching folders today
+- The status bar shows the active account name alongside the folder
+- Compose: a "From" field lets the user pick which account to send from
+- All tabs (Timeline, Cleanup, Search) can optionally show a unified view across accounts or be scoped to one
+
+### Vendor presets
+Common providers ship with sensible defaults so users only need to supply credentials:
+
+| Vendor | IMAP host / port | SMTP host / port | Notes |
+|--------|-----------------|-----------------|-------|
+| `protonmail` | `127.0.0.1:1143` | `127.0.0.1:1025` | Via ProtonMail Bridge; default today |
+| `gmail` | `imap.gmail.com:993` | `smtp.gmail.com:587` | App password required |
+| `outlook` | `outlook.office365.com:993` | `smtp.office365.com:587` | OAuth or app password |
+| `fastmail` | `imap.fastmail.com:993` | `smtp.fastmail.com:587` | App password |
+| `icloud` | `imap.mail.me.com:993` | `smtp.mail.me.com:587` | App-specific password |
+
+With a preset, config shrinks to:
+
+```yaml
+accounts:
+  - name: personal
+    vendor: protonmail
+    credentials:
+      username: me@pm.me
+      password: bridge_password
+  - name: work
+    vendor: gmail
+    credentials:
+      username: me@company.com
+      password: app_password
+```
+
+### OAuth2 (future)
+Gmail and Outlook prefer OAuth2 over app passwords. A future phase adds a `vendor_auth` flow that opens a browser for the OAuth dance and stores the refresh token in the system keychain.
 
 ---
 
