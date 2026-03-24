@@ -16,6 +16,7 @@ This document describes the long-term direction for this project. It evolves fro
 - [x] SSH app mode (charmbracelet/wish)
 - [x] Image rendering (iTerm2 inline images)
 - [ ] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
+- [ ] Semantic search (natural-language queries via local embeddings)
 - [ ] Multi-account support (multiple IMAP accounts in one session)
 - [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [ ] Forward email with address input
@@ -182,6 +183,56 @@ Ties into the daemon architecture: MCP server is just another client of the daem
 ## SSH App Mode
 
 `charmbracelet/wish` lets you serve the Bubble Tea TUI over SSH on a custom port. With the daemon architecture in place, this is a small addition — the TUI becomes one of several possible clients.
+
+---
+
+## Semantic Search
+
+Keyword search (SQLite `LIKE`) finds exact matches. Semantic search finds *meaning* — "emails about my tax return" matches messages that say "annual filing", "IRS", "accountant sent documents", even if none contain the word "tax return".
+
+### How it works
+
+1. **Embedding model** — a small local model (e.g. `nomic-embed-text` via Ollama, or a bundled GGUF via `llama.cpp`) converts each email's plain-text body + subject into a dense vector (e.g. 768 floats).
+2. **Vector store** — vectors are stored in a separate table in the existing SQLite database using the `sqlite-vec` extension (a single loadable `.so`/`.dylib` file, no separate process). Cosine similarity search runs entirely in SQLite.
+3. **Query** — when the user types a natural-language query, the same embedding model converts it to a vector; SQLite returns the K nearest neighbours.
+4. **Hybrid ranking** — results are merged with keyword matches and re-ranked: exact keyword hits score higher than semantic-only matches, so precision is not sacrificed.
+
+### Indexing pipeline
+
+- Triggered automatically after each TUI sync: newly cached emails are embedded in a background goroutine (rate-limited to avoid saturating the Ollama API or CPU)
+- Embedding is skipped for emails with no body text
+- Re-embedding on body change is detected by hashing the plain-text content
+- A progress indicator in the status bar shows `✦ embedding N/M` while indexing is in progress
+
+### UX
+
+- In the search bar, prefix with `?` to switch to semantic mode: `? emails about my lease renewal`
+- Without a prefix, the existing keyword search runs as today
+- Results show a similarity score badge (`87%`) next to each row
+- A "Why this result?" hint is available (shows the matched excerpt that drove the score)
+
+### Configuration
+
+```yaml
+semantic:
+  enabled: true          # default: true when Ollama is configured
+  model: "nomic-embed-text"   # Ollama embedding model to use
+  batch_size: 20         # emails to embed per background tick
+  min_score: 0.65        # minimum cosine similarity to include in results
+```
+
+### Dependencies
+
+| Component | Role |
+|-----------|------|
+| `sqlite-vec` | Vector similarity search inside SQLite (no extra process) |
+| Ollama `nomic-embed-text` | Local embedding model (already a project dependency) |
+
+`sqlite-vec` is a single dynamically-loaded extension; no schema changes beyond a new `email_embeddings` table.
+
+### Privacy
+
+All embeddings are computed locally. No email content is sent to any remote service. The embedding model runs inside the existing Ollama instance the user already has.
 
 ---
 
