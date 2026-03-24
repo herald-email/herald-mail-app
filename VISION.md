@@ -178,6 +178,34 @@ MCP server hook exposes email operations as tools, enabling:
 
 Ties into the daemon architecture: MCP server is just another client of the daemon.
 
+### Current tools (implemented)
+
+| Tool | Description |
+|------|-------------|
+| `list_recent_emails` | Most recent emails in a folder, newest-first |
+| `search_emails` | Keyword search across sender and subject |
+| `get_sender_stats` | Senders ranked by email volume |
+| `get_email_classifications` | AI category counts for a folder |
+
+### Planned: semantic search tool
+
+Add a `semantic_search_emails` tool that exposes the local embedding index to agents:
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `semantic_search_emails` | `query` (req), `folder` (opt), `limit` (opt, default 10), `min_score` (opt, default 0.65) | Natural-language search across email bodies and subjects using local vector embeddings; returns results ranked by cosine similarity |
+
+**Why this matters for agents**: keyword search requires the agent to guess exact terms the user may have used. Semantic search lets the agent ask *"did the user receive anything about their lease renewal?"* and get relevant results even when none of the emails contain those exact words. This makes AI-assisted inbox queries significantly more useful.
+
+**Pre-condition**: the embedding index must be populated (happens automatically in the background after TUI sync). The tool returns a `not_ready` error with an estimated completion time if the index is still being built.
+
+**Example agent interaction**:
+```
+Tool call: semantic_search_emails(query="package delivery notification", folder="INBOX", limit=5)
+→ Returns top 5 emails semantically similar to package delivery,
+  each with a similarity score, sender, subject, and date.
+```
+
 ---
 
 ## SSH App Mode
