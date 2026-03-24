@@ -1869,7 +1869,7 @@ func wrapLines(text string, width int) []string {
 
 // wrapText wraps text to fit within width runes.
 // stripInvisibleChars removes zero-width and formatting Unicode characters that
-// appear as visible noise in terminal output (e.g. U+034F, U+200B, U+FEFF).
+// appear as visible noise in terminal output (U+200B, U+FEFF, U+034F, etc.).
 // Regular whitespace (space, tab, newline) is preserved.
 func stripInvisibleChars(s string) string {
 	var b strings.Builder
@@ -1879,6 +1879,9 @@ func stripInvisibleChars(s string) string {
 			b.WriteRune(r) // preserve normal whitespace
 		case unicode.Is(unicode.Cf, r): // format characters (zero-width, BOM, etc.)
 			// skip
+		case r == '\u034f': // COMBINING GRAPHEME JOINER — used as invisible spacer in HTML email
+			// skip: xterm.js and some terminal renderers give it nonzero width,
+			// causing lines of "͏ ͏ ͏ ..." to overflow the preview panel.
 		default:
 			b.WriteRune(r)
 		}
