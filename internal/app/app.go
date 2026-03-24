@@ -874,6 +874,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					if m.bodyScrollOffset > 0 {
 						m.bodyScrollOffset--
 					}
+				} else if m.focusedPanel == panelSidebar {
+					return m.handleNavigation(-1)
 				} else {
 					var cmd tea.Cmd
 					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
@@ -890,6 +892,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabTimeline {
 				if m.focusedPanel == panelPreview {
 					m.bodyScrollOffset++
+				} else if m.focusedPanel == panelSidebar {
+					return m.handleNavigation(1)
 				} else {
 					var cmd tea.Cmd
 					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
