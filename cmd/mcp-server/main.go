@@ -43,6 +43,8 @@ func main() {
 	s.AddTool(
 		mcp.NewTool("list_recent_emails",
 			mcp.WithDescription("List the most recent emails in a folder, sorted newest first"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder",
 				mcp.Required(),
 				mcp.Description("IMAP folder name, e.g. INBOX"),
@@ -70,6 +72,9 @@ func main() {
 			}
 
 			var sb strings.Builder
+			if len(emails) == 0 {
+				return mcp.NewToolResultText(fmt.Sprintf("No emails found in %s (folder not found or empty)", folder)), nil
+			}
 			sb.WriteString(fmt.Sprintf("Recent emails in %s (%d results):\n\n", folder, len(emails)))
 			for _, e := range emails {
 				att := ""
@@ -87,6 +92,8 @@ func main() {
 	s.AddTool(
 		mcp.NewTool("search_emails",
 			mcp.WithDescription("Search emails by sender or subject keyword (case-insensitive, up to 100 results)"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder",
 				mcp.Required(),
 				mcp.Description("IMAP folder name"),
@@ -128,6 +135,8 @@ func main() {
 	s.AddTool(
 		mcp.NewTool("get_sender_stats",
 			mcp.WithDescription("Get per-sender email statistics for a folder (count, sorted by volume)"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder",
 				mcp.Required(),
 				mcp.Description("IMAP folder name"),
@@ -178,6 +187,8 @@ func main() {
 	s.AddTool(
 		mcp.NewTool("get_email_classifications",
 			mcp.WithDescription("Get AI classification tag summary for emails in a folder"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder",
 				mcp.Required(),
 				mcp.Description("IMAP folder name"),
