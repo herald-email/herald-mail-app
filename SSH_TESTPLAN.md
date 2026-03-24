@@ -1,0 +1,308 @@
+# SSH Server Test Plan — mail-processor
+
+Manual QA checklist for verifying that the SSH server delivers a fully functional TUI over an SSH connection.
+Run this after any change to `cmd/ssh-server/`, connection handling, or TUI rendering.
+
+---
+
+## Setup
+
+### 1. Build the SSH server binary
+
+```bash
+go build -o /tmp/ssh-server-test ./cmd/ssh-server
+```
+
+### 2. Start the server in a tmux pane
+
+```bash
+# Pane A — server
+tmux new-session -d -s ssh_test
+tmux send-keys -t ssh_test '/tmp/ssh-server-test -config proton.yaml -addr :2222' Enter
+sleep 2   # wait for server to initialise
+```
+
+### 3. Open a second pane for the SSH client
+
+```bash
+# Pane B — client
+tmux split-window -t ssh_test -h
+tmux send-keys -t ssh_test:0.1 'ssh -p 2222 -o StrictHostKeyChecking=no -o LogLevel=ERROR localhost' Enter
+sleep 6   # wait for TUI to load
+```
+
+### 4. Capture screenshots from the client pane
+
+```bash
+tmux capture-pane -t ssh_test:0.1 -p -e > /tmp/ssh_cap.txt
+cat /tmp/ssh_cap.txt
+```
+
+### 5. Send keystrokes to the client pane
+
+```bash
+# Single key
+tmux send-keys -t ssh_test:0.1 'j' ''
+
+# Enter
+tmux send-keys -t ssh_test:0.1 '' ''
+
+# Escape
+tmux send-keys -t ssh_test:0.1 '' ''
+
+sleep 0.3
+```
+
+### 6. Resize the client pane
+
+```bash
+tmux resize-pane -t ssh_test:0.1 -x 80 -y 24
+sleep 0.3
+tmux capture-pane -t ssh_test:0.1 -p -e > /tmp/ssh_cap_80.txt
+```
+
+### 7. Teardown
+
+```bash
+# Quit TUI in client pane
+tmux send-keys -t ssh_test:0.1 'q' ''
+sleep 1
+
+# Kill server
+tmux send-keys -t ssh_test:0.0 'C-c' ''
+sleep 1
+
+tmux kill-session -t ssh_test
+```
+
+---
+
+## Prerequisites
+
+| Item | Required |
+|------|----------|
+| `proton.yaml` present and valid | Yes |
+| `email_cache.db` populated (run TUI first) | Recommended |
+| Port 2222 free on localhost | Yes |
+| `ssh` client available | Yes |
+| Ollama running (for AI test cases) | TC-SS-05 only |
+
+---
+
+## What to Look for in Every Capture
+
+- **Rendering fidelity** — tab bar, table borders, and status bar appear correctly; no garbled escape sequences
+- **Overflow** — no lines wrap past the right edge of the SSH pane
+- **Truncation** — long subjects and senders end with `…`, not broken bytes
+- **Responsiveness** — key presses produce visible changes within ~0.5 seconds
+- **No crash output** — no raw Go stack trace visible in either server or client pane
+
+---
+
+## Test Cases
+
+### TC-SS-01 — Successful connection and initial render
+
+**Steps:**
+1. Follow Setup steps 1–4.
+2. Capture screenshot after TUI loads.
+
+**Expect:**
+- Tab bar visible: `1  Timeline  2  Compose  3  Cleanup`
+- Timeline table populated or "No emails" message shown
+- Folder sidebar visible on the left
+- Status bar at the bottom shows folder name and email count
+- No garbled bytes or raw escape sequences
+- Server pane (Pane A) shows a connection log line
+
+---
+
+### TC-SS-02 — All tabs accessible over SSH
+
+**Steps:**
+1. Connect (TC-SS-01 setup).
+2. Press `1` → capture.
+3. Press `2` → capture.
+4. Press `3` → capture.
+5. Press `1` to return to Timeline.
+
+**Expect:**
+- Each tab highlights correctly in the tab bar
+- Timeline: chronological list with Sender, Subject, Date columns
+- Compose: To / Subject fields and body textarea visible
+- Cleanup: two-panel layout (senders left, messages right)
+- No layout corruption when switching
+
+---
+
+### TC-SS-03 — Email navigation and body preview
+
+**Steps:**
+1. Switch to Timeline (`1`).
+2. Press `j` five times.
+3. Press Enter.
+4. Wait 2 seconds for body to load.
+5. Capture screenshot.
+6. Press `j` three times to scroll the preview body.
+7. Capture screenshot.
+8. Press Escape.
+9. Capture screenshot.
+
+**Expect (step 5 — preview open):**
+- Screen splits: timeline table left, preview panel right
+- Preview header shows From, Date, Subject
+- Body text visible (or "Loading…" briefly)
+- No column overflow in either panel
+
+**Expect (step 7 — after scroll):**
+- Body scrolls down; scroll indicator updates (`line N/M  XX%`)
+- Timeline table cursor does not change
+
+**Expect (step 9 — preview closed):**
+- Layout returns to full-width timeline
+- Cursor remains on the previously selected email
+
+---
+
+### TC-SS-04 — Terminal resize propagates
+
+**Steps:**
+1. Start with client pane at 220×50, capture.
+2. Resize pane to 80×24: `tmux resize-pane -t ssh_test:0.1 -x 80 -y 24`
+3. Wait 0.5 seconds, capture.
+4. Resize back to 220×50.
+5. Wait 0.5 seconds, capture.
+
+**Expect (step 3 — 80×24):**
+- Layout reflows; columns narrow proportionally
+- No overflow; tab bar and status bar still visible
+- Sidebar may auto-hide if too narrow
+
+**Expect (step 5 — 220×50 restored):**
+- Full layout restored; sidebar reappears if it was auto-hidden
+- No stale artefacts from the previous size
+
+---
+
+### TC-SS-05 — Folder switch via sidebar
+
+**Steps:**
+1. Ensure sidebar is visible (press `f` if needed).
+2. Press `Tab` until sidebar is focused.
+3. Press `j` to move to a different folder.
+4. Press Enter to switch.
+5. Wait 3 seconds, capture.
+
+**Expect:**
+- Status bar updates with the new folder name
+- Email list repopulates for the new folder
+- Empty folder shows "No emails in this folder", not blank rows
+
+---
+
+### TC-SS-06 — Graceful quit and server persistence
+
+**Steps:**
+1. Connect (TC-SS-01 setup).
+2. Press `q` in the client pane.
+3. Capture client pane immediately after.
+4. Wait 1 second; attempt a second connection:
+   ```bash
+   tmux send-keys -t ssh_test:0.1 'ssh -p 2222 -o StrictHostKeyChecking=no -o LogLevel=ERROR localhost' Enter
+   sleep 5
+   ```
+5. Capture the new session.
+
+**Expect (step 3):**
+- SSH connection closes cleanly; shell prompt returns in client pane
+- No error output in server pane
+
+**Expect (step 5):**
+- Second connection succeeds and TUI loads normally
+- Server has not crashed or hung
+
+---
+
+### TC-SS-07 — Host key persistence across server restart
+
+**Steps:**
+1. Stop the server (Ctrl-C in Pane A).
+2. Note the host key fingerprint shown when first connecting (or check `.ssh/host_ed25519.pub`).
+3. Restart the server:
+   ```bash
+   tmux send-keys -t ssh_test:0.0 '/tmp/ssh-server-test -config proton.yaml -addr :2222' Enter
+   sleep 2
+   ```
+4. Connect again from the client pane.
+
+**Expect:**
+- No "REMOTE HOST IDENTIFICATION HAS CHANGED" SSH warning
+- TUI loads normally — same experience as the first connection
+
+---
+
+### TC-SS-08 — Multiple simultaneous sessions
+
+**Steps:**
+1. Start server (Pane A).
+2. Open client session 1 in Pane B.
+3. Open a third tmux pane and connect a second client:
+   ```bash
+   tmux split-window -t ssh_test -v
+   tmux send-keys -t ssh_test:0.2 'ssh -p 2222 -o StrictHostKeyChecking=no -o LogLevel=ERROR localhost' Enter
+   sleep 5
+   ```
+4. In session 1, press `j` several times.
+5. Capture both client panes.
+
+**Expect:**
+- Both sessions render independently; navigation in one does not affect the other
+- Server pane shows two connection log lines
+- No crash or data corruption in either session
+
+---
+
+### TC-SS-09 — Missing config file error handling
+
+**Steps:**
+1. Start server with a non-existent config path:
+   ```bash
+   /tmp/ssh-server-test -config /nonexistent/proton.yaml -addr :2223
+   ```
+2. Capture terminal output.
+
+**Expect:**
+- Server prints a clear error message (e.g. `failed to load config: …`)
+- Process exits with a non-zero status code
+- No panic or stack trace
+
+---
+
+## Result Format
+
+After completing all test cases, write up findings using this structure:
+
+```
+## Test Run — <date> — SSH server <version>
+
+### Bugs
+
+| ID  | Severity | TC     | Description                        | Steps to reproduce |
+|-----|----------|--------|------------------------------------|--------------------|
+| B1  | High     | SS-04  | Layout not redrawn after resize    | TC-SS-04 step 3    |
+
+### UX Issues
+
+| ID  | TC     | Description                                | Suggestion                        |
+|-----|--------|--------------------------------------------|-----------------------------------|
+| U1  | SS-01  | No log line when client disconnects        | Add disconnect log to server pane |
+
+### All Good
+
+List test cases that passed with no issues:
+- TC-SS-01 Connection and render: PASS
+- TC-SS-02 Tab switching: PASS
+- ...
+```
+
+Only open a bug or UX item when something is clearly wrong or clearly improvable.

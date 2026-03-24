@@ -137,13 +137,80 @@ Requires [Ollama](https://ollama.com) running locally with the configured model 
 
 ---
 
-## Running Over SSH
+## SSH Server
 
-A built-in SSH server serves the full TUI on port 2222:
+The full TUI can be served over SSH so you can connect from any terminal — remote machine, iPad, phone, etc.
 
+**Build:**
 ```bash
-./bin/ssh-server
+go build -o bin/ssh-server ./cmd/ssh-server
+```
+
+**Start:**
+```bash
+./bin/ssh-server                                  # defaults: port 2222, proton.yaml
+./bin/ssh-server -addr :2222 -config proton.yaml -host-key .ssh/host_ed25519
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-addr` | `:2222` | Listen address |
+| `-config` | `proton.yaml` | Path to config file |
+| `-host-key` | `.ssh/host_ed25519` | SSH host private key (auto-created if missing) |
+
+**Connect:**
+```bash
 ssh localhost -p 2222
+```
+
+- No username or password needed — the server accepts any connection
+- Each SSH session gets its own independent IMAP connection
+- All sessions share the same local email cache and Ollama classifier
+- The host key is generated on first run and reused on restart; subsequent connections will not trigger a host-key warning
+
+---
+
+## MCP Server
+
+The MCP (Model Context Protocol) server exposes your email data as tools that Claude and other AI agents can call directly. It reads from the local SQLite cache — no live IMAP connection is required.
+
+**Prerequisites:** run the TUI at least once to populate `email_cache.db`.
+
+**Build:**
+```bash
+go build -o bin/mcp-server ./cmd/mcp-server
+```
+
+**Claude Code integration** — add to your `.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "mail": {
+      "command": "/absolute/path/to/bin/mcp-server",
+      "args": ["-config", "/absolute/path/to/proton.yaml"]
+    }
+  }
+}
+```
+
+Once registered, Claude can call your email tools in any conversation.
+
+**Available tools:**
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_recent_emails` | `folder` (req), `limit` (opt, default 20) | Most recent emails newest-first |
+| `search_emails` | `folder` (req), `query` (req) | Case-insensitive search across sender and subject |
+| `get_sender_stats` | `folder` (req), `top_n` (opt, default 20) | Senders ranked by email count |
+| `get_email_classifications` | `folder` (req) | AI category counts (requires prior `a` run in TUI) |
+
+**Direct invocation** (for testing without Claude):
+```bash
+# List available tools
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/mcp-server
+
+# Or use the MCP inspector UI
+npx @modelcontextprotocol/inspector ./bin/mcp-server
 ```
 
 ---

@@ -491,6 +491,38 @@ done
 
 ---
 
+### TC-21 — Thread expand/collapse
+
+**Steps:**
+1. Switch to Timeline (`1`), wait for load.
+2. Use `j`/`k` to find a row whose subject begins with `[N]` (collapsed thread, N ≥ 2).
+3. Capture screenshot — note the subject and N value.
+4. Press Enter to expand the thread.
+5. Capture screenshot.
+6. Press `j` once or twice to move to a child email row (prefixed `↳`).
+7. Capture screenshot.
+8. Navigate back to the `[N]` header row and press Enter again to collapse.
+9. Capture screenshot.
+
+**Expect (step 3 — collapsed):**
+- Single row shows `[N] Subject`, sender from the newest email, date of newest email
+
+**Expect (step 5 — expanded):**
+- The `[N]` header row is gone; N individual rows appear in its place
+- First row shows the full sender and subject without `[N]` prefix
+- Subsequent rows show `  ↳ sender` in the sender column
+- No overflow; table width unchanged
+
+**Expect (step 7 — navigating child rows):**
+- Each `↳` row has its own date, size, and attachment indicator
+- Pressing Enter on a `↳` row opens the body preview for that specific email
+
+**Expect (step 9 — collapsed again):**
+- All individual rows are replaced by the single `[N]` header row
+- Timeline length shrinks by N-1 rows
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:
