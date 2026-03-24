@@ -1033,6 +1033,10 @@ func (m *Model) renderEmailPreview() string {
 				if rerr == nil {
 					if rendered, err := renderer.Render(body); err == nil {
 						rendered = strings.TrimRight(rendered, "\n")
+						// Clamp any lines exceeding innerW (e.g. long URLs that
+						// glamour couldn't break at a word boundary).
+						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
+						rendered = strings.TrimRight(rendered, "\n")
 						m.bodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
 						m.bodyWrappedLines = wrapLines(body, innerW)
