@@ -16,6 +16,7 @@ email_cache.db
 proton.yaml
 config.yaml
 *.yaml
+.ssh
 
 # Go build cache
 .cache/
