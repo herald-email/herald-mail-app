@@ -187,24 +187,102 @@ Ties into the daemon architecture: MCP server is just another client of the daem
 | `get_sender_stats` | Senders ranked by email volume |
 | `get_email_classifications` | AI category counts for a folder |
 
-### Planned: semantic search tool
+### Vision: full email client over MCP
 
-Add a `semantic_search_emails` tool that exposes the local embedding index to agents:
+The goal is to make the MCP server a complete programmatic email client — everything an AI agent needs to act as a capable email assistant without ever opening the TUI. Tools are grouped by capability area.
 
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `semantic_search_emails` | `query` (req), `folder` (opt), `limit` (opt, default 10), `min_score` (opt, default 0.65) | Natural-language search across email bodies and subjects using local vector embeddings; returns results ranked by cosine similarity |
+---
 
-**Why this matters for agents**: keyword search requires the agent to guess exact terms the user may have used. Semantic search lets the agent ask *"did the user receive anything about their lease renewal?"* and get relevant results even when none of the emails contain those exact words. This makes AI-assisted inbox queries significantly more useful.
+#### Read & discovery
 
-**Pre-condition**: the embedding index must be populated (happens automatically in the background after TUI sync). The tool returns a `not_ready` error with an estimated completion time if the index is still being built.
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `list_recent_emails` ✓ | `folder`, `limit` | Most recent emails, newest-first |
+| `get_email_body` | `message_id` | Full plain-text body of a single email (fetched live from IMAP if not cached) |
+| `list_folders` | — | All IMAP folders with unread/total counts |
+| `get_folder_stats` | `folder` | Message count, unread count, oldest/newest date, total size |
+| `get_thread` | `message_id` | All emails in the same thread (same normalised subject), ordered by date |
 
-**Example agent interaction**:
-```
-Tool call: semantic_search_emails(query="package delivery notification", folder="INBOX", limit=5)
-→ Returns top 5 emails semantically similar to package delivery,
-  each with a similarity score, sender, subject, and date.
-```
+---
+
+#### Search
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `search_emails` ✓ | `folder`, `query` | Keyword search across sender and subject |
+| `semantic_search_emails` | `query`, `folder`, `limit`, `min_score` | Natural-language search via local embeddings; returns results ranked by cosine similarity |
+| `search_by_date` | `folder`, `after`, `before` | Filter emails within a date range (ISO 8601) |
+| `search_by_sender` | `sender`, `folder` | All emails from an exact sender or domain |
+
+---
+
+#### AI & classification
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `get_email_classifications` ✓ | `folder` | Category counts for a folder |
+| `classify_email` | `message_id` | Run AI classification on a single email and return (and persist) its category |
+| `classify_folder` | `folder`, `limit` | Classify up to N unclassified emails in the folder; returns progress summary |
+| `summarise_email` | `message_id`, `max_words` | Generate a concise summary of an email body using the local Ollama model |
+| `summarise_thread` | `message_id`, `max_words` | Summarise an entire thread into a single paragraph |
+| `extract_action_items` | `message_id` | List tasks, deadlines, or requests mentioned in an email body |
+
+---
+
+#### Compose & send
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `send_email` | `to`, `subject`, `body`, `from` | Send a new email via configured SMTP; body is plain text or Markdown |
+| `reply_to_email` | `message_id`, `body` | Reply to an existing email; pre-fills To, Subject (`Re:`), and quotes original |
+| `forward_email` | `message_id`, `to`, `note` | Forward an email to a new recipient with an optional covering note |
+| `draft_reply` | `message_id`, `instructions` | Ask the local LLM to draft a reply based on natural-language instructions; returns draft text without sending |
+
+---
+
+#### Inbox management
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `get_sender_stats` ✓ | `folder`, `top_n` | Senders ranked by email count |
+| `delete_email` | `message_id` | Move a single email to Trash |
+| `delete_sender` | `sender`, `folder` | Move all emails from a sender to Trash |
+| `move_email` | `message_id`, `destination_folder` | Move an email to a different IMAP folder |
+| `mark_read` | `message_id` | Mark an email as read on the IMAP server |
+| `mark_unread` | `message_id` | Mark an email as unread |
+| `flag_email` | `message_id`, `flag` | Set an IMAP flag (`\Flagged`, `\Answered`, etc.) |
+| `create_folder` | `name` | Create a new IMAP folder |
+
+---
+
+#### System
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `sync_folder` | `folder` | Trigger incremental IMAP sync for a folder; returns count of new messages fetched |
+| `get_sync_status` | — | Report cache freshness: last sync time and pending embedding count |
+| `get_embedding_status` | — | Report semantic index progress (N indexed / M total) |
+
+---
+
+### Why this is useful
+
+An agent with these tools can handle real-world tasks autonomously:
+
+- *"Summarise everything I received from the finance team this week and list any action items."*
+- *"Find the email about my insurance renewal, draft a reply asking for the updated quote, and send it."*
+- *"Move all newsletters from the last 3 months to the Archive folder."*
+- *"Classify my entire inbox and tell me how many emails need a reply."*
+
+The combination of semantic search + summarisation + compose tools means an agent can operate as a capable inbox assistant with no human in the loop for routine tasks.
+
+---
+
+### Implementation notes
+
+- Tools that require live IMAP (`get_email_body`, `reply_to_email`, `send_email`, `move_email`, flag/read tools, `sync_folder`) need the MCP server to hold an IMAP connection. Currently the server is cache-only; this requires adding an optional live backend mode (connect on demand, idle disconnect after N seconds of inactivity).
+- AI tools (`summarise_email`, `draft_reply`, `extract_action_items`) call the same Ollama HTTP API already used by the TUI classifier. No new dependency.
+- `✓` marks tools already implemented.
 
 ---
 
