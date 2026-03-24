@@ -21,6 +21,8 @@ This document describes the long-term direction for this project. It evolves fro
 - [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [ ] Forward email with address input
 - [x] Email deletion (single message, all from sender, all from domain — moves to Trash)
+- [ ] Delete individual email from Timeline (`D` on highlighted row or open preview)
+- [ ] Archive email (`e` key — moves to Archive/All Mail instead of Trash)
 - [ ] Deletion confirmation prompt
 - [ ] Automatic new-email sync (IMAP IDLE + background polling)
 
@@ -433,6 +435,16 @@ sync:
   - Subject prefixed with `Fwd:`
   - Body quoted with a forwarding header (From / Date / Subject / original body text)
 - If the email body is already loaded in the preview panel, it is included in the quote; otherwise only the metadata header is pre-filled
+
+### Delete from Timeline
+- `D` on any Timeline row (collapsed thread, expanded email, or open preview) deletes that specific email
+- For a collapsed `[N]` thread header, `D` prompts: "Delete all N emails in this thread?"
+- Moves to Trash, same as the Cleanup tab path
+
+### Archive from Timeline and Cleanup
+- `e` archives the highlighted email or sender (moves to `Archive` / `[Gmail]/All Mail` / `Archives` — tries known names in order)
+- Archive is non-destructive: email is still searchable and accessible from the Archive folder
+- Works in both Timeline (single email or full thread) and Cleanup (all emails from the selected sender)
 
 ### Deletion confirmation
 - `D` never deletes immediately — it opens an inline prompt in the status bar:
