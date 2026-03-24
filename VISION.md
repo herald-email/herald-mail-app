@@ -20,6 +20,7 @@ This document describes the long-term direction for this project. It evolves fro
 - [ ] Multi-account support (multiple IMAP accounts in one session)
 - [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [ ] Forward email with address input
+- [x] Email deletion (single message, all from sender, all from domain — moves to Trash)
 - [ ] Deletion confirmation prompt
 - [ ] Automatic new-email sync (IMAP IDLE + background polling)
 
