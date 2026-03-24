@@ -61,8 +61,12 @@ func main() {
 	logger.Debug("Server: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	logger.Debug("Username: %s", cfg.Credentials.Username)
 
-	// Create the backend
-	b, err := backend.NewLocal(cfg)
+	// Create AI classifier (talks to local Ollama; nil-safe if not configured)
+	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
+	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+
+	// Create the backend (pass classifier so semantic search can embed queries)
+	b, err := backend.NewLocal(cfg, classifier)
 	if err != nil {
 		logger.Error("Failed to create backend: %v", err)
 		log.Fatalf("Failed to create backend: %v", err)
@@ -70,9 +74,6 @@ func main() {
 
 	// Create SMTP client for compose/reply
 	mailer := appsmtp.New(cfg)
-
-	// Create AI classifier (talks to local Ollama; nil-safe if not configured)
-	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
 
 	// Create the TUI application
 	app := app.New(b, mailer, cfg.Credentials.Username, classifier)

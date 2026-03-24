@@ -384,6 +384,130 @@ func (c *Client) SetGroupByDomain(groupByDomain bool) {
 	c.groupByDomain = groupByDomain
 }
 
+// SearchIMAP performs a server-side IMAP search for messages matching the query text
+// in the From, Subject, or Body fields. Returns matching emails fetched from the server.
+func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	if _, err := c.client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("failed to select folder: %w", err)
+	}
+
+	criteria := imap.NewSearchCriteria()
+	criteria.Text = []string{query}
+	seqNums, err := c.client.Search(criteria)
+	if err != nil {
+		return nil, fmt.Errorf("IMAP search failed: %w", err)
+	}
+	if len(seqNums) == 0 {
+		return nil, nil
+	}
+
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(seqNums...)
+	messages := make(chan *imap.Message, 20)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size}, messages)
+	}()
+
+	var emails []*models.EmailData
+	for msg := range messages {
+		if msg.Envelope == nil {
+			continue
+		}
+		sender := ""
+		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+			addr := msg.Envelope.From[0]
+			if addr.MailboxName != "" && addr.HostName != "" {
+				sender = addr.MailboxName + "@" + addr.HostName
+			}
+		}
+		msgID := msg.Envelope.MessageId
+		if msgID == "" {
+			msgID = fmt.Sprintf("uid-%d", msg.SeqNum)
+		}
+		emails = append(emails, &models.EmailData{
+			MessageID: msgID,
+			UID:       msg.SeqNum,
+			Sender:    sender,
+			Subject:   msg.Envelope.Subject,
+			Date:      msg.Envelope.Date,
+			Size:      int(msg.Size),
+			Folder:    folder,
+		})
+	}
+	if err := <-done; err != nil {
+		return nil, err
+	}
+	return emails, nil
+}
+
+// PollForNewEmails checks for messages newer than sinceDate and returns them.
+// This is used by the background polling goroutine for auto-refresh.
+func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models.EmailData, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	if _, err := c.client.Select(folder, true); err != nil {
+		return nil, fmt.Errorf("failed to select folder: %w", err)
+	}
+
+	criteria := imap.NewSearchCriteria()
+	criteria.Since = sinceDate
+	seqNums, err := c.client.Search(criteria)
+	if err != nil {
+		return nil, err
+	}
+	if len(seqNums) == 0 {
+		return nil, nil
+	}
+
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(seqNums...)
+	messages := make(chan *imap.Message, 20)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size}, messages)
+	}()
+
+	var emails []*models.EmailData
+	for msg := range messages {
+		if msg.Envelope == nil {
+			continue
+		}
+		sender := ""
+		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+			addr := msg.Envelope.From[0]
+			if addr.MailboxName != "" && addr.HostName != "" {
+				sender = addr.MailboxName + "@" + addr.HostName
+			}
+		}
+		msgID := msg.Envelope.MessageId
+		if msgID == "" {
+			msgID = fmt.Sprintf("uid-%d", msg.SeqNum)
+		}
+		emails = append(emails, &models.EmailData{
+			MessageID: msgID,
+			UID:       msg.SeqNum,
+			Sender:    sender,
+			Subject:   msg.Envelope.Subject,
+			Date:      msg.Envelope.Date,
+			Size:      int(msg.Size),
+			Folder:    folder,
+		})
+	}
+	if err := <-done; err != nil {
+		return nil, err
+	}
+	return emails, nil
+}
+
 // sendProgress sends progress update through channel
 func (c *Client) sendProgress(info models.ProgressInfo) {
 	select {

@@ -2,7 +2,10 @@ package cache
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -69,6 +72,72 @@ func (c *Cache) initDB() error {
 		)
 	`
 	if _, err := c.db.Exec(classQuery); err != nil {
+		return err
+	}
+
+	// body_text column for FTS search (added lazily — ignore error if already exists)
+	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN body_text TEXT`); err != nil {
+		logger.Debug("body_text column might already exist: %v", err)
+	}
+
+	// FTS5 virtual table for full-text search over sender + subject + body
+	ftsQuery := `
+		CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
+			sender, subject, body_text,
+			content=emails,
+			content_rowid=rowid
+		)
+	`
+	if _, err := c.db.Exec(ftsQuery); err != nil {
+		logger.Warn("Failed to create FTS5 table (SQLite might lack FTS5 support): %v", err)
+	}
+
+	// Triggers to keep FTS index in sync with emails table
+	for _, trigSQL := range []string{
+		`CREATE TRIGGER IF NOT EXISTS emails_ai AFTER INSERT ON emails BEGIN
+			INSERT INTO emails_fts(rowid, sender, subject, body_text)
+			VALUES (new.rowid, new.sender, new.subject, new.body_text);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS emails_ad AFTER DELETE ON emails BEGIN
+			INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
+			VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS emails_au AFTER UPDATE ON emails BEGIN
+			INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
+			VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
+			INSERT INTO emails_fts(rowid, sender, subject, body_text)
+			VALUES (new.rowid, new.sender, new.subject, new.body_text);
+		END`,
+	} {
+		if _, err := c.db.Exec(trigSQL); err != nil {
+			logger.Debug("FTS trigger creation: %v", err)
+		}
+	}
+
+	// Embeddings table for semantic search
+	embQuery := `
+		CREATE TABLE IF NOT EXISTS email_embeddings (
+			message_id  TEXT PRIMARY KEY,
+			embedding   BLOB NOT NULL,
+			hash        TEXT NOT NULL,
+			embedded_at DATETIME NOT NULL
+		)
+	`
+	if _, err := c.db.Exec(embQuery); err != nil {
+		return err
+	}
+
+	// Saved searches table
+	savedQuery := `
+		CREATE TABLE IF NOT EXISTS saved_searches (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			name       TEXT NOT NULL,
+			query      TEXT NOT NULL,
+			folder     TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL
+		)
+	`
+	if _, err := c.db.Exec(savedQuery); err != nil {
 		return err
 	}
 
@@ -455,4 +524,230 @@ func (c *Cache) GetCachedUIDs(folder string) (map[uint32]bool, error) {
 	}
 
 	return uids, rows.Err()
+}
+
+// CacheBodyText stores the plain-text body of an email for FTS indexing
+func (c *Cache) CacheBodyText(messageID, bodyText string) error {
+	_, err := c.db.Exec(`UPDATE emails SET body_text = ? WHERE message_id = ?`, bodyText, messageID)
+	return err
+}
+
+// SearchEmailsFTS uses the FTS5 index to search sender, subject, and body
+func (c *Cache) SearchEmailsFTS(folder, query string) ([]*models.EmailData, error) {
+	var rows *sql.Rows
+	var err error
+	if folder == "" {
+		rows, err = c.db.Query(`
+			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder
+			FROM emails_fts f
+			JOIN emails e ON e.rowid = f.rowid
+			WHERE emails_fts MATCH ?
+			ORDER BY e.date DESC LIMIT 100`, query)
+	} else {
+		rows, err = c.db.Query(`
+			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder
+			FROM emails_fts f
+			JOIN emails e ON e.rowid = f.rowid
+			WHERE emails_fts MATCH ? AND e.folder = ?
+			ORDER BY e.date DESC LIMIT 100`, query, folder)
+	}
+	if err != nil {
+		// FTS5 might not be available; fall back gracefully
+		return nil, fmt.Errorf("FTS search failed: %w", err)
+	}
+	defer rows.Close()
+	return scanEmailRows(rows)
+}
+
+// SearchEmailsCrossFolder searches across all folders via FTS or LIKE fallback
+func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
+	// Try FTS5 first
+	emails, err := c.SearchEmailsFTS("", query)
+	if err == nil {
+		return emails, nil
+	}
+	// Fallback to LIKE across all folders
+	like := "%" + escapeLike(query) + "%"
+	rows, err := c.db.Query(`
+		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder
+		FROM emails
+		WHERE sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\'
+		ORDER BY date DESC LIMIT 100`, like, like)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEmailRows(rows)
+}
+
+// scanEmailRows is a helper to scan email result rows that include folder column
+func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
+	var emails []*models.EmailData
+	for rows.Next() {
+		var msgID, sender, subject, folder string
+		var uid uint32
+		var date time.Time
+		var size, hasAtt int
+		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder); err != nil {
+			return nil, err
+		}
+		emails = append(emails, &models.EmailData{
+			MessageID:      msgID,
+			UID:            uid,
+			Sender:         sender,
+			Subject:        subject,
+			Date:           date,
+			Size:           size,
+			HasAttachments: hasAtt == 1,
+			Folder:         folder,
+		})
+	}
+	return emails, rows.Err()
+}
+
+// StoreEmbedding saves a float32 embedding vector for a message
+func (c *Cache) StoreEmbedding(messageID string, embedding []float32, hash string) error {
+	buf := make([]byte, len(embedding)*4)
+	for i, v := range embedding {
+		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
+	}
+	_, err := c.db.Exec(
+		`INSERT OR REPLACE INTO email_embeddings (message_id, embedding, hash, embedded_at) VALUES (?, ?, ?, ?)`,
+		messageID, buf, hash, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetAllEmbeddings returns all embeddings for emails in a folder as message_id → vector
+func (c *Cache) GetAllEmbeddings(folder string) (map[string][]float32, error) {
+	rows, err := c.db.Query(`
+		SELECT ee.message_id, ee.embedding
+		FROM email_embeddings ee
+		JOIN emails e ON e.message_id = ee.message_id
+		WHERE e.folder = ?`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string][]float32)
+	for rows.Next() {
+		var msgID string
+		var buf []byte
+		if err := rows.Scan(&msgID, &buf); err != nil {
+			return nil, err
+		}
+		vec := make([]float32, len(buf)/4)
+		for i := range vec {
+			vec[i] = math.Float32frombits(binary.LittleEndian.Uint32(buf[i*4:]))
+		}
+		result[msgID] = vec
+	}
+	return result, rows.Err()
+}
+
+// GetUnembeddedIDs returns message IDs in a folder that have body_text but no embedding
+func (c *Cache) GetUnembeddedIDs(folder string) ([]string, error) {
+	rows, err := c.db.Query(`
+		SELECT e.message_id
+		FROM emails e
+		LEFT JOIN email_embeddings ee ON ee.message_id = e.message_id
+		WHERE e.folder = ? AND ee.message_id IS NULL
+		ORDER BY e.date DESC`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SearchSemantic finds emails in a folder using cosine similarity against queryVec
+func (c *Cache) SearchSemantic(folder string, queryVec []float32, limit int, minScore float64) ([]*models.EmailData, error) {
+	embeddings, err := c.GetAllEmbeddings(folder)
+	if err != nil {
+		return nil, err
+	}
+	type scored struct {
+		messageID string
+		score     float64
+	}
+	var results []scored
+	for msgID, vec := range embeddings {
+		score := cosineSimilarity(queryVec, vec)
+		if score >= minScore {
+			results = append(results, scored{msgID, score})
+		}
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].score > results[j].score })
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+	var emails []*models.EmailData
+	for _, r := range results {
+		email, err := c.GetEmailByID(r.messageID)
+		if err != nil {
+			continue
+		}
+		emails = append(emails, email)
+	}
+	return emails, nil
+}
+
+// cosineSimilarity computes cosine similarity between two float32 vectors
+func cosineSimilarity(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, na, nb float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+		na += float64(a[i]) * float64(a[i])
+		nb += float64(b[i]) * float64(b[i])
+	}
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(na) * math.Sqrt(nb))
+}
+
+// GetSavedSearches returns all saved searches
+func (c *Cache) GetSavedSearches() ([]*models.SavedSearch, error) {
+	rows, err := c.db.Query(`SELECT id, name, query, folder, created_at FROM saved_searches ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var searches []*models.SavedSearch
+	for rows.Next() {
+		s := &models.SavedSearch{}
+		var createdStr string
+		if err := rows.Scan(&s.ID, &s.Name, &s.Query, &s.Folder, &createdStr); err != nil {
+			return nil, err
+		}
+		s.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
+		searches = append(searches, s)
+	}
+	return searches, rows.Err()
+}
+
+// SaveSearch persists a named search query
+func (c *Cache) SaveSearch(name, query, folder string) error {
+	_, err := c.db.Exec(
+		`INSERT INTO saved_searches (name, query, folder, created_at) VALUES (?, ?, ?, ?)`,
+		name, query, folder, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// DeleteSavedSearch removes a saved search by ID
+func (c *Cache) DeleteSavedSearch(id int) error {
+	_, err := c.db.Exec(`DELETE FROM saved_searches WHERE id = ?`, id)
+	return err
 }

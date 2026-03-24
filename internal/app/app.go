@@ -89,6 +89,36 @@ type ChatResponseMsg struct {
 	Err     error
 }
 
+// SearchResultMsg carries search results back to the UI
+type SearchResultMsg struct {
+	Emails []*models.EmailData
+	Query  string
+	Source string // "local", "fts", "imap", "semantic"
+}
+
+// NewEmailsMsg signals new emails arrived via IDLE/polling
+type NewEmailsMsg struct {
+	Emails []*models.EmailData
+	Folder string
+}
+
+// EmailExpungedMsg signals an email was deleted on the server
+type EmailExpungedMsg struct {
+	MessageID string
+	Folder    string
+}
+
+// SyncTickMsg drives the sync countdown timer
+type SyncTickMsg struct{}
+
+// EmbeddingProgressMsg reports background embedding progress
+type EmbeddingProgressMsg struct {
+	Remaining int
+}
+
+// EmbeddingDoneMsg signals background embedding finished
+type EmbeddingDoneMsg struct{}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -188,6 +218,25 @@ type Model struct {
 	showSidebar   bool
 	sidebarCursor int
 	focusedPanel  int // panelSidebar, panelSummary, panelDetails
+
+	// Deletion confirmation
+	pendingDeleteConfirm bool
+	pendingDeleteDesc    string
+	pendingDeleteAction  func() tea.Cmd
+	pendingArchive       bool // true = archive, false = delete
+
+	// Search
+	searchMode          bool
+	searchInput         textinput.Model
+	searchResults       []*models.EmailData // nil = not in search mode
+	timelineEmailsCache []*models.EmailData // full list before search
+
+	// IMAP IDLE / background sync
+	syncStatusMode  string // "idle", "polling", "off"
+	syncCountdown   int    // seconds until next poll
+
+	// Background embedding
+	embeddingPending int
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -329,6 +378,10 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	deletionRequestCh := make(chan models.DeletionRequest, 10)
 	deletionResultCh := make(chan models.DeletionResult, 10)
 
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search emails... (/b body  /* all folders  ? semantic)"
+	searchInput.CharLimit = 200
+
 	m := &Model{
 		backend:            b,
 		progressCh:         b.Progress(),
@@ -365,6 +418,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		inactiveTableStyle: inactiveStyle,
 		deletionRequestCh:  deletionRequestCh,
 		deletionResultCh:   deletionResultCh,
+		searchInput:        searchInput,
 	}
 
 	// Start deletion worker goroutine
@@ -463,6 +517,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.emailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
 		} else {
 			m.emailBody = msg.Body
+			// Cache body text for FTS and embedding (fire-and-forget)
+			if msg.Body != nil && msg.Body.TextPlain != "" && m.selectedTimelineEmail != nil {
+				msgID := m.selectedTimelineEmail.MessageID
+				bodyText := msg.Body.TextPlain
+				go func() {
+					if err := m.backend.CacheBodyText(msgID, bodyText); err != nil {
+						logger.Warn("Failed to cache body text: %v", err)
+					}
+				}()
+			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
 		return m, nil
@@ -503,8 +567,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FoldersLoadedMsg{Folders: folders}
 			}
+			// Start background polling (default 60s interval)
+			pollCmd := m.startPolling(60)
 			// Always load timeline since it's the default startup tab
-			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails())
+			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), pollCmd)
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)
@@ -571,11 +637,77 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stats = stats
 			m.updateSummaryTable()
 			m.updateDetailsTable()
-			return m, nil
+			// Also refresh timeline since emails may have been deleted/archived from there
+			return m, m.loadTimelineEmails()
 		}
 
 		// Continue listening for more results
 		return m, m.listenForDeletionResults()
+
+	case SearchResultMsg:
+		if msg.Query == "" {
+			// Empty query = clear search
+			m.searchResults = nil
+			if m.timelineEmailsCache != nil {
+				m.timelineEmails = m.timelineEmailsCache
+				m.timelineEmailsCache = nil
+			}
+			m.updateTimelineTable()
+		} else {
+			m.searchResults = msg.Emails
+			m.updateTimelineTable()
+		}
+		return m, nil
+
+	case NewEmailsMsg:
+		if msg.Folder == m.currentFolder {
+			// Prepend new emails to visible list
+			m.timelineEmails = append(msg.Emails, m.timelineEmails...)
+			if m.timelineEmailsCache != nil {
+				m.timelineEmailsCache = append(msg.Emails, m.timelineEmailsCache...)
+			}
+			m.updateTimelineTable()
+		}
+		return m, m.listenForNewEmails()
+
+	case EmailExpungedMsg:
+		if msg.Folder == m.currentFolder {
+			filtered := m.timelineEmails[:0]
+			for _, e := range m.timelineEmails {
+				if e.MessageID != msg.MessageID {
+					filtered = append(filtered, e)
+				}
+			}
+			m.timelineEmails = filtered
+			if m.timelineEmailsCache != nil {
+				filtered2 := m.timelineEmailsCache[:0]
+				for _, e := range m.timelineEmailsCache {
+					if e.MessageID != msg.MessageID {
+						filtered2 = append(filtered2, e)
+					}
+				}
+				m.timelineEmailsCache = filtered2
+			}
+			m.updateTimelineTable()
+		}
+		return m, m.listenForExpunged()
+
+	case SyncTickMsg:
+		if m.syncCountdown > 0 {
+			m.syncCountdown--
+		}
+		return m, m.tickSyncCountdown()
+
+	case EmbeddingProgressMsg:
+		m.embeddingPending = msg.Remaining
+		if msg.Remaining > 0 {
+			return m, m.runEmbeddingBatch()
+		}
+		return m, nil
+
+	case EmbeddingDoneMsg:
+		m.embeddingPending = 0
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.updateTableDimensions(msg.Width, msg.Height)
@@ -650,6 +782,56 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Deletion/archive confirmation prompt intercepts all keys
+	if m.pendingDeleteConfirm {
+		switch msg.String() {
+		case "y", "Y":
+			m.pendingDeleteConfirm = false
+			action := m.pendingDeleteAction
+			m.pendingDeleteAction = nil
+			m.pendingDeleteDesc = ""
+			if action != nil {
+				return m, action()
+			}
+		case "n", "N", "esc":
+			m.pendingDeleteConfirm = false
+			m.pendingDeleteAction = nil
+			m.pendingDeleteDesc = ""
+		}
+		return m, nil
+	}
+
+	// Search mode intercepts input when active
+	if m.searchMode && m.activeTab == tabTimeline {
+		switch msg.String() {
+		case "esc":
+			m.searchMode = false
+			m.searchInput.Blur()
+			m.searchInput.SetValue("")
+			m.searchResults = nil
+			if m.timelineEmailsCache != nil {
+				m.timelineEmails = m.timelineEmailsCache
+				m.timelineEmailsCache = nil
+			}
+			m.updateTimelineTable()
+			return m, nil
+		case "ctrl+s":
+			if q := m.searchInput.Value(); q != "" {
+				return m, m.saveCurrentSearch(q)
+			}
+		case "ctrl+i":
+			return m, m.performIMAPSearch(m.searchInput.Value())
+		case "ctrl+c":
+			m.cleanup()
+			return m, tea.Quit
+		default:
+			var cmd tea.Cmd
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			return m, tea.Batch(cmd, m.performSearch(m.searchInput.Value()))
+		}
+		return m, nil
+	}
+
 	// Global quit always works
 	if msg.String() == "q" || msg.String() == "ctrl+c" {
 		m.cleanup()
@@ -742,9 +924,76 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "D":
-		if !m.loading && !m.deleting {
-			m.deleting = true
-			return m, m.deleteSelected()
+		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
+			desc := m.buildDeleteDesc()
+			if desc != "" {
+				m.pendingDeleteConfirm = true
+				m.pendingDeleteDesc = desc
+				m.pendingArchive = false
+				m.pendingDeleteAction = func() tea.Cmd {
+					m.deleting = true
+					return m.deleteSelected()
+				}
+			}
+		}
+		return m, nil
+
+	case "e":
+		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
+			desc := m.buildArchiveDesc()
+			if desc != "" {
+				m.pendingDeleteConfirm = true
+				m.pendingDeleteDesc = desc
+				m.pendingArchive = true
+				m.pendingDeleteAction = func() tea.Cmd {
+					m.deleting = true
+					return m.archiveSelected()
+				}
+			}
+		}
+		return m, nil
+
+	case "F":
+		if !m.loading && m.activeTab == tabTimeline {
+			cursor := m.timelineTable.Cursor()
+			if cursor < len(m.threadRowMap) {
+				ref := m.threadRowMap[cursor]
+				var email *models.EmailData
+				if ref.kind == rowKindThread {
+					email = ref.group.emails[0]
+				} else {
+					email = ref.group.emails[ref.emailIdx]
+				}
+				subject := email.Subject
+				if !strings.HasPrefix(strings.ToLower(subject), "fwd:") {
+					subject = "Fwd: " + subject
+				}
+				fwdBody := fmt.Sprintf("\n\n--- Forwarded message ---\nFrom: %s\nDate: %s\nSubject: %s\n\n",
+					email.Sender, email.Date.Format("Mon, 02 Jan 2006 15:04"), email.Subject)
+				if m.emailBody != nil && m.selectedTimelineEmail != nil &&
+					m.selectedTimelineEmail.MessageID == email.MessageID {
+					fwdBody += m.emailBody.TextPlain
+				}
+				m.activeTab = tabCompose
+				m.composeTo.SetValue("")
+				m.composeSubject.SetValue(subject)
+				m.composeBody.SetValue(fwdBody)
+				m.composeField = 0
+				m.composeTo.Focus()
+				m.composeSubject.Blur()
+				m.composeBody.Blur()
+			}
+		}
+		return m, nil
+
+	case "/":
+		if !m.loading && m.activeTab == tabTimeline && !m.searchMode {
+			m.searchMode = true
+			if m.timelineEmailsCache == nil {
+				m.timelineEmailsCache = m.timelineEmails
+			}
+			m.searchInput.SetValue("")
+			m.searchInput.Focus()
 		}
 		return m, nil
 
@@ -759,8 +1008,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					ref := m.threadRowMap[cursor]
 					if ref.kind == rowKindThread {
 						key := ref.group.normalizedSubject
+						savedCursor := m.timelineTable.Cursor()
 						m.expandedThreads[key] = !m.expandedThreads[key]
 						m.updateTimelineTable()
+						m.timelineTable.SetCursor(savedCursor)
 						return m, nil
 					}
 					email := ref.group.emails[ref.emailIdx]

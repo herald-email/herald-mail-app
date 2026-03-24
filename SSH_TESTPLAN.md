@@ -278,6 +278,83 @@ tmux kill-session -t ssh_test
 
 ---
 
+---
+
+### TC-SS-10 — Deletion confirmation over SSH
+
+**Steps:**
+1. Connect via SSH (TC-SS-01 setup).
+2. Switch to Timeline (`1`), navigate to an email.
+3. Press `D`.
+4. Capture screenshot.
+5. Press `n`, capture screenshot.
+6. Press `D` again, press `y`.
+7. Capture screenshot after reload.
+
+**Expect (step 4):**
+- Status bar turns red with subject and `[y] confirm  [n/Esc] cancel`
+- No layout corruption in the SSH terminal
+
+**Expect (step 5):**
+- Status bar returns to normal; email still present
+
+**Expect (step 7):**
+- Email removed; timeline reloads cleanly
+
+---
+
+### TC-SS-11 — Archive email over SSH
+
+**Steps:**
+1. Connect via SSH, switch to Timeline.
+2. Press `e` on an email.
+3. Capture screenshot (confirmation).
+4. Press `y`.
+5. Wait 3 seconds, capture screenshot.
+
+**Expect:**
+- Confirmation bar shows "Archive …?"
+- After `y`: email removed from timeline
+- No crash or garbled output
+
+---
+
+### TC-SS-12 — Search over SSH (all modes)
+
+**Steps:**
+1. Connect via SSH, switch to Timeline.
+2. Press `/`, type `github`.
+3. Capture screenshot (filtered results).
+4. Clear with Esc.
+5. Press `/`, type `/b invoice` (body search).
+6. Capture screenshot.
+7. Press `/`, type `/* hello` (cross-folder).
+8. Capture screenshot.
+
+**Expect (steps 3, 6, 8):**
+- Key hint bar shows search input text
+- Timeline updates in real time as text is typed
+- No rendering artifacts or overflowing lines
+- Source tags visible in status bar
+
+---
+
+### TC-SS-13 — Background polling notification over SSH
+
+**Steps:**
+1. Connect via SSH, wait for load to complete.
+2. Observe status bar for `↻ Ns` countdown.
+3. (Optional) Send a new email from another client.
+4. Wait for countdown to reach 0.
+5. Capture screenshot.
+
+**Expect:**
+- `↻ Ns` visible and counting down
+- After poll: new email appears without manual refresh (if sent in step 3)
+- No crash, freeze, or layout corruption during poll
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

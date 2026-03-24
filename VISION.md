@@ -15,16 +15,16 @@ This document describes the long-term direction for this project. It evolves fro
 - [x] MCP server hook
 - [x] SSH app mode (charmbracelet/wish)
 - [x] Image rendering (iTerm2 inline images)
-- [ ] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
-- [ ] Semantic search (natural-language queries via local embeddings)
+- [x] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
+- [x] Semantic search (natural-language queries via local embeddings)
 - [ ] Multi-account support (multiple IMAP accounts in one session)
-- [ ] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
-- [ ] Forward email with address input
+- [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
+- [x] Forward email with address input
 - [x] Email deletion (single message, all from sender, all from domain — moves to Trash)
-- [ ] Delete individual email from Timeline (`D` on highlighted row or open preview)
-- [ ] Archive email (`e` key — moves to Archive/All Mail instead of Trash)
-- [ ] Deletion confirmation prompt
-- [ ] Automatic new-email sync (IMAP IDLE + background polling)
+- [x] Delete individual email from Timeline (`D` on highlighted row or open preview)
+- [x] Archive email (`e` key — moves to Archive/All Mail instead of Trash)
+- [x] Deletion confirmation prompt
+- [x] Automatic new-email sync (IMAP IDLE + background polling)
 
 ---
 

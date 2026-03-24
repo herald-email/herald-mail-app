@@ -50,6 +50,7 @@ func main() {
 
 	mailer := appsmtp.New(cfg)
 	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
+	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
 
 	srv, err := wish.NewServer(
 		wish.WithAddress(*addr),
@@ -57,7 +58,7 @@ func main() {
 		wish.WithMiddleware(
 			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				// Each SSH connection gets its own backend (own IMAP connection + shared cache)
-				b, err := backend.NewLocal(cfg)
+				b, err := backend.NewLocal(cfg, classifier)
 				if err != nil {
 					fmt.Fprintf(s, "Failed to create backend: %v\n", err)
 					return nil, nil

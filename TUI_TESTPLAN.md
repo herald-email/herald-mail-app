@@ -523,6 +523,237 @@ done
 
 ---
 
+### TC-22 — Deletion confirmation prompt
+
+**Steps:**
+1. Switch to Timeline (`1`), navigate to an email.
+2. Press `D`.
+3. Capture screenshot.
+4. Press `n`.
+5. Capture screenshot (email still present).
+6. Press `D` again, then press `y`.
+7. Capture screenshot.
+
+**Expect (step 3):**
+- Status bar turns red/highlighted with the email subject and `[y] confirm  [n/Esc] cancel`
+- Key hint bar shows `[y] confirm  │  [n/Esc] cancel`
+- No deletion has started yet
+
+**Expect (step 5):**
+- Status bar returns to normal
+- Email is still present in the timeline
+
+**Expect (step 7):**
+- Email is removed from the timeline after deletion completes
+- Status bar returns to normal after reload
+
+---
+
+### TC-23 — Delete individual email from Timeline
+
+**Steps:**
+1. Switch to Timeline (`1`), navigate to any email row.
+2. Press `D` → `y` to confirm.
+3. Wait for reload.
+4. Capture screenshot.
+
+**Expect:**
+- The specific email row disappears
+- Timeline reloads without the deleted email
+- Cursor stays near its previous position
+
+---
+
+### TC-24 — Archive email (`e` key)
+
+**Steps:**
+1. Switch to Timeline (`1`), navigate to an email.
+2. Press `e`.
+3. Status bar shows archive confirmation prompt.
+4. Press `y`.
+5. Wait for reload, capture screenshot.
+
+**Expect:**
+- Confirmation prompt mentions "Archive" not "Delete"
+- After `y`: email removed from INBOX timeline
+- No crash; server-side: email should appear in Archive folder
+
+Also test in Cleanup tab (panelDetails focused on a message):
+6. Switch to Cleanup (`3`), focus on a message row, press `e` → `y`.
+
+**Expect:**
+- Same confirmation + archive behavior
+
+---
+
+### TC-25 — Forward email (`F` key)
+
+**Steps:**
+1. Switch to Timeline (`1`), navigate to an email.
+2. Press `F`.
+3. Capture screenshot.
+
+**Expect:**
+- Compose tab opens automatically
+- Subject prefixed with `Fwd: ` (original subject preserved)
+- Body contains `--- Forwarded message ---` header with From/Date/Subject
+- If the email body was previously loaded in preview, it appears in the compose body
+- Cursor focus is on the To: field (empty, ready to type)
+
+---
+
+### TC-26 — In-folder search (`/` key)
+
+**Steps:**
+1. Switch to Timeline (`1`).
+2. Press `/`.
+3. Type a sender domain (e.g. `github`).
+4. Capture screenshot.
+5. Press Escape.
+6. Capture screenshot.
+
+**Expect (step 4):**
+- Key hint bar shows search input with query text
+- Timeline shows only matching emails (filtered in real time)
+- Status bar shows result count
+
+**Expect (step 6):**
+- Timeline restores all emails
+- Search input cleared
+
+---
+
+### TC-27 — Full-text body search (`/b` prefix)
+
+**Prerequisites:** Open a few emails in the preview to cache their body text.
+
+**Steps:**
+1. Press `/`, type `/b invoice`.
+2. Capture screenshot.
+
+**Expect:**
+- Results include emails where `invoice` appears in the body (not just subject/sender)
+- Source tag in status bar shows `fts`
+
+---
+
+### TC-28 — Cross-folder search (`/*` prefix)
+
+**Steps:**
+1. Press `/`, type `/* github`.
+2. Capture screenshot.
+
+**Expect:**
+- Results include emails from all folders, not just the current one
+- Emails from different folders appear mixed in the results
+
+---
+
+### TC-29 — Saved search (`Ctrl+S` in search mode)
+
+**Steps:**
+1. Press `/`, type `newsletter`.
+2. Press `Ctrl+S`.
+3. Press Escape.
+4. Capture screenshot.
+
+**Expect:**
+- No error/crash
+- Search saved silently (can be verified in database: `sqlite3 email_cache.db "SELECT * FROM saved_searches"`)
+
+---
+
+### TC-30 — Semantic search (`?` prefix)
+
+**Prerequisites:** Ollama running with `nomic-embed-text` model available.
+
+**Steps:**
+1. Press `/`, type `?meeting tomorrow`.
+2. Wait for results.
+3. Capture screenshot.
+
+**Expect:**
+- Results ranked by semantic similarity (not keyword match)
+- Status bar shows `semantic` source tag
+- If Ollama not available: graceful error in status, no crash
+
+---
+
+### TC-31 — Background polling / new email notification
+
+**Prerequisites:** Another email client or script that can send a new email to INBOX.
+
+**Steps:**
+1. Start the app, wait for load to complete.
+2. Check status bar for `↻ 60s` countdown (or similar).
+3. Send a new email to the account from an external client.
+4. Wait for the polling interval (up to 60 seconds).
+5. Capture screenshot.
+
+**Expect:**
+- Status bar shows `↻ Ns` countdown ticking down each second
+- After poll fires: new email appears at the top of the Timeline without manual refresh
+- No crash or freeze during poll
+
+---
+
+### TC-32 — Vendor preset config (`vendor: gmail`)
+
+**Steps:**
+1. Create a test config file with only:
+   ```yaml
+   vendor: gmail
+   credentials:
+     username: test@gmail.com
+     password: testpass
+   ```
+2. Run: `./bin/mail-processor -config test-vendor.yaml`
+
+**Expect:**
+- App connects to `imap.gmail.com:993` (visible in log)
+- No "missing server.host" validation error
+- Connection fails (wrong credentials) but with an IMAP auth error, not a config error
+
+---
+
+### TC-33 — Deletion confirmation in Cleanup tab
+
+**Steps:**
+1. Switch to Cleanup (`3`), navigate to a sender row.
+2. Press `D`.
+3. Capture screenshot (confirmation prompt).
+4. Press `Esc`.
+5. Confirm no deletion occurred (sender still present).
+
+**Expect:**
+- Red status bar with sender name in the description
+- Press `Esc` cancels cleanly
+
+---
+
+### TC-34 — Thread collapse by pressing Enter on open thread root
+
+**Steps:**
+1. Switch to Timeline (`1`), wait for load.
+2. Use `j`/`k` to find a row whose subject begins with `[N]` (collapsed thread, N ≥ 2).
+3. Press Enter to expand the thread.
+4. Capture screenshot — thread is expanded (N individual rows visible).
+5. Navigate back to the thread root row (the first row of the expanded thread, no `↳` prefix).
+6. Press Enter to collapse the thread.
+7. Capture screenshot.
+
+**Expect (step 4 — expanded):**
+- N individual email rows appear where the `[N]` header was
+- First row has no `↳` prefix; subsequent rows are prefixed with `↳`
+
+**Expect (step 7 — collapsed):**
+- All N individual rows are replaced by a single `[N] Subject` header row
+- Timeline length shrinks by N−1 rows
+- Cursor sits on the collapsed `[N]` header row
+- No layout corruption or blank rows left behind
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

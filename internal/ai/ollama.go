@@ -24,9 +24,10 @@ const (
 
 // Classifier uses a local Ollama instance to tag emails
 type Classifier struct {
-	host   string
-	model  string
-	client *http.Client
+	host           string
+	model          string
+	embeddingModel string
+	client         *http.Client
 }
 
 // New creates a Classifier talking to the given Ollama host
@@ -38,11 +39,19 @@ func New(host, model string) *Classifier {
 		model = "gemma2:2b"
 	}
 	return &Classifier{
-		host:  strings.TrimRight(host, "/"),
-		model: model,
+		host:           strings.TrimRight(host, "/"),
+		model:          model,
+		embeddingModel: "nomic-embed-text",
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+	}
+}
+
+// SetEmbeddingModel overrides the default embedding model
+func (c *Classifier) SetEmbeddingModel(model string) {
+	if model != "" {
+		c.embeddingModel = model
 	}
 }
 
@@ -141,6 +150,41 @@ func (c *Classifier) Chat(messages []ChatMessage) (string, error) {
 }
 
 // Ping checks whether Ollama is running and the model is available
+type embedRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+}
+
+type embedResponse struct {
+	Embedding []float32 `json:"embedding"`
+}
+
+// Embed returns a float32 embedding vector for the given text.
+// Uses the embeddingModel (default: nomic-embed-text) via /api/embeddings.
+func (c *Classifier) Embed(text string) ([]float32, error) {
+	payload := embedRequest{Model: c.embeddingModel, Prompt: text}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Post(c.host+"/api/embeddings", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("embedding request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ollama /api/embeddings returned %d", resp.StatusCode)
+	}
+	var result embedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode embedding response: %w", err)
+	}
+	if len(result.Embedding) == 0 {
+		return nil, fmt.Errorf("ollama returned empty embedding")
+	}
+	return result.Embedding, nil
+}
+
 func (c *Classifier) Ping() error {
 	resp, err := c.client.Get(c.host + "/api/tags")
 	if err != nil {

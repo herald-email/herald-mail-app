@@ -380,6 +380,16 @@ func (m *Model) toggleSelection() {
 // All model state is read and mutations performed here (on the Update goroutine)
 // before a background goroutine is launched, avoiding data races.
 func (m *Model) deleteSelected() tea.Cmd {
+	return m.queueRequests(false)
+}
+
+// archiveSelected archives the selected senders or individual messages via queue.
+func (m *Model) archiveSelected() tea.Cmd {
+	return m.queueRequests(true)
+}
+
+// queueRequests builds deletion/archive requests and sends them to the worker.
+func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	type deleteTarget struct {
 		messageID string
 		sender    string
@@ -389,6 +399,39 @@ func (m *Model) deleteSelected() tea.Cmd {
 
 	folder := m.currentFolder
 	var targets []deleteTarget
+
+	// Timeline tab: delete/archive current email
+	if m.activeTab == tabTimeline {
+		cursor := m.timelineTable.Cursor()
+		if cursor < len(m.threadRowMap) {
+			ref := m.threadRowMap[cursor]
+			var email *models.EmailData
+			if ref.kind == rowKindThread {
+				email = ref.group.emails[0]
+			} else {
+				email = ref.group.emails[ref.emailIdx]
+			}
+			if email != nil {
+				targets = append(targets, deleteTarget{messageID: email.MessageID, folder: email.Folder})
+			}
+		}
+		if len(targets) == 0 {
+			return nil
+		}
+		ch := m.deletionRequestCh
+		go func() {
+			for _, t := range targets {
+				ch <- models.DeletionRequest{
+					MessageID: t.messageID,
+					Folder:    t.folder,
+					IsArchive: isArchive,
+				}
+			}
+		}()
+		m.deletionsPending = len(targets)
+		m.deletionsTotal = len(targets)
+		return m.listenForDeletionResults()
+	}
 
 	if m.detailsTable.Focused() {
 		if len(m.selectedMessages) > 0 {
@@ -439,6 +482,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 				Sender:    t.sender,
 				IsDomain:  t.isDomain,
 				Folder:    t.folder,
+				IsArchive: isArchive,
 			}
 		}
 	}()
@@ -446,7 +490,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 	// Set pending counters
 	m.deletionsPending = len(targets)
 	m.deletionsTotal = len(targets)
-	logger.Info("Queued %d deletion(s)", len(targets))
+	logger.Info("Queued %d deletion(s) isArchive=%v", len(targets), isArchive)
 
 	// Start listening for deletion results
 	return m.listenForDeletionResults()
@@ -461,26 +505,27 @@ func (m *Model) deletionWorker() {
 			Folder:    req.Folder,
 		}
 
-		// Perform deletion based on what's provided
+		// Perform deletion or archive based on what's provided
 		if req.MessageID != "" {
-			// Delete individual message
-			logger.Info("Deleting message: %s", req.MessageID)
-			err := m.backend.DeleteEmail(req.MessageID, req.Folder)
-			result.Error = err
+			if req.IsArchive {
+				logger.Info("Archiving message: %s", req.MessageID)
+				result.Error = m.backend.ArchiveEmail(req.MessageID, req.Folder)
+			} else {
+				logger.Info("Deleting message: %s", req.MessageID)
+				result.Error = m.backend.DeleteEmail(req.MessageID, req.Folder)
+			}
 			result.DeletedCount = 1
 		} else if req.Sender != "" {
-			if req.IsDomain {
-				// Delete all messages from domain
+			if req.IsArchive {
+				logger.Info("Archiving all messages from sender: %s", req.Sender)
+				result.Error = m.backend.ArchiveSenderEmails(req.Sender, req.Folder)
+			} else if req.IsDomain {
 				logger.Info("Deleting all messages from domain: %s", req.Sender)
-				err := m.backend.DeleteDomainEmails(req.Sender, req.Folder)
-				result.Error = err
+				result.Error = m.backend.DeleteDomainEmails(req.Sender, req.Folder)
 			} else {
-				// Delete all messages from sender
 				logger.Info("Deleting all messages from sender: %s", req.Sender)
-				err := m.backend.DeleteSenderEmails(req.Sender, req.Folder)
-				result.Error = err
+				result.Error = m.backend.DeleteSenderEmails(req.Sender, req.Folder)
 			}
-			// We don't know the count here, would need to update Delete*Emails to return it
 		}
 
 		// Send result back
@@ -869,8 +914,14 @@ func (m *Model) updateTimelineTable() {
 		}
 	}
 
+	// Use search results when in search mode, otherwise use full list
+	displayEmails := m.timelineEmails
+	if m.searchMode && m.searchResults != nil {
+		displayEmails = m.searchResults
+	}
+
 	// Build thread groups from the full email list
-	m.threadGroups = buildThreadGroups(m.timelineEmails)
+	m.threadGroups = buildThreadGroups(displayEmails)
 	m.threadRowMap = m.threadRowMap[:0]
 
 	var rows []table.Row
@@ -1152,6 +1203,21 @@ func (m *Model) renderTabBar() string {
 
 // renderStatusBar renders the persistent bottom status bar
 func (m *Model) renderStatusBar() string {
+	// Deletion/archive confirmation prompt overrides everything
+	if m.pendingDeleteConfirm {
+		w := m.windowWidth
+		if w <= 0 {
+			w = 80
+		}
+		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingDeleteDesc)
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255")).
+			Background(lipgloss.Color("160")).
+			Width(w).
+			Padding(0, 1).
+			Render(line)
+	}
+
 	// Folder breadcrumb
 	folderParts := strings.Split(m.currentFolder, "/")
 	breadcrumb := strings.Join(folderParts, " › ")
@@ -1223,6 +1289,30 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, fmt.Sprintf("Tagging… %d/%d", m.classifyDone, m.classifyTotal))
 	}
 
+	// Search result count
+	if m.searchMode {
+		if m.searchResults != nil {
+			parts = append(parts, fmt.Sprintf("Search: %d results", len(m.searchResults)))
+		} else {
+			parts = append(parts, "Search")
+		}
+	}
+
+	// Background embedding progress
+	if m.embeddingPending > 0 {
+		parts = append(parts, fmt.Sprintf("✦ embedding %d", m.embeddingPending))
+	}
+
+	// Sync status
+	switch m.syncStatusMode {
+	case "idle":
+		parts = append(parts, "↻ live")
+	case "polling":
+		if m.syncCountdown > 0 {
+			parts = append(parts, fmt.Sprintf("↻ %ds", m.syncCountdown))
+		}
+	}
+
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")
@@ -1249,7 +1339,12 @@ func (m *Model) renderStatusBar() string {
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	var hints string
-	if m.focusedPanel == panelChat && m.showChat {
+	if m.pendingDeleteConfirm {
+		hints = "[y] confirm  │  [n/Esc] cancel"
+	} else if m.searchMode && m.activeTab == tabTimeline {
+		q := m.searchInput.View()
+		hints = fmt.Sprintf("/ %s  │  esc: clear  │  ctrl+s: save  │  ctrl+i: server search", q)
+	} else if m.focusedPanel == panelChat && m.showChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
@@ -1257,20 +1352,20 @@ func (m *Model) renderKeyHints() string {
 		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
 		if m.focusedPanel == panelPreview {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  esc: close preview  │  R: reply  │  q: quit"
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  esc: close preview  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
 		} else if m.selectedTimelineEmail != nil {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  q: quit"
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
 		} else {
-			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  tab: panels  │  a: AI tag  │  f: sidebar  │  c: chat  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  f: sidebar  │  q: quit"
 		}
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
 			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().
@@ -1406,6 +1501,7 @@ func (m *Model) selectSidebarFolder() {
 	m.stats = nil
 	m.selectedRows = make(map[int]bool)
 	m.selectedMessages = make(map[string]bool)
+	m.focusedPanel = panelSummary
 	logger.Info("Switching to folder: %s", m.currentFolder)
 }
 
@@ -1961,4 +2057,258 @@ func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// --- Deletion/archive confirmation description builders ---
+
+// buildDeleteDesc builds a human-readable description for the deletion confirmation prompt.
+func (m *Model) buildDeleteDesc() string {
+	if m.activeTab == tabTimeline {
+		cursor := m.timelineTable.Cursor()
+		if cursor < len(m.threadRowMap) {
+			ref := m.threadRowMap[cursor]
+			var email *models.EmailData
+			if ref.kind == rowKindThread {
+				email = ref.group.emails[0]
+			} else {
+				email = ref.group.emails[ref.emailIdx]
+			}
+			if email != nil {
+				subj := email.Subject
+				if len(subj) > 50 {
+					subj = subj[:47] + "..."
+				}
+				return fmt.Sprintf("Delete \"%s\"?", subj)
+			}
+		}
+		return ""
+	}
+	if m.detailsTable.Focused() {
+		if len(m.selectedMessages) > 0 {
+			return fmt.Sprintf("Delete %d selected message(s)?", len(m.selectedMessages))
+		}
+		cursor := m.detailsTable.Cursor()
+		if cursor < len(m.detailsEmails) {
+			return fmt.Sprintf("Delete message from %s?", m.detailsEmails[cursor].Sender)
+		}
+		return ""
+	}
+	if len(m.selectedRows) > 0 {
+		return fmt.Sprintf("Delete emails from %d selected sender(s)?", len(m.selectedRows))
+	}
+	cursor := m.summaryTable.Cursor()
+	if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
+		if m.groupByDomain {
+			return fmt.Sprintf("Delete all emails from domain %s?", sender)
+		}
+		return fmt.Sprintf("Delete all emails from %s?", sender)
+	}
+	return ""
+}
+
+// buildArchiveDesc builds a human-readable description for the archive confirmation prompt.
+func (m *Model) buildArchiveDesc() string {
+	if m.activeTab == tabTimeline {
+		cursor := m.timelineTable.Cursor()
+		if cursor < len(m.threadRowMap) {
+			ref := m.threadRowMap[cursor]
+			var email *models.EmailData
+			if ref.kind == rowKindThread {
+				email = ref.group.emails[0]
+			} else {
+				email = ref.group.emails[ref.emailIdx]
+			}
+			if email != nil {
+				subj := email.Subject
+				if len(subj) > 50 {
+					subj = subj[:47] + "..."
+				}
+				return fmt.Sprintf("Archive \"%s\"?", subj)
+			}
+		}
+		return ""
+	}
+	if m.detailsTable.Focused() {
+		if len(m.selectedMessages) > 0 {
+			return fmt.Sprintf("Archive %d selected message(s)?", len(m.selectedMessages))
+		}
+		cursor := m.detailsTable.Cursor()
+		if cursor < len(m.detailsEmails) {
+			return fmt.Sprintf("Archive message from %s?", m.detailsEmails[cursor].Sender)
+		}
+		return ""
+	}
+	if len(m.selectedRows) > 0 {
+		return fmt.Sprintf("Archive emails from %d selected sender(s)?", len(m.selectedRows))
+	}
+	cursor := m.summaryTable.Cursor()
+	if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
+		return fmt.Sprintf("Archive all emails from %s?", sender)
+	}
+	return ""
+}
+
+// --- Search helpers ---
+
+// performSearch runs a local or semantic search and returns the result as a tea.Cmd.
+func (m *Model) performSearch(query string) tea.Cmd {
+	if query == "" {
+		return func() tea.Msg { return SearchResultMsg{Query: ""} }
+	}
+	folder := m.currentFolder
+	bodyMode := strings.HasPrefix(query, "/b ")
+	crossFolder := strings.HasPrefix(query, "/*")
+	semanticMode := strings.HasPrefix(query, "?")
+
+	actualQuery := query
+	switch {
+	case bodyMode:
+		actualQuery = strings.TrimPrefix(query, "/b ")
+	case crossFolder:
+		actualQuery = strings.TrimPrefix(strings.TrimPrefix(query, "/* "), "/*")
+	case semanticMode:
+		actualQuery = strings.TrimPrefix(query, "?")
+	}
+	actualQuery = strings.TrimSpace(actualQuery)
+	if actualQuery == "" {
+		return func() tea.Msg { return SearchResultMsg{Query: ""} }
+	}
+
+	return func() tea.Msg {
+		var emails []*models.EmailData
+		var err error
+		source := "local"
+		switch {
+		case semanticMode:
+			emails, err = m.backend.SearchEmailsSemantic(folder, actualQuery, 20, 0.65)
+			source = "semantic"
+		case bodyMode:
+			emails, err = m.backend.SearchEmails(folder, actualQuery, true)
+			source = "fts"
+		case crossFolder:
+			emails, err = m.backend.SearchEmailsCrossFolder(actualQuery)
+			source = "cross"
+		default:
+			emails, err = m.backend.SearchEmails(folder, actualQuery, false)
+		}
+		if err != nil {
+			logger.Warn("Search error: %v", err)
+			return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+		}
+		return SearchResultMsg{Emails: emails, Query: query, Source: source}
+	}
+}
+
+// performIMAPSearch performs a server-side IMAP search as a tea.Cmd.
+func (m *Model) performIMAPSearch(query string) tea.Cmd {
+	if query == "" {
+		return nil
+	}
+	folder := m.currentFolder
+	return func() tea.Msg {
+		emails, err := m.backend.SearchEmailsIMAP(folder, query)
+		if err != nil {
+			logger.Warn("IMAP search error: %v", err)
+			return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: "imap"}
+		}
+		return SearchResultMsg{Emails: emails, Query: query, Source: "imap"}
+	}
+}
+
+// saveCurrentSearch persists the current search query with an auto-generated name.
+func (m *Model) saveCurrentSearch(query string) tea.Cmd {
+	folder := m.currentFolder
+	name := query
+	if len(name) > 30 {
+		name = name[:27] + "..."
+	}
+	return func() tea.Msg {
+		if err := m.backend.SaveSearch(name, query, folder); err != nil {
+			logger.Warn("Failed to save search: %v", err)
+		}
+		return nil
+	}
+}
+
+// updateTimelineTableFromSearch replaces the displayed emails with search results.
+// Called from the SearchResultMsg handler when searchMode is active.
+func (m *Model) updateTimelineTableFromSearch(emails []*models.EmailData) {
+	if emails == nil {
+		// Restore from cache
+		if m.timelineEmailsCache != nil {
+			m.timelineEmails = m.timelineEmailsCache
+			m.timelineEmailsCache = nil
+		}
+	} else {
+		m.timelineEmails = emails
+	}
+	m.updateTimelineTable()
+}
+
+// --- Background sync helpers ---
+
+// listenForNewEmails returns a Cmd that blocks on the backend's new-emails channel.
+func (m *Model) listenForNewEmails() tea.Cmd {
+	ch := m.backend.NewEmailsCh()
+	return func() tea.Msg {
+		notif := <-ch
+		return NewEmailsMsg{Emails: notif.Emails, Folder: notif.Folder}
+	}
+}
+
+// listenForExpunged is a no-op stub (IMAP expunge notifications not yet implemented).
+func (m *Model) listenForExpunged() tea.Cmd {
+	return nil
+}
+
+// tickSyncCountdown drives the sync countdown ticker.
+func (m *Model) tickSyncCountdown() tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return SyncTickMsg{}
+	})
+}
+
+// startPolling starts background polling and the sync countdown timer.
+func (m *Model) startPolling(interval int) tea.Cmd {
+	m.syncStatusMode = "polling"
+	m.syncCountdown = interval
+	m.backend.StartPolling(m.currentFolder, interval)
+	return tea.Batch(m.listenForNewEmails(), m.tickSyncCountdown())
+}
+
+// --- Embedding helpers ---
+
+// runEmbeddingBatch embeds a batch of emails and returns a progress message.
+func (m *Model) runEmbeddingBatch() tea.Cmd {
+	folder := m.currentFolder
+	return func() tea.Msg {
+		ids, err := m.backend.GetUnembeddedIDs(folder)
+		if err != nil || len(ids) == 0 {
+			return EmbeddingDoneMsg{}
+		}
+		batchSize := 20
+		batch := ids
+		if len(batch) > batchSize {
+			batch = ids[:batchSize]
+		}
+		for _, id := range batch {
+			email, err := m.backend.GetEmailByID(id)
+			if err != nil || email == nil {
+				continue
+			}
+			text := email.Subject + " " + email.Sender
+			vec, err := m.classifier.Embed(text)
+			if err != nil {
+				continue
+			}
+			if err := m.backend.StoreEmbedding(id, vec, ""); err != nil {
+				logger.Warn("Failed to store embedding: %v", err)
+			}
+		}
+		remaining := len(ids) - batchSize
+		if remaining < 0 {
+			remaining = 0
+		}
+		return EmbeddingProgressMsg{Remaining: remaining}
+	}
 }

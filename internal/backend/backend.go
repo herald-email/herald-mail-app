@@ -60,4 +60,61 @@ type Backend interface {
 
 	// Close shuts down all connections and releases resources.
 	Close() error
+
+	// --- Archive ---
+
+	// ArchiveEmail moves a single email to the archive folder.
+	ArchiveEmail(messageID, folder string) error
+
+	// ArchiveSenderEmails moves all emails from a sender to the archive folder.
+	ArchiveSenderEmails(sender, folder string) error
+
+	// --- Search ---
+
+	// SearchEmails finds emails matching query in a folder (subject/sender LIKE, or FTS body).
+	SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error)
+
+	// SearchEmailsCrossFolder finds emails matching query across all folders.
+	SearchEmailsCrossFolder(query string) ([]*models.EmailData, error)
+
+	// SearchEmailsIMAP performs a server-side IMAP search for query text.
+	SearchEmailsIMAP(folder, query string) ([]*models.EmailData, error)
+
+	// SearchEmailsSemantic returns emails ranked by semantic similarity to query.
+	SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error)
+
+	// --- Saved Searches ---
+
+	// GetSavedSearches returns all persisted searches.
+	GetSavedSearches() ([]*models.SavedSearch, error)
+
+	// SaveSearch persists a named search.
+	SaveSearch(name, query, folder string) error
+
+	// DeleteSavedSearch removes a saved search by ID.
+	DeleteSavedSearch(id int) error
+
+	// --- Body text caching ---
+
+	// CacheBodyText stores the plain-text body for FTS indexing.
+	CacheBodyText(messageID, bodyText string) error
+
+	// --- Embeddings ---
+
+	// StoreEmbedding saves a float32 embedding vector for a message.
+	StoreEmbedding(messageID string, embedding []float32, hash string) error
+
+	// GetUnembeddedIDs returns message IDs without embeddings.
+	GetUnembeddedIDs(folder string) ([]string, error)
+
+	// --- Background sync ---
+
+	// NewEmailsCh returns a receive-only channel of new-email notifications.
+	NewEmailsCh() <-chan models.NewEmailsNotification
+
+	// StartPolling starts background polling for new emails at the given interval.
+	StartPolling(folder string, interval int)
+
+	// StopPolling stops background polling.
+	StopPolling()
 }

@@ -71,5 +71,21 @@ type DeletionRequest struct {
 	Sender    string `json:"sender"`
 	IsDomain  bool   `json:"is_domain"` // True if Sender is a domain, not a full email
 	Folder    string `json:"folder"`
+	IsArchive bool   `json:"is_archive"` // True = archive instead of delete
 	Response  chan DeletionResult
+}
+
+// NewEmailsNotification carries new emails found by background polling
+type NewEmailsNotification struct {
+	Emails []*EmailData
+	Folder string
+}
+
+// SavedSearch represents a user-saved search query
+type SavedSearch struct {
+	ID        int
+	Name      string
+	Query     string
+	Folder    string
+	CreatedAt time.Time
 }
