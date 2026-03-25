@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -160,6 +161,13 @@ func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error)
 
 func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
 	return b.imapClient.FetchEmailBody(uid, folder)
+}
+
+func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) error {
+	if att.Data == nil {
+		return fmt.Errorf("attachment data not loaded")
+	}
+	return os.WriteFile(destPath, att.Data, 0644)
 }
 
 func (b *LocalBackend) SetGroupByDomain(v bool) {

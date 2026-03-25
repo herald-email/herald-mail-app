@@ -52,6 +52,9 @@ type Backend interface {
 	// FetchEmailBody fetches the full MIME body of an email by UID from the IMAP server.
 	FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error)
 
+	// SaveAttachment writes attachment data to the given destination path.
+	SaveAttachment(attachment *models.Attachment, destPath string) error
+
 	// SetGroupByDomain toggles domain-level grouping for GetEmailsBySender/GetSenderStatistics.
 	SetGroupByDomain(bool)
 

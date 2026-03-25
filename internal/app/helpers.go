@@ -2,6 +2,10 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -12,8 +16,10 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
+	"mail-processor/internal/backend"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	appsmtp "mail-processor/internal/smtp"
 )
 
 var spinnerChars = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -1069,6 +1075,31 @@ func (m *Model) renderEmailPreview() string {
 			imageLines++
 		}
 
+		// Show downloadable attachments
+		attachStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("111"))
+		selectedAttachStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
+		for i, att := range m.emailBody.Attachments {
+			sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)
+			if att.Size >= 1024*1024 {
+				sizeStr = fmt.Sprintf("%.1f MB", float64(att.Size)/(1024*1024))
+			}
+			label := fmt.Sprintf("[attach] %s  %s  %s", att.Filename, att.MIMEType, sizeStr)
+			label = truncate(label, innerW)
+			if i == m.selectedAttachment {
+				sb.WriteString(selectedAttachStyle.Render(label) + "\n")
+			} else {
+				sb.WriteString(attachStyle.Render(label) + "\n")
+			}
+			imageLines++
+		}
+
+		// Save-path prompt
+		if m.attachmentSavePrompt {
+			promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+			sb.WriteString(promptStyle.Render("Save to: ") + m.attachmentSaveInput.View() + "\n")
+			imageLines++
+		}
+
 		// Body — wrap/render once and cache; re-render only if panel width changed
 		body := stripInvisibleChars(m.emailBody.TextPlain)
 		if body == "" {
@@ -1119,7 +1150,8 @@ func (m *Model) renderEmailPreview() string {
 		if end > totalLines {
 			end = totalLines
 		}
-		sb.WriteString(strings.Join(m.bodyWrappedLines[m.bodyScrollOffset:end], "\n"))
+		sb.WriteString(renderBodyLines(m.bodyWrappedLines, m.bodyScrollOffset, end,
+			m.visualMode, m.visualStart, m.visualEnd))
 
 		// Scroll indicator
 		if totalLines > visibleLines {
@@ -1141,6 +1173,125 @@ func (m *Model) renderEmailPreview() string {
 		PaddingLeft(1)
 
 	return panelStyle.Render(sb.String())
+}
+
+// renderBodyLines joins lines[start:end] into a string, applying a purple
+// highlight to lines within [visualStart, visualEnd] when visualMode is true.
+func renderBodyLines(lines []string, start, end int, visualMode bool, visualStart, visualEnd int) string {
+	if !visualMode {
+		return strings.Join(lines[start:end], "\n")
+	}
+	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	lo, hi := visualStart, visualEnd
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	var sb strings.Builder
+	for i := start; i < end; i++ {
+		if i > start {
+			sb.WriteByte('\n')
+		}
+		if i >= lo && i <= hi {
+			sb.WriteString(highlightStyle.Render(lines[i]))
+		} else {
+			sb.WriteString(lines[i])
+		}
+	}
+	return sb.String()
+}
+
+// renderFullScreenEmail renders the email preview filling the entire terminal.
+// All chrome (tab bar, sidebar, timeline, status bar, key hints) is hidden.
+func (m *Model) renderFullScreenEmail() string {
+	innerW := m.windowWidth - 2
+	if innerW < 10 {
+		innerW = 10
+	}
+
+	var sb strings.Builder
+
+	headerColor := "255"
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
+
+	email := m.selectedTimelineEmail
+	sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
+	sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
+	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+	sb.WriteString(strings.Repeat("─", innerW) + "\n")
+
+	// Reserve 1 row at the bottom for the scroll indicator
+	maxBodyLines := m.windowHeight - 5 // 4 header rows + 1 scroll indicator
+	if maxBodyLines < 1 {
+		maxBodyLines = 1
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+	if m.emailBodyLoading {
+		sb.WriteString(dimStyle.Render("Loading…"))
+	} else if m.emailBody != nil {
+		body := stripInvisibleChars(m.emailBody.TextPlain)
+		if body == "" {
+			body = "(No plain text — HTML only)"
+		}
+		// Re-wrap if width changed (full-screen uses different innerW than split view)
+		if m.bodyWrappedLines == nil || m.bodyWrappedWidth != innerW {
+			if m.emailBody.IsFromHTML {
+				renderer, rerr := glamour.NewTermRenderer(
+					glamour.WithStandardStyle("dark"),
+					glamour.WithWordWrap(innerW),
+				)
+				if rerr == nil {
+					if rendered, err := renderer.Render(body); err == nil {
+						rendered = strings.TrimRight(rendered, "\n")
+						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
+						rendered = strings.TrimRight(rendered, "\n")
+						m.bodyWrappedLines = strings.Split(rendered, "\n")
+					} else {
+						m.bodyWrappedLines = wrapLines(body, innerW)
+					}
+				} else {
+					m.bodyWrappedLines = wrapLines(body, innerW)
+				}
+			} else {
+				m.bodyWrappedLines = wrapLines(body, innerW)
+			}
+			m.bodyWrappedWidth = innerW
+		}
+
+		totalLines := len(m.bodyWrappedLines)
+		maxOffset := totalLines - maxBodyLines
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.bodyScrollOffset > maxOffset {
+			m.bodyScrollOffset = maxOffset
+		}
+
+		end := m.bodyScrollOffset + maxBodyLines
+		if end > totalLines {
+			end = totalLines
+		}
+		sb.WriteString(renderBodyLines(m.bodyWrappedLines, m.bodyScrollOffset, end,
+			m.visualMode, m.visualStart, m.visualEnd))
+
+		// Scroll indicator
+		if totalLines > maxBodyLines {
+			pct := 0
+			if maxOffset > 0 {
+				pct = m.bodyScrollOffset * 100 / maxOffset
+			}
+			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  z/esc: exit full-screen", m.bodyScrollOffset+1, totalLines, pct)
+			sb.WriteString("\n" + dimStyle.Render(indicator))
+		} else {
+			sb.WriteString("\n" + dimStyle.Render(" z/esc: exit full-screen"))
+		}
+	}
+
+	return lipgloss.NewStyle().
+		Width(m.windowWidth).
+		Height(m.windowHeight).
+		Render(sb.String())
 }
 
 // emptyStateView returns a placeholder string the same height as the content
@@ -1337,6 +1488,11 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, "sidebar hidden (too narrow — widen terminal or press f)")
 	}
 
+	// Mouse select mode indicator
+	if m.mouseMode {
+		parts = append([]string{"[mouse] select mode — m: restore TUI"}, parts...)
+	}
+
 	line := strings.Join(parts, "  │  ")
 	w := m.windowWidth
 	if w <= 0 {
@@ -1368,10 +1524,17 @@ func (m *Model) renderKeyHints() string {
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  r: refresh  │  c: chat  │  q: quit"
+		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabTimeline {
 		if m.focusedPanel == panelPreview {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  esc: close preview  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
+			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
+			if m.visualMode {
+				hints = "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual"
+			} else if hasAttachments {
+				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  esc: close  │  q: quit"
+			} else {
+				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit"
+			}
 		} else if m.selectedTimelineEmail != nil {
 			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
 		} else {
@@ -1673,6 +1836,27 @@ func (m *Model) loadClassifications() {
 
 // handleComposeKey handles all key input when on the compose tab
 func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Attachment path input intercepts all keys while active
+	if m.attachmentInputActive {
+		switch msg.String() {
+		case "enter":
+			path := expandTilde(m.attachmentPathInput.Value())
+			m.attachmentInputActive = false
+			m.attachmentPathInput.SetValue("")
+			m.attachmentPathInput.Blur()
+			return m, addAttachmentCmd(path)
+		case "esc":
+			m.attachmentInputActive = false
+			m.attachmentPathInput.SetValue("")
+			m.attachmentPathInput.Blur()
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.attachmentPathInput, cmd = m.attachmentPathInput.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "1":
 		m.activeTab = tabTimeline
@@ -1698,6 +1882,11 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.sendCompose()
 	case "ctrl+p":
 		m.composePreview = !m.composePreview
+		return m, nil
+	case "ctrl+a":
+		m.attachmentInputActive = true
+		m.attachmentPathInput.SetValue("")
+		m.attachmentPathInput.Focus()
 		return m, nil
 	case "esc":
 		m.composeStatus = ""
@@ -1735,12 +1924,15 @@ func (m *Model) cycleComposeField() {
 	}
 }
 
-// sendCompose sends the composed message via SMTP
+// sendCompose sends the composed message via SMTP as multipart/alternative
+// (HTML + plain-text fallback). The body textarea is treated as Markdown.
+// Any staged attachments are sent as multipart/mixed parts.
 func (m *Model) sendCompose() tea.Cmd {
 	from := m.fromAddress
 	to := m.composeTo.Value()
 	subject := m.composeSubject.Value()
-	body := m.composeBody.Value()
+	markdownBody := m.composeBody.Value()
+	attachments := m.composeAttachments // snapshot; cleared on success in Update()
 	return func() tea.Msg {
 		if m.mailer == nil {
 			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
@@ -1751,7 +1943,8 @@ func (m *Model) sendCompose() tea.Cmd {
 		if subject == "" {
 			return ComposeStatusMsg{Message: "Error: Subject is empty"}
 		}
-		err := m.mailer.Send(from, to, subject, body)
+		htmlBody, plainText := appsmtp.MarkdownToHTMLAndPlain(markdownBody)
+		err := m.mailer.SendWithAttachments(from, to, subject, plainText, htmlBody, attachments)
 		if err != nil {
 			return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 		}
@@ -1823,11 +2016,37 @@ func (m *Model) renderComposeView() string {
 		sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 	}
 
+	// Attachment path input prompt
+	if m.attachmentInputActive {
+		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+		sb.WriteString(promptStyle.Render("Attach file: ") + m.attachmentPathInput.View() + "\n")
+	}
+
+	// Staged attachments list
+	for _, att := range m.composeAttachments {
+		sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)
+		if att.Size >= 1024*1024 {
+			sizeStr = fmt.Sprintf("%.1f MB", float64(att.Size)/(1024*1024))
+		}
+		warnIcon := ""
+		if att.Size > 10*1024*1024 {
+			warnIcon = " ⚠ (>10 MB)"
+		}
+		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
+		attachColor := "111"
+		if att.Data == nil {
+			attachColor = "196"
+		}
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(attachColor)).Render(label) + "\n")
+	}
+
 	// Status message
 	if m.composeStatus != "" {
 		color := "86"
-		if strings.HasPrefix(m.composeStatus, "Error") || strings.HasPrefix(m.composeStatus, "Send failed") {
+		if strings.HasPrefix(m.composeStatus, "Error") || strings.HasPrefix(m.composeStatus, "Send failed") || strings.HasPrefix(m.composeStatus, "Attach error") {
 			color = "196"
+		} else if strings.HasPrefix(m.composeStatus, "Warning") {
+			color = "214"
 		}
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(m.composeStatus) + "\n")
 	}
@@ -1960,6 +2179,72 @@ func (m *Model) renderChatPanel() string {
 // wrapLines splits text on newlines first, then word-wraps each paragraph to
 // fit within width runes. Consecutive blank lines are collapsed to one blank
 // line, so over-spaced HTML-converted bodies look reasonable.
+// expandTilde replaces a leading "~/" with the user's home directory.
+func expandTilde(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
+}
+
+// saveAttachmentCmd returns a tea.Cmd that writes attachment data to destPath.
+func saveAttachmentCmd(b backend.Backend, att *models.Attachment, destPath string) tea.Cmd {
+	return func() tea.Msg {
+		if err := b.SaveAttachment(att, destPath); err != nil {
+			return AttachmentSavedMsg{Err: err}
+		}
+		return AttachmentSavedMsg{Filename: att.Filename, Path: destPath}
+	}
+}
+
+// addAttachmentCmd reads a file from path and returns an AttachmentAddedMsg.
+func addAttachmentCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		info, err := os.Stat(path)
+		if err != nil {
+			return AttachmentAddedMsg{Err: fmt.Errorf("cannot read %s: %w", path, err)}
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return AttachmentAddedMsg{Err: err}
+		}
+		return AttachmentAddedMsg{
+			Attachment: models.ComposeAttachment{
+				Path:     path,
+				Filename: filepath.Base(path),
+				Size:     info.Size(),
+				Data:     data,
+			},
+		}
+	}
+}
+
+// copyToClipboard returns a tea.Cmd that writes text to the system clipboard.
+// Tries pbcopy (macOS), wl-copy (Wayland), then xclip (X11). Failures are
+// logged and silently dropped so the TUI keeps running.
+func copyToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("pbcopy")
+		default:
+			if os.Getenv("WAYLAND_DISPLAY") != "" {
+				cmd = exec.Command("wl-copy")
+			} else {
+				cmd = exec.Command("xclip", "-sel", "clip")
+			}
+		}
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err != nil {
+			logger.Warn("clipboard copy failed: %v", err)
+		}
+		return nil
+	}
+}
+
 func wrapLines(text string, width int) []string {
 	// Normalize CRLF and strip trailing whitespace
 	text = strings.ReplaceAll(text, "\r\n", "\n")

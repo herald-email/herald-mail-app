@@ -764,6 +764,186 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 ---
 
+### TC-35 — Full-screen email view (`z` key)
+
+**Steps:**
+1. Switch to Timeline (`1`), open body preview on any email (Enter).
+2. Wait for body to load.
+3. Press `z` to enter full-screen mode.
+4. Capture screenshot.
+5. Press `j` several times to scroll.
+6. Capture screenshot.
+7. Press `z` again to exit.
+8. Capture screenshot.
+9. Repeat: re-enter full-screen with `z`, then press Escape to exit.
+10. Capture screenshot after Escape.
+
+**Expect (step 4 — full-screen):**
+- Tab bar, sidebar, and timeline table are all hidden
+- Email body fills the entire terminal width and height
+- From / Date / Subject header visible at the top
+- Scroll indicator at the bottom: `z/esc: exit full-screen`
+
+**Expect (step 6 — scrolled):**
+- Body scrolls; scroll indicator updates (`line N/M  XX%`)
+
+**Expect (steps 7 and 10 — exit):**
+- Layout restores to the split timeline + preview view
+- No blank panels or rendering artifacts
+
+---
+
+### TC-36 — Mouse mode (`m` key)
+
+**Steps:**
+1. Open an email body preview (Enter on Timeline).
+2. Tab to focus the preview panel.
+3. Press `m` to enter mouse mode.
+4. Capture screenshot.
+5. Press `m` again to restore TUI mouse handling.
+6. Capture screenshot.
+
+**Expect (step 4 — mouse mode):**
+- Status bar prepends `[mouse] select mode — m: restore TUI`
+- Terminal mouse events are released to the OS (native text selection active)
+
+**Expect (step 6 — restored):**
+- Status bar returns to normal (no mouse-mode prefix)
+- TUI mouse handling is re-enabled
+
+---
+
+### TC-37 — Visual selection (`v`, `y`, `Y`, `yy`)
+
+**Prerequisites:** Email with multi-line body open in preview.
+
+**Steps:**
+1. Open an email body preview; wait for body to load.
+2. Tab to focus the preview panel.
+3. Press `v` to enter visual mode.
+4. Capture screenshot — first line should be highlighted (purple).
+5. Press `j` three times to extend the selection.
+6. Capture screenshot — four lines highlighted.
+7. Press `y` to copy the selection to clipboard.
+8. Open a terminal editor or text area and paste to verify.
+9. Open the preview again; focus preview panel; press `yy`.
+10. Paste and verify the current line was copied.
+11. Press `Y` to copy the entire body.
+12. Paste and verify all body lines are present.
+13. Press `v` to enter visual mode, press `j` once, then press Esc.
+14. Capture screenshot — visual mode exits; no highlight.
+
+**Expect (step 4):**
+- Key hint bar changes to: `j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual`
+- First visible line highlighted with purple background
+
+**Expect (step 6):**
+- Lines 1–4 highlighted; remaining lines normal
+
+**Expect (steps 8, 10, 12):**
+- Clipboard content matches the selected text exactly
+
+**Expect (step 14):**
+- Visual mode exits cleanly; body renders normally (no highlight)
+- Key hint bar returns to normal preview hints
+
+---
+
+### TC-38 — Compose: Markdown → HTML send
+
+**Prerequisites:** Live SMTP configured in `proton.yaml`.
+
+**Steps:**
+1. Switch to Compose (`2`).
+2. Fill To, Subject, and Body (include `**bold**` and `_italic_` in body).
+3. Press `Ctrl+P` to preview — verify Markdown renders.
+4. Press `Ctrl+P` again to return to edit mode.
+5. Press `Ctrl+S` to send.
+6. Capture screenshot after send.
+7. In a separate email client, open the sent message and view in HTML mode.
+
+**Expect (step 6):**
+- Status bar shows `Email sent!` or similar confirmation
+
+**Expect (step 7):**
+- Received email renders `bold` in bold and `italic` in italic in the HTML view
+- A plain-text fallback is also present (multipart/alternative)
+
+---
+
+### TC-39 — Receive attachments: display in preview
+
+**Prerequisites:** An email with at least one attachment (PDF, image, or similar) present in the mailbox.
+
+**Steps:**
+1. Switch to Timeline (`1`), locate an email with attachment indicator.
+2. Press Enter to open preview; wait for body to load.
+3. Capture screenshot.
+
+**Expect:**
+- Preview panel shows `[attach] filename.pdf  application/pdf  X KB` (or similar) below the body
+- Key hint bar shows `s: save attachment` when preview is focused
+- No crash or blank panel
+
+---
+
+### TC-40 — Save attachment (`s` key)
+
+**Prerequisites:** TC-39 prerequisite met; email with attachment open in preview.
+
+**Steps:**
+1. Open the email with attachment (TC-39 steps 1–2).
+2. Tab to focus the preview panel.
+3. Press `s`.
+4. Capture screenshot — save-path input should appear.
+5. Type a destination path (e.g. `/tmp/test-att.pdf`).
+6. Press Enter.
+7. Capture screenshot.
+8. Verify the file exists: `ls -la /tmp/test-att.pdf`
+
+**Expect (step 4):**
+- `Save to:` input appears pre-filled with `~/Downloads/<filename>`
+- Esc cancels the prompt without saving
+
+**Expect (step 7):**
+- Status bar or preview shows a confirmation message
+- No crash or error
+
+**Expect (step 8):**
+- File exists at the specified path with non-zero size
+
+---
+
+### TC-41 — Send with attachment (`ctrl+a`)
+
+**Prerequisites:** Live SMTP configured; a small test file at a known path (e.g. `/tmp/test.txt`).
+
+**Steps:**
+1. Switch to Compose (`2`).
+2. Fill To and Subject.
+3. Press `Ctrl+A` to open the attachment path input.
+4. Capture screenshot.
+5. Type `/tmp/test.txt`, press Enter.
+6. Capture screenshot — file should appear in staged attachment list.
+7. Press `Ctrl+A` again and type a path to a file >10 MB (if available) — verify size warning.
+8. Press `Ctrl+S` to send.
+9. In a separate email client, open the sent message.
+
+**Expect (step 4):**
+- Attachment path input appears below the body area
+
+**Expect (step 6):**
+- Staged attachment list shows `[attach] test.txt  (N KB)`
+- Compose status shows no error
+
+**Expect (step 7):**
+- Compose status shows a size warning if file >10 MB
+
+**Expect (step 9):**
+- Received email has the attachment intact with correct filename and size
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

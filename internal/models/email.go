@@ -55,6 +55,7 @@ type EmailBody struct {
 	TextPlain    string
 	TextHTML     string
 	InlineImages []InlineImage
+	Attachments  []Attachment
 	IsFromHTML   bool // TextPlain was converted from HTML; render via markdown
 }
 
@@ -63,6 +64,23 @@ type InlineImage struct {
 	ContentID string
 	MIMEType  string
 	Data      []byte
+}
+
+// Attachment represents a downloadable email attachment (not inline).
+type Attachment struct {
+	Filename string
+	MIMEType string
+	Size     int    // bytes
+	PartPath string // MIME part path for targeted fetch (e.g. "2", "1.2")
+	Data     []byte // populated during FetchEmailBody (full message already in memory)
+}
+
+// ComposeAttachment is a local file staged for sending.
+type ComposeAttachment struct {
+	Path     string
+	Filename string
+	Size     int64
+	Data     []byte // loaded at add time; nil = load error
 }
 
 // Deletion Request

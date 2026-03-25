@@ -72,7 +72,7 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		return &models.EmailBody{TextPlain: string(raw)}, nil
 	}
 	result := &models.EmailBody{}
-	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result)
+	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result, "")
 	// If there is no plain-text part, convert HTML to markdown
 	if result.TextPlain == "" && result.TextHTML != "" {
 		result.TextPlain = htmlToMarkdown(result.TextHTML)
@@ -289,7 +289,7 @@ func stripTags(s string) string {
 	return sb.String()
 }
 
-func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.EmailBody) {
+func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.EmailBody, partPath string) {
 	ct := header.Get("Content-Type")
 	if ct == "" {
 		ct = "text/plain"
@@ -301,12 +301,18 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 
 	if strings.HasPrefix(mediaType, "multipart/") {
 		mr := multipart.NewReader(body, params["boundary"])
+		partIdx := 1
 		for {
 			part, err := mr.NextPart()
 			if err != nil {
 				break
 			}
-			parseMIMEPart(textproto.MIMEHeader(part.Header), part, result)
+			childPath := fmt.Sprintf("%d", partIdx)
+			if partPath != "" {
+				childPath = partPath + "." + childPath
+			}
+			parseMIMEPart(textproto.MIMEHeader(part.Header), part, result, childPath)
+			partIdx++
 		}
 		return
 	}
@@ -327,9 +333,9 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 			result.TextHTML = string(data)
 		}
 	default:
+		disp := strings.ToLower(header.Get("Content-Disposition"))
 		if strings.HasPrefix(mediaType, "image/") {
-			disp := strings.ToLower(header.Get("Content-Disposition"))
-			// Include inline images and images with no explicit disposition
+			// Inline images (no disposition or explicitly inline) go to InlineImages
 			if disp == "" || strings.HasPrefix(disp, "inline") {
 				cid := strings.Trim(header.Get("Content-ID"), "<>")
 				result.InlineImages = append(result.InlineImages, models.InlineImage{
@@ -337,9 +343,52 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 					MIMEType:  mediaType,
 					Data:      data,
 				})
+				return
+			}
+		}
+		// Everything else with an explicit attachment disposition (or unknown
+		// non-text/non-image types) is treated as a downloadable attachment.
+		if strings.HasPrefix(disp, "attachment") || (!strings.HasPrefix(mediaType, "text/") && !strings.HasPrefix(mediaType, "multipart/")) {
+			filename := extractAttachmentFilename(header)
+			if filename == "" {
+				filename = fmt.Sprintf("attachment_%s", partPath)
+			}
+			result.Attachments = append(result.Attachments, models.Attachment{
+				Filename: filename,
+				MIMEType: mediaType,
+				Size:     len(data),
+				PartPath: partPath,
+				Data:     data,
+			})
+		}
+	}
+}
+
+// extractAttachmentFilename parses the filename from Content-Disposition or
+// Content-Type parameters.
+func extractAttachmentFilename(header textproto.MIMEHeader) string {
+	dec := mime.WordDecoder{}
+	if disp := header.Get("Content-Disposition"); disp != "" {
+		if _, params, err := mime.ParseMediaType(disp); err == nil {
+			if fn := params["filename"]; fn != "" {
+				if decoded, err := dec.DecodeHeader(fn); err == nil {
+					return decoded
+				}
+				return fn
 			}
 		}
 	}
+	if ct := header.Get("Content-Type"); ct != "" {
+		if _, params, err := mime.ParseMediaType(ct); err == nil {
+			if fn := params["name"]; fn != "" {
+				if decoded, err := dec.DecodeHeader(fn); err == nil {
+					return decoded
+				}
+				return fn
+			}
+		}
+	}
+	return ""
 }
 
 // base64LineStripper wraps a reader and drops CR and LF bytes.

@@ -362,6 +362,61 @@ tmux kill-session -t ssh_test
 
 ---
 
+### TC-SS-14 — Full-screen email view over SSH
+
+**Steps:**
+1. Connect via SSH (TC-SS-01 setup).
+2. Switch to Timeline (`1`), open body preview on any email.
+3. Wait for body to load.
+4. Press `z` to enter full-screen.
+5. Capture screenshot.
+6. Press `j` several times to scroll.
+7. Capture screenshot.
+8. Press `z` to exit; capture screenshot.
+9. Re-enter with `z`, then press Escape; capture screenshot.
+
+**Expect (step 5 — full-screen over SSH):**
+- Tab bar, sidebar, and timeline table hidden
+- Email body fills the entire SSH pane width and height
+- From / Date / Subject header at top; scroll indicator at bottom
+- No garbled escape sequences or rendering artifacts
+
+**Expect (step 7 — scrolled):**
+- Body scrolls; scroll indicator updates; timeline cursor unchanged
+
+**Expect (steps 8 and 9 — exit):**
+- Split layout restored; no blank panels or lingering full-screen state
+
+---
+
+### TC-SS-15 — Attachment display over SSH
+
+**Prerequisites:** An email with at least one attachment present in the mailbox.
+
+**Steps:**
+1. Connect via SSH (TC-SS-01 setup).
+2. Switch to Timeline (`1`), locate an email with attachment indicator.
+3. Press Enter to open the body preview; wait for load.
+4. Capture screenshot.
+5. Tab to focus the preview panel.
+6. Press `s`.
+7. Capture screenshot (save-path prompt).
+8. Press Escape to cancel.
+
+**Expect (step 4):**
+- `[attach] filename  mime/type  X KB` label visible below body
+- Key hint bar shows `s: save attachment`
+- No layout corruption or garbled output over SSH
+
+**Expect (step 7):**
+- Save-path input appears with pre-filled `~/Downloads/<filename>`
+- No crash or rendering artifacts
+
+**Expect (step 8):**
+- Prompt dismissed; preview returns to normal state
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

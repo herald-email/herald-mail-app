@@ -34,6 +34,14 @@ ollama:
   model: "gemma2"
 ```
 
+**Vendor presets** — skip the `server` block by using a preset:
+
+```yaml
+vendor: protonmail   # sets host=127.0.0.1 port=1143 smtp.port=1025
+# or
+vendor: gmail        # sets host=imap.gmail.com port=993
+```
+
 Secure the file: `chmod 600 proton.yaml`
 
 On first launch, all emails are fetched into a local SQLite cache. Subsequent launches only sync new messages, so startup is fast.
@@ -58,28 +66,60 @@ Your inbox as a chronological list. Emails with the same subject are grouped int
 - `↑`/`↓` or `k`/`j` — navigate the list
 - `Enter` — open the email body (splits the screen; plain text or converted from HTML)
 - `Esc` — close the preview
+- `z` — toggle full-screen email view (hides tab bar, sidebar, and timeline; fills the terminal)
+
+**Full-screen mode keys:** `j`/`k` scroll, `z` or `Esc` exit.
 
 **Threads:**
 - A thread header showing `[3] Subject` means 3 emails share that subject
 - `Enter` on a thread header — expands it to show individual emails
 - `Enter` again on the header — collapses it back
 
-**Replying:**
-- `R` — opens Compose pre-filled with the sender's address and `Re:` subject
+**Attachments:**
+- Emails with attachments show an attachment count in the timeline
+- In the body preview, each attachment is listed as `[attach] filename  mime/type  size`
+- `s` — save the highlighted attachment (prompts for a destination path; defaults to `~/Downloads/`)
 
-**Deleting:**
-- `D` — moves the highlighted email to Trash
+**Text selection and clipboard:**
+- `v` — enter visual mode; the current line is highlighted
+- `j`/`k` — extend the selection down/up
+- `y` — copy the selection to the system clipboard (macOS: pbcopy; Wayland: wl-copy; X11: xclip)
+- `yy` — copy the current line (press `y` twice without entering visual mode)
+- `Y` — copy the entire email body
+- `Esc` — cancel visual mode
+- `m` — release TUI mouse handling so you can select text with the terminal's native cursor;
+         press `m` again to restore TUI interaction
+
+**Replying and forwarding:**
+- `R` — opens Compose pre-filled with the sender's address and `Re:` subject
+- `F` — opens Compose pre-filled with `Fwd:` subject and a forwarded-message block
+
+**Deleting and archiving:**
+- `D` — confirmation prompt → `y` to delete, `n`/`Esc` to cancel
+- `e` — confirmation prompt → `y` to move to Archive
+
+**Search:**
+- `/` — in-folder search (filters by sender and subject in real time)
+- `/b <query>` — full-text body search (uses cached body text)
+- `/* <query>` — cross-folder search (all folders)
+- `? <query>` — semantic similarity search (requires Ollama with `nomic-embed-text`)
+- `Ctrl+I` — IMAP server-side search (for terms not yet cached locally)
+- `Ctrl+S` (in search mode) — save the current search with a name
+- `Esc` — clear search and restore the full email list
 
 ---
 
 ## Tab 2 — Compose
 
-Write and send email.
+Write and send email. The body is interpreted as Markdown and sent as both HTML and plain text.
 
-- `Tab` cycles between: **To**, **Subject**, **Body** fields
-- `Ctrl+P` — toggle Markdown preview (body is rendered with formatting)
-- `Ctrl+S` — send the email via SMTP
+- `Tab` — cycle between **To**, **Subject**, **Body** fields
+- `Ctrl+P` — toggle Markdown preview (rendered with glamour)
+- `Ctrl+A` — add a file attachment (prompts for a path; the file is staged below the body)
+- `Ctrl+S` — send the email via SMTP (multipart/alternative HTML + plain text; multipart/mixed if attachments are staged)
 - `Esc` — cancel and return to Timeline
+
+Staged attachments are listed below the body as `[attach] filename (N KB)`. A warning appears if any attachment exceeds 10 MB.
 
 ---
 
@@ -94,7 +134,8 @@ Find and delete bulk senders. The left panel groups all emails by sender (or dom
 **Selecting and deleting:**
 - `Space` — select/deselect the highlighted sender or individual message
 - `Enter` — load individual messages for the highlighted sender
-- `D` — delete all emails from selected senders (or selected individual messages)
+- `D` — delete all emails from selected senders (or selected individual messages); confirmation prompt
+- `e` — archive all emails from the highlighted sender; confirmation prompt
 
 Deletion moves emails to Trash and runs in the background. The status bar shows progress; you can keep navigating while it runs.
 
@@ -117,7 +158,11 @@ Requires [Ollama](https://ollama.com) running locally with the configured model 
 **Chat panel:**
 - `c` — open/close a chat panel on the right side
 - Ask questions about your inbox in plain language (e.g. "Which senders have the most emails?")
-- `Enter` to send, the response streams back in the panel
+- `Enter` to send; the response streams back in the panel
+
+**Semantic search:**
+- `/? <query>` — find emails by meaning rather than keyword
+- Requires the `nomic-embed-text` model: `ollama pull nomic-embed-text`
 
 ---
 
@@ -134,6 +179,34 @@ Requires [Ollama](https://ollama.com) running locally with the configured model 
 | `l` / `L` | Toggle live log viewer |
 | `↑`/`k`, `↓`/`j` | Navigate |
 | `Tab` | Cycle focus between panels |
+
+### Timeline / Preview Keys
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Open body preview (or expand/collapse thread) |
+| `Esc` | Close preview |
+| `z` | Toggle full-screen email view |
+| `R` | Reply (opens Compose) |
+| `F` | Forward (opens Compose) |
+| `D` | Delete with confirmation |
+| `e` | Archive with confirmation |
+| `/` | Start search |
+| `v` | Enter visual selection mode |
+| `y` (in visual mode) | Copy selection to clipboard |
+| `yy` | Copy current line to clipboard |
+| `Y` | Copy entire body to clipboard |
+| `m` | Toggle mouse mode (release/restore TUI mouse handling) |
+| `s` | Save highlighted attachment |
+
+### Compose Keys
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Next field (To → Subject → Body) |
+| `Ctrl+P` | Toggle Markdown preview |
+| `Ctrl+A` | Add file attachment |
+| `Ctrl+S` | Send email |
 
 ---
 

@@ -119,6 +119,19 @@ type EmbeddingProgressMsg struct {
 // EmbeddingDoneMsg signals background embedding finished
 type EmbeddingDoneMsg struct{}
 
+// AttachmentSavedMsg signals an attachment save completed
+type AttachmentSavedMsg struct {
+	Filename string
+	Path     string
+	Err      error
+}
+
+// AttachmentAddedMsg signals a compose attachment was loaded from disk
+type AttachmentAddedMsg struct {
+	Attachment models.ComposeAttachment
+	Err        error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -181,10 +194,16 @@ type Model struct {
 	emailBody             *models.EmailBody
 	emailBodyLoading      bool
 	emailPreviewWidth     int // computed in updateTableDimensions
+	emailFullScreen       bool
 	// Cached wrapped body lines — invalidated when body or panel width changes.
 	bodyWrappedLines  []string
 	bodyWrappedWidth  int
 	bodyScrollOffset  int // first visible line in preview body
+
+	// Attachment save prompt (receive side)
+	selectedAttachment   int
+	attachmentSavePrompt bool
+	attachmentSaveInput  textinput.Model
 
 	// Chat panel
 	showChat          bool
@@ -202,14 +221,17 @@ type Model struct {
 	classifyDone    int
 
 	// Compose
-	mailer          *appsmtp.Client
-	fromAddress     string
-	composeTo       textinput.Model
-	composeSubject  textinput.Model
-	composeBody     textarea.Model
-	composeField    int    // 0=To, 1=Subject, 2=Body
-	composeStatus   string // last send result message
-	composePreview  bool   // show glamour markdown preview
+	mailer               *appsmtp.Client
+	fromAddress          string
+	composeTo            textinput.Model
+	composeSubject       textinput.Model
+	composeBody          textarea.Model
+	composeField         int    // 0=To, 1=Subject, 2=Body
+	composeStatus        string // last send result message
+	composePreview       bool   // show glamour markdown preview
+	composeAttachments   []models.ComposeAttachment
+	attachmentPathInput  textinput.Model
+	attachmentInputActive bool
 
 	// Sidebar
 	folders       []string
@@ -237,6 +259,13 @@ type Model struct {
 
 	// Background embedding
 	embeddingPending int
+
+	// Text selection (preview panel)
+	mouseMode   bool
+	visualMode  bool
+	visualStart int // first selected line index in bodyWrappedLines
+	visualEnd   int // last selected line index (inclusive)
+	pendingY    bool // first 'y' of 'yy' sequence
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -382,6 +411,14 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	searchInput.Placeholder = "Search emails... (/b body  /* all folders  ? semantic)"
 	searchInput.CharLimit = 200
 
+	attachmentSaveInput := textinput.New()
+	attachmentSaveInput.Placeholder = "~/Downloads/"
+	attachmentSaveInput.CharLimit = 512
+
+	attachmentPathInput := textinput.New()
+	attachmentPathInput.Placeholder = "Path to file (e.g. ~/Documents/report.pdf)"
+	attachmentPathInput.CharLimit = 512
+
 	m := &Model{
 		backend:            b,
 		progressCh:         b.Progress(),
@@ -416,9 +453,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		progressStyle:      progressStyle,
 		activeTableStyle:   activeStyle,
 		inactiveTableStyle: inactiveStyle,
-		deletionRequestCh:  deletionRequestCh,
-		deletionResultCh:   deletionResultCh,
-		searchInput:        searchInput,
+		deletionRequestCh:   deletionRequestCh,
+		deletionResultCh:    deletionResultCh,
+		searchInput:         searchInput,
+		attachmentSaveInput: attachmentSaveInput,
+		attachmentPathInput: attachmentPathInput,
 	}
 
 	// Start deletion worker goroutine
@@ -489,6 +528,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeTo.SetValue("")
 			m.composeSubject.SetValue("")
 			m.composeBody.SetValue("")
+			m.composeAttachments = nil
 		}
 		return m, nil
 
@@ -510,8 +550,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
 		return m, nil
 
+	case AttachmentSavedMsg:
+		if msg.Err != nil {
+			m.composeStatus = fmt.Sprintf("Save failed: %v", msg.Err)
+		} else {
+			m.composeStatus = fmt.Sprintf("Saved: %s", msg.Path)
+		}
+		return m, nil
+
+	case AttachmentAddedMsg:
+		if msg.Err != nil {
+			m.composeStatus = fmt.Sprintf("Attach error: %v", msg.Err)
+		} else {
+			if msg.Attachment.Size > 10*1024*1024 {
+				m.composeStatus = fmt.Sprintf("Warning: %s is %.1f MB (>10 MB)", msg.Attachment.Filename, float64(msg.Attachment.Size)/(1024*1024))
+			}
+			m.composeAttachments = append(m.composeAttachments, msg.Attachment)
+		}
+		return m, nil
+
 	case EmailBodyMsg:
 		m.emailBodyLoading = false
+		m.selectedAttachment = 0 // reset attachment cursor for new email
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.emailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
@@ -786,6 +846,9 @@ func (m *Model) View() string {
 	if m.loading {
 		return m.renderLoadingView()
 	}
+	if m.emailFullScreen {
+		return m.renderFullScreenEmail()
+	}
 	return m.renderMainView()
 }
 
@@ -806,6 +869,30 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pendingDeleteConfirm = false
 			m.pendingDeleteAction = nil
 			m.pendingDeleteDesc = ""
+		}
+		return m, nil
+	}
+
+	// Attachment save prompt intercepts all keys while active
+	if m.attachmentSavePrompt {
+		switch msg.String() {
+		case "enter":
+			if m.emailBody != nil && m.selectedAttachment < len(m.emailBody.Attachments) {
+				att := &m.emailBody.Attachments[m.selectedAttachment]
+				path := expandTilde(m.attachmentSaveInput.Value())
+				m.attachmentSavePrompt = false
+				m.attachmentSaveInput.Blur()
+				return m, saveAttachmentCmd(m.backend, att, path)
+			}
+			m.attachmentSavePrompt = false
+			m.attachmentSaveInput.Blur()
+		case "esc":
+			m.attachmentSavePrompt = false
+			m.attachmentSaveInput.Blur()
+		default:
+			var cmd tea.Cmd
+			m.attachmentSaveInput, cmd = m.attachmentSaveInput.Update(msg)
+			return m, cmd
 		}
 		return m, nil
 	}
@@ -839,6 +926,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmd, m.performSearch(m.searchInput.Value()))
 		}
 		return m, nil
+	}
+
+	// Reset pending 'yy' sequence on any key other than 'y'
+	if m.pendingY && msg.String() != "y" {
+		m.pendingY = false
 	}
 
 	// Global quit always works
@@ -1045,7 +1137,24 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "z":
+		if !m.loading && m.selectedTimelineEmail != nil {
+			m.emailFullScreen = !m.emailFullScreen
+			m.bodyWrappedLines = nil // force re-wrap at new width
+		}
+		return m, nil
+
 	case "esc":
+		if m.visualMode {
+			m.visualMode = false
+			m.pendingY = false
+			return m, nil
+		}
+		if m.emailFullScreen {
+			m.emailFullScreen = false
+			m.bodyWrappedLines = nil
+			return m, nil
+		}
 		if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {
 			m.selectedTimelineEmail = nil
 			m.emailBody = nil
@@ -1108,6 +1217,18 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "s":
+		// Save highlighted attachment from preview panel
+		if !m.loading && m.focusedPanel == panelPreview && m.emailBody != nil &&
+			len(m.emailBody.Attachments) > 0 && !m.attachmentSavePrompt {
+			att := m.emailBody.Attachments[m.selectedAttachment]
+			defaultPath := expandTilde("~/Downloads/" + att.Filename)
+			m.attachmentSaveInput.SetValue(defaultPath)
+			m.attachmentSaveInput.Focus()
+			m.attachmentSavePrompt = true
+		}
+		return m, nil
+
 	case "R":
 		// Reply: open compose pre-filled from selected timeline email
 		if !m.loading && m.activeTab == tabTimeline {
@@ -1137,9 +1258,23 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		if !m.loading {
+			if m.emailFullScreen {
+				if m.visualMode {
+					if m.visualEnd > m.visualStart {
+						m.visualEnd--
+					}
+				} else if m.bodyScrollOffset > 0 {
+					m.bodyScrollOffset--
+				}
+				return m, nil
+			}
 			if m.activeTab == tabTimeline {
 				if m.focusedPanel == panelPreview {
-					if m.bodyScrollOffset > 0 {
+					if m.visualMode {
+						if m.visualEnd > m.visualStart {
+							m.visualEnd--
+						}
+					} else if m.bodyScrollOffset > 0 {
 						m.bodyScrollOffset--
 					}
 				} else if m.focusedPanel == panelSidebar {
@@ -1157,9 +1292,25 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		if !m.loading {
+			if m.emailFullScreen {
+				if m.visualMode {
+					if m.visualEnd < len(m.bodyWrappedLines)-1 {
+						m.visualEnd++
+					}
+				} else {
+					m.bodyScrollOffset++
+				}
+				return m, nil
+			}
 			if m.activeTab == tabTimeline {
 				if m.focusedPanel == panelPreview {
-					m.bodyScrollOffset++
+					if m.visualMode {
+						if m.visualEnd < len(m.bodyWrappedLines)-1 {
+							m.visualEnd++
+						}
+					} else {
+						m.bodyScrollOffset++
+					}
 				} else if m.focusedPanel == panelSidebar {
 					return m.handleNavigation(1)
 				} else {
@@ -1170,6 +1321,61 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				return m.handleNavigation(1)
 			}
+		}
+		return m, nil
+
+	case "v":
+		if m.emailFullScreen || (m.activeTab == tabTimeline && m.focusedPanel == panelPreview) {
+			if len(m.bodyWrappedLines) > 0 {
+				m.visualMode = !m.visualMode
+				if m.visualMode {
+					m.visualStart = m.bodyScrollOffset
+					m.visualEnd = m.bodyScrollOffset
+				}
+			}
+		}
+		return m, nil
+
+	case "m":
+		m.mouseMode = !m.mouseMode
+		if m.mouseMode {
+			return m, tea.DisableMouse
+		}
+		return m, tea.EnableMouseCellMotion
+
+	case "y":
+		if m.pendingY {
+			// yy: copy current line
+			m.pendingY = false
+			if m.bodyScrollOffset < len(m.bodyWrappedLines) {
+				return m, copyToClipboard(m.bodyWrappedLines[m.bodyScrollOffset])
+			}
+		} else if m.visualMode {
+			// y in visual mode: copy selection
+			m.visualMode = false
+			m.pendingY = false
+			start, end := m.visualStart, m.visualEnd
+			if start > end {
+				start, end = end, start
+			}
+			if end >= len(m.bodyWrappedLines) {
+				end = len(m.bodyWrappedLines) - 1
+			}
+			if start < len(m.bodyWrappedLines) {
+				selected := strings.Join(m.bodyWrappedLines[start:end+1], "\n")
+				return m, copyToClipboard(selected)
+			}
+		} else {
+			m.pendingY = true
+		}
+		return m, nil
+
+	case "Y":
+		// Copy all body lines
+		m.visualMode = false
+		m.pendingY = false
+		if len(m.bodyWrappedLines) > 0 {
+			return m, copyToClipboard(strings.Join(m.bodyWrappedLines, "\n"))
 		}
 		return m, nil
 	}
