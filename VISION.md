@@ -206,10 +206,15 @@ The goal is to make the MCP server a complete programmatic email client — ever
 | Tool | Key parameters | Description |
 |------|---------------|-------------|
 | `list_recent_emails` ✓ | `folder`, `limit` | Most recent emails, newest-first |
-| `get_email_body` | `message_id` | Full plain-text body of a single email (fetched live from IMAP if not cached) |
+| `list_unread_emails` | `folder`, `limit` | Unread emails only; common first step for an agent morning briefing |
+| `get_email_body` | `message_id` | Full plain-text body; fetched live from IMAP if not yet cached |
+| `get_email_body_html` | `message_id` | Raw HTML body (for agents that render or further process HTML) |
+| `get_email_headers` | `message_id` | All MIME headers as a key/value map (useful for List-Unsubscribe, DKIM, etc.) |
 | `list_folders` | — | All IMAP folders with unread/total counts |
 | `get_folder_stats` | `folder` | Message count, unread count, oldest/newest date, total size |
 | `get_thread` | `message_id` | All emails in the same thread (same normalised subject), ordered by date |
+| `list_attachments` | `message_id` | Attachment metadata: filename, MIME type, size — without downloading content |
+| `get_attachment` | `message_id`, `filename`, `save_path` | Download a specific attachment; returns base64 content or saves to `save_path` |
 
 ---
 
@@ -241,10 +246,13 @@ The goal is to make the MCP server a complete programmatic email client — ever
 
 | Tool | Key parameters | Description |
 |------|---------------|-------------|
-| `send_email` | `to`, `subject`, `body`, `from` | Send a new email via configured SMTP; body is plain text or Markdown |
-| `reply_to_email` | `message_id`, `body` | Reply to an existing email; pre-fills To, Subject (`Re:`), and quotes original |
-| `forward_email` | `message_id`, `to`, `note` | Forward an email to a new recipient with an optional covering note |
-| `draft_reply` | `message_id`, `instructions` | Ask the local LLM to draft a reply based on natural-language instructions; returns draft text without sending |
+| `send_email` | `to`, `subject`, `body`, `from`, `cc`, `bcc`, `attachments` | Send a new email via SMTP; body is plain text or Markdown (converted to HTML); `attachments` is a list of local file paths |
+| `reply_to_email` | `message_id`, `body`, `cc`, `attachments` | Reply to an existing email; pre-fills To and `Re:` subject, quotes original |
+| `forward_email` | `message_id`, `to`, `note`, `attachments` | Forward with an optional covering note and additional attachments |
+| `draft_reply` | `message_id`, `instructions` | LLM drafts a reply from natural-language instructions; returns text without sending |
+| `save_draft` | `to`, `subject`, `body`, `from`, `cc`, `bcc` | Save a draft to the Drafts IMAP folder without sending |
+| `list_drafts` | — | List all saved drafts with subject, to, and date |
+| `send_draft` | `draft_message_id` | Send a previously saved draft and remove it from Drafts |
 
 ---
 
@@ -254,12 +262,45 @@ The goal is to make the MCP server a complete programmatic email client — ever
 |------|---------------|-------------|
 | `get_sender_stats` ✓ | `folder`, `top_n` | Senders ranked by email count |
 | `delete_email` | `message_id` | Move a single email to Trash |
-| `delete_sender` | `sender`, `folder` | Move all emails from a sender to Trash |
-| `move_email` | `message_id`, `destination_folder` | Move an email to a different IMAP folder |
-| `mark_read` | `message_id` | Mark an email as read on the IMAP server |
-| `mark_unread` | `message_id` | Mark an email as unread |
+| `delete_thread` | `message_id` | Move all emails in the thread to Trash |
+| `delete_sender` | `sender`, `folder` | Move all emails from a sender/domain to Trash |
+| `archive_email` | `message_id` | Move to Archive (equivalent of TUI `e` key) |
+| `archive_thread` | `message_id` | Archive all emails in the thread |
+| `archive_sender` | `sender`, `folder` | Archive all emails from a sender/domain |
+| `bulk_delete` | `message_ids[]` | Move multiple specific messages to Trash in one call |
+| `bulk_move` | `message_ids[]`, `destination_folder` | Move multiple specific messages to a folder in one call |
+| `move_email` | `message_id`, `destination_folder` | Move a single email to any IMAP folder |
+| `mark_read` | `message_id` | Mark as read on the IMAP server |
+| `mark_unread` | `message_id` | Mark as unread |
 | `flag_email` | `message_id`, `flag` | Set an IMAP flag (`\Flagged`, `\Answered`, etc.) |
 | `create_folder` | `name` | Create a new IMAP folder |
+| `rename_folder` | `folder`, `new_name` | Rename an IMAP folder |
+| `delete_folder` | `folder` | Delete an empty IMAP folder |
+
+---
+
+#### Cleanup & automation
+
+These mirror the TUI Cleanup tab and its planned auto-cleanup rules — the same rules are shared between both interfaces.
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `list_cleanup_rules` | — | List all saved auto-cleanup rules (sender/domain → action) |
+| `add_cleanup_rule` | `sender`, `action`, `older_than_days` | Add a rule: e.g. delete all emails from `news@example.com` older than 30 days |
+| `remove_cleanup_rule` | `rule_id` | Remove a cleanup rule |
+| `run_cleanup_rules` | — | Execute all cleanup rules immediately; returns count of emails affected |
+| `unsubscribe_sender` | `message_id` | Hard-unsubscribe via the `List-Unsubscribe` / `List-Unsubscribe-Post` header found in the email |
+| `soft_unsubscribe_sender` | `sender`, `folder` | Soft-unsubscribe: auto-move all future emails from this sender to a designated folder |
+
+---
+
+#### Contacts
+
+| Tool | Key parameters | Description |
+|------|---------------|-------------|
+| `list_contacts` | `limit` | Contacts derived from To/From/CC headers in sent and received mail |
+| `search_contacts` | `query` | Find contacts by name or email address |
+| `get_contact` | `email` | Full contact record: name, all seen email addresses, last seen date |
 
 ---
 
@@ -267,9 +308,25 @@ The goal is to make the MCP server a complete programmatic email client — ever
 
 | Tool | Key parameters | Description |
 |------|---------------|-------------|
-| `sync_folder` | `folder` | Trigger incremental IMAP sync for a folder; returns count of new messages fetched |
-| `get_sync_status` | — | Report cache freshness: last sync time and pending embedding count |
-| `get_embedding_status` | — | Report semantic index progress (N indexed / M total) |
+| `sync_folder` | `folder` | Trigger incremental IMAP sync; returns count of new messages fetched |
+| `sync_all_folders` | — | Sync all folders; returns per-folder new-message counts |
+| `get_sync_status` | — | Cache freshness: last sync time per folder, pending embedding count |
+| `get_embedding_status` | — | Semantic index progress (N indexed / M total) |
+| `get_server_info` | — | Connected account, IMAP server, capabilities (IDLE, MOVE, etc.) |
+
+---
+
+### TUI ↔ MCP shared state
+
+The TUI and MCP server both read from and write to the **same `email_cache.db`**. This means:
+
+- Classifications set via `classify_email` appear immediately in the TUI Cleanup tab's Tag column
+- Emails deleted via `delete_email` are removed from the TUI timeline on the next render or sync
+- Cleanup rules created via `add_cleanup_rule` are enforced the next time the TUI runs a sync
+- Drafts saved via `save_draft` appear in the TUI's Compose drafts list
+- Contacts built up via the TUI (from viewed emails) are queryable via MCP `list_contacts`
+
+This makes the two interfaces fully interchangeable: start a task in the TUI, continue it in Claude, or vice versa, with no manual sync step.
 
 ---
 
