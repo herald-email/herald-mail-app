@@ -328,6 +328,19 @@ The TUI and MCP server both read from and write to the **same `email_cache.db`**
 
 This makes the two interfaces fully interchangeable: start a task in the TUI, continue it in Claude, or vice versa, with no manual sync step.
 
+### Simultaneous TUI + MCP operation
+
+**Requirement:** the TUI and MCP server must be safely runnable at the same time — a user should be able to have the TUI open in one terminal while Claude (or another agent) calls MCP tools in parallel, without data corruption, crashes, or stale reads.
+
+This requires:
+
+- **SQLite WAL mode** — enable write-ahead logging so readers never block writers and vice versa. Both processes open the database with `PRAGMA journal_mode=WAL`. This is the primary enabler of safe concurrent access.
+- **IMAP connection isolation** — TUI and MCP server each hold their own IMAP connection (or the MCP server operates cache-only for read tools and opens a short-lived connection only for write tools like `send_email` or `move_email`). They must never share a single `go-imap` client across processes.
+- **Cache invalidation signalling** — when the MCP server mutates the cache (deletes an email, saves a classification), the TUI should notice on its next render cycle. SQLite WAL means the TUI's next `SELECT` will see the committed change without any explicit IPC needed.
+- **No cross-process locks** — neither process should hold long-lived SQLite transactions that block the other. All writes are short, atomic operations.
+
+The daemon/UI split (Phase 2 architecture) is the long-term solution: both TUI and MCP become clients of a single daemon that serialises all IMAP and cache writes. Until that is built, WAL mode + connection isolation is sufficient for safe simultaneous use.
+
 ---
 
 ### Why this is useful
