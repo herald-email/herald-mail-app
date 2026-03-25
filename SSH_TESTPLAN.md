@@ -315,6 +315,7 @@ tmux kill-session -t ssh_test
 **Expect:**
 - Confirmation bar shows "Archive …?"
 - After `y`: email removed from timeline
+- Sidebar folder counts update (Archive count increases)
 - No crash or garbled output
 
 ---
@@ -330,12 +331,18 @@ tmux kill-session -t ssh_test
 6. Capture screenshot.
 7. Press `/`, type `/* hello` (cross-folder).
 8. Capture screenshot.
+9. Press `/`, type a term that doesn't exist in this folder (e.g. `zzznomatch`).
+10. Capture screenshot.
 
 **Expect (steps 3, 6, 8):**
 - Key hint bar shows search input text
 - Timeline updates in real time as text is typed
 - No rendering artifacts or overflowing lines
 - Source tags visible in status bar
+
+**Expect (step 10 — zero results):**
+- Status bar shows `Search: 0 results`
+- Key hint bar shows: `No results in this folder — try: /* zzznomatch`
 
 ---
 

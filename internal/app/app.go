@@ -637,8 +637,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stats = stats
 			m.updateSummaryTable()
 			m.updateDetailsTable()
-			// Also refresh timeline since emails may have been deleted/archived from there
-			return m, m.loadTimelineEmails()
+			// Also refresh timeline and sidebar folder counts
+			folders := m.folders
+			refreshCounts := func() tea.Msg {
+				status, err := m.backend.GetFolderStatus(folders)
+				if err != nil {
+					logger.Warn("Failed to refresh folder status: %v", err)
+					return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+				}
+				return FolderStatusMsg{Status: status}
+			}
+			return m, tea.Batch(m.loadTimelineEmails(), refreshCounts)
 		}
 
 		// Continue listening for more results
@@ -1010,6 +1019,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						key := ref.group.normalizedSubject
 						savedCursor := m.timelineTable.Cursor()
 						m.expandedThreads[key] = !m.expandedThreads[key]
+						m.updateTimelineTable()
+						m.timelineTable.SetCursor(savedCursor)
+						return m, nil
+					}
+					// First row of an expanded thread: collapse on Enter instead of opening preview
+					if ref.emailIdx == 0 && len(ref.group.emails) > 1 && m.expandedThreads[ref.group.normalizedSubject] {
+						savedCursor := m.timelineTable.Cursor()
+						m.expandedThreads[ref.group.normalizedSubject] = false
 						m.updateTimelineTable()
 						m.timelineTable.SetCursor(savedCursor)
 						return m, nil

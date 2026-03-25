@@ -1170,9 +1170,23 @@ func truncate(s string, n int) string {
 }
 
 // loadEmailBodyCmd returns a tea.Cmd that fetches the email body in the background.
+// Retries up to 2 times on error to handle transient ProtonMail Bridge failures.
 func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
 	return func() tea.Msg {
-		body, err := m.backend.FetchEmailBody(folder, uid)
+		var (
+			body *models.EmailBody
+			err  error
+		)
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 {
+				time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			}
+			body, err = m.backend.FetchEmailBody(folder, uid)
+			if err == nil {
+				break
+			}
+			logger.Warn("FetchEmailBody attempt %d failed: %v", attempt+1, err)
+		}
 		return EmailBodyMsg{Body: body, Err: err}
 	}
 }
@@ -1344,6 +1358,11 @@ func (m *Model) renderKeyHints() string {
 	} else if m.searchMode && m.activeTab == tabTimeline {
 		q := m.searchInput.View()
 		hints = fmt.Sprintf("/ %s  │  esc: clear  │  ctrl+s: save  │  ctrl+i: server search", q)
+		// When search returns no results and we're not already in cross-folder mode, suggest it
+		query := m.searchInput.Value()
+		if m.searchResults != nil && len(m.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
+			hints = fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  esc: clear  │  ctrl+i: server search", q, query)
+		}
 	} else if m.focusedPanel == panelChat && m.showChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if m.showLogs {
@@ -2194,6 +2213,9 @@ func (m *Model) performSearch(query string) tea.Cmd {
 		if err != nil {
 			logger.Warn("Search error: %v", err)
 			return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+		}
+		if emails == nil {
+			emails = []*models.EmailData{}
 		}
 		return SearchResultMsg{Emails: emails, Query: query, Source: source}
 	}

@@ -577,12 +577,14 @@ done
 - Confirmation prompt mentions "Archive" not "Delete"
 - After `y`: email removed from INBOX timeline
 - No crash; server-side: email should appear in Archive folder
+- Sidebar folder counts update after completion (Archive count increases)
 
 Also test in Cleanup tab (panelDetails focused on a message):
 6. Switch to Cleanup (`3`), focus on a message row, press `e` → `y`.
 
 **Expect:**
 - Same confirmation + archive behavior
+- Sidebar counts update after completion
 
 ---
 
@@ -611,6 +613,8 @@ Also test in Cleanup tab (panelDetails focused on a message):
 4. Capture screenshot.
 5. Press Escape.
 6. Capture screenshot.
+7. Press `/`, type a term that does not exist in this folder (e.g. `zzznomatch`).
+8. Capture screenshot.
 
 **Expect (step 4):**
 - Key hint bar shows search input with query text
@@ -620,6 +624,10 @@ Also test in Cleanup tab (panelDetails focused on a message):
 **Expect (step 6):**
 - Timeline restores all emails
 - Search input cleared
+
+**Expect (step 8 — zero results):**
+- Status bar shows `Search: 0 results`
+- Key hint bar shows: `No results in this folder — try: /* zzznomatch`
 
 ---
 
