@@ -87,6 +87,8 @@ make test     # Run tests
 
 **Always verify visual/layout changes using tmux.** The TUI renders differently at different terminal sizes; a change that looks correct in code can break layout at 80×24 or produce garbage at 50×15. tmux lets you spin up headless sessions at exact dimensions, send keystrokes, and capture rendered output — all without interrupting your working terminal.
 
+**Test reports** must be saved in the `reports/` folder (gitignored). Name them descriptively, e.g. `reports/TEST_REPORT_2026-03-24.md`.
+
 #### Quick workflow
 
 ```bash

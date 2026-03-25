@@ -38,3 +38,6 @@ Thumbs.db
 
 # Claude Code session memory
 memory/
+
+# Test reports
+reports/

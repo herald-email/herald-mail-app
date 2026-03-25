@@ -3,6 +3,8 @@
 Manual QA checklist for verifying layout, navigation, and feature correctness across terminal sizes.
 Run this after any change that touches rendering, layout math, key handling, or IMAP/cache logic.
 
+**Test reports** must be saved in the `reports/` folder (gitignored). Name them descriptively, e.g. `reports/TEST_REPORT_2026-03-24.md`.
+
 ---
 
 ## Setup
