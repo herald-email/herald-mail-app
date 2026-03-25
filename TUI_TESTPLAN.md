@@ -944,6 +944,66 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 ---
 
+### TC-42 — Read/unread tracking
+
+**Steps:**
+1. Build and launch at 220×50.
+2. Switch to Timeline (`1`).
+3. Look for unread emails — they should show `●` as the first character of the Sender column.
+4. Press Enter on an unread email to open the body preview.
+5. Wait ~1 second for the body to load.
+6. Capture screenshot.
+7. Press Esc to close.
+8. Capture screenshot.
+
+**Expect (step 3):**
+- Unread emails have `●` prefix in Sender column; read emails have ` ` (space) prefix
+- No layout overflow from the extra character
+
+**Expect (step 6 — preview open):**
+- Body displays normally; no visual change in preview itself
+
+**Expect (step 8 — after close):**
+- The `●` has been replaced by ` ` (space) for the email just opened, confirming it was marked read
+- No crash or error output
+
+---
+
+### TC-43 — Unsubscribe (`u` key)
+
+**Prerequisites:** An email with a `List-Unsubscribe` header loaded in the preview panel.
+
+**Steps:**
+1. Switch to Timeline (`1`), navigate to a newsletter or marketing email.
+2. Press Enter to open the body preview; wait for it to load.
+3. Press Tab to focus the preview panel.
+4. Check key hints — should show `u: unsubscribe` if `List-Unsubscribe` header is present.
+5. Press `u`.
+6. Capture screenshot — should show orange confirmation bar.
+7. Press `n` to cancel; capture screenshot.
+8. Press `u` again, then press `y` to confirm.
+9. Capture screenshot — status bar should show unsubscribe result.
+
+**Expect (step 4):**
+- `u: unsubscribe` appears in key hints when body has `List-Unsubscribe` header
+- Hint absent for emails without the header
+
+**Expect (step 6 — confirmation):**
+- Status bar turns orange with `Unsubscribe from <sender>?  [y] confirm  [n/Esc] cancel`
+- No layout corruption
+
+**Expect (step 7 — cancelled):**
+- Status bar returns to normal; no action taken
+
+**Expect (step 9 — confirmed):**
+- Status bar shows one of:
+  - `Unsubscribed (one-click POST sent)` — if RFC 8058 one-click
+  - `Unsubscribe URL copied to clipboard` — if HTTPS URL copied
+  - `Unsubscribe address copied to clipboard` — if mailto only
+- No crash
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

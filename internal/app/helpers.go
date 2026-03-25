@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -901,7 +902,11 @@ func (m *Model) updateTimelineTable() {
 		if subject == "" {
 			subject = "(no subject)"
 		}
-		sender := senderPrefix + sanitizeText(email.Sender)
+		unreadDot := " "
+		if !email.IsRead {
+			unreadDot = "●"
+		}
+		sender := unreadDot + senderPrefix + sanitizeText(email.Sender)
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
@@ -1382,6 +1387,20 @@ func (m *Model) renderStatusBar() string {
 			Padding(0, 1).
 			Render(line)
 	}
+	// Unsubscribe confirmation prompt overrides everything
+	if m.pendingUnsubscribe {
+		w := m.windowWidth
+		if w <= 0 {
+			w = 80
+		}
+		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingUnsubscribeDesc)
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255")).
+			Background(lipgloss.Color("202")).
+			Width(w).
+			Padding(0, 1).
+			Render(line)
+	}
 
 	// Folder breadcrumb
 	folderParts := strings.Split(m.currentFolder, "/")
@@ -1509,7 +1528,7 @@ func (m *Model) renderStatusBar() string {
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	var hints string
-	if m.pendingDeleteConfirm {
+	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if m.searchMode && m.activeTab == tabTimeline {
 		q := m.searchInput.View()
@@ -1528,10 +1547,15 @@ func (m *Model) renderKeyHints() string {
 	} else if m.activeTab == tabTimeline {
 		if m.focusedPanel == panelPreview {
 			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
+			hasUnsub := m.emailBody != nil && m.emailBody.ListUnsubscribe != ""
 			if m.visualMode {
 				hints = "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual"
+			} else if hasAttachments && hasUnsub {
+				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  u: unsubscribe  │  esc: close  │  q: quit"
 			} else if hasAttachments {
 				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  esc: close  │  q: quit"
+			} else if hasUnsub {
+				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit"
 			} else {
 				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit"
 			}
@@ -2218,6 +2242,91 @@ func addAttachmentCmd(path string) tea.Cmd {
 				Data:     data,
 			},
 		}
+	}
+}
+
+// unsubscribeCmd attempts to unsubscribe via List-Unsubscribe header.
+// RFC 8058: if List-Unsubscribe-Post is "List-Unsubscribe=One-Click" and an https URL exists,
+// it does an HTTP POST. Otherwise it copies the URL or mailto address to the clipboard.
+func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
+	return func() tea.Msg {
+		raw := body.ListUnsubscribe
+		if raw == "" {
+			return UnsubscribeResultMsg{Err: fmt.Errorf("no List-Unsubscribe header")}
+		}
+		// Parse angle-bracket-delimited URIs: <https://...>, <mailto:...>
+		var httpsURL, mailtoAddr string
+		parts := strings.Split(raw, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if len(part) >= 2 && part[0] == '<' && part[len(part)-1] == '>' {
+				part = part[1 : len(part)-1]
+			}
+			if strings.HasPrefix(part, "https://") && httpsURL == "" {
+				httpsURL = part
+			} else if strings.HasPrefix(part, "mailto:") && mailtoAddr == "" {
+				mailtoAddr = part
+			}
+		}
+		// One-click POST (RFC 8058)
+		if body.ListUnsubscribePost == "List-Unsubscribe=One-Click" && httpsURL != "" {
+			resp, err := http.Post(httpsURL, "application/x-www-form-urlencoded",
+				strings.NewReader("List-Unsubscribe=One-Click"))
+			if err != nil {
+				return UnsubscribeResultMsg{Err: err}
+			}
+			resp.Body.Close()
+			return UnsubscribeResultMsg{Method: "one-click", URL: httpsURL}
+		}
+		// Copy HTTPS URL to clipboard
+		if httpsURL != "" {
+			cmd := exec.Command("pbcopy")
+			if runtime.GOOS == "linux" {
+				if os.Getenv("WAYLAND_DISPLAY") != "" {
+					cmd = exec.Command("wl-copy")
+				} else {
+					cmd = exec.Command("xclip", "-sel", "clip")
+				}
+			}
+			cmd.Stdin = strings.NewReader(httpsURL)
+			_ = cmd.Run()
+			return UnsubscribeResultMsg{Method: "url-copied", URL: httpsURL}
+		}
+		// Copy mailto address to clipboard
+		if mailtoAddr != "" {
+			cmd := exec.Command("pbcopy")
+			if runtime.GOOS == "linux" {
+				if os.Getenv("WAYLAND_DISPLAY") != "" {
+					cmd = exec.Command("wl-copy")
+				} else {
+					cmd = exec.Command("xclip", "-sel", "clip")
+				}
+			}
+			cmd.Stdin = strings.NewReader(mailtoAddr)
+			_ = cmd.Run()
+			return UnsubscribeResultMsg{Method: "mailto-copied", URL: mailtoAddr}
+		}
+		return UnsubscribeResultMsg{Err: fmt.Errorf("no usable unsubscribe URI found")}
+	}
+}
+
+// markReadCmd fires and forgets — marks the email as read on IMAP and in cache.
+func markReadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
+	return func() tea.Msg {
+		if err := b.MarkRead(messageID, folder); err != nil {
+			logger.Warn("markReadCmd failed for %s: %v", messageID, err)
+		}
+		return nil
+	}
+}
+
+// cacheUnsubscribeHeadersCmd stores List-Unsubscribe headers in the cache.
+func cacheUnsubscribeHeadersCmd(b backend.Backend, messageID, listUnsub, listUnsubPost string) tea.Cmd {
+	return func() tea.Msg {
+		if err := b.UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost); err != nil {
+			logger.Warn("cacheUnsubscribeHeadersCmd failed for %s: %v", messageID, err)
+		}
+		return nil
 	}
 }
 

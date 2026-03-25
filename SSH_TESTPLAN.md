@@ -417,6 +417,25 @@ tmux kill-session -t ssh_test
 
 ---
 
+### TC-SS-16 — Unsubscribe over SSH
+
+**Steps:**
+1. Connect via SSH (TC-SS-01 setup).
+2. Switch to Timeline (`1`), open body preview on a newsletter email.
+3. Wait for body to load; Tab to focus preview panel.
+4. If `u: unsubscribe` is visible in key hints, press `u`.
+5. Capture screenshot (confirmation bar).
+6. Press `n` to cancel; capture screenshot.
+
+**Expect (step 5):**
+- Orange confirmation bar visible: `Unsubscribe from <sender>?  [y] confirm  [n/Esc] cancel`
+- No rendering artifacts or garbled escape sequences over SSH
+
+**Expect (step 6):**
+- Status bar returns to normal; preview unchanged
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

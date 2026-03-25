@@ -265,7 +265,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	done := make(chan error, 1)
 
 	// Fetch using Envelope + basic fields to avoid RFC822 parsing issues
-	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, imap.FetchRFC822Size, imap.FetchBodyStructure}
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, imap.FetchRFC822Size, imap.FetchBodyStructure, imap.FetchFlags}
 
 	go func() {
 		done <- c.client.Fetch(seqset, items, messages)
@@ -309,6 +309,15 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		messageID = fmt.Sprintf("uid-%d", msg.Uid)
 	}
 
+	// Check \Seen flag
+	isRead := false
+	for _, flag := range msg.Flags {
+		if flag == imap.SeenFlag {
+			isRead = true
+			break
+		}
+	}
+
 	// Extract email data from Envelope
 	emailData := &models.EmailData{
 		MessageID:      messageID,
@@ -318,6 +327,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		Date:           msg.Envelope.Date,
 		Size:           int(msg.Size),
 		HasAttachments: hasAttach,
+		IsRead:         isRead,
 		Folder:         folder,
 	}
 

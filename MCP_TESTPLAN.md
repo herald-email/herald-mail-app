@@ -314,6 +314,121 @@ Then attempt any tool call over stdin.
 
 ---
 
+### TC-MCP-15 — get_email_body
+
+**Steps:**
+```bash
+# Use a message_id from a previous list_recent_emails call that has been opened in the TUI
+echo '{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"get_email_body","arguments":{"message_id":"<some-id>"}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect:**
+- Returns the cached plain-text body of the email
+- If body is not cached, returns a helpful message to open the email in the TUI
+
+---
+
+### TC-MCP-16 — list_unread_emails
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_unread_emails","arguments":{"folder":"INBOX","limit":5}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect:**
+- Returns only unread emails (those not yet opened in TUI)
+- Respects `limit` parameter
+
+---
+
+### TC-MCP-17 — search_by_date
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"search_by_date","arguments":{"folder":"INBOX","after":"2024-01-01","before":"2024-12-31"}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect:**
+- Returns emails within the specified date range only
+- Invalid date format returns a clear error
+
+---
+
+### TC-MCP-18 — search_by_sender
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"search_by_sender","arguments":{"sender":"github.com"}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect:**
+- Returns emails from senders matching `github.com` across all folders
+- Each row shows folder name alongside date, sender, subject
+
+---
+
+### TC-MCP-19 — semantic_search_emails (Ollama required)
+
+**Prerequisites:** Ollama running with `nomic-embed-text` pulled; emails with cached body vectors.
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"semantic_search_emails","arguments":{"query":"invoice or billing","folder":"INBOX","limit":5}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect (Ollama running):**
+- Returns semantically similar emails, ranked by similarity
+
+**Expect (Ollama not configured):**
+- Returns: `Ollama not configured — set ollama.host in proton.yaml`
+
+---
+
+### TC-MCP-20 — classify_email (Ollama required)
+
+**Prerequisites:** Ollama running; a known message_id.
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"classify_email","arguments":{"message_id":"<some-id>"}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect (Ollama running):**
+- Returns `Classified as: <category>`
+- Classification persisted in cache (visible in TUI Cleanup tab)
+
+**Expect (Ollama not configured):**
+- Returns: `Ollama not configured — set ollama.host in proton.yaml`
+
+---
+
+### TC-MCP-21 — summarise_email (Ollama required)
+
+**Prerequisites:** Ollama running; a message_id whose body has been cached (opened in TUI).
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"summarise_email","arguments":{"message_id":"<some-id>","max_words":50}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect (body cached, Ollama running):**
+- Returns a concise summary in ≤50 words
+
+**Expect (body not cached):**
+- Returns: `Body not cached. Open the email in the TUI to load its body first.`
+
+**Expect (Ollama not configured):**
+- Returns: `Ollama not configured — set ollama.host in proton.yaml`
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

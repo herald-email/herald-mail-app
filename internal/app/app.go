@@ -132,6 +132,13 @@ type AttachmentAddedMsg struct {
 	Err        error
 }
 
+// UnsubscribeResultMsg carries the result of an unsubscribe attempt
+type UnsubscribeResultMsg struct {
+	Method string // "one-click", "url-copied", "mailto-copied"
+	URL    string
+	Err    error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -246,6 +253,11 @@ type Model struct {
 	pendingDeleteDesc    string
 	pendingDeleteAction  func() tea.Cmd
 	pendingArchive       bool // true = archive, false = delete
+
+	// Unsubscribe confirmation
+	pendingUnsubscribe       bool
+	pendingUnsubscribeDesc   string
+	pendingUnsubscribeAction func() tea.Cmd
 
 	// Search
 	searchMode          bool
@@ -569,6 +581,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case UnsubscribeResultMsg:
+		if msg.Err != nil {
+			m.composeStatus = fmt.Sprintf("Unsubscribe failed: %v", msg.Err)
+		} else {
+			switch msg.Method {
+			case "one-click":
+				m.composeStatus = "Unsubscribed (one-click POST sent)"
+			case "url-copied":
+				m.composeStatus = fmt.Sprintf("Unsubscribe URL copied to clipboard: %s", msg.URL)
+			case "mailto-copied":
+				m.composeStatus = fmt.Sprintf("Unsubscribe address copied to clipboard: %s", msg.URL)
+			}
+		}
+		return m, nil
+
 	case EmailBodyMsg:
 		m.emailBodyLoading = false
 		m.selectedAttachment = 0 // reset attachment cursor for new email
@@ -586,6 +613,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						logger.Warn("Failed to cache body text: %v", err)
 					}
 				}()
+			}
+			// Mark as read and cache unsubscribe headers (fire-and-forget commands)
+			if m.selectedTimelineEmail != nil {
+				email := m.selectedTimelineEmail
+				body := msg.Body
+				var cmds []tea.Cmd
+				if !email.IsRead {
+					email.IsRead = true // optimistic update in memory
+					cmds = append(cmds, markReadCmd(m.backend, email.MessageID, email.Folder))
+				}
+				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
+					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
+				}
+				if len(cmds) > 0 {
+					m.bodyWrappedLines = nil
+					return m, tea.Batch(cmds...)
+				}
 			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
@@ -873,6 +917,25 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Unsubscribe confirmation prompt intercepts all keys
+	if m.pendingUnsubscribe {
+		switch msg.String() {
+		case "y", "Y":
+			m.pendingUnsubscribe = false
+			action := m.pendingUnsubscribeAction
+			m.pendingUnsubscribeAction = nil
+			m.pendingUnsubscribeDesc = ""
+			if action != nil {
+				return m, action()
+			}
+		case "n", "N", "esc":
+			m.pendingUnsubscribe = false
+			m.pendingUnsubscribeAction = nil
+			m.pendingUnsubscribeDesc = ""
+		}
+		return m, nil
+	}
+
 	// Attachment save prompt intercepts all keys while active
 	if m.attachmentSavePrompt {
 		switch msg.String() {
@@ -1049,6 +1112,20 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.pendingDeleteAction = func() tea.Cmd {
 					m.deleting = true
 					return m.archiveSelected()
+				}
+			}
+		}
+		return m, nil
+
+	case "u":
+		if m.activeTab == tabTimeline && m.emailBody != nil && m.selectedTimelineEmail != nil {
+			if m.emailBody.ListUnsubscribe != "" {
+				sender := m.selectedTimelineEmail.Sender
+				body := m.emailBody
+				m.pendingUnsubscribe = true
+				m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
+				m.pendingUnsubscribeAction = func() tea.Cmd {
+					return unsubscribeCmd(body)
 				}
 			}
 		}

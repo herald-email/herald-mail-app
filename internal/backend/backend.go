@@ -97,6 +97,14 @@ type Backend interface {
 	// DeleteSavedSearch removes a saved search by ID.
 	DeleteSavedSearch(id int) error
 
+	// --- Read/unread ---
+
+	// MarkRead marks an email as read on the IMAP server and in the local cache.
+	MarkRead(messageID, folder string) error
+
+	// UpdateUnsubscribeHeaders stores List-Unsubscribe headers for a message in the cache.
+	UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error
+
 	// --- Body text caching ---
 
 	// CacheBodyText stores the plain-text body for FTS indexing.

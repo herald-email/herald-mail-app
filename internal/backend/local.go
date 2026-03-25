@@ -244,6 +244,21 @@ func (b *LocalBackend) CacheBodyText(messageID, bodyText string) error {
 	return b.cache.CacheBodyText(messageID, bodyText)
 }
 
+func (b *LocalBackend) MarkRead(messageID, folder string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return err
+	}
+	if err := b.imapClient.MarkRead(email.UID, folder); err != nil {
+		logger.Warn("MarkRead IMAP failed for %s: %v", messageID, err)
+	}
+	return b.cache.MarkRead(messageID)
+}
+
+func (b *LocalBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error {
+	return b.cache.UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost)
+}
+
 func (b *LocalBackend) StoreEmbedding(messageID string, embedding []float32, hash string) error {
 	return b.cache.StoreEmbedding(messageID, embedding, hash)
 }

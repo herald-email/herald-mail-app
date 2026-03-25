@@ -25,10 +25,10 @@ This document describes the long-term direction for this project. It evolves fro
 - [x] Archive email (`e` key — moves to Archive/All Mail instead of Trash)
 - [x] Deletion confirmation prompt
 - [x] Automatic new-email sync (IMAP IDLE + background polling)
-- [ ] Markdown compose → HTML send (write in Markdown, deliver as multipart HTML+plain)
-- [ ] Attachment support (download received attachments, attach files when composing)
-- [ ] Text selection (mouse selection + vim-style visual mode for copying body text)
-- [ ] Full-screen email view (expand preview to fill the entire terminal)
+- [x] Markdown compose → HTML send (write in Markdown, deliver as multipart HTML+plain)
+- [x] Attachment support (download received attachments, attach files when composing)
+- [x] Text selection (mouse selection + vim-style visual mode for copying body text)
+- [x] Full-screen email view (expand preview to fill the entire terminal)
 
 ---
 

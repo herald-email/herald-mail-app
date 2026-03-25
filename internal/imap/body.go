@@ -72,6 +72,8 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		return &models.EmailBody{TextPlain: string(raw)}, nil
 	}
 	result := &models.EmailBody{}
+	result.ListUnsubscribe = mailMsg.Header.Get("List-Unsubscribe")
+	result.ListUnsubscribePost = mailMsg.Header.Get("List-Unsubscribe-Post")
 	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result, "")
 	// If there is no plain-text part, convert HTML to markdown
 	if result.TextPlain == "" && result.TextHTML != "" {

@@ -15,6 +15,7 @@ type EmailData struct {
 	HasAttachments bool      `db:"has_attachments"`
 	Folder         string    `db:"folder"`
 	LastUpdated    time.Time `db:"last_updated"`
+	IsRead         bool      `db:"is_read"`
 }
 
 // SenderStats represents statistics for a sender
@@ -52,11 +53,13 @@ type FolderStatus struct {
 
 // EmailBody holds the fetched body content of a single email message.
 type EmailBody struct {
-	TextPlain    string
-	TextHTML     string
-	InlineImages []InlineImage
-	Attachments  []Attachment
-	IsFromHTML   bool // TextPlain was converted from HTML; render via markdown
+	TextPlain           string
+	TextHTML            string
+	InlineImages        []InlineImage
+	Attachments         []Attachment
+	IsFromHTML          bool   // TextPlain was converted from HTML; render via markdown
+	ListUnsubscribe     string // raw List-Unsubscribe header value
+	ListUnsubscribePost string // raw List-Unsubscribe-Post header value (RFC 8058)
 }
 
 // InlineImage is an image MIME part embedded inline in an email body.
