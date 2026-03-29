@@ -16,6 +16,92 @@ import (
 	appsmtp "mail-processor/internal/smtp"
 )
 
+// wizardState tracks which sub-model is active during the first-run wizard.
+type wizardState int
+
+const (
+	wizardStateSettings wizardState = iota
+	wizardStateOAuth
+	wizardStateDone
+)
+
+// wizardModel is a thin tea.Model wrapper that drives the first-run setup wizard.
+type wizardModel struct {
+	settings   *app.Settings
+	oauthWait  *app.OAuthWaitModel
+	configPath string
+	state      wizardState
+	width      int
+	height     int
+}
+
+func (m wizardModel) Init() tea.Cmd {
+	return m.settings.Init()
+}
+
+func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+
+	case app.SettingsSavedMsg:
+		return m, tea.Quit
+
+	case app.SettingsCancelledMsg:
+		// Wizard cannot be cancelled — treat as quit (no config written).
+		return m, tea.Quit
+
+	case app.OAuthRequiredMsg:
+		cfg := msg.Config
+		if cfg == nil {
+			cfg = &config.Config{}
+		}
+		oauthModel, err := app.NewOAuthWaitModel(msg.Email, cfg, m.configPath)
+		if err != nil {
+			return m, tea.Quit
+		}
+		m.oauthWait = oauthModel
+		m.state = wizardStateOAuth
+		return m, m.oauthWait.Init()
+
+	case app.OAuthDoneMsg:
+		return m, tea.Quit
+
+	case app.OAuthErrorMsg:
+		return m, tea.Quit
+	}
+
+	// Delegate to the active sub-model.
+	switch m.state {
+	case wizardStateSettings:
+		newModel, cmd := m.settings.Update(msg)
+		m.settings = newModel.(*app.Settings)
+		return m, cmd
+	case wizardStateOAuth:
+		newModel, cmd := m.oauthWait.Update(msg)
+		m.oauthWait = newModel.(*app.OAuthWaitModel)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m wizardModel) View() string {
+	switch m.state {
+	case wizardStateOAuth:
+		return m.oauthWait.View()
+	default:
+		return m.settings.View()
+	}
+}
+
+// runWizard runs the first-run setup wizard as a standalone Bubble Tea program.
+func runWizard(configPath string) error {
+	s := app.NewSettings(app.SettingsModeWizard, nil)
+	p := tea.NewProgram(wizardModel{settings: s, configPath: configPath}, tea.WithAltScreen())
+	_, err := p.Run()
+	return err
+}
+
 func main() {
 	// Parse command line flags
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
@@ -66,6 +152,13 @@ func main() {
 		heraldDir := filepath.Dir(resolvedConfig)
 		if err := os.MkdirAll(heraldDir, 0700); err != nil {
 			log.Fatalf("Failed to create config directory %s: %v", heraldDir, err)
+		}
+	}
+
+	// First-run: if config doesn't exist, launch the setup wizard.
+	if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
+		if err := runWizard(resolvedConfig); err != nil {
+			log.Fatalf("setup wizard failed: %v", err)
 		}
 	}
 

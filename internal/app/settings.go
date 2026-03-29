@@ -31,7 +31,8 @@ type SettingsCancelledMsg struct{}
 
 // OAuthRequiredMsg is sent when Gmail is selected and OAuth flow needs to run.
 type OAuthRequiredMsg struct {
-	Email string
+	Email  string
+	Config *config.Config // partially-built config with vendor presets applied
 }
 
 // Settings is a self-contained huh-based settings form component.
@@ -203,8 +204,9 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cfg := s.buildConfig()
 		if s.provider == "gmail" {
 			// OAuth flow will handle saving after tokens received.
+			builtCfg := cfg
 			return s, tea.Batch(cmd, func() tea.Msg {
-				return OAuthRequiredMsg{Email: s.email}
+				return OAuthRequiredMsg{Email: s.email, Config: builtCfg}
 			})
 		}
 		// Non-Gmail: persist to disk (best-effort) then signal done.
