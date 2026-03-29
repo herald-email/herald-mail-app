@@ -36,6 +36,8 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] IMAP IDLE (real push; currently polling only)
 - [ ] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [ ] Soft unsubscribe (auto-move future emails to a local folder)
+- [ ] Custom classification prompts (user-defined categories + data extraction)
+- [ ] Classification actions (notify, command, webhook, move, flag on match)
 - [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
 - [ ] Chat tool calling (Ollama tool API + MCP tools in-process)
@@ -167,6 +169,74 @@ The app can automatically tag emails with categories (subscription, important, u
 - [ ] `classify_folder` MCP tool (batch, with progress)
 - [ ] Auto-classify new emails as they arrive (background, rate-limited)
 - [ ] Reanalyse / override existing tags
+
+### Custom Classification Prompts
+
+The built-in classification prompt assigns one of six fixed categories (`sub`, `news`, `imp`, `txn`, `soc`, `spam`). Custom prompts let users define their own categories and extraction logic tailored to their workflow — e.g. extracting order numbers from receipts, flagging emails from specific clients, or categorizing by project.
+
+- [ ] `classification_prompts` section in `proton.yaml` — list of named prompt definitions
+- [ ] Each prompt specifies: name, system prompt text, list of valid output categories, and an optional data extraction instruction (e.g. "extract the tracking number")
+- [ ] Default built-in prompt used when no custom prompts are configured (current behaviour preserved)
+- [ ] Multiple prompts can run on the same email (e.g. one for category, one for data extraction)
+- [ ] `custom_categories` table in SQLite storing prompt name + category + extracted data per email
+- [ ] TUI displays custom categories alongside the built-in tag column
+- [ ] MCP tools: `list_classification_prompts`, `classify_email_custom` (run a named prompt on one email)
+
+### Classification Actions
+
+When an email matches a category, the system can trigger an action automatically. Actions turn classification from passive tagging into an active assistant — sending OS notifications for important mail, running shell commands with extracted data, or auto-filing emails into folders. Actions execute in the background daemon (Phase 2) so they fire even when the TUI is not running.
+
+- [ ] `classification_actions` section in `proton.yaml` — list of rules mapping category → action
+- [ ] Each rule specifies: category match (built-in or custom), action type, and action config
+- [ ] Action type: `notify` — send an OS-level notification (macOS Notification Center / `notify-send` on Linux) with sender, subject, and optional extracted data
+- [ ] Action type: `command` — run a shell command with template variables (`{{.Sender}}`, `{{.Subject}}`, `{{.Category}}`, `{{.ExtractedData}}`, `{{.MessageID}}`)
+- [ ] Action type: `webhook` — POST a JSON payload to a URL (for Slack, Discord, Home Assistant, etc.)
+- [ ] Action type: `move` — auto-move the email to a specified IMAP folder
+- [ ] Action type: `flag` — set IMAP flags (e.g. `\Flagged`, `\Seen`)
+- [ ] Actions run in the daemon (Phase 2) on every newly classified email, even when TUI/UI is offline
+- [ ] Action execution logged to SQLite (`classification_action_log` table) with timestamp and result
+- [ ] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
+- [ ] MCP tools: `list_classification_actions`, `add_classification_action`, `remove_classification_action`, `get_action_log`
+
+#### Example configuration
+
+```yaml
+classification_prompts:
+  - name: project-tagger
+    prompt: |
+      Given this email, respond with exactly one project name:
+      infra, backend, frontend, hiring, other
+      Sender: {sender}
+      Subject: {subject}
+      Tag:
+    categories: [infra, backend, frontend, hiring, other]
+
+  - name: order-extractor
+    prompt: |
+      If this email contains an order or tracking number, extract it.
+      Respond with ONLY the number, or "none" if not found.
+      Sender: {sender}
+      Subject: {subject}
+      Number:
+    extract: true
+
+classification_actions:
+  - category: imp
+    action: notify
+    title: "Important email"
+    body: "From {{.Sender}}: {{.Subject}}"
+
+  - category: txn
+    prompt: order-extractor
+    action: command
+    command: "echo '{{.ExtractedData}}' >> ~/orders.log"
+
+  - category: infra
+    prompt: project-tagger
+    action: webhook
+    url: "https://hooks.slack.com/services/XXX"
+    body: '{"text": "Infra email from {{.Sender}}: {{.Subject}}"}'
+```
 
 ---
 
