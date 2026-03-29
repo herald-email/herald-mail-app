@@ -209,11 +209,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return OAuthRequiredMsg{Email: s.email, Config: builtCfg}
 			})
 		}
-		// Non-Gmail: persist to disk (best-effort) then signal done.
-		savePath, err := config.ExpandPath("~/.herald/conf.yaml")
-		if err == nil {
-			_ = cfg.Save(savePath)
-		}
+		// Non-Gmail: signal done; the caller is responsible for saving.
 		return s, tea.Batch(cmd, func() tea.Msg {
 			return SettingsSavedMsg{Config: cfg}
 		})

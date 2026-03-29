@@ -22,7 +22,6 @@ type wizardState int
 const (
 	wizardStateSettings wizardState = iota
 	wizardStateOAuth
-	wizardStateDone
 )
 
 // wizardModel is a thin tea.Model wrapper that drives the first-run setup wizard.
@@ -33,6 +32,7 @@ type wizardModel struct {
 	state      wizardState
 	width      int
 	height     int
+	err        error
 }
 
 func (m wizardModel) Init() tea.Cmd {
@@ -43,8 +43,12 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		// Fall through to delegate WindowSizeMsg to the active sub-model.
 
 	case app.SettingsSavedMsg:
+		if err := msg.Config.Save(m.configPath); err != nil {
+			m.err = err
+		}
 		return m, tea.Quit
 
 	case app.SettingsCancelledMsg:
@@ -58,6 +62,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		oauthModel, err := app.NewOAuthWaitModel(msg.Email, cfg, m.configPath)
 		if err != nil {
+			m.err = err
 			return m, tea.Quit
 		}
 		m.oauthWait = oauthModel
@@ -68,6 +73,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case app.OAuthErrorMsg:
+		m.err = msg.Err
 		return m, tea.Quit
 	}
 
@@ -97,9 +103,16 @@ func (m wizardModel) View() string {
 // runWizard runs the first-run setup wizard as a standalone Bubble Tea program.
 func runWizard(configPath string) error {
 	s := app.NewSettings(app.SettingsModeWizard, nil)
-	p := tea.NewProgram(wizardModel{settings: s, configPath: configPath}, tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+	wm := wizardModel{settings: s, configPath: configPath}
+	p := tea.NewProgram(wm, tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return err
+	}
+	if final, ok := finalModel.(wizardModel); ok && final.err != nil {
+		return final.err
+	}
+	return nil
 }
 
 func main() {
@@ -159,6 +172,11 @@ func main() {
 	if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
 		if err := runWizard(resolvedConfig); err != nil {
 			log.Fatalf("setup wizard failed: %v", err)
+		}
+		// Wizard exited — verify config was actually written (user may have cancelled).
+		if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
+			fmt.Fprintln(os.Stderr, "Setup cancelled. Run herald again to configure.")
+			os.Exit(0)
 		}
 	}
 
