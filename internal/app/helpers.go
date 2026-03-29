@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -144,6 +146,22 @@ func flattenTree(roots []*folderNode) []sidebarItem {
 }
 
 type tickMsg struct{}
+
+// describeImagesCmd returns one tea.Cmd per inline image that asks the vision model for a
+// one-sentence description. Each command resolves to an ImageDescMsg.
+func describeImagesCmd(classifier *ai.Classifier, images []models.InlineImage) []tea.Cmd {
+	cmds := make([]tea.Cmd, 0, len(images))
+	for _, img := range images {
+		img := img // capture loop variable
+		cmds = append(cmds, func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			desc, err := classifier.DescribeImage(ctx, img.Data, img.MIMEType)
+			return ImageDescMsg{ContentID: img.ContentID, Description: desc, Err: err}
+		})
+	}
+	return cmds
+}
 
 // tickSpinner returns a command to tick the spinner
 func (m *Model) tickSpinner() tea.Cmd {
@@ -1091,7 +1109,24 @@ func (m *Model) renderEmailPreview() string {
 		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
 		imageLines := 0
 		for _, img := range m.emailBody.InlineImages {
-			label := fmt.Sprintf("[image  %s  %d KB]", img.MIMEType, len(img.Data)/1024)
+			var label string
+			if iterm2.IsSupported() {
+				// Render image inline via iTerm2 protocol
+				rendered := iterm2.Render(img.Data, innerW)
+				if rendered != "" {
+					sb.WriteString(rendered)
+					imageLines++
+					continue
+				}
+			}
+			if desc, ok := m.inlineImageDescs[img.ContentID]; ok {
+				label = fmt.Sprintf("[Image: %s]", desc)
+			} else if m.classifier != nil && m.classifier.HasVisionModel() {
+				label = fmt.Sprintf("[image  %s  %d KB  — describing…]", img.MIMEType, len(img.Data)/1024)
+			} else {
+				label = fmt.Sprintf("[image: %s]", img.MIMEType)
+			}
+			label = truncate(label, innerW)
 			sb.WriteString(dimStyle.Render(label) + "\n")
 			imageLines++
 		}
@@ -1251,6 +1286,35 @@ func (m *Model) renderFullScreenEmail() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
+		// Show inline images — same 3-path logic as split view
+		imageLines := 0
+		for _, img := range m.emailBody.InlineImages {
+			if iterm2.IsSupported() {
+				rendered := iterm2.Render(img.Data, innerW)
+				if rendered != "" {
+					sb.WriteString(rendered)
+					imageLines++
+					continue
+				}
+			}
+			var label string
+			if desc, ok := m.inlineImageDescs[img.ContentID]; ok {
+				label = fmt.Sprintf("[Image: %s]", desc)
+			} else if m.classifier != nil && m.classifier.HasVisionModel() {
+				label = fmt.Sprintf("[image  %s  %d KB  — describing…]", img.MIMEType, len(img.Data)/1024)
+			} else {
+				label = fmt.Sprintf("[image: %s]", img.MIMEType)
+			}
+			label = truncate(label, innerW)
+			sb.WriteString(dimStyle.Render(label) + "\n")
+			imageLines++
+		}
+		// Reserve lines used by image labels so body scroll accounting is correct
+		maxBodyLines -= imageLines
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+
 		body := stripInvisibleChars(m.emailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"

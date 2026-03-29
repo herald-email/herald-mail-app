@@ -1,6 +1,6 @@
-// ssh-server serves the mail-processor TUI over SSH using charmbracelet/wish.
+// ssh-server serves the herald TUI over SSH using charmbracelet/wish.
 // Any SSH client can connect and use the full email client remotely.
-// Usage: ./ssh-server [-config proton.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
+// Usage: ./ssh-server [-config ~/.herald/conf.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
 package main
 
 import (
@@ -28,7 +28,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "proton.yaml", "Path to configuration file")
+	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	flag.Parse()
@@ -38,7 +38,12 @@ func main() {
 	}
 	defer logger.Close()
 
-	cfg, err := config.Load(*configPath)
+	resolvedConfig, err := config.ExpandPath(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(resolvedConfig)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -58,7 +63,7 @@ func main() {
 		wish.WithMiddleware(
 			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				// Each SSH connection gets its own backend (own IMAP connection + shared cache)
-				b, err := backend.NewLocal(cfg, classifier)
+				b, err := backend.NewLocal(cfg, resolvedConfig, classifier)
 				if err != nil {
 					fmt.Fprintf(s, "Failed to create backend: %v\n", err)
 					return nil, nil

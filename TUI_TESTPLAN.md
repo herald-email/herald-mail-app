@@ -1004,6 +1004,85 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 ---
 
+### TC-44 — First-run wizard (no config file)
+
+**Prerequisites:** `~/.herald/conf.yaml` does not exist. Herald binary is built (`make build`).
+
+**Steps:**
+1. Rename or remove `~/.herald/conf.yaml` if present.
+2. Run `./bin/herald`.
+3. Capture screenshot — wizard step 1 (account type selector) should appear immediately.
+4. Navigate to **Standard IMAP** with `↓`, press Enter.
+5. Fill in email address and password fields; leave IMAP/SMTP fields at defaults.
+6. Press Enter to advance to step 3 (AI).
+7. Accept default Ollama settings; press Enter to save & launch.
+8. Capture screenshot — app should load with the inbox.
+
+**Expect (step 3):**
+- Full-screen TUI wizard visible (no config error, no crash)
+- Step indicator shows `Step 1 of 3 — Account`
+- Provider list includes Gmail, Standard IMAP, ProtonMail Bridge, Fastmail, iCloud, Outlook
+
+**Expect (step 8):**
+- `~/.herald/conf.yaml` created with correct IMAP credentials
+- App loads inbox normally
+
+---
+
+### TC-45 — S key settings panel
+
+**Prerequisites:** App running with a valid config.
+
+**Steps:**
+1. From any tab, press `S`.
+2. Capture screenshot — settings overlay should appear full-screen.
+3. Navigate to the AI step (step 3) using the form navigation.
+4. Change the Ollama model field.
+5. Press Enter to save.
+6. Capture screenshot — settings should close; inbox visible again.
+7. Press `S` again; press Escape.
+8. Capture screenshot — settings should close without saving.
+
+**Expect (step 2):**
+- Settings overlay fills the terminal
+- Form pre-filled with current config values
+- Provider matches what is in the active config
+
+**Expect (step 6):**
+- Status bar briefly shows "Settings saved."
+- Inbox (or previous view) is visible again
+
+**Expect (step 8):**
+- Settings close; no "Settings saved." message
+
+---
+
+### TC-46 — Gmail OAuth flow from settings panel
+
+**Prerequisites:** `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` set to real Google OAuth2 credentials. App running.
+
+**Steps:**
+1. Press `S` to open settings.
+2. Select **Gmail** as provider; enter a Gmail address; advance to step 2.
+3. Press Enter on the OAuth confirmation.
+4. Capture screenshot — OAuth wait screen should appear with the authorization URL.
+5. Open the URL in a browser and authorize.
+6. Capture screenshot — OAuth wait screen should show success and transition back to inbox.
+7. Check `~/.herald/conf.yaml` for `gmail.access_token`, `gmail.refresh_token`, `gmail.token_expiry`.
+
+**Expect (step 4):**
+- Authorization URL displayed; spinner visible
+- `Open Browser` option visible; URL is a valid `accounts.google.com/o/oauth2/auth` URL
+
+**Expect (step 6):**
+- App returns to inbox
+- Status bar shows "Gmail account authorized. Reconnecting…"
+
+**Expect (step 7):**
+- `gmail.refresh_token` is non-empty in the saved config
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

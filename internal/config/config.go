@@ -3,9 +3,24 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+	"mail-processor/internal/logger"
 )
+
+// ExpandPath replaces a leading "~" with the current user's home directory.
+func ExpandPath(p string) (string, error) {
+	if !strings.HasPrefix(p, "~") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	return filepath.Join(home, p[1:]), nil
+}
 
 // Config represents the application configuration
 type Config struct {
@@ -24,7 +39,7 @@ type Config struct {
 	} `yaml:"smtp"`
 	Ollama struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
-		Model          string `yaml:"model"`           // default: gemma2:2b
+		Model          string `yaml:"model"`           // default: gemma3:4b
 		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
 	} `yaml:"ollama"`
 	Sync struct {
@@ -39,6 +54,13 @@ type Config struct {
 		BatchSize int     `yaml:"batch_size"` // default: 20
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
+	Gmail struct {
+		AccessToken  string `yaml:"access_token,omitempty"`
+		RefreshToken string `yaml:"refresh_token,omitempty"`
+		// TokenExpiry is the OAuth access-token expiry in RFC3339 format.
+		TokenExpiry string `yaml:"token_expiry,omitempty"`
+		Email        string `yaml:"email,omitempty"`
+	} `yaml:"gmail,omitempty"`
 }
 
 // vendorPreset holds IMAP/SMTP defaults for a known mail provider
@@ -57,9 +79,10 @@ var vendorPresets = map[string]vendorPreset{
 	"icloud":     {"imap.mail.me.com", 993, "smtp.mail.me.com", 587},
 }
 
-// applyVendorPreset fills in server/smtp host+port when a vendor shortcut is set
-// and the user has not provided explicit values.
-func (c *Config) applyVendorPreset() {
+// ApplyVendorPreset fills in server/smtp host+port when a vendor shortcut is
+// set and the user has not provided explicit values. Exported so that other
+// packages (e.g. the settings form) can apply presets to a freshly built config.
+func (c *Config) ApplyVendorPreset() {
 	if c.Vendor == "" {
 		return
 	}
@@ -81,8 +104,47 @@ func (c *Config) applyVendorPreset() {
 	}
 }
 
+// IsGmailOAuth returns true when the config contains a Gmail OAuth refresh token,
+// indicating the user authenticates via OAuth rather than username/password.
+func (c *Config) IsGmailOAuth() bool {
+	return c.Gmail.RefreshToken != ""
+}
+
+// Save marshals the config to YAML and writes it atomically to path with 0600 permissions.
+func (c *Config) Save(path string) error {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".config-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp config file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op after successful rename
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temp config: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+	return nil
+}
+
 // applyDefaults sets sensible defaults for optional config fields
 func (c *Config) applyDefaults() {
+	if c.Ollama.Model == "" {
+		c.Ollama.Model = "gemma3:4b"
+	}
 	if c.Ollama.EmbeddingModel == "" {
 		c.Ollama.EmbeddingModel = "nomic-embed-text"
 	}
@@ -119,7 +181,7 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	config.applyVendorPreset()
+	config.ApplyVendorPreset()
 	config.applyDefaults()
 
 	// Validate required fields
@@ -132,11 +194,14 @@ func Load(configPath string) (*Config, error) {
 
 // validate checks that all required configuration fields are present
 func (c *Config) validate() error {
-	if c.Credentials.Username == "" {
-		return fmt.Errorf("missing credentials.username")
-	}
-	if c.Credentials.Password == "" {
-		return fmt.Errorf("missing credentials.password")
+	// Gmail OAuth users authenticate via token; skip username/password checks.
+	if !c.IsGmailOAuth() {
+		if c.Credentials.Username == "" {
+			return fmt.Errorf("missing credentials.username")
+		}
+		if c.Credentials.Password == "" {
+			return fmt.Errorf("missing credentials.password")
+		}
 	}
 	if c.Server.Host == "" {
 		return fmt.Errorf("missing server.host")
@@ -157,8 +222,7 @@ func checkFilePermissions(configPath string) error {
 	mode := info.Mode()
 	// Check if group or others have any permissions (Unix-like systems)
 	if mode&0o077 != 0 {
-		fmt.Printf("Warning: Config file has loose permissions (%v). Consider running: chmod 600 %s\n", 
-			mode, configPath)
+		logger.Warn("Config file has loose permissions (%v). Consider running: chmod 600 %s", mode, configPath)
 	}
 
 	return nil

@@ -72,8 +72,9 @@ func (b *LocalBackend) ValidIDsCh() <-chan map[string]bool {
 	return ch
 }
 
-// NewLocal creates a LocalBackend. The caller must call Close() when done.
-func NewLocal(cfg *config.Config, classifier *ai.Classifier) (*LocalBackend, error) {
+// NewLocal creates a LocalBackend. configPath is the path to the config file on disk;
+// it is used to persist refreshed OAuth tokens. The caller must call Close() when done.
+func NewLocal(cfg *config.Config, configPath string, classifier *ai.Classifier) (*LocalBackend, error) {
 	c, err := cache.New("email_cache.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cache: %w", err)
@@ -81,7 +82,7 @@ func NewLocal(cfg *config.Config, classifier *ai.Classifier) (*LocalBackend, err
 
 	progressCh := make(chan models.ProgressInfo, 100)
 	return &LocalBackend{
-		imapClient:  imap.New(cfg, c, progressCh),
+		imapClient:  imap.New(cfg, configPath, c, progressCh),
 		cache:       c,
 		classifier:  classifier,
 		progressCh:  progressCh,

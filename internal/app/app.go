@@ -12,6 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/config"
+	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -145,6 +147,13 @@ type UnsubscribeResultMsg struct {
 	Err    error
 }
 
+// ImageDescMsg carries an AI-generated description for a single inline image
+type ImageDescMsg struct {
+	ContentID   string
+	Description string
+	Err         error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -209,6 +218,7 @@ type Model struct {
 	selectedTimelineEmail *models.EmailData
 	emailBody             *models.EmailBody
 	emailBodyLoading      bool
+	inlineImageDescs      map[string]string // ContentID → AI description (vision fallback)
 	emailPreviewWidth     int // computed in updateTableDimensions
 	emailFullScreen       bool
 	// Cached wrapped body lines — invalidated when body or panel width changes.
@@ -287,6 +297,20 @@ type Model struct {
 	visualStart int // first selected line index in bodyWrappedLines
 	visualEnd   int // last selected line index (inclusive)
 	pendingY    bool // first 'y' of 'yy' sequence
+
+	// Config
+	cfg        *config.Config
+	configPath string
+
+	// Settings panel overlay
+	showSettings  bool
+	settingsPanel *Settings
+
+	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
+	oauthWait *OAuthWaitModel
+
+	// General status message (shown briefly after actions like settings save)
+	statusMessage string
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -487,6 +511,17 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	return m
 }
 
+// SetConfigPath stores the resolved config file path so settings saves can
+// persist changes back to disk.
+func (m *Model) SetConfigPath(path string) {
+	m.configPath = path
+}
+
+// SetConfig stores the loaded config so the settings panel can pre-fill fields.
+func (m *Model) SetConfig(cfg *config.Config) {
+	m.cfg = cfg
+}
+
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
@@ -499,6 +534,65 @@ func (m *Model) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// Handle settings panel messages before forwarding to the panel, so we can
+	// close it cleanly when it emits a completion message.
+	switch msg := msg.(type) {
+	case SettingsSavedMsg:
+		if err := msg.Config.Save(m.configPath); err != nil {
+			m.statusMessage = fmt.Sprintf("Failed to save settings: %v", err)
+		} else {
+			m.cfg = msg.Config
+			m.statusMessage = "Settings saved."
+		}
+		m.showSettings = false
+		m.settingsPanel = nil
+		return m, nil
+
+	case SettingsCancelledMsg:
+		m.showSettings = false
+		m.settingsPanel = nil
+		return m, nil
+
+	case OAuthRequiredMsg:
+		// Gmail chosen in the settings panel — launch the OAuth wait overlay.
+		m.showSettings = false
+		m.settingsPanel = nil
+		oauthModel, err := NewOAuthWaitModel(msg.Email, msg.Config, m.configPath)
+		if err != nil {
+			m.statusMessage = fmt.Sprintf("Failed to start OAuth flow: %v", err)
+			return m, nil
+		}
+		m.oauthWait = oauthModel
+		return m, m.oauthWait.Init()
+
+	case OAuthDoneMsg:
+		m.oauthWait = nil
+		m.cfg = msg.Config
+		m.statusMessage = "Gmail account authorized. Reconnecting…"
+		// TODO: trigger backend reconnect when reconnect API is available
+		return m, nil
+
+	case OAuthErrorMsg:
+		m.oauthWait = nil
+		m.statusMessage = fmt.Sprintf("OAuth failed: %v", msg.Err)
+		return m, nil
+	}
+
+	// Forward all messages to the OAuth wait overlay when active.
+	if m.oauthWait != nil {
+		newModel, cmd := m.oauthWait.Update(msg)
+		m.oauthWait = newModel.(*OAuthWaitModel)
+		return m, cmd
+	}
+
+	// Forward all messages to the settings panel when it is active (intercepts
+	// key presses and window-size events so the panel handles them exclusively).
+	if m.showSettings && m.settingsPanel != nil {
+		newModel, cmd := m.settingsPanel.Update(msg)
+		m.settingsPanel = newModel.(*Settings)
+		return m, cmd
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -646,6 +740,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
 				}
+				// Only fetch AI image descriptions when the terminal can't render them natively
+				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
+					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
+				}
 				if len(cmds) > 0 {
 					m.bodyWrappedLines = nil
 					return m, tea.Batch(cmds...)
@@ -653,6 +751,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
+		return m, nil
+
+	case ImageDescMsg:
+		if msg.Err == nil && msg.Description != "" {
+			if m.inlineImageDescs == nil {
+				m.inlineImageDescs = make(map[string]string)
+			}
+			m.inlineImageDescs[msg.ContentID] = msg.Description
+		}
 		return m, nil
 
 	case ChatResponseMsg:
@@ -903,6 +1010,14 @@ const minTermWidth = 60
 const minTermHeight = 15
 
 func (m *Model) View() string {
+	// OAuth wait overlay takes over the entire screen when active.
+	if m.oauthWait != nil {
+		return m.oauthWait.View()
+	}
+	// Settings overlay takes over the entire screen when active.
+	if m.showSettings && m.settingsPanel != nil {
+		return m.settingsPanel.View()
+	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
 		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
 	}
@@ -1124,6 +1239,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "S":
+		if !m.showSettings {
+			m.showSettings = true
+			m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+			return m, m.settingsPanel.Init()
+		}
+		return m, nil
+
 	case "e":
 		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
 			desc := m.buildArchiveDesc()
@@ -1226,6 +1349,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.selectedTimelineEmail = email
 					m.emailBody = nil
 					m.emailBodyLoading = true
+					m.inlineImageDescs = nil // reset per-email image descriptions
 					m.bodyScrollOffset = 0
 					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 					return m, m.loadEmailBodyCmd(email.Folder, email.UID)

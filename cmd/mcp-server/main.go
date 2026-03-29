@@ -1,5 +1,5 @@
-// mcp-server exposes email operations as MCP tools over stdio.
-// Usage: ./mcp-server [-config proton.yaml]
+// mcp-server exposes herald email operations as MCP tools over stdio.
+// Usage: ./mcp-server [-config ~/.herald/conf.yaml]
 // Add to Claude Code's MCP config to let Claude search and manage your email.
 package main
 
@@ -20,10 +20,15 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "proton.yaml", "Path to configuration file")
+	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	flag.Parse()
 
-	cfg, err := config.Load(*configPath)
+	expanded, err := config.ExpandPath(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(expanded)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -41,7 +46,7 @@ func main() {
 	}
 
 	s := server.NewMCPServer(
-		"mail-processor",
+		"herald",
 		"1.0.0",
 		server.WithToolCapabilities(false),
 	)
@@ -412,7 +417,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			query, err := req.RequireString("query")
 			if err != nil {
@@ -459,7 +464,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			msgID, err := req.RequireString("message_id")
 			if err != nil {
@@ -496,7 +501,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			msgID, err := req.RequireString("message_id")
 			if err != nil {

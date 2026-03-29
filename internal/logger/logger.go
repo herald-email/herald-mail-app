@@ -22,7 +22,7 @@ func Init(debug bool) error {
 	
 	// Create log file with timestamp
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("mail_processor_%s.log", timestamp)
+	filename := fmt.Sprintf("herald_%s.log", timestamp)
 	
 	var err error
 	logFile, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -38,7 +38,7 @@ func Init(debug bool) error {
 	errorLogger = log.New(multiWriter, "ERROR ", log.Ldate|log.Ltime|log.Lshortfile)
 	debugLogger = log.New(multiWriter, "DEBUG ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	Info("=== Mail Processor Started ===")
+	Info("=== Herald Started ===")
 	Info("Logging to file: %s", filename)
 	if debug {
 		Info("Debug mode enabled - detailed logging active")
@@ -50,7 +50,7 @@ func Init(debug bool) error {
 // Close closes the log file
 func Close() {
 	if logFile != nil {
-		Info("=== Mail Processor Finished ===")
+		Info("=== Herald Finished ===")
 		logFile.Close()
 	}
 }

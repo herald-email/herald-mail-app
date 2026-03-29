@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -16,7 +17,27 @@ import (
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	"mail-processor/internal/oauth"
 )
+
+// xoauth2Client implements the XOAUTH2 SASL mechanism required by Gmail's IMAP server.
+// XOAUTH2 is distinct from OAUTHBEARER (RFC 7628); Gmail only supports XOAUTH2.
+// Format: "user=<username>\x01auth=Bearer <access_token>\x01\x01"
+type xoauth2Client struct {
+	username string
+	token    string
+}
+
+func (c *xoauth2Client) Start() (string, []byte, error) {
+	ir := []byte("user=" + c.username + "\x01auth=Bearer " + c.token + "\x01\x01")
+	return "XOAUTH2", ir, nil
+}
+
+func (c *xoauth2Client) Next(_ []byte) ([]byte, error) {
+	// XOAUTH2 is a single-step mechanism. If the server sends a challenge it
+	// means authentication failed; respond with an empty string to get the error.
+	return []byte{}, nil
+}
 
 var discardLogger = log.New(io.Discard, "", 0)
 
@@ -25,6 +46,7 @@ var discardLogger = log.New(io.Discard, "", 0)
 // the go-imap client is not safe for concurrent use.
 type Client struct {
 	cfg           *config.Config
+	configPath    string // path to write refreshed OAuth tokens back to disk
 	client        *client.Client
 	cache         *cache.Cache
 	groupByDomain bool
@@ -32,13 +54,23 @@ type Client struct {
 	mu            sync.Mutex
 }
 
-// New creates a new IMAP client
-func New(cfg *config.Config, cache *cache.Cache, progressCh chan models.ProgressInfo) *Client {
+// New creates a new IMAP client. configPath is used to persist refreshed OAuth tokens;
+// pass an empty string if OAuth is not in use.
+func New(cfg *config.Config, configPath string, cache *cache.Cache, progressCh chan models.ProgressInfo) *Client {
 	return &Client{
 		cfg:        cfg,
+		configPath: configPath,
 		cache:      cache,
 		progressCh: progressCh,
 	}
+}
+
+// isLocalServer reports whether the IMAP server is a local bridge (ProtonMail Bridge,
+// local proxy, etc.) that requires InsecureSkipVerify. External providers such as
+// Gmail, Fastmail, and Outlook use implicit TLS with valid certificates.
+func (c *Client) isLocalServer() bool {
+	h := c.cfg.Server.Host
+	return h == "127.0.0.1" || h == "localhost" || c.cfg.Vendor == "protonmail"
 }
 
 // Connect establishes connection to IMAP server. It is a no-op if already connected.
@@ -47,35 +79,58 @@ func (c *Client) Connect() error {
 		return nil // reuse existing connection
 	}
 
-	// Connect to IMAP server
 	addr := fmt.Sprintf("%s:%d", c.cfg.Server.Host, c.cfg.Server.Port)
 
 	var err error
-	c.client, err = client.Dial(addr)
-	if err != nil {
-		return fmt.Errorf("failed to connect to IMAP server: %w", err)
-	}
-
-	// Suppress IMAP protocol errors that are logged to stderr
-	// These are parsing errors on malformed emails that we handle gracefully
-	c.client.ErrorLog = discardLogger
-
-	// Create TLS config for localhost/ProtonMail Bridge
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // Required for localhost connections
-		ServerName:         c.cfg.Server.Host,
-	}
-
-	// Start TLS
-	if err := c.client.StartTLS(tlsConfig); err != nil {
-		return fmt.Errorf("failed to start TLS: %w", err)
+	if c.isLocalServer() {
+		// Local bridge: plain TCP + StartTLS with self-signed cert tolerance.
+		c.client, err = client.Dial(addr)
+		if err != nil {
+			return fmt.Errorf("failed to connect to IMAP server: %w", err)
+		}
+		c.client.ErrorLog = discardLogger
+		tlsCfg := &tls.Config{
+			InsecureSkipVerify: true, // intentional for local ProtonMail Bridge
+			ServerName:         c.cfg.Server.Host,
+		}
+		if err := c.client.StartTLS(tlsCfg); err != nil {
+			return fmt.Errorf("failed to start TLS: %w", err)
+		}
+	} else {
+		// External provider (Gmail, Fastmail, Outlook…): implicit TLS on port 993
+		// with proper certificate verification.
+		tlsCfg := &tls.Config{ServerName: c.cfg.Server.Host}
+		c.client, err = client.DialTLS(addr, tlsCfg)
+		if err != nil {
+			return fmt.Errorf("failed to connect to IMAP server: %w", err)
+		}
+		c.client.ErrorLog = discardLogger
 	}
 
 	// Authenticate
-	logger.Debug("Attempting to authenticate with username: %s", c.cfg.Credentials.Username)
-	if err := c.client.Login(c.cfg.Credentials.Username, c.cfg.Credentials.Password); err != nil {
-		logger.Error("Authentication failed: %v", err)
-		return fmt.Errorf("failed to authenticate: %w", err)
+	if c.cfg.IsGmailOAuth() {
+		logger.Debug("Attempting Gmail XOAUTH2 authentication for: %s", c.cfg.Gmail.Email)
+		accessToken, err := oauth.RefreshIfNeeded(context.Background(), c.cfg)
+		if err != nil {
+			return fmt.Errorf("failed to refresh OAuth token: %w", err)
+		}
+		// Persist any refreshed tokens so the next launch doesn't need a new refresh.
+		if c.configPath != "" {
+			if saveErr := c.cfg.Save(c.configPath); saveErr != nil {
+				logger.Warn("Failed to persist refreshed OAuth token: %v", saveErr)
+			}
+		}
+		saslClient := &xoauth2Client{username: c.cfg.Gmail.Email, token: accessToken}
+		if err := c.client.Authenticate(saslClient); err != nil {
+			logger.Error("XOAUTH2 authentication failed: %v", err)
+			return fmt.Errorf("IMAP XOAUTH2 authentication failed: %w", err)
+		}
+	} else {
+		logger.Debug("Attempting to authenticate with username: %s", c.cfg.Credentials.Username)
+		if err := c.client.Login(c.cfg.Credentials.Username, c.cfg.Credentials.Password); err != nil {
+			logger.Error("Authentication failed: %v", err)
+			return fmt.Errorf("IMAP login failed: %w", err)
+		}
 	}
 
 	logger.Info("Successfully connected to IMAP server at %s", addr)

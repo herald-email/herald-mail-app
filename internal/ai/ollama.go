@@ -2,6 +2,8 @@ package ai
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -198,6 +200,73 @@ func (c *Classifier) Ping() error {
 		return fmt.Errorf("ollama returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// IsVisionCapable returns true if the given model name supports image inputs.
+func IsVisionCapable(modelName string) bool {
+	lower := strings.ToLower(modelName)
+	prefixes := []string{"gemma3", "llava", "bakllava", "moondream", "minicpm-v", "gemma3n"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasVisionModel returns true if the classifier's configured model supports image inputs.
+func (c *Classifier) HasVisionModel() bool {
+	return IsVisionCapable(c.model)
+}
+
+type generateImageRequest struct {
+	Model  string   `json:"model"`
+	Prompt string   `json:"prompt"`
+	Images []string `json:"images"`
+	Stream bool     `json:"stream"`
+}
+
+// DescribeImage sends an image to the vision model and returns a one-sentence description.
+// imageBytes is the raw image data; mimeType is e.g. "image/jpeg".
+// Returns an error if the model is not vision-capable or the request fails.
+func (c *Classifier) DescribeImage(ctx context.Context, imageBytes []byte, mimeType string) (string, error) {
+	if !c.HasVisionModel() {
+		return "", fmt.Errorf("model %q does not support vision", c.model)
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(imageBytes)
+	payload := generateImageRequest{
+		Model:  c.model,
+		Prompt: "Describe this image in one sentence, focusing on what it shows.",
+		Images: []string{b64},
+		Stream: false,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/api/generate", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("ollama image request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+
+	var result generateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(result.Response), nil
 }
 
 func normalizeCategory(raw string) Category {
