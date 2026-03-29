@@ -46,7 +46,8 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
 - [ ] Quick replies (canned + AI-generated contextual options)
 - [ ] Contact book
-- [ ] Settings / onboarding screen (no YAML editing required)
+- [x] First-run setup wizard (detected when no config exists; account type, credentials, AI config steps)
+- [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [ ] README with MCP setup prompts for Claude / Cursor / Codex
 - [ ] Daemon server (`mail-processor serve`, Ollama-style)
@@ -174,7 +175,7 @@ The app can automatically tag emails with categories (subscription, important, u
 
 The built-in classification prompt assigns one of six fixed categories (`sub`, `news`, `imp`, `txn`, `soc`, `spam`). Custom prompts let users define their own categories and extraction logic tailored to their workflow — e.g. extracting order numbers from receipts, flagging emails from specific clients, or categorizing by project.
 
-- [ ] `classification_prompts` section in `proton.yaml` — list of named prompt definitions
+- [ ] `classification_prompts` section in `~/.herald/conf.yaml` — list of named prompt definitions
 - [ ] Each prompt specifies: name, system prompt text, list of valid output categories, and an optional data extraction instruction (e.g. "extract the tracking number")
 - [ ] Default built-in prompt used when no custom prompts are configured (current behaviour preserved)
 - [ ] Multiple prompts can run on the same email (e.g. one for category, one for data extraction)
@@ -186,7 +187,7 @@ The built-in classification prompt assigns one of six fixed categories (`sub`, `
 
 When an email matches a category, the system can trigger an action automatically. Actions turn classification from passive tagging into an active assistant — sending OS notifications for important mail, running shell commands with extracted data, or auto-filing emails into folders. Actions execute in the background daemon (Phase 2) so they fire even when the TUI is not running.
 
-- [ ] `classification_actions` section in `proton.yaml` — list of rules mapping category → action
+- [ ] `classification_actions` section in `~/.herald/conf.yaml` — list of rules mapping category → action
 - [ ] Each rule specifies: category match (built-in or custom), action type, and action config
 - [ ] Action type: `notify` — send an OS-level notification (macOS Notification Center / `notify-send` on Linux) with sender, subject, and optional extracted data
 - [ ] Action type: `command` — run a shell command with template variables (`{{.Sender}}`, `{{.Subject}}`, `{{.Category}}`, `{{.ExtractedData}}`, `{{.MessageID}}`)
@@ -295,7 +296,7 @@ Rules let the app automatically act on email from known senders — delete newsl
 - [ ] Per-sender / per-domain rules (action + older-than-days condition)
 - [ ] Rule storage in SQLite (`cleanup_rules` table)
 - [ ] Manual rule execution (`run_cleanup_rules` trigger)
-- [ ] Scheduled execution (configurable interval in `proton.yaml`)
+- [ ] Scheduled execution (configurable interval in `~/.herald/conf.yaml`)
 - [ ] TUI rule manager (list, add, remove)
 - [ ] MCP tools: `list_cleanup_rules`, `add_cleanup_rule`, `remove_cleanup_rule`, `run_cleanup_rules`
 
@@ -355,6 +356,7 @@ Received emails are converted from HTML to Markdown for display in the terminal.
 - [x] HTML → Markdown conversion for body preview
 - [x] Inline image rendering (iTerm2 protocol)
 - [ ] Kitty graphics protocol support (for non-iTerm2 terminals)
+- [ ] AI image description for non-iTerm2 terminals (vision-capable Ollama model, e.g. gemma3:4b)
 
 ---
 
@@ -474,7 +476,7 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 - [ ] 29-minute keepalive (re-issue IDLE before server timeout)
 
 ### Background polling (current)
-- [x] Configurable poll interval (`sync.interval` in `proton.yaml`, default 60s)
+- [x] Configurable poll interval (`sync.interval` in `~/.herald/conf.yaml`, default 60s)
 - [x] Polling detects new emails via UIDNEXT comparison
 - [x] New emails cached and prepended to timeline
 - [x] Sync countdown shown in status bar (↻ 42s)
@@ -486,7 +488,7 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 
 The app currently supports one IMAP account per config file. Multi-account support will allow managing several inboxes (e.g. personal + work) in a single session.
 
-- [ ] `accounts:` list in `proton.yaml` (current single-account format still works)
+- [ ] `accounts:` list in `~/.herald/conf.yaml` (current single-account format still works)
 - [ ] Per-account IMAP connection, cache file, and folder tree
 - [ ] Folder sidebar grouped under account headers
 - [ ] Status bar shows active account name
@@ -570,17 +572,17 @@ Bubble Tea's alt-screen captures all input, so the terminal's native mouse selec
 First-run experience and ongoing configuration should not require the user to edit a YAML file. A TUI settings screen lets users configure accounts, server details, AI, and sync preferences interactively. The YAML file remains the source of truth on disk — the settings screen reads and writes it.
 
 ### First-run wizard
-- [ ] Detected on startup when no config file exists
-- [ ] Step 1 — Account type: pick a vendor preset (ProtonMail, Gmail, Outlook, Fastmail, iCloud) or "Custom"
-- [ ] Step 2 — Credentials: username + password fields (masked); password optionally saved to keychain
-- [ ] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, skip if Ollama not running
+- [x] Detected on startup when no config file exists
+- [x] Step 1 — Account type: pick a vendor preset (Gmail, Standard IMAP, ProtonMail Bridge, Fastmail, iCloud, Outlook) or "Custom"
+- [x] Step 2 — Credentials: OAuth for Gmail; email + password + IMAP/SMTP host/port for all others
+- [x] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, pick embedding model; skip if Ollama not running
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
 - [ ] Step 5 — Test connection button; shows result inline before saving
-- [ ] Writes `proton.yaml` on finish
+- [x] Writes `~/.herald/conf.yaml` on finish
 
 ### In-app settings panel
-- [ ] Accessible from the TUI with `?` or `,` key (or a Settings tab)
-- [ ] Editable fields for all config sections: credentials, server, SMTP, AI, sync
+- [x] Accessible from the TUI with `S` key
+- [ ] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [ ] Account list for multi-account (add / remove / reorder)
 - [ ] Changes saved on `Ctrl+S`; no restart required for most settings
 - [ ] Passwords always hidden; "reveal" button toggles visibility
@@ -589,7 +591,7 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ## Security / Keychain
 
-Passwords in `proton.yaml` are stored in plaintext, which is acceptable for a local tool but not ideal. The keychain integration stores credentials in the OS keychain and replaces the plaintext value with a reference.
+Passwords in `~/.herald/conf.yaml` are stored in plaintext, which is acceptable for a local tool but not ideal. The keychain integration stores credentials in the OS keychain and replaces the plaintext value with a reference.
 
 - [ ] macOS: Keychain Services API (`security` CLI or native Go binding)
 - [ ] Linux: Secret Service API (via `libsecret` / D-Bus)
@@ -616,7 +618,7 @@ Each prompt below instructs the AI tool to register the MCP server. Users copy t
 Example (Claude Code):
 ```
 Add a local MCP server called "mail" that runs this command:
-/path/to/mail-processor/bin/mcp-server -config /path/to/proton.yaml
+/path/to/mail-processor/bin/mcp-server -config ~/.herald/conf.yaml
 ```
 
 ### README goals
@@ -631,6 +633,6 @@ Add a local MCP server called "mail" that runs this command:
 
 ## Theming
 
-- [ ] App-level theme system (configurable in `proton.yaml`)
+- [ ] App-level theme system (configurable in `~/.herald/conf.yaml`)
 - [ ] Inherit terminal color profile
 - [ ] Dark theme (current hardcoded styles are dark; no light theme)
