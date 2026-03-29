@@ -38,7 +38,7 @@ type Config struct {
 	} `yaml:"smtp"`
 	Ollama struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
-		Model          string `yaml:"model"`           // default: gemma2:2b
+		Model          string `yaml:"model"`           // default: gemma3:4b
 		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
 	} `yaml:"ollama"`
 	Sync struct {
@@ -56,7 +56,9 @@ type Config struct {
 	Gmail struct {
 		AccessToken  string `yaml:"access_token,omitempty"`
 		RefreshToken string `yaml:"refresh_token,omitempty"`
-		TokenExpiry  string `yaml:"token_expiry,omitempty"` // RFC3339 format
+		// TokenExpiry is the OAuth access-token expiry in RFC3339 format.
+		// TODO: parse to time.Time once the token-refresh flow is implemented.
+		TokenExpiry string `yaml:"token_expiry,omitempty"`
 		Email        string `yaml:"email,omitempty"`
 	} `yaml:"gmail,omitempty"`
 }
@@ -113,12 +115,25 @@ func (c *Config) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		return fmt.Errorf("failed to write temp config file: %w", err)
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".config-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp config file: %w", err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp) // best-effort cleanup
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op after successful rename
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temp config: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("failed to rename config file: %w", err)
 	}
 	return nil
