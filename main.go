@@ -216,6 +216,8 @@ func main() {
 
 	// Create the TUI application
 	app := app.New(b, mailer, cfg.Credentials.Username, classifier)
+	app.SetConfigPath(resolvedConfig)
+	app.SetConfig(cfg)
 
 	logger.Info("Starting TUI application...")
 

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -288,6 +289,17 @@ type Model struct {
 	visualEnd   int // last selected line index (inclusive)
 	pendingY    bool // first 'y' of 'yy' sequence
 
+	// Config
+	cfg        *config.Config
+	configPath string
+
+	// Settings panel overlay
+	showSettings  bool
+	settingsPanel *Settings
+
+	// General status message (shown briefly after actions like settings save)
+	statusMessage string
+
 	// Styles
 	baseStyle          lipgloss.Style
 	headerStyle        lipgloss.Style
@@ -487,6 +499,17 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	return m
 }
 
+// SetConfigPath stores the resolved config file path so settings saves can
+// persist changes back to disk.
+func (m *Model) SetConfigPath(path string) {
+	m.configPath = path
+}
+
+// SetConfig stores the loaded config so the settings panel can pre-fill fields.
+func (m *Model) SetConfig(cfg *config.Config) {
+	m.cfg = cfg
+}
+
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
@@ -499,6 +522,42 @@ func (m *Model) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// Handle settings panel messages before forwarding to the panel, so we can
+	// close it cleanly when it emits a completion message.
+	switch msg := msg.(type) {
+	case SettingsSavedMsg:
+		if err := msg.Config.Save(m.configPath); err != nil {
+			m.statusMessage = fmt.Sprintf("Failed to save settings: %v", err)
+		} else {
+			m.cfg = msg.Config
+			m.statusMessage = "Settings saved."
+		}
+		m.showSettings = false
+		m.settingsPanel = nil
+		return m, nil
+
+	case SettingsCancelledMsg:
+		m.showSettings = false
+		m.settingsPanel = nil
+		return m, nil
+
+	case OAuthRequiredMsg:
+		// Settings saved with Gmail — start OAuth flow.
+		// For now: close settings and show a status message with instructions.
+		m.showSettings = false
+		m.settingsPanel = nil
+		m.statusMessage = "Gmail OAuth: restart Herald to complete authorization."
+		return m, nil
+	}
+
+	// Forward all messages to the settings panel when it is active (intercepts
+	// key presses and window-size events so the panel handles them exclusively).
+	if m.showSettings && m.settingsPanel != nil {
+		newModel, cmd := m.settingsPanel.Update(msg)
+		m.settingsPanel = newModel.(*Settings)
+		return m, cmd
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -903,6 +962,10 @@ const minTermWidth = 60
 const minTermHeight = 15
 
 func (m *Model) View() string {
+	// Settings overlay takes over the entire screen when active.
+	if m.showSettings && m.settingsPanel != nil {
+		return m.settingsPanel.View()
+	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
 		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
 	}
@@ -1121,6 +1184,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m.deleteSelected()
 				}
 			}
+		}
+		return m, nil
+
+	case "S":
+		if !m.showSettings {
+			m.showSettings = true
+			m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+			return m, m.settingsPanel.Init()
 		}
 		return m, nil
 
