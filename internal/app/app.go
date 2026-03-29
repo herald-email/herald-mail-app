@@ -13,6 +13,7 @@ import (
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/config"
+	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -713,8 +714,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
 				}
-				// If classifier has vision model and terminal lacks iTerm2 support, fetch AI image descriptions
-				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() {
+				// Only fetch AI image descriptions when the terminal can't render them natively
+				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
 					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
 				}
 				if len(cmds) > 0 {
