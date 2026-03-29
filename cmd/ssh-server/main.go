@@ -12,6 +12,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,8 +29,20 @@ import (
 	appsmtp "mail-processor/internal/smtp"
 )
 
+// expandPath replaces a leading "~" with the current user's home directory.
+func expandPath(p string) (string, error) {
+	if !strings.HasPrefix(p, "~") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	return filepath.Join(home, p[1:]), nil
+}
+
 func main() {
-	configPath := flag.String("config", "proton.yaml", "Path to configuration file")
+	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	flag.Parse()
@@ -38,7 +52,12 @@ func main() {
 	}
 	defer logger.Close()
 
-	cfg, err := config.Load(*configPath)
+	resolvedConfig, err := expandPath(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(resolvedConfig)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

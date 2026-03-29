@@ -9,6 +9,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,11 +21,28 @@ import (
 	"mail-processor/internal/config"
 )
 
+// expandPath replaces a leading "~" with the current user's home directory.
+func expandPath(p string) (string, error) {
+	if !strings.HasPrefix(p, "~") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	return filepath.Join(home, p[1:]), nil
+}
+
 func main() {
-	configPath := flag.String("config", "proton.yaml", "Path to configuration file")
+	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	flag.Parse()
 
-	cfg, err := config.Load(*configPath)
+	expanded, err := expandPath(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(expanded)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
