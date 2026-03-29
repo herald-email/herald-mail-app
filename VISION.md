@@ -34,6 +34,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
 - [ ] IMAP IDLE (real push; currently polling only)
+- [ ] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [ ] Soft unsubscribe (auto-move future emails to a local folder)
 - [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
@@ -181,6 +182,30 @@ The Cleanup tab groups emails by sender or domain and shows volume statistics, m
 - [x] Details panel: individual emails for selected sender
 - [x] Bulk delete: all from sender, all from domain
 - [x] Bulk archive: all from sender
+
+### Email preview in Cleanup
+
+The Cleanup tab has two panels side by side: the sender summary (left) and the email list for the selected sender (right). Today the email list is read-only. The goal is to make individual emails fully actionable from within Cleanup — open, read, reply, unsubscribe — without switching to the Timeline tab.
+
+**Layout when an email is open:**
+- Folder sidebar hides completely (same as full-screen mode in Timeline)
+- Summary panel (sender list) shrinks to 25% of the terminal width
+- Email list panel (details) shrinks to 25%
+- Email preview panel opens at 50% on the right
+
+This gives enough room to read the email while keeping both panels visible as context. `Esc` closes the preview and restores the normal two-panel layout.
+
+- [x] `Tab` cycles focus between the summary panel and the email list panel
+- [ ] `Enter` on a row in the email list opens the email preview at 50% width
+- [ ] Folder sidebar hides when preview is open; restores on `Esc`
+- [ ] Summary and email list panels each shrink to 25% when preview is open
+- [ ] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
+- [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
+- [ ] `u` — unsubscribe from within Cleanup preview
+- [ ] `D` — delete the open email from within the preview
+- [ ] `e` — archive the open email from within the preview
+- [ ] `z` — expand to full-screen (same as Timeline full-screen mode)
+- [ ] `Esc` — close preview, restore two-panel Cleanup layout
 
 ### Unsubscribe
 
