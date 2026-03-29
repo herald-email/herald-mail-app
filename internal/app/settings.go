@@ -201,6 +201,17 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.form.State == huh.StateCompleted && !s.done {
 		s.done = true
 		cfg := s.buildConfig()
+		if s.provider == "gmail" {
+			// OAuth flow will handle saving after tokens received.
+			return s, tea.Batch(cmd, func() tea.Msg {
+				return OAuthRequiredMsg{Email: s.email}
+			})
+		}
+		// Non-Gmail: persist to disk (best-effort) then signal done.
+		savePath, err := config.ExpandPath("~/.herald/conf.yaml")
+		if err == nil {
+			_ = cfg.Save(savePath)
+		}
 		return s, tea.Batch(cmd, func() tea.Msg {
 			return SettingsSavedMsg{Config: cfg}
 		})
