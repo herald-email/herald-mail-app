@@ -287,3 +287,153 @@ func TestGetAllEmails_GroupByDomain(t *testing.T) {
 		t.Errorf("expected 1 email for other.com, got %d", len(groups["other.com"]))
 	}
 }
+
+// --- folder_sync_state ---
+
+func TestGetSetFolderSyncState(t *testing.T) {
+	c := newTestCache(t)
+
+	// Unknown folder returns zeros, no error
+	v, n, err := c.GetFolderSyncState("INBOX")
+	if err != nil {
+		t.Fatalf("GetFolderSyncState on empty: %v", err)
+	}
+	if v != 0 || n != 0 {
+		t.Errorf("expected 0,0 for unknown folder, got %d,%d", v, n)
+	}
+
+	// Store and read back
+	if err := c.SetFolderSyncState("INBOX", 12345, 999); err != nil {
+		t.Fatalf("SetFolderSyncState: %v", err)
+	}
+	v, n, err = c.GetFolderSyncState("INBOX")
+	if err != nil {
+		t.Fatalf("GetFolderSyncState after set: %v", err)
+	}
+	if v != 12345 || n != 999 {
+		t.Errorf("expected 12345,999 got %d,%d", v, n)
+	}
+
+	// Update replaces
+	if err := c.SetFolderSyncState("INBOX", 12345, 1000); err != nil {
+		t.Fatalf("SetFolderSyncState update: %v", err)
+	}
+	_, n, _ = c.GetFolderSyncState("INBOX")
+	if n != 1000 {
+		t.Errorf("expected updated uidnext=1000, got %d", n)
+	}
+}
+
+// --- GetCachedUIDsAndMessageIDs ---
+
+func TestGetCachedUIDsAndMessageIDs(t *testing.T) {
+	c := newTestCache(t)
+
+	withUID := &models.EmailData{MessageID: "<with-uid@x.com>", UID: 42, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()}
+	noUID := &models.EmailData{MessageID: "<no-uid@x.com>", UID: 0, Sender: "b@x.com", Folder: "INBOX", Date: time.Now()}
+	otherFolder := &models.EmailData{MessageID: "<other@x.com>", UID: 77, Sender: "c@x.com", Folder: "Sent", Date: time.Now()}
+
+	for _, e := range []*models.EmailData{withUID, noUID, otherFolder} {
+		if err := c.CacheEmail(e); err != nil {
+			t.Fatalf("CacheEmail: %v", err)
+		}
+	}
+
+	rows, err := c.GetCachedUIDsAndMessageIDs("INBOX")
+	if err != nil {
+		t.Fatalf("GetCachedUIDsAndMessageIDs: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows for INBOX, got %d", len(rows))
+	}
+
+	byID := make(map[string]uint32)
+	for _, r := range rows {
+		byID[r.MessageID] = r.UID
+	}
+	if byID["<with-uid@x.com>"] != 42 {
+		t.Errorf("expected UID 42 for <with-uid@x.com>, got %d", byID["<with-uid@x.com>"])
+	}
+	if byID["<no-uid@x.com>"] != 0 {
+		t.Errorf("expected UID 0 for <no-uid@x.com>, got %d", byID["<no-uid@x.com>"])
+	}
+	if _, ok := byID["<other@x.com>"]; ok {
+		t.Error("Sent folder entry should not appear")
+	}
+}
+
+// --- DeleteEmailsByUIDs ---
+
+func TestDeleteEmailsByUIDs(t *testing.T) {
+	c := newTestCache(t)
+
+	emails := []*models.EmailData{
+		{MessageID: "<uid1@x.com>", UID: 1, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid2@x.com>", UID: 2, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid3@x.com>", UID: 3, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid4@x.com>", UID: 4, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid5@x.com>", UID: 5, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+	}
+	for _, e := range emails {
+		if err := c.CacheEmail(e); err != nil {
+			t.Fatalf("CacheEmail: %v", err)
+		}
+	}
+
+	if err := c.DeleteEmailsByUIDs("INBOX", []uint32{1, 3, 5}); err != nil {
+		t.Fatalf("DeleteEmailsByUIDs: %v", err)
+	}
+
+	ids, _ := c.GetCachedIDs("INBOX")
+	for _, gone := range []string{"<uid1@x.com>", "<uid3@x.com>", "<uid5@x.com>"} {
+		if ids[gone] {
+			t.Errorf("expected %s to be deleted", gone)
+		}
+	}
+	for _, kept := range []string{"<uid2@x.com>", "<uid4@x.com>"} {
+		if !ids[kept] {
+			t.Errorf("expected %s to remain", kept)
+		}
+	}
+}
+
+func TestDeleteEmailsByUIDs_Empty(t *testing.T) {
+	c := newTestCache(t)
+	// No-op on empty slice should not error
+	if err := c.DeleteEmailsByUIDs("INBOX", nil); err != nil {
+		t.Fatalf("DeleteEmailsByUIDs with nil: %v", err)
+	}
+	if err := c.DeleteEmailsByUIDs("INBOX", []uint32{}); err != nil {
+		t.Fatalf("DeleteEmailsByUIDs with empty: %v", err)
+	}
+}
+
+// --- ClearFolder ---
+
+func TestClearFolder(t *testing.T) {
+	c := newTestCache(t)
+
+	inbox1 := &models.EmailData{MessageID: "<i1@x.com>", Sender: "a@x.com", Folder: "INBOX", Date: time.Now()}
+	inbox2 := &models.EmailData{MessageID: "<i2@x.com>", Sender: "b@x.com", Folder: "INBOX", Date: time.Now()}
+	sent := &models.EmailData{MessageID: "<s1@x.com>", Sender: "a@x.com", Folder: "Sent", Date: time.Now()}
+
+	for _, e := range []*models.EmailData{inbox1, inbox2, sent} {
+		if err := c.CacheEmail(e); err != nil {
+			t.Fatalf("CacheEmail: %v", err)
+		}
+	}
+
+	if err := c.ClearFolder("INBOX"); err != nil {
+		t.Fatalf("ClearFolder: %v", err)
+	}
+
+	inboxIDs, _ := c.GetCachedIDs("INBOX")
+	if len(inboxIDs) != 0 {
+		t.Errorf("expected INBOX to be empty after ClearFolder, got %d entries", len(inboxIDs))
+	}
+
+	sentIDs, _ := c.GetCachedIDs("Sent")
+	if !sentIDs["<s1@x.com>"] {
+		t.Error("Sent folder should be unaffected by ClearFolder(INBOX)")
+	}
+}

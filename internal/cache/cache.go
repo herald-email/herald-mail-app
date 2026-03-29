@@ -109,29 +109,38 @@ func (c *Cache) initDB() error {
 			content_rowid=rowid
 		)
 	`
+	ftsAvailable := true
 	if _, err := c.db.Exec(ftsQuery); err != nil {
 		logger.Warn("Failed to create FTS5 table (SQLite might lack FTS5 support): %v", err)
+		ftsAvailable = false
+		// Drop any stale FTS triggers left from a previous run when FTS5 was available.
+		// If these triggers exist they will fire on INSERT and fail with "no such table: emails_fts".
+		for _, trig := range []string{"emails_ai", "emails_ad", "emails_au"} {
+			c.db.Exec("DROP TRIGGER IF EXISTS " + trig)
+		}
 	}
 
-	// Triggers to keep FTS index in sync with emails table
-	for _, trigSQL := range []string{
-		`CREATE TRIGGER IF NOT EXISTS emails_ai AFTER INSERT ON emails BEGIN
-			INSERT INTO emails_fts(rowid, sender, subject, body_text)
-			VALUES (new.rowid, new.sender, new.subject, new.body_text);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS emails_ad AFTER DELETE ON emails BEGIN
-			INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
-			VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS emails_au AFTER UPDATE ON emails BEGIN
-			INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
-			VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
-			INSERT INTO emails_fts(rowid, sender, subject, body_text)
-			VALUES (new.rowid, new.sender, new.subject, new.body_text);
-		END`,
-	} {
-		if _, err := c.db.Exec(trigSQL); err != nil {
-			logger.Debug("FTS trigger creation: %v", err)
+	// Triggers to keep FTS index in sync with emails table — only when FTS5 is available.
+	if ftsAvailable {
+		for _, trigSQL := range []string{
+			`CREATE TRIGGER IF NOT EXISTS emails_ai AFTER INSERT ON emails BEGIN
+				INSERT INTO emails_fts(rowid, sender, subject, body_text)
+				VALUES (new.rowid, new.sender, new.subject, new.body_text);
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS emails_ad AFTER DELETE ON emails BEGIN
+				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
+				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS emails_au AFTER UPDATE ON emails BEGIN
+				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
+				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
+				INSERT INTO emails_fts(rowid, sender, subject, body_text)
+				VALUES (new.rowid, new.sender, new.subject, new.body_text);
+			END`,
+		} {
+			if _, err := c.db.Exec(trigSQL); err != nil {
+				logger.Debug("FTS trigger creation: %v", err)
+			}
 		}
 	}
 
@@ -162,7 +171,101 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	// folder_sync_state: persists UIDVALIDITY and UIDNEXT per folder for incremental sync
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS folder_sync_state (
+			folder      TEXT PRIMARY KEY,
+			uidvalidity INTEGER NOT NULL DEFAULT 0,
+			uidnext     INTEGER NOT NULL DEFAULT 0,
+			updated_at  DATETIME NOT NULL
+		)`); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// GetFolderSyncState returns the stored UIDVALIDITY and UIDNEXT for a folder.
+// Returns 0, 0, nil when no record exists yet.
+func (c *Cache) GetFolderSyncState(folder string) (uidValidity, uidNext uint32, err error) {
+	var v, n int64
+	err = c.db.QueryRow(
+		`SELECT uidvalidity, uidnext FROM folder_sync_state WHERE folder = ?`, folder,
+	).Scan(&v, &n)
+	if err == sql.ErrNoRows {
+		return 0, 0, nil
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	return uint32(v), uint32(n), nil
+}
+
+// SetFolderSyncState persists UIDVALIDITY and UIDNEXT for a folder.
+func (c *Cache) SetFolderSyncState(folder string, uidValidity, uidNext uint32) error {
+	_, err := c.db.Exec(
+		`INSERT OR REPLACE INTO folder_sync_state (folder, uidvalidity, uidnext, updated_at) VALUES (?, ?, ?, ?)`,
+		folder, uidValidity, uidNext, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetCachedUIDsAndMessageIDs returns (message_id, uid) pairs for all rows in a folder.
+// Rows with NULL uid are returned with UID=0.
+func (c *Cache) GetCachedUIDsAndMessageIDs(folder string) ([]struct {
+	MessageID string
+	UID       uint32
+}, error) {
+	rows, err := c.db.Query(
+		`SELECT message_id, COALESCE(uid, 0) FROM emails WHERE folder = ?`, folder,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []struct {
+		MessageID string
+		UID       uint32
+	}
+	for rows.Next() {
+		var msgID string
+		var uid int64
+		if err := rows.Scan(&msgID, &uid); err != nil {
+			return nil, err
+		}
+		result = append(result, struct {
+			MessageID string
+			UID       uint32
+		}{msgID, uint32(uid)})
+	}
+	return result, rows.Err()
+}
+
+// ClearFolder removes all cached emails for a folder.
+// Called when UIDVALIDITY changes and the cache must be rebuilt from scratch.
+func (c *Cache) ClearFolder(folder string) error {
+	_, err := c.db.Exec(`DELETE FROM emails WHERE folder = ?`, folder)
+	return err
+}
+
+// DeleteEmailsByUIDs removes cache rows whose UID is in the given slice for a folder.
+// No-op if uids is empty.
+func (c *Cache) DeleteEmailsByUIDs(folder string, uids []uint32) error {
+	if len(uids) == 0 {
+		return nil
+	}
+	// Build placeholder list: ?,?,?...
+	placeholders := make([]string, len(uids))
+	args := make([]interface{}, 0, len(uids)+1)
+	args = append(args, folder)
+	for i, uid := range uids {
+		placeholders[i] = "?"
+		args = append(args, uid)
+	}
+	query := `DELETE FROM emails WHERE folder = ? AND uid IN (` + strings.Join(placeholders, ",") + `)`
+	_, err := c.db.Exec(query, args...)
+	return err
 }
 
 // SetClassification stores or updates an AI classification for a message

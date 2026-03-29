@@ -85,6 +85,12 @@ make test     # Run tests
 
 ### TUI Testing with tmux
 
+> **Use both files together:**
+> - [TUI_TESTPLAN.md](TUI_TESTPLAN.md) — the full manual QA checklist (what to test and what to expect at each step)
+> - [TUI_TESTING.md](TUI_TESTING.md) — programmatic/agent harness guide using `teatest` or PTY + virtual terminal (how to automate TUI interactions in Go tests)
+>
+> When writing automated TUI tests, consult `TUI_TESTING.md` for the harness pattern, then use the test cases in `TUI_TESTPLAN.md` as the specification for what to assert.
+
 **Always verify visual/layout changes using tmux.** The TUI renders differently at different terminal sizes; a change that looks correct in code can break layout at 80×24 or produce garbage at 50×15. tmux lets you spin up headless sessions at exact dimensions, send keystrokes, and capture rendered output — all without interrupting your working terminal.
 
 **Test reports** must be saved in the `reports/` folder (gitignored). Name them descriptively, e.g. `reports/TEST_REPORT_2026-03-24.md`.
@@ -214,6 +220,46 @@ Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | `ctrl+p` | Toggle Markdown preview (Compose tab) |
 
 ## Development Notes
+
+### Development Practices
+
+#### Large feature workflow
+1. **Update [TUI_TESTPLAN.md](TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
+2. Implement the feature.
+3. Run the post-completion checklist below.
+
+#### Post-completion checklist (bugs and large features)
+
+After a bug fix or large feature is complete, run all three surface tests and save a report in `reports/`:
+
+| Surface | How to test |
+|---------|-------------|
+| **TUI** | tmux workflow (see below) + relevant `TUI_TESTPLAN.md` test cases |
+| **SSH** | `go build ./cmd/ssh-server && ./bin/ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
+| **MCP** | `go build ./cmd/mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/mcp-server` — then invoke the relevant tool(s) and verify output |
+
+Save the report as `reports/TEST_REPORT_<YYYY-MM-DD>_<short-description>.md`.
+
+---
+
+### Bug Fix Workflow
+
+**Always write a failing test before fixing a bug.**
+
+#### Internal / non-TUI logic
+1. Write a test in the relevant `*_test.go` file that reproduces the bug and fails.
+2. Confirm it fails (`go test ./...`).
+3. Fix the bug.
+4. Confirm the test now passes.
+5. Run the post-completion checklist above.
+
+#### TUI logic
+When the buggy behavior can be exercised through pure Go (e.g. a helper function, a model update function, state transitions, rendering logic with mock data):
+1. Write a test using mock `EmailData` / fake state — no live IMAP or SMTP needed.
+2. Confirm it fails, fix the bug, confirm it passes.
+3. Run the post-completion checklist above.
+
+When the bug is genuinely only observable via terminal rendering (layout, ANSI codes, key routing), fall back to the tmux workflow described below and document the repro steps in the test report.
 
 ### Database Schema
 ```sql

@@ -160,6 +160,22 @@ func (m *Model) listenForProgress() tea.Cmd {
 	}
 }
 
+// listenForValidIDs waits for the background reconciliation to send the live
+// valid-ID set, then delivers it as ValidIDsMsg so all views can re-filter.
+func (m *Model) listenForValidIDs() tea.Cmd {
+	ch := m.validIDsCh
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ids, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return ValidIDsMsg{ValidIDs: ids}
+	}
+}
+
 // listenForDeletionResults listens for deletion results from the worker
 func (m *Model) listenForDeletionResults() tea.Cmd {
 	return func() tea.Msg {
@@ -1571,7 +1587,7 @@ func (m *Model) renderKeyHints() string {
 		case panelDetails:
 			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().

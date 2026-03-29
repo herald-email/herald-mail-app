@@ -128,4 +128,8 @@ type Backend interface {
 
 	// StopPolling stops background polling.
 	StopPolling()
+
+	// ValidIDsCh returns a channel that receives the live valid-ID set from
+	// background reconciliation. Returns nil before Load() is called.
+	ValidIDsCh() <-chan map[string]bool
 }

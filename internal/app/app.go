@@ -77,6 +77,12 @@ type ClassifyProgressMsg struct {
 // ClassifyDoneMsg signals classification is complete
 type ClassifyDoneMsg struct{}
 
+// ValidIDsMsg is sent when background reconciliation has determined the live
+// set of valid message IDs from the server. All views should re-filter.
+type ValidIDsMsg struct {
+	ValidIDs map[string]bool
+}
+
 // EmailBodyMsg carries the result of fetching an email body from IMAP
 type EmailBodyMsg struct {
 	Body *models.EmailBody
@@ -164,6 +170,9 @@ type Model struct {
 
 	// Classification channel (buffered; one result per email)
 	classifyCh chan ClassifyProgressMsg
+
+	// validIDsCh receives the live valid-ID set from background reconciliation.
+	validIDsCh <-chan map[string]bool
 
 	// Data
 	stats          map[string]*models.SenderStats
@@ -596,6 +605,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ValidIDsMsg:
+		// Background reconciliation has produced the live valid-ID set.
+		// The backend's filterByValidIDs now applies automatically; reload all views.
+		if stats, err := m.backend.GetSenderStatistics(m.currentFolder); err == nil {
+			m.stats = stats
+		}
+		m.loadClassifications()
+		m.updateSummaryTable()
+		m.updateDetailsTable()
+		return m, m.loadTimelineEmails()
+
 	case EmailBodyMsg:
 		m.emailBodyLoading = false
 		m.selectedAttachment = 0 // reset attachment cursor for new email
@@ -673,8 +693,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Start background polling (default 60s interval)
 			pollCmd := m.startPolling(60)
+			// Subscribe to background reconciliation now that Load() has set the channel.
+			m.validIDsCh = m.backend.ValidIDsCh()
 			// Always load timeline since it's the default startup tab
-			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), pollCmd)
+			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), pollCmd, m.listenForValidIDs())
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)

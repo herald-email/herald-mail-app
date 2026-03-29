@@ -135,6 +135,273 @@ func (c *Client) ListFolders() ([]string, error) {
 	return folders, nil
 }
 
+// syncStrategy describes how ProcessEmailsIncremental should sync a folder.
+type syncStrategy int
+
+const (
+	syncStrategyNone        syncStrategy = iota // UIDNEXT unchanged — no new mail
+	syncStrategyIncremental                     // fetch only UIDs >= storedNext
+	syncStrategyFull                            // UIDVALIDITY changed — clear cache + full fetch
+)
+
+// decideSyncStrategy computes which sync strategy to use given stored and server values.
+// storedValidity==0 means no prior sync has been recorded (first run).
+func decideSyncStrategy(storedValidity, storedNext, serverValidity, serverNext uint32) syncStrategy {
+	if storedValidity == 0 || storedValidity != serverValidity {
+		return syncStrategyFull
+	}
+	if storedNext == serverNext {
+		return syncStrategyNone
+	}
+	return syncStrategyIncremental
+}
+
+// uidMsgPair holds a message-ID string and its IMAP UID as returned by the cache.
+type uidMsgPair struct {
+	MessageID string
+	UID       uint32
+}
+
+// buildValidIDSet partitions cached entries into valid IDs and stale UIDs.
+// An entry is valid if uid==0 (legacy, kept conservatively) or the UID exists on the server.
+// Stale UIDs are returned sorted descending (highest/newest first).
+func buildValidIDSet(cached []uidMsgPair, serverUIDs map[uint32]bool) (validIDs map[string]bool, staleUIDs []uint32) {
+	validIDs = make(map[string]bool, len(cached))
+	for _, row := range cached {
+		if row.UID == 0 || serverUIDs[row.UID] {
+			validIDs[row.MessageID] = true
+		} else {
+			staleUIDs = append(staleUIDs, row.UID)
+		}
+	}
+	// Sort descending so newest (highest UID) are deleted first
+	for i, j := 0, len(staleUIDs)-1; i < j; i, j = i+1, j-1 {
+		staleUIDs[i], staleUIDs[j] = staleUIDs[j], staleUIDs[i]
+	}
+	// Simple insertion sort to ensure descending order (staleUIDs is small in the common case)
+	for i := 1; i < len(staleUIDs); i++ {
+		for j := i; j > 0 && staleUIDs[j] > staleUIDs[j-1]; j-- {
+			staleUIDs[j], staleUIDs[j-1] = staleUIDs[j-1], staleUIDs[j]
+		}
+	}
+	return validIDs, staleUIDs
+}
+
+// ProcessEmailsIncremental performs a UIDVALIDITY-aware incremental sync for folder.
+// It replaces the ProcessEmails + CleanupCache combination in the Load() path.
+func (c *Client) ProcessEmailsIncremental(folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	logger.Info("ProcessEmailsIncremental: starting for folder %s", folder)
+
+	mbox, err := c.client.Select(folder, false)
+	if err != nil {
+		return fmt.Errorf("select folder %s: %w", folder, err)
+	}
+
+	storedValidity, storedNext, err := c.cache.GetFolderSyncState(folder)
+	if err != nil {
+		return fmt.Errorf("get folder sync state: %w", err)
+	}
+
+	strategy := decideSyncStrategy(storedValidity, storedNext, mbox.UidValidity, mbox.UidNext)
+	logger.Info("ProcessEmailsIncremental: strategy=%d stored(v=%d n=%d) server(v=%d n=%d)",
+		strategy, storedValidity, storedNext, mbox.UidValidity, mbox.UidNext)
+
+	totalMessages := int(mbox.Messages)
+
+	switch strategy {
+	case syncStrategyNone:
+		logger.Info("ProcessEmailsIncremental: no new mail in %s", folder)
+		c.sendProgress(models.ProgressInfo{Phase: "scanning", Message: "No new mail"})
+		return nil
+
+	case syncStrategyFull:
+		logger.Info("ProcessEmailsIncremental: UIDVALIDITY changed or first run — full resync of %s", folder)
+		if storedValidity != 0 {
+			if err := c.cache.ClearFolder(folder); err != nil {
+				return fmt.Errorf("clear folder on uidvalidity change: %w", err)
+			}
+		}
+		if totalMessages > 0 {
+			if err := c.fetchAndCacheRange(folder, 1, uint32(totalMessages), totalMessages); err != nil {
+				return err
+			}
+		}
+
+	case syncStrategyIncremental:
+		logger.Info("ProcessEmailsIncremental: fetching new UIDs [%d:*] in %s", storedNext, folder)
+		if totalMessages > 0 {
+			if err := c.fetchAndCacheUIDRange(folder, storedNext, totalMessages); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := c.cache.SetFolderSyncState(folder, mbox.UidValidity, mbox.UidNext); err != nil {
+		logger.Warn("ProcessEmailsIncremental: failed to persist sync state: %v", err)
+	}
+	return nil
+}
+
+// fetchAndCacheRange fetches sequence numbers start:end and caches each message.
+// Reuses the existing processMessage path.
+func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int) error {
+	seqset := new(imap.SeqSet)
+	seqset.AddRange(start, end)
+	messages := make(chan *imap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
+	}()
+	processed := 0
+	var newSeqNums []uint32
+	for msg := range messages {
+		processed++
+		if processed%100 == 0 {
+			c.sendProgress(models.ProgressInfo{
+				Phase:   "scanning",
+				Current: processed,
+				Total:   total,
+				Message: fmt.Sprintf("Scanning messages... [%d%%] (%d/%d)", processed*100/total, processed, total),
+			})
+		}
+		messageID := extractMessageID(msg)
+		cachedIDs, _ := c.cache.GetCachedIDs(folder)
+		if messageID != "" && !cachedIDs[messageID] {
+			newSeqNums = append(newSeqNums, msg.SeqNum)
+		}
+	}
+	if err := <-done; err != nil {
+		return fmt.Errorf("fetch envelopes: %w", err)
+	}
+	for i, seq := range newSeqNums {
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "fetching",
+			Current: i + 1,
+			Total:   len(newSeqNums),
+			Message: fmt.Sprintf("Fetching new emails... (%d/%d)", i+1, len(newSeqNums)),
+		})
+		if err := c.processMessage(seq, folder); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fetchAndCacheUIDRange fetches messages with UID >= startUID using UidFetch.
+func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int) error {
+	seqset := new(imap.SeqSet)
+	// AddRange(start, 0) means start:* in go-imap (0 = *)
+	seqset.AddRange(startUID, 0)
+	messages := make(chan *imap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid}, messages)
+	}()
+	var newSeqNums []uint32
+	for msg := range messages {
+		messageID := extractMessageID(msg)
+		cachedIDs, _ := c.cache.GetCachedIDs(folder)
+		if messageID != "" && !cachedIDs[messageID] {
+			newSeqNums = append(newSeqNums, msg.SeqNum)
+		}
+	}
+	if err := <-done; err != nil {
+		return fmt.Errorf("uid fetch new range: %w", err)
+	}
+	for i, seq := range newSeqNums {
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "fetching",
+			Current: i + 1,
+			Total:   len(newSeqNums),
+			Message: fmt.Sprintf("Fetching new emails... (%d/%d)", i+1, len(newSeqNums)),
+		})
+		if err := c.processMessage(seq, folder); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fetchAllServerUIDs returns the set of all UIDs currently on the server for the
+// already-selected folder. Caller must hold c.mu.
+func (c *Client) fetchAllServerUIDs() (map[uint32]bool, error) {
+	seqset := new(imap.SeqSet)
+	seqset.AddRange(1, 0) // 1:*
+	messages := make(chan *imap.Message, 50)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchUid}, messages)
+	}()
+	serverUIDs := make(map[uint32]bool)
+	for msg := range messages {
+		if msg.Uid > 0 {
+			serverUIDs[msg.Uid] = true
+		}
+	}
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("uid fetch all: %w", err)
+	}
+	return serverUIDs, nil
+}
+
+// StartBackgroundReconcile fetches all server UIDs for folder, immediately sends
+// the valid-ID set on validIDsCh, then gradually deletes stale cache rows
+// (newest-first, in batches of 50) before closing the channel.
+func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[string]bool) {
+	go func() {
+		// Fetch all server UIDs (lightweight — no envelopes).
+		c.mu.Lock()
+		if _, err := c.client.Select(folder, true); err != nil {
+			c.mu.Unlock()
+			logger.Warn("StartBackgroundReconcile: select %s: %v", folder, err)
+			close(validIDsCh)
+			return
+		}
+		serverUIDs, err := c.fetchAllServerUIDs()
+		c.mu.Unlock()
+		if err != nil {
+			logger.Warn("StartBackgroundReconcile: fetchAllServerUIDs: %v", err)
+			close(validIDsCh)
+			return
+		}
+		logger.Info("StartBackgroundReconcile: %d UIDs on server for %s", len(serverUIDs), folder)
+
+		// Build valid-ID set from cache without holding the IMAP mutex.
+		rawRows, err := c.cache.GetCachedUIDsAndMessageIDs(folder)
+		if err != nil {
+			logger.Warn("StartBackgroundReconcile: GetCachedUIDsAndMessageIDs: %v", err)
+			close(validIDsCh)
+			return
+		}
+		pairs := make([]uidMsgPair, len(rawRows))
+		for i, r := range rawRows {
+			pairs[i] = uidMsgPair{MessageID: r.MessageID, UID: r.UID}
+		}
+		validIDs, staleUIDs := buildValidIDSet(pairs, serverUIDs)
+		logger.Info("StartBackgroundReconcile: %d valid, %d stale in %s", len(validIDs), len(staleUIDs), folder)
+
+		// Broadcast valid IDs immediately — UI can filter right away.
+		validIDsCh <- validIDs
+
+		// Gradually delete stale rows (newest first, batches of 50).
+		const batchSize = 50
+		for i := 0; i < len(staleUIDs); i += batchSize {
+			end := i + batchSize
+			if end > len(staleUIDs) {
+				end = len(staleUIDs)
+			}
+			if err := c.cache.DeleteEmailsByUIDs(folder, staleUIDs[i:end]); err != nil {
+				logger.Warn("StartBackgroundReconcile: delete batch: %v", err)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		logger.Info("StartBackgroundReconcile: done for %s", folder)
+		close(validIDsCh)
+	}()
+}
+
 // ProcessEmails reads and processes all emails from specified folder
 func (c *Client) ProcessEmails(folder string) error {
 	c.mu.Lock()

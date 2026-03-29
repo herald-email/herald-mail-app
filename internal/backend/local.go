@@ -28,6 +28,48 @@ type LocalBackend struct {
 	newEmailsCh chan models.NewEmailsNotification
 	pollStop    chan struct{}
 	pollMu      sync.Mutex
+
+	// validIDs is the live ground-truth set of message IDs known to exist on the server.
+	// nil means reconciliation has not run yet — all cache entries are accepted.
+	validIDsMu  sync.RWMutex
+	validIDs    map[string]bool
+	validIDsChSt chan map[string]bool // channel returned by ValidIDsCh()
+}
+
+// filterByValidIDs returns only emails whose MessageID is in validIDs.
+// If validIDs is nil (not yet reconciled), the original slice is returned unchanged.
+func (b *LocalBackend) filterByValidIDs(emails []*models.EmailData) []*models.EmailData {
+	b.validIDsMu.RLock()
+	ids := b.validIDs
+	b.validIDsMu.RUnlock()
+	if ids == nil {
+		return emails
+	}
+	out := make([]*models.EmailData, 0, len(emails))
+	for _, e := range emails {
+		if ids[e.MessageID] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// isValidID returns true when the message exists in the valid set, or when no
+// valid set has been established yet (nil → accept all).
+func (b *LocalBackend) isValidID(msgID string) bool {
+	b.validIDsMu.RLock()
+	ids := b.validIDs
+	b.validIDsMu.RUnlock()
+	return ids == nil || ids[msgID]
+}
+
+// ValidIDsCh returns the channel that will receive the valid-ID map from
+// background reconciliation. Returns nil before Load() is called.
+func (b *LocalBackend) ValidIDsCh() <-chan map[string]bool {
+	b.validIDsMu.RLock()
+	ch := b.validIDsChSt
+	b.validIDsMu.RUnlock()
+	return ch
 }
 
 // NewLocal creates a LocalBackend. The caller must call Close() when done.
@@ -72,21 +114,13 @@ func (b *LocalBackend) Load(folder string) {
 			return
 		}
 
-		if err := b.imapClient.ProcessEmails(folder); err != nil {
+		if err := b.imapClient.ProcessEmailsIncremental(folder); err != nil {
 			logger.Error("Failed to process emails: %v", err)
 			b.progressCh <- models.ProgressInfo{
 				Phase:   "error",
 				Message: fmt.Sprintf("Processing failed: %v", err),
 			}
 			return
-		}
-
-		b.progressCh <- models.ProgressInfo{
-			Phase:   "cleanup",
-			Message: "Cleaning up cache...",
-		}
-		if err := b.imapClient.CleanupCache(folder); err != nil {
-			logger.Warn("Cache cleanup failed (non-critical): %v", err)
 		}
 
 		b.progressCh <- models.ProgressInfo{
@@ -108,6 +142,14 @@ func (b *LocalBackend) Load(folder string) {
 			Message: fmt.Sprintf("Found %d senders", len(stats)),
 		}
 		logger.Info("Load complete: %d senders", len(stats))
+
+		// Launch background reconciliation. The valid-ID map is sent on the channel
+		// as soon as the server UID list is fetched; all views re-filter immediately.
+		validIDsCh := make(chan map[string]bool, 1)
+		b.validIDsMu.Lock()
+		b.validIDsChSt = validIDsCh
+		b.validIDsMu.Unlock()
+		b.imapClient.StartBackgroundReconcile(folder, validIDsCh)
 	}()
 }
 
@@ -116,7 +158,19 @@ func (b *LocalBackend) GetSenderStatistics(folder string) (map[string]*models.Se
 }
 
 func (b *LocalBackend) GetEmailsBySender(folder string) (map[string][]*models.EmailData, error) {
-	return b.imapClient.GetEmailsBySender(folder)
+	grouped, err := b.imapClient.GetEmailsBySender(folder)
+	if err != nil {
+		return nil, err
+	}
+	for sender, emails := range grouped {
+		filtered := b.filterByValidIDs(emails)
+		if len(filtered) == 0 {
+			delete(grouped, sender)
+		} else {
+			grouped[sender] = filtered
+		}
+	}
+	return grouped, nil
 }
 
 func (b *LocalBackend) DeleteSenderEmails(sender, folder string) error {
@@ -140,7 +194,11 @@ func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.Fold
 }
 
 func (b *LocalBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
-	return b.cache.GetEmailsSortedByDate(folder)
+	emails, err := b.cache.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return nil, err
+	}
+	return b.filterByValidIDs(emails), nil
 }
 
 func (b *LocalBackend) GetClassifications(folder string) (map[string]string, error) {
@@ -152,10 +210,23 @@ func (b *LocalBackend) SetClassification(messageID, category string) error {
 }
 
 func (b *LocalBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
-	return b.cache.GetUnclassifiedIDs(folder)
+	ids, err := b.cache.GetUnclassifiedIDs(folder)
+	if err != nil {
+		return nil, err
+	}
+	out := ids[:0:0]
+	for _, id := range ids {
+		if b.isValidID(id) {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error) {
+	if !b.isValidID(messageID) {
+		return nil, fmt.Errorf("email %s not in valid set", messageID)
+	}
 	return b.cache.GetEmailByID(messageID)
 }
 
@@ -198,19 +269,31 @@ func (b *LocalBackend) ArchiveSenderEmails(sender, folder string) error {
 }
 
 func (b *LocalBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
+	var (
+		emails []*models.EmailData
+		err    error
+	)
 	if bodySearch {
-		emails, err := b.cache.SearchEmailsFTS(folder, query)
+		emails, err = b.cache.SearchEmailsFTS(folder, query)
 		if err != nil {
 			logger.Warn("FTS search failed, falling back to LIKE: %v", err)
-			return b.cache.SearchEmails(folder, query)
+			emails, err = b.cache.SearchEmails(folder, query)
 		}
-		return emails, nil
+	} else {
+		emails, err = b.cache.SearchEmails(folder, query)
 	}
-	return b.cache.SearchEmails(folder, query)
+	if err != nil {
+		return nil, err
+	}
+	return b.filterByValidIDs(emails), nil
 }
 
 func (b *LocalBackend) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
-	return b.cache.SearchEmailsCrossFolder(query)
+	emails, err := b.cache.SearchEmailsCrossFolder(query)
+	if err != nil {
+		return nil, err
+	}
+	return b.filterByValidIDs(emails), nil
 }
 
 func (b *LocalBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailData, error) {
