@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -12,10 +13,12 @@ import (
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
+	"github.com/emersion/go-sasl"
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	"mail-processor/internal/oauth"
 )
 
 var discardLogger = log.New(io.Discard, "", 0)
@@ -72,10 +75,28 @@ func (c *Client) Connect() error {
 	}
 
 	// Authenticate
-	logger.Debug("Attempting to authenticate with username: %s", c.cfg.Credentials.Username)
-	if err := c.client.Login(c.cfg.Credentials.Username, c.cfg.Credentials.Password); err != nil {
-		logger.Error("Authentication failed: %v", err)
-		return fmt.Errorf("failed to authenticate: %w", err)
+	if c.cfg.IsGmailOAuth() {
+		logger.Debug("Attempting Gmail OAuth authentication for: %s", c.cfg.Gmail.Email)
+		// Refresh token if needed, then authenticate via XOAUTH2.
+		accessToken, err := oauth.RefreshIfNeeded(context.Background(), c.cfg)
+		if err != nil {
+			return fmt.Errorf("failed to refresh OAuth token: %w", err)
+		}
+		// TODO: persist refreshed token to ~/.herald/conf.yaml
+		saslClient := sasl.NewOAuthBearerClient(&sasl.OAuthBearerOptions{
+			Username: c.cfg.Gmail.Email,
+			Token:    accessToken,
+		})
+		if err := c.client.Authenticate(saslClient); err != nil {
+			logger.Error("OAuth authentication failed: %v", err)
+			return fmt.Errorf("IMAP OAuth authentication failed: %w", err)
+		}
+	} else {
+		logger.Debug("Attempting to authenticate with username: %s", c.cfg.Credentials.Username)
+		if err := c.client.Login(c.cfg.Credentials.Username, c.cfg.Credentials.Password); err != nil {
+			logger.Error("Authentication failed: %v", err)
+			return fmt.Errorf("IMAP login failed: %w", err)
+		}
 	}
 
 	logger.Info("Successfully connected to IMAP server at %s", addr)
