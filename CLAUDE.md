@@ -183,7 +183,7 @@ Config file permissions are checked at startup; warns if group/others have acces
 
 ### Dependencies
 
-Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
+Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 
 | Library | Purpose |
 |---------|---------|
