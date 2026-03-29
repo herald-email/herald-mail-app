@@ -38,7 +38,7 @@ func Init(debug bool) error {
 	errorLogger = log.New(multiWriter, "ERROR ", log.Ldate|log.Ltime|log.Lshortfile)
 	debugLogger = log.New(multiWriter, "DEBUG ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	Info("=== Mail Processor Started ===")
+	Info("=== Herald Started ===")
 	Info("Logging to file: %s", filename)
 	if debug {
 		Info("Debug mode enabled - detailed logging active")
@@ -50,7 +50,7 @@ func Init(debug bool) error {
 // Close closes the log file
 func Close() {
 	if logFile != nil {
-		Info("=== Mail Processor Finished ===")
+		Info("=== Herald Finished ===")
 		logFile.Close()
 	}
 }

@@ -1,4 +1,4 @@
-# Makefile for Mail Processor
+# Makefile for Herald
 
 .PHONY: build run clean test deps fmt vet
 
