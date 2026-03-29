@@ -79,9 +79,10 @@ var vendorPresets = map[string]vendorPreset{
 	"icloud":     {"imap.mail.me.com", 993, "smtp.mail.me.com", 587},
 }
 
-// applyVendorPreset fills in server/smtp host+port when a vendor shortcut is set
-// and the user has not provided explicit values.
-func (c *Config) applyVendorPreset() {
+// ApplyVendorPreset fills in server/smtp host+port when a vendor shortcut is
+// set and the user has not provided explicit values. Exported so that other
+// packages (e.g. the settings form) can apply presets to a freshly built config.
+func (c *Config) ApplyVendorPreset() {
 	if c.Vendor == "" {
 		return
 	}
@@ -180,7 +181,7 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	config.applyVendorPreset()
+	config.ApplyVendorPreset()
 	config.applyDefaults()
 
 	// Validate required fields

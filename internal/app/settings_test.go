@@ -1,0 +1,246 @@
+package app
+
+import (
+	"testing"
+
+	"mail-processor/internal/config"
+)
+
+func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
+	existing := &config.Config{}
+	existing.Vendor = "fastmail"
+	existing.Credentials.Username = "user@fastmail.com"
+	existing.Credentials.Password = "secret"
+	existing.Server.Host = "imap.fastmail.com"
+	existing.Server.Port = 993
+	existing.SMTP.Host = "smtp.fastmail.com"
+	existing.SMTP.Port = 587
+	existing.Ollama.Host = "http://myhost:11434"
+	existing.Ollama.Model = "llama3"
+	existing.Ollama.EmbeddingModel = "nomic-embed-text"
+
+	s := NewSettings(SettingsModeWizard, existing)
+
+	if s.provider != "fastmail" {
+		t.Errorf("provider = %q, want %q", s.provider, "fastmail")
+	}
+	if s.email != "user@fastmail.com" {
+		t.Errorf("email = %q, want %q", s.email, "user@fastmail.com")
+	}
+	if s.password != "secret" {
+		t.Errorf("password = %q, want %q", s.password, "secret")
+	}
+	if s.imapHost != "imap.fastmail.com" {
+		t.Errorf("imapHost = %q, want %q", s.imapHost, "imap.fastmail.com")
+	}
+	if s.imapPort != "993" {
+		t.Errorf("imapPort = %q, want %q", s.imapPort, "993")
+	}
+	if s.smtpHost != "smtp.fastmail.com" {
+		t.Errorf("smtpHost = %q, want %q", s.smtpHost, "smtp.fastmail.com")
+	}
+	if s.smtpPort != "587" {
+		t.Errorf("smtpPort = %q, want %q", s.smtpPort, "587")
+	}
+	if s.ollamaHost != "http://myhost:11434" {
+		t.Errorf("ollamaHost = %q, want %q", s.ollamaHost, "http://myhost:11434")
+	}
+	if s.ollamaModel != "llama3" {
+		t.Errorf("ollamaModel = %q, want %q", s.ollamaModel, "llama3")
+	}
+	if s.embedModel != "nomic-embed-text" {
+		t.Errorf("embedModel = %q, want %q", s.embedModel, "nomic-embed-text")
+	}
+}
+
+func TestNewSettings_NilConfigUsesDefaults(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+
+	if s.provider != "imap" {
+		t.Errorf("provider = %q, want %q (default)", s.provider, "imap")
+	}
+	if s.email != "" {
+		t.Errorf("email = %q, want empty", s.email)
+	}
+	if s.form == nil {
+		t.Error("form should not be nil")
+	}
+}
+
+func TestNewSettings_GmailUsesGmailEmail(t *testing.T) {
+	existing := &config.Config{}
+	existing.Vendor = "gmail"
+	existing.Gmail.Email = "me@gmail.com"
+
+	s := NewSettings(SettingsModePanel, existing)
+
+	if s.provider != "gmail" {
+		t.Errorf("provider = %q, want %q", s.provider, "gmail")
+	}
+	if s.email != "me@gmail.com" {
+		t.Errorf("email = %q, want %q", s.email, "me@gmail.com")
+	}
+}
+
+func TestBuildConfig_GmailVendor(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.provider = "gmail"
+	s.email = "test@gmail.com"
+
+	cfg := s.buildConfig()
+
+	if cfg.Vendor != "gmail" {
+		t.Errorf("Vendor = %q, want %q", cfg.Vendor, "gmail")
+	}
+	if cfg.Gmail.Email != "test@gmail.com" {
+		t.Errorf("Gmail.Email = %q, want %q", cfg.Gmail.Email, "test@gmail.com")
+	}
+	// Credentials should be empty for Gmail.
+	if cfg.Credentials.Username != "" {
+		t.Errorf("Credentials.Username = %q, want empty for Gmail", cfg.Credentials.Username)
+	}
+}
+
+func TestBuildConfig_StandardIMAP(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.provider = "imap"
+	s.email = "user@example.com"
+	s.password = "pass123"
+	s.imapHost = "imap.example.com"
+	s.imapPort = "993"
+	s.smtpHost = "smtp.example.com"
+	s.smtpPort = "587"
+
+	cfg := s.buildConfig()
+
+	if cfg.Vendor != "imap" {
+		t.Errorf("Vendor = %q, want %q", cfg.Vendor, "imap")
+	}
+	if cfg.Credentials.Username != "user@example.com" {
+		t.Errorf("Username = %q, want %q", cfg.Credentials.Username, "user@example.com")
+	}
+	if cfg.Server.Host != "imap.example.com" {
+		t.Errorf("Server.Host = %q, want %q", cfg.Server.Host, "imap.example.com")
+	}
+	if cfg.Server.Port != 993 {
+		t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, 993)
+	}
+}
+
+func TestApplyVendorPreset_Gmail(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Vendor = "gmail"
+
+	applyVendorPreset(cfg)
+
+	if cfg.Server.Host != "imap.gmail.com" {
+		t.Errorf("Server.Host = %q, want %q", cfg.Server.Host, "imap.gmail.com")
+	}
+	if cfg.Server.Port != 993 {
+		t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, 993)
+	}
+	if cfg.SMTP.Host != "smtp.gmail.com" {
+		t.Errorf("SMTP.Host = %q, want %q", cfg.SMTP.Host, "smtp.gmail.com")
+	}
+	if cfg.SMTP.Port != 587 {
+		t.Errorf("SMTP.Port = %d, want %d", cfg.SMTP.Port, 587)
+	}
+}
+
+func TestApplyVendorPreset_ProtonMail(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Vendor = "protonmail"
+
+	applyVendorPreset(cfg)
+
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Errorf("Server.Host = %q, want %q", cfg.Server.Host, "127.0.0.1")
+	}
+	if cfg.Server.Port != 1143 {
+		t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, 1143)
+	}
+	if cfg.SMTP.Host != "127.0.0.1" {
+		t.Errorf("SMTP.Host = %q, want %q", cfg.SMTP.Host, "127.0.0.1")
+	}
+	if cfg.SMTP.Port != 1025 {
+		t.Errorf("SMTP.Port = %d, want %d", cfg.SMTP.Port, 1025)
+	}
+}
+
+func TestApplyVendorPreset_DoesNotOverrideExplicitValues(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Vendor = "gmail"
+	cfg.Server.Host = "custom-imap.example.com"
+	cfg.Server.Port = 1234
+
+	applyVendorPreset(cfg)
+
+	if cfg.Server.Host != "custom-imap.example.com" {
+		t.Errorf("Server.Host = %q, want %q (should not override)", cfg.Server.Host, "custom-imap.example.com")
+	}
+	if cfg.Server.Port != 1234 {
+		t.Errorf("Server.Port = %d, want %d (should not override)", cfg.Server.Port, 1234)
+	}
+	// SMTP should still get the preset since it was empty.
+	if cfg.SMTP.Host != "smtp.gmail.com" {
+		t.Errorf("SMTP.Host = %q, want %q", cfg.SMTP.Host, "smtp.gmail.com")
+	}
+}
+
+func TestValidateEmail(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+	}{
+		{"user@example.com", false},
+		{"a@b", false},
+		{"nope", true},
+		{"", true},
+	}
+	for _, tt := range tests {
+		err := validateEmail(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("validateEmail(%q) err=%v, wantErr=%v", tt.input, err, tt.wantErr)
+		}
+	}
+}
+
+func TestParsePort(t *testing.T) {
+	tests := []struct {
+		input string
+		want  int
+	}{
+		{"993", 993},
+		{"587", 587},
+		{"", 0},
+		{"abc", 0},
+		{" 1143 ", 1143},
+	}
+	for _, tt := range tests {
+		got := parsePort(tt.input)
+		if got != tt.want {
+			t.Errorf("parsePort(%q) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPortToString(t *testing.T) {
+	if got := portToString(0); got != "" {
+		t.Errorf("portToString(0) = %q, want empty", got)
+	}
+	if got := portToString(993); got != "993" {
+		t.Errorf("portToString(993) = %q, want %q", got, "993")
+	}
+}
+
+func TestSettingsMode(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	if s.mode != SettingsModePanel {
+		t.Errorf("mode = %d, want %d", s.mode, SettingsModePanel)
+	}
+
+	s2 := NewSettings(SettingsModeWizard, nil)
+	if s2.mode != SettingsModeWizard {
+		t.Errorf("mode = %d, want %d", s2.mode, SettingsModeWizard)
+	}
+}
