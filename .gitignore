@@ -9,7 +9,7 @@ mail_processor_*.log
 protonmail_analyzer_*.log
 
 # Database files
-email_cache.db
+email_cache.db*
 *.db
 
 # Configuration (contains credentials)
