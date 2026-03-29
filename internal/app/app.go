@@ -146,6 +146,13 @@ type UnsubscribeResultMsg struct {
 	Err    error
 }
 
+// ImageDescMsg carries an AI-generated description for a single inline image
+type ImageDescMsg struct {
+	ContentID   string
+	Description string
+	Err         error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -210,6 +217,7 @@ type Model struct {
 	selectedTimelineEmail *models.EmailData
 	emailBody             *models.EmailBody
 	emailBodyLoading      bool
+	inlineImageDescs      map[string]string // ContentID → AI description (vision fallback)
 	emailPreviewWidth     int // computed in updateTableDimensions
 	emailFullScreen       bool
 	// Cached wrapped body lines — invalidated when body or panel width changes.
@@ -705,6 +713,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
 				}
+				// If classifier has vision model and terminal lacks iTerm2 support, fetch AI image descriptions
+				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() {
+					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
+				}
 				if len(cmds) > 0 {
 					m.bodyWrappedLines = nil
 					return m, tea.Batch(cmds...)
@@ -712,6 +724,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
+		return m, nil
+
+	case ImageDescMsg:
+		if msg.Err == nil && msg.Description != "" {
+			if m.inlineImageDescs == nil {
+				m.inlineImageDescs = make(map[string]string)
+			}
+			m.inlineImageDescs[msg.ContentID] = msg.Description
+		}
 		return m, nil
 
 	case ChatResponseMsg:
@@ -1297,6 +1318,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.selectedTimelineEmail = email
 					m.emailBody = nil
 					m.emailBodyLoading = true
+					m.inlineImageDescs = nil // reset per-email image descriptions
 					m.bodyScrollOffset = 0
 					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 					return m, m.loadEmailBodyCmd(email.Folder, email.UID)

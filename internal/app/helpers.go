@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -144,6 +145,22 @@ func flattenTree(roots []*folderNode) []sidebarItem {
 }
 
 type tickMsg struct{}
+
+// describeImagesCmd returns one tea.Cmd per inline image that asks the vision model for a
+// one-sentence description. Each command resolves to an ImageDescMsg.
+func describeImagesCmd(classifier *ai.Classifier, images []models.InlineImage) []tea.Cmd {
+	cmds := make([]tea.Cmd, 0, len(images))
+	for _, img := range images {
+		img := img // capture loop variable
+		cmds = append(cmds, func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			desc, err := classifier.DescribeImage(ctx, img.Data, img.MIMEType)
+			return ImageDescMsg{ContentID: img.ContentID, Description: desc, Err: err}
+		})
+	}
+	return cmds
+}
 
 // tickSpinner returns a command to tick the spinner
 func (m *Model) tickSpinner() tea.Cmd {
@@ -1091,7 +1108,14 @@ func (m *Model) renderEmailPreview() string {
 		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
 		imageLines := 0
 		for _, img := range m.emailBody.InlineImages {
-			label := fmt.Sprintf("[image  %s  %d KB]", img.MIMEType, len(img.Data)/1024)
+			var label string
+			if desc, ok := m.inlineImageDescs[img.ContentID]; ok {
+				label = fmt.Sprintf("[Image: %s]", desc)
+			} else if m.classifier != nil && m.classifier.HasVisionModel() {
+				label = fmt.Sprintf("[image  %s  %d KB  — describing…]", img.MIMEType, len(img.Data)/1024)
+			} else {
+				label = fmt.Sprintf("[image: %s]", img.MIMEType)
+			}
 			sb.WriteString(dimStyle.Render(label) + "\n")
 			imageLines++
 		}
