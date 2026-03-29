@@ -1,645 +1,541 @@
 # Vision
 
-This document describes the long-term direction for this project. It evolves from an inbox cleanup tool into a full-featured terminal email client.
-
-## Implementation Order
-
-- [x] Fix responsive terminal width (hardcoded values today)
-- [x] Refactor to daemon/UI split architecture
-- [x] Multi-folder sidebar (collapsible tree, counts)
-- [x] Status bar showing active folder, unread/total counts, selection state
-- [x] Timeline/thread view + tab navigation
-- [x] Compose and reply (after timeline)
-- [x] AI-powered inbox classification via Ollama
-- [x] Chat panel (talk to your emails with AI)
-- [x] MCP server hook
-- [x] SSH app mode (charmbracelet/wish)
-- [x] Image rendering (iTerm2 inline images)
-- [x] Search (in-folder, full-text, cross-folder, IMAP fallback, saved searches)
-- [x] Semantic search (natural-language queries via local embeddings)
-- [ ] Multi-account support (multiple IMAP accounts in one session)
-- [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
-- [x] Forward email with address input
-- [x] Email deletion (single message, all from sender, all from domain — moves to Trash)
-- [x] Delete individual email from Timeline (`D` on highlighted row or open preview)
-- [x] Archive email (`e` key — moves to Archive/All Mail instead of Trash)
-- [x] Deletion confirmation prompt
-- [x] Automatic new-email sync (IMAP IDLE + background polling)
-- [x] Markdown compose → HTML send (write in Markdown, deliver as multipart HTML+plain)
-- [x] Attachment support (download received attachments, attach files when composing)
-- [x] Text selection (mouse selection + vim-style visual mode for copying body text)
-- [x] Full-screen email view (expand preview to fill the entire terminal)
+This document describes the long-term direction for this project. It evolves from an inbox cleanup tool into a full-featured terminal email client with a native app and a local daemon server.
 
 ---
 
-## Architecture: Daemon / UI Split
+## Implementation Status
 
-### Phase 1
-Single process, two goroutines: one daemon goroutine (all IMAP, cache, AI logic) and one UI goroutine (Bubble Tea). They communicate via channels and well-defined interfaces. The key discipline is that the Bubble Tea model talks only to a `Backend` interface, never to IMAP directly — this makes the later split free.
+High-level milestones. Detailed feature status is in each section below.
 
-### Phase 2
-Daemon becomes a real background process with IPC (Unix socket or gRPC). TUI connects to it like a client. This enables MCP hooks, SSH TUI access via `charmbracelet/wish`, and integration with Claude Code or phone apps.
+- [x] Responsive terminal layout (no hardcoded widths)
+- [x] Backend interface discipline (UI never touches IMAP/SQL directly)
+- [x] Multi-folder sidebar (collapsible tree, unread/total counts)
+- [x] Status bar (folder, counts, selection state, mode, key hints)
+- [x] Timeline / thread view + tab navigation
+- [x] Compose, reply, forward
+- [x] Email deletion (single, by sender, by domain — moves to Trash)
+- [x] Archive (`e` key — moves to Archive / All Mail)
+- [x] Deletion confirmation prompt
+- [x] Attachment support (download + attach when composing)
+- [x] Markdown compose → HTML send (multipart HTML + plain)
+- [x] Full-screen email preview (`z`)
+- [x] Text selection (mouse mode + vim visual mode + clipboard)
+- [x] AI classification via Ollama
+- [x] Chat panel (ask questions about your inbox)
+- [x] Semantic search (natural-language queries via local embeddings)
+- [x] Search (in-folder, full-text FTS5, cross-folder, IMAP fallback, saved searches)
+- [x] MCP server (read/search/classify tools for Claude Code)
+- [x] SSH app mode (`cmd/ssh-server` via charmbracelet/wish)
+- [x] iTerm2 inline image rendering
+- [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
+- [x] Background new-email polling
+- [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
+- [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
+- [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
+- [ ] IMAP IDLE (real push; currently polling only)
+- [ ] Soft unsubscribe (auto-move future emails to a local folder)
+- [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
+- [ ] Multi-account support
+- [ ] Chat tool calling (Ollama tool API + MCP tools in-process)
+- [ ] Filtered timeline from chat results
+- [ ] Multiple AI backends (Claude, OpenAI-compatible)
+- [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
+- [ ] Quick replies (canned + AI-generated contextual options)
+- [ ] Contact book
+- [ ] Settings / onboarding screen (no YAML editing required)
+- [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
+- [ ] README with MCP setup prompts for Claude / Cursor / Codex
+- [ ] Daemon server (`mail-processor serve`, Ollama-style)
+- [ ] Native app client (Phase 3)
+
+---
+
+## Architecture: Daemon / Client Split
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference.
+
+The app is designed in three phases so that each phase's work is additive and nothing needs to be rewritten.
+
+### Phase 1 — current
+Single process. The Bubble Tea model talks only to a `Backend` interface, never to IMAP or SQLite directly. All processing (IMAP, cache, AI) lives behind that interface. The discipline means the UI can be swapped or multiplied without touching the backend.
+
+### Phase 2 — daemon server (Ollama-style)
+The backend becomes a standalone daemon: `mail-processor serve`. It runs as a persistent background process, holds the IMAP connection, owns the SQLite cache, and exposes a local HTTP + WebSocket API on a configurable port (default `localhost:7272`). Clients connect to it — they do not touch IMAP or the database directly.
+
+CLI mirrors Ollama's UX:
+```
+mail-processor serve          # start daemon (foreground; launchd/systemd for autostart)
+mail-processor status         # show running daemon info
+mail-processor stop           # graceful shutdown
+mail-processor sync           # trigger incremental IMAP sync
+```
+
+All existing client modes (TUI, SSH, MCP) become thin clients of the daemon. A `RemoteBackend` struct implements the same `Backend` interface over HTTP/WebSocket — TUI code is unchanged, only the backend wiring differs.
+
+### Phase 3 — native app
+A native desktop client (macOS-first via SwiftUI; cross-platform alternative via Wails) connects to the same daemon API. The server and client are distributed separately, just like Ollama and its frontends. Multiple clients can run simultaneously against one daemon with no data races.
 
 ---
 
 ## UI Layout
 
+The TUI uses a fixed tab bar at the top, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
+
 ### Tabs (top-level navigation)
 Keyboard (number keys) and mouse clickable.
 
-- **Tab 1 — Cleanup**: Current sender/domain grouping view for bulk deletion
-- **Tab 2 — Timeline**: Chronological thread list, standard email client layout
-- Future: Tab 3 — Compose
+- [x] Tab 1 — Timeline: chronological email list with body preview split
+- [x] Tab 2 — Compose: write and send email
+- [x] Tab 3 — Cleanup: sender/domain grouping for bulk deletion
 
 ### Timeline View
-- Full-width thread list sorted by most recent email in thread
-- Selecting a thread splits into: left thread list + right email preview panel
-- Right panel auto-updates as user scrolls
-- Fold/unfold thread replies inline
-- Star/pin important threads to top
-- Actions: delete thread, delete individual email, forward (before full compose is built)
+
+The primary reading interface. Shows emails sorted newest-first, grouped by thread when multiple messages share the same subject. Selecting a row opens a body preview split on the right.
+
+- [x] Full-width thread list sorted by date
+- [x] Thread grouping (fold/unfold inline with `Enter`)
+- [x] Body preview split (right panel, auto-updates on navigation)
+- [x] Full-screen preview (`z`)
+- [x] Actions: delete, archive, reply, forward
+- [ ] Star / pin important threads to top
 
 ### Status Bar
-A persistent top/bottom bar replacing the current ad-hoc status line:
 
-- **Active folder** — breadcrumb style, e.g. `Labels / Health`
-- **Folder counts** — `12 unread / 340 total` pulled from the sidebar status cache
-- **Selection state** — `3 senders selected`, `7 messages selected`, or blank when nothing is selected
-- **Mode indicator** — `Domain mode` / `Sender mode`, `Logs ON` when log overlay is open
-- **Deletion progress** — replaces the inline text currently in the status line: `Deleting 3/5…`
-- **Key hints** — condensed one-liner that changes based on which panel is focused (sidebar / summary / details)
+A single persistent line at the bottom of the screen. Its content changes based on which panel is focused.
+
+- [x] Active folder breadcrumb
+- [x] Folder counts (unread / total)
+- [x] Selection state (N senders selected, N messages selected)
+- [x] Mode indicator (Domain mode, Sender mode, Logs ON)
+- [x] Deletion progress (Deleting 3/5…)
+- [x] Key hints (changes per panel)
+- [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 
 ### Multi-Folder Sidebar
-- Collapsible left panel, toggled by a keyboard shortcut
-- Arrow key navigation: forward/space to expand, back to collapse
-- Real IMAP folders synced from server
+
+- [x] Collapsible left panel (toggled with `f`)
+- [x] Real IMAP folders synced from server
+- [x] Unread / total counts per folder
+- [x] Keyboard navigation (j/k, Enter to switch folder)
+- [x] Auto-hides with a hint when terminal is too narrow
 
 ### Chat Panel
 
-The chat panel evolves from a simple Q&A box into a full agentic email assistant running inside the TUI. It shares all infrastructure already in the app — MCP tools, vector search, contacts, Markdown rendering — and surfaces it through natural conversation.
+The chat panel is a right-side slide-out (`c` key) that lets you have a conversation with your inbox using a local Ollama model. It currently supports Q&A over email content. The vision is to evolve it into a full agentic assistant that can search, summarise, compose, and manage email through natural conversation.
 
-#### Tool calling (MCP-backed)
+- [x] Slide-out panel (`c` key)
+- [x] Conversation history (multiple turns)
+- [x] Markdown rendering of assistant responses (glamour)
+- [x] Context: currently open email available to the model
+- [ ] Tool calling via Ollama's native tool API
+- [ ] In-process MCP tools (no stdio round-trip)
+- [ ] Filtered timeline: chat result sets pushed into Timeline as a live view
+- [ ] Context: active folder and selection state passed to model
+- [ ] `draft_reply` / `send_email` from within chat
+- [ ] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
 
-The chat uses Ollama's native tool-calling API (`tools` field in `/api/chat`) to invoke the same functions exposed by the MCP server, directly in-process (no stdio round-trip). The model decides which tools to call; the app executes them against the local cache and IMAP; results feed back into the conversation until the model produces a final text reply.
+#### Tool calling (planned)
 
-Available tools mirror the MCP surface:
-- **Search & discovery** — `search_emails`, `search_by_sender`, `search_by_date`, `semantic_search_emails`, `list_unread_emails`
-- **Reading** — `get_email_body`, `get_thread`, `summarise_email`, `summarise_thread`, `extract_action_items`
-- **Compose & send** — `reply_to_email`, `forward_email`, `draft_reply`, `send_email`
-- **Management** — `delete_email`, `archive_email`, `mark_read`, `move_email`
-- **Contacts** — `search_contacts`, `get_contact`
-- **Classification** — `classify_email`, `get_email_classifications`
+When tool calling is implemented, the chat will use Ollama's `tools` field in `/api/chat` to invoke the same functions exposed by the MCP server, directly in-process. The model decides which tools to call; the app executes them and feeds results back until the model produces a final reply.
 
-#### Filtered timeline
+Planned tools mirror the MCP surface: search, read body, summarise, reply, manage, classify.
 
-When the chat returns a set of emails (from a search, date filter, sender query, or semantic search), those results are pushed directly into the Timeline tab as a live filtered view — the table updates in place, showing only the matched emails. The user can browse, open, and act on them without leaving the chat flow. Clearing the filter (`Esc` or asking "show all") restores the full timeline.
+#### Filtered timeline (planned)
 
-Examples of natural-language queries that produce a filtered timeline:
-- *"Show me everything from Amazon this month"*
-- *"Find emails about my lease renewal"* (semantic)
-- *"What did I get from the finance team last week?"*
+When the chat returns a set of emails (from a search, date filter, or semantic query), those results are pushed into the Timeline tab as a live filtered view. The user can browse and act on them without leaving the chat flow. `Esc` or "show all" restores the full timeline.
 
-#### Context awareness
-
-The chat always knows what the user is looking at:
-- **Currently open email** — if a preview is open, the chat has access to its body, headers, and thread; "summarise this" or "reply saying I'll call back Thursday" works without specifying a message ID
-- **Active folder and selection** — "delete all selected" or "archive these" applies to the current TUI selection
-- **Contacts** — sender names and addresses are resolved through the contact book; the model can reference people by name
-
-#### Markdown replies
-
-The chat panel renders the assistant's responses as styled Markdown (same glamour pipeline used in Compose preview). When the model drafts a reply or compose body, it writes Markdown naturally — bold, bullets, links — and the app converts it to HTML on send, so recipients see a properly formatted email.
-
-#### Model backends
-
-The chat is not tied to Ollama. A backend abstraction allows swapping the underlying model:
+#### Multiple AI backends (planned)
 
 | Backend | How | When to use |
 |---------|-----|-------------|
 | Ollama (local) | `/api/chat` with tools | Default; fully offline, no cost |
-| Claude (Anthropic API) | `claude-opus-4-6` / `claude-sonnet-4-6` via Anthropic SDK | Stronger reasoning, better tool use, requires API key |
-| OpenAI-compatible | Any server speaking the OpenAI chat completions API | Flexibility |
-
-Backend is configured per-account in `proton.yaml`:
-```yaml
-chat:
-  backend: ollama          # ollama | claude | openai-compatible
-  model: gemma2            # model name for the chosen backend
-  api_key: ""              # required for claude / openai-compatible
-  api_base: ""             # required for openai-compatible
-```
-
-When Claude is the backend, the same tools are expressed as Anthropic tool schemas; the tool-call loop is identical from the app's perspective.
-
-#### Semantic search integration
-
-Semantic search (via local embeddings) powers tool calls that use natural language queries. When the model calls `semantic_search_emails`, the embedding is computed locally via `nomic-embed-text` and matched against the vector index in SQLite — no query rewriting or server round-trip needed. This means "find emails about my tax situation" works even if no email contains those exact words.
+| Claude | `claude-sonnet-4-6` via Anthropic SDK | Stronger reasoning, better tool use |
+| OpenAI-compatible | Any server speaking OpenAI chat completions | Flexibility |
 
 ---
 
-## AI Classification (Ollama)
+## AI Classification
 
-- Runs locally — Ollama already installed, small model preferred (Mac Mini with limited RAM)
-- Qwen is a good candidate for embeddings; Gemma family for classification
-- Default behavior: background tagging of new emails (fresh first, then backwards)
-- Manual trigger: "Analyze everything" / "Reanalyze" button processes full history
-- Categories: subscription, unnecessary, important, and others as needed
+The app can automatically tag emails with categories (subscription, important, unnecessary, etc.) using a local Ollama model. Classification runs in the background after sync — it never blocks the UI. The `a` key triggers a full classification pass on the current folder.
+
+- [x] Background classification via Ollama (`a` key)
+- [x] Category tags stored in SQLite (`email_classifications` table)
+- [x] Tag column visible in Timeline and Cleanup tabs
+- [x] MCP tool: `classify_email` (single message)
+- [ ] `classify_folder` MCP tool (batch, with progress)
+- [ ] Auto-classify new emails as they arrive (background, rate-limited)
+- [ ] Reanalyse / override existing tags
 
 ---
 
-## Cleanup Mode (Current Core, Expanding)
+## Cleanup Mode
 
-### Unsubscribe System
+The Cleanup tab groups emails by sender or domain and shows volume statistics, making it easy to identify and bulk-delete noise. It is the original core of the app and the area where unsubscribe and auto-cleanup rules will land.
 
-**Hard unsubscribe** — actual unsubscription:
-- Use RFC 8058 `List-Unsubscribe-Post` header for one-click machine-readable unsubscribe where supported
-- Fallback: open the `List-Unsubscribe` browser URL
-- Track whether emails keep arriving after unsubscribe; notify/prompt if they do
+### Sender / Domain grouping
 
-**Soft unsubscribe** — local only (Yandex-style):
-- Create a "Disabled Subscriptions" IMAP folder (or user-named)
-- Auto-move all future emails from that sender/domain there
-- Inbox stays clean without touching the actual mailing list
+- [x] Group by sender (default)
+- [x] Group by domain (`d` key toggle)
+- [x] Stats per sender: count, size, date range
+- [x] Details panel: individual emails for selected sender
+- [x] Bulk delete: all from sender, all from domain
+- [x] Bulk archive: all from sender
 
-Batch flow: present a list of detected subscriptions, let user select and choose mode, then execute.
+### Unsubscribe
+
+Triggered with `u` on any email in the Timeline or Cleanup detail view. The app reads `List-Unsubscribe` and `List-Unsubscribe-Post` headers stored during sync.
+
+- [x] Hard unsubscribe via RFC 8058 one-click POST (`List-Unsubscribe-Post`)
+- [x] Fallback: open `List-Unsubscribe` mailto link (opens in default mail client)
+- [ ] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
+- [ ] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
+- [ ] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
+- [ ] Batch unsubscribe flow: present list of detected subscriptions, select, choose mode, execute
 
 ### Auto-Cleanup Rules
-- Per-sender rules: e.g. delete all emails from a subscription sender older than N days
-- Offer to run cleanup automatically on a schedule
+
+Rules let the app automatically act on email from known senders — delete newsletters older than 30 days, archive promotional email weekly, etc. Rules are defined per-sender or per-domain and stored in SQLite.
+
+- [ ] Per-sender / per-domain rules (action + older-than-days condition)
+- [ ] Rule storage in SQLite (`cleanup_rules` table)
+- [ ] Manual rule execution (`run_cleanup_rules` trigger)
+- [ ] Scheduled execution (configurable interval in `proton.yaml`)
+- [ ] TUI rule manager (list, add, remove)
+- [ ] MCP tools: `list_cleanup_rules`, `add_cleanup_rule`, `remove_cleanup_rule`, `run_cleanup_rules`
 
 ---
 
 ## Compose and Reply
 
-- Write in Markdown with live Bear.app-style preview (`charmbracelet/glamour`, already in place)
-- On send: convert Markdown to HTML and deliver as `multipart/alternative` — HTML part for modern clients, auto-generated plain-text part as fallback
-- The plain-text fallback is stripped of Markdown syntax (not raw `**bold**`); generated by the same `htmlToText` converter used for reading
-- Browser preview button: open rendered HTML in the default browser before sending
-- Insert inline images by pasting or dragging a file path into the body; encoded as base64 `multipart/related` attachment
-- Full reply (quotes original, Re: prefix) and forward (Fwd: prefix, forwarding header) support
+Write in Markdown, deliver as properly formatted HTML email. The compose tab is a full-screen editor with a live preview mode and attachment support.
+
+- [x] Markdown editor (textarea)
+- [x] Live Markdown preview (`Ctrl+P`)
+- [x] Send as multipart HTML + plain-text via SMTP
+- [x] Reply (`R` key — pre-fills To, Re: subject, quotes original)
+- [x] Forward (`F` key — pre-fills Fwd: subject, forwarding header, body quote)
+- [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
+- [x] Send with attachments (`multipart/mixed`)
+- [ ] Browser preview (open rendered HTML in default browser before sending)
+- [ ] Inline images (paste / drag file path → base64 `multipart/related`)
+- [ ] `send_email` MCP tool
+- [ ] `reply_to_email` MCP tool
+- [ ] `forward_email` MCP tool
+- [ ] `draft_reply` MCP tool (LLM drafts reply from natural-language instructions)
+- [ ] `save_draft` / `send_draft` / `list_drafts` MCP tools
+
+### AI Writing Assistant (Compose)
+
+While composing, the local Ollama model acts as an inline writing assistant — no cloud, no round-trip, just a keystroke. The assistant operates on the current draft and replaces or annotates it in place. All rewrites are diff-previewed before applying: old text greyed out, new text highlighted; `y` accepts, `n` keeps the original.
+
+- [ ] **Spell / grammar check** (`Ctrl+G`) — highlights errors inline; `Tab` to accept suggestion, `Esc` to dismiss
+- [ ] **Style rewrite** (`Ctrl+W`) — rewrites the selected paragraph in a cleaner, more concise style while preserving meaning
+- [ ] **Tone adjuster** — cycle through tones: `professional → friendly → direct → formal`; model rewrites the draft to match
+- [ ] **Subject line suggest** — when To is filled and the body has content, offer 3 subject line options ranked by clarity
+- [ ] **Length adjust** — `shorten` (condense to key points) / `expand` (add context and detail)
+
+### Quick Replies
+
+When reading an email, a set of contextual one-click replies is offered below the preview. The user picks one, it opens pre-filled in Compose ready to edit or send immediately. Eliminates the most repetitive writing without removing the human in the loop.
+
+Built-in canned replies (always shown, no model needed):
+- [ ] "No thanks" — polite decline
+- [ ] "Thank you for reaching out"
+- [ ] "Thank you, [Name]" — first name extracted from the From header
+- [ ] "Copy that" — simple acknowledgement
+- [ ] "I'll get back to you" — defer
+
+AI-generated contextual replies (shown when body is loaded):
+- [ ] Model reads the email body and generates 3 short reply options relevant to the content
+- [ ] `Ctrl+Q` opens the quick-reply picker; arrow keys to select, `Enter` to open in Compose, `Esc` to cancel
+- [ ] Works in both split-preview and full-screen view
 
 ---
 
 ## HTML Rendering (Received Emails)
 
-- Best-effort rendering of HTML emails in terminal
-- charmbracelet/glamour handles the Markdown path; HTML needs a separate rendering solution
+Received emails are converted from HTML to Markdown for display in the terminal. The conversion is best-effort — complex layouts simplify gracefully.
 
----
-
-## Image Support
-
-- iTerm2 inline images protocol (primary target, user is on macOS/iTerm2)
-- Design to be extensible to Kitty graphics protocol for other terminals
+- [x] HTML → Markdown conversion for body preview
+- [x] Inline image rendering (iTerm2 protocol)
+- [ ] Kitty graphics protocol support (for non-iTerm2 terminals)
 
 ---
 
 ## Search
 
+Search is layered: fast local metadata search first, full-text body search next, IMAP server-side search as a fallback for emails not yet cached.
+
 ### In-folder search (local, fast)
-- `/` key opens a search bar at the bottom of the Timeline and Cleanup tabs
-- Searches cached metadata (sender, subject) instantly via SQLite `LIKE`
-- Results replace the current list view; `Esc` clears the search and restores the full list
-- Matched terms highlighted in the results
+- [x] `/` key opens search bar in Timeline and Cleanup tabs
+- [x] SQLite `LIKE` search on sender + subject
+- [x] Results replace current list view; `Esc` clears
+- [ ] Matched term highlighting in results
 
 ### Full-text search (body content)
-- Extend the local cache to store a plain-text snippet or full body text per email
-- SQLite FTS5 virtual table for ranked full-text search across all cached emails
-- Search bar prefix `/b ` to switch into body-search mode
-- Results show a one-line excerpt with the matched phrase
+- [x] Body text cached per email (`body_text` column)
+- [x] SQLite FTS5 virtual table (when available)
+- [x] `/b ` prefix switches to body-search mode
+- [ ] One-line excerpt with matched phrase in results
 
 ### Cross-folder search
-- Search across all locally cached folders in a single query
-- Results grouped by folder with a folder breadcrumb per row
-- Selecting a result switches the active folder and highlights the email
+- [x] Searches all locally cached folders in one query
+- [ ] Results grouped by folder with breadcrumb per row
+- [ ] Selecting a result switches folder and highlights the email
 
-### IMAP server-side search (fallback / deep search)
-- When the local cache is incomplete (e.g. emails older than the sync window), fall back to IMAP `SEARCH` command
-- Triggered explicitly with a `S` key or a "search server" prompt when local results are sparse
-- Results fetched and temporarily added to the cache
+### IMAP server-side search (fallback)
+- [x] Falls back to IMAP `SEARCH` when local results are sparse
+- [ ] Explicit `S` key to force a server search
 
 ### Saved searches / filters
-- Save a search query as a named virtual folder in the sidebar
-- Persisted in the SQLite database; re-executed on demand with `r`
+- [x] Save named searches persisted in SQLite
+- [x] Listed and executable from the TUI
+- [ ] Appear as virtual folders in the sidebar
 
----
-
-## Contact Book
-
-- Start simple: build from To/From/CC headers seen in sent and received mail
-- Explore macOS Contacts app API
-- Explore CardDAV if ProtonMail Bridge exposes it
-- Evolve incrementally as compose/forward features land
+### Semantic search
+- [x] `?` prefix in search bar triggers semantic mode
+- [x] Local embeddings via `nomic-embed-text` (Ollama)
+- [x] Vectors stored in SQLite (`email_embeddings` table)
+- [x] Cosine similarity ranking
+- [x] `semantic_search_emails` MCP tool
+- [ ] Similarity score badge (`87%`) per result row
+- [ ] Hybrid ranking (keyword + semantic merged)
+- [ ] "Why this result?" hint (matched excerpt)
 
 ---
 
 ## MCP Integration
 
-MCP server hook exposes email operations as tools, enabling:
-- Claude Code to read, search, and manage email
-- Phone app integration
-- Arbitrary AI agent access to the local mail store
+The MCP server exposes email operations as tools, enabling Claude Code and other AI agents to read, search, classify, and eventually manage email without opening the TUI. It reads directly from `email_cache.db` and shares state with the TUI via SQLite WAL mode.
 
-Ties into the daemon architecture: MCP server is just another client of the daemon.
-
-### Current tools (implemented)
+### Implemented tools
 
 | Tool | Description |
 |------|-------------|
 | `list_recent_emails` | Most recent emails in a folder, newest-first |
-| `search_emails` | Keyword search across sender and subject |
+| `list_unread_emails` | Unread emails only |
+| `search_emails` | Keyword search on sender + subject |
+| `search_by_sender` | All emails from a sender or domain |
+| `search_by_date` | Filter by date range |
+| `semantic_search_emails` | Natural-language search via local embeddings |
+| `get_email_body` | Cached plain-text body |
 | `get_sender_stats` | Senders ranked by email volume |
 | `get_email_classifications` | AI category counts for a folder |
+| `classify_email` | Run AI classification on one email |
+| `summarise_email` | Generate a summary via Ollama |
 
-### Vision: full email client over MCP
+### Planned tools
 
-The goal is to make the MCP server a complete programmatic email client — everything an AI agent needs to act as a capable email assistant without ever opening the TUI. Tools are grouped by capability area.
-
----
-
-#### Read & discovery
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `list_recent_emails` ✓ | `folder`, `limit` | Most recent emails, newest-first |
-| `list_unread_emails` | `folder`, `limit` | Unread emails only; common first step for an agent morning briefing |
-| `get_email_body` | `message_id` | Full plain-text body; fetched live from IMAP if not yet cached |
-| `get_email_body_html` | `message_id` | Raw HTML body (for agents that render or further process HTML) |
-| `get_email_headers` | `message_id` | All MIME headers as a key/value map (useful for List-Unsubscribe, DKIM, etc.) |
-| `list_folders` | — | All IMAP folders with unread/total counts |
-| `get_folder_stats` | `folder` | Message count, unread count, oldest/newest date, total size |
-| `get_thread` | `message_id` | All emails in the same thread (same normalised subject), ordered by date |
-| `list_attachments` | `message_id` | Attachment metadata: filename, MIME type, size — without downloading content |
-| `get_attachment` | `message_id`, `filename`, `save_path` | Download a specific attachment; returns base64 content or saves to `save_path` |
-
----
-
-#### Search
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `search_emails` ✓ | `folder`, `query` | Keyword search across sender and subject |
-| `semantic_search_emails` | `query`, `folder`, `limit`, `min_score` | Natural-language search via local embeddings; returns results ranked by cosine similarity |
-| `search_by_date` | `folder`, `after`, `before` | Filter emails within a date range (ISO 8601) |
-| `search_by_sender` | `sender`, `folder` | All emails from an exact sender or domain |
-
----
-
-#### AI & classification
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `get_email_classifications` ✓ | `folder` | Category counts for a folder |
-| `classify_email` | `message_id` | Run AI classification on a single email and return (and persist) its category |
-| `classify_folder` | `folder`, `limit` | Classify up to N unclassified emails in the folder; returns progress summary |
-| `summarise_email` | `message_id`, `max_words` | Generate a concise summary of an email body using the local Ollama model |
-| `summarise_thread` | `message_id`, `max_words` | Summarise an entire thread into a single paragraph |
-| `extract_action_items` | `message_id` | List tasks, deadlines, or requests mentioned in an email body |
-
----
-
-#### Compose & send
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `send_email` | `to`, `subject`, `body`, `from`, `cc`, `bcc`, `attachments` | Send a new email via SMTP; body is plain text or Markdown (converted to HTML); `attachments` is a list of local file paths |
-| `reply_to_email` | `message_id`, `body`, `cc`, `attachments` | Reply to an existing email; pre-fills To and `Re:` subject, quotes original |
-| `forward_email` | `message_id`, `to`, `note`, `attachments` | Forward with an optional covering note and additional attachments |
-| `draft_reply` | `message_id`, `instructions` | LLM drafts a reply from natural-language instructions; returns text without sending |
-| `save_draft` | `to`, `subject`, `body`, `from`, `cc`, `bcc` | Save a draft to the Drafts IMAP folder without sending |
-| `list_drafts` | — | List all saved drafts with subject, to, and date |
-| `send_draft` | `draft_message_id` | Send a previously saved draft and remove it from Drafts |
-
----
-
-#### Inbox management
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `get_sender_stats` ✓ | `folder`, `top_n` | Senders ranked by email count |
-| `delete_email` | `message_id` | Move a single email to Trash |
-| `delete_thread` | `message_id` | Move all emails in the thread to Trash |
-| `delete_sender` | `sender`, `folder` | Move all emails from a sender/domain to Trash |
-| `archive_email` | `message_id` | Move to Archive (equivalent of TUI `e` key) |
-| `archive_thread` | `message_id` | Archive all emails in the thread |
-| `archive_sender` | `sender`, `folder` | Archive all emails from a sender/domain |
-| `bulk_delete` | `message_ids[]` | Move multiple specific messages to Trash in one call |
-| `bulk_move` | `message_ids[]`, `destination_folder` | Move multiple specific messages to a folder in one call |
-| `move_email` | `message_id`, `destination_folder` | Move a single email to any IMAP folder |
-| `mark_read` | `message_id` | Mark as read on the IMAP server |
-| `mark_unread` | `message_id` | Mark as unread |
-| `flag_email` | `message_id`, `flag` | Set an IMAP flag (`\Flagged`, `\Answered`, etc.) |
-| `create_folder` | `name` | Create a new IMAP folder |
-| `rename_folder` | `folder`, `new_name` | Rename an IMAP folder |
-| `delete_folder` | `folder` | Delete an empty IMAP folder |
-
----
-
-#### Cleanup & automation
-
-These mirror the TUI Cleanup tab and its planned auto-cleanup rules — the same rules are shared between both interfaces.
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `list_cleanup_rules` | — | List all saved auto-cleanup rules (sender/domain → action) |
-| `add_cleanup_rule` | `sender`, `action`, `older_than_days` | Add a rule: e.g. delete all emails from `news@example.com` older than 30 days |
-| `remove_cleanup_rule` | `rule_id` | Remove a cleanup rule |
-| `run_cleanup_rules` | — | Execute all cleanup rules immediately; returns count of emails affected |
-| `unsubscribe_sender` | `message_id` | Hard-unsubscribe via the `List-Unsubscribe` / `List-Unsubscribe-Post` header found in the email |
-| `soft_unsubscribe_sender` | `sender`, `folder` | Soft-unsubscribe: auto-move all future emails from this sender to a designated folder |
-
----
-
-#### Contacts
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `list_contacts` | `limit` | Contacts derived from To/From/CC headers in sent and received mail |
-| `search_contacts` | `query` | Find contacts by name or email address |
-| `get_contact` | `email` | Full contact record: name, all seen email addresses, last seen date |
-
----
-
-#### System
-
-| Tool | Key parameters | Description |
-|------|---------------|-------------|
-| `sync_folder` | `folder` | Trigger incremental IMAP sync; returns count of new messages fetched |
-| `sync_all_folders` | — | Sync all folders; returns per-folder new-message counts |
-| `get_sync_status` | — | Cache freshness: last sync time per folder, pending embedding count |
-| `get_embedding_status` | — | Semantic index progress (N indexed / M total) |
-| `get_server_info` | — | Connected account, IMAP server, capabilities (IDLE, MOVE, etc.) |
-
----
+- [ ] `get_thread` — all emails in a thread ordered by date
+- [ ] `list_attachments` — attachment metadata without downloading
+- [ ] `get_attachment` — download a specific attachment
+- [ ] `list_folders` — all IMAP folders with counts
+- [ ] `classify_folder` — batch classify with progress
+- [ ] `extract_action_items` — tasks and deadlines from an email body
+- [ ] `summarise_thread` — one-paragraph thread summary
+- [ ] `send_email` — send via SMTP
+- [ ] `reply_to_email` — reply with pre-filled headers
+- [ ] `forward_email` — forward with covering note
+- [ ] `draft_reply` — LLM drafts a reply from instructions
+- [ ] `save_draft` / `list_drafts` / `send_draft`
+- [ ] `delete_email` / `delete_thread` / `bulk_delete`
+- [ ] `archive_email` / `archive_thread` / `archive_sender`
+- [ ] `move_email` / `bulk_move`
+- [ ] `mark_read` / `mark_unread`
+- [ ] `create_folder` / `rename_folder` / `delete_folder`
+- [ ] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
+- [ ] `soft_unsubscribe_sender` — auto-move future emails to a folder
+- [ ] `list_cleanup_rules` / `add_cleanup_rule` / `run_cleanup_rules`
+- [ ] `list_contacts` / `search_contacts` / `get_contact`
+- [ ] `sync_folder` / `sync_all_folders` / `get_sync_status`
+- [ ] `get_server_info`
 
 ### TUI ↔ MCP shared state
 
-The TUI and MCP server both read from and write to the **same `email_cache.db`**. This means:
-
-- Classifications set via `classify_email` appear immediately in the TUI Cleanup tab's Tag column
-- Emails deleted via `delete_email` are removed from the TUI timeline on the next render or sync
-- Cleanup rules created via `add_cleanup_rule` are enforced the next time the TUI runs a sync
-- Drafts saved via `save_draft` appear in the TUI's Compose drafts list
-- Contacts built up via the TUI (from viewed emails) are queryable via MCP `list_contacts`
-
-This makes the two interfaces fully interchangeable: start a task in the TUI, continue it in Claude, or vice versa, with no manual sync step.
+Both processes read and write the same `email_cache.db` via SQLite WAL mode. Classifications set via `classify_email` appear immediately in the TUI's Tag column. Emails deleted via `delete_email` disappear from the TUI on the next render.
 
 ### Simultaneous TUI + MCP operation
 
-**Requirement:** the TUI and MCP server must be safely runnable at the same time — a user should be able to have the TUI open in one terminal while Claude (or another agent) calls MCP tools in parallel, without data corruption, crashes, or stale reads.
+The TUI and MCP server are safely runnable at the same time:
 
-This requires:
-
-- **SQLite WAL mode** — enable write-ahead logging so readers never block writers and vice versa. Both processes open the database with `PRAGMA journal_mode=WAL`. This is the primary enabler of safe concurrent access.
-- **IMAP connection isolation** — TUI and MCP server each hold their own IMAP connection (or the MCP server operates cache-only for read tools and opens a short-lived connection only for write tools like `send_email` or `move_email`). They must never share a single `go-imap` client across processes.
-- **Cache invalidation signalling** — when the MCP server mutates the cache (deletes an email, saves a classification), the TUI should notice on its next render cycle. SQLite WAL means the TUI's next `SELECT` will see the committed change without any explicit IPC needed.
-- **No cross-process locks** — neither process should hold long-lived SQLite transactions that block the other. All writes are short, atomic operations.
-
-The daemon/UI split (Phase 2 architecture) is the long-term solution: both TUI and MCP become clients of a single daemon that serialises all IMAP and cache writes. Until that is built, WAL mode + connection isolation is sufficient for safe simultaneous use.
-
----
-
-### Why this is useful
-
-An agent with these tools can handle real-world tasks autonomously:
-
-- *"Summarise everything I received from the finance team this week and list any action items."*
-- *"Find the email about my insurance renewal, draft a reply asking for the updated quote, and send it."*
-- *"Move all newsletters from the last 3 months to the Archive folder."*
-- *"Classify my entire inbox and tell me how many emails need a reply."*
-
-The combination of semantic search + summarisation + compose tools means an agent can operate as a capable inbox assistant with no human in the loop for routine tasks.
-
----
-
-### Implementation notes
-
-- Tools that require live IMAP (`get_email_body`, `reply_to_email`, `send_email`, `move_email`, flag/read tools, `sync_folder`) need the MCP server to hold an IMAP connection. Currently the server is cache-only; this requires adding an optional live backend mode (connect on demand, idle disconnect after N seconds of inactivity).
-- AI tools (`summarise_email`, `draft_reply`, `extract_action_items`) call the same Ollama HTTP API already used by the TUI classifier. No new dependency.
-- `✓` marks tools already implemented.
-
----
-
-## SSH App Mode
-
-`charmbracelet/wish` lets you serve the Bubble Tea TUI over SSH on a custom port. With the daemon architecture in place, this is a small addition — the TUI becomes one of several possible clients.
-
----
-
-## Semantic Search
-
-Keyword search (SQLite `LIKE`) finds exact matches. Semantic search finds *meaning* — "emails about my tax return" matches messages that say "annual filing", "IRS", "accountant sent documents", even if none contain the word "tax return".
-
-### How it works
-
-1. **Embedding model** — a small local model (e.g. `nomic-embed-text` via Ollama, or a bundled GGUF via `llama.cpp`) converts each email's plain-text body + subject into a dense vector (e.g. 768 floats).
-2. **Vector store** — vectors are stored in a separate table in the existing SQLite database using the `sqlite-vec` extension (a single loadable `.so`/`.dylib` file, no separate process). Cosine similarity search runs entirely in SQLite.
-3. **Query** — when the user types a natural-language query, the same embedding model converts it to a vector; SQLite returns the K nearest neighbours.
-4. **Hybrid ranking** — results are merged with keyword matches and re-ranked: exact keyword hits score higher than semantic-only matches, so precision is not sacrificed.
-
-### Indexing pipeline
-
-- Triggered automatically after each TUI sync: newly cached emails are embedded in a background goroutine (rate-limited to avoid saturating the Ollama API or CPU)
-- Embedding is skipped for emails with no body text
-- Re-embedding on body change is detected by hashing the plain-text content
-- A progress indicator in the status bar shows `✦ embedding N/M` while indexing is in progress
-
-### UX
-
-- In the search bar, prefix with `?` to switch to semantic mode: `? emails about my lease renewal`
-- Without a prefix, the existing keyword search runs as today
-- Results show a similarity score badge (`87%`) next to each row
-- A "Why this result?" hint is available (shows the matched excerpt that drove the score)
-
-### Configuration
-
-```yaml
-semantic:
-  enabled: true          # default: true when Ollama is configured
-  model: "nomic-embed-text"   # Ollama embedding model to use
-  batch_size: 20         # emails to embed per background tick
-  min_score: 0.65        # minimum cosine similarity to include in results
-```
-
-### Dependencies
-
-| Component | Role |
-|-----------|------|
-| `sqlite-vec` | Vector similarity search inside SQLite (no extra process) |
-| Ollama `nomic-embed-text` | Local embedding model (already a project dependency) |
-
-`sqlite-vec` is a single dynamically-loaded extension; no schema changes beyond a new `email_embeddings` table.
-
-### Privacy
-
-All embeddings are computed locally. No email content is sent to any remote service. The embedding model runs inside the existing Ollama instance the user already has.
-
----
-
-## Multi-Account Support
-
-The app currently hard-codes a single IMAP+SMTP connection from one config file. The goal is to manage multiple accounts (e.g. personal ProtonMail + work Gmail) in a single session.
-
-### Account model
-- `proton.yaml` gains a top-level `accounts:` list; each entry has a `name`, IMAP credentials, SMTP credentials, and an optional `vendor` shorthand
-- A default single-account config (current format) continues to work unchanged
-- Each account gets its own IMAP connection, its own SQLite cache file, and its own set of folders
-
-### UI changes
-- The folder sidebar groups folders under an account header (e.g. `● personal` / `● work`)
-- Switching between account folders works identically to switching folders today
-- The status bar shows the active account name alongside the folder
-- Compose: a "From" field lets the user pick which account to send from
-- All tabs (Timeline, Cleanup, Search) can optionally show a unified view across accounts or be scoped to one
-
-### Vendor presets
-Common providers ship with sensible defaults so users only need to supply credentials:
-
-| Vendor | IMAP host / port | SMTP host / port | Notes |
-|--------|-----------------|-----------------|-------|
-| `protonmail` | `127.0.0.1:1143` | `127.0.0.1:1025` | Via ProtonMail Bridge; default today |
-| `gmail` | `imap.gmail.com:993` | `smtp.gmail.com:587` | App password required |
-| `outlook` | `outlook.office365.com:993` | `smtp.office365.com:587` | OAuth or app password |
-| `fastmail` | `imap.fastmail.com:993` | `smtp.fastmail.com:587` | App password |
-| `icloud` | `imap.mail.me.com:993` | `smtp.mail.me.com:587` | App-specific password |
-
-With a preset, config shrinks to:
-
-```yaml
-accounts:
-  - name: personal
-    vendor: protonmail
-    credentials:
-      username: me@pm.me
-      password: bridge_password
-  - name: work
-    vendor: gmail
-    credentials:
-      username: me@company.com
-      password: app_password
-```
-
-### OAuth2 (future)
-Gmail and Outlook prefer OAuth2 over app passwords. A future phase adds a `vendor_auth` flow that opens a browser for the OAuth dance and stores the refresh token in the system keychain.
+- [x] SQLite WAL mode (readers never block writers)
+- [x] IMAP connection isolation (each process holds its own connection)
+- [x] Short atomic writes (no long-lived transactions)
+- [ ] Daemon architecture (Phase 2): both become clients of a single daemon that serialises all IMAP writes
 
 ---
 
 ## Automatic New-Email Sync
 
-### IMAP IDLE (primary mechanism)
-IMAP IDLE (`RFC 2177`) is the proper push-like mechanism: the client sends an `IDLE` command and the server sends unsolicited `EXISTS` or `EXPUNGE` responses when the mailbox changes, without the client having to poll. This is far more efficient than periodic polling and is supported by all major servers (ProtonMail Bridge, Gmail, Outlook, Fastmail).
+New emails are detected without a full restart. The current implementation uses background polling; IMAP IDLE is the target for true push behaviour.
 
-Implementation plan:
-- Maintain a **dedicated IDLE connection** for the active folder alongside the existing command connection (go-imap supports this via a second `client.Client`)
-- When the server sends `EXISTS` (new message count increased), trigger an incremental fetch of only the new messages and append them to the cache and timeline in-place
-- The TUI receives a new message type (e.g. `NewEmailsMsg`) and inserts the rows at the top of the timeline without a full reload
-- On `EXPUNGE` (message deleted elsewhere), remove the matching row from the cache and timeline
-- IDLE must be re-issued every 29 minutes (server timeout); the background goroutine handles the keepalive automatically
+### IMAP IDLE (target)
+IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications to the client without polling. It is more efficient and eliminates the delay between arrival and display.
 
-### Background polling (fallback)
-For servers or configurations where IDLE is unavailable or unreliable:
-- Configurable poll interval (default: 60 seconds) in `proton.yaml` under `sync.interval`
-- Polling checks only the active folder; other folders are checked less frequently (e.g. every 5 minutes) to keep the sidebar counts fresh
-- Polling is also used for **non-active folders** even when IDLE is active on the current folder
+- [ ] Dedicated IDLE connection alongside the command connection
+- [ ] `EXISTS` → trigger incremental fetch, prepend rows to timeline
+- [ ] `EXPUNGE` → remove matching row from cache and timeline immediately
+- [ ] 29-minute keepalive (re-issue IDLE before server timeout)
 
-### Configuration
-```yaml
-sync:
-  idle: true          # Use IMAP IDLE when available (default: true)
-  interval: 60        # Fallback poll interval in seconds (default: 60)
-  background: true    # Sync other folders in background (default: true)
-  notify: true        # Show a status bar flash on new email arrival (default: true)
-```
+### Background polling (current)
+- [x] Configurable poll interval (`sync.interval` in `proton.yaml`, default 60s)
+- [x] Polling detects new emails via UIDNEXT comparison
+- [x] New emails cached and prepended to timeline
+- [x] Sync countdown shown in status bar (↻ 42s)
+- [ ] Per-folder poll frequency (active folder more often; background folders less)
 
-### UX
-- A subtle indicator in the status bar shows sync state: `↻ live` when IDLE is active, `↻ 42s` counting down to the next poll
-- New emails slide into the top of the timeline with a brief highlight so the user notices them without being interrupted
-- An unread badge on the folder sidebar updates automatically as new mail arrives
+---
+
+## Multi-Account Support
+
+The app currently supports one IMAP account per config file. Multi-account support will allow managing several inboxes (e.g. personal + work) in a single session.
+
+- [ ] `accounts:` list in `proton.yaml` (current single-account format still works)
+- [ ] Per-account IMAP connection, cache file, and folder tree
+- [ ] Folder sidebar grouped under account headers
+- [ ] Status bar shows active account name
+- [ ] Compose "From" field lets user pick sending account
+- [ ] Unified Timeline view across accounts (opt-in)
+- [ ] OAuth2 for Gmail / Outlook (future; current: app passwords only)
+- [x] Vendor presets: `protonmail`, `gmail`, `outlook`, `fastmail`, `icloud`
+
+---
+
+## Contact Book
+
+Contacts are derived from To/From/CC headers seen in sent and received mail — no import required. They power name completion in Compose and will feed into chat context.
+
+- [ ] `contacts` table in SQLite (built from email headers during sync)
+- [ ] Name + all seen addresses + last-seen date per contact
+- [ ] Autocomplete in Compose `To`/`CC`/`BCC` fields
+- [ ] `list_contacts` / `search_contacts` / `get_contact` MCP tools
+- [ ] macOS Contacts app integration (future)
+- [ ] CardDAV sync if ProtonMail Bridge exposes it (future)
+
+---
+
+## SSH App Mode
+
+`charmbracelet/wish` serves the full TUI over SSH on port 2222. Each SSH session gets its own `LocalBackend` (independent IMAP connection).
+
+- [x] `cmd/ssh-server` binary
+- [x] Each session: independent LocalBackend + IMAP connection
+- [ ] In Phase 2: each session connects to the shared daemon instead
 
 ---
 
 ## Forward and Deletion UX
 
-### Forward email
-- `F` key in Timeline opens Compose pre-filled with:
-  - `To` field empty and focused — user types the recipient address
-  - Subject prefixed with `Fwd:`
-  - Body quoted with a forwarding header (From / Date / Subject / original body text)
-- If the email body is already loaded in the preview panel, it is included in the quote; otherwise only the metadata header is pre-filled
-
-### Delete from Timeline
-- `D` on any Timeline row (collapsed thread, expanded email, or open preview) deletes that specific email
-- For a collapsed `[N]` thread header, `D` prompts: "Delete all N emails in this thread?"
-- Moves to Trash, same as the Cleanup tab path
-
-### Archive from Timeline and Cleanup
-- `e` archives the highlighted email or sender (moves to `Archive` / `[Gmail]/All Mail` / `Archives` — tries known names in order)
-- Archive is non-destructive: email is still searchable and accessible from the Archive folder
-- Works in both Timeline (single email or full thread) and Cleanup (all emails from the selected sender)
-
-### Deletion confirmation
-- `D` never deletes immediately — it opens an inline prompt in the status bar:
-  `Delete 3 senders? [y] confirm  [n/Esc] cancel`
-- The prompt describes exactly what would be deleted (N message(s), N sender(s), a specific sender name, or a domain)
-- `y` or `Y` confirms and proceeds; any other key or `Esc` cancels silently
-- This applies to all deletion paths: single message, selected messages, single sender, selected senders, domain
+- [x] `F` key in Timeline opens Compose pre-filled for forward (Fwd: subject, quoted body)
+- [x] `R` key in Timeline opens Compose pre-filled for reply (Re: subject, quoted body, To pre-filled)
+- [x] `D` in Timeline deletes the highlighted email (single message)
+- [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
+- [x] `e` archives the highlighted email or sender
+- [x] Inline confirmation prompt (`y` to confirm, `Esc` to cancel)
 
 ---
 
 ## Attachment Support
 
-### Receiving attachments
-- Attachments are detected from `BodyStructure` during sync and shown in the email preview with a filename, MIME type, and size
-- `Enter` on an attachment descriptor (or a dedicated key, e.g. `s`) opens a save-to-disk prompt with a default path (`~/Downloads/<filename>`)
-- Downloaded files are saved via IMAP part fetch; no need to re-download the full message
-- Inline images that are too large for iTerm2 rendering are also accessible this way
-
-### Sending attachments
-- In Compose, `Ctrl+A` opens a file picker prompt (path input with tab-completion against the filesystem)
-- Multiple attachments can be added; each appears as a line below the body: `[attach] report.pdf  (42 KB)`
-- `Ctrl+A` on an existing attachment line removes it
-- Files are base64-encoded and sent as `multipart/mixed` wrapping the `multipart/alternative` body
-- File size warning shown inline if a single attachment exceeds 10 MB
-
-### MCP
-`send_email` and `reply_to_email` tools accept an optional `attachments` list of local file paths.
+- [x] Attachments detected from `BodyStructure` during sync
+- [x] Attachment list shown in email preview (filename, MIME type, size)
+- [x] Save attachment to disk (prompted path, default `~/Downloads/<filename>`)
+- [x] Attach files when composing (`Ctrl+A`, tab-completion)
+- [x] Multiple attachments; each listed below the body
+- [x] Sent as `multipart/mixed`
+- [ ] File size warning for attachments over 10 MB
 
 ---
 
 ## Text Selection
 
-Bubble Tea's alt-screen mode captures all input, so the terminal's native mouse selection is disabled. Two complementary mechanisms restore copy-ability:
+Bubble Tea's alt-screen captures all input, so the terminal's native mouse selection is disabled. Two mechanisms restore copy-ability.
 
-### Mouse selection mode
-- `m` toggles mouse-selection mode: the TUI temporarily releases mouse capture (`tea.DisableMouse`) so the terminal's native text selection works normally
-- A visible indicator in the status bar shows `[mouse] select mode — press m to return`
-- Pressing `m` again re-enables Bubble Tea mouse handling and returns to normal TUI operation
-
-### Vim-style visual selection
-- In the email preview panel, `v` enters visual line mode
-- `j`/`k` extend the selection; the selected lines are highlighted
-- `y` yanks the selected text to the system clipboard (via `pbcopy` on macOS, `xclip`/`wl-copy` on Linux)
-- `Esc` cancels visual mode without copying
-- Works for any text visible in the preview — body, headers, quoted blocks
-
-### Quick copy shortcuts
-- `yy` in the preview panel copies the current line to clipboard without entering visual mode
-- `Y` copies the entire visible body text (all lines, not just the viewport)
+- [x] `m` toggles mouse-selection mode (releases mouse capture; status bar indicator)
+- [x] `v` in preview enters vim-style visual line mode
+- [x] `y` yanks selected lines to system clipboard (`pbcopy` / `xclip`)
+- [x] `Esc` cancels visual mode
+- [x] `yy` copies current line; `Y` copies entire visible body
 
 ---
 
 ## Full-Screen Email View
 
-- `z` (or `Enter` when preview is already open) expands the email preview to fill the entire terminal — tab bar, sidebar, timeline table, and status bar are all hidden
-- The full-screen view shows the full email with the same scroll controls (`j`/`k`, `PgUp`/`PgDn`)
-- Header block (From / Date / Subject) remains pinned at the top
-- `z` or `Esc` exits full-screen and restores the previous split layout
-- Full-screen mode also works in the Cleanup details panel
+- [x] `z` (or `Enter` when preview is already open) expands preview to fill the terminal
+- [x] Tab bar, sidebar, timeline table hidden in full-screen
+- [x] Header (From / Date / Subject) pinned at top
+- [x] Same scroll controls (`j`/`k`, `PgUp`/`PgDn`)
+- [x] `z` or `Esc` exits and restores split layout
+
+---
+
+## Settings / Onboarding Screen
+
+First-run experience and ongoing configuration should not require the user to edit a YAML file. A TUI settings screen lets users configure accounts, server details, AI, and sync preferences interactively. The YAML file remains the source of truth on disk — the settings screen reads and writes it.
+
+### First-run wizard
+- [ ] Detected on startup when no config file exists
+- [ ] Step 1 — Account type: pick a vendor preset (ProtonMail, Gmail, Outlook, Fastmail, iCloud) or "Custom"
+- [ ] Step 2 — Credentials: username + password fields (masked); password optionally saved to keychain
+- [ ] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, skip if Ollama not running
+- [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
+- [ ] Step 5 — Test connection button; shows result inline before saving
+- [ ] Writes `proton.yaml` on finish
+
+### In-app settings panel
+- [ ] Accessible from the TUI with `?` or `,` key (or a Settings tab)
+- [ ] Editable fields for all config sections: credentials, server, SMTP, AI, sync
+- [ ] Account list for multi-account (add / remove / reorder)
+- [ ] Changes saved on `Ctrl+S`; no restart required for most settings
+- [ ] Passwords always hidden; "reveal" button toggles visibility
+
+---
+
+## Security / Keychain
+
+Passwords in `proton.yaml` are stored in plaintext, which is acceptable for a local tool but not ideal. The keychain integration stores credentials in the OS keychain and replaces the plaintext value with a reference.
+
+- [ ] macOS: Keychain Services API (`security` CLI or native Go binding)
+- [ ] Linux: Secret Service API (via `libsecret` / D-Bus)
+- [ ] Opt-in: `credentials.use_keychain: true` in config (default off to avoid breaking existing setups)
+- [ ] Settings screen always uses keychain when available
+- [ ] First-run wizard offers keychain storage by default
+- [ ] Fallback to plaintext YAML if keychain unavailable or declined
+
+---
+
+## Developer Integration (MCP Setup)
+
+The MCP server lets Claude Code, Cursor, Codex, and other AI tools read and manage email without opening the TUI. Setting it up requires a few lines of config that vary by tool. The README will include a ready-to-paste prompt for each supported tool so users can enable their AI assistant in under a minute.
+
+### README prompts (planned)
+
+Each prompt below instructs the AI tool to register the MCP server. Users copy the prompt, run it in the relevant tool, and the server is live.
+
+- [ ] **Claude Code** — prompt to add `cmd/mcp-server` to `~/.claude/claude.json` MCP config
+- [ ] **Cursor** — prompt to add the server to Cursor's MCP settings JSON
+- [ ] **GitHub Copilot / VS Code** (when MCP support lands) — equivalent config snippet
+- [ ] **Generic** — prompt that explains how to run `./bin/mcp-server` and wire it into any MCP-compatible client
+
+Example (Claude Code):
+```
+Add a local MCP server called "mail" that runs this command:
+/path/to/mail-processor/bin/mcp-server -config /path/to/proton.yaml
+```
+
+### README goals
+- [ ] One-paragraph "what this is" intro
+- [ ] Quick-start: build → configure → run (under 5 commands)
+- [ ] MCP setup section with copy-paste prompts per tool
+- [ ] Screenshot / GIF of the TUI
+- [ ] Key bindings reference table
+- [ ] Link to VISION.md and ARCHITECTURE.md for deeper context
 
 ---
 
 ## Theming
 
-- Dark theme default (current is acceptable)
-- Inherit terminal color profile where possible
-- App-level theme system as a future feature
+- [ ] App-level theme system (configurable in `proton.yaml`)
+- [ ] Inherit terminal color profile
+- [ ] Dark theme (current hardcoded styles are dark; no light theme)

@@ -223,10 +223,21 @@ Go 1.23+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 
 ### Development Practices
 
+#### Documentation conventions
+
+When adding or updating features in `VISION.md` or any other planning/design document:
+
+- Every `##` section heading must be followed by a 1–3 sentence description of what the section covers and why it matters — before any bullet points or subsections.
+- All features within a section must be expressed as checkboxes: `- [x]` for implemented, `- [ ]` for planned.
+- Never use plain bullet points for feature lists — always checkboxes so the document is also a progress tracker.
+- Keep checkbox descriptions concrete and testable (what a user can observe), not vague intentions.
+
 #### Large feature workflow
 1. **Update [TUI_TESTPLAN.md](TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
-2. Implement the feature.
-3. Run the post-completion checklist below.
+2. **Update [VISION.md](VISION.md)** — add the feature as a `- [ ]` checkbox in the relevant section with a brief description.
+3. Implement the feature.
+4. Mark the checkbox `- [x]` in VISION.md when done.
+5. Run the post-completion checklist below.
 
 #### Post-completion checklist (bugs and large features)
 
