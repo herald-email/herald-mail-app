@@ -75,9 +75,65 @@ A persistent top/bottom bar replacing the current ad-hoc status line:
 - Real IMAP folders synced from server
 
 ### Chat Panel
-- Right-side slide-out panel
-- User converses with their emails via a local Ollama model
-- Position is fixed on the right; functionality will grow in complexity over time
+
+The chat panel evolves from a simple Q&A box into a full agentic email assistant running inside the TUI. It shares all infrastructure already in the app — MCP tools, vector search, contacts, Markdown rendering — and surfaces it through natural conversation.
+
+#### Tool calling (MCP-backed)
+
+The chat uses Ollama's native tool-calling API (`tools` field in `/api/chat`) to invoke the same functions exposed by the MCP server, directly in-process (no stdio round-trip). The model decides which tools to call; the app executes them against the local cache and IMAP; results feed back into the conversation until the model produces a final text reply.
+
+Available tools mirror the MCP surface:
+- **Search & discovery** — `search_emails`, `search_by_sender`, `search_by_date`, `semantic_search_emails`, `list_unread_emails`
+- **Reading** — `get_email_body`, `get_thread`, `summarise_email`, `summarise_thread`, `extract_action_items`
+- **Compose & send** — `reply_to_email`, `forward_email`, `draft_reply`, `send_email`
+- **Management** — `delete_email`, `archive_email`, `mark_read`, `move_email`
+- **Contacts** — `search_contacts`, `get_contact`
+- **Classification** — `classify_email`, `get_email_classifications`
+
+#### Filtered timeline
+
+When the chat returns a set of emails (from a search, date filter, sender query, or semantic search), those results are pushed directly into the Timeline tab as a live filtered view — the table updates in place, showing only the matched emails. The user can browse, open, and act on them without leaving the chat flow. Clearing the filter (`Esc` or asking "show all") restores the full timeline.
+
+Examples of natural-language queries that produce a filtered timeline:
+- *"Show me everything from Amazon this month"*
+- *"Find emails about my lease renewal"* (semantic)
+- *"What did I get from the finance team last week?"*
+
+#### Context awareness
+
+The chat always knows what the user is looking at:
+- **Currently open email** — if a preview is open, the chat has access to its body, headers, and thread; "summarise this" or "reply saying I'll call back Thursday" works without specifying a message ID
+- **Active folder and selection** — "delete all selected" or "archive these" applies to the current TUI selection
+- **Contacts** — sender names and addresses are resolved through the contact book; the model can reference people by name
+
+#### Markdown replies
+
+The chat panel renders the assistant's responses as styled Markdown (same glamour pipeline used in Compose preview). When the model drafts a reply or compose body, it writes Markdown naturally — bold, bullets, links — and the app converts it to HTML on send, so recipients see a properly formatted email.
+
+#### Model backends
+
+The chat is not tied to Ollama. A backend abstraction allows swapping the underlying model:
+
+| Backend | How | When to use |
+|---------|-----|-------------|
+| Ollama (local) | `/api/chat` with tools | Default; fully offline, no cost |
+| Claude (Anthropic API) | `claude-opus-4-6` / `claude-sonnet-4-6` via Anthropic SDK | Stronger reasoning, better tool use, requires API key |
+| OpenAI-compatible | Any server speaking the OpenAI chat completions API | Flexibility |
+
+Backend is configured per-account in `proton.yaml`:
+```yaml
+chat:
+  backend: ollama          # ollama | claude | openai-compatible
+  model: gemma2            # model name for the chosen backend
+  api_key: ""              # required for claude / openai-compatible
+  api_base: ""             # required for openai-compatible
+```
+
+When Claude is the backend, the same tools are expressed as Anthropic tool schemas; the tool-call loop is identical from the app's perspective.
+
+#### Semantic search integration
+
+Semantic search (via local embeddings) powers tool calls that use natural language queries. When the model calls `semantic_search_emails`, the embedding is computed locally via `nomic-embed-text` and matched against the vector index in SQLite — no query rewriting or server round-trip needed. This means "find emails about my tax situation" works even if no email contains those exact words.
 
 ---
 
