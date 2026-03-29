@@ -306,6 +306,9 @@ type Model struct {
 	showSettings  bool
 	settingsPanel *Settings
 
+	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
+	oauthWait *OAuthWaitModel
+
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
 
@@ -552,12 +555,35 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case OAuthRequiredMsg:
-		// Settings saved with Gmail — start OAuth flow.
-		// For now: close settings and show a status message with instructions.
+		// Gmail chosen in the settings panel — launch the OAuth wait overlay.
 		m.showSettings = false
 		m.settingsPanel = nil
-		m.statusMessage = "Gmail OAuth: restart Herald to complete authorization."
+		oauthModel, err := NewOAuthWaitModel(msg.Email, msg.Config, m.configPath)
+		if err != nil {
+			m.statusMessage = fmt.Sprintf("Failed to start OAuth flow: %v", err)
+			return m, nil
+		}
+		m.oauthWait = oauthModel
+		return m, m.oauthWait.Init()
+
+	case OAuthDoneMsg:
+		m.oauthWait = nil
+		m.cfg = msg.Config
+		m.statusMessage = "Gmail account authorized. Reconnecting…"
+		// TODO: trigger backend reconnect when reconnect API is available
 		return m, nil
+
+	case OAuthErrorMsg:
+		m.oauthWait = nil
+		m.statusMessage = fmt.Sprintf("OAuth failed: %v", msg.Err)
+		return m, nil
+	}
+
+	// Forward all messages to the OAuth wait overlay when active.
+	if m.oauthWait != nil {
+		newModel, cmd := m.oauthWait.Update(msg)
+		m.oauthWait = newModel.(*OAuthWaitModel)
+		return m, cmd
 	}
 
 	// Forward all messages to the settings panel when it is active (intercepts
@@ -984,6 +1010,10 @@ const minTermWidth = 60
 const minTermHeight = 15
 
 func (m *Model) View() string {
+	// OAuth wait overlay takes over the entire screen when active.
+	if m.oauthWait != nil {
+		return m.oauthWait.View()
+	}
 	// Settings overlay takes over the entire screen when active.
 	if m.showSettings && m.settingsPanel != nil {
 		return m.settingsPanel.View()

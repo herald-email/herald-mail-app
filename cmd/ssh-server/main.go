@@ -63,7 +63,7 @@ func main() {
 		wish.WithMiddleware(
 			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				// Each SSH connection gets its own backend (own IMAP connection + shared cache)
-				b, err := backend.NewLocal(cfg, classifier)
+				b, err := backend.NewLocal(cfg, resolvedConfig, classifier)
 				if err != nil {
 					fmt.Fprintf(s, "Failed to create backend: %v\n", err)
 					return nil, nil

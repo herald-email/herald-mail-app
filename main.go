@@ -205,7 +205,7 @@ func main() {
 	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
 
 	// Create the backend (pass classifier so semantic search can embed queries)
-	b, err := backend.NewLocal(cfg, classifier)
+	b, err := backend.NewLocal(cfg, resolvedConfig, classifier)
 	if err != nil {
 		logger.Error("Failed to create backend: %v", err)
 		log.Fatalf("Failed to create backend: %v", err)

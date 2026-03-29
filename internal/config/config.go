@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"mail-processor/internal/logger"
 )
 
 // ExpandPath replaces a leading "~" with the current user's home directory.
@@ -57,7 +58,6 @@ type Config struct {
 		AccessToken  string `yaml:"access_token,omitempty"`
 		RefreshToken string `yaml:"refresh_token,omitempty"`
 		// TokenExpiry is the OAuth access-token expiry in RFC3339 format.
-		// TODO: parse to time.Time once the token-refresh flow is implemented.
 		TokenExpiry string `yaml:"token_expiry,omitempty"`
 		Email        string `yaml:"email,omitempty"`
 	} `yaml:"gmail,omitempty"`
@@ -222,8 +222,7 @@ func checkFilePermissions(configPath string) error {
 	mode := info.Mode()
 	// Check if group or others have any permissions (Unix-like systems)
 	if mode&0o077 != 0 {
-		fmt.Printf("Warning: Config file has loose permissions (%v). Consider running: chmod 600 %s\n", 
-			mode, configPath)
+		logger.Warn("Config file has loose permissions (%v). Consider running: chmod 600 %s", mode, configPath)
 	}
 
 	return nil
