@@ -1,6 +1,6 @@
-// ssh-server serves the mail-processor TUI over SSH using charmbracelet/wish.
+// ssh-server serves the herald TUI over SSH using charmbracelet/wish.
 // Any SSH client can connect and use the full email client remotely.
-// Usage: ./ssh-server [-config proton.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
+// Usage: ./ssh-server [-config ~/.herald/conf.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
 package main
 
 import (
@@ -12,8 +12,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -29,18 +27,6 @@ import (
 	appsmtp "mail-processor/internal/smtp"
 )
 
-// expandPath replaces a leading "~" with the current user's home directory.
-func expandPath(p string) (string, error) {
-	if !strings.HasPrefix(p, "~") {
-		return p, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("could not determine home directory: %w", err)
-	}
-	return filepath.Join(home, p[1:]), nil
-}
-
 func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	addr := flag.String("addr", ":2222", "SSH server listen address")
@@ -52,7 +38,7 @@ func main() {
 	}
 	defer logger.Close()
 
-	resolvedConfig, err := expandPath(*configPath)
+	resolvedConfig, err := config.ExpandPath(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to resolve config path: %v", err)
 	}

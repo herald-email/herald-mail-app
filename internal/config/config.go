@@ -3,9 +3,23 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// ExpandPath replaces a leading "~" with the current user's home directory.
+func ExpandPath(p string) (string, error) {
+	if !strings.HasPrefix(p, "~") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	return filepath.Join(home, p[1:]), nil
+}
 
 // Config represents the application configuration
 type Config struct {

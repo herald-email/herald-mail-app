@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/ai"
@@ -17,25 +16,16 @@ import (
 	appsmtp "mail-processor/internal/smtp"
 )
 
-// expandPath replaces a leading "~" with the current user's home directory.
-func expandPath(p string) (string, error) {
-	if !strings.HasPrefix(p, "~") {
-		return p, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("could not determine home directory: %w", err)
-	}
-	return filepath.Join(home, p[1:]), nil
-}
-
 func main() {
 	// Parse command line flags
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
 	var verbose = flag.Bool("verbose", false, "Enable verbose logging")
-	var configPath = flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
+	const defaultConfig = "~/.herald/conf.yaml"
+	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
 	flag.Parse()
+
+	usingDefault := (*configPath == defaultConfig)
 
 	if *showHelp {
 		fmt.Println("Herald - Email analysis and cleanup tool")
@@ -51,18 +41,18 @@ func main() {
 		fmt.Printf("  %s -debug             # Run with debug logging\n", os.Args[0])
 		fmt.Printf("  %s -config custom.yaml # Use custom config file\n", os.Args[0])
 		fmt.Println()
-		fmt.Println("Log files are created as mail_processor_YYYYMMDD_HHMMSS.log")
+		fmt.Println("Log files are created as herald_YYYYMMDD_HHMMSS.log")
 		os.Exit(0)
 	}
 
 	// Expand ~ in config path
-	resolvedConfig, err := expandPath(*configPath)
+	resolvedConfig, err := config.ExpandPath(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to resolve config path: %v", err)
 	}
 
-	// Backwards-compat: if proton.yaml exists in CWD and ~/.herald/conf.yaml is absent, guide migration
-	if *configPath == "~/.herald/conf.yaml" {
+	if usingDefault {
+		// Backwards-compat: if proton.yaml exists in CWD and ~/.herald/conf.yaml is absent, guide migration
 		if _, statErr := os.Stat("proton.yaml"); statErr == nil {
 			if _, statErr2 := os.Stat(resolvedConfig); os.IsNotExist(statErr2) {
 				fmt.Fprintln(os.Stderr, "Found proton.yaml in current directory. Herald now uses ~/.herald/conf.yaml.")
@@ -71,12 +61,12 @@ func main() {
 				os.Exit(1)
 			}
 		}
-	}
 
-	// Ensure ~/.herald directory exists (only when using the default config path)
-	heraldDir := filepath.Dir(resolvedConfig)
-	if err := os.MkdirAll(heraldDir, 0700); err != nil {
-		log.Fatalf("Failed to create config directory %s: %v", heraldDir, err)
+		// Ensure ~/.herald directory exists (only when using the default config path)
+		heraldDir := filepath.Dir(resolvedConfig)
+		if err := os.MkdirAll(heraldDir, 0700); err != nil {
+			log.Fatalf("Failed to create config directory %s: %v", heraldDir, err)
+		}
 	}
 
 	// Initialize logging

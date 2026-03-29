@@ -1,5 +1,5 @@
-// mcp-server exposes email operations as MCP tools over stdio.
-// Usage: ./mcp-server [-config proton.yaml]
+// mcp-server exposes herald email operations as MCP tools over stdio.
+// Usage: ./mcp-server [-config ~/.herald/conf.yaml]
 // Add to Claude Code's MCP config to let Claude search and manage your email.
 package main
 
@@ -9,8 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,23 +19,11 @@ import (
 	"mail-processor/internal/config"
 )
 
-// expandPath replaces a leading "~" with the current user's home directory.
-func expandPath(p string) (string, error) {
-	if !strings.HasPrefix(p, "~") {
-		return p, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("could not determine home directory: %w", err)
-	}
-	return filepath.Join(home, p[1:]), nil
-}
-
 func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	flag.Parse()
 
-	expanded, err := expandPath(*configPath)
+	expanded, err := config.ExpandPath(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to resolve config path: %v", err)
 	}
@@ -60,7 +46,7 @@ func main() {
 	}
 
 	s := server.NewMCPServer(
-		"mail-processor",
+		"herald",
 		"1.0.0",
 		server.WithToolCapabilities(false),
 	)
@@ -431,7 +417,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			query, err := req.RequireString("query")
 			if err != nil {
@@ -478,7 +464,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			msgID, err := req.RequireString("message_id")
 			if err != nil {
@@ -515,7 +501,7 @@ func main() {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			if classifier == nil {
-				return mcp.NewToolResultText("Ollama not configured — set ollama.host in proton.yaml"), nil
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
 			}
 			msgID, err := req.RequireString("message_id")
 			if err != nil {

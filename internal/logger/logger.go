@@ -22,7 +22,7 @@ func Init(debug bool) error {
 	
 	// Create log file with timestamp
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("mail_processor_%s.log", timestamp)
+	filename := fmt.Sprintf("herald_%s.log", timestamp)
 	
 	var err error
 	logFile, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
