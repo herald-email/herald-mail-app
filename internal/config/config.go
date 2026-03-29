@@ -53,6 +53,12 @@ type Config struct {
 		BatchSize int     `yaml:"batch_size"` // default: 20
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
+	Gmail struct {
+		AccessToken  string `yaml:"access_token,omitempty"`
+		RefreshToken string `yaml:"refresh_token,omitempty"`
+		TokenExpiry  string `yaml:"token_expiry,omitempty"` // RFC3339 format
+		Email        string `yaml:"email,omitempty"`
+	} `yaml:"gmail,omitempty"`
 }
 
 // vendorPreset holds IMAP/SMTP defaults for a known mail provider
@@ -95,8 +101,34 @@ func (c *Config) applyVendorPreset() {
 	}
 }
 
+// IsGmailOAuth returns true when the config contains a Gmail OAuth refresh token,
+// indicating the user authenticates via OAuth rather than username/password.
+func (c *Config) IsGmailOAuth() bool {
+	return c.Gmail.RefreshToken != ""
+}
+
+// Save marshals the config to YAML and writes it atomically to path with 0600 permissions.
+func (c *Config) Save(path string) error {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return fmt.Errorf("failed to write temp config file: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp) // best-effort cleanup
+		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+	return nil
+}
+
 // applyDefaults sets sensible defaults for optional config fields
 func (c *Config) applyDefaults() {
+	if c.Ollama.Model == "" {
+		c.Ollama.Model = "gemma3:4b"
+	}
 	if c.Ollama.EmbeddingModel == "" {
 		c.Ollama.EmbeddingModel = "nomic-embed-text"
 	}
@@ -146,11 +178,14 @@ func Load(configPath string) (*Config, error) {
 
 // validate checks that all required configuration fields are present
 func (c *Config) validate() error {
-	if c.Credentials.Username == "" {
-		return fmt.Errorf("missing credentials.username")
-	}
-	if c.Credentials.Password == "" {
-		return fmt.Errorf("missing credentials.password")
+	// Gmail OAuth users authenticate via token; skip username/password checks.
+	if !c.IsGmailOAuth() {
+		if c.Credentials.Username == "" {
+			return fmt.Errorf("missing credentials.username")
+		}
+		if c.Credentials.Password == "" {
+			return fmt.Errorf("missing credentials.password")
+		}
 	}
 	if c.Server.Host == "" {
 		return fmt.Errorf("missing server.host")
