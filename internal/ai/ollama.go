@@ -69,12 +69,15 @@ type generateResponse struct {
 // Returns CategoryUnknown on any error (so callers can skip gracefully).
 func (c *Classifier) Classify(sender, subject string) (Category, error) {
 	prompt := fmt.Sprintf(`You are an email tagger. Given the sender and subject below, respond with EXACTLY ONE of these tags and nothing else:
-sub       (marketing / unwanted subscription)
-news      (newsletter you signed up for)
-imp       (important: bills, legal, personal, work)
-txn       (receipt, booking confirmation, notification)
-soc       (social media)
-spam      (spam)
+
+sub   = unsolicited marketing, promotions, deals, offers, gift cards, discounts (even from financial or retail brands)
+news  = newsletters or editorial content from a list you chose to subscribe to
+imp   = genuinely important: bills/invoices YOU must pay, legal notices, doctor/appointment, direct personal/work email
+txn   = transactional: receipts, order confirmations, shipping updates, booking confirmations
+soc   = social media notifications
+spam  = phishing, scams, or unsolicited junk
+
+Key rule: promotional emails advertising offers (e.g. "gift card", "limited time", "earn rewards", "save X%%") are ALWAYS sub or spam, never imp — even if the sender is a bank or financial service.
 
 Sender: %s
 Subject: %s
