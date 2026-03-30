@@ -154,4 +154,13 @@ type Backend interface {
 
 	// SaveCustomPrompt persists a custom prompt (insert or update by ID).
 	SaveCustomPrompt(p *models.CustomPrompt) error
+
+	// GetCustomPrompt returns a single custom prompt by ID.
+	GetCustomPrompt(id int64) (*models.CustomPrompt, error)
+
+	// AppendActionLog inserts a rule action log entry.
+	AppendActionLog(entry *models.RuleActionLogEntry) error
+
+	// TouchRuleLastTriggered updates the last_triggered timestamp for a rule.
+	TouchRuleLastTriggered(ruleID int64) error
 }

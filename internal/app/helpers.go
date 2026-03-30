@@ -22,6 +22,7 @@ import (
 	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	"mail-processor/internal/rules"
 	appsmtp "mail-processor/internal/smtp"
 )
 
@@ -198,6 +199,27 @@ func (m *Model) listenForValidIDs() tea.Cmd {
 func (m *Model) listenForDeletionResults() tea.Cmd {
 	return func() tea.Msg {
 		return <-m.deletionResultCh
+	}
+}
+
+// ruleWorker processes emails through the rule engine serially.
+func (m *Model) ruleWorker() {
+	engine := rules.New(m.backend, m.backend, m.classifier)
+	for req := range m.ruleRequestCh {
+		fired, err := engine.EvaluateEmail(req.Email, req.Category)
+		m.ruleResultCh <- models.RuleResult{
+			MessageID:  req.Email.MessageID,
+			FiredCount: fired,
+			Err:        err,
+		}
+	}
+}
+
+// listenForRuleResult waits for a single result from the rule engine worker.
+func (m *Model) listenForRuleResult() tea.Cmd {
+	return func() tea.Msg {
+		result := <-m.ruleResultCh
+		return RuleResultMsg{Result: result}
 	}
 }
 

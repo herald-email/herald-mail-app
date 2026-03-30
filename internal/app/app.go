@@ -147,6 +147,15 @@ type UnsubscribeResultMsg struct {
 	Err    error
 }
 
+// RuleResultMsg carries the result of processing a single email through the rule engine
+type RuleResultMsg struct{ Result models.RuleResult }
+
+// SoftUnsubResultMsg carries the result of a soft-unsubscribe attempt
+type SoftUnsubResultMsg struct {
+	Sender string
+	Err    error
+}
+
 // ImageDescMsg carries an AI-generated description for a single inline image
 type ImageDescMsg struct {
 	ContentID   string
@@ -176,6 +185,11 @@ type Model struct {
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
 	deletionResultCh  chan models.DeletionResult
+
+	// Rule engine channels
+	ruleRequestCh  chan models.RuleRequest
+	ruleResultCh   chan models.RuleResult
+	rulesFiredCount int // total rules fired across session
 
 	// Classification channel (buffered; one result per email)
 	classifyCh chan ClassifyProgressMsg
@@ -452,6 +466,10 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	deletionRequestCh := make(chan models.DeletionRequest, 10)
 	deletionResultCh := make(chan models.DeletionResult, 10)
 
+	// Create rule engine channels
+	ruleRequestCh := make(chan models.RuleRequest, 20)
+	ruleResultCh := make(chan models.RuleResult, 1)
+
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Search emails... (/b body  /* all folders  ? semantic)"
 	searchInput.CharLimit = 200
@@ -500,6 +518,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		inactiveTableStyle: inactiveStyle,
 		deletionRequestCh:   deletionRequestCh,
 		deletionResultCh:    deletionResultCh,
+		ruleRequestCh:       ruleRequestCh,
+		ruleResultCh:        ruleResultCh,
 		searchInput:         searchInput,
 		attachmentSaveInput: attachmentSaveInput,
 		attachmentPathInput: attachmentPathInput,
@@ -507,6 +527,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 
 	// Start deletion worker goroutine
 	go m.deletionWorker()
+
+	// Start rule engine worker goroutine
+	go m.ruleWorker()
 
 	return m
 }

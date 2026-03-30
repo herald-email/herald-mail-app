@@ -427,3 +427,15 @@ func (b *LocalBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error) {
 func (b *LocalBackend) SaveCustomPrompt(p *models.CustomPrompt) error {
 	return b.cache.SaveCustomPrompt(p)
 }
+
+func (b *LocalBackend) GetCustomPrompt(id int64) (*models.CustomPrompt, error) {
+	return b.cache.GetCustomPrompt(id)
+}
+
+func (b *LocalBackend) AppendActionLog(entry *models.RuleActionLogEntry) error {
+	return b.cache.AppendActionLog(entry)
+}
+
+func (b *LocalBackend) TouchRuleLastTriggered(ruleID int64) error {
+	return b.cache.TouchRuleLastTriggered(ruleID)
+}
