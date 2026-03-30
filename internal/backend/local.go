@@ -403,3 +403,27 @@ func (b *LocalBackend) StopPolling() {
 		b.pollStop = nil
 	}
 }
+
+func (b *LocalBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
+	return b.imapClient.MoveEmail(messageID, fromFolder, toFolder)
+}
+
+func (b *LocalBackend) SaveRule(r *models.Rule) error {
+	return b.cache.SaveRule(r)
+}
+
+func (b *LocalBackend) GetEnabledRules() ([]*models.Rule, error) {
+	return b.cache.GetEnabledRules()
+}
+
+func (b *LocalBackend) DeleteRule(id int64) error {
+	return b.cache.DeleteRule(id)
+}
+
+func (b *LocalBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error) {
+	return b.cache.GetAllCustomPrompts()
+}
+
+func (b *LocalBackend) SaveCustomPrompt(p *models.CustomPrompt) error {
+	return b.cache.SaveCustomPrompt(p)
+}

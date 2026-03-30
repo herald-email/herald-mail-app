@@ -285,6 +285,52 @@ func (c *Client) DeleteEmail(messageID string, folder string) error {
 	return nil
 }
 
+// MoveEmail copies the message identified by messageID from fromFolder to toFolder,
+// then expunges it from fromFolder and removes it from the SQLite cache.
+func (c *Client) MoveEmail(messageID, fromFolder, toFolder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	logger.Info("Moving message %s from %s to %s", messageID, fromFolder, toFolder)
+
+	_, err := c.client.Select(fromFolder, false)
+	if err != nil {
+		return fmt.Errorf("failed to select folder %s: %w", fromFolder, err)
+	}
+
+	criteria := imap.NewSearchCriteria()
+	criteria.Header.Add("Message-ID", messageID)
+	seqNums, err := c.client.Search(criteria)
+	if err != nil {
+		return fmt.Errorf("failed to search for message: %w", err)
+	}
+
+	if len(seqNums) > 0 {
+		seqset := new(imap.SeqSet)
+		seqset.AddNum(seqNums[0])
+
+		if err := c.client.Copy(seqset, toFolder); err != nil {
+			return fmt.Errorf("failed to copy message to %s: %w", toFolder, err)
+		}
+		logger.Info("Copied message %s to %s", messageID, toFolder)
+
+		store := imap.FormatFlagsOp(imap.AddFlags, true)
+		if err := c.client.Store(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+			logger.Warn("Failed to mark original as deleted: %v", err)
+		}
+		if err := c.client.Expunge(nil); err != nil {
+			return fmt.Errorf("failed to expunge: %w", err)
+		}
+	} else {
+		logger.Warn("Message not found in IMAP with ID: %s (likely already moved)", messageID)
+	}
+
+	// Remove from cache regardless
+	if err := c.cache.DeleteEmail(messageID); err != nil {
+		logger.Warn("Failed to delete from cache: %v", err)
+	}
+	return nil
+}
+
 // archiveFolders is the ordered list of common archive folder names to try
 var archiveFolders = []string{"Archive", "[Gmail]/All Mail", "Archives", "All Mail"}
 

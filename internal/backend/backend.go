@@ -132,4 +132,26 @@ type Backend interface {
 	// ValidIDsCh returns a channel that receives the live valid-ID set from
 	// background reconciliation. Returns nil before Load() is called.
 	ValidIDsCh() <-chan map[string]bool
+
+	// --- Move ---
+
+	// MoveEmail copies messageID from fromFolder to toFolder then expunges the original.
+	MoveEmail(messageID, fromFolder, toFolder string) error
+
+	// --- Rules persistence ---
+
+	// SaveRule persists a rule (insert or update by ID).
+	SaveRule(r *models.Rule) error
+
+	// GetEnabledRules returns all rules that are currently enabled.
+	GetEnabledRules() ([]*models.Rule, error)
+
+	// DeleteRule removes a rule by ID.
+	DeleteRule(id int64) error
+
+	// GetAllCustomPrompts returns all custom prompts.
+	GetAllCustomPrompts() ([]*models.CustomPrompt, error)
+
+	// SaveCustomPrompt persists a custom prompt (insert or update by ID).
+	SaveCustomPrompt(p *models.CustomPrompt) error
 }
