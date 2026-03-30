@@ -91,6 +91,12 @@ type EmailBodyMsg struct {
 	Err  error
 }
 
+// CleanupEmailBodyMsg carries the result of fetching an email body from the Cleanup tab
+type CleanupEmailBodyMsg struct {
+	Body *models.EmailBody
+	Err  error
+}
+
 // ChatResponseMsg carries an Ollama chat reply
 type ChatResponseMsg struct {
 	Content string
@@ -239,6 +245,17 @@ type Model struct {
 	bodyWrappedLines  []string
 	bodyWrappedWidth  int
 	bodyScrollOffset  int // first visible line in preview body
+
+	// Email body preview (cleanup tab)
+	showCleanupPreview      bool
+	cleanupPreviewEmail     *models.EmailData
+	cleanupEmailBody        *models.EmailBody
+	cleanupBodyLoading      bool
+	cleanupBodyScrollOffset int
+	cleanupBodyWrappedLines []string
+	cleanupBodyWrappedWidth int
+	cleanupPreviewWidth     int // computed in updateTableDimensions
+	cleanupPreviewHadSidebar bool
 
 	// Attachment save prompt (receive side)
 	selectedAttachment   int
@@ -833,6 +850,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
+		return m, nil
+
+	case CleanupEmailBodyMsg:
+		m.cleanupBodyLoading = false
+		if msg.Err != nil {
+			logger.Warn("Failed to fetch cleanup email body: %v", msg.Err)
+			m.cleanupEmailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
+		} else {
+			m.cleanupEmailBody = msg.Body
+			m.cleanupBodyWrappedLines = nil // force rewrap on next render
+		}
 		return m, nil
 
 	case ImageDescMsg:
@@ -1500,6 +1528,26 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 					return m, m.loadEmailBodyCmd(email.Folder, email.UID)
 				}
+			} else if m.focusedPanel == panelDetails && m.activeTab == tabCleanup {
+				// Open or scroll cleanup preview
+				if m.showCleanupPreview {
+					m.cleanupBodyScrollOffset++
+				} else {
+					idx := m.detailsTable.Cursor()
+					if idx < len(m.detailsEmails) {
+						email := m.detailsEmails[idx]
+						m.cleanupPreviewEmail = email
+						m.showCleanupPreview = true
+						m.cleanupBodyLoading = true
+						m.cleanupEmailBody = nil
+						m.cleanupBodyScrollOffset = 0
+						m.cleanupBodyWrappedLines = nil
+						m.cleanupPreviewHadSidebar = m.showSidebar
+						m.showSidebar = false
+						m.updateTableDimensions(m.windowWidth, m.windowHeight)
+						return m, fetchCleanupBodyCmd(m.backend, email)
+					}
+				}
 			} else if m.focusedPanel == panelSummary {
 				m.updateDetailsTable()
 			}
@@ -1522,6 +1570,17 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.emailFullScreen {
 			m.emailFullScreen = false
 			m.bodyWrappedLines = nil
+			return m, nil
+		}
+		if m.activeTab == tabCleanup && m.showCleanupPreview {
+			m.showCleanupPreview = false
+			m.cleanupPreviewEmail = nil
+			m.cleanupEmailBody = nil
+			m.cleanupBodyLoading = false
+			m.cleanupBodyScrollOffset = 0
+			m.cleanupBodyWrappedLines = nil
+			m.showSidebar = m.cleanupPreviewHadSidebar
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			return m, nil
 		}
 		if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {
@@ -1637,6 +1696,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
+				if m.cleanupBodyScrollOffset > 0 {
+					m.cleanupBodyScrollOffset--
+				}
+				return m, nil
+			}
 			if m.activeTab == tabTimeline {
 				if m.focusedPanel == panelPreview {
 					if m.visualMode {
@@ -1669,6 +1734,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else {
 					m.bodyScrollOffset++
 				}
+				return m, nil
+			}
+			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
+				m.cleanupBodyScrollOffset++
 				return m, nil
 			}
 			if m.activeTab == tabTimeline {
@@ -1829,7 +1898,11 @@ func (m *Model) renderMainView() string {
 			summaryView = m.baseStyle.Render(m.summaryTable.View())
 		}
 		detailsView := m.baseStyle.Render(m.detailsTable.View())
-		if m.showSidebar && !m.sidebarTooWide {
+		if m.showCleanupPreview {
+			// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
+			previewPanel := m.renderCleanupPreview()
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
+		} else if m.showSidebar && !m.sidebarTooWide {
 			sidebarView := m.baseStyle.Render(m.renderSidebar())
 			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
 		} else {

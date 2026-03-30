@@ -715,7 +715,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		chatExtra = chatPanelWidth + 2 + 2 // content + border + gap
 	}
 
-	// --- Cleanup tab: two side-by-side tables ---
+	// --- Cleanup tab: two (or three when preview open) side-by-side tables ---
 	// Fixed (non-resizable) column widths:
 	//   Summary: checkmark(2) + count(6) + avgkb(7) + attach(6) + daterange(20) = 41
 	//   Details: checkmark(2) + date(16) + size(8) + att(3) = 29
@@ -724,44 +724,101 @@ func (m *Model) updateTableDimensions(width, height int) {
 	const detailsFixedCols = 29
 	const detailsNumCols = 5
 
-	// Total rendering overhead for two tables:
-	//   summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gap = 12+10+4+2 = 28
-	cleanupOverhead := 28 + sidebarExtra + chatExtra
-
-	cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
-	if cleanupVariable < 0 {
-		cleanupVariable = 0
-	}
-	senderWidth := cleanupVariable * 40 / 100
-	subjectWidth := cleanupVariable - senderWidth
-	if cleanupVariable >= 24 {
-		if senderWidth < 12 {
-			senderWidth = 12
+	// When cleanup preview is open, compute a 3-column layout (25%/25%/50%).
+	// Sidebar is hidden while preview is open.
+	availForCleanup := width - chatExtra
+	if m.showCleanupPreview {
+		// Hide sidebar while preview is shown
+		availForCleanup = width - chatExtra
+		// Preview occupies ~50% of the available width
+		cleanupPreviewW := availForCleanup / 2
+		if cleanupPreviewW < 25 {
+			cleanupPreviewW = 25
 		}
-		if subjectWidth < 12 {
-			subjectWidth = 12
+		m.cleanupPreviewWidth = cleanupPreviewW
+
+		// The two tables share the remaining ~50%
+		// Total rendering overhead for two tables: summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gaps = 28
+		// Plus 1 border for the preview panel + 2 gaps = 3 extra
+		tablesAvail := availForCleanup - cleanupPreviewW - 3
+		if tablesAvail < 0 {
+			tablesAvail = 0
 		}
+		// Split tables evenly: each gets half
+		tableHalf := tablesAvail / 2
+		// Fixed overhead for each table: summaryFixed + numCols*2 or detailsFixed + numCols*2
+		perTableOverhead := summaryFixedCols + summaryNumCols*2
+		senderW := tableHalf - perTableOverhead
+		if senderW < 4 {
+			senderW = 4
+		}
+		perTableOverhead2 := detailsFixedCols + detailsNumCols*2
+		subjectW := tablesAvail - tableHalf - perTableOverhead2
+		if subjectW < 4 {
+			subjectW = 4
+		}
+
+		m.summaryTable.SetColumns([]table.Column{
+			{Title: "✓", Width: 2},
+			{Title: "Sender/Domain", Width: senderW},
+			{Title: "Count", Width: 6},
+			{Title: "Avg KB", Width: 7},
+			{Title: "Attach", Width: 6},
+			{Title: "Date Range", Width: 20},
+		})
+		m.summaryTable.SetWidth(summaryFixedCols + senderW + summaryNumCols*2)
+
+		m.subjectColWidth = subjectW
+		m.detailsTable.SetColumns([]table.Column{
+			{Title: "✓", Width: 2},
+			{Title: "Date", Width: 16},
+			{Title: "Subject", Width: subjectW},
+			{Title: "Size", Width: 8},
+			{Title: "Att", Width: 3},
+		})
+		m.detailsTable.SetWidth(detailsFixedCols + subjectW + detailsNumCols*2)
+	} else {
+		m.cleanupPreviewWidth = 0
+
+		// Total rendering overhead for two tables:
+		//   summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gap = 12+10+4+2 = 28
+		cleanupOverhead := 28 + sidebarExtra + chatExtra
+
+		cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
+		if cleanupVariable < 0 {
+			cleanupVariable = 0
+		}
+		senderWidth := cleanupVariable * 40 / 100
+		subjectWidth := cleanupVariable - senderWidth
+		if cleanupVariable >= 24 {
+			if senderWidth < 12 {
+				senderWidth = 12
+			}
+			if subjectWidth < 12 {
+				subjectWidth = 12
+			}
+		}
+
+		m.summaryTable.SetColumns([]table.Column{
+			{Title: "✓", Width: 2},
+			{Title: "Sender/Domain", Width: senderWidth},
+			{Title: "Count", Width: 6},
+			{Title: "Avg KB", Width: 7},
+			{Title: "Attach", Width: 6},
+			{Title: "Date Range", Width: 20},
+		})
+		m.summaryTable.SetWidth(summaryFixedCols + senderWidth + summaryNumCols*2)
+
+		m.subjectColWidth = subjectWidth
+		m.detailsTable.SetColumns([]table.Column{
+			{Title: "✓", Width: 2},
+			{Title: "Date", Width: 16},
+			{Title: "Subject", Width: subjectWidth},
+			{Title: "Size", Width: 8},
+			{Title: "Att", Width: 3},
+		})
+		m.detailsTable.SetWidth(detailsFixedCols + subjectWidth + detailsNumCols*2)
 	}
-
-	m.summaryTable.SetColumns([]table.Column{
-		{Title: "✓", Width: 2},
-		{Title: "Sender/Domain", Width: senderWidth},
-		{Title: "Count", Width: 6},
-		{Title: "Avg KB", Width: 7},
-		{Title: "Attach", Width: 6},
-		{Title: "Date Range", Width: 20},
-	})
-	m.summaryTable.SetWidth(summaryFixedCols + senderWidth + summaryNumCols*2)
-
-	m.subjectColWidth = subjectWidth
-	m.detailsTable.SetColumns([]table.Column{
-		{Title: "✓", Width: 2},
-		{Title: "Date", Width: 16},
-		{Title: "Subject", Width: subjectWidth},
-		{Title: "Size", Width: 8},
-		{Title: "Att", Width: 3},
-	})
-	m.detailsTable.SetWidth(detailsFixedCols + subjectWidth + detailsNumCols*2)
 
 	m.summaryTable.SetHeight(tableHeight)
 	m.detailsTable.SetHeight(tableHeight)
@@ -1449,6 +1506,119 @@ func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
 	}
 }
 
+// fetchCleanupBodyCmd returns a tea.Cmd that fetches an email body for the Cleanup tab preview.
+func fetchCleanupBodyCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
+	return func() tea.Msg {
+		body, err := b.FetchEmailBody(email.Folder, email.UID)
+		return CleanupEmailBodyMsg{Body: body, Err: err}
+	}
+}
+
+// renderCleanupPreview renders the right-hand email body preview panel for the Cleanup tab.
+func (m *Model) renderCleanupPreview() string {
+	w := m.cleanupPreviewWidth
+	if w <= 0 {
+		w = 40
+	}
+	innerW := w - 4 // left border + padding
+
+	var sb strings.Builder
+
+	borderColor := "238"
+	headerColor := "245"
+
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
+	dimStyle := headerStyle
+
+	if m.cleanupPreviewEmail != nil {
+		email := m.cleanupPreviewEmail
+		sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
+		sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
+		sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+		sb.WriteString(strings.Repeat("─", innerW) + "\n")
+	}
+
+	panelHeight := m.windowHeight - 6
+	if panelHeight < 5 {
+		panelHeight = 5
+	}
+	// Header block is 4 rows; reserve 1 for scroll indicator → maxBodyLines = panelHeight - 4 - 1
+	maxBodyLines := panelHeight - 5
+	if maxBodyLines < 1 {
+		maxBodyLines = 1
+	}
+
+	if m.cleanupBodyLoading {
+		sb.WriteString(dimStyle.Render("Loading…"))
+	} else if m.cleanupEmailBody != nil {
+		body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
+		if body == "" {
+			body = "(No plain text — HTML only)"
+		}
+		if m.cleanupBodyWrappedLines == nil || m.cleanupBodyWrappedWidth != innerW {
+			if m.cleanupEmailBody.IsFromHTML {
+				renderer, rerr := glamour.NewTermRenderer(
+					glamour.WithStandardStyle("dark"),
+					glamour.WithWordWrap(innerW),
+				)
+				if rerr == nil {
+					if rendered, err := renderer.Render(body); err == nil {
+						rendered = strings.TrimRight(rendered, "\n")
+						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
+						rendered = strings.TrimRight(rendered, "\n")
+						m.cleanupBodyWrappedLines = strings.Split(rendered, "\n")
+					} else {
+						m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+					}
+				} else {
+					m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+				}
+			} else {
+				m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+			}
+			m.cleanupBodyWrappedWidth = innerW
+		}
+
+		totalLines := len(m.cleanupBodyWrappedLines)
+		maxOffset := totalLines - maxBodyLines
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.cleanupBodyScrollOffset > maxOffset {
+			m.cleanupBodyScrollOffset = maxOffset
+		}
+
+		end := m.cleanupBodyScrollOffset + maxBodyLines
+		if end > totalLines {
+			end = totalLines
+		}
+		sb.WriteString(strings.Join(m.cleanupBodyWrappedLines[m.cleanupBodyScrollOffset:end], "\n"))
+
+		if totalLines > maxBodyLines {
+			pct := 0
+			if maxOffset > 0 {
+				pct = m.cleanupBodyScrollOffset * 100 / maxOffset
+			}
+			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  esc: close", m.cleanupBodyScrollOffset+1, totalLines, pct)
+			sb.WriteString("\n" + dimStyle.Render(indicator))
+		} else {
+			sb.WriteString("\n" + dimStyle.Render(" esc: close preview"))
+		}
+	} else {
+		sb.WriteString(dimStyle.Render("(No content)"))
+	}
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		Height(panelHeight).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(borderColor)).
+		PaddingLeft(1)
+
+	return panelStyle.Render(sb.String())
+}
+
 // renderTabBar renders the tab navigation bar
 func (m *Model) renderTabBar() string {
 	inactive := lipgloss.NewStyle().
@@ -1686,7 +1856,11 @@ func (m *Model) renderKeyHints() string {
 		case panelSidebar:
 			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
+			if m.showCleanupPreview {
+				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  esc: close preview  │  tab: next panel  │  D: delete  │  q: quit"
+			} else {
+				hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
+			}
 		default: // panelSummary
 			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  f: sidebar  │  c: chat  │  q: quit"
 		}
