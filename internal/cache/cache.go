@@ -182,6 +182,50 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	// custom_prompts: stores reusable AI prompt templates
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS custom_prompts (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			name          TEXT    NOT NULL,
+			system_text   TEXT    NOT NULL DEFAULT '',
+			user_template TEXT    NOT NULL,
+			output_var    TEXT    NOT NULL DEFAULT 'result',
+			created_at    DATETIME NOT NULL
+		)`); err != nil {
+		return err
+	}
+
+	// email_rules: stores automation rules triggered on email events
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS email_rules (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			name             TEXT    NOT NULL DEFAULT '',
+			enabled          INTEGER NOT NULL DEFAULT 1,
+			priority         INTEGER NOT NULL DEFAULT 0,
+			trigger_type     TEXT    NOT NULL,
+			trigger_value    TEXT    NOT NULL,
+			custom_prompt_id INTEGER REFERENCES custom_prompts(id) ON DELETE SET NULL,
+			actions_json     TEXT    NOT NULL DEFAULT '[]',
+			created_at       DATETIME NOT NULL,
+			last_triggered   DATETIME
+		)`); err != nil {
+		return err
+	}
+
+	// rule_action_log: audit trail for rule executions
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS rule_action_log (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			rule_id      INTEGER NOT NULL REFERENCES email_rules(id) ON DELETE CASCADE,
+			message_id   TEXT    NOT NULL,
+			action_type  TEXT    NOT NULL,
+			status       TEXT    NOT NULL,
+			detail       TEXT,
+			executed_at  DATETIME NOT NULL
+		)`); err != nil {
+		return err
+	}
+
 	return nil
 }
 
