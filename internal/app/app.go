@@ -569,6 +569,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showRuleEditor = false
 		m.ruleEditor = nil
 		if msg.Rule != nil {
+			if len(msg.Rule.Actions) == 0 {
+				m.statusMessage = "Rule not saved: no actions selected"
+				return m, nil
+			}
 			if err := m.backend.SaveRule(msg.Rule); err != nil {
 				m.statusMessage = "Error saving rule: " + err.Error()
 			} else {
