@@ -437,3 +437,224 @@ func TestClearFolder(t *testing.T) {
 		t.Error("Sent folder should be unaffected by ClearFolder(INBOX)")
 	}
 }
+
+// --- Rules CRUD ---
+
+func TestSaveAndGetRule(t *testing.T) {
+	c := newTestCache(t)
+
+	rule := &models.Rule{
+		Name:         "test-rule",
+		Enabled:      true,
+		Priority:     10,
+		TriggerType:  models.TriggerSender,
+		TriggerValue: "spam@example.com",
+		Actions: []models.RuleAction{
+			{Type: models.ActionDelete},
+			{Type: models.ActionNotify, NotifyTitle: "Spam!", NotifyBody: "Got one"},
+		},
+	}
+
+	if err := c.SaveRule(rule); err != nil {
+		t.Fatalf("SaveRule: %v", err)
+	}
+	if rule.ID == 0 {
+		t.Fatal("expected rule.ID to be set after insert")
+	}
+
+	rules, err := c.GetEnabledRules()
+	if err != nil {
+		t.Fatalf("GetEnabledRules: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(rules))
+	}
+
+	got := rules[0]
+	if got.Name != rule.Name {
+		t.Errorf("Name: got %q, want %q", got.Name, rule.Name)
+	}
+	if !got.Enabled {
+		t.Error("expected Enabled=true")
+	}
+	if got.Priority != 10 {
+		t.Errorf("Priority: got %d, want 10", got.Priority)
+	}
+	if got.TriggerType != models.TriggerSender {
+		t.Errorf("TriggerType: got %q, want %q", got.TriggerType, models.TriggerSender)
+	}
+	if got.TriggerValue != "spam@example.com" {
+		t.Errorf("TriggerValue: got %q", got.TriggerValue)
+	}
+	if len(got.Actions) != 2 {
+		t.Fatalf("expected 2 actions, got %d", len(got.Actions))
+	}
+	if got.Actions[0].Type != models.ActionDelete {
+		t.Errorf("Actions[0].Type: got %q, want %q", got.Actions[0].Type, models.ActionDelete)
+	}
+	if got.Actions[1].NotifyTitle != "Spam!" {
+		t.Errorf("Actions[1].NotifyTitle: got %q, want %q", got.Actions[1].NotifyTitle, "Spam!")
+	}
+}
+
+func TestGetRuleByID(t *testing.T) {
+	c := newTestCache(t)
+
+	rule := &models.Rule{
+		Name:         "by-id-rule",
+		Enabled:      true,
+		TriggerType:  models.TriggerDomain,
+		TriggerValue: "example.com",
+		Actions:      []models.RuleAction{{Type: models.ActionArchive}},
+	}
+	if err := c.SaveRule(rule); err != nil {
+		t.Fatalf("SaveRule: %v", err)
+	}
+
+	got, err := c.GetRuleByID(rule.ID)
+	if err != nil {
+		t.Fatalf("GetRuleByID: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected rule, got nil")
+	}
+	if got.ID != rule.ID {
+		t.Errorf("ID: got %d, want %d", got.ID, rule.ID)
+	}
+	if got.Name != "by-id-rule" {
+		t.Errorf("Name: got %q", got.Name)
+	}
+}
+
+func TestDeleteRule(t *testing.T) {
+	c := newTestCache(t)
+
+	rule := &models.Rule{
+		Name:         "to-delete",
+		Enabled:      true,
+		TriggerType:  models.TriggerCategory,
+		TriggerValue: "spam",
+		Actions:      []models.RuleAction{{Type: models.ActionDelete}},
+	}
+	if err := c.SaveRule(rule); err != nil {
+		t.Fatalf("SaveRule: %v", err)
+	}
+
+	if err := c.DeleteRule(rule.ID); err != nil {
+		t.Fatalf("DeleteRule: %v", err)
+	}
+
+	rules, err := c.GetEnabledRules()
+	if err != nil {
+		t.Fatalf("GetEnabledRules: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Errorf("expected 0 rules after delete, got %d", len(rules))
+	}
+}
+
+// --- CustomPrompts CRUD ---
+
+func TestSaveAndGetCustomPrompt(t *testing.T) {
+	c := newTestCache(t)
+
+	p := &models.CustomPrompt{
+		Name:         "classify-newsletter",
+		SystemText:   "You are an email classifier.",
+		UserTemplate: "Is this a newsletter? {{.Subject}}",
+		OutputVar:    "is_newsletter",
+	}
+	if err := c.SaveCustomPrompt(p); err != nil {
+		t.Fatalf("SaveCustomPrompt: %v", err)
+	}
+	if p.ID == 0 {
+		t.Fatal("expected p.ID to be set after insert")
+	}
+
+	got, err := c.GetCustomPrompt(p.ID)
+	if err != nil {
+		t.Fatalf("GetCustomPrompt: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected prompt, got nil")
+	}
+	if got.Name != p.Name {
+		t.Errorf("Name: got %q, want %q", got.Name, p.Name)
+	}
+	if got.SystemText != p.SystemText {
+		t.Errorf("SystemText: got %q", got.SystemText)
+	}
+	if got.UserTemplate != p.UserTemplate {
+		t.Errorf("UserTemplate: got %q", got.UserTemplate)
+	}
+	if got.OutputVar != p.OutputVar {
+		t.Errorf("OutputVar: got %q", got.OutputVar)
+	}
+
+	all, err := c.GetAllCustomPrompts()
+	if err != nil {
+		t.Fatalf("GetAllCustomPrompts: %v", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("expected 1 prompt, got %d", len(all))
+	}
+}
+
+// --- AppendActionLog ---
+
+func TestAppendActionLog(t *testing.T) {
+	c := newTestCache(t)
+
+	// Need a rule to satisfy the FK constraint
+	rule := &models.Rule{
+		Name:         "log-test-rule",
+		Enabled:      true,
+		TriggerType:  models.TriggerSender,
+		TriggerValue: "a@b.com",
+		Actions:      []models.RuleAction{{Type: models.ActionNotify}},
+	}
+	if err := c.SaveRule(rule); err != nil {
+		t.Fatalf("SaveRule: %v", err)
+	}
+
+	entry := &models.RuleActionLogEntry{
+		RuleID:     rule.ID,
+		MessageID:  "<test@example.com>",
+		ActionType: models.ActionNotify,
+		Status:     "ok",
+		Detail:     "notification sent",
+		ExecutedAt: time.Now(),
+	}
+	if err := c.AppendActionLog(entry); err != nil {
+		t.Fatalf("AppendActionLog: %v", err)
+	}
+}
+
+// --- TouchRuleLastTriggered ---
+
+func TestTouchRuleLastTriggered(t *testing.T) {
+	c := newTestCache(t)
+
+	rule := &models.Rule{
+		Name:         "touch-test-rule",
+		Enabled:      true,
+		TriggerType:  models.TriggerSender,
+		TriggerValue: "x@y.com",
+		Actions:      []models.RuleAction{{Type: models.ActionDelete}},
+	}
+	if err := c.SaveRule(rule); err != nil {
+		t.Fatalf("SaveRule: %v", err)
+	}
+
+	if err := c.TouchRuleLastTriggered(rule.ID); err != nil {
+		t.Fatalf("TouchRuleLastTriggered: %v", err)
+	}
+
+	got, err := c.GetRuleByID(rule.ID)
+	if err != nil {
+		t.Fatalf("GetRuleByID: %v", err)
+	}
+	if got.LastTriggered == nil {
+		t.Error("expected LastTriggered to be non-nil after touch")
+	}
+}
