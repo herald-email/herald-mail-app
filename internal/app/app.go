@@ -333,6 +333,9 @@ type Model struct {
 	visualEnd   int // last selected line index (inclusive)
 	pendingY    bool // first 'y' of 'yy' sequence
 
+	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
+	demoMode bool
+
 	// Config
 	cfg        *config.Config
 	configPath string
@@ -548,6 +551,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		searchInput:         searchInput,
 		attachmentSaveInput: attachmentSaveInput,
 		attachmentPathInput: attachmentPathInput,
+	}
+
+	// Detect demo mode via DemoBackendMarker interface
+	if marker, ok := b.(interface{ IsDemo() bool }); ok && marker.IsDemo() {
+		m.demoMode = true
 	}
 
 	// Start deletion worker goroutine

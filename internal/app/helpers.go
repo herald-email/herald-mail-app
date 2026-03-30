@@ -1784,6 +1784,11 @@ func (m *Model) renderStatusBar() string {
 		}
 	}
 
+	// Demo mode indicator
+	if m.demoMode {
+		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("[DEMO]"))
+	}
+
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")

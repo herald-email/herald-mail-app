@@ -115,14 +115,57 @@ func runWizard(configPath string) error {
 	return nil
 }
 
+// runDemo starts the app with synthetic data and no real IMAP connection.
+func runDemo() {
+	if err := logger.Init(false); err != nil {
+		log.Fatalf("Failed to initialize logging: %v", err)
+	}
+	defer logger.Close()
+
+	logger.Info("Starting Herald in demo mode...")
+
+	// Fake config — no real credentials needed
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "demo@demo.local"
+
+	// Build demo backend
+	demoBackend := backend.NewDemoBackend()
+
+	// AI classifier is optional; pass nil-safe zero value
+	classifier := ai.New("", "")
+
+	// Create SMTP client (no-op without real config, but New() is safe)
+	mailer := appsmtp.New(cfg)
+
+	// Build the TUI model
+	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier)
+	model.SetConfigPath("demo-config.yaml")
+	model.SetConfig(cfg)
+
+	logger.Info("Starting demo TUI application...")
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		logger.Error("Demo application error: %v", err)
+		fmt.Printf("Error running demo: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	// Parse command line flags
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
 	var verbose = flag.Bool("verbose", false, "Enable verbose logging")
+	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
 	const defaultConfig = "~/.herald/conf.yaml"
 	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
 	flag.Parse()
+
+	// Demo mode: skip all real IMAP setup
+	if *demo {
+		runDemo()
+		return
+	}
 
 	usingDefault := (*configPath == defaultConfig)
 
