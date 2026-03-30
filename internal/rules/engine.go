@@ -49,7 +49,7 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 	fired := 0
 	var firstErr error
 	for _, rule := range rules {
-		if !matchRule(rule, email, category) {
+		if !MatchRule(rule, email, category) {
 			continue
 		}
 
@@ -117,8 +117,8 @@ func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData
 	}
 }
 
-// matchRule returns true if the email matches the rule's trigger.
-func matchRule(r *models.Rule, email *models.EmailData, category string) bool {
+// MatchRule returns true if the email matches the rule's trigger.
+func MatchRule(r *models.Rule, email *models.EmailData, category string) bool {
 	switch r.TriggerType {
 	case models.TriggerSender:
 		return strings.EqualFold(email.Sender, r.TriggerValue)

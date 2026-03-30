@@ -496,7 +496,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 
 	// Create rule engine channels
 	ruleRequestCh := make(chan models.RuleRequest, 20)
-	ruleResultCh := make(chan models.RuleResult, 1)
+	ruleResultCh := make(chan models.RuleResult, 50)
 
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Search emails... (/b body  /* all folders  ? semantic)"

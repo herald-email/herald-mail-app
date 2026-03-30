@@ -90,18 +90,18 @@ func TestMatchRule_Sender(t *testing.T) {
 	email := makeEmail("Alice <alice@example.com>", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.TriggerSender, "Alice <alice@example.com>")
 
-	if !matchRule(rule, email, "") {
+	if !MatchRule(rule, email, "") {
 		t.Error("expected exact sender match to return true")
 	}
 
 	// case-insensitive
 	rule.TriggerValue = "alice <ALICE@EXAMPLE.COM>"
-	if !matchRule(rule, email, "") {
+	if !MatchRule(rule, email, "") {
 		t.Error("expected case-insensitive sender match to return true")
 	}
 
 	rule.TriggerValue = "bob@example.com"
-	if matchRule(rule, email, "") {
+	if MatchRule(rule, email, "") {
 		t.Error("expected different sender to return false")
 	}
 }
@@ -110,18 +110,18 @@ func TestMatchRule_Domain(t *testing.T) {
 	email := makeEmail("Name <user@example.com>", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.TriggerDomain, "example.com")
 
-	if !matchRule(rule, email, "") {
+	if !MatchRule(rule, email, "") {
 		t.Error("expected domain match to return true")
 	}
 
 	// case-insensitive
 	rule.TriggerValue = "EXAMPLE.COM"
-	if !matchRule(rule, email, "") {
+	if !MatchRule(rule, email, "") {
 		t.Error("expected case-insensitive domain match to return true")
 	}
 
 	rule.TriggerValue = "other.com"
-	if matchRule(rule, email, "") {
+	if MatchRule(rule, email, "") {
 		t.Error("expected different domain to return false")
 	}
 }
@@ -130,16 +130,16 @@ func TestMatchRule_Category(t *testing.T) {
 	email := makeEmail("sender@example.com", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.TriggerCategory, "news")
 
-	if !matchRule(rule, email, "news") {
+	if !MatchRule(rule, email, "news") {
 		t.Error("expected category match to return true")
 	}
 
 	// case-insensitive
-	if !matchRule(rule, email, "NEWS") {
+	if !MatchRule(rule, email, "NEWS") {
 		t.Error("expected case-insensitive category match to return true")
 	}
 
-	if matchRule(rule, email, "spam") {
+	if MatchRule(rule, email, "spam") {
 		t.Error("expected different category to return false")
 	}
 }
@@ -148,7 +148,7 @@ func TestMatchRule_Unknown(t *testing.T) {
 	email := makeEmail("sender@example.com", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.RuleTriggerType("bogus"), "anything")
 
-	if matchRule(rule, email, "") {
+	if MatchRule(rule, email, "") {
 		t.Error("expected unknown trigger type to return false")
 	}
 }

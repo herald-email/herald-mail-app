@@ -18,6 +18,7 @@ import (
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
 	"mail-processor/internal/models"
+	rulesengine "mail-processor/internal/rules"
 )
 
 func main() {
@@ -619,7 +620,7 @@ func main() {
 			category := classifications[email.MessageID]
 			fired := 0
 			for _, rule := range rules {
-				if mcpMatchesRule(rule, email, category) {
+				if rulesengine.MatchRule(rule, email, category) {
 					fired++
 				}
 			}
@@ -637,30 +638,3 @@ func main() {
 	}
 }
 
-// mcpMatchesRule reports whether an email matches a rule's trigger condition.
-func mcpMatchesRule(r *models.Rule, email *models.EmailData, category string) bool {
-	switch r.TriggerType {
-	case models.TriggerSender:
-		return strings.EqualFold(email.Sender, r.TriggerValue)
-	case models.TriggerDomain:
-		return strings.EqualFold(mcpExtractDomain(email.Sender), r.TriggerValue)
-	case models.TriggerCategory:
-		return strings.EqualFold(category, r.TriggerValue)
-	default:
-		return false
-	}
-}
-
-// mcpExtractDomain extracts the domain from an email address.
-func mcpExtractDomain(sender string) string {
-	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
-		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
-			sender = sender[lt+1 : lt+gt]
-		}
-	}
-	at := strings.LastIndex(sender, "@")
-	if at < 0 {
-		return ""
-	}
-	return strings.ToLower(sender[at+1:])
-}

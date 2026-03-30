@@ -207,10 +207,14 @@ func (m *Model) ruleWorker() {
 	engine := rules.New(m.backend, m.backend, m.classifier)
 	for req := range m.ruleRequestCh {
 		fired, err := engine.EvaluateEmail(req.Email, req.Category)
-		m.ruleResultCh <- models.RuleResult{
+		select {
+		case m.ruleResultCh <- models.RuleResult{
 			MessageID:  req.Email.MessageID,
 			FiredCount: fired,
 			Err:        err,
+		}:
+		default:
+			// result dropped if channel full — rule fired but UI won't see the count
 		}
 	}
 }
