@@ -34,10 +34,10 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
 - [ ] IMAP IDLE (real push; currently polling only)
-- [ ] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
-- [ ] Soft unsubscribe (auto-move future emails to a local folder)
+- [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
+- [x] Soft unsubscribe (auto-move future emails to a local folder)
 - [ ] Custom classification prompts (user-defined categories + data extraction)
-- [ ] Classification actions (notify, command, webhook, move, flag on match)
+- [x] Classification actions (notify, command, webhook, move, flag on match)
 - [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
 - [ ] Chat tool calling (Ollama tool API + MCP tools in-process)
@@ -187,17 +187,18 @@ The built-in classification prompt assigns one of six fixed categories (`sub`, `
 
 When an email matches a category, the system can trigger an action automatically. Actions turn classification from passive tagging into an active assistant — sending OS notifications for important mail, running shell commands with extracted data, or auto-filing emails into folders. Actions execute in the background daemon (Phase 2) so they fire even when the TUI is not running.
 
-- [ ] `classification_actions` section in `~/.herald/conf.yaml` — list of rules mapping category → action
-- [ ] Each rule specifies: category match (built-in or custom), action type, and action config
-- [ ] Action type: `notify` — send an OS-level notification (macOS Notification Center / `notify-send` on Linux) with sender, subject, and optional extracted data
-- [ ] Action type: `command` — run a shell command with template variables (`{{.Sender}}`, `{{.Subject}}`, `{{.Category}}`, `{{.ExtractedData}}`, `{{.MessageID}}`)
-- [ ] Action type: `webhook` — POST a JSON payload to a URL (for Slack, Discord, Home Assistant, etc.)
-- [ ] Action type: `move` — auto-move the email to a specified IMAP folder
-- [ ] Action type: `flag` — set IMAP flags (e.g. `\Flagged`, `\Seen`)
-- [ ] Actions run in the daemon (Phase 2) on every newly classified email, even when TUI/UI is offline
-- [ ] Action execution logged to SQLite (`classification_action_log` table) with timestamp and result
+- [x] Sender / domain / category triggers stored in SQLite (`email_rules` table) — rule matches on sender address, domain, or AI category
+- [x] Action type: `notify` — send an OS-level notification (macOS Notification Center / `notify-send` on Linux) with sender, subject, and optional extracted data
+- [x] Action type: `command` — run a shell command with template variables (`{{.Sender}}`, `{{.Subject}}`, `{{.Category}}`, `{{.MessageID}}`)
+- [x] Action type: `webhook` — POST a JSON payload to a URL (for Slack, Discord, Home Assistant, etc.)
+- [x] Action type: `move` — auto-move the email to a specified IMAP folder
+- [x] Action type: `archive` — archive the matching email
+- [x] Action type: `delete` — delete the matching email
+- [x] Action execution logged to SQLite (`rule_action_log` table) with timestamp and result
+- [x] Rule editor TUI form (`W` key in Cleanup tab — add/edit rules interactively)
+- [ ] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
+- [ ] Auto-classify new emails as they arrive to trigger rules in real time
 - [ ] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
-- [ ] MCP tools: `list_classification_actions`, `add_classification_action`, `remove_classification_action`, `get_action_log`
 
 #### Example configuration
 
@@ -267,16 +268,16 @@ The Cleanup tab has two panels side by side: the sender summary (left) and the e
 This gives enough room to read the email while keeping both panels visible as context. `Esc` closes the preview and restores the normal two-panel layout.
 
 - [x] `Tab` cycles focus between the summary panel and the email list panel
-- [ ] `Enter` on a row in the email list opens the email preview at 50% width
-- [ ] Folder sidebar hides when preview is open; restores on `Esc`
-- [ ] Summary and email list panels each shrink to 25% when preview is open
-- [ ] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
+- [x] `Enter` on a row in the email list opens the email preview at 50% width
+- [x] Folder sidebar hides when preview is open; restores on `Esc`
+- [x] Summary and email list panels each shrink to 25% when preview is open
+- [x] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
 - [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
-- [ ] `u` — unsubscribe from within Cleanup preview
+- [x] `u` — unsubscribe from within Cleanup preview
 - [ ] `D` — delete the open email from within the preview
 - [ ] `e` — archive the open email from within the preview
 - [ ] `z` — expand to full-screen (same as Timeline full-screen mode)
-- [ ] `Esc` — close preview, restore two-panel Cleanup layout
+- [x] `Esc` — close preview, restore two-panel Cleanup layout
 
 ### Unsubscribe
 
@@ -286,7 +287,7 @@ Triggered with `u` on any email in the Timeline or Cleanup detail view. The app 
 - [x] Fallback: open `List-Unsubscribe` mailto link (opens in default mail client)
 - [ ] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
 - [ ] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
-- [ ] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
+- [x] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
 - [ ] Batch unsubscribe flow: present list of detected subscriptions, select, choose mode, execute
 
 ### Auto-Cleanup Rules
@@ -421,6 +422,9 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 | `get_email_classifications` | AI category counts for a folder |
 | `classify_email` | Run AI classification on one email |
 | `summarise_email` | Generate a summary via Ollama |
+| `list_rules` | List all enabled automation rules |
+| `add_rule` | Create a new automation rule |
+| `run_rules` | Dry-run: show which cached emails match rules in a folder |
 
 ### Planned tools
 
@@ -443,7 +447,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 - [ ] `create_folder` / `rename_folder` / `delete_folder`
 - [ ] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
 - [ ] `soft_unsubscribe_sender` — auto-move future emails to a folder
-- [ ] `list_cleanup_rules` / `add_cleanup_rule` / `run_cleanup_rules`
+- [x] `list_rules` / `add_rule` / `run_rules` — automation rule management (dry-run evaluation)
 - [ ] `list_contacts` / `search_contacts` / `get_contact`
 - [ ] `sync_folder` / `sync_all_folders` / `get_sync_status`
 - [ ] `get_server_info`
@@ -628,6 +632,28 @@ Add a local MCP server called "mail" that runs this command:
 - [ ] Screenshot / GIF of the TUI
 - [ ] Key bindings reference table
 - [ ] Link to VISION.md and ARCHITECTURE.md for deeper context
+
+---
+
+## Demo Mode
+
+Demo mode lets anyone try the full TUI without a live IMAP account. It launches with a synthetic set of emails covering all supported features — threads, attachments, classifications, HTML bodies — so every panel and key binding can be exercised immediately.
+
+- [x] `--demo` flag on the main binary starts the app with a `DemoBackend` instead of IMAP
+- [x] `DemoBackend` seeds synthetic emails covering senders, categories, attachments, and threads
+- [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
+- [ ] Demo mode accessible from the first-run wizard ("Try without an account")
+
+---
+
+## Testing Infrastructure
+
+Integration tests and headless test harnesses ensure the app works correctly at the protocol level without a live server.
+
+- [x] IMAP mock server (`internal/testutil/imap_server.go`) — in-process IMAP server for integration tests
+- [x] Integration tests against the mock server (`internal/imap/integration_test.go`)
+- [ ] TUI snapshot tests via `teatest` or PTY (render correctness at fixed terminal sizes)
+- [ ] CI pipeline running all tests on push
 
 ---
 

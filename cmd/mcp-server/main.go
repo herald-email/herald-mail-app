@@ -17,6 +17,7 @@ import (
 	"mail-processor/internal/ai"
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
+	"mail-processor/internal/models"
 )
 
 func main() {
@@ -528,7 +529,138 @@ func main() {
 		},
 	)
 
+	// Tool: list_rules
+	s.AddTool(mcp.NewTool("list_rules",
+		mcp.WithDescription("List all enabled email automation rules"),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		rules, err := c.GetEnabledRules()
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get rules: %v", err)), nil
+		}
+		data, _ := json.Marshal(rules)
+		return mcp.NewToolResultText(string(data)), nil
+	})
+
+	// Tool: add_rule
+	s.AddTool(mcp.NewTool("add_rule",
+		mcp.WithDescription("Create a new email automation rule"),
+		mcp.WithString("trigger_type", mcp.Required(), mcp.Description("sender | domain | category")),
+		mcp.WithString("trigger_value", mcp.Required(), mcp.Description("The value to match (email address, domain, or category name)")),
+		mcp.WithString("name", mcp.Description("Rule name (optional, auto-generated if empty)")),
+		mcp.WithString("actions", mcp.Required(), mcp.Description("JSON array of RuleAction objects")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		triggerType, err := req.RequireString("trigger_type")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		triggerValue, err := req.RequireString("trigger_value")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		actionsJSON, err := req.RequireString("actions")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		name := req.GetString("name", "")
+		if name == "" {
+			name = triggerType + ": " + triggerValue
+		}
+
+		var actions []models.RuleAction
+		if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("parse actions JSON: %v", err)), nil
+		}
+
+		rule := &models.Rule{
+			Name:         name,
+			Enabled:      true,
+			TriggerType:  models.RuleTriggerType(triggerType),
+			TriggerValue: triggerValue,
+			Actions:      actions,
+		}
+		if err := c.SaveRule(rule); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("save rule: %v", err)), nil
+		}
+		data, _ := json.Marshal(rule)
+		return mcp.NewToolResultText(string(data)), nil
+	})
+
+	// Tool: run_rules
+	s.AddTool(mcp.NewTool("run_rules",
+		mcp.WithDescription("Evaluate all automation rules against cached emails in a folder (dry run — no IMAP actions)"),
+		mcp.WithString("folder", mcp.Description("Folder to process (default: INBOX)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		folder := req.GetString("folder", "INBOX")
+		if folder == "" {
+			folder = "INBOX"
+		}
+
+		rules, err := c.GetEnabledRules()
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get rules: %v", err)), nil
+		}
+
+		emails, err := c.GetEmailsSortedByDate(folder)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get emails: %v", err)), nil
+		}
+
+		classifications, err := c.GetClassifications(folder)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get classifications: %v", err)), nil
+		}
+
+		type result struct {
+			MessageID  string `json:"message_id"`
+			RulesFired int    `json:"rules_fired"`
+		}
+		var results []result
+		for _, email := range emails {
+			category := classifications[email.MessageID]
+			fired := 0
+			for _, rule := range rules {
+				if mcpMatchesRule(rule, email, category) {
+					fired++
+				}
+			}
+			if fired > 0 {
+				results = append(results, result{MessageID: email.MessageID, RulesFired: fired})
+			}
+		}
+
+		data, _ := json.Marshal(results)
+		return mcp.NewToolResultText(string(data)), nil
+	})
+
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("MCP server error: %v", err)
 	}
+}
+
+// mcpMatchesRule reports whether an email matches a rule's trigger condition.
+func mcpMatchesRule(r *models.Rule, email *models.EmailData, category string) bool {
+	switch r.TriggerType {
+	case models.TriggerSender:
+		return strings.EqualFold(email.Sender, r.TriggerValue)
+	case models.TriggerDomain:
+		return strings.EqualFold(mcpExtractDomain(email.Sender), r.TriggerValue)
+	case models.TriggerCategory:
+		return strings.EqualFold(category, r.TriggerValue)
+	default:
+		return false
+	}
+}
+
+// mcpExtractDomain extracts the domain from an email address.
+func mcpExtractDomain(sender string) string {
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			sender = sender[lt+1 : lt+gt]
+		}
+	}
+	at := strings.LastIndex(sender, "@")
+	if at < 0 {
+		return ""
+	}
+	return strings.ToLower(sender[at+1:])
 }
