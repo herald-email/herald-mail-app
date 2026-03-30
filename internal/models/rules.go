@@ -71,7 +71,7 @@ type RuleRequest struct {
 
 type RuleResult struct {
 	MessageID  string
-	RulesFired int
+	FiredCount int
 	Err        error
 }
 

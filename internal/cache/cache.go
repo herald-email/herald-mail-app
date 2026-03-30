@@ -199,7 +199,7 @@ func (c *Cache) initDB() error {
 	if _, err := c.db.Exec(`
 		CREATE TABLE IF NOT EXISTS email_rules (
 			id               INTEGER PRIMARY KEY AUTOINCREMENT,
-			name             TEXT    NOT NULL DEFAULT '',
+			name             TEXT    NOT NULL DEFAULT '' CHECK(name != ''),
 			enabled          INTEGER NOT NULL DEFAULT 1,
 			priority         INTEGER NOT NULL DEFAULT 0,
 			trigger_type     TEXT    NOT NULL,
@@ -222,7 +222,9 @@ func (c *Cache) initDB() error {
 			status       TEXT    NOT NULL,
 			detail       TEXT,
 			executed_at  DATETIME NOT NULL
-		)`); err != nil {
+		);
+		CREATE INDEX IF NOT EXISTS idx_rule_action_log_rule_id ON rule_action_log(rule_id);
+	`); err != nil {
 		return err
 	}
 
