@@ -1504,6 +1504,21 @@ func (m *Model) renderStatusBar() string {
 			Render(line)
 	}
 
+	// 3-way unsubscribe choice prompt overrides normal status bar
+	if m.unsubConfirmMode {
+		w := m.windowWidth
+		if w <= 0 {
+			w = 80
+		}
+		line := fmt.Sprintf("  Unsubscribe from %s:  [h] Hard unsubscribe  │  [s] Soft unsubscribe (auto-move)  │  [Esc] Cancel", m.unsubConfirmSender)
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255")).
+			Background(lipgloss.Color("202")).
+			Width(w).
+			Padding(0, 1).
+			Render(line)
+	}
+
 	// Folder breadcrumb
 	folderParts := strings.Split(m.currentFolder, "/")
 	breadcrumb := strings.Join(folderParts, " › ")
@@ -2409,6 +2424,25 @@ func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
 			return UnsubscribeResultMsg{Method: "mailto-copied", URL: mailtoAddr}
 		}
 		return UnsubscribeResultMsg{Err: fmt.Errorf("no usable unsubscribe URI found")}
+	}
+}
+
+// createSoftUnsubscribeRuleCmd creates a rule that auto-moves emails from sender
+// to "Disabled Subscriptions", providing a non-destructive alternative to hard deletion.
+func createSoftUnsubscribeRuleCmd(b backend.Backend, sender string) tea.Cmd {
+	return func() tea.Msg {
+		rule := &models.Rule{
+			Name:         "Soft unsub: " + sender,
+			Enabled:      true,
+			TriggerType:  models.TriggerSender,
+			TriggerValue: sender,
+			Actions: []models.RuleAction{{
+				Type:       models.ActionMove,
+				DestFolder: "Disabled Subscriptions",
+			}},
+		}
+		err := b.SaveRule(rule)
+		return SoftUnsubResultMsg{Sender: sender, Err: err}
 	}
 }
 

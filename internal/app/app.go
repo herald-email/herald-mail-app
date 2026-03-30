@@ -292,6 +292,10 @@ type Model struct {
 	pendingUnsubscribeDesc   string
 	pendingUnsubscribeAction func() tea.Cmd
 
+	// 3-way unsubscribe choice (Cleanup tab)
+	unsubConfirmMode   bool
+	unsubConfirmSender string
+
 	// Search
 	searchMode          bool
 	searchInput         textinput.Model
@@ -768,6 +772,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case SoftUnsubResultMsg:
+		m.unsubConfirmMode = false
+		if msg.Err != nil {
+			m.statusMessage = "Error creating soft unsubscribe rule: " + msg.Err.Error()
+		} else {
+			m.statusMessage = "Soft unsubscribe rule created for " + msg.Sender
+		}
+		return m, nil
+
 	case ValidIDsMsg:
 		// Background reconciliation has produced the live valid-ID set.
 		// The backend's filterByValidIDs now applies automatically; reload all views.
@@ -1153,6 +1166,35 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// 3-way unsubscribe choice (Cleanup tab) intercepts all keys
+	if m.unsubConfirmMode {
+		switch msg.String() {
+		case "h", "H":
+			sender := m.unsubConfirmSender
+			m.unsubConfirmMode = false
+			m.unsubConfirmSender = ""
+			// Hard unsubscribe: delete all emails from this sender via deletion worker
+			folder := m.currentFolder
+			ch := m.deletionRequestCh
+			go func() {
+				ch <- models.DeletionRequest{Sender: sender, IsDomain: false, Folder: folder}
+			}()
+			m.deleting = true
+			m.deletionsPending = 1
+			m.deletionsTotal = 1
+			return m, m.listenForDeletionResults()
+		case "s", "S":
+			sender := m.unsubConfirmSender
+			m.unsubConfirmMode = false
+			m.unsubConfirmSender = ""
+			return m, createSoftUnsubscribeRuleCmd(m.backend, sender)
+		case "esc":
+			m.unsubConfirmMode = false
+			m.unsubConfirmSender = ""
+		}
+		return m, nil
+	}
+
 	// Attachment save prompt intercepts all keys while active
 	if m.attachmentSavePrompt {
 		switch msg.String() {
@@ -1370,6 +1412,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.pendingUnsubscribeAction = func() tea.Cmd {
 					return unsubscribeCmd(body)
 				}
+			}
+		} else if m.activeTab == tabCleanup && !m.loading && !m.deleting {
+			cursor := m.summaryTable.Cursor()
+			if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
+				m.unsubConfirmMode = true
+				m.unsubConfirmSender = sender
 			}
 		}
 		return m, nil
