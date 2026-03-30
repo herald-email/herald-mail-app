@@ -320,6 +320,10 @@ type Model struct {
 	showSettings  bool
 	settingsPanel *Settings
 
+	// Rule editor overlay
+	showRuleEditor bool
+	ruleEditor     *RuleEditor
+
 	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
 	oauthWait *OAuthWaitModel
 
@@ -559,6 +563,26 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Handle rule editor messages before forwarding, so we can close it cleanly.
+	switch msg := msg.(type) {
+	case RuleEditorDoneMsg:
+		m.showRuleEditor = false
+		m.ruleEditor = nil
+		if msg.Rule != nil {
+			if err := m.backend.SaveRule(msg.Rule); err != nil {
+				m.statusMessage = "Error saving rule: " + err.Error()
+			} else {
+				m.statusMessage = "Rule created: " + msg.Rule.Name
+			}
+		}
+		return m, nil
+
+	case RuleEditorCancelledMsg:
+		m.showRuleEditor = false
+		m.ruleEditor = nil
+		return m, nil
+	}
+
 	// Handle settings panel messages before forwarding to the panel, so we can
 	// close it cleanly when it emits a completion message.
 	switch msg := msg.(type) {
@@ -616,6 +640,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
 		return m, cmd
+	}
+
+	// Forward all messages to the rule editor when it is active.
+	if m.showRuleEditor && m.ruleEditor != nil {
+		var ruleCmd tea.Cmd
+		m.ruleEditor, ruleCmd = m.ruleEditor.Update(msg)
+		return m, ruleCmd
 	}
 
 	switch msg := msg.(type) {
@@ -1059,6 +1090,10 @@ func (m *Model) View() string {
 	if m.showSettings && m.settingsPanel != nil {
 		return m.settingsPanel.View()
 	}
+	// Rule editor overlay takes over the entire screen when active.
+	if m.showRuleEditor && m.ruleEditor != nil {
+		return m.ruleEditor.View()
+	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
 		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
 	}
@@ -1277,6 +1312,24 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m.deleteSelected()
 				}
 			}
+		}
+		return m, nil
+
+	case "W":
+		if m.activeTab == tabCleanup && !m.showRuleEditor {
+			sender := ""
+			domain := ""
+			cursor := m.summaryTable.Cursor()
+			if s, ok := m.rowToSender[cursor]; ok {
+				if m.groupByDomain {
+					domain = s
+				} else {
+					sender = s
+				}
+			}
+			m.ruleEditor = NewRuleEditor(sender, domain, m.windowWidth, m.windowHeight)
+			m.showRuleEditor = true
+			return m, m.ruleEditor.Init()
 		}
 		return m, nil
 
