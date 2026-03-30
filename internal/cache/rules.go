@@ -42,8 +42,8 @@ func (c *Cache) SaveRule(r *models.Rule) error {
 		}
 		r.ID = id
 	} else {
-		_, err := c.db.Exec(
-			`UPDATE email_rules SET name=?, enabled=?, priority=?, trigger_type=?, trigger_value=?, custom_prompt_id=?, actions_json=?, created_at=? WHERE id=?`,
+		result, err := c.db.Exec(
+			`UPDATE email_rules SET name=?, enabled=?, priority=?, trigger_type=?, trigger_value=?, custom_prompt_id=?, actions_json=? WHERE id=?`,
 			r.Name,
 			boolToInt(r.Enabled),
 			r.Priority,
@@ -51,11 +51,17 @@ func (c *Cache) SaveRule(r *models.Rule) error {
 			r.TriggerValue,
 			r.CustomPromptID,
 			string(actionsJSON),
-			r.CreatedAt.Format(time.RFC3339),
 			r.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update rule: %w", err)
+		}
+		rowsAff, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("save rule: check rows affected: %w", err)
+		}
+		if rowsAff == 0 {
+			return fmt.Errorf("save rule: rule ID %d not found", r.ID)
 		}
 	}
 	return nil
@@ -132,17 +138,23 @@ func (c *Cache) SaveCustomPrompt(p *models.CustomPrompt) error {
 		}
 		p.ID = id
 	} else {
-		_, err := c.db.Exec(
-			`UPDATE custom_prompts SET name=?, system_text=?, user_template=?, output_var=?, created_at=? WHERE id=?`,
+		result, err := c.db.Exec(
+			`UPDATE custom_prompts SET name=?, system_text=?, user_template=?, output_var=? WHERE id=?`,
 			p.Name,
 			p.SystemText,
 			p.UserTemplate,
 			p.OutputVar,
-			p.CreatedAt.Format(time.RFC3339),
 			p.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update custom prompt: %w", err)
+		}
+		rowsAff, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("save custom prompt: check rows affected: %w", err)
+		}
+		if rowsAff == 0 {
+			return fmt.Errorf("save custom prompt: prompt ID %d not found", p.ID)
 		}
 	}
 	return nil
@@ -242,6 +254,7 @@ func scanRule(s ruleScanner) (*models.Rule, error) {
 	var actionsJSON string
 	var createdAt string
 	var lastTriggered sql.NullTime
+	var promptID sql.NullInt64
 
 	err := s.Scan(
 		&rule.ID,
@@ -250,13 +263,17 @@ func scanRule(s ruleScanner) (*models.Rule, error) {
 		&rule.Priority,
 		&triggerType,
 		&rule.TriggerValue,
-		&rule.CustomPromptID,
+		&promptID,
 		&actionsJSON,
 		&createdAt,
 		&lastTriggered,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if promptID.Valid {
+		rule.CustomPromptID = &promptID.Int64
 	}
 
 	rule.Enabled = enabledInt != 0

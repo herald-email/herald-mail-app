@@ -495,6 +495,47 @@ func TestSaveAndGetRule(t *testing.T) {
 	if got.Actions[1].NotifyTitle != "Spam!" {
 		t.Errorf("Actions[1].NotifyTitle: got %q, want %q", got.Actions[1].NotifyTitle, "Spam!")
 	}
+	if got.CustomPromptID != nil {
+		t.Errorf("expected CustomPromptID to be nil, got %v", got.CustomPromptID)
+	}
+
+	// Test with a non-nil CustomPromptID FK value
+	prompt := &models.CustomPrompt{
+		Name:         "test-prompt",
+		SystemText:   "You are a classifier.",
+		UserTemplate: "Classify: {{.Subject}}",
+		OutputVar:    "category",
+	}
+	if err := c.SaveCustomPrompt(prompt); err != nil {
+		t.Fatalf("SaveCustomPrompt: %v", err)
+	}
+
+	ruleWithPrompt := &models.Rule{
+		Name:           "rule-with-prompt",
+		Enabled:        true,
+		Priority:       20,
+		TriggerType:    models.TriggerSender,
+		TriggerValue:   "promo@example.com",
+		CustomPromptID: &prompt.ID,
+		Actions:        []models.RuleAction{{Type: models.ActionNotify}},
+	}
+	if err := c.SaveRule(ruleWithPrompt); err != nil {
+		t.Fatalf("SaveRule with prompt: %v", err)
+	}
+
+	gotWithPrompt, err := c.GetRuleByID(ruleWithPrompt.ID)
+	if err != nil {
+		t.Fatalf("GetRuleByID: %v", err)
+	}
+	if gotWithPrompt == nil {
+		t.Fatal("expected rule with prompt, got nil")
+	}
+	if gotWithPrompt.CustomPromptID == nil {
+		t.Fatal("expected CustomPromptID to be non-nil")
+	}
+	if *gotWithPrompt.CustomPromptID != prompt.ID {
+		t.Errorf("CustomPromptID: got %d, want %d", *gotWithPrompt.CustomPromptID, prompt.ID)
+	}
 }
 
 func TestGetRuleByID(t *testing.T) {
@@ -550,6 +591,14 @@ func TestDeleteRule(t *testing.T) {
 	}
 	if len(rules) != 0 {
 		t.Errorf("expected 0 rules after delete, got %d", len(rules))
+	}
+
+	got, err := c.GetRuleByID(rule.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Error("expected rule to be absent after DeleteRule")
 	}
 }
 
@@ -627,6 +676,15 @@ func TestAppendActionLog(t *testing.T) {
 	}
 	if err := c.AppendActionLog(entry); err != nil {
 		t.Fatalf("AppendActionLog: %v", err)
+	}
+
+	// verify row was persisted
+	var count int
+	if err := c.db.QueryRow("SELECT COUNT(*) FROM rule_action_log WHERE rule_id=?", rule.ID).Scan(&count); err != nil {
+		t.Fatalf("query error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 log entry, got %d", count)
 	}
 }
 
