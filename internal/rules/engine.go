@@ -1,0 +1,162 @@
+package rules
+
+import (
+	"bytes"
+	"fmt"
+	"strings"
+	"text/template"
+	"time"
+
+	"mail-processor/internal/ai"
+	"mail-processor/internal/models"
+)
+
+// Store is implemented by *cache.Cache
+type Store interface {
+	GetEnabledRules() ([]*models.Rule, error)
+	GetCustomPrompt(id int64) (*models.CustomPrompt, error)
+	AppendActionLog(*models.RuleActionLogEntry) error
+	TouchRuleLastTriggered(int64) error
+}
+
+// Executor is implemented by *LocalBackend
+type Executor interface {
+	MoveEmail(messageID, from, to string) error
+	ArchiveEmail(messageID, folder string) error
+	DeleteEmail(messageID, folder string) error
+}
+
+// Engine evaluates rules against incoming emails and executes their actions.
+type Engine struct {
+	store    Store
+	executor Executor
+	ai       *ai.Classifier
+}
+
+// New creates a new Engine.
+func New(store Store, executor Executor, classifier *ai.Classifier) *Engine {
+	return &Engine{store: store, executor: executor, ai: classifier}
+}
+
+// EvaluateEmail checks all enabled rules against the email and fires matching ones.
+// Returns the number of rules fired and the first error encountered.
+func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, error) {
+	rules, err := e.store.GetEnabledRules()
+	if err != nil {
+		return 0, fmt.Errorf("get enabled rules: %w", err)
+	}
+
+	fired := 0
+	var firstErr error
+	for _, rule := range rules {
+		if !matchRule(rule, email, category) {
+			continue
+		}
+
+		// Build base RuleContext
+		ctx := models.RuleContext{
+			Sender:    email.Sender,
+			Domain:    extractDomain(email.Sender),
+			Subject:   email.Subject,
+			Category:  category,
+			MessageID: email.MessageID,
+			Folder:    email.Folder,
+		}
+
+		// Run optional custom prompt
+		if rule.CustomPromptID != nil && e.ai != nil {
+			// best-effort: if prompt fails, continue without result
+			// (implement custom prompt execution in a follow-up — for now skip)
+		}
+
+		// Execute actions
+		for _, action := range rule.Actions {
+			actionErr := e.executeAction(action, email, ctx)
+			status := "ok"
+			detail := ""
+			if actionErr != nil {
+				status = "error"
+				detail = actionErr.Error()
+				if firstErr == nil {
+					firstErr = actionErr
+				}
+			}
+			_ = e.store.AppendActionLog(&models.RuleActionLogEntry{
+				RuleID:     rule.ID,
+				MessageID:  email.MessageID,
+				ActionType: action.Type,
+				Status:     status,
+				Detail:     detail,
+				ExecutedAt: time.Now(),
+			})
+		}
+		_ = e.store.TouchRuleLastTriggered(rule.ID)
+		fired++
+	}
+	return fired, firstErr
+}
+
+func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData, ctx models.RuleContext) error {
+	switch action.Type {
+	case models.ActionMove:
+		return e.executor.MoveEmail(email.MessageID, email.Folder, action.DestFolder)
+	case models.ActionArchive:
+		return e.executor.ArchiveEmail(email.MessageID, email.Folder)
+	case models.ActionDelete:
+		return e.executor.DeleteEmail(email.MessageID, email.Folder)
+	case models.ActionNotify:
+		title := renderTemplate(action.NotifyTitle, ctx)
+		body := renderTemplate(action.NotifyBody, ctx)
+		return notify(title, body)
+	case models.ActionWebhook:
+		return webhook(action.WebhookURL, action.WebhookBody, action.Headers, ctx)
+	case models.ActionCommand:
+		return runCommand(action.Command, ctx)
+	default:
+		return fmt.Errorf("unknown action type: %s", action.Type)
+	}
+}
+
+// matchRule returns true if the email matches the rule's trigger.
+func matchRule(r *models.Rule, email *models.EmailData, category string) bool {
+	switch r.TriggerType {
+	case models.TriggerSender:
+		return strings.EqualFold(email.Sender, r.TriggerValue)
+	case models.TriggerDomain:
+		return strings.EqualFold(extractDomain(email.Sender), r.TriggerValue)
+	case models.TriggerCategory:
+		return strings.EqualFold(category, r.TriggerValue)
+	default:
+		return false
+	}
+}
+
+// extractDomain extracts the domain part from an email address (e.g. "foo@example.com" → "example.com").
+// Handles display names like "Name <addr@domain.com>". Returns empty string if no @ is found.
+func extractDomain(sender string) string {
+	// Strip display name: "Name <addr@domain.com>" → "addr@domain.com"
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			sender = sender[lt+1 : lt+gt]
+		}
+	}
+	at := strings.LastIndex(sender, "@")
+	if at < 0 {
+		return ""
+	}
+	return strings.ToLower(sender[at+1:])
+}
+
+// renderTemplate executes a Go text/template with the given context.
+// Returns the input string unchanged if the template fails to parse or execute.
+func renderTemplate(tmpl string, ctx models.RuleContext) string {
+	t, err := template.New("").Parse(tmpl)
+	if err != nil {
+		return tmpl
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, ctx); err != nil {
+		return tmpl
+	}
+	return buf.String()
+}
