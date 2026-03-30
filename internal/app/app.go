@@ -551,6 +551,7 @@ func (m *Model) Init() tea.Cmd {
 		m.startLoading(),
 		m.tickSpinner(),
 		m.listenForProgress(),
+		m.listenForRuleResult(),
 	)
 }
 
@@ -679,6 +680,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.classifications[msg.MessageID] = msg.Category
 		// Refresh tables to show updated tags
 		m.updateTimelineTable()
+		// Push newly classified email to rule engine (non-blocking)
+		for _, e := range m.timelineEmails {
+			if e.MessageID == msg.MessageID {
+				select {
+				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: msg.Category}:
+				default:
+				}
+				break
+			}
+		}
 		return m, m.listenForClassification()
 
 	case ClassifyDoneMsg:
@@ -908,6 +919,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Continue listening for more results
 		return m, m.listenForDeletionResults()
+
+	case RuleResultMsg:
+		m.rulesFiredCount += msg.Result.FiredCount
+		if msg.Result.Err != nil {
+			logger.Warn("rule worker error: %v", msg.Result.Err)
+		}
+		return m, m.listenForRuleResult()
 
 	case SearchResultMsg:
 		if msg.Query == "" {

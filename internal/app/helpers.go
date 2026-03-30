@@ -1673,7 +1673,7 @@ func (m *Model) renderKeyHints() string {
 		case panelDetails:
 			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().
