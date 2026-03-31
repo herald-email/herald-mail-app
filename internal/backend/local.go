@@ -306,13 +306,22 @@ func (b *LocalBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailDa
 
 func (b *LocalBackend) SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error) {
 	if b.classifier == nil {
-		return nil, fmt.Errorf("Ollama classifier not configured")
+		return nil, nil
 	}
-	vec, err := b.classifier.Embed(query)
+	queryText := ai.BuildQueryText(query)
+	vec, err := b.classifier.Embed(queryText)
 	if err != nil {
 		return nil, fmt.Errorf("embedding failed: %w", err)
 	}
-	return b.cache.SearchSemantic(folder, vec, limit, minScore)
+	results, err := b.cache.SearchSemanticChunked(folder, vec, limit, minScore)
+	if err != nil {
+		return nil, err
+	}
+	emails := make([]*models.EmailData, 0, len(results))
+	for _, r := range results {
+		emails = append(emails, r.Email)
+	}
+	return emails, nil
 }
 
 func (b *LocalBackend) GetSavedSearches() ([]*models.SavedSearch, error) {
@@ -352,6 +361,50 @@ func (b *LocalBackend) StoreEmbedding(messageID string, embedding []float32, has
 
 func (b *LocalBackend) GetUnembeddedIDs(folder string) ([]string, error) {
 	return b.cache.GetUnembeddedIDs(folder)
+}
+
+func (b *LocalBackend) GetUnembeddedIDsWithBody(folder string) ([]string, error) {
+	return b.cache.GetUnembeddedIDsWithBody(folder)
+}
+
+func (b *LocalBackend) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
+	return b.cache.GetUncachedBodyIDs(folder, limit)
+}
+
+func (b *LocalBackend) GetEmbeddingProgress(folder string) (done, total int, err error) {
+	return b.cache.GetEmbeddingProgress(folder)
+}
+
+func (b *LocalBackend) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
+	return b.cache.StoreEmbeddingChunks(messageID, chunks)
+}
+
+func (b *LocalBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	return b.cache.SearchSemanticChunked(folder, queryVec, limit, minScore)
+}
+
+func (b *LocalBackend) GetBodyText(messageID string) (string, error) {
+	return b.cache.GetBodyText(messageID)
+}
+
+func (b *LocalBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, error) {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return nil, err
+	}
+	if email == nil {
+		return nil, fmt.Errorf("FetchAndCacheBody: message %s not found in cache", messageID)
+	}
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return nil, err
+	}
+	if body.TextPlain != "" {
+		if err := b.cache.CacheBodyText(messageID, body.TextPlain); err != nil {
+			logger.Warn("FetchAndCacheBody CacheBodyText %s: %v", messageID, err)
+		}
+	}
+	return body, nil
 }
 
 func (b *LocalBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
@@ -449,4 +502,42 @@ func (b *LocalBackend) AppendActionLog(entry *models.RuleActionLogEntry) error {
 
 func (b *LocalBackend) TouchRuleLastTriggered(ruleID int64) error {
 	return b.cache.TouchRuleLastTriggered(ruleID)
+}
+
+// --- Contacts ---
+
+func (b *LocalBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
+	return b.cache.GetContactsToEnrich(minCount, limit)
+}
+
+func (b *LocalBackend) GetRecentSubjectsByContact(email string, limit int) ([]string, error) {
+	return b.cache.GetRecentSubjectsByContact(email, limit)
+}
+
+func (b *LocalBackend) UpdateContactEnrichment(email, company string, topics []string) error {
+	return b.cache.UpdateContactEnrichment(email, company, topics)
+}
+
+func (b *LocalBackend) UpdateContactEmbedding(email string, embedding []float32) error {
+	return b.cache.UpdateContactEmbedding(email, embedding)
+}
+
+func (b *LocalBackend) SearchContactsSemantic(queryVec []float32, limit int, minScore float64) ([]*models.ContactSearchResult, error) {
+	return b.cache.SearchContactsSemantic(queryVec, limit, minScore)
+}
+
+func (b *LocalBackend) ListContacts(limit int, sortBy string) ([]models.ContactData, error) {
+	return b.cache.ListContacts(limit, sortBy)
+}
+
+func (b *LocalBackend) SearchContacts(query string) ([]models.ContactData, error) {
+	return b.cache.SearchContacts(query)
+}
+
+func (b *LocalBackend) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
+	return b.cache.GetContactEmails(contactEmail, limit)
+}
+
+func (b *LocalBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
+	return b.cache.UpsertContacts(addrs, direction)
 }

@@ -459,6 +459,45 @@ func (d *DemoBackend) GetUnembeddedIDs(folder string) ([]string, error) {
 	return nil, nil
 }
 
+func (d *DemoBackend) GetUnembeddedIDsWithBody(folder string) ([]string, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) GetEmbeddingProgress(folder string) (done, total int, err error) {
+	return 0, 0, nil
+}
+
+func (d *DemoBackend) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
+	return nil
+}
+
+func (d *DemoBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) GetBodyText(messageID string) (string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.bodyCache[messageID], nil
+}
+
+func (d *DemoBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range d.emails {
+		if e.MessageID == messageID {
+			body := "Demo body for: " + e.Subject
+			d.bodyCache[messageID] = body
+			return &models.EmailBody{TextPlain: body}, nil
+		}
+	}
+	return nil, nil
+}
+
 // --- Background sync ---
 
 func (d *DemoBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
@@ -574,6 +613,71 @@ func (d *DemoBackend) TouchRuleLastTriggered(ruleID int64) error {
 		}
 	}
 	return nil
+}
+
+// --- Contacts (stubs for DemoBackend) ---
+
+func (d *DemoBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) GetRecentSubjectsByContact(email string, limit int) ([]string, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) UpdateContactEnrichment(email, company string, topics []string) error {
+	return nil
+}
+
+func (d *DemoBackend) UpdateContactEmbedding(email string, embedding []float32) error {
+	return nil
+}
+
+func (d *DemoBackend) SearchContactsSemantic(queryVec []float32, limit int, minScore float64) ([]*models.ContactSearchResult, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) ListContacts(limit int, sortBy string) ([]models.ContactData, error) {
+	contacts := seedDemoContacts()
+	if limit > 0 && len(contacts) > limit {
+		contacts = contacts[:limit]
+	}
+	return contacts, nil
+}
+
+func (d *DemoBackend) SearchContacts(query string) ([]models.ContactData, error) {
+	q := strings.ToLower(query)
+	all := seedDemoContacts()
+	var out []models.ContactData
+	for _, c := range all {
+		if strings.Contains(strings.ToLower(c.DisplayName), q) ||
+			strings.Contains(strings.ToLower(c.Email), q) ||
+			strings.Contains(strings.ToLower(c.Company), q) {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (d *DemoBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
+	return nil
+}
+
+func (d *DemoBackend) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	q := strings.ToLower(contactEmail)
+	var out []*models.EmailData
+	for _, e := range d.emails {
+		if strings.Contains(strings.ToLower(e.Sender), q) {
+			out = append(out, e)
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".

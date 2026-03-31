@@ -663,7 +663,25 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	}
 
 	// Cache the email
-	return c.cache.CacheEmail(emailData)
+	if err := c.cache.CacheEmail(emailData); err != nil {
+		return err
+	}
+
+	// Upsert contacts from envelope headers
+	fromAddrs := extractEnvelopeAddrs(msg.Envelope.From)
+	if err := c.cache.UpsertContacts(fromAddrs, "from"); err != nil {
+		logger.Warn("UpsertContacts (from) for message %s: %v", messageID, err)
+	}
+
+	var toAddrs []models.ContactAddr
+	toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.To)...)
+	toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Cc)...)
+	toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Bcc)...)
+	if err := c.cache.UpsertContacts(toAddrs, "to"); err != nil {
+		logger.Warn("UpsertContacts (to) for message %s: %v", messageID, err)
+	}
+
+	return nil
 }
 
 // GetEmailsBySender retrieves all emails grouped by sender
@@ -1033,6 +1051,22 @@ func (c *Client) StopIDLE() {
 		close(c.idleStop)
 		c.idleStop = nil
 	}
+}
+
+// extractEnvelopeAddrs converts an imap envelope address list to ContactAddr slice.
+// Entries with empty MailboxName or HostName are skipped.
+func extractEnvelopeAddrs(addrs []*imap.Address) []models.ContactAddr {
+	out := make([]models.ContactAddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr == nil || addr.MailboxName == "" || addr.HostName == "" {
+			continue
+		}
+		out = append(out, models.ContactAddr{
+			Email: addr.MailboxName + "@" + addr.HostName,
+			Name:  addr.PersonalName,
+		})
+	}
+	return out
 }
 
 // checkBodyStructureForAttachments recursively checks if a body structure contains attachments

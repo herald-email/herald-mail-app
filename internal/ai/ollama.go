@@ -269,6 +269,83 @@ func (c *Classifier) DescribeImage(ctx context.Context, imageBytes []byte, mimeT
 	return strings.TrimSpace(result.Response), nil
 }
 
+// EnrichContact asks the model to extract company and topics from a list of
+// recent email subjects involving the contact.
+// Returns (company, topics, nil) on success, or ("", nil, err) on failure.
+// JSON parsing errors are silently treated as ("", nil, nil) so the caller can skip gracefully.
+func (c *Classifier) EnrichContact(email string, subjects []string) (company string, topics []string, err error) {
+	var sb strings.Builder
+	sb.WriteString("Based on these email subjects involving ")
+	sb.WriteString(email)
+	sb.WriteString(":\n")
+	for _, s := range subjects {
+		sb.WriteString("- ")
+		sb.WriteString(s)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\nExtract in JSON (respond with JSON only, no explanation):\n")
+	sb.WriteString(`{"company": "string or empty", "topics": ["topic1", "topic2"]}`)
+
+	reply, err := c.Chat([]ChatMessage{
+		{Role: "user", Content: sb.String()},
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("EnrichContact chat failed: %w", err)
+	}
+
+	// Strip markdown code fences if present
+	reply = strings.TrimSpace(reply)
+	if strings.HasPrefix(reply, "```") {
+		// Remove opening fence (```json or ```)
+		if idx := strings.Index(reply, "\n"); idx >= 0 {
+			reply = reply[idx+1:]
+		}
+		// Remove closing fence
+		if idx := strings.LastIndex(reply, "```"); idx >= 0 {
+			reply = reply[:idx]
+		}
+		reply = strings.TrimSpace(reply)
+	}
+
+	var result struct {
+		Company string   `json:"company"`
+		Topics  []string `json:"topics"`
+	}
+	if err := json.Unmarshal([]byte(reply), &result); err != nil {
+		return "", nil, fmt.Errorf("parse enrichment response: %w", err)
+	}
+	return result.Company, result.Topics, nil
+}
+
+// GenerateQuickReplies generates 3 short reply suggestions for the given email.
+// Returns a JSON array of strings. On error returns nil (callers fall back to canned replies).
+func (c *Classifier) GenerateQuickReplies(sender, subject, bodyPreview string) ([]string, error) {
+	prompt := fmt.Sprintf(
+		"Generate 3 very short (1–2 sentences max) reply options for this email.\nRespond with a JSON array of strings ONLY — no explanation, no markdown.\n\nFrom: %s\nSubject: %s\n\n%s",
+		sender, subject, bodyPreview,
+	)
+	reply, err := c.Chat([]ChatMessage{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("GenerateQuickReplies: %w", err)
+	}
+	reply = strings.TrimSpace(reply)
+	// Strip markdown fences
+	if strings.HasPrefix(reply, "```") {
+		if idx := strings.Index(reply, "\n"); idx >= 0 {
+			reply = reply[idx+1:]
+		}
+		if idx := strings.LastIndex(reply, "```"); idx >= 0 {
+			reply = reply[:idx]
+		}
+		reply = strings.TrimSpace(reply)
+	}
+	var suggestions []string
+	if err := json.Unmarshal([]byte(reply), &suggestions); err != nil {
+		return nil, fmt.Errorf("parse quick replies: %w", err)
+	}
+	return suggestions, nil
+}
+
 func normalizeCategory(raw string) Category {
 	raw = strings.ToLower(raw)
 	raw = strings.TrimPrefix(raw, "tag:")

@@ -118,6 +118,28 @@ type Backend interface {
 	// GetUnembeddedIDs returns message IDs without embeddings.
 	GetUnembeddedIDs(folder string) ([]string, error)
 
+	// GetUnembeddedIDsWithBody returns message IDs that have body_text cached but no embedding chunks yet.
+	GetUnembeddedIDsWithBody(folder string) ([]string, error)
+
+	// GetUncachedBodyIDs returns up to limit message IDs that have neither body_text nor embedding chunks.
+	GetUncachedBodyIDs(folder string, limit int) ([]string, error)
+
+	// GetEmbeddingProgress returns the count of embedded messages (done) and total messages (total) for a folder.
+	GetEmbeddingProgress(folder string) (done, total int, err error)
+
+	// StoreEmbeddingChunks replaces all existing chunks for messageID with the provided chunks.
+	StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error
+
+	// SearchSemanticChunked returns emails ranked by semantic similarity using per-chunk embeddings.
+	// Results are paired with their cosine similarity scores.
+	SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error)
+
+	// GetBodyText returns the cached plain-text body for a message.
+	GetBodyText(messageID string) (string, error)
+
+	// FetchAndCacheBody fetches the email body via IMAP and caches the plain text for future embedding.
+	FetchAndCacheBody(messageID string) (*models.EmailBody, error)
+
 	// --- Background sync ---
 
 	// NewEmailsCh returns a receive-only channel of new-email notifications.
@@ -170,4 +192,35 @@ type Backend interface {
 
 	// TouchRuleLastTriggered updates the last_triggered timestamp for a rule.
 	TouchRuleLastTriggered(ruleID int64) error
+
+	// --- Contacts ---
+
+	// GetContactsToEnrich returns contacts with email_count >= minCount that have not been enriched yet.
+	GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error)
+
+	// GetRecentSubjectsByContact returns recent email subjects where sender matches the contact email.
+	GetRecentSubjectsByContact(email string, limit int) ([]string, error)
+
+	// UpdateContactEnrichment saves LLM-extracted company and topics for a contact.
+	UpdateContactEnrichment(email, company string, topics []string) error
+
+	// UpdateContactEmbedding saves the semantic embedding vector for a contact.
+	UpdateContactEmbedding(email string, embedding []float32) error
+
+	// SearchContactsSemantic finds contacts by cosine similarity against queryVec.
+	SearchContactsSemantic(queryVec []float32, limit int, minScore float64) ([]*models.ContactSearchResult, error)
+
+	// ListContacts returns contacts sorted by the given criterion.
+	// sortBy accepts "last_seen" (default), "name", or "email_count".
+	ListContacts(limit int, sortBy string) ([]models.ContactData, error)
+
+	// SearchContacts performs a keyword search on display_name, email, company, and topics.
+	SearchContacts(query string) ([]models.ContactData, error)
+
+	// GetContactEmails returns recent emails where sender matches the given email address.
+	GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error)
+
+	// UpsertContacts inserts or updates contacts from seen email addresses.
+	// direction is "from" or "to".
+	UpsertContacts(addrs []models.ContactAddr, direction string) error
 }

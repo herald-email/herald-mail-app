@@ -716,3 +716,500 @@ func TestTouchRuleLastTriggered(t *testing.T) {
 		t.Error("expected LastTriggered to be non-nil after touch")
 	}
 }
+
+// --- Schema migrations: email_embedding_chunks and contacts ---
+
+func TestInitDB_CreatesEmbeddingChunksTable(t *testing.T) {
+	c := newTestCache(t)
+
+	// Insert a row to confirm the table and all columns exist
+	_, err := c.db.Exec(`
+		INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at)
+		VALUES (?, ?, ?, ?, ?)`,
+		"<test@example.com>", 0, []byte{0x01, 0x02}, "abc123", time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("email_embedding_chunks insert failed: %v", err)
+	}
+
+	// UNIQUE constraint: duplicate (message_id, chunk_index) must be rejected
+	_, err = c.db.Exec(`
+		INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at)
+		VALUES (?, ?, ?, ?, ?)`,
+		"<test@example.com>", 0, []byte{0x03}, "def456", time.Now(),
+	)
+	if err == nil {
+		t.Fatal("expected UNIQUE constraint violation for duplicate (message_id, chunk_index), got nil")
+	}
+}
+
+func TestInitDB_CreatesContactsTable(t *testing.T) {
+	c := newTestCache(t)
+
+	now := time.Now()
+
+	// Insert a contact with required fields
+	_, err := c.db.Exec(`
+		INSERT INTO contacts (email, display_name, company, topics, notes, first_seen, last_seen, email_count, sent_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"alice@example.com", "Alice", "Acme", `["go","email"]`, "", now, now, 5, 1,
+	)
+	if err != nil {
+		t.Fatalf("contacts insert failed: %v", err)
+	}
+
+	// UNIQUE constraint on email: duplicate email must be rejected
+	_, err = c.db.Exec(`
+		INSERT INTO contacts (email, first_seen, last_seen)
+		VALUES (?, ?, ?)`,
+		"alice@example.com", now, now,
+	)
+	if err == nil {
+		t.Fatal("expected UNIQUE constraint violation for duplicate email, got nil")
+	}
+
+	// Nullable columns (carddav_uid, enriched_at, embedding) should accept NULL
+	_, err = c.db.Exec(`
+		INSERT INTO contacts (email, first_seen, last_seen, carddav_uid, enriched_at, embedding)
+		VALUES (?, ?, ?, NULL, NULL, NULL)`,
+		"bob@example.com", now, now,
+	)
+	if err != nil {
+		t.Fatalf("contacts insert with NULL optionals failed: %v", err)
+	}
+}
+
+// --- UpsertContacts ---
+
+func TestUpsertContacts_FromDirection(t *testing.T) {
+	c := newTestCache(t)
+
+	addrs := []models.ContactAddr{
+		{Email: "alice@example.com", Name: "Alice"},
+	}
+
+	if err := c.UpsertContacts(addrs, "from"); err != nil {
+		t.Fatalf("UpsertContacts: %v", err)
+	}
+
+	var emailCount, sentCount int
+	var displayName string
+	err := c.db.QueryRow(`SELECT display_name, email_count, sent_count FROM contacts WHERE email = ?`, "alice@example.com").
+		Scan(&displayName, &emailCount, &sentCount)
+	if err != nil {
+		t.Fatalf("query contact: %v", err)
+	}
+	if displayName != "Alice" {
+		t.Errorf("display_name = %q, want %q", displayName, "Alice")
+	}
+	if emailCount != 1 {
+		t.Errorf("email_count = %d, want 1", emailCount)
+	}
+	if sentCount != 0 {
+		t.Errorf("sent_count = %d, want 0", sentCount)
+	}
+}
+
+func TestUpsertContacts_ToDirection(t *testing.T) {
+	c := newTestCache(t)
+
+	addrs := []models.ContactAddr{
+		{Email: "bob@example.com", Name: "Bob"},
+	}
+
+	if err := c.UpsertContacts(addrs, "to"); err != nil {
+		t.Fatalf("UpsertContacts: %v", err)
+	}
+
+	var emailCount, sentCount int
+	err := c.db.QueryRow(`SELECT email_count, sent_count FROM contacts WHERE email = ?`, "bob@example.com").
+		Scan(&emailCount, &sentCount)
+	if err != nil {
+		t.Fatalf("query contact: %v", err)
+	}
+	if emailCount != 0 {
+		t.Errorf("email_count = %d, want 0", emailCount)
+	}
+	if sentCount != 1 {
+		t.Errorf("sent_count = %d, want 1", sentCount)
+	}
+}
+
+func TestUpsertContacts_ConflictIncrementsCounters(t *testing.T) {
+	c := newTestCache(t)
+
+	addr := []models.ContactAddr{{Email: "carol@example.com", Name: "Carol"}}
+
+	// Insert twice as "from"
+	if err := c.UpsertContacts(addr, "from"); err != nil {
+		t.Fatalf("first UpsertContacts: %v", err)
+	}
+	if err := c.UpsertContacts(addr, "from"); err != nil {
+		t.Fatalf("second UpsertContacts: %v", err)
+	}
+
+	var emailCount int
+	if err := c.db.QueryRow(`SELECT email_count FROM contacts WHERE email = ?`, "carol@example.com").Scan(&emailCount); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if emailCount != 2 {
+		t.Errorf("email_count = %d, want 2", emailCount)
+	}
+}
+
+func TestUpsertContacts_PreservesExistingDisplayName(t *testing.T) {
+	c := newTestCache(t)
+
+	// First insert with a name
+	if err := c.UpsertContacts([]models.ContactAddr{{Email: "dave@example.com", Name: "Dave"}}, "from"); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	// Second upsert with empty name — existing name should be kept
+	if err := c.UpsertContacts([]models.ContactAddr{{Email: "dave@example.com", Name: ""}}, "from"); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+
+	var displayName string
+	if err := c.db.QueryRow(`SELECT display_name FROM contacts WHERE email = ?`, "dave@example.com").Scan(&displayName); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if displayName != "Dave" {
+		t.Errorf("display_name = %q, want %q", displayName, "Dave")
+	}
+}
+
+func TestUpsertContacts_SkipsEmptyEmail(t *testing.T) {
+	c := newTestCache(t)
+
+	addrs := []models.ContactAddr{
+		{Email: "", Name: "Nobody"},
+		{Email: "valid@example.com", Name: "Valid"},
+	}
+
+	if err := c.UpsertContacts(addrs, "from"); err != nil {
+		t.Fatalf("UpsertContacts: %v", err)
+	}
+
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM contacts`).Scan(&count); err != nil {
+		t.Fatalf("count query: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("contacts count = %d, want 1 (empty email should be skipped)", count)
+	}
+}
+
+func TestUpsertContacts_EmptySlice(t *testing.T) {
+	c := newTestCache(t)
+
+	// Should be a no-op without error
+	if err := c.UpsertContacts(nil, "from"); err != nil {
+		t.Fatalf("UpsertContacts(nil): %v", err)
+	}
+	if err := c.UpsertContacts([]models.ContactAddr{}, "to"); err != nil {
+		t.Fatalf("UpsertContacts(empty): %v", err)
+	}
+
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM contacts`).Scan(&count); err != nil {
+		t.Fatalf("count query: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("contacts count = %d, want 0", count)
+	}
+}
+
+func TestUpsertContacts_MixedDirectionAccumulates(t *testing.T) {
+	c := newTestCache(t)
+	addr := []models.ContactAddr{{Email: "x@example.com", Name: "X"}}
+	if err := c.UpsertContacts(addr, "to"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.UpsertContacts(addr, "from"); err != nil {
+		t.Fatal(err)
+	}
+	var emailCount, sentCount int
+	err := c.db.QueryRow(`SELECT email_count, sent_count FROM contacts WHERE email = ?`, "x@example.com").Scan(&emailCount, &sentCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emailCount != 1 {
+		t.Errorf("email_count = %d, want 1", emailCount)
+	}
+	if sentCount != 1 {
+		t.Errorf("sent_count = %d, want 1", sentCount)
+	}
+}
+
+func TestUpsertContacts_FillsBlankDisplayName(t *testing.T) {
+	c := newTestCache(t)
+	// First upsert: no name
+	addr1 := []models.ContactAddr{{Email: "y@example.com", Name: ""}}
+	if err := c.UpsertContacts(addr1, "from"); err != nil {
+		t.Fatal(err)
+	}
+	// Second upsert: provides name
+	addr2 := []models.ContactAddr{{Email: "y@example.com", Name: "Yvonne"}}
+	if err := c.UpsertContacts(addr2, "from"); err != nil {
+		t.Fatal(err)
+	}
+	var name string
+	err := c.db.QueryRow(`SELECT display_name FROM contacts WHERE email = ?`, "y@example.com").Scan(&name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "Yvonne" {
+		t.Errorf("display_name = %q, want %q", name, "Yvonne")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for chunked embedding tests
+// ---------------------------------------------------------------------------
+
+func insertTestEmail(t *testing.T, c *Cache, messageID, folder, bodyText string) {
+	t.Helper()
+	_, err := c.db.Exec(
+		`INSERT INTO emails (message_id, sender, subject, date, size, has_attachments, folder, body_text)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		messageID, "sender@example.com", "Subject", time.Now(), 100, 0, folder, bodyText,
+	)
+	if err != nil {
+		t.Fatalf("insertTestEmail(%s): %v", messageID, err)
+	}
+}
+
+func countChunkRows(t *testing.T, c *Cache, messageID string) int {
+	t.Helper()
+	var n int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM email_embedding_chunks WHERE message_id = ?`, messageID).Scan(&n); err != nil {
+		t.Fatalf("countChunkRows: %v", err)
+	}
+	return n
+}
+
+func makeTestChunks(messageID string, n int) []models.EmbeddingChunk {
+	chunks := make([]models.EmbeddingChunk, n)
+	for i := range chunks {
+		vec := make([]float32, 4)
+		vec[i%4] = float32(i + 1)
+		chunks[i] = models.EmbeddingChunk{
+			MessageID:   messageID,
+			ChunkIndex:  i,
+			Embedding:   vec,
+			ContentHash: "hash" + string(rune('0'+i)),
+		}
+	}
+	return chunks
+}
+
+// ---------------------------------------------------------------------------
+// StoreEmbeddingChunks
+// ---------------------------------------------------------------------------
+
+func TestStoreEmbeddingChunks_Basic(t *testing.T) {
+	c := newTestCache(t)
+	insertTestEmail(t, c, "msg1", "INBOX", "hello world")
+
+	if err := c.StoreEmbeddingChunks("msg1", makeTestChunks("msg1", 2)); err != nil {
+		t.Fatalf("StoreEmbeddingChunks: %v", err)
+	}
+	if got := countChunkRows(t, c, "msg1"); got != 2 {
+		t.Errorf("expected 2 chunks, got %d", got)
+	}
+}
+
+func TestStoreEmbeddingChunks_Replaces(t *testing.T) {
+	c := newTestCache(t)
+	insertTestEmail(t, c, "msg1", "INBOX", "hello world")
+
+	if err := c.StoreEmbeddingChunks("msg1", makeTestChunks("msg1", 3)); err != nil {
+		t.Fatalf("first StoreEmbeddingChunks: %v", err)
+	}
+	if got := countChunkRows(t, c, "msg1"); got != 3 {
+		t.Errorf("expected 3 chunks after first store, got %d", got)
+	}
+
+	// Second store with 1 chunk should replace all 3
+	if err := c.StoreEmbeddingChunks("msg1", makeTestChunks("msg1", 1)); err != nil {
+		t.Fatalf("second StoreEmbeddingChunks: %v", err)
+	}
+	if got := countChunkRows(t, c, "msg1"); got != 1 {
+		t.Errorf("expected 1 chunk after replace, got %d", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetUnembeddedIDsWithBody
+// ---------------------------------------------------------------------------
+
+func TestGetUnembeddedIDsWithBody(t *testing.T) {
+	c := newTestCache(t)
+
+	// Has body AND chunks → must NOT appear
+	insertTestEmail(t, c, "has-both", "INBOX", "body text")
+	if err := c.StoreEmbeddingChunks("has-both", makeTestChunks("has-both", 1)); err != nil {
+		t.Fatalf("StoreEmbeddingChunks: %v", err)
+	}
+
+	// Has body, NO chunks → must appear
+	insertTestEmail(t, c, "body-only", "INBOX", "another body")
+
+	// No body → must NOT appear
+	insertTestEmail(t, c, "no-body", "INBOX", "")
+
+	ids, err := c.GetUnembeddedIDsWithBody("INBOX")
+	if err != nil {
+		t.Fatalf("GetUnembeddedIDsWithBody: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "body-only" {
+		t.Errorf("expected [body-only], got %v", ids)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetUncachedBodyIDs
+// ---------------------------------------------------------------------------
+
+func TestGetUncachedBodyIDs(t *testing.T) {
+	c := newTestCache(t)
+
+	// Has body → must NOT appear
+	insertTestEmail(t, c, "has-body", "INBOX", "some text")
+
+	// Has chunks but no body → must NOT appear
+	insertTestEmail(t, c, "has-chunks", "INBOX", "")
+	if err := c.StoreEmbeddingChunks("has-chunks", makeTestChunks("has-chunks", 1)); err != nil {
+		t.Fatalf("StoreEmbeddingChunks: %v", err)
+	}
+
+	// Neither body nor chunks → must appear
+	insertTestEmail(t, c, "naked", "INBOX", "")
+
+	ids, err := c.GetUncachedBodyIDs("INBOX", 10)
+	if err != nil {
+		t.Fatalf("GetUncachedBodyIDs: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "naked" {
+		t.Errorf("expected [naked], got %v", ids)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetEmbeddingProgress
+// ---------------------------------------------------------------------------
+
+func TestGetEmbeddingProgress(t *testing.T) {
+	c := newTestCache(t)
+
+	insertTestEmail(t, c, "e1", "INBOX", "body1")
+	insertTestEmail(t, c, "e2", "INBOX", "body2")
+	insertTestEmail(t, c, "e3", "INBOX", "body3")
+
+	// e1 and e2 get chunks; e3 does not
+	if err := c.StoreEmbeddingChunks("e1", makeTestChunks("e1", 2)); err != nil {
+		t.Fatalf("StoreEmbeddingChunks e1: %v", err)
+	}
+	if err := c.StoreEmbeddingChunks("e2", makeTestChunks("e2", 1)); err != nil {
+		t.Fatalf("StoreEmbeddingChunks e2: %v", err)
+	}
+
+	done, total, err := c.GetEmbeddingProgress("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmbeddingProgress: %v", err)
+	}
+	if done != 2 {
+		t.Errorf("done = %d, want 2", done)
+	}
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SearchSemanticChunked
+// ---------------------------------------------------------------------------
+
+func TestSearchSemanticChunked(t *testing.T) {
+	c := newTestCache(t)
+
+	insertTestEmail(t, c, "close", "INBOX", "very relevant content")
+	insertTestEmail(t, c, "far", "INBOX", "unrelated content")
+
+	// "close" chunk: [1,0,0,0] — identical direction to query
+	closeChunk := models.EmbeddingChunk{
+		MessageID:   "close",
+		ChunkIndex:  0,
+		Embedding:   []float32{1, 0, 0, 0},
+		ContentHash: "close-hash",
+	}
+	if err := c.StoreEmbeddingChunks("close", []models.EmbeddingChunk{closeChunk}); err != nil {
+		t.Fatalf("StoreEmbeddingChunks close: %v", err)
+	}
+
+	// "far" chunk: [0,1,0,0] — orthogonal to query (cosine = 0)
+	farChunk := models.EmbeddingChunk{
+		MessageID:   "far",
+		ChunkIndex:  0,
+		Embedding:   []float32{0, 1, 0, 0},
+		ContentHash: "far-hash",
+	}
+	if err := c.StoreEmbeddingChunks("far", []models.EmbeddingChunk{farChunk}); err != nil {
+		t.Fatalf("StoreEmbeddingChunks far: %v", err)
+	}
+
+	queryVec := []float32{1, 0, 0, 0}
+
+	results, err := c.SearchSemanticChunked("INBOX", queryVec, 10, 0.5)
+	if err != nil {
+		t.Fatalf("SearchSemanticChunked: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result above minScore 0.5, got %d", len(results))
+	}
+	if results[0].Email.MessageID != "close" {
+		t.Errorf("expected first result to be 'close', got %q", results[0].Email.MessageID)
+	}
+	if results[0].Score <= 0 {
+		t.Errorf("expected positive score, got %f", results[0].Score)
+	}
+}
+
+// --- GetContactByEmail ---
+
+func TestGetContactByEmail(t *testing.T) {
+	c := newTestCache(t)
+
+	// Insert a contact via UpsertContacts.
+	addrs := []models.ContactAddr{
+		{Email: "alice@example.com", Name: "Alice Example"},
+	}
+	if err := c.UpsertContacts(addrs, "received"); err != nil {
+		t.Fatalf("UpsertContacts: %v", err)
+	}
+
+	// Should find the contact.
+	cd, err := c.GetContactByEmail("alice@example.com")
+	if err != nil {
+		t.Fatalf("GetContactByEmail: %v", err)
+	}
+	if cd == nil {
+		t.Fatal("expected non-nil contact, got nil")
+	}
+	if cd.Email != "alice@example.com" {
+		t.Errorf("email = %q, want %q", cd.Email, "alice@example.com")
+	}
+	if cd.DisplayName != "Alice Example" {
+		t.Errorf("display_name = %q, want %q", cd.DisplayName, "Alice Example")
+	}
+
+	// Should return nil for unknown address.
+	cd2, err := c.GetContactByEmail("unknown@nowhere.com")
+	if err != nil {
+		t.Fatalf("GetContactByEmail unknown: %v", err)
+	}
+	if cd2 != nil {
+		t.Errorf("expected nil for unknown email, got %+v", cd2)
+	}
+}

@@ -319,3 +319,30 @@ Cache file: `email_cache.db` (created in working directory).
 - **Attachment detection**: Recursively checks `BodyStructure.Disposition == "attachment"`
 - **SSH server**: Each `wish` SSH session gets its own `LocalBackend` (own IMAP connection + shared Ollama classifier)
 - **MCP server**: Reads directly from `email_cache.db` — no live IMAP needed; 4 tools: `list_recent_emails`, `search_emails`, `get_sender_stats`, `get_email_classifications`
+
+## Generating Demo GIFs
+
+Demo tapes live in `demos/*.tape`. Generated GIFs go to `static/*.gif`.
+
+**Prerequisites:**
+```bash
+brew install vhs
+```
+
+**Regenerate all GIFs:**
+```bash
+make build   # tapes launch ./bin/herald --demo
+for f in demos/*.tape; do vhs "$f"; done
+```
+
+**Individual tape:**
+```bash
+vhs demos/overview.tape   # generates static/overview.gif
+```
+
+**Notes:**
+- All tapes use `--demo` mode — no live IMAP or credentials needed
+- Output paths are set inside each `.tape` file (`Output static/xxx.gif`)
+- After changing a feature, regenerate the relevant tape to keep demos current
+- Keep tapes under 30 seconds — focused demos convert better
+- Tapes must be run from the project root (they reference `./bin/herald`)

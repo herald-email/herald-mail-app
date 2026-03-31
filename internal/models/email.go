@@ -110,3 +110,46 @@ type SavedSearch struct {
 	Folder    string
 	CreatedAt time.Time
 }
+
+// ContactAddr is a parsed email address from headers (From/To/CC/BCC)
+type ContactAddr struct {
+	Email string
+	Name  string
+}
+
+// EmbeddingChunk is one chunk of a message's embedding
+type EmbeddingChunk struct {
+	MessageID   string    // message this chunk belongs to
+	ChunkIndex  int
+	Embedding   []float32
+	ContentHash string    // SHA256 hex of the chunk text
+}
+
+// SemanticSearchResult pairs an email with its similarity score.
+type SemanticSearchResult struct {
+	Email *EmailData
+	Score float64 // cosine similarity 0.0–1.0
+}
+
+// ContactSearchResult pairs a contact with its similarity score from semantic search.
+type ContactSearchResult struct {
+	Contact ContactData
+	Score   float64 // cosine similarity 0.0–1.0
+}
+
+// ContactData represents an enriched contact from the contacts table
+type ContactData struct {
+	ID          int64
+	Email       string
+	DisplayName string
+	Company     string
+	Topics      []string   // stored as JSON in DB, deserialized here
+	Notes       string
+	FirstSeen   time.Time
+	LastSeen    time.Time
+	EmailCount  int
+	SentCount   int
+	CardDAVUID  string
+	EnrichedAt  *time.Time // nil if never enriched
+	Embedding   []float32  // nil if not yet embedded; stored as little-endian float32 BLOB (same encoding as email_embedding_chunks)
+}

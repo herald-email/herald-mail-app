@@ -31,9 +31,10 @@ const (
 
 // Tab constants
 const (
-	tabTimeline = 0
-	tabCompose  = 1
-	tabCleanup  = 2
+	tabTimeline  = 0
+	tabCompose   = 1
+	tabCleanup   = 2
+	tabContacts  = 3
 )
 
 // LoadingMsg represents a loading state update
@@ -91,6 +92,12 @@ type EmailBodyMsg struct {
 	Err  error
 }
 
+// QuickRepliesMsg is sent when AI quick reply generation completes.
+type QuickRepliesMsg struct {
+	Replies []string
+	Err     error
+}
+
 // CleanupEmailBodyMsg carries the result of fetching an email body from the Cleanup tab
 type CleanupEmailBodyMsg struct {
 	Body *models.EmailBody
@@ -106,8 +113,10 @@ type ChatResponseMsg struct {
 // SearchResultMsg carries search results back to the UI
 type SearchResultMsg struct {
 	Emails []*models.EmailData
+	Scores map[string]float64 // messageID → similarity score; non-nil only for semantic results
 	Query  string
 	Source string // "local", "fts", "imap", "semantic"
+	Err    error  // non-nil when the search failed with a user-visible error
 }
 
 // NewEmailsMsg signals new emails arrived via IDLE/polling
@@ -127,7 +136,8 @@ type SyncTickMsg struct{}
 
 // EmbeddingProgressMsg reports background embedding progress
 type EmbeddingProgressMsg struct {
-	Remaining int
+	Done  int
+	Total int
 }
 
 // EmbeddingDoneMsg signals background embedding finished
@@ -168,6 +178,17 @@ type ImageDescMsg struct {
 	Description string
 	Err         error
 }
+
+// ContactEnrichedMsg signals that a batch of contacts was enriched with company/topics/embedding.
+type ContactEnrichedMsg struct{ Count int }
+
+// ContactsLoadedMsg carries the full contact list for the Contacts tab.
+type ContactsLoadedMsg struct{ Contacts []models.ContactData }
+
+// ContactDetailLoadedMsg carries recent emails for the selected contact detail panel.
+type ContactDetailLoadedMsg struct{ Emails []*models.EmailData }
+
+type AppleContactsImportedMsg struct{ Count int }
 
 // Model represents the main application state
 type Model struct {
@@ -246,6 +267,12 @@ type Model struct {
 	bodyWrappedWidth  int
 	bodyScrollOffset  int // first visible line in preview body
 
+	// Quick replies
+	quickReplies      []string // canned (first 5) + AI-generated (up to 3)
+	quickRepliesReady bool     // true once AI has finished generating
+	quickReplyOpen    bool     // picker overlay is visible
+	quickReplyIdx     int      // currently highlighted item
+
 	// Email body preview (cleanup tab)
 	showCleanupPreview      bool
 	cleanupPreviewEmail     *models.EmailData
@@ -318,13 +345,16 @@ type Model struct {
 	searchInput         textinput.Model
 	searchResults       []*models.EmailData // nil = not in search mode
 	timelineEmailsCache []*models.EmailData // full list before search
+	semanticScores      map[string]float64  // messageID → similarity score (populated during semantic search)
+	searchError         string              // user-visible error from last search attempt
 
 	// IMAP IDLE / background sync
 	syncStatusMode  string // "idle", "polling", "off"
 	syncCountdown   int    // seconds until next poll
 
 	// Background embedding
-	embeddingPending int
+	embeddingDone  int
+	embeddingTotal int
 
 	// Text selection (preview panel)
 	mouseMode   bool
@@ -335,6 +365,17 @@ type Model struct {
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode bool
+
+	// Contacts tab
+	contactsList       []models.ContactData
+	contactsFiltered   []models.ContactData
+	contactsIdx        int
+	contactSearch      string
+	contactSearchMode  string // "" | "keyword" | "semantic"
+	contactDetail      *models.ContactData
+	contactDetailEmails []*models.EmailData
+	contactDetailIdx   int
+	contactFocusPanel  int // 0 = list, 1 = detail
 
 	// Config
 	cfg        *config.Config
@@ -589,6 +630,7 @@ func (m *Model) Init() tea.Cmd {
 		m.tickSpinner(),
 		m.listenForProgress(),
 		m.listenForRuleResult(),
+		m.importAppleContacts(),
 	)
 }
 
@@ -750,6 +792,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TimelineLoadedMsg:
 		m.timelineEmails = msg.Emails
 		m.updateTimelineTable()
+		if m.classifier != nil {
+			return m, tea.Batch(m.runEmbeddingBatch(), m.runContactEnrichment())
+		}
 		return m, nil
 
 	case ComposeStatusMsg:
@@ -848,6 +893,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EmailBodyMsg:
 		m.emailBodyLoading = false
 		m.selectedAttachment = 0 // reset attachment cursor for new email
+		// Reset quick reply state for the new email
+		m.quickReplies = nil
+		m.quickRepliesReady = false
+		m.quickReplyOpen = false
+		m.quickReplyIdx = 0
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.emailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
@@ -863,9 +913,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}()
 			}
-			// Mark as read and cache unsubscribe headers (fire-and-forget commands)
+			// Build canned replies and kick off AI generation
 			if m.selectedTimelineEmail != nil {
 				email := m.selectedTimelineEmail
+				m.quickReplies = buildCannedReplies(email.Sender)
+				// Mark as read and cache unsubscribe headers (fire-and-forget commands)
 				body := msg.Body
 				var cmds []tea.Cmd
 				if !email.IsRead {
@@ -879,13 +931,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
 					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
 				}
+				// Kick off AI quick reply generation
+				if m.classifier != nil && body != nil && body.TextPlain != "" {
+					bodyPreview := body.TextPlain
+					if len([]rune(bodyPreview)) > 500 {
+						bodyPreview = string([]rune(bodyPreview)[:500])
+					}
+					cmds = append(cmds, generateQuickRepliesCmd(m.classifier, email.Sender, email.Subject, bodyPreview))
+				} else {
+					// No classifier or no body text — mark as ready immediately with just canned replies
+					m.quickRepliesReady = true
+				}
 				if len(cmds) > 0 {
 					m.bodyWrappedLines = nil
 					return m, tea.Batch(cmds...)
 				}
+			} else {
+				m.quickRepliesReady = true
 			}
 		}
 		m.bodyWrappedLines = nil // invalidate wrap cache
+		return m, nil
+
+	case QuickRepliesMsg:
+		if msg.Err != nil {
+			logger.Warn("Quick reply generation failed: %v", msg.Err)
+		} else if len(msg.Replies) > 0 {
+			// Append AI suggestions after canned replies
+			m.quickReplies = append(m.quickReplies, msg.Replies...)
+		}
+		m.quickRepliesReady = true
 		return m, nil
 
 	case CleanupEmailBodyMsg:
@@ -1040,9 +1115,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.listenForRuleResult()
 
 	case SearchResultMsg:
+		if msg.Err != nil {
+			m.searchError = msg.Err.Error()
+			return m, nil
+		}
+		m.searchError = ""
 		if msg.Query == "" {
 			// Empty query = clear search
 			m.searchResults = nil
+			m.semanticScores = nil
 			if m.timelineEmailsCache != nil {
 				m.timelineEmails = m.timelineEmailsCache
 				m.timelineEmailsCache = nil
@@ -1050,6 +1131,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateTimelineTable()
 		} else {
 			m.searchResults = msg.Emails
+			m.semanticScores = msg.Scores
 			m.updateTimelineTable()
 		}
 		return m, nil
@@ -1094,14 +1176,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickSyncCountdown()
 
 	case EmbeddingProgressMsg:
-		m.embeddingPending = msg.Remaining
-		if msg.Remaining > 0 {
+		m.embeddingDone = msg.Done
+		m.embeddingTotal = msg.Total
+		if msg.Done < msg.Total {
 			return m, m.runEmbeddingBatch()
 		}
 		return m, nil
 
 	case EmbeddingDoneMsg:
-		m.embeddingPending = 0
+		m.embeddingDone = 0
+		m.embeddingTotal = 0
+		return m, nil
+
+	case ContactEnrichedMsg:
+		if msg.Count > 0 {
+			m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
+			return m, m.runContactEnrichment()
+		}
+		return m, nil
+
+	case ContactsLoadedMsg:
+		m.contactsList = msg.Contacts
+		m.contactsFiltered = msg.Contacts
+		m.contactsIdx = 0
+		return m, nil
+
+	case ContactDetailLoadedMsg:
+		m.contactDetailEmails = msg.Emails
+		m.contactDetailIdx = 0
+		return m, nil
+
+	case AppleContactsImportedMsg:
+		if msg.Count > 0 {
+			logger.Debug("Imported %d contacts from Apple Contacts", msg.Count)
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -1295,6 +1403,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searchInput.Blur()
 			m.searchInput.SetValue("")
 			m.searchResults = nil
+			m.semanticScores = nil
+			m.searchError = ""
 			if m.timelineEmailsCache != nil {
 				m.timelineEmails = m.timelineEmailsCache
 				m.timelineEmailsCache = nil
@@ -1348,6 +1458,16 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleComposeKey(msg)
 	}
 
+	// Contacts tab gets its own key handler (except for global keys handled below)
+	if m.activeTab == tabContacts {
+		switch msg.String() {
+		case "1", "2", "3", "4", "q", "ctrl+c", "r", "f", "c", "l", "L":
+			// fall through to global handler
+		default:
+			return m.handleContactsKey(msg)
+		}
+	}
+
 	switch msg.String() {
 	case "f":
 		if !m.loading {
@@ -1363,6 +1483,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "1":
+		if m.quickReplyOpen && len(m.quickReplies) > 0 {
+			return m.openQuickReply(m.quickReplies[0])
+		}
 		if !m.loading && m.activeTab != tabTimeline {
 			m.activeTab = tabTimeline
 			m.setFocusedPanel(panelTimeline)
@@ -1371,6 +1494,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "2":
+		if m.quickReplyOpen && len(m.quickReplies) > 1 {
+			return m.openQuickReply(m.quickReplies[1])
+		}
 		if !m.loading && m.activeTab != tabCompose {
 			m.activeTab = tabCompose
 			m.timelineTable.Blur()
@@ -1384,9 +1510,46 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "3":
+		if m.quickReplyOpen && len(m.quickReplies) > 2 {
+			return m.openQuickReply(m.quickReplies[2])
+		}
 		if !m.loading && m.activeTab != tabCleanup {
 			m.activeTab = tabCleanup
 			m.setFocusedPanel(panelSummary)
+		}
+		return m, nil
+
+	case "4":
+		if m.quickReplyOpen && len(m.quickReplies) > 3 {
+			return m.openQuickReply(m.quickReplies[3])
+		}
+		if !m.loading && m.activeTab != tabContacts {
+			m.activeTab = tabContacts
+			m.contactFocusPanel = 0
+		}
+		return m, m.loadContacts()
+
+	case "5":
+		if m.quickReplyOpen && len(m.quickReplies) > 4 {
+			return m.openQuickReply(m.quickReplies[4])
+		}
+		return m, nil
+
+	case "6":
+		if m.quickReplyOpen && len(m.quickReplies) > 5 {
+			return m.openQuickReply(m.quickReplies[5])
+		}
+		return m, nil
+
+	case "7":
+		if m.quickReplyOpen && len(m.quickReplies) > 6 {
+			return m.openQuickReply(m.quickReplies[6])
+		}
+		return m, nil
+
+	case "8":
+		if m.quickReplyOpen && len(m.quickReplies) > 7 {
+			return m.openQuickReply(m.quickReplies[7])
 		}
 		return m, nil
 
@@ -1544,6 +1707,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		if !m.loading {
+			if m.quickReplyOpen && len(m.quickReplies) > 0 {
+				return m.openQuickReply(m.quickReplies[m.quickReplyIdx])
+			}
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
 				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
@@ -1602,6 +1768,18 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "ctrl+q":
+		// Toggle quick reply picker (only in preview panel or full-screen)
+		if m.activeTab == tabTimeline && (m.focusedPanel == panelPreview || m.emailFullScreen) && m.emailBody != nil {
+			m.quickReplyOpen = !m.quickReplyOpen
+			if m.quickReplyOpen {
+				if m.quickReplyIdx >= len(m.quickReplies) {
+					m.quickReplyIdx = 0
+				}
+			}
+		}
+		return m, nil
+
 	case "z":
 		if !m.loading && m.selectedTimelineEmail != nil {
 			m.emailFullScreen = !m.emailFullScreen
@@ -1610,6 +1788,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
+		if m.quickReplyOpen {
+			m.quickReplyOpen = false
+			return m, nil
+		}
 		if m.visualMode {
 			m.visualMode = false
 			m.pendingY = false
@@ -1734,6 +1916,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		if !m.loading {
+			if m.quickReplyOpen {
+				if m.quickReplyIdx > 0 {
+					m.quickReplyIdx--
+				}
+				return m, nil
+			}
 			if m.emailFullScreen {
 				if m.visualMode {
 					if m.visualEnd > m.visualStart {
@@ -1774,6 +1962,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		if !m.loading {
+			if m.quickReplyOpen {
+				if m.quickReplyIdx < len(m.quickReplies)-1 {
+					m.quickReplyIdx++
+				}
+				return m, nil
+			}
 			if m.emailFullScreen {
 				if m.visualMode {
 					if m.visualEnd < len(m.bodyWrappedLines)-1 {
@@ -1937,6 +2131,8 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderTimelineView()
 	} else if m.activeTab == tabCompose {
 		mainContent = m.renderComposeView()
+	} else if m.activeTab == tabContacts {
+		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
 	} else {
 		// Cleanup tab
 		var summaryView string

@@ -432,22 +432,23 @@ func main() {
 			limit := req.GetInt("limit", 10)
 			minScore := req.GetFloat("min_score", 0.5)
 
-			vec, err := classifier.Embed(query)
+			vec, err := classifier.Embed(ai.BuildQueryText(query))
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("embedding error: %v", err)), nil
 			}
-			emails, err := c.SearchSemantic(folder, vec, limit, minScore)
+			results, err := c.SearchSemanticChunked(folder, vec, limit, minScore)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("search error: %v", err)), nil
 			}
-			if len(emails) == 0 {
+			if len(results) == 0 {
 				return mcp.NewToolResultText("No semantically similar emails found"), nil
 			}
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("Found %d emails semantically similar to %q:\n\n", len(emails), query))
-			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s\n",
-					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject))
+			sb.WriteString(fmt.Sprintf("Found %d emails semantically similar to %q:\n\n", len(results), query))
+			for _, result := range results {
+				pct := int(result.Score * 100)
+				sb.WriteString(fmt.Sprintf("  [%d%%] %s  %-40s  %s\n",
+					pct, result.Email.Date.Format("2006-01-02"), result.Email.Sender, result.Email.Subject))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -633,8 +634,233 @@ func main() {
 		return mcp.NewToolResultText(string(data)), nil
 	})
 
+	// Tool: list_contacts
+	s.AddTool(
+		mcp.NewTool("list_contacts",
+			mcp.WithDescription("List contacts sorted by recency, with email count and enrichment data"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithNumber("limit",
+				mcp.Description("Maximum number of contacts to return (default 50)"),
+			),
+			mcp.WithString("sort_by",
+				mcp.Description("Sort order: last_seen, name, or email_count (default last_seen)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			limit := req.GetInt("limit", 50)
+			sortBy := req.GetString("sort_by", "last_seen")
+			switch sortBy {
+			case "last_seen", "name", "email_count":
+				// valid
+			default:
+				return mcp.NewToolResultError(fmt.Sprintf("invalid sort_by %q: valid values are last_seen, name, email_count", sortBy)), nil
+			}
+			contacts, err := c.ListContacts(limit, sortBy)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("list contacts error: %v", err)), nil
+			}
+			if len(contacts) == 0 {
+				return mcp.NewToolResultText("No contacts found"), nil
+			}
+			return mcp.NewToolResultText(formatContacts(contacts)), nil
+		},
+	)
+
+	// Tool: search_contacts
+	s.AddTool(
+		mcp.NewTool("search_contacts",
+			mcp.WithDescription("Search contacts by name, email, company, or topics (keyword search)"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("query",
+				mcp.Required(),
+				mcp.Description("Search terms"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			query, err := req.RequireString("query")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			contacts, err := c.SearchContacts(query)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("search contacts error: %v", err)), nil
+			}
+			if len(contacts) == 0 {
+				return mcp.NewToolResultText(fmt.Sprintf("No contacts found matching %q", query)), nil
+			}
+			return mcp.NewToolResultText(formatContacts(contacts)), nil
+		},
+	)
+
+	// Tool: semantic_search_contacts
+	s.AddTool(
+		mcp.NewTool("semantic_search_contacts",
+			mcp.WithDescription("Semantic search over contacts using natural language (finds contacts by topics, company, or communication context). Requires Ollama with nomic-embed-text."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("query",
+				mcp.Required(),
+				mcp.Description("Natural language query"),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description("Max results (default 10)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if classifier == nil {
+				return mcp.NewToolResultText("Ollama not configured — set ollama.host in ~/.herald/conf.yaml"), nil
+			}
+			query, err := req.RequireString("query")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			limit := req.GetInt("limit", 10)
+			vec, err := classifier.Embed(ai.BuildQueryText(query))
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("embedding error: %v", err)), nil
+			}
+			results, err := c.SearchContactsSemantic(vec, limit, 0.3)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("semantic search error: %v", err)), nil
+			}
+			if len(results) == 0 {
+				return mcp.NewToolResultText("No semantically similar contacts found"), nil
+			}
+			return mcp.NewToolResultText(formatContactsWithScores(results)), nil
+		},
+	)
+
+	// Tool: get_contact
+	s.AddTool(
+		mcp.NewTool("get_contact",
+			mcp.WithDescription("Get full contact profile including recent emails"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("email",
+				mcp.Required(),
+				mcp.Description("Contact's email address"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			email, err := req.RequireString("email")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			contact, err := c.GetContactByEmail(email)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("lookup error: %v", err)), nil
+			}
+			if contact == nil {
+				return mcp.NewToolResultText(fmt.Sprintf("No contact found for %q", email)), nil
+			}
+			recentEmails, err := c.GetContactEmails(email, 10)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("email lookup error: %v", err)), nil
+			}
+
+			var sb strings.Builder
+			sb.WriteString("=== Contact Profile ===\n")
+			if contact.DisplayName != "" {
+				sb.WriteString(fmt.Sprintf("Name: %s\n", contact.DisplayName))
+			}
+			sb.WriteString(fmt.Sprintf("Email: %s\n", contact.Email))
+			if contact.Company != "" {
+				sb.WriteString(fmt.Sprintf("Company: %s\n", contact.Company))
+			}
+			if len(contact.Topics) > 0 {
+				sb.WriteString(fmt.Sprintf("Topics: %s\n", strings.Join(contact.Topics, ", ")))
+			}
+			if contact.Notes != "" {
+				sb.WriteString(fmt.Sprintf("Notes: %s\n", contact.Notes))
+			}
+			sb.WriteString("\nStats:\n")
+			sb.WriteString(fmt.Sprintf("First seen: %s\n", contact.FirstSeen.Format("2006-01-02")))
+			sb.WriteString(fmt.Sprintf("Last seen: %s\n", contact.LastSeen.Format("2006-01-02")))
+			sb.WriteString(fmt.Sprintf("Emails received: %d\n", contact.EmailCount))
+			sb.WriteString(fmt.Sprintf("Emails sent: %d\n", contact.SentCount))
+			if contact.EnrichedAt != nil {
+				sb.WriteString("Enriched: yes\n")
+			} else {
+				sb.WriteString("Enriched: no\n")
+			}
+			if len(recentEmails) > 0 {
+				sb.WriteString(fmt.Sprintf("\nRecent Emails (%d):\n", len(recentEmails)))
+				for _, e := range recentEmails {
+					sb.WriteString(fmt.Sprintf("- %s %s\n", e.Date.Format("2006-01-02"), e.Subject))
+				}
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("MCP server error: %v", err)
 	}
+}
+
+// formatContactsWithScores formats semantic search results including similarity scores.
+func formatContactsWithScores(results []*models.ContactSearchResult) string {
+	var sb strings.Builder
+	for i, r := range results {
+		if i > 0 {
+			sb.WriteString("---\n")
+		}
+		pct := int(r.Score * 100)
+		cd := r.Contact
+		if cd.DisplayName != "" {
+			sb.WriteString(fmt.Sprintf("[%d%%] %s <%s>\n", pct, cd.DisplayName, cd.Email))
+		} else {
+			sb.WriteString(fmt.Sprintf("[%d%%] <%s>\n", pct, cd.Email))
+		}
+		if cd.Company != "" || len(cd.Topics) > 0 {
+			line := ""
+			if cd.Company != "" {
+				line += fmt.Sprintf("Company: %s", cd.Company)
+			}
+			if len(cd.Topics) > 0 {
+				if line != "" {
+					line += "  "
+				}
+				line += fmt.Sprintf("Topics: %s", strings.Join(cd.Topics, ", "))
+			}
+			sb.WriteString(line + "\n")
+		}
+		sb.WriteString(fmt.Sprintf("Last seen: %s  Emails: %d\n",
+			cd.LastSeen.Format("2006-01-02"), cd.EmailCount))
+	}
+	return sb.String()
+}
+
+// formatContacts formats a slice of ContactData into a human-readable string.
+func formatContacts(contacts []models.ContactData) string {
+	var sb strings.Builder
+	for i, cd := range contacts {
+		if i > 0 {
+			sb.WriteString("---\n")
+		}
+		if cd.DisplayName != "" {
+			sb.WriteString(fmt.Sprintf("%s <%s>\n", cd.DisplayName, cd.Email))
+		} else {
+			sb.WriteString(fmt.Sprintf("<%s>\n", cd.Email))
+		}
+		if cd.Company != "" || len(cd.Topics) > 0 {
+			line := ""
+			if cd.Company != "" {
+				line += fmt.Sprintf("Company: %s", cd.Company)
+			}
+			if len(cd.Topics) > 0 {
+				if line != "" {
+					line += "  "
+				}
+				line += fmt.Sprintf("Topics: %s", strings.Join(cd.Topics, ", "))
+			}
+			sb.WriteString(line + "\n")
+		}
+		sb.WriteString(fmt.Sprintf("Last seen: %s  Emails: %d\n",
+			cd.LastSeen.Format("2006-01-02"), cd.EmailCount))
+	}
+	return sb.String()
 }
 

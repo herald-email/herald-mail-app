@@ -7,6 +7,101 @@ import (
 	"mail-processor/internal/models"
 )
 
+// seedDemoContacts returns synthetic contacts matching the demo email senders.
+func seedDemoContacts() []models.ContactData {
+	now := time.Now()
+	return []models.ContactData{
+		{
+			ID:          1,
+			Email:       "newsletter@techweekly.example",
+			DisplayName: "Tech Weekly",
+			Company:     "TechWeekly Media",
+			Topics:      []string{"technology", "news", "weekly digest"},
+			FirstSeen:   now.AddDate(0, -6, 0),
+			LastSeen:    now.AddDate(0, 0, -1),
+			EmailCount:  8,
+			SentCount:   0,
+		},
+		{
+			ID:          2,
+			Email:       "orders@shopify-brand.example",
+			DisplayName: "ShopifyBrand",
+			Company:     "ShopifyBrand Store",
+			Topics:      []string{"ecommerce", "orders", "shipping"},
+			FirstSeen:   now.AddDate(0, -4, 0),
+			LastSeen:    now.AddDate(0, 0, -3),
+			EmailCount:  8,
+			SentCount:   0,
+		},
+		{
+			ID:          3,
+			Email:       "noreply@twitter-x.example",
+			DisplayName: "Twitter/X",
+			Company:     "X Corp",
+			Topics:      []string{"social media", "notifications"},
+			FirstSeen:   now.AddDate(0, -3, 0),
+			LastSeen:    now.AddDate(0, 0, -5),
+			EmailCount:  6,
+			SentCount:   0,
+		},
+		{
+			ID:          4,
+			Email:       "billing@aws-demo.example",
+			DisplayName: "AWS",
+			Company:     "Amazon Web Services",
+			Topics:      []string{"cloud", "billing", "infrastructure"},
+			FirstSeen:   now.AddDate(0, -12, 0),
+			LastSeen:    now.AddDate(0, 0, -2),
+			EmailCount:  6,
+			SentCount:   0,
+		},
+		{
+			ID:          5,
+			Email:       "dr.jones@healthclinic.example",
+			DisplayName: "Dr. Jones",
+			Company:     "Health Clinic",
+			Topics:      []string{"healthcare", "appointments"},
+			FirstSeen:   now.AddDate(0, -2, 0),
+			LastSeen:    now.AddDate(0, 0, -7),
+			EmailCount:  6,
+			SentCount:   2,
+		},
+		{
+			ID:          6,
+			Email:       "deals@airbnb-promo.example",
+			DisplayName: "Airbnb",
+			Company:     "Airbnb Inc.",
+			Topics:      []string{"travel", "accommodation", "promotions"},
+			FirstSeen:   now.AddDate(0, -5, 0),
+			LastSeen:    now.AddDate(0, 0, -4),
+			EmailCount:  6,
+			SentCount:   0,
+		},
+		{
+			ID:          7,
+			Email:       "github-noreply@github-demo.example",
+			DisplayName: "GitHub",
+			Company:     "GitHub / Microsoft",
+			Topics:      []string{"development", "code review", "pull requests"},
+			FirstSeen:   now.AddDate(0, -8, 0),
+			LastSeen:    now.AddDate(0, 0, -1),
+			EmailCount:  6,
+			SentCount:   0,
+		},
+		{
+			ID:          8,
+			Email:       "statements@demobank.example",
+			DisplayName: "Demo Bank",
+			Company:     "Demo Bank N.A.",
+			Topics:      []string{"finance", "banking", "statements"},
+			FirstSeen:   now.AddDate(0, -24, 0),
+			LastSeen:    now.AddDate(0, 0, -6),
+			EmailCount:  6,
+			SentCount:   1,
+		},
+	}
+}
+
 var demoSenders = []struct {
 	addr    string
 	name    string

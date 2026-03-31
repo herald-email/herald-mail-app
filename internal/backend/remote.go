@@ -439,6 +439,42 @@ func (b *RemoteBackend) GetUnembeddedIDs(folder string) ([]string, error) {
 	return []string{}, nil
 }
 
+// GetUnembeddedIDsWithBody is not exposed by the daemon API; returns an empty slice.
+func (b *RemoteBackend) GetUnembeddedIDsWithBody(folder string) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetUncachedBodyIDs is not exposed by the daemon API; returns an empty slice.
+func (b *RemoteBackend) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetEmbeddingProgress is not exposed by the daemon API; returns zeros.
+func (b *RemoteBackend) GetEmbeddingProgress(folder string) (done, total int, err error) {
+	return 0, 0, nil
+}
+
+// StoreEmbeddingChunks is not exposed by the daemon API; returns nil (silently dropped).
+func (b *RemoteBackend) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
+	return nil
+}
+
+// SearchSemanticChunked is not exposed by the daemon API; returns an unsupported error.
+func (b *RemoteBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	return nil, fmt.Errorf("remote: SearchSemanticChunked: not supported over daemon API")
+}
+
+// GetBodyText is not exposed by the daemon API; returns an empty string.
+func (b *RemoteBackend) GetBodyText(messageID string) (string, error) {
+	return "", nil
+}
+
+// FetchAndCacheBody fetches the email body via the daemon for the given message ID.
+func (b *RemoteBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, error) {
+	var body models.EmailBody
+	return &body, b.get("/v1/emails/"+url.PathEscape(messageID)+"/body", &body)
+}
+
 // ── Background sync / IDLE / polling ─────────────────────────────────────────
 
 // StartIDLE is a no-op; the daemon handles IDLE internally.
@@ -492,4 +528,42 @@ func (b *RemoteBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error) {
 
 func (b *RemoteBackend) SaveCustomPrompt(p *models.CustomPrompt) error {
 	return b.post("/v1/prompts", p)
+}
+
+// --- Contacts (not yet exposed by daemon API; stubs) ---
+
+func (b *RemoteBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) GetRecentSubjectsByContact(email string, limit int) ([]string, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) UpdateContactEnrichment(email, company string, topics []string) error {
+	return nil
+}
+
+func (b *RemoteBackend) UpdateContactEmbedding(email string, embedding []float32) error {
+	return nil
+}
+
+func (b *RemoteBackend) SearchContactsSemantic(queryVec []float32, limit int, minScore float64) ([]*models.ContactSearchResult, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) ListContacts(limit int, sortBy string) ([]models.ContactData, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) SearchContacts(query string) ([]models.ContactData, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
+	return nil, nil
+}
+
+func (b *RemoteBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
+	return nil
 }

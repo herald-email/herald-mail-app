@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/contacts"
 	imapClient "mail-processor/internal/imap"
 	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
@@ -1021,6 +1023,13 @@ func (m *Model) updateTimelineTable() {
 		if subject == "" {
 			subject = "(no subject)"
 		}
+		// Prepend similarity score badge for semantic search results
+		if m.semanticScores != nil {
+			if score, ok := m.semanticScores[email.MessageID]; ok {
+				pct := int(score * 100)
+				subject = fmt.Sprintf("[%d%%] %s", pct, subject)
+			}
+		}
 		unreadDot := " "
 		if !email.IsRead {
 			unreadDot = "●"
@@ -1187,6 +1196,22 @@ func (m *Model) renderEmailPreview() string {
 		maxBodyLines = 1
 	}
 
+	// Reserve rows for the quick reply picker overlay when open.
+	pickerLines := 0
+	if m.quickReplyOpen {
+		pickerLines = 2 + len(m.quickReplies) // divider + header + items
+		if len(m.quickReplies) == 0 {
+			pickerLines = 3
+		}
+		if pickerLines > 12 {
+			pickerLines = 12
+		}
+		maxBodyLines -= pickerLines
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+	}
+
 	dimStyle := headerStyle
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
@@ -1305,6 +1330,11 @@ func (m *Model) renderEmailPreview() string {
 		}
 	}
 
+	// Quick reply picker overlay at the bottom of the preview panel.
+	if m.quickReplyOpen {
+		sb.WriteString(m.renderQuickReplyPicker(innerW))
+	}
+
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(panelHeight).
@@ -1360,8 +1390,19 @@ func (m *Model) renderFullScreenEmail() string {
 	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
-	// Reserve 1 row at the bottom for the scroll indicator
+	// Reserve 1 row at the bottom for the scroll indicator.
+	// Also reserve rows for the quick reply picker overlay when open.
 	maxBodyLines := m.windowHeight - 5 // 4 header rows + 1 scroll indicator
+	if m.quickReplyOpen {
+		pickerRows := 2 + len(m.quickReplies)
+		if len(m.quickReplies) == 0 {
+			pickerRows = 3
+		}
+		if pickerRows > 12 {
+			pickerRows = 12
+		}
+		maxBodyLines -= pickerRows
+	}
 	if maxBodyLines < 1 {
 		maxBodyLines = 1
 	}
@@ -1458,6 +1499,11 @@ func (m *Model) renderFullScreenEmail() string {
 		}
 	}
 
+	// Quick reply picker overlay at the bottom of full-screen view.
+	if m.quickReplyOpen {
+		sb.WriteString(m.renderQuickReplyPicker(innerW))
+	}
+
 	return lipgloss.NewStyle().
 		Width(m.windowWidth).
 		Height(m.windowHeight).
@@ -1518,6 +1564,109 @@ func fetchCleanupBodyCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
 		body, err := b.FetchEmailBody(email.Folder, email.UID)
 		return CleanupEmailBodyMsg{Body: body, Err: err}
 	}
+}
+
+// buildCannedReplies returns 5 pre-written reply templates for the given sender.
+func buildCannedReplies(senderName string) []string {
+	firstName := senderName
+	// Extract display name from "Name <email>" format
+	if idx := strings.Index(senderName, "<"); idx > 0 {
+		firstName = strings.TrimSpace(senderName[:idx])
+	}
+	// Use first word only
+	if parts := strings.Fields(firstName); len(parts) > 0 {
+		firstName = parts[0]
+	}
+	// Strip surrounding quotes if any
+	firstName = strings.Trim(firstName, `"'`)
+	if firstName == "" {
+		firstName = "there"
+	}
+	return []string{
+		"No thanks.",
+		"Thank you for reaching out.",
+		fmt.Sprintf("Thank you, %s.", firstName),
+		"Copy that.",
+		"I'll get back to you.",
+	}
+}
+
+// generateQuickRepliesCmd returns a tea.Cmd that asks Ollama for AI reply suggestions.
+func generateQuickRepliesCmd(classifier *ai.Classifier, sender, subject, bodyPreview string) tea.Cmd {
+	return func() tea.Msg {
+		replies, err := classifier.GenerateQuickReplies(sender, subject, bodyPreview)
+		return QuickRepliesMsg{Replies: replies, Err: err}
+	}
+}
+
+// openQuickReply pre-fills the Compose tab with the selected reply template and switches to it.
+func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
+	m.quickReplyOpen = false
+	if m.selectedTimelineEmail == nil {
+		return m, nil
+	}
+	email := m.selectedTimelineEmail
+	m.activeTab = tabCompose
+	m.composeTo.SetValue(email.Sender)
+	subject := email.Subject
+	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
+		subject = "Re: " + subject
+	}
+	m.composeSubject.SetValue(subject)
+	m.composeBody.SetValue(template)
+	m.composeField = 2
+	m.composeTo.Blur()
+	m.composeSubject.Blur()
+	m.composeBody.Focus()
+	return m, nil
+}
+
+// renderQuickReplyPicker renders the quick reply picker overlay appended to the preview panel.
+func (m *Model) renderQuickReplyPicker(width int) string {
+	if width < 20 {
+		width = 20
+	}
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Width(width)
+	normalStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")).
+		Width(width)
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	aiLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+
+	var sb strings.Builder
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+
+	header := "Quick Reply — ↑↓ navigate  Enter: compose  Esc: close"
+	if !m.quickRepliesReady {
+		header = "Quick Reply — generating suggestions…"
+	}
+	sb.WriteString(headerStyle.Render(truncate(header, width)) + "\n")
+
+	cannedCount := 5 // first 5 are always canned
+	for i, reply := range m.quickReplies {
+		num := fmt.Sprintf("%d. ", i+1)
+		var label string
+		if i >= cannedCount {
+			label = num + aiLabelStyle.Render("[AI] ") + truncate(reply, width-len(num)-5)
+		} else {
+			label = num + truncate(reply, width-len(num))
+		}
+		if i == m.quickReplyIdx {
+			sb.WriteString(selectedStyle.Render(label) + "\n")
+		} else {
+			sb.WriteString(normalStyle.Render(label) + "\n")
+		}
+	}
+
+	if len(m.quickReplies) == 0 && m.quickRepliesReady {
+		sb.WriteString(dimStyle.Render("  No suggestions available") + "\n")
+	}
+
+	return sb.String()
 }
 
 // renderCleanupPreview renders the right-hand email body preview panel for the Cleanup tab.
@@ -1646,6 +1795,7 @@ func (m *Model) renderTabBar() string {
 		tab(tabTimeline, "1  Timeline"),
 		tab(tabCompose, "2  Compose"),
 		tab(tabCleanup, "3  Cleanup"),
+		tab(tabContacts, "4  Contacts"),
 	)
 }
 
@@ -1776,8 +1926,17 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	// Background embedding progress
-	if m.embeddingPending > 0 {
-		parts = append(parts, fmt.Sprintf("✦ embedding %d", m.embeddingPending))
+	if m.embeddingTotal > 0 && m.embeddingDone < m.embeddingTotal {
+		parts = append(parts, fmt.Sprintf("⬡ embedding %d/%d", m.embeddingDone, m.embeddingTotal))
+	}
+
+	// Quick reply hint / generating indicator
+	if m.activeTab == tabTimeline && m.emailBody != nil {
+		if !m.quickRepliesReady && m.classifier != nil {
+			parts = append(parts, "⚡ generating replies…")
+		} else if m.quickRepliesReady && !m.quickReplyOpen {
+			parts = append(parts, "ctrl+q: quick reply")
+		}
 	}
 
 	// Sync status
@@ -1833,7 +1992,9 @@ func (m *Model) renderKeyHints() string {
 		hints = fmt.Sprintf("/ %s  │  esc: clear  │  ctrl+s: save  │  ctrl+i: server search", q)
 		// When search returns no results and we're not already in cross-folder mode, suggest it
 		query := m.searchInput.Value()
-		if m.searchResults != nil && len(m.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
+		if m.searchError != "" {
+			hints = fmt.Sprintf("/ %s  │  Error: %s  │  esc: clear", q, m.searchError)
+		} else if m.searchResults != nil && len(m.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
 			hints = fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  esc: clear  │  ctrl+i: server search", q, query)
 		}
 	} else if m.focusedPanel == panelChat && m.showChat {
@@ -1841,7 +2002,17 @@ func (m *Model) renderKeyHints() string {
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  r: refresh  │  c: chat  │  q: quit"
+		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  r: refresh  │  c: chat  │  q: quit"
+	} else if m.activeTab == tabContacts {
+		if m.contactSearchMode == "keyword" {
+			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)
+		} else if m.contactSearchMode == "semantic" {
+			hints = fmt.Sprintf("? %s  │  esc: clear search  │  q: quit", m.contactSearch)
+		} else if m.contactFocusPanel == 1 {
+			hints = "1/2/3/4: tabs  │  tab: list panel  │  ↑/k ↓/j: nav emails  │  e: enrich  │  enter: open email  │  q: quit"
+		} else {
+			hints = "1/2/3/4: tabs  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
+		}
 	} else if m.activeTab == tabTimeline {
 		if m.focusedPanel == panelPreview {
 			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
@@ -1860,21 +2031,25 @@ func (m *Model) renderKeyHints() string {
 		} else if m.selectedTimelineEmail != nil {
 			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
 		} else {
-			hints = "1/2/3: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  f: sidebar  │  q: quit"
+			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  f: sidebar  │  q: quit"
 		}
 	} else {
 		switch m.focusedPanel {
 		case panelSidebar:
-			hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
 			if m.showCleanupPreview {
 				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  esc: close preview  │  tab: next panel  │  D: delete  │  q: quit"
 			} else {
-				hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
+				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
+	}
+	// Override hints when quick reply picker is open.
+	if m.quickReplyOpen {
+		hints = "↑/k ↓/j: navigate replies  │  enter: compose  │  1-8: select  │  esc: close picker  │  q: quit"
 	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("243")).
@@ -2908,22 +3083,47 @@ func (m *Model) performSearch(query string) tea.Cmd {
 		return func() tea.Msg { return SearchResultMsg{Query: ""} }
 	}
 
+	classifier := m.classifier
+	backend := m.backend
 	return func() tea.Msg {
 		var emails []*models.EmailData
+		var scores map[string]float64
 		var err error
 		source := "local"
 		switch {
 		case semanticMode:
-			emails, err = m.backend.SearchEmailsSemantic(folder, actualQuery, 20, 0.65)
 			source = "semantic"
+			if classifier == nil {
+				logger.Warn("Semantic search requires Ollama classifier — not configured")
+				return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+			}
+			queryText := ai.BuildQueryText(actualQuery)
+			vec, embedErr := classifier.Embed(queryText)
+			if embedErr != nil {
+				logger.Warn("Semantic search embed error: %v", embedErr)
+				return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+			}
+			results, searchErr := backend.SearchSemanticChunked(folder, vec, 20, 0.3)
+			if searchErr != nil {
+				logger.Warn("semantic search: %v", searchErr)
+				if strings.Contains(searchErr.Error(), "not supported") {
+					return SearchResultMsg{Emails: nil, Err: fmt.Errorf("semantic search requires local backend")}
+				}
+				return SearchResultMsg{Emails: nil, Err: searchErr}
+			}
+			scores = make(map[string]float64, len(results))
+			for _, r := range results {
+				emails = append(emails, r.Email)
+				scores[r.Email.MessageID] = r.Score
+			}
 		case bodyMode:
-			emails, err = m.backend.SearchEmails(folder, actualQuery, true)
+			emails, err = backend.SearchEmails(folder, actualQuery, true)
 			source = "fts"
 		case crossFolder:
-			emails, err = m.backend.SearchEmailsCrossFolder(actualQuery)
+			emails, err = backend.SearchEmailsCrossFolder(actualQuery)
 			source = "cross"
 		default:
-			emails, err = m.backend.SearchEmails(folder, actualQuery, false)
+			emails, err = backend.SearchEmails(folder, actualQuery, false)
 		}
 		if err != nil {
 			logger.Warn("Search error: %v", err)
@@ -2932,7 +3132,7 @@ func (m *Model) performSearch(query string) tea.Cmd {
 		if emails == nil {
 			emails = []*models.EmailData{}
 		}
-		return SearchResultMsg{Emails: emails, Query: query, Source: source}
+		return SearchResultMsg{Emails: emails, Scores: scores, Query: query, Source: source}
 	}
 }
 
@@ -3032,37 +3232,568 @@ func (m *Model) startSync(folder string) tea.Cmd {
 
 // --- Embedding helpers ---
 
-// runEmbeddingBatch embeds a batch of emails and returns a progress message.
+// embedChunksForEmail strips, chunks, and embeds an email body for semantic search.
+// Uses nomic-embed-text's search_document: prefix for asymmetric retrieval.
+// Returns nil if classifier is nil, body is empty, or all embeddings fail.
+func embedChunksForEmail(email *models.EmailData, bodyText string, classifier *ai.Classifier) []models.EmbeddingChunk {
+	if classifier == nil || email == nil || bodyText == "" {
+		return nil
+	}
+	cleaned := ai.StripQuotedText(bodyText)
+	if cleaned == "" {
+		cleaned = email.Subject // fallback: at least embed the subject
+	}
+	rawChunks := ai.ChunkText(cleaned, 800, 200, 10)
+	if len(rawChunks) == 0 {
+		return nil
+	}
+	date := email.Date.Format("2006-01-02")
+	var result []models.EmbeddingChunk
+	for i, chunk := range rawChunks {
+		doc := ai.BuildDocumentChunk(email.Sender, date, email.Subject, chunk)
+		vec, err := classifier.Embed(doc)
+		if err != nil {
+			logger.Debug("embed chunk %d for %s: %v", i, email.MessageID, err)
+			continue
+		}
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(doc)))
+		result = append(result, models.EmbeddingChunk{
+			MessageID:   email.MessageID,
+			ChunkIndex:  i,
+			Embedding:   vec,
+			ContentHash: hash,
+		})
+	}
+	return result
+}
+
+// runEmbeddingBatch processes one batch of emails for semantic search embedding.
+// Pass 1 embeds emails with cached body text.
+// Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
 func (m *Model) runEmbeddingBatch() tea.Cmd {
 	folder := m.currentFolder
 	return func() tea.Msg {
-		ids, err := m.backend.GetUnembeddedIDs(folder)
-		if err != nil || len(ids) == 0 {
+		// Pass 1: embed emails that already have body_text in cache
+		if ids, err := m.backend.GetUnembeddedIDsWithBody(folder); err == nil && len(ids) > 0 {
+			if len(ids) > 20 {
+				ids = ids[:20]
+			}
+			for _, id := range ids {
+				email, err := m.backend.GetEmailByID(id)
+				if err != nil || email == nil {
+					continue
+				}
+				bodyText, err := m.backend.GetBodyText(id)
+				if err != nil || bodyText == "" {
+					continue
+				}
+				chunks := embedChunksForEmail(email, bodyText, m.classifier)
+				if len(chunks) > 0 {
+					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
+						logger.Warn("StoreEmbeddingChunks %s: %v", id, err)
+					}
+				}
+			}
+		}
+
+		// Pass 2: lazily fetch bodies for emails with neither body_text nor chunks
+		if uncached, err := m.backend.GetUncachedBodyIDs(folder, 5); err == nil {
+			for _, id := range uncached {
+				email, err := m.backend.GetEmailByID(id)
+				if err != nil || email == nil {
+					continue
+				}
+				body, err := m.backend.FetchAndCacheBody(id)
+				if err != nil || body == nil || body.TextPlain == "" {
+					continue
+				}
+				chunks := embedChunksForEmail(email, body.TextPlain, m.classifier)
+				if len(chunks) > 0 {
+					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
+						logger.Warn("StoreEmbeddingChunks (lazy) %s: %v", id, err)
+					}
+				}
+			}
+		}
+
+		done, total, _ := m.backend.GetEmbeddingProgress(folder)
+		if total > 0 && done >= total {
 			return EmbeddingDoneMsg{}
 		}
-		batchSize := 20
-		batch := ids
-		if len(batch) > batchSize {
-			batch = ids[:batchSize]
-		}
-		for _, id := range batch {
-			email, err := m.backend.GetEmailByID(id)
-			if err != nil || email == nil {
-				continue
-			}
-			text := email.Subject + " " + email.Sender
-			vec, err := m.classifier.Embed(text)
-			if err != nil {
-				continue
-			}
-			if err := m.backend.StoreEmbedding(id, vec, ""); err != nil {
-				logger.Warn("Failed to store embedding: %v", err)
-			}
-		}
-		remaining := len(ids) - batchSize
-		if remaining < 0 {
-			remaining = 0
-		}
-		return EmbeddingProgressMsg{Remaining: remaining}
+		return EmbeddingProgressMsg{Done: done, Total: total}
 	}
+}
+
+// runContactEnrichment fetches up to 5 unenriched contacts (email_count >= 3),
+// calls Ollama to extract company + topics, stores the results, then embeds each
+// enriched contact and stores the embedding. Returns ContactEnrichedMsg.
+// This is a no-op (returns Count: 0) when no contacts need enrichment.
+func (m *Model) runContactEnrichment() tea.Cmd {
+	return func() tea.Msg {
+		if m.classifier == nil {
+			return ContactEnrichedMsg{Count: 0}
+		}
+		contacts, err := m.backend.GetContactsToEnrich(3, 5)
+		if err != nil {
+			logger.Warn("runContactEnrichment: GetContactsToEnrich: %v", err)
+			return ContactEnrichedMsg{Count: 0}
+		}
+		if len(contacts) == 0 {
+			return nil
+		}
+
+		enriched := 0
+		for _, contact := range contacts {
+			// Fetch recent email subjects for this contact
+			subjects, err := m.backend.GetRecentSubjectsByContact(contact.Email, 10)
+			if err != nil {
+				logger.Warn("runContactEnrichment: GetRecentSubjectsByContact %s: %v", contact.Email, err)
+				continue
+			}
+
+			// Ask Ollama to extract company and topics
+			company, topics, err := m.classifier.EnrichContact(contact.Email, subjects)
+			if err != nil {
+				logger.Warn("runContactEnrichment: EnrichContact %s: %v", contact.Email, err)
+				continue
+			}
+
+			// Store enrichment result (even if company and topics are empty — marks as processed)
+			if err := m.backend.UpdateContactEnrichment(contact.Email, company, topics); err != nil {
+				logger.Warn("runContactEnrichment: UpdateContactEnrichment %s: %v", contact.Email, err)
+				continue
+			}
+
+			// Build embedding text and embed
+			displayName := contact.DisplayName
+			if displayName == "" {
+				displayName = contact.Email
+			}
+			topicsStr := strings.Join(topics, ", ")
+			embText := displayName + " " + contact.Email
+			if company != "" {
+				embText += " from " + company
+			}
+			if topicsStr != "" {
+				embText += ", topics: " + topicsStr
+			}
+
+			vec, embErr := m.classifier.Embed(embText)
+			if embErr != nil {
+				logger.Warn("runContactEnrichment: Embed %s: %v", contact.Email, embErr)
+				// Enrichment still counts even if embedding fails
+			} else {
+				if storeErr := m.backend.UpdateContactEmbedding(contact.Email, vec); storeErr != nil {
+					logger.Warn("runContactEnrichment: UpdateContactEmbedding %s: %v", contact.Email, storeErr)
+				}
+			}
+
+			enriched++
+		}
+
+		return ContactEnrichedMsg{Count: enriched}
+	}
+}
+
+// --- Contacts tab ---
+
+// loadContacts returns a Cmd that fetches all contacts from the backend.
+func (m *Model) loadContacts() tea.Cmd {
+	return func() tea.Msg {
+		contacts, err := m.backend.ListContacts(200, "last_seen")
+		if err != nil {
+			logger.Warn("loadContacts: %v", err)
+			return ContactsLoadedMsg{}
+		}
+		return ContactsLoadedMsg{Contacts: contacts}
+	}
+}
+
+// loadContactDetail returns a Cmd that fetches recent emails for the given contact.
+func (m *Model) loadContactDetail(contact models.ContactData) tea.Cmd {
+	return func() tea.Msg {
+		emails, err := m.backend.GetContactEmails(contact.Email, 5)
+		if err != nil {
+			logger.Warn("loadContactDetail: %v", err)
+			return ContactDetailLoadedMsg{}
+		}
+		return ContactDetailLoadedMsg{Emails: emails}
+	}
+}
+
+// applyContactSearch filters contactsFiltered based on the current search query and mode.
+func (m *Model) applyContactSearch() {
+	if m.contactSearch == "" {
+		m.contactsFiltered = m.contactsList
+		m.contactsIdx = 0
+		return
+	}
+	if m.contactSearchMode == "keyword" {
+		q := strings.ToLower(m.contactSearch)
+		var out []models.ContactData
+		for _, c := range m.contactsList {
+			if strings.Contains(strings.ToLower(c.DisplayName), q) ||
+				strings.Contains(strings.ToLower(c.Email), q) ||
+				strings.Contains(strings.ToLower(c.Company), q) {
+				out = append(out, c)
+			}
+		}
+		m.contactsFiltered = out
+	} else {
+		// semantic: search via backend; fall back to keyword if classifier unavailable
+		var out []models.ContactData
+		if m.classifier != nil {
+			vec, embErr := m.classifier.Embed(m.contactSearch)
+			if embErr == nil {
+				results, err := m.backend.SearchContactsSemantic(vec, 50, 0.3)
+				if err != nil {
+					logger.Warn("applyContactSearch semantic: %v", err)
+				} else {
+					for _, r := range results {
+						out = append(out, r.Contact)
+					}
+				}
+			}
+		}
+		if len(out) == 0 {
+			q := strings.ToLower(m.contactSearch)
+			for _, c := range m.contactsList {
+				if strings.Contains(strings.ToLower(c.DisplayName), q) ||
+					strings.Contains(strings.ToLower(c.Email), q) ||
+					strings.Contains(strings.ToLower(c.Company), q) {
+					out = append(out, c)
+				}
+			}
+		}
+		m.contactsFiltered = out
+	}
+	m.contactsIdx = 0
+}
+
+// runSingleContactEnrichment enriches one specific contact by email address.
+func (m *Model) runSingleContactEnrichment(contact models.ContactData) tea.Cmd {
+	return func() tea.Msg {
+		if m.classifier == nil {
+			return ContactEnrichedMsg{Count: 0}
+		}
+		subjects, err := m.backend.GetRecentSubjectsByContact(contact.Email, 10)
+		if err != nil {
+			logger.Warn("runSingleContactEnrichment: GetRecentSubjectsByContact %s: %v", contact.Email, err)
+			return ContactEnrichedMsg{Count: 0}
+		}
+		company, topics, err := m.classifier.EnrichContact(contact.Email, subjects)
+		if err != nil {
+			logger.Warn("runSingleContactEnrichment: EnrichContact %s: %v", contact.Email, err)
+			return ContactEnrichedMsg{Count: 0}
+		}
+		if err := m.backend.UpdateContactEnrichment(contact.Email, company, topics); err != nil {
+			logger.Warn("runSingleContactEnrichment: UpdateContactEnrichment %s: %v", contact.Email, err)
+			return ContactEnrichedMsg{Count: 0}
+		}
+		return ContactEnrichedMsg{Count: 1}
+	}
+}
+
+func (m *Model) importAppleContacts() tea.Cmd {
+	return func() tea.Msg {
+		addrs, err := contacts.ImportFromAppleContacts()
+		if err != nil || len(addrs) == 0 {
+			return AppleContactsImportedMsg{Count: 0}
+		}
+		if err := m.backend.UpsertContacts(addrs, "from"); err != nil {
+			logger.Warn("Apple Contacts import: %v", err)
+			return AppleContactsImportedMsg{Count: 0}
+		}
+		return AppleContactsImportedMsg{Count: len(addrs)}
+	}
+}
+
+// handleContactsKey handles key events for the Contacts tab.
+func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
+	key := msg.String()
+
+	// In search mode route printable chars to the search buffer
+	if m.contactSearchMode == "keyword" || m.contactSearchMode == "semantic" {
+		switch key {
+		case "esc":
+			m.contactSearchMode = ""
+			m.contactSearch = ""
+			m.contactsFiltered = m.contactsList
+			m.contactsIdx = 0
+		case "backspace", "ctrl+h":
+			runes := []rune(m.contactSearch)
+			if len(runes) > 0 {
+				m.contactSearch = string(runes[:len(runes)-1])
+			}
+			m.applyContactSearch()
+		case "enter":
+			m.contactSearchMode = "" // confirm; keep results
+		default:
+			if len(key) == 1 {
+				m.contactSearch += key
+				m.applyContactSearch()
+			}
+		}
+		return m, nil
+	}
+
+	switch key {
+	case "/":
+		m.contactSearchMode = "keyword"
+		m.contactSearch = ""
+	case "?":
+		m.contactSearchMode = "semantic"
+		m.contactSearch = ""
+	case "esc":
+		m.contactSearchMode = ""
+		m.contactSearch = ""
+		m.contactsFiltered = m.contactsList
+		m.contactsIdx = 0
+		m.contactDetail = nil
+		m.contactDetailEmails = nil
+		m.contactFocusPanel = 0
+	case "tab":
+		if m.contactDetail != nil {
+			m.contactFocusPanel = 1 - m.contactFocusPanel
+		}
+	case "j", "down":
+		if m.contactFocusPanel == 0 {
+			if m.contactsIdx < len(m.contactsFiltered)-1 {
+				m.contactsIdx++
+			}
+		} else {
+			if m.contactDetailIdx < len(m.contactDetailEmails)-1 {
+				m.contactDetailIdx++
+			}
+		}
+	case "k", "up":
+		if m.contactFocusPanel == 0 {
+			if m.contactsIdx > 0 {
+				m.contactsIdx--
+			}
+		} else {
+			if m.contactDetailIdx > 0 {
+				m.contactDetailIdx--
+			}
+		}
+	case "enter":
+		if m.contactFocusPanel == 0 {
+			if len(m.contactsFiltered) > 0 && m.contactsIdx < len(m.contactsFiltered) {
+				c := m.contactsFiltered[m.contactsIdx]
+				m.contactDetail = &c
+				m.contactDetailEmails = nil
+				m.contactDetailIdx = 0
+				return m, m.loadContactDetail(c)
+			}
+		} else {
+			// Open selected email in Timeline tab
+			if len(m.contactDetailEmails) > 0 && m.contactDetailIdx < len(m.contactDetailEmails) {
+				email := m.contactDetailEmails[m.contactDetailIdx]
+				m.activeTab = tabTimeline
+				m.contactFocusPanel = 0
+				m.setFocusedPanel(panelTimeline)
+				m.selectedTimelineEmail = email
+				m.emailBody = nil
+				m.emailBodyLoading = true
+				return m, tea.Batch(
+					m.loadTimelineEmails(),
+					m.loadEmailBodyCmd(email.Folder, email.UID),
+				)
+			}
+		}
+	case "e":
+		var target *models.ContactData
+		if m.contactFocusPanel == 1 && m.contactDetail != nil {
+			target = m.contactDetail
+		} else if len(m.contactsFiltered) > 0 && m.contactsIdx < len(m.contactsFiltered) {
+			c := m.contactsFiltered[m.contactsIdx]
+			target = &c
+		}
+		if target != nil {
+			return m, m.runSingleContactEnrichment(*target)
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// renderContactsTab renders the two-panel Contacts tab (left: list, right: detail).
+func (m *Model) renderContactsTab(width, height int) string {
+	if width < 20 {
+		return "Terminal too narrow"
+	}
+
+	leftW := width * 35 / 100
+	if leftW < 20 {
+		leftW = 20
+	}
+	rightW := width - leftW - 4
+	if rightW < 10 {
+		rightW = 10
+	}
+
+	contentH := height - 6
+	if contentH < 5 {
+		contentH = 5
+	}
+
+	activeColor := lipgloss.Color("57")
+	inactiveColor := lipgloss.Color("240")
+
+	leftBorderColor := inactiveColor
+	if m.contactFocusPanel == 0 {
+		leftBorderColor = activeColor
+	}
+	rightBorderColor := inactiveColor
+	if m.contactFocusPanel == 1 {
+		rightBorderColor = activeColor
+	}
+
+	makePanel := func(borderColor lipgloss.Color, w int) lipgloss.Style {
+		return lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(borderColor).
+			Width(w).
+			Height(contentH).
+			PaddingLeft(1)
+	}
+
+	// --- Left panel: contact list ---
+	var leftSb strings.Builder
+
+	if m.contactSearchMode == "keyword" {
+		leftSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("33")).Render(fmt.Sprintf("/ %s_", m.contactSearch)) + "\n")
+	} else if m.contactSearchMode == "semantic" {
+		leftSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(fmt.Sprintf("? %s_", m.contactSearch)) + "\n")
+	} else {
+		leftSb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render(
+			fmt.Sprintf("Contacts (%d)", len(m.contactsFiltered))) + "\n")
+	}
+
+	if len(m.contactsFiltered) == 0 {
+		leftSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("  No contacts"))
+	} else {
+		maxRows := contentH - 3
+		if maxRows < 1 {
+			maxRows = 1
+		}
+		start := 0
+		if m.contactsIdx >= maxRows {
+			start = m.contactsIdx - maxRows + 1
+		}
+		end := start + maxRows
+		if end > len(m.contactsFiltered) {
+			end = len(m.contactsFiltered)
+		}
+		for i := start; i < end; i++ {
+			c := m.contactsFiltered[i]
+			nameStr := c.DisplayName
+			if nameStr == "" {
+				nameStr = fmt.Sprintf("<%s>", c.Email)
+			} else {
+				nameStr = fmt.Sprintf("%s <%s>", c.DisplayName, c.Email)
+			}
+			maxNameW := leftW - 8
+			if maxNameW < 8 {
+				maxNameW = 8
+			}
+			runes := []rune(nameStr)
+			if len(runes) > maxNameW {
+				nameStr = string(runes[:maxNameW-1]) + "…"
+			}
+			company := ""
+			if c.Company != "" {
+				company = fmt.Sprintf("[%s] ", c.Company)
+				cr := []rune(company)
+				if len(cr) > 14 {
+					company = string(cr[:13]) + "…] "
+				}
+			}
+			line := fmt.Sprintf("%-*s  %s%d", maxNameW, nameStr, company, c.EmailCount)
+			rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+			if i == m.contactsIdx {
+				rowStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("229")).
+					Background(activeColor).
+					Bold(true)
+			}
+			leftSb.WriteString(rowStyle.Render(line) + "\n")
+		}
+	}
+
+	leftPanel := makePanel(leftBorderColor, leftW).Render(leftSb.String())
+
+	// --- Right panel: contact detail ---
+	var rightSb strings.Builder
+
+	if m.contactDetail == nil {
+		rightSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).
+			Render("  Select a contact and press Enter"))
+	} else {
+		c := m.contactDetail
+		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+		normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+
+		displayName := c.DisplayName
+		if displayName == "" {
+			displayName = c.Email
+		}
+		rightSb.WriteString(boldStyle.Render(displayName) + "\n")
+		rightSb.WriteString(dimStyle.Render(c.Email) + "\n")
+		if c.Company != "" {
+			rightSb.WriteString(normalStyle.Render("Company: "+c.Company) + "\n")
+		}
+		if len(c.Topics) > 0 {
+			rightSb.WriteString(normalStyle.Render("Topics: "+strings.Join(c.Topics, ", ")) + "\n")
+		}
+
+		firstStr := "—"
+		lastStr := "—"
+		if !c.FirstSeen.IsZero() {
+			firstStr = c.FirstSeen.Format("2006-01-02")
+		}
+		if !c.LastSeen.IsZero() {
+			lastStr = c.LastSeen.Format("2006-01-02")
+		}
+		stats := fmt.Sprintf("First seen: %s  Last seen: %s  Received: %d  Sent: %d",
+			firstStr, lastStr, c.EmailCount, c.SentCount)
+		rightSb.WriteString(dimStyle.Render(stats) + "\n")
+
+		if c.EnrichedAt != nil {
+			rightSb.WriteString(dimStyle.Render("Enriched: "+c.EnrichedAt.Format("2006-01-02")) + "\n")
+		}
+
+		rightSb.WriteString("\n")
+		rightSb.WriteString(boldStyle.Render("Recent Emails") + "\n")
+
+		if len(m.contactDetailEmails) == 0 {
+			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
+		} else {
+			maxSubjW := rightW - 14
+			if maxSubjW < 10 {
+				maxSubjW = 10
+			}
+			for i, e := range m.contactDetailEmails {
+				subj := e.Subject
+				sr := []rune(subj)
+				if len(sr) > maxSubjW {
+					subj = string(sr[:maxSubjW-1]) + "…"
+				}
+				line := fmt.Sprintf("  %-*s  %s", maxSubjW, subj, e.Date.Format("2006-01-02"))
+				rowStyle := normalStyle
+				if m.contactFocusPanel == 1 && i == m.contactDetailIdx {
+					rowStyle = lipgloss.NewStyle().
+						Foreground(lipgloss.Color("229")).
+						Background(activeColor).
+						Bold(true)
+				}
+				rightSb.WriteString(rowStyle.Render(line) + "\n")
+			}
+		}
+	}
+
+	rightPanel := makePanel(rightBorderColor, rightW).Render(rightSb.String())
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
 }

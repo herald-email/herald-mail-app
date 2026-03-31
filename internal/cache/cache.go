@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -225,6 +226,46 @@ func (c *Cache) initDB() error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_rule_action_log_rule_id ON rule_action_log(rule_id);
 	`); err != nil {
+		return err
+	}
+
+	// email_embedding_chunks: chunked embeddings for semantic search
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS email_embedding_chunks (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			message_id   TEXT NOT NULL,
+			chunk_index  INTEGER NOT NULL DEFAULT 0,
+			embedding    BLOB NOT NULL,
+			content_hash TEXT NOT NULL,
+			embedded_at  DATETIME NOT NULL,
+			UNIQUE(message_id, chunk_index)
+		)
+	`); err != nil {
+		return err
+	}
+
+	// contacts: enriched contact book built from email headers
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS contacts (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			email        TEXT UNIQUE NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			company      TEXT NOT NULL DEFAULT '',
+			topics       TEXT NOT NULL DEFAULT '[]',
+			notes        TEXT NOT NULL DEFAULT '',
+			first_seen   DATETIME NOT NULL,
+			last_seen    DATETIME NOT NULL,
+			email_count  INTEGER NOT NULL DEFAULT 0,
+			sent_count   INTEGER NOT NULL DEFAULT 0,
+			carddav_uid  TEXT,
+			enriched_at  DATETIME,
+			embedding    BLOB
+		)
+	`); err != nil {
+		return err
+	}
+
+	if _, err := c.db.Exec(`CREATE INDEX IF NOT EXISTS idx_contacts_last_seen ON contacts(last_seen DESC)`); err != nil {
 		return err
 	}
 
@@ -1050,6 +1091,167 @@ func cosineSimilarity(a, b []float32) float64 {
 	return dot / (math.Sqrt(na) * math.Sqrt(nb))
 }
 
+// StoreEmbeddingChunks replaces all existing chunks for messageID with the provided chunks.
+// Uses a transaction: deletes old chunks first, then inserts all new ones.
+func (c *Cache) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if _, err := tx.Exec(`DELETE FROM email_embedding_chunks WHERE message_id = ?`, messageID); err != nil {
+		return err
+	}
+	for _, chunk := range chunks {
+		buf := make([]byte, len(chunk.Embedding)*4)
+		for i, v := range chunk.Embedding {
+			binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?)`,
+			messageID, chunk.ChunkIndex, buf, chunk.ContentHash, time.Now().Format(time.RFC3339),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// GetUnembeddedIDsWithBody returns message IDs in a folder that have body_text cached
+// but have no rows in email_embedding_chunks. Ordered newest-first.
+func (c *Cache) GetUnembeddedIDsWithBody(folder string) ([]string, error) {
+	rows, err := c.db.Query(`
+		SELECT e.message_id
+		FROM emails e
+		LEFT JOIN email_embedding_chunks eec ON eec.message_id = e.message_id
+		WHERE e.folder = ?
+		  AND e.body_text IS NOT NULL
+		  AND e.body_text != ''
+		  AND eec.message_id IS NULL
+		ORDER BY e.date DESC`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// GetUncachedBodyIDs returns up to limit message IDs in a folder that have
+// neither body_text nor any embedding chunks. Ordered newest-first.
+func (c *Cache) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
+	rows, err := c.db.Query(`
+		SELECT e.message_id
+		FROM emails e
+		LEFT JOIN email_embedding_chunks eec ON eec.message_id = e.message_id
+		WHERE e.folder = ?
+		  AND (e.body_text IS NULL OR e.body_text = '')
+		  AND eec.message_id IS NULL
+		ORDER BY e.date DESC
+		LIMIT ?`, folder, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// GetEmbeddingProgress returns the number of emails with at least one embedding chunk
+// and the total number of emails in the folder.
+func (c *Cache) GetEmbeddingProgress(folder string) (done, total int, err error) {
+	if err = c.db.QueryRow(`
+		SELECT COUNT(DISTINCT eec.message_id)
+		FROM email_embedding_chunks eec
+		JOIN emails e ON e.message_id = eec.message_id
+		WHERE e.folder = ?`, folder).Scan(&done); err != nil {
+		return
+	}
+	err = c.db.QueryRow(`SELECT COUNT(*) FROM emails WHERE folder = ?`, folder).Scan(&total)
+	return
+}
+
+// SearchSemanticChunked finds emails in a folder using cosine similarity against queryVec.
+// It loads all chunk embeddings, computes similarity per chunk, de-duplicates by message_id
+// keeping the maximum score per email, then returns the top limit results above minScore
+// paired with their similarity scores.
+func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	rows, err := c.db.Query(`
+		SELECT eec.message_id, eec.embedding
+		FROM email_embedding_chunks eec
+		JOIN emails e ON e.message_id = eec.message_id
+		WHERE e.folder = ?`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	bestScore := make(map[string]float64)
+	for rows.Next() {
+		var msgID string
+		var buf []byte
+		if err := rows.Scan(&msgID, &buf); err != nil {
+			return nil, err
+		}
+		if len(buf)%4 != 0 {
+			logger.Warn("corrupt embedding blob for message %s (len=%d), skipping", msgID, len(buf))
+			continue
+		}
+		chunkVec := make([]float32, len(buf)/4)
+		for i := range chunkVec {
+			chunkVec[i] = math.Float32frombits(binary.LittleEndian.Uint32(buf[i*4:]))
+		}
+		score := cosineSimilarity(queryVec, chunkVec)
+		if score > bestScore[msgID] {
+			bestScore[msgID] = score
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	type scored struct {
+		messageID string
+		score     float64
+	}
+	var candidates []scored
+	for msgID, score := range bestScore {
+		if score >= minScore {
+			candidates = append(candidates, scored{msgID, score})
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	var results []*models.SemanticSearchResult
+	for _, r := range candidates {
+		email, err := c.GetEmailByID(r.messageID)
+		if err != nil {
+			logger.Debug("SearchSemanticChunked: GetEmailByID %s: %v", r.messageID, err)
+			continue
+		}
+		results = append(results, &models.SemanticSearchResult{Email: email, Score: r.score})
+	}
+	return results, nil
+}
+
 // GetSavedSearches returns all saved searches
 func (c *Cache) GetSavedSearches() ([]*models.SavedSearch, error) {
 	rows, err := c.db.Query(`SELECT id, name, query, folder, created_at FROM saved_searches ORDER BY created_at DESC`)
@@ -1083,4 +1285,389 @@ func (c *Cache) SaveSearch(name, query, folder string) error {
 func (c *Cache) DeleteSavedSearch(id int) error {
 	_, err := c.db.Exec(`DELETE FROM saved_searches WHERE id = ?`, id)
 	return err
+}
+
+// UpsertContacts inserts or updates contacts from seen email addresses.
+// direction is "from" (increments email_count) or "to" (increments sent_count).
+func (c *Cache) UpsertContacts(addrs []models.ContactAddr, direction string) error {
+	if len(addrs) == 0 {
+		return nil
+	}
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return fmt.Errorf("UpsertContacts: begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	now := time.Now().Format(time.RFC3339)
+	var emailCount, sentCount int
+	if direction == "from" {
+		emailCount = 1
+	} else {
+		sentCount = 1
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO contacts (email, display_name, first_seen, last_seen, email_count, sent_count)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(email) DO UPDATE SET
+			last_seen    = excluded.last_seen,
+			display_name = CASE WHEN display_name = '' THEN excluded.display_name ELSE display_name END,
+			email_count  = email_count + CASE WHEN ? = 'from' THEN 1 ELSE 0 END,
+			sent_count   = sent_count  + CASE WHEN ? = 'to'   THEN 1 ELSE 0 END
+	`)
+	if err != nil {
+		return fmt.Errorf("UpsertContacts: prepare: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, addr := range addrs {
+		if addr.Email == "" {
+			continue
+		}
+		if _, err := stmt.Exec(addr.Email, addr.Name, now, now, emailCount, sentCount, direction, direction); err != nil {
+			return fmt.Errorf("UpsertContacts: exec for %q: %w", addr.Email, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetContactsToEnrich returns up to limit contacts with email_count >= minCount
+// that have not been enriched yet (enriched_at IS NULL).
+// Only id, email, and display_name are populated in the returned ContactData.
+func (c *Cache) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
+	rows, err := c.db.Query(
+		`SELECT id, email, display_name FROM contacts WHERE email_count >= ? AND enriched_at IS NULL LIMIT ?`,
+		minCount, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contacts []models.ContactData
+	for rows.Next() {
+		var cd models.ContactData
+		if err := rows.Scan(&cd.ID, &cd.Email, &cd.DisplayName); err != nil {
+			return nil, err
+		}
+		contacts = append(contacts, cd)
+	}
+	return contacts, rows.Err()
+}
+
+// GetRecentSubjectsByContact returns up to limit email subjects where the sender
+// field contains the given email address, ordered by date descending.
+func (c *Cache) GetRecentSubjectsByContact(email string, limit int) ([]string, error) {
+	like := "%" + escapeLike(email) + "%"
+	rows, err := c.db.Query(
+		`SELECT subject FROM emails WHERE sender LIKE ? ESCAPE '\' ORDER BY date DESC LIMIT ?`,
+		like, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subjects []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		subjects = append(subjects, s)
+	}
+	return subjects, rows.Err()
+}
+
+// UpdateContactEnrichment saves the LLM-extracted company and topics for a contact.
+// Sets enriched_at to the current time. Topics are JSON-encoded for storage.
+func (c *Cache) UpdateContactEnrichment(email, company string, topics []string) error {
+	if topics == nil {
+		topics = []string{}
+	}
+	topicsJSON, err := json.Marshal(topics)
+	if err != nil {
+		return fmt.Errorf("UpdateContactEnrichment: marshal topics: %w", err)
+	}
+	_, err = c.db.Exec(
+		`UPDATE contacts SET company = ?, topics = ?, enriched_at = datetime('now') WHERE email = ?`,
+		company, string(topicsJSON), email,
+	)
+	return err
+}
+
+// UpdateContactEmbedding saves the semantic embedding vector for a contact.
+// The embedding is encoded as a little-endian float32 blob (same as email_embedding_chunks).
+func (c *Cache) UpdateContactEmbedding(email string, embedding []float32) error {
+	buf := make([]byte, len(embedding)*4)
+	for i, v := range embedding {
+		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
+	}
+	_, err := c.db.Exec(`UPDATE contacts SET embedding = ? WHERE email = ?`, buf, email)
+	return err
+}
+
+// SearchContactsSemantic finds contacts using cosine similarity against queryVec.
+// Returns up to limit contacts with score >= minScore, ordered by score descending.
+// Fields populated: id, email, display_name, company, topics, embedding.
+func (c *Cache) SearchContactsSemantic(queryVec []float32, limit int, minScore float64) ([]*models.ContactSearchResult, error) {
+	rows, err := c.db.Query(
+		`SELECT id, email, display_name, company, topics, embedding FROM contacts WHERE embedding IS NOT NULL`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type scored struct {
+		cd    models.ContactData
+		score float64
+	}
+	var candidates []scored
+
+	for rows.Next() {
+		var cd models.ContactData
+		var topicsJSON string
+		var embBlob []byte
+		if err := rows.Scan(&cd.ID, &cd.Email, &cd.DisplayName, &cd.Company, &topicsJSON, &embBlob); err != nil {
+			return nil, err
+		}
+		if len(embBlob)%4 != 0 || len(embBlob) == 0 {
+			logger.Warn("SearchContactsSemantic: corrupt embedding for %s (len=%d), skipping", cd.Email, len(embBlob))
+			continue
+		}
+		vec := make([]float32, len(embBlob)/4)
+		for i := range vec {
+			vec[i] = math.Float32frombits(binary.LittleEndian.Uint32(embBlob[i*4:]))
+		}
+		score := cosineSimilarity(queryVec, vec)
+		if score < minScore {
+			continue
+		}
+		// Decode topics
+		if jsonErr := json.Unmarshal([]byte(topicsJSON), &cd.Topics); jsonErr != nil {
+			cd.Topics = nil
+		}
+		cd.Embedding = vec
+		candidates = append(candidates, scored{cd, score})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	result := make([]*models.ContactSearchResult, len(candidates))
+	for i, cand := range candidates {
+		result[i] = &models.ContactSearchResult{Contact: cand.cd, Score: cand.score}
+	}
+	return result, nil
+}
+
+// ListContacts returns contacts sorted by the given criterion.
+// sortBy accepts "last_seen" (default), "name", or "email_count".
+// All ContactData fields are populated (topics decoded, embedding decoded).
+func (c *Cache) ListContacts(limit int, sortBy string) ([]models.ContactData, error) {
+	var orderBy string
+	switch sortBy {
+	case "name":
+		orderBy = "display_name ASC, email ASC"
+	case "email_count":
+		orderBy = "email_count DESC"
+	default:
+		orderBy = "last_seen DESC"
+	}
+	query := fmt.Sprintf(
+		`SELECT id, email, display_name, company, topics, notes, first_seen, last_seen, email_count, sent_count, COALESCE(carddav_uid,''), enriched_at, embedding
+		 FROM contacts ORDER BY %s LIMIT ?`, orderBy,
+	)
+	rows, err := c.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contacts []models.ContactData
+	for rows.Next() {
+		var cd models.ContactData
+		var topicsJSON string
+		var embBlob []byte
+		var enrichedAt sql.NullString
+		var firstSeen, lastSeen string
+		if err := rows.Scan(
+			&cd.ID, &cd.Email, &cd.DisplayName, &cd.Company,
+			&topicsJSON, &cd.Notes, &firstSeen, &lastSeen,
+			&cd.EmailCount, &cd.SentCount, &cd.CardDAVUID,
+			&enrichedAt, &embBlob,
+		); err != nil {
+			return nil, err
+		}
+		// Parse timestamps
+		if t, err := time.Parse(time.RFC3339, firstSeen); err == nil {
+			cd.FirstSeen = t
+		}
+		if t, err := time.Parse(time.RFC3339, lastSeen); err == nil {
+			cd.LastSeen = t
+		}
+		if enrichedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, enrichedAt.String); err == nil {
+				cd.EnrichedAt = &t
+			}
+		}
+		// Decode topics JSON
+		if jsonErr := json.Unmarshal([]byte(topicsJSON), &cd.Topics); jsonErr != nil {
+			cd.Topics = nil
+		}
+		// Decode embedding blob
+		if len(embBlob)%4 == 0 && len(embBlob) > 0 {
+			vec := make([]float32, len(embBlob)/4)
+			for i := range vec {
+				vec[i] = math.Float32frombits(binary.LittleEndian.Uint32(embBlob[i*4:]))
+			}
+			cd.Embedding = vec
+		}
+		contacts = append(contacts, cd)
+	}
+	return contacts, rows.Err()
+}
+
+// SearchContacts performs a keyword search on display_name, email, company, and topics.
+func (c *Cache) SearchContacts(query string) ([]models.ContactData, error) {
+	like := "%" + escapeLike(query) + "%"
+	rows, err := c.db.Query(
+		`SELECT id, email, display_name, company, topics, notes, first_seen, last_seen, email_count, sent_count, COALESCE(carddav_uid,''), enriched_at, embedding
+		 FROM contacts
+		 WHERE display_name LIKE ? ESCAPE '\'
+		    OR email        LIKE ? ESCAPE '\'
+		    OR company      LIKE ? ESCAPE '\'
+		    OR topics       LIKE ? ESCAPE '\'
+		 ORDER BY last_seen DESC`,
+		like, like, like, like,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contacts []models.ContactData
+	for rows.Next() {
+		var cd models.ContactData
+		var topicsJSON string
+		var embBlob []byte
+		var enrichedAt sql.NullString
+		var firstSeen, lastSeen string
+		if err := rows.Scan(
+			&cd.ID, &cd.Email, &cd.DisplayName, &cd.Company,
+			&topicsJSON, &cd.Notes, &firstSeen, &lastSeen,
+			&cd.EmailCount, &cd.SentCount, &cd.CardDAVUID,
+			&enrichedAt, &embBlob,
+		); err != nil {
+			return nil, err
+		}
+		if t, err := time.Parse(time.RFC3339, firstSeen); err == nil {
+			cd.FirstSeen = t
+		}
+		if t, err := time.Parse(time.RFC3339, lastSeen); err == nil {
+			cd.LastSeen = t
+		}
+		if enrichedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, enrichedAt.String); err == nil {
+				cd.EnrichedAt = &t
+			}
+		}
+		if jsonErr := json.Unmarshal([]byte(topicsJSON), &cd.Topics); jsonErr != nil {
+			cd.Topics = nil
+		}
+		if len(embBlob)%4 == 0 && len(embBlob) > 0 {
+			vec := make([]float32, len(embBlob)/4)
+			for i := range vec {
+				vec[i] = math.Float32frombits(binary.LittleEndian.Uint32(embBlob[i*4:]))
+			}
+			cd.Embedding = vec
+		}
+		contacts = append(contacts, cd)
+	}
+	return contacts, rows.Err()
+}
+
+// GetContactEmails returns recent emails where sender matches the given email address.
+// GetContactByEmail returns the contact with the exact email address, or nil if not found.
+func (c *Cache) GetContactByEmail(email string) (*models.ContactData, error) {
+	row := c.db.QueryRow(
+		`SELECT id, email, display_name, company, topics, notes, first_seen, last_seen, email_count, sent_count, COALESCE(carddav_uid,''), enriched_at
+		 FROM contacts WHERE email = ?`, email,
+	)
+	var cd models.ContactData
+	var topicsJSON string
+	var enrichedAt sql.NullString
+	var firstSeen, lastSeen string
+	err := row.Scan(
+		&cd.ID, &cd.Email, &cd.DisplayName, &cd.Company,
+		&topicsJSON, &cd.Notes, &firstSeen, &lastSeen,
+		&cd.EmailCount, &cd.SentCount, &cd.CardDAVUID,
+		&enrichedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if t, err := time.Parse(time.RFC3339, firstSeen); err == nil {
+		cd.FirstSeen = t
+	}
+	if t, err := time.Parse(time.RFC3339, lastSeen); err == nil {
+		cd.LastSeen = t
+	}
+	if enrichedAt.Valid {
+		if t, err := time.Parse(time.RFC3339, enrichedAt.String); err == nil {
+			cd.EnrichedAt = &t
+		}
+	}
+	if jsonErr := json.Unmarshal([]byte(topicsJSON), &cd.Topics); jsonErr != nil {
+		cd.Topics = nil
+	}
+	return &cd, nil
+}
+
+func (c *Cache) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
+	like := "%" + escapeLike(contactEmail) + "%"
+	rows, err := c.db.Query(
+		`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, last_updated, COALESCE(is_read,0)
+		 FROM emails WHERE sender LIKE ? ESCAPE '\' ORDER BY date DESC LIMIT ?`,
+		like, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var emails []*models.EmailData
+	for rows.Next() {
+		var e models.EmailData
+		var dateStr, lastUpdStr string
+		var hasAtt, isRead int
+		if err := rows.Scan(
+			&e.MessageID, &e.UID, &e.Sender, &e.Subject,
+			&dateStr, &e.Size, &hasAtt, &e.Folder, &lastUpdStr, &isRead,
+		); err != nil {
+			return nil, err
+		}
+		if t, err := time.Parse(time.RFC3339, dateStr); err == nil {
+			e.Date = t
+		}
+		if t, err := time.Parse(time.RFC3339, lastUpdStr); err == nil {
+			e.LastUpdated = t
+		}
+		e.HasAttachments = hasAtt != 0
+		e.IsRead = isRead != 0
+		emails = append(emails, &e)
+	}
+	return emails, rows.Err()
 }
