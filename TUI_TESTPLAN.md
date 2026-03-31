@@ -1083,6 +1083,116 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 ---
 
+### TC-47 — Rule Editor (W key)
+
+**Preconditions:** App running in Cleanup tab with at least one sender visible
+
+**Steps:**
+1. Press `W` while a sender row is highlighted
+2. The rule editor form opens (huh form overlay)
+3. Fill in: Trigger = "sender", Action = "archive", any details
+4. Tab through the remaining fields to reach the Submit button, then press Enter to submit
+5. Press `W` again — confirm the new rule appears in the editor pre-filled
+
+**Expect:**
+- Rule is saved; re-opening the editor (W key) shows a pre-filled form with the saved trigger and actions; a status message confirms 'Rule saved'; `go test ./...` passes
+
+---
+
+### TC-48 — Demo Mode (--demo flag)
+
+**Preconditions:** Binary built with `make build`
+
+**Steps:**
+1. Run `./bin/herald --demo`
+2. Observe status bar shows `[DEMO]` badge
+3. Navigate Timeline, Cleanup, Compose tabs — all show synthetic data
+4. Press `D` to delete a sender — the sender row disappears from the table and a status message confirms the deletion
+5. Press `a` to classify — classification runs on demo emails
+
+**Expected:**
+- App functions fully with synthetic data; no IMAP connection needed; `[DEMO]` visible in status bar
+
+---
+
+### TC-49 — Soft Unsubscribe (u key)
+
+**Preconditions:** App running in Cleanup tab with at least one sender visible
+
+**Steps:**
+1. Press `u` on a sender row
+2. A 3-choice prompt appears (unsubscribe / move / cancel)
+3. Choices are navigable with arrow keys; pressing Escape cancels without taking action
+4. Choose "move to Disabled Subscriptions"
+5. Confirm the sender's emails moved
+
+**Expected:**
+- Emails from that sender moved to "Disabled Subscriptions" folder; rule created; no crash; the sender's emails no longer appear in the Cleanup tab; the move rule is visible via the `W` key
+
+---
+
+### TC-50 — Cleanup Preview (Enter key)
+
+**Preconditions:** App running in Cleanup tab with at least one sender that has emails
+
+**Steps:**
+1. Press `Enter` on a sender row (not `D` for delete)
+2. A three-column layout appears (sender list | email list | body preview); verify at 220×50 and 80×24 terminal sizes
+3. Navigate between emails in the middle column — body updates in right panel
+4. Press `Escape` to close the preview and return to normal 2-column layout
+
+**Expected:**
+- Preview opens cleanly; body loads asynchronously (loading indicator shown); layout returns to normal on Escape; no layout overflow; at 80×24 the layout degrades gracefully (no content overflow beyond terminal edge)
+
+---
+
+### TC-51 — Daemon serve subcommand
+
+**Preconditions:** `herald` binary built (`make build`); no daemon already running on the configured port
+
+**Steps:**
+1. Run `./bin/herald serve --config proton.yaml` in a terminal
+2. Verify the process starts and logs indicate it is listening (e.g. `listening on 127.0.0.1:<port>`)
+3. Run `./bin/herald status --config proton.yaml` in a second terminal
+4. Run `./bin/herald stop --config proton.yaml`
+5. Confirm the serve process exits cleanly
+
+**Expected:**
+- `serve` starts without error and writes a pidfile; `status` reports the daemon as running with its PID; `stop` sends a shutdown signal and the serve process exits with code 0; pidfile is removed after stop
+
+---
+
+### TC-52 — Daemon sync subcommand
+
+**Preconditions:** Daemon running via `herald serve --config proton.yaml`
+
+**Steps:**
+1. Run `./bin/herald sync --config proton.yaml` (optionally with `--folder INBOX`)
+2. Observe output or daemon log for sync activity
+3. Run `./bin/herald sync --config proton.yaml --folder INBOX` explicitly
+4. Stop the daemon with `./bin/herald stop --config proton.yaml`
+
+**Expected:**
+- `sync` triggers an IMAP fetch on the daemon; the daemon log shows new emails processed (or "no new mail" if inbox is empty); command exits 0; running sync against a stopped daemon produces a clear error message (not a panic)
+
+---
+
+### TC-53 — TUI auto-detects running daemon (RemoteBackend)
+
+**Preconditions:** Daemon running via `herald serve --config proton.yaml`
+
+**Steps:**
+1. Launch the TUI: `./bin/herald --config proton.yaml` (no `serve` subcommand)
+2. Verify the status bar shows a remote/daemon indicator (not "local")
+3. Navigate through Timeline and Cleanup tabs — data should load via the daemon
+4. Stop the daemon with `./bin/herald stop --config proton.yaml` in another terminal
+5. Observe TUI behaviour after daemon disappears (reconnect attempt or error message)
+
+**Expected:**
+- TUI detects the running daemon and connects as a RemoteBackend client; the status bar reflects this; email data loads normally; when the daemon stops, the TUI shows a reconnect or error state rather than crashing
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

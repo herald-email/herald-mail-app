@@ -61,6 +61,12 @@ type Config struct {
 		TokenExpiry string `yaml:"token_expiry,omitempty"`
 		Email        string `yaml:"email,omitempty"`
 	} `yaml:"gmail,omitempty"`
+	Daemon struct {
+		Port     int    `yaml:"port"`      // default: 7272
+		BindAddr string `yaml:"bind"` // default: "127.0.0.1"
+		PidFile  string `yaml:"pid_file"`  // default: ~/.local/share/herald/daemon.pid
+		LogFile  string `yaml:"log_file"`  // default: ~/.local/share/herald/daemon.log
+	} `yaml:"daemon"`
 }
 
 // vendorPreset holds IMAP/SMTP defaults for a known mail provider
@@ -160,6 +166,24 @@ func (c *Config) applyDefaults() {
 	// Enable IDLE and background sync by default
 	// (zero-value bool is false; we use a separate flag to detect "not set")
 	// Users must explicitly set idle: false to disable
+
+	// Daemon defaults
+	if c.Daemon.Port == 0 {
+		c.Daemon.Port = 7272
+	}
+	if c.Daemon.BindAddr == "" {
+		c.Daemon.BindAddr = "127.0.0.1"
+	}
+	if c.Daemon.PidFile == "" || c.Daemon.LogFile == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			if c.Daemon.PidFile == "" {
+				c.Daemon.PidFile = filepath.Join(home, ".local", "share", "herald", "daemon.pid")
+			}
+			if c.Daemon.LogFile == "" {
+				c.Daemon.LogFile = filepath.Join(home, ".local", "share", "herald", "daemon.log")
+			}
+		}
+	}
 }
 
 // Load reads and parses the configuration file

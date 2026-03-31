@@ -348,6 +348,10 @@ type Model struct {
 	showRuleEditor bool
 	ruleEditor     *RuleEditor
 
+	// Prompt editor overlay
+	showPromptEditor bool
+	promptEditor     *PromptEditor
+
 	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
 	oauthWait *OAuthWaitModel
 
@@ -614,6 +618,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showRuleEditor = false
 		m.ruleEditor = nil
 		return m, nil
+
+	case PromptEditorDoneMsg:
+		m.showPromptEditor = false
+		m.promptEditor = nil
+		if msg.Prompt != nil {
+			if err := m.backend.SaveCustomPrompt(msg.Prompt); err != nil {
+				m.statusMessage = "Error saving prompt: " + err.Error()
+			} else {
+				m.statusMessage = "Prompt saved: " + msg.Prompt.Name
+			}
+		}
+		return m, nil
+
+	case PromptEditorCancelledMsg:
+		m.showPromptEditor = false
+		m.promptEditor = nil
+		return m, nil
 	}
 
 	// Handle settings panel messages before forwarding to the panel, so we can
@@ -680,6 +701,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var ruleCmd tea.Cmd
 		m.ruleEditor, ruleCmd = m.ruleEditor.Update(msg)
 		return m, ruleCmd
+	}
+
+	// Forward all messages to the prompt editor when it is active.
+	if m.showPromptEditor && m.promptEditor != nil {
+		var promptCmd tea.Cmd
+		m.promptEditor, promptCmd = m.promptEditor.Update(msg)
+		return m, promptCmd
 	}
 
 	switch msg := msg.(type) {
@@ -916,12 +944,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FoldersLoadedMsg{Folders: folders}
 			}
-			// Start background polling (default 60s interval)
-			pollCmd := m.startPolling(60)
+			// Start background sync: IDLE if supported, else fall back to polling.
+			syncCmd := m.startSync(m.currentFolder)
 			// Subscribe to background reconciliation now that Load() has set the channel.
 			m.validIDsCh = m.backend.ValidIDsCh()
 			// Always load timeline since it's the default startup tab
-			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), pollCmd, m.listenForValidIDs())
+			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), syncCmd, m.listenForValidIDs())
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)
@@ -1146,6 +1174,10 @@ func (m *Model) View() string {
 	// Rule editor overlay takes over the entire screen when active.
 	if m.showRuleEditor && m.ruleEditor != nil {
 		return m.ruleEditor.View()
+	}
+	// Prompt editor overlay takes over the entire screen when active.
+	if m.showPromptEditor && m.promptEditor != nil {
+		return m.promptEditor.View()
 	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
 		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
@@ -1412,6 +1444,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ruleEditor = NewRuleEditor(sender, domain, m.windowWidth, m.windowHeight)
 			m.showRuleEditor = true
 			return m, m.ruleEditor.Init()
+		}
+		return m, nil
+
+	case "P":
+		if !m.showRuleEditor && !m.showPromptEditor && !m.showSettings {
+			m.showPromptEditor = true
+			m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+			return m, m.promptEditor.Init()
 		}
 		return m, nil
 

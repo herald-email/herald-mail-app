@@ -3,6 +3,7 @@ package imap
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,12 +14,16 @@ import (
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
+	"github.com/emersion/go-imap-idle"
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	"mail-processor/internal/oauth"
 )
+
+// ErrIDLENotSupported is returned by StartIDLE when the server lacks IDLE capability.
+var ErrIDLENotSupported = errors.New("imap: server does not support IDLE")
 
 // xoauth2Client implements the XOAUTH2 SASL mechanism required by Gmail's IMAP server.
 // XOAUTH2 is distinct from OAUTHBEARER (RFC 7628); Gmail only supports XOAUTH2.
@@ -52,6 +57,10 @@ type Client struct {
 	groupByDomain bool
 	progressCh    chan models.ProgressInfo
 	mu            sync.Mutex
+
+	// IDLE support
+	idleStop chan struct{}
+	idleMu   sync.Mutex
 }
 
 // New creates a new IMAP client. configPath is used to persist refreshed OAuth tokens;
@@ -922,6 +931,108 @@ func parseDate(dateStr string) time.Time {
 func hasAttachments(msg *mail.Message) bool {
 	contentType := msg.Header.Get("Content-Type")
 	return strings.Contains(strings.ToLower(contentType), "multipart")
+}
+
+// StartIDLE starts an IMAP IDLE session on the given folder, sending a
+// NewEmailsNotification on newEmailsCh whenever new messages arrive.
+// Returns ErrIDLENotSupported if the server does not support IDLE.
+// Note: IDLE holds the connection; no other IMAP commands should be issued
+// while IDLE is active. Call StopIDLE before issuing further commands.
+func (c *Client) StartIDLE(folder string, newEmailsCh chan<- models.NewEmailsNotification) error {
+	// Lock ordering: idleMu must be acquired before c.mu to avoid deadlock.
+	// All paths that hold both locks must follow this order.
+	c.idleMu.Lock()
+	defer c.idleMu.Unlock()
+
+	if c.idleStop != nil {
+		return nil // already running
+	}
+
+	idleClient := idle.NewClient(c.client)
+	supported, err := idleClient.SupportIdle()
+	if err != nil {
+		return fmt.Errorf("imap idle: capability check: %w", err)
+	}
+	if !supported {
+		return ErrIDLENotSupported
+	}
+
+	c.mu.Lock()
+	if c.client == nil {
+		c.mu.Unlock()
+		return fmt.Errorf("imap idle: not connected")
+	}
+	if _, err := c.client.Select(folder, true); err != nil {
+		c.mu.Unlock()
+		return fmt.Errorf("imap idle: select folder %s: %w", folder, err)
+	}
+	// Set up the updates channel before starting IDLE so we don't miss events.
+	updates := make(chan client.Update, 10)
+	c.client.Updates = updates
+	c.mu.Unlock()
+
+	stop := make(chan struct{})
+	c.idleStop = stop
+
+	go func() {
+		defer func() {
+			c.mu.Lock()
+			if c.client != nil {
+				c.client.Updates = nil
+			}
+			c.mu.Unlock()
+		}()
+
+		// idleErrCh carries the result of IdleWithFallback so we can log it.
+		idleErrCh := make(chan error, 1)
+		go func() {
+			idleErrCh <- idleClient.IdleWithFallback(stop, 0)
+		}()
+
+		lastPoll := time.Now()
+		for {
+			select {
+			case <-stop:
+				<-idleErrCh // drain
+				return
+			case err := <-idleErrCh:
+				if err != nil {
+					logger.Warn("IMAP IDLE ended with error: %v", err)
+				}
+				return
+			case upd, ok := <-updates:
+				if !ok {
+					return
+				}
+				if _, isMailbox := upd.(*client.MailboxUpdate); isMailbox {
+					emails, err := c.PollForNewEmails(folder, lastPoll)
+					if err != nil {
+						logger.Warn("IDLE poll for new emails failed: %v", err)
+						continue
+					}
+					if len(emails) > 0 {
+						lastPoll = time.Now()
+						select {
+						case newEmailsCh <- models.NewEmailsNotification{Emails: emails, Folder: folder}:
+						default:
+						}
+					}
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// StopIDLE stops a running IDLE session.
+func (c *Client) StopIDLE() {
+	c.idleMu.Lock()
+	defer c.idleMu.Unlock()
+	if c.idleStop != nil {
+		close(c.idleStop)
+		c.idleStop = nil
+	}
 }
 
 // checkBodyStructureForAttachments recursively checks if a body structure contains attachments

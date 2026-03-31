@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	imapClient "mail-processor/internal/imap"
 	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -1871,7 +1873,7 @@ func (m *Model) renderKeyHints() string {
 				hints = "1/2/3: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	return lipgloss.NewStyle().
@@ -3009,6 +3011,23 @@ func (m *Model) startPolling(interval int) tea.Cmd {
 	m.syncCountdown = interval
 	m.backend.StartPolling(m.currentFolder, interval)
 	return tea.Batch(m.listenForNewEmails(), m.tickSyncCountdown())
+}
+
+// startSync tries IDLE first (if enabled in config), falling back to polling.
+func (m *Model) startSync(folder string) tea.Cmd {
+	// Stop any running sync before starting a new one.
+	m.backend.StopIDLE()
+	m.backend.StopPolling()
+
+	if m.cfg.Sync.Idle {
+		if err := m.backend.StartIDLE(folder); err == nil {
+			m.syncStatusMode = "idle"
+			return m.listenForNewEmails()
+		} else if !errors.Is(err, imapClient.ErrIDLENotSupported) {
+			logger.Warn("IDLE failed, falling back to polling: %v", err)
+		}
+	}
+	return m.startPolling(m.cfg.Sync.Interval)
 }
 
 // --- Embedding helpers ---

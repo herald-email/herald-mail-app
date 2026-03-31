@@ -252,7 +252,10 @@ func (b *LocalBackend) Progress() <-chan models.ProgressInfo {
 
 // Close shuts down the IMAP connection and the cache database.
 func (b *LocalBackend) Close() error {
+	b.StopIDLE()
 	b.StopPolling()
+	close(b.progressCh)
+	close(b.newEmailsCh)
 	imapErr := b.imapClient.Close()
 	cacheErr := b.cache.Close()
 	if imapErr != nil {
@@ -353,6 +356,14 @@ func (b *LocalBackend) GetUnembeddedIDs(folder string) ([]string, error) {
 
 func (b *LocalBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
 	return b.newEmailsCh
+}
+
+func (b *LocalBackend) StartIDLE(folder string) error {
+	return b.imapClient.StartIDLE(folder, b.newEmailsCh)
+}
+
+func (b *LocalBackend) StopIDLE() {
+	b.imapClient.StopIDLE()
 }
 
 func (b *LocalBackend) StartPolling(folder string, interval int) {

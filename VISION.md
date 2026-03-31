@@ -33,7 +33,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
-- [ ] IMAP IDLE (real push; currently polling only)
+- [x] IMAP IDLE (real push; currently polling only)
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [x] Soft unsubscribe (auto-move future emails to a local folder)
 - [ ] Custom classification prompts (user-defined categories + data extraction)
@@ -50,7 +50,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [ ] README with MCP setup prompts for Claude / Cursor / Codex
-- [ ] Daemon server (`mail-processor serve`, Ollama-style)
+- [x] Daemon server (`mail-processor serve`, Ollama-style)
 - [ ] Native app client (Phase 3)
 
 ---
@@ -175,7 +175,7 @@ The app can automatically tag emails with categories (subscription, important, u
 
 The built-in classification prompt assigns one of six fixed categories (`sub`, `news`, `imp`, `txn`, `soc`, `spam`). Custom prompts let users define their own categories and extraction logic tailored to their workflow — e.g. extracting order numbers from receipts, flagging emails from specific clients, or categorizing by project.
 
-- [ ] `classification_prompts` section in `~/.herald/conf.yaml` — list of named prompt definitions
+- [x] `classification_prompts` section in `~/.herald/conf.yaml` — list of named prompt definitions
 - [ ] Each prompt specifies: name, system prompt text, list of valid output categories, and an optional data extraction instruction (e.g. "extract the tracking number")
 - [ ] Default built-in prompt used when no custom prompts are configured (current behaviour preserved)
 - [ ] Multiple prompts can run on the same email (e.g. one for category, one for data extraction)
@@ -463,7 +463,7 @@ The TUI and MCP server are safely runnable at the same time:
 - [x] SQLite WAL mode (readers never block writers)
 - [x] IMAP connection isolation (each process holds its own connection)
 - [x] Short atomic writes (no long-lived transactions)
-- [ ] Daemon architecture (Phase 2): both become clients of a single daemon that serialises all IMAP writes
+- [x] Daemon architecture (Phase 2): both become clients of a single daemon that serialises all IMAP writes
 
 ---
 

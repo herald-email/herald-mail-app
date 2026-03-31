@@ -1,17 +1,24 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/app"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/config"
+	"mail-processor/internal/daemon"
 	"mail-processor/internal/logger"
 	appsmtp "mail-processor/internal/smtp"
 )
@@ -151,7 +158,188 @@ func runDemo() {
 	}
 }
 
+// loadConfigResult holds the resolved config and its path.
+type loadConfigResult struct {
+	cfg        *config.Config
+	configPath string
+}
+
+// loadConfig loads and returns the app config using the default config path logic.
+// It expands ~ and handles the backwards-compat proton.yaml check.
+// Returns nil cfg on error (prints to stderr and exits).
+func loadConfig() (*config.Config, string) {
+	const defaultConfig = "~/.herald/conf.yaml"
+	configPath := defaultConfig
+
+	resolvedConfig, err := config.ExpandPath(configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(resolvedConfig)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	return cfg, resolvedConfig
+}
+
+// tryConnectDaemon attempts to connect to a running daemon and returns a
+// RemoteBackend if the daemon is reachable, or nil if not.
+func tryConnectDaemon(cfg *config.Config) backend.Backend {
+	url := fmt.Sprintf("http://%s:%d", cfg.Daemon.BindAddr, cfg.Daemon.Port)
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	resp, err := client.Get(url + "/v1/status")
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil
+	}
+	resp.Body.Close()
+	b, err := backend.NewRemote(url)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "serve":
+			runServe(os.Args[2:])
+			return
+		case "status":
+			runStatus(os.Args[2:])
+			return
+		case "stop":
+			runStop(os.Args[2:])
+			return
+		case "sync":
+			runSync(os.Args[2:])
+			return
+		}
+	}
+	runTUI()
+}
+
+func runServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	configPath := fs.String("config", "~/.herald/conf.yaml", "Path to configuration file")
+	_ = fs.Parse(args)
+
+	resolvedConfig, err := config.ExpandPath(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+
+	cfg, err := config.Load(resolvedConfig)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	if err := daemon.WritePID(cfg.Daemon.PidFile); err != nil {
+		log.Fatalf("pidfile: %v", err)
+	}
+	defer daemon.RemovePID(cfg.Daemon.PidFile)
+
+	srv, err := daemon.New(cfg, resolvedConfig)
+	if err != nil {
+		daemon.RemovePID(cfg.Daemon.PidFile)
+		log.Fatalf("daemon: %v", err)
+	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-stop
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("daemon shutdown error: %v", err)
+		}
+	}()
+
+	addr := fmt.Sprintf("%s:%d", cfg.Daemon.BindAddr, cfg.Daemon.Port)
+	log.Printf("herald daemon listening on %s", addr)
+	if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+		daemon.RemovePID(cfg.Daemon.PidFile)
+		log.Fatalf("server: %v", err)
+	}
+}
+
+func runStatus(args []string) {
+	cfg, _ := loadConfig()
+	pid, err := daemon.ReadPID(cfg.Daemon.PidFile)
+	if err != nil {
+		fmt.Println("daemon: not running (no pidfile)")
+		return
+	}
+	if !daemon.IsRunning(cfg.Daemon.PidFile) {
+		fmt.Printf("daemon: stale pidfile (pid %d not running)\n", pid)
+		return
+	}
+	// Call /v1/status
+	url := fmt.Sprintf("http://%s:%d/v1/status", cfg.Daemon.BindAddr, cfg.Daemon.Port)
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Printf("daemon: running (pid %d) but HTTP unreachable: %v\n", pid, err)
+		return
+	}
+	defer resp.Body.Close()
+	io.Copy(os.Stdout, resp.Body)
+	fmt.Println()
+}
+
+func runStop(args []string) {
+	cfg, _ := loadConfig()
+	pid, err := daemon.ReadPID(cfg.Daemon.PidFile)
+	if err != nil {
+		fmt.Println("daemon: not running")
+		return
+	}
+	if !daemon.IsRunning(cfg.Daemon.PidFile) {
+		fmt.Printf("daemon: stale pidfile (pid %d not running), removing\n", pid)
+		daemon.RemovePID(cfg.Daemon.PidFile)
+		return
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		fmt.Printf("process not found: %v\n", err)
+		return
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		fmt.Printf("signal failed: %v\n", err)
+		return
+	}
+	// Wait for pidfile removal (up to 5s)
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if _, err := os.Stat(cfg.Daemon.PidFile); os.IsNotExist(err) {
+			fmt.Println("daemon stopped")
+			return
+		}
+	}
+	fmt.Println("daemon stop timed out")
+}
+
+func runSync(args []string) {
+	cfg, _ := loadConfig()
+	folder := "INBOX"
+	if len(args) > 0 {
+		folder = args[0]
+	}
+	url := fmt.Sprintf("http://%s:%d/v1/sync?folder=%s", cfg.Daemon.BindAddr, cfg.Daemon.Port, folder)
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		fmt.Printf("sync failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	fmt.Printf("sync started for %s\n", folder)
+}
+
+func runTUI() {
 	// Parse command line flags
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
 	var verbose = flag.Bool("verbose", false, "Enable verbose logging")
@@ -174,6 +362,12 @@ func main() {
 		fmt.Println()
 		fmt.Println("Usage:")
 		fmt.Printf("  %s [flags]\n", os.Args[0])
+		fmt.Println()
+		fmt.Println("Subcommands:")
+		fmt.Printf("  %s serve   # Start the Herald daemon\n", os.Args[0])
+		fmt.Printf("  %s status  # Show daemon status\n", os.Args[0])
+		fmt.Printf("  %s stop    # Stop the running daemon\n", os.Args[0])
+		fmt.Printf("  %s sync    # Trigger a sync (optionally pass folder name)\n", os.Args[0])
 		fmt.Println()
 		fmt.Println("Flags:")
 		flag.PrintDefaults()
@@ -247,11 +441,19 @@ func main() {
 	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
 	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
 
-	// Create the backend (pass classifier so semantic search can embed queries)
-	b, err := backend.NewLocal(cfg, resolvedConfig, classifier)
-	if err != nil {
-		logger.Error("Failed to create backend: %v", err)
-		log.Fatalf("Failed to create backend: %v", err)
+	// Try to connect to the daemon first; fall back to direct LocalBackend.
+	var b backend.Backend
+	if remoteB := tryConnectDaemon(cfg); remoteB != nil {
+		logger.Info("Connected to Herald daemon")
+		b = remoteB
+	} else {
+		// Create the backend (pass classifier so semantic search can embed queries)
+		lb, err := backend.NewLocal(cfg, resolvedConfig, classifier)
+		if err != nil {
+			logger.Error("Failed to create backend: %v", err)
+			log.Fatalf("Failed to create backend: %v", err)
+		}
+		b = lb
 	}
 
 	// Create SMTP client for compose/reply

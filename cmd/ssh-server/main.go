@@ -31,6 +31,7 @@ func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
+	daemonURL := flag.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
 	flag.Parse()
 
 	if err := logger.Init(false); err != nil {
@@ -62,11 +63,23 @@ func main() {
 		wish.WithHostKeyPath(*hostKey),
 		wish.WithMiddleware(
 			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				// Each SSH connection gets its own backend (own IMAP connection + shared cache)
-				b, err := backend.NewLocal(cfg, resolvedConfig, classifier)
-				if err != nil {
-					fmt.Fprintf(s, "Failed to create backend: %v\n", err)
-					return nil, nil
+				var b backend.Backend
+				if *daemonURL != "" {
+					rb, err := backend.NewRemote(*daemonURL)
+					if err != nil {
+						log.Printf("ssh: failed to connect to daemon at %s: %v", *daemonURL, err)
+						fmt.Fprintf(s, "Failed to connect to daemon: %v\n", err)
+						return nil, nil
+					}
+					b = rb
+				} else {
+					// Each SSH connection gets its own backend (own IMAP connection + shared cache)
+					lb, err := backend.NewLocal(cfg, resolvedConfig, classifier)
+					if err != nil {
+						fmt.Fprintf(s, "Failed to create backend: %v\n", err)
+						return nil, nil
+					}
+					b = lb
 				}
 				m := app.New(b, mailer, cfg.Credentials.Username, classifier)
 				return m, []tea.ProgramOption{tea.WithAltScreen()}

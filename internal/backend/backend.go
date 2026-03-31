@@ -123,6 +123,13 @@ type Backend interface {
 	// NewEmailsCh returns a receive-only channel of new-email notifications.
 	NewEmailsCh() <-chan models.NewEmailsNotification
 
+	// StartIDLE starts an IMAP IDLE session on the given folder.
+	// Returns an error (including imap.ErrIDLENotSupported) if IDLE cannot start.
+	StartIDLE(folder string) error
+
+	// StopIDLE stops a running IDLE session.
+	StopIDLE()
+
 	// StartPolling starts background polling for new emails at the given interval.
 	StartPolling(folder string, interval int)
 

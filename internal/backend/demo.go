@@ -465,6 +465,8 @@ func (d *DemoBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
 	return d.newEmailsCh
 }
 
+func (d *DemoBackend) StartIDLE(folder string) error { return nil }
+func (d *DemoBackend) StopIDLE()                     {}
 func (d *DemoBackend) StartPolling(folder string, interval int) {}
 func (d *DemoBackend) StopPolling()                             {}
 

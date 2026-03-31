@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -113,5 +114,23 @@ func TestValidateRequiresCredentialsWithoutOAuth(t *testing.T) {
 
 	if err := c.validate(); err == nil {
 		t.Error("validate() should return error when credentials are missing and OAuth is not configured")
+	}
+}
+
+func TestDaemonDefaults(t *testing.T) {
+	c := &Config{}
+	c.applyDefaults()
+
+	if c.Daemon.Port != 7272 {
+		t.Errorf("expected Daemon.Port == 7272, got %d", c.Daemon.Port)
+	}
+	if c.Daemon.BindAddr != "127.0.0.1" {
+		t.Errorf("expected Daemon.BindAddr == %q, got %q", "127.0.0.1", c.Daemon.BindAddr)
+	}
+	if !strings.HasSuffix(c.Daemon.PidFile, filepath.Join("herald", "daemon.pid")) {
+		t.Errorf("unexpected PidFile: %s", c.Daemon.PidFile)
+	}
+	if !strings.HasSuffix(c.Daemon.LogFile, filepath.Join("herald", "daemon.log")) {
+		t.Errorf("unexpected LogFile: %s", c.Daemon.LogFile)
 	}
 }
