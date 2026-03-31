@@ -44,12 +44,12 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Filtered timeline from chat results
 - [ ] Multiple AI backends (Claude, OpenAI-compatible)
 - [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
-- [ ] Quick replies (canned + AI-generated contextual options)
-- [ ] Contact book
+- [x] Quick replies (canned + AI-generated contextual options)
+- [x] Contact book
 - [x] First-run setup wizard (detected when no config exists; account type, credentials, AI config steps)
 - [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
-- [ ] README with MCP setup prompts for Claude / Cursor / Codex
+- [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`mail-processor serve`, Ollama-style)
 - [ ] Native app client (Phase 3)
 
@@ -92,6 +92,7 @@ Keyboard (number keys) and mouse clickable.
 - [x] Tab 1 — Timeline: chronological email list with body preview split
 - [x] Tab 2 — Compose: write and send email
 - [x] Tab 3 — Cleanup: sender/domain grouping for bulk deletion
+- [x] Tab 4 — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
 
 ### Timeline View
 
@@ -337,16 +338,16 @@ While composing, the local Ollama model acts as an inline writing assistant — 
 When reading an email, a set of contextual one-click replies is offered below the preview. The user picks one, it opens pre-filled in Compose ready to edit or send immediately. Eliminates the most repetitive writing without removing the human in the loop.
 
 Built-in canned replies (always shown, no model needed):
-- [ ] "No thanks" — polite decline
-- [ ] "Thank you for reaching out"
-- [ ] "Thank you, [Name]" — first name extracted from the From header
-- [ ] "Copy that" — simple acknowledgement
-- [ ] "I'll get back to you" — defer
+- [x] "No thanks" — polite decline
+- [x] "Thank you for reaching out"
+- [x] "Thank you, [Name]" — first name extracted from the From header
+- [x] "Copy that" — simple acknowledgement
+- [x] "I'll get back to you" — defer
 
 AI-generated contextual replies (shown when body is loaded):
-- [ ] Model reads the email body and generates 3 short reply options relevant to the content
-- [ ] `Ctrl+Q` opens the quick-reply picker; arrow keys to select, `Enter` to open in Compose, `Esc` to cancel
-- [ ] Works in both split-preview and full-screen view
+- [x] Model reads the email body and generates 3 short reply options relevant to the content
+- [x] `Ctrl+Q` opens the quick-reply picker; arrow keys to select, `Enter` to open in Compose, `Esc` to cancel
+- [x] Works in both split-preview and full-screen view
 
 ---
 
@@ -397,7 +398,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 - [x] Vectors stored in SQLite (`email_embeddings` table)
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
-- [ ] Similarity score badge (`87%`) per result row
+- [x] Similarity score badge (`87%`) per result row
 - [ ] Hybrid ranking (keyword + semantic merged)
 - [ ] "Why this result?" hint (matched excerpt)
 
@@ -448,7 +449,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 - [ ] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
 - [ ] `soft_unsubscribe_sender` — auto-move future emails to a folder
 - [x] `list_rules` / `add_rule` / `run_rules` — automation rule management (dry-run evaluation)
-- [ ] `list_contacts` / `search_contacts` / `get_contact`
+- [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact`
 - [ ] `sync_folder` / `sync_all_folders` / `get_sync_status`
 - [ ] `get_server_info`
 
@@ -474,10 +475,10 @@ New emails are detected without a full restart. The current implementation uses 
 ### IMAP IDLE (target)
 IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications to the client without polling. It is more efficient and eliminates the delay between arrival and display.
 
-- [ ] Dedicated IDLE connection alongside the command connection
-- [ ] `EXISTS` → trigger incremental fetch, prepend rows to timeline
+- [ ] Dedicated IDLE connection alongside the command connection (currently reuses the command connection via `IdleWithFallback`)
+- [x] `EXISTS` → trigger incremental fetch, prepend rows to timeline (`MailboxUpdate` event → `PollForNewEmails`)
 - [ ] `EXPUNGE` → remove matching row from cache and timeline immediately
-- [ ] 29-minute keepalive (re-issue IDLE before server timeout)
+- [x] 29-minute keepalive (handled by `go-imap-idle` `IdleWithFallback`)
 
 ### Background polling (current)
 - [x] Configurable poll interval (`sync.interval` in `~/.herald/conf.yaml`, default 60s)
@@ -507,12 +508,15 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 
 Contacts are derived from To/From/CC headers seen in sent and received mail — no import required. They power name completion in Compose and will feed into chat context.
 
-- [ ] `contacts` table in SQLite (built from email headers during sync)
-- [ ] Name + all seen addresses + last-seen date per contact
+- [x] `contacts` table in SQLite (built from To/CC/BCC/From headers during IMAP sync)
+- [x] Name, email, company, topics, first/last-seen, email/sent counts per contact
+- [x] LLM enrichment via Ollama: extracts company name and discussed topics from email subjects (`e` key)
+- [x] Semantic contact embeddings for natural-language search
+- [x] Tab 4 — Contacts TUI: two-panel list+detail, `/` keyword search, `?` semantic search
+- [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
+- [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
 - [ ] Autocomplete in Compose `To`/`CC`/`BCC` fields
-- [ ] `list_contacts` / `search_contacts` / `get_contact` MCP tools
-- [ ] macOS Contacts app integration (future)
-- [ ] CardDAV sync if ProtonMail Bridge exposes it (future)
+- [ ] CardDAV sync (config stubs in place; implementation deferred)
 
 ---
 
@@ -614,10 +618,12 @@ The MCP server lets Claude Code, Cursor, Codex, and other AI tools read and mana
 
 Each prompt below instructs the AI tool to register the MCP server. Users copy the prompt, run it in the relevant tool, and the server is live.
 
-- [ ] **Claude Code** — prompt to add `cmd/mcp-server` to `~/.claude/claude.json` MCP config
-- [ ] **Cursor** — prompt to add the server to Cursor's MCP settings JSON
+- [x] **Claude Code** — prompt to add `cmd/mcp-server` to `~/.claude/claude.json` MCP config
+- [x] **Cursor** — prompt to add the server to Cursor's MCP settings JSON
+- [x] **Windsurf** — JSON snippet for `~/.codeium/windsurf/mcp_config.json`
+- [x] **Codex** — env-var CLI approach
 - [ ] **GitHub Copilot / VS Code** (when MCP support lands) — equivalent config snippet
-- [ ] **Generic** — prompt that explains how to run `./bin/mcp-server` and wire it into any MCP-compatible client
+- [x] **Generic** — prompt that explains how to run `./bin/mcp-server` and wire it into any MCP-compatible client
 
 Example (Claude Code):
 ```
@@ -626,12 +632,12 @@ Add a local MCP server called "mail" that runs this command:
 ```
 
 ### README goals
-- [ ] One-paragraph "what this is" intro
-- [ ] Quick-start: build → configure → run (under 5 commands)
-- [ ] MCP setup section with copy-paste prompts per tool
-- [ ] Screenshot / GIF of the TUI
-- [ ] Key bindings reference table
-- [ ] Link to VISION.md and ARCHITECTURE.md for deeper context
+- [x] One-paragraph "what this is" intro
+- [x] Quick-start: build → configure → run (under 5 commands)
+- [x] MCP setup section with copy-paste prompts per tool
+- [ ] Screenshot / GIF of the TUI (tapes written; GIFs not yet generated)
+- [x] Key bindings reference table
+- [x] Link to VISION.md and ARCHITECTURE.md for deeper context
 
 ---
 
