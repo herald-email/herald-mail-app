@@ -10,10 +10,7 @@ import (
 
 func claudeOKResponse(text string) claudeResponse {
 	return claudeResponse{
-		Content: []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		}{{Type: "text", Text: text}},
+		Content: []claudeResponseBlock{{Type: "text", Text: text}},
 	}
 }
 
@@ -123,5 +120,80 @@ func TestClaudeClientClassify(t *testing.T) {
 	}
 	if cat != CategorySpam {
 		t.Errorf("expected spam, got %q", cat)
+	}
+}
+
+func TestClaudeChatWithTools_ReturnsToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := claudeResponse{
+			Content: []claudeResponseBlock{
+				{
+					Type:  "tool_use",
+					ID:    "toolu_123",
+					Name:  "search_emails",
+					Input: json.RawMessage(`{"query":"invoice"}`),
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestClaudeClient(srv.URL)
+	tools := []Tool{
+		{
+			Name:        "search_emails",
+			Description: "Search emails",
+			Parameters: ToolParams{
+				Type:       "object",
+				Properties: map[string]ToolProp{"query": {Type: "string", Description: "query"}},
+				Required:   []string{"query"},
+			},
+		},
+	}
+
+	text, calls, err := c.ChatWithTools([]ChatMessage{{Role: "user", Content: "find invoices"}}, tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "" {
+		t.Errorf("expected empty text, got %q", text)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	if calls[0].ID != "toolu_123" {
+		t.Errorf("expected ID toolu_123, got %q", calls[0].ID)
+	}
+	if calls[0].Name != "search_emails" {
+		t.Errorf("expected search_emails, got %q", calls[0].Name)
+	}
+	var args map[string]string
+	if err := json.Unmarshal(calls[0].Arguments, &args); err != nil {
+		t.Fatal(err)
+	}
+	if args["query"] != "invoice" {
+		t.Errorf("expected query=invoice, got %q", args["query"])
+	}
+}
+
+func TestClaudeChatWithTools_ReturnsText(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(claudeOKResponse("Here are your results"))
+	}))
+	defer srv.Close()
+
+	c := newTestClaudeClient(srv.URL)
+	text, calls, err := c.ChatWithTools([]ChatMessage{{Role: "user", Content: "hello"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "Here are your results" {
+		t.Errorf("expected text, got %q", text)
+	}
+	if len(calls) != 0 {
+		t.Errorf("expected no tool calls, got %d", len(calls))
 	}
 }

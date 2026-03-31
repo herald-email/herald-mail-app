@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -37,14 +38,15 @@ type OAuthRequiredMsg struct {
 
 // Settings is a self-contained huh-based settings form component.
 type Settings struct {
-	mode   SettingsMode
-	form   *huh.Form
-	cfg    *config.Config // working copy
-	width  int
-	height int
-	done   bool // set once we've emitted the completion message
+	mode       SettingsMode
+	form       *huh.Form
+	cfg        *config.Config // working copy
+	configPath string         // path to the config file for saving
+	width      int
+	height     int
+	done       bool // set once we've emitted the completion message
 
-	// form field backing variables
+	// form field backing variables — account
 	provider    string
 	email       string
 	password    string
@@ -52,17 +54,37 @@ type Settings struct {
 	imapPort    string
 	smtpHost    string
 	smtpPort    string
-	ollamaHost  string
-	ollamaModel string
-	embedModel  string
+
+	// form field backing variables — AI provider
+	aiProvider   string
+	claudeAPIKey string
+	claudeModel  string
+	openAIAPIKey string
+	openAIBaseURL string
+	openAIModel  string
+	ollamaHost   string
+	ollamaModel  string
+	embedModel   string
+
+	// form field backing variables — sync & cleanup
+	syncPollStr        string
+	syncIDLE           bool
+	cleanupScheduleStr string
 }
 
 // NewSettings creates a Settings component, pre-filling fields from an existing config.
 // If existing is nil, a zero-value config is used.
 func NewSettings(mode SettingsMode, existing *config.Config) *Settings {
+	return NewSettingsWithPath(mode, existing, "")
+}
+
+// NewSettingsWithPath creates a Settings component with an explicit config file path for saving.
+func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath string) *Settings {
 	s := &Settings{
-		mode: mode,
-		cfg:  &config.Config{},
+		mode:       mode,
+		cfg:        &config.Config{},
+		configPath: configPath,
+		syncIDLE:   true, // sensible default
 	}
 
 	if existing != nil {
@@ -75,9 +97,22 @@ func NewSettings(mode SettingsMode, existing *config.Config) *Settings {
 		s.imapPort = portToString(existing.Server.Port)
 		s.smtpHost = existing.SMTP.Host
 		s.smtpPort = portToString(existing.SMTP.Port)
+
+		// AI provider fields
+		s.aiProvider = existing.AI.Provider
 		s.ollamaHost = existing.Ollama.Host
 		s.ollamaModel = existing.Ollama.Model
 		s.embedModel = existing.Ollama.EmbeddingModel
+		s.claudeAPIKey = existing.Claude.APIKey
+		s.claudeModel = existing.Claude.Model
+		s.openAIAPIKey = existing.OpenAI.APIKey
+		s.openAIBaseURL = existing.OpenAI.BaseURL
+		s.openAIModel = existing.OpenAI.Model
+
+		// Sync & cleanup fields
+		s.syncPollStr = strconv.Itoa(existing.Sync.PollIntervalMinutes)
+		s.syncIDLE = existing.Sync.IDLEEnabled
+		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
 
 		// If Gmail OAuth, use the Gmail email field.
 		if existing.Gmail.Email != "" {
@@ -89,12 +124,21 @@ func NewSettings(mode SettingsMode, existing *config.Config) *Settings {
 	if s.provider == "" {
 		s.provider = "imap"
 	}
+	if s.aiProvider == "" {
+		s.aiProvider = "ollama"
+	}
+	if s.syncPollStr == "" {
+		s.syncPollStr = "5" // default only on first run; 0 is valid (IDLE-only mode)
+	}
+	if s.cleanupScheduleStr == "" {
+		s.cleanupScheduleStr = "0"
+	}
 
 	s.buildForm()
 	return s
 }
 
-// buildForm constructs the huh.Form with three groups.
+// buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
 func (s *Settings) buildForm() {
 	// Group 1 — Account type selection
 	accountGroup := huh.NewGroup(
@@ -116,9 +160,29 @@ func (s *Settings) buildForm() {
 		huh.NewInput().Title("Email address").Value(&s.email).Validate(validateEmail),
 		huh.NewInput().Title("Password").EchoMode(huh.EchoModePassword).Value(&s.password),
 		huh.NewInput().Title("IMAP Host").Value(&s.imapHost),
-		huh.NewInput().Title("IMAP Port").Value(&s.imapPort),
+		huh.NewInput().Title("IMAP Port").Value(&s.imapPort).
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
 		huh.NewInput().Title("SMTP Host").Value(&s.smtpHost),
-		huh.NewInput().Title("SMTP Port").Value(&s.smtpPort),
+		huh.NewInput().Title("SMTP Port").Value(&s.smtpPort).
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
 	).WithHideFunc(func() bool { return s.provider == "gmail" })
 
 	// Group 2b — Gmail OAuth notice
@@ -129,15 +193,79 @@ func (s *Settings) buildForm() {
 		huh.NewInput().Title("Gmail address").Value(&s.email).Validate(validateEmail),
 	).WithHideFunc(func() bool { return s.provider != "gmail" })
 
-	// Group 3 — AI configuration (all optional)
-	aiGroup := huh.NewGroup(
-		huh.NewInput().Title("Ollama Host").Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
-		huh.NewInput().Title("Model").Value(&s.ollamaModel).Placeholder("gemma3:4b"),
-		huh.NewInput().Title("Embedding Model").Value(&s.embedModel).Placeholder("nomic-embed-text"),
-		huh.NewNote().Description("All AI fields are optional. Leave blank to use Herald without AI."),
-	)
+	// Group 3 — AI provider selection
+	aiProviderGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("AI Provider").
+			Options(
+				huh.NewOption("Ollama (local)", "ollama"),
+				huh.NewOption("Claude API", "claude"),
+				huh.NewOption("OpenAI / compatible", "openai"),
+			).
+			Value(&s.aiProvider),
+	).Title("AI Provider")
 
-	s.form = huh.NewForm(accountGroup, credentialsGroup, gmailGroup, aiGroup).
+	// Group 3a — Ollama settings (shown only when provider = ollama)
+	ollamaGroup := huh.NewGroup(
+		huh.NewInput().Title("Ollama Host").Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
+		huh.NewInput().Title("Ollama Model").Value(&s.ollamaModel).Placeholder("gemma3:4b"),
+		huh.NewInput().Title("Embedding Model").Value(&s.embedModel).Placeholder("nomic-embed-text"),
+	).WithHideFunc(func() bool { return s.aiProvider != "ollama" })
+
+	// Group 3b — Claude settings (shown only when provider = claude)
+	claudeGroup := huh.NewGroup(
+		huh.NewInput().Title("Claude API Key").EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey),
+		huh.NewInput().Title("Claude Model").Placeholder("claude-sonnet-4-6").Value(&s.claudeModel),
+	).WithHideFunc(func() bool { return s.aiProvider != "claude" })
+
+	// Group 3c — OpenAI settings (shown only when provider = openai)
+	openAIGroup := huh.NewGroup(
+		huh.NewInput().Title("OpenAI API Key").EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
+		huh.NewInput().Title("OpenAI Base URL").Placeholder("https://api.openai.com/v1").Value(&s.openAIBaseURL),
+		huh.NewInput().Title("OpenAI Model").Placeholder("gpt-4o").Value(&s.openAIModel),
+	).WithHideFunc(func() bool { return s.aiProvider != "openai" })
+
+	// Group 4 — Sync & Cleanup preferences
+	syncGroup := huh.NewGroup(
+		huh.NewInput().
+			Title("Poll Interval (minutes)").
+			Description("0 = use IMAP IDLE only").
+			Placeholder("5").
+			Value(&s.syncPollStr).
+			Validate(func(v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 0 {
+					return errors.New("must be a non-negative integer")
+				}
+				return nil
+			}),
+		huh.NewConfirm().
+			Title("Enable IMAP IDLE").
+			Value(&s.syncIDLE),
+		huh.NewInput().
+			Title("Auto-Cleanup Schedule (hours)").
+			Description("0 = disabled").
+			Placeholder("24").
+			Value(&s.cleanupScheduleStr).
+			Validate(func(v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 0 {
+					return errors.New("must be a non-negative integer")
+				}
+				return nil
+			}),
+	).Title("Sync & Cleanup")
+
+	s.form = huh.NewForm(
+		accountGroup,
+		credentialsGroup,
+		gmailGroup,
+		aiProviderGroup,
+		ollamaGroup,
+		claudeGroup,
+		openAIGroup,
+		syncGroup,
+	).
 		WithShowHelp(true).
 		WithShowErrors(true)
 
@@ -248,8 +376,14 @@ func (s *Settings) View() string {
 }
 
 // buildConfig constructs a config.Config from the current form field values.
+// It starts from a copy of the existing config so that fields not managed by
+// this form (Daemon, Semantic, Classification.Prompts, OAuth tokens, etc.) are
+// preserved unchanged.
 func (s *Settings) buildConfig() *config.Config {
-	cfg := &config.Config{}
+	// Shallow copy preserves all non-pointer fields; pointer/slice fields that
+	// this form does not modify are left pointing at the same underlying data
+	// (safe because we never mutate them — we only overwrite scalar fields below).
+	cfg := *s.cfg
 	cfg.Vendor = s.provider
 
 	if s.provider == "gmail" {
@@ -263,12 +397,29 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.Server.Port = parsePort(s.imapPort)
 	cfg.SMTP.Host = s.smtpHost
 	cfg.SMTP.Port = parsePort(s.smtpPort)
+
+	// AI provider
+	cfg.AI.Provider = s.aiProvider
 	cfg.Ollama.Host = s.ollamaHost
 	cfg.Ollama.Model = s.ollamaModel
 	cfg.Ollama.EmbeddingModel = s.embedModel
+	cfg.Claude.APIKey = s.claudeAPIKey
+	cfg.Claude.Model = s.claudeModel
+	cfg.OpenAI.APIKey = s.openAIAPIKey
+	cfg.OpenAI.BaseURL = s.openAIBaseURL
+	cfg.OpenAI.Model = s.openAIModel
 
-	applyVendorPreset(cfg)
-	return cfg
+	// Sync & cleanup
+	if n, err := strconv.Atoi(s.syncPollStr); err == nil {
+		cfg.Sync.PollIntervalMinutes = n
+	}
+	cfg.Sync.IDLEEnabled = s.syncIDLE
+	if n, err := strconv.Atoi(s.cleanupScheduleStr); err == nil {
+		cfg.Cleanup.ScheduleHours = n
+	}
+
+	applyVendorPreset(&cfg)
+	return &cfg
 }
 
 // applyVendorPreset fills in server/smtp host+port when a vendor shortcut is

@@ -253,6 +253,12 @@ func (b *LocalBackend) Progress() <-chan models.ProgressInfo {
 	return b.progressCh
 }
 
+// Cache returns the underlying SQLite cache, for use by components that need
+// direct cache access (e.g. the cleanup engine in the daemon server).
+func (b *LocalBackend) Cache() *cache.Cache {
+	return b.cache
+}
+
 // Close shuts down the IMAP connection and the cache database.
 func (b *LocalBackend) Close() error {
 	b.StopIDLE()
@@ -527,6 +533,10 @@ func (b *LocalBackend) TouchRuleLastTriggered(ruleID int64) error {
 	return b.cache.TouchRuleLastTriggered(ruleID)
 }
 
+func (b *LocalBackend) SaveCustomCategory(messageID string, promptID int64, result string) error {
+	return b.cache.SaveCustomCategory(messageID, promptID, result)
+}
+
 // --- Contacts ---
 
 func (b *LocalBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
@@ -563,4 +573,18 @@ func (b *LocalBackend) GetContactEmails(contactEmail string, limit int) ([]*mode
 
 func (b *LocalBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
 	return b.cache.UpsertContacts(addrs, direction)
+}
+
+// --- Cleanup rules ---
+
+func (b *LocalBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {
+	return b.cache.GetAllCleanupRules()
+}
+
+func (b *LocalBackend) SaveCleanupRule(rule *models.CleanupRule) error {
+	return b.cache.SaveCleanupRule(rule)
+}
+
+func (b *LocalBackend) DeleteCleanupRule(id int64) error {
+	return b.cache.DeleteCleanupRule(id)
 }

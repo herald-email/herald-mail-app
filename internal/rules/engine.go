@@ -15,6 +15,7 @@ import (
 type Store interface {
 	GetEnabledRules() ([]*models.Rule, error)
 	GetCustomPrompt(id int64) (*models.CustomPrompt, error)
+	SaveCustomCategory(messageID string, promptID int64, result string) error
 	AppendActionLog(*models.RuleActionLogEntry) error
 	TouchRuleLastTriggered(int64) error
 }
@@ -63,10 +64,16 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 			Folder:    email.Folder,
 		}
 
-		// Run optional custom prompt
+		// Run optional custom prompt — best-effort; failure does not block actions.
 		if rule.CustomPromptID != nil && e.ai != nil {
-			// best-effort: if prompt fails, continue without result
-			// (implement custom prompt execution in a follow-up — for now skip)
+			prompt, err := e.store.GetCustomPrompt(*rule.CustomPromptID)
+			if err == nil && prompt != nil {
+				result, execErr := e.runCustomPrompt(prompt, email)
+				if execErr == nil {
+					_ = e.store.SaveCustomCategory(email.MessageID, *rule.CustomPromptID, result)
+					ctx.PromptResult = result
+				}
+			}
 		}
 
 		// Execute actions
@@ -159,4 +166,49 @@ func renderTemplate(tmpl string, ctx models.RuleContext) string {
 		return tmpl
 	}
 	return buf.String()
+}
+
+// promptData is the template data struct used when expanding a CustomPrompt's UserTemplate.
+type promptData struct {
+	Subject string
+	Sender  string
+	Body    string
+}
+
+// RunCustomPromptForEmail expands the prompt's UserTemplate with email data and
+// calls the AI client. It is used by both the rules engine and the MCP server.
+func RunCustomPromptForEmail(aiClient ai.AIClient, prompt *models.CustomPrompt, sender, subject string) (string, error) {
+	tmplText := prompt.UserTemplate
+	if strings.TrimSpace(tmplText) == "" {
+		tmplText = "Email from: {{.Sender}}\nSubject: {{.Subject}}"
+	}
+
+	t, err := template.New("prompt").Parse(tmplText)
+	if err != nil {
+		return "", fmt.Errorf("parse template: %w", err)
+	}
+
+	var buf strings.Builder
+	data := struct {
+		Sender  string
+		Subject string
+		Body    string
+	}{Sender: sender, Subject: subject, Body: ""}
+	if err := t.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute template: %w", err)
+	}
+	expanded := buf.String()
+
+	msgs := []ai.ChatMessage{}
+	if strings.TrimSpace(prompt.SystemText) != "" {
+		msgs = append(msgs, ai.ChatMessage{Role: "system", Content: prompt.SystemText})
+	}
+	msgs = append(msgs, ai.ChatMessage{Role: "user", Content: expanded})
+	return aiClient.Chat(msgs)
+}
+
+// runCustomPrompt expands the prompt's UserTemplate with email fields,
+// calls the AI Chat endpoint, and returns the raw response string.
+func (e *Engine) runCustomPrompt(prompt *models.CustomPrompt, email *models.EmailData) (string, error) {
+	return RunCustomPromptForEmail(e.ai, prompt, email.Sender, email.Subject)
 }

@@ -635,6 +635,10 @@ func (d *DemoBackend) TouchRuleLastTriggered(ruleID int64) error {
 	return nil
 }
 
+func (d *DemoBackend) SaveCustomCategory(messageID string, promptID int64, result string) error {
+	return nil
+}
+
 // --- Contacts (stubs for DemoBackend) ---
 
 func (d *DemoBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
@@ -680,6 +684,20 @@ func (d *DemoBackend) SearchContacts(query string) ([]models.ContactData, error)
 }
 
 func (d *DemoBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
+	return nil
+}
+
+// --- Cleanup rules ---
+
+func (d *DemoBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) SaveCleanupRule(rule *models.CleanupRule) error {
+	return nil
+}
+
+func (d *DemoBackend) DeleteCleanupRule(id int64) error {
 	return nil
 }
 

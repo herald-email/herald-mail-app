@@ -2064,7 +2064,7 @@ func (m *Model) renderKeyHints() string {
 				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  C: auto-cleanup rules  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	// Override hints when quick reply picker is open.
@@ -2575,7 +2575,10 @@ func (m *Model) renderComposeView() string {
 	return sb.String()
 }
 
-// submitChat sends the current chat input to Ollama with email context
+const maxToolRounds = 5
+
+// submitChat sends the current chat input to the AI backend with email context,
+// using a multi-turn tool-calling loop when supported.
 func (m *Model) submitChat() tea.Cmd {
 	question := strings.TrimSpace(m.chatInput.Value())
 	if question == "" {
@@ -2583,6 +2586,8 @@ func (m *Model) submitChat() tea.Cmd {
 	}
 	m.chatInput.SetValue("")
 	m.chatWaiting = true
+
+	currentFolder := m.currentFolder // snapshot before goroutine
 
 	// Append user message to history
 	m.chatMessages = append(m.chatMessages, ai.ChatMessage{
@@ -2593,8 +2598,8 @@ func (m *Model) submitChat() tea.Cmd {
 
 	// Build system prompt with email context
 	var ctx strings.Builder
-	ctx.WriteString(fmt.Sprintf("You are an email assistant. The user is viewing folder: %s.\n", m.currentFolder))
-	if st, ok := m.folderStatus[m.currentFolder]; ok {
+	ctx.WriteString(fmt.Sprintf("You are an email assistant. The user is viewing folder: %s.\n", currentFolder))
+	if st, ok := m.folderStatus[currentFolder]; ok {
 		ctx.WriteString(fmt.Sprintf("Folder has %d total emails, %d unread.\n", st.Total, st.Unseen))
 	}
 	if len(m.timelineEmails) > 0 {
@@ -2616,12 +2621,54 @@ func (m *Model) submitChat() tea.Cmd {
 	messages := append([]ai.ChatMessage{systemMsg}, m.chatMessages...)
 
 	classifier := m.classifier
+	tools, dispatch := m.chatToolRegistryWithFolder(currentFolder)
+
 	return func() tea.Msg {
 		if classifier == nil {
 			return ChatResponseMsg{Err: fmt.Errorf("AI not configured")}
 		}
-		reply, err := classifier.Chat(messages)
-		return ChatResponseMsg{Content: reply, Err: err}
+
+		for round := 0; round < maxToolRounds; round++ {
+			response, calls, err := classifier.ChatWithTools(messages, tools)
+			if err != nil {
+				if errors.Is(err, ai.ErrToolsNotSupported) {
+					// Fall back to plain Chat()
+					reply, err2 := classifier.Chat(messages)
+					if err2 != nil {
+						return ChatResponseMsg{Err: err2}
+					}
+					return ChatResponseMsg{Content: reply}
+				}
+				return ChatResponseMsg{Err: err}
+			}
+
+			if len(calls) == 0 {
+				// Final text response
+				return ChatResponseMsg{Content: response}
+			}
+
+			// Append assistant turn with all tool calls (once per round)
+			messages = append(messages, ai.ChatMessage{
+				Role:      "assistant",
+				ToolCalls: calls,
+			})
+
+			// Execute tool calls and append one result message per call
+			for _, call := range calls {
+				result, dispErr := dispatch(call.Name, call.Arguments)
+				if dispErr != nil {
+					result = "Error: " + dispErr.Error()
+				}
+				messages = append(messages, ai.ChatMessage{
+					Role:       "tool",
+					ToolCallID: call.ID,
+					ToolName:   call.Name,
+					Content:    result,
+				})
+			}
+		}
+
+		return ChatResponseMsg{Content: "Max tool rounds reached without a final response."}
 	}
 }
 

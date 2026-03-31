@@ -202,6 +202,9 @@ type Backend interface {
 	// TouchRuleLastTriggered updates the last_triggered timestamp for a rule.
 	TouchRuleLastTriggered(ruleID int64) error
 
+	// SaveCustomCategory persists a custom prompt result for a message.
+	SaveCustomCategory(messageID string, promptID int64, result string) error
+
 	// --- Contacts ---
 
 	// GetContactsToEnrich returns contacts with email_count >= minCount that have not been enriched yet.
@@ -232,4 +235,15 @@ type Backend interface {
 	// UpsertContacts inserts or updates contacts from seen email addresses.
 	// direction is "from" or "to".
 	UpsertContacts(addrs []models.ContactAddr, direction string) error
+
+	// --- Cleanup rules ---
+
+	// GetAllCleanupRules returns all cleanup rules.
+	GetAllCleanupRules() ([]*models.CleanupRule, error)
+
+	// SaveCleanupRule inserts or updates a cleanup rule.
+	SaveCleanupRule(rule *models.CleanupRule) error
+
+	// DeleteCleanupRule removes a cleanup rule by ID.
+	DeleteCleanupRule(id int64) error
 }

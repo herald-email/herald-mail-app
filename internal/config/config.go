@@ -43,10 +43,12 @@ type Config struct {
 		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
 	} `yaml:"ollama"`
 	Sync struct {
-		Idle       bool `yaml:"idle"`       // default: true
-		Interval   int  `yaml:"interval"`   // fallback poll seconds, default: 60
-		Background bool `yaml:"background"` // sync other folders, default: true
-		Notify     bool `yaml:"notify"`     // status bar flash, default: true
+		Idle                bool `yaml:"idle"`       // default: true
+		Interval            int  `yaml:"interval"`   // fallback poll seconds, default: 60
+		Background          bool `yaml:"background"` // sync other folders, default: true
+		Notify              bool `yaml:"notify"`     // status bar flash, default: true
+		PollIntervalMinutes int  `yaml:"poll_interval_minutes"` // 0 = IDLE only; default 5
+		IDLEEnabled         bool `yaml:"idle_enabled"`          // default true
 	} `yaml:"sync"`
 	Semantic struct {
 		Enabled   bool    `yaml:"enabled"`    // default: true when Ollama configured
@@ -67,6 +69,19 @@ type Config struct {
 		PidFile  string `yaml:"pid_file"` // default: ~/.local/share/herald/daemon.pid
 		LogFile  string `yaml:"log_file"` // default: ~/.local/share/herald/daemon.log
 	} `yaml:"daemon"`
+
+	Classification struct {
+		Prompts []struct {
+			Name         string `yaml:"name"`
+			SystemText   string `yaml:"system_text"`
+			UserTemplate string `yaml:"user_template"`
+			OutputVar    string `yaml:"output_var"`
+		} `yaml:"prompts"`
+	} `yaml:"classification"`
+
+	Cleanup struct {
+		ScheduleHours int `yaml:"schedule_hours"` // 0 = disabled (no auto-run)
+	} `yaml:"cleanup"`
 
 	Claude struct {
 		APIKey string `yaml:"api_key"`

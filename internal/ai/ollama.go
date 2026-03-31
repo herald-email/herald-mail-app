@@ -115,18 +115,31 @@ Tag:`, sender, subject)
 
 // ChatMessage is a single turn in a conversation
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall // set on role="assistant" messages that contain tool calls
+	ToolCallID string     // set on role="tool" messages (links to the ToolCall.ID)
+	ToolName   string     // set on role="tool" messages (the tool that was called)
 }
 
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	Stream   bool          `json:"stream"`
+	Tools    []Tool        `json:"tools,omitempty"`
 }
 
 type chatResponse struct {
-	Message ChatMessage `json:"message"`
+	Message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+		ToolCalls []struct {
+			Function struct {
+				Name      string          `json:"name"`
+				Arguments json.RawMessage `json:"arguments"`
+			} `json:"function"`
+		} `json:"tool_calls"`
+	} `json:"message"`
 }
 
 // Chat sends a multi-turn conversation to Ollama and returns the assistant reply
@@ -152,6 +165,44 @@ func (c *Classifier) Chat(messages []ChatMessage) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(result.Message.Content), nil
+}
+
+// ChatWithTools sends a multi-turn conversation with tool definitions to Ollama.
+// Returns either a text response OR tool calls (not both).
+func (c *Classifier) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
+	body, err := json.Marshal(chatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   false,
+		Tools:    tools,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	resp, err := c.client.Post(c.host+"/api/chat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", nil, fmt.Errorf("ollama chat failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+	var result chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", nil, err
+	}
+	if len(result.Message.ToolCalls) > 0 {
+		var calls []ToolCall
+		for i, tc := range result.Message.ToolCalls {
+			calls = append(calls, ToolCall{
+				ID:        fmt.Sprintf("call_%d", i),
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			})
+		}
+		return "", calls, nil
+	}
+	return strings.TrimSpace(result.Message.Content), nil, nil
 }
 
 // Ping checks whether Ollama is running and the model is available

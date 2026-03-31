@@ -110,3 +110,26 @@ func Warn(format string, args ...interface{}) {
 func IsDebugMode() bool {
 	return debugMode
 }
+
+// Logger is an injectable logger that delegates to the package-level logger.
+// A nil *Logger is safe to use; all methods are no-ops on nil.
+type Logger struct{}
+
+// New returns a Logger that delegates to the package-level logger functions.
+func New() *Logger { return &Logger{} }
+
+// Debug logs a debug message via the package-level Debug function.
+func (l *Logger) Debug(format string, args ...interface{}) {
+	if l == nil {
+		return
+	}
+	Debug(format, args...)
+}
+
+// Info logs an info message via the package-level Info function.
+func (l *Logger) Info(format string, args ...interface{}) {
+	if l == nil {
+		return
+	}
+	Info(format, args...)
+}

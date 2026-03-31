@@ -60,15 +60,37 @@ type openAIImageURL struct {
 	URL string `json:"url"`
 }
 
+type openAITool struct {
+	Type     string         `json:"type"` // "function"
+	Function openAIFunction `json:"function"`
+}
+
+type openAIFunction struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Parameters  ToolParams `json:"parameters"`
+}
+
+type openAIToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	} `json:"function"`
+}
+
 type openAIChatRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
+	Model    string       `json:"model"`
+	Messages []any        `json:"messages"`
+	Tools    []openAITool `json:"tools,omitempty"`
 }
 
 type openAIChatResponse struct {
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content   string           `json:"content"`
+			ToolCalls []openAIToolCall `json:"tool_calls"`
 		} `json:"message"`
 	} `json:"choices"`
 	Error *struct {
@@ -117,7 +139,7 @@ func (c *OpenAICompatClient) doPost(ctx context.Context, path string, payload an
 
 // Chat sends a multi-turn conversation using /v1/chat/completions.
 func (c *OpenAICompatClient) Chat(messages []ChatMessage) (string, error) {
-	var oaMsgs []openAIMessage
+	var oaMsgs []any
 	for _, m := range messages {
 		oaMsgs = append(oaMsgs, openAIMessage{Role: m.Role, Content: m.Content})
 	}
@@ -139,6 +161,118 @@ func (c *OpenAICompatClient) Chat(messages []ChatMessage) (string, error) {
 		return "", fmt.Errorf("no choices in openai response")
 	}
 	return strings.TrimSpace(result.Choices[0].Message.Content), nil
+}
+
+// openAIToolCallOut is the tool_call object sent inside an assistant message.
+type openAIToolCallOut struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"` // "function"
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"` // JSON-encoded string
+	} `json:"function"`
+}
+
+// openAIAssistantMsg is an assistant message that may include tool_calls.
+type openAIAssistantMsg struct {
+	Role      string              `json:"role"`
+	Content   string              `json:"content,omitempty"`
+	ToolCalls []openAIToolCallOut `json:"tool_calls,omitempty"`
+}
+
+// openAIToolResultMsg is a tool result message.
+type openAIToolResultMsg struct {
+	Role       string `json:"role"`        // "tool"
+	ToolCallID string `json:"tool_call_id"`
+	Content    string `json:"content"`
+}
+
+// ChatWithTools sends a conversation with tool definitions using /v1/chat/completions.
+// Returns either a text response OR tool calls (not both).
+func (c *OpenAICompatClient) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
+	// Build a []any so we can mix different message struct shapes.
+	var oaMsgs []any
+	for _, m := range messages {
+		switch m.Role {
+		case "assistant":
+			if len(m.ToolCalls) > 0 {
+				var tcs []openAIToolCallOut
+				for _, tc := range m.ToolCalls {
+					tcs = append(tcs, openAIToolCallOut{
+						ID:   tc.ID,
+						Type: "function",
+						Function: struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						}{
+							Name:      tc.Name,
+							Arguments: string(tc.Arguments),
+						},
+					})
+				}
+				oaMsgs = append(oaMsgs, openAIAssistantMsg{Role: "assistant", ToolCalls: tcs})
+			} else {
+				oaMsgs = append(oaMsgs, openAIMessage{Role: "assistant", Content: m.Content})
+			}
+		case "tool":
+			oaMsgs = append(oaMsgs, openAIToolResultMsg{
+				Role:       "tool",
+				ToolCallID: m.ToolCallID,
+				Content:    m.Content,
+			})
+		default:
+			oaMsgs = append(oaMsgs, openAIMessage{Role: m.Role, Content: m.Content})
+		}
+	}
+	var oaTools []openAITool
+	for _, t := range tools {
+		oaTools = append(oaTools, openAITool{
+			Type: "function",
+			Function: openAIFunction{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.Parameters,
+			},
+		})
+	}
+	respBody, err := c.doPost(context.Background(), "/chat/completions", openAIChatRequest{
+		Model:    c.model,
+		Messages: oaMsgs,
+		Tools:    oaTools,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	var result openAIChatResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", nil, fmt.Errorf("decode openai response: %w", err)
+	}
+	if result.Error != nil {
+		return "", nil, fmt.Errorf("openai error: %s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 {
+		return "", nil, fmt.Errorf("no choices in openai response")
+	}
+	msg := result.Choices[0].Message
+	if len(msg.ToolCalls) > 0 {
+		var calls []ToolCall
+		for _, tc := range msg.ToolCalls {
+			// OpenAI returns arguments as a JSON-encoded string (e.g. `"{\"q\":\"foo\"}"`).
+			// Try to double-decode; if that fails the raw value is already a JSON object.
+			rawArgs := json.RawMessage(tc.Function.Arguments)
+			var argsStr string
+			if json.Unmarshal(rawArgs, &argsStr) == nil {
+				rawArgs = json.RawMessage(argsStr)
+			}
+			calls = append(calls, ToolCall{
+				ID:        tc.ID,
+				Name:      tc.Function.Name,
+				Arguments: rawArgs,
+			})
+		}
+		return "", calls, nil
+	}
+	return strings.TrimSpace(msg.Content), nil, nil
 }
 
 // Embed returns a float32 embedding using /v1/embeddings with text-embedding-3-small.
@@ -239,8 +373,8 @@ func (c *OpenAICompatClient) EnrichContact(email string, subjects []string) (str
 func (c *OpenAICompatClient) DescribeImage(ctx context.Context, imageBytes []byte, mimeType string) (string, error) {
 	b64 := base64.StdEncoding.EncodeToString(imageBytes)
 	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64)
-	msgs := []openAIMessage{
-		{
+	msgs := []any{
+		openAIMessage{
 			Role: "user",
 			Content: []openAIContentBlock{
 				{Type: "text", Text: "Describe this image in one sentence, focusing on what it shows."},

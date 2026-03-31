@@ -11,10 +11,12 @@ func openAIOKResponse(content string) openAIChatResponse {
 	return openAIChatResponse{
 		Choices: []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content   string           `json:"content"`
+				ToolCalls []openAIToolCall `json:"tool_calls"`
 			} `json:"message"`
 		}{{Message: struct {
-			Content string `json:"content"`
+			Content   string           `json:"content"`
+			ToolCalls []openAIToolCall `json:"tool_calls"`
 		}{Content: content}}},
 	}
 }

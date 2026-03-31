@@ -17,9 +17,12 @@ import (
 	"mail-processor/internal/ai"
 	"mail-processor/internal/app"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/cache"
+	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
 	"mail-processor/internal/daemon"
 	"mail-processor/internal/logger"
+	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
 )
 
@@ -444,6 +447,28 @@ func runTUI() {
 		log.Fatalf("Failed to create AI client: %v", err)
 	}
 
+	// Import classification prompts from config into DB (idempotent by name).
+	if len(cfg.Classification.Prompts) > 0 {
+		if emailCache, cacheErr := cache.New("email_cache.db"); cacheErr == nil {
+			existing, _ := emailCache.GetAllCustomPrompts()
+			existingNames := make(map[string]bool, len(existing))
+			for _, p := range existing {
+				existingNames[p.Name] = true
+			}
+			for _, cp := range cfg.Classification.Prompts {
+				if !existingNames[cp.Name] {
+					_ = emailCache.SaveCustomPrompt(&models.CustomPrompt{
+						Name:         cp.Name,
+						SystemText:   cp.SystemText,
+						UserTemplate: cp.UserTemplate,
+						OutputVar:    cp.OutputVar,
+					})
+				}
+			}
+			emailCache.Close()
+		}
+	}
+
 	// Try to connect to the daemon first; fall back to direct LocalBackend.
 	var b backend.Backend
 	if remoteB := tryConnectDaemon(cfg); remoteB != nil {
@@ -466,6 +491,14 @@ func runTUI() {
 	app := app.New(b, mailer, cfg.Credentials.Username, classifier)
 	app.SetConfigPath(resolvedConfig)
 	app.SetConfig(cfg)
+
+	// Wire cleanup scheduler if using a local backend and schedule is configured.
+	if lb, ok := b.(*backend.LocalBackend); ok && cfg.Cleanup.ScheduleHours > 0 {
+		engine := cleanup.NewEngine(lb.Cache(), b, logger.New())
+		sched := cleanup.NewScheduler(engine, cfg.Cleanup.ScheduleHours)
+		sched.Start(context.Background())
+		app.SetCleanupScheduler(sched)
+	}
 
 	logger.Info("Starting TUI application...")
 

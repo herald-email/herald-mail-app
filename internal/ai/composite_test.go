@@ -14,6 +14,9 @@ func (m *mockAI) Chat(messages []ChatMessage) (string, error) {
 	m.chatCalled = true
 	return "ok", nil
 }
+func (m *mockAI) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
+	return "ok", nil, nil
+}
 func (m *mockAI) Classify(_, _ string) (Category, error)    { return "imp", nil }
 func (m *mockAI) Embed(_ string) ([]float32, error)          { m.embedCalled = true; return []float32{1, 2, 3}, nil }
 func (m *mockAI) SetEmbeddingModel(_ string)                 {}

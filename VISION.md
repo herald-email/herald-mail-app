@@ -36,11 +36,11 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] IMAP IDLE (real push; currently polling only)
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [x] Soft unsubscribe (auto-move future emails to a local folder)
-- [ ] Custom classification prompts (user-defined categories + data extraction)
+- [x] Custom classification prompts (user-defined categories + data extraction)
 - [x] Classification actions (notify, command, webhook, move, flag on match)
-- [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
+- [x] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
-- [ ] Chat tool calling (Ollama tool API + MCP tools in-process)
+- [x] Chat tool calling (Ollama tool API + MCP tools in-process)
 - [x] Filtered timeline from chat results
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
@@ -133,11 +133,11 @@ The chat panel is a right-side slide-out (`c` key) that lets you have a conversa
 - [x] Conversation history (multiple turns)
 - [x] Markdown rendering of assistant responses (glamour)
 - [x] Context: currently open email available to the model
-- [ ] Tool calling via Ollama's native tool API
-- [ ] In-process MCP tools (no stdio round-trip)
+- [x] Tool calling via Ollama's native tool API
+- [x] In-process MCP tools (no stdio round-trip)
 - [x] Filtered timeline: chat result sets pushed into Timeline as a live view
-- [ ] Context: active folder and selection state passed to model
-- [ ] `draft_reply` / `send_email` from within chat
+- [x] Context: active folder and selection state passed to model
+- [x] `draft_reply` / `send_email` from within chat
 - [x] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
 
 #### Tool calling (planned)
@@ -177,12 +177,12 @@ The app can automatically tag emails with categories (subscription, important, u
 The built-in classification prompt assigns one of six fixed categories (`sub`, `news`, `imp`, `txn`, `soc`, `spam`). Custom prompts let users define their own categories and extraction logic tailored to their workflow — e.g. extracting order numbers from receipts, flagging emails from specific clients, or categorizing by project.
 
 - [x] `classification_prompts` section in `~/.herald/conf.yaml` — list of named prompt definitions
-- [ ] Each prompt specifies: name, system prompt text, list of valid output categories, and an optional data extraction instruction (e.g. "extract the tracking number")
-- [ ] Default built-in prompt used when no custom prompts are configured (current behaviour preserved)
-- [ ] Multiple prompts can run on the same email (e.g. one for category, one for data extraction)
-- [ ] `custom_categories` table in SQLite storing prompt name + category + extracted data per email
-- [ ] TUI displays custom categories alongside the built-in tag column
-- [ ] MCP tools: `list_classification_prompts`, `classify_email_custom` (run a named prompt on one email)
+- [x] Each prompt specifies: name, system prompt text, list of valid output categories, and an optional data extraction instruction (e.g. "extract the tracking number")
+- [x] Default built-in prompt used when no custom prompts are configured (current behaviour preserved)
+- [x] Multiple prompts can run on the same email (e.g. one for category, one for data extraction)
+- [x] `custom_categories` table in SQLite storing prompt name + category + extracted data per email
+- [x] TUI displays custom categories alongside the built-in tag column
+- [x] MCP tools: `list_classification_prompts`, `classify_email_custom` (run a named prompt on one email)
 
 ### Classification Actions
 
@@ -295,12 +295,12 @@ Triggered with `u` on any email in the Timeline or Cleanup detail view. The app 
 
 Rules let the app automatically act on email from known senders — delete newsletters older than 30 days, archive promotional email weekly, etc. Rules are defined per-sender or per-domain and stored in SQLite.
 
-- [ ] Per-sender / per-domain rules (action + older-than-days condition)
-- [ ] Rule storage in SQLite (`cleanup_rules` table)
-- [ ] Manual rule execution (`run_cleanup_rules` trigger)
-- [ ] Scheduled execution (configurable interval in `~/.herald/conf.yaml`)
-- [ ] TUI rule manager (list, add, remove)
-- [ ] MCP tools: `list_cleanup_rules`, `add_cleanup_rule`, `remove_cleanup_rule`, `run_cleanup_rules`
+- [x] Per-sender / per-domain rules (action + older-than-days condition)
+- [x] Rule storage in SQLite (`cleanup_rules` table)
+- [x] Manual rule execution (`run_cleanup_rules` trigger)
+- [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`)
+- [x] TUI rule manager (list, add, remove)
+- [x] MCP tools: `list_cleanup_rules`, `add_cleanup_rule`, `remove_cleanup_rule`, `run_cleanup_rules`
 
 ---
 
@@ -597,10 +597,10 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key
-- [ ] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
+- [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [ ] Account list for multi-account (add / remove / reorder)
-- [ ] Changes saved on `Ctrl+S`; no restart required for most settings
-- [ ] Passwords always hidden; "reveal" button toggles visibility
+- [x] Changes saved on `Ctrl+S`; no restart required for most settings
+- [x] Passwords always hidden; "reveal" button toggles visibility
 
 ---
 

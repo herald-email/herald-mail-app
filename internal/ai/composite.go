@@ -21,6 +21,10 @@ func (c *CompositeClient) Chat(messages []ChatMessage) (string, error) {
 	return c.chat.Chat(messages)
 }
 
+func (c *CompositeClient) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
+	return c.chat.ChatWithTools(messages, tools)
+}
+
 func (c *CompositeClient) Classify(sender, subject string) (Category, error) {
 	return c.chat.Classify(sender, subject)
 }

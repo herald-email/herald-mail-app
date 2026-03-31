@@ -50,4 +50,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Custom prompts
 	mux.HandleFunc("GET /v1/prompts", s.handleGetPrompts)
 	mux.HandleFunc("POST /v1/prompts", s.handleSavePrompt)
+
+	// Cleanup rules — literal "run" segment must be registered before the {id} wildcard
+	mux.HandleFunc("POST /v1/cleanup-rules/run", s.handleRunCleanupRules)
+	mux.HandleFunc("GET /v1/cleanup-rules", s.handleListCleanupRules)
+	mux.HandleFunc("POST /v1/cleanup-rules", s.handleCreateCleanupRule)
+	mux.HandleFunc("DELETE /v1/cleanup-rules/{id}", s.handleDeleteCleanupRule)
 }

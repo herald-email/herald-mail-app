@@ -1,19 +1,23 @@
 package rules
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"mail-processor/internal/ai"
 	"mail-processor/internal/models"
 )
 
 // --- mock Store ---
 
 type mockStore struct {
-	rules   []*models.Rule
-	prompts map[int64]*models.CustomPrompt
-	log     []*models.RuleActionLogEntry
+	rules            []*models.Rule
+	prompts          map[int64]*models.CustomPrompt
+	log              []*models.RuleActionLogEntry
+	savedCategories  map[string]string // "messageID:promptID" -> result
 }
 
 func (m *mockStore) GetEnabledRules() ([]*models.Rule, error) { return m.rules, nil }
@@ -25,6 +29,15 @@ func (m *mockStore) GetCustomPrompt(id int64) (*models.CustomPrompt, error) {
 		}
 	}
 	return nil, nil
+}
+
+func (m *mockStore) SaveCustomCategory(messageID string, promptID int64, result string) error {
+	if m.savedCategories == nil {
+		m.savedCategories = make(map[string]string)
+	}
+	key := fmt.Sprintf("%s:%d", messageID, promptID)
+	m.savedCategories[key] = result
+	return nil
 }
 
 func (m *mockStore) AppendActionLog(e *models.RuleActionLogEntry) error {
@@ -288,5 +301,124 @@ func TestExtractDomain(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("extractDomain(%q) = %q, want %q", tc.input, got, tc.want)
 		}
+	}
+}
+
+// --- mock AI client ---
+
+type mockAI struct {
+	response string
+	err      error
+}
+
+func (m *mockAI) Chat(messages []ai.ChatMessage) (string, error) {
+	return m.response, m.err
+}
+func (m *mockAI) ChatWithTools(messages []ai.ChatMessage, tools []ai.Tool) (string, []ai.ToolCall, error) {
+	return m.response, nil, m.err
+}
+func (m *mockAI) Classify(sender, subject string) (ai.Category, error) { return "", nil }
+func (m *mockAI) Embed(text string) ([]float32, error)                  { return nil, nil }
+func (m *mockAI) SetEmbeddingModel(model string)                        {}
+func (m *mockAI) GenerateQuickReplies(sender, subject, bodyPreview string) ([]string, error) {
+	return nil, nil
+}
+func (m *mockAI) EnrichContact(email string, subjects []string) (string, []string, error) {
+	return "", nil, nil
+}
+func (m *mockAI) HasVisionModel() bool { return false }
+func (m *mockAI) DescribeImage(ctx context.Context, imageBytes []byte, mimeType string) (string, error) {
+	return "", nil
+}
+func (m *mockAI) Ping() error { return nil }
+
+// --- TestRunCustomPrompt ---
+
+func TestRunCustomPrompt(t *testing.T) {
+	const wantResult = "high urgency"
+	mockClient := &mockAI{response: wantResult}
+
+	promptID := int64(1)
+	store := &mockStore{
+		rules: []*models.Rule{
+			{
+				ID:             1,
+				Name:           "urgency-rule",
+				Enabled:        true,
+				TriggerType:    models.TriggerSender,
+				TriggerValue:   "alice@example.com",
+				CustomPromptID: &promptID,
+				Actions:        []models.RuleAction{{Type: models.ActionMove, DestFolder: "Urgent"}},
+			},
+		},
+		prompts: map[int64]*models.CustomPrompt{
+			1: {
+				ID:           1,
+				Name:         "urgency",
+				SystemText:   "Rate urgency as high, medium, or low.",
+				UserTemplate: "From: {{.Sender}}\nSubject: {{.Subject}}",
+				OutputVar:    "urgency",
+			},
+		},
+	}
+	exec := &mockExecutor{}
+	engine := New(store, exec, mockClient)
+
+	email := makeEmail("alice@example.com", "Urgent: action required", "INBOX", "msg-custom-1")
+	fired, err := engine.EvaluateEmail(email, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fired != 1 {
+		t.Errorf("expected fired=1, got %d", fired)
+	}
+
+	// Verify the result was saved in the mock store
+	key := fmt.Sprintf("%s:%d", email.MessageID, promptID)
+	got, ok := store.savedCategories[key]
+	if !ok {
+		t.Fatalf("expected custom category to be saved for key %q", key)
+	}
+	if got != wantResult {
+		t.Errorf("saved result: got %q, want %q", got, wantResult)
+	}
+}
+
+func TestRunCustomPrompt_AIError(t *testing.T) {
+	aiErr := errors.New("AI unavailable")
+	mockClient := &mockAI{err: aiErr}
+
+	promptID := int64(1)
+	store := &mockStore{
+		rules: []*models.Rule{
+			{
+				ID:             1,
+				Name:           "urgency-rule",
+				Enabled:        true,
+				TriggerType:    models.TriggerSender,
+				TriggerValue:   "alice@example.com",
+				CustomPromptID: &promptID,
+				Actions:        []models.RuleAction{{Type: models.ActionMove, DestFolder: "Urgent"}},
+			},
+		},
+		prompts: map[int64]*models.CustomPrompt{
+			1: {ID: 1, Name: "urgency", UserTemplate: "Subject: {{.Subject}}", OutputVar: "urgency"},
+		},
+	}
+	exec := &mockExecutor{}
+	engine := New(store, exec, mockClient)
+
+	email := makeEmail("alice@example.com", "Hello", "INBOX", "msg-ai-err")
+	// Even when AI fails, the rule still fires (best-effort prompt execution)
+	fired, err := engine.EvaluateEmail(email, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fired != 1 {
+		t.Errorf("expected fired=1 even on AI error, got %d", fired)
+	}
+	// No category should be saved
+	if len(store.savedCategories) != 0 {
+		t.Errorf("expected no saved categories on AI error, got %v", store.savedCategories)
 	}
 }

@@ -58,8 +58,26 @@ type claudeImgSource struct {
 }
 
 type claudeMessage struct {
-	Role    string               `json:"role"`
-	Content []claudeContentBlock `json:"content"`
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// claudeTextContent marshals a plain text content array to json.RawMessage.
+func claudeTextContent(text string) json.RawMessage {
+	b, _ := json.Marshal([]claudeContentBlock{{Type: "text", Text: text}})
+	return json.RawMessage(b)
+}
+
+// claudeBlocksContent marshals an arbitrary slice of content blocks.
+func claudeBlocksContent(blocks []claudeContentBlock) json.RawMessage {
+	b, _ := json.Marshal(blocks)
+	return json.RawMessage(b)
+}
+
+type claudeTool struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	InputSchema ToolParams `json:"input_schema"`
 }
 
 type claudeRequest struct {
@@ -67,14 +85,20 @@ type claudeRequest struct {
 	MaxTokens int             `json:"max_tokens"`
 	System    string          `json:"system,omitempty"`
 	Messages  []claudeMessage `json:"messages"`
+	Tools     []claudeTool    `json:"tools,omitempty"`
+}
+
+type claudeResponseBlock struct {
+	Type  string          `json:"type"`
+	Text  string          `json:"text,omitempty"`
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
 }
 
 type claudeResponse struct {
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	Error *struct {
+	Content []claudeResponseBlock `json:"content"`
+	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
@@ -130,7 +154,7 @@ func (c *ClaudeClient) Chat(messages []ChatMessage) (string, error) {
 		}
 		claudeMsgs = append(claudeMsgs, claudeMessage{
 			Role:    m.Role,
-			Content: []claudeContentBlock{{Type: "text", Text: m.Content}},
+			Content: claudeTextContent(m.Content),
 		})
 	}
 	if len(claudeMsgs) == 0 {
@@ -143,6 +167,136 @@ func (c *ClaudeClient) Chat(messages []ChatMessage) (string, error) {
 		Messages:  claudeMsgs,
 	}
 	return c.doRequest(context.Background(), payload)
+}
+
+// ChatWithTools sends a conversation with tool definitions to Claude.
+// Returns either a text response OR tool calls (not both).
+func (c *ClaudeClient) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
+	var systemPrompt string
+	var claudeMsgs []claudeMessage
+	for _, m := range messages {
+		if m.Role == "system" {
+			systemPrompt = m.Content
+			continue
+		}
+		switch m.Role {
+		case "assistant":
+			if len(m.ToolCalls) > 0 {
+				// Build tool_use content blocks for each call
+				var blocks []map[string]any
+				for _, tc := range m.ToolCalls {
+					blocks = append(blocks, map[string]any{
+						"type":  "tool_use",
+						"id":    tc.ID,
+						"name":  tc.Name,
+						"input": json.RawMessage(tc.Arguments),
+					})
+				}
+				b, _ := json.Marshal(blocks)
+				claudeMsgs = append(claudeMsgs, claudeMessage{
+					Role:    "assistant",
+					Content: json.RawMessage(b),
+				})
+			} else {
+				claudeMsgs = append(claudeMsgs, claudeMessage{
+					Role:    "assistant",
+					Content: claudeTextContent(m.Content),
+				})
+			}
+		case "tool":
+			// Claude expects tool results as role="user" with a tool_result block
+			block := map[string]any{
+				"type":        "tool_result",
+				"tool_use_id": m.ToolCallID,
+				"content":     m.Content,
+			}
+			b, _ := json.Marshal([]any{block})
+			claudeMsgs = append(claudeMsgs, claudeMessage{
+				Role:    "user",
+				Content: json.RawMessage(b),
+			})
+		default:
+			claudeMsgs = append(claudeMsgs, claudeMessage{
+				Role:    m.Role,
+				Content: claudeTextContent(m.Content),
+			})
+		}
+	}
+	if len(claudeMsgs) == 0 {
+		return "", nil, fmt.Errorf("no non-system messages")
+	}
+
+	var claudeTools []claudeTool
+	for _, t := range tools {
+		claudeTools = append(claudeTools, claudeTool{
+			Name:        t.Name,
+			Description: t.Description,
+			InputSchema: t.Parameters,
+		})
+	}
+
+	payload := claudeRequest{
+		Model:     c.model,
+		MaxTokens: 4096,
+		System:    systemPrompt,
+		Messages:  claudeMsgs,
+		Tools:     claudeTools,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", nil, err
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		c.baseURL+"/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		return "", nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", nil, fmt.Errorf("claude request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	var result claudeResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", nil, fmt.Errorf("decode claude response: %w", err)
+	}
+	if result.Error != nil {
+		return "", nil, fmt.Errorf("claude error: %s", result.Error.Message)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, fmt.Errorf("claude returned %d", resp.StatusCode)
+	}
+
+	// Check for tool_use blocks
+	var calls []ToolCall
+	var textParts []string
+	for _, block := range result.Content {
+		switch block.Type {
+		case "tool_use":
+			argBytes := block.Input
+			if argBytes == nil {
+				argBytes = json.RawMessage("{}")
+			}
+			calls = append(calls, ToolCall{
+				ID:        block.ID,
+				Name:      block.Name,
+				Arguments: argBytes,
+			})
+		case "text":
+			textParts = append(textParts, block.Text)
+		}
+	}
+	if len(calls) > 0 {
+		return "", calls, nil
+	}
+	return strings.TrimSpace(strings.Join(textParts, "")), nil, nil
 }
 
 // Classify asks Claude to tag an email with a single category label.
@@ -226,7 +380,7 @@ func (c *ClaudeClient) DescribeImage(ctx context.Context, imageBytes []byte, mim
 		Messages: []claudeMessage{
 			{
 				Role: "user",
-				Content: []claudeContentBlock{
+				Content: claudeBlocksContent([]claudeContentBlock{
 					{
 						Type: "image",
 						Source: &claudeImgSource{
@@ -236,7 +390,7 @@ func (c *ClaudeClient) DescribeImage(ctx context.Context, imageBytes []byte, mim
 						},
 					},
 					{Type: "text", Text: "Describe this image in one sentence, focusing on what it shows."},
-				},
+				}),
 			},
 		},
 	}

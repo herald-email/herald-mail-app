@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
 	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
@@ -400,6 +402,11 @@ type Model struct {
 	showRuleEditor bool
 	ruleEditor     *RuleEditor
 
+	// Cleanup manager overlay
+	showCleanupMgr   bool
+	cleanupManager   *CleanupManager
+	cleanupScheduler *cleanup.Scheduler
+
 	// Prompt editor overlay
 	showPromptEditor bool
 	promptEditor     *PromptEditor
@@ -634,6 +641,12 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.cfg = cfg
 }
 
+// SetCleanupScheduler wires a cleanup Scheduler into the model so that
+// CleanupRunNowMsg actually executes the rules.
+func (m *Model) SetCleanupScheduler(s *cleanup.Scheduler) {
+	m.cleanupScheduler = s
+}
+
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
@@ -694,11 +707,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// close it cleanly when it emits a completion message.
 	switch msg := msg.(type) {
 	case SettingsSavedMsg:
-		if err := msg.Config.Save(m.configPath); err != nil {
-			m.statusMessage = fmt.Sprintf("Failed to save settings: %v", err)
-		} else {
-			m.cfg = msg.Config
-			m.statusMessage = "Settings saved."
+		m.cfg = msg.Config
+		m.statusMessage = "Settings saved."
+		if m.configPath != "" {
+			if err := m.cfg.Save(m.configPath); err != nil {
+				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
+			}
 		}
 		m.showSettings = false
 		m.settingsPanel = nil
@@ -761,6 +775,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var promptCmd tea.Cmd
 		m.promptEditor, promptCmd = m.promptEditor.Update(msg)
 		return m, promptCmd
+	}
+
+	// Handle cleanup manager messages
+	switch msg.(type) {
+	case CleanupManagerOpenMsg:
+		m.cleanupManager = NewCleanupManager(m.backend, m.windowWidth, m.windowHeight)
+		m.showCleanupMgr = true
+		return m, m.cleanupManager.Init()
+
+	case CleanupManagerCloseMsg:
+		m.showCleanupMgr = false
+		m.cleanupManager = nil
+		return m, nil
+
+	case CleanupRunNowMsg:
+		m.showCleanupMgr = false
+		m.cleanupManager = nil
+		m.statusMessage = "Running cleanup rules..."
+		if m.cleanupScheduler != nil {
+			return m, m.cleanupScheduler.RunNow(context.Background())
+		}
+		return m, nil
+
+	case cleanup.CleanupDoneMsg:
+		doneMsg := msg.(cleanup.CleanupDoneMsg)
+		total := 0
+		for _, n := range doneMsg.Results {
+			total += n
+		}
+		m.statusMessage = fmt.Sprintf("Cleanup complete: %d email(s) processed", total)
+		return m, nil
+	}
+
+	// Forward all messages to the cleanup manager when it is active.
+	if m.showCleanupMgr && m.cleanupManager != nil {
+		var cleanupCmd tea.Cmd
+		m.cleanupManager, cleanupCmd = m.cleanupManager.Update(msg)
+		return m, cleanupCmd
 	}
 
 	switch msg := msg.(type) {
@@ -1332,6 +1384,10 @@ func (m *Model) View() string {
 	if m.showPromptEditor && m.promptEditor != nil {
 		return m.promptEditor.View()
 	}
+	// Cleanup manager overlay takes over the entire screen when active.
+	if m.showCleanupMgr && m.cleanupManager != nil {
+		return m.cleanupManager.View()
+	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
 		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
 	}
@@ -1667,10 +1723,18 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "C":
+		if m.activeTab == tabCleanup && !m.showCleanupMgr {
+			m.cleanupManager = NewCleanupManager(m.backend, m.windowWidth, m.windowHeight)
+			m.showCleanupMgr = true
+			return m, m.cleanupManager.Init()
+		}
+		return m, nil
+
 	case "S":
 		if !m.showSettings {
 			m.showSettings = true
-			m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
 			return m, m.settingsPanel.Init()
 		}
 		return m, nil

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 )
 
@@ -9,12 +10,44 @@ import (
 // text embedding (e.g. Claude, OpenAI chat-only configurations).
 var ErrEmbeddingNotSupported = errors.New("embedding not supported by this backend")
 
+// ErrToolsNotSupported is returned by ChatWithTools when tools are not supported.
+var ErrToolsNotSupported = errors.New("tool use not supported by this backend")
+
+// Tool describes a callable function for AI tool use.
+type Tool struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Parameters  ToolParams `json:"parameters"`
+}
+
+type ToolParams struct {
+	Type       string              `json:"type"` // "object"
+	Properties map[string]ToolProp `json:"properties"`
+	Required   []string            `json:"required,omitempty"`
+}
+
+type ToolProp struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+// ToolCall is returned when the AI wants to call a function.
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments json.RawMessage
+}
+
 // AIClient is the common interface implemented by all AI backends.
 // Callers are responsible for adding nomic-embed-text prefixes
 // (search_document: / search_query:) before calling Embed().
 type AIClient interface {
 	// Chat sends a multi-turn conversation and returns the assistant reply.
 	Chat(messages []ChatMessage) (string, error)
+	// ChatWithTools sends messages with available tools. Returns either a text
+	// response OR tool calls (not both). Returns ErrToolsNotSupported if the
+	// backend doesn't support tools.
+	ChatWithTools(messages []ChatMessage, tools []Tool) (response string, calls []ToolCall, err error)
 	// Classify returns a short category tag for an email.
 	Classify(sender, subject string) (Category, error)
 	// Embed returns a float32 embedding vector. May return ErrEmbeddingNotSupported.

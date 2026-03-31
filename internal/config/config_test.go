@@ -117,6 +117,49 @@ func TestValidateRequiresCredentialsWithoutOAuth(t *testing.T) {
 	}
 }
 
+func TestConfigSave_SyncAndAIFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	original := &Config{}
+	original.Gmail.RefreshToken = "rt-token" // use OAuth so no password required
+	original.Gmail.Email = "user@gmail.com"
+	original.Server.Host = "imap.gmail.com"
+	original.Server.Port = 993
+
+	original.AI.Provider = "claude"
+	original.Claude.APIKey = "test-api-key"
+	original.Claude.Model = "claude-sonnet-4-6"
+	original.Sync.PollIntervalMinutes = 10
+	original.Sync.IDLEEnabled = true
+	original.Cleanup.ScheduleHours = 24
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if loaded.AI.Provider != "claude" {
+		t.Errorf("AI.Provider: got %q, want %q", loaded.AI.Provider, "claude")
+	}
+	if loaded.Claude.APIKey != "test-api-key" {
+		t.Errorf("Claude.APIKey: got %q, want %q", loaded.Claude.APIKey, "test-api-key")
+	}
+	if loaded.Sync.PollIntervalMinutes != 10 {
+		t.Errorf("Sync.PollIntervalMinutes: got %d, want 10", loaded.Sync.PollIntervalMinutes)
+	}
+	if !loaded.Sync.IDLEEnabled {
+		t.Error("Sync.IDLEEnabled: got false, want true")
+	}
+	if loaded.Cleanup.ScheduleHours != 24 {
+		t.Errorf("Cleanup.ScheduleHours: got %d, want 24", loaded.Cleanup.ScheduleHours)
+	}
+}
+
 func TestDaemonDefaults(t *testing.T) {
 	c := &Config{}
 	c.applyDefaults()

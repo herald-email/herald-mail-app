@@ -12,6 +12,8 @@ import (
 
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/cache"
+	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -22,9 +24,11 @@ type Server struct {
 	cfg         *config.Config
 	configPath  string
 	backend     backend.Backend
+	cache       *cache.Cache
 	broadcaster *Broadcaster
 	httpSrv     *http.Server
 	startTime   time.Time
+	log         *logger.Logger
 }
 
 // New creates a Server from the given config. It initialises the LocalBackend
@@ -48,7 +52,10 @@ func New(cfg *config.Config, configPath string) (*Server, error) {
 		backend:     b,
 		broadcaster: NewBroadcaster(),
 		startTime:   time.Now(),
+		log:         logger.New(),
 	}
+	// Expose the underlying cache for components like the cleanup engine.
+	s.cache = lb.Cache()
 	return s, nil
 }
 
@@ -536,4 +543,75 @@ func (s *Server) handleSavePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, prompt)
+}
+
+// handleListCleanupRules returns all cleanup rules.
+func (s *Server) handleListCleanupRules(w http.ResponseWriter, _ *http.Request) {
+	rules, err := s.backend.GetAllCleanupRules()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rules)
+}
+
+// handleCreateCleanupRule creates or updates a cleanup rule.
+func (s *Server) handleCreateCleanupRule(w http.ResponseWriter, r *http.Request) {
+	var rule models.CleanupRule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if rule.Name == "" || rule.MatchValue == "" {
+		writeError(w, http.StatusBadRequest, "name and match_value are required")
+		return
+	}
+	if rule.MatchType != "sender" && rule.MatchType != "domain" {
+		http.Error(w, "match_type must be 'sender' or 'domain'", http.StatusBadRequest)
+		return
+	}
+	if rule.Action != "delete" && rule.Action != "archive" {
+		http.Error(w, "action must be 'delete' or 'archive'", http.StatusBadRequest)
+		return
+	}
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = time.Now()
+	}
+	if err := s.backend.SaveCleanupRule(&rule); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rule)
+}
+
+// handleDeleteCleanupRule removes a cleanup rule by ID.
+func (s *Server) handleDeleteCleanupRule(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid rule id")
+		return
+	}
+	if err := s.backend.DeleteCleanupRule(id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.
+// The cleanup engine runs in-process using the server's backend and cache.
+func (s *Server) handleRunCleanupRules(w http.ResponseWriter, r *http.Request) {
+	engine := cleanup.NewEngine(s.cache, s.backend, s.log)
+	results, err := engine.RunAll(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	total := 0
+	for _, n := range results {
+		total += n
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"results": results, "total": total})
 }

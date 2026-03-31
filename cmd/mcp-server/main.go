@@ -6,7 +6,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -1244,6 +1246,217 @@ func main() {
 				return mcp.NewToolResultError(fmt.Sprintf("AI error: %v", err)), nil
 			}
 			return mcp.NewToolResultText(reply), nil
+		},
+	)
+
+	// Tool: list_classification_prompts
+	s.AddTool(
+		mcp.NewTool("list_classification_prompts",
+			mcp.WithDescription("List all custom classification prompt templates stored in the database"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			prompts, err := c.GetAllCustomPrompts()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if len(prompts) == 0 {
+				return mcp.NewToolResultText("No custom classification prompts found"), nil
+			}
+			data, _ := json.Marshal(prompts)
+			return mcp.NewToolResultText(string(data)), nil
+		},
+	)
+
+	// Tool: classify_email_custom
+	s.AddTool(
+		mcp.NewTool("classify_email_custom",
+			mcp.WithDescription("Run a custom classification prompt against an email and persist the result"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id",
+				mcp.Required(),
+				mcp.Description("The Message-ID of the email to classify"),
+			),
+			mcp.WithNumber("prompt_id",
+				mcp.Required(),
+				mcp.Description("The ID of the custom prompt to use (from list_classification_prompts)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if classifier == nil {
+				return mcp.NewToolResultText("AI client not configured"), nil
+			}
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			promptID := int64(req.GetInt("prompt_id", 0))
+
+			email, err := c.GetEmailByID(msgID)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("email not found: %v", err)), nil
+			}
+
+			prompt, err := c.GetCustomPrompt(promptID)
+			if err != nil || prompt == nil {
+				return mcp.NewToolResultError(fmt.Sprintf("prompt not found: %v", err)), nil
+			}
+
+			result, err := rulesengine.RunCustomPromptForEmail(classifier, prompt, email.Sender, email.Subject)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("classify error: %v", err)), nil
+			}
+			if err := c.SaveCustomCategory(msgID, promptID, result); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to save result: %v", err)), nil
+			}
+			return mcp.NewToolResultText(result), nil
+		},
+	)
+
+	// Tool: get_custom_category
+	s.AddTool(
+		mcp.NewTool("get_custom_category",
+			mcp.WithDescription("Retrieve a stored custom classification result for an email"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id",
+				mcp.Required(),
+				mcp.Description("The Message-ID of the email"),
+			),
+			mcp.WithNumber("prompt_id",
+				mcp.Required(),
+				mcp.Description("The ID of the custom prompt"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			promptID := int64(req.GetInt("prompt_id", 0))
+
+			result, err := c.GetCustomCategory(msgID, promptID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return mcp.NewToolResultText(fmt.Sprintf("No custom category result found for message_id=%s, prompt_id=%d. Run classify_email_custom first.", msgID, promptID)), nil
+				}
+				return nil, fmt.Errorf("get custom category: %w", err)
+			}
+			return mcp.NewToolResultText(result), nil
+		},
+	)
+
+	// Tool: list_cleanup_rules
+	s.AddTool(
+		mcp.NewTool("list_cleanup_rules",
+			mcp.WithDescription("List all auto-cleanup rules stored in the local cache"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			rules, err := c.GetAllCleanupRules()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if len(rules) == 0 {
+				return mcp.NewToolResultText("No cleanup rules defined. Use create_cleanup_rule to add one."), nil
+			}
+			data, _ := json.Marshal(rules)
+			return mcp.NewToolResultText(string(data)), nil
+		},
+	)
+
+	// Tool: create_cleanup_rule
+	s.AddTool(
+		mcp.NewTool("create_cleanup_rule",
+			mcp.WithDescription("Create a new auto-cleanup rule. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Human-readable rule name"),
+			),
+			mcp.WithString("match_type",
+				mcp.Required(),
+				mcp.Description("Match type: 'sender' or 'domain'"),
+			),
+			mcp.WithString("match_value",
+				mcp.Required(),
+				mcp.Description("Value to match, e.g. newsletter@example.com or example.com"),
+			),
+			mcp.WithString("action",
+				mcp.Required(),
+				mcp.Description("Action to perform: 'delete' or 'archive'"),
+			),
+			mcp.WithNumber("older_than_days",
+				mcp.Description("Only affect emails older than this many days (default 30)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := req.RequireString("name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			matchType, err := req.RequireString("match_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if matchType != "sender" && matchType != "domain" {
+				return mcp.NewToolResultError("match_type must be 'sender' or 'domain'"), nil
+			}
+			matchValue, err := req.RequireString("match_value")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			action, err := req.RequireString("action")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if action != "delete" && action != "archive" {
+				return mcp.NewToolResultError("action must be 'delete' or 'archive'"), nil
+			}
+			olderThanDays := req.GetInt("older_than_days", 30)
+			if olderThanDays <= 0 {
+				olderThanDays = 30
+			}
+
+			body := map[string]interface{}{
+				"name":            name,
+				"match_type":      matchType,
+				"match_value":     matchValue,
+				"action":          action,
+				"older_than_days": olderThanDays,
+				"enabled":         true,
+			}
+			respBody, status, err := daemonPost("/v1/cleanup-rules", body)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Created cleanup rule: %s", string(respBody))), nil
+		},
+	)
+
+	// Tool: run_cleanup_rules
+	s.AddTool(
+		mcp.NewTool("run_cleanup_rules",
+			mcp.WithDescription("Trigger immediate execution of all enabled cleanup rules. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			respBody, status, err := daemonPost("/v1/cleanup-rules/run", nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK && status != http.StatusAccepted {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText(string(respBody)), nil
 		},
 	)
 

@@ -535,6 +535,11 @@ func (b *RemoteBackend) TouchRuleLastTriggered(ruleID int64) error {
 	return nil
 }
 
+// SaveCustomCategory is not exposed by the daemon API; returns nil (silently dropped).
+func (b *RemoteBackend) SaveCustomCategory(messageID string, promptID int64, result string) error {
+	return nil
+}
+
 // ── Custom prompts ────────────────────────────────────────────────────────────
 
 func (b *RemoteBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error) {
@@ -582,4 +587,18 @@ func (b *RemoteBackend) GetContactEmails(contactEmail string, limit int) ([]*mod
 
 func (b *RemoteBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
 	return nil
+}
+
+// --- Cleanup rules ---
+
+func (b *RemoteBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {
+	return nil, fmt.Errorf("not supported via remote backend")
+}
+
+func (b *RemoteBackend) SaveCleanupRule(rule *models.CleanupRule) error {
+	return fmt.Errorf("not supported via remote backend")
+}
+
+func (b *RemoteBackend) DeleteCleanupRule(id int64) error {
+	return fmt.Errorf("not supported via remote backend")
 }

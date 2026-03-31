@@ -269,6 +269,36 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	// custom_categories: stores per-message results from running custom prompts
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS custom_categories (
+			message_id    TEXT NOT NULL,
+			prompt_id     INTEGER NOT NULL,
+			result        TEXT NOT NULL,
+			classified_at DATETIME NOT NULL,
+			PRIMARY KEY (message_id, prompt_id)
+		)
+	`); err != nil {
+		return err
+	}
+
+	// cleanup_rules: automated inbox cleanup rules
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS cleanup_rules (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			name            TEXT NOT NULL,
+			match_type      TEXT NOT NULL CHECK(match_type IN ('sender','domain')),
+			match_value     TEXT NOT NULL,
+			action          TEXT NOT NULL CHECK(action IN ('delete','archive')),
+			older_than_days INTEGER NOT NULL DEFAULT 30,
+			enabled         INTEGER NOT NULL DEFAULT 1,
+			last_run        DATETIME,
+			created_at      DATETIME NOT NULL
+		)
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
 
