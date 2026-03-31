@@ -4,11 +4,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -20,6 +23,62 @@ import (
 	"mail-processor/internal/models"
 	rulesengine "mail-processor/internal/rules"
 )
+
+// daemonURL is the base URL of the running herald daemon.
+// Empty string means daemon is not available; write operations will fail gracefully.
+var daemonURL string
+
+// probeDaemon checks if the daemon is running and sets daemonURL.
+func probeDaemon(port int) {
+	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url + "/v1/status")
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		daemonURL = url
+		log.Printf("daemon available at %s", daemonURL)
+	}
+}
+
+// daemonPost makes a POST to the daemon. Returns error if daemon unavailable.
+func daemonPost(path string, body any) ([]byte, int, error) {
+	if daemonURL == "" {
+		return nil, 0, fmt.Errorf("daemon not running — start herald daemon first")
+	}
+	var buf bytes.Buffer
+	if body != nil {
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			return nil, 0, err
+		}
+	}
+	resp, err := http.Post(daemonURL+path, "application/json", &buf)
+	if err != nil {
+		return nil, 0, fmt.Errorf("daemon unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	return respBody, resp.StatusCode, nil
+}
+
+// daemonDelete makes a DELETE to the daemon.
+func daemonDelete(path string) (int, error) {
+	if daemonURL == "" {
+		return 0, fmt.Errorf("daemon not running — start herald daemon first")
+	}
+	req, err := http.NewRequest(http.MethodDelete, daemonURL+path, nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	resp.Body.Close()
+	return resp.StatusCode, nil
+}
 
 func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
@@ -41,11 +100,13 @@ func main() {
 	}
 	defer c.Close()
 
-	// Classifier is optional — nil if Ollama is not configured
-	var classifier *ai.Classifier
-	if cfg.Ollama.Host != "" {
-		classifier = ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
+	// Classifier is optional — nil if no AI backend is configured
+	classifier, err := ai.NewFromConfig(cfg)
+	if err != nil {
+		log.Fatalf("Failed to init AI client: %v", err)
 	}
+
+	probeDaemon(cfg.Daemon.Port)
 
 	s := server.NewMCPServer(
 		"herald",
@@ -792,6 +853,397 @@ func main() {
 				}
 			}
 			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
+	// Tool: list_folders
+	s.AddTool(
+		mcp.NewTool("list_folders",
+			mcp.WithDescription("List all email folders available in the local cache"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folders, err := c.GetCachedFolders()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if len(folders) == 0 {
+				return mcp.NewToolResultText("No folders found in cache. Open the TUI to sync first."), nil
+			}
+			return mcp.NewToolResultText(strings.Join(folders, "\n")), nil
+		},
+	)
+
+	// Tool: get_server_info
+	s.AddTool(
+		mcp.NewTool("get_server_info",
+			mcp.WithDescription("Get herald configuration and status information"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			var sb strings.Builder
+			sb.WriteString("Herald Server Info:\n")
+			sb.WriteString(fmt.Sprintf("IMAP: %s:%d\n", cfg.Server.Host, cfg.Server.Port))
+			sb.WriteString(fmt.Sprintf("AI provider: %s\n", cfg.AI.Provider))
+			if cfg.Ollama.Host != "" {
+				sb.WriteString(fmt.Sprintf("Ollama: %s (%s)\n", cfg.Ollama.Host, cfg.Ollama.Model))
+			}
+			if daemonURL != "" {
+				sb.WriteString(fmt.Sprintf("Daemon: %s (running)\n", daemonURL))
+			} else {
+				sb.WriteString(fmt.Sprintf("Daemon: port %d (not running)\n", cfg.Daemon.Port))
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
+	// Tool: mark_read
+	s.AddTool(
+		mcp.NewTool("mark_read",
+			mcp.WithDescription("Mark an email as read. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/read?folder=%s", msgID, folder), nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText("Marked as read"), nil
+		},
+	)
+
+	// Tool: mark_unread
+	s.AddTool(
+		mcp.NewTool("mark_unread",
+			mcp.WithDescription("Mark an email as unread. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/unread?folder=%s", msgID, folder), nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText("Marked as unread"), nil
+		},
+	)
+
+	// Tool: delete_email
+	s.AddTool(
+		mcp.NewTool("delete_email",
+			mcp.WithDescription("Delete an email. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			status, err := daemonDelete(fmt.Sprintf("/v1/emails/%s?folder=%s", msgID, folder))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText("Email deleted"), nil
+		},
+	)
+
+	// Tool: archive_email
+	s.AddTool(
+		mcp.NewTool("archive_email",
+			mcp.WithDescription("Archive an email (move to Archive folder). Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+			mcp.WithString("folder", mcp.Description("Source folder (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/archive?folder=%s", msgID, folder), nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText("Email archived"), nil
+		},
+	)
+
+	// Tool: move_email
+	s.AddTool(
+		mcp.NewTool("move_email",
+			mcp.WithDescription("Move an email to a different folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+			mcp.WithString("from_folder", mcp.Required(), mcp.Description("Source folder")),
+			mcp.WithString("to_folder", mcp.Required(), mcp.Description("Destination folder")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			fromFolder, err := req.RequireString("from_folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			toFolder, err := req.RequireString("to_folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/move", msgID), map[string]string{
+				"fromFolder": fromFolder,
+				"toFolder":   toFolder,
+			})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Moved to %s", toFolder)), nil
+		},
+	)
+
+	// Tool: sync_folder
+	s.AddTool(
+		mcp.NewTool("sync_folder",
+			mcp.WithDescription("Trigger an IMAP sync for a folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("folder", mcp.Description("Folder to sync (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folder := req.GetString("folder", "INBOX")
+			_, status, err := daemonPost("/v1/sync", map[string]string{"folder": folder})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusAccepted {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Sync started for %s", folder)), nil
+		},
+	)
+
+	// Tool: get_thread
+	s.AddTool(
+		mcp.NewTool("get_thread",
+			mcp.WithDescription("Get all emails in the same thread (by subject) in a folder"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("subject", mcp.Required(), mcp.Description("Email subject (Re:/Fwd: prefixes are stripped automatically)")),
+			mcp.WithString("folder", mcp.Description("Folder to search (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			emails, err := c.GetEmailsByThread(folder, subject)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if len(emails) == 0 {
+				return mcp.NewToolResultText("No thread found for that subject"), nil
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("Thread: %q — %d emails in %s\n\n", subject, len(emails), folder))
+			for _, e := range emails {
+				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s\n",
+					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject))
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
+	// Tool: send_email
+	s.AddTool(
+		mcp.NewTool("send_email",
+			mcp.WithDescription("Send an email via SMTP. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("to", mcp.Required(), mcp.Description("Recipient email address")),
+			mcp.WithString("subject", mcp.Required(), mcp.Description("Email subject")),
+			mcp.WithString("body", mcp.Required(), mcp.Description("Email body (plain text)")),
+			mcp.WithString("from", mcp.Description("Sender address (optional, uses configured account)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			to, err := req.RequireString("to")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, err := req.RequireString("body")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			from := req.GetString("from", "")
+			_, status, err := daemonPost("/v1/emails/send", map[string]string{
+				"to": to, "subject": subject, "body": body, "from": from,
+			})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Email sent to %s", to)), nil
+		},
+	)
+
+	// Tool: summarise_thread
+	s.AddTool(
+		mcp.NewTool("summarise_thread",
+			mcp.WithDescription("Generate a summary of an email thread. Requires AI configured."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("subject", mcp.Required(), mcp.Description("Thread subject")),
+			mcp.WithString("folder", mcp.Description("Folder (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if classifier == nil {
+				return mcp.NewToolResultText("AI not configured — set ollama.host or claude.api_key in config"), nil
+			}
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			emails, err := c.GetEmailsByThread(folder, subject)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if len(emails) == 0 {
+				return mcp.NewToolResultText("No thread found"), nil
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("Thread with %d emails. Summarise concisely:\n\n", len(emails)))
+			for _, e := range emails {
+				sb.WriteString(fmt.Sprintf("From: %s | Date: %s | Subject: %s\n",
+					e.Sender, e.Date.Format("2006-01-02"), e.Subject))
+				bodyText, _ := c.GetBodyText(e.MessageID)
+				if bodyText != "" {
+					if len(bodyText) > 300 {
+						bodyText = bodyText[:300] + "..."
+					}
+					sb.WriteString(bodyText + "\n\n")
+				}
+			}
+			summary, err := classifier.Chat([]ai.ChatMessage{{Role: "user", Content: sb.String()}})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("AI error: %v", err)), nil
+			}
+			return mcp.NewToolResultText(summary), nil
+		},
+	)
+
+	// Tool: extract_action_items
+	s.AddTool(
+		mcp.NewTool("extract_action_items",
+			mcp.WithDescription("Extract action items from an email as a JSON array. Requires AI and cached body."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if classifier == nil {
+				return mcp.NewToolResultText("AI not configured"), nil
+			}
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			bodyText, err := c.GetBodyText(msgID)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			if bodyText == "" {
+				return mcp.NewToolResultText("Body not cached. Open the email in the TUI first."), nil
+			}
+			prompt := fmt.Sprintf("Extract all action items from this email as a JSON array of strings. Respond with JSON only, no explanation:\n\n%s", bodyText)
+			reply, err := classifier.Chat([]ai.ChatMessage{{Role: "user", Content: prompt}})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("AI error: %v", err)), nil
+			}
+			return mcp.NewToolResultText(reply), nil
+		},
+	)
+
+	// Tool: draft_reply
+	s.AddTool(
+		mcp.NewTool("draft_reply",
+			mcp.WithDescription("Draft a reply to an email. Requires AI and cached body."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID to reply to")),
+			mcp.WithString("tone", mcp.Description("Tone of reply: professional or casual (default: professional)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if classifier == nil {
+				return mcp.NewToolResultText("AI not configured"), nil
+			}
+			msgID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			tone := req.GetString("tone", "professional")
+			email, err := c.GetEmailByID(msgID)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("email not found: %v", err)), nil
+			}
+			bodyText, _ := c.GetBodyText(msgID)
+			if bodyText == "" {
+				bodyText = "(body not cached)"
+			}
+			prompt := fmt.Sprintf(
+				"Draft a %s reply to this email. Write only the reply body, no subject line or headers.\n\nFrom: %s\nSubject: %s\n\n%s",
+				tone, email.Sender, email.Subject, bodyText,
+			)
+			reply, err := classifier.Chat([]ai.ChatMessage{{Role: "user", Content: prompt}})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("AI error: %v", err)), nil
+			}
+			return mcp.NewToolResultText(reply), nil
 		},
 	)
 

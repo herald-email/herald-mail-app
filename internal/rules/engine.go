@@ -30,11 +30,11 @@ type Executor interface {
 type Engine struct {
 	store    Store
 	executor Executor
-	ai       *ai.Classifier
+	ai       ai.AIClient
 }
 
 // New creates a new Engine.
-func New(store Store, executor Executor, classifier *ai.Classifier) *Engine {
+func New(store Store, executor Executor, classifier ai.AIClient) *Engine {
 	return &Engine{store: store, executor: executor, ai: classifier}
 }
 

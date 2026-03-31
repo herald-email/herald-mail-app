@@ -110,6 +110,12 @@ type ChatResponseMsg struct {
 	Err     error
 }
 
+// ChatFilterActivatedMsg is sent when the chat response contains a <filter> block.
+type ChatFilterActivatedMsg struct {
+	Emails []*models.EmailData
+	Label  string
+}
+
 // SearchResultMsg carries search results back to the UI
 type SearchResultMsg struct {
 	Emails []*models.EmailData
@@ -297,8 +303,13 @@ type Model struct {
 	chatInput         textinput.Model
 	chatWaiting       bool // waiting for Ollama response
 
+	// Chat filter (timeline filtering driven by AI chat <filter> blocks)
+	chatFilterMode     bool
+	chatFilteredEmails []*models.EmailData
+	chatFilterLabel    string
+
 	// AI classification
-	classifier      *ai.Classifier
+	classifier      ai.AIClient
 	classifying     bool
 	classifications map[string]string // messageID → category
 	classifyTotal   int
@@ -409,7 +420,7 @@ type Model struct {
 }
 
 // New creates a new application model backed by the given Backend.
-func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifier *ai.Classifier) *Model {
+func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifier ai.AIClient) *Model {
 	logger.Info("Creating new application model")
 
 	// Setup styles
@@ -989,11 +1000,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			content = "Error: " + msg.Err.Error()
 		}
+		// Check for a <filter> block before stripping it for display.
+		var filterCmd tea.Cmd
+		if ids, label, found := parseChatFilter(content); found {
+			// Build matched email list by MessageID.
+			idSet := make(map[string]bool, len(ids))
+			for _, id := range ids {
+				idSet[id] = true
+			}
+			var matched []*models.EmailData
+			for _, e := range m.timelineEmails {
+				if idSet[e.MessageID] {
+					matched = append(matched, e)
+				}
+			}
+			if len(matched) > 0 {
+				activateLabel := label
+				filterCmd = func() tea.Msg {
+					return ChatFilterActivatedMsg{Emails: matched, Label: activateLabel}
+				}
+			}
+			// Strip filter block for clean display.
+			content = stripChatFilter(content)
+		}
 		m.chatMessages = append(m.chatMessages, ai.ChatMessage{
 			Role:    "assistant",
 			Content: content,
 		})
 		m.chatWrappedLines = nil // invalidate wrap cache
+		if filterCmd != nil {
+			return m, filterCmd
+		}
+		return m, nil
+
+	case ChatFilterActivatedMsg:
+		m.chatFilterMode = true
+		m.chatFilteredEmails = msg.Emails
+		m.chatFilterLabel = msg.Label
+		m.activeTab = tabTimeline
+		m.updateTimelineTable()
 		return m, nil
 
 	case LoadingMsg:
@@ -1563,6 +1608,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.loading {
 			m.loading = true
 			m.startTime = time.Now()
+			// Clear any active chat filter on refresh.
+			m.chatFilterMode = false
+			m.chatFilteredEmails = nil
+			m.chatFilterLabel = ""
 			return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
 		}
 		return m, nil
@@ -1712,6 +1761,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
+				// Clear chat filter when switching folders.
+				m.chatFilterMode = false
+				m.chatFilteredEmails = nil
+				m.chatFilterLabel = ""
 				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
 			} else if m.activeTab == tabTimeline {
 				cursor := m.timelineTable.Cursor()
@@ -1811,6 +1864,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cleanupBodyWrappedLines = nil
 			m.showSidebar = m.cleanupPreviewHadSidebar
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			return m, nil
+		}
+		// Clear chat filter first; a second Esc will then close the preview.
+		if m.activeTab == tabTimeline && m.chatFilterMode {
+			m.chatFilterMode = false
+			m.chatFilteredEmails = nil
+			m.chatFilterLabel = ""
+			m.updateTimelineTable()
 			return m, nil
 		}
 		if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {

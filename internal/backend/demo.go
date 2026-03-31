@@ -436,6 +436,26 @@ func (d *DemoBackend) MarkRead(messageID, folder string) error {
 	return nil
 }
 
+func (d *DemoBackend) MarkUnread(messageID, folder string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range d.emails {
+		if e.MessageID == messageID {
+			e.IsRead = false
+			return nil
+		}
+	}
+	return nil
+}
+
+func (d *DemoBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
+	return nil, nil
+}
+
+func (d *DemoBackend) SendEmail(to, subject, body, from string) error {
+	return nil
+}
+
 func (d *DemoBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error {
 	return nil
 }

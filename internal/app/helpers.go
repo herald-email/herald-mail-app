@@ -154,7 +154,7 @@ type tickMsg struct{}
 
 // describeImagesCmd returns one tea.Cmd per inline image that asks the vision model for a
 // one-sentence description. Each command resolves to an ImageDescMsg.
-func describeImagesCmd(classifier *ai.Classifier, images []models.InlineImage) []tea.Cmd {
+func describeImagesCmd(classifier ai.AIClient, images []models.InlineImage) []tea.Cmd {
 	cmds := make([]tea.Cmd, 0, len(images))
 	for _, img := range images {
 		img := img // capture loop variable
@@ -1053,10 +1053,15 @@ func (m *Model) updateTimelineTable() {
 		}
 	}
 
-	// Use search results when in search mode, otherwise use full list
-	displayEmails := m.timelineEmails
-	if m.searchMode && m.searchResults != nil {
+	// Priority: chat filter > search results > full list
+	var displayEmails []*models.EmailData
+	switch {
+	case m.chatFilterMode:
+		displayEmails = m.chatFilteredEmails
+	case m.searchMode && m.searchResults != nil:
 		displayEmails = m.searchResults
+	default:
+		displayEmails = m.timelineEmails
 	}
 
 	// Build thread groups from the full email list
@@ -1592,7 +1597,7 @@ func buildCannedReplies(senderName string) []string {
 }
 
 // generateQuickRepliesCmd returns a tea.Cmd that asks Ollama for AI reply suggestions.
-func generateQuickRepliesCmd(classifier *ai.Classifier, sender, subject, bodyPreview string) tea.Cmd {
+func generateQuickRepliesCmd(classifier ai.AIClient, sender, subject, bodyPreview string) tea.Cmd {
 	return func() tea.Msg {
 		replies, err := classifier.GenerateQuickReplies(sender, subject, bodyPreview)
 		return QuickRepliesMsg{Replies: replies, Err: err}
@@ -1845,6 +1850,19 @@ func (m *Model) renderStatusBar() string {
 			Render(line)
 	}
 
+	// Chat filter indicator
+	var filterPrefix string
+	if m.chatFilterMode && m.activeTab == tabTimeline {
+		filterLabel := m.chatFilterLabel
+		if filterLabel == "" {
+			filterLabel = "filtered"
+		}
+		filterPrefix = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("14")).
+			Bold(true).
+			Render(fmt.Sprintf("⬡ filter: %s (%d emails)  ", filterLabel, len(m.chatFilteredEmails)))
+	}
+
 	// Folder breadcrumb
 	folderParts := strings.Split(m.currentFolder, "/")
 	breadcrumb := strings.Join(folderParts, " › ")
@@ -1969,7 +1987,7 @@ func (m *Model) renderStatusBar() string {
 		parts = append([]string{"[mouse] select mode — m: restore TUI"}, parts...)
 	}
 
-	line := strings.Join(parts, "  │  ")
+	line := filterPrefix + strings.Join(parts, "  │  ")
 	w := m.windowWidth
 	if w <= 0 {
 		w = 80
@@ -2013,6 +2031,8 @@ func (m *Model) renderKeyHints() string {
 		} else {
 			hints = "1/2/3/4: tabs  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
+	} else if m.chatFilterMode && m.activeTab == tabTimeline {
+		hints = "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit"
 	} else if m.activeTab == tabTimeline {
 		if m.focusedPanel == panelPreview {
 			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
@@ -2584,10 +2604,13 @@ func (m *Model) submitChat() tea.Cmd {
 			limit = len(m.timelineEmails)
 		}
 		for _, e := range m.timelineEmails[:limit] {
-			ctx.WriteString(fmt.Sprintf("  - From: %s | Subject: %s | Date: %s\n",
-				e.Sender, e.Subject, e.Date.Format("2006-01-02")))
+			ctx.WriteString(fmt.Sprintf("  - [%s] From: %s | Subject: %s | Date: %s\n",
+				e.MessageID, e.Sender, e.Subject, e.Date.Format("2006-01-02")))
 		}
 	}
+	ctx.WriteString("\nIf the user asks to show, filter, or find specific emails, include a <filter> block at the end of your response:\n")
+	ctx.WriteString("<filter>{\"ids\": [\"<message-id-1>\", \"<message-id-2>\"], \"label\": \"short description\"}</filter>\n")
+	ctx.WriteString("Only include a <filter> block when the user is explicitly asking to filter or navigate to specific emails.\n")
 
 	systemMsg := ai.ChatMessage{Role: "system", Content: ctx.String()}
 	messages := append([]ai.ChatMessage{systemMsg}, m.chatMessages...)
@@ -3235,7 +3258,7 @@ func (m *Model) startSync(folder string) tea.Cmd {
 // embedChunksForEmail strips, chunks, and embeds an email body for semantic search.
 // Uses nomic-embed-text's search_document: prefix for asymmetric retrieval.
 // Returns nil if classifier is nil, body is empty, or all embeddings fail.
-func embedChunksForEmail(email *models.EmailData, bodyText string, classifier *ai.Classifier) []models.EmbeddingChunk {
+func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai.AIClient) []models.EmbeddingChunk {
 	if classifier == nil || email == nil || bodyText == "" {
 		return nil
 	}

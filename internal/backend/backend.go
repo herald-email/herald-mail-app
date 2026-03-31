@@ -102,6 +102,15 @@ type Backend interface {
 	// MarkRead marks an email as read on the IMAP server and in the local cache.
 	MarkRead(messageID, folder string) error
 
+	// MarkUnread marks an email as unread on the IMAP server and in the local cache.
+	MarkUnread(messageID, folder string) error
+
+	// GetEmailsByThread returns all emails in the given folder with the same thread subject.
+	GetEmailsByThread(folder, subject string) ([]*models.EmailData, error)
+
+	// SendEmail sends an email via SMTP.
+	SendEmail(to, subject, body, from string) error
+
 	// UpdateUnsubscribeHeaders stores List-Unsubscribe headers for a message in the cache.
 	UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error
 

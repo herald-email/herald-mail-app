@@ -138,8 +138,8 @@ func runDemo() {
 	// Build demo backend
 	demoBackend := backend.NewDemoBackend()
 
-	// AI classifier is optional; pass nil-safe zero value
-	classifier := ai.New("", "")
+	// AI classifier is optional in demo mode; pass nil
+	var classifier ai.AIClient
 
 	// Create SMTP client (no-op without real config, but New() is safe)
 	mailer := appsmtp.New(cfg)
@@ -437,9 +437,12 @@ func runTUI() {
 	logger.Debug("Server: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	logger.Debug("Username: %s", cfg.Credentials.Username)
 
-	// Create AI classifier (talks to local Ollama; nil-safe if not configured)
-	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
-	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+	// Create AI classifier based on configured provider
+	classifier, err := ai.NewFromConfig(cfg)
+	if err != nil {
+		logger.Error("Failed to create AI client: %v", err)
+		log.Fatalf("Failed to create AI client: %v", err)
+	}
 
 	// Try to connect to the daemon first; fall back to direct LocalBackend.
 	var b backend.Backend

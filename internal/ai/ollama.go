@@ -346,6 +346,9 @@ func (c *Classifier) GenerateQuickReplies(sender, subject, bodyPreview string) (
 	return suggestions, nil
 }
 
+// Compile-time interface check
+var _ AIClient = (*Classifier)(nil)
+
 func normalizeCategory(raw string) Category {
 	raw = strings.ToLower(raw)
 	raw = strings.TrimPrefix(raw, "tag:")

@@ -62,11 +62,26 @@ type Config struct {
 		Email        string `yaml:"email,omitempty"`
 	} `yaml:"gmail,omitempty"`
 	Daemon struct {
-		Port     int    `yaml:"port"`      // default: 7272
-		BindAddr string `yaml:"bind"` // default: "127.0.0.1"
-		PidFile  string `yaml:"pid_file"`  // default: ~/.local/share/herald/daemon.pid
-		LogFile  string `yaml:"log_file"`  // default: ~/.local/share/herald/daemon.log
+		Port     int    `yaml:"port"`     // default: 7272
+		BindAddr string `yaml:"bind"`     // default: "127.0.0.1"
+		PidFile  string `yaml:"pid_file"` // default: ~/.local/share/herald/daemon.pid
+		LogFile  string `yaml:"log_file"` // default: ~/.local/share/herald/daemon.log
 	} `yaml:"daemon"`
+
+	Claude struct {
+		APIKey string `yaml:"api_key"`
+		Model  string `yaml:"model"` // default: "claude-sonnet-4-6"
+	} `yaml:"claude"`
+
+	OpenAI struct {
+		APIKey  string `yaml:"api_key"`
+		BaseURL string `yaml:"base_url"` // default: "https://api.openai.com/v1"
+		Model   string `yaml:"model"`    // default: "gpt-4o"
+	} `yaml:"openai"`
+
+	AI struct {
+		Provider string `yaml:"provider"` // "ollama" | "claude" | "openai"; default: "ollama"
+	} `yaml:"ai"`
 }
 
 // vendorPreset holds IMAP/SMTP defaults for a known mail provider
@@ -166,6 +181,20 @@ func (c *Config) applyDefaults() {
 	// Enable IDLE and background sync by default
 	// (zero-value bool is false; we use a separate flag to detect "not set")
 	// Users must explicitly set idle: false to disable
+
+	// AI provider defaults
+	if c.AI.Provider == "" {
+		c.AI.Provider = "ollama"
+	}
+	if c.Claude.Model == "" {
+		c.Claude.Model = "claude-sonnet-4-6"
+	}
+	if c.OpenAI.BaseURL == "" {
+		c.OpenAI.BaseURL = "https://api.openai.com/v1"
+	}
+	if c.OpenAI.Model == "" {
+		c.OpenAI.Model = "gpt-4o"
+	}
 
 	// Daemon defaults
 	if c.Daemon.Port == 0 {

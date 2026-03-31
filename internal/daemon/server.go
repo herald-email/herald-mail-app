@@ -30,7 +30,10 @@ type Server struct {
 // New creates a Server from the given config. It initialises the LocalBackend
 // (IMAP + SQLite) and wires up the SSE broadcaster.
 func New(cfg *config.Config, configPath string) (*Server, error) {
-	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
+	classifier, err := ai.NewFromConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("daemon: init ai: %w", err)
+	}
 
 	var b backend.Backend
 	lb, err := backend.NewLocal(cfg, configPath, classifier)
@@ -456,6 +459,69 @@ func (s *Server) handleGetPrompts(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, prompts)
+}
+
+// handleMarkUnread marks an email as unread.
+func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "INBOX"
+	}
+	if err := s.backend.MarkUnread(id, folder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleGetThread returns all emails in the same thread as the given subject.
+func (s *Server) handleGetThread(w http.ResponseWriter, r *http.Request) {
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "INBOX"
+	}
+	subject := r.URL.Query().Get("subject")
+	if subject == "" {
+		writeError(w, http.StatusBadRequest, "subject is required")
+		return
+	}
+	emails, err := s.backend.GetEmailsByThread(folder, subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, emails)
+}
+
+// sendEmailRequest is the body for POST /v1/emails/send.
+type sendEmailRequest struct {
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+	From    string `json:"from"`
+}
+
+// handleSendEmail sends an email via SMTP.
+// Note: this route MUST be registered BEFORE POST /v1/emails/{id}/... to avoid
+// the literal "send" segment being captured as a path variable.
+// Go 1.22 ServeMux resolves literal segments before wildcards, so route order
+// within the same pattern group is fine, but we add this comment for clarity.
+func (s *Server) handleSendEmail(w http.ResponseWriter, r *http.Request) {
+	var req sendEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.To == "" || req.Subject == "" {
+		writeError(w, http.StatusBadRequest, "to and subject are required")
+		return
+	}
+	if err := s.backend.SendEmail(req.To, req.Subject, req.Body, req.From); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
 }
 
 // handleSavePrompt creates or updates a custom prompt.

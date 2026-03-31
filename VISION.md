@@ -41,8 +41,8 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
 - [ ] Chat tool calling (Ollama tool API + MCP tools in-process)
-- [ ] Filtered timeline from chat results
-- [ ] Multiple AI backends (Claude, OpenAI-compatible)
+- [x] Filtered timeline from chat results
+- [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
 - [x] Quick replies (canned + AI-generated contextual options)
 - [x] Contact book
@@ -135,10 +135,10 @@ The chat panel is a right-side slide-out (`c` key) that lets you have a conversa
 - [x] Context: currently open email available to the model
 - [ ] Tool calling via Ollama's native tool API
 - [ ] In-process MCP tools (no stdio round-trip)
-- [ ] Filtered timeline: chat result sets pushed into Timeline as a live view
+- [x] Filtered timeline: chat result sets pushed into Timeline as a live view
 - [ ] Context: active folder and selection state passed to model
 - [ ] `draft_reply` / `send_email` from within chat
-- [ ] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
+- [x] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
 
 #### Tool calling (planned)
 
@@ -317,10 +317,10 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Send with attachments (`multipart/mixed`)
 - [ ] Browser preview (open rendered HTML in default browser before sending)
 - [ ] Inline images (paste / drag file path → base64 `multipart/related`)
-- [ ] `send_email` MCP tool
+- [x] `send_email` MCP tool
 - [ ] `reply_to_email` MCP tool
 - [ ] `forward_email` MCP tool
-- [ ] `draft_reply` MCP tool (LLM drafts reply from natural-language instructions)
+- [x] `draft_reply` MCP tool (LLM drafts reply from natural-language instructions)
 - [ ] `save_draft` / `send_draft` / `list_drafts` MCP tools
 
 ### AI Writing Assistant (Compose)
@@ -422,36 +422,43 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 | `get_sender_stats` | Senders ranked by email volume |
 | `get_email_classifications` | AI category counts for a folder |
 | `classify_email` | Run AI classification on one email |
-| `summarise_email` | Generate a summary via Ollama |
+| `summarise_email` | Generate a summary via local AI |
 | `list_rules` | List all enabled automation rules |
 | `add_rule` | Create a new automation rule |
 | `run_rules` | Dry-run: show which cached emails match rules in a folder |
+| `list_contacts` | List contacts sorted by recency |
+| `search_contacts` | Keyword search on name/email/company/topics |
+| `semantic_search_contacts` | Natural-language contact search |
+| `get_contact` | Full contact profile + recent emails |
+| `list_folders` | All folders present in the local cache |
+| `get_server_info` | Herald config and daemon status |
+| `mark_read` | Mark an email as read (via daemon) |
+| `mark_unread` | Mark an email as unread (via daemon) |
+| `delete_email` | Delete an email (via daemon) |
+| `archive_email` | Archive an email (via daemon) |
+| `move_email` | Move an email to a folder (via daemon) |
+| `sync_folder` | Trigger IMAP sync for a folder (via daemon) |
+| `get_thread` | All emails in a thread by subject |
+| `send_email` | Send email via SMTP (via daemon) |
+| `summarise_thread` | One-paragraph thread summary via AI |
+| `extract_action_items` | Extract tasks from an email body via AI |
+| `draft_reply` | LLM-drafted reply in professional or casual tone |
 
 ### Planned tools
 
-- [ ] `get_thread` — all emails in a thread ordered by date
 - [ ] `list_attachments` — attachment metadata without downloading
 - [ ] `get_attachment` — download a specific attachment
-- [ ] `list_folders` — all IMAP folders with counts
 - [ ] `classify_folder` — batch classify with progress
-- [ ] `extract_action_items` — tasks and deadlines from an email body
-- [ ] `summarise_thread` — one-paragraph thread summary
-- [ ] `send_email` — send via SMTP
 - [ ] `reply_to_email` — reply with pre-filled headers
 - [ ] `forward_email` — forward with covering note
-- [ ] `draft_reply` — LLM drafts a reply from instructions
 - [ ] `save_draft` / `list_drafts` / `send_draft`
-- [ ] `delete_email` / `delete_thread` / `bulk_delete`
-- [ ] `archive_email` / `archive_thread` / `archive_sender`
-- [ ] `move_email` / `bulk_move`
-- [ ] `mark_read` / `mark_unread`
+- [ ] `delete_thread` / `bulk_delete`
+- [ ] `archive_thread` / `archive_sender`
+- [ ] `bulk_move`
 - [ ] `create_folder` / `rename_folder` / `delete_folder`
 - [ ] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
 - [ ] `soft_unsubscribe_sender` — auto-move future emails to a folder
-- [x] `list_rules` / `add_rule` / `run_rules` — automation rule management (dry-run evaluation)
-- [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact`
-- [ ] `sync_folder` / `sync_all_folders` / `get_sync_status`
-- [ ] `get_server_info`
+- [ ] `sync_all_folders` / `get_sync_status`
 
 ### TUI ↔ MCP shared state
 

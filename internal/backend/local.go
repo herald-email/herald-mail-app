@@ -13,6 +13,7 @@ import (
 	"mail-processor/internal/imap"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	appsmtp "mail-processor/internal/smtp"
 )
 
 // LocalBackend implements Backend with a direct IMAP connection and local SQLite cache.
@@ -20,7 +21,8 @@ import (
 type LocalBackend struct {
 	imapClient *imap.Client
 	cache      *cache.Cache
-	classifier *ai.Classifier
+	classifier ai.AIClient
+	cfg        *config.Config
 	progressCh chan models.ProgressInfo
 	loading    atomic.Bool
 
@@ -74,7 +76,7 @@ func (b *LocalBackend) ValidIDsCh() <-chan map[string]bool {
 
 // NewLocal creates a LocalBackend. configPath is the path to the config file on disk;
 // it is used to persist refreshed OAuth tokens. The caller must call Close() when done.
-func NewLocal(cfg *config.Config, configPath string, classifier *ai.Classifier) (*LocalBackend, error) {
+func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*LocalBackend, error) {
 	c, err := cache.New("email_cache.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cache: %w", err)
@@ -85,6 +87,7 @@ func NewLocal(cfg *config.Config, configPath string, classifier *ai.Classifier) 
 		imapClient:  imap.New(cfg, configPath, c, progressCh),
 		cache:       c,
 		classifier:  classifier,
+		cfg:         cfg,
 		progressCh:  progressCh,
 		newEmailsCh: make(chan models.NewEmailsNotification, 10),
 	}, nil
@@ -349,6 +352,26 @@ func (b *LocalBackend) MarkRead(messageID, folder string) error {
 		logger.Warn("MarkRead IMAP failed for %s: %v", messageID, err)
 	}
 	return b.cache.MarkRead(messageID)
+}
+
+func (b *LocalBackend) MarkUnread(messageID, folder string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return err
+	}
+	if err := b.imapClient.MarkUnread(email.UID, folder); err != nil {
+		logger.Warn("MarkUnread IMAP failed for %s: %v", messageID, err)
+	}
+	return b.cache.MarkUnread(messageID)
+}
+
+func (b *LocalBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
+	return b.cache.GetEmailsByThread(folder, subject)
+}
+
+func (b *LocalBackend) SendEmail(to, subject, body, from string) error {
+	mailer := appsmtp.New(b.cfg)
+	return mailer.Send(from, to, subject, body, "")
 }
 
 func (b *LocalBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error {

@@ -953,6 +953,64 @@ func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, erro
 	return scanEmailRows(rows)
 }
 
+// GetCachedFolders returns the distinct set of folder names present in the emails cache.
+func (c *Cache) GetCachedFolders() ([]string, error) {
+	rows, err := c.db.Query(`SELECT DISTINCT folder FROM emails WHERE folder != '' ORDER BY folder`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var folders []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			return nil, err
+		}
+		folders = append(folders, f)
+	}
+	return folders, rows.Err()
+}
+
+// normalizeSubjectSQL is a SQL expression that strips Re:, Fwd:, Fw:, AW: prefixes
+// from a subject column for thread grouping. Applied inline in queries.
+// Uses a chain of REPLACE + TRIM to handle the most common prefixes.
+// Note: This is case-sensitive in SQLite by default; LOWER() is applied to match.
+const normalizeSubjectSQL = `TRIM(
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+        LOWER(subject),
+        're: ', ''), 'fwd: ', ''), 'fw: ', ''), 'aw: ', ''),
+        're:', ''), 'fwd:', ''), 'fw:', ''), 'aw:', '')
+)`
+
+// normalizeSubjectGo mirrors normalizeSubjectSQL in Go for use in tests and
+// code that cannot run SQL. It does NOT import from package app (avoids circular import).
+func normalizeSubjectGo(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	prefixes := []string{"re: ", "fwd: ", "fw: ", "aw: ", "re:", "fwd:", "fw:", "aw:"}
+	for _, p := range prefixes {
+		s = strings.TrimPrefix(s, p)
+	}
+	return strings.TrimSpace(s)
+}
+
+// GetEmailsByThread returns all emails in folder whose normalized subject matches
+// the normalized form of subject. Results are sorted newest first.
+func (c *Cache) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
+	normalizedSubject := normalizeSubjectGo(subject)
+	query := `
+		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0)
+		FROM emails
+		WHERE folder = ?
+		  AND ` + normalizeSubjectSQL + ` = ?
+		ORDER BY date DESC`
+	rows, err := c.db.Query(query, folder, normalizedSubject)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEmailRows(rows)
+}
+
 // scanEmailRows is a helper to scan email result rows that include folder and is_read columns
 func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 	var emails []*models.EmailData

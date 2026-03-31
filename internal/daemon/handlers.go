@@ -14,6 +14,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/folders", s.handleListFolders)
 
 	// Emails
+	mux.HandleFunc("POST /v1/emails/send", s.handleSendEmail) // must be before /{id}/... routes
 	mux.HandleFunc("GET /v1/emails", s.handleGetEmails)
 	mux.HandleFunc("GET /v1/emails/{id}", s.handleGetEmail)
 	mux.HandleFunc("GET /v1/emails/{id}/body", s.handleGetEmailBody)
@@ -22,6 +23,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/emails/{id}/move", s.handleMoveEmail)
 	mux.HandleFunc("POST /v1/emails/{id}/classify", s.handleClassifyEmail)
 	mux.HandleFunc("POST /v1/emails/{id}/read", s.handleMarkRead)
+	mux.HandleFunc("POST /v1/emails/{id}/unread", s.handleMarkUnread)
+
+	// Threads
+	mux.HandleFunc("GET /v1/threads", s.handleGetThread)
 
 	// Senders
 	mux.HandleFunc("DELETE /v1/senders/{sender}", s.handleDeleteSender)

@@ -354,6 +354,22 @@ func (b *RemoteBackend) MarkRead(messageID, folder string) error {
 	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/read?folder="+url.QueryEscape(folder), nil)
 }
 
+func (b *RemoteBackend) MarkUnread(messageID, folder string) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/unread?folder="+url.QueryEscape(folder), nil)
+}
+
+func (b *RemoteBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
+	var emails []*models.EmailData
+	path := fmt.Sprintf("/v1/threads?folder=%s&subject=%s", url.QueryEscape(folder), url.QueryEscape(subject))
+	return emails, b.get(path, &emails)
+}
+
+func (b *RemoteBackend) SendEmail(to, subject, body, from string) error {
+	return b.post("/v1/emails/send", map[string]string{
+		"to": to, "subject": subject, "body": body, "from": from,
+	})
+}
+
 // UpdateUnsubscribeHeaders is not exposed by the daemon API; returns nil (best-effort).
 func (b *RemoteBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error {
 	return nil
