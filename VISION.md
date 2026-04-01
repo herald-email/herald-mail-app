@@ -103,7 +103,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Body preview split (right panel, auto-updates on navigation)
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
-- [ ] Star / pin important threads to top
+- [x] Star / pin important threads to top
 
 ### Status Bar
 
@@ -168,8 +168,8 @@ The app can automatically tag emails with categories (subscription, important, u
 - [x] Category tags stored in SQLite (`email_classifications` table)
 - [x] Tag column visible in Timeline and Cleanup tabs
 - [x] MCP tool: `classify_email` (single message)
-- [ ] `classify_folder` MCP tool (batch, with progress)
-- [ ] Auto-classify new emails as they arrive (background, rate-limited)
+- [x] `classify_folder` MCP tool (batch, with progress)
+- [x] Auto-classify new emails as they arrive (background, rate-limited)
 - [x] Reanalyse / override existing tags
 
 ### Custom Classification Prompts
@@ -198,8 +198,8 @@ When an email matches a category, the system can trigger an action automatically
 - [x] Action execution logged to SQLite (`rule_action_log` table) with timestamp and result
 - [x] Rule editor TUI form (`W` key in Cleanup tab — add/edit rules interactively)
 - [x] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
-- [ ] Auto-classify new emails as they arrive to trigger rules in real time
-- [ ] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
+- [x] Auto-classify new emails as they arrive to trigger rules in real time
+- [x] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
 
 #### Example configuration
 
@@ -287,7 +287,7 @@ Triggered with `u` on any email in the Timeline or Cleanup detail view. The app 
 - [x] Hard unsubscribe via RFC 8058 one-click POST (`List-Unsubscribe-Post`)
 - [x] Fallback: open `List-Unsubscribe` mailto link (opens in default mail client)
 - [x] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
-- [ ] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
+- [x] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
 - [x] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
 - [ ] Batch unsubscribe flow: present list of detected subscriptions, select, choose mode, execute
 
@@ -448,7 +448,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 
 - [ ] `list_attachments` — attachment metadata without downloading
 - [ ] `get_attachment` — download a specific attachment
-- [ ] `classify_folder` — batch classify with progress
+- [x] `classify_folder` — batch classify with progress
 - [ ] `reply_to_email` — reply with pre-filled headers
 - [ ] `forward_email` — forward with covering note
 - [ ] `save_draft` / `list_drafts` / `send_draft`
