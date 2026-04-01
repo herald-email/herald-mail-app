@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -237,5 +238,99 @@ func TestBuildThreadGroups_SingleEmail(t *testing.T) {
 	}
 	if len(groups[0].emails) != 1 {
 		t.Errorf("expected 1 email in group, got %d", len(groups[0].emails))
+	}
+}
+
+// --- unsubscribeCmd browser fallback ---
+
+// TestUnsubscribeBrowserFallback verifies that unsubscribeCmd returns a
+// "browser-opened" result when the email has an HTTPS List-Unsubscribe URL
+// and one-click POST conditions are not met. The openBrowserFn variable is
+// replaced with a no-op so no real browser process is spawned.
+func TestUnsubscribeBrowserFallback(t *testing.T) {
+	// Swap out the real browser opener with a no-op that always succeeds.
+	orig := openBrowserFn
+	defer func() { openBrowserFn = orig }()
+	openBrowserFn = func(url string) error { return nil }
+
+	body := &models.EmailBody{
+		// One-click POST requires ListUnsubscribePost == "List-Unsubscribe=One-Click";
+		// leaving it empty ensures we fall through to the browser branch.
+		ListUnsubscribe:     "<https://example.com/unsub>",
+		ListUnsubscribePost: "",
+	}
+
+	cmd := unsubscribeCmd(body)
+	msg := cmd()
+
+	result, ok := msg.(UnsubscribeResultMsg)
+	if !ok {
+		t.Fatalf("expected UnsubscribeResultMsg, got %T", msg)
+	}
+	if result.Err != nil {
+		t.Fatalf("unexpected error: %v", result.Err)
+	}
+	if result.Method != "browser-opened" {
+		t.Errorf("Method = %q, want %q", result.Method, "browser-opened")
+	}
+	if result.URL != "https://example.com/unsub" {
+		t.Errorf("URL = %q, want %q", result.URL, "https://example.com/unsub")
+	}
+}
+
+// TestUnsubscribeBrowserFallback_HTTP verifies the browser branch also fires
+// for plain http:// URLs.
+func TestUnsubscribeBrowserFallback_HTTP(t *testing.T) {
+	orig := openBrowserFn
+	defer func() { openBrowserFn = orig }()
+	openBrowserFn = func(url string) error { return nil }
+
+	body := &models.EmailBody{
+		ListUnsubscribe:     "<http://example.com/unsub>",
+		ListUnsubscribePost: "",
+	}
+
+	cmd := unsubscribeCmd(body)
+	msg := cmd()
+
+	result, ok := msg.(UnsubscribeResultMsg)
+	if !ok {
+		t.Fatalf("expected UnsubscribeResultMsg, got %T", msg)
+	}
+	if result.Err != nil {
+		t.Fatalf("unexpected error: %v", result.Err)
+	}
+	if result.Method != "browser-opened" {
+		t.Errorf("Method = %q, want %q", result.Method, "browser-opened")
+	}
+}
+
+// TestUnsubscribeBrowserFallback_ExecError verifies that when the browser
+// open fails, the function falls through to the clipboard fallback
+// ("url-copied") rather than returning an error.
+func TestUnsubscribeBrowserFallback_ExecError(t *testing.T) {
+	orig := openBrowserFn
+	defer func() { openBrowserFn = orig }()
+	openBrowserFn = func(url string) error {
+		return fmt.Errorf("no browser available")
+	}
+
+	body := &models.EmailBody{
+		ListUnsubscribe:     "<https://example.com/unsub>",
+		ListUnsubscribePost: "",
+	}
+
+	cmd := unsubscribeCmd(body)
+	msg := cmd()
+
+	result, ok := msg.(UnsubscribeResultMsg)
+	if !ok {
+		t.Fatalf("expected UnsubscribeResultMsg, got %T", msg)
+	}
+	// Should fall through to clipboard — either url-copied or an error from
+	// pbcopy/xclip not being present in the test environment is acceptable,
+	// but "browser-opened" must NOT be returned.
+	if result.Method == "browser-opened" {
+		t.Error("expected fall-through to clipboard, but got browser-opened")
 	}
 }

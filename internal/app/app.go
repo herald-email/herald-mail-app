@@ -82,6 +82,13 @@ type ClassifyProgressMsg struct {
 // ClassifyDoneMsg signals classification is complete
 type ClassifyDoneMsg struct{}
 
+// ReclassifyResultMsg carries the result of re-classifying a single email.
+type ReclassifyResultMsg struct {
+	MessageID string
+	Category  string
+	Err       error
+}
+
 // ValidIDsMsg is sent when background reconciliation has determined the live
 // set of valid message IDs from the server. All views should re-filter.
 type ValidIDsMsg struct {
@@ -166,7 +173,7 @@ type AttachmentAddedMsg struct {
 
 // UnsubscribeResultMsg carries the result of an unsubscribe attempt
 type UnsubscribeResultMsg struct {
-	Method string // "one-click", "url-copied", "mailto-copied"
+	Method string // "one-click", "browser-opened", "url-copied", "mailto-copied"
 	URL    string
 	Err    error
 }
@@ -291,6 +298,9 @@ type Model struct {
 	cleanupBodyWrappedWidth int
 	cleanupPreviewWidth     int // computed in updateTableDimensions
 	cleanupPreviewHadSidebar bool
+	cleanupFullScreen         bool // true = preview takes entire screen
+	cleanupPreviewDeleting    bool // true = deletion/archive was triggered from preview
+	cleanupPreviewIsArchive   bool // true = the preview action was archive (not delete)
 
 	// Attachment save prompt (receive side)
 	selectedAttachment   int
@@ -899,6 +909,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
 		return m, nil
 
+	case ReclassifyResultMsg:
+		if msg.Err != nil {
+			m.statusMessage = "Reclassify failed: " + msg.Err.Error()
+			return m, nil
+		}
+		if m.classifications == nil {
+			m.classifications = make(map[string]string)
+		}
+		m.classifications[msg.MessageID] = msg.Category
+		m.statusMessage = "Reclassified: " + msg.Category
+		m.updateTimelineTable()
+		m.updateSummaryTable()
+		return m, nil
+
 	case AttachmentSavedMsg:
 		if msg.Err != nil {
 			m.composeStatus = fmt.Sprintf("Save failed: %v", msg.Err)
@@ -925,6 +949,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.Method {
 			case "one-click":
 				m.composeStatus = "Unsubscribed (one-click POST sent)"
+			case "browser-opened":
+				m.composeStatus = "Opened unsubscribe link in browser"
 			case "url-copied":
 				m.composeStatus = fmt.Sprintf("Unsubscribe URL copied to clipboard: %s", msg.URL)
 			case "mailto-copied":
@@ -1155,7 +1181,41 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.Error != nil {
 			logger.Error("Deletion error: %v", msg.Error)
+			if m.cleanupPreviewDeleting {
+				m.cleanupPreviewDeleting = false
+				m.cleanupPreviewIsArchive = false
+			}
 		} else {
+			// Handle cleanup preview deletion: close preview and remove from details list
+			if m.cleanupPreviewDeleting && msg.MessageID != "" &&
+				m.cleanupPreviewEmail != nil && msg.MessageID == m.cleanupPreviewEmail.MessageID {
+				toast := "Deleted"
+				if m.cleanupPreviewIsArchive {
+					toast = "Archived"
+				}
+				m.statusMessage = toast
+				// Remove from detailsEmails slice
+				filtered := m.detailsEmails[:0]
+				for _, e := range m.detailsEmails {
+					if e.MessageID != msg.MessageID {
+						filtered = append(filtered, e)
+					}
+				}
+				m.detailsEmails = filtered
+				// Close the preview
+				m.showCleanupPreview = false
+				m.cleanupPreviewEmail = nil
+				m.cleanupEmailBody = nil
+				m.cleanupBodyLoading = false
+				m.cleanupBodyScrollOffset = 0
+				m.cleanupBodyWrappedLines = nil
+				m.cleanupFullScreen = false
+				m.cleanupPreviewDeleting = false
+				m.cleanupPreviewIsArchive = false
+				m.showSidebar = m.cleanupPreviewHadSidebar
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
+
 			// Remove from local cache immediately for instant UI update
 			if msg.Sender != "" {
 				logger.Info("Deletion complete: %s", msg.Sender)
@@ -1399,6 +1459,9 @@ func (m *Model) View() string {
 	}
 	if m.emailFullScreen {
 		return m.renderFullScreenEmail()
+	}
+	if m.cleanupFullScreen {
+		return m.renderCleanupPreview()
 	}
 	return m.renderMainView()
 }
@@ -1683,6 +1746,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "D":
+		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
+			email := m.cleanupPreviewEmail
+			m.cleanupPreviewDeleting = true
+			m.cleanupPreviewIsArchive = false
+			m.deleting = true
+			m.deletionsPending++
+			m.deletionsTotal++
+			ch := m.deletionRequestCh
+			go func() {
+				ch <- models.DeletionRequest{MessageID: email.MessageID, Folder: email.Folder, IsArchive: false}
+			}()
+			return m, m.listenForDeletionResults()
+		}
 		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
 			desc := m.buildDeleteDesc()
 			if desc != "" {
@@ -1694,6 +1770,31 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m.deleteSelected()
 				}
 			}
+		}
+		return m, nil
+
+	case "A":
+		// Re-classify the currently focused single email with AI.
+		if !m.loading && m.classifier != nil {
+			var target *models.EmailData
+			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
+				target = m.cleanupPreviewEmail
+			} else if m.activeTab == tabTimeline {
+				cursor := m.timelineTable.Cursor()
+				if cursor < len(m.threadRowMap) {
+					ref := m.threadRowMap[cursor]
+					if ref.kind == rowKindThread {
+						target = ref.group.emails[0]
+					} else {
+						target = ref.group.emails[ref.emailIdx]
+					}
+				}
+			}
+			if target != nil {
+				return m, m.reclassifyEmailCmd(target)
+			}
+		} else if m.classifier == nil {
+			m.statusMessage = "No AI configured"
 		}
 		return m, nil
 
@@ -1740,6 +1841,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "e":
+		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
+			email := m.cleanupPreviewEmail
+			m.cleanupPreviewDeleting = true
+			m.cleanupPreviewIsArchive = true
+			m.deleting = true
+			m.deletionsPending++
+			m.deletionsTotal++
+			ch := m.deletionRequestCh
+			go func() {
+				ch <- models.DeletionRequest{MessageID: email.MessageID, Folder: email.Folder, IsArchive: true}
+			}()
+			return m, m.listenForDeletionResults()
+		}
 		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
 			desc := m.buildArchiveDesc()
 			if desc != "" {
@@ -1898,6 +2012,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "z":
+		if m.activeTab == tabCleanup && m.showCleanupPreview {
+			m.cleanupFullScreen = !m.cleanupFullScreen
+			m.cleanupBodyWrappedLines = nil // force re-wrap at new width
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			return m, nil
+		}
 		if !m.loading && m.selectedTimelineEmail != nil {
 			m.emailFullScreen = !m.emailFullScreen
 			m.bodyWrappedLines = nil // force re-wrap at new width
@@ -1919,6 +2039,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.bodyWrappedLines = nil
 			return m, nil
 		}
+		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
+			m.cleanupFullScreen = false
+			m.cleanupBodyWrappedLines = nil
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			return m, nil
+		}
 		if m.activeTab == tabCleanup && m.showCleanupPreview {
 			m.showCleanupPreview = false
 			m.cleanupPreviewEmail = nil
@@ -1926,6 +2052,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cleanupBodyLoading = false
 			m.cleanupBodyScrollOffset = 0
 			m.cleanupBodyWrappedLines = nil
+			m.cleanupFullScreen = false
+			m.cleanupPreviewDeleting = false
+			m.cleanupPreviewIsArchive = false
 			m.showSidebar = m.cleanupPreviewHadSidebar
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			return m, nil
@@ -2260,22 +2389,27 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
 	} else {
 		// Cleanup tab
-		var summaryView string
-		if m.stats != nil && len(m.stats) == 0 {
-			summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
+		if m.showCleanupPreview && m.cleanupFullScreen {
+			// Full-screen: the entire content area is the preview
+			mainContent = m.renderCleanupPreview()
 		} else {
-			summaryView = m.baseStyle.Render(m.summaryTable.View())
-		}
-		detailsView := m.baseStyle.Render(m.detailsTable.View())
-		if m.showCleanupPreview {
-			// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
-			previewPanel := m.renderCleanupPreview()
-			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
-		} else if m.showSidebar && !m.sidebarTooWide {
-			sidebarView := m.baseStyle.Render(m.renderSidebar())
-			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
-		} else {
-			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
+			var summaryView string
+			if m.stats != nil && len(m.stats) == 0 {
+				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
+			} else {
+				summaryView = m.baseStyle.Render(m.summaryTable.View())
+			}
+			detailsView := m.baseStyle.Render(m.detailsTable.View())
+			if m.showCleanupPreview {
+				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
+				previewPanel := m.renderCleanupPreview()
+				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
+			} else if m.showSidebar && !m.sidebarTooWide {
+				sidebarView := m.baseStyle.Render(m.renderSidebar())
+				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
+			} else {
+				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
+			}
 		}
 	}
 	if m.showChat {

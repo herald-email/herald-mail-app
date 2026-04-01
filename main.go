@@ -342,6 +342,23 @@ func runSync(args []string) {
 	fmt.Printf("sync started for %s\n", folder)
 }
 
+// buildRuleAction converts a flat action_type + action_value pair (from YAML config)
+// into a models.RuleAction, populating the appropriate sub-field by type.
+func buildRuleAction(actionType, actionValue string) models.RuleAction {
+	a := models.RuleAction{Type: models.RuleActionType(actionType)}
+	switch models.RuleActionType(actionType) {
+	case models.ActionMove:
+		a.DestFolder = actionValue
+	case models.ActionWebhook:
+		a.WebhookURL = actionValue
+	case models.ActionCommand:
+		a.Command = actionValue
+	case models.ActionNotify:
+		a.NotifyBody = actionValue
+	}
+	return a
+}
+
 func runTUI() {
 	// Parse command line flags
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
@@ -463,6 +480,36 @@ func runTUI() {
 						UserTemplate: cp.UserTemplate,
 						OutputVar:    cp.OutputVar,
 					})
+				}
+			}
+			emailCache.Close()
+		}
+	}
+
+	// Import classification_actions from config into DB as rules (idempotent by name).
+	if len(cfg.ClassificationActions) > 0 {
+		if emailCache, cacheErr := cache.New("email_cache.db"); cacheErr == nil {
+			existing, existErr := emailCache.GetAllRules()
+			if existErr != nil {
+				logger.Warn("Failed to load existing rules during config import: %v", existErr)
+			}
+			existingNames := make(map[string]bool, len(existing))
+			for _, r := range existing {
+				existingNames[r.Name] = true
+			}
+			for _, ca := range cfg.ClassificationActions {
+				if !existingNames[ca.Name] {
+					if saveErr := emailCache.SaveRule(&models.Rule{
+						Name:         ca.Name,
+						TriggerType:  models.RuleTriggerType(ca.TriggerType),
+						TriggerValue: ca.TriggerValue,
+						Enabled:      ca.Enabled,
+						Actions: []models.RuleAction{
+							buildRuleAction(ca.ActionType, ca.ActionValue),
+						},
+					}); saveErr != nil {
+						logger.Warn("Failed to seed classification action %q: %v", ca.Name, saveErr)
+					}
 				}
 			}
 			emailCache.Close()

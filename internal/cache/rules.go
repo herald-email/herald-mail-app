@@ -67,6 +67,27 @@ func (c *Cache) SaveRule(r *models.Rule) error {
 	return nil
 }
 
+// GetAllRules returns all rules ordered by priority ASC, regardless of enabled state.
+func (c *Cache) GetAllRules() ([]*models.Rule, error) {
+	rows, err := c.db.Query(
+		`SELECT id, name, enabled, priority, trigger_type, trigger_value, custom_prompt_id, actions_json, created_at, last_triggered FROM email_rules ORDER BY priority ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all rules: %w", err)
+	}
+	defer rows.Close()
+
+	var rules []*models.Rule
+	for rows.Next() {
+		rule, err := scanRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, rule)
+	}
+	return rules, rows.Err()
+}
+
 // GetEnabledRules returns all enabled rules ordered by priority ASC.
 func (c *Cache) GetEnabledRules() ([]*models.Rule, error) {
 	rows, err := c.db.Query(

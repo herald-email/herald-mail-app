@@ -32,6 +32,22 @@ import (
 
 var spinnerChars = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
+// openBrowserFn launches the system browser for the given URL. It is a
+// package-level variable so tests can substitute a no-op to avoid spawning a
+// real browser process.
+var openBrowserFn = func(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
+}
+
 // --- Thread grouping types ---
 
 // threadGroup holds all emails that share the same normalised subject.
@@ -735,7 +751,10 @@ func (m *Model) updateTableDimensions(width, height int) {
 	// When cleanup preview is open, compute a 3-column layout (25%/25%/50%).
 	// Sidebar is hidden while preview is open.
 	availForCleanup := width - chatExtra
-	if m.showCleanupPreview {
+	if m.showCleanupPreview && m.cleanupFullScreen {
+		// Full-screen: preview uses the entire terminal width
+		m.cleanupPreviewWidth = width
+	} else if m.showCleanupPreview {
 		// Hide sidebar while preview is shown
 		availForCleanup = width - chatExtra
 		// Preview occupies ~50% of the available width
@@ -1754,15 +1773,22 @@ func (m *Model) renderCleanupPreview() string {
 		}
 		sb.WriteString(strings.Join(m.cleanupBodyWrappedLines[m.cleanupBodyScrollOffset:end], "\n"))
 
+		escHint := "Esc: close"
+		zHint := "z: full-screen"
+		if m.cleanupFullScreen {
+			escHint = "Esc: close preview"
+			zHint = "z: exit full-screen"
+		}
 		if totalLines > maxBodyLines {
 			pct := 0
 			if maxOffset > 0 {
 				pct = m.cleanupBodyScrollOffset * 100 / maxOffset
 			}
-			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  esc: close", m.cleanupBodyScrollOffset+1, totalLines, pct)
+			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
 			sb.WriteString("\n" + dimStyle.Render(indicator))
 		} else {
-			sb.WriteString("\n" + dimStyle.Render(" esc: close preview"))
+			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  │  %s", zHint, escHint)
+			sb.WriteString("\n" + dimStyle.Render(indicator))
 		}
 	} else {
 		sb.WriteString(dimStyle.Render("(No content)"))
@@ -2049,9 +2075,9 @@ func (m *Model) renderKeyHints() string {
 				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit"
 			}
 		} else if m.selectedTimelineEmail != nil {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  q: quit"
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
 		} else {
-			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  f: sidebar  │  q: quit"
+			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit"
 		}
 	} else {
 		switch m.focusedPanel {
@@ -2059,7 +2085,7 @@ func (m *Model) renderKeyHints() string {
 			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
 			if m.showCleanupPreview {
-				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  esc: close preview  │  tab: next panel  │  D: delete  │  q: quit"
+				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  esc: close preview  │  tab: next panel  │  D: delete  │  A: re-classify  │  q: quit"
 			} else {
 				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 			}
@@ -2327,6 +2353,28 @@ func (m *Model) startClassification() tea.Cmd {
 			}
 		}
 		return ClassifyDoneMsg{}
+	}
+}
+
+// reclassifyEmailCmd re-classifies a single email and stores the result.
+func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
+	classifier := m.classifier // snapshot before goroutine
+	b := m.backend
+	messageID := email.MessageID
+	sender := email.Sender
+	subject := email.Subject
+	return func() tea.Msg {
+		if classifier == nil {
+			return ReclassifyResultMsg{Err: errors.New("no AI classifier configured")}
+		}
+		cat, err := classifier.Classify(sender, subject)
+		if err != nil {
+			return ReclassifyResultMsg{MessageID: messageID, Err: err}
+		}
+		if setErr := b.SetClassification(messageID, cat); setErr != nil {
+			return ReclassifyResultMsg{MessageID: messageID, Err: setErr}
+		}
+		return ReclassifyResultMsg{MessageID: messageID, Category: cat}
 	}
 }
 
@@ -2801,8 +2849,8 @@ func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
 		if raw == "" {
 			return UnsubscribeResultMsg{Err: fmt.Errorf("no List-Unsubscribe header")}
 		}
-		// Parse angle-bracket-delimited URIs: <https://...>, <mailto:...>
-		var httpsURL, mailtoAddr string
+		// Parse angle-bracket-delimited URIs: <https://...>, <http://...>, <mailto:...>
+		var httpsURL, httpURL, mailtoAddr string
 		parts := strings.Split(raw, ",")
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
@@ -2811,6 +2859,8 @@ func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
 			}
 			if strings.HasPrefix(part, "https://") && httpsURL == "" {
 				httpsURL = part
+			} else if strings.HasPrefix(part, "http://") && httpURL == "" {
+				httpURL = part
 			} else if strings.HasPrefix(part, "mailto:") && mailtoAddr == "" {
 				mailtoAddr = part
 			}
@@ -2824,6 +2874,17 @@ func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
 			}
 			resp.Body.Close()
 			return UnsubscribeResultMsg{Method: "one-click", URL: httpsURL}
+		}
+		// Browser fallback: open HTTP/HTTPS URL in the system browser
+		webURL := httpsURL
+		if webURL == "" {
+			webURL = httpURL
+		}
+		if webURL != "" {
+			if err := openBrowserFn(webURL); err == nil {
+				return UnsubscribeResultMsg{Method: "browser-opened", URL: webURL}
+			}
+			// fall through to clipboard on exec error
 		}
 		// Copy HTTPS URL to clipboard
 		if httpsURL != "" {

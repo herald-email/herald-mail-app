@@ -79,6 +79,15 @@ type Config struct {
 		} `yaml:"prompts"`
 	} `yaml:"classification"`
 
+	ClassificationActions []struct {
+		Name         string `yaml:"name"`
+		TriggerType  string `yaml:"trigger_type"`  // "category" | "sender" | "domain"
+		TriggerValue string `yaml:"trigger_value"`
+		ActionType   string `yaml:"action_type"`   // "notify" | "move" | "archive" | "delete" | "command" | "webhook"
+		ActionValue  string `yaml:"action_value"`  // folder name, command, URL, or notification text
+		Enabled      bool   `yaml:"enabled"`
+	} `yaml:"classification_actions"`
+
 	Cleanup struct {
 		ScheduleHours int `yaml:"schedule_hours"` // 0 = disabled (no auto-run)
 	} `yaml:"cleanup"`
