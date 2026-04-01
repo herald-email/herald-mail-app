@@ -170,7 +170,7 @@ The app can automatically tag emails with categories (subscription, important, u
 - [x] MCP tool: `classify_email` (single message)
 - [ ] `classify_folder` MCP tool (batch, with progress)
 - [ ] Auto-classify new emails as they arrive (background, rate-limited)
-- [ ] Reanalyse / override existing tags
+- [x] Reanalyse / override existing tags
 
 ### Custom Classification Prompts
 
@@ -197,7 +197,7 @@ When an email matches a category, the system can trigger an action automatically
 - [x] Action type: `delete` — delete the matching email
 - [x] Action execution logged to SQLite (`rule_action_log` table) with timestamp and result
 - [x] Rule editor TUI form (`W` key in Cleanup tab — add/edit rules interactively)
-- [ ] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
+- [x] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
 - [ ] Auto-classify new emails as they arrive to trigger rules in real time
 - [ ] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
 
@@ -275,9 +275,9 @@ This gives enough room to read the email while keeping both panels visible as co
 - [x] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
 - [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
 - [x] `u` — unsubscribe from within Cleanup preview
-- [ ] `D` — delete the open email from within the preview
-- [ ] `e` — archive the open email from within the preview
-- [ ] `z` — expand to full-screen (same as Timeline full-screen mode)
+- [x] `D` — delete the open email from within the preview
+- [x] `e` — archive the open email from within the preview
+- [x] `z` — expand to full-screen (same as Timeline full-screen mode)
 - [x] `Esc` — close preview, restore two-panel Cleanup layout
 
 ### Unsubscribe
@@ -286,7 +286,7 @@ Triggered with `u` on any email in the Timeline or Cleanup detail view. The app 
 
 - [x] Hard unsubscribe via RFC 8058 one-click POST (`List-Unsubscribe-Post`)
 - [x] Fallback: open `List-Unsubscribe` mailto link (opens in default mail client)
-- [ ] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
+- [x] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
 - [ ] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
 - [x] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
 - [ ] Batch unsubscribe flow: present list of detected subscriptions, select, choose mode, execute
