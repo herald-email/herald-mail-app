@@ -316,12 +316,12 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
 - [ ] Browser preview (open rendered HTML in default browser before sending)
-- [ ] Inline images (paste / drag file path → base64 `multipart/related`)
+- [x] Inline images (paste / drag file path → base64 `multipart/related`)
 - [x] `send_email` MCP tool
 - [ ] `reply_to_email` MCP tool
 - [ ] `forward_email` MCP tool
 - [x] `draft_reply` MCP tool (LLM drafts reply from natural-language instructions)
-- [ ] `save_draft` / `send_draft` / `list_drafts` MCP tools
+- [x] `save_draft` / `send_draft` / `list_drafts` MCP tools
 
 ### AI Writing Assistant (Compose)
 
@@ -451,7 +451,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 - [x] `classify_folder` — batch classify with progress
 - [ ] `reply_to_email` — reply with pre-filled headers
 - [ ] `forward_email` — forward with covering note
-- [ ] `save_draft` / `list_drafts` / `send_draft`
+- [x] `save_draft` / `list_drafts` / `send_draft`
 - [ ] `delete_thread` / `bulk_delete`
 - [ ] `archive_thread` / `archive_sender`
 - [ ] `bulk_move`
