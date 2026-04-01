@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mail-processor/internal/ai"
+	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
 
@@ -32,6 +33,7 @@ type Engine struct {
 	store    Store
 	executor Executor
 	ai       ai.AIClient
+	DryRun   bool // when true, log actions without executing destructive ones
 }
 
 // New creates a new Engine.
@@ -104,6 +106,11 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 }
 
 func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData, ctx models.RuleContext) error {
+	if e.DryRun {
+		logger.Info("[DRY RUN] Would execute action type=%s email=%s subject=%q",
+			action.Type, email.MessageID, email.Subject)
+		return nil
+	}
 	switch action.Type {
 	case models.ActionMove:
 		return e.executor.MoveEmail(email.MessageID, email.Folder, action.DestFolder)

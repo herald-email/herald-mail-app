@@ -29,9 +29,10 @@ type DemoBackend struct {
 	validIDsCh      chan map[string]bool
 	groupByDomain   bool
 	bodyCache       map[string]string // messageID → cached body text
-	nextSearchID    int
-	nextRuleID      int64
-	nextPromptID    int64
+	nextSearchID        int
+	nextRuleID          int64
+	nextPromptID        int64
+	unsubscribedSenders map[string]bool
 }
 
 // compile-time check that DemoBackend satisfies the Backend interface.
@@ -40,16 +41,17 @@ var _ Backend = (*DemoBackend)(nil)
 // NewDemoBackend creates a DemoBackend pre-loaded with synthetic email data.
 func NewDemoBackend() *DemoBackend {
 	d := &DemoBackend{
-		emails:          seedDemoEmails(),
-		classifications: make(map[string]string),
-		deletedIDs:      make(map[string]bool),
-		bodyCache:       make(map[string]string),
-		progressCh:      make(chan models.ProgressInfo, 100),
-		newEmailsCh:     make(chan models.NewEmailsNotification, 10),
-		validIDsCh:      make(chan map[string]bool, 1),
-		nextSearchID:    1,
-		nextRuleID:      1,
-		nextPromptID:    1,
+		emails:              seedDemoEmails(),
+		classifications:     make(map[string]string),
+		deletedIDs:          make(map[string]bool),
+		bodyCache:           make(map[string]string),
+		unsubscribedSenders: make(map[string]bool),
+		progressCh:          make(chan models.ProgressInfo, 100),
+		newEmailsCh:         make(chan models.NewEmailsNotification, 10),
+		validIDsCh:          make(chan map[string]bool, 1),
+		nextSearchID:        1,
+		nextRuleID:          1,
+		nextPromptID:        1,
 	}
 	return d
 }
@@ -448,6 +450,30 @@ func (d *DemoBackend) MarkUnread(messageID, folder string) error {
 	return nil
 }
 
+func (d *DemoBackend) MarkStarred(messageID, folder string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range d.emails {
+		if e.MessageID == messageID {
+			e.IsStarred = true
+			return nil
+		}
+	}
+	return nil
+}
+
+func (d *DemoBackend) UnmarkStarred(messageID, folder string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range d.emails {
+		if e.MessageID == messageID {
+			e.IsStarred = false
+			return nil
+		}
+	}
+	return nil
+}
+
 func (d *DemoBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
 	return nil, nil
 }
@@ -716,6 +742,21 @@ func (d *DemoBackend) GetContactEmails(contactEmail string, limit int) ([]*model
 		}
 	}
 	return out, nil
+}
+
+// --- Unsubscribed senders ---
+
+func (d *DemoBackend) RecordUnsubscribe(sender, method, url string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.unsubscribedSenders[sender] = true
+	return nil
+}
+
+func (d *DemoBackend) IsUnsubscribedSender(sender string) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.unsubscribedSenders[sender], nil
 }
 
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".

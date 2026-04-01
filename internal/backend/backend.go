@@ -105,6 +105,14 @@ type Backend interface {
 	// MarkUnread marks an email as unread on the IMAP server and in the local cache.
 	MarkUnread(messageID, folder string) error
 
+	// --- Star/unstar ---
+
+	// MarkStarred sets the \Flagged flag on an email on the IMAP server and in the local cache.
+	MarkStarred(messageID, folder string) error
+
+	// UnmarkStarred removes the \Flagged flag from an email on the IMAP server and in the local cache.
+	UnmarkStarred(messageID, folder string) error
+
 	// GetEmailsByThread returns all emails in the given folder with the same thread subject.
 	GetEmailsByThread(folder, subject string) ([]*models.EmailData, error)
 
@@ -235,6 +243,14 @@ type Backend interface {
 	// UpsertContacts inserts or updates contacts from seen email addresses.
 	// direction is "from" or "to".
 	UpsertContacts(addrs []models.ContactAddr, direction string) error
+
+	// --- Unsubscribed senders ---
+
+	// RecordUnsubscribe persists an unsubscribe record for a sender.
+	RecordUnsubscribe(sender, method, url string) error
+
+	// IsUnsubscribedSender returns true if the sender has previously been unsubscribed from.
+	IsUnsubscribedSender(sender string) (bool, error)
 
 	// --- Cleanup rules ---
 

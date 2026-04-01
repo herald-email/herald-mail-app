@@ -551,6 +551,40 @@ func main() {
 		},
 	)
 
+	// Tool: classify_folder
+	s.AddTool(
+		mcp.NewTool("classify_folder",
+			mcp.WithDescription("Batch classify all unclassified emails in a folder using AI. Requires Ollama and a running herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("folder",
+				mcp.Required(),
+				mcp.Description("IMAP folder name (e.g. INBOX)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folder, err := req.RequireString("folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/classify/folder", map[string]string{"folder": folder})
+			if err != nil {
+				return mcp.NewToolResultText("Error: " + err.Error()), nil
+			}
+			if status != 200 {
+				return mcp.NewToolResultText(fmt.Sprintf("Daemon error (HTTP %d): %s", status, string(body))), nil
+			}
+			var result map[string]int
+			if err := json.Unmarshal(body, &result); err != nil {
+				return mcp.NewToolResultText(string(body)), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf(
+				"Classified %d emails in %s (%d skipped, %d total)",
+				result["classified"], folder, result["skipped"], result["total"],
+			)), nil
+		},
+	)
+
 	// Tool: summarise_email
 	s.AddTool(
 		mcp.NewTool("summarise_email",

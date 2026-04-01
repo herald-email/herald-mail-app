@@ -100,7 +100,7 @@ func (c *Cache) FindEmailsMatchingCleanupRule(rule *models.CleanupRule) ([]*mode
 	var rows *sql.Rows
 	var err error
 
-	baseSelect := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0)
+	baseSelect := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0)
 		FROM emails
 		WHERE date < datetime('now', ? || ' days')`
 

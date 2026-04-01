@@ -371,6 +371,28 @@ func (b *LocalBackend) MarkUnread(messageID, folder string) error {
 	return b.cache.MarkUnread(messageID)
 }
 
+func (b *LocalBackend) MarkStarred(messageID, folder string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return err
+	}
+	if err := b.imapClient.MarkStarred(email.UID, folder); err != nil {
+		logger.Warn("MarkStarred IMAP failed for %s: %v", messageID, err)
+	}
+	return b.cache.UpdateStarred(messageID, true)
+}
+
+func (b *LocalBackend) UnmarkStarred(messageID, folder string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return err
+	}
+	if err := b.imapClient.UnmarkStarred(email.UID, folder); err != nil {
+		logger.Warn("UnmarkStarred IMAP failed for %s: %v", messageID, err)
+	}
+	return b.cache.UpdateStarred(messageID, false)
+}
+
 func (b *LocalBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
 	return b.cache.GetEmailsByThread(folder, subject)
 }
@@ -573,6 +595,16 @@ func (b *LocalBackend) GetContactEmails(contactEmail string, limit int) ([]*mode
 
 func (b *LocalBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
 	return b.cache.UpsertContacts(addrs, direction)
+}
+
+// --- Unsubscribed senders ---
+
+func (b *LocalBackend) RecordUnsubscribe(sender, method, url string) error {
+	return b.cache.RecordUnsubscribe(sender, method, url)
+}
+
+func (b *LocalBackend) IsUnsubscribedSender(sender string) (bool, error) {
+	return b.cache.IsUnsubscribedSender(sender)
 }
 
 // --- Cleanup rules ---

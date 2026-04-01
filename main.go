@@ -148,7 +148,7 @@ func runDemo() {
 	mailer := appsmtp.New(cfg)
 
 	// Build the TUI model
-	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier)
+	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, false)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
 
@@ -364,6 +364,7 @@ func runTUI() {
 	var debug = flag.Bool("debug", false, "Enable debug logging to console")
 	var verbose = flag.Bool("verbose", false, "Enable verbose logging")
 	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
+	var dryRun = flag.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)")
 	const defaultConfig = "~/.herald/conf.yaml"
 	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
@@ -535,13 +536,13 @@ func runTUI() {
 	mailer := appsmtp.New(cfg)
 
 	// Create the TUI application
-	app := app.New(b, mailer, cfg.Credentials.Username, classifier)
+	app := app.New(b, mailer, cfg.Credentials.Username, classifier, *dryRun)
 	app.SetConfigPath(resolvedConfig)
 	app.SetConfig(cfg)
 
 	// Wire cleanup scheduler if using a local backend and schedule is configured.
 	if lb, ok := b.(*backend.LocalBackend); ok && cfg.Cleanup.ScheduleHours > 0 {
-		engine := cleanup.NewEngine(lb.Cache(), b, logger.New())
+		engine := cleanup.NewEngineWithDryRun(lb.Cache(), b, logger.New(), *dryRun)
 		sched := cleanup.NewScheduler(engine, cfg.Cleanup.ScheduleHours)
 		sched.Start(context.Background())
 		app.SetCleanupScheduler(sched)

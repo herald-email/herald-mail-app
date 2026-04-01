@@ -24,6 +24,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/emails/{id}/classify", s.handleClassifyEmail)
 	mux.HandleFunc("POST /v1/emails/{id}/read", s.handleMarkRead)
 	mux.HandleFunc("POST /v1/emails/{id}/unread", s.handleMarkUnread)
+	mux.HandleFunc("POST /v1/emails/{id}/star", s.handleMarkStarred)
+	mux.HandleFunc("DELETE /v1/emails/{id}/star", s.handleUnmarkStarred)
 
 	// Threads
 	mux.HandleFunc("GET /v1/threads", s.handleGetThread)
@@ -41,6 +43,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Classifications
 	mux.HandleFunc("GET /v1/classifications", s.handleGetClassifications)
+	mux.HandleFunc("POST /v1/classify/folder", s.handleClassifyFolder)
 
 	// Rules
 	mux.HandleFunc("GET /v1/rules", s.handleGetRules)

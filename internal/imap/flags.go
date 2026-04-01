@@ -41,3 +41,41 @@ func (c *Client) MarkUnread(uid uint32, folder string) error {
 		nil,
 	)
 }
+
+// MarkStarred sets the \Flagged flag on a message by UID in the given folder.
+func (c *Client) MarkStarred(uid uint32, folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return nil
+	}
+	if _, err := c.client.Select(folder, false); err != nil {
+		return err
+	}
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uid)
+	return c.client.UidStore(seqset,
+		imap.FormatFlagsOp(imap.AddFlags, true),
+		[]interface{}{imap.FlaggedFlag},
+		nil,
+	)
+}
+
+// UnmarkStarred removes the \Flagged flag from a message by UID in the given folder.
+func (c *Client) UnmarkStarred(uid uint32, folder string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return nil
+	}
+	if _, err := c.client.Select(folder, false); err != nil {
+		return err
+	}
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uid)
+	return c.client.UidStore(seqset,
+		imap.FormatFlagsOp(imap.RemoveFlags, true),
+		[]interface{}{imap.FlaggedFlag},
+		nil,
+	)
+}

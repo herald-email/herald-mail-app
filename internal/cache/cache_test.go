@@ -1213,3 +1213,55 @@ func TestGetContactByEmail(t *testing.T) {
 		t.Errorf("expected nil for unknown email, got %+v", cd2)
 	}
 }
+
+// --- UpdateStarred ---
+
+func TestUpdateStarred(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{
+		MessageID: "star-test-1",
+		UID:       42,
+		Sender:    "test@example.com",
+		Subject:   "Test Star",
+		Date:      time.Now(),
+		Size:      1024,
+		Folder:    "INBOX",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	// Initially not starred.
+	got, err := c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if got.IsStarred {
+		t.Error("expected IsStarred=false initially, got true")
+	}
+
+	// Star it.
+	if err := c.UpdateStarred(email.MessageID, true); err != nil {
+		t.Fatalf("UpdateStarred(true): %v", err)
+	}
+	got, err = c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID after star: %v", err)
+	}
+	if !got.IsStarred {
+		t.Error("expected IsStarred=true after UpdateStarred(true), got false")
+	}
+
+	// Unstar it.
+	if err := c.UpdateStarred(email.MessageID, false); err != nil {
+		t.Fatalf("UpdateStarred(false): %v", err)
+	}
+	got, err = c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID after unstar: %v", err)
+	}
+	if got.IsStarred {
+		t.Error("expected IsStarred=false after UpdateStarred(false), got true")
+	}
+}

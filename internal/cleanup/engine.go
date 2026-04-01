@@ -15,11 +15,17 @@ type Engine struct {
 	cache   *cache.Cache
 	backend backend.Backend
 	log     *logger.Logger
+	dryRun  bool // when true, log actions without executing destructive ones
 }
 
 // NewEngine creates a new cleanup Engine.
 func NewEngine(c *cache.Cache, b backend.Backend, l *logger.Logger) *Engine {
 	return &Engine{cache: c, backend: b, log: l}
+}
+
+// NewEngineWithDryRun creates a new cleanup Engine with an optional dry-run mode.
+func NewEngineWithDryRun(c *cache.Cache, b backend.Backend, l *logger.Logger, dryRun bool) *Engine {
+	return &Engine{cache: c, backend: b, log: l, dryRun: dryRun}
 }
 
 // RunRule executes one cleanup rule. Returns count of emails processed.
@@ -37,6 +43,11 @@ func (e *Engine) RunRule(ctx context.Context, rule *models.CleanupRule) (int, er
 		default:
 		}
 
+		if e.dryRun {
+			e.log.Info("[DRY RUN] Would %s email %s (rule: %s)", rule.Action, email.MessageID, rule.Name)
+			count++
+			continue
+		}
 		var actionErr error
 		if rule.Action == "delete" {
 			actionErr = e.backend.DeleteEmail(email.MessageID, email.Folder)

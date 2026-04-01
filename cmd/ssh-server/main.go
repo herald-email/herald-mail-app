@@ -81,7 +81,7 @@ func main() {
 					}
 					b = lb
 				}
-				m := app.New(b, mailer, cfg.Credentials.Username, classifier)
+				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
 				return m, []tea.ProgramOption{tea.WithAltScreen()}
 			}),
 		),

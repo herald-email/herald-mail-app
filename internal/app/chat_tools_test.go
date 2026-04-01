@@ -59,6 +59,8 @@ func (s *stubBackend) SaveSearch(_, _, _ string) error                  { return
 func (s *stubBackend) DeleteSavedSearch(_ int) error                    { return nil }
 func (s *stubBackend) MarkRead(_, _ string) error                       { return nil }
 func (s *stubBackend) MarkUnread(_, _ string) error                     { return nil }
+func (s *stubBackend) MarkStarred(_, _ string) error                    { return nil }
+func (s *stubBackend) UnmarkStarred(_, _ string) error                  { return nil }
 func (s *stubBackend) GetEmailsByThread(_, _ string) ([]*models.EmailData, error) {
 	return s.threadResult, s.searchErr
 }

@@ -225,6 +225,7 @@ func (m *Model) listenForDeletionResults() tea.Cmd {
 // ruleWorker processes emails through the rule engine serially.
 func (m *Model) ruleWorker() {
 	engine := rules.New(m.backend, m.backend, m.classifier)
+	engine.DryRun = m.dryRun
 	for req := range m.ruleRequestCh {
 		fired, err := engine.EvaluateEmail(req.Email, req.Category)
 		select {
@@ -1053,7 +1054,11 @@ func (m *Model) updateTimelineTable() {
 		if !email.IsRead {
 			unreadDot = "●"
 		}
-		sender := unreadDot + senderPrefix + sanitizeText(email.Sender)
+		starDot := " "
+		if email.IsStarred {
+			starDot = "★"
+		}
+		sender := unreadDot + starDot + senderPrefix + sanitizeText(email.Sender)
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
@@ -1086,6 +1091,13 @@ func (m *Model) updateTimelineTable() {
 	// Build thread groups from the full email list
 	m.threadGroups = buildThreadGroups(displayEmails)
 	m.threadRowMap = m.threadRowMap[:0]
+
+	// Sort starred threads to the top, preserving date order within each bucket.
+	sort.SliceStable(m.threadGroups, func(i, j int) bool {
+		iStarred := len(m.threadGroups[i].emails) > 0 && m.threadGroups[i].emails[0].IsStarred
+		jStarred := len(m.threadGroups[j].emails) > 0 && m.threadGroups[j].emails[0].IsStarred
+		return iStarred && !jStarred
+	})
 
 	var rows []table.Row
 	for gi := range m.threadGroups {
@@ -1998,6 +2010,11 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("[DEMO]"))
 	}
 
+	// Dry-run mode indicator
+	if m.dryRun {
+		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Bold(true).Render("[DRY RUN]"))
+	}
+
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")
@@ -2075,9 +2092,9 @@ func (m *Model) renderKeyHints() string {
 				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit"
 			}
 		} else if m.selectedTimelineEmail != nil {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
+			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
 		} else {
-			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit"
+			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit"
 		}
 	} else {
 		switch m.focusedPanel {
@@ -2375,6 +2392,26 @@ func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
 			return ReclassifyResultMsg{MessageID: messageID, Err: setErr}
 		}
 		return ReclassifyResultMsg{MessageID: messageID, Category: cat}
+	}
+}
+
+// autoClassifyEmailCmd classifies a newly arrived email in the background and
+// returns AutoClassifyResultMsg. Unlike reclassifyEmailCmd, it is a fire-and-
+// forget background op triggered automatically on email arrival — no visible
+// status update is set on success.
+func (m *Model) autoClassifyEmailCmd(email *models.EmailData) tea.Cmd {
+	classifier := m.classifier // snapshot
+	b := m.backend
+	messageID := email.MessageID
+	sender := email.Sender
+	subject := email.Subject
+	return func() tea.Msg {
+		cat, err := classifier.Classify(sender, subject)
+		if err != nil {
+			return AutoClassifyResultMsg{MessageID: messageID, Err: err}
+		}
+		_ = b.SetClassification(messageID, cat)
+		return AutoClassifyResultMsg{MessageID: messageID, Category: string(cat)}
 	}
 }
 
@@ -2944,6 +2981,26 @@ func markReadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
 			logger.Warn("markReadCmd failed for %s: %v", messageID, err)
 		}
 		return nil
+	}
+}
+
+// toggleStarCmd toggles the \Flagged IMAP flag and returns a StarResultMsg.
+func (m *Model) toggleStarCmd(email *models.EmailData) tea.Cmd {
+	b := m.backend
+	messageID := email.MessageID
+	folder := email.Folder
+	starred := !email.IsStarred
+	return func() tea.Msg {
+		var err error
+		if starred {
+			err = b.MarkStarred(messageID, folder)
+		} else {
+			err = b.UnmarkStarred(messageID, folder)
+		}
+		if err != nil {
+			return StarResultMsg{MessageID: messageID, Err: err}
+		}
+		return StarResultMsg{MessageID: messageID, Starred: starred}
 	}
 }
 

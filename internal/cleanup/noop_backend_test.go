@@ -39,6 +39,8 @@ func (noopBackend) SaveSearch(name, query, folder string) error              { r
 func (noopBackend) DeleteSavedSearch(id int) error                           { return nil }
 func (noopBackend) MarkRead(messageID, folder string) error                  { return nil }
 func (noopBackend) MarkUnread(messageID, folder string) error                { return nil }
+func (noopBackend) MarkStarred(messageID, folder string) error               { return nil }
+func (noopBackend) UnmarkStarred(messageID, folder string) error             { return nil }
 func (noopBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) { return nil, nil }
 func (noopBackend) SendEmail(to, subject, body, from string) error           { return nil }
 func (noopBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error { return nil }

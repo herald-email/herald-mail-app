@@ -16,6 +16,7 @@ type EmailData struct {
 	Folder         string    `db:"folder"`
 	LastUpdated    time.Time `db:"last_updated"`
 	IsRead         bool      `db:"is_read"`
+	IsStarred      bool      `db:"is_starred"`
 }
 
 // SenderStats represents statistics for a sender
@@ -129,6 +130,15 @@ type EmbeddingChunk struct {
 type SemanticSearchResult struct {
 	Email *EmailData
 	Score float64 // cosine similarity 0.0–1.0
+}
+
+// UnsubscribedSender records a sender the user has unsubscribed from.
+type UnsubscribedSender struct {
+	ID             int64
+	Sender         string
+	UnsubbedAt     time.Time
+	Method         string
+	UnsubscribeURL string
 }
 
 // ContactSearchResult pairs a contact with its similarity score from semantic search.

@@ -384,6 +384,39 @@ func TestRunCustomPrompt(t *testing.T) {
 	}
 }
 
+func TestDryRunRulesEngine(t *testing.T) {
+	store := &mockStore{
+		rules: []*models.Rule{
+			makeRule(1, models.TriggerSender, "alice@example.com",
+				models.RuleAction{Type: models.ActionDelete}),
+		},
+	}
+	exec := &mockExecutor{}
+	engine := New(store, exec, nil)
+	engine.DryRun = true
+
+	email := makeEmail("alice@example.com", "Hello", "INBOX", "msg-dry-1")
+	fired, err := engine.EvaluateEmail(email, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Rule should still be counted as fired (condition matched)
+	if fired != 1 {
+		t.Errorf("expected fired=1, got %d", fired)
+	}
+	// Backend delete must NOT have been called
+	if len(exec.deleted) != 0 {
+		t.Errorf("dry-run: DeleteEmail should not be called, got %v", exec.deleted)
+	}
+	// Action log entry should record status "ok" (dry-run returns nil error)
+	if len(store.log) != 1 {
+		t.Fatalf("expected 1 action log entry, got %d", len(store.log))
+	}
+	if store.log[0].Status != "ok" {
+		t.Errorf("expected log status ok in dry-run, got %s", store.log[0].Status)
+	}
+}
+
 func TestRunCustomPrompt_AIError(t *testing.T) {
 	aiErr := errors.New("AI unavailable")
 	mockClient := &mockAI{err: aiErr}

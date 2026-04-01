@@ -94,6 +94,9 @@ func (c *Cache) initDB() error {
 		logger.Debug("is_read column might already exist: %v", err)
 	}
 
+	// is_starred column for star/pin tracking
+	_, _ = c.db.Exec(`ALTER TABLE emails ADD COLUMN is_starred INTEGER NOT NULL DEFAULT 0`)
+
 	// list_unsubscribe columns for one-click unsubscribe
 	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN list_unsubscribe TEXT`); err != nil {
 		logger.Debug("list_unsubscribe column might already exist: %v", err)
@@ -299,6 +302,19 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	// unsubscribed_senders: tracks senders the user has unsubscribed from
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS unsubscribed_senders (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			sender          TEXT NOT NULL UNIQUE,
+			unsubbed_at     DATETIME NOT NULL,
+			method          TEXT NOT NULL DEFAULT '',
+			unsubscribe_url TEXT NOT NULL DEFAULT ''
+		)
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -466,8 +482,8 @@ func (c *Cache) GetCachedIDs(folder string) (map[string]bool, error) {
 func (c *Cache) CacheEmail(email *models.EmailData) error {
 	query := `
 		INSERT OR REPLACE INTO emails
-		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_read)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	hasAttachments := 0
@@ -477,6 +493,10 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 	isRead := 0
 	if email.IsRead {
 		isRead = 1
+	}
+	isStarred := 0
+	if email.IsStarred {
+		isStarred = 1
 	}
 
 	_, err := c.db.Exec(query,
@@ -490,6 +510,7 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 		email.Folder,
 		time.Now().Format(time.RFC3339),
 		isRead,
+		isStarred,
 	)
 
 	if err != nil {
@@ -511,6 +532,16 @@ func (c *Cache) MarkUnread(messageID string) error {
 	return err
 }
 
+// UpdateStarred sets or clears the starred flag for an email in the cache.
+func (c *Cache) UpdateStarred(messageID string, starred bool) error {
+	val := 0
+	if starred {
+		val = 1
+	}
+	_, err := c.db.Exec(`UPDATE emails SET is_starred=? WHERE message_id=?`, val, messageID)
+	return err
+}
+
 // GetBodyText returns the cached plain-text body for a message
 func (c *Cache) GetBodyText(messageID string) (string, error) {
 	var text sql.NullString
@@ -526,7 +557,7 @@ func (c *Cache) GetBodyText(messageID string) (string, error) {
 
 // GetUnreadEmails returns unread emails in a folder, newest first
 func (c *Cache) GetUnreadEmails(folder string, limit int) ([]*models.EmailData, error) {
-	q := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read
+	q := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, COALESCE(is_starred,0)
 	      FROM emails WHERE folder=? AND is_read=0 ORDER BY date DESC`
 	args := []interface{}{folder}
 	if limit > 0 {
@@ -554,7 +585,7 @@ func (c *Cache) SearchByDate(folder string, after, before time.Time) ([]*models.
 		args = append(args, before.Format(time.RFC3339))
 	}
 	where := strings.Join(conds, " AND ")
-	rows, err := c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read
+	rows, err := c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, COALESCE(is_starred,0)
 	                          FROM emails WHERE `+where+` ORDER BY date DESC LIMIT 200`, args...)
 	if err != nil {
 		return nil, err
@@ -569,10 +600,10 @@ func (c *Cache) SearchBySender(sender, folder string) ([]*models.EmailData, erro
 	var rows *sql.Rows
 	var err error
 	if folder == "" {
-		rows, err = c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, folder
+		rows, err = c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, folder, COALESCE(is_starred,0)
 		                         FROM emails WHERE sender LIKE ? ESCAPE '\' ORDER BY date DESC LIMIT 200`, like)
 	} else {
-		rows, err = c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, folder
+		rows, err = c.db.Query(`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, is_read, folder, COALESCE(is_starred,0)
 		                         FROM emails WHERE folder=? AND sender LIKE ? ESCAPE '\' ORDER BY date DESC LIMIT 200`, folder, like)
 	}
 	if err != nil {
@@ -584,8 +615,8 @@ func (c *Cache) SearchBySender(sender, folder string) ([]*models.EmailData, erro
 		var msgID, sndr, subj, fldr string
 		var uid uint32
 		var date time.Time
-		var size, hasAtt, isRead int
-		if err := rows.Scan(&msgID, &uid, &sndr, &subj, &date, &size, &hasAtt, &isRead, &fldr); err != nil {
+		var size, hasAtt, isRead, isStarred int
+		if err := rows.Scan(&msgID, &uid, &sndr, &subj, &date, &size, &hasAtt, &isRead, &fldr, &isStarred); err != nil {
 			return nil, err
 		}
 		emails = append(emails, &models.EmailData{
@@ -597,6 +628,7 @@ func (c *Cache) SearchBySender(sender, folder string) ([]*models.EmailData, erro
 			Size:           size,
 			HasAttachments: hasAtt == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         fldr,
 		})
 	}
@@ -626,15 +658,15 @@ func (c *Cache) GetUnsubscribeHeaders(messageID string) (listUnsub, listUnsubPos
 	return listUnsub, listUnsubPost, nil
 }
 
-// scanEmailRowsWithRead scans rows with is_read column (no folder column — folder passed separately)
+// scanEmailRowsWithRead scans rows with is_read and is_starred columns (no folder column — folder passed separately)
 func scanEmailRowsWithRead(rows *sql.Rows, folder string) ([]*models.EmailData, error) {
 	var emails []*models.EmailData
 	for rows.Next() {
 		var msgID, sender, subject string
 		var uid uint32
 		var date time.Time
-		var size, hasAtt, isRead int
-		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead); err != nil {
+		var size, hasAtt, isRead, isStarred int
+		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred); err != nil {
 			return nil, err
 		}
 		emails = append(emails, &models.EmailData{
@@ -646,6 +678,7 @@ func scanEmailRowsWithRead(rows *sql.Rows, folder string) ([]*models.EmailData, 
 			Size:           size,
 			HasAttachments: hasAtt == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         folder,
 		})
 	}
@@ -655,7 +688,7 @@ func scanEmailRowsWithRead(rows *sql.Rows, folder string) ([]*models.EmailData, 
 // GetAllEmails retrieves all cached emails for a folder
 func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*models.EmailData, error) {
 	query := `
-		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0)
+		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0)
 		FROM emails WHERE folder = ?
 	`
 	rows, err := c.db.Query(query, folder)
@@ -670,9 +703,9 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 		var messageID, sender, subject string
 		var uid uint32
 		var date time.Time
-		var size, hasAttachments, isRead int
+		var size, hasAttachments, isRead, isStarred int
 
-		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead); err != nil {
+		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred); err != nil {
 			return nil, err
 		}
 
@@ -685,6 +718,7 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 			Size:           size,
 			HasAttachments: hasAttachments == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         folder,
 		}
 
@@ -817,7 +851,7 @@ func escapeLike(s string) string {
 func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) {
 	like := "%" + escapeLike(query) + "%"
 	rows, err := c.db.Query(`
-		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0)
+		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0)
 		FROM emails
 		WHERE folder = ? AND (sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\')
 		ORDER BY date DESC LIMIT 100`, folder, like, like)
@@ -830,8 +864,8 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 		var msgID, sender, subject string
 		var uid uint32
 		var date time.Time
-		var size, hasAtt, isRead int
-		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead); err != nil {
+		var size, hasAtt, isRead, isStarred int
+		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred); err != nil {
 			return nil, err
 		}
 		emails = append(emails, &models.EmailData{
@@ -843,6 +877,7 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 			Size:           size,
 			HasAttachments: hasAtt == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         folder,
 		})
 	}
@@ -851,13 +886,13 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 
 // GetEmailByID returns a single email by message ID
 func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
-	row := c.db.QueryRow(`SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read, 0)
+	row := c.db.QueryRow(`SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read, 0), COALESCE(is_starred, 0)
 	                       FROM emails WHERE message_id = ?`, messageID)
 	var msgID, sender, subject, folder string
 	var uid uint32
 	var date time.Time
-	var size, hasAtt, isRead int
-	if err := row.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead); err != nil {
+	var size, hasAtt, isRead, isStarred int
+	if err := row.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred); err != nil {
 		return nil, err
 	}
 	return &models.EmailData{
@@ -869,13 +904,14 @@ func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
 		Size:           size,
 		HasAttachments: hasAtt == 1,
 		IsRead:         isRead == 1,
+		IsStarred:      isStarred == 1,
 		Folder:         folder,
 	}, nil
 }
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending
 func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error) {
-	query := `SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0)
+	query := `SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0)
 	          FROM emails WHERE folder = ? ORDER BY date DESC`
 	rows, err := c.db.Query(query, folder)
 	if err != nil {
@@ -888,8 +924,8 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 		var messageID, sender, subject string
 		var uid uint32
 		var date time.Time
-		var size, hasAttachments, isRead int
-		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead); err != nil {
+		var size, hasAttachments, isRead, isStarred int
+		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred); err != nil {
 			return nil, err
 		}
 		emails = append(emails, &models.EmailData{
@@ -901,6 +937,7 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 			Size:           size,
 			HasAttachments: hasAttachments == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         folder,
 		})
 	}
@@ -941,14 +978,14 @@ func (c *Cache) SearchEmailsFTS(folder, query string) ([]*models.EmailData, erro
 	var err error
 	if folder == "" {
 		rows, err = c.db.Query(`
-			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0)
+			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0), COALESCE(e.is_starred,0)
 			FROM emails_fts f
 			JOIN emails e ON e.rowid = f.rowid
 			WHERE emails_fts MATCH ?
 			ORDER BY e.date DESC LIMIT 100`, query)
 	} else {
 		rows, err = c.db.Query(`
-			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0)
+			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0), COALESCE(e.is_starred,0)
 			FROM emails_fts f
 			JOIN emails e ON e.rowid = f.rowid
 			WHERE emails_fts MATCH ? AND e.folder = ?
@@ -972,7 +1009,7 @@ func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, erro
 	// Fallback to LIKE across all folders
 	like := "%" + escapeLike(query) + "%"
 	rows, err := c.db.Query(`
-		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0)
+		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0)
 		FROM emails
 		WHERE sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\'
 		ORDER BY date DESC LIMIT 100`, like, like)
@@ -1028,7 +1065,7 @@ func normalizeSubjectGo(s string) string {
 func (c *Cache) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
 	normalizedSubject := normalizeSubjectGo(subject)
 	query := `
-		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0)
+		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0)
 		FROM emails
 		WHERE folder = ?
 		  AND ` + normalizeSubjectSQL + ` = ?
@@ -1041,15 +1078,15 @@ func (c *Cache) GetEmailsByThread(folder, subject string) ([]*models.EmailData, 
 	return scanEmailRows(rows)
 }
 
-// scanEmailRows is a helper to scan email result rows that include folder and is_read columns
+// scanEmailRows is a helper to scan email result rows that include folder, is_read, and is_starred columns
 func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 	var emails []*models.EmailData
 	for rows.Next() {
 		var msgID, sender, subject, folder string
 		var uid uint32
 		var date time.Time
-		var size, hasAtt, isRead int
-		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead); err != nil {
+		var size, hasAtt, isRead, isStarred int
+		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred); err != nil {
 			return nil, err
 		}
 		emails = append(emails, &models.EmailData{
@@ -1061,6 +1098,7 @@ func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 			Size:           size,
 			HasAttachments: hasAtt == 1,
 			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
 			Folder:         folder,
 		})
 	}
@@ -1727,7 +1765,7 @@ func (c *Cache) GetContactByEmail(email string) (*models.ContactData, error) {
 func (c *Cache) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
 	like := "%" + escapeLike(contactEmail) + "%"
 	rows, err := c.db.Query(
-		`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, last_updated, COALESCE(is_read,0)
+		`SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, last_updated, COALESCE(is_read,0), COALESCE(is_starred,0)
 		 FROM emails WHERE sender LIKE ? ESCAPE '\' ORDER BY date DESC LIMIT ?`,
 		like, limit,
 	)
@@ -1740,10 +1778,10 @@ func (c *Cache) GetContactEmails(contactEmail string, limit int) ([]*models.Emai
 	for rows.Next() {
 		var e models.EmailData
 		var dateStr, lastUpdStr string
-		var hasAtt, isRead int
+		var hasAtt, isRead, isStarred int
 		if err := rows.Scan(
 			&e.MessageID, &e.UID, &e.Sender, &e.Subject,
-			&dateStr, &e.Size, &hasAtt, &e.Folder, &lastUpdStr, &isRead,
+			&dateStr, &e.Size, &hasAtt, &e.Folder, &lastUpdStr, &isRead, &isStarred,
 		); err != nil {
 			return nil, err
 		}
@@ -1755,6 +1793,7 @@ func (c *Cache) GetContactEmails(contactEmail string, limit int) ([]*models.Emai
 		}
 		e.HasAttachments = hasAtt != 0
 		e.IsRead = isRead != 0
+		e.IsStarred = isStarred != 0
 		emails = append(emails, &e)
 	}
 	return emails, rows.Err()

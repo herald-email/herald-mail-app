@@ -25,6 +25,7 @@ type Server struct {
 	configPath  string
 	backend     backend.Backend
 	cache       *cache.Cache
+	classifier  ai.AIClient
 	broadcaster *Broadcaster
 	httpSrv     *http.Server
 	startTime   time.Time
@@ -50,6 +51,7 @@ func New(cfg *config.Config, configPath string) (*Server, error) {
 		cfg:         cfg,
 		configPath:  configPath,
 		backend:     b,
+		classifier:  classifier,
 		broadcaster: NewBroadcaster(),
 		startTime:   time.Now(),
 		log:         logger.New(),
@@ -482,6 +484,34 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleMarkStarred sets the \Flagged flag on an email.
+func (s *Server) handleMarkStarred(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "INBOX"
+	}
+	if err := s.backend.MarkStarred(id, folder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleUnmarkStarred removes the \Flagged flag from an email.
+func (s *Server) handleUnmarkStarred(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "INBOX"
+	}
+	if err := s.backend.UnmarkStarred(id, folder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleGetThread returns all emails in the same thread as the given subject.
 func (s *Server) handleGetThread(w http.ResponseWriter, r *http.Request) {
 	folder := r.URL.Query().Get("folder")
@@ -597,6 +627,58 @@ func (s *Server) handleDeleteCleanupRule(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleClassifyFolder classifies all unclassified emails in a folder.
+func (s *Server) handleClassifyFolder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Folder string `json:"folder"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Folder == "" {
+		writeError(w, http.StatusBadRequest, "folder is required")
+		return
+	}
+	if s.classifier == nil {
+		writeError(w, http.StatusServiceUnavailable, "no AI classifier configured")
+		return
+	}
+
+	// Get unclassified message IDs for the folder
+	ids, err := s.cache.GetUnclassifiedIDs(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Count total emails in folder to compute skipped
+	allClassifications, err := s.cache.GetClassifications(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	skipped := len(allClassifications)
+	total := len(ids) + skipped
+
+	classified := 0
+	for _, msgID := range ids {
+		email, err := s.cache.GetEmailByID(msgID)
+		if err != nil || email == nil {
+			continue
+		}
+		cat, err := s.classifier.Classify(email.Sender, email.Subject)
+		if err != nil {
+			continue
+		}
+		if err := s.cache.SetClassification(msgID, string(cat)); err == nil {
+			classified++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{
+		"classified": classified,
+		"skipped":    skipped,
+		"total":      total,
+	})
 }
 
 // handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.

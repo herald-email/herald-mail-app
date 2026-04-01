@@ -358,6 +358,14 @@ func (b *RemoteBackend) MarkUnread(messageID, folder string) error {
 	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/unread?folder="+url.QueryEscape(folder), nil)
 }
 
+func (b *RemoteBackend) MarkStarred(messageID, folder string) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/star?folder="+url.QueryEscape(folder), nil)
+}
+
+func (b *RemoteBackend) UnmarkStarred(messageID, folder string) error {
+	return b.delete("/v1/emails/" + url.PathEscape(messageID) + "/star?folder=" + url.QueryEscape(folder))
+}
+
 func (b *RemoteBackend) GetEmailsByThread(folder, subject string) ([]*models.EmailData, error) {
 	var emails []*models.EmailData
 	path := fmt.Sprintf("/v1/threads?folder=%s&subject=%s", url.QueryEscape(folder), url.QueryEscape(subject))
@@ -602,3 +610,8 @@ func (b *RemoteBackend) SaveCleanupRule(rule *models.CleanupRule) error {
 func (b *RemoteBackend) DeleteCleanupRule(id int64) error {
 	return fmt.Errorf("not supported via remote backend")
 }
+
+// --- Unsubscribed senders ---
+
+func (b *RemoteBackend) RecordUnsubscribe(sender, method, url string) error { return nil }
+func (b *RemoteBackend) IsUnsubscribedSender(sender string) (bool, error)   { return false, nil }

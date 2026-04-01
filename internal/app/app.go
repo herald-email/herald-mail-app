@@ -181,6 +181,13 @@ type UnsubscribeResultMsg struct {
 // RuleResultMsg carries the result of processing a single email through the rule engine
 type RuleResultMsg struct{ Result models.RuleResult }
 
+// AutoClassifyResultMsg carries the result of auto-classifying a newly arrived email.
+type AutoClassifyResultMsg struct {
+	MessageID string
+	Category  string
+	Err       error
+}
+
 // SoftUnsubResultMsg carries the result of a soft-unsubscribe attempt
 type SoftUnsubResultMsg struct {
 	Sender string
@@ -204,6 +211,13 @@ type ContactsLoadedMsg struct{ Contacts []models.ContactData }
 type ContactDetailLoadedMsg struct{ Emails []*models.EmailData }
 
 type AppleContactsImportedMsg struct{ Count int }
+
+// StarResultMsg is returned after a star/unstar operation completes.
+type StarResultMsg struct {
+	MessageID string
+	Starred   bool
+	Err       error
+}
 
 // Model represents the main application state
 type Model struct {
@@ -389,6 +403,9 @@ type Model struct {
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode bool
 
+	// Dry-run mode — log rule/cleanup actions without executing destructive ones
+	dryRun bool
+
 	// Contacts tab
 	contactsList       []models.ContactData
 	contactsFiltered   []models.ContactData
@@ -437,7 +454,7 @@ type Model struct {
 }
 
 // New creates a new application model backed by the given Backend.
-func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifier ai.AIClient) *Model {
+func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifier ai.AIClient, dryRun bool) *Model {
 	logger.Info("Creating new application model")
 
 	// Setup styles
@@ -587,6 +604,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		backend:            b,
 		progressCh:         b.Progress(),
 		loading:            true,
+		dryRun:             dryRun,
 		startTime:          time.Now(),
 		currentFolder:      "INBOX",
 		folders:            []string{"INBOX"},
@@ -956,6 +974,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "mailto-copied":
 				m.composeStatus = fmt.Sprintf("Unsubscribe address copied to clipboard: %s", msg.URL)
 			}
+			// Persist the unsubscribe record so future arrivals from this sender can be flagged.
+			if m.selectedTimelineEmail != nil {
+				sender := m.selectedTimelineEmail.Sender
+				method := msg.Method
+				url := msg.URL
+				go func() {
+					_ = m.backend.RecordUnsubscribe(sender, method, url)
+				}()
+			}
 		}
 		return m, nil
 
@@ -965,6 +992,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Error creating soft unsubscribe rule: " + msg.Err.Error()
 		} else {
 			m.statusMessage = "Soft unsubscribe rule created for " + msg.Sender
+		}
+		return m, nil
+
+	case StarResultMsg:
+		if msg.Err != nil {
+			m.statusMessage = "Star failed: " + msg.Err.Error()
+		} else {
+			for _, e := range m.timelineEmails {
+				if e.MessageID == msg.MessageID {
+					e.IsStarred = msg.Starred
+					break
+				}
+			}
+			m.updateTimelineTable()
+			if msg.Starred {
+				m.statusMessage = "★ Starred"
+			} else {
+				m.statusMessage = "☆ Unstarred"
+			}
 		}
 		return m, nil
 
@@ -1302,7 +1348,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.updateTimelineTable()
 		}
-		return m, m.listenForNewEmails()
+		var cmds []tea.Cmd
+		cmds = append(cmds, m.listenForNewEmails())
+		for _, email := range msg.Emails {
+			if m.classifier != nil && m.classifications[email.MessageID] == "" {
+				// Auto-classify; rules will be triggered after classification completes.
+				cmds = append(cmds, m.autoClassifyEmailCmd(email))
+			} else if cat := m.classifications[email.MessageID]; cat != "" {
+				// Already classified — send directly to rule engine (non-blocking).
+				select {
+				case m.ruleRequestCh <- models.RuleRequest{Email: email, Category: cat}:
+				default:
+				}
+			}
+			// Warn if this sender was previously unsubscribed from.
+			if ok, _ := m.backend.IsUnsubscribedSender(email.Sender); ok {
+				m.statusMessage = fmt.Sprintf("⚠ Email from unsubscribed sender: %s", email.Sender)
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case EmailExpungedMsg:
 		if msg.Folder == m.currentFolder {
@@ -1325,6 +1389,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateTimelineTable()
 		}
 		return m, m.listenForExpunged()
+
+	case AutoClassifyResultMsg:
+		if msg.Err == nil {
+			if m.classifications == nil {
+				m.classifications = make(map[string]string)
+			}
+			m.classifications[msg.MessageID] = msg.Category
+			m.updateTimelineTable()
+		}
+		// Send to rule engine regardless; use empty category on error so rules
+		// that don't require a category can still fire.
+		cat := msg.Category
+		for _, e := range m.timelineEmails {
+			if e.MessageID == msg.MessageID {
+				select {
+				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: cat}:
+				default:
+				}
+				break
+			}
+		}
+		return m, nil
 
 	case SyncTickMsg:
 		if m.syncCountdown > 0 {
@@ -1863,6 +1949,24 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.pendingDeleteAction = func() tea.Cmd {
 					m.deleting = true
 					return m.archiveSelected()
+				}
+			}
+		}
+		return m, nil
+
+	case "*":
+		if !m.loading && m.activeTab == tabTimeline {
+			cursor := m.timelineTable.Cursor()
+			if cursor < len(m.threadRowMap) {
+				ref := m.threadRowMap[cursor]
+				var email *models.EmailData
+				if ref.kind == rowKindThread {
+					email = ref.group.emails[0]
+				} else {
+					email = ref.group.emails[ref.emailIdx]
+				}
+				if email != nil {
+					return m, m.toggleStarCmd(email)
 				}
 			}
 		}

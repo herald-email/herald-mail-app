@@ -89,6 +89,45 @@ func TestRunRule(t *testing.T) {
 	}
 }
 
+func TestDryRunCleanupEngine(t *testing.T) {
+	c := newTestCache(t)
+	mb := &mockBackend{}
+	engine := NewEngineWithDryRun(c, mb, nil, true)
+
+	old := time.Now().AddDate(0, 0, -40)
+	seedEmail(t, c, "dry-old", "spam@example.com", "INBOX", old)
+
+	rule := &models.CleanupRule{
+		ID:            1,
+		Name:          "dry-run-rule",
+		MatchType:     "sender",
+		MatchValue:    "spam@example.com",
+		Action:        "delete",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+	if err := c.SaveCleanupRule(rule); err != nil {
+		t.Fatalf("SaveCleanupRule: %v", err)
+	}
+
+	count, err := engine.RunRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("RunRule: %v", err)
+	}
+	// Should still count "would process" emails
+	if count != 1 {
+		t.Errorf("dry-run count: got %d, want 1", count)
+	}
+	// Backend delete must NOT have been called
+	if len(mb.deleted) != 0 {
+		t.Errorf("dry-run: DeleteEmail should not be called, got %v", mb.deleted)
+	}
+	if len(mb.moved) != 0 {
+		t.Errorf("dry-run: MoveEmail should not be called, got %v", mb.moved)
+	}
+}
+
 func TestRunAll_SkipsDisabled(t *testing.T) {
 	c := newTestCache(t)
 	mb := &mockBackend{}
