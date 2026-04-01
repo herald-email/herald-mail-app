@@ -38,6 +38,7 @@ Thumbs.db
 
 # Claude Code session memory
 memory/
+.tasks
 
 # Test reports
 reports/
