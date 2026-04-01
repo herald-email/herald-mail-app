@@ -2533,14 +2533,17 @@ func (m *Model) cycleComposeField() {
 // sendCompose sends the composed message via SMTP as multipart/alternative
 // (HTML + plain-text fallback). The body textarea is treated as Markdown.
 // Any staged attachments are sent as multipart/mixed parts.
+// Local inline images referenced as ![alt](~/path) or ![alt](/path) are
+// embedded as multipart/related parts with cid: references.
 func (m *Model) sendCompose() tea.Cmd {
+	mailer := m.mailer // snapshot before goroutine to avoid data races
 	from := m.fromAddress
 	to := m.composeTo.Value()
 	subject := m.composeSubject.Value()
 	markdownBody := m.composeBody.Value()
 	attachments := m.composeAttachments // snapshot; cleared on success in Update()
 	return func() tea.Msg {
-		if m.mailer == nil {
+		if mailer == nil {
 			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
 		}
 		if to == "" {
@@ -2549,8 +2552,15 @@ func (m *Model) sendCompose() tea.Cmd {
 		if subject == "" {
 			return ComposeStatusMsg{Message: "Error: Subject is empty"}
 		}
-		htmlBody, plainText := appsmtp.MarkdownToHTMLAndPlain(markdownBody)
-		err := m.mailer.SendWithAttachments(from, to, subject, plainText, htmlBody, attachments)
+		htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(markdownBody)
+		if inlineErr != nil {
+			// Log and fall back to plain markdown conversion without inline images.
+			logger.Warn("inline image embedding failed: %v", inlineErr)
+			htmlBody, _ = appsmtp.MarkdownToHTMLAndPlain(markdownBody)
+			inlines = nil
+		}
+		_, plainText := appsmtp.MarkdownToHTMLAndPlain(markdownBody)
+		err := mailer.SendWithInlineImages(from, to, subject, plainText, htmlBody, attachments, inlines)
 		if err != nil {
 			return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 		}
@@ -3984,4 +3994,40 @@ func (m *Model) renderContactsTab(width, height int) string {
 	rightPanel := makePanel(rightBorderColor, rightW).Render(rightSb.String())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+}
+
+// --- Draft auto-save helpers ---
+
+// draftSaveTick returns a Cmd that fires DraftSaveTickMsg after 30 seconds.
+func draftSaveTick() tea.Cmd {
+	return tea.Tick(30*time.Second, func(_ time.Time) tea.Msg {
+		return DraftSaveTickMsg{}
+	})
+}
+
+// composeHasContent returns true if any compose field is non-empty.
+func composeHasContent(m *Model) bool {
+	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != ""
+}
+
+// saveDraftCmd saves the current compose content as a draft.
+// Snapshots the values before the goroutine to prevent data races.
+func (m *Model) saveDraftCmd() tea.Cmd {
+	backend := m.backend
+	to := m.composeTo.Value()
+	subject := m.composeSubject.Value()
+	body := m.composeBody.Value()
+	return func() tea.Msg {
+		uid, folder, err := backend.SaveDraft(to, subject, body)
+		return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
+	}
+}
+
+// deleteDraftCmd deletes the draft with the given UID from the given folder.
+func (m *Model) deleteDraftCmd(uid uint32, folder string) tea.Cmd {
+	backend := m.backend
+	return func() tea.Msg {
+		err := backend.DeleteDraft(uid, folder)
+		return DraftDeletedMsg{Err: err}
+	}
 }

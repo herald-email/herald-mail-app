@@ -611,6 +611,28 @@ func (b *RemoteBackend) DeleteCleanupRule(id int64) error {
 	return fmt.Errorf("not supported via remote backend")
 }
 
+// --- Drafts ---
+
+func (b *RemoteBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+	var resp struct {
+		UID    uint32 `json:"uid"`
+		Folder string `json:"folder"`
+	}
+	if err := b.postOut("/v1/drafts", map[string]string{"to": to, "subject": subject, "body": body}, &resp); err != nil {
+		return 0, "", err
+	}
+	return resp.UID, resp.Folder, nil
+}
+
+func (b *RemoteBackend) ListDrafts() ([]*models.Draft, error) {
+	var drafts []*models.Draft
+	return drafts, b.get("/v1/drafts", &drafts)
+}
+
+func (b *RemoteBackend) DeleteDraft(uid uint32, folder string) error {
+	return b.delete(fmt.Sprintf("/v1/drafts/%d?folder=%s", uid, url.QueryEscape(folder)))
+}
+
 // --- Unsubscribed senders ---
 
 func (b *RemoteBackend) RecordUnsubscribe(sender, method, url string) error { return nil }

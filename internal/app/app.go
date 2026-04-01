@@ -219,6 +219,21 @@ type StarResultMsg struct {
 	Err       error
 }
 
+// DraftSaveTickMsg fires every 30 seconds to trigger auto-save of compose draft.
+type DraftSaveTickMsg struct{}
+
+// DraftSavedMsg is returned after a SaveDraft call completes.
+type DraftSavedMsg struct {
+	UID    uint32
+	Folder string
+	Err    error
+}
+
+// DraftDeletedMsg is returned after a DeleteDraft call completes.
+type DraftDeletedMsg struct {
+	Err error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -353,6 +368,11 @@ type Model struct {
 	composeAttachments   []models.ComposeAttachment
 	attachmentPathInput  textinput.Model
 	attachmentInputActive bool
+
+	// Draft auto-save state
+	lastDraftUID    uint32 // UID of last auto-saved draft; 0 = not saved yet
+	lastDraftFolder string // folder of last auto-saved draft
+	draftSaving     bool   // true while a SaveDraft cmd is in flight (prevents concurrent saves)
 
 	// Sidebar
 	folders       []string
@@ -683,6 +703,7 @@ func (m *Model) Init() tea.Cmd {
 		m.listenForProgress(),
 		m.listenForRuleResult(),
 		m.importAppleContacts(),
+		draftSaveTick(),
 	)
 }
 
@@ -896,6 +917,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeSubject.SetValue("")
 			m.composeBody.SetValue("")
 			m.composeAttachments = nil
+			// Delete the auto-saved draft (if any) since the email was sent
+			if m.lastDraftUID != 0 {
+				cmd := m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder)
+				m.lastDraftUID = 0
+				m.lastDraftFolder = ""
+				return m, cmd
+			}
 		}
 		return m, nil
 
@@ -1011,6 +1039,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.statusMessage = "☆ Unstarred"
 			}
+		}
+		return m, nil
+
+	case DraftSaveTickMsg:
+		cmds := []tea.Cmd{draftSaveTick()} // always reschedule
+		if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
+			m.draftSaving = true
+			if m.lastDraftUID != 0 {
+				cmds = append(cmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
+				m.lastDraftUID = 0
+				m.lastDraftFolder = ""
+			}
+			cmds = append(cmds, m.saveDraftCmd())
+		}
+		return m, tea.Batch(cmds...)
+
+	case DraftSavedMsg:
+		m.draftSaving = false
+		if msg.Err != nil {
+			logger.Warn("auto-save draft failed: %v", msg.Err)
+		} else {
+			m.lastDraftUID = msg.UID
+			m.lastDraftFolder = msg.Folder
+			m.statusMessage = "Draft saved"
+		}
+		return m, nil
+
+	case DraftDeletedMsg:
+		if msg.Err != nil {
+			logger.Warn("delete old draft failed: %v", msg.Err)
 		}
 		return m, nil
 
@@ -1737,9 +1795,20 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.openQuickReply(m.quickReplies[0])
 		}
 		if !m.loading && m.activeTab != tabTimeline {
+			var extraCmds []tea.Cmd
+			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
+				m.draftSaving = true
+				if m.lastDraftUID != 0 {
+					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
+					m.lastDraftUID = 0
+					m.lastDraftFolder = ""
+				}
+				extraCmds = append(extraCmds, m.saveDraftCmd())
+			}
 			m.activeTab = tabTimeline
 			m.setFocusedPanel(panelTimeline)
-			return m, m.loadTimelineEmails()
+			extraCmds = append(extraCmds, m.loadTimelineEmails())
+			return m, tea.Batch(extraCmds...)
 		}
 		return m, nil
 
@@ -1764,8 +1833,19 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.openQuickReply(m.quickReplies[2])
 		}
 		if !m.loading && m.activeTab != tabCleanup {
+			var extraCmds []tea.Cmd
+			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
+				m.draftSaving = true
+				if m.lastDraftUID != 0 {
+					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
+					m.lastDraftUID = 0
+					m.lastDraftFolder = ""
+				}
+				extraCmds = append(extraCmds, m.saveDraftCmd())
+			}
 			m.activeTab = tabCleanup
 			m.setFocusedPanel(panelSummary)
+			return m, tea.Batch(extraCmds...)
 		}
 		return m, nil
 
@@ -1774,8 +1854,20 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.openQuickReply(m.quickReplies[3])
 		}
 		if !m.loading && m.activeTab != tabContacts {
+			var extraCmds []tea.Cmd
+			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
+				m.draftSaving = true
+				if m.lastDraftUID != 0 {
+					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
+					m.lastDraftUID = 0
+					m.lastDraftFolder = ""
+				}
+				extraCmds = append(extraCmds, m.saveDraftCmd())
+			}
 			m.activeTab = tabContacts
 			m.contactFocusPanel = 0
+			extraCmds = append(extraCmds, m.loadContacts())
+			return m, tea.Batch(extraCmds...)
 		}
 		return m, m.loadContacts()
 

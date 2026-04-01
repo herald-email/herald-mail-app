@@ -59,4 +59,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/cleanup-rules", s.handleListCleanupRules)
 	mux.HandleFunc("POST /v1/cleanup-rules", s.handleCreateCleanupRule)
 	mux.HandleFunc("DELETE /v1/cleanup-rules/{id}", s.handleDeleteCleanupRule)
+
+	// Drafts — literal "send" segment must be registered before the {uid} wildcard
+	mux.HandleFunc("POST /v1/drafts/{uid}/send", s.handleSendDraft)
+	mux.HandleFunc("GET /v1/drafts", s.handleListDrafts)
+	mux.HandleFunc("POST /v1/drafts", s.handleSaveDraft)
+	mux.HandleFunc("DELETE /v1/drafts/{uid}", s.handleDeleteDraft)
 }

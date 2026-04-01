@@ -607,6 +607,25 @@ func (b *LocalBackend) IsUnsubscribedSender(sender string) (bool, error) {
 	return b.cache.IsUnsubscribedSender(sender)
 }
 
+// --- Drafts ---
+
+func (b *LocalBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+	from := b.cfg.Credentials.Username
+	raw, err := appsmtp.BuildDraftMessage(from, to, subject, body)
+	if err != nil {
+		return 0, "", fmt.Errorf("build draft message: %w", err)
+	}
+	return b.imapClient.AppendDraft(raw)
+}
+
+func (b *LocalBackend) ListDrafts() ([]*models.Draft, error) {
+	return b.imapClient.ListDrafts()
+}
+
+func (b *LocalBackend) DeleteDraft(uid uint32, folder string) error {
+	return b.imapClient.DeleteDraft(uid, folder)
+}
+
 // --- Cleanup rules ---
 
 func (b *LocalBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {

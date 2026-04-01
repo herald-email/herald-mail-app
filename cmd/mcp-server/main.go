@@ -65,6 +65,20 @@ func daemonPost(path string, body any) ([]byte, int, error) {
 	return respBody, resp.StatusCode, nil
 }
 
+// daemonGet makes a GET to the daemon. Returns error if daemon unavailable.
+func daemonGet(path string) ([]byte, int, error) {
+	if daemonURL == "" {
+		return nil, 0, fmt.Errorf("daemon not running — start herald daemon first")
+	}
+	resp, err := http.Get(daemonURL + path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("daemon unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	return respBody, resp.StatusCode, nil
+}
+
 // daemonDelete makes a DELETE to the daemon.
 func daemonDelete(path string) (int, error) {
 	if daemonURL == "" {
@@ -1491,6 +1505,120 @@ func main() {
 				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
 			}
 			return mcp.NewToolResultText(string(respBody)), nil
+		},
+	)
+
+	// Tool: save_draft
+	s.AddTool(
+		mcp.NewTool("save_draft",
+			mcp.WithDescription("Save an email draft to the IMAP Drafts folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("to",
+				mcp.Required(),
+				mcp.Description("Recipient email address"),
+			),
+			mcp.WithString("subject",
+				mcp.Required(),
+				mcp.Description("Email subject"),
+			),
+			mcp.WithString("body",
+				mcp.Required(),
+				mcp.Description("Email body (Markdown supported)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			to, err := req.RequireString("to")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, err := req.RequireString("body")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			respBody, status, err := daemonPost("/v1/drafts", map[string]string{
+				"to": to, "subject": subject, "body": body,
+			})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			var result map[string]any
+			if err := json.Unmarshal(respBody, &result); err != nil {
+				return mcp.NewToolResultText(string(respBody)), nil
+			}
+			uid := result["uid"]
+			return mcp.NewToolResultText(fmt.Sprintf("Draft saved (UID: %v)", uid)), nil
+		},
+	)
+
+	// Tool: list_drafts
+	s.AddTool(
+		mcp.NewTool("list_drafts",
+			mcp.WithDescription("List all draft emails from the IMAP Drafts folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			respBody, status, err := daemonGet("/v1/drafts")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			var drafts []struct {
+				UID     uint32 `json:"UID"`
+				Folder  string `json:"Folder"`
+				To      string `json:"To"`
+				Subject string `json:"Subject"`
+				Date    string `json:"Date"`
+			}
+			if err := json.Unmarshal(respBody, &drafts); err != nil {
+				return mcp.NewToolResultText(string(respBody)), nil
+			}
+			if len(drafts) == 0 {
+				return mcp.NewToolResultText("No drafts found"), nil
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("%d drafts:\n", len(drafts)))
+			for i, d := range drafts {
+				sb.WriteString(fmt.Sprintf("%d. [%s] → %s (%s)\n", i+1, d.Subject, d.To, d.Date))
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
+	// Tool: send_draft
+	s.AddTool(
+		mcp.NewTool("send_draft",
+			mcp.WithDescription("Send a saved draft and delete it from the Drafts folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithNumber("uid",
+				mcp.Required(),
+				mcp.Description("The UID of the draft to send (from list_drafts)"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			uid := req.GetInt("uid", 0)
+			if uid == 0 {
+				return mcp.NewToolResultError("uid is required and must be non-zero"), nil
+			}
+			respBody, status, err := daemonPost(fmt.Sprintf("/v1/drafts/%d/send?folder=Drafts", uid), nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText("Draft sent and deleted"), nil
 		},
 	)
 

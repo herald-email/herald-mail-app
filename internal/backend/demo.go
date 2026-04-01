@@ -33,6 +33,8 @@ type DemoBackend struct {
 	nextRuleID          int64
 	nextPromptID        int64
 	unsubscribedSenders map[string]bool
+	drafts              []*models.Draft
+	nextDraftUID        uint32
 }
 
 // compile-time check that DemoBackend satisfies the Backend interface.
@@ -757,6 +759,44 @@ func (d *DemoBackend) IsUnsubscribedSender(sender string) (bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.unsubscribedSenders[sender], nil
+}
+
+// --- Drafts ---
+
+func (d *DemoBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.nextDraftUID++
+	draft := &models.Draft{
+		UID:     d.nextDraftUID,
+		Folder:  "Drafts",
+		To:      to,
+		Subject: subject,
+		Body:    body,
+		Date:    time.Now(),
+	}
+	d.drafts = append(d.drafts, draft)
+	return draft.UID, draft.Folder, nil
+}
+
+func (d *DemoBackend) ListDrafts() ([]*models.Draft, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]*models.Draft, len(d.drafts))
+	copy(out, d.drafts)
+	return out, nil
+}
+
+func (d *DemoBackend) DeleteDraft(uid uint32, folder string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for i, dr := range d.drafts {
+		if dr.UID == uid {
+			d.drafts = append(d.drafts[:i], d.drafts[i+1:]...)
+			return nil
+		}
+	}
+	return nil // not found is not an error
 }
 
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".

@@ -218,6 +218,158 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	return err
 }
 
+// SendWithInlineImages is like SendWithAttachments but also embeds inline
+// images via multipart/related. When inlines is empty it behaves exactly like
+// SendWithAttachments.
+//
+// MIME structure with inline images:
+//
+//	multipart/mixed
+//	  └─ multipart/related
+//	       ├─ multipart/alternative
+//	       │    ├─ text/plain
+//	       │    └─ text/html
+//	       └─ image/png (Content-ID: <img001@herald>; Content-Disposition: inline)
+//	  └─ attachment parts
+func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody string, attachments []models.ComposeAttachment, inlines []InlineImage) error {
+	if len(inlines) == 0 {
+		return c.SendWithAttachments(from, to, subject, plainText, htmlBody, attachments)
+	}
+
+	outerBoundary := fmt.Sprintf("outer_%d", time.Now().UnixNano())
+	relatedBoundary := fmt.Sprintf("related_%d", time.Now().UnixNano()+1)
+	innerBoundary := fmt.Sprintf("inner_%d", time.Now().UnixNano()+2)
+
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n", outerBoundary))
+	msg.WriteString("\r\n")
+
+	// multipart/related wraps alternative + inline images
+	msg.WriteString(fmt.Sprintf("--%s\r\n", outerBoundary))
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/related; boundary=%q\r\n", relatedBoundary))
+	msg.WriteString("\r\n")
+
+	// multipart/alternative (plain + HTML)
+	msg.WriteString(fmt.Sprintf("--%s\r\n", relatedBoundary))
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", innerBoundary))
+	msg.WriteString("\r\n")
+
+	msg.WriteString(fmt.Sprintf("--%s\r\n", innerBoundary))
+	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(plainText)
+	msg.WriteString("\r\n")
+
+	if htmlBody != "" {
+		msg.WriteString(fmt.Sprintf("--%s\r\n", innerBoundary))
+		msg.WriteString("Content-Type: text/html; charset=utf-8\r\n")
+		msg.WriteString("\r\n")
+		msg.WriteString(htmlBody)
+		msg.WriteString("\r\n")
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", innerBoundary))
+
+	// Inline image parts
+	for i, img := range inlines {
+		msg.WriteString(fmt.Sprintf("--%s\r\n", relatedBoundary))
+		msg.WriteString(fmt.Sprintf("Content-Type: %s\r\n", img.MIMEType))
+		msg.WriteString("Content-Transfer-Encoding: base64\r\n")
+		msg.WriteString(fmt.Sprintf("Content-ID: <%s>\r\n", img.ContentID))
+		ext := extFromMIME(img.MIMEType)
+		msg.WriteString(fmt.Sprintf("Content-Disposition: inline; filename=%q\r\n", fmt.Sprintf("img%03d%s", i+1, ext)))
+		msg.WriteString("\r\n")
+		encoded := base64.StdEncoding.EncodeToString(img.Data)
+		for len(encoded) > 76 {
+			msg.WriteString(encoded[:76] + "\r\n")
+			encoded = encoded[76:]
+		}
+		if len(encoded) > 0 {
+			msg.WriteString(encoded + "\r\n")
+		}
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", relatedBoundary))
+
+	// File attachment parts
+	for _, att := range attachments {
+		if att.Data == nil {
+			continue
+		}
+		msg.WriteString(fmt.Sprintf("--%s\r\n", outerBoundary))
+		msg.WriteString("Content-Type: application/octet-stream\r\n")
+		msg.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=%q\r\n", att.Filename))
+		msg.WriteString("Content-Transfer-Encoding: base64\r\n")
+		msg.WriteString("\r\n")
+		encoded := base64.StdEncoding.EncodeToString(att.Data)
+		for len(encoded) > 76 {
+			msg.WriteString(encoded[:76] + "\r\n")
+			encoded = encoded[76:]
+		}
+		if len(encoded) > 0 {
+			msg.WriteString(encoded + "\r\n")
+		}
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", outerBoundary))
+
+	rawMsg := msg.String()
+	host := c.cfg.SMTP.Host
+	port := c.cfg.SMTP.Port
+	if port == 0 {
+		port = 1025
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
+	conn, err := tls.Dial("tcp", addr, tlsCfg)
+	if err != nil {
+		return c.sendPlain(addr, from, to, rawMsg)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp connect: %w", err)
+	}
+	defer client.Quit()
+
+	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("smtp MAIL FROM: %w", err)
+	}
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp RCPT TO: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp DATA: %w", err)
+	}
+	defer w.Close()
+	_, err = w.Write([]byte(rawMsg))
+	return err
+}
+
+// extFromMIME returns a file extension for common image MIME types.
+func extFromMIME(mimeType string) string {
+	switch mimeType {
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".bin"
+	}
+}
+
 func (c *Client) sendPlain(addr, from, to, rawMsg string) error {
 	host := c.cfg.SMTP.Host
 	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)

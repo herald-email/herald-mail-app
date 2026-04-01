@@ -132,6 +132,16 @@ type SemanticSearchResult struct {
 	Score float64 // cosine similarity 0.0–1.0
 }
 
+// Draft represents a saved compose draft.
+type Draft struct {
+	UID     uint32
+	Folder  string
+	To      string
+	Subject string
+	Body    string // Markdown body as stored
+	Date    time.Time
+}
+
 // UnsubscribedSender records a sender the user has unsubscribed from.
 type UnsubscribedSender struct {
 	ID             int64

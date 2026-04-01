@@ -681,6 +681,111 @@ func (s *Server) handleClassifyFolder(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// saveDraftRequest is the body for POST /v1/drafts.
+type saveDraftRequest struct {
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+}
+
+// handleSaveDraft saves a draft email to the IMAP Drafts folder.
+func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
+	var req saveDraftRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	uid, folder, err := s.backend.SaveDraft(req.To, req.Subject, req.Body)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"uid": uid, "folder": folder})
+}
+
+// handleListDrafts returns all draft emails from the IMAP Drafts folder.
+func (s *Server) handleListDrafts(w http.ResponseWriter, _ *http.Request) {
+	drafts, err := s.backend.ListDrafts()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if drafts == nil {
+		drafts = []*models.Draft{}
+	}
+	writeJSON(w, http.StatusOK, drafts)
+}
+
+// handleDeleteDraft removes a draft by UID from the given folder.
+func (s *Server) handleDeleteDraft(w http.ResponseWriter, r *http.Request) {
+	uidStr := r.PathValue("uid")
+	uid64, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid uid")
+		return
+	}
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "Drafts"
+	}
+	if err := s.backend.DeleteDraft(uint32(uid64), folder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSendDraft fetches a draft, sends it via SMTP, then deletes it.
+func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request) {
+	uidStr := r.PathValue("uid")
+	uid64, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid uid")
+		return
+	}
+	uid := uint32(uid64)
+	folder := r.URL.Query().Get("folder")
+	if folder == "" {
+		folder = "Drafts"
+	}
+
+	drafts, err := s.backend.ListDrafts()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var draft *models.Draft
+	for _, d := range drafts {
+		if d.UID == uid {
+			draft = d
+			break
+		}
+	}
+	if draft == nil {
+		writeError(w, http.StatusNotFound, "draft not found")
+		return
+	}
+
+	// Fetch the full body — ListDrafts only returns envelope metadata.
+	body, fetchErr := s.backend.FetchEmailBody(draft.Folder, draft.UID)
+	if fetchErr != nil {
+		logger.Warn("daemon: fetch draft body uid=%d: %v — sending with empty body", draft.UID, fetchErr)
+	} else if body != nil {
+		draft.Body = body.TextPlain
+	}
+
+	if err := s.backend.SendEmail(draft.To, draft.Subject, draft.Body, ""); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := s.backend.DeleteDraft(uid, folder); err != nil {
+		logger.Error("daemon: delete draft after send: %v", err)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Draft sent and deleted"})
+}
+
 // handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.
 // The cleanup engine runs in-process using the server's backend and cache.
 func (s *Server) handleRunCleanupRules(w http.ResponseWriter, r *http.Request) {

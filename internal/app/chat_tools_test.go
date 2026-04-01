@@ -110,6 +110,11 @@ func (s *stubBackend) UpsertContacts(_ []models.ContactAddr, _ string) error { r
 func (s *stubBackend) GetAllCleanupRules() ([]*models.CleanupRule, error)     { return nil, nil }
 func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error             { return nil }
 func (s *stubBackend) DeleteCleanupRule(_ int64) error                         { return nil }
+func (s *stubBackend) RecordUnsubscribe(_, _, _ string) error                  { return nil }
+func (s *stubBackend) IsUnsubscribedSender(_ string) (bool, error)             { return false, nil }
+func (s *stubBackend) SaveDraft(_, _, _ string) (uint32, string, error)        { return 0, "", nil }
+func (s *stubBackend) ListDrafts() ([]*models.Draft, error)                    { return nil, nil }
+func (s *stubBackend) DeleteDraft(_ uint32, _ string) error                    { return nil }
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.
 func newStubModel(b *stubBackend) *Model {

@@ -252,6 +252,18 @@ type Backend interface {
 	// IsUnsubscribedSender returns true if the sender has previously been unsubscribed from.
 	IsUnsubscribedSender(sender string) (bool, error)
 
+	// --- Drafts ---
+
+	// SaveDraft saves a draft email to the IMAP Drafts folder.
+	// Returns the UID and folder of the saved draft.
+	SaveDraft(to, subject, body string) (uid uint32, folder string, err error)
+
+	// ListDrafts returns all draft emails from the IMAP Drafts folder.
+	ListDrafts() ([]*models.Draft, error)
+
+	// DeleteDraft removes a draft by UID from the given folder.
+	DeleteDraft(uid uint32, folder string) error
+
 	// --- Cleanup rules ---
 
 	// GetAllCleanupRules returns all cleanup rules.
