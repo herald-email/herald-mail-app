@@ -235,9 +235,10 @@ When adding or updating features in `VISION.md` or any other planning/design doc
 #### Large feature workflow
 1. **Update [TUI_TESTPLAN.md](TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
 2. **Update [VISION.md](VISION.md)** — add the feature as a `- [ ]` checkbox in the relevant section with a brief description.
-3. Implement the feature.
-4. Mark the checkbox `- [x]` in VISION.md when done.
-5. Run the post-completion checklist below.
+3. **Update [ARCHITECTURE.md](ARCHITECTURE.md)** if the change affects package responsibilities, data flows, the Backend interface, the SQLite schema, or the Phase 2/3 design. Update the relevant diagram, table, or section before writing implementation code.
+4. Implement the feature.
+5. Mark the checkbox `- [x]` in VISION.md when done.
+6. Run the post-completion checklist below.
 
 #### Post-completion checklist (bugs and large features)
 
