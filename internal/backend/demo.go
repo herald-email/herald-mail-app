@@ -815,6 +815,14 @@ func (d *DemoBackend) BulkMove(messageIDs []string, toFolder string) error { ret
 func (d *DemoBackend) UnsubscribeSender(messageID string) error   { return nil }
 func (d *DemoBackend) SoftUnsubscribeSender(sender, toFolder string) error { return nil }
 
+// --- Folder management ---
+
+func (d *DemoBackend) CreateFolder(_ string) error                             { return nil }
+func (d *DemoBackend) RenameFolder(_, _ string) error                          { return nil }
+func (d *DemoBackend) DeleteFolder(_ string) error                             { return nil }
+func (d *DemoBackend) SyncAllFolders() (int, error)                            { return 0, nil }
+func (d *DemoBackend) GetSyncStatus() (map[string]models.FolderStatus, error)  { return nil, nil }
+
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".
 func extractDemoEmailDomain(sender string) string {
 	addr := sender

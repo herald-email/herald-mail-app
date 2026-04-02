@@ -125,6 +125,11 @@ func (s *stubBackend) ArchiveThread(_, _ string) error                         {
 func (s *stubBackend) BulkMove(_ []string, _ string) error                     { return nil }
 func (s *stubBackend) UnsubscribeSender(_ string) error                        { return nil }
 func (s *stubBackend) SoftUnsubscribeSender(_, _ string) error                 { return nil }
+func (s *stubBackend) CreateFolder(_ string) error                             { return nil }
+func (s *stubBackend) RenameFolder(_, _ string) error                         { return nil }
+func (s *stubBackend) DeleteFolder(_ string) error                             { return nil }
+func (s *stubBackend) SyncAllFolders() (int, error)                           { return 0, nil }
+func (s *stubBackend) GetSyncStatus() (map[string]models.FolderStatus, error) { return nil, nil }
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.
 func newStubModel(b *stubBackend) *Model {

@@ -302,6 +302,24 @@ type Backend interface {
 	// from the sender to a specified folder (or "Disabled Subscriptions" if empty).
 	SoftUnsubscribeSender(sender, toFolder string) error
 
+	// --- Folder management ---
+
+	// CreateFolder creates a new IMAP folder.
+	CreateFolder(name string) error
+
+	// RenameFolder renames an existing IMAP folder.
+	RenameFolder(existingName, newName string) error
+
+	// DeleteFolder permanently deletes an IMAP folder.
+	DeleteFolder(name string) error
+
+	// SyncAllFolders triggers a sync for all known folders.
+	// Returns the number of new emails found (0 if sync runs in background).
+	SyncAllFolders() (int, error)
+
+	// GetSyncStatus returns per-folder email counts.
+	GetSyncStatus() (map[string]models.FolderStatus, error)
+
 	// --- Cleanup rules ---
 
 	// GetAllCleanupRules returns all cleanup rules.

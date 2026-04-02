@@ -885,6 +885,43 @@ func (b *LocalBackend) SoftUnsubscribeSender(sender, toFolder string) error {
 	return b.SaveRule(rule)
 }
 
+// --- Folder management ---
+
+func (b *LocalBackend) CreateFolder(name string) error {
+	return b.imapClient.CreateMailbox(name)
+}
+
+func (b *LocalBackend) RenameFolder(existingName, newName string) error {
+	return b.imapClient.RenameMailbox(existingName, newName)
+}
+
+func (b *LocalBackend) DeleteFolder(name string) error {
+	return b.imapClient.DeleteMailbox(name)
+}
+
+// SyncAllFolders triggers background sync for all known folders.
+// Load() is async (starts a goroutine), so this returns immediately with 0.
+func (b *LocalBackend) SyncAllFolders() (int, error) {
+	folders, err := b.ListFolders()
+	if err != nil {
+		return 0, fmt.Errorf("list folders: %w", err)
+	}
+	for _, folder := range folders {
+		b.Load(folder)
+	}
+	return 0, nil
+}
+
+// GetSyncStatus returns per-folder message counts by listing folders then
+// fetching their status from the IMAP server.
+func (b *LocalBackend) GetSyncStatus() (map[string]models.FolderStatus, error) {
+	folders, err := b.ListFolders()
+	if err != nil {
+		return nil, fmt.Errorf("list folders: %w", err)
+	}
+	return b.GetFolderStatus(folders)
+}
+
 // --- Cleanup rules ---
 
 func (b *LocalBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {

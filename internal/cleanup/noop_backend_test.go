@@ -101,3 +101,8 @@ func (noopBackend) ArchiveThread(_, _ string) error                          { r
 func (noopBackend) BulkMove(_ []string, _ string) error                      { return nil }
 func (noopBackend) UnsubscribeSender(_ string) error                         { return nil }
 func (noopBackend) SoftUnsubscribeSender(_, _ string) error                  { return nil }
+func (noopBackend) CreateFolder(_ string) error                               { return nil }
+func (noopBackend) RenameFolder(_, _ string) error                            { return nil }
+func (noopBackend) DeleteFolder(_ string) error                               { return nil }
+func (noopBackend) SyncAllFolders() (int, error)                              { return 0, nil }
+func (noopBackend) GetSyncStatus() (map[string]models.FolderStatus, error)    { return nil, nil }

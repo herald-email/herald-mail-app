@@ -597,6 +597,36 @@ func (b *RemoteBackend) UpsertContacts(addrs []models.ContactAddr, direction str
 	return nil
 }
 
+// --- Folder management ---
+
+func (b *RemoteBackend) CreateFolder(name string) error {
+	return b.post("/v1/folders", map[string]string{"name": name})
+}
+
+func (b *RemoteBackend) RenameFolder(existingName, newName string) error {
+	return b.post("/v1/folders/"+url.PathEscape(existingName)+"/rename", map[string]string{"new_name": newName})
+}
+
+func (b *RemoteBackend) DeleteFolder(name string) error {
+	return b.delete("/v1/folders/" + url.PathEscape(name))
+}
+
+func (b *RemoteBackend) SyncAllFolders() (int, error) {
+	type syncResp struct {
+		NewEmails int `json:"new_emails"`
+	}
+	var resp syncResp
+	if err := b.postOut("/v1/sync/all", nil, &resp); err != nil {
+		return 0, err
+	}
+	return resp.NewEmails, nil
+}
+
+func (b *RemoteBackend) GetSyncStatus() (map[string]models.FolderStatus, error) {
+	var status map[string]models.FolderStatus
+	return status, b.get("/v1/sync/status", &status)
+}
+
 // --- Cleanup rules ---
 
 func (b *RemoteBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {

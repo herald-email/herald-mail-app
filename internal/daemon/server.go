@@ -1017,6 +1017,69 @@ func (s *Server) handleSoftUnsubscribeSender(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Rule created"})
 }
 
+// handleCreateFolder creates a new IMAP mailbox.
+func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeError(w, http.StatusBadRequest, "missing required field: name")
+		return
+	}
+	if err := s.backend.CreateFolder(req.Name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "Folder created"})
+}
+
+// handleRenameFolder renames an existing IMAP mailbox.
+func (s *Server) handleRenameFolder(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var req struct {
+		NewName string `json:"new_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.NewName == "" {
+		writeError(w, http.StatusBadRequest, "missing required field: new_name")
+		return
+	}
+	if err := s.backend.RenameFolder(name, req.NewName); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Folder renamed"})
+}
+
+// handleDeleteFolder deletes an IMAP mailbox permanently.
+func (s *Server) handleDeleteFolder(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if err := s.backend.DeleteFolder(name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Folder deleted"})
+}
+
+// handleSyncAllFolders triggers background sync for all known IMAP folders.
+func (s *Server) handleSyncAllFolders(w http.ResponseWriter, _ *http.Request) {
+	n, err := s.backend.SyncAllFolders()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "Sync started", "new_emails": n})
+}
+
+// handleGetSyncStatus returns per-folder message and unseen counts.
+func (s *Server) handleGetSyncStatus(w http.ResponseWriter, _ *http.Request) {
+	status, err := s.backend.GetSyncStatus()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
 // handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.
 // The cleanup engine runs in-process using the server's backend and cache.
 func (s *Server) handleRunCleanupRules(w http.ResponseWriter, r *http.Request) {

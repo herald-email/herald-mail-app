@@ -1972,6 +1972,150 @@ func main() {
 		},
 	)
 
+	// Tool: create_folder
+	s.AddTool(
+		mcp.NewTool("create_folder",
+			mcp.WithDescription("Create a new IMAP mailbox folder"),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Name for the new folder, e.g. 'Work/Projects'"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := req.RequireString("name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/folders", map[string]string{"name": name})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != 201 {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon error (status %d): %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText("Folder '" + name + "' created"), nil
+		},
+	)
+
+	// Tool: rename_folder
+	s.AddTool(
+		mcp.NewTool("rename_folder",
+			mcp.WithDescription("Rename an existing IMAP mailbox folder"),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Current name of the folder to rename"),
+			),
+			mcp.WithString("new_name",
+				mcp.Required(),
+				mcp.Description("New name for the folder"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := req.RequireString("name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			newName, err := req.RequireString("new_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/folders/"+url.PathEscape(name)+"/rename", map[string]string{"new_name": newName})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != 200 {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon error (status %d): %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText("Folder '" + name + "' renamed to '" + newName + "'"), nil
+		},
+	)
+
+	// Tool: delete_folder
+	s.AddTool(
+		mcp.NewTool("delete_folder",
+			mcp.WithDescription("Permanently delete an IMAP mailbox folder"),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Name of the folder to delete"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := req.RequireString("name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			status, err := daemonDelete("/v1/folders/" + url.PathEscape(name))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != 200 {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon error (status %d)", status)), nil
+			}
+			return mcp.NewToolResultText("Folder '" + name + "' deleted"), nil
+		},
+	)
+
+	// Tool: sync_all_folders
+	s.AddTool(
+		mcp.NewTool("sync_all_folders",
+			mcp.WithDescription("Trigger background sync for all known IMAP folders"),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			body, status, err := daemonPost("/v1/sync/all", nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != 200 {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon error (status %d): %s", status, string(body))), nil
+			}
+			var resp struct {
+				NewEmails int `json:"new_emails"`
+			}
+			if json.Unmarshal(body, &resp) == nil && resp.NewEmails > 0 {
+				return mcp.NewToolResultText(fmt.Sprintf("Sync started (%d new emails found)", resp.NewEmails)), nil
+			}
+			return mcp.NewToolResultText("Sync started"), nil
+		},
+	)
+
+	// Tool: get_sync_status
+	s.AddTool(
+		mcp.NewTool("get_sync_status",
+			mcp.WithDescription("Get per-folder email counts from the IMAP server"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			body, status, err := daemonGet("/v1/sync/status")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != 200 {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon error (status %d): %s", status, string(body))), nil
+			}
+			var folderStatus map[string]struct {
+				Total  int `json:"Total"`
+				Unseen int `json:"Unseen"`
+			}
+			if err := json.Unmarshal(body, &folderStatus); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("parse error: %v", err)), nil
+			}
+			if len(folderStatus) == 0 {
+				return mcp.NewToolResultText("No folders found"), nil
+			}
+			var sb strings.Builder
+			sb.WriteString("Sync status:\n")
+			for folder, st := range folderStatus {
+				sb.WriteString(fmt.Sprintf("- %s: %d messages, %d unseen\n", folder, st.Total, st.Unseen))
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("MCP server error: %v", err)
 	}

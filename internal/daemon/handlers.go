@@ -10,8 +10,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/sync", s.handleSync)
 	mux.HandleFunc("GET /v1/events", s.handleEvents)
 
-	// Folders
+	// Folders — literal "POST /v1/folders" must be registered before the {name...} wildcard routes
 	mux.HandleFunc("GET /v1/folders", s.handleListFolders)
+	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
+	mux.HandleFunc("POST /v1/folders/{name...}/rename", s.handleRenameFolder)
+	mux.HandleFunc("DELETE /v1/folders/{name...}", s.handleDeleteFolder)
+
+	// Sync — /v1/sync/all and /v1/sync/status must be registered before POST /v1/sync wildcard
+	mux.HandleFunc("POST /v1/sync/all", s.handleSyncAllFolders)
+	mux.HandleFunc("GET /v1/sync/status", s.handleGetSyncStatus)
 
 	// Emails
 	mux.HandleFunc("POST /v1/emails/send", s.handleSendEmail) // must be before /{id}/... routes

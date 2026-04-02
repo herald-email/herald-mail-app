@@ -1069,6 +1069,45 @@ func extractEnvelopeAddrs(addrs []*imap.Address) []models.ContactAddr {
 	return out
 }
 
+// CreateMailbox creates a new IMAP mailbox with the given name.
+func (c *Client) CreateMailbox(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return fmt.Errorf("not connected")
+	}
+	if err := c.client.Create(name); err != nil {
+		return fmt.Errorf("create mailbox %q: %w", name, err)
+	}
+	return nil
+}
+
+// RenameMailbox renames an existing IMAP mailbox.
+func (c *Client) RenameMailbox(existingName, newName string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return fmt.Errorf("not connected")
+	}
+	if err := c.client.Rename(existingName, newName); err != nil {
+		return fmt.Errorf("rename mailbox %q to %q: %w", existingName, newName, err)
+	}
+	return nil
+}
+
+// DeleteMailbox deletes an IMAP mailbox permanently.
+func (c *Client) DeleteMailbox(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return fmt.Errorf("not connected")
+	}
+	if err := c.client.Delete(name); err != nil {
+		return fmt.Errorf("delete mailbox %q: %w", name, err)
+	}
+	return nil
+}
+
 // checkBodyStructureForAttachments recursively checks if a body structure contains attachments
 func checkBodyStructureForAttachments(bs *imap.BodyStructure) bool {
 	if bs == nil {
