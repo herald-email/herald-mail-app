@@ -138,8 +138,78 @@ func TestMimeTypeFromExt(t *testing.T) {
 	}
 }
 
+func TestBuildMIMEMessage_CCHeader(t *testing.T) {
+	msg := buildMIMEMessage("from@e.com", "to@e.com", "Subj", "plain", "", "cc@e.com")
+	if !strings.Contains(msg, "Cc: cc@e.com\r\n") {
+		t.Fatalf("expected Cc header, got:\n%s", msg)
+	}
+}
+
+func TestBuildMIMEMessage_BCCNotInHeaders(t *testing.T) {
+	// BCC is no longer a param; verify empty cc produces no Cc header
+	msg := buildMIMEMessage("from@e.com", "to@e.com", "Subj", "plain", "", "")
+	if strings.Contains(msg, "Bcc:") {
+		t.Fatalf("Bcc: must not appear in message headers, got:\n%s", msg)
+	}
+	if strings.Contains(msg, "Cc:") {
+		t.Fatalf("Cc: must not appear when cc is empty, got:\n%s", msg)
+	}
+}
+
+func TestBuildMIMEMessage_NoCCOmitsHeader(t *testing.T) {
+	msg := buildMIMEMessage("from@e.com", "to@e.com", "Subj", "plain", "", "")
+	if strings.Contains(msg, "Cc:") {
+		t.Fatalf("Cc: must not appear when cc is empty, got:\n%s", msg)
+	}
+}
+
+func TestParseAddrs(t *testing.T) {
+	cases := []struct {
+		input string
+		want  []string
+	}{
+		{"", nil},
+		{"alice@example.com", []string{"alice@example.com"}},
+		{"alice@example.com, bob@example.com", []string{"alice@example.com", "bob@example.com"}},
+		{"  alice@example.com  ,  bob@example.com  ", []string{"alice@example.com", "bob@example.com"}},
+		{",, ,", nil},
+	}
+	for _, tc := range cases {
+		got := parseAddrs(tc.input)
+		if len(got) != len(tc.want) {
+			t.Errorf("parseAddrs(%q) len = %d, want %d (got %v)", tc.input, len(got), len(tc.want), got)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("parseAddrs(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+func TestBuildDraftMessage_CCHeader(t *testing.T) {
+	raw, err := BuildDraftMessage("from@e.com", "to@e.com", "cc@e.com", "", "Subj", "body")
+	if err != nil {
+		t.Fatalf("BuildDraftMessage: %v", err)
+	}
+	if !strings.Contains(string(raw), "Cc: cc@e.com\r\n") {
+		t.Fatalf("expected Cc header in draft, got:\n%s", raw)
+	}
+}
+
+func TestBuildDraftMessage_NoBCCHeader(t *testing.T) {
+	raw, err := BuildDraftMessage("from@e.com", "to@e.com", "", "bcc@e.com", "Subj", "body")
+	if err != nil {
+		t.Fatalf("BuildDraftMessage: %v", err)
+	}
+	if strings.Contains(string(raw), "Bcc:") {
+		t.Fatalf("Bcc: must not appear in draft headers, got:\n%s", raw)
+	}
+}
+
 func TestBuildDraftMessage(t *testing.T) {
-	raw, err := BuildDraftMessage("from@example.com", "to@example.com", "Test Subject", "Hello body")
+	raw, err := BuildDraftMessage("from@example.com", "to@example.com", "", "", "Test Subject", "Hello body")
 	if err != nil {
 		t.Fatalf("BuildDraftMessage: %v", err)
 	}

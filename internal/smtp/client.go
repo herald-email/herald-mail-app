@@ -36,7 +36,7 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
-	rawMsg := buildMIMEMessage(from, to, subject, plainText, htmlBody)
+	rawMsg := buildMIMEMessage(from, to, subject, plainText, htmlBody, "")
 
 	// Connect with TLS (required for ProtonMail Bridge)
 	tlsCfg := &tls.Config{
@@ -47,7 +47,7 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
 		// Fall back to plain SMTP with STARTTLS
-		return c.sendPlain(addr, from, to, rawMsg)
+		return c.sendPlain(addr, from, []string{to}, rawMsg)
 	}
 	defer conn.Close()
 
@@ -78,13 +78,16 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	return err
 }
 
-// buildMIMEMessage assembles the raw RFC 2822 message. When htmlBody is
-// non-empty it produces multipart/alternative with plain-text + HTML parts;
-// otherwise it falls back to a simple text/plain message.
-func buildMIMEMessage(from, to, subject, plainText, htmlBody string) string {
+// buildMIMEMessage assembles the raw RFC 2822 message. cc is written as a
+// Cc: header when non-empty. BCC recipients must be handled by the caller
+// via RCPT TO commands — they must NOT appear in message headers per RFC 5321.
+func buildMIMEMessage(from, to, subject, plainText, htmlBody, cc string) string {
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	if cc != "" {
+		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 
@@ -189,7 +192,7 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return c.sendPlain(addr, from, to, rawMsg)
+		return c.sendPlain(addr, from, []string{to}, rawMsg)
 	}
 	defer conn.Close()
 
@@ -231,8 +234,8 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 //	       │    └─ text/html
 //	       └─ image/png (Content-ID: <img001@herald>; Content-Disposition: inline)
 //	  └─ attachment parts
-func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody string, attachments []models.ComposeAttachment, inlines []InlineImage) error {
-	if len(inlines) == 0 {
+func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc, bcc string, attachments []models.ComposeAttachment, inlines []InlineImage) error {
+	if len(inlines) == 0 && cc == "" && bcc == "" {
 		return c.SendWithAttachments(from, to, subject, plainText, htmlBody, attachments)
 	}
 
@@ -243,6 +246,9 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody str
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	if cc != "" {
+		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n", outerBoundary))
@@ -325,7 +331,9 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody str
 	tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return c.sendPlain(addr, from, to, rawMsg)
+		allRcpts := append([]string{to}, parseAddrs(cc)...)
+		allRcpts = append(allRcpts, parseAddrs(bcc)...)
+		return c.sendPlain(addr, from, allRcpts, rawMsg)
 	}
 	defer conn.Close()
 
@@ -344,6 +352,16 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody str
 	}
 	if err := client.Rcpt(to); err != nil {
 		return fmt.Errorf("smtp RCPT TO: %w", err)
+	}
+	for _, addr := range parseAddrs(cc) {
+		if err := client.Rcpt(addr); err != nil {
+			return fmt.Errorf("smtp RCPT CC %s: %w", addr, err)
+		}
+	}
+	for _, addr := range parseAddrs(bcc) {
+		if err := client.Rcpt(addr); err != nil {
+			return fmt.Errorf("smtp RCPT BCC %s: %w", addr, err)
+		}
 	}
 	w, err := client.Data()
 	if err != nil {
@@ -420,7 +438,7 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return c.sendPlain(addr, from, to, rawMsg)
+		return c.sendPlain(addr, from, []string{to}, rawMsg)
 	}
 	defer conn.Close()
 
@@ -465,8 +483,24 @@ func extFromMIME(mimeType string) string {
 	}
 }
 
-func (c *Client) sendPlain(addr, from, to, rawMsg string) error {
+func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) error {
 	host := c.cfg.SMTP.Host
 	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
-	return smtp.SendMail(addr, auth, from, []string{to}, []byte(rawMsg))
+	return smtp.SendMail(addr, auth, from, rcpts, []byte(rawMsg))
+}
+
+// parseAddrs splits a comma-separated address string into a slice of trimmed
+// non-empty addresses.
+func parseAddrs(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

@@ -112,7 +112,7 @@ func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error             {
 func (s *stubBackend) DeleteCleanupRule(_ int64) error                         { return nil }
 func (s *stubBackend) RecordUnsubscribe(_, _, _ string) error                  { return nil }
 func (s *stubBackend) IsUnsubscribedSender(_ string) (bool, error)             { return false, nil }
-func (s *stubBackend) SaveDraft(_, _, _ string) (uint32, string, error)        { return 0, "", nil }
+func (s *stubBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)  { return 0, "", nil }
 func (s *stubBackend) ListDrafts() ([]*models.Draft, error)                    { return nil, nil }
 func (s *stubBackend) DeleteDraft(_ uint32, _ string) error                    { return nil }
 func (s *stubBackend) ReplyToEmail(_, _ string) error                          { return nil }

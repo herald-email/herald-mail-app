@@ -270,7 +270,7 @@ type Backend interface {
 
 	// SaveDraft saves a draft email to the IMAP Drafts folder.
 	// Returns the UID and folder of the saved draft.
-	SaveDraft(to, subject, body string) (uid uint32, folder string, err error)
+	SaveDraft(to, cc, bcc, subject, body string) (uid uint32, folder string, err error)
 
 	// ListDrafts returns all draft emails from the IMAP Drafts folder.
 	ListDrafts() ([]*models.Draft, error)

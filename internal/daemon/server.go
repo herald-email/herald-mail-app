@@ -685,6 +685,8 @@ func (s *Server) handleClassifyFolder(w http.ResponseWriter, r *http.Request) {
 // saveDraftRequest is the body for POST /v1/drafts.
 type saveDraftRequest struct {
 	To      string `json:"to"`
+	CC      string `json:"cc"`
+	BCC     string `json:"bcc"`
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
 }
@@ -696,7 +698,7 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	uid, folder, err := s.backend.SaveDraft(req.To, req.Subject, req.Body)
+	uid, folder, err := s.backend.SaveDraft(req.To, req.CC, req.BCC, req.Subject, req.Body)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -137,6 +137,8 @@ type Draft struct {
 	UID     uint32
 	Folder  string
 	To      string
+	CC      string
+	BCC     string
 	Subject string
 	Body    string // Markdown body as stored
 	Date    time.Time

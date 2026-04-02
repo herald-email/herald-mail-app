@@ -663,12 +663,13 @@ func (b *RemoteBackend) GetAttachment(messageID, filename string) (*models.Attac
 
 // --- Drafts ---
 
-func (b *RemoteBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+func (b *RemoteBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
 	var resp struct {
 		UID    uint32 `json:"uid"`
 		Folder string `json:"folder"`
 	}
-	if err := b.postOut("/v1/drafts", map[string]string{"to": to, "subject": subject, "body": body}, &resp); err != nil {
+	payload := map[string]string{"to": to, "cc": cc, "bcc": bcc, "subject": subject, "body": body}
+	if err := b.postOut("/v1/drafts", payload, &resp); err != nil {
 		return 0, "", err
 	}
 	return resp.UID, resp.Folder, nil

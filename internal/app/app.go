@@ -234,6 +234,11 @@ type DraftDeletedMsg struct {
 	Err error
 }
 
+// ContactSuggestionsMsg carries autocomplete results for the compose address fields.
+type ContactSuggestionsMsg struct {
+	Contacts []models.ContactData
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -360,12 +365,18 @@ type Model struct {
 	mailer               *appsmtp.Client
 	fromAddress          string
 	composeTo            textinput.Model
+	composeCC            textinput.Model
+	composeBCC           textinput.Model
 	composeSubject       textinput.Model
 	composeBody          textarea.Model
-	composeField         int    // 0=To, 1=Subject, 2=Body
+	composeField         int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
 	composeStatus        string // last send result message
 	composePreview       bool   // show glamour markdown preview
 	composeAttachments   []models.ComposeAttachment
+
+	// Autocomplete (compose address fields)
+	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
+	suggestionIdx int                  // selected row index (-1 = none selected)
 	attachmentPathInput  textinput.Model
 	attachmentInputActive bool
 
@@ -590,6 +601,14 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	composeTo.CharLimit = 256
 	composeTo.Focus()
 
+	composeCC := textinput.New()
+	composeCC.Placeholder = "cc@example.com, ..."
+	composeCC.CharLimit = 512
+
+	composeBCC := textinput.New()
+	composeBCC.Placeholder = "bcc@example.com, ..."
+	composeBCC.CharLimit = 512
+
 	composeSubject := textinput.New()
 	composeSubject.Placeholder = "Subject"
 	composeSubject.CharLimit = 512
@@ -647,8 +666,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		mailer:             mailer,
 		fromAddress:        fromAddress,
 		composeTo:          composeTo,
+		composeCC:          composeCC,
+		composeBCC:         composeBCC,
 		composeSubject:     composeSubject,
 		composeBody:        composeBody,
+		suggestionIdx:      -1,
 		baseStyle:          baseStyle,
 		headerStyle:        headerStyle,
 		loadingStyle:       loadingStyle,
@@ -1069,6 +1091,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DraftDeletedMsg:
 		if msg.Err != nil {
 			logger.Warn("delete old draft failed: %v", msg.Err)
+		}
+		return m, nil
+
+	case ContactSuggestionsMsg:
+		m.suggestions = msg.Contacts
+		if len(m.suggestions) == 0 {
+			m.suggestionIdx = -1
+		} else {
+			m.suggestionIdx = 0
 		}
 		return m, nil
 
@@ -1541,8 +1572,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 0:
 			m.composeTo, cmd = m.composeTo.Update(msg)
 		case 1:
-			m.composeSubject, cmd = m.composeSubject.Update(msg)
+			m.composeCC, cmd = m.composeCC.Update(msg)
 		case 2:
+			m.composeBCC, cmd = m.composeBCC.Update(msg)
+		case 3:
+			m.composeSubject, cmd = m.composeSubject.Update(msg)
+		case 4:
 			m.composeBody, cmd = m.composeBody.Update(msg)
 		}
 		cmds = append(cmds, cmd)
@@ -2356,7 +2391,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					subject = "Re: " + subject
 				}
 				m.composeSubject.SetValue(subject)
-				m.composeField = 2
+				m.composeField = 4
 				m.composeTo.Blur()
 				m.composeSubject.Blur()
 				m.composeBody.Focus()

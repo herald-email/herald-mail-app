@@ -770,7 +770,7 @@ func (d *DemoBackend) GetAttachment(_, _ string) (*models.Attachment, error) { r
 
 // --- Drafts ---
 
-func (d *DemoBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+func (d *DemoBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.nextDraftUID++
@@ -778,6 +778,8 @@ func (d *DemoBackend) SaveDraft(to, subject, body string) (uint32, string, error
 		UID:     d.nextDraftUID,
 		Folder:  "Drafts",
 		To:      to,
+		CC:      cc,
+		BCC:     bcc,
 		Subject: subject,
 		Body:    body,
 		Date:    time.Now(),

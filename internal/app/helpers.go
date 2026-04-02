@@ -1650,8 +1650,10 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	}
 	m.composeSubject.SetValue(subject)
 	m.composeBody.SetValue(template)
-	m.composeField = 2
+	m.composeField = 4
 	m.composeTo.Blur()
+	m.composeCC.Blur()
+	m.composeBCC.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
 	return m, nil
@@ -2463,6 +2465,44 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Autocomplete dropdown interactions take priority over normal field navigation
+	if len(m.suggestions) > 0 {
+		switch msg.String() {
+		case "up":
+			if m.suggestionIdx > 0 {
+				m.suggestionIdx--
+			}
+			return m, nil
+		case "down":
+			if m.suggestionIdx < len(m.suggestions)-1 {
+				m.suggestionIdx++
+			}
+			return m, nil
+		case "enter", "tab":
+			// Accept selected suggestion
+			if m.suggestionIdx >= 0 && m.suggestionIdx < len(m.suggestions) {
+				c := m.suggestions[m.suggestionIdx]
+				label := c.DisplayName
+				if label == "" {
+					label = c.Email
+				} else {
+					label = fmt.Sprintf("%s <%s>", label, c.Email)
+				}
+				m.acceptSuggestion(label)
+			}
+			m.suggestions = nil
+			m.suggestionIdx = -1
+			return m, nil
+		case "esc":
+			m.suggestions = nil
+			m.suggestionIdx = -1
+			return m, nil
+		}
+		// Any other key: dismiss dropdown and fall through to normal key handling
+		m.suggestions = nil
+		m.suggestionIdx = -1
+	}
+
 	switch msg.String() {
 	case "1":
 		m.activeTab = tabTimeline
@@ -2503,29 +2543,106 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.composeField {
 	case 0:
 		m.composeTo, cmd = m.composeTo.Update(msg)
+		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeTo.Value())))
 	case 1:
-		m.composeSubject, cmd = m.composeSubject.Update(msg)
+		m.composeCC, cmd = m.composeCC.Update(msg)
+		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeCC.Value())))
 	case 2:
+		m.composeBCC, cmd = m.composeBCC.Update(msg)
+		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeBCC.Value())))
+	case 3:
+		m.composeSubject, cmd = m.composeSubject.Update(msg)
+	case 4:
 		m.composeBody, cmd = m.composeBody.Update(msg)
 	}
 	return m, cmd
 }
 
-// cycleComposeField advances focus to the next compose input field
+// renderSuggestionDropdown renders the autocomplete dropdown list.
+// Returns an empty string when there are no suggestions.
+func (m *Model) renderSuggestionDropdown() string {
+	if len(m.suggestions) == 0 {
+		return ""
+	}
+	selectedStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("57")).
+		Foreground(lipgloss.Color("255"))
+	normalStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245"))
+	maxW := m.windowWidth - 6
+	if maxW < 20 {
+		maxW = 20
+	}
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("57")).
+		Padding(0, 1).
+		MaxWidth(maxW)
+
+	var rows []string
+	for i, c := range m.suggestions {
+		label := c.DisplayName
+		if label == "" {
+			label = c.Email
+		} else {
+			label = fmt.Sprintf("%s <%s>", label, c.Email)
+		}
+		if i == m.suggestionIdx {
+			rows = append(rows, selectedStyle.Render(label))
+		} else {
+			rows = append(rows, normalStyle.Render(label))
+		}
+	}
+	return boxStyle.Render(strings.Join(rows, "\n"))
+}
+
+// acceptSuggestion replaces the current token in the active address field
+// with the accepted label (DisplayName <email>), followed by ", ".
+func (m *Model) acceptSuggestion(label string) {
+	replaceToken := func(existing, replacement string) string {
+		if i := strings.LastIndex(existing, ","); i >= 0 {
+			return existing[:i+1] + " " + replacement + ", "
+		}
+		return replacement + ", "
+	}
+
+	switch m.composeField {
+	case 0:
+		m.composeTo.SetValue(replaceToken(m.composeTo.Value(), label))
+		m.composeTo.CursorEnd()
+	case 1:
+		m.composeCC.SetValue(replaceToken(m.composeCC.Value(), label))
+		m.composeCC.CursorEnd()
+	case 2:
+		m.composeBCC.SetValue(replaceToken(m.composeBCC.Value(), label))
+		m.composeBCC.CursorEnd()
+	}
+}
+
+// cycleComposeField advances focus to the next compose input field.
+// Order: To(0) → CC(1) → BCC(2) → Subject(3) → Body(4) → wrap.
 func (m *Model) cycleComposeField() {
-	m.composeField = (m.composeField + 1) % 3
+	m.composeField = (m.composeField + 1) % 5
+	// Clear autocomplete when moving away from address fields (0–2)
+	if m.composeField > 2 {
+		m.suggestions = nil
+		m.suggestionIdx = -1
+	}
+	m.composeTo.Blur()
+	m.composeCC.Blur()
+	m.composeBCC.Blur()
+	m.composeSubject.Blur()
+	m.composeBody.Blur()
 	switch m.composeField {
 	case 0:
 		m.composeTo.Focus()
-		m.composeSubject.Blur()
-		m.composeBody.Blur()
 	case 1:
-		m.composeTo.Blur()
-		m.composeSubject.Focus()
-		m.composeBody.Blur()
+		m.composeCC.Focus()
 	case 2:
-		m.composeTo.Blur()
-		m.composeSubject.Blur()
+		m.composeBCC.Focus()
+	case 3:
+		m.composeSubject.Focus()
+	case 4:
 		m.composeBody.Focus()
 	}
 }
@@ -2539,6 +2656,8 @@ func (m *Model) sendCompose() tea.Cmd {
 	mailer := m.mailer // snapshot before goroutine to avoid data races
 	from := m.fromAddress
 	to := m.composeTo.Value()
+	cc := m.composeCC.Value()
+	bcc := m.composeBCC.Value()
 	subject := m.composeSubject.Value()
 	markdownBody := m.composeBody.Value()
 	attachments := m.composeAttachments // snapshot; cleared on success in Update()
@@ -2560,7 +2679,7 @@ func (m *Model) sendCompose() tea.Cmd {
 			inlines = nil
 		}
 		_, plainText := appsmtp.MarkdownToHTMLAndPlain(markdownBody)
-		err := mailer.SendWithInlineImages(from, to, subject, plainText, htmlBody, attachments, inlines)
+		err := mailer.SendWithInlineImages(from, to, subject, plainText, htmlBody, cc, bcc, attachments, inlines)
 		if err != nil {
 			return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 		}
@@ -2592,9 +2711,34 @@ func (m *Model) renderComposeView() string {
 		toStyle.Render(m.composeTo.View()),
 	) + "\n")
 
+	// CC field
+	ccStyle := inactiveFieldStyle
+	if m.composeField == 1 {
+		ccStyle = activeFieldStyle
+	}
+	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Render("CC:"),
+		ccStyle.Render(m.composeCC.View()),
+	) + "\n")
+
+	// BCC field
+	bccStyle := inactiveFieldStyle
+	if m.composeField == 2 {
+		bccStyle = activeFieldStyle
+	}
+	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Render("BCC:"),
+		bccStyle.Render(m.composeBCC.View()),
+	) + "\n")
+
+	// Autocomplete dropdown (shown when address field has suggestions)
+	if drop := m.renderSuggestionDropdown(); drop != "" {
+		sb.WriteString(drop + "\n")
+	}
+
 	// Subject field
 	subStyle := inactiveFieldStyle
-	if m.composeField == 1 {
+	if m.composeField == 3 {
 		subStyle = activeFieldStyle
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
@@ -2626,7 +2770,7 @@ func (m *Model) renderComposeView() string {
 		}
 	} else {
 		bodyStyle := inactiveFieldStyle
-		if m.composeField == 2 {
+		if m.composeField == 4 {
 			bodyStyle = activeFieldStyle
 		}
 		sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
@@ -4005,6 +4149,35 @@ func draftSaveTick() tea.Cmd {
 	})
 }
 
+// currentComposeToken returns the text after the last comma in s, trimmed.
+// This is the fragment being typed for autocomplete in a comma-separated
+// address field.
+func currentComposeToken(s string) string {
+	if i := strings.LastIndex(s, ","); i >= 0 {
+		return strings.TrimSpace(s[i+1:])
+	}
+	return strings.TrimSpace(s)
+}
+
+// searchContactsCmd queries SearchContacts with token and returns a
+// ContactSuggestionsMsg. Clears suggestions when token is shorter than 2 chars.
+func (m *Model) searchContactsCmd(token string) tea.Cmd {
+	if len(token) < 2 {
+		return func() tea.Msg { return ContactSuggestionsMsg{} }
+	}
+	backend := m.backend
+	return func() tea.Msg {
+		contacts, err := backend.SearchContacts(token)
+		if err != nil || len(contacts) == 0 {
+			return ContactSuggestionsMsg{}
+		}
+		if len(contacts) > 5 {
+			contacts = contacts[:5]
+		}
+		return ContactSuggestionsMsg{Contacts: contacts}
+	}
+}
+
 // composeHasContent returns true if any compose field is non-empty.
 func composeHasContent(m *Model) bool {
 	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != ""
@@ -4015,10 +4188,12 @@ func composeHasContent(m *Model) bool {
 func (m *Model) saveDraftCmd() tea.Cmd {
 	backend := m.backend
 	to := m.composeTo.Value()
+	cc := m.composeCC.Value()
+	bcc := m.composeBCC.Value()
 	subject := m.composeSubject.Value()
 	body := m.composeBody.Value()
 	return func() tea.Msg {
-		uid, folder, err := backend.SaveDraft(to, subject, body)
+		uid, folder, err := backend.SaveDraft(to, cc, bcc, subject, body)
 		return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
 	}
 }

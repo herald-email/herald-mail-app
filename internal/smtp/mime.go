@@ -119,11 +119,19 @@ func mimeTypeFromExt(ext string) string {
 }
 
 // BuildDraftMessage builds a raw RFC 2822 message suitable for IMAP APPEND.
+// cc is written as a Cc: header when non-empty.
+// bcc is accepted for interface consistency but must NOT appear in message
+// headers per RFC 5321; it is the caller's responsibility to deliver BCC
+// recipients via RCPT TO at send time.
 // Returns the full message bytes.
-func BuildDraftMessage(from, to, subject, body string) ([]byte, error) {
+func BuildDraftMessage(from, to, cc, bcc, subject, body string) ([]byte, error) {
+	_ = bcc // intentionally not written to headers per RFC 5321
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	if cc != "" {
+		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	msg.WriteString("MIME-Version: 1.0\r\n")

@@ -7,7 +7,7 @@ import (
 func TestDemoDraftRoundtrip(t *testing.T) {
 	b := NewDemoBackend()
 
-	uid, folder, err := b.SaveDraft("to@example.com", "Test Subject", "Hello body")
+	uid, folder, err := b.SaveDraft("to@example.com", "", "", "Test Subject", "Hello body")
 	if err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
@@ -51,9 +51,45 @@ func TestDemoDraftDelete_NotFoundIsNoError(t *testing.T) {
 
 func TestDemoDraftUID_AutoIncrement(t *testing.T) {
 	b := NewDemoBackend()
-	uid1, _, _ := b.SaveDraft("a@b.com", "S1", "B1")
-	uid2, _, _ := b.SaveDraft("a@b.com", "S2", "B2")
+	uid1, _, _ := b.SaveDraft("a@b.com", "", "", "S1", "B1")
+	uid2, _, _ := b.SaveDraft("a@b.com", "", "", "S2", "B2")
 	if uid2 <= uid1 {
 		t.Errorf("expected uid2 > uid1, got %d <= %d", uid2, uid1)
+	}
+}
+
+func TestDemoBackend_SaveDraft_WithCC(t *testing.T) {
+	b := NewDemoBackend()
+	uid, folder, err := b.SaveDraft("to@e.com", "cc@e.com", "", "Subj", "Body")
+	if err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+	if uid == 0 {
+		t.Fatal("expected non-zero uid")
+	}
+	if folder == "" {
+		t.Fatal("expected non-empty folder")
+	}
+	drafts, _ := b.ListDrafts()
+	if len(drafts) != 1 {
+		t.Fatalf("expected 1 draft, got %d", len(drafts))
+	}
+	if drafts[0].CC != "cc@e.com" {
+		t.Fatalf("expected CC=cc@e.com, got %q", drafts[0].CC)
+	}
+}
+
+func TestDemoBackend_SaveDraft_WithBCC(t *testing.T) {
+	b := NewDemoBackend()
+	_, _, err := b.SaveDraft("to@e.com", "", "bcc@e.com", "Subj", "Body")
+	if err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+	drafts, _ := b.ListDrafts()
+	if len(drafts) != 1 {
+		t.Fatalf("expected 1 draft, got %d", len(drafts))
+	}
+	if drafts[0].BCC != "bcc@e.com" {
+		t.Fatalf("expected BCC=bcc@e.com, got %q", drafts[0].BCC)
 	}
 }

@@ -698,9 +698,9 @@ func (b *LocalBackend) GetAttachment(messageID, filename string) (*models.Attach
 
 // --- Drafts ---
 
-func (b *LocalBackend) SaveDraft(to, subject, body string) (uint32, string, error) {
+func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
 	from := b.cfg.Credentials.Username
-	raw, err := appsmtp.BuildDraftMessage(from, to, subject, body)
+	raw, err := appsmtp.BuildDraftMessage(from, to, cc, bcc, subject, body)
 	if err != nil {
 		return 0, "", fmt.Errorf("build draft message: %w", err)
 	}

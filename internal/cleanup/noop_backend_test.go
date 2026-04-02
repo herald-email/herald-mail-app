@@ -88,7 +88,7 @@ func (noopBackend) SaveCleanupRule(rule *models.CleanupRule) error           { r
 func (noopBackend) DeleteCleanupRule(id int64) error                         { return nil }
 func (noopBackend) RecordUnsubscribe(_, _, _ string) error                   { return nil }
 func (noopBackend) IsUnsubscribedSender(_ string) (bool, error)              { return false, nil }
-func (noopBackend) SaveDraft(_, _, _ string) (uint32, string, error)         { return 0, "", nil }
+func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)   { return 0, "", nil }
 func (noopBackend) ListDrafts() ([]*models.Draft, error)                     { return nil, nil }
 func (noopBackend) DeleteDraft(_ uint32, _ string) error                     { return nil }
 func (noopBackend) ReplyToEmail(_, _ string) error                           { return nil }
