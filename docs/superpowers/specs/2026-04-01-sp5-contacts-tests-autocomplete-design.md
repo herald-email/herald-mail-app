@@ -1,67 +1,17 @@
-# SP5 — Contacts Tab, TUI Snapshot Tests, Compose CC/BCC + Autocomplete
+# SP5 — TUI Snapshot Tests + Compose CC/BCC + Autocomplete
 
 ## Overview
 
-Three tightly related features that together make Herald's compose flow and contact management first-class:
+Two features:
 
-1. **Contacts Tab** — a browsable Tab 4 backed by the existing contacts SQLite table, with macOS import and pre-fill-compose action.
-2. **TUI Snapshot Tests** — `teatest` + `charmbracelet/x/vt` infrastructure with golden-file snapshots for key views.
-3. **Compose CC/BCC + Autocomplete** — two new address fields in compose with a live dropdown backed by `SearchContacts`.
+1. **TUI Snapshot Tests** — `teatest` + `charmbracelet/x/vt` golden-file infrastructure for key views.
+2. **Compose CC/BCC + Autocomplete** — two new address fields in compose with a live dropdown backed by the existing `SearchContacts` backend method.
 
----
-
-## Feature 1: Contacts Tab
-
-### What it does
-
-A 4th tab (`4` key, label "Contacts") is added to the existing tab bar (Timeline / Compose / Cleanup / Contacts).
-
-The view is a `bubbles/table` with three columns: **Name**, **Email**, **Source** (macOS / sent / manual). Contacts are loaded from the existing `contacts` SQLite table via a new `ListContacts() ([]*models.Contact, error)` method on the Backend interface.
-
-The tab is read-only for editing — contacts are populated by import or auto-add on send. Users can search, navigate, and act on rows.
-
-### Key bindings
-
-| Key | Action |
-|-----|--------|
-| `4` | Switch to Contacts tab |
-| `/` | Focus search input; filters table live as you type |
-| `Esc` | Clear search / unfocus search input |
-| `Enter` | Pre-fill Compose `To:` with selected contact's email; switch to Tab 2 |
-| `i` | Trigger macOS Contacts.app AppleScript import (shows progress message) |
-| `d` | Delete selected contact (confirmation prompt: `y` / `n`) |
-| `j` / `k`, `↑` / `↓` | Navigate rows |
-
-### Backend interface addition
-
-```go
-// ListContacts returns all contacts, optionally filtered by query (empty = all).
-ListContacts(query string) ([]*models.Contact, error)
-```
-
-`LocalBackend` delegates to the existing `cache.SearchContacts` (query non-empty) or a new `cache.ListAllContacts` (query empty). `RemoteBackend` proxies `GET /v1/contacts?q=<query>`. `DemoBackend` returns a small hardcoded slice of synthetic contacts.
-
-### Daemon endpoint
-
-```
-GET /v1/contacts?q=<query>
-```
-
-Returns JSON array of `{name, email, source}`. No write endpoints — contacts are managed locally.
-
-### Data flow
-
-```
-4 key → ContactsTabMsg → load ContactsMsg (stubBackend.ListContacts)
-/ key  → search input focused → ContactsSearchMsg(query) → refilter table in Update
-Enter  → ContactSelectedMsg{Email} → set composeTo, switch to tab 2
-i key  → ImportContactsMsg → backend.ImportContacts() → ImportDoneMsg (progress shown in status bar)
-d key  → ContactDeleteConfirmMsg → y → backend.DeleteContact(email) → reload
-```
+> **Note:** The Contacts tab (Tab 4) is already fully implemented. "Contacts (small)" refers only to wiring the existing `SearchContacts` into the compose autocomplete.
 
 ---
 
-## Feature 2: TUI Snapshot Tests
+## Feature 1: TUI Snapshot Tests
 
 ### Infrastructure
 
@@ -89,6 +39,12 @@ go test ./internal/app/...           # diff against golden files (CI)
 
 Implemented via a package-level `var update = flag.Bool("update", false, "update golden files")`.
 
+### Golden file helper
+
+`requireGolden` is a file-local helper in `snapshot_test.go`:
+- With `-update`: writes `got` bytes to the golden file path (creating dirs as needed)
+- Without `-update`: reads the golden file and calls `t.Fatalf` with a diff if content differs
+
 ### Snapshots (initial set)
 
 | Golden file | State |
@@ -97,8 +53,8 @@ Implemented via a package-level `var update = flag.Bool("update", false, "update
 | `timeline_populated.txt` | 3 mock `EmailData` entries loaded into table |
 | `compose_blank.txt` | Tab 2, all fields empty |
 | `compose_with_cc_bcc.txt` | CC and BCC fields visible, To field focused |
-| `contacts_empty.txt` | Tab 4, `ListContacts` returns 0 results |
-| `contacts_populated.txt` | Tab 4, 3 mock contacts loaded |
+
+Terminal size fixed at **120×40** for all snapshots — keeps golden files stable across machines.
 
 ### Test pattern
 
@@ -110,32 +66,30 @@ func TestSnapshot_TimelinePopulated(t *testing.T) {
     teatest.WaitFor(t, tm.Output(), func(bts []byte) bool {
         return bytes.Contains(bts, []byte("alice@example.com"))
     }, teatest.WithCheckInterval(50*time.Millisecond), teatest.WithDuration(3*time.Second))
-    // requireGolden is a file-local helper: reads golden file, compares;
-    // with -update flag, writes tm.FinalOutput(t) to the file instead.
     requireGolden(t, "testdata/snapshots/timeline_populated.txt", tm.FinalOutput(t))
 }
 ```
-
-Terminal size fixed at **120×40** for all snapshots — matches the "wide terminal" case and keeps golden files stable across machines.
 
 ### Scope boundary
 
 - No live IMAP or SMTP — `stubBackend` only.
 - No timing-sensitive tests — `WaitFor` polls on content, not on sleep.
-- Snapshot tests do not replace tmux QA (layout stress, narrow sizes) — they complement it.
+- Snapshot tests complement (not replace) the tmux QA workflow in CLAUDE.md.
 
 ---
 
-## Feature 3: Compose CC/BCC + Autocomplete
+## Feature 2: Compose CC/BCC + Autocomplete
 
 ### New model fields
 
 ```go
-composeCC    textinput.Model   // CC addresses (comma-separated)
-composeBCC   textinput.Model   // BCC addresses (comma-separated)
-suggestions  []models.Contact  // current autocomplete candidates
-suggestionIdx int              // selected row in dropdown (-1 = none)
+composeCC     textinput.Model   // CC addresses (comma-separated)
+composeBCC    textinput.Model   // BCC addresses (comma-separated)
+suggestions   []models.ContactData  // current autocomplete candidates
+suggestionIdx int               // selected row in dropdown (-1 = none)
 ```
+
+`composeField` currently cycles through 3 values (0=To, 1=Subject, 2=Body). It extends to 5: 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body.
 
 ### Layout change
 
@@ -159,20 +113,20 @@ Subject: [____________________________]
 
 ### Autocomplete trigger
 
-On each keystroke in To, CC, or BCC: extract the current token (text after the last `,`, trimmed). If token length ≥ 2, fire `SearchContacts(token)` as a `tea.Cmd`. Result arrives as `ContactSuggestionsMsg{contacts []models.Contact}`.
+On each keystroke in To, CC, or BCC: extract the current token (text after the last `,`, trimmed). If token length ≥ 2, fire `backend.SearchContacts(token)` as a `tea.Cmd`. Result arrives as `ContactSuggestionsMsg{contacts []models.ContactData}`.
 
 If token < 2 characters or field loses focus: clear `suggestions`.
 
 ### Dropdown rendering
 
-Up to 5 rows rendered immediately below the active input field as a lipgloss-styled box. Each row: `Name <email>`. Selected row highlighted. Rendered in `View()` using overlay technique (same layer as `quickReplyPicker`).
+Up to 5 rows rendered immediately below the active input field as a lipgloss-styled box. Each row: `DisplayName <email>`. Selected row highlighted. Rendered in `View()` using overlay technique (same layer as `quickReplyPicker`).
 
 ### Keyboard (dropdown active)
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Move `suggestionIdx` |
-| `Enter` or `Tab` | Accept: replace current token with `Name <email>, `; clear dropdown |
+| `Enter` or `Tab` | Accept: replace current token with `DisplayName <email>, `; clear dropdown |
 | `Esc` | Dismiss dropdown without accepting |
 | Any printable key | Dismiss dropdown; type normally |
 
@@ -182,7 +136,11 @@ Fields accept comma-separated addresses. Autocomplete token is always the segmen
 
 ### SMTP wiring
 
-`sendCompose` snapshots `composeCC` and `composeBCC` values before the goroutine (same snapshot pattern as `composeTo`). CC/BCC are passed to `smtp.SendWithInlineImages` — add `cc, bcc string` params if not already present. The SMTP `buildMIMEMessage` adds `Cc:` and `Bcc:` headers when non-empty.
+`sendCompose` snapshots `composeCC` and `composeBCC` before the goroutine (same pattern as `composeTo`). CC/BCC are passed to `smtp.SendWithInlineImages` — add `cc, bcc string` params. `buildMIMEMessage` adds `Cc:` and `Bcc:` headers when non-empty.
+
+### Draft model update
+
+`models.Draft` gains `CC` and `BCC string` fields so auto-save preserves them. `saveDraftCmd` snapshots both fields; daemon `handleSaveDraft` stores them in IMAP draft body headers.
 
 ---
 
@@ -190,48 +148,40 @@ Fields accept comma-separated addresses. Autocomplete token is always the segmen
 
 | File | Change |
 |------|--------|
-| `internal/backend/backend.go` | Add `ListContacts(query string) ([]*models.Contact, error)` |
-| `internal/backend/local.go` | `ListContacts` → `cache.ListAllContacts` or `SearchContacts` |
-| `internal/backend/remote.go` | `ListContacts` → `GET /v1/contacts?q=` |
-| `internal/backend/demo.go` | `ListContacts` → synthetic slice |
-| `internal/cache/cache.go` | Add `ListAllContacts()` (no-filter variant of `SearchContacts`) |
-| `internal/daemon/server.go` | Add `GET /v1/contacts` handler |
-| `internal/app/app.go` | Tab 4 state, CC/BCC fields, suggestions fields, new message types |
-| `internal/app/helpers.go` | `renderContacts()`, `renderSuggestionDropdown()`, `saveDraftCmd` CC/BCC, contact actions |
+| `internal/app/app.go` | Add `composeCC`, `composeBCC`, `suggestions`, `suggestionIdx` fields; extend `composeField` cycle to 5; new message types `ContactSuggestionsMsg` |
+| `internal/app/helpers.go` | Update `renderCompose()` for CC/BCC rows + dropdown overlay; update `cycleComposeField()`; update `sendCompose()` to snapshot + pass CC/BCC; update `saveDraftCmd()` to snapshot CC/BCC |
 | `internal/smtp/client.go` | Add `cc, bcc string` params to `SendWithInlineImages` |
-| `internal/smtp/mime.go` | Add `Cc:` / `Bcc:` headers to `buildMIMEMessage` |
+| `internal/smtp/mime.go` | Add `Cc:` / `Bcc:` headers to `buildMIMEMessage` when non-empty |
+| `internal/models/email.go` | Add `CC`, `BCC string` to `Draft` struct |
+| `internal/daemon/server.go` | Update `handleSaveDraft` to read/write CC/BCC from draft headers |
 | `go.mod` / `go.sum` | Add `teatest` + `vt` deps |
 | `internal/app/snapshot_test.go` | New snapshot test file |
-| `internal/app/testdata/snapshots/` | Golden files (6 initial) |
-| `internal/app/chat_tools_test.go` | Add `ListContacts` no-op stub |
-| `internal/cleanup/noop_backend_test.go` | Add `ListContacts` no-op stub |
+| `internal/app/testdata/snapshots/` | Golden files (4 initial) |
+| `internal/app/chat_tools_test.go` | No new Backend stubs needed (no new Backend methods) |
 
 ---
 
 ## Error handling
 
-- `ListContacts` failure: show "Failed to load contacts" in status bar; table shows empty state.
 - `SearchContacts` failure during autocomplete: silently clear suggestions (don't interrupt typing).
-- macOS import failure: show error in status bar (AppleScript may fail if Contacts.app access is denied).
-- Contact delete: if backend returns error, show in status bar; do not remove row from table.
+- CC/BCC empty on send: treated as no CC/BCC — no error, headers simply omitted.
 
 ---
 
 ## Testing plan
 
 ### Snapshot tests (automated)
-- All 6 golden files pass `go test ./internal/app/...`
-- Update flow works: `-update` flag regenerates files, subsequent run passes
+- All 4 golden files pass `go test ./internal/app/...`
+- `-update` flag regenerates files; subsequent run passes
 
 ### Unit tests
-- `TestListContacts_Empty` — returns empty slice, no error
-- `TestListContacts_Populated` — returns expected rows
-- `TestAutocomplete_TriggerAt2Chars` — verify `SearchContacts` not called at 1 char, called at 2
-- `TestAutocomplete_AcceptAppends` — accept inserts `Name <email>, ` and clears suggestions
-- `TestSMTP_CCBCCHeaders` — verify `Cc:` and `Bcc:` present in built MIME when non-empty
+- `TestAutocomplete_TriggerAt2Chars` — `SearchContacts` not called at 1 char, called at 2
+- `TestAutocomplete_AcceptAppends` — accept inserts `DisplayName <email>, ` and clears suggestions
+- `TestAutocomplete_TabConflict` — Tab with dropdown open accepts suggestion, not advance focus
+- `TestSMTP_CCBCCHeaders` — `Cc:` and `Bcc:` present in built MIME when non-empty; absent when empty
 
 ### Manual (tmux)
-- Tab 4 renders at 220×50, 80×24
-- Dropdown appears below To field, dismisses cleanly
-- `Enter` on contact pre-fills Compose To and switches tab
-- macOS import shows progress then success/error
+- CC/BCC fields render at 220×50, 80×24
+- Dropdown appears below active field, dismisses cleanly
+- Multiple recipients work (comma-separated)
+- Draft save/restore preserves CC/BCC values
