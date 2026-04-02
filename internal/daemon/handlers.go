@@ -26,6 +26,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/emails/{id}/unread", s.handleMarkUnread)
 	mux.HandleFunc("POST /v1/emails/{id}/star", s.handleMarkStarred)
 	mux.HandleFunc("DELETE /v1/emails/{id}/star", s.handleUnmarkStarred)
+	mux.HandleFunc("POST /v1/emails/{id}/reply", s.handleReplyEmail)
+	mux.HandleFunc("POST /v1/emails/{id}/forward", s.handleForwardEmail)
+	mux.HandleFunc("GET /v1/emails/{id}/attachments", s.handleListAttachments)
+	mux.HandleFunc("GET /v1/emails/{id}/attachments/{filename...}", s.handleGetAttachment)
 
 	// Threads
 	mux.HandleFunc("GET /v1/threads", s.handleGetThread)

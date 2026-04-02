@@ -1622,6 +1622,154 @@ func main() {
 		},
 	)
 
+	// Tool: reply_to_email
+	s.AddTool(
+		mcp.NewTool("reply_to_email",
+			mcp.WithDescription("Send a reply to an existing email. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to reply to")),
+			mcp.WithString("body", mcp.Required(), mcp.Description("Reply body (Markdown supported)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			messageID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, err := req.RequireString("body")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/reply", map[string]string{"body": body})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText("Reply sent"), nil
+		},
+	)
+
+	// Tool: forward_email
+	s.AddTool(
+		mcp.NewTool("forward_email",
+			mcp.WithDescription("Forward an email to a new recipient. Requires the herald daemon to be running."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to forward")),
+			mcp.WithString("to", mcp.Required(), mcp.Description("Recipient email address")),
+			mcp.WithString("body", mcp.Description("Optional covering note (Markdown supported)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			messageID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			to, err := req.RequireString("to")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body := req.GetString("body", "")
+			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/forward", map[string]string{"to": to, "body": body})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText("Forwarded to " + to), nil
+		},
+	)
+
+	// Tool: list_attachments
+	s.AddTool(
+		mcp.NewTool("list_attachments",
+			mcp.WithDescription("List attachment metadata for an email (no binary data). Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			messageID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			respBody, status, err := daemonGet("/v1/emails/" + messageID + "/attachments")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			var attachments []struct {
+				Filename string `json:"filename"`
+				MIMEType string `json:"mimeType"`
+				Size     int    `json:"size"`
+			}
+			if err := json.Unmarshal(respBody, &attachments); err != nil {
+				return mcp.NewToolResultText(string(respBody)), nil
+			}
+			if len(attachments) == 0 {
+				return mcp.NewToolResultText("No attachments found"), nil
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("%d attachment(s):\n", len(attachments)))
+			for i, a := range attachments {
+				kb := float64(a.Size) / 1024.0
+				sb.WriteString(fmt.Sprintf("%d. %s (%s, %.1f KB)\n", i+1, a.Filename, a.MIMEType, kb))
+			}
+			return mcp.NewToolResultText(sb.String()), nil
+		},
+	)
+
+	// Tool: get_attachment
+	s.AddTool(
+		mcp.NewTool("get_attachment",
+			mcp.WithDescription("Retrieve a specific attachment from an email. Optionally save to disk. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email")),
+			mcp.WithString("filename", mcp.Required(), mcp.Description("Attachment filename (from list_attachments)")),
+			mcp.WithString("dest_path", mcp.Description("If provided, save attachment to this local file path and return the path")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			messageID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			filename, err := req.RequireString("filename")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			destPath := req.GetString("dest_path", "")
+
+			urlPath := "/v1/emails/" + messageID + "/attachments/" + filename
+			if destPath != "" {
+				urlPath += "?dest_path=" + destPath
+			}
+			respBody, status, err := daemonGet(urlPath)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			var result map[string]any
+			if err := json.Unmarshal(respBody, &result); err != nil {
+				return mcp.NewToolResultText(string(respBody)), nil
+			}
+			if destPath != "" {
+				if path, ok := result["path"].(string); ok {
+					return mcp.NewToolResultText("Saved to " + path), nil
+				}
+			}
+			mimeType, _ := result["mimeType"].(string)
+			data, _ := result["data"].(string)
+			return mcp.NewToolResultText(fmt.Sprintf("%s (%s):\n%s", filename, mimeType, data)), nil
+		},
+	)
+
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("MCP server error: %v", err)
 	}

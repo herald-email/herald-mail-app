@@ -611,6 +611,26 @@ func (b *RemoteBackend) DeleteCleanupRule(id int64) error {
 	return fmt.Errorf("not supported via remote backend")
 }
 
+// --- Reply / Forward / Attachments ---
+
+func (b *RemoteBackend) ReplyToEmail(messageID, replyBody string) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/reply", map[string]string{"body": replyBody})
+}
+
+func (b *RemoteBackend) ForwardEmail(messageID, to, forwardBody string) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/forward", map[string]string{"to": to, "body": forwardBody})
+}
+
+func (b *RemoteBackend) ListAttachments(messageID string) ([]models.Attachment, error) {
+	var attachments []models.Attachment
+	return attachments, b.get("/v1/emails/"+url.PathEscape(messageID)+"/attachments", &attachments)
+}
+
+func (b *RemoteBackend) GetAttachment(messageID, filename string) (*models.Attachment, error) {
+	var a models.Attachment
+	return &a, b.get("/v1/emails/"+url.PathEscape(messageID)+"/attachments/"+url.PathEscape(filename), &a)
+}
+
 // --- Drafts ---
 
 func (b *RemoteBackend) SaveDraft(to, subject, body string) (uint32, string, error) {

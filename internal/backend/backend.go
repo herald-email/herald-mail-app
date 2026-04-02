@@ -252,6 +252,20 @@ type Backend interface {
 	// IsUnsubscribedSender returns true if the sender has previously been unsubscribed from.
 	IsUnsubscribedSender(sender string) (bool, error)
 
+	// --- Reply / Forward / Attachments ---
+
+	// ReplyToEmail sends a reply to the given message. replyBody is Markdown.
+	ReplyToEmail(messageID, replyBody string) error
+
+	// ForwardEmail forwards the given message to `to` with an optional covering note. forwardBody is Markdown.
+	ForwardEmail(messageID, to, forwardBody string) error
+
+	// ListAttachments returns attachment metadata for the given email (no binary data).
+	ListAttachments(messageID string) ([]models.Attachment, error)
+
+	// GetAttachment returns the named attachment with Data field populated.
+	GetAttachment(messageID, filename string) (*models.Attachment, error)
+
 	// --- Drafts ---
 
 	// SaveDraft saves a draft email to the IMAP Drafts folder.

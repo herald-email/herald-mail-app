@@ -761,6 +761,13 @@ func (d *DemoBackend) IsUnsubscribedSender(sender string) (bool, error) {
 	return d.unsubscribedSenders[sender], nil
 }
 
+// --- Reply / Forward / Attachments ---
+
+func (d *DemoBackend) ReplyToEmail(_, _ string) error                       { return nil }
+func (d *DemoBackend) ForwardEmail(_, _, _ string) error                     { return nil }
+func (d *DemoBackend) ListAttachments(_ string) ([]models.Attachment, error) { return nil, nil }
+func (d *DemoBackend) GetAttachment(_, _ string) (*models.Attachment, error) { return nil, nil }
+
 // --- Drafts ---
 
 func (d *DemoBackend) SaveDraft(to, subject, body string) (uint32, string, error) {

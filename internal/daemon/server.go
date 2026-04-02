@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -784,6 +785,100 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Draft sent and deleted"})
+}
+
+// handleReplyEmail sends a reply to an existing email.
+func (s *Server) handleReplyEmail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := s.backend.ReplyToEmail(id, req.Body); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Reply sent"})
+}
+
+// handleForwardEmail forwards an email to a new recipient.
+func (s *Server) handleForwardEmail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		To   string `json:"to"`
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.To == "" {
+		writeError(w, http.StatusBadRequest, "to is required")
+		return
+	}
+	if err := s.backend.ForwardEmail(id, req.To, req.Body); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Forwarded"})
+}
+
+// attachmentMeta is the JSON-safe view of an attachment (no binary data).
+type attachmentMeta struct {
+	Filename string `json:"filename"`
+	MIMEType string `json:"mimeType"`
+	Size     int    `json:"size"`
+}
+
+// handleListAttachments returns attachment metadata for an email.
+func (s *Server) handleListAttachments(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	attachments, err := s.backend.ListAttachments(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	meta := make([]attachmentMeta, 0, len(attachments))
+	for _, a := range attachments {
+		meta = append(meta, attachmentMeta{
+			Filename: a.Filename,
+			MIMEType: a.MIMEType,
+			Size:     a.Size,
+		})
+	}
+	writeJSON(w, http.StatusOK, meta)
+}
+
+// handleGetAttachment returns a single attachment, optionally writing it to disk.
+func (s *Server) handleGetAttachment(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	filename := r.PathValue("filename")
+	destPath := r.URL.Query().Get("dest_path")
+
+	attachment, err := s.backend.GetAttachment(id, filename)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	if destPath != "" {
+		if err := os.WriteFile(destPath, attachment.Data, 0644); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"path": destPath})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"filename": attachment.Filename,
+		"mimeType": attachment.MIMEType,
+		"size":     attachment.Size,
+		"data":     base64.StdEncoding.EncodeToString(attachment.Data),
+	})
 }
 
 // handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.

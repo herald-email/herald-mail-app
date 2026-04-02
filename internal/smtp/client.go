@@ -354,6 +354,101 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody str
 	return err
 }
 
+// buildReplyMIMEMessage assembles a raw RFC 2822 reply message with In-Reply-To
+// and References threading headers. When htmlBody is non-empty the message is
+// sent as multipart/alternative; otherwise plain text only.
+func buildReplyMIMEMessage(from, to, subject, plainText, htmlBody, inReplyTo, references string) string {
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", inReplyTo))
+	if references != "" {
+		msg.WriteString(fmt.Sprintf("References: %s %s\r\n", references, inReplyTo))
+	} else {
+		msg.WriteString(fmt.Sprintf("References: %s\r\n", inReplyTo))
+	}
+	msg.WriteString("MIME-Version: 1.0\r\n")
+
+	if htmlBody == "" {
+		msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+		msg.WriteString("\r\n")
+		msg.WriteString(plainText)
+		return msg.String()
+	}
+
+	boundary := fmt.Sprintf("boundary_%d", time.Now().UnixNano())
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
+	msg.WriteString("\r\n")
+
+	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(plainText)
+	msg.WriteString("\r\n")
+
+	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	msg.WriteString("Content-Type: text/html; charset=utf-8\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(htmlBody)
+	msg.WriteString("\r\n")
+
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	return msg.String()
+}
+
+// SendReply sends an email that is a reply to an existing message.
+// inReplyTo is the Message-ID of the original (e.g. "<abc@domain>").
+// references is the full References chain from the original (may be empty string).
+func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, references string) error {
+	host := c.cfg.SMTP.Host
+	port := c.cfg.SMTP.Port
+	if host == "" {
+		return fmt.Errorf("smtp.host not configured in proton.yaml")
+	}
+	if port == 0 {
+		port = 1025
+	}
+
+	addr := fmt.Sprintf("%s:%d", host, port)
+	rawMsg := buildReplyMIMEMessage(from, to, subject, plainText, htmlBody, inReplyTo, references)
+
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         host,
+	}
+
+	conn, err := tls.Dial("tcp", addr, tlsCfg)
+	if err != nil {
+		return c.sendPlain(addr, from, to, rawMsg)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp connect: %w", err)
+	}
+	defer client.Quit()
+
+	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("smtp MAIL FROM: %w", err)
+	}
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp RCPT TO: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp DATA: %w", err)
+	}
+	defer w.Close()
+	_, err = w.Write([]byte(rawMsg))
+	return err
+}
+
 // extFromMIME returns a file extension for common image MIME types.
 func extFromMIME(mimeType string) string {
 	switch mimeType {

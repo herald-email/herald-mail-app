@@ -91,3 +91,7 @@ func (noopBackend) IsUnsubscribedSender(_ string) (bool, error)              { r
 func (noopBackend) SaveDraft(_, _, _ string) (uint32, string, error)         { return 0, "", nil }
 func (noopBackend) ListDrafts() ([]*models.Draft, error)                     { return nil, nil }
 func (noopBackend) DeleteDraft(_ uint32, _ string) error                     { return nil }
+func (noopBackend) ReplyToEmail(_, _ string) error                           { return nil }
+func (noopBackend) ForwardEmail(_, _, _ string) error                        { return nil }
+func (noopBackend) ListAttachments(_ string) ([]models.Attachment, error)    { return nil, nil }
+func (noopBackend) GetAttachment(_, _ string) (*models.Attachment, error)    { return nil, nil }

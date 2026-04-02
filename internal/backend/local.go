@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -605,6 +606,91 @@ func (b *LocalBackend) RecordUnsubscribe(sender, method, url string) error {
 
 func (b *LocalBackend) IsUnsubscribedSender(sender string) (bool, error) {
 	return b.cache.IsUnsubscribedSender(sender)
+}
+
+// --- Reply / Forward / Attachments ---
+
+func (b *LocalBackend) ReplyToEmail(messageID, replyBody string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return fmt.Errorf("get email: %w", err)
+	}
+	if email == nil {
+		return fmt.Errorf("email %s not found", messageID)
+	}
+	subject := email.Subject
+	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
+		subject = "Re: " + subject
+	}
+	from := b.cfg.Credentials.Username
+	html, plain := appsmtp.MarkdownToHTMLAndPlain(replyBody)
+	mailer := appsmtp.New(b.cfg)
+	return mailer.SendReply(from, email.Sender, subject, plain, html, email.MessageID, "")
+}
+
+func (b *LocalBackend) ForwardEmail(messageID, to, forwardBody string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return fmt.Errorf("get email: %w", err)
+	}
+	if email == nil {
+		return fmt.Errorf("email %s not found", messageID)
+	}
+	// Build subject: strip existing Re:/Fwd: prefix then prepend Fwd:
+	subject := email.Subject
+	lower := strings.ToLower(subject)
+	if strings.HasPrefix(lower, "re: ") {
+		subject = subject[4:]
+	} else if strings.HasPrefix(lower, "fwd: ") {
+		subject = subject[5:]
+	}
+	subject = "Fwd: " + subject
+
+	body := forwardBody + "\n\n---------- Forwarded message ----------\nFrom: " + email.Sender + "\nSubject: " + email.Subject
+	html, plain := appsmtp.MarkdownToHTMLAndPlain(body)
+	from := b.cfg.Credentials.Username
+	mailer := appsmtp.New(b.cfg)
+	return mailer.Send(from, to, subject, plain, html)
+}
+
+func (b *LocalBackend) ListAttachments(messageID string) ([]models.Attachment, error) {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return nil, fmt.Errorf("get email: %w", err)
+	}
+	if email == nil {
+		return nil, fmt.Errorf("email %s not found", messageID)
+	}
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return nil, fmt.Errorf("fetch body: %w", err)
+	}
+	// Zero out binary data — return metadata only
+	for i := range body.Attachments {
+		body.Attachments[i].Data = nil
+	}
+	return body.Attachments, nil
+}
+
+func (b *LocalBackend) GetAttachment(messageID, filename string) (*models.Attachment, error) {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return nil, fmt.Errorf("get email: %w", err)
+	}
+	if email == nil {
+		return nil, fmt.Errorf("email %s not found", messageID)
+	}
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return nil, fmt.Errorf("fetch body: %w", err)
+	}
+	for _, a := range body.Attachments {
+		if strings.EqualFold(a.Filename, filename) {
+			aCopy := a
+			return &aCopy, nil
+		}
+	}
+	return nil, fmt.Errorf("attachment %q not found in message %s", filename, messageID)
 }
 
 // --- Drafts ---
