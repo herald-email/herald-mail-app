@@ -95,3 +95,9 @@ func (noopBackend) ReplyToEmail(_, _ string) error                           { r
 func (noopBackend) ForwardEmail(_, _, _ string) error                        { return nil }
 func (noopBackend) ListAttachments(_ string) ([]models.Attachment, error)    { return nil, nil }
 func (noopBackend) GetAttachment(_, _ string) (*models.Attachment, error)    { return nil, nil }
+func (noopBackend) DeleteThread(_, _ string) error                           { return nil }
+func (noopBackend) BulkDelete(_ []string) error                              { return nil }
+func (noopBackend) ArchiveThread(_, _ string) error                          { return nil }
+func (noopBackend) BulkMove(_ []string, _ string) error                      { return nil }
+func (noopBackend) UnsubscribeSender(_ string) error                         { return nil }
+func (noopBackend) SoftUnsubscribeSender(_, _ string) error                  { return nil }

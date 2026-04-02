@@ -33,9 +33,18 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Threads
 	mux.HandleFunc("GET /v1/threads", s.handleGetThread)
+	mux.HandleFunc("POST /v1/threads/delete", s.handleDeleteThread)
+	mux.HandleFunc("POST /v1/threads/archive", s.handleArchiveThread)
+
+	// Bulk email operations
+	mux.HandleFunc("POST /v1/emails/bulk-delete", s.handleBulkDelete)
+	mux.HandleFunc("POST /v1/emails/bulk-move", s.handleBulkMove)
+	mux.HandleFunc("POST /v1/emails/{id}/unsubscribe", s.handleUnsubscribeSender)
 
 	// Senders
 	mux.HandleFunc("DELETE /v1/senders/{sender}", s.handleDeleteSender)
+	mux.HandleFunc("POST /v1/senders/{sender}/archive", s.handleArchiveSender)
+	mux.HandleFunc("POST /v1/senders/{sender}/soft-unsubscribe", s.handleSoftUnsubscribeSender)
 
 	// Statistics
 	mux.HandleFunc("GET /v1/stats", s.handleGetStats)

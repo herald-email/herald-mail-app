@@ -806,6 +806,15 @@ func (d *DemoBackend) DeleteDraft(uid uint32, folder string) error {
 	return nil // not found is not an error
 }
 
+// --- Bulk operations ---
+
+func (d *DemoBackend) DeleteThread(folder, subject string) error  { return nil }
+func (d *DemoBackend) BulkDelete(messageIDs []string) error       { return nil }
+func (d *DemoBackend) ArchiveThread(folder, subject string) error { return nil }
+func (d *DemoBackend) BulkMove(messageIDs []string, toFolder string) error { return nil }
+func (d *DemoBackend) UnsubscribeSender(messageID string) error   { return nil }
+func (d *DemoBackend) SoftUnsubscribeSender(sender, toFolder string) error { return nil }
+
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".
 func extractDemoEmailDomain(sender string) string {
 	addr := sender

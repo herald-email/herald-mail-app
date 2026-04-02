@@ -278,6 +278,30 @@ type Backend interface {
 	// DeleteDraft removes a draft by UID from the given folder.
 	DeleteDraft(uid uint32, folder string) error
 
+	// --- Bulk operations ---
+
+	// DeleteThread deletes all emails in a thread (matched by subject in folder).
+	DeleteThread(folder, subject string) error
+
+	// BulkDelete deletes multiple emails by their message IDs.
+	// The folder of each email is looked up from the cache.
+	BulkDelete(messageIDs []string) error
+
+	// ArchiveThread archives all emails in a thread (matched by subject in folder).
+	ArchiveThread(folder, subject string) error
+
+	// BulkMove moves multiple emails to a target folder.
+	BulkMove(messageIDs []string, toFolder string) error
+
+	// UnsubscribeSender executes the unsubscribe action for the sender of the given email.
+	// Parses the List-Unsubscribe header of messageID and fires RFC 8058 POST if available,
+	// otherwise opens the URL in the default browser.
+	UnsubscribeSender(messageID string) error
+
+	// SoftUnsubscribeSender creates an auto-move rule that moves all future emails
+	// from the sender to a specified folder (or "Disabled Subscriptions" if empty).
+	SoftUnsubscribeSender(sender, toFolder string) error
+
 	// --- Cleanup rules ---
 
 	// GetAllCleanupRules returns all cleanup rules.

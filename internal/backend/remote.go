@@ -657,3 +657,29 @@ func (b *RemoteBackend) DeleteDraft(uid uint32, folder string) error {
 
 func (b *RemoteBackend) RecordUnsubscribe(sender, method, url string) error { return nil }
 func (b *RemoteBackend) IsUnsubscribedSender(sender string) (bool, error)   { return false, nil }
+
+// --- Bulk operations ---
+
+func (b *RemoteBackend) DeleteThread(folder, subject string) error {
+	return b.post("/v1/threads/delete", map[string]string{"folder": folder, "subject": subject})
+}
+
+func (b *RemoteBackend) BulkDelete(messageIDs []string) error {
+	return b.post("/v1/emails/bulk-delete", map[string]any{"message_ids": messageIDs})
+}
+
+func (b *RemoteBackend) ArchiveThread(folder, subject string) error {
+	return b.post("/v1/threads/archive", map[string]string{"folder": folder, "subject": subject})
+}
+
+func (b *RemoteBackend) BulkMove(messageIDs []string, toFolder string) error {
+	return b.post("/v1/emails/bulk-move", map[string]any{"message_ids": messageIDs, "to_folder": toFolder})
+}
+
+func (b *RemoteBackend) UnsubscribeSender(messageID string) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/unsubscribe", nil)
+}
+
+func (b *RemoteBackend) SoftUnsubscribeSender(sender, toFolder string) error {
+	return b.post("/v1/senders/"+url.PathEscape(sender)+"/soft-unsubscribe", map[string]string{"to_folder": toFolder})
+}

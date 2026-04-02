@@ -2,7 +2,10 @@ package backend
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -710,6 +713,176 @@ func (b *LocalBackend) ListDrafts() ([]*models.Draft, error) {
 
 func (b *LocalBackend) DeleteDraft(uid uint32, folder string) error {
 	return b.imapClient.DeleteDraft(uid, folder)
+}
+
+// --- Bulk operations ---
+
+func (b *LocalBackend) DeleteThread(folder, subject string) error {
+	emails, err := b.GetEmailsByThread(folder, subject)
+	if err != nil {
+		return fmt.Errorf("DeleteThread get thread: %w", err)
+	}
+	var firstErr error
+	for _, email := range emails {
+		if err := b.DeleteEmail(email.MessageID, folder); err != nil {
+			logger.Warn("DeleteThread: failed to delete %s: %v", email.MessageID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (b *LocalBackend) BulkDelete(messageIDs []string) error {
+	var firstErr error
+	for _, id := range messageIDs {
+		email, err := b.cache.GetEmailByID(id)
+		if err != nil {
+			logger.Warn("BulkDelete: lookup %s: %v", id, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if email == nil {
+			continue
+		}
+		if err := b.DeleteEmail(id, email.Folder); err != nil {
+			logger.Warn("BulkDelete: delete %s: %v", id, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (b *LocalBackend) ArchiveThread(folder, subject string) error {
+	emails, err := b.GetEmailsByThread(folder, subject)
+	if err != nil {
+		return fmt.Errorf("ArchiveThread get thread: %w", err)
+	}
+	var firstErr error
+	for _, email := range emails {
+		if err := b.ArchiveEmail(email.MessageID, folder); err != nil {
+			logger.Warn("ArchiveThread: failed to archive %s: %v", email.MessageID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (b *LocalBackend) BulkMove(messageIDs []string, toFolder string) error {
+	var firstErr error
+	for _, id := range messageIDs {
+		email, err := b.cache.GetEmailByID(id)
+		if err != nil {
+			logger.Warn("BulkMove: lookup %s: %v", id, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if email == nil {
+			continue
+		}
+		if err := b.MoveEmail(id, email.Folder, toFolder); err != nil {
+			logger.Warn("BulkMove: move %s: %v", id, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (b *LocalBackend) UnsubscribeSender(messageID string) error {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return fmt.Errorf("UnsubscribeSender lookup: %w", err)
+	}
+	if email == nil {
+		return fmt.Errorf("UnsubscribeSender: message %s not found", messageID)
+	}
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return fmt.Errorf("UnsubscribeSender fetch body: %w", err)
+	}
+	raw := body.ListUnsubscribe
+	if raw == "" {
+		return fmt.Errorf("no List-Unsubscribe header found for message %s", messageID)
+	}
+
+	// Parse angle-bracket-delimited URIs: <https://...>, <http://...>, <mailto:...>
+	var httpsURL, httpURL string
+	parts := strings.Split(raw, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) >= 2 && part[0] == '<' && part[len(part)-1] == '>' {
+			part = part[1 : len(part)-1]
+		}
+		if strings.HasPrefix(part, "https://") && httpsURL == "" {
+			httpsURL = part
+		} else if strings.HasPrefix(part, "http://") && httpURL == "" {
+			httpURL = part
+		}
+	}
+
+	// One-click POST (RFC 8058)
+	if body.ListUnsubscribePost == "List-Unsubscribe=One-Click" && httpsURL != "" {
+		resp, err := http.Post(httpsURL, "application/x-www-form-urlencoded",
+			strings.NewReader("List-Unsubscribe=One-Click"))
+		if err != nil {
+			return fmt.Errorf("UnsubscribeSender POST failed: %w", err)
+		}
+		resp.Body.Close()
+		_ = b.RecordUnsubscribe(email.Sender, "one-click", httpsURL)
+		return nil
+	}
+
+	// Browser fallback
+	webURL := httpsURL
+	if webURL == "" {
+		webURL = httpURL
+	}
+	if webURL == "" {
+		return fmt.Errorf("no usable HTTP/HTTPS unsubscribe URL found")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", webURL)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", webURL)
+	default:
+		cmd = exec.Command("xdg-open", webURL)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("UnsubscribeSender open browser: %w", err)
+	}
+	_ = b.RecordUnsubscribe(email.Sender, "browser-opened", webURL)
+	return nil
+}
+
+func (b *LocalBackend) SoftUnsubscribeSender(sender, toFolder string) error {
+	if toFolder == "" {
+		toFolder = "Disabled Subscriptions"
+	}
+	rule := &models.Rule{
+		Name:         "Soft unsub: " + sender,
+		Enabled:      true,
+		TriggerType:  models.TriggerSender,
+		TriggerValue: sender,
+		Actions: []models.RuleAction{{
+			Type:       models.ActionMove,
+			DestFolder: toFolder,
+		}},
+	}
+	return b.SaveRule(rule)
 }
 
 // --- Cleanup rules ---

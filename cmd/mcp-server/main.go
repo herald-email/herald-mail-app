@@ -14,6 +14,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -1767,6 +1768,207 @@ func main() {
 			mimeType, _ := result["mimeType"].(string)
 			data, _ := result["data"].(string)
 			return mcp.NewToolResultText(fmt.Sprintf("%s (%s):\n%s", filename, mimeType, data)), nil
+		},
+	)
+
+	// Tool: delete_thread
+	s.AddTool(
+		mcp.NewTool("delete_thread",
+			mcp.WithDescription("Delete all emails in a thread (grouped by subject). Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithString("folder", mcp.Required(), mcp.Description("IMAP folder name")),
+			mcp.WithString("subject", mcp.Required(), mcp.Description("Thread subject to match")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folder, err := req.RequireString("folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/threads/delete", map[string]string{"folder": folder, "subject": subject})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText("Thread deleted"), nil
+		},
+	)
+
+	// Tool: archive_thread
+	s.AddTool(
+		mcp.NewTool("archive_thread",
+			mcp.WithDescription("Archive all emails in a thread (grouped by subject). Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("folder", mcp.Required(), mcp.Description("IMAP folder name")),
+			mcp.WithString("subject", mcp.Required(), mcp.Description("Thread subject to match")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folder, err := req.RequireString("folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			subject, err := req.RequireString("subject")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/threads/archive", map[string]string{"folder": folder, "subject": subject})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText("Thread archived"), nil
+		},
+	)
+
+	// Tool: bulk_delete
+	s.AddTool(
+		mcp.NewTool("bulk_delete",
+			mcp.WithDescription("Delete a list of emails by message ID. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithString("message_ids", mcp.Required(), mcp.Description("JSON array of message IDs, e.g. [\"id1\",\"id2\"]")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			idsJSON, err := req.RequireString("message_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			var ids []string
+			if err := json.Unmarshal([]byte(idsJSON), &ids); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid message_ids JSON: %v", err)), nil
+			}
+			if len(ids) == 0 {
+				return mcp.NewToolResultError("message_ids must not be empty"), nil
+			}
+			body, status, err := daemonPost("/v1/emails/bulk-delete", map[string]any{"message_ids": ids})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Deleted %d emails", len(ids))), nil
+		},
+	)
+
+	// Tool: archive_sender
+	s.AddTool(
+		mcp.NewTool("archive_sender",
+			mcp.WithDescription("Archive all emails from a sender. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("sender", mcp.Required(), mcp.Description("Sender email address")),
+			mcp.WithString("folder", mcp.Description("Source folder (default: INBOX)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			sender, err := req.RequireString("sender")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			folder := req.GetString("folder", "INBOX")
+			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/archive", map[string]string{"folder": folder})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Archived all emails from %s", sender)), nil
+		},
+	)
+
+	// Tool: bulk_move
+	s.AddTool(
+		mcp.NewTool("bulk_move",
+			mcp.WithDescription("Move a list of emails to a target folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_ids", mcp.Required(), mcp.Description("JSON array of message IDs")),
+			mcp.WithString("to_folder", mcp.Required(), mcp.Description("Destination folder name")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			idsJSON, err := req.RequireString("message_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			var ids []string
+			if err := json.Unmarshal([]byte(idsJSON), &ids); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid message_ids JSON: %v", err)), nil
+			}
+			if len(ids) == 0 {
+				return mcp.NewToolResultError("message_ids must not be empty"), nil
+			}
+			toFolder, err := req.RequireString("to_folder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/emails/bulk-move", map[string]any{"message_ids": ids, "to_folder": toFolder})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Moved %d emails to %s", len(ids), toFolder)), nil
+		},
+	)
+
+	// Tool: unsubscribe_sender
+	s.AddTool(
+		mcp.NewTool("unsubscribe_sender",
+			mcp.WithDescription("Execute unsubscribe via the List-Unsubscribe header of an email (RFC 8058 POST or browser open). Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to unsubscribe from")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			messageID, err := req.RequireString("message_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			body, status, err := daemonPost("/v1/emails/"+url.PathEscape(messageID)+"/unsubscribe", nil)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText("Unsubscribed"), nil
+		},
+	)
+
+	// Tool: soft_unsubscribe_sender
+	s.AddTool(
+		mcp.NewTool("soft_unsubscribe_sender",
+			mcp.WithDescription("Create an auto-move rule that moves all future emails from a sender to a folder. Requires the herald daemon."),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("sender", mcp.Required(), mcp.Description("Sender email address to create rule for")),
+			mcp.WithString("to_folder", mcp.Description("Destination folder (default: Disabled Subscriptions)")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			sender, err := req.RequireString("sender")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			toFolder := req.GetString("to_folder", "")
+			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/soft-unsubscribe", map[string]string{"to_folder": toFolder})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(body))), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Auto-move rule created for %s", sender)), nil
 		},
 	)
 

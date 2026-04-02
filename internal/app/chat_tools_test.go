@@ -119,6 +119,12 @@ func (s *stubBackend) ReplyToEmail(_, _ string) error                          {
 func (s *stubBackend) ForwardEmail(_, _, _ string) error                       { return nil }
 func (s *stubBackend) ListAttachments(_ string) ([]models.Attachment, error)   { return nil, nil }
 func (s *stubBackend) GetAttachment(_, _ string) (*models.Attachment, error)   { return nil, nil }
+func (s *stubBackend) DeleteThread(_, _ string) error                          { return nil }
+func (s *stubBackend) BulkDelete(_ []string) error                             { return nil }
+func (s *stubBackend) ArchiveThread(_, _ string) error                         { return nil }
+func (s *stubBackend) BulkMove(_ []string, _ string) error                     { return nil }
+func (s *stubBackend) UnsubscribeSender(_ string) error                        { return nil }
+func (s *stubBackend) SoftUnsubscribeSender(_, _ string) error                 { return nil }
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.
 func newStubModel(b *stubBackend) *Model {

@@ -881,6 +881,142 @@ func (s *Server) handleGetAttachment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Bulk operation handlers ---
+
+type threadRequest struct {
+	Folder  string `json:"folder"`
+	Subject string `json:"subject"`
+}
+
+// handleDeleteThread deletes all emails in a thread (by subject in folder).
+func (s *Server) handleDeleteThread(w http.ResponseWriter, r *http.Request) {
+	var req threadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Folder == "" || req.Subject == "" {
+		writeError(w, http.StatusBadRequest, "folder and subject are required")
+		return
+	}
+	if err := s.backend.DeleteThread(req.Folder, req.Subject); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Thread deleted"})
+}
+
+// handleArchiveThread archives all emails in a thread (by subject in folder).
+func (s *Server) handleArchiveThread(w http.ResponseWriter, r *http.Request) {
+	var req threadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Folder == "" || req.Subject == "" {
+		writeError(w, http.StatusBadRequest, "folder and subject are required")
+		return
+	}
+	if err := s.backend.ArchiveThread(req.Folder, req.Subject); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Thread archived"})
+}
+
+type bulkDeleteRequest struct {
+	MessageIDs []string `json:"message_ids"`
+}
+
+// handleBulkDelete deletes multiple emails by message ID.
+func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
+	var req bulkDeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(req.MessageIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "message_ids is required and must not be empty")
+		return
+	}
+	if err := s.backend.BulkDelete(req.MessageIDs); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("Deleted %d emails", len(req.MessageIDs)),
+	})
+}
+
+type bulkMoveRequest struct {
+	MessageIDs []string `json:"message_ids"`
+	ToFolder   string   `json:"to_folder"`
+}
+
+// handleBulkMove moves multiple emails to a target folder.
+func (s *Server) handleBulkMove(w http.ResponseWriter, r *http.Request) {
+	var req bulkMoveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(req.MessageIDs) == 0 || req.ToFolder == "" {
+		writeError(w, http.StatusBadRequest, "message_ids and to_folder are required")
+		return
+	}
+	if err := s.backend.BulkMove(req.MessageIDs, req.ToFolder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("Moved %d emails to %s", len(req.MessageIDs), req.ToFolder),
+	})
+}
+
+// handleUnsubscribeSender fires the unsubscribe action for a message's sender.
+func (s *Server) handleUnsubscribeSender(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.backend.UnsubscribeSender(id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Unsubscribed"})
+}
+
+type archiveSenderRequest struct {
+	Folder string `json:"folder"`
+}
+
+// handleArchiveSender archives all emails from a sender.
+func (s *Server) handleArchiveSender(w http.ResponseWriter, r *http.Request) {
+	sender := r.PathValue("sender")
+	var req archiveSenderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Folder == "" {
+		req.Folder = "INBOX"
+	}
+	if err := s.backend.ArchiveSenderEmails(sender, req.Folder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Archived"})
+}
+
+type softUnsubscribeRequest struct {
+	ToFolder string `json:"to_folder"`
+}
+
+// handleSoftUnsubscribeSender creates an auto-move rule for a sender.
+func (s *Server) handleSoftUnsubscribeSender(w http.ResponseWriter, r *http.Request) {
+	sender := r.PathValue("sender")
+	var req softUnsubscribeRequest
+	_ = json.NewDecoder(r.Body).Decode(&req) // body is optional
+	if err := s.backend.SoftUnsubscribeSender(sender, req.ToFolder); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Rule created"})
+}
+
 // handleRunCleanupRules triggers immediate execution of all enabled cleanup rules.
 // The cleanup engine runs in-process using the server's backend and cache.
 func (s *Server) handleRunCleanupRules(w http.ResponseWriter, r *http.Request) {
