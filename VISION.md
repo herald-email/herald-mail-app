@@ -452,13 +452,13 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 - [x] `reply_to_email` — reply with pre-filled headers
 - [x] `forward_email` — forward with covering note
 - [x] `save_draft` / `list_drafts` / `send_draft`
-- [ ] `delete_thread` / `bulk_delete`
-- [ ] `archive_thread` / `archive_sender`
-- [ ] `bulk_move`
-- [ ] `create_folder` / `rename_folder` / `delete_folder`
-- [ ] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
-- [ ] `soft_unsubscribe_sender` — auto-move future emails to a folder
-- [ ] `sync_all_folders` / `get_sync_status`
+- [x] `delete_thread` / `bulk_delete`
+- [x] `archive_thread` / `archive_sender`
+- [x] `bulk_move`
+- [x] `create_folder` / `rename_folder` / `delete_folder`
+- [x] `unsubscribe_sender` — hard-unsubscribe via List-Unsubscribe header
+- [x] `soft_unsubscribe_sender` — auto-move future emails to a folder
+- [x] `sync_all_folders` / `get_sync_status`
 
 ### TUI ↔ MCP shared state
 
