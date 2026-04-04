@@ -4128,7 +4128,7 @@ func (m *Model) loadContacts() tea.Cmd {
 // loadContactDetail returns a Cmd that fetches recent emails for the given contact.
 func (m *Model) loadContactDetail(contact models.ContactData) tea.Cmd {
 	return func() tea.Msg {
-		emails, err := m.backend.GetContactEmails(contact.Email, 5)
+		emails, err := m.backend.GetContactEmails(contact.Email, 20)
 		if err != nil {
 			logger.Warn("loadContactDetail: %v", err)
 			return ContactDetailLoadedMsg{}
@@ -4409,38 +4409,106 @@ func (m *Model) renderContactsTab(width, height int) string {
 		}
 		for i := start; i < end; i++ {
 			c := m.contactsFiltered[i]
-			nameStr := c.DisplayName
-			if nameStr == "" {
-				nameStr = fmt.Sprintf("<%s>", c.Email)
-			} else {
-				nameStr = fmt.Sprintf("%s <%s>", c.DisplayName, c.Email)
-			}
+
 			// Inner content width = Width(leftW) - PaddingLeft(1) = leftW-1.
-			// Line = nameStr(maxNameW) + "  "(2) + company(≤16) + count(≤4) = maxNameW+22.
-			// To fit: maxNameW = leftW-1-22 = leftW-23.
-			maxNameW := leftW - 23
-			if maxNameW < 8 {
-				maxNameW = 8
+			innerW := leftW - 1
+
+			// Progressive column layout based on available width:
+			// Wide (>=60): Name | Email | Company | Count
+			// Medium (>=35): Name | Email | Count
+			// Narrow (<35): Name | Count
+			countW := 4
+			showEmail := innerW >= 35
+			showCompany := innerW >= 60
+
+			displayName := c.DisplayName
+			if displayName == "" {
+				displayName = c.Email
 			}
-			nameStr = ansi.Truncate(nameStr, maxNameW, "…")
-			namePad := strings.Repeat(" ", maxNameW-ansi.StringWidth(nameStr))
-			company := ""
-			if c.Company != "" {
-				company = fmt.Sprintf("[%s] ", c.Company)
-				cr := []rune(company)
-				if len(cr) > 14 {
-					company = string(cr[:13]) + "…] "
+			countStr := fmt.Sprintf("%d", c.EmailCount)
+
+			var line string
+			if showCompany {
+				companyW := 14
+				separators := 6 // 3 x "  "
+				nameW := (innerW - separators - countW - companyW) * 55 / 100
+				if nameW < 8 {
+					nameW = 8
+				}
+				emailW := innerW - separators - countW - companyW - nameW
+				if emailW < 6 {
+					emailW = 6
+				}
+				dn := ansi.Truncate(displayName, nameW, "…")
+				em := ansi.Truncate(c.Email, emailW, "…")
+				co := ""
+				if c.Company != "" {
+					co = ansi.Truncate(c.Company, companyW, "…")
+				}
+				dnPad := strings.Repeat(" ", nameW-ansi.StringWidth(dn))
+				emPad := strings.Repeat(" ", emailW-ansi.StringWidth(em))
+				coPad := strings.Repeat(" ", companyW-ansi.StringWidth(co))
+				if i == m.contactsIdx {
+					bg := activeColor
+					ns := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(bg).Bold(true)
+					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
+					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(bg)
+					ks := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(bg).Bold(true)
+					bs := lipgloss.NewStyle().Background(bg)
+					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + cs.Render(co) + bs.Render(coPad+"  ") + ks.Render(countStr)
+				} else {
+					ns := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+					es := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("249"))
+					ks := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+					line = ns.Render(dn) + dnPad + "  " + es.Render(em) + emPad + "  " + cs.Render(co) + coPad + "  " + ks.Render(countStr)
+				}
+			} else if showEmail {
+				separators := 4 // 2 x "  "
+				nameW := (innerW - separators - countW) * 45 / 100
+				if nameW < 8 {
+					nameW = 8
+				}
+				emailW := innerW - separators - countW - nameW
+				if emailW < 6 {
+					emailW = 6
+				}
+				dn := ansi.Truncate(displayName, nameW, "…")
+				em := ansi.Truncate(c.Email, emailW, "…")
+				dnPad := strings.Repeat(" ", nameW-ansi.StringWidth(dn))
+				emPad := strings.Repeat(" ", emailW-ansi.StringWidth(em))
+				if i == m.contactsIdx {
+					bg := activeColor
+					ns := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(bg).Bold(true)
+					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
+					ks := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(bg).Bold(true)
+					bs := lipgloss.NewStyle().Background(bg)
+					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + ks.Render(countStr)
+				} else {
+					ns := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+					es := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+					ks := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+					line = ns.Render(dn) + dnPad + "  " + es.Render(em) + emPad + "  " + ks.Render(countStr)
+				}
+			} else {
+				// Narrow: just name + count
+				nameW := innerW - 2 - countW
+				if nameW < 4 {
+					nameW = 4
+				}
+				dn := ansi.Truncate(displayName, nameW, "…")
+				dnPad := strings.Repeat(" ", nameW-ansi.StringWidth(dn))
+				if i == m.contactsIdx {
+					bg := activeColor
+					s := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(bg).Bold(true)
+					line = s.Render(dn+dnPad+"  "+countStr)
+				} else {
+					ns := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+					ks := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+					line = ns.Render(dn) + dnPad + "  " + ks.Render(countStr)
 				}
 			}
-			line := nameStr + namePad + "  " + company + fmt.Sprintf("%d", c.EmailCount)
-			rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-			if i == m.contactsIdx {
-				rowStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("229")).
-					Background(activeColor).
-					Bold(true)
-			}
-			leftSb.WriteString(rowStyle.Render(line) + "\n")
+			leftSb.WriteString(line + "\n")
 		}
 	}
 
@@ -4461,7 +4529,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))
 		} else if m.contactPreviewBody != nil {
-			body := linkifyURLs(m.contactPreviewBody.TextPlain)
+			body := linkifyURLs(stripInvisibleChars(m.contactPreviewBody.TextPlain))
 			if body == "" {
 				body = "(No text content)"
 			}
@@ -4469,7 +4537,28 @@ func (m *Model) renderContactsTab(width, height int) string {
 			if innerW < 10 {
 				innerW = 10
 			}
-			lines := wrapLines(body, innerW)
+			// Render markdown via glamour for HTML-converted content (same as Timeline)
+			var lines []string
+			if m.contactPreviewBody.IsFromHTML {
+				renderer, rerr := glamour.NewTermRenderer(
+					glamour.WithStandardStyle("dark"),
+					glamour.WithWordWrap(innerW),
+				)
+				if rerr == nil {
+					if rendered, err := renderer.Render(body); err == nil {
+						rendered = strings.TrimRight(rendered, "\n")
+						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
+						rendered = strings.TrimRight(rendered, "\n")
+						lines = strings.Split(rendered, "\n")
+					} else {
+						lines = wrapLines(body, innerW)
+					}
+				} else {
+					lines = wrapLines(body, innerW)
+				}
+			} else {
+				lines = wrapLines(body, innerW)
+			}
 			maxLines := contentH - 6 // header(4) + hint(1) + margin
 			if maxLines < 1 {
 				maxLines = 1

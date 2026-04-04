@@ -891,7 +891,7 @@ func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
 	messages := make(chan *imap.Message, 20)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size}, messages)
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size, imap.FetchUid}, messages)
 	}()
 
 	var emails []*models.EmailData
@@ -908,11 +908,11 @@ func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
 		}
 		msgID := msg.Envelope.MessageId
 		if msgID == "" {
-			msgID = fmt.Sprintf("uid-%d", msg.SeqNum)
+			msgID = fmt.Sprintf("uid-%d", msg.Uid)
 		}
 		emails = append(emails, &models.EmailData{
 			MessageID: msgID,
-			UID:       msg.SeqNum,
+			UID:       msg.Uid,
 			Sender:    sender,
 			Subject:   msg.Envelope.Subject,
 			Date:      msg.Envelope.Date,
@@ -953,7 +953,7 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 	messages := make(chan *imap.Message, 20)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size}, messages)
+		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size, imap.FetchUid}, messages)
 	}()
 
 	var emails []*models.EmailData
@@ -970,11 +970,11 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 		}
 		msgID := msg.Envelope.MessageId
 		if msgID == "" {
-			msgID = fmt.Sprintf("uid-%d", msg.SeqNum)
+			msgID = fmt.Sprintf("uid-%d", msg.Uid)
 		}
 		emails = append(emails, &models.EmailData{
 			MessageID: msgID,
-			UID:       msg.SeqNum,
+			UID:       msg.Uid,
 			Sender:    sender,
 			Subject:   msg.Envelope.Subject,
 			Date:      msg.Envelope.Date,
