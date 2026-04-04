@@ -2108,7 +2108,7 @@ func (m *Model) renderKeyHints() string {
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  q: quit"
+		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)

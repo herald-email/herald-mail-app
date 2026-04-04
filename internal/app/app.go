@@ -250,7 +250,6 @@ type AISubjectMsg struct {
 	Subject string
 	Err     error
 }
-
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -458,7 +457,6 @@ type Model struct {
 
 	// Dry-run mode — log rule/cleanup actions without executing destructive ones
 	dryRun bool
-
 	// Contacts tab
 	contactsList       []models.ContactData
 	contactsFiltered   []models.ContactData
