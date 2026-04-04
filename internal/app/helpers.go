@@ -1419,13 +1419,9 @@ func (m *Model) renderEmailPreview() string {
 				if rerr == nil {
 					if rendered, err := renderer.Render(body); err == nil {
 						rendered = strings.TrimRight(rendered, "\n")
-						// Clamp any lines exceeding innerW (e.g. long URLs that
-						// glamour couldn't break at a word boundary).
 						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
 						rendered = strings.TrimRight(rendered, "\n")
-						// Linkify per-line AFTER glamour has wrapped — safe because
-						// each line is already within innerW visible chars.
-						m.bodyWrappedLines = linkifyWrappedLines(strings.Split(rendered, "\n"))
+						m.bodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
 						m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
@@ -1433,8 +1429,6 @@ func (m *Model) renderEmailPreview() string {
 					m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 				}
 			} else {
-				// Plain text: wrap first, then linkify per-line so OSC 8 sequences
-				// never span a line break (which would corrupt terminal state).
 				m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 			}
 			m.bodyWrappedWidth = innerW
@@ -1605,7 +1599,7 @@ func (m *Model) renderFullScreenEmail() string {
 						rendered = strings.TrimRight(rendered, "\n")
 						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
 						rendered = strings.TrimRight(rendered, "\n")
-						m.bodyWrappedLines = linkifyWrappedLines(strings.Split(rendered, "\n"))
+						m.bodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
 						m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
@@ -1877,7 +1871,7 @@ func (m *Model) renderCleanupPreview() string {
 						rendered = strings.TrimRight(rendered, "\n")
 						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
 						rendered = strings.TrimRight(rendered, "\n")
-						m.cleanupBodyWrappedLines = linkifyWrappedLines(strings.Split(rendered, "\n"))
+						m.cleanupBodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
 						m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
@@ -4566,7 +4560,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 						rendered = strings.TrimRight(rendered, "\n")
 						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
 						rendered = strings.TrimRight(rendered, "\n")
-						lines = linkifyWrappedLines(strings.Split(rendered, "\n"))
+						lines = strings.Split(rendered, "\n")
 					} else {
 						lines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
