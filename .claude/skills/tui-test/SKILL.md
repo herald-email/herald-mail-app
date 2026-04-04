@@ -1,6 +1,6 @@
 ---
 name: tui-test
-description: Battle-test the Herald TUI — prolonged exploratory stress testing that simulates real power-user sessions. Finds state accumulation bugs, rendering drift, and UX degradation that only surface after extended use.
+description: Battle-test the Herald TUI — automated exploratory testing that captures screens, detects visual defects programmatically, and digs into anything suspicious. Simulates prolonged real usage.
 disable-model-invocation: true
 allowed-tools: Bash Read Write Glob Grep Edit Agent TodoWrite
 argument-hint: "[focus: full | stress | ai | contacts | timeline | cleanup | compose | navigation]"
@@ -8,188 +8,248 @@ argument-hint: "[focus: full | stress | ai | contacts | timeline | cleanup | com
 
 # TUI Battle Testing
 
-You are a curious, skeptical power user. You don't follow scripts — you explore, notice things that feel slightly off, and pull on those threads until something breaks or you're satisfied it's solid. When you find one bug, you immediately ask: "what else is broken in this area? Does this same bug happen from a different entry point? Does it get worse with repetition?"
+You are testing Herald, a terminal email client. Your job is to systematically USE the app via tmux, capture every screen, ANALYZE each capture for defects, and dig deeper into anything that looks wrong.
 
-## Your Mindset
+## The Core Loop
 
-**Explore first, verify second.** Don't start with a checklist. Start by using the app the way a real person would — open some emails, switch between tabs, try the features. Pay attention to what *feels* wrong, not just what *is* wrong. A column that looks slightly off, a panel that flickers, a cursor that's one row too low — these are clues. Follow them.
+This is what you do, over and over, for every feature you test:
 
-**Iterate on findings.** When you find something suspicious:
-1. Confirm it's reproducible — do it again
-2. Find the boundaries — does it happen every time, or only after N operations? Only at certain sizes? Only from certain tabs?
-3. Try variations — if opening email #15 looks wrong, check #14 and #16. If it's an alignment bug, resize the terminal and check if it gets better or worse
-4. Check related features — if the Timeline has a rendering bug, does the same data render correctly in Cleanup? In Contacts?
-5. Look at the code if the pattern is clear — grep for the rendering function, check the state management, trace the data flow
+```
+1. CAPTURE the screen (tmux capture-pane)
+2. READ the capture carefully — every line
+3. CHECK against the defect checklist below
+4. If something is wrong → investigate (try variations, sizes, repetitions)
+5. If something is fine → do more operations, then capture and check again
+6. After 10+ operations in an area → capture and compare against your first capture
+```
 
-**Don't stop at the first bug.** The first bug is just the door. State corruption bugs travel in packs. If you find one accumulated-state issue, systematically check every other piece of state in the same area.
+**You must actually read and analyze every capture you take.** Don't just capture and move on. Look at the output. Count the columns. Check if borders are closed. Verify the header is present.
 
-**Capture before and after.** Every time you're about to do something that might reveal a bug, capture the screen BEFORE. Then do it and capture AFTER. The diff tells the story. Save captures to `/tmp/cap_*.txt` and include the interesting ones in your report.
+## How to Detect Defects in a tmux Capture
 
-## How to Run
+When you capture a screen with `tmux capture-pane -t test -p > /tmp/cap.txt`, you get plain text. Here is exactly what to check:
 
-### Setup
+### 1. Structural Integrity
+
+```
+EXPECTED (first 3 lines of any tab):
+ ProtonMail Analyzer                          ← Line 1: app title
+  1  Timeline    2  Compose    3  Cleanup...  ← Line 2: tab bar
+                                              ← Line 3: blank or panel start
+```
+
+**Defect: Missing header.** If line 1 doesn't contain "Analyzer" or line 2 doesn't contain tab numbers, the header has been pushed off-screen. This happens when height is too small or panel height calculation is wrong. Check `windowHeight` math.
+
+**Defect: Missing tab indicator.** The active tab should be visually distinct. If all tabs look the same in the ANSI capture (`-e` flag), the highlight is broken.
+
+### 2. Border Completeness
+
+Every panel must have matching corners:
+- Top-left `┌` must pair with top-right `┐` on the same line
+- Bottom-left `└` must pair with bottom-right `┘` on the same line
+- Left `│` and right `│` must appear on every line between top and bottom
+
+**Defect: Unclosed border.** If you see `┌───...` without a matching `┐`, the panel overflows the terminal width. Count the characters between `│` markers — they should equal the panel's intended width.
+
+**Defect: Missing bottom border.** If `└` never appears, the panel extends beyond the visible terminal height.
+
+### 3. Column Alignment
+
+For any table (Timeline, Cleanup, Contact list), pick a column header and check that every row's data for that column starts at the same character position.
+
+**How to check programmatically:**
+```bash
+# Capture and check if all "Date" values start at the same column
+tmux capture-pane -t test -p > /tmp/cap.txt
+# Find the column position of "Date" in the header
+grep -n "Date" /tmp/cap.txt | head -1
+# Then check that date-like patterns (26-0X-XX) appear at that same position in data rows
+```
+
+**Defect: Column drift.** If row 5's date starts at column 60 but row 12's date starts at column 58, something is wrong with the sender or subject cell width for that row. Common cause: ANSI codes counted as visible width, or inconsistent indicator characters.
+
+### 4. Content Presence
+
+- **Sender column**: Should never be entirely empty. If you see rows where the space between `│` and the subject is blank, the sender rendering is broken.
+- **Status bar**: Bottom line(s) should contain folder name, counts, and key hints. If the status bar is missing or shows previous tab's hints, state didn't update.
+- **Right panel**: When showing "Select a contact..." or email detail, should never be completely empty (no text at all between borders).
+
+### 5. Layout at Different Sizes
+
+At **80x24**:
+- Sidebar should auto-hide (status bar says "sidebar hidden")
+- App header may be compressed but tab bar must still be present
+- Contact list: names will be heavily truncated but company brackets and counts must still be on each row
+
+At **120x40**:
+- Sidebar visible, panels proportional
+- No column should be 0-width (invisible)
+
+At **220x50**:
+- Everything visible, full sender names with email addresses
+- No excessive whitespace gaps between columns
+
+### 6. Hint Placement
+
+Key hints and scroll indicators must appear at the **bottom** of their panel, never floating mid-panel or mixed into body content. If you see "Esc: back" or "D: delete" with body text above AND below it, the hint is in the wrong place.
+
+## Setup
 
 ```bash
-# Build fresh
+# Build
 go build -o bin/herald ./main.go
 
-# Launch in tmux (start at 220x50 for full visibility)
-tmux kill-session -t test 2>/dev/null
+# Launch at starting size
+tmux kill-session -t test 2>/dev/null; sleep 0.5
 tmux new-session -d -s test -x 220 -y 50
-tmux send-keys -t test '/abs/path/to/bin/herald --demo' Enter
+tmux send-keys -t test "$(pwd)/bin/herald --demo" Enter
 sleep 5
 
-# For live IMAP (needed for AI features):
-tmux send-keys -t test '/abs/path/to/bin/herald' Enter
-sleep 8
+# For live IMAP (AI features): omit --demo
 ```
 
-### Interacting
+### Key Reference
 
 ```bash
-tmux send-keys -t test 'KEY' ''     # Single key
-tmux send-keys -t test Enter        # Enter
-tmux send-keys -t test Escape       # Escape
-tmux send-keys -t test Tab          # Tab
-tmux send-keys -t test C-q          # Ctrl+Q (quick replies)
-tmux send-keys -t test C-p          # Ctrl+P (compose preview)
-tmux capture-pane -t test -p > /tmp/cap.txt   # Screenshot
-tmux resize-window -t test -x 80 -y 24        # Resize (DON'T restart)
+tmux send-keys -t test 'j' ''       # Down
+tmux send-keys -t test 'k' ''       # Up
+tmux send-keys -t test Enter        # Open/confirm
+tmux send-keys -t test Escape       # Back/close
+tmux send-keys -t test Tab          # Next panel
+tmux send-keys -t test '1'          # Timeline tab
+tmux send-keys -t test '2'          # Compose tab
+tmux send-keys -t test '3'          # Cleanup tab
+tmux send-keys -t test '4'          # Contacts tab
+tmux send-keys -t test 'f'          # Toggle sidebar
+tmux send-keys -t test 'c'          # Toggle chat
+tmux send-keys -t test 'z'          # Full-screen toggle
+tmux send-keys -t test '*'          # Star
+tmux send-keys -t test 'D'          # Delete
+tmux send-keys -t test 'e'          # Archive/enrich
+tmux send-keys -t test '/' ''       # Search
+tmux send-keys -t test C-q          # Quick replies
+tmux send-keys -t test C-p          # Compose preview
+tmux resize-window -t test -x W -y H  # Resize (DON'T restart)
 ```
 
-### Terminal Sizes
+## Exploration Plan
 
-Always test at **220x50**, **120x40**, and **80x24**. The key rule: **resize the live session, never restart.** Bugs hide in the re-render path.
+Default to `full`. If $ARGUMENTS names a focus, spend 80% of time there, 20% on a quick pass of other areas.
 
-## Exploration Territories
+### Step 1: Baseline at 220x50
 
-These aren't steps to follow in order. They're territories to explore. Start wherever your intuition says, jump between them when you notice something, and come back to re-check areas after you've found bugs elsewhere.
+Capture the initial screen. This is your reference. Verify:
+- [ ] Header present ("Analyzer" on line 1, tab bar on line 2)
+- [ ] Sidebar with folder counts
+- [ ] Table with populated Sender and Subject columns
+- [ ] Status bar at bottom with counts and key hints
+- [ ] Border boxes complete (all corners present)
 
-### Territory: Repetition & Drift
+### Step 2: Exercise Every Tab (still 220x50)
 
-The question: *Does the 20th operation look the same as the 1st?*
+For each tab (1, 2, 3, 4):
+1. Switch to the tab, wait 1s, capture
+2. Run the defect checklist above on the capture
+3. Interact: open something (Enter), capture, check
+4. Close it (Esc), capture, compare with the pre-interaction capture
+5. Note any differences
 
-- Open 20+ emails in sequence (j, Enter, wait, Esc, j, Enter...). Compare the render of email #1 vs #10 vs #20. Same alignment? Same body loading behavior? Same scroll indicator position?
-- Star and unstar the same email 10 times. Is the row in the right place every time?
-- Search, open result, close, clear search, repeat 5+ times. Is the full list perfectly restored each time?
-- Delete 5 emails one by one. Do counts update? Any phantom rows? Any cursor jumps?
+### Step 3: Deep Dive — Repetition (pick the most complex tab first)
 
-When something looks off after N repetitions, nail down exactly which repetition causes it. Capture N-1 and N.
+Stay in one tab. Do 15-20 operations:
+- **Timeline**: Open email, close, move down, open next, close, repeat for 15+ emails. Every 5th one, capture and run the full defect checklist.
+- **Contacts**: Open contact, tab to emails, open email, Esc back, Esc back, next contact, repeat for ALL contacts. Capture after each round.
+- **Cleanup**: Tab to emails, open preview, close, move down, open next, repeat. Try full-screen on every 3rd email.
+- **Compose**: Tab through all fields, type something, toggle preview, switch away and back. Is the draft preserved?
 
-### Territory: Cross-Tab State Leakage
+After the repetition burst, capture and compare against the Step 1 baseline for that tab. **Character-for-character comparison of the structural elements** (borders, header, status bar).
 
-The question: *Does acting in one tab corrupt another tab's state?*
+### Step 4: The Resize Gauntlet (single session, no restart)
 
-- Open a preview in Timeline, switch to Compose, type something, switch back. Is the preview still there? Is it the right email?
-- Open a contact detail in Contacts, switch to Cleanup, browse around, switch back to Contacts. Is the detail still there or wiped? (It should be wiped — clean state on tab entry.)
-- Start a search in Timeline, switch to Contacts, switch back. Is the search still active or cleared?
-- The same email should look identical when opened from Timeline, Cleanup, and Contacts. Open it from all three and compare.
+With something open (email preview, contact detail, etc.):
+1. Capture at 220x50
+2. `tmux resize-window -t test -x 120 -y 40` → wait 1s → capture → defect check
+3. `tmux resize-window -t test -x 80 -y 24` → wait 1s → capture → defect check
+4. `tmux resize-window -t test -x 220 -y 50` → wait 1s → capture → compare with step 1
+5. `tmux resize-window -t test -x 60 -y 18` → capture → should show size guard or degrade gracefully
 
-### Territory: Panel Gymnastics
+At each size, explicitly verify:
+- Header + tab bar present?
+- Borders complete?
+- Columns aligned?
+- Status bar with correct content?
 
-The question: *Does the layout survive toggling every panel combination?*
+### Step 5: Cross-Tab State
 
-- Toggle sidebar (f), chat (c), and email preview in every combination. That's 8 states. Capture each. Do the remaining panels fill the space correctly?
-- Open preview + sidebar + chat all at once. Resize to 80x24. What survives?
-- Close everything, resize back to 220x50. Does it look like the baseline?
-- Open a cleanup 3-panel view (sender list + email list + preview). Toggle sidebar. Toggle chat. What happens to the 25/25/50 split?
+1. Open something in Timeline (email preview). Switch to Compose (2). Switch back (1). Is the preview still there?
+2. Open something in Contacts. Switch to Cleanup (3). Switch back (4). Is the state clean? (It should be — clean entry.)
+3. Type something in Compose. Switch away. Switch back. Is the text preserved?
+4. Open same email from Timeline, Cleanup, and Contacts. Compare the body text — must be identical.
 
-### Territory: The Resize Gauntlet
+### Step 6: Edge Cases
 
-The question: *Does the app recover from any resize sequence without restarting?*
+- `tmux send-keys -t test 'jjjjjjjjjjjjjjjjjjjj' ''` — 20 rapid keys. Capture. Valid state?
+- Esc 10 times from any state. Clean baseline?
+- Enter on empty (no contact selected, 0 search results). No crash?
+- Navigate to last email → j (stay put). First email → k (stay put).
+- Star → unstar → star → unstar 5 times. Aligned?
 
-In a single continuous session:
-1. 220x50 — capture baseline
-2. Open email preview, capture
-3. Resize to 120x40 — capture (preview should adapt)
-4. Resize to 80x24 — capture (aggressive truncation, sidebar hides)
-5. Resize to 220x50 — capture (compare with step 1, should be identical)
-6. Resize to 60x20 — should show minimum-size guard or degrade gracefully
-7. Resize back to 120x40 — verify full recovery
+### Step 7: AI Features (if Ollama running or live IMAP)
 
-If any step looks wrong, stay at that size and explore further before moving on.
+- `a` in Timeline for classification → wait → check Tag column
+- `c` for chat → ask a question → check response rendering
+- `Ctrl+Q` on open email → quick reply picker → select one → check Compose
+- `e` on contact → enrichment → check Company/Topics persist
 
-### Territory: Interaction Sequences That Break Things
-
-These are specific multi-step flows that historically cause problems. Try them, but also invent your own variations.
-
-- **Cleanup full-screen flip**: Open email in cleanup preview → full-screen (z) → exit full-screen (z) → close preview (Esc) → open DIFFERENT email → verify it's the new email, not cached old one
-- **Contacts deep navigation**: Open contact → Tab to emails → open email (inline preview) → Esc (back to detail) → Esc (back to list) → open DIFFERENT contact → open email. Repeat for every contact. Does the Nth contact work as well as the 1st?
-- **Compose persistence**: Type a draft → leave → come back. Is it there? Leave again → come back. Still there?
-- **Search → full-screen → unwind**: Search → open result → full-screen (z) → exit (z) → close preview (Esc) → clear search (Esc) → verify full list restored exactly
-
-### Territory: AI Features (requires Ollama or live backend)
-
-Skip if `--demo` mode and AI has no stubs. Otherwise:
-
-- **Classification**: Press `a` in Timeline. Watch progress. Do tags appear? Re-classify with `A` — do tags update? Switch to Cleanup — tags visible there too?
-- **Chat**: Press `c`, ask about emails. Does response render in Markdown? If it returns email results, does filtered timeline appear? Clear filter — full list back?
-- **Quick replies**: Open email, Ctrl+Q. Are options visible? Select one — does Compose open pre-filled? Open a DIFFERENT email, Ctrl+Q — are options different (AI-generated should be contextual)?
-- **Contact enrichment**: Select contact, press `e`. Wait. Do Company/Topics fill in? Esc, re-open — data persisted?
-
-After each AI operation, go back to Timeline and verify the table still renders correctly. AI round-trips are notorious for leaving stale state.
-
-### Territory: Edge Cases & Adversarial Input
-
-- **Speed**: Send 20 keys in <1 second: `tmux send-keys -t test 'jjjjjjjjjjjjjjjjjjjj' ''`. Capture. Valid cursor position? Rendering artifacts?
-- **Esc spam**: Press Esc 10 times from any state. Should eventually reach a clean baseline with no errors.
-- **Enter on nothing**: Press Enter when nothing is selected (empty folder, no contact, 0 search results). Should do nothing gracefully.
-- **Boundaries**: Navigate to the very last email → press j (should stay). Navigate to the very first → press k (should stay). Open last email, then first — both render correctly?
-- **Long scroll**: Find the longest email body, scroll to 100%. Percentage accurate? Scroll back to 0%. Re-open the same email — starts at top?
-- **Double-action**: Press Enter twice quickly. Press Esc twice quickly. Press * twice on the same email (star then unstar). No crashes, no orphaned state.
+After each AI operation, go back to Timeline and verify the table is still rendering correctly.
 
 ## The Iteration Loop
 
-After completing your initial exploration:
+After your first full pass:
 
-1. **Review your findings.** Which territory had the most bugs?
-2. **Go back to that territory** and dig deeper. If you found a rendering bug after 20 email opens, try 30. Try it at a different size. Try it with sidebar toggled.
-3. **Cross-pollinate.** Take a bug you found in one territory and check if it manifests in other territories. A cursor drift bug in Timeline might also exist in Cleanup or Contacts.
-4. **Fix and re-test.** If you fix a bug, don't just move on. Re-run the entire sequence that revealed it, PLUS the neighboring sequences. Fixes often expose adjacent bugs.
-5. **Capture the "after" state.** After all fixes, do one clean full pass to verify nothing regressed.
+1. **What area had the most issues?** Go back there. Dig deeper. Try 30 operations instead of 15. Try at the size where things looked worst.
+2. **Can you reproduce each bug?** Try the exact sequence again. Nail down the boundary (works for N, breaks at N+1).
+3. **Do bugs from one area appear in others?** If contacts had a rendering issue, does the same data render wrong in cleanup?
+4. **After fixing a bug, re-run the full sequence** that found it AND its neighbors.
+5. **Capture "hunches"** — things that feel slightly off but you can't pinpoint. Write them in the report. They're worth re-checking next session.
 
 ## Reporting
 
 Save to `reports/TEST_REPORT_YYYY-MM-DD_<description>.md`.
 
-### Structure
-
 ```markdown
 # Battle Test Report — YYYY-MM-DD
 
-## Session Info
-- Mode: --demo / live IMAP
-- Duration: X minutes
-- Territories explored: [list]
-- Iterations: how many times you circled back
+## Session
+- Mode: --demo / live
+- Sizes tested: 220x50, 120x40, 80x24
+- Iterations: N (how many times you circled back)
 
 ## Bugs Found
-
-### [BUG-N] Short title (Severity: critical/major/moderate/minor)
-- **Symptom**: What you saw
-- **Reproduction**: Exact sequence (or "after Nth repetition of X")
-- **Boundary**: When it starts (e.g., "works for 12 emails, breaks on 13th")
-- **Cross-checked**: Does it happen from other entry points? At other sizes?
-- **Root cause**: file:line if identified
+### [BUG-N] Title (Severity)
+- **Symptom**: exact visual description
+- **Capture**: (paste the relevant lines from tmux capture)
+- **Reproduction**: key sequence
+- **Boundary**: works until Nth operation / only at width < X
+- **Root cause**: file:line if found
 - **Fixed**: yes/no
 
-## State Accumulation Issues
-Anything that works once but degrades over time.
-
 ## Regression Matrix
-| Tab/Feature | 220x50 | 120x40 | 80x24 | After 20+ ops |
-|-------------|--------|--------|-------|---------------|
-| ... | PASS/FAIL | ... | ... | ... |
+| Feature | 220x50 | 120x40 | 80x24 | After 15+ ops |
+|---------|--------|--------|-------|---------------|
+| Timeline table | | | | |
+| Email preview | | | | |
+| Full-screen | | | | |
+| Cleanup 2-panel | | | | |
+| Cleanup preview | | | | |
+| Contacts list | | | | |
+| Contact detail | | | | |
+| Contact email preview | | | | |
+| Compose fields | | | | |
+| Sidebar toggle | | | | |
+| Tab switching | | | | |
+| Resize recovery | | | | |
 
-## Hunches Not Yet Confirmed
-Things that felt off but you couldn't reproduce reliably. Worth re-checking next session.
+## Hunches
+Things that felt off but weren't confirmed. Check next time.
 ```
-
-## UX Principles (Quick Reference)
-
-- **Temporal stability**: The 20th operation renders identically to the 1st
-- **State honesty**: Deleted = gone. Cleared = restored. No ghosts, no leaks
-- **Navigation predictability**: Esc goes up one level. Tab entry = clean slate
-- **Visual consistency**: Same data, same rendering, regardless of entry point or terminal size
-- **Graceful degradation**: Narrow terminal hides optional info, never corrupts required info
-- **Responsiveness**: Resize never requires restart. Re-render is immediate and correct
