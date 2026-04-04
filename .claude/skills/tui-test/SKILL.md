@@ -15,15 +15,15 @@ You are testing Herald, a terminal email client. Your job is to systematically U
 This is what you do, over and over, for every feature you test:
 
 ```
-1. CAPTURE the screen (tmux capture-pane)
-2. READ the capture carefully — every line
-3. CHECK against the defect checklist below
-4. If something is wrong → investigate (try variations, sizes, repetitions)
-5. If something is fine → do more operations, then capture and check again
-6. After 10+ operations in an area → capture and compare against your first capture
+1. SCREENSHOT the screen (.claude/skills/tui-test/screenshot.sh)
+2. VIEW the screenshot with the Read tool — you can see colors, borders, alignment
+3. EVALUATE against the defect checklist below — actually look at the image
+4. If something looks wrong → investigate (try variations, sizes, repetitions)
+5. If something looks fine → do more operations, screenshot, check again
+6. After 10+ operations → screenshot and visually compare with your first screenshot
 ```
 
-**You must actually read and analyze every capture you take.** Don't just capture and move on. Look at the output. Count the columns. Check if borders are closed. Verify the header is present.
+**You are multimodal. Use your eyes.** The screenshot script renders the TUI as a PNG with full terminal colors. When you Read a PNG file, you see the actual rendered output — purple highlights, yellow selections, colored borders, everything. Don't rely on plain text captures for visual assessment; use screenshots and LOOK at them. Plain text is useful for grep and diff, but screenshots are how you spot misalignment, broken styling, and layout issues.
 
 ## How to Detect Defects in a tmux Capture
 
@@ -108,6 +108,38 @@ sleep 5
 # For live IMAP (AI features): omit --demo
 ```
 
+### Visual Screenshots (Primary Inspection Method)
+
+**Always use visual screenshots to inspect the TUI.** Plain text captures lose colors, styling, and subtle alignment cues. The screenshot script renders exactly what a human sees.
+
+```bash
+# Take a visual screenshot (renders ANSI colors as a PNG image)
+.claude/skills/tui-test/screenshot.sh test /tmp/tui_screenshot.png
+
+# Then VIEW the screenshot — you are multimodal, use your eyes:
+# (use the Read tool on the PNG file to see it)
+```
+
+**The loop for every interaction:**
+```bash
+# 1. Do something
+tmux send-keys -t test Enter
+sleep 1
+
+# 2. Screenshot
+.claude/skills/tui-test/screenshot.sh test /tmp/cap_after_enter.png
+
+# 3. VIEW the screenshot with the Read tool — actually look at it
+# 4. Evaluate: colors, alignment, borders, spacing, missing elements
+# 5. If something looks wrong → investigate further
+```
+
+You can also use plain text captures for quick structural checks:
+```bash
+tmux capture-pane -t test -p > /tmp/cap.txt    # Plain text (for grep/diff)
+tmux capture-pane -t test -p -e > /tmp/cap.txt  # With ANSI (for aha conversion)
+```
+
 ### Key Reference
 
 ```bash
@@ -138,21 +170,41 @@ Default to `full`. If $ARGUMENTS names a focus, spend 80% of time there, 20% on 
 
 ### Step 1: Baseline at 220x50
 
-Capture the initial screen. This is your reference. Verify:
-- [ ] Header present ("Analyzer" on line 1, tab bar on line 2)
-- [ ] Sidebar with folder counts
-- [ ] Table with populated Sender and Subject columns
-- [ ] Status bar at bottom with counts and key hints
-- [ ] Border boxes complete (all corners present)
+Take a visual screenshot of the initial screen. This is your reference.
+
+```bash
+.claude/skills/tui-test/screenshot.sh test /tmp/baseline_220.png
+```
+
+**View it** with the Read tool. Verify by looking at the image:
+- [ ] "ProtonMail Analyzer" header visible at top
+- [ ] Tab bar with numbered tabs, active tab highlighted in color
+- [ ] Sidebar with folder names and unread/total counts
+- [ ] Table with populated Sender column (names with email addresses) and Subject column
+- [ ] Status bar at bottom with folder name, email counts, and key hints
+- [ ] All panel borders are complete rectangles (no broken corners)
+- [ ] Colors are semantically consistent (unread dots, selection highlight, etc.)
 
 ### Step 2: Exercise Every Tab (still 220x50)
 
 For each tab (1, 2, 3, 4):
-1. Switch to the tab, wait 1s, capture
-2. Run the defect checklist above on the capture
-3. Interact: open something (Enter), capture, check
-4. Close it (Esc), capture, compare with the pre-interaction capture
-5. Note any differences
+1. Switch to the tab, wait 1s, **screenshot and view it**
+2. Interact: open something (Enter), **screenshot and view it**
+3. Close it (Esc), **screenshot and compare with the pre-interaction screenshot**
+4. Ask: does the layout look exactly right? Are colors correct? Any clipped text?
+
+```bash
+# Example: test Contacts tab
+tmux send-keys -t test '4' && sleep 1
+.claude/skills/tui-test/screenshot.sh test /tmp/contacts_initial.png
+# View it! Then interact:
+tmux send-keys -t test Enter && sleep 1
+.claude/skills/tui-test/screenshot.sh test /tmp/contacts_detail.png
+# View it! Then close:
+tmux send-keys -t test Escape && sleep 0.5
+.claude/skills/tui-test/screenshot.sh test /tmp/contacts_after_close.png
+# View it and compare with contacts_initial.png
+```
 
 ### Step 3: Deep Dive — Repetition (pick the most complex tab first)
 
@@ -167,17 +219,28 @@ After the repetition burst, capture and compare against the Step 1 baseline for 
 ### Step 4: The Resize Gauntlet (single session, no restart)
 
 With something open (email preview, contact detail, etc.):
-1. Capture at 220x50
-2. `tmux resize-window -t test -x 120 -y 40` → wait 1s → capture → defect check
-3. `tmux resize-window -t test -x 80 -y 24` → wait 1s → capture → defect check
-4. `tmux resize-window -t test -x 220 -y 50` → wait 1s → capture → compare with step 1
-5. `tmux resize-window -t test -x 60 -y 18` → capture → should show size guard or degrade gracefully
 
-At each size, explicitly verify:
-- Header + tab bar present?
-- Borders complete?
-- Columns aligned?
-- Status bar with correct content?
+```bash
+# Screenshot at each size — VIEW every one
+.claude/skills/tui-test/screenshot.sh test /tmp/resize_220.png
+
+tmux resize-window -t test -x 120 -y 40 && sleep 1
+.claude/skills/tui-test/screenshot.sh test /tmp/resize_120.png
+
+tmux resize-window -t test -x 80 -y 24 && sleep 1
+.claude/skills/tui-test/screenshot.sh test /tmp/resize_80.png
+
+tmux resize-window -t test -x 220 -y 50 && sleep 1
+.claude/skills/tui-test/screenshot.sh test /tmp/resize_back_220.png
+# Compare resize_back_220.png with resize_220.png — should be identical
+```
+
+At each size, view the screenshot and verify:
+- Header + tab bar visible? (at 80x24 they may be compressed but must exist)
+- Panel borders form complete rectangles?
+- No text overlapping borders or other panels?
+- Status bar present at the bottom with correct key hints?
+- Colors still correct (not garbled by resize)?
 
 ### Step 5: Cross-Tab State
 
