@@ -4618,9 +4618,9 @@ func (m *Model) renderContactsTab(width, height int) string {
 			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
 		} else {
 			// Inner content = Width(rightW) - PaddingLeft(1) = rightW-1.
-			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) = maxSubjW+14.
-			// To fit: maxSubjW+14 <= rightW-1 → maxSubjW = rightW-15.
-			maxSubjW := rightW - 15
+			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) + " "(1 right padding) = maxSubjW+15.
+			// To fit: maxSubjW+15 <= rightW-1 → maxSubjW = rightW-16.
+			maxSubjW := rightW - 16
 			if maxSubjW < 10 {
 				maxSubjW = 10
 			}
