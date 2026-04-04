@@ -288,12 +288,15 @@ func (m *Model) updateSummaryTable() {
 		// Store original sender for deletion
 		m.rowToSender[i] = item.sender
 
-		// Style for display — name bright, email dim
 		senderColW := m.summaryTable.Columns()[1].Width
 		if senderColW <= 0 {
 			senderColW = 33
 		}
-		sender := styledSender(item.sender, senderColW)
+		senderPlain := sanitizeText(item.sender)
+		if len([]rune(senderPlain)) > senderColW {
+			senderPlain = string([]rune(senderPlain)[:senderColW-1]) + "…"
+		}
+		sender := senderPlain
 		stats := item.stats
 
 		// Format date range
@@ -1096,13 +1099,16 @@ func (m *Model) updateTimelineTable() {
 		if email.IsStarred {
 			starDot = "★"
 		}
-		// Indicators take up to 3 chars (●★ + prefix); remainder goes to styled sender
 		indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot)) + len([]rune(senderPrefix))
 		senderAvail := maxSend - indicatorWidth
 		if senderAvail < 1 {
 			senderAvail = 1
 		}
-		sender := unreadDot + starDot + senderPrefix + styledSender(email.Sender, senderAvail)
+		senderPlain := sanitizeText(email.Sender)
+		if len([]rune(senderPlain)) > senderAvail {
+			senderPlain = string([]rune(senderPlain)[:senderAvail-1]) + "…"
+		}
+		sender := unreadDot + starDot + senderPrefix + senderPlain
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
