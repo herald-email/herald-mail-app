@@ -844,17 +844,56 @@ func (m *Model) updateTableDimensions(width, height int) {
 	} else {
 		m.cleanupPreviewWidth = 0
 
-		// Total rendering overhead for two tables:
-		//   summaryNumCols*2 + detailsNumCols*2 + 4 borders + 2 gap = 12+10+4+2 = 28
-		cleanupOverhead := 28 + sidebarExtra + chatExtra
+		// Progressive column hiding: when there isn't enough space for the
+		// Sender/Domain and Subject variable columns, hide lower-priority
+		// fixed columns first.  Hide order (lowest priority first):
+		//   1. Attach (6)  2. Att (3)  3. Date Range (20)  4. Avg KB (7)
+		const minVariable = 24 // minimum combined sender + subject width
 
-		cleanupVariable := width - cleanupOverhead - summaryFixedCols - detailsFixedCols
-		if cleanupVariable < 0 {
-			cleanupVariable = 0
+		attachW := 6
+		dateRangeW := 20
+		avgKBW := 7
+		detailsAttW := 3
+
+		sumFixed := summaryFixedCols   // 41
+		detFixed := detailsFixedCols   // 29
+		sumNCols := summaryNumCols     // 6
+		detNCols := detailsNumCols     // 5
+
+		calcVariable := func() int {
+			overhead := sumNCols*2 + detNCols*2 + 4 + 2 + sidebarExtra + chatExtra
+			v := width - overhead - sumFixed - detFixed
+			if v < 0 {
+				return 0
+			}
+			return v
 		}
+
+		if calcVariable() < minVariable && attachW > 0 {
+			sumFixed -= 6
+			sumNCols--
+			attachW = 0
+		}
+		if calcVariable() < minVariable && detailsAttW > 0 {
+			detFixed -= 3
+			detNCols--
+			detailsAttW = 0
+		}
+		if calcVariable() < minVariable && dateRangeW > 0 {
+			sumFixed -= 20
+			sumNCols--
+			dateRangeW = 0
+		}
+		if calcVariable() < minVariable && avgKBW > 0 {
+			sumFixed -= 7
+			sumNCols--
+			avgKBW = 0
+		}
+
+		cleanupVariable := calcVariable()
 		senderWidth := cleanupVariable * 40 / 100
 		subjectWidth := cleanupVariable - senderWidth
-		if cleanupVariable >= 24 {
+		if cleanupVariable >= minVariable {
 			if senderWidth < 12 {
 				senderWidth = 12
 			}
@@ -867,11 +906,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "✓", Width: 2},
 			{Title: "Sender/Domain", Width: senderWidth},
 			{Title: "Count", Width: 6},
-			{Title: "Avg KB", Width: 7},
-			{Title: "Attach", Width: 6},
-			{Title: "Date Range", Width: 20},
+			{Title: "Avg KB", Width: avgKBW},
+			{Title: "Attach", Width: attachW},
+			{Title: "Date Range", Width: dateRangeW},
 		})
-		m.summaryTable.SetWidth(summaryFixedCols + senderWidth + summaryNumCols*2)
+		m.summaryTable.SetWidth(sumFixed + senderWidth + sumNCols*2)
 
 		m.subjectColWidth = subjectWidth
 		m.detailsTable.SetColumns([]table.Column{
@@ -879,9 +918,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "Date", Width: 16},
 			{Title: "Subject", Width: subjectWidth},
 			{Title: "Size", Width: 8},
-			{Title: "Att", Width: 3},
+			{Title: "Att", Width: detailsAttW},
 		})
-		m.detailsTable.SetWidth(detailsFixedCols + subjectWidth + detailsNumCols*2)
+		m.detailsTable.SetWidth(detFixed + subjectWidth + detNCols*2)
 	}
 
 	m.summaryTable.SetHeight(tableHeight)
