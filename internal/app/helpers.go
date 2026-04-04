@@ -19,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/contacts"
@@ -972,8 +973,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	if composeBodyWidth < 10 {
 		composeBodyWidth = 10
 	}
-	// Reserve rows for: To(3) + Subject(3) + divider(1) + status(1) + body border top/bot(2) = 10
-	composeBodyHeight := tableHeight - 10
+	// Reserve rows for: To(3) + CC(3) + BCC(3) + Subject(3) + divider(1) + status(1) + body border top/bot(2) = 16
+	composeBodyHeight := tableHeight - 16
 	if composeBodyHeight < 3 {
 		composeBodyHeight = 3
 	}
@@ -2107,7 +2108,7 @@ func (m *Model) renderKeyHints() string {
 	} else if m.showLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  r: refresh  │  c: chat  │  q: quit"
+		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  q: quit"
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)
@@ -2151,7 +2152,7 @@ func (m *Model) renderKeyHints() string {
 				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: create rule  │  C: auto-cleanup rules  │  P: new prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
 	// Override hints when quick reply picker is open.
@@ -2605,6 +2606,11 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.composeBody.Blur()
 		m.setFocusedPanel(m.focusedPanel)
 		return m, nil
+	case "4":
+		m.activeTab = tabContacts
+		m.contactFocusPanel = 0
+		m.composeBody.Blur()
+		return m, m.loadContacts()
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":
@@ -4163,7 +4169,9 @@ func (m *Model) renderContactsTab(width, height int) string {
 	if leftW < 20 {
 		leftW = 20
 	}
-	rightW := width - leftW - 4
+	// Each panel's outer visual width = Width(w) + 2 border chars; separator = 2 chars.
+	// Total = (leftW+2) + 2 + (rightW+2) = leftW+rightW+6, so rightW = width-leftW-6.
+	rightW := width - leftW - 6
 	if rightW < 10 {
 		rightW = 10
 	}
@@ -4229,14 +4237,15 @@ func (m *Model) renderContactsTab(width, height int) string {
 			} else {
 				nameStr = fmt.Sprintf("%s <%s>", c.DisplayName, c.Email)
 			}
-			maxNameW := leftW - 8
+			// Inner content width = Width(leftW) - PaddingLeft(1) = leftW-1.
+			// Line = nameStr(maxNameW) + "  "(2) + company(≤16) + count(≤4) = maxNameW+22.
+			// To fit: maxNameW = leftW-1-22 = leftW-23.
+			maxNameW := leftW - 23
 			if maxNameW < 8 {
 				maxNameW = 8
 			}
-			runes := []rune(nameStr)
-			if len(runes) > maxNameW {
-				nameStr = string(runes[:maxNameW-1]) + "…"
-			}
+			nameStr = ansi.Truncate(nameStr, maxNameW, "…")
+			namePad := strings.Repeat(" ", maxNameW-ansi.StringWidth(nameStr))
 			company := ""
 			if c.Company != "" {
 				company = fmt.Sprintf("[%s] ", c.Company)
@@ -4245,7 +4254,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 					company = string(cr[:13]) + "…] "
 				}
 			}
-			line := fmt.Sprintf("%-*s  %s%d", maxNameW, nameStr, company, c.EmailCount)
+			line := nameStr + namePad + "  " + company + fmt.Sprintf("%d", c.EmailCount)
 			rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 			if i == m.contactsIdx {
 				rowStyle = lipgloss.NewStyle().
@@ -4306,17 +4315,17 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if len(m.contactDetailEmails) == 0 {
 			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
 		} else {
-			maxSubjW := rightW - 14
+			// Inner content = Width(rightW) - PaddingLeft(1) = rightW-1.
+			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) = maxSubjW+14.
+			// To fit: maxSubjW+14 <= rightW-1 → maxSubjW = rightW-15.
+			maxSubjW := rightW - 15
 			if maxSubjW < 10 {
 				maxSubjW = 10
 			}
 			for i, e := range m.contactDetailEmails {
-				subj := e.Subject
-				sr := []rune(subj)
-				if len(sr) > maxSubjW {
-					subj = string(sr[:maxSubjW-1]) + "…"
-				}
-				line := fmt.Sprintf("  %-*s  %s", maxSubjW, subj, e.Date.Format("2006-01-02"))
+				subj := ansi.Truncate(e.Subject, maxSubjW, "…")
+				subjPad := strings.Repeat(" ", maxSubjW-ansi.StringWidth(subj))
+				line := "  " + subj + subjPad + "  " + e.Date.Format("2006-01-02")
 				rowStyle := normalStyle
 				if m.contactFocusPanel == 1 && i == m.contactDetailIdx {
 					rowStyle = lipgloss.NewStyle().

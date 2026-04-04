@@ -960,6 +960,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TimelineLoadedMsg:
 		m.timelineEmails = msg.Emails
 		m.updateTimelineTable()
+		// If we navigated here from Contacts, scroll the cursor to the selected email.
+		if m.selectedTimelineEmail != nil {
+			targetID := m.selectedTimelineEmail.MessageID
+			for rowIdx, ref := range m.threadRowMap {
+				if ref.kind == rowKindEmail &&
+					ref.group != nil &&
+					ref.emailIdx < len(ref.group.emails) &&
+					ref.group.emails[ref.emailIdx].MessageID == targetID {
+					m.timelineTable.SetCursor(rowIdx)
+					break
+				}
+			}
+		}
 		if m.classifier != nil {
 			return m, tea.Batch(m.runEmbeddingBatch(), m.runContactEnrichment())
 		}
