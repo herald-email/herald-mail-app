@@ -188,6 +188,27 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/mcp-server -config
 
 ---
 
+## Run in Browser
+
+Herald can run in a browser tab via [ttyd](https://github.com/nicholasgasior/ttyd):
+
+```bash
+brew install ttyd
+ttyd -W ./bin/herald
+```
+
+Open [http://localhost:7681](http://localhost:7681). The `-W` flag makes the terminal writable (required for keyboard input). All key bindings work as in a normal terminal.
+
+Options:
+
+```bash
+ttyd -W -p 8080 ./bin/herald                  # Custom port
+ttyd -W -c user:pass ./bin/herald              # Basic auth
+ttyd -W ./bin/herald --demo                    # Demo mode (no IMAP needed)
+```
+
+---
+
 ## Architecture
 
 See [VISION.md](VISION.md) for the full feature roadmap and [ARCHITECTURE.md](ARCHITECTURE.md) for the technical design.
