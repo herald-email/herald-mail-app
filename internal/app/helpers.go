@@ -1403,13 +1403,15 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Body — wrap/render once and cache; re-render only if panel width changed
-		body := linkifyURLs(stripInvisibleChars(m.emailBody.TextPlain))
+		body := stripInvisibleChars(m.emailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
 		if m.bodyWrappedLines == nil || m.bodyWrappedWidth != innerW {
 			if m.emailBody.IsFromHTML {
-				// Render markdown (converted from HTML) via glamour at panel width
+				// Render markdown (converted from HTML) via glamour at panel width.
+				// Don't linkify before glamour — OSC 8 escape sequences break
+				// glamour's width calculation and cause lines to overflow the panel.
 				renderer, rerr := glamour.NewTermRenderer(
 					glamour.WithStandardStyle("dark"),
 					glamour.WithWordWrap(innerW),
@@ -1423,13 +1425,15 @@ func (m *Model) renderEmailPreview() string {
 						rendered = strings.TrimRight(rendered, "\n")
 						m.bodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
-						m.bodyWrappedLines = wrapLines(body, innerW)
+						m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
 				} else {
-					m.bodyWrappedLines = wrapLines(body, innerW)
+					m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 				}
 			} else {
-				m.bodyWrappedLines = wrapLines(body, innerW)
+				// Plain text: wrap first, then linkify per-line so OSC 8 sequences
+				// never span a line break (which would corrupt terminal state).
+				m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 			}
 			m.bodyWrappedWidth = innerW
 		}
@@ -1583,7 +1587,7 @@ func (m *Model) renderFullScreenEmail() string {
 			maxBodyLines = 1
 		}
 
-		body := linkifyURLs(stripInvisibleChars(m.emailBody.TextPlain))
+		body := stripInvisibleChars(m.emailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -1601,13 +1605,13 @@ func (m *Model) renderFullScreenEmail() string {
 						rendered = strings.TrimRight(rendered, "\n")
 						m.bodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
-						m.bodyWrappedLines = wrapLines(body, innerW)
+						m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
 				} else {
-					m.bodyWrappedLines = wrapLines(body, innerW)
+					m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 				}
 			} else {
-				m.bodyWrappedLines = wrapLines(body, innerW)
+				m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 			}
 			m.bodyWrappedWidth = innerW
 		}
@@ -1856,7 +1860,7 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.cleanupEmailBody != nil {
-		body := linkifyURLs(stripInvisibleChars(m.cleanupEmailBody.TextPlain))
+		body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -1873,13 +1877,13 @@ func (m *Model) renderCleanupPreview() string {
 						rendered = strings.TrimRight(rendered, "\n")
 						m.cleanupBodyWrappedLines = strings.Split(rendered, "\n")
 					} else {
-						m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+						m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
 				} else {
-					m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+					m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 				}
 			} else {
-				m.cleanupBodyWrappedLines = wrapLines(body, innerW)
+				m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
 			}
 			m.cleanupBodyWrappedWidth = innerW
 		}
@@ -3514,6 +3518,17 @@ func stripInvisibleChars(s string) string {
 // urlRe matches http/https URLs.
 var urlRe = regexp.MustCompile(`https?://[^\s<>\[\](){}"'` + "`" + `]+`)
 
+// linkifyWrappedLines applies linkifyURLs to each pre-wrapped line individually.
+// This ensures OSC 8 escape sequences never span a line break, which would leave
+// the terminal in a broken hyperlink state and corrupt adjacent panel rendering.
+func linkifyWrappedLines(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = linkifyURLs(line)
+	}
+	return out
+}
+
 // linkifyURLs replaces raw URLs with OSC 8 terminal hyperlinks.
 // The visible text is a shortened version (domain + truncated path);
 // the full URL is embedded in the escape sequence so terminals can open it on click.
@@ -4529,7 +4544,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))
 		} else if m.contactPreviewBody != nil {
-			body := linkifyURLs(stripInvisibleChars(m.contactPreviewBody.TextPlain))
+			body := stripInvisibleChars(m.contactPreviewBody.TextPlain)
 			if body == "" {
 				body = "(No text content)"
 			}
@@ -4551,13 +4566,13 @@ func (m *Model) renderContactsTab(width, height int) string {
 						rendered = strings.TrimRight(rendered, "\n")
 						lines = strings.Split(rendered, "\n")
 					} else {
-						lines = wrapLines(body, innerW)
+						lines = linkifyWrappedLines(wrapLines(body, innerW))
 					}
 				} else {
-					lines = wrapLines(body, innerW)
+					lines = linkifyWrappedLines(wrapLines(body, innerW))
 				}
 			} else {
-				lines = wrapLines(body, innerW)
+				lines = linkifyWrappedLines(wrapLines(body, innerW))
 			}
 			maxLines := contentH - 6 // header(4) + hint(1) + margin
 			if maxLines < 1 {
