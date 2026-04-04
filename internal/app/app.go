@@ -1518,12 +1518,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case NewEmailsMsg:
 		if msg.Folder == m.currentFolder {
-			// Prepend new emails to visible list
-			m.timelineEmails = append(msg.Emails, m.timelineEmails...)
-			if m.timelineEmailsCache != nil {
-				m.timelineEmailsCache = append(msg.Emails, m.timelineEmailsCache...)
+			// Deduplicate: IMAP SINCE is date-granularity, so polls within
+			// the same day can return emails already in the list.
+			existing := make(map[string]struct{}, len(m.timelineEmails))
+			for _, e := range m.timelineEmails {
+				existing[e.MessageID] = struct{}{}
 			}
-			m.updateTimelineTable()
+			var fresh []*models.EmailData
+			for _, e := range msg.Emails {
+				if _, dup := existing[e.MessageID]; !dup {
+					fresh = append(fresh, e)
+				}
+			}
+			if len(fresh) > 0 {
+				m.timelineEmails = append(fresh, m.timelineEmails...)
+				if m.timelineEmailsCache != nil {
+					m.timelineEmailsCache = append(fresh, m.timelineEmailsCache...)
+				}
+				m.updateTimelineTable()
+			}
 		}
 		var cmds []tea.Cmd
 		cmds = append(cmds, m.listenForNewEmails())

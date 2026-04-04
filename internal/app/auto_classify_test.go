@@ -196,3 +196,45 @@ func TestAutoClassifyNilClassifier(t *testing.T) {
 		// correct — nothing queued for the unclassified email
 	}
 }
+
+// TestNewEmailsMsgDeduplication verifies that NewEmailsMsg does not add emails
+// whose MessageID already exists in timelineEmails. IMAP SINCE is date-granularity,
+// so repeated polls within the same day can return already-seen emails.
+func TestNewEmailsMsgDeduplication(t *testing.T) {
+	m := makeAutoClassifyModel(nil)
+	m.timelineEmails = []*models.EmailData{
+		{MessageID: "existing-1", Subject: "Hello", Sender: "a@b.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "existing-2", Subject: "World", Sender: "c@d.com", Folder: "INBOX", Date: time.Now()},
+	}
+	m.updateTimelineTable()
+
+	// Send a batch that contains one duplicate and one new email
+	m.Update(NewEmailsMsg{
+		Emails: []*models.EmailData{
+			{MessageID: "existing-1", Subject: "Hello", Sender: "a@b.com", Folder: "INBOX", Date: time.Now()},
+			{MessageID: "brand-new", Subject: "Fresh", Sender: "e@f.com", Folder: "INBOX", Date: time.Now()},
+		},
+		Folder: "",
+	})
+
+	if len(m.timelineEmails) != 3 {
+		t.Fatalf("expected 3 emails after dedup, got %d", len(m.timelineEmails))
+	}
+	// The new email should be prepended
+	if m.timelineEmails[0].MessageID != "brand-new" {
+		t.Errorf("first email should be brand-new, got %q", m.timelineEmails[0].MessageID)
+	}
+
+	// Sending the same batch again should not add any more
+	m.Update(NewEmailsMsg{
+		Emails: []*models.EmailData{
+			{MessageID: "existing-1", Subject: "Hello", Sender: "a@b.com", Folder: "INBOX", Date: time.Now()},
+			{MessageID: "brand-new", Subject: "Fresh", Sender: "e@f.com", Folder: "INBOX", Date: time.Now()},
+		},
+		Folder: "",
+	})
+
+	if len(m.timelineEmails) != 3 {
+		t.Fatalf("expected 3 emails after second dedup, got %d (duplicates leaked)", len(m.timelineEmails))
+	}
+}
