@@ -288,8 +288,12 @@ func (m *Model) updateSummaryTable() {
 		// Store original sender for deletion
 		m.rowToSender[i] = item.sender
 
-		// Sanitize for display
-		sender := sanitizeText(item.sender)
+		// Style for display — name bright, email dim
+		senderColW := m.summaryTable.Columns()[1].Width
+		if senderColW <= 0 {
+			senderColW = 33
+		}
+		sender := styledSender(item.sender, senderColW)
 		stats := item.stats
 
 		// Format date range
@@ -708,6 +712,38 @@ func sanitizeText(text string) string {
 	return cleaned
 }
 
+// styledSender renders a sender string with the display name in bright white and
+// the <email> part in dim gray, making the two visually distinct in table columns.
+// The plain-text content is truncated to maxWidth before styling to avoid
+// confusing runewidth-based layout in the table renderer.
+func styledSender(raw string, maxWidth int) string {
+	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	emailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+
+	// Try to split "Display Name <email@domain>" format.
+	if lt := strings.Index(raw, " <"); lt > 0 && strings.HasSuffix(raw, ">") {
+		name := sanitizeText(raw[:lt])
+		email := raw[lt+1:] // keeps the "<...>" wrapper
+		combined := name + " " + email
+		if len([]rune(combined)) > maxWidth {
+			combined = string([]rune(combined)[:maxWidth-1]) + "…"
+		}
+		// Re-locate the " <" boundary in the (possibly truncated) string.
+		if lt2 := strings.Index(combined, " <"); lt2 > 0 {
+			return nameStyle.Render(combined[:lt2]) + " " + emailStyle.Render(combined[lt2+1:])
+		}
+		// If "<" was truncated away, render everything as name.
+		return nameStyle.Render(combined)
+	}
+
+	// Fallback: no "Name <email>" structure — render as plain name.
+	plain := sanitizeText(raw)
+	if len([]rune(plain)) > maxWidth {
+		plain = string([]rune(plain)[:maxWidth-1]) + "…"
+	}
+	return nameStyle.Render(plain)
+}
+
 // updateTableDimensions recalculates table and column sizes based on terminal dimensions
 func (m *Model) updateTableDimensions(width, height int) {
 	if width == 0 {
@@ -929,6 +965,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 		composeInputWidth = 10
 	}
 	m.composeTo.Width = composeInputWidth
+	m.composeCC.Width = composeInputWidth
+	m.composeBCC.Width = composeInputWidth
 	m.composeSubject.Width = composeInputWidth
 	// Body: no label, borders add 2
 	composeBodyWidth := width - chatExtra - 2
@@ -1058,7 +1096,13 @@ func (m *Model) updateTimelineTable() {
 		if email.IsStarred {
 			starDot = "★"
 		}
-		sender := unreadDot + starDot + senderPrefix + sanitizeText(email.Sender)
+		// Indicators take up to 3 chars (●★ + prefix); remainder goes to styled sender
+		indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot)) + len([]rune(senderPrefix))
+		senderAvail := maxSend - indicatorWidth
+		if senderAvail < 1 {
+			senderAvail = 1
+		}
+		sender := unreadDot + starDot + senderPrefix + styledSender(email.Sender, senderAvail)
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
@@ -2465,6 +2509,48 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// When AI panel prompt is focused, route keystrokes to it
+	if m.composeAIPanel && m.composeAIInput.Focused() {
+		if msg.String() == "enter" {
+			instruction := strings.TrimSpace(m.composeAIInput.Value())
+			if instruction == "" {
+				return m, nil
+			}
+			m.composeAILoading = true
+			m.composeAIInput.SetValue("")
+			return m, m.aiAssistCmd(instruction)
+		}
+		var cmd tea.Cmd
+		m.composeAIInput, cmd = m.composeAIInput.Update(msg)
+		return m, cmd
+	}
+
+	// When AI response textarea is focused, route to it
+	if m.composeAIPanel && m.composeAIResponse.Focused() {
+		var cmd tea.Cmd
+		m.composeAIResponse, cmd = m.composeAIResponse.Update(msg)
+		return m, cmd
+	}
+
+	// When AI panel is open, number keys 1-5 trigger quick actions
+	if m.composeAIPanel && !m.composeAIInput.Focused() {
+		actions := map[string]string{
+			"1": "Improve the clarity and professionalism of this email",
+			"2": "Shorten this email to be more concise",
+			"3": "Lengthen this email with more detail",
+			"4": "Rewrite this email in a formal tone",
+			"5": "Rewrite this email in a casual, friendly tone",
+		}
+		if instruction, ok := actions[msg.String()]; ok {
+			if m.composeBody.Value() == "" {
+				m.composeStatus = "Write something first"
+				return m, nil
+			}
+			m.composeAILoading = true
+			return m, m.aiAssistCmd(instruction)
+		}
+	}
+
 	// Autocomplete dropdown interactions take priority over normal field navigation
 	if len(m.suggestions) > 0 {
 		switch msg.String() {
@@ -2521,9 +2607,6 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.composeBody.Blur()
 		m.setFocusedPanel(m.focusedPanel)
 		return m, nil
-	case "tab":
-		m.cycleComposeField()
-		return m, nil
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":
@@ -2534,7 +2617,65 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.attachmentPathInput.SetValue("")
 		m.attachmentPathInput.Focus()
 		return m, nil
+	case "ctrl+g":
+		if m.classifier == nil {
+			m.composeStatus = "No AI backend configured"
+			return m, nil
+		}
+		m.composeAIPanel = !m.composeAIPanel
+		if m.composeAIPanel {
+			m.composeAIInput.Focus()
+		} else {
+			m.composeAIInput.Blur()
+			m.composeAIResponse.Blur()
+		}
+		return m, nil
+	case "ctrl+j":
+		if m.classifier == nil {
+			m.composeStatus = "No AI backend configured"
+			return m, nil
+		}
+		if m.composeBody.Value() == "" && m.replyContextEmail == nil {
+			m.composeStatus = "Write something first"
+			return m, nil
+		}
+		m.composeAILoading = true
+		return m, m.aiSubjectCmd()
+	case "ctrl+enter":
+		if m.composeAIPanel && m.composeAIResponse.Value() != "" {
+			m.composeBody.SetValue(m.composeAIResponse.Value())
+			m.composeAIPanel = false
+			m.composeAIDiff = ""
+			m.composeAIResponse.SetValue("")
+			m.composeAIInput.Blur()
+			m.composeAIResponse.Blur()
+			m.composeBody.Focus()
+			m.composeField = 4
+		}
+		return m, nil
+	case "tab":
+		// If a subject hint is pending, Tab accepts it
+		if m.composeAISubjectHint != "" {
+			m.composeSubject.SetValue(m.composeAISubjectHint)
+			m.composeAISubjectHint = ""
+			return m, nil
+		}
+		m.cycleComposeField()
+		return m, nil
 	case "esc":
+		// Dismiss subject hint
+		if m.composeAISubjectHint != "" {
+			m.composeAISubjectHint = ""
+			return m, nil
+		}
+		// Close AI panel
+		if m.composeAIPanel {
+			m.composeAIPanel = false
+			m.composeAIDiff = ""
+			m.composeAIInput.Blur()
+			m.composeAIResponse.Blur()
+			return m, nil
+		}
 		m.composeStatus = ""
 		return m, nil
 	}
@@ -2753,27 +2894,82 @@ func (m *Model) renderComposeView() string {
 	}
 	sb.WriteString(strings.Repeat("─", divWidth) + "\n")
 
-	// Body / Preview
-	if m.composePreview {
-		previewLabel := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("86")).
-			Render("  Preview (Ctrl+P to edit)  ")
-		sb.WriteString(previewLabel + "\n")
-		body := m.composeBody.Value()
-		if body == "" {
-			body = "_empty body_"
+	// Subject hint (shown below divider when a suggestion is pending)
+	if m.composeAISubjectHint != "" {
+		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		hintText := m.composeAISubjectHint
+		if len(hintText) > divWidth-30 && divWidth > 35 {
+			hintText = hintText[:divWidth-30] + "…"
 		}
-		if rendered, err := glamour.Render(body, "dark"); err == nil {
-			sb.WriteString(rendered)
+		hint := hintStyle.Render("✨ "+hintText) +
+			"  " + dimStyle.Render("Tab: accept  Esc: dismiss")
+		sb.WriteString(hint + "\n")
+	}
+
+	// Body + optional AI panel
+	bodyAreaWidth := m.windowWidth - 4
+	if bodyAreaWidth < 10 {
+		bodyAreaWidth = 10
+	}
+	if m.composeAIPanel {
+		// Split: panel takes ~40%, body takes the rest (min panel width = 36)
+		panelWidth := 40
+		if bodyAreaWidth < 80 {
+			panelWidth = bodyAreaWidth / 2
+		}
+		bodyWidth := bodyAreaWidth - panelWidth - 3 // 3 for gap/border
+		if bodyWidth < 20 {
+			bodyWidth = 20
+		}
+
+		var bodyPane string
+		if m.composePreview {
+			previewLabel := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("86")).
+				Render("  Preview (Ctrl+P to edit)  ")
+			body := m.composeBody.Value()
+			if body == "" {
+				body = "_empty body_"
+			}
+			rendered := body
+			if r, err := glamour.Render(body, "dark"); err == nil {
+				rendered = r
+			}
+			bodyPane = previewLabel + "\n" + lipgloss.NewStyle().Width(bodyWidth).Render(rendered)
 		} else {
-			sb.WriteString(body + "\n")
+			bodyStyle := inactiveFieldStyle.Width(bodyWidth)
+			if m.composeField == 4 {
+				bodyStyle = activeFieldStyle.Width(bodyWidth)
+			}
+			m.composeBody.SetWidth(bodyWidth)
+			bodyPane = bodyStyle.Render(m.composeBody.View())
 		}
+		panelPane := m.renderAIPanel(panelWidth)
+		sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, bodyPane, "  ", panelPane) + "\n")
 	} else {
-		bodyStyle := inactiveFieldStyle
-		if m.composeField == 4 {
-			bodyStyle = activeFieldStyle
+		// Normal full-width body / preview
+		if m.composePreview {
+			previewLabel := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("86")).
+				Render("  Preview (Ctrl+P to edit)  ")
+			sb.WriteString(previewLabel + "\n")
+			body := m.composeBody.Value()
+			if body == "" {
+				body = "_empty body_"
+			}
+			if rendered, err := glamour.Render(body, "dark"); err == nil {
+				sb.WriteString(rendered)
+			} else {
+				sb.WriteString(body + "\n")
+			}
+		} else {
+			bodyStyle := inactiveFieldStyle
+			if m.composeField == 4 {
+				bodyStyle = activeFieldStyle
+			}
+			sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 		}
-		sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 	}
 
 	// Attachment path input prompt
@@ -4205,4 +4401,316 @@ func (m *Model) deleteDraftCmd(uid uint32, folder string) tea.Cmd {
 		err := backend.DeleteDraft(uid, folder)
 		return DraftDeletedMsg{Err: err}
 	}
+}
+
+// tokenizeWords splits s into a slice of word and non-word tokens,
+// preserving whitespace and punctuation as separate tokens.
+// "Hello, world" → ["Hello", ",", " ", "world"]
+func tokenizeWords(s string) []string {
+	var tokens []string
+	var cur strings.Builder
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			}
+			tokens = append(tokens, string(r))
+		} else if r == ',' || r == '.' || r == '!' || r == '?' || r == ';' || r == ':' || r == '"' || r == '\'' || r == '(' || r == ')' {
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			}
+			tokens = append(tokens, string(r))
+		} else {
+			cur.WriteRune(r)
+		}
+	}
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens
+}
+
+// lcsTokens returns the longest common subsequence of token slices a and b.
+func lcsTokens(a, b []string) []string {
+	m, n := len(a), len(b)
+	dp := make([][]int, m+1)
+	for i := range dp {
+		dp[i] = make([]int, n+1)
+	}
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if a[i-1] == b[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else if dp[i-1][j] >= dp[i][j-1] {
+				dp[i][j] = dp[i-1][j]
+			} else {
+				dp[i][j] = dp[i][j-1]
+			}
+		}
+	}
+	result := make([]string, 0, dp[m][n])
+	i, j := m, n
+	for i > 0 && j > 0 {
+		if a[i-1] == b[j-1] {
+			result = append(result, a[i-1])
+			i--
+			j--
+		} else if dp[i-1][j] >= dp[i][j-1] {
+			i--
+		} else {
+			j--
+		}
+	}
+	for l, r := 0, len(result)-1; l < r; l, r = l+1, r-1 {
+		result[l], result[r] = result[r], result[l]
+	}
+	return result
+}
+
+// wordDiff computes a word-level diff between original and revised and returns
+// a lipgloss-styled string. Deleted tokens appear red with strikethrough,
+// added tokens appear green, unchanged tokens are unstyled.
+func wordDiff(original, revised string) string {
+	delStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("196")).
+		Strikethrough(true).
+		Background(lipgloss.Color("52"))
+	addStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("46")).
+		Background(lipgloss.Color("22"))
+
+	origTokens := tokenizeWords(original)
+	revTokens := tokenizeWords(revised)
+	common := lcsTokens(origTokens, revTokens)
+
+	var sb strings.Builder
+	i, j, k := 0, 0, 0
+	for k < len(common) {
+		for i < len(origTokens) && origTokens[i] != common[k] {
+			sb.WriteString(delStyle.Render(origTokens[i]))
+			i++
+		}
+		for j < len(revTokens) && revTokens[j] != common[k] {
+			sb.WriteString(addStyle.Render(revTokens[j]))
+			j++
+		}
+		sb.WriteString(common[k])
+		i++
+		j++
+		k++
+	}
+	for i < len(origTokens) {
+		sb.WriteString(delStyle.Render(origTokens[i]))
+		i++
+	}
+	for j < len(revTokens) {
+		sb.WriteString(addStyle.Render(revTokens[j]))
+		j++
+	}
+	return sb.String()
+}
+
+// aiAssistCmd fires an AI body-rewrite request with the given instruction.
+// If m.composeAIThread is true and m.replyContextEmail is non-nil, the
+// original email's sender and subject are included as context.
+func (m *Model) aiAssistCmd(instruction string) tea.Cmd {
+	classifier := m.classifier
+	draft := m.composeBody.Value()
+	threadCtx := m.composeAIThread
+	replyEmail := m.replyContextEmail
+
+	return func() tea.Msg {
+		if classifier == nil {
+			return AIAssistMsg{Err: fmt.Errorf("no AI backend configured")}
+		}
+		if strings.TrimSpace(draft) == "" {
+			return AIAssistMsg{Err: fmt.Errorf("draft is empty")}
+		}
+
+		var contextParts []string
+		if threadCtx && replyEmail != nil {
+			contextParts = append(contextParts,
+				fmt.Sprintf("This email is a reply to:\nFrom: %s\nSubject: %s",
+					replyEmail.Sender, replyEmail.Subject))
+		}
+		contextParts = append(contextParts, "Current draft:\n"+draft)
+		context := strings.Join(contextParts, "\n\n")
+
+		messages := []ai.ChatMessage{
+			{
+				Role: "system",
+				Content: "You are an expert email writing assistant. " +
+					"Rewrite the email body according to the user's instruction. " +
+					"Return only the rewritten body text, no explanations or preamble.",
+			},
+			{
+				Role:    "user",
+				Content: instruction + "\n\n" + context,
+			},
+		}
+		result, err := classifier.Chat(messages)
+		if err != nil {
+			return AIAssistMsg{Err: err}
+		}
+		return AIAssistMsg{Result: strings.TrimSpace(result)}
+	}
+}
+
+// aiSubjectCmd fires an AI subject-suggestion request using the current
+// draft body and, if available, the thread context.
+func (m *Model) aiSubjectCmd() tea.Cmd {
+	classifier := m.classifier
+	draft := m.composeBody.Value()
+	threadCtx := m.composeAIThread
+	replyEmail := m.replyContextEmail
+
+	return func() tea.Msg {
+		if classifier == nil {
+			return AISubjectMsg{Err: fmt.Errorf("no AI backend configured")}
+		}
+
+		var contextParts []string
+		if threadCtx && replyEmail != nil {
+			contextParts = append(contextParts,
+				fmt.Sprintf("Original email subject: %s\nFrom: %s",
+					replyEmail.Subject, replyEmail.Sender))
+		}
+		if strings.TrimSpace(draft) != "" {
+			contextParts = append(contextParts, "Email body:\n"+draft)
+		}
+		if len(contextParts) == 0 {
+			return AISubjectMsg{Err: fmt.Errorf("nothing to base a subject on")}
+		}
+
+		messages := []ai.ChatMessage{
+			{
+				Role: "system",
+				Content: "You are an email writing assistant. " +
+					"Suggest a concise, specific email subject line (maximum 10 words). " +
+					"Return only the subject line text, no quotes, no explanation.",
+			},
+			{
+				Role:    "user",
+				Content: strings.Join(contextParts, "\n\n"),
+			},
+		}
+		result, err := classifier.Chat(messages)
+		if err != nil {
+			return AISubjectMsg{Err: err}
+		}
+		return AISubjectMsg{Subject: strings.TrimSpace(result)}
+	}
+}
+
+// renderAIPanel renders the compose AI assistant panel.
+// Returns an empty string when composeAIPanel is false.
+// width is the panel's character width.
+func (m *Model) renderAIPanel(width int) string {
+	if !m.composeAIPanel {
+		return ""
+	}
+	if width < 20 {
+		width = 20
+	}
+
+	var sb strings.Builder
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")).
+		Bold(true).
+		Width(width)
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Width(width)
+	activeToggleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("25")).
+		Padding(0, 1)
+	inactiveToggleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Padding(0, 1)
+	actionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")).
+		Background(lipgloss.Color("236")).
+		Padding(0, 1).
+		Margin(0, 1, 0, 0)
+	acceptStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("28")).
+		Padding(0, 1)
+	discardStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Background(lipgloss.Color("236")).
+		Padding(0, 1)
+	spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+
+	// Title
+	sb.WriteString(titleStyle.Render("🤖 AI Assistant") + "\n")
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+
+	// Context toggle — only shown when replying (replyContextEmail != nil)
+	if m.replyContextEmail != nil {
+		sb.WriteString(labelStyle.Render("Context:") + "\n")
+		threadLabel := inactiveToggleStyle.Render("Thread")
+		draftLabel := inactiveToggleStyle.Render("Draft only")
+		if m.composeAIThread {
+			threadLabel = activeToggleStyle.Render("● Thread")
+		} else {
+			draftLabel = activeToggleStyle.Render("● Draft only")
+		}
+		sb.WriteString(threadLabel + "  " + draftLabel + "\n\n")
+	}
+
+	// Quick action buttons
+	actions := []string{"Improve", "Shorten", "Lengthen", "Formal", "Casual"}
+	var actionRow strings.Builder
+	for _, a := range actions {
+		actionRow.WriteString(actionStyle.Render(a))
+	}
+	sb.WriteString(actionRow.String() + "\n\n")
+
+	// Free-form prompt input
+	sb.WriteString(labelStyle.Render("Custom prompt:") + "\n")
+	m.composeAIInput.Width = width - 2
+	sb.WriteString(m.composeAIInput.View() + "\n\n")
+
+	// Loading spinner
+	if m.composeAILoading {
+		sb.WriteString(spinnerStyle.Render("⠋ Thinking…") + "\n")
+		return lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("86")).
+			Width(width).
+			Render(sb.String())
+	}
+
+	// Diff view (if result available)
+	if m.composeAIDiff != "" {
+		sb.WriteString(labelStyle.Render("Changes:") + "\n")
+		diffStyle := lipgloss.NewStyle().
+			Width(width - 2).
+			MaxWidth(width - 2)
+		sb.WriteString(diffStyle.Render(m.composeAIDiff) + "\n\n")
+	}
+
+	// Editable response textarea
+	if m.composeAIResponse.Value() != "" || m.composeAIDiff != "" {
+		sb.WriteString(labelStyle.Render("Suggestion (edit freely):") + "\n")
+		m.composeAIResponse.SetWidth(width - 2)
+		m.composeAIResponse.SetHeight(8)
+		sb.WriteString(m.composeAIResponse.View() + "\n\n")
+
+		// Accept / Discard
+		sb.WriteString(acceptStyle.Render("✓ Accept") + "  " + discardStyle.Render("Discard") + "\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(
+			"Ctrl+Enter: accept  Esc: discard") + "\n")
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("86")).
+		Width(width).
+		Render(sb.String())
 }

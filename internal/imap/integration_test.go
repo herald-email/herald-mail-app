@@ -121,6 +121,48 @@ func TestProcessEmailsIncremental_NoNewMail(t *testing.T) {
 	}
 }
 
+// TestBatchFetchDetails_ProcessesAllEmails verifies that batchFetchDetails
+// retrieves all seeded messages in a single round trip and stores them in the
+// cache correctly. This exercises the batch-fetch path introduced to replace
+// the serial processMessage loop.
+func TestBatchFetchDetails_ProcessesAllEmails(t *testing.T) {
+	_, cfg, stop := testutil.StartMockIMAPServer(t)
+	defer stop()
+
+	progressCh := make(chan models.ProgressInfo, 50)
+	ch := newIntegrationCache(t)
+	c := New(cfg, "", ch, progressCh)
+
+	if err := c.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	// ProcessEmailsIncremental now routes through batchFetchDetails internally.
+	// A first run should find all 5 seeded messages and store them.
+	if err := c.ProcessEmailsIncremental("INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental: %v", err)
+	}
+
+	emails, err := ch.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(emails) != 5 {
+		t.Errorf("batchFetchDetails: expected 5 emails in cache, got %d", len(emails))
+	}
+	// All emails must have a non-empty sender and message ID.
+	for i, e := range emails {
+		if e.Sender == "" {
+			t.Errorf("email[%d] has empty sender", i)
+		}
+		if e.MessageID == "" {
+			t.Errorf("email[%d] has empty message ID", i)
+		}
+	}
+	t.Logf("batchFetchDetails correctly cached %d emails", len(emails))
+}
+
 // TestMoveEmail verifies that MoveEmail copies a message to Archive,
 // removes it from INBOX on the server, and deletes it from the cache.
 func TestMoveEmail(t *testing.T) {

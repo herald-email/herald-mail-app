@@ -339,16 +339,22 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 	if err := <-done; err != nil {
 		return fmt.Errorf("fetch envelopes: %w", err)
 	}
-	for i, seq := range newSeqNums {
+	if len(newSeqNums) > 0 {
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "fetching",
-			Current: i + 1,
+			Current: 0,
 			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetching new emails... (%d/%d)", i+1, len(newSeqNums)),
+			Message: fmt.Sprintf("Fetching %d new emails...", len(newSeqNums)),
 		})
-		if err := c.processMessage(seq, folder); err != nil {
+		if err := c.batchFetchDetails(newSeqNums, folder); err != nil {
 			return err
 		}
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "fetching",
+			Current: len(newSeqNums),
+			Total:   len(newSeqNums),
+			Message: fmt.Sprintf("Fetched %d new emails", len(newSeqNums)),
+		})
 	}
 	return nil
 }
@@ -374,16 +380,22 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 	if err := <-done; err != nil {
 		return fmt.Errorf("uid fetch new range: %w", err)
 	}
-	for i, seq := range newSeqNums {
+	if len(newSeqNums) > 0 {
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "fetching",
-			Current: i + 1,
+			Current: 0,
 			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetching new emails... (%d/%d)", i+1, len(newSeqNums)),
+			Message: fmt.Sprintf("Fetching %d new emails...", len(newSeqNums)),
 		})
-		if err := c.processMessage(seq, folder); err != nil {
+		if err := c.batchFetchDetails(newSeqNums, folder); err != nil {
 			return err
 		}
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "fetching",
+			Current: len(newSeqNums),
+			Total:   len(newSeqNums),
+			Message: fmt.Sprintf("Fetched %d new emails", len(newSeqNums)),
+		})
 	}
 	return nil
 }
@@ -582,6 +594,115 @@ func (c *Client) ProcessEmails(folder string) error {
 		// Sending "complete" from ProcessEmails leaves a stale message in the
 		// buffered channel that poisons the next folder switch.
 		logger.Info("No new emails in %s (all %d cached)", folder, len(cachedIDs))
+	}
+
+	return nil
+}
+
+// batchFetchDetails fetches Envelope, UID, Flags, Size, and BodyStructure for
+// all seqNums in a single IMAP round trip, then persists results in one SQLite
+// transaction. This replaces serial processMessage calls for large batches.
+func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
+	if len(seqNums) == 0 {
+		return nil
+	}
+	seqset := new(imap.SeqSet)
+	for _, s := range seqNums {
+		seqset.AddNum(s)
+	}
+	items := []imap.FetchItem{
+		imap.FetchEnvelope,
+		imap.FetchUid,
+		imap.FetchRFC822Size,
+		imap.FetchBodyStructure,
+		imap.FetchFlags,
+	}
+	messages := make(chan *imap.Message, len(seqNums))
+	done := make(chan error, 1)
+	go func() {
+		done <- c.client.Fetch(seqset, items, messages)
+	}()
+
+	var emails []*models.EmailData
+	var allFrom []models.ContactAddr
+	var allTo []models.ContactAddr
+
+	for msg := range messages {
+		if msg == nil {
+			continue
+		}
+		if msg.Envelope == nil {
+			logger.Warn("batchFetchDetails: no envelope for seq %d, skipping", msg.SeqNum)
+			continue
+		}
+
+		sender := ""
+		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+			addr := msg.Envelope.From[0]
+			if addr.MailboxName != "" && addr.HostName != "" {
+				sender = addr.MailboxName + "@" + addr.HostName
+			}
+		}
+		if sender == "" {
+			logger.Warn("batchFetchDetails: empty sender for seq %d, skipping", msg.SeqNum)
+			continue
+		}
+
+		messageID := msg.Envelope.MessageId
+		if messageID == "" && msg.Uid > 0 {
+			messageID = fmt.Sprintf("uid-%d", msg.Uid)
+		}
+
+		hasAttach := false
+		if msg.BodyStructure != nil {
+			hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
+		}
+
+		isRead := false
+		for _, flag := range msg.Flags {
+			if flag == imap.SeenFlag {
+				isRead = true
+				break
+			}
+		}
+
+		emails = append(emails, &models.EmailData{
+			MessageID:      messageID,
+			UID:            msg.Uid,
+			Sender:         sender,
+			Subject:        msg.Envelope.Subject,
+			Date:           msg.Envelope.Date,
+			Size:           int(msg.Size),
+			HasAttachments: hasAttach,
+			IsRead:         isRead,
+			Folder:         folder,
+		})
+
+		allFrom = append(allFrom, extractEnvelopeAddrs(msg.Envelope.From)...)
+		var toAddrs []models.ContactAddr
+		toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.To)...)
+		toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Cc)...)
+		toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Bcc)...)
+		allTo = append(allTo, toAddrs...)
+	}
+
+	if err := <-done; err != nil {
+		return fmt.Errorf("batchFetchDetails: fetch: %w", err)
+	}
+
+	if err := c.cache.BatchCacheEmails(emails); err != nil {
+		return fmt.Errorf("batchFetchDetails: cache: %w", err)
+	}
+
+	if len(allFrom) > 0 {
+		if err := c.cache.UpsertContacts(allFrom, "from"); err != nil {
+			logger.Warn("batchFetchDetails: UpsertContacts (from): %v", err)
+		}
+	}
+	if len(allTo) > 0 {
+		if err := c.cache.UpsertContacts(allTo, "to"); err != nil {
+			logger.Warn("batchFetchDetails: UpsertContacts (to): %v", err)
+		}
 	}
 
 	return nil

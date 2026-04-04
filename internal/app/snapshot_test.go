@@ -138,3 +138,21 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 	tm.Quit()
 	requireGolden(t, "testdata/snapshots/compose_with_cc_bcc.txt", readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
 }
+
+func TestSnapshot_ComposeAIPanel(t *testing.T) {
+	m := testModelWithEmails(nil)
+	m.activeTab = tabCompose
+	m.composeField = 4
+	m.composeBody.SetValue("Hey Alice,\n\nCan we meet tomorrow for a quick sync?\n\nThanks")
+	m.composeAIPanel = true
+	// Pre-populate with a fake AI result so the diff renders
+	original := m.composeBody.Value()
+	revised := "Hi Alice,\n\nAre you available tomorrow for a quick catch-up?\n\nBest regards"
+	m.composeAIDiff = wordDiff(original, revised)
+	m.composeAIResponse.SetValue(revised)
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
+	time.Sleep(200 * time.Millisecond)
+	tm.Quit()
+	requireGolden(t, "testdata/snapshots/compose_ai_panel.txt",
+		readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+}

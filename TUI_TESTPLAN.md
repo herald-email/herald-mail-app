@@ -1193,6 +1193,96 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 ---
 
+### TC-54 — Compose CC/BCC fields render at full width
+
+**Goal:** Verify CC and BCC text inputs span the full compose column width (regression for the "tiny box" bug where they only showed a single character).
+
+**Setup:** `./bin/herald --demo`, navigate to Compose tab (`2` key).
+
+**Steps:**
+1. Open Compose tab
+2. Observe the To, CC, and BCC input fields
+
+**Expected:**
+- All three input fields (To, CC, BCC) span the same full width as each other
+- No field shows as a tiny one-character box
+- Typing into CC and BCC fields shows text as expected
+
+**Automated coverage:** `TestComposeCCBCCWidth_MatchesToField` in `internal/app/compose_layout_test.go`
+
+---
+
+### TC-55 — Sender name and email address shown in distinct colors
+
+**Goal:** Verify that in the Cleanup sender list and Timeline sender column, the display name and `<email>` address are rendered in visually distinct colors (near-white name, dim gray email).
+
+**Setup:** `./bin/herald --demo`, use a 220×50 terminal.
+
+**Steps:**
+1. Open Cleanup tab (`3` key) — observe sender column
+2. Open Timeline tab (`1` key) — observe sender column in email list
+3. Look for senders in `"Display Name <email@domain>"` format
+
+**Expected:**
+- Display name appears brighter/near-white
+- Email address appears dimmer/gray
+- Both are readable and don't overflow their column width
+- Plain email-only addresses (no name) render gracefully without errors
+
+**Automated coverage:** `TestStyledSender_*` tests in `internal/app/wordDiff_test.go`
+
+---
+
+### TC-56 — AI Writing Assistant panel (Compose tab)
+
+**Goal:** Verify the Compose AI assistant panel opens, quick actions work, subject suggestion works, and accept/discard function correctly.
+
+**Setup:** `./bin/herald --config proton.yaml` with Ollama running, Compose tab.
+
+**Steps:**
+1. Open Compose tab (`2` key), type some body text
+2. Press `Ctrl+G` — AI panel should appear on the right, compose body narrows
+3. Press a quick action (e.g. arrow to "Improve", Enter) — panel shows loading, then suggestion
+4. Observe word-level diff: deleted words in red strikethrough, additions in green
+5. Edit the suggestion text directly in the panel
+6. Press `Ctrl+Enter` — suggestion replaces compose body; panel closes
+7. Open panel again (`Ctrl+G`), press `Esc` — panel closes, body unchanged
+8. Press `Ctrl+J` — subject hint appears below Subject field
+9. Press `Tab` — hint accepted into Subject field; or `Esc` to dismiss
+
+**Expected:**
+- `Ctrl+G` toggles panel; compose body narrows to ~60% width
+- Loading spinner shows while AI is working
+- Word-level diff highlights only changed words
+- `Ctrl+Enter` copies edited suggestion to body
+- `Ctrl+J` + `Tab` accepts subject hint
+- No AI configured → status bar shows "No AI backend configured", no panic
+
+**Automated coverage:** `TestAiAssistCmd_NilClassifier`, `TestAiSubjectCmd_NilClassifier`, `TestComposeAIFields_Initialized`
+
+---
+
+### TC-57 — Reply pre-fills compose with thread context for AI
+
+**Goal:** Verify that pressing `R` on a Timeline email pre-fills Compose and captures reply context so the AI assistant uses thread context.
+
+**Setup:** `./bin/herald --demo`, Timeline tab with emails loaded.
+
+**Steps:**
+1. Navigate to an email in Timeline (`j`/`k`)
+2. Press `R` — Compose opens pre-filled with To, Subject (Re: ...), quoted body
+3. Press `Ctrl+G` to open AI panel
+4. Observe context toggle shows "Thread" (not "Draft only") when replying
+5. Fire a quick action — AI should include thread context in its rewrite
+
+**Expected:**
+- Compose pre-filled correctly (To, Subject with Re:, quoted reply)
+- AI panel shows Thread context enabled when replying
+- Draft-only context toggle switches to "Draft only" mode
+- After sending or navigating away, reply context is cleared for next compose
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

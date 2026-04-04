@@ -520,6 +520,54 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 	return nil
 }
 
+// BatchCacheEmails inserts or updates multiple emails in a single SQLite transaction.
+// Use this instead of repeated CacheEmail calls to reduce disk flush overhead.
+func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
+	if len(emails) == 0 {
+		return nil
+	}
+	tx, err := c.db.Begin()
+	if err != nil {
+		return fmt.Errorf("BatchCacheEmails: begin tx: %w", err)
+	}
+	query := `
+		INSERT OR REPLACE INTO emails
+		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("BatchCacheEmails: prepare: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now().Format(time.RFC3339)
+	for _, email := range emails {
+		hasAttachments := 0
+		if email.HasAttachments {
+			hasAttachments = 1
+		}
+		isRead := 0
+		if email.IsRead {
+			isRead = 1
+		}
+		isStarred := 0
+		if email.IsStarred {
+			isStarred = 1
+		}
+		if _, err = stmt.Exec(
+			email.MessageID, email.UID, email.Sender, email.Subject,
+			email.Date.Format(time.RFC3339), email.Size, hasAttachments,
+			email.Folder, now, isRead, isStarred,
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("BatchCacheEmails: exec for %s: %w", email.MessageID, err)
+		}
+	}
+	return tx.Commit()
+}
+
 // MarkRead marks an email as read in the cache
 func (c *Cache) MarkRead(messageID string) error {
 	_, err := c.db.Exec(`UPDATE emails SET is_read=1 WHERE message_id=?`, messageID)

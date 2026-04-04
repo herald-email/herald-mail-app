@@ -239,6 +239,18 @@ type ContactSuggestionsMsg struct {
 	Contacts []models.ContactData
 }
 
+// AIAssistMsg carries the result of an AI body-rewrite request.
+type AIAssistMsg struct {
+	Result string
+	Err    error
+}
+
+// AISubjectMsg carries the result of an AI subject-suggestion request.
+type AISubjectMsg struct {
+	Subject string
+	Err     error
+}
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -377,6 +389,16 @@ type Model struct {
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
 	suggestionIdx int                  // selected row index (-1 = none selected)
+
+	// Compose AI panel (Ctrl+G)
+	composeAIPanel       bool
+	composeAIInput       textinput.Model // free-form prompt
+	composeAIResponse    textarea.Model  // editable AI rewrite
+	composeAIDiff        string          // lipgloss-styled word diff (display only)
+	composeAILoading     bool
+	composeAIThread      bool              // true = include reply context in prompt
+	composeAISubjectHint string            // pending subject suggestion ("" = none)
+	replyContextEmail    *models.EmailData // set when reply is initiated; nil for new emails
 	attachmentPathInput  textinput.Model
 	attachmentInputActive bool
 
@@ -619,6 +641,16 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	composeBody.SetHeight(15)
 	composeBody.CharLimit = 0 // unlimited
 
+	composeAIInput := textinput.New()
+	composeAIInput.Placeholder = "Ask AI anything about this email…"
+	composeAIInput.CharLimit = 512
+
+	composeAIResponse := textarea.New()
+	composeAIResponse.Placeholder = "AI suggestion will appear here…"
+	composeAIResponse.SetWidth(38)
+	composeAIResponse.SetHeight(8)
+	composeAIResponse.CharLimit = 0
+
 	// Create deletion channels
 	deletionRequestCh := make(chan models.DeletionRequest, 10)
 	deletionResultCh := make(chan models.DeletionResult, 10)
@@ -671,6 +703,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		composeSubject:     composeSubject,
 		composeBody:        composeBody,
 		suggestionIdx:      -1,
+		composeAIInput:     composeAIInput,
+		composeAIResponse:  composeAIResponse,
 		baseStyle:          baseStyle,
 		headerStyle:        headerStyle,
 		loadingStyle:       loadingStyle,
@@ -939,6 +973,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeSubject.SetValue("")
 			m.composeBody.SetValue("")
 			m.composeAttachments = nil
+			// Clear reply/AI context after successful send
+			m.replyContextEmail = nil
+			m.composeAIThread = false
+			m.composeAIPanel = false
+			m.composeAIDiff = ""
+			m.composeAISubjectHint = ""
+			m.composeAIResponse.SetValue("")
+			m.composeAILoading = false
 			// Delete the auto-saved draft (if any) since the email was sent
 			if m.lastDraftUID != 0 {
 				cmd := m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder)
@@ -1101,6 +1143,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.suggestionIdx = 0
 		}
+		return m, nil
+
+	case AIAssistMsg:
+		m.composeAILoading = false
+		if msg.Err != nil {
+			m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			return m, nil
+		}
+		original := m.composeBody.Value()
+		m.composeAIDiff = wordDiff(original, msg.Result)
+		m.composeAIResponse.SetValue(msg.Result)
+		return m, nil
+
+	case AISubjectMsg:
+		m.composeAILoading = false
+		if msg.Err != nil {
+			m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			return m, nil
+		}
+		m.composeAISubjectHint = strings.TrimSpace(msg.Subject)
 		return m, nil
 
 	case ValidIDsMsg:
@@ -1860,6 +1922,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.composeTo.Focus()
 			m.composeSubject.Blur()
 			m.composeBody.Blur()
+			// Clear reply/AI context for new compose (not a reply)
+			m.replyContextEmail = nil
+			m.composeAIThread = false
+			m.composeAIPanel = false
+			m.composeAIDiff = ""
+			m.composeAISubjectHint = ""
+			m.composeAIResponse.SetValue("")
+			m.composeAILoading = false
 		}
 		return m, nil
 
@@ -2385,6 +2455,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					email = ref.group.emails[ref.emailIdx]
 				}
 				m.activeTab = tabCompose
+				m.replyContextEmail = email
+				m.composeAIThread = true
 				m.composeTo.SetValue(email.Sender)
 				subject := email.Subject
 				if !strings.HasPrefix(strings.ToLower(subject), "re:") {
