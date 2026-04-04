@@ -292,11 +292,7 @@ func (m *Model) updateSummaryTable() {
 		if senderColW <= 0 {
 			senderColW = 33
 		}
-		senderPlain := sanitizeText(item.sender)
-		if len([]rune(senderPlain)) > senderColW {
-			senderPlain = string([]rune(senderPlain)[:senderColW-1]) + "…"
-		}
-		sender := senderPlain
+		sender := styledSender(item.sender, senderColW)
 		stats := item.stats
 
 		// Format date range
@@ -1104,11 +1100,7 @@ func (m *Model) updateTimelineTable() {
 		if senderAvail < 1 {
 			senderAvail = 1
 		}
-		senderPlain := sanitizeText(email.Sender)
-		if len([]rune(senderPlain)) > senderAvail {
-			senderPlain = string([]rune(senderPlain)[:senderAvail-1]) + "…"
-		}
-		sender := unreadDot + starDot + senderPrefix + senderPlain
+		sender := unreadDot + starDot + senderPrefix + styledSender(email.Sender, senderAvail)
 		att := "N"
 		if email.HasAttachments {
 			att = "Y"
@@ -1227,7 +1219,7 @@ func (m *Model) renderTimelineView() string {
 	if m.timelineEmails != nil && len(m.timelineEmails) == 0 {
 		tableView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 	} else {
-		tableView = m.baseStyle.Render(m.timelineTable.View())
+		tableView = m.baseStyle.Render(renderStyledTableView(&m.timelineTable, 0))
 	}
 
 	var mainContent string

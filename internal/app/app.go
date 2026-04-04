@@ -2700,9 +2700,9 @@ func (m *Model) renderMainView() string {
 			if m.stats != nil && len(m.stats) == 0 {
 				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 			} else {
-				summaryView = m.baseStyle.Render(m.summaryTable.View())
+				summaryView = m.baseStyle.Render(renderStyledTableView(&m.summaryTable, 1))
 			}
-			detailsView := m.baseStyle.Render(m.detailsTable.View())
+			detailsView := m.baseStyle.Render(renderStyledTableView(&m.detailsTable, 2))
 			if m.showCleanupPreview {
 				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
 				previewPanel := m.renderCleanupPreview()
