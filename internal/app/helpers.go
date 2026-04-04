@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -1401,7 +1403,7 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Body — wrap/render once and cache; re-render only if panel width changed
-		body := stripInvisibleChars(m.emailBody.TextPlain)
+		body := linkifyURLs(stripInvisibleChars(m.emailBody.TextPlain))
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -1581,7 +1583,7 @@ func (m *Model) renderFullScreenEmail() string {
 			maxBodyLines = 1
 		}
 
-		body := stripInvisibleChars(m.emailBody.TextPlain)
+		body := linkifyURLs(stripInvisibleChars(m.emailBody.TextPlain))
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -1854,7 +1856,7 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.cleanupEmailBody != nil {
-		body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
+		body := linkifyURLs(stripInvisibleChars(m.cleanupEmailBody.TextPlain))
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -3509,8 +3511,50 @@ func stripInvisibleChars(s string) string {
 	return b.String()
 }
 
-// Uses rune-based indexing so multi-byte characters (CJK, accented, emoji)
-// are never split mid-codepoint.
+// urlRe matches http/https URLs.
+var urlRe = regexp.MustCompile(`https?://[^\s<>\[\](){}"'` + "`" + `]+`)
+
+// linkifyURLs replaces raw URLs with OSC 8 terminal hyperlinks.
+// The visible text is a shortened version (domain + truncated path);
+// the full URL is embedded in the escape sequence so terminals can open it on click.
+func linkifyURLs(text string) string {
+	return urlRe.ReplaceAllStringFunc(text, func(raw string) string {
+		// Trim trailing punctuation that's likely not part of the URL
+		trimmed := strings.TrimRight(raw, ".,;:!?)")
+		label := shortenURL(trimmed)
+		// OSC 8: \033]8;;URL\033\\ LABEL \033]8;;\033\\
+		return "\033]8;;" + trimmed + "\033\\" + label + "\033]8;;\033\\"
+	})
+}
+
+// shortenURL produces a human-readable label like "example.com/path…"
+func shortenURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		if len(raw) > 40 {
+			return raw[:37] + "..."
+		}
+		return raw
+	}
+	host := parsed.Hostname()
+	path := parsed.Path
+	if q := parsed.RawQuery; q != "" {
+		path += "?" + q
+	}
+	if path == "" || path == "/" {
+		return host
+	}
+	// Show domain + beginning of path, cap at 50 visible chars
+	full := host + path
+	if len(full) > 50 {
+		return full[:47] + "..."
+	}
+	return full
+}
+
+// wrapText wraps text to fit within width visible columns.
+// Uses ansi.StringWidth so ANSI escape sequences (OSC 8 hyperlinks, SGR
+// styling) are not counted toward visible width.
 func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
@@ -3518,27 +3562,84 @@ func wrapText(text string, width int) []string {
 	var lines []string
 	runes := []rune(text)
 	for len(runes) > 0 {
-		if len(runes) <= width {
+		if ansi.StringWidth(string(runes)) <= width {
 			lines = append(lines, string(runes))
 			break
 		}
-		// Find last space within width
-		cut := width
-		for cut > 0 && runes[cut-1] != ' ' {
-			cut--
+		// Walk forward counting visible width to find the cut point.
+		visW := 0
+		cut := 0
+		for cut < len(runes) {
+			// Check for escape sequence start (ESC)
+			if runes[cut] == '\033' {
+				// Skip the entire escape sequence without adding to visW.
+				seqEnd := skipEscapeSeq(runes, cut)
+				cut = seqEnd
+				continue
+			}
+			rw := ansi.StringWidth(string(runes[cut : cut+1]))
+			if visW+rw > width {
+				break
+			}
+			visW += rw
+			cut++
 		}
-		if cut == 0 {
-			cut = width
+		// Try to break at the last space within the visible width.
+		bestCut := cut
+		for bestCut > 0 && runes[bestCut-1] != ' ' {
+			bestCut--
 		}
-		lines = append(lines, string(runes[:cut]))
-		// Trim leading spaces from the remainder
-		rest := runes[cut:]
+		if bestCut == 0 {
+			bestCut = cut
+		}
+		if bestCut == 0 && cut == 0 {
+			// Safety: avoid infinite loop on zero-width content
+			bestCut = 1
+		}
+		lines = append(lines, string(runes[:bestCut]))
+		rest := runes[bestCut:]
 		for len(rest) > 0 && rest[0] == ' ' {
 			rest = rest[1:]
 		}
 		runes = rest
 	}
 	return lines
+}
+
+// skipEscapeSeq advances past an escape sequence starting at runes[pos].
+// Handles OSC (ESC ]) and CSI (ESC [) sequences.
+func skipEscapeSeq(runes []rune, pos int) int {
+	if pos >= len(runes) || runes[pos] != '\033' {
+		return pos + 1
+	}
+	pos++ // skip ESC
+	if pos >= len(runes) {
+		return pos
+	}
+	switch runes[pos] {
+	case ']': // OSC sequence — terminated by ST (ESC \) or BEL (\a)
+		pos++
+		for pos < len(runes) {
+			if runes[pos] == '\a' {
+				return pos + 1
+			}
+			if runes[pos] == '\033' && pos+1 < len(runes) && runes[pos+1] == '\\' {
+				return pos + 2
+			}
+			pos++
+		}
+	case '[': // CSI sequence — terminated by 0x40-0x7E
+		pos++
+		for pos < len(runes) {
+			if runes[pos] >= 0x40 && runes[pos] <= 0x7E {
+				return pos + 1
+			}
+			pos++
+		}
+	default:
+		// Unknown sequence type, just skip the ESC
+	}
+	return pos
 }
 
 // handleNavigation handles up/down navigation for the focused panel
@@ -4357,7 +4458,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))
 		} else if m.contactPreviewBody != nil {
-			body := m.contactPreviewBody.TextPlain
+			body := linkifyURLs(m.contactPreviewBody.TextPlain)
 			if body == "" {
 				body = "(No text content)"
 			}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,6 +239,62 @@ func TestBuildThreadGroups_SingleEmail(t *testing.T) {
 	}
 	if len(groups[0].emails) != 1 {
 		t.Errorf("expected 1 email in group, got %d", len(groups[0].emails))
+	}
+}
+
+// --- linkifyURLs and wrapText ---
+
+func TestShortenURL(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"https://example.com", "example.com"},
+		{"https://example.com/", "example.com"},
+		{"https://example.com/path/to/page", "example.com/path/to/page"},
+		// Long URL gets truncated at 50 chars (47 + "...")
+		{"https://link.tesla.com/ls/click?upn=u001.H5C2HFm3je6EmjZ4beiadaSm-2B4nZaA6qcP02EtsQ52UPTrOhQONlsTHMt2JXHIqR", "link.tesla.com/ls/click?upn=u001.H5C2HFm3je6Emj..."},
+	}
+	for _, tt := range tests {
+		got := shortenURL(tt.input)
+		if got != tt.want {
+			t.Errorf("shortenURL(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestLinkifyURLs(t *testing.T) {
+	input := "Visit https://example.com/page for details."
+	result := linkifyURLs(input)
+	// Should contain OSC 8 escape sequences
+	if !strings.Contains(result, "\033]8;;") {
+		t.Errorf("expected OSC 8 sequence in output, got: %q", result)
+	}
+	// Should contain the shortened label
+	if !strings.Contains(result, "example.com/page") {
+		t.Errorf("expected shortened label in output, got: %q", result)
+	}
+	// The raw URL should only appear inside the OSC 8 escape, not as standalone visible text.
+	// Strip all OSC 8 sequences and check the URL is gone from visible content.
+	visible := strings.ReplaceAll(result, "\033]8;;https://example.com/page\033\\", "")
+	visible = strings.ReplaceAll(visible, "\033]8;;\033\\", "")
+	if strings.Contains(visible, "https://example.com/page") {
+		t.Errorf("raw URL should not appear as visible text, got: %q", visible)
+	}
+}
+
+func TestWrapTextWithOSC8(t *testing.T) {
+	// A line with an OSC 8 link should wrap based on visible width only
+	link := "\033]8;;https://example.com\033\\example.com\033]8;;\033\\"
+	text := "Click " + link + " for info"
+	// Visible text: "Click example.com for info" = 26 chars
+	lines := wrapText(text, 30)
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line at width 30, got %d: %v", len(lines), lines)
+	}
+	// At width 20, should wrap
+	lines = wrapText(text, 20)
+	if len(lines) < 2 {
+		t.Errorf("expected 2+ lines at width 20, got %d", len(lines))
 	}
 }
 
