@@ -1111,7 +1111,7 @@ func (m *Model) updateTimelineTable() {
 			tag = m.classifications[email.MessageID]
 		}
 		return table.Row{
-			trunc(sender, maxSend),
+			sender,
 			trunc(subject, maxSubj),
 			dateStr,
 			fmt.Sprintf("%.1f", float64(email.Size)/1024),
@@ -1184,8 +1184,24 @@ func (m *Model) updateTimelineTable() {
 				tag = m.classifications[newest.MessageID]
 			}
 			threadSubj := fmt.Sprintf("[%d] %s", len(g.emails), subject)
+			// Build sender cell with the same indicators as single-email rows
+			// so columns stay aligned across all timeline rows.
+			unreadDot := " "
+			if !newest.IsRead {
+				unreadDot = "●"
+			}
+			starDot := " "
+			if newest.IsStarred {
+				starDot = "★"
+			}
+			indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot))
+			senderAvail := maxSend - indicatorWidth
+			if senderAvail < 1 {
+				senderAvail = 1
+			}
+			threadSender := unreadDot + starDot + styledSender(newest.Sender, senderAvail)
 			rows = append(rows, table.Row{
-				trunc(sanitizeText(newest.Sender), maxSend),
+				threadSender,
 				trunc(threadSubj, maxSubj),
 				dateStr,
 				fmt.Sprintf("%.1f", float64(totalSize)/1024),
@@ -1398,7 +1414,13 @@ func (m *Model) renderEmailPreview() string {
 		sb.WriteString(renderBodyLines(m.bodyWrappedLines, m.bodyScrollOffset, end,
 			m.visualMode, m.visualStart, m.visualEnd))
 
-		// Scroll indicator
+		// Pad short content so the indicator always sits at the bottom of the panel.
+		shownLines := end - m.bodyScrollOffset
+		for i := shownLines; i < visibleLines; i++ {
+			sb.WriteString("\n")
+		}
+
+		// Scroll indicator (pinned to bottom)
 		if totalLines > visibleLines {
 			pct := 0
 			if maxOffset > 0 {
@@ -1565,7 +1587,13 @@ func (m *Model) renderFullScreenEmail() string {
 		sb.WriteString(renderBodyLines(m.bodyWrappedLines, m.bodyScrollOffset, end,
 			m.visualMode, m.visualStart, m.visualEnd))
 
-		// Scroll indicator
+		// Pad short content so the indicator always sits at the bottom of the panel.
+		visibleLines := end - m.bodyScrollOffset
+		for i := visibleLines; i < maxBodyLines; i++ {
+			sb.WriteString("\n")
+		}
+
+		// Scroll indicator (pinned to bottom)
 		if totalLines > maxBodyLines {
 			pct := 0
 			if maxOffset > 0 {
@@ -1829,6 +1857,12 @@ func (m *Model) renderCleanupPreview() string {
 			end = totalLines
 		}
 		sb.WriteString(strings.Join(m.cleanupBodyWrappedLines[m.cleanupBodyScrollOffset:end], "\n"))
+
+		// Pad short content so the indicator always sits at the bottom of the panel.
+		visibleLines := end - m.cleanupBodyScrollOffset
+		for i := visibleLines; i < maxBodyLines; i++ {
+			sb.WriteString("\n")
+		}
 
 		escHint := "Esc: close"
 		zHint := "z: full-screen"
@@ -4087,6 +4121,13 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		m.contactSearchMode = "semantic"
 		m.contactSearch = ""
 	case "esc":
+		// Close inline email preview first, then detail, then search
+		if m.contactPreviewEmail != nil {
+			m.contactPreviewEmail = nil
+			m.contactPreviewBody = nil
+			m.contactPreviewLoading = false
+			return m, nil
+		}
 		m.contactSearchMode = ""
 		m.contactSearch = ""
 		m.contactsFiltered = m.contactsList
@@ -4128,19 +4169,13 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 				return m, m.loadContactDetail(c)
 			}
 		} else {
-			// Open selected email in Timeline tab
+			// Open selected email inline in the contact detail panel
 			if len(m.contactDetailEmails) > 0 && m.contactDetailIdx < len(m.contactDetailEmails) {
 				email := m.contactDetailEmails[m.contactDetailIdx]
-				m.activeTab = tabTimeline
-				m.contactFocusPanel = 0
-				m.setFocusedPanel(panelTimeline)
-				m.selectedTimelineEmail = email
-				m.emailBody = nil
-				m.emailBodyLoading = true
-				return m, tea.Batch(
-					m.loadTimelineEmails(),
-					m.loadEmailBodyCmd(email.Folder, email.UID),
-				)
+				m.contactPreviewEmail = email
+				m.contactPreviewBody = nil
+				m.contactPreviewLoading = true
+				return m, m.loadEmailBodyCmd(email.Folder, email.UID)
 			}
 		}
 	case "e":
@@ -4271,7 +4306,42 @@ func (m *Model) renderContactsTab(width, height int) string {
 	// --- Right panel: contact detail ---
 	var rightSb strings.Builder
 
-	if m.contactDetail == nil {
+	if m.contactPreviewEmail != nil {
+		// Inline email preview within the Contacts tab
+		email := m.contactPreviewEmail
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+		rightSb.WriteString(boldStyle.Render("From: "+sanitizeText(email.Sender)) + "\n")
+		rightSb.WriteString(dimStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
+		rightSb.WriteString(boldStyle.Render("Subj: "+sanitizeText(email.Subject)) + "\n")
+		rightSb.WriteString(strings.Repeat("─", rightW-1) + "\n")
+		if m.contactPreviewLoading {
+			rightSb.WriteString(dimStyle.Render("Loading…"))
+		} else if m.contactPreviewBody != nil {
+			body := m.contactPreviewBody.TextPlain
+			if body == "" {
+				body = "(No text content)"
+			}
+			innerW := rightW - 1
+			if innerW < 10 {
+				innerW = 10
+			}
+			lines := wrapLines(body, innerW)
+			maxLines := contentH - 6 // header(4) + hint(1) + margin
+			if maxLines < 1 {
+				maxLines = 1
+			}
+			if len(lines) > maxLines {
+				lines = lines[:maxLines]
+			}
+			rightSb.WriteString(strings.Join(lines, "\n"))
+			// Pad to push hint to bottom
+			for i := len(lines); i < maxLines; i++ {
+				rightSb.WriteString("\n")
+			}
+		}
+		rightSb.WriteString("\n" + dimStyle.Render(" Esc: back to contact"))
+	} else if m.contactDetail == nil {
 		rightSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).
 			Render("  Select a contact and press Enter"))
 	} else {

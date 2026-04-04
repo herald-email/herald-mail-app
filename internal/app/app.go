@@ -468,6 +468,11 @@ type Model struct {
 	contactDetailIdx   int
 	contactFocusPanel  int // 0 = list, 1 = detail
 
+	// Inline email preview within Contacts tab
+	contactPreviewEmail *models.EmailData
+	contactPreviewBody  *models.EmailBody
+	contactPreviewLoading bool
+
 	// Config
 	cfg        *config.Config
 	configPath string
@@ -1188,6 +1193,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.loadTimelineEmails()
 
 	case EmailBodyMsg:
+		// If this body load was triggered from the Contacts tab, handle it there.
+		if m.contactPreviewLoading {
+			m.contactPreviewLoading = false
+			if msg.Err != nil {
+				m.contactPreviewBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
+			} else {
+				m.contactPreviewBody = msg.Body
+			}
+			return m, nil
+		}
 		m.emailBodyLoading = false
 		m.selectedAttachment = 0 // reset attachment cursor for new email
 		// Reset quick reply state for the new email
@@ -1982,6 +1997,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.activeTab = tabContacts
 			m.contactFocusPanel = 0
+			m.contactDetail = nil
+			m.contactDetailEmails = nil
+			m.contactPreviewEmail = nil
+			m.contactPreviewBody = nil
+			m.contactPreviewLoading = false
 			extraCmds = append(extraCmds, m.loadContacts())
 			return m, tea.Batch(extraCmds...)
 		}

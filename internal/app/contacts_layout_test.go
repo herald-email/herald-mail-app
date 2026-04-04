@@ -219,14 +219,10 @@ func TestContactsDetail_EmojiSubjectNoWrap(t *testing.T) {
 	}
 }
 
-// TestContactsEnter_SelectsEmailInTimeline verifies that pressing Enter on an email
-// in the Contacts detail panel navigates to the Timeline tab and positions the
-// table cursor on the correct row after TimelineLoadedMsg is handled.
-//
-// Regression test: before the fix, TimelineLoadedMsg called updateTimelineTable()
-// but never called SetCursor(), leaving the cursor at row 0 regardless of which
-// email was selected from Contacts.
-func TestContactsEnter_SelectsEmailInTimeline(t *testing.T) {
+// TestContactsEnter_OpensInlinePreview verifies that pressing Enter on an email
+// in the Contacts detail panel opens an inline preview within the Contacts tab
+// (not jumping to Timeline).
+func TestContactsEnter_OpensInlinePreview(t *testing.T) {
 	b := &stubBackend{}
 	m := New(b, nil, "", nil, false)
 	m.loading = false
@@ -245,25 +241,18 @@ func TestContactsEnter_SelectsEmailInTimeline(t *testing.T) {
 	m.contactDetailEmails = emails
 	m.contactDetailIdx = 1 // user has selected the second email (msg-2)
 
-	// Press Enter: should switch to Timeline with msg-2 as selectedTimelineEmail.
+	// Press Enter: should open inline preview, staying on Contacts tab.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(*Model)
 
-	if m.activeTab != tabTimeline {
-		t.Fatalf("activeTab=%d after Enter, want tabTimeline(%d)", m.activeTab, tabTimeline)
+	if m.activeTab != tabContacts {
+		t.Fatalf("activeTab=%d after Enter, want tabContacts(%d)", m.activeTab, tabContacts)
 	}
-	if m.selectedTimelineEmail == nil || m.selectedTimelineEmail.MessageID != "msg-2" {
-		t.Fatalf("selectedTimelineEmail=%v, want msg-2", m.selectedTimelineEmail)
+	if m.contactPreviewEmail == nil || m.contactPreviewEmail.MessageID != "msg-2" {
+		t.Fatalf("contactPreviewEmail=%v, want msg-2", m.contactPreviewEmail)
 	}
-
-	// Simulate TimelineLoadedMsg arriving with all three emails (newest first).
-	updated2, _ := m.Update(TimelineLoadedMsg{Emails: emails})
-	m = updated2.(*Model)
-
-	cursor := m.timelineTable.Cursor()
-	// msg-2 is at index 1 in the emails slice → row 1 in the table.
-	if cursor != 1 {
-		t.Errorf("timeline cursor=%d after TimelineLoadedMsg, want 1 (row of msg-2)", cursor)
+	if !m.contactPreviewLoading {
+		t.Error("contactPreviewLoading should be true while body is fetching")
 	}
 }
 
