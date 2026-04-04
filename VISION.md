@@ -37,7 +37,8 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [x] Soft unsubscribe (auto-move future emails to a local folder)
 - [x] Custom classification prompts (user-defined categories + data extraction)
-- [x] Classification actions (notify, command, webhook, move, flag on match)
+- [x] Classification actions (notify, command, webhook, move, archive, delete)
+- [ ] Classification action: flag on match (set IMAP `\Flagged`)
 - [x] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
 - [x] Chat tool calling (Ollama tool API + MCP tools in-process)
@@ -134,23 +135,23 @@ The chat panel is a right-side slide-out (`c` key) that lets you have a conversa
 - [x] Markdown rendering of assistant responses (glamour)
 - [x] Context: currently open email available to the model
 - [x] Tool calling via Ollama's native tool API
-- [x] In-process MCP tools (no stdio round-trip)
+- [x] In-process tools (search, sender stats, threads — not the full MCP surface yet)
 - [x] Filtered timeline: chat result sets pushed into Timeline as a live view
 - [x] Context: active folder and selection state passed to model
-- [x] `draft_reply` / `send_email` from within chat
+- [ ] `draft_reply` / `send_email` from within chat (currently MCP-only)
 - [x] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
 
-#### Tool calling (planned)
+#### Tool calling
 
-When tool calling is implemented, the chat will use Ollama's `tools` field in `/api/chat` to invoke the same functions exposed by the MCP server, directly in-process. The model decides which tools to call; the app executes them and feeds results back until the model produces a final reply.
+The chat uses Ollama's `tools` field in `/api/chat` to invoke tools directly in-process. The model decides which tools to call; the app executes them and feeds results back until the model produces a final reply. Current chat tools: `search_emails`, `list_emails_by_sender`, `get_thread`, `get_sender_stats`.
 
-Planned tools mirror the MCP surface: search, read body, summarise, reply, manage, classify.
+- [ ] Expand chat tools to mirror the full MCP surface (read body, summarise, reply, manage, classify)
 
-#### Filtered timeline (planned)
+#### Filtered timeline
 
 When the chat returns a set of emails (from a search, date filter, or semantic query), those results are pushed into the Timeline tab as a live filtered view. The user can browse and act on them without leaving the chat flow. `Esc` or "show all" restores the full timeline.
 
-#### Multiple AI backends (planned)
+#### Multiple AI backends
 
 | Backend | How | When to use |
 |---------|-----|-------------|
@@ -298,9 +299,9 @@ Rules let the app automatically act on email from known senders — delete newsl
 - [x] Per-sender / per-domain rules (action + older-than-days condition)
 - [x] Rule storage in SQLite (`cleanup_rules` table)
 - [x] Manual rule execution (`run_cleanup_rules` trigger)
-- [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`)
+- [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`; TUI-only — daemon runs rules on-demand via `/v1/cleanup-rules/run`)
 - [x] TUI rule manager (list, add, remove)
-- [x] MCP tools: `list_cleanup_rules`, `add_cleanup_rule`, `remove_cleanup_rule`, `run_cleanup_rules`
+- [x] MCP tools: `list_cleanup_rules`, `create_cleanup_rule`, `run_cleanup_rules`
 
 ---
 
@@ -444,7 +445,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 | `extract_action_items` | Extract tasks from an email body via AI |
 | `draft_reply` | LLM-drafted reply in professional or casual tone |
 
-### Planned tools
+### Additional tools
 
 - [x] `list_attachments` — attachment metadata without downloading
 - [x] `get_attachment` — download a specific attachment
