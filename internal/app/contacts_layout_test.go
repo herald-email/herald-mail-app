@@ -257,6 +257,33 @@ func TestContactsEnter_OpensInlinePreview(t *testing.T) {
 }
 
 // stripANSIContacts removes ANSI escape sequences from s (local to contacts tests).
+// TestContactsTab_HeightFits verifies that the Contacts tab panel height does not
+// exceed the available space, which would push the header off-screen. Before the fix,
+// contentH = height - 6 forgot the 2 border lines lipgloss adds, making total output
+// 2 lines taller than the terminal.
+func TestContactsTab_HeightFits(t *testing.T) {
+	for _, h := range []int{24, 40, 50} {
+		b := &stubBackend{}
+		m := New(b, nil, "", nil, false)
+		m.loading = false
+		m.activeTab = tabContacts
+		m.contactsFiltered = []models.ContactData{
+			{Email: "test@example.com", DisplayName: "Test User", Company: "Acme Corp", EmailCount: 5},
+		}
+
+		rendered := m.renderContactsTab(220, h)
+		lines := strings.Split(rendered, "\n")
+		// renderMainView adds 6 lines of chrome around this content:
+		// header(1) + tab bar(1) + blank(1) + trailing newline(1) + status bar(1) + key hints(1).
+		// So renderContactsTab output must fit in h - 6 lines.
+		maxLines := h - 6
+		if len(lines) > maxLines {
+			t.Errorf("h=%d: renderContactsTab produced %d lines, max allowed %d (would push header off-screen)",
+				h, len(lines), maxLines)
+		}
+	}
+}
+
 func stripANSIContacts(s string) string {
 	var out strings.Builder
 	inEscape := false
