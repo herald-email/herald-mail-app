@@ -65,3 +65,56 @@ func TestHTMLToText_EmptyInput(t *testing.T) {
 		t.Errorf("got %q, want empty", got)
 	}
 }
+
+func TestHTMLToText_AdjacentInlineElements(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+		want string // substring that must appear
+	}{
+		{
+			name: "adjacent anchors no href",
+			html: `<a>Click</a><a>Yes</a><a>to</a>`,
+			want: "Click Yes to",
+		},
+		{
+			name: "text before and after anchor",
+			html: `<p>this<a href="#">was NOT</a>your</p>`,
+			want: "this was NOT your",
+		},
+		{
+			name: "adjacent anchors with href",
+			html: `<p><a href="http://a">Click</a><a href="http://b">Yes</a> to</p>`,
+			want: "Yes",
+		},
+		{
+			name: "adjacent spans",
+			html: `<span>Click</span><span>Yes</span><span>to</span>`,
+			want: "Click Yes to",
+		},
+		{
+			name: "mixed inline elements",
+			html: `<p>this <strong>was NOT</strong> your card</p>`,
+			want: "this **was NOT** your card",
+		},
+		{
+			name: "button-like links in table cells",
+			html: `<table><tr><td><a href="http://yes">Yes</a></td><td><a href="http://no">No</a></td></tr></table>`,
+			want: "Yes",
+		},
+		{
+			name: "whitespace-only text node between elements",
+			html: `<a href="http://a">Click</a> <a href="http://b">Yes</a>`,
+			want: "Yes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := htmlToMarkdown(tt.html)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("output %q does not contain %q", got, tt.want)
+			}
+		})
+	}
+}

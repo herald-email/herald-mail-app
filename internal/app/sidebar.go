@@ -155,7 +155,7 @@ func (m *Model) renderSidebar() string {
 	var sb strings.Builder
 
 	// Limit rendered rows to tableHeight to prevent overflow at small terminal heights
-	maxRows := m.windowHeight - 6
+	maxRows := m.windowHeight - 7
 	if maxRows < 5 {
 		maxRows = 5
 	}

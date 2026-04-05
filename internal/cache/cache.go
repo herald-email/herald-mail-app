@@ -1500,7 +1500,10 @@ func (c *Cache) UpsertContacts(addrs []models.ContactAddr, direction string) err
 		if addr.Email == "" {
 			continue
 		}
-		if _, err := stmt.Exec(addr.Email, addr.Name, now, now, emailCount, sentCount, direction, direction); err != nil {
+		// Normalize email to lowercase to prevent case-only duplicates
+		// (e.g. "USER@example.com" vs "user@example.com").
+		email := strings.ToLower(addr.Email)
+		if _, err := stmt.Exec(email, addr.Name, now, now, emailCount, sentCount, direction, direction); err != nil {
 			return fmt.Errorf("UpsertContacts: exec for %q: %w", addr.Email, err)
 		}
 	}

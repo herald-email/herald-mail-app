@@ -40,7 +40,7 @@ func (m *Model) renderEmailPreview() string {
 	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
-	panelHeight := m.windowHeight - 6
+	panelHeight := m.windowHeight - 7
 	if panelHeight < 5 {
 		panelHeight = 5
 	}
@@ -197,10 +197,9 @@ func (m *Model) renderEmailPreview() string {
 	}
 
 	panelStyle := lipgloss.NewStyle().
-		Width(w).
+		Width(w - 2). // subtract 2 for left+right borders
 		Height(panelHeight).
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
+		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 
@@ -378,7 +377,7 @@ func (m *Model) renderFullScreenEmail() string {
 // emptyStateView returns a placeholder string the same height as the content
 // area, with msg centred vertically. Used when a table has no rows to display.
 func (m *Model) emptyStateView(msg string) string {
-	h := m.windowHeight - 6
+	h := m.windowHeight - 7
 	if h < 5 {
 		h = 5
 	}
@@ -548,7 +547,7 @@ func (m *Model) renderCleanupPreview() string {
 		sb.WriteString(strings.Repeat("─", innerW) + "\n")
 	}
 
-	panelHeight := m.windowHeight - 6
+	panelHeight := m.windowHeight - 7
 	if panelHeight < 5 {
 		panelHeight = 5
 	}
@@ -632,10 +631,9 @@ func (m *Model) renderCleanupPreview() string {
 	}
 
 	panelStyle := lipgloss.NewStyle().
-		Width(w).
+		Width(w - 2). // subtract 2 for left+right borders
 		Height(panelHeight).
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
+		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 

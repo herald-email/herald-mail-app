@@ -58,6 +58,18 @@ func renderStyledTableView(t *table.Model, _ int) string {
 		sb.WriteString(renderTableRow(cols, row, i == cursor, styles))
 	}
 
+	// Pad with blank rows to fill the viewport when data rows < height.
+	// This ensures panels stretch to the full terminal height (fixes Cleanup tab
+	// with few senders leaving large blank gaps below the panel border).
+	rendered := end - start
+	if rendered < height {
+		emptyRow := make(table.Row, len(cols))
+		for i := rendered; i < height; i++ {
+			sb.WriteByte('\n')
+			sb.WriteString(renderTableRow(cols, emptyRow, false, styles))
+		}
+	}
+
 	return sb.String()
 }
 

@@ -374,7 +374,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.windowWidth = width
 	m.windowHeight = height
 
-	tableHeight := height - 6
+	// renderMainView chrome: header(1) + tab bar(1) + blank(1) + status bar(1) + key hints(1) = 5 rows.
+	// Each table panel adds 2 border lines (top + bottom), so total deduction = 7.
+	tableHeight := height - 7
 	if tableHeight < 5 {
 		tableHeight = 5
 	}
@@ -542,14 +544,19 @@ func (m *Model) updateTableDimensions(width, height int) {
 			if previewWidth > maxPreview {
 				previewWidth = maxPreview
 			}
+			// Ensure enough space remains for Sender + Subject columns.
+			const minSenderSubjectCols = 20
+			maxForColumns := availableForTimeline - timelineTableFixedOverhead - 1 - minSenderSubjectCols
+			if previewWidth > maxForColumns && maxForColumns >= minPreviewWidth {
+				previewWidth = maxForColumns
+			}
 		}
 	}
 	m.emailPreviewWidth = previewWidth
 
+	// With full Border() on the preview panel, both borders are inside Width(w-2)+2=w,
+	// so no extra border column needed.
 	previewBorder := 0
-	if previewWidth > 0 {
-		previewBorder = 1
-	}
 	timelineOverhead := timelineTableFixedOverhead + sidebarExtra + chatExtra + previewWidth + previewBorder
 	timelineVariable := width - timelineOverhead
 	if timelineVariable < 0 {

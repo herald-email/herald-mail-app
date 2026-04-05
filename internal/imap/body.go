@@ -119,10 +119,10 @@ func htmlToMarkdown(htmlStr string) string {
 				str := out.String()
 				last := str[len(str)-1]
 				first := s[0]
-				if last != ' ' && last != '\n' && last != '(' && last != '[' && last != '*' && last != '`' &&
+				if last != ' ' && last != '\n' && last != '(' && last != '[' &&
 					first != ' ' && first != '\n' && first != '.' && first != ',' &&
 					first != '!' && first != '?' && first != ')' && first != ']' &&
-					first != ':' && first != ';' && first != '*' && first != '`' {
+					first != ':' && first != ';' {
 					out.WriteByte(' ')
 				}
 			}

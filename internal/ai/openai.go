@@ -352,7 +352,7 @@ func (c *OpenAICompatClient) EnrichContact(email string, subjects []string) (str
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\nExtract in JSON (respond with JSON only, no explanation):\n")
-	sb.WriteString(`{"company": "string or empty", "topics": ["topic1", "topic2"]}`)
+	sb.WriteString(`{"company": "Acme Corp", "topics": ["billing", "support"]}`)
 
 	reply, err := c.Chat([]ChatMessage{{Role: "user", Content: sb.String()}})
 	if err != nil {
@@ -365,6 +365,10 @@ func (c *OpenAICompatClient) EnrichContact(email string, subjects []string) (str
 	}
 	if err := json.Unmarshal([]byte(reply), &result); err != nil {
 		return "", nil, fmt.Errorf("parse enrichment: %w", err)
+	}
+	comp := strings.ToLower(strings.TrimSpace(result.Company))
+	if comp == "" || comp == "string or empty" || comp == "acme corp" || comp == "unknown" {
+		result.Company = ""
 	}
 	return result.Company, result.Topics, nil
 }

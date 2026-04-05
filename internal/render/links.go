@@ -26,7 +26,10 @@ func LinkifyWrappedLines(lines []string) []string {
 func LinkifyURLs(text string) string {
 	return URLRe.ReplaceAllStringFunc(text, func(raw string) string {
 		trimmed := strings.TrimRight(raw, ".,;:!?)")
-		label := ShortenURL(trimmed)
+		// Strip tracking params so the visible label shows the meaningful destination
+		// instead of 200+ chars of encoded tracker gibberish.
+		cleaned := StripTrackers(trimmed)
+		label := ShortenURL(cleaned)
 		// OSC 8: \033]8;;URL\033\\ LABEL \033]8;;\033\\
 		return "\033]8;;" + trimmed + "\033\\" + label + "\033]8;;\033\\"
 	})

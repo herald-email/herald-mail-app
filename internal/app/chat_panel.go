@@ -127,7 +127,7 @@ func (m *Model) renderChatPanel() string {
 
 	// Calculate how many lines we have for history
 	// Total height = tableHeight; minus title(1) + divider(1) + divider2(1) + input(1) = 4
-	historyLines := m.windowHeight - 6 - 4 // same tableHeight formula minus chat chrome
+	historyLines := m.windowHeight - 7 - 4 // same tableHeight formula minus chat chrome
 	if historyLines < 3 {
 		historyLines = 3
 	}

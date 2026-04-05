@@ -1890,7 +1890,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.chatWaiting {
 				return m, m.submitChat()
 			}
-		case "esc", "tab":
+		case "esc":
+			m.showChat = false
+			m.chatInput.Blur()
+			if m.windowWidth > 0 {
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
+			m.setFocusedPanel(panelSummary)
+		case "tab":
 			m.chatInput.Blur()
 			m.setFocusedPanel(panelSummary)
 		}
@@ -2551,9 +2558,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else if m.focusedPanel == panelSidebar {
 					return m.handleNavigation(-1)
 				} else {
-					var cmd tea.Cmd
-					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyUp})
-					return m, cmd
+					m.timelineTable.MoveUp(1)
+					return m, nil
 				}
 			} else {
 				return m.handleNavigation(-1)
@@ -2595,9 +2601,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else if m.focusedPanel == panelSidebar {
 					return m.handleNavigation(1)
 				} else {
-					var cmd tea.Cmd
-					m.timelineTable, cmd = m.timelineTable.Update(tea.KeyMsg{Type: tea.KeyDown})
-					return m, cmd
+					m.timelineTable.MoveDown(1)
+					return m, nil
 				}
 			} else {
 				return m.handleNavigation(1)
