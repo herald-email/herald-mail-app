@@ -33,7 +33,6 @@
                               │                                                                                        │
                               │                                                                                        │
                               │                                                                                        │
-                              │                                                                                        │
                               └────────────────────────────────────────────────────────────────────────────────────────┘
  INBOX  │  3 emails                                                                                                     
-1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive[120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: de…[K[120D[2K[?2004l[?25h[?1002l[?1003l[?1006l

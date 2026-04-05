@@ -35,9 +35,9 @@ func (m *Model) renderEmailPreview() string {
 	// Header block
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 	email := m.selectedTimelineEmail
-	sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
-	sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
-	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
 	panelHeight := m.windowHeight - 7
@@ -243,9 +243,9 @@ func (m *Model) renderFullScreenEmail() string {
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 
 	email := m.selectedTimelineEmail
-	sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
-	sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
-	sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
+	sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
 	// Reserve 1 row at the bottom for the scroll indicator.
@@ -541,9 +541,9 @@ func (m *Model) renderCleanupPreview() string {
 
 	if m.cleanupPreviewEmail != nil {
 		email := m.cleanupPreviewEmail
-		sb.WriteString(headerStyle.Render("From: "+truncate(email.Sender, innerW-6)) + "\n")
-		sb.WriteString(headerStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
-		sb.WriteString(headerStyle.Render("Subj: "+truncate(email.Subject, innerW-6)) + "\n")
+		sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
+		sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
+		sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
 		sb.WriteString(strings.Repeat("─", innerW) + "\n")
 	}
 

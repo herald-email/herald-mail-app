@@ -424,9 +424,9 @@ func (m *Model) renderContactsTab(width, height int) string {
 		email := m.contactPreviewEmail
 		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-		rightSb.WriteString(boldStyle.Render("From: "+sanitizeText(email.Sender)) + "\n")
-		rightSb.WriteString(dimStyle.Render("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04")) + "\n")
-		rightSb.WriteString(boldStyle.Render("Subj: "+sanitizeText(email.Subject)) + "\n")
+		rightSb.WriteString(boldStyle.Render(truncate("From: "+sanitizeText(email.Sender), rightW-1)) + "\n")
+		rightSb.WriteString(dimStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), rightW-1)) + "\n")
+		rightSb.WriteString(boldStyle.Render(truncate("Subj: "+sanitizeText(email.Subject), rightW-1)) + "\n")
 		rightSb.WriteString(strings.Repeat("─", rightW-1) + "\n")
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))

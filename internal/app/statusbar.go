@@ -224,6 +224,10 @@ func (m *Model) renderStatusBar() string {
 	if w <= 0 {
 		w = 80
 	}
+	// Truncate to prevent wrapping that pushes the header off-screen.
+	if len(line) > w-2 {
+		line = line[:w-5] + "…"
+	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")).
 		Background(lipgloss.Color("237")).
@@ -302,6 +306,14 @@ func (m *Model) renderKeyHints() string {
 	// Override hints when quick reply picker is open.
 	if m.quickReplyOpen {
 		hints = "↑/k ↓/j: navigate replies  │  enter: compose  │  1-8: select  │  esc: close picker  │  q: quit"
+	}
+	// Truncate to prevent wrapping that pushes the header off-screen.
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	if len(hints) > w {
+		hints = hints[:w-3] + "…"
 	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("243")).

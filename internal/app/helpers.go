@@ -415,14 +415,51 @@ func (m *Model) updateTableDimensions(width, height int) {
 		if tablesAvail < 0 {
 			tablesAvail = 0
 		}
+
+		// Progressive column hiding for cleanup tables with preview open.
+		cpAttachW := 6
+		cpDateRangeW := 20
+		cpAvgKBW := 7
+		cpDetAttW := 3
+		sumF := summaryFixedCols  // 41
+		sumN := summaryNumCols    // 6
+		detF := detailsFixedCols  // 29
+		detN := detailsNumCols    // 5
+
+		const cpMinSender = 8
+
+		calcSender := func() int {
+			tableHalf := tablesAvail / 2
+			return tableHalf - (sumF + sumN*2)
+		}
+
+		if calcSender() < cpMinSender && cpAttachW > 0 {
+			sumF -= cpAttachW
+			sumN--
+			cpAttachW = 0
+		}
+		if calcSender() < cpMinSender && cpDetAttW > 0 {
+			detF -= cpDetAttW
+			detN--
+			cpDetAttW = 0
+		}
+		if calcSender() < cpMinSender && cpDateRangeW > 0 {
+			sumF -= cpDateRangeW
+			sumN--
+			cpDateRangeW = 0
+		}
+		if calcSender() < cpMinSender && cpAvgKBW > 0 {
+			sumF -= cpAvgKBW
+			sumN--
+			cpAvgKBW = 0
+		}
+
 		tableHalf := tablesAvail / 2
-		perTableOverhead := summaryFixedCols + summaryNumCols*2
-		senderW := tableHalf - perTableOverhead
+		senderW := tableHalf - (sumF + sumN*2)
 		if senderW < 4 {
 			senderW = 4
 		}
-		perTableOverhead2 := detailsFixedCols + detailsNumCols*2
-		subjectW := tablesAvail - tableHalf - perTableOverhead2
+		subjectW := tablesAvail - tableHalf - (detF + detN*2)
 		if subjectW < 4 {
 			subjectW = 4
 		}
@@ -431,11 +468,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "✓", Width: 2},
 			{Title: "Sender/Domain", Width: senderW},
 			{Title: "Count", Width: 6},
-			{Title: "Avg KB", Width: 7},
-			{Title: "Attach", Width: 6},
-			{Title: "Date Range", Width: 20},
+			{Title: "Avg KB", Width: cpAvgKBW},
+			{Title: "Attach", Width: cpAttachW},
+			{Title: "Date Range", Width: cpDateRangeW},
 		})
-		m.summaryTable.SetWidth(summaryFixedCols + senderW + summaryNumCols*2)
+		m.summaryTable.SetWidth(sumF + senderW + sumN*2)
 
 		m.subjectColWidth = subjectW
 		m.detailsTable.SetColumns([]table.Column{
@@ -443,9 +480,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "Date", Width: 16},
 			{Title: "Subject", Width: subjectW},
 			{Title: "Size", Width: 8},
-			{Title: "Att", Width: 3},
+			{Title: "Att", Width: cpDetAttW},
 		})
-		m.detailsTable.SetWidth(detailsFixedCols + subjectW + detailsNumCols*2)
+		m.detailsTable.SetWidth(detF + subjectW + detN*2)
 	} else {
 		m.cleanupPreviewWidth = 0
 
@@ -524,8 +561,12 @@ func (m *Model) updateTableDimensions(width, height int) {
 		m.detailsTable.SetWidth(detFixed + subjectWidth + detNCols*2)
 	}
 
-	m.summaryTable.SetHeight(tableHeight)
-	m.detailsTable.SetHeight(tableHeight)
+	// SetHeight controls visible data rows (excludes header row).
+	// renderStyledTableView renders height+1 lines (header + data); baseStyle adds 2
+	// border lines → total = height+3. Other panels have Height(tableHeight)+2 border = tableHeight+2.
+	// Subtract 1 so table total (height+2) matches panel total (tableHeight+2).
+	m.summaryTable.SetHeight(tableHeight - 1)
+	m.detailsTable.SetHeight(tableHeight - 1)
 
 	const timelineFixedCols = 30
 	const timelineNumCols = 6
@@ -554,14 +595,49 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.emailPreviewWidth = previewWidth
 
-	// With full Border() on the preview panel, both borders are inside Width(w-2)+2=w,
-	// so no extra border column needed.
-	previewBorder := 0
-	timelineOverhead := timelineTableFixedOverhead + sidebarExtra + chatExtra + previewWidth + previewBorder
-	timelineVariable := width - timelineOverhead
-	if timelineVariable < 0 {
-		timelineVariable = 0
+	// Progressive timeline column hiding: when preview is open and space is tight,
+	// drop low-priority fixed columns to preserve Sender + Subject visibility.
+	tTagW := 4
+	tAttW := 3
+	tSizeW := 7
+	tDateW := 16
+	tFixed := timelineFixedCols    // 30 = Date(16) + Size(7) + Att(3) + Tag(4)
+	tNCols := timelineNumCols      // 6
+	const minTimelineVariable = 15 // minimum for usable Sender + Subject
+
+	calcTimelineVar := func() int {
+		overhead := tFixed + tNCols*2 + 2 + sidebarExtra + chatExtra + previewWidth
+		v := width - overhead
+		if v < 0 {
+			return 0
+		}
+		return v
 	}
+
+	if previewWidth > 0 {
+		if calcTimelineVar() < minTimelineVariable && tTagW > 0 {
+			tFixed -= tTagW
+			tNCols--
+			tTagW = 0
+		}
+		if calcTimelineVar() < minTimelineVariable && tAttW > 0 {
+			tFixed -= tAttW
+			tNCols--
+			tAttW = 0
+		}
+		if calcTimelineVar() < minTimelineVariable && tSizeW > 0 {
+			tFixed -= tSizeW
+			tNCols--
+			tSizeW = 0
+		}
+		if calcTimelineVar() < minTimelineVariable && tDateW > 0 {
+			tFixed -= tDateW
+			tNCols--
+			tDateW = 0
+		}
+	}
+
+	timelineVariable := calcTimelineVar()
 	tSenderWidth := timelineVariable * 30 / 100
 	tSubjectWidth := timelineVariable - tSenderWidth
 	if timelineVariable >= 24 {
@@ -577,13 +653,13 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.timelineTable.SetColumns([]table.Column{
 		{Title: "Sender", Width: tSenderWidth},
 		{Title: "Subject", Width: tSubjectWidth},
-		{Title: "Date", Width: 16},
-		{Title: "Size KB", Width: 7},
-		{Title: "Att", Width: 3},
-		{Title: "Tag", Width: 4},
+		{Title: "Date", Width: tDateW},
+		{Title: "Size KB", Width: tSizeW},
+		{Title: "Att", Width: tAttW},
+		{Title: "Tag", Width: tTagW},
 	})
-	m.timelineTable.SetWidth(timelineFixedCols + tSenderWidth + tSubjectWidth + timelineNumCols*2)
-	m.timelineTable.SetHeight(tableHeight)
+	m.timelineTable.SetWidth(tFixed + tSenderWidth + tSubjectWidth + tNCols*2)
+	m.timelineTable.SetHeight(tableHeight - 1)
 
 	logWidth := width - 4
 	if logWidth < 20 {
