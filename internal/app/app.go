@@ -97,8 +97,9 @@ type ValidIDsMsg struct {
 
 // EmailBodyMsg carries the result of fetching an email body from IMAP
 type EmailBodyMsg struct {
-	Body *models.EmailBody
-	Err  error
+	Body      *models.EmailBody
+	Err       error
+	MessageID string // used to discard stale body fetches from rapid cursor movement
 }
 
 // QuickRepliesMsg is sent when AI quick reply generation completes.
@@ -328,10 +329,11 @@ type Model struct {
 	bodyScrollOffset  int // first visible line in preview body
 
 	// Quick replies
-	quickReplies      []string // canned (first 5) + AI-generated (up to 3)
-	quickRepliesReady bool     // true once AI has finished generating
-	quickReplyOpen    bool     // picker overlay is visible
-	quickReplyIdx     int      // currently highlighted item
+	quickReplies          []string // canned (first 5) + AI-generated (up to 3)
+	quickRepliesReady     bool     // true once canned replies are available
+	quickReplyOpen        bool     // picker overlay is visible
+	quickReplyIdx         int      // currently highlighted item
+	quickRepliesAIFetched bool     // true once AI generation was triggered for this email
 
 	// Email body preview (cleanup tab)
 	showCleanupPreview      bool
@@ -565,7 +567,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		table.WithHeight(11),
 	)
 
-	// Create active table style (blue highlight)
+	// Create active table style (purple highlight, matching sidebar selection)
 	activeStyle := table.DefaultStyles()
 	activeStyle.Header = activeStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).
@@ -573,9 +575,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		BorderBottom(true).
 		Bold(false)
 	activeStyle.Selected = activeStyle.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
+		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("62")).
+		Bold(true)
 
 	// Create inactive table style (gray highlight)
 	inactiveStyle := table.DefaultStyles()
@@ -1203,6 +1205,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Discard stale body fetches from rapid cursor navigation.
+		if msg.MessageID != "" && m.selectedTimelineEmail != nil && msg.MessageID != m.selectedTimelineEmail.MessageID {
+			return m, nil
+		}
 		m.emailBodyLoading = false
 		m.selectedAttachment = 0 // reset attachment cursor for new email
 		// Reset quick reply state for the new email
@@ -1243,17 +1249,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
 					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
 				}
-				// Kick off AI quick reply generation
-				if m.classifier != nil && body != nil && body.TextPlain != "" {
-					bodyPreview := body.TextPlain
-					if len([]rune(bodyPreview)) > 500 {
-						bodyPreview = string([]rune(bodyPreview)[:500])
-					}
-					cmds = append(cmds, generateQuickRepliesCmd(m.classifier, email.Sender, email.Subject, bodyPreview))
-				} else {
-					// No classifier or no body text — mark as ready immediately with just canned replies
-					m.quickRepliesReady = true
-				}
+				// Quick replies are generated on-demand (Ctrl+Q or R), not on every email open.
+				// Pre-populate with canned replies so the picker is always available.
+				m.quickRepliesReady = true
 				if len(cmds) > 0 {
 					m.bodyWrappedLines = nil
 					return m, tea.Batch(cmds...)
@@ -2322,6 +2320,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.emailBodyLoading = true
 					m.inlineImageDescs = nil // reset per-email image descriptions
 					m.bodyScrollOffset = 0
+					m.quickRepliesAIFetched = false
 					m.updateTableDimensions(m.windowWidth, m.windowHeight)
 					return m, m.loadEmailBodyCmd(email.Folder, email.UID)
 				}
@@ -2358,6 +2357,16 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.quickReplyOpen {
 				if m.quickReplyIdx >= len(m.quickReplies) {
 					m.quickReplyIdx = 0
+				}
+				// Generate AI replies on-demand (first Ctrl+Q press only)
+				if m.classifier != nil && m.emailBody.TextPlain != "" && m.selectedTimelineEmail != nil && !m.quickRepliesAIFetched {
+					m.quickRepliesAIFetched = true
+					email := m.selectedTimelineEmail
+					bodyPreview := m.emailBody.TextPlain
+					if len([]rune(bodyPreview)) > 500 {
+						bodyPreview = string([]rune(bodyPreview)[:500])
+					}
+					return m, generateQuickRepliesCmd(m.classifier, email.Sender, email.Subject, bodyPreview)
 				}
 			}
 		}
@@ -2559,7 +2568,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m.handleNavigation(-1)
 				} else {
 					m.timelineTable.MoveUp(1)
-					return m, nil
+					return m, m.maybeUpdatePreview()
 				}
 			} else {
 				return m.handleNavigation(-1)
@@ -2602,7 +2611,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m.handleNavigation(1)
 				} else {
 					m.timelineTable.MoveDown(1)
-					return m, nil
+					return m, m.maybeUpdatePreview()
 				}
 			} else {
 				return m.handleNavigation(1)

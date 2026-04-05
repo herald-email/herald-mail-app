@@ -31,7 +31,9 @@ func LinkifyURLs(text string) string {
 		cleaned := StripTrackers(trimmed)
 		label := ShortenURL(cleaned)
 		// OSC 8: \033]8;;URL\033\\ LABEL \033]8;;\033\\
-		return "\033]8;;" + trimmed + "\033\\" + label + "\033]8;;\033\\"
+		// Wrap label in blue color so links are readable on dark backgrounds.
+		coloredLabel := "\033[38;5;75m" + label + "\033[39m"
+		return "\033]8;;" + trimmed + "\033\\" + coloredLabel + "\033]8;;\033\\"
 	})
 }
 

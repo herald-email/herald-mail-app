@@ -89,8 +89,9 @@ func renderTableHeader(cols []table.Column, styles table.Styles) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
-// renderTableRow renders a single data row. When selected is true it wraps the
-// whole row in the Selected style, matching bubbles/table behaviour.
+// renderTableRow renders a single data row. When selected is true, the Selected
+// style is applied per-cell to ensure the background color covers the full row
+// (wrapping the joined line doesn't work because inner ANSI codes reset the bg).
 func renderTableRow(cols []table.Column, row table.Row, selected bool, styles table.Styles) string {
 	parts := make([]string, 0, len(cols))
 	for i, col := range cols {
@@ -104,14 +105,19 @@ func renderTableRow(cols []table.Column, row table.Row, selected bool, styles ta
 		// ansi.Truncate respects ANSI escape sequences so styled values are
 		// clipped at the correct visual position.
 		cell := ansi.Truncate(value, col.Width, "…")
-		rendered := styles.Cell.Render(
-			lipgloss.NewStyle().Width(col.Width).MaxWidth(col.Width).Inline(true).Render(cell),
-		)
+		cellStyle := lipgloss.NewStyle().Width(col.Width).MaxWidth(col.Width).Inline(true)
+		if selected {
+			// Apply selection colors directly to each cell so the background
+			// isn't overridden by inner ANSI codes from styled sender etc.
+			cellStyle = cellStyle.
+				Foreground(styles.Selected.GetForeground()).
+				Background(styles.Selected.GetBackground()).
+				Bold(styles.Selected.GetBold())
+			// Strip inner ANSI from cell value to prevent color conflicts.
+			cell = ansi.Strip(cell)
+		}
+		rendered := styles.Cell.Render(cellStyle.Render(cell))
 		parts = append(parts, rendered)
 	}
-	line := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
-	if selected {
-		return styles.Selected.Render(line)
-	}
-	return line
+	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }

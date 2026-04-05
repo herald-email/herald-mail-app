@@ -391,7 +391,42 @@ func (m *Model) emptyStateView(msg string) string {
 	return sb.String()
 }
 
+// maybeUpdatePreview updates the preview panel when the cursor moves to a
+// different email while the preview is already open. Returns nil if the preview
+// is closed or the cursor already points to the displayed email.
+func (m *Model) maybeUpdatePreview() tea.Cmd {
+	if m.selectedTimelineEmail == nil {
+		return nil // preview not open
+	}
+	cursor := m.timelineTable.Cursor()
+	if cursor >= len(m.threadRowMap) {
+		return nil
+	}
+	ref := m.threadRowMap[cursor]
+	if ref.kind == rowKindThread {
+		return nil // cursor on a collapsed thread header — don't preview
+	}
+	email := ref.group.emails[ref.emailIdx]
+	if email.MessageID == m.selectedTimelineEmail.MessageID {
+		return nil // same email already shown
+	}
+	m.selectedTimelineEmail = email
+	m.emailBody = nil
+	m.emailBodyLoading = true
+	m.inlineImageDescs = nil
+	m.bodyScrollOffset = 0
+	m.bodyWrappedLines = nil
+	m.quickRepliesReady = false
+	m.quickReplies = nil
+	m.quickRepliesAIFetched = false
+	return m.loadEmailBodyCmd(email.Folder, email.UID)
+}
+
 func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
+	messageID := ""
+	if m.selectedTimelineEmail != nil {
+		messageID = m.selectedTimelineEmail.MessageID
+	}
 	return func() tea.Msg {
 		var (
 			body *models.EmailBody
@@ -407,7 +442,7 @@ func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
 			}
 			logger.Warn("FetchEmailBody attempt %d failed: %v", attempt+1, err)
 		}
-		return EmailBodyMsg{Body: body, Err: err}
+		return EmailBodyMsg{Body: body, Err: err, MessageID: messageID}
 	}
 }
 

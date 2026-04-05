@@ -288,7 +288,10 @@ func (m *Model) renderTimelineView() string {
 	if m.timelineEmails != nil && len(m.timelineEmails) == 0 {
 		tableView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 	} else {
-		tableView = m.baseStyle.Render(renderStyledTableView(&m.timelineTable, 0))
+		// Timeline table always gets a bright border on the Timeline tab —
+		// it's the primary panel and should always stand out.
+		style := m.baseStyle.BorderForeground(lipgloss.Color("39"))
+		tableView = style.Render(renderStyledTableView(&m.timelineTable, 0))
 	}
 
 	var mainContent string
@@ -300,7 +303,11 @@ func (m *Model) renderTimelineView() string {
 	}
 
 	if m.showSidebar && !m.sidebarTooWide {
-		sidebarView := m.baseStyle.Render(m.renderSidebar())
+		sidebarStyle := m.baseStyle
+		if m.focusedPanel == panelSidebar {
+			sidebarStyle = sidebarStyle.BorderForeground(lipgloss.Color("39"))
+		}
+		sidebarView := sidebarStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)
 	}
 	return mainContent

@@ -194,6 +194,11 @@ func (m *Model) renderStatusBar() string {
 		}
 	}
 
+	// AI status indicator
+	if m.classifier == nil && !m.demoMode {
+		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("AI: off"))
+	}
+
 	// Demo mode indicator
 	if m.demoMode {
 		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("[DEMO]"))
