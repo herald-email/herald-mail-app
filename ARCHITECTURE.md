@@ -42,6 +42,7 @@ cmd/mcp-server  → JSON-RPC stdio server, reads email_cache.db directly
 | `internal/models` | Shared data types: `EmailData`, `EmailBody`, `SenderStats`, `ProgressInfo`, etc. |
 | `internal/config` | YAML config load/validate |
 | `internal/smtp` | SMTP send (TLS-first, STARTTLS fallback) |
+| `internal/render` | Email body rendering: ANSI-aware text wrapping, URL linkification, link sanitization. No TUI dependency — usable from MCP, daemon, SSH |
 | `internal/logger` | File-based logger with TUI callback |
 
 ### Key design patterns

@@ -52,6 +52,9 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`mail-processor serve`, Ollama-style)
+- [x] Email rendering package (`internal/render` — independent, testable component)
+- [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc.)
+- [ ] Link display modes (full URL, title-only clickable, sanitized)
 - [ ] Native app client (Phase 3)
 
 ---
@@ -360,6 +363,42 @@ Received emails are converted from HTML to Markdown for display in the terminal.
 - [x] Inline image rendering (iTerm2 protocol)
 - [ ] Kitty graphics protocol support (for non-iTerm2 terminals)
 - [ ] AI image description for non-iTerm2 terminals (vision-capable Ollama model, e.g. gemma3:4b)
+
+---
+
+## Email Rendering & Link Processing
+
+Email body rendering and link handling live in `internal/render`, a standalone package with no TUI dependency. This makes it testable independently and reusable across all surfaces: TUI, MCP server, daemon API, and SSH mode. The package handles text wrapping (ANSI-aware), URL linkification (OSC 8 terminal hyperlinks), and link sanitization.
+
+### Rendering component (`internal/render`)
+- [x] `WrapText` / `WrapLines` — ANSI-aware text wrapping that correctly skips escape sequences when counting visible width
+- [x] `StripInvisibleChars` — removes zero-width joiners, BOM, and invisible spacers that HTML emails embed
+- [x] `LinkifyURLs` / `LinkifyWrappedLines` — converts raw URLs to OSC 8 clickable terminal hyperlinks with shortened labels
+- [x] `ShortenURL` — produces human-readable labels like `example.com/path…` for long URLs
+- [x] `Truncate`, `SanitizeText`, `CalculateTextWidth` — text utilities shared across all rendering surfaces
+- [x] Full test suite (`internal/render/*_test.go`)
+
+### Link tracker sanitization
+Modern marketing emails embed tracking parameters in every link — UTM tags, Mailchimp click IDs, Facebook/Google/HubSpot trackers. These make URLs unreadable and leak privacy. The sanitizer strips known tracker parameters while preserving the actual destination.
+
+- [x] `StripTrackers` — removes known tracking query parameters (UTM, fbclid, mc_cid, gclid, HubSpot, LinkedIn, etc.) from a single URL
+- [x] `StripTrackersFromText` — applies tracker stripping to all URLs found in a text block
+- [x] Case-insensitive parameter matching
+- [x] Preserves non-tracker query parameters, path, fragment
+- [ ] `L` key in email preview toggles link sanitization on/off (per-session)
+- [ ] `sanitize_links` config option in `~/.herald/conf.yaml` (default: on)
+- [ ] Link sanitization applied in MCP `get_email_body` tool output
+- [ ] Link sanitization applied in daemon API `/v1/email/{id}/body` response
+
+### Link display modes
+Links in email bodies can be shown in different ways depending on user preference. A toggle cycles through modes so users can see clean text by default but reveal the full URL when needed.
+
+- [x] Mode: title-only clickable — shortened label (`example.com/path…`) as visible text, full URL in OSC 8 hyperlink (current default)
+- [ ] Mode: full URL visible — raw URL shown inline, no shortening
+- [ ] Mode: sanitized clickable — tracker-stripped URL in both label and hyperlink target
+- [ ] `ctrl+l` in email preview cycles through link display modes
+- [ ] Current mode shown in status bar when preview is focused
+- [ ] Mode preference saved in `~/.herald/conf.yaml`
 
 ---
 

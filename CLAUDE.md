@@ -24,9 +24,22 @@ internal/
 ├── ai/
 │   └── ollama.go    # Ollama HTTP client: Classify() + Chat() via /api/generate and /api/chat
 ├── app/
-│   ├── app.go       # Bubble Tea Model: Init/Update/View, state, all message types
-│   ├── helpers.go   # Tables, deletion queue, navigation, render functions, classify/chat
-│   └── logs.go      # LogViewer TUI component (viewport-based)
+│   ├── app.go            # Bubble Tea Model: Init/Update/View, state, all message types
+│   ├── helpers.go        # Table layout, progress bar, styled sender, thin wrappers to render pkg
+│   ├── timeline.go       # Thread grouping, timeline table, timeline rendering, navigation
+│   ├── email_preview.go  # Email preview (split, full-screen, cleanup), body rendering
+│   ├── compose.go        # Compose key handling, rendering, sending, AI assist, drafts
+│   ├── contacts_tab.go   # Contacts tab handling and rendering
+│   ├── sidebar.go        # Folder tree building, sidebar rendering
+│   ├── statusbar.go      # Tab bar, status bar, key hints, panel focus cycling
+│   ├── chat_panel.go     # Chat submission and panel rendering
+│   ├── classification.go # AI classification helpers
+│   ├── search.go         # Search functions (local, FTS, cross-folder, semantic, IMAP)
+│   ├── sync.go           # Background polling, sync countdown, IMAP sync
+│   ├── embeddings.go     # Semantic embedding batch processing, contact enrichment
+│   ├── deletion.go       # Deletion/archive worker, queue, confirmation descriptions
+│   ├── actions.go        # Unsubscribe, attachments, star, clipboard, mark read
+│   └── logs.go           # LogViewer TUI component (viewport-based)
 ├── backend/
 │   ├── backend.go   # Backend interface decoupling UI from IMAP
 │   └── local.go     # LocalBackend: direct IMAP + SQLite cache
@@ -42,6 +55,9 @@ internal/
 │   └── render.go    # iTerm2 inline image protocol (OSC 1337); IsSupported() + Render()
 ├── logger/
 │   └── logger.go    # File-based logger with callback for TUI log viewer
+├── render/
+│   ├── text.go      # ANSI-aware text wrapping, invisible char stripping, truncation
+│   └── links.go     # URL linkification (OSC 8), URL shortening, tracker sanitization
 ├── models/
 │   └── email.go     # EmailData, EmailBody, InlineImage, SenderStats, ProgressInfo, DeletionRequest/Result
 └── smtp/
