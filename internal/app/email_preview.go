@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/iterm2"
@@ -71,41 +72,12 @@ func (m *Model) renderEmailPreview() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
-		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer).
-		// Cap images to avoid layout blowup on emails with many inline images (e.g. USPS).
-		const maxInlineImages = 3
-		const imageHeightCells = 6 // max rows per image in iTerm2
+		// Split view: show compact image placeholders (no iTerm2 rendering).
+		// Full-screen (z) renders actual images.
 		imageLines := 0
-		images := m.emailBody.InlineImages
-		moreImages := 0
-		if len(images) > maxInlineImages {
-			moreImages = len(images) - maxInlineImages
-			images = images[:maxInlineImages]
-		}
-		for _, img := range images {
-			var label string
-			if iterm2.IsSupported() {
-				// Render image inline via iTerm2 protocol, capped to imageHeightCells rows.
-				rendered := iterm2.Render(img.Data, innerW, imageHeightCells)
-				if rendered != "" {
-					sb.WriteString(rendered)
-					imageLines += imageHeightCells
-					continue
-				}
-			}
-			if desc, ok := m.inlineImageDescs[img.ContentID]; ok {
-				label = fmt.Sprintf("[Image: %s]", desc)
-			} else if m.classifier != nil && m.classifier.HasVisionModel() {
-				label = fmt.Sprintf("[image  %s  %d KB  — describing…]", img.MIMEType, len(img.Data)/1024)
-			} else {
-				label = fmt.Sprintf("[image: %s]", img.MIMEType)
-			}
-			label = truncate(label, innerW)
-			sb.WriteString(dimStyle.Render(label) + "\n")
-			imageLines++
-		}
-		if moreImages > 0 {
-			sb.WriteString(dimStyle.Render(fmt.Sprintf("[+%d more images]", moreImages)) + "\n")
+		if nImg := len(m.emailBody.InlineImages); nImg > 0 {
+			label := fmt.Sprintf("[%d image(s) — press z for full-screen to view]", nImg)
+			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
 			imageLines++
 		}
 
@@ -159,6 +131,12 @@ func (m *Model) renderEmailPreview() string {
 					}
 				} else {
 					m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
+				}
+				// Safety: hard-truncate every line to innerW visual chars.
+				// Glamour and linkification can produce lines with ANSI/OSC sequences
+				// that break lipgloss width math, causing panel overflow.
+				for i, line := range m.bodyWrappedLines {
+					m.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
 				}
 			} else {
 				m.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
