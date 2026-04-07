@@ -71,16 +71,25 @@ func (m *Model) renderEmailPreview() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
-		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer)
+		// Show inline image descriptors (raw escape sequences corrupt the TUI renderer).
+		// Cap images to avoid layout blowup on emails with many inline images (e.g. USPS).
+		const maxInlineImages = 3
+		const imageHeightCells = 6 // max rows per image in iTerm2
 		imageLines := 0
-		for _, img := range m.emailBody.InlineImages {
+		images := m.emailBody.InlineImages
+		moreImages := 0
+		if len(images) > maxInlineImages {
+			moreImages = len(images) - maxInlineImages
+			images = images[:maxInlineImages]
+		}
+		for _, img := range images {
 			var label string
 			if iterm2.IsSupported() {
-				// Render image inline via iTerm2 protocol
-				rendered := iterm2.Render(img.Data, innerW)
+				// Render image inline via iTerm2 protocol, capped to imageHeightCells rows.
+				rendered := iterm2.Render(img.Data, innerW, imageHeightCells)
 				if rendered != "" {
 					sb.WriteString(rendered)
-					imageLines++
+					imageLines += imageHeightCells
 					continue
 				}
 			}
@@ -93,6 +102,10 @@ func (m *Model) renderEmailPreview() string {
 			}
 			label = truncate(label, innerW)
 			sb.WriteString(dimStyle.Render(label) + "\n")
+			imageLines++
+		}
+		if moreImages > 0 {
+			sb.WriteString(dimStyle.Render(fmt.Sprintf("[+%d more images]", moreImages)) + "\n")
 			imageLines++
 		}
 
@@ -270,14 +283,22 @@ func (m *Model) renderFullScreenEmail() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
-		// Show inline images — same 3-path logic as split view
+		// Show inline images — cap to 5 in full-screen, 10 rows each.
+		const fsMaxImages = 5
+		const fsImageHeight = 10
 		imageLines := 0
-		for _, img := range m.emailBody.InlineImages {
+		fsImages := m.emailBody.InlineImages
+		fsMore := 0
+		if len(fsImages) > fsMaxImages {
+			fsMore = len(fsImages) - fsMaxImages
+			fsImages = fsImages[:fsMaxImages]
+		}
+		for _, img := range fsImages {
 			if iterm2.IsSupported() {
-				rendered := iterm2.Render(img.Data, innerW)
+				rendered := iterm2.Render(img.Data, innerW, fsImageHeight)
 				if rendered != "" {
 					sb.WriteString(rendered)
-					imageLines++
+					imageLines += fsImageHeight
 					continue
 				}
 			}
@@ -291,6 +312,10 @@ func (m *Model) renderFullScreenEmail() string {
 			}
 			label = truncate(label, innerW)
 			sb.WriteString(dimStyle.Render(label) + "\n")
+			imageLines++
+		}
+		if fsMore > 0 {
+			sb.WriteString(dimStyle.Render(fmt.Sprintf("[+%d more images]", fsMore)) + "\n")
 			imageLines++
 		}
 		// Reserve lines used by image labels so body scroll accounting is correct

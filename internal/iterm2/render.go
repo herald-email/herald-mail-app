@@ -17,8 +17,9 @@ func IsSupported() bool {
 
 // Render encodes imageData as an iTerm2 inline image escape sequence.
 // width specifies the maximum character-cell width (0 = auto).
+// height specifies the maximum character-cell height (0 = auto).
 // Non-iTerm2 terminals will receive an empty string.
-func Render(imageData []byte, width int) string {
+func Render(imageData []byte, width, height int) string {
 	if len(imageData) == 0 || !IsSupported() {
 		return ""
 	}
@@ -26,6 +27,9 @@ func Render(imageData []byte, width int) string {
 	args := fmt.Sprintf("inline=1;preserveAspectRatio=1;size=%d", len(imageData))
 	if width > 0 {
 		args += fmt.Sprintf(";width=%d", width)
+	}
+	if height > 0 {
+		args += fmt.Sprintf(";height=%d", height)
 	}
 	// OSC 1337 ; File=<args> : <base64data> BEL
 	return fmt.Sprintf("\033]1337;File=%s:%s\a\n", args, b64)
