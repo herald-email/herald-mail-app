@@ -154,6 +154,32 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// Reconnect tears down the current IMAP connection and establishes a new one.
+// Must be called with c.mu held.
+func (c *Client) Reconnect() error {
+	logger.Info("Reconnecting to IMAP server…")
+	if c.client != nil {
+		_ = c.client.Logout() // best-effort close
+		c.client = nil
+	}
+	return c.Connect()
+}
+
+// isConnectionError returns true if the error indicates the IMAP TCP connection
+// is dead and a reconnect should be attempted.
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "connection closed") ||
+		strings.Contains(s, "i/o timeout") ||
+		strings.Contains(s, "use of closed network connection") ||
+		strings.Contains(s, "EOF")
+}
+
 // GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
 func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
 	c.mu.Lock()

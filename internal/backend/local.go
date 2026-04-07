@@ -40,6 +40,11 @@ type LocalBackend struct {
 	validIDsMu  sync.RWMutex
 	validIDs    map[string]bool
 	validIDsChSt chan map[string]bool // channel returned by ValidIDsCh()
+
+	// In-memory email body cache to avoid redundant IMAP fetches when
+	// the user navigates back-and-forth through the same emails.
+	bodyCache   map[string]*models.EmailBody // key: "folder:uid"
+	bodyCacheMu sync.Mutex
 }
 
 // filterByValidIDs returns only emails whose MessageID is in validIDs.
@@ -239,7 +244,35 @@ func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error)
 }
 
 func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
-	return b.imapClient.FetchEmailBody(uid, folder)
+	key := fmt.Sprintf("%s:%d", folder, uid)
+
+	// Check in-memory cache first.
+	b.bodyCacheMu.Lock()
+	if b.bodyCache == nil {
+		b.bodyCache = make(map[string]*models.EmailBody, 256)
+	}
+	if cached, ok := b.bodyCache[key]; ok {
+		b.bodyCacheMu.Unlock()
+		return cached, nil
+	}
+	b.bodyCacheMu.Unlock()
+
+	body, err := b.imapClient.FetchEmailBody(uid, folder)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache; evict oldest if over 500 entries.
+	b.bodyCacheMu.Lock()
+	if len(b.bodyCache) >= 500 {
+		// Simple eviction: clear the whole cache when full.
+		// An LRU would be better but this is good enough.
+		b.bodyCache = make(map[string]*models.EmailBody, 256)
+	}
+	b.bodyCache[key] = body
+	b.bodyCacheMu.Unlock()
+
+	return body, nil
 }
 
 func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) error {

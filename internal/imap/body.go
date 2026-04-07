@@ -20,9 +20,24 @@ import (
 
 // FetchEmailBody retrieves the full MIME body of the email identified by uid
 // in the given folder. It returns parsed plain text and any inline images.
+// On connection errors (broken pipe, EOF), it reconnects once and retries.
 func (c *Client) FetchEmailBody(uid uint32, folder string) (*models.EmailBody, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	body, err := c.fetchEmailBodyLocked(uid, folder)
+	if err != nil && isConnectionError(err) {
+		logger.Info("FetchEmailBody: connection error, reconnecting: %v", err)
+		if reconErr := c.Reconnect(); reconErr != nil {
+			return nil, fmt.Errorf("reconnect failed: %w (original: %v)", reconErr, err)
+		}
+		body, err = c.fetchEmailBodyLocked(uid, folder)
+	}
+	return body, err
+}
+
+// fetchEmailBodyLocked performs the actual IMAP fetch. Must be called with c.mu held.
+func (c *Client) fetchEmailBodyLocked(uid uint32, folder string) (*models.EmailBody, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}

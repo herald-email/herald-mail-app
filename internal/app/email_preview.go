@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
 	"mail-processor/internal/iterm2"
-	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
 
@@ -429,24 +429,29 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 }
 
 func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
+	// Cancel any in-flight body fetch so rapid j/k doesn't pile up
+	// concurrent IMAP requests that overwhelm the connection.
+	if m.bodyFetchCancel != nil {
+		m.bodyFetchCancel()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	m.bodyFetchCancel = cancel
+
 	messageID := ""
 	if m.selectedTimelineEmail != nil {
 		messageID = m.selectedTimelineEmail.MessageID
 	}
+	b := m.backend // capture for goroutine
 	return func() tea.Msg {
-		var (
-			body *models.EmailBody
-			err  error
-		)
-		for attempt := 0; attempt < 3; attempt++ {
-			if attempt > 0 {
-				time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
-			}
-			body, err = m.backend.FetchEmailBody(folder, uid)
-			if err == nil {
-				break
-			}
-			logger.Warn("FetchEmailBody attempt %d failed: %v", attempt+1, err)
+		defer cancel()
+		if ctx.Err() != nil {
+			return EmailBodyMsg{Err: ctx.Err(), MessageID: messageID}
+		}
+		// Single attempt — IMAP layer handles reconnection internally.
+		// Context cancellation handles rapid cursor movement.
+		body, err := b.FetchEmailBody(folder, uid)
+		if ctx.Err() != nil {
+			return EmailBodyMsg{Err: ctx.Err(), MessageID: messageID}
 		}
 		return EmailBodyMsg{Body: body, Err: err, MessageID: messageID}
 	}

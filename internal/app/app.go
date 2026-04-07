@@ -323,6 +323,7 @@ type Model struct {
 	inlineImageDescs      map[string]string // ContentID → AI description (vision fallback)
 	emailPreviewWidth     int // computed in updateTableDimensions
 	emailFullScreen       bool
+	bodyFetchCancel       context.CancelFunc // cancels the in-flight body fetch
 	// Cached wrapped body lines — invalidated when body or panel width changes.
 	bodyWrappedLines  []string
 	bodyWrappedWidth  int
