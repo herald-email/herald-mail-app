@@ -403,10 +403,16 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 		return nil
 	}
 	ref := m.threadRowMap[cursor]
+	var email *models.EmailData
 	if ref.kind == rowKindThread {
-		return nil // cursor on a collapsed thread header — don't preview
+		// Collapsed thread header — preview the newest email in the group.
+		if len(ref.group.emails) == 0 {
+			return nil
+		}
+		email = ref.group.emails[0]
+	} else {
+		email = ref.group.emails[ref.emailIdx]
 	}
-	email := ref.group.emails[ref.emailIdx]
 	if email.MessageID == m.selectedTimelineEmail.MessageID {
 		return nil // same email already shown
 	}
