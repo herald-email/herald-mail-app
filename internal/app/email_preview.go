@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
-	"mail-processor/internal/iterm2"
 	"mail-processor/internal/models"
 )
 
@@ -261,39 +260,17 @@ func (m *Model) renderFullScreenEmail() string {
 	if m.emailBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.emailBody != nil {
-		// Show inline images — cap to 5 in full-screen, 10 rows each.
-		const fsMaxImages = 5
-		const fsImageHeight = 10
+		// Show inline images as text placeholders with AI description when available.
 		imageLines := 0
-		fsImages := m.emailBody.InlineImages
-		fsMore := 0
-		if len(fsImages) > fsMaxImages {
-			fsMore = len(fsImages) - fsMaxImages
-			fsImages = fsImages[:fsMaxImages]
-		}
-		for _, img := range fsImages {
-			if iterm2.IsSupported() {
-				rendered := iterm2.Render(img.Data, innerW, fsImageHeight)
-				if rendered != "" {
-					sb.WriteString(rendered)
-					imageLines += fsImageHeight
-					continue
-				}
-			}
+		for _, img := range m.emailBody.InlineImages {
 			var label string
 			if desc, ok := m.inlineImageDescs[img.ContentID]; ok {
 				label = fmt.Sprintf("[Image: %s]", desc)
-			} else if m.classifier != nil && m.classifier.HasVisionModel() {
-				label = fmt.Sprintf("[image  %s  %d KB  — describing…]", img.MIMEType, len(img.Data)/1024)
 			} else {
-				label = fmt.Sprintf("[image: %s]", img.MIMEType)
+				label = fmt.Sprintf("[image: %s  %d KB]", img.MIMEType, len(img.Data)/1024)
 			}
 			label = truncate(label, innerW)
 			sb.WriteString(dimStyle.Render(label) + "\n")
-			imageLines++
-		}
-		if fsMore > 0 {
-			sb.WriteString(dimStyle.Render(fmt.Sprintf("[+%d more images]", fsMore)) + "\n")
 			imageLines++
 		}
 		// Reserve lines used by image labels so body scroll accounting is correct

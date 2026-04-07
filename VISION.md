@@ -27,7 +27,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Search (in-folder, full-text FTS5, cross-folder, IMAP fallback, saved searches)
 - [x] MCP server (read/search/classify tools for Claude Code)
 - [x] SSH app mode (`cmd/ssh-server` via charmbracelet/wish)
-- [x] iTerm2 inline image rendering
+- [x] Inline image placeholders (text labels with AI vision descriptions when available)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
 - [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
@@ -360,9 +360,10 @@ AI-generated contextual replies (shown when body is loaded):
 Received emails are converted from HTML to Markdown for display in the terminal. The conversion is best-effort — complex layouts simplify gracefully.
 
 - [x] HTML → Markdown conversion for body preview
-- [x] Inline image rendering (iTerm2 protocol)
+- [x] Inline image text placeholders (`[image: type  size]` in split view, `[Image: AI description]` when vision model available)
+- [ ] AI vision image descriptions — use a vision-capable model (e.g. gemma3:4b, gpt-4o, claude) to generate a one-line description for each inline image on demand. Show as `[Image: A promotional banner showing...]` instead of raw MIME type. Generate lazily when email is opened, cache in SQLite. Requires `HasVisionModel()` on the classifier.
 - [ ] Kitty graphics protocol support (for non-iTerm2 terminals)
-- [ ] AI image description for non-iTerm2 terminals (vision-capable Ollama model, e.g. gemma3:4b)
+- [ ] Optional iTerm2 inline image rendering in full-screen mode (disabled by default, toggle with config flag)
 
 ---
 
