@@ -260,8 +260,9 @@ type Model struct {
 	loading          bool
 	deleting         bool
 	deletionProgress models.DeletionResult
-	deletionsPending int // Number of deletions waiting to complete
-	deletionsTotal   int // Total deletions in current batch
+	deletionsPending int  // Number of deletions waiting to complete
+	deletionsTotal   int  // Total deletions in current batch
+	connectionLost   bool // true while IMAP connection is down during deletion
 	loadingSpinner   int
 	startTime        time.Time
 	progressInfo     models.ProgressInfo
@@ -1401,6 +1402,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.deletionProgress = msg
 		m.deletionsPending--
 
+		// Track connection state for the status bar indicator
+		if msg.ConnectionLost {
+			m.connectionLost = true
+		} else if msg.Error == nil {
+			m.connectionLost = false
+		}
+
 		if msg.Error != nil {
 			logger.Error("Deletion error: %v", msg.Error)
 			if m.cleanupPreviewDeleting {
@@ -1460,6 +1468,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deleting = false
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
+			m.connectionLost = false
+			m.selectedRows = make(map[int]bool)
+			m.selectedMessages = make(map[string]bool)
 
 			// Reload data after all deletions complete to sync with server
 			stats, err := m.backend.GetSenderStatistics(m.currentFolder)

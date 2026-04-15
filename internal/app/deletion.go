@@ -2,11 +2,28 @@ package app
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
+
+// deletionThrottle is the minimum pause between consecutive IMAP delete
+// operations, giving Proton Bridge (and similar backends) time to sync
+// with their upstream API and release sockets.
+const deletionThrottle = 1 * time.Second
+
+// deletionRetryBackoff is the initial wait before retrying a failed
+// deletion due to a connection error. The backoff doubles on each
+// consecutive failure, capped at deletionMaxBackoff.
+const deletionRetryBackoff = 2 * time.Second
+const deletionMaxBackoff = 30 * time.Second
+
+// deletionMaxRetries is how many times the worker retries a single
+// request before giving up and moving to the next one.
+const deletionMaxRetries = 3
 
 func (m *Model) toggleSelection() {
 	if m.summaryTable.Focused() {
@@ -103,7 +120,6 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			for messageID := range m.selectedMessages {
 				targets = append(targets, deleteTarget{messageID: messageID, folder: folder})
 			}
-			m.selectedMessages = make(map[string]bool) // safe: still on Update goroutine
 		} else {
 			// Delete current message
 			cursor := m.detailsTable.Cursor()
@@ -122,7 +138,6 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			}
 			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
 		}
-		m.selectedRows = make(map[int]bool) // safe: still on Update goroutine
 	} else {
 		// Delete current sender using row mapping (or domain in domain mode)
 		cursor := m.summaryTable.Cursor()
@@ -160,8 +175,37 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	return m.listenForDeletionResults()
 }
 
-// deletionWorker processes deletion requests from the queue
+// executeDeletion runs a single deletion/archive request and returns the error.
+func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
+	if req.MessageID != "" {
+		if req.IsArchive {
+			logger.Info("Archiving message: %s", req.MessageID)
+			return 1, m.backend.ArchiveEmail(req.MessageID, req.Folder)
+		}
+		logger.Info("Deleting message: %s", req.MessageID)
+		return 1, m.backend.DeleteEmail(req.MessageID, req.Folder)
+	}
+	if req.Sender != "" {
+		if req.IsArchive {
+			logger.Info("Archiving all messages from sender: %s", req.Sender)
+			return 0, m.backend.ArchiveSenderEmails(req.Sender, req.Folder)
+		}
+		if req.IsDomain {
+			logger.Info("Deleting all messages from domain: %s", req.Sender)
+			return 0, m.backend.DeleteDomainEmails(req.Sender, req.Folder)
+		}
+		logger.Info("Deleting all messages from sender: %s", req.Sender)
+		return 0, m.backend.DeleteSenderEmails(req.Sender, req.Folder)
+	}
+	return 0, nil
+}
+
+// deletionWorker processes deletion requests from the queue.
+// It throttles operations to avoid overwhelming the IMAP backend and
+// retries with exponential backoff when the connection drops.
 func (m *Model) deletionWorker() {
+	backoff := deletionRetryBackoff
+
 	for req := range m.deletionRequestCh {
 		result := models.DeletionResult{
 			MessageID: req.MessageID,
@@ -169,37 +213,64 @@ func (m *Model) deletionWorker() {
 			Folder:    req.Folder,
 		}
 
-		// Perform deletion or archive based on what's provided
-		if req.MessageID != "" {
-			if req.IsArchive {
-				logger.Info("Archiving message: %s", req.MessageID)
-				result.Error = m.backend.ArchiveEmail(req.MessageID, req.Folder)
-			} else {
-				logger.Info("Deleting message: %s", req.MessageID)
-				result.Error = m.backend.DeleteEmail(req.MessageID, req.Folder)
+		// Try the deletion, retrying on connection errors with backoff.
+		// The IMAP layer already reconnects once per call; retries here
+		// handle the case where reconnect itself fails (e.g. port exhaustion
+		// that needs time to clear).
+		for attempt := 0; attempt <= deletionMaxRetries; attempt++ {
+			count, err := m.executeDeletion(req)
+			result.DeletedCount = count
+			result.Error = err
+
+			if err == nil {
+				backoff = deletionRetryBackoff // reset on success
+				break
 			}
-			result.DeletedCount = 1
-		} else if req.Sender != "" {
-			if req.IsArchive {
-				logger.Info("Archiving all messages from sender: %s", req.Sender)
-				result.Error = m.backend.ArchiveSenderEmails(req.Sender, req.Folder)
-			} else if req.IsDomain {
-				logger.Info("Deleting all messages from domain: %s", req.Sender)
-				result.Error = m.backend.DeleteDomainEmails(req.Sender, req.Folder)
+
+			// Non-connection errors are not retryable
+			if !isConnectionErrorStr(err.Error()) {
+				break
+			}
+
+			result.ConnectionLost = true
+
+			if attempt < deletionMaxRetries {
+				logger.Warn("Deletion failed (attempt %d/%d), retrying in %v: %v",
+					attempt+1, deletionMaxRetries+1, backoff, err)
+				time.Sleep(backoff)
+				backoff *= 2
+				if backoff > deletionMaxBackoff {
+					backoff = deletionMaxBackoff
+				}
 			} else {
-				logger.Info("Deleting all messages from sender: %s", req.Sender)
-				result.Error = m.backend.DeleteSenderEmails(req.Sender, req.Folder)
+				logger.Error("Deletion failed after %d attempts, moving to next: %v",
+					deletionMaxRetries+1, err)
 			}
 		}
 
-		// Send result back
 		if req.Response != nil {
 			req.Response <- result
 		}
-
-		// Also send to result channel for UI updates
 		m.deletionResultCh <- result
+
+		// Throttle between operations to let Proton Bridge / upstream API
+		// release sockets and sync state.
+		time.Sleep(deletionThrottle)
 	}
+}
+
+// isConnectionErrorStr checks if an error message indicates a dead connection.
+func isConnectionErrorStr(s string) bool {
+	for _, substr := range []string{
+		"broken pipe", "connection reset", "connection closed",
+		"i/o timeout", "use of closed network connection", "EOF",
+		"reconnect failed", "can't assign requested address",
+	} {
+		if strings.Contains(s, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 // cleanup cleans up resources

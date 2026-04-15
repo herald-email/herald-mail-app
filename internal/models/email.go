@@ -39,11 +39,12 @@ type ProgressInfo struct {
 }
 
 type DeletionResult struct {
-	MessageID    string `json:"message_id"`
-	Sender       string `json:"sender"`
-	Folder       string `json:"folder"`
-	DeletedCount int    `json:"deleted_count"`
-	Error        error
+	MessageID      string `json:"message_id"`
+	Sender         string `json:"sender"`
+	Folder         string `json:"folder"`
+	DeletedCount   int    `json:"deleted_count"`
+	Error          error
+	ConnectionLost bool // true when the IMAP connection dropped during deletion
 }
 
 // FolderStatus holds message counts for a mailbox

@@ -138,10 +138,14 @@ func (m *Model) renderStatusBar() string {
 	// Deletion progress
 	if m.deleting {
 		completed := m.deletionsTotal - m.deletionsPending
+		status := "Deleting"
+		if m.connectionLost {
+			status = "Deleting (reconnecting…)"
+		}
 		if m.deletionProgress.Sender != "" {
-			parts = append(parts, fmt.Sprintf("Deleting %s  %d/%d", m.deletionProgress.Sender, completed, m.deletionsTotal))
+			parts = append(parts, fmt.Sprintf("%s %s  %d/%d", status, m.deletionProgress.Sender, completed, m.deletionsTotal))
 		} else {
-			parts = append(parts, fmt.Sprintf("Deleting…  %d/%d", completed, m.deletionsTotal))
+			parts = append(parts, fmt.Sprintf("%s…  %d/%d", status, completed, m.deletionsTotal))
 		}
 	}
 
