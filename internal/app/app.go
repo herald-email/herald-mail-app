@@ -15,7 +15,6 @@ import (
 	"mail-processor/internal/backend"
 	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
-	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -33,10 +32,10 @@ const (
 
 // Tab constants
 const (
-	tabTimeline  = 0
-	tabCompose   = 1
-	tabCleanup   = 2
-	tabContacts  = 3
+	tabTimeline = 0
+	tabCompose  = 1
+	tabCleanup  = 2
+	tabContacts = 3
 )
 
 // LoadingMsg represents a loading state update
@@ -251,6 +250,7 @@ type AISubjectMsg struct {
 	Subject string
 	Err     error
 }
+
 // Model represents the main application state
 type Model struct {
 	backend    backend.Backend
@@ -276,8 +276,8 @@ type Model struct {
 	deletionResultCh  chan models.DeletionResult
 
 	// Rule engine channels
-	ruleRequestCh  chan models.RuleRequest
-	ruleResultCh   chan models.RuleResult
+	ruleRequestCh   chan models.RuleRequest
+	ruleResultCh    chan models.RuleResult
 	rulesFiredCount int // total rules fired across session
 
 	// Classification channel (buffered; one result per email)
@@ -297,77 +297,42 @@ type Model struct {
 	logViewer     *LogViewer
 
 	// Display options
-	groupByDomain        bool
-	currentFolder        string
-	selectedSender       string
-	selectedRows         map[int]bool        // Selected rows in summary table
-	selectedMessages     map[string]bool     // Selected messages by MessageID (across all senders)
-	rowToSender          map[int]string      // Maps row index to original sender (before sanitization)
-	detailsEmails        []*models.EmailData // Current emails shown in details table
-	timelineEmails       []*models.EmailData // All emails sorted by date for timeline tab
-	timelineSenderWidth  int
-	timelineSubjectWidth int
-	sidebarTooWide       bool // set by layout when sidebar + terminal width leaves < 16 variable cols
-
-	// Thread grouping (timeline tab)
-	threadGroups    []threadGroup
-	threadRowMap    []timelineRowRef // maps table cursor index → row descriptor
-	expandedThreads map[string]bool  // normalised subject → expanded?
+	groupByDomain    bool
+	currentFolder    string
+	selectedSender   string
+	selectedRows     map[int]bool        // Selected rows in summary table
+	selectedMessages map[string]bool     // Selected messages by MessageID (across all senders)
+	rowToSender      map[int]string      // Maps row index to original sender (before sanitization)
+	detailsEmails    []*models.EmailData // Current emails shown in details table
+	sidebarTooWide   bool                // set by layout when sidebar + terminal width leaves < 16 variable cols
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
 
-	// Email body preview (timeline tab)
-	selectedTimelineEmail *models.EmailData
-	emailBody             *models.EmailBody
-	emailBodyLoading      bool
-	inlineImageDescs      map[string]string // ContentID → AI description (vision fallback)
-	emailPreviewWidth     int // computed in updateTableDimensions
-	emailFullScreen       bool
-	bodyFetchCancel       context.CancelFunc // cancels the in-flight body fetch
-	// Cached wrapped body lines — invalidated when body or panel width changes.
-	bodyWrappedLines  []string
-	bodyWrappedWidth  int
-	bodyScrollOffset  int // first visible line in preview body
-
-	// Quick replies
-	quickReplies          []string // canned (first 5) + AI-generated (up to 3)
-	quickRepliesReady     bool     // true once canned replies are available
-	quickReplyOpen        bool     // picker overlay is visible
-	quickReplyIdx         int      // currently highlighted item
-	quickRepliesAIFetched bool     // true once AI generation was triggered for this email
+	// Timeline
+	timeline TimelineState
 
 	// Email body preview (cleanup tab)
-	showCleanupPreview      bool
-	cleanupPreviewEmail     *models.EmailData
-	cleanupEmailBody        *models.EmailBody
-	cleanupBodyLoading      bool
-	cleanupBodyScrollOffset int
-	cleanupBodyWrappedLines []string
-	cleanupBodyWrappedWidth int
-	cleanupPreviewWidth     int // computed in updateTableDimensions
+	showCleanupPreview       bool
+	cleanupPreviewEmail      *models.EmailData
+	cleanupEmailBody         *models.EmailBody
+	cleanupBodyLoading       bool
+	cleanupBodyScrollOffset  int
+	cleanupBodyWrappedLines  []string
+	cleanupBodyWrappedWidth  int
+	cleanupPreviewWidth      int // computed in updateTableDimensions
 	cleanupPreviewHadSidebar bool
-	cleanupFullScreen         bool // true = preview takes entire screen
-	cleanupPreviewDeleting    bool // true = deletion/archive was triggered from preview
-	cleanupPreviewIsArchive   bool // true = the preview action was archive (not delete)
-
-	// Attachment save prompt (receive side)
-	selectedAttachment   int
-	attachmentSavePrompt bool
-	attachmentSaveInput  textinput.Model
+	cleanupFullScreen        bool // true = preview takes entire screen
+	cleanupPreviewDeleting   bool // true = deletion/archive was triggered from preview
+	cleanupPreviewIsArchive  bool // true = the preview action was archive (not delete)
 
 	// Chat panel
-	showChat          bool
-	chatMessages      []ai.ChatMessage // conversation history
-	chatWrappedLines  [][]string       // cached wrapText output per message; nil = invalid
-	chatWrappedWidth  int              // width at which chatWrappedLines was built
-	chatInput         textinput.Model
-	chatWaiting       bool // waiting for Ollama response
-
-	// Chat filter (timeline filtering driven by AI chat <filter> blocks)
-	chatFilterMode     bool
-	chatFilteredEmails []*models.EmailData
-	chatFilterLabel    string
+	showChat         bool
+	chatMessages     []ai.ChatMessage // conversation history
+	chatWrappedLines [][]string       // cached wrapText output per message; nil = invalid
+	chatWrappedWidth int              // width at which chatWrappedLines was built
+	chatInput        textinput.Model
+	chatWaiting      bool // waiting for Ollama response
 
 	// AI classification
 	classifier      ai.AIClient
@@ -377,32 +342,32 @@ type Model struct {
 	classifyDone    int
 
 	// Compose
-	mailer               *appsmtp.Client
-	fromAddress          string
-	composeTo            textinput.Model
-	composeCC            textinput.Model
-	composeBCC           textinput.Model
-	composeSubject       textinput.Model
-	composeBody          textarea.Model
-	composeField         int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
-	composeStatus        string // last send result message
-	composePreview       bool   // show glamour markdown preview
-	composeAttachments   []models.ComposeAttachment
+	mailer             *appsmtp.Client
+	fromAddress        string
+	composeTo          textinput.Model
+	composeCC          textinput.Model
+	composeBCC         textinput.Model
+	composeSubject     textinput.Model
+	composeBody        textarea.Model
+	composeField       int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
+	composeStatus      string // last send result message
+	composePreview     bool   // show glamour markdown preview
+	composeAttachments []models.ComposeAttachment
 
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
 	suggestionIdx int                  // selected row index (-1 = none selected)
 
 	// Compose AI panel (Ctrl+G)
-	composeAIPanel       bool
-	composeAIInput       textinput.Model // free-form prompt
-	composeAIResponse    textarea.Model  // editable AI rewrite
-	composeAIDiff        string          // lipgloss-styled word diff (display only)
-	composeAILoading     bool
-	composeAIThread      bool              // true = include reply context in prompt
-	composeAISubjectHint string            // pending subject suggestion ("" = none)
-	replyContextEmail    *models.EmailData // set when reply is initiated; nil for new emails
-	attachmentPathInput  textinput.Model
+	composeAIPanel        bool
+	composeAIInput        textinput.Model // free-form prompt
+	composeAIResponse     textarea.Model  // editable AI rewrite
+	composeAIDiff         string          // lipgloss-styled word diff (display only)
+	composeAILoading      bool
+	composeAIThread       bool              // true = include reply context in prompt
+	composeAISubjectHint  string            // pending subject suggestion ("" = none)
+	replyContextEmail     *models.EmailData // set when reply is initiated; nil for new emails
+	attachmentPathInput   textinput.Model
 	attachmentInputActive bool
 
 	// Draft auto-save state
@@ -433,28 +398,13 @@ type Model struct {
 	unsubConfirmMode   bool
 	unsubConfirmSender string
 
-	// Search
-	searchMode          bool
-	searchInput         textinput.Model
-	searchResults       []*models.EmailData // nil = not in search mode
-	timelineEmailsCache []*models.EmailData // full list before search
-	semanticScores      map[string]float64  // messageID → similarity score (populated during semantic search)
-	searchError         string              // user-visible error from last search attempt
-
 	// IMAP IDLE / background sync
-	syncStatusMode  string // "idle", "polling", "off"
-	syncCountdown   int    // seconds until next poll
+	syncStatusMode string // "idle", "polling", "off"
+	syncCountdown  int    // seconds until next poll
 
 	// Background embedding
 	embeddingDone  int
 	embeddingTotal int
-
-	// Text selection (preview panel)
-	mouseMode   bool
-	visualMode  bool
-	visualStart int // first selected line index in bodyWrappedLines
-	visualEnd   int // last selected line index (inclusive)
-	pendingY    bool // first 'y' of 'yy' sequence
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode bool
@@ -462,19 +412,19 @@ type Model struct {
 	// Dry-run mode — log rule/cleanup actions without executing destructive ones
 	dryRun bool
 	// Contacts tab
-	contactsList       []models.ContactData
-	contactsFiltered   []models.ContactData
-	contactsIdx        int
-	contactSearch      string
-	contactSearchMode  string // "" | "keyword" | "semantic"
-	contactDetail      *models.ContactData
+	contactsList        []models.ContactData
+	contactsFiltered    []models.ContactData
+	contactsIdx         int
+	contactSearch       string
+	contactSearchMode   string // "" | "keyword" | "semantic"
+	contactDetail       *models.ContactData
 	contactDetailEmails []*models.EmailData
-	contactDetailIdx   int
-	contactFocusPanel  int // 0 = list, 1 = detail
+	contactDetailIdx    int
+	contactFocusPanel   int // 0 = list, 1 = detail
 
 	// Inline email preview within Contacts tab
-	contactPreviewEmail *models.EmailData
-	contactPreviewBody  *models.EmailBody
+	contactPreviewEmail   *models.EmailData
+	contactPreviewBody    *models.EmailBody
 	contactPreviewLoading bool
 
 	// Config
@@ -679,51 +629,53 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	attachmentPathInput.CharLimit = 512
 
 	m := &Model{
-		backend:            b,
-		progressCh:         b.Progress(),
-		loading:            true,
-		dryRun:             dryRun,
-		startTime:          time.Now(),
-		currentFolder:      "INBOX",
-		folders:            []string{"INBOX"},
-		folderTree:         buildFolderTree([]string{"INBOX"}),
-		folderStatus:       make(map[string]models.FolderStatus),
-		showSidebar:        true,
-		focusedPanel:       panelTimeline,
-		selectedRows:       make(map[int]bool),
-		selectedMessages:   make(map[string]bool),
-		rowToSender:        make(map[int]string),
-		summaryTable:       summaryTable,
-		detailsTable:       detailsTable,
-		timelineTable:      timelineTable,
-		logViewer:          logViewer,
-		chatInput:          chatInput,
-		classifier:         classifier,
-		classifications:    make(map[string]string),
-		expandedThreads:    make(map[string]bool),
-		classifyCh:         make(chan ClassifyProgressMsg, 50),
-		mailer:             mailer,
-		fromAddress:        fromAddress,
-		composeTo:          composeTo,
-		composeCC:          composeCC,
-		composeBCC:         composeBCC,
-		composeSubject:     composeSubject,
-		composeBody:        composeBody,
-		suggestionIdx:      -1,
-		composeAIInput:     composeAIInput,
-		composeAIResponse:  composeAIResponse,
-		baseStyle:          baseStyle,
-		headerStyle:        headerStyle,
-		loadingStyle:       loadingStyle,
-		progressStyle:      progressStyle,
-		activeTableStyle:   activeStyle,
-		inactiveTableStyle: inactiveStyle,
+		backend:          b,
+		progressCh:       b.Progress(),
+		loading:          true,
+		dryRun:           dryRun,
+		startTime:        time.Now(),
+		currentFolder:    "INBOX",
+		folders:          []string{"INBOX"},
+		folderTree:       buildFolderTree([]string{"INBOX"}),
+		folderStatus:     make(map[string]models.FolderStatus),
+		showSidebar:      true,
+		focusedPanel:     panelTimeline,
+		selectedRows:     make(map[int]bool),
+		selectedMessages: make(map[string]bool),
+		rowToSender:      make(map[int]string),
+		summaryTable:     summaryTable,
+		detailsTable:     detailsTable,
+		timelineTable:    timelineTable,
+		logViewer:        logViewer,
+		chatInput:        chatInput,
+		classifier:       classifier,
+		classifications:  make(map[string]string),
+		timeline: TimelineState{
+			expandedThreads:     make(map[string]bool),
+			searchInput:         searchInput,
+			attachmentSaveInput: attachmentSaveInput,
+		},
+		classifyCh:          make(chan ClassifyProgressMsg, 50),
+		mailer:              mailer,
+		fromAddress:         fromAddress,
+		composeTo:           composeTo,
+		composeCC:           composeCC,
+		composeBCC:          composeBCC,
+		composeSubject:      composeSubject,
+		composeBody:         composeBody,
+		suggestionIdx:       -1,
+		composeAIInput:      composeAIInput,
+		composeAIResponse:   composeAIResponse,
+		baseStyle:           baseStyle,
+		headerStyle:         headerStyle,
+		loadingStyle:        loadingStyle,
+		progressStyle:       progressStyle,
+		activeTableStyle:    activeStyle,
+		inactiveTableStyle:  inactiveStyle,
 		deletionRequestCh:   deletionRequestCh,
 		deletionResultCh:    deletionResultCh,
 		ruleRequestCh:       ruleRequestCh,
 		ruleResultCh:        ruleResultCh,
-		searchInput:         searchInput,
-		attachmentSaveInput: attachmentSaveInput,
 		attachmentPathInput: attachmentPathInput,
 	}
 
@@ -927,6 +879,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cleanupCmd
 	}
 
+	if model, cmd, handled := m.handleTimelineMsg(msg); handled {
+		return model, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
@@ -961,27 +917,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Merge rather than replace so partial results don't wipe existing counts
 		for folder, st := range msg.Status {
 			m.folderStatus[folder] = st
-		}
-		return m, nil
-
-	case TimelineLoadedMsg:
-		m.timelineEmails = msg.Emails
-		m.updateTimelineTable()
-		// If we navigated here from Contacts, scroll the cursor to the selected email.
-		if m.selectedTimelineEmail != nil {
-			targetID := m.selectedTimelineEmail.MessageID
-			for rowIdx, ref := range m.threadRowMap {
-				if ref.kind == rowKindEmail &&
-					ref.group != nil &&
-					ref.emailIdx < len(ref.group.emails) &&
-					ref.group.emails[ref.emailIdx].MessageID == targetID {
-					m.timelineTable.SetCursor(rowIdx)
-					break
-				}
-			}
-		}
-		if m.classifier != nil {
-			return m, tea.Batch(m.runEmbeddingBatch(), m.runContactEnrichment())
 		}
 		return m, nil
 
@@ -1021,7 +956,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh tables to show updated tags
 		m.updateTimelineTable()
 		// Push newly classified email to rule engine (non-blocking)
-		for _, e := range m.timelineEmails {
+		for _, e := range m.timeline.emails {
 			if e.MessageID == msg.MessageID {
 				select {
 				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: msg.Category}:
@@ -1087,8 +1022,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.composeStatus = fmt.Sprintf("Unsubscribe address copied to clipboard: %s", msg.URL)
 			}
 			// Persist the unsubscribe record so future arrivals from this sender can be flagged.
-			if m.selectedTimelineEmail != nil {
-				sender := m.selectedTimelineEmail.Sender
+			if m.timeline.selectedEmail != nil {
+				sender := m.timeline.selectedEmail.Sender
 				method := msg.Method
 				url := msg.URL
 				go func() {
@@ -1104,25 +1039,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Error creating soft unsubscribe rule: " + msg.Err.Error()
 		} else {
 			m.statusMessage = "Soft unsubscribe rule created for " + msg.Sender
-		}
-		return m, nil
-
-	case StarResultMsg:
-		if msg.Err != nil {
-			m.statusMessage = "Star failed: " + msg.Err.Error()
-		} else {
-			for _, e := range m.timelineEmails {
-				if e.MessageID == msg.MessageID {
-					e.IsStarred = msg.Starred
-					break
-				}
-			}
-			m.updateTimelineTable()
-			if msg.Starred {
-				m.statusMessage = "★ Starred"
-			} else {
-				m.statusMessage = "☆ Unstarred"
-			}
 		}
 		return m, nil
 
@@ -1207,72 +1123,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Discard stale body fetches from rapid cursor navigation.
-		if msg.MessageID != "" && m.selectedTimelineEmail != nil && msg.MessageID != m.selectedTimelineEmail.MessageID {
-			return m, nil
-		}
-		m.emailBodyLoading = false
-		m.selectedAttachment = 0 // reset attachment cursor for new email
-		// Reset quick reply state for the new email
-		m.quickReplies = nil
-		m.quickRepliesReady = false
-		m.quickReplyOpen = false
-		m.quickReplyIdx = 0
-		if msg.Err != nil {
-			logger.Warn("Failed to fetch email body: %v", msg.Err)
-			m.emailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
-		} else {
-			m.emailBody = msg.Body
-			// Cache body text for FTS and embedding (fire-and-forget)
-			if msg.Body != nil && msg.Body.TextPlain != "" && m.selectedTimelineEmail != nil {
-				msgID := m.selectedTimelineEmail.MessageID
-				bodyText := msg.Body.TextPlain
-				go func() {
-					if err := m.backend.CacheBodyText(msgID, bodyText); err != nil {
-						logger.Warn("Failed to cache body text: %v", err)
-					}
-				}()
-			}
-			// Build canned replies and kick off AI generation
-			if m.selectedTimelineEmail != nil {
-				email := m.selectedTimelineEmail
-				m.quickReplies = buildCannedReplies(email.Sender)
-				// Mark as read and cache unsubscribe headers (fire-and-forget commands)
-				body := msg.Body
-				var cmds []tea.Cmd
-				if !email.IsRead {
-					email.IsRead = true // optimistic update in memory
-					cmds = append(cmds, markReadCmd(m.backend, email.MessageID, email.Folder))
-				}
-				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
-					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
-				}
-				// Only fetch AI image descriptions when the terminal can't render them natively
-				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
-					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
-				}
-				// Quick replies are generated on-demand (Ctrl+Q or R), not on every email open.
-				// Pre-populate with canned replies so the picker is always available.
-				m.quickRepliesReady = true
-				if len(cmds) > 0 {
-					m.bodyWrappedLines = nil
-					return m, tea.Batch(cmds...)
-				}
-			} else {
-				m.quickRepliesReady = true
-			}
-		}
-		m.bodyWrappedLines = nil // invalidate wrap cache
-		return m, nil
-
-	case QuickRepliesMsg:
-		if msg.Err != nil {
-			logger.Warn("Quick reply generation failed: %v", msg.Err)
-		} else if len(msg.Replies) > 0 {
-			// Append AI suggestions after canned replies
-			m.quickReplies = append(m.quickReplies, msg.Replies...)
-		}
-		m.quickRepliesReady = true
 		return m, nil
 
 	case CleanupEmailBodyMsg:
@@ -1283,15 +1133,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.cleanupEmailBody = msg.Body
 			m.cleanupBodyWrappedLines = nil // force rewrap on next render
-		}
-		return m, nil
-
-	case ImageDescMsg:
-		if msg.Err == nil && msg.Description != "" {
-			if m.inlineImageDescs == nil {
-				m.inlineImageDescs = make(map[string]string)
-			}
-			m.inlineImageDescs[msg.ContentID] = msg.Description
 		}
 		return m, nil
 
@@ -1310,7 +1151,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				idSet[id] = true
 			}
 			var matched []*models.EmailData
-			for _, e := range m.timelineEmails {
+			for _, e := range m.timeline.emails {
 				if idSet[e.MessageID] {
 					matched = append(matched, e)
 				}
@@ -1332,14 +1173,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if filterCmd != nil {
 			return m, filterCmd
 		}
-		return m, nil
-
-	case ChatFilterActivatedMsg:
-		m.chatFilterMode = true
-		m.chatFilteredEmails = msg.Emails
-		m.chatFilterLabel = msg.Label
-		m.activeTab = tabTimeline
-		m.updateTimelineTable()
 		return m, nil
 
 	case LoadingMsg:
@@ -1504,92 +1337,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.listenForRuleResult()
 
-	case SearchResultMsg:
-		if msg.Err != nil {
-			m.searchError = msg.Err.Error()
-			return m, nil
-		}
-		m.searchError = ""
-		if msg.Query == "" {
-			// Empty query = clear search
-			m.searchResults = nil
-			m.semanticScores = nil
-			if m.timelineEmailsCache != nil {
-				m.timelineEmails = m.timelineEmailsCache
-				m.timelineEmailsCache = nil
-			}
-			m.updateTimelineTable()
-		} else {
-			m.searchResults = msg.Emails
-			m.semanticScores = msg.Scores
-			m.updateTimelineTable()
-		}
-		return m, nil
-
-	case NewEmailsMsg:
-		if msg.Folder == m.currentFolder {
-			// Deduplicate: IMAP SINCE is date-granularity, so polls within
-			// the same day can return emails already in the list.
-			existing := make(map[string]struct{}, len(m.timelineEmails))
-			for _, e := range m.timelineEmails {
-				existing[e.MessageID] = struct{}{}
-			}
-			var fresh []*models.EmailData
-			for _, e := range msg.Emails {
-				if _, dup := existing[e.MessageID]; !dup {
-					fresh = append(fresh, e)
-				}
-			}
-			if len(fresh) > 0 {
-				m.timelineEmails = append(fresh, m.timelineEmails...)
-				if m.timelineEmailsCache != nil {
-					m.timelineEmailsCache = append(fresh, m.timelineEmailsCache...)
-				}
-				m.updateTimelineTable()
-			}
-		}
-		var cmds []tea.Cmd
-		cmds = append(cmds, m.listenForNewEmails())
-		for _, email := range msg.Emails {
-			if m.classifier != nil && m.classifications[email.MessageID] == "" {
-				// Auto-classify; rules will be triggered after classification completes.
-				cmds = append(cmds, m.autoClassifyEmailCmd(email))
-			} else if cat := m.classifications[email.MessageID]; cat != "" {
-				// Already classified — send directly to rule engine (non-blocking).
-				select {
-				case m.ruleRequestCh <- models.RuleRequest{Email: email, Category: cat}:
-				default:
-				}
-			}
-			// Warn if this sender was previously unsubscribed from.
-			if ok, _ := m.backend.IsUnsubscribedSender(email.Sender); ok {
-				m.statusMessage = fmt.Sprintf("⚠ Email from unsubscribed sender: %s", email.Sender)
-			}
-		}
-		return m, tea.Batch(cmds...)
-
-	case EmailExpungedMsg:
-		if msg.Folder == m.currentFolder {
-			filtered := m.timelineEmails[:0]
-			for _, e := range m.timelineEmails {
-				if e.MessageID != msg.MessageID {
-					filtered = append(filtered, e)
-				}
-			}
-			m.timelineEmails = filtered
-			if m.timelineEmailsCache != nil {
-				filtered2 := m.timelineEmailsCache[:0]
-				for _, e := range m.timelineEmailsCache {
-					if e.MessageID != msg.MessageID {
-						filtered2 = append(filtered2, e)
-					}
-				}
-				m.timelineEmailsCache = filtered2
-			}
-			m.updateTimelineTable()
-		}
-		return m, m.listenForExpunged()
-
 	case AutoClassifyResultMsg:
 		if msg.Err == nil {
 			if m.classifications == nil {
@@ -1601,7 +1348,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Send to rule engine regardless; use empty category on error so rules
 		// that don't require a category can still fire.
 		cat := msg.Category
-		for _, e := range m.timelineEmails {
+		for _, e := range m.timeline.emails {
 			if e.MessageID == msg.MessageID {
 				select {
 				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: cat}:
@@ -1747,7 +1494,7 @@ func (m *Model) View() string {
 	if m.loading {
 		return m.renderLoadingView()
 	}
-	if m.emailFullScreen {
+	if m.timeline.fullScreen {
 		return m.renderFullScreenEmail()
 	}
 	if m.cleanupFullScreen {
@@ -1763,8 +1510,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Reset pending 'yy' sequence on any key other than 'y'
-	if m.pendingY && msg.String() != "y" {
-		m.pendingY = false
+	if m.timeline.pendingY && msg.String() != "y" {
+		m.timeline.pendingY = false
 	}
 
 	// Global quit always works
@@ -1786,6 +1533,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if model, cmd, handled := m.handleTabKey(msg); handled {
+		return model, cmd
+	}
+
+	if model, cmd, handled := m.handleTimelineKey(msg); handled {
 		return model, cmd
 	}
 
@@ -1813,10 +1564,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.loading {
 			m.loading = true
 			m.startTime = time.Now()
-			// Clear any active chat filter on refresh.
-			m.chatFilterMode = false
-			m.chatFilteredEmails = nil
-			m.chatFilterLabel = ""
+			m.clearTimelineChatFilter()
 			return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
 		}
 		return m, nil
@@ -1867,8 +1615,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				target = m.cleanupPreviewEmail
 			} else if m.activeTab == tabTimeline {
 				cursor := m.timelineTable.Cursor()
-				if cursor < len(m.threadRowMap) {
-					ref := m.threadRowMap[cursor]
+				if cursor < len(m.timeline.threadRowMap) {
+					ref := m.timeline.threadRowMap[cursor]
 					if ref.kind == rowKindThread {
 						target = ref.group.emails[0]
 					} else {
@@ -1954,36 +1702,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "*":
-		if !m.loading && m.activeTab == tabTimeline {
-			cursor := m.timelineTable.Cursor()
-			if cursor < len(m.threadRowMap) {
-				ref := m.threadRowMap[cursor]
-				var email *models.EmailData
-				if ref.kind == rowKindThread {
-					email = ref.group.emails[0]
-				} else {
-					email = ref.group.emails[ref.emailIdx]
-				}
-				if email != nil {
-					return m, m.toggleStarCmd(email)
-				}
-			}
-		}
-		return m, nil
-
 	case "u":
-		if m.activeTab == tabTimeline && m.emailBody != nil && m.selectedTimelineEmail != nil {
-			if m.emailBody.ListUnsubscribe != "" {
-				sender := m.selectedTimelineEmail.Sender
-				body := m.emailBody
-				m.pendingUnsubscribe = true
-				m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
-				m.pendingUnsubscribeAction = func() tea.Cmd {
-					return unsubscribeCmd(body)
-				}
-			}
-		} else if m.activeTab == tabCleanup && !m.loading && !m.deleting {
+		if m.activeTab == tabCleanup && !m.loading && !m.deleting {
 			cursor := m.summaryTable.Cursor()
 			if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
 				m.unsubConfirmMode = true
@@ -1992,92 +1712,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "F":
-		if !m.loading && m.activeTab == tabTimeline {
-			cursor := m.timelineTable.Cursor()
-			if cursor < len(m.threadRowMap) {
-				ref := m.threadRowMap[cursor]
-				var email *models.EmailData
-				if ref.kind == rowKindThread {
-					email = ref.group.emails[0]
-				} else {
-					email = ref.group.emails[ref.emailIdx]
-				}
-				subject := email.Subject
-				if !strings.HasPrefix(strings.ToLower(subject), "fwd:") {
-					subject = "Fwd: " + subject
-				}
-				fwdBody := fmt.Sprintf("\n\n--- Forwarded message ---\nFrom: %s\nDate: %s\nSubject: %s\n\n",
-					email.Sender, email.Date.Format("Mon, 02 Jan 2006 15:04"), email.Subject)
-				if m.emailBody != nil && m.selectedTimelineEmail != nil &&
-					m.selectedTimelineEmail.MessageID == email.MessageID {
-					fwdBody += m.emailBody.TextPlain
-				}
-				m.activeTab = tabCompose
-				m.composeTo.SetValue("")
-				m.composeSubject.SetValue(subject)
-				m.composeBody.SetValue(fwdBody)
-				m.composeField = 0
-				m.composeTo.Focus()
-				m.composeSubject.Blur()
-				m.composeBody.Blur()
-			}
-		}
-		return m, nil
-
-	case "/":
-		if !m.loading && m.activeTab == tabTimeline && !m.searchMode {
-			m.searchMode = true
-			if m.timelineEmailsCache == nil {
-				m.timelineEmailsCache = m.timelineEmails
-			}
-			m.searchInput.SetValue("")
-			m.searchInput.Focus()
-		}
-		return m, nil
-
 	case "enter":
 		if !m.loading {
-			if m.quickReplyOpen && len(m.quickReplies) > 0 {
-				return m.openQuickReply(m.quickReplies[m.quickReplyIdx])
-			}
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
-				// Clear chat filter when switching folders.
-				m.chatFilterMode = false
-				m.chatFilteredEmails = nil
-				m.chatFilterLabel = ""
+				m.clearTimelineChatFilter()
 				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
-			} else if m.activeTab == tabTimeline {
-				cursor := m.timelineTable.Cursor()
-				if cursor < len(m.threadRowMap) {
-					ref := m.threadRowMap[cursor]
-					if ref.kind == rowKindThread {
-						key := ref.group.normalizedSubject
-						savedCursor := m.timelineTable.Cursor()
-						m.expandedThreads[key] = !m.expandedThreads[key]
-						m.updateTimelineTable()
-						m.timelineTable.SetCursor(savedCursor)
-						return m, nil
-					}
-					// First row of an expanded thread: collapse on Enter instead of opening preview
-					if ref.emailIdx == 0 && len(ref.group.emails) > 1 && m.expandedThreads[ref.group.normalizedSubject] {
-						savedCursor := m.timelineTable.Cursor()
-						m.expandedThreads[ref.group.normalizedSubject] = false
-						m.updateTimelineTable()
-						m.timelineTable.SetCursor(savedCursor)
-						return m, nil
-					}
-					email := ref.group.emails[ref.emailIdx]
-					m.selectedTimelineEmail = email
-					m.emailBody = nil
-					m.emailBodyLoading = true
-					m.inlineImageDescs = nil // reset per-email image descriptions
-					m.bodyScrollOffset = 0
-					m.quickRepliesAIFetched = false
-					m.updateTableDimensions(m.windowWidth, m.windowHeight)
-					return m, m.loadEmailBodyCmd(email.Folder, email.UID)
-				}
 			} else if m.focusedPanel == panelDetails && m.activeTab == tabCleanup {
 				// Open or scroll cleanup preview
 				if m.showCleanupPreview {
@@ -2104,38 +1744,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "ctrl+q":
-		// Toggle quick reply picker (only in preview panel or full-screen)
-		if m.activeTab == tabTimeline && (m.focusedPanel == panelPreview || m.emailFullScreen) && m.emailBody != nil {
-			m.quickReplyOpen = !m.quickReplyOpen
-			if m.quickReplyOpen {
-				if m.quickReplyIdx >= len(m.quickReplies) {
-					m.quickReplyIdx = 0
-				}
-				// Generate AI replies on-demand (first Ctrl+Q press only)
-				if m.classifier != nil && m.emailBody.TextPlain != "" && m.selectedTimelineEmail != nil && !m.quickRepliesAIFetched {
-					m.quickRepliesAIFetched = true
-					email := m.selectedTimelineEmail
-					bodyPreview := m.emailBody.TextPlain
-					if len([]rune(bodyPreview)) > 500 {
-						bodyPreview = string([]rune(bodyPreview)[:500])
-					}
-					return m, generateQuickRepliesCmd(m.classifier, email.Sender, email.Subject, bodyPreview)
-				}
-			}
-		}
-		return m, nil
-
 	case "z":
 		if m.activeTab == tabCleanup && m.showCleanupPreview {
 			m.cleanupFullScreen = !m.cleanupFullScreen
 			m.cleanupBodyWrappedLines = nil // force re-wrap at new width
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			return m, nil
-		}
-		if !m.loading && m.selectedTimelineEmail != nil {
-			m.emailFullScreen = !m.emailFullScreen
-			m.bodyWrappedLines = nil // force re-wrap at new width
 		}
 		return m, nil
 
@@ -2193,87 +1807,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "s":
-		// Save highlighted attachment from preview panel
-		if !m.loading && m.focusedPanel == panelPreview && m.emailBody != nil &&
-			len(m.emailBody.Attachments) > 0 && !m.attachmentSavePrompt {
-			att := m.emailBody.Attachments[m.selectedAttachment]
-			defaultPath := expandTilde("~/Downloads/" + att.Filename)
-			m.attachmentSaveInput.SetValue(defaultPath)
-			m.attachmentSaveInput.Focus()
-			m.attachmentSavePrompt = true
-		}
-		return m, nil
-
-	case "R":
-		// Reply: open compose pre-filled from selected timeline email
-		if !m.loading && m.activeTab == tabTimeline {
-			cursor := m.timelineTable.Cursor()
-			if cursor < len(m.threadRowMap) {
-				ref := m.threadRowMap[cursor]
-				var email *models.EmailData
-				if ref.kind == rowKindThread {
-					email = ref.group.emails[0]
-				} else {
-					email = ref.group.emails[ref.emailIdx]
-				}
-				m.activeTab = tabCompose
-				m.replyContextEmail = email
-				m.composeAIThread = true
-				m.composeTo.SetValue(email.Sender)
-				subject := email.Subject
-				if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-					subject = "Re: " + subject
-				}
-				m.composeSubject.SetValue(subject)
-				m.composeField = 4
-				m.composeTo.Blur()
-				m.composeSubject.Blur()
-				m.composeBody.Focus()
-			}
-		}
-		return m, nil
-
 	case "up", "k":
 		if !m.loading {
-			if m.quickReplyOpen {
-				if m.quickReplyIdx > 0 {
-					m.quickReplyIdx--
-				}
-				return m, nil
-			}
-			if m.emailFullScreen {
-				if m.visualMode {
-					if m.visualEnd > m.visualStart {
-						m.visualEnd--
-					}
-				} else if m.bodyScrollOffset > 0 {
-					m.bodyScrollOffset--
-				}
-				return m, nil
-			}
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				if m.cleanupBodyScrollOffset > 0 {
 					m.cleanupBodyScrollOffset--
 				}
 				return m, nil
 			}
-			if m.activeTab == tabTimeline {
-				if m.focusedPanel == panelPreview {
-					if m.visualMode {
-						if m.visualEnd > m.visualStart {
-							m.visualEnd--
-						}
-					} else if m.bodyScrollOffset > 0 {
-						m.bodyScrollOffset--
-					}
-				} else if m.focusedPanel == panelSidebar {
-					return m.handleNavigation(-1)
-				} else {
-					m.timelineTable.MoveUp(1)
-					return m, m.maybeUpdatePreview()
-				}
-			} else {
+			if m.activeTab != tabTimeline {
 				return m.handleNavigation(-1)
 			}
 		}
@@ -2281,99 +1823,13 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		if !m.loading {
-			if m.quickReplyOpen {
-				if m.quickReplyIdx < len(m.quickReplies)-1 {
-					m.quickReplyIdx++
-				}
-				return m, nil
-			}
-			if m.emailFullScreen {
-				if m.visualMode {
-					if m.visualEnd < len(m.bodyWrappedLines)-1 {
-						m.visualEnd++
-					}
-				} else {
-					m.bodyScrollOffset++
-				}
-				return m, nil
-			}
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				m.cleanupBodyScrollOffset++
 				return m, nil
 			}
-			if m.activeTab == tabTimeline {
-				if m.focusedPanel == panelPreview {
-					if m.visualMode {
-						if m.visualEnd < len(m.bodyWrappedLines)-1 {
-							m.visualEnd++
-						}
-					} else {
-						m.bodyScrollOffset++
-					}
-				} else if m.focusedPanel == panelSidebar {
-					return m.handleNavigation(1)
-				} else {
-					m.timelineTable.MoveDown(1)
-					return m, m.maybeUpdatePreview()
-				}
-			} else {
+			if m.activeTab != tabTimeline {
 				return m.handleNavigation(1)
 			}
-		}
-		return m, nil
-
-	case "v":
-		if m.emailFullScreen || (m.activeTab == tabTimeline && m.focusedPanel == panelPreview) {
-			if len(m.bodyWrappedLines) > 0 {
-				m.visualMode = !m.visualMode
-				if m.visualMode {
-					m.visualStart = m.bodyScrollOffset
-					m.visualEnd = m.bodyScrollOffset
-				}
-			}
-		}
-		return m, nil
-
-	case "m":
-		m.mouseMode = !m.mouseMode
-		if m.mouseMode {
-			return m, tea.DisableMouse
-		}
-		return m, tea.EnableMouseCellMotion
-
-	case "y":
-		if m.pendingY {
-			// yy: copy current line
-			m.pendingY = false
-			if m.bodyScrollOffset < len(m.bodyWrappedLines) {
-				return m, copyToClipboard(m.bodyWrappedLines[m.bodyScrollOffset])
-			}
-		} else if m.visualMode {
-			// y in visual mode: copy selection
-			m.visualMode = false
-			m.pendingY = false
-			start, end := m.visualStart, m.visualEnd
-			if start > end {
-				start, end = end, start
-			}
-			if end >= len(m.bodyWrappedLines) {
-				end = len(m.bodyWrappedLines) - 1
-			}
-			if start < len(m.bodyWrappedLines) {
-				selected := strings.Join(m.bodyWrappedLines[start:end+1], "\n")
-				return m, copyToClipboard(selected)
-			}
-		} else {
-			m.pendingY = true
-		}
-		return m, nil
-
-	case "Y":
-		// Copy all body lines
-		m.visualMode = false
-		m.pendingY = false
-		if len(m.bodyWrappedLines) > 0 {
-			return m, copyToClipboard(strings.Join(m.bodyWrappedLines, "\n"))
 		}
 		return m, nil
 	}

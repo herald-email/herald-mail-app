@@ -125,12 +125,12 @@ func (m *Model) saveCurrentSearch(query string) tea.Cmd {
 func (m *Model) updateTimelineTableFromSearch(emails []*models.EmailData) {
 	if emails == nil {
 		// Restore from cache
-		if m.timelineEmailsCache != nil {
-			m.timelineEmails = m.timelineEmailsCache
-			m.timelineEmailsCache = nil
+		if m.timeline.emailsCache != nil {
+			m.timeline.emails = m.timeline.emailsCache
+			m.timeline.emailsCache = nil
 		}
 	} else {
-		m.timelineEmails = emails
+		m.timeline.emails = emails
 	}
 	m.updateTimelineTable()
 }

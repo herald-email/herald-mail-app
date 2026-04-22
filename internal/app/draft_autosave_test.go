@@ -14,7 +14,7 @@ func newDraftTestModel() *Model {
 	body := textarea.New()
 	return &Model{
 		backend:         &stubBackend{},
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 		composeTo:       to,
 		composeSubject:  subject,

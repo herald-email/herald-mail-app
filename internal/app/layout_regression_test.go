@@ -87,18 +87,18 @@ func makeCleanupStats() map[string]*models.SenderStats {
 	now := time.Date(2026, 4, 20, 18, 38, 0, 0, time.UTC)
 	return map[string]*models.SenderStats{
 		"ShopifyBrand <orders@shopify-brand.example>": {
-			TotalEmails:      8,
-			AvgSize:          8.2 * 1024,
-			WithAttachments:  0,
-			FirstEmail:       now.AddDate(0, 0, -8),
-			LastEmail:        now,
+			TotalEmails:     8,
+			AvgSize:         8.2 * 1024,
+			WithAttachments: 0,
+			FirstEmail:      now.AddDate(0, 0, -8),
+			LastEmail:       now,
 		},
 		"Tech Weekly <newsletter@techweekly.example>": {
-			TotalEmails:      8,
-			AvgSize:          4.2 * 1024,
-			WithAttachments:  0,
-			FirstEmail:       now.AddDate(0, 0, -8),
-			LastEmail:        now,
+			TotalEmails:     8,
+			AvgSize:         4.2 * 1024,
+			WithAttachments: 0,
+			FirstEmail:      now.AddDate(0, 0, -8),
+			LastEmail:       now,
 		},
 	}
 }
@@ -106,7 +106,7 @@ func makeCleanupStats() map[string]*models.SenderStats {
 func TestStatusChrome_UTF8SafeAt80Cols(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline
-	m.timelineEmails = mockEmails()
+	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
 	status := m.renderStatusBar()

@@ -13,14 +13,14 @@ import (
 // It sets up the ruleRequestCh so that non-blocking sends can be observed.
 func makeAutoClassifyModel(classifier ai.AIClient) *Model {
 	m := &Model{
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 		backend:         &stubBackend{},
 		classifier:      classifier,
 		ruleRequestCh:   make(chan models.RuleRequest, 20),
 		ruleResultCh:    make(chan models.RuleResult, 50),
 	}
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{
 			MessageID: "msg-new",
 			Subject:   "New arrival",
@@ -39,7 +39,7 @@ func TestAutoClassifyOnArrival(t *testing.T) {
 	classifier := &stubClassifier{category: "imp"}
 	m := makeAutoClassifyModel(classifier)
 	// Remove the email from timeline so it only exists in the incoming message.
-	m.timelineEmails = nil
+	m.timeline.emails = nil
 
 	email := &models.EmailData{
 		MessageID: "msg-arrival",
@@ -152,7 +152,7 @@ func TestAutoClassifyNilClassifier(t *testing.T) {
 	}
 	// Add it to timeline so the rule-send path in NewEmailsMsg can find it (not
 	// strictly required for the direct send in the handler, but mirrors real state).
-	m.timelineEmails = append(m.timelineEmails, preEmail)
+	m.timeline.emails = append(m.timeline.emails, preEmail)
 
 	unclassifiedEmail := &models.EmailData{
 		MessageID: "msg-unclassified",
@@ -202,7 +202,7 @@ func TestAutoClassifyNilClassifier(t *testing.T) {
 // so repeated polls within the same day can return already-seen emails.
 func TestNewEmailsMsgDeduplication(t *testing.T) {
 	m := makeAutoClassifyModel(nil)
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{MessageID: "existing-1", Subject: "Hello", Sender: "a@b.com", Folder: "INBOX", Date: time.Now()},
 		{MessageID: "existing-2", Subject: "World", Sender: "c@d.com", Folder: "INBOX", Date: time.Now()},
 	}
@@ -217,12 +217,12 @@ func TestNewEmailsMsgDeduplication(t *testing.T) {
 		Folder: "",
 	})
 
-	if len(m.timelineEmails) != 3 {
-		t.Fatalf("expected 3 emails after dedup, got %d", len(m.timelineEmails))
+	if len(m.timeline.emails) != 3 {
+		t.Fatalf("expected 3 emails after dedup, got %d", len(m.timeline.emails))
 	}
 	// The new email should be prepended
-	if m.timelineEmails[0].MessageID != "brand-new" {
-		t.Errorf("first email should be brand-new, got %q", m.timelineEmails[0].MessageID)
+	if m.timeline.emails[0].MessageID != "brand-new" {
+		t.Errorf("first email should be brand-new, got %q", m.timeline.emails[0].MessageID)
 	}
 
 	// Sending the same batch again should not add any more
@@ -234,7 +234,7 @@ func TestNewEmailsMsgDeduplication(t *testing.T) {
 		Folder: "",
 	})
 
-	if len(m.timelineEmails) != 3 {
-		t.Fatalf("expected 3 emails after second dedup, got %d (duplicates leaked)", len(m.timelineEmails))
+	if len(m.timeline.emails) != 3 {
+		t.Fatalf("expected 3 emails after second dedup, got %d (duplicates leaked)", len(m.timeline.emails))
 	}
 }

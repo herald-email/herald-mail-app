@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/ssh"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/bubbletea"
 	"mail-processor/internal/ai"
@@ -82,6 +82,8 @@ func main() {
 					b = lb
 				}
 				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
+				m.SetConfigPath(resolvedConfig)
+				m.SetConfig(cfg)
 				return m, []tea.ProgramOption{tea.WithAltScreen()}
 			}),
 		),

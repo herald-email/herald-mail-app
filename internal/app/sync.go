@@ -46,6 +46,11 @@ func (m *Model) startSync(folder string) tea.Cmd {
 	m.backend.StopIDLE()
 	m.backend.StopPolling()
 
+	if m.cfg == nil {
+		logger.Warn("startSync called before config was attached; falling back to 60s polling")
+		return m.startPolling(60)
+	}
+
 	if m.cfg.Sync.Idle {
 		if err := m.backend.StartIDLE(folder); err == nil {
 			m.syncStatusMode = "idle"

@@ -37,13 +37,13 @@ func (m *Model) submitChat() tea.Cmd {
 	if st, ok := m.folderStatus[currentFolder]; ok {
 		ctx.WriteString(fmt.Sprintf("Folder has %d total emails, %d unread.\n", st.Total, st.Unseen))
 	}
-	if len(m.timelineEmails) > 0 {
+	if len(m.timeline.emails) > 0 {
 		ctx.WriteString("Recent emails (newest first):\n")
 		limit := 20
-		if len(m.timelineEmails) < limit {
-			limit = len(m.timelineEmails)
+		if len(m.timeline.emails) < limit {
+			limit = len(m.timeline.emails)
 		}
-		for _, e := range m.timelineEmails[:limit] {
+		for _, e := range m.timeline.emails[:limit] {
 			ctx.WriteString(fmt.Sprintf("  - [%s] From: %s | Subject: %s | Date: %s\n",
 				e.MessageID, e.Sender, e.Subject, e.Date.Format("2006-01-02")))
 		}

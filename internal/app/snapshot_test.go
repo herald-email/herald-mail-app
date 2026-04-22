@@ -48,7 +48,7 @@ func testModelWithEmails(emails []*models.EmailData) *Model {
 	m.windowHeight = 40
 	m.loading = false
 	if len(emails) > 0 {
-		m.timelineEmails = emails
+		m.timeline.emails = emails
 		m.updateTimelineTable()
 	}
 	return m

@@ -84,8 +84,8 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	// Timeline tab: delete/archive current email
 	if m.activeTab == tabTimeline {
 		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.threadRowMap) {
-			ref := m.threadRowMap[cursor]
+		if cursor < len(m.timeline.threadRowMap) {
+			ref := m.timeline.threadRowMap[cursor]
 			var email *models.EmailData
 			if ref.kind == rowKindThread {
 				email = ref.group.emails[0]
@@ -290,8 +290,8 @@ func (m *Model) cleanup() {
 func (m *Model) buildDeleteDesc() string {
 	if m.activeTab == tabTimeline {
 		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.threadRowMap) {
-			ref := m.threadRowMap[cursor]
+		if cursor < len(m.timeline.threadRowMap) {
+			ref := m.timeline.threadRowMap[cursor]
 			var email *models.EmailData
 			if ref.kind == rowKindThread {
 				email = ref.group.emails[0]
@@ -335,8 +335,8 @@ func (m *Model) buildDeleteDesc() string {
 func (m *Model) buildArchiveDesc() string {
 	if m.activeTab == tabTimeline {
 		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.threadRowMap) {
-			ref := m.threadRowMap[cursor]
+		if cursor < len(m.timeline.threadRowMap) {
+			ref := m.timeline.threadRowMap[cursor]
 			var email *models.EmailData
 			if ref.kind == rowKindThread {
 				email = ref.group.emails[0]

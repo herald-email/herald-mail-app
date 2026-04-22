@@ -28,7 +28,7 @@ func makeCleanupPreviewModel() *Model {
 		},
 		deletionRequestCh: make(chan models.DeletionRequest, 10),
 		deletionResultCh:  make(chan models.DeletionResult, 10),
-		expandedThreads:   make(map[string]bool),
+		timeline:          TimelineState{expandedThreads: make(map[string]bool)},
 		backend:           &stubBackend{},
 		stats:             map[string]*models.SenderStats{},
 	}

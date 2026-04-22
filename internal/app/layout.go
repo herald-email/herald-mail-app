@@ -1,29 +1,76 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/x/ansi"
+	"mail-processor/internal/models"
 )
 
 type ChromeState struct {
-	ActiveTab    int
-	FocusedPanel int
-	ShowLogs     bool
-	ShowChat     bool
-	ShowSidebar  bool
+	ActiveTab     int
+	FocusedPanel  int
+	ShowLogs      bool
+	ShowChat      bool
+	ShowSidebar   bool
 	SidebarNarrow bool
 	StatusMessage string
 }
 
 type TimelineState struct {
-	PreviewOpen bool
+	emails       []*models.EmailData
+	senderWidth  int
+	subjectWidth int
+
+	threadGroups    []threadGroup
+	threadRowMap    []timelineRowRef
+	expandedThreads map[string]bool
+
+	selectedEmail    *models.EmailData
+	body             *models.EmailBody
+	bodyLoading      bool
+	inlineImageDescs map[string]string
+	previewWidth     int
+	fullScreen       bool
+	bodyFetchCancel  context.CancelFunc
+	bodyWrappedLines []string
+	bodyWrappedWidth int
+	bodyScrollOffset int
+
+	selectedAttachment   int
+	attachmentSavePrompt bool
+	attachmentSaveInput  textinput.Model
+
+	quickReplies          []string
+	quickRepliesReady     bool
+	quickReplyOpen        bool
+	quickReplyIdx         int
+	quickRepliesAIFetched bool
+
+	searchMode     bool
+	searchInput    textinput.Model
+	searchResults  []*models.EmailData
+	emailsCache    []*models.EmailData
+	semanticScores map[string]float64
+	searchError    string
+
+	chatFilterMode     bool
+	chatFilteredEmails []*models.EmailData
+	chatFilterLabel    string
+
+	mouseMode   bool
+	visualMode  bool
+	visualStart int
+	visualEnd   int
+	pendingY    bool
 }
 
 type CleanupState struct {
-	PreviewOpen bool
-	FullScreen  bool
+	PreviewOpen   bool
+	FullScreen    bool
 	GroupByDomain bool
 }
 
@@ -41,15 +88,15 @@ type SyncState struct {
 }
 
 type LayoutPlan struct {
-	Width         int
-	Height        int
-	ContentHeight int
+	Width          int
+	Height         int
+	ContentHeight  int
 	SidebarVisible bool
-	ChatVisible   bool
-	Timeline      TimelineLayoutPlan
-	Cleanup       CleanupLayoutPlan
-	Compose       ComposeLayoutPlan
-	Contacts      ContactsLayoutPlan
+	ChatVisible    bool
+	Timeline       TimelineLayoutPlan
+	Cleanup        CleanupLayoutPlan
+	Compose        ComposeLayoutPlan
+	Contacts       ContactsLayoutPlan
 }
 
 type TimelineLayoutPlan struct {
@@ -64,9 +111,9 @@ type CleanupLayoutPlan struct {
 }
 
 type ComposeLayoutPlan struct {
-	LabelWidth     int
+	LabelWidth      int
 	FieldInnerWidth int
-	BodyInnerWidth int
+	BodyInnerWidth  int
 }
 
 type ContactsLayoutPlan struct {
@@ -75,9 +122,30 @@ type ContactsLayoutPlan struct {
 }
 
 func (m *Model) chromeState(plan LayoutPlan) ChromeState {
+	focused := m.focusedPanel
+	if focused == panelSidebar && !plan.SidebarVisible {
+		if m.activeTab == tabTimeline {
+			focused = panelTimeline
+		} else {
+			focused = panelSummary
+		}
+	}
+	if focused == panelChat && !plan.ChatVisible {
+		if m.activeTab == tabTimeline {
+			focused = panelTimeline
+		} else {
+			focused = panelSummary
+		}
+	}
+	if m.activeTab == tabCleanup && m.showCleanupPreview {
+		focused = panelDetails
+	}
+	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && focused == panelPreview {
+		focused = panelTimeline
+	}
 	return ChromeState{
 		ActiveTab:     m.activeTab,
-		FocusedPanel:  m.focusedPanel,
+		FocusedPanel:  focused,
 		ShowLogs:      m.showLogs,
 		ShowChat:      plan.ChatVisible,
 		ShowSidebar:   plan.SidebarVisible,
@@ -87,9 +155,7 @@ func (m *Model) chromeState(plan LayoutPlan) ChromeState {
 }
 
 func (m *Model) timelineState() TimelineState {
-	return TimelineState{
-		PreviewOpen: m.selectedTimelineEmail != nil,
-	}
+	return m.timeline
 }
 
 func (m *Model) cleanupState() CleanupState {
@@ -212,18 +278,51 @@ func (m *Model) normalizeFocusForLayout(plan LayoutPlan) {
 	if m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0 && m.focusedPanel == panelSummary {
 		m.setFocusedPanel(panelDetails)
 	}
-	if m.activeTab == tabTimeline && m.selectedTimelineEmail == nil && m.focusedPanel == panelPreview {
+	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && m.focusedPanel == panelPreview {
+		m.setFocusedPanel(panelTimeline)
+	}
+}
+
+func (t TimelineState) PreviewOpen() bool {
+	return t.selectedEmail != nil
+}
+
+func (t TimelineState) SearchOpen() bool {
+	return t.searchMode
+}
+
+func (t TimelineState) QuickReplyOpen() bool {
+	return t.quickReplyOpen
+}
+
+func (m *Model) timelineDisplayEmails() []*models.EmailData {
+	switch {
+	case m.timeline.chatFilterMode:
+		return m.timeline.chatFilteredEmails
+	case m.timeline.searchMode && m.timeline.searchResults != nil:
+		return m.timeline.searchResults
+	default:
+		return m.timeline.emails
+	}
+}
+
+func (m *Model) hasTimelinePreview() bool {
+	return m.timeline.selectedEmail != nil
+}
+
+func (m *Model) normalizeTimelineFocus() {
+	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && m.focusedPanel == panelPreview {
 		m.setFocusedPanel(panelTimeline)
 	}
 }
 
 func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	plan := LayoutPlan{
-		Width:         width,
-		Height:        height,
-		ContentHeight: clamp(height-8, 5),
+		Width:          width,
+		Height:         height,
+		ContentHeight:  clamp(height-8, 5),
 		SidebarVisible: false,
-		ChatVisible:   m.showChat,
+		ChatVisible:    m.showChat,
 	}
 
 	canShowSidebar := m.showSidebar && (m.activeTab == tabTimeline || m.activeTab == tabCleanup) && !m.showCleanupPreview
@@ -279,7 +378,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	if plan.SidebarVisible {
 		timelineWidth -= sidebarContentWidth + 2 + 2
 	}
-	if m.selectedTimelineEmail != nil {
+	if m.timeline.selectedEmail != nil {
 		tableOuter, previewOuter := splitWidth(clamp(timelineWidth, 20), 0, 26, 25, timelineWidth/2)
 		plan.Timeline = TimelineLayoutPlan{
 			TableWidth:   clamp(tableOuter-2, 20),

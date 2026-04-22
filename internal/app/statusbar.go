@@ -77,18 +77,7 @@ func (m *Model) renderStatusBar() string {
 			Render(safeChromeLine(line, w-2))
 	}
 
-	// Chat filter indicator
-	var filterPrefix string
-	if m.chatFilterMode && m.activeTab == tabTimeline {
-		filterLabel := m.chatFilterLabel
-		if filterLabel == "" {
-			filterLabel = "filtered"
-		}
-		filterPrefix = lipgloss.NewStyle().
-			Foreground(defaultTheme.InfoFg).
-			Bold(true).
-			Render(fmt.Sprintf("⬡ filter: %s (%d emails)  ", filterLabel, len(m.chatFilteredEmails)))
-	}
+	filterPrefix := m.timelineFilterPrefix()
 
 	// Folder breadcrumb
 	folderParts := strings.Split(m.currentFolder, "/")
@@ -149,10 +138,7 @@ func (m *Model) renderStatusBar() string {
 		}
 	}
 
-	// Timeline email count
-	if m.activeTab == tabTimeline {
-		parts = append(parts, fmt.Sprintf("%d emails", len(m.timelineEmails)))
-	} else if m.stats != nil {
+	if m.activeTab != tabTimeline && m.stats != nil {
 		total := 0
 		for _, s := range m.stats {
 			total += s.TotalEmails
@@ -165,28 +151,12 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, fmt.Sprintf("Tagging… %d/%d", m.classifyDone, m.classifyTotal))
 	}
 
-	// Search result count
-	if m.searchMode {
-		if m.searchResults != nil {
-			parts = append(parts, fmt.Sprintf("Search: %d results", len(m.searchResults)))
-		} else {
-			parts = append(parts, "Search")
-		}
-	}
-
 	// Background embedding progress
 	if m.embeddingTotal > 0 && m.embeddingDone < m.embeddingTotal {
 		parts = append(parts, fmt.Sprintf("⬡ embedding %d/%d", m.embeddingDone, m.embeddingTotal))
 	}
 
-	// Quick reply hint / generating indicator
-	if m.activeTab == tabTimeline && m.emailBody != nil {
-		if !m.quickRepliesReady && m.classifier != nil {
-			parts = append(parts, "⚡ generating replies…")
-		} else if m.quickRepliesReady && !m.quickReplyOpen {
-			parts = append(parts, "ctrl+q: quick reply")
-		}
-	}
+	parts = m.appendTimelineStatusParts(parts)
 
 	// Sync status
 	switch m.syncStatusMode {
@@ -223,11 +193,6 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, "sidebar hidden (too narrow — widen terminal or press f)")
 	}
 
-	// Mouse select mode indicator
-	if m.mouseMode {
-		parts = append([]string{"[mouse] select mode — m: restore TUI"}, parts...)
-	}
-
 	line := filterPrefix + strings.Join(parts, "  │  ")
 	w := m.windowWidth
 	if w <= 0 {
@@ -246,18 +211,11 @@ func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	chrome := m.chromeState(plan)
 	var hints string
+	timelineHints, hasTimelineHints := m.timelineKeyHints(chrome)
 	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
-	} else if m.searchMode && m.activeTab == tabTimeline {
-		q := m.searchInput.View()
-		hints = fmt.Sprintf("/ %s  │  esc: clear  │  ctrl+s: save  │  ctrl+i: server search", q)
-		// When search returns no results and we're not already in cross-folder mode, suggest it
-		query := m.searchInput.Value()
-		if m.searchError != "" {
-			hints = fmt.Sprintf("/ %s  │  Error: %s  │  esc: clear", q, m.searchError)
-		} else if m.searchResults != nil && len(m.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
-			hints = fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  esc: clear  │  ctrl+i: server search", q, query)
-		}
+	} else if hasTimelineHints {
+		hints = timelineHints
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if chrome.ShowLogs {
@@ -274,28 +232,6 @@ func (m *Model) renderKeyHints() string {
 		} else {
 			hints = "1/2/3/4: tabs  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
-	} else if m.chatFilterMode && m.activeTab == tabTimeline {
-		hints = "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit"
-	} else if m.activeTab == tabTimeline {
-		if chrome.FocusedPanel == panelPreview {
-			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
-			hasUnsub := m.emailBody != nil && m.emailBody.ListUnsubscribe != ""
-			if m.visualMode {
-				hints = "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual"
-			} else if hasAttachments && hasUnsub {
-				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  u: unsubscribe  │  esc: close  │  q: quit"
-			} else if hasAttachments {
-				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  esc: close  │  q: quit"
-			} else if hasUnsub {
-				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit"
-			} else {
-				hints = "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit"
-			}
-		} else if m.selectedTimelineEmail != nil {
-			hints = "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
-		} else {
-			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit"
-		}
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
@@ -309,10 +245,6 @@ func (m *Model) renderKeyHints() string {
 		default: // panelSummary
 			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
-	}
-	// Override hints when quick reply picker is open.
-	if m.quickReplyOpen {
-		hints = "↑/k ↓/j: navigate replies  │  enter: compose  │  1-8: select  │  esc: close picker  │  q: quit"
 	}
 	// Truncate to prevent wrapping that pushes the header off-screen.
 	w := m.windowWidth
@@ -380,7 +312,7 @@ func (m *Model) cyclePanel(forward bool) {
 			panels = append(panels, panelSidebar)
 		}
 		panels = append(panels, panelTimeline)
-		if m.selectedTimelineEmail != nil {
+		if m.timeline.selectedEmail != nil {
 			panels = append(panels, panelPreview)
 		}
 		if plan.ChatVisible {

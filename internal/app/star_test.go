@@ -13,10 +13,10 @@ import (
 func TestToggleStarCmd(t *testing.T) {
 	m := &Model{
 		backend:         &stubBackend{},
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 	}
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{MessageID: "msg-star-1", Subject: "Star me", Sender: "alice@example.com", Date: time.Now(), IsStarred: false},
 	}
 
@@ -25,7 +25,7 @@ func TestToggleStarCmd(t *testing.T) {
 	updated := result.(*Model)
 
 	found := false
-	for _, e := range updated.timelineEmails {
+	for _, e := range updated.timeline.emails {
 		if e.MessageID == "msg-star-1" {
 			found = true
 			if !e.IsStarred {
@@ -43,7 +43,7 @@ func TestToggleStarCmd(t *testing.T) {
 	// Simulate unstarring.
 	result2, _ := updated.Update(StarResultMsg{MessageID: "msg-star-1", Starred: false})
 	updated2 := result2.(*Model)
-	for _, e := range updated2.timelineEmails {
+	for _, e := range updated2.timeline.emails {
 		if e.MessageID == "msg-star-1" && e.IsStarred {
 			t.Error("expected IsStarred=false after StarResultMsg{Starred:false}, got true")
 		}
@@ -57,10 +57,10 @@ func TestToggleStarCmd(t *testing.T) {
 func TestToggleStarCmdError(t *testing.T) {
 	m := &Model{
 		backend:         &stubBackend{},
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 	}
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{MessageID: "msg-star-2", Subject: "Error case", Sender: "bob@example.com", Date: time.Now()},
 	}
 
@@ -76,28 +76,28 @@ func TestToggleStarCmdError(t *testing.T) {
 func TestStarredSort(t *testing.T) {
 	m := &Model{
 		backend:         &stubBackend{},
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 	}
 
 	now := time.Now()
 	// Two emails: the unstarred one is newer (would sort first by date), starred one is older.
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{MessageID: "unstarred-1", Subject: "Unstarred recent", Sender: "bob@example.com", Date: now, IsStarred: false},
 		{MessageID: "starred-1", Subject: "Starred older", Sender: "alice@example.com", Date: now.Add(-24 * time.Hour), IsStarred: true},
 	}
 
 	m.updateTimelineTable()
 
-	if len(m.threadGroups) < 2 {
-		t.Fatalf("expected 2 thread groups, got %d", len(m.threadGroups))
+	if len(m.timeline.threadGroups) < 2 {
+		t.Fatalf("expected 2 thread groups, got %d", len(m.timeline.threadGroups))
 	}
 
 	// After sort, the first group must be the starred one.
-	if !m.threadGroups[0].emails[0].IsStarred {
+	if !m.timeline.threadGroups[0].emails[0].IsStarred {
 		t.Error("expected starred thread group to appear first after sort")
 	}
-	if m.threadGroups[1].emails[0].IsStarred {
+	if m.timeline.threadGroups[1].emails[0].IsStarred {
 		t.Error("expected unstarred thread group to appear second after sort")
 	}
 }

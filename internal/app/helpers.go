@@ -399,10 +399,10 @@ func (m *Model) updateTableDimensions(width, height int) {
 		cpDateRangeW := 20
 		cpAvgKBW := 7
 		cpDetAttW := 3
-		sumF := summaryFixedCols  // 41
-		sumN := summaryNumCols    // 6
-		detF := detailsFixedCols  // 29
-		detN := detailsNumCols    // 5
+		sumF := summaryFixedCols // 41
+		sumN := summaryNumCols   // 6
+		detF := detailsFixedCols // 29
+		detN := detailsNumCols   // 5
 
 		const cpMinSender = 8
 
@@ -550,13 +550,13 @@ func (m *Model) updateTableDimensions(width, height int) {
 	const timelineTableFixedOverhead = timelineFixedCols + timelineNumCols*2 + 2
 	const minPreviewWidth = 25
 	previewWidth := 0
-	if m.selectedTimelineEmail != nil {
+	if m.timeline.selectedEmail != nil {
 		maxPreview := plan.Timeline.PreviewWidth
 		if maxPreview >= minPreviewWidth {
 			previewWidth = maxPreview
 		}
 	}
-	m.emailPreviewWidth = previewWidth
+	m.timeline.previewWidth = previewWidth
 
 	// Progressive timeline column hiding: when preview is open and space is tight,
 	// drop low-priority fixed columns to preserve Sender + Subject visibility.
@@ -611,8 +611,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 			tSubjectWidth = 14
 		}
 	}
-	m.timelineSenderWidth = tSenderWidth
-	m.timelineSubjectWidth = tSubjectWidth
+	m.timeline.senderWidth = tSenderWidth
+	m.timeline.subjectWidth = tSubjectWidth
 	m.timelineTable.SetColumns([]table.Column{
 		{Title: "Sender", Width: tSenderWidth},
 		{Title: "Subject", Width: tSubjectWidth},

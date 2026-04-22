@@ -71,57 +71,47 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
-	if m.attachmentSavePrompt {
+	if m.timeline.attachmentSavePrompt {
 		switch msg.String() {
 		case "enter":
-			if m.emailBody != nil && m.selectedAttachment < len(m.emailBody.Attachments) {
-				att := &m.emailBody.Attachments[m.selectedAttachment]
-				path := expandTilde(m.attachmentSaveInput.Value())
-				m.attachmentSavePrompt = false
-				m.attachmentSaveInput.Blur()
+			if m.timeline.body != nil && m.timeline.selectedAttachment < len(m.timeline.body.Attachments) {
+				att := &m.timeline.body.Attachments[m.timeline.selectedAttachment]
+				path := expandTilde(m.timeline.attachmentSaveInput.Value())
+				m.timeline.attachmentSavePrompt = false
+				m.timeline.attachmentSaveInput.Blur()
 				return m, saveAttachmentCmd(m.backend, att, path), true
 			}
-			m.attachmentSavePrompt = false
-			m.attachmentSaveInput.Blur()
+			m.timeline.attachmentSavePrompt = false
+			m.timeline.attachmentSaveInput.Blur()
 		case "esc":
-			m.attachmentSavePrompt = false
-			m.attachmentSaveInput.Blur()
+			m.timeline.attachmentSavePrompt = false
+			m.timeline.attachmentSaveInput.Blur()
 		default:
 			var cmd tea.Cmd
-			m.attachmentSaveInput, cmd = m.attachmentSaveInput.Update(msg)
+			m.timeline.attachmentSaveInput, cmd = m.timeline.attachmentSaveInput.Update(msg)
 			return m, cmd, true
 		}
 		return m, nil, true
 	}
 
-	if m.searchMode && m.activeTab == tabTimeline {
+	if m.timeline.searchMode && m.activeTab == tabTimeline {
 		switch msg.String() {
 		case "esc":
-			m.searchMode = false
-			m.searchInput.Blur()
-			m.searchInput.SetValue("")
-			m.searchResults = nil
-			m.semanticScores = nil
-			m.searchError = ""
-			if m.timelineEmailsCache != nil {
-				m.timelineEmails = m.timelineEmailsCache
-				m.timelineEmailsCache = nil
-			}
-			m.updateTimelineTable()
+			m.clearTimelineSearch()
 			return m, nil, true
 		case "ctrl+s":
-			if q := m.searchInput.Value(); q != "" {
+			if q := m.timeline.searchInput.Value(); q != "" {
 				return m, m.saveCurrentSearch(q), true
 			}
 		case "ctrl+i":
-			return m, m.performIMAPSearch(m.searchInput.Value()), true
+			return m, m.performIMAPSearch(m.timeline.searchInput.Value()), true
 		case "ctrl+c":
 			m.cleanup()
 			return m, tea.Quit, true
 		default:
 			var cmd tea.Cmd
-			m.searchInput, cmd = m.searchInput.Update(msg)
-			return m, tea.Batch(cmd, m.performSearch(m.searchInput.Value())), true
+			m.timeline.searchInput, cmd = m.timeline.searchInput.Update(msg)
+			return m, tea.Batch(cmd, m.performSearch(m.timeline.searchInput.Value())), true
 		}
 		return m, nil, true
 	}
@@ -152,8 +142,8 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch msg.String() {
 	case "1":
-		if m.quickReplyOpen && len(m.quickReplies) > 0 {
-			model, cmd := m.openQuickReply(m.quickReplies[0])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 0 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[0])
 			return model, cmd, true
 		}
 		if !m.loading && m.activeTab != tabTimeline {
@@ -161,8 +151,8 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "2":
-		if m.quickReplyOpen && len(m.quickReplies) > 1 {
-			model, cmd := m.openQuickReply(m.quickReplies[1])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 1 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
 		}
 		if !m.loading && m.activeTab != tabCompose {
@@ -170,8 +160,8 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "3":
-		if m.quickReplyOpen && len(m.quickReplies) > 2 {
-			model, cmd := m.openQuickReply(m.quickReplies[2])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
 			return model, cmd, true
 		}
 		if !m.loading && m.activeTab != tabCleanup {
@@ -179,8 +169,8 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "4":
-		if m.quickReplyOpen && len(m.quickReplies) > 3 {
-			model, cmd := m.openQuickReply(m.quickReplies[3])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 3 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
 			return model, cmd, true
 		}
 		if !m.loading && m.activeTab != tabContacts {
@@ -188,26 +178,26 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, m.loadContacts(), true
 	case "5":
-		if m.quickReplyOpen && len(m.quickReplies) > 4 {
-			model, cmd := m.openQuickReply(m.quickReplies[4])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 4 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[4])
 			return model, cmd, true
 		}
 		return m, nil, true
 	case "6":
-		if m.quickReplyOpen && len(m.quickReplies) > 5 {
-			model, cmd := m.openQuickReply(m.quickReplies[5])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 5 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[5])
 			return model, cmd, true
 		}
 		return m, nil, true
 	case "7":
-		if m.quickReplyOpen && len(m.quickReplies) > 6 {
-			model, cmd := m.openQuickReply(m.quickReplies[6])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 6 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[6])
 			return model, cmd, true
 		}
 		return m, nil, true
 	case "8":
-		if m.quickReplyOpen && len(m.quickReplies) > 7 {
-			model, cmd := m.openQuickReply(m.quickReplies[7])
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 7 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[7])
 			return model, cmd, true
 		}
 		return m, nil, true
@@ -216,18 +206,17 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 }
 
 func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
-	if m.quickReplyOpen {
-		m.quickReplyOpen = false
+	if m.timeline.quickReplyOpen {
+		m.clearTimelineQuickReply()
 		return m, nil
 	}
-	if m.visualMode {
-		m.visualMode = false
-		m.pendingY = false
+	if m.timeline.visualMode {
+		m.timeline.visualMode = false
+		m.timeline.pendingY = false
 		return m, nil
 	}
-	if m.emailFullScreen {
-		m.emailFullScreen = false
-		m.bodyWrappedLines = nil
+	if m.timeline.fullScreen {
+		m.clearTimelineFullScreen()
 		return m, nil
 	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
@@ -250,21 +239,12 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		return m, nil
 	}
-	if m.activeTab == tabTimeline && m.chatFilterMode {
-		m.chatFilterMode = false
-		m.chatFilteredEmails = nil
-		m.chatFilterLabel = ""
-		m.updateTimelineTable()
+	if m.activeTab == tabTimeline && m.timeline.chatFilterMode {
+		m.clearTimelineChatFilter()
 		return m, nil
 	}
-	if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {
-		m.selectedTimelineEmail = nil
-		m.emailBody = nil
-		m.emailBodyLoading = false
-		m.bodyWrappedLines = nil
-		m.bodyScrollOffset = 0
-		m.setFocusedPanel(panelTimeline)
-		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	if m.activeTab == tabTimeline && m.timeline.selectedEmail != nil {
+		m.clearTimelinePreview()
 		return m, nil
 	}
 	if m.activeTab == tabCompose {

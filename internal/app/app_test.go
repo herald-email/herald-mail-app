@@ -26,13 +26,13 @@ type stubClassifier struct {
 	err      error
 }
 
-func (s *stubClassifier) Classify(_, _ string) (ai.Category, error)  { return s.category, s.err }
-func (s *stubClassifier) Chat(_ []ai.ChatMessage) (string, error)     { return "", nil }
+func (s *stubClassifier) Classify(_, _ string) (ai.Category, error) { return s.category, s.err }
+func (s *stubClassifier) Chat(_ []ai.ChatMessage) (string, error)   { return "", nil }
 func (s *stubClassifier) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string, []ai.ToolCall, error) {
 	return "", nil, ai.ErrToolsNotSupported
 }
-func (s *stubClassifier) Embed(_ string) ([]float32, error)              { return nil, ai.ErrEmbeddingNotSupported }
-func (s *stubClassifier) SetEmbeddingModel(_ string)                     {}
+func (s *stubClassifier) Embed(_ string) ([]float32, error)                     { return nil, ai.ErrEmbeddingNotSupported }
+func (s *stubClassifier) SetEmbeddingModel(_ string)                            {}
 func (s *stubClassifier) GenerateQuickReplies(_, _, _ string) ([]string, error) { return nil, nil }
 func (s *stubClassifier) EnrichContact(_ string, _ []string) (string, []string, error) {
 	return "", nil, nil
@@ -46,12 +46,12 @@ func (s *stubClassifier) Ping() error { return nil }
 // makeReclassifyModel builds the minimal Model state required to test reclassification.
 func makeReclassifyModel(classifier ai.AIClient) *Model {
 	m := &Model{
-		expandedThreads: make(map[string]bool),
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
 		classifications: make(map[string]string),
 		backend:         &stubBackend{},
 		classifier:      classifier,
 	}
-	m.timelineEmails = []*models.EmailData{
+	m.timeline.emails = []*models.EmailData{
 		{MessageID: "msg-1", Subject: "Hello", Sender: "alice@example.com", Date: time.Now()},
 	}
 	return m
