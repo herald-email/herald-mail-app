@@ -559,6 +559,55 @@ Check these states during every applicable lane:
 - Tool listing succeeds.
 - One read operation succeeds and does not regress after TUI-affecting work.
 
+### TC-21 — Virtual `All Mail only` inspector
+
+**Lane:** B  
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Start with a live config that exposes `All Mail`.
+2. Open the sidebar.
+3. Select the virtual item `All Mail only`.
+4. Wait for the diagnostic set to load.
+5. Open one message preview and then full-screen it.
+
+**Expect:**
+- The sidebar shows `All Mail only` as a non-server diagnostic item.
+- The Timeline opens a derived read-only view rather than a real IMAP folder.
+- The status line and key hints explicitly indicate a diagnostic/read-only context.
+- Preview and full-screen preview work normally.
+- No destructive or mutating actions are advertised from this view.
+
+### TC-22 — `All Mail only` unsupported state
+
+**Lane:** B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Run against an account/server that does not expose `All Mail`, or use a stubbed unsupported backend.
+2. Select `All Mail only`.
+
+**Expect:**
+- The view shows a clear explanation that the provider does not expose `All Mail`.
+- Herald does not show an empty ambiguous Timeline.
+- No destructive actions are available.
+
+### TC-23 — `All Mail only` read-only enforcement
+
+**Lane:** A, B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Select `All Mail only`.
+2. Try `D`, `e`, `R`, `F`, `A`, `u`, `ctrl+q`, and star toggle.
+3. Use `/` search inside the view.
+
+**Expect:**
+- Mutating actions are ignored or blocked with clear diagnostic-safe behavior.
+- Key hints do not advertise delete/archive/reply/forward/re-classify/unsubscribe/quick-reply/star actions.
+- Local search works within the derived set.
+- `Esc` and preview navigation still behave normally.
+
 ---
 
 ## Recommendations

@@ -131,7 +131,7 @@ func (m *Model) renderStatusBar() string {
 	filterPrefix := m.timelineFilterPrefix()
 
 	// Folder breadcrumb
-	folderParts := strings.Split(m.currentFolder, "/")
+	folderParts := strings.Split(displayFolderName(m.currentFolder), "/")
 	breadcrumb := strings.Join(folderParts, " › ")
 
 	var parts []string

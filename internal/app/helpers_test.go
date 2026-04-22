@@ -9,6 +9,28 @@ import (
 	"mail-processor/internal/models"
 )
 
+func stripVirtualRoots(roots []*folderNode) []*folderNode {
+	filtered := make([]*folderNode, 0, len(roots))
+	for _, root := range roots {
+		if root == nil || root.fullPath == virtualFolderAllMailOnly {
+			continue
+		}
+		filtered = append(filtered, root)
+	}
+	return filtered
+}
+
+func stripVirtualItems(items []sidebarItem) []sidebarItem {
+	filtered := make([]sidebarItem, 0, len(items))
+	for _, item := range items {
+		if item.node == nil || item.node.fullPath == virtualFolderAllMailOnly {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
 // --- sanitizeText ---
 
 func TestSanitizeText(t *testing.T) {
@@ -17,11 +39,11 @@ func TestSanitizeText(t *testing.T) {
 		want  string
 	}{
 		{"Hello World", "Hello World"},
-		{"Hello  World", "Hello World"},   // multiple spaces collapsed
-		{"café", "café"},                  // accented letters kept
-		{"日本語テスト", "日本語テスト"},        // CJK kept
+		{"Hello  World", "Hello World"},          // multiple spaces collapsed
+		{"café", "café"},                         // accented letters kept
+		{"日本語テスト", "日本語テスト"},                     // CJK kept
 		{"test@example.com", "test@example.com"}, // @ is punctuation
-		{"emoji 🎉 here", "emoji here"},   // emoji stripped
+		{"emoji 🎉 here", "emoji here"},           // emoji stripped
 		{"🚀launch", "launch"},
 		{"", ""},
 		{"   ", ""},
@@ -42,7 +64,7 @@ func TestSanitizeText(t *testing.T) {
 
 func TestBuildFolderTree_TopLevelFolders(t *testing.T) {
 	folders := []string{"Trash", "INBOX", "Sent"}
-	roots := buildFolderTree(folders)
+	roots := stripVirtualRoots(buildFolderTree(folders))
 
 	if len(roots) != 3 {
 		t.Fatalf("expected 3 roots, got %d", len(roots))
@@ -59,7 +81,7 @@ func TestBuildFolderTree_TopLevelFolders(t *testing.T) {
 
 func TestBuildFolderTree_NestedFolders(t *testing.T) {
 	folders := []string{"INBOX", "INBOX/Work", "INBOX/Personal"}
-	roots := buildFolderTree(folders)
+	roots := stripVirtualRoots(buildFolderTree(folders))
 
 	if len(roots) != 1 {
 		t.Fatalf("expected 1 root, got %d", len(roots))
@@ -76,7 +98,7 @@ func TestBuildFolderTree_NestedFolders(t *testing.T) {
 func TestBuildFolderTree_SyntheticParent(t *testing.T) {
 	// Only the leaf is given; the parent should be created as a synthetic node
 	folders := []string{"INBOX/Sub"}
-	roots := buildFolderTree(folders)
+	roots := stripVirtualRoots(buildFolderTree(folders))
 
 	if len(roots) != 1 {
 		t.Fatalf("expected 1 root, got %d", len(roots))
@@ -96,7 +118,7 @@ func TestBuildFolderTree_SyntheticParent(t *testing.T) {
 
 func TestBuildFolderTree_UnknownFoldersSortedAlphabetically(t *testing.T) {
 	folders := []string{"Zebra", "Apple", "Mango"}
-	roots := buildFolderTree(folders)
+	roots := stripVirtualRoots(buildFolderTree(folders))
 
 	if len(roots) != 3 {
 		t.Fatalf("expected 3 roots, got %d", len(roots))
@@ -116,7 +138,7 @@ func TestFlattenTree_ExpandedNodes(t *testing.T) {
 	folders := []string{"INBOX", "INBOX/Work", "Sent"}
 	roots := buildFolderTree(folders)
 	// All nodes start expanded
-	items := flattenTree(roots)
+	items := stripVirtualItems(flattenTree(roots))
 
 	// Should see: INBOX, INBOX/Work, Sent  (3 items)
 	if len(items) != 3 {
@@ -137,7 +159,7 @@ func TestFlattenTree_CollapsedNodeHidesChildren(t *testing.T) {
 	// Collapse INBOX
 	roots[0].expanded = false
 
-	items := flattenTree(roots)
+	items := stripVirtualItems(flattenTree(roots))
 	// Only INBOX itself should appear
 	if len(items) != 1 {
 		t.Errorf("expected 1 item when collapsed, got %d", len(items))

@@ -15,7 +15,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Timeline / thread view + tab navigation
 - [x] Compose, reply, forward
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
-- [x] Archive (`e` key — moves to Archive / All Mail)
+- [x] Archive (`e` key — moves to an explicit archive folder; provider-aware fallback only)
 - [x] Deletion confirmation prompt
 - [x] Attachment support (download + attach when composing)
 - [x] Markdown compose → HTML send (multipart HTML + plain)
@@ -109,6 +109,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Star / pin important threads to top
+- [ ] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
 - [ ] Split Timeline and preview panels keep aligned heights at common sizes including `80x24`

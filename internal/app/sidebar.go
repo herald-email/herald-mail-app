@@ -86,6 +86,18 @@ func buildFolderTree(folders []string) []*folderNode {
 		return roots[i].name < roots[j].name
 	})
 
+	virtualNode := &folderNode{name: "All Mail only", fullPath: virtualFolderAllMailOnly, expanded: true}
+	insertAt := len(roots)
+	for i, root := range roots {
+		if root.name == "All Mail" {
+			insertAt = i + 1
+			break
+		}
+	}
+	roots = append(roots, nil)
+	copy(roots[insertAt+1:], roots[insertAt:])
+	roots[insertAt] = virtualNode
+
 	return roots
 }
 
@@ -135,11 +147,17 @@ func (m *Model) selectSidebarFolder() {
 	}
 	m.currentFolder = node.fullPath
 	m.loading = true
+	m.startupFallbackIssued = false
 	m.startTime = time.Now()
 	m.stats = nil
 	m.selectedRows = make(map[int]bool)
 	m.selectedMessages = make(map[string]bool)
-	m.focusedPanel = panelSummary
+	m.timeline.virtualNotice = ""
+	if m.activeTab == tabTimeline {
+		m.focusedPanel = panelTimeline
+	} else {
+		m.focusedPanel = panelSummary
+	}
 	logger.Info("Switching to folder: %s", m.currentFolder)
 }
 

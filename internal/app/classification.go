@@ -46,7 +46,7 @@ func (m *Model) startClassification() tea.Cmd {
 }
 
 func (m *Model) startClassificationIfNeeded() tea.Cmd {
-	if m.loading || m.classifying || m.classifier == nil {
+	if m.loading || m.classifying || m.classifier == nil || m.timelineIsReadOnlyDiagnostic() {
 		return nil
 	}
 	m.classifying = true
@@ -116,6 +116,10 @@ func (m *Model) listenForClassification() tea.Cmd {
 
 // loadClassifications fetches existing AI tags from cache for the current folder
 func (m *Model) loadClassifications() {
+	if m.timelineIsReadOnlyDiagnostic() {
+		m.classifications = make(map[string]string)
+		return
+	}
 	tags, err := m.backend.GetClassifications(m.currentFolder)
 	if err != nil {
 		logger.Warn("Failed to load classifications: %v", err)

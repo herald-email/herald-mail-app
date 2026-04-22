@@ -91,6 +91,48 @@ func (m *Model) performSearchWithToken(query string, token int) tea.Cmd {
 	if actualQuery == "" {
 		return func() tea.Msg { return SearchResultMsg{Query: "", Token: token} }
 	}
+	if isVirtualAllMailOnlyFolder(folder) {
+		baseEmails := m.timeline.emailsCache
+		if baseEmails == nil {
+			baseEmails = m.timeline.emails
+		}
+		baseSnapshot := append([]*models.EmailData(nil), baseEmails...)
+		return func() tea.Msg {
+			switch {
+			case bodyMode:
+				return SearchResultMsg{
+					Emails: []*models.EmailData{},
+					Query:  query,
+					Source: "local",
+					Token:  token,
+					Err:    fmt.Errorf("body search is unavailable in All Mail only; use local search here"),
+				}
+			case crossFolder:
+				return SearchResultMsg{
+					Emails: []*models.EmailData{},
+					Query:  query,
+					Source: "local",
+					Token:  token,
+					Err:    fmt.Errorf("cross-folder search is unavailable in All Mail only; this view is already a derived diagnostic set"),
+				}
+			case semanticMode:
+				return SearchResultMsg{
+					Emails: []*models.EmailData{},
+					Query:  query,
+					Source: "local",
+					Token:  token,
+					Err:    fmt.Errorf("semantic search is unavailable in All Mail only; use local search here"),
+				}
+			default:
+				return SearchResultMsg{
+					Emails: filterVirtualFolderEmails(baseSnapshot, actualQuery),
+					Query:  query,
+					Source: "local",
+					Token:  token,
+				}
+			}
+		}
+	}
 
 	classifier := m.classifier
 	backend := m.backend
@@ -180,6 +222,17 @@ func (m *Model) performIMAPSearchWithToken(query string, token int) tea.Cmd {
 		return nil
 	}
 	folder := m.currentFolder
+	if isVirtualAllMailOnlyFolder(folder) {
+		return func() tea.Msg {
+			return SearchResultMsg{
+				Emails: []*models.EmailData{},
+				Query:  query,
+				Source: "imap",
+				Token:  token,
+				Err:    fmt.Errorf("server search is unavailable in All Mail only; this inspector is local and read-only"),
+			}
+		}
+	}
 	return func() tea.Msg {
 		emails, err := m.backend.SearchEmailsIMAP(folder, query)
 		if err != nil {

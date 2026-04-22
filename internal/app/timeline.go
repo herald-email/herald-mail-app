@@ -39,6 +39,32 @@ type timelineRowRef struct {
 func (m *Model) loadTimelineEmails() tea.Cmd {
 	folder := m.currentFolder
 	return func() tea.Msg {
+		if isVirtualAllMailOnlyFolder(folder) {
+			view, err := m.backend.GetAllMailOnlyView()
+			if err != nil {
+				return TimelineLoadedMsg{
+					Emails:   []*models.EmailData{},
+					Notice:   "All Mail only inspection failed: " + err.Error(),
+					ReadOnly: true,
+				}
+			}
+			if view == nil {
+				return TimelineLoadedMsg{
+					Emails:   []*models.EmailData{},
+					Notice:   "All Mail only inspector returned no data",
+					ReadOnly: true,
+				}
+			}
+			emails := view.Emails
+			if emails == nil {
+				emails = []*models.EmailData{}
+			}
+			return TimelineLoadedMsg{
+				Emails:   emails,
+				Notice:   view.Reason,
+				ReadOnly: true,
+			}
+		}
 		emails, err := m.backend.GetTimelineEmails(folder)
 		if err != nil {
 			logger.Error("Failed to load timeline emails: %v", err)
@@ -290,7 +316,15 @@ func (m *Model) renderTimelineView() string {
 
 	var tableView string
 	if m.timeline.emails != nil && len(m.timeline.emails) == 0 {
-		tableView = m.emptyStateView("No emails in this folder  •  press r to refresh")
+		notice := "No emails in this folder  •  press r to refresh"
+		if m.timelineIsReadOnlyDiagnostic() {
+			if m.timeline.virtualNotice != "" {
+				notice = m.timeline.virtualNotice
+			} else {
+				notice = "No messages matched the All Mail only diagnostic"
+			}
+		}
+		tableView = m.emptyStateView(notice)
 	} else {
 		style := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
 		if chrome.FocusedPanel == panelTimeline {
@@ -517,6 +551,9 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 }
 
 func (m *Model) openTimelineQuickReply() tea.Cmd {
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
 	if m.timeline.selectedEmail == nil || m.timeline.body == nil {
 		return nil
 	}
@@ -539,6 +576,9 @@ func (m *Model) openTimelineQuickReply() tea.Cmd {
 }
 
 func (m *Model) toggleTimelineQuickReply() tea.Cmd {
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
 	if m.timeline.selectedEmail == nil || m.timeline.body == nil {
 		if email := m.currentTimelineRowEmail(); email != nil {
 			m.timeline.quickReplyPending = true
@@ -571,6 +611,9 @@ func (m *Model) timelineFilterPrefix() string {
 func (m *Model) appendTimelineStatusParts(parts []string) []string {
 	if m.activeTab == tabTimeline {
 		parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
+		if m.timelineIsReadOnlyDiagnostic() {
+			parts = append(parts, "diagnostic read-only")
+		}
 	}
 	if m.timeline.searchMode {
 		if m.timeline.searchFocus == timelineSearchFocusResults {
@@ -581,7 +624,7 @@ func (m *Model) appendTimelineStatusParts(parts []string) []string {
 			parts = append(parts, "Search input")
 		}
 	}
-	if m.activeTab == tabTimeline && m.timeline.body != nil {
+	if m.activeTab == tabTimeline && m.timeline.body != nil && !m.timelineIsReadOnlyDiagnostic() {
 		if !m.timeline.quickRepliesReady && m.classifier != nil {
 			parts = append(parts, "⚡ generating replies…")
 		} else if m.timeline.quickRepliesReady && !m.timeline.quickReplyOpen {
@@ -613,13 +656,25 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: back", q, m.timeline.searchError), true
 		}
 		query := m.timeline.searchInput.Value()
-		if m.timeline.searchResults != nil && len(m.timeline.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
+		if !m.timelineIsReadOnlyDiagnostic() && m.timeline.searchResults != nil && len(m.timeline.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
 			return fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  ctrl+i: server search  │  esc: back", q, query), true
+		}
+		if m.timelineIsReadOnlyDiagnostic() {
+			return fmt.Sprintf("/ %s  │  read-only local search  │  enter: results  │  esc: back", q), true
 		}
 		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
 	}
 	if m.timeline.chatFilterMode {
 		return "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
+	}
+	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
+		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
+	}
+	if m.timelineIsReadOnlyDiagnostic() && m.timeline.selectedEmail != nil {
+		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  q: quit  │  read-only", true
+	}
+	if m.timelineIsReadOnlyDiagnostic() {
+		return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  f: sidebar  │  q: quit  │  read-only", true
 	}
 	if chrome.FocusedPanel == panelPreview {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
@@ -656,6 +711,17 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case TimelineLoadedMsg:
 		m.timeline.emails = msg.Emails
+		m.timeline.virtualNotice = msg.Notice
+		if msg.ReadOnly {
+			m.loading = false
+			unseen := 0
+			for _, email := range msg.Emails {
+				if email != nil && !email.IsRead {
+					unseen++
+				}
+			}
+			m.folderStatus[m.currentFolder] = models.FolderStatus{Unseen: unseen, Total: len(msg.Emails)}
+		}
 		m.updateTimelineTable()
 		if m.timeline.selectedEmail != nil {
 			targetID := m.timeline.selectedEmail.MessageID
@@ -669,7 +735,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 		}
-		if m.classifier != nil {
+		if m.classifier != nil && !msg.ReadOnly {
 			return m, tea.Batch(
 				m.startEmbeddingBatchIfNeeded(),
 				m.startContactEnrichmentIfNeeded(),
@@ -716,11 +782,11 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.timeline.quickReplies = buildCannedReplies(email.Sender)
 				body := msg.Body
 				var cmds []tea.Cmd
-				if !email.IsRead {
+				if !email.IsRead && !m.timelineIsReadOnlyDiagnostic() {
 					email.IsRead = true
 					cmds = append(cmds, markReadCmd(m.backend, email.MessageID, email.Folder))
 				}
-				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") {
+				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") && !m.timelineIsReadOnlyDiagnostic() {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
 				}
 				if body != nil && len(body.InlineImages) > 0 && m.classifier != nil && m.classifier.HasVisionModel() && !iterm2.IsSupported() {
@@ -914,6 +980,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	switch msg.String() {
 	case "*":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				return m, m.toggleStarCmd(email), true
@@ -921,6 +990,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "u":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if m.timeline.body != nil && m.timeline.selectedEmail != nil && m.timeline.body.ListUnsubscribe != "" {
 			sender := m.timeline.selectedEmail.Sender
 			body := m.timeline.body
@@ -930,6 +1002,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "F":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				subject := email.Subject
@@ -973,7 +1048,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
 				m.clearTimelineChatFilter()
-				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress()), true
+				return m, m.activateCurrentFolder(), true
 			}
 			if m.focusedPanel != panelSidebar {
 				return m, m.openCurrentTimelineEmail(), true
@@ -995,6 +1070,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "s":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading && m.focusedPanel == panelPreview && m.timeline.body != nil &&
 			len(m.timeline.body.Attachments) > 0 && !m.timeline.attachmentSavePrompt {
 			att := m.timeline.body.Attachments[m.timeline.selectedAttachment]
@@ -1005,6 +1083,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "]":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
 			m.timeline.body != nil && m.timeline.selectedAttachment < len(m.timeline.body.Attachments)-1 {
 			m.timeline.selectedAttachment++
@@ -1014,6 +1095,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 	case "[":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
 			m.timeline.body != nil && m.timeline.selectedAttachment > 0 {
 			m.timeline.selectedAttachment--
@@ -1023,6 +1107,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 	case "R":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				m.activeTab = tabCompose

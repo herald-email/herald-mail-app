@@ -127,6 +127,27 @@ func (m *Model) startLoading() tea.Cmd {
 	}
 }
 
+func scheduleStartupFallback() tea.Cmd {
+	return tea.Tick(5*time.Second, func(time.Time) tea.Msg {
+		return StartupFallbackMsg{}
+	})
+}
+
+func (m *Model) loadCachedStartupCmd() tea.Cmd {
+	folder := m.currentFolder
+	return func() tea.Msg {
+		stats, statsErr := m.backend.GetSenderStatistics(folder)
+		if statsErr != nil {
+			return StartupHydratedMsg{Err: statsErr}
+		}
+		emails, emailsErr := m.backend.GetTimelineEmails(folder)
+		if emailsErr != nil {
+			return StartupHydratedMsg{Err: emailsErr}
+		}
+		return StartupHydratedMsg{Stats: stats, Emails: emails}
+	}
+}
+
 // updateSummaryTable updates the summary table with current data
 func (m *Model) updateSummaryTable() {
 	if m.stats == nil {

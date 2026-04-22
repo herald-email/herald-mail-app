@@ -121,10 +121,10 @@ type ContactAddr struct {
 
 // EmbeddingChunk is one chunk of a message's embedding
 type EmbeddingChunk struct {
-	MessageID   string    // message this chunk belongs to
+	MessageID   string // message this chunk belongs to
 	ChunkIndex  int
 	Embedding   []float32
-	ContentHash string    // SHA256 hex of the chunk text
+	ContentHash string // SHA256 hex of the chunk text
 }
 
 // SemanticSearchResult pairs an email with its similarity score.
@@ -166,7 +166,7 @@ type ContactData struct {
 	Email       string
 	DisplayName string
 	Company     string
-	Topics      []string   // stored as JSON in DB, deserialized here
+	Topics      []string // stored as JSON in DB, deserialized here
 	Notes       string
 	FirstSeen   time.Time
 	LastSeen    time.Time
@@ -175,4 +175,13 @@ type ContactData struct {
 	CardDAVUID  string
 	EnrichedAt  *time.Time // nil if never enriched
 	Embedding   []float32  // nil if not yet embedded; stored as little-endian float32 BLOB (same encoding as email_embedding_chunks)
+}
+
+// VirtualFolderResult carries the result of a derived, non-server folder view.
+type VirtualFolderResult struct {
+	Name         string
+	Supported    bool
+	Reason       string
+	SourceFolder string
+	Emails       []*EmailData
 }

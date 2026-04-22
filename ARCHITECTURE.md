@@ -56,6 +56,9 @@ Long-running operations (IMAP sync, classification, reconcile) run in goroutines
 **Valid-ID ground truth**
 After each sync, `StartBackgroundReconcile` fetches all server UIDs once (no envelopes), builds a `map[string]bool` of live message IDs, and sends it on a channel. All backend read methods filter results against this set. Stale cache rows are batch-deleted in the background (50/batch, 100ms sleep, newest UIDs first) while the UI already shows only valid data. Legacy or incomplete cache rows with no server UID are also invalidated automatically by message ID so they do not linger as half-openable search results.
 
+**Virtual diagnostic folders**
+Some investigative views should not pretend to be real IMAP mailboxes. The first example is `All Mail only`, a read-only virtual folder derived from live IMAP folder membership rather than the current cache row’s single `folder` value. The source of truth is the server: start from the `All Mail` message-ID set, subtract all protected folders/views, then hydrate the surviving IDs from the `All Mail` cache for Timeline rendering. If `All Mail` is unavailable or any required membership fetch fails, the view fails closed with an explicit unsupported or error state rather than showing a partial unsafe result set.
+
 **Deletion worker**
 `DeletionRequest` values are sent to a buffered channel. A single `deletionWorker` goroutine processes them serially (IMAP copy-to-Trash → mark Deleted → expunge → remove from cache). Results flow back via `deletionResultCh`. The UI updates immediately on result without waiting for a full reload.
 

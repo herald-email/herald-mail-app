@@ -37,6 +37,9 @@ type Backend interface {
 	// GetTimelineEmails returns all emails for a folder sorted by date descending.
 	GetTimelineEmails(folder string) ([]*models.EmailData, error)
 
+	// GetAllMailOnlyView returns the derived, read-only "All Mail only" inspector view.
+	GetAllMailOnlyView() (*models.VirtualFolderResult, error)
+
 	// GetClassifications returns AI category tags for emails in a folder.
 	GetClassifications(folder string) (map[string]string, error)
 

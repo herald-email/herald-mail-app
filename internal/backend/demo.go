@@ -17,18 +17,18 @@ type DemoBackendMarker interface {
 // DemoBackend implements Backend with synthetic in-memory data.
 // No IMAP connection or SQLite database is required.
 type DemoBackend struct {
-	mu              sync.Mutex
-	emails          []*models.EmailData
-	rules           []*models.Rule
-	prompts         []*models.CustomPrompt
-	classifications map[string]string
-	savedSearches   []*models.SavedSearch
-	deletedIDs      map[string]bool
-	progressCh      chan models.ProgressInfo
-	newEmailsCh     chan models.NewEmailsNotification
-	validIDsCh      chan map[string]bool
-	groupByDomain   bool
-	bodyCache       map[string]string // messageID → cached body text
+	mu                  sync.Mutex
+	emails              []*models.EmailData
+	rules               []*models.Rule
+	prompts             []*models.CustomPrompt
+	classifications     map[string]string
+	savedSearches       []*models.SavedSearch
+	deletedIDs          map[string]bool
+	progressCh          chan models.ProgressInfo
+	newEmailsCh         chan models.NewEmailsNotification
+	validIDsCh          chan map[string]bool
+	groupByDomain       bool
+	bodyCache           map[string]string // messageID → cached body text
 	nextSearchID        int
 	nextRuleID          int64
 	nextPromptID        int64
@@ -165,6 +165,16 @@ func (d *DemoBackend) GetTimelineEmails(folder string) ([]*models.EmailData, err
 		return out[i].Date.After(out[j].Date)
 	})
 	return out, nil
+}
+
+// GetAllMailOnlyView returns an unsupported diagnostic result in demo mode.
+func (d *DemoBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error) {
+	return &models.VirtualFolderResult{
+		Name:      "All Mail only",
+		Supported: false,
+		Reason:    "Demo mode does not expose All Mail only diagnostics",
+		Emails:    []*models.EmailData{},
+	}, nil
 }
 
 // GetEmailByID returns a single email by message ID.
@@ -552,8 +562,8 @@ func (d *DemoBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
 	return d.newEmailsCh
 }
 
-func (d *DemoBackend) StartIDLE(folder string) error { return nil }
-func (d *DemoBackend) StopIDLE()                     {}
+func (d *DemoBackend) StartIDLE(folder string) error            { return nil }
+func (d *DemoBackend) StopIDLE()                                {}
 func (d *DemoBackend) StartPolling(folder string, interval int) {}
 func (d *DemoBackend) StopPolling()                             {}
 
@@ -763,7 +773,7 @@ func (d *DemoBackend) IsUnsubscribedSender(sender string) (bool, error) {
 
 // --- Reply / Forward / Attachments ---
 
-func (d *DemoBackend) ReplyToEmail(_, _ string) error                       { return nil }
+func (d *DemoBackend) ReplyToEmail(_, _ string) error                        { return nil }
 func (d *DemoBackend) ForwardEmail(_, _, _ string) error                     { return nil }
 func (d *DemoBackend) ListAttachments(_ string) ([]models.Attachment, error) { return nil, nil }
 func (d *DemoBackend) GetAttachment(_, _ string) (*models.Attachment, error) { return nil, nil }
@@ -810,20 +820,20 @@ func (d *DemoBackend) DeleteDraft(uid uint32, folder string) error {
 
 // --- Bulk operations ---
 
-func (d *DemoBackend) DeleteThread(folder, subject string) error  { return nil }
-func (d *DemoBackend) BulkDelete(messageIDs []string) error       { return nil }
-func (d *DemoBackend) ArchiveThread(folder, subject string) error { return nil }
+func (d *DemoBackend) DeleteThread(folder, subject string) error           { return nil }
+func (d *DemoBackend) BulkDelete(messageIDs []string) error                { return nil }
+func (d *DemoBackend) ArchiveThread(folder, subject string) error          { return nil }
 func (d *DemoBackend) BulkMove(messageIDs []string, toFolder string) error { return nil }
-func (d *DemoBackend) UnsubscribeSender(messageID string) error   { return nil }
+func (d *DemoBackend) UnsubscribeSender(messageID string) error            { return nil }
 func (d *DemoBackend) SoftUnsubscribeSender(sender, toFolder string) error { return nil }
 
 // --- Folder management ---
 
-func (d *DemoBackend) CreateFolder(_ string) error                             { return nil }
-func (d *DemoBackend) RenameFolder(_, _ string) error                          { return nil }
-func (d *DemoBackend) DeleteFolder(_ string) error                             { return nil }
-func (d *DemoBackend) SyncAllFolders() (int, error)                            { return 0, nil }
-func (d *DemoBackend) GetSyncStatus() (map[string]models.FolderStatus, error)  { return nil, nil }
+func (d *DemoBackend) CreateFolder(_ string) error                            { return nil }
+func (d *DemoBackend) RenameFolder(_, _ string) error                         { return nil }
+func (d *DemoBackend) DeleteFolder(_ string) error                            { return nil }
+func (d *DemoBackend) SyncAllFolders() (int, error)                           { return 0, nil }
+func (d *DemoBackend) GetSyncStatus() (map[string]models.FolderStatus, error) { return nil, nil }
 
 // extractDemoEmailDomain extracts the domain part from a sender string like "Name <addr@domain.com>".
 func extractDemoEmailDomain(sender string) string {

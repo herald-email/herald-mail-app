@@ -34,6 +34,11 @@ func (m *Model) tickSyncCountdown() tea.Cmd {
 
 // startPolling starts background polling and the sync countdown timer.
 func (m *Model) startPolling(interval int) tea.Cmd {
+	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		m.syncStatusMode = ""
+		m.syncCountdown = 0
+		return nil
+	}
 	m.syncStatusMode = "polling"
 	m.syncCountdown = interval
 	m.backend.StartPolling(m.currentFolder, interval)
@@ -45,6 +50,11 @@ func (m *Model) startSync(folder string) tea.Cmd {
 	// Stop any running sync before starting a new one.
 	m.backend.StopIDLE()
 	m.backend.StopPolling()
+	if isVirtualAllMailOnlyFolder(folder) {
+		m.syncStatusMode = ""
+		m.syncCountdown = 0
+		return nil
+	}
 
 	if m.cfg == nil {
 		logger.Warn("startSync called before config was attached; falling back to 60s polling")

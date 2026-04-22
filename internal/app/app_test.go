@@ -231,3 +231,31 @@ func TestEmbedChunksForEmail_FallsBackOnContextLengthError(t *testing.T) {
 		t.Fatalf("expected fallback retries, got %d embed call(s)", classifier.embedCalls)
 	}
 }
+
+func TestStartupHydratedMsg_FailsOpenIntoCachedData(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.loading = true
+
+	emails := []*models.EmailData{
+		{MessageID: "msg-1", Sender: "alice@example.com", Subject: "cached", Date: time.Now(), Folder: "INBOX"},
+	}
+	stats := map[string]*models.SenderStats{
+		"alice@example.com": {TotalEmails: 1},
+	}
+
+	updatedModel, _ := m.Update(StartupHydratedMsg{Stats: stats, Emails: emails})
+	updated := updatedModel.(*Model)
+
+	if updated.loading {
+		t.Fatal("expected startup fallback to clear loading state")
+	}
+	if updated.timeline.emails == nil || len(updated.timeline.emails) != 1 {
+		t.Fatalf("expected cached timeline emails to be loaded, got %#v", updated.timeline.emails)
+	}
+	if updated.stats == nil || updated.stats["alice@example.com"] == nil {
+		t.Fatalf("expected cached sender stats to be loaded, got %#v", updated.stats)
+	}
+	if !strings.Contains(updated.statusMessage, "Showing cached mail") {
+		t.Fatalf("expected cached-startup status message, got %q", updated.statusMessage)
+	}
+}

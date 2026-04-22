@@ -220,6 +220,16 @@ func (b *RemoteBackend) ValidIDsCh() <-chan map[string]bool {
 	return b.validIDsCh
 }
 
+// GetAllMailOnlyView is not yet exposed by the daemon-backed remote backend.
+func (b *RemoteBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error) {
+	return &models.VirtualFolderResult{
+		Name:      "All Mail only",
+		Supported: false,
+		Reason:    "All Mail only inspector is not supported over the daemon yet",
+		Emails:    []*models.EmailData{},
+	}, nil
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 // Close cancels the SSE goroutine and drains/closes all channels.

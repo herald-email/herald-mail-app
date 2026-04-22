@@ -145,3 +145,64 @@ func TestSendProgress_DoesNotPanicAfterClose(t *testing.T) {
 
 	b.sendProgress(models.ProgressInfo{Phase: "complete", Message: "done"})
 }
+
+func TestBuildAllMailOnlyView_StrictExclusions(t *testing.T) {
+	allMail := []*models.EmailData{
+		{MessageID: "<keep@x.com>", Sender: "a@x.com", Subject: "keep", Folder: "All Mail"},
+		{MessageID: "<inbox@x.com>", Sender: "b@x.com", Subject: "inbox", Folder: "All Mail"},
+		{MessageID: "<custom@x.com>", Sender: "c@x.com", Subject: "custom", Folder: "All Mail"},
+		{MessageID: "", Sender: "d@x.com", Subject: "missing id", Folder: "All Mail"},
+	}
+	membership := map[string]map[string]bool{
+		"All Mail": {
+			"<keep@x.com>":  true,
+			"<inbox@x.com>": true,
+			"<custom@x.com>": true,
+		},
+		"INBOX": {
+			"<inbox@x.com>": true,
+		},
+		"Labels/Home": {
+			"<custom@x.com>": true,
+		},
+	}
+
+	view := buildAllMailOnlyView("All Mail", allMail, membership, true, "")
+
+	if !view.Supported {
+		t.Fatalf("expected supported view, got unsupported: %s", view.Reason)
+	}
+	if len(view.Emails) != 1 {
+		t.Fatalf("expected exactly 1 all-mail-only message, got %d", len(view.Emails))
+	}
+	if view.Emails[0].MessageID != "<keep@x.com>" {
+		t.Fatalf("expected <keep@x.com>, got %q", view.Emails[0].MessageID)
+	}
+}
+
+func TestBuildAllMailOnlyView_UnsupportedWhenAllMailMissing(t *testing.T) {
+	view := buildAllMailOnlyView("", nil, nil, true, "")
+	if view.Supported {
+		t.Fatalf("expected unsupported view when All Mail is missing")
+	}
+	if view.Reason == "" {
+		t.Fatalf("expected unsupported reason when All Mail is missing")
+	}
+}
+
+func TestBuildAllMailOnlyView_FailsClosedWhenMembershipIncomplete(t *testing.T) {
+	allMail := []*models.EmailData{
+		{MessageID: "<maybe@x.com>", Sender: "a@x.com", Subject: "maybe", Folder: "All Mail"},
+	}
+
+	view := buildAllMailOnlyView("All Mail", allMail, nil, false, "membership inspection incomplete")
+	if view.Supported {
+		t.Fatalf("expected unsupported view when membership inspection is incomplete")
+	}
+	if view.Reason == "" {
+		t.Fatalf("expected an error reason for incomplete membership inspection")
+	}
+	if len(view.Emails) != 0 {
+		t.Fatalf("expected no partial emails on fail-closed result, got %d", len(view.Emails))
+	}
+}

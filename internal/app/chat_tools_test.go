@@ -28,6 +28,7 @@ type stubBackend struct {
 	saveSearchCalls      int
 	bodyTextByID         map[string]string
 	fetchBodyCalls       int
+	virtualFolderResult  *models.VirtualFolderResult
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -45,6 +46,9 @@ func (s *stubBackend) GetFolderStatus(_ []string) (map[string]models.FolderStatu
 	return nil, nil
 }
 func (s *stubBackend) GetTimelineEmails(_ string) ([]*models.EmailData, error) { return nil, nil }
+func (s *stubBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error) {
+	return s.virtualFolderResult, nil
+}
 func (s *stubBackend) GetClassifications(_ string) (map[string]string, error)  { return nil, nil }
 func (s *stubBackend) SetClassification(_, _ string) error                     { return nil }
 func (s *stubBackend) GetUnclassifiedIDs(_ string) ([]string, error)           { return nil, nil }

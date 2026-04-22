@@ -59,9 +59,22 @@ type FolderStatusMsg struct {
 	Status map[string]models.FolderStatus
 }
 
+// StartupFallbackMsg fires when startup loading has taken too long and Herald
+// should fail open into cached data while live sync continues in the background.
+type StartupFallbackMsg struct{}
+
+// StartupHydratedMsg carries cached startup data used by the fail-open path.
+type StartupHydratedMsg struct {
+	Stats  map[string]*models.SenderStats
+	Emails []*models.EmailData
+	Err    error
+}
+
 // TimelineLoadedMsg carries emails sorted by date for the timeline tab
 type TimelineLoadedMsg struct {
-	Emails []*models.EmailData
+	Emails   []*models.EmailData
+	Notice   string
+	ReadOnly bool
 }
 
 // ComposeStatusMsg carries the result of a send attempt
@@ -269,19 +282,20 @@ type Model struct {
 	progressCh <-chan models.ProgressInfo
 
 	// UI State
-	loading          bool
-	deleting         bool
-	deletionProgress models.DeletionResult
-	deletionsPending int  // Number of deletions waiting to complete
-	deletionsTotal   int  // Total deletions in current batch
-	connectionLost   bool // true while IMAP connection is down during deletion
-	loadingSpinner   int
-	startTime        time.Time
-	progressInfo     models.ProgressInfo
-	showLogs         bool
-	windowWidth      int
-	windowHeight     int
-	subjectColWidth  int
+	loading               bool
+	deleting              bool
+	deletionProgress      models.DeletionResult
+	deletionsPending      int  // Number of deletions waiting to complete
+	deletionsTotal        int  // Total deletions in current batch
+	connectionLost        bool // true while IMAP connection is down during deletion
+	loadingSpinner        int
+	startTime             time.Time
+	startupFallbackIssued bool
+	progressInfo          models.ProgressInfo
+	showLogs              bool
+	windowWidth           int
+	windowHeight          int
+	subjectColWidth       int
 
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
@@ -728,6 +742,7 @@ func (m *Model) SetCleanupScheduler(s *cleanup.Scheduler) {
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.startLoading(),
+		scheduleStartupFallback(),
 		m.tickSpinner(),
 		m.listenForProgress(),
 		m.listenForRuleResult(),
@@ -1108,6 +1123,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case StartupFallbackMsg:
+		if !m.loading {
+			return m, nil
+		}
+		logger.Warn("Startup load is slow; falling back to cached startup data")
+		return m, m.loadCachedStartupCmd()
+
+	case StartupHydratedMsg:
+		if !m.loading {
+			return m, nil
+		}
+		if msg.Err != nil {
+			logger.Warn("cached startup fallback failed: %v", msg.Err)
+			return m, nil
+		}
+		m.loading = false
+		m.startupFallbackIssued = true
+		m.statusMessage = "Showing cached mail while live sync continues…"
+		if msg.Stats != nil {
+			m.stats = msg.Stats
+			m.updateSummaryTable()
+			m.updateDetailsTable()
+		}
+		if msg.Emails != nil {
+			m.timeline.emails = msg.Emails
+			m.updateTimelineTable()
+		}
+		m.loadClassifications()
+		return m, nil
+
 	case ContactSuggestionsMsg:
 		m.suggestions = msg.Contacts
 		if len(m.suggestions) == 0 {
@@ -1140,6 +1185,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ValidIDsMsg:
 		// Background reconciliation has produced the live valid-ID set.
 		// The backend's filterByValidIDs now applies automatically; reload all views.
+		if isVirtualAllMailOnlyFolder(m.currentFolder) {
+			return m, nil
+		}
 		if stats, err := m.backend.GetSenderStatistics(m.currentFolder); err == nil {
 			m.stats = stats
 		}
@@ -1461,6 +1509,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.loading {
+			if !m.startupFallbackIssued && time.Since(m.startTime) >= 5*time.Second {
+				m.startupFallbackIssued = true
+				return m, tea.Batch(m.tickSpinner(), m.loadCachedStartupCmd())
+			}
 			m.loadingSpinner = (m.loadingSpinner + 1) % len(spinnerChars)
 			return m, m.tickSpinner()
 		}
@@ -1615,9 +1667,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		if !m.loading {
 			m.loading = true
+			m.startupFallbackIssued = false
 			m.startTime = time.Now()
 			m.clearTimelineChatFilter()
-			return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
+			return m, m.activateCurrentFolder()
 		}
 		return m, nil
 
@@ -1632,6 +1685,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "D":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil
+		}
 		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
 			email := m.cleanupPreviewEmail
 			m.cleanupPreviewDeleting = true
@@ -1661,6 +1717,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "A":
 		// Re-classify the currently focused single email with AI.
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil
+		}
 		if !m.loading && m.classifier != nil {
 			var target *models.EmailData
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
@@ -1727,6 +1786,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "e":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil
+		}
 		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
 			email := m.cleanupPreviewEmail
 			m.cleanupPreviewDeleting = true
@@ -1755,6 +1817,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "u":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil
+		}
 		if m.activeTab == tabCleanup && !m.loading && !m.deleting {
 			cursor := m.summaryTable.Cursor()
 			if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
@@ -1769,7 +1834,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
 				m.clearTimelineChatFilter()
-				return m, tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
+				return m, m.activateCurrentFolder()
 			} else if m.focusedPanel == panelDetails && m.activeTab == tabCleanup {
 				// Open or scroll cleanup preview
 				if m.showCleanupPreview {
