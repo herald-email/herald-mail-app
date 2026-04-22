@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -231,6 +232,8 @@ type embedResponse struct {
 	Embeddings [][]float32 `json:"embeddings"`
 }
 
+var missingModelPattern = regexp.MustCompile(`model "([^"]+)" not found`)
+
 func (c *Classifier) currentEmbedEndpoint() string {
 	c.embedMu.Lock()
 	defer c.embedMu.Unlock()
@@ -337,6 +340,20 @@ func IsVisionCapable(modelName string) bool {
 		}
 	}
 	return false
+}
+
+// MissingModelInstallHint returns an explicit Ollama install command when the
+// error indicates that a requested local model is not installed.
+func MissingModelInstallHint(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.ReplaceAll(err.Error(), `\"`, `"`)
+	match := missingModelPattern.FindStringSubmatch(msg)
+	if len(match) != 2 {
+		return ""
+	}
+	return fmt.Sprintf("Install missing Ollama model: ollama pull %s", match[1])
 }
 
 // HasVisionModel returns true if the classifier's configured model supports image inputs.

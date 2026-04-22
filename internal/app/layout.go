@@ -10,6 +10,9 @@ import (
 	"mail-processor/internal/models"
 )
 
+const panelGap = "  "
+const panelGapWidth = 2
+
 type ChromeState struct {
 	ActiveTab     int
 	FocusedPanel  int
@@ -341,17 +344,17 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 
 	contentWidth := width
 	if plan.SidebarVisible {
-		contentWidth -= sidebarContentWidth + 2 + 2
+		contentWidth -= sidebarContentWidth + 2 + panelGapWidth
 	}
 	if plan.ChatVisible {
-		contentWidth -= chatPanelWidth + 2 + 2
+		contentWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
 
 	// Compose: label width + bordered field.
 	const composeLabelW = 10
 	composeWidth := width
 	if plan.ChatVisible {
-		composeWidth -= chatPanelWidth + 2 + 2
+		composeWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
 	fieldOuter := clamp(composeWidth-composeLabelW, 12)
 	plan.Compose = ComposeLayoutPlan{
@@ -363,7 +366,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	// Contacts: two bordered panels plus separator.
 	contactsWidth := width
 	if plan.ChatVisible {
-		contactsWidth -= chatPanelWidth + 2 + 2
+		contactsWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
 	contactsAvailable := clamp(contactsWidth-6, 20)
 	leftPreferred := contactsAvailable * 35 / 100
@@ -373,13 +376,13 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	// Timeline: table inner width plus optional preview outer width.
 	timelineWidth := width
 	if plan.ChatVisible {
-		timelineWidth -= chatPanelWidth + 2 + 2
+		timelineWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
 	if plan.SidebarVisible {
-		timelineWidth -= sidebarContentWidth + 2 + 2
+		timelineWidth -= sidebarContentWidth + 2 + panelGapWidth
 	}
 	if m.timeline.selectedEmail != nil {
-		tableOuter, previewOuter := splitWidth(clamp(timelineWidth, 20), 0, 26, 25, timelineWidth/2)
+		tableOuter, previewOuter := splitWidth(clamp(timelineWidth, 20), panelGapWidth, 26, 25, timelineWidth/2)
 		plan.Timeline = TimelineLayoutPlan{
 			TableWidth:   clamp(tableOuter-2, 20),
 			PreviewWidth: previewOuter,
@@ -391,10 +394,10 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	// Cleanup: summary/details inner widths with optional preview outer width.
 	cleanupWidth := width
 	if plan.ChatVisible {
-		cleanupWidth -= chatPanelWidth + 2 + 2
+		cleanupWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
 	if plan.SidebarVisible {
-		cleanupWidth -= sidebarContentWidth + 2 + 2
+		cleanupWidth -= sidebarContentWidth + 2 + panelGapWidth
 	}
 	if m.showCleanupPreview && !m.cleanupFullScreen {
 		if cleanupWidth < 100 {

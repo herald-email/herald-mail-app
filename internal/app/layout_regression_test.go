@@ -209,3 +209,25 @@ func TestContactsInlinePreview_NoFooterBorderLeakAt80x24(t *testing.T) {
 		}
 	}
 }
+
+func TestTimelinePreview_PanelHeightsStayAligned(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.body = &models.EmailBody{TextPlain: strings.Repeat("Lorem ipsum ", 40)}
+	m.focusedPanel = panelPreview
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+
+	tableView := stripANSI(m.baseStyle.Render(renderStyledTableView(&m.timelineTable, 0)))
+	previewView := stripANSI(m.renderEmailPreview())
+
+	tableLines := strings.Split(tableView, "\n")
+	previewLines := strings.Split(previewView, "\n")
+	if len(tableLines) != len(previewLines) {
+		t.Fatalf("expected aligned panel heights, table=%d preview=%d", len(tableLines), len(previewLines))
+	}
+}

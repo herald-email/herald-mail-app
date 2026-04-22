@@ -15,6 +15,37 @@ import (
 	"mail-processor/internal/models"
 )
 
+func fitPanelContentHeight(content string, target int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > target {
+		lines = lines[:target]
+	}
+	for len(lines) < target {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) timelinePreviewInnerHeight() int {
+	if h := m.timelineTable.Height() + 1; h >= 5 {
+		return h
+	}
+	if h := m.windowHeight - 7; h >= 5 {
+		return h
+	}
+	return 5
+}
+
+func (m *Model) cleanupPreviewInnerHeight() int {
+	if h := m.detailsTable.Height() + 1; h >= 5 {
+		return h
+	}
+	if h := m.windowHeight - 7; h >= 5 {
+		return h
+	}
+	return 5
+}
+
 func (m *Model) renderEmailPreview() string {
 	w := m.timeline.previewWidth
 	if w <= 0 {
@@ -44,10 +75,7 @@ func (m *Model) renderEmailPreview() string {
 	sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
 	sb.WriteString(strings.Repeat("─", innerW) + "\n")
 
-	panelHeight := m.windowHeight - 7
-	if panelHeight < 5 {
-		panelHeight = 5
-	}
+	panelHeight := m.timelinePreviewInnerHeight()
 	// Header block is 4 rows (From + Date + Subj + separator).
 	// Reserve 1 row for scroll indicator → maxBodyLines = panelHeight - 4 - 1.
 	maxBodyLines := panelHeight - 5
@@ -196,12 +224,11 @@ func (m *Model) renderEmailPreview() string {
 
 	panelStyle := lipgloss.NewStyle().
 		Width(w - 2). // subtract 2 for left+right borders
-		Height(panelHeight).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 
-	return panelStyle.Render(sb.String())
+	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
 }
 
 // renderBodyLines joins lines[start:end] into a string, applying a purple
@@ -581,10 +608,7 @@ func (m *Model) renderCleanupPreview() string {
 		sb.WriteString(strings.Repeat("─", innerW) + "\n")
 	}
 
-	panelHeight := m.windowHeight - 7
-	if panelHeight < 5 {
-		panelHeight = 5
-	}
+	panelHeight := m.cleanupPreviewInnerHeight()
 	// Header block is 4 rows; reserve 1 for scroll indicator → maxBodyLines = panelHeight - 4 - 1
 	maxBodyLines := panelHeight - 5
 	if maxBodyLines < 1 {
@@ -666,10 +690,9 @@ func (m *Model) renderCleanupPreview() string {
 
 	panelStyle := lipgloss.NewStyle().
 		Width(w - 2). // subtract 2 for left+right borders
-		Height(panelHeight).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 
-	return panelStyle.Render(sb.String())
+	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
 }

@@ -534,5 +534,5 @@ func (m *Model) renderContactsTab(width, height int) string {
 
 	rightPanel := makePanel(rightBorderColor, rightW).Render(rightSb.String())
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
 }

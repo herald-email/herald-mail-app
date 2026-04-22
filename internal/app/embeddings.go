@@ -76,6 +76,7 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 		if backgroundAI == nil {
 			return nil
 		}
+		notice := ""
 		// Pass 1: embed emails that already have body_text in cache
 		if ids, err := m.backend.GetUnembeddedIDsWithBody(folder); err == nil && len(ids) > 0 {
 			if len(ids) > 5 {
@@ -97,6 +98,9 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 					}
 				} else if embErr != nil {
 					warnBackgroundAIOnce("runEmbeddingBatch: embeddings deferred or unavailable: %v", embErr)
+					if notice == "" {
+						notice = aiGuidanceNotice(embErr)
+					}
 					break
 				}
 			}
@@ -120,6 +124,9 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 					}
 				} else if embErr != nil {
 					warnBackgroundAIOnce("runEmbeddingBatch: lazy embeddings deferred or unavailable: %v", embErr)
+					if notice == "" {
+						notice = aiGuidanceNotice(embErr)
+					}
 					break
 				}
 			}
@@ -129,7 +136,7 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 		if total > 0 && done >= total {
 			return EmbeddingDoneMsg{}
 		}
-		return EmbeddingProgressMsg{Done: done, Total: total}
+		return EmbeddingProgressMsg{Done: done, Total: total, Notice: notice}
 	}
 }
 
@@ -153,6 +160,7 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 		}
 
 		enriched := 0
+		notice := ""
 		seenWarnings := map[string]bool{}
 		logWarnOnce := func(format string, args ...any) {
 			msg := fmt.Sprintf(format, args...)
@@ -174,6 +182,9 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 			company, topics, err := backgroundAI.EnrichContact(contact.Email, subjects)
 			if err != nil {
 				logWarnOnce("runContactEnrichment: EnrichContact %s: %v", contact.Email, err)
+				if notice == "" {
+					notice = aiGuidanceNotice(err)
+				}
 				break
 			}
 
@@ -200,6 +211,9 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 			vec, embErr := backgroundAI.Embed(embText)
 			if embErr != nil {
 				logWarnOnce("runContactEnrichment: Embed %s: %v", contact.Email, embErr)
+				if notice == "" {
+					notice = aiGuidanceNotice(embErr)
+				}
 				// Enrichment still counts even if embedding fails
 			} else {
 				if storeErr := m.backend.UpdateContactEmbedding(contact.Email, vec); storeErr != nil {
@@ -210,6 +224,6 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 			enriched++
 		}
 
-		return ContactEnrichedMsg{Count: enriched}
+		return ContactEnrichedMsg{Count: enriched, Notice: notice}
 	}
 }

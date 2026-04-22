@@ -128,3 +128,13 @@ func TestHandleOverlayKey_AttachmentSaveUsesCurrentSelection(t *testing.T) {
 		t.Fatalf("expected save path /tmp/second.pdf, got %q", backend.savedPath)
 	}
 }
+
+func TestRenderStatusBar_ShowsStatusMessage(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.statusMessage = "Install missing Ollama model: ollama pull nomic-embed-text"
+
+	status := stripANSI(m.renderStatusBar())
+	if !strings.Contains(status, "ollama pull nomic-embed-text") {
+		t.Fatalf("expected status bar to include status message guidance, got %q", status)
+	}
+}

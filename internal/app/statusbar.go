@@ -83,7 +83,11 @@ func (m *Model) renderStatusBar() string {
 	folderParts := strings.Split(m.currentFolder, "/")
 	breadcrumb := strings.Join(folderParts, " › ")
 
-	parts := []string{breadcrumb}
+	var parts []string
+	if msg := strings.TrimSpace(m.statusMessage); msg != "" {
+		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Render(msg))
+	}
+	parts = append(parts, breadcrumb)
 
 	// Folder counts
 	if st, ok := m.folderStatus[m.currentFolder]; ok {

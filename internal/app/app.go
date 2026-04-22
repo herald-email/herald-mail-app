@@ -151,8 +151,9 @@ type SyncTickMsg struct{}
 
 // EmbeddingProgressMsg reports background embedding progress
 type EmbeddingProgressMsg struct {
-	Done  int
-	Total int
+	Done   int
+	Total  int
+	Notice string
 }
 
 // EmbeddingDoneMsg signals background embedding finished
@@ -202,7 +203,10 @@ type ImageDescMsg struct {
 }
 
 // ContactEnrichedMsg signals that a batch of contacts was enriched with company/topics/embedding.
-type ContactEnrichedMsg struct{ Count int }
+type ContactEnrichedMsg struct {
+	Count  int
+	Notice string
+}
 
 // ContactsLoadedMsg carries the full contact list for the Contacts tab.
 type ContactsLoadedMsg struct{ Contacts []models.ContactData }
@@ -1368,6 +1372,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EmbeddingProgressMsg:
 		m.embeddingDone = msg.Done
 		m.embeddingTotal = msg.Total
+		if msg.Notice != "" {
+			m.statusMessage = msg.Notice
+		}
 		if msg.Done < msg.Total {
 			return m, m.runEmbeddingBatch()
 		}
@@ -1379,8 +1386,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ContactEnrichedMsg:
+		if msg.Notice != "" {
+			m.statusMessage = msg.Notice
+		}
 		if msg.Count > 0 {
-			m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
+			if msg.Notice == "" {
+				m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
+			}
 			return m, m.runContactEnrichment()
 		}
 		return m, nil
@@ -1895,7 +1907,7 @@ func (m *Model) renderMainView() string {
 	content.WriteString(m.headerStyle.Render("ProtonMail Analyzer") + "\n")
 
 	// Tab bar
-	content.WriteString(m.renderTabBar() + "\n\n")
+	content.WriteString(m.renderTabBar() + "\n")
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
@@ -1928,19 +1940,19 @@ func (m *Model) renderMainView() string {
 				if plan.Cleanup.SummaryWidth == 0 {
 					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, detailsView, previewPanel)
 				} else {
-					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
+					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView, previewPanel)
 				}
 			} else if plan.SidebarVisible && !m.sidebarTooWide {
 				sidebarView := m.baseStyle.Render(m.renderSidebar())
-				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
+				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, summaryView, panelGap, detailsView)
 			} else {
-				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView)
+				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView)
 			}
 		}
 	}
 	if plan.ChatVisible {
 		chatView := m.baseStyle.Render(m.renderChatPanel())
-		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, "  ", chatView) + "\n")
+		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, panelGap, chatView) + "\n")
 	} else {
 		content.WriteString(mainContent + "\n")
 	}

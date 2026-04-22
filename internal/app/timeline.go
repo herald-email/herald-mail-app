@@ -302,7 +302,7 @@ func (m *Model) renderTimelineView() string {
 	var mainContent string
 	if m.timeline.selectedEmail != nil {
 		previewPanel := m.renderEmailPreview()
-		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, tableView, previewPanel)
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, tableView, panelGap, previewPanel)
 	} else {
 		mainContent = tableView
 	}
@@ -315,7 +315,7 @@ func (m *Model) renderTimelineView() string {
 			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderInactive)
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)
+		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
 	}
 	return mainContent
 }

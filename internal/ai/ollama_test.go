@@ -2,8 +2,10 @@ package ai
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -174,5 +176,14 @@ func TestEmbed_FallsBackToSupportedEndpointAndCachesIt(t *testing.T) {
 	}
 	if embedCalls != 2 {
 		t.Fatalf("expected /api/embed to serve both requests, got %d", embedCalls)
+	}
+}
+
+func TestMissingModelInstallHint(t *testing.T) {
+	err := errors.New(`ollama /api/embed returned 404: {"error":"model \"nomic-embed-text\" not found, try pulling it first"}`)
+
+	hint := MissingModelInstallHint(err)
+	if !strings.Contains(hint, "ollama pull nomic-embed-text") {
+		t.Fatalf("expected install hint for missing model, got %q", hint)
 	}
 }
