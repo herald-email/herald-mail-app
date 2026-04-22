@@ -47,13 +47,16 @@ func TestBuildValidIDSet_AllValid(t *testing.T) {
 	}
 	serverUIDs := map[uint32]bool{1: true, 2: true}
 
-	valid, stale := buildValidIDSet(cached, serverUIDs)
+	valid, staleUIDs, staleMessageIDs := buildValidIDSet(cached, serverUIDs)
 
 	if !valid["<a@x.com>"] || !valid["<b@x.com>"] {
 		t.Error("expected both IDs to be valid")
 	}
-	if len(stale) != 0 {
-		t.Errorf("expected no stale UIDs, got %v", stale)
+	if len(staleUIDs) != 0 {
+		t.Errorf("expected no stale UIDs, got %v", staleUIDs)
+	}
+	if len(staleMessageIDs) != 0 {
+		t.Errorf("expected no stale message IDs, got %v", staleMessageIDs)
 	}
 }
 
@@ -65,7 +68,7 @@ func TestBuildValidIDSet_SomeStale(t *testing.T) {
 	}
 	serverUIDs := map[uint32]bool{1: true, 3: true}
 
-	valid, stale := buildValidIDSet(cached, serverUIDs)
+	valid, staleUIDs, staleMessageIDs := buildValidIDSet(cached, serverUIDs)
 
 	if !valid["<a@x.com>"] || !valid["<c@x.com>"] {
 		t.Error("expected a and c to be valid")
@@ -73,29 +76,35 @@ func TestBuildValidIDSet_SomeStale(t *testing.T) {
 	if valid["<b@x.com>"] {
 		t.Error("b should not be valid")
 	}
-	if len(stale) != 1 || stale[0] != 2 {
-		t.Errorf("expected stale=[2], got %v", stale)
+	if len(staleUIDs) != 1 || staleUIDs[0] != 2 {
+		t.Errorf("expected staleUIDs=[2], got %v", staleUIDs)
+	}
+	if len(staleMessageIDs) != 0 {
+		t.Errorf("expected no stale message IDs, got %v", staleMessageIDs)
 	}
 }
 
 func TestBuildValidIDSet_LegacyZeroUID(t *testing.T) {
-	// Emails cached before UID tracking (uid=0) must be kept conservatively
+	// Emails cached before UID tracking (uid=0) should be invalidated and deleted.
 	cached := []uidMsgPair{
 		{MessageID: "<legacy@x.com>", UID: 0},
 		{MessageID: "<stale@x.com>", UID: 5}, // not on server
 	}
 	serverUIDs := map[uint32]bool{1: true}
 
-	valid, stale := buildValidIDSet(cached, serverUIDs)
+	valid, staleUIDs, staleMessageIDs := buildValidIDSet(cached, serverUIDs)
 
-	if !valid["<legacy@x.com>"] {
-		t.Error("legacy zero-UID entry must be kept")
+	if valid["<legacy@x.com>"] {
+		t.Error("legacy zero-UID entry should not remain valid")
 	}
 	if valid["<stale@x.com>"] {
 		t.Error("stale non-zero UID entry must not be valid")
 	}
-	if len(stale) != 1 || stale[0] != 5 {
-		t.Errorf("expected stale=[5], got %v", stale)
+	if len(staleUIDs) != 1 || staleUIDs[0] != 5 {
+		t.Errorf("expected staleUIDs=[5], got %v", staleUIDs)
+	}
+	if len(staleMessageIDs) != 1 || staleMessageIDs[0] != "<legacy@x.com>" {
+		t.Errorf("expected staleMessageIDs=[<legacy@x.com>], got %v", staleMessageIDs)
 	}
 }
 
@@ -108,12 +117,15 @@ func TestBuildValidIDSet_StaleOrderedDescending(t *testing.T) {
 	}
 	serverUIDs := map[uint32]bool{} // all stale
 
-	_, stale := buildValidIDSet(cached, serverUIDs)
+	_, staleUIDs, staleMessageIDs := buildValidIDSet(cached, serverUIDs)
 
-	if len(stale) != 3 {
-		t.Fatalf("expected 3 stale, got %d", len(stale))
+	if len(staleUIDs) != 3 {
+		t.Fatalf("expected 3 stale UIDs, got %d", len(staleUIDs))
 	}
-	if stale[0] != 30 || stale[1] != 20 || stale[2] != 10 {
-		t.Errorf("expected descending order [30 20 10], got %v", stale)
+	if staleUIDs[0] != 30 || staleUIDs[1] != 20 || staleUIDs[2] != 10 {
+		t.Errorf("expected descending order [30 20 10], got %v", staleUIDs)
+	}
+	if len(staleMessageIDs) != 0 {
+		t.Errorf("expected no stale message IDs, got %v", staleMessageIDs)
 	}
 }

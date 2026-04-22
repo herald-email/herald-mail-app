@@ -33,6 +33,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
+- [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
 - [x] IMAP IDLE (real push; currently polling only)
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [x] Soft unsubscribe (auto-move future emails to a local folder)

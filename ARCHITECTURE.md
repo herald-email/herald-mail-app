@@ -54,7 +54,7 @@ cmd/mcp-server  → JSON-RPC stdio server, reads email_cache.db directly
 Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send `models.ProgressInfo` values to buffered channels. The UI listens with `tea.Cmd` functions that block on the channel and return a message when something arrives. No polling, no shared state.
 
 **Valid-ID ground truth**
-After each sync, `StartBackgroundReconcile` fetches all server UIDs once (no envelopes), builds a `map[string]bool` of live message IDs, and sends it on a channel. All backend read methods filter results against this set. Stale cache rows are batch-deleted in the background (50/batch, 100ms sleep, newest UIDs first) while the UI already shows only valid data.
+After each sync, `StartBackgroundReconcile` fetches all server UIDs once (no envelopes), builds a `map[string]bool` of live message IDs, and sends it on a channel. All backend read methods filter results against this set. Stale cache rows are batch-deleted in the background (50/batch, 100ms sleep, newest UIDs first) while the UI already shows only valid data. Legacy or incomplete cache rows with no server UID are also invalidated automatically by message ID so they do not linger as half-openable search results.
 
 **Deletion worker**
 `DeletionRequest` values are sent to a buffered channel. A single `deletionWorker` goroutine processes them serially (IMAP copy-to-Trash → mark Deleted → expunge → remove from cache). Results flow back via `deletionResultCh`. The UI updates immediately on result without waiting for a full reload.
@@ -260,12 +260,14 @@ Load() completes ("complete" phase)
             ├─ UidFetch("1:*", [FetchUid])       ← UID-only, no envelopes
             ├─ GetCachedUIDsAndMessageIDs(folder) ← all cache rows
             ├─ buildValidIDSet(cached, serverUIDs)
-            │       uid==0 → keep conservatively (legacy rows)
+            │       uid==0 → stale legacy/no-uid row
             │       uid!=0 && !serverUIDs[uid] → stale
             │
             ├─ ch <- validMessageIDs              ← immediate send
             │
-            └─ goroutine: batch-delete stale UIDs
+            └─ goroutine: batch-delete stale rows
+                    delete stale UIDs by uid
+                    delete legacy rows by message_id
                     for batches of 50, sleep 100ms between
 
 app.listenForValidIDs() receives ValidIDsMsg

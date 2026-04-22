@@ -521,6 +521,24 @@ func (c *Cache) DeleteEmailsByUIDs(folder string, uids []uint32) error {
 	return err
 }
 
+// DeleteEmailsByMessageIDs removes cache rows whose message IDs are in the given slice for a folder.
+// No-op if messageIDs is empty.
+func (c *Cache) DeleteEmailsByMessageIDs(folder string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, 0, len(messageIDs)+1)
+	args = append(args, folder)
+	for i, messageID := range messageIDs {
+		placeholders[i] = "?"
+		args = append(args, messageID)
+	}
+	query := `DELETE FROM emails WHERE folder = ? AND message_id IN (` + strings.Join(placeholders, ",") + `)`
+	_, err := c.db.Exec(query, args...)
+	return err
+}
+
 // SetClassification stores or updates an AI classification for a message
 func (c *Cache) SetClassification(messageID, category string) error {
 	_, err := c.db.Exec(

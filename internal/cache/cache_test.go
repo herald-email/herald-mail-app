@@ -520,6 +520,36 @@ func TestDeleteEmailsByUIDs_Empty(t *testing.T) {
 	}
 }
 
+func TestDeleteEmailsByMessageIDs(t *testing.T) {
+	c := newTestCache(t)
+
+	emails := []*models.EmailData{
+		{MessageID: "<uid1@x.com>", UID: 1, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid2@x.com>", UID: 2, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<uid3@x.com>", UID: 3, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+	}
+	for _, e := range emails {
+		if err := c.CacheEmail(e); err != nil {
+			t.Fatalf("CacheEmail: %v", err)
+		}
+	}
+
+	if err := c.DeleteEmailsByMessageIDs("INBOX", []string{"<uid1@x.com>", "<uid3@x.com>"}); err != nil {
+		t.Fatalf("DeleteEmailsByMessageIDs: %v", err)
+	}
+
+	ids, err := c.GetCachedIDs("INBOX")
+	if err != nil {
+		t.Fatalf("GetCachedIDs: %v", err)
+	}
+	if ids["<uid1@x.com>"] || ids["<uid3@x.com>"] {
+		t.Fatalf("expected deleted message IDs to be removed, got %v", ids)
+	}
+	if !ids["<uid2@x.com>"] {
+		t.Fatalf("expected untouched message to remain, got %v", ids)
+	}
+}
+
 // --- ClearFolder ---
 
 func TestClearFolder(t *testing.T) {

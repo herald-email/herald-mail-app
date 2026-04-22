@@ -364,8 +364,14 @@ func (c *Client) moveEmailLocked(messageID, fromFolder, toFolder string) error {
 	return nil
 }
 
-// archiveFolders is the ordered list of common archive folder names to try
-var archiveFolders = []string{"Archive", "[Gmail]/All Mail", "Archives", "All Mail"}
+func archiveFoldersForVendor(vendor string) []string {
+	switch strings.ToLower(strings.TrimSpace(vendor)) {
+	case "gmail":
+		return []string{"[Gmail]/All Mail", "Archive", "Archives"}
+	default:
+		return []string{"Archive", "Archives"}
+	}
+}
 
 // ArchiveEmail moves a specific email to an archive folder by MessageID.
 // On connection errors it reconnects once and retries.
@@ -405,7 +411,7 @@ func (c *Client) archiveEmailLocked(messageID string, folder string) error {
 		seqset.AddNum(seqNums[0])
 
 		archived := false
-		for _, af := range archiveFolders {
+		for _, af := range archiveFoldersForVendor(c.cfg.Vendor) {
 			if err := c.client.Copy(seqset, af); err == nil {
 				logger.Info("Archived message to %s", af)
 				archived = true
@@ -487,7 +493,7 @@ func (c *Client) archiveSenderEmailsLocked(sender, folder string) error {
 		seqset := new(imap.SeqSet)
 		seqset.AddNum(seqNums...)
 		archived := false
-		for _, af := range archiveFolders {
+		for _, af := range archiveFoldersForVendor(c.cfg.Vendor) {
 			if err := c.client.Copy(seqset, af); err == nil {
 				logger.Info("Archived %d messages to %s", len(seqNums), af)
 				archived = true
@@ -540,7 +546,7 @@ func (c *Client) CleanupCache(folder string) error {
 
 	// Get all current IMAP message IDs
 	currentIDs := make(map[string]bool)
-	
+
 	if mbox.Messages > 0 {
 		seqset := new(imap.SeqSet)
 		seqset.AddRange(1, mbox.Messages)

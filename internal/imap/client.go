@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap"
-	"github.com/emersion/go-imap/client"
 	"github.com/emersion/go-imap-idle"
+	"github.com/emersion/go-imap/client"
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
@@ -252,13 +252,16 @@ type uidMsgPair struct {
 	UID       uint32
 }
 
-// buildValidIDSet partitions cached entries into valid IDs and stale UIDs.
-// An entry is valid if uid==0 (legacy, kept conservatively) or the UID exists on the server.
+// buildValidIDSet partitions cached entries into valid IDs, stale UIDs, and stale message IDs.
+// A cache row is valid only when it has a non-zero UID that still exists on the server.
+// Legacy/incomplete rows with uid==0 are invalidated by message ID so they do not linger forever.
 // Stale UIDs are returned sorted descending (highest/newest first).
-func buildValidIDSet(cached []uidMsgPair, serverUIDs map[uint32]bool) (validIDs map[string]bool, staleUIDs []uint32) {
+func buildValidIDSet(cached []uidMsgPair, serverUIDs map[uint32]bool) (validIDs map[string]bool, staleUIDs []uint32, staleMessageIDs []string) {
 	validIDs = make(map[string]bool, len(cached))
 	for _, row := range cached {
-		if row.UID == 0 || serverUIDs[row.UID] {
+		if row.UID == 0 {
+			staleMessageIDs = append(staleMessageIDs, row.MessageID)
+		} else if serverUIDs[row.UID] {
 			validIDs[row.MessageID] = true
 		} else {
 			staleUIDs = append(staleUIDs, row.UID)
@@ -274,7 +277,7 @@ func buildValidIDSet(cached []uidMsgPair, serverUIDs map[uint32]bool) (validIDs 
 			staleUIDs[j], staleUIDs[j-1] = staleUIDs[j-1], staleUIDs[j]
 		}
 	}
-	return validIDs, staleUIDs
+	return validIDs, staleUIDs, staleMessageIDs
 }
 
 // ProcessEmailsIncremental performs a UIDVALIDITY-aware incremental sync for folder.
@@ -481,13 +484,16 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 		for i, r := range rawRows {
 			pairs[i] = uidMsgPair{MessageID: r.MessageID, UID: r.UID}
 		}
-		validIDs, staleUIDs := buildValidIDSet(pairs, serverUIDs)
-		logger.Info("StartBackgroundReconcile: %d valid, %d stale in %s", len(validIDs), len(staleUIDs), folder)
+		validIDs, staleUIDs, staleMessageIDs := buildValidIDSet(pairs, serverUIDs)
+		logger.Info(
+			"StartBackgroundReconcile: %d valid, %d stale uid-backed, %d stale legacy/no-uid in %s",
+			len(validIDs), len(staleUIDs), len(staleMessageIDs), folder,
+		)
 
 		// Broadcast valid IDs immediately — UI can filter right away.
 		validIDsCh <- validIDs
 
-		// Gradually delete stale rows (newest first, batches of 50).
+		// Gradually delete stale rows (newest first for UID-backed rows, batches of 50).
 		const batchSize = 50
 		for i := 0; i < len(staleUIDs); i += batchSize {
 			end := i + batchSize
@@ -496,6 +502,16 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			}
 			if err := c.cache.DeleteEmailsByUIDs(folder, staleUIDs[i:end]); err != nil {
 				logger.Warn("StartBackgroundReconcile: delete batch: %v", err)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		for i := 0; i < len(staleMessageIDs); i += batchSize {
+			end := i + batchSize
+			if end > len(staleMessageIDs) {
+				end = len(staleMessageIDs)
+			}
+			if err := c.cache.DeleteEmailsByMessageIDs(folder, staleMessageIDs[i:end]); err != nil {
+				logger.Warn("StartBackgroundReconcile: delete legacy batch: %v", err)
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -509,7 +525,7 @@ func (c *Client) ProcessEmails(folder string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	logger.Info("Starting to process emails in folder: %s", folder)
-	
+
 	// Select folder
 	logger.Debug("Selecting folder: %s", folder)
 	mbox, err := c.client.Select(folder, false)
@@ -583,10 +599,10 @@ func (c *Client) ProcessEmails(folder string) error {
 
 	newCount := len(newMessages)
 	logger.Info("Found %d new messages to process", newCount)
-	
+
 	if totalMessages > 0 {
 		cacheHitRate := float64(len(cachedIDs)) / float64(totalMessages) * 100
-		logger.Debug("Cache hit rate: %.1f%% (%d cached / %d total)", 
+		logger.Debug("Cache hit rate: %.1f%% (%d cached / %d total)",
 			cacheHitRate, len(cachedIDs), totalMessages)
 	}
 
@@ -844,7 +860,7 @@ func (c *Client) GetSenderStatistics(folder string) (map[string]*models.SenderSt
 	}
 
 	stats := make(map[string]*models.SenderStats)
-	
+
 	for sender, emails := range emailsBySender {
 		if len(emails) == 0 {
 			continue
