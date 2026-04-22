@@ -10,14 +10,22 @@ import (
 // stubBackend is a minimal backend.Backend implementation for unit tests.
 // Only the methods called by chatToolRegistry dispatch are implemented.
 type stubBackend struct {
-	searchResult []*models.EmailData
-	threadResult []*models.EmailData
-	statsResult  map[string]*models.SenderStats
-	searchErr    error
-	ensuredModel string
-	ensureCalled bool
-	ensureResult bool
-	ensureErr    error
+	searchResult         []*models.EmailData
+	imapSearchResult     []*models.EmailData
+	semanticResults      []*models.SemanticSearchResult
+	threadResult         []*models.EmailData
+	statsResult          map[string]*models.SenderStats
+	searchErr            error
+	semanticErr          error
+	ensuredModel         string
+	ensureCalled         bool
+	ensureResult         bool
+	ensureErr            error
+	lastSemanticLimit    int
+	lastSemanticMinScore float64
+	imapSearchCalls      int
+	searchCalls          int
+	saveSearchCalls      int
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -49,22 +57,29 @@ func (s *stubBackend) Close() error                                        { ret
 func (s *stubBackend) ArchiveEmail(_, _ string) error                      { return nil }
 func (s *stubBackend) ArchiveSenderEmails(_, _ string) error               { return nil }
 func (s *stubBackend) SearchEmails(_, _ string, _ bool) ([]*models.EmailData, error) {
+	s.searchCalls++
 	return s.searchResult, s.searchErr
 }
 func (s *stubBackend) SearchEmailsCrossFolder(_ string) ([]*models.EmailData, error) {
 	return nil, nil
 }
-func (s *stubBackend) SearchEmailsIMAP(_, _ string) ([]*models.EmailData, error) { return nil, nil }
+func (s *stubBackend) SearchEmailsIMAP(_, _ string) ([]*models.EmailData, error) {
+	s.imapSearchCalls++
+	return s.imapSearchResult, s.searchErr
+}
 func (s *stubBackend) SearchEmailsSemantic(_, _ string, _ int, _ float64) ([]*models.EmailData, error) {
 	return nil, nil
 }
 func (s *stubBackend) GetSavedSearches() ([]*models.SavedSearch, error) { return nil, nil }
-func (s *stubBackend) SaveSearch(_, _, _ string) error                  { return nil }
-func (s *stubBackend) DeleteSavedSearch(_ int) error                    { return nil }
-func (s *stubBackend) MarkRead(_, _ string) error                       { return nil }
-func (s *stubBackend) MarkUnread(_, _ string) error                     { return nil }
-func (s *stubBackend) MarkStarred(_, _ string) error                    { return nil }
-func (s *stubBackend) UnmarkStarred(_, _ string) error                  { return nil }
+func (s *stubBackend) SaveSearch(_, _, _ string) error {
+	s.saveSearchCalls++
+	return nil
+}
+func (s *stubBackend) DeleteSavedSearch(_ int) error   { return nil }
+func (s *stubBackend) MarkRead(_, _ string) error      { return nil }
+func (s *stubBackend) MarkUnread(_, _ string) error    { return nil }
+func (s *stubBackend) MarkStarred(_, _ string) error   { return nil }
+func (s *stubBackend) UnmarkStarred(_, _ string) error { return nil }
 func (s *stubBackend) GetEmailsByThread(_, _ string) ([]*models.EmailData, error) {
 	return s.threadResult, s.searchErr
 }
@@ -77,8 +92,10 @@ func (s *stubBackend) GetUnembeddedIDsWithBody(_ string) ([]string, error)      
 func (s *stubBackend) GetUncachedBodyIDs(_ string, _ int) ([]string, error)           { return nil, nil }
 func (s *stubBackend) GetEmbeddingProgress(_ string) (int, int, error)                { return 0, 0, nil }
 func (s *stubBackend) StoreEmbeddingChunks(_ string, _ []models.EmbeddingChunk) error { return nil }
-func (s *stubBackend) SearchSemanticChunked(_ string, _ []float32, _ int, _ float64) ([]*models.SemanticSearchResult, error) {
-	return nil, nil
+func (s *stubBackend) SearchSemanticChunked(_ string, _ []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	s.lastSemanticLimit = limit
+	s.lastSemanticMinScore = minScore
+	return s.semanticResults, s.semanticErr
 }
 func (s *stubBackend) GetBodyText(_ string) (string, error)                         { return "", nil }
 func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error)        { return nil, nil }

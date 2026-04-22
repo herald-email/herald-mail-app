@@ -94,24 +94,45 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
-	if m.timeline.searchMode && m.activeTab == tabTimeline {
+	if m.timeline.searchMode && m.activeTab == tabTimeline && m.timeline.searchFocus == timelineSearchFocusInput {
 		switch msg.String() {
 		case "esc":
 			m.clearTimelineSearch()
 			return m, nil, true
-		case "ctrl+s":
-			if q := m.timeline.searchInput.Value(); q != "" {
-				return m, m.saveCurrentSearch(q), true
+		case "enter":
+			query := strings.TrimSpace(m.timeline.searchInput.Value())
+			if query != "" && query == strings.TrimSpace(m.timeline.searchResultsQuery) && len(m.timeline.searchResults) > 0 {
+				m.timeline.searchFocus = timelineSearchFocusResults
+				m.timeline.searchInput.Blur()
+				m.setFocusedPanel(panelTimeline)
+				return m, nil, true
 			}
-		case "ctrl+i":
-			return m, m.performIMAPSearch(m.timeline.searchInput.Value()), true
+			if query == "" {
+				return m, nil, true
+			}
+			m.timeline.searchToken++
+			m.timeline.searchAutoFocusResults = true
+			return m, m.performSearchWithToken(m.timeline.searchInput.Value(), m.timeline.searchToken), true
+		case "ctrl+i", "tab":
+			if strings.TrimSpace(m.timeline.searchInput.Value()) == "" {
+				return m, nil, true
+			}
+			m.timeline.searchToken++
+			m.timeline.searchAutoFocusResults = false
+			return m, m.performIMAPSearchWithToken(m.timeline.searchInput.Value(), m.timeline.searchToken), true
+		case "ctrl+s":
+			return m, nil, true
 		case "ctrl+c":
 			m.cleanup()
 			return m, tea.Quit, true
 		default:
 			var cmd tea.Cmd
 			m.timeline.searchInput, cmd = m.timeline.searchInput.Update(msg)
-			return m, tea.Batch(cmd, m.performSearch(m.timeline.searchInput.Value())), true
+			m.timeline.searchError = ""
+			m.timeline.searchAutoFocusResults = false
+			m.timeline.searchResultsQuery = ""
+			m.timeline.searchToken++
+			return m, tea.Batch(cmd, scheduleTimelineSearchDebounce(m.timeline.searchToken, m.timeline.searchInput.Value())), true
 		}
 		return m, nil, true
 	}
@@ -244,7 +265,21 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail != nil {
+		if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {
+			m.clearTimelinePreview()
+			return m, nil
+		}
 		m.clearTimelinePreview()
+		return m, nil
+	}
+	if m.activeTab == tabTimeline && m.timeline.searchMode {
+		if m.timeline.searchFocus == timelineSearchFocusResults {
+			m.timeline.searchFocus = timelineSearchFocusInput
+			m.timeline.searchInput.Focus()
+			m.setFocusedPanel(panelTimeline)
+			return m, nil
+		}
+		m.clearTimelineSearch()
 		return m, nil
 	}
 	if m.activeTab == tabCompose {

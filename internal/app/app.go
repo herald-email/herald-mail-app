@@ -130,8 +130,15 @@ type SearchResultMsg struct {
 	Emails []*models.EmailData
 	Scores map[string]float64 // messageID → similarity score; non-nil only for semantic results
 	Query  string
-	Source string // "local", "fts", "imap", "semantic"
-	Err    error  // non-nil when the search failed with a user-visible error
+	Source string // "local", "fts", "imap", "semantic", "hybrid", "cross"
+	Token  int
+	Err    error // non-nil when the search failed with a user-visible error
+}
+
+// TimelineSearchDebounceMsg fires after the Timeline search debounce window.
+type TimelineSearchDebounceMsg struct {
+	Query string
+	Token int
 }
 
 // NewEmailsMsg signals new emails arrived via IDLE/polling

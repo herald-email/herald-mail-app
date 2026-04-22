@@ -95,6 +95,16 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 - If the configured embedding model changes, Herald invalidates cached email and contact embeddings before new semantic work starts
 - Legacy caches without recorded embedding-model metadata are treated as compatible only with the historical default `nomic-embed-text`; switching to another model forces invalidation
 
+**Hybrid Timeline search**
+
+- Plain Timeline search combines fast local sender/subject keyword matches with semantic expansion when embeddings are available
+- Keyword hits remain the stable head of the result set while semantic-only candidates are appended in similarity order
+- Semantic expansion is bounded by a configured score threshold and a fixed result cap so one query does not fan out into an unbounded whole-folder ranking pass
+- Duplicate message IDs from the keyword and semantic legs are coalesced before results reach the TUI
+- Timeline search is modeled as explicit input and result-navigation submodes rather than a single global text overlay
+- Local search dispatch is debounced and tagged with sequence tokens so stale responses are ignored when newer typing supersedes them
+- Search unwind is step-based: `Esc` returns from preview to results, from results to the input, and only then restores the original timeline snapshot
+
 **Configuration**
 
 These controls live under `ai:` in config:

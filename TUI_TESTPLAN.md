@@ -383,15 +383,27 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. In Timeline press `/`.
-2. Search for a term with matches.
-3. Search for a term with no matches.
-4. Clear with `Esc`.
+2. Type a query slowly, then type another quickly.
+3. Press `Enter` and move into the result list.
+4. Open a result with `Enter`.
+5. Use a preview action such as quick reply or full-screen.
+6. Press `Esc` repeatedly to unwind.
+7. Repeat with a query that returns no matches.
+8. Repeat and use `Ctrl+I` from the search input.
 
 **Expect:**
 - Search state is visible.
-- Results update and are navigable.
+- Results do not fire on every keystroke; search waits briefly before running.
+- `Enter` from search input moves into result navigation when results exist.
+- Results are navigable.
+- Preview opened from search behaves like normal Timeline preview.
+- Default Timeline search merges keyword and semantic results when embeddings are available.
+- Exact keyword matches remain predictable and appear before semantic-only tail results.
+- Duplicate emails from the keyword and semantic legs appear only once.
 - No-match case gives a clear fallback hint.
-- `Esc` restores the full timeline cleanly.
+- `Esc` unwinds in order: preview → results → input → original timeline state.
+- The original cursor position and thread expansion state are restored after the final `Esc`.
+- Timeline search does not advertise or use `Ctrl+S`.
 
 ### TC-11 — Preview unwind order
 
@@ -467,6 +479,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Success path returns sensible results.
+- Semantic expansion is bounded and respects the configured similarity threshold instead of returning the whole folder.
 - Degraded path reports AI unavailability or embedding deferral clearly.
 - No silent failure and no runaway retries.
 - Changing the configured embedding model invalidates stale embeddings and triggers clean re-embedding instead of mixing vector generations.

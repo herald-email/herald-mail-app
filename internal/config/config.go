@@ -217,7 +217,7 @@ func (c *Config) applyDefaults() {
 		c.Semantic.BatchSize = 20
 	}
 	if c.Semantic.MinScore == 0 {
-		c.Semantic.MinScore = 0.65
+		c.Semantic.MinScore = 0.30
 	}
 	// Enable IDLE and background sync by default
 	// (zero-value bool is false; we use a separate flag to detect "not set")

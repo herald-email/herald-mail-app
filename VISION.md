@@ -421,7 +421,11 @@ Search is layered: fast local metadata search first, full-text body search next,
 ### In-folder search (local, fast)
 - [x] `/` key opens search bar in Timeline and Cleanup tabs
 - [x] SQLite `LIKE` search on sender + subject
+- [x] Timeline `/` search merges keyword and semantic results when embeddings are available
 - [x] Results replace current list view; `Esc` clears
+- [x] Timeline search debounces local execution and ignores stale result responses while typing
+- [x] `Enter` from Timeline search moves into a result-navigation mode
+- [x] `Esc` unwinds Timeline search in steps: preview → results → input → original timeline state
 - [ ] Matched term highlighting in results
 
 ### Full-text search (body content)
@@ -442,6 +446,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 ### Saved searches / filters
 - [x] Save named searches persisted in SQLite
 - [x] Listed and executable from the TUI
+- [ ] Timeline search no longer uses `Ctrl+S`; saved searches need a clearer dedicated entry point
 - [ ] Appear as virtual folders in the sidebar
 
 ### Semantic search
@@ -453,7 +458,8 @@ Search is layered: fast local metadata search first, full-text body search next,
 - [x] Similarity score badge (`87%`) per result row
 - [x] Embeddings are invalidated automatically when the configured embedding model changes
 - [ ] Semantic search explicitly degrades when embeddings are unavailable or deferred
-- [ ] Hybrid ranking (keyword + semantic merged)
+- [x] Hybrid ranking (keyword + semantic merged)
+- [x] Semantic expansion is bounded by a configured similarity threshold and result cap
 - [ ] "Why this result?" hint (matched excerpt)
 
 ---

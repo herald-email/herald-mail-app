@@ -23,6 +23,25 @@ type ChromeState struct {
 	StatusMessage string
 }
 
+type timelineSearchFocus int
+
+const (
+	timelineSearchFocusInput timelineSearchFocus = iota
+	timelineSearchFocusResults
+)
+
+type timelineSearchOrigin struct {
+	cursor           int
+	expandedThreads  map[string]bool
+	focusedPanel     int
+	selectedEmail    *models.EmailData
+	body             *models.EmailBody
+	bodyLoading      bool
+	inlineImageDescs map[string]string
+	fullScreen       bool
+	bodyScrollOffset int
+}
+
 type TimelineState struct {
 	emails       []*models.EmailData
 	senderWidth  int
@@ -54,12 +73,17 @@ type TimelineState struct {
 	quickReplyIdx         int
 	quickRepliesAIFetched bool
 
-	searchMode     bool
-	searchInput    textinput.Model
-	searchResults  []*models.EmailData
-	emailsCache    []*models.EmailData
-	semanticScores map[string]float64
-	searchError    string
+	searchMode             bool
+	searchInput            textinput.Model
+	searchResults          []*models.EmailData
+	searchResultsQuery     string
+	emailsCache            []*models.EmailData
+	semanticScores         map[string]float64
+	searchError            string
+	searchFocus            timelineSearchFocus
+	searchOrigin           *timelineSearchOrigin
+	searchToken            int
+	searchAutoFocusResults bool
 
 	chatFilterMode     bool
 	chatFilteredEmails []*models.EmailData

@@ -321,17 +321,55 @@ func (m *Model) renderTimelineView() string {
 }
 
 func (m *Model) clearTimelineSearch() {
+	m.timeline.searchToken++
 	m.timeline.searchMode = false
+	m.timeline.searchFocus = timelineSearchFocusInput
+	m.timeline.searchAutoFocusResults = false
 	m.timeline.searchInput.Blur()
 	m.timeline.searchInput.SetValue("")
 	m.timeline.searchResults = nil
+	m.timeline.searchResultsQuery = ""
 	m.timeline.semanticScores = nil
 	m.timeline.searchError = ""
 	if m.timeline.emailsCache != nil {
 		m.timeline.emails = m.timeline.emailsCache
-		m.timeline.emailsCache = nil
 	}
-	m.updateTimelineTable()
+	if origin := m.timeline.searchOrigin; origin != nil {
+		m.timeline.expandedThreads = cloneTimelineExpandedThreads(origin.expandedThreads)
+		m.timeline.selectedEmail = origin.selectedEmail
+		m.timeline.body = origin.body
+		m.timeline.bodyLoading = origin.bodyLoading
+		m.timeline.inlineImageDescs = cloneInlineImageDescs(origin.inlineImageDescs)
+		m.timeline.fullScreen = origin.fullScreen
+		m.timeline.bodyScrollOffset = origin.bodyScrollOffset
+		m.timeline.bodyWrappedLines = nil
+		m.timeline.visualMode = false
+		m.timeline.pendingY = false
+		m.timeline.quickReplyOpen = false
+		m.timeline.quickReplyPending = false
+		m.timeline.quickReplyIdx = 0
+		m.timeline.attachmentSavePrompt = false
+		m.timeline.attachmentSaveInput.Blur()
+		m.updateTimelineTable()
+		maxCursor := len(m.timeline.threadRowMap) - 1
+		cursor := origin.cursor
+		if maxCursor >= 0 {
+			if cursor < 0 {
+				cursor = 0
+			}
+			if cursor > maxCursor {
+				cursor = maxCursor
+			}
+			m.timelineTable.SetCursor(cursor)
+		}
+		m.setFocusedPanel(origin.focusedPanel)
+	} else {
+		m.updateTimelineTable()
+		m.setFocusedPanel(panelTimeline)
+	}
+	m.timeline.searchOrigin = nil
+	m.timeline.emailsCache = nil
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 }
 
 func (m *Model) clearTimelineQuickReply() {
@@ -365,12 +403,49 @@ func (m *Model) clearTimelineChatFilter() {
 }
 
 func (m *Model) openTimelineSearch() {
+	if m.timeline.searchOrigin == nil {
+		m.timeline.searchOrigin = &timelineSearchOrigin{
+			cursor:           m.timelineTable.Cursor(),
+			expandedThreads:  cloneTimelineExpandedThreads(m.timeline.expandedThreads),
+			focusedPanel:     m.focusedPanel,
+			selectedEmail:    m.timeline.selectedEmail,
+			body:             m.timeline.body,
+			bodyLoading:      m.timeline.bodyLoading,
+			inlineImageDescs: cloneInlineImageDescs(m.timeline.inlineImageDescs),
+			fullScreen:       m.timeline.fullScreen,
+			bodyScrollOffset: m.timeline.bodyScrollOffset,
+		}
+	}
+	m.timeline.searchToken++
 	m.timeline.searchMode = true
+	m.timeline.searchFocus = timelineSearchFocusInput
+	m.timeline.searchAutoFocusResults = false
 	if m.timeline.emailsCache == nil {
 		m.timeline.emailsCache = m.timeline.emails
 	}
+	m.timeline.selectedEmail = nil
+	m.timeline.body = nil
+	m.timeline.bodyLoading = false
+	m.timeline.inlineImageDescs = nil
+	m.timeline.fullScreen = false
+	m.timeline.bodyWrappedLines = nil
+	m.timeline.bodyScrollOffset = 0
+	m.timeline.visualMode = false
+	m.timeline.pendingY = false
+	m.timeline.quickReplyOpen = false
+	m.timeline.quickReplyPending = false
+	m.timeline.quickReplyIdx = 0
+	m.timeline.attachmentSavePrompt = false
+	m.timeline.attachmentSaveInput.Blur()
 	m.timeline.searchInput.SetValue("")
+	m.timeline.searchResults = nil
+	m.timeline.searchResultsQuery = ""
+	m.timeline.semanticScores = nil
+	m.timeline.searchError = ""
 	m.timeline.searchInput.Focus()
+	m.setFocusedPanel(panelTimeline)
+	m.updateTimelineTable()
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 }
 
 func (m *Model) currentTimelineRowEmail() *models.EmailData {
@@ -493,10 +568,12 @@ func (m *Model) appendTimelineStatusParts(parts []string) []string {
 		parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 	}
 	if m.timeline.searchMode {
-		if m.timeline.searchResults != nil {
+		if m.timeline.searchFocus == timelineSearchFocusResults {
+			parts = append(parts, fmt.Sprintf("Search results: %d", len(m.timeline.searchResults)))
+		} else if m.timeline.searchResults != nil {
 			parts = append(parts, fmt.Sprintf("Search: %d results", len(m.timeline.searchResults)))
 		} else {
-			parts = append(parts, "Search")
+			parts = append(parts, "Search input")
 		}
 	}
 	if m.activeTab == tabTimeline && m.timeline.body != nil {
@@ -521,14 +598,20 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	}
 	if m.timeline.searchMode {
 		q := m.timeline.searchInput.View()
+		if m.timeline.searchFocus == timelineSearchFocusResults {
+			if m.timeline.selectedEmail != nil && chrome.FocusedPanel == panelPreview {
+				return "tab: back to results  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: back to results  │  q: quit", true
+			}
+			return fmt.Sprintf("/ %s  │  %d results  │  ↑/k ↓/j: results  │  enter: open  │  esc: back to search", q, len(m.timeline.threadRowMap)), true
+		}
 		if m.timeline.searchError != "" {
-			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: clear", q, m.timeline.searchError), true
+			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: back", q, m.timeline.searchError), true
 		}
 		query := m.timeline.searchInput.Value()
 		if m.timeline.searchResults != nil && len(m.timeline.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
-			return fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  esc: clear  │  ctrl+i: server search", q, query), true
+			return fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  ctrl+i: server search  │  esc: back", q, query), true
 		}
-		return fmt.Sprintf("/ %s  │  esc: clear  │  ctrl+s: save  │  ctrl+i: server search", q), true
+		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
 	}
 	if m.timeline.chatFilterMode {
 		return "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
@@ -561,7 +644,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timeline.selectedEmail != nil {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit", true
 	}
-	return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  A: re-classify  │  f: sidebar  │  q: quit", true
+	return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit", true
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -594,8 +677,10 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.contactPreviewLoading {
 			return m, nil, false
 		}
-		if msg.MessageID != "" && m.timeline.selectedEmail != nil && msg.MessageID != m.timeline.selectedEmail.MessageID {
-			return m, nil, true
+		if msg.MessageID != "" {
+			if m.timeline.selectedEmail == nil || msg.MessageID != m.timeline.selectedEmail.MessageID {
+				return m, nil, true
+			}
 		}
 		m.timeline.bodyLoading = false
 		m.timeline.selectedAttachment = 0
@@ -688,25 +773,50 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 
 	case SearchResultMsg:
+		if m.timeline.searchMode && msg.Token != 0 && msg.Token != m.timeline.searchToken {
+			return m, nil, true
+		}
 		if msg.Err != nil {
 			m.timeline.searchError = msg.Err.Error()
+			m.timeline.searchAutoFocusResults = false
 			return m, nil, true
 		}
 		m.timeline.searchError = ""
 		if msg.Query == "" {
 			m.timeline.searchResults = nil
+			m.timeline.searchResultsQuery = ""
 			m.timeline.semanticScores = nil
 			if m.timeline.emailsCache != nil {
 				m.timeline.emails = m.timeline.emailsCache
-				m.timeline.emailsCache = nil
 			}
 			m.updateTimelineTable()
 		} else {
 			m.timeline.searchResults = msg.Emails
+			m.timeline.searchResultsQuery = msg.Query
 			m.timeline.semanticScores = msg.Scores
 			m.updateTimelineTable()
+			if len(m.timeline.threadRowMap) > 0 {
+				m.timelineTable.SetCursor(0)
+			}
+		}
+		if m.timeline.searchAutoFocusResults {
+			if len(m.timeline.threadRowMap) > 0 {
+				m.timeline.searchFocus = timelineSearchFocusResults
+				m.timeline.searchInput.Blur()
+				m.setFocusedPanel(panelTimeline)
+			}
+			m.timeline.searchAutoFocusResults = false
 		}
 		return m, nil, true
+
+	case TimelineSearchDebounceMsg:
+		if !m.timeline.searchMode || m.timeline.searchFocus != timelineSearchFocusInput {
+			return m, nil, true
+		}
+		if msg.Token != m.timeline.searchToken {
+			return m, nil, true
+		}
+		return m, m.performSearchWithToken(msg.Query, msg.Token), true
 
 	case NewEmailsMsg:
 		if msg.Folder == m.currentFolder {
@@ -840,6 +950,13 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	case "enter":
 		if !m.loading {
+			if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {
+				if m.focusedPanel == panelPreview {
+					m.setFocusedPanel(panelTimeline)
+					return m, nil, true
+				}
+				return m, m.openCurrentTimelineEmail(), true
+			}
 			if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 0 {
 				model, cmd := m.openQuickReply(m.timeline.quickReplies[m.timeline.quickReplyIdx])
 				return model, cmd, true
@@ -854,6 +971,12 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 		return m, nil, true
+	case "tab", "shift+tab":
+		if !m.loading && m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults &&
+			m.timeline.selectedEmail != nil && m.focusedPanel == panelPreview {
+			m.setFocusedPanel(panelTimeline)
+			return m, nil, true
+		}
 	case "ctrl+q":
 		return m, m.toggleTimelineQuickReply(), true
 	case "z":
@@ -1031,6 +1154,28 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 	return m, nil, false
+}
+
+func cloneTimelineExpandedThreads(src map[string]bool) map[string]bool {
+	if len(src) == 0 {
+		return make(map[string]bool)
+	}
+	dst := make(map[string]bool, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func cloneInlineImageDescs(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]string, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
 }
 
 func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
