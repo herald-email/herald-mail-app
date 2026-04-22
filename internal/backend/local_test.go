@@ -49,6 +49,27 @@ func TestFilterByValidIDs_WithSet(t *testing.T) {
 	}
 }
 
+func TestFilterSemanticResultsByValidIDs_WithSet(t *testing.T) {
+	b := &LocalBackend{}
+	b.validIDs = map[string]bool{"<a@x.com>": true, "<c@x.com>": true}
+
+	results := []*models.SemanticSearchResult{
+		{Email: makeEmail("<a@x.com>"), Score: 0.91},
+		{Email: makeEmail("<b@x.com>"), Score: 0.88},
+		nil,
+		{Email: nil, Score: 0.70},
+		{Email: makeEmail("<c@x.com>"), Score: 0.77},
+	}
+
+	got := b.filterSemanticResultsByValidIDs(results)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 semantic results, got %d", len(got))
+	}
+	if got[0].Email.MessageID != "<a@x.com>" || got[1].Email.MessageID != "<c@x.com>" {
+		t.Fatalf("unexpected semantic results after filtering: %q, %q", got[0].Email.MessageID, got[1].Email.MessageID)
+	}
+}
+
 // --- isValidID ---
 
 func TestIsValidID_NilSet(t *testing.T) {

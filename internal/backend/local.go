@@ -66,6 +66,25 @@ func (b *LocalBackend) filterByValidIDs(emails []*models.EmailData) []*models.Em
 	return out
 }
 
+func (b *LocalBackend) filterSemanticResultsByValidIDs(results []*models.SemanticSearchResult) []*models.SemanticSearchResult {
+	b.validIDsMu.RLock()
+	ids := b.validIDs
+	b.validIDsMu.RUnlock()
+	if ids == nil {
+		return results
+	}
+	out := make([]*models.SemanticSearchResult, 0, len(results))
+	for _, result := range results {
+		if result == nil || result.Email == nil {
+			continue
+		}
+		if ids[result.Email.MessageID] {
+			out = append(out, result)
+		}
+	}
+	return out
+}
+
 // isValidID returns true when the message exists in the valid set, or when no
 // valid set has been established yet (nil → accept all).
 func (b *LocalBackend) isValidID(msgID string) bool {
@@ -390,7 +409,7 @@ func (b *LocalBackend) SearchEmailsSemantic(folder, query string, limit int, min
 		return nil, err
 	}
 	emails := make([]*models.EmailData, 0, len(results))
-	for _, r := range results {
+	for _, r := range b.filterSemanticResultsByValidIDs(results) {
 		emails = append(emails, r.Email)
 	}
 	return emails, nil
@@ -494,7 +513,11 @@ func (b *LocalBackend) StoreEmbeddingChunks(messageID string, chunks []models.Em
 }
 
 func (b *LocalBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
-	return b.cache.SearchSemanticChunked(folder, queryVec, limit, minScore)
+	results, err := b.cache.SearchSemanticChunked(folder, queryVec, limit, minScore)
+	if err != nil {
+		return nil, err
+	}
+	return b.filterSemanticResultsByValidIDs(results), nil
 }
 
 func (b *LocalBackend) GetBodyText(messageID string) (string, error) {

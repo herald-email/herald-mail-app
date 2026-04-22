@@ -218,7 +218,7 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 				m.contactPreviewEmail = email
 				m.contactPreviewBody = nil
 				m.contactPreviewLoading = true
-				return m, m.loadEmailBodyCmd(email.Folder, email.UID)
+				return m, m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
 			}
 		}
 	case "e":

@@ -338,6 +338,7 @@ func (m *Model) clearTimelineSearch() {
 		m.timeline.expandedThreads = cloneTimelineExpandedThreads(origin.expandedThreads)
 		m.timeline.selectedEmail = origin.selectedEmail
 		m.timeline.body = origin.body
+		m.timeline.bodyMessageID = origin.bodyMessageID
 		m.timeline.bodyLoading = origin.bodyLoading
 		m.timeline.inlineImageDescs = cloneInlineImageDescs(origin.inlineImageDescs)
 		m.timeline.fullScreen = origin.fullScreen
@@ -386,6 +387,7 @@ func (m *Model) clearTimelineFullScreen() {
 func (m *Model) clearTimelinePreview() {
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = false
 	m.timeline.bodyWrappedLines = nil
 	m.timeline.bodyScrollOffset = 0
@@ -410,6 +412,7 @@ func (m *Model) openTimelineSearch() {
 			focusedPanel:     m.focusedPanel,
 			selectedEmail:    m.timeline.selectedEmail,
 			body:             m.timeline.body,
+			bodyMessageID:    m.timeline.bodyMessageID,
 			bodyLoading:      m.timeline.bodyLoading,
 			inlineImageDescs: cloneInlineImageDescs(m.timeline.inlineImageDescs),
 			fullScreen:       m.timeline.fullScreen,
@@ -425,6 +428,7 @@ func (m *Model) openTimelineSearch() {
 	}
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = false
 	m.timeline.inlineImageDescs = nil
 	m.timeline.fullScreen = false
@@ -498,6 +502,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	}
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = true
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
@@ -508,7 +513,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.quickReplyIdx = 0
 	m.timeline.quickRepliesAIFetched = false
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	return m.loadEmailBodyCmd(email.Folder, email.UID)
+	return m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
 }
 
 func (m *Model) openTimelineQuickReply() tea.Cmd {
@@ -691,8 +696,12 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.timeline.body = &models.EmailBody{TextPlain: "(Failed to load body)"}
+			if m.timeline.selectedEmail != nil {
+				m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+			}
 		} else {
 			m.timeline.body = msg.Body
+			m.timeline.bodyMessageID = msg.MessageID
 			if msg.Body != nil && msg.Body.TextPlain != "" && m.timeline.selectedEmail != nil {
 				msgID := m.timeline.selectedEmail.MessageID
 				bodyText := msg.Body.TextPlain

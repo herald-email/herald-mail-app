@@ -26,6 +26,8 @@ type stubBackend struct {
 	imapSearchCalls      int
 	searchCalls          int
 	saveSearchCalls      int
+	bodyTextByID         map[string]string
+	fetchBodyCalls       int
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -48,6 +50,7 @@ func (s *stubBackend) SetClassification(_, _ string) error                     {
 func (s *stubBackend) GetUnclassifiedIDs(_ string) ([]string, error)           { return nil, nil }
 func (s *stubBackend) GetEmailByID(_ string) (*models.EmailData, error)        { return nil, nil }
 func (s *stubBackend) FetchEmailBody(_ string, _ uint32) (*models.EmailBody, error) {
+	s.fetchBodyCalls++
 	return nil, nil
 }
 func (s *stubBackend) SaveAttachment(_ *models.Attachment, _ string) error { return nil }
@@ -97,7 +100,12 @@ func (s *stubBackend) SearchSemanticChunked(_ string, _ []float32, limit int, mi
 	s.lastSemanticMinScore = minScore
 	return s.semanticResults, s.semanticErr
 }
-func (s *stubBackend) GetBodyText(_ string) (string, error)                         { return "", nil }
+func (s *stubBackend) GetBodyText(messageID string) (string, error) {
+	if s.bodyTextByID == nil {
+		return "", nil
+	}
+	return s.bodyTextByID[messageID], nil
+}
 func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error)        { return nil, nil }
 func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification             { return nil }
 func (s *stubBackend) StartIDLE(_ string) error                                     { return nil }

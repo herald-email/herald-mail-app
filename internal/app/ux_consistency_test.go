@@ -281,3 +281,42 @@ func TestHandleTimelineMsg_PrefixesAIGeneratedReplies(t *testing.T) {
 		t.Fatalf("expected existing prefix to be preserved, got %q", updated.timeline.quickReplies[1])
 	}
 }
+
+func TestRenderEmailPreview_HidesStaleBodyWhenSelectedEmailChanges(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.selectedEmail = &models.EmailData{
+		MessageID: "msg-new",
+		Sender:    "new@example.com",
+		Subject:   "New subject",
+	}
+	m.timeline.body = &models.EmailBody{TextPlain: "stale body should not render"}
+	m.timeline.bodyMessageID = "msg-old"
+	m.timeline.bodyLoading = false
+	m.timeline.previewWidth = 60
+	m.timelineTable.SetHeight(10)
+
+	rendered := stripANSI(m.renderEmailPreview())
+	if !strings.Contains(rendered, "Loading") {
+		t.Fatalf("expected stale body association to render loading state, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "stale body should not render") {
+		t.Fatalf("expected stale body text to stay hidden, got:\n%s", rendered)
+	}
+}
+
+func TestLoadEmailBodyCmd_UIDZeroShowsUnavailablePlaceholder(t *testing.T) {
+	backend := &stubBackend{}
+	m := New(backend, nil, "", nil, false)
+
+	msg := m.loadEmailBodyCmd("msg-legacy", "INBOX", 0)().(EmailBodyMsg)
+	if msg.MessageID != "msg-legacy" {
+		t.Fatalf("expected message id msg-legacy, got %q", msg.MessageID)
+	}
+	if msg.Body == nil || !strings.Contains(msg.Body.TextPlain, "Body unavailable") {
+		t.Fatalf("expected unavailable placeholder for UID 0 body, got %#v", msg.Body)
+	}
+	if backend.fetchBodyCalls != 0 {
+		t.Fatalf("expected no IMAP fetch for UID 0, got %d calls", backend.fetchBodyCalls)
+	}
+}

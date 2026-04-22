@@ -36,6 +36,7 @@ type timelineSearchOrigin struct {
 	focusedPanel     int
 	selectedEmail    *models.EmailData
 	body             *models.EmailBody
+	bodyMessageID    string
 	bodyLoading      bool
 	inlineImageDescs map[string]string
 	fullScreen       bool
@@ -53,6 +54,7 @@ type TimelineState struct {
 
 	selectedEmail    *models.EmailData
 	body             *models.EmailBody
+	bodyMessageID    string
 	bodyLoading      bool
 	inlineImageDescs map[string]string
 	previewWidth     int

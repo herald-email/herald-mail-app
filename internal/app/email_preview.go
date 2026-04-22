@@ -104,7 +104,8 @@ func (m *Model) renderEmailPreview() string {
 	}
 
 	dimStyle := headerStyle
-	if m.timeline.bodyLoading {
+	bodyMatchesSelected := email != nil && m.timeline.bodyMessageID == email.MessageID
+	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
 		// Split view: show compact image placeholders (no iTerm2 rendering).
@@ -444,6 +445,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	}
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = true
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
@@ -451,10 +453,10 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.quickRepliesReady = false
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesAIFetched = false
-	return m.loadEmailBodyCmd(email.Folder, email.UID)
+	return m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
 }
 
-func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
+func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 	// Cancel any in-flight body fetch so rapid j/k doesn't pile up
 	// concurrent IMAP requests that overwhelm the connection.
 	if m.timeline.bodyFetchCancel != nil {
@@ -463,15 +465,19 @@ func (m *Model) loadEmailBodyCmd(folder string, uid uint32) tea.Cmd {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	m.timeline.bodyFetchCancel = cancel
 
-	messageID := ""
-	if m.timeline.selectedEmail != nil {
-		messageID = m.timeline.selectedEmail.MessageID
-	}
 	b := m.backend // capture for goroutine
 	return func() tea.Msg {
 		defer cancel()
 		if ctx.Err() != nil {
 			return EmailBodyMsg{Err: ctx.Err(), MessageID: messageID}
+		}
+		if uid == 0 {
+			return EmailBodyMsg{
+				Body: &models.EmailBody{
+					TextPlain: "(Body unavailable: this cached email has no server UID yet, so Herald cannot safely load its full contents. Re-sync the folder or use server search to refresh it.)",
+				},
+				MessageID: messageID,
+			}
 		}
 		// Single attempt — IMAP layer handles reconnection internally.
 		// Context cancellation handles rapid cursor movement.
