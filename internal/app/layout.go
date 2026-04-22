@@ -329,7 +329,10 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 		ChatVisible:    m.showChat,
 	}
 
-	canShowSidebar := m.showSidebar && (m.activeTab == tabTimeline || m.activeTab == tabCleanup) && !m.showCleanupPreview
+	canShowSidebar := m.showSidebar &&
+		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
+		!m.showCleanupPreview &&
+		!(m.activeTab == tabTimeline && m.timeline.selectedEmail != nil)
 	if canShowSidebar {
 		sidebarOuter := sidebarContentWidth + 2
 		if width-sidebarOuter >= 60 && width >= 100 {

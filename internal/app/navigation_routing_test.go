@@ -72,3 +72,30 @@ func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 		t.Fatalf("expected cleanup preview hints after focus normalization, got %q", hints)
 	}
 }
+
+func TestTimelinePreview_HidesSidebarWhileOpenWithoutChangingPreference(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.showSidebar = true
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	cmd := m.openTimelineEmail(m.timeline.emails[0])
+	if cmd == nil {
+		t.Fatal("expected opening timeline email to return body load command")
+	}
+	if !m.showSidebar {
+		t.Fatal("expected sidebar preference to remain enabled")
+	}
+	if plan := m.buildLayoutPlan(120, 40); plan.SidebarVisible {
+		t.Fatal("expected layout to auto-hide sidebar while timeline preview is open")
+	}
+
+	m.clearTimelinePreview()
+	if !m.showSidebar {
+		t.Fatal("expected sidebar preference to remain enabled after closing timeline preview")
+	}
+	if plan := m.buildLayoutPlan(120, 40); !plan.SidebarVisible {
+		t.Fatal("expected sidebar to become visible again after closing timeline preview")
+	}
+}

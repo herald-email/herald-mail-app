@@ -274,6 +274,7 @@ func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
 func TestTimelineView_UsesConsistentPanelGaps(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
+	m.showSidebar = true
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 	m.timeline.selectedEmail = m.timeline.emails[0]
@@ -283,8 +284,8 @@ func TestTimelineView_UsesConsistentPanelGaps(t *testing.T) {
 		t.Fatal("expected timeline view output")
 	}
 	top := rendered[0]
-	if count := strings.Count(top, "┐  ┌"); count != 2 {
-		t.Fatalf("expected equal 2-column gaps between sidebar/timeline and timeline/preview, got top line %q", top)
+	if count := strings.Count(top, "┐  ┌"); count != 1 {
+		t.Fatalf("expected a single gap between timeline and preview when preview auto-hides sidebar, got top line %q", top)
 	}
 }
 

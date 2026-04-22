@@ -307,7 +307,7 @@ func (m *Model) renderTimelineView() string {
 		mainContent = tableView
 	}
 
-	if m.showSidebar && !m.sidebarTooWide {
+	if plan.SidebarVisible {
 		sidebarStyle := m.baseStyle
 		if chrome.FocusedPanel == panelSidebar {
 			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)

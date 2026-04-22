@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"mail-processor/internal/models"
+)
 
 func TestBuildLayoutPlan_TimelineShowsSidebarAndChatWhenRoomAllows(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
@@ -30,6 +34,19 @@ func TestBuildLayoutPlan_HidesSidebarWhenTooNarrow(t *testing.T) {
 
 	if plan.SidebarVisible {
 		t.Fatal("expected sidebar to auto-hide at 80x24")
+	}
+}
+
+func TestBuildLayoutPlan_HidesSidebarWhenTimelinePreviewIsOpen(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.showSidebar = true
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1"}
+
+	plan := m.buildLayoutPlan(220, 50)
+
+	if plan.SidebarVisible {
+		t.Fatal("expected sidebar to auto-hide while timeline preview is open")
 	}
 }
 
