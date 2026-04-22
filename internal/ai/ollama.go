@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +32,8 @@ type Classifier struct {
 	model          string
 	embeddingModel string
 	client         *http.Client
+	embedMu        sync.Mutex
+	embedEndpoint  string
 }
 
 // New creates a Classifier talking to the given Ollama host
@@ -45,8 +49,14 @@ func New(host, model string) *Classifier {
 		model:          model,
 		embeddingModel: "nomic-embed-text",
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        4,
+				MaxIdleConnsPerHost: 2,
+				MaxConnsPerHost:     2,
+			},
 		},
+		embedEndpoint: "/api/embeddings",
 	}
 }
 
@@ -131,8 +141,8 @@ type chatRequest struct {
 
 type chatResponse struct {
 	Message struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role      string `json:"role"`
+		Content   string `json:"content"`
 		ToolCalls []struct {
 			Function struct {
 				Name      string          `json:"name"`
@@ -211,34 +221,98 @@ type embedRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-type embedResponse struct {
-	Embedding []float32 `json:"embedding"`
+type embedAltRequest struct {
+	Model string `json:"model"`
+	Input string `json:"input"`
 }
 
-// Embed returns a float32 embedding vector for the given text.
-// Uses the embeddingModel (default: nomic-embed-text) via /api/embeddings.
-func (c *Classifier) Embed(text string) ([]float32, error) {
-	payload := embedRequest{Model: c.embeddingModel, Prompt: text}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+type embedResponse struct {
+	Embedding  []float32   `json:"embedding"`
+	Embeddings [][]float32 `json:"embeddings"`
+}
+
+func (c *Classifier) currentEmbedEndpoint() string {
+	c.embedMu.Lock()
+	defer c.embedMu.Unlock()
+	if c.embedEndpoint == "" {
+		c.embedEndpoint = "/api/embeddings"
 	}
-	resp, err := c.client.Post(c.host+"/api/embeddings", "application/json", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("embedding request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama /api/embeddings returned %d", resp.StatusCode)
-	}
+	return c.embedEndpoint
+}
+
+func (c *Classifier) setEmbedEndpoint(path string) {
+	c.embedMu.Lock()
+	c.embedEndpoint = path
+	c.embedMu.Unlock()
+}
+
+func (c *Classifier) decodeEmbeddingResponse(resp *http.Response) ([]float32, error) {
 	var result embedResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode embedding response: %w", err)
 	}
-	if len(result.Embedding) == 0 {
+	switch {
+	case len(result.Embedding) > 0:
+		return result.Embedding, nil
+	case len(result.Embeddings) > 0 && len(result.Embeddings[0]) > 0:
+		return result.Embeddings[0], nil
+	default:
 		return nil, fmt.Errorf("ollama returned empty embedding")
 	}
-	return result.Embedding, nil
+}
+
+func (c *Classifier) embedWithEndpoint(path string, payload embedRequest) ([]float32, int, error) {
+	requestBody := any(payload)
+	if path == "/api/embed" {
+		requestBody = embedAltRequest{
+			Model: payload.Model,
+			Input: payload.Prompt,
+		}
+	}
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, 0, err
+	}
+	resp, err := c.client.Post(c.host+path, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("embedding request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(resp.Body)
+		message := strings.TrimSpace(string(payload))
+		if message != "" {
+			return nil, resp.StatusCode, fmt.Errorf("ollama %s returned %d: %s", path, resp.StatusCode, message)
+		}
+		return nil, resp.StatusCode, fmt.Errorf("ollama %s returned %d", path, resp.StatusCode)
+	}
+	vec, err := c.decodeEmbeddingResponse(resp)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return vec, resp.StatusCode, nil
+}
+
+// Embed returns a float32 embedding vector for the given text.
+// It supports both legacy `/api/embeddings` and newer `/api/embed` routes and
+// caches the working endpoint after the first successful probe.
+func (c *Classifier) Embed(text string) ([]float32, error) {
+	payload := embedRequest{Model: c.embeddingModel, Prompt: text}
+	endpoint := c.currentEmbedEndpoint()
+	vec, status, err := c.embedWithEndpoint(endpoint, payload)
+	if err == nil {
+		return vec, nil
+	}
+
+	if endpoint == "/api/embeddings" && status == http.StatusNotFound {
+		fallback, _, fallbackErr := c.embedWithEndpoint("/api/embed", payload)
+		if fallbackErr == nil {
+			c.setEmbedEndpoint("/api/embed")
+			return fallback, nil
+		}
+		return nil, fallbackErr
+	}
+	return nil, err
 }
 
 func (c *Classifier) Ping() error {

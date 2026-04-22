@@ -27,7 +27,8 @@ func (m *Model) renderEmailPreview() string {
 	// Focus-aware colors: brighter when preview panel has focus
 	borderColor := "238"
 	headerColor := "245"
-	if m.focusedPanel == panelPreview {
+	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
+	if chrome.FocusedPanel == panelPreview {
 		borderColor = string(defaultTheme.BorderActive)
 		headerColor = string(defaultTheme.ConfirmFg)
 	} else {
@@ -84,8 +85,12 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Show downloadable attachments
-		attachStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("111"))
-		selectedAttachStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
+		attachStyle := lipgloss.NewStyle().
+			Foreground(defaultTheme.TextFg).
+			Background(defaultTheme.StatusBg)
+		selectedAttachStyle := lipgloss.NewStyle().
+			Foreground(defaultTheme.TabActiveFg).
+			Background(defaultTheme.TabActiveBg)
 		for i, att := range m.timeline.body.Attachments {
 			sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)
 			if att.Size >= 1024*1024 {

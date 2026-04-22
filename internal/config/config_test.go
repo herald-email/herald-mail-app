@@ -128,6 +128,10 @@ func TestConfigSave_SyncAndAIFields(t *testing.T) {
 	original.Server.Port = 993
 
 	original.AI.Provider = "claude"
+	original.AI.LocalMaxConcurrency = 1
+	original.AI.ExternalMaxConcurrency = 4
+	original.AI.BackgroundQueueLimit = 64
+	original.AI.PauseBackgroundWhileInteractive = true
 	original.Claude.APIKey = "test-api-key"
 	original.Claude.Model = "claude-sonnet-4-6"
 	original.Sync.PollIntervalMinutes = 10
@@ -145,6 +149,18 @@ func TestConfigSave_SyncAndAIFields(t *testing.T) {
 
 	if loaded.AI.Provider != "claude" {
 		t.Errorf("AI.Provider: got %q, want %q", loaded.AI.Provider, "claude")
+	}
+	if loaded.AI.LocalMaxConcurrency != 1 {
+		t.Errorf("AI.LocalMaxConcurrency: got %d, want 1", loaded.AI.LocalMaxConcurrency)
+	}
+	if loaded.AI.ExternalMaxConcurrency != 4 {
+		t.Errorf("AI.ExternalMaxConcurrency: got %d, want 4", loaded.AI.ExternalMaxConcurrency)
+	}
+	if loaded.AI.BackgroundQueueLimit != 64 {
+		t.Errorf("AI.BackgroundQueueLimit: got %d, want 64", loaded.AI.BackgroundQueueLimit)
+	}
+	if !loaded.AI.PauseBackgroundWhileInteractive {
+		t.Error("AI.PauseBackgroundWhileInteractive: got false, want true")
 	}
 	if loaded.Claude.APIKey != "test-api-key" {
 		t.Errorf("Claude.APIKey: got %q, want %q", loaded.Claude.APIKey, "test-api-key")
@@ -175,5 +191,26 @@ func TestDaemonDefaults(t *testing.T) {
 	}
 	if !strings.HasSuffix(c.Daemon.LogFile, filepath.Join("herald", "daemon.log")) {
 		t.Errorf("unexpected LogFile: %s", c.Daemon.LogFile)
+	}
+}
+
+func TestAIDefaults(t *testing.T) {
+	c := &Config{}
+	c.applyDefaults()
+
+	if c.AI.Provider != "ollama" {
+		t.Errorf("expected AI.Provider == %q, got %q", "ollama", c.AI.Provider)
+	}
+	if c.AI.LocalMaxConcurrency != 1 {
+		t.Errorf("expected AI.LocalMaxConcurrency == 1, got %d", c.AI.LocalMaxConcurrency)
+	}
+	if c.AI.ExternalMaxConcurrency != 4 {
+		t.Errorf("expected AI.ExternalMaxConcurrency == 4, got %d", c.AI.ExternalMaxConcurrency)
+	}
+	if c.AI.BackgroundQueueLimit != 64 {
+		t.Errorf("expected AI.BackgroundQueueLimit == 64, got %d", c.AI.BackgroundQueueLimit)
+	}
+	if !c.AI.PauseBackgroundWhileInteractive {
+		t.Error("expected AI.PauseBackgroundWhileInteractive == true")
 	}
 }

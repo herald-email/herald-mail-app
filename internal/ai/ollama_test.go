@@ -130,3 +130,49 @@ func TestChatWithTools_ReturnsText(t *testing.T) {
 		t.Errorf("expected no tool calls, got %d", len(calls))
 	}
 }
+
+func TestEmbed_FallsBackToSupportedEndpointAndCachesIt(t *testing.T) {
+	var embeddingsCalls int
+	var embedCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/embeddings":
+			embeddingsCalls++
+			http.NotFound(w, r)
+		case "/api/embed":
+			embedCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"embeddings": [][]float32{{0.1, 0.2, 0.3}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClassifier(srv.URL)
+
+	vec, err := c.Embed("hello")
+	if err != nil {
+		t.Fatalf("first Embed() failed: %v", err)
+	}
+	if len(vec) != 3 {
+		t.Fatalf("expected 3-d embedding from fallback endpoint, got %d", len(vec))
+	}
+
+	vec, err = c.Embed("world")
+	if err != nil {
+		t.Fatalf("second Embed() failed: %v", err)
+	}
+	if len(vec) != 3 {
+		t.Fatalf("expected 3-d embedding on cached endpoint, got %d", len(vec))
+	}
+
+	if embeddingsCalls != 1 {
+		t.Fatalf("expected /api/embeddings to be probed once, got %d", embeddingsCalls)
+	}
+	if embedCalls != 2 {
+		t.Fatalf("expected /api/embed to serve both requests, got %d", embedCalls)
+	}
+}

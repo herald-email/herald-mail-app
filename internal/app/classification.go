@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -11,8 +12,12 @@ import (
 func (m *Model) startClassification() tea.Cmd {
 	folder := m.currentFolder
 	ch := m.classifyCh // capture the current channel
+	classifier := ai.WithPriority(m.classifier, ai.PriorityUserAction)
 	return func() tea.Msg {
 		defer close(ch) // unblock the listener when we're done
+		if classifier == nil {
+			return ClassifyDoneMsg{}
+		}
 		ids, err := m.backend.GetUnclassifiedIDs(folder)
 		if err != nil || len(ids) == 0 {
 			return ClassifyDoneMsg{}
@@ -23,7 +28,7 @@ func (m *Model) startClassification() tea.Cmd {
 			if err != nil {
 				continue
 			}
-			cat, err := m.classifier.Classify(email.Sender, email.Subject)
+			cat, err := classifier.Classify(email.Sender, email.Subject)
 			if err != nil {
 				logger.Warn("Classification failed for %s: %v", id, err)
 				continue
@@ -42,7 +47,7 @@ func (m *Model) startClassification() tea.Cmd {
 
 // reclassifyEmailCmd re-classifies a single email and stores the result.
 func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
-	classifier := m.classifier // snapshot before goroutine
+	classifier := ai.WithPriority(m.classifier, ai.PriorityUserAction) // snapshot before goroutine
 	b := m.backend
 	messageID := email.MessageID
 	sender := email.Sender
@@ -67,12 +72,15 @@ func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
 // forget background op triggered automatically on email arrival — no visible
 // status update is set on success.
 func (m *Model) autoClassifyEmailCmd(email *models.EmailData) tea.Cmd {
-	classifier := m.classifier // snapshot
+	classifier := ai.WithPriority(m.classifier, ai.PriorityBackground) // snapshot
 	b := m.backend
 	messageID := email.MessageID
 	sender := email.Sender
 	subject := email.Subject
 	return func() tea.Msg {
+		if classifier == nil {
+			return AutoClassifyResultMsg{MessageID: messageID, Err: errors.New("no AI classifier configured")}
+		}
 		cat, err := classifier.Classify(sender, subject)
 		if err != nil {
 			return AutoClassifyResultMsg{MessageID: messageID, Err: err}

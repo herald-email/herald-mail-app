@@ -18,8 +18,8 @@ func TestNewFromConfigOllama(t *testing.T) {
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
-	if _, ok := client.(*Classifier); !ok {
-		t.Errorf("expected *Classifier, got %T", client)
+	if _, ok := client.(*ManagedClient); !ok {
+		t.Errorf("expected *ManagedClient, got %T", client)
 	}
 }
 
@@ -50,8 +50,8 @@ func TestNewFromConfigClaude(t *testing.T) {
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
-	if _, ok := client.(*ClaudeClient); !ok {
-		t.Errorf("expected *ClaudeClient, got %T", client)
+	if _, ok := client.(*ManagedClient); !ok {
+		t.Errorf("expected *ManagedClient, got %T", client)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestNewFromConfigOpenAI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := client.(*OpenAICompatClient); !ok {
-		t.Errorf("expected *OpenAICompatClient, got %T", client)
+	if _, ok := client.(*ManagedClient); !ok {
+		t.Errorf("expected *ManagedClient, got %T", client)
 	}
 }
 

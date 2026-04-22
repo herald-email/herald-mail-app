@@ -43,10 +43,10 @@ type Config struct {
 		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
 	} `yaml:"ollama"`
 	Sync struct {
-		Idle                bool `yaml:"idle"`       // default: true
-		Interval            int  `yaml:"interval"`   // fallback poll seconds, default: 60
-		Background          bool `yaml:"background"` // sync other folders, default: true
-		Notify              bool `yaml:"notify"`     // status bar flash, default: true
+		Idle                bool `yaml:"idle"`                  // default: true
+		Interval            int  `yaml:"interval"`              // fallback poll seconds, default: 60
+		Background          bool `yaml:"background"`            // sync other folders, default: true
+		Notify              bool `yaml:"notify"`                // status bar flash, default: true
 		PollIntervalMinutes int  `yaml:"poll_interval_minutes"` // 0 = IDLE only; default 5
 		IDLEEnabled         bool `yaml:"idle_enabled"`          // default true
 	} `yaml:"sync"`
@@ -61,7 +61,7 @@ type Config struct {
 		RefreshToken string `yaml:"refresh_token,omitempty"`
 		// TokenExpiry is the OAuth access-token expiry in RFC3339 format.
 		TokenExpiry string `yaml:"token_expiry,omitempty"`
-		Email        string `yaml:"email,omitempty"`
+		Email       string `yaml:"email,omitempty"`
 	} `yaml:"gmail,omitempty"`
 	Daemon struct {
 		Port     int    `yaml:"port"`     // default: 7272
@@ -81,10 +81,10 @@ type Config struct {
 
 	ClassificationActions []struct {
 		Name         string `yaml:"name"`
-		TriggerType  string `yaml:"trigger_type"`  // "category" | "sender" | "domain"
+		TriggerType  string `yaml:"trigger_type"` // "category" | "sender" | "domain"
 		TriggerValue string `yaml:"trigger_value"`
-		ActionType   string `yaml:"action_type"`   // "notify" | "move" | "archive" | "delete" | "command" | "webhook"
-		ActionValue  string `yaml:"action_value"`  // folder name, command, URL, or notification text
+		ActionType   string `yaml:"action_type"`  // "notify" | "move" | "archive" | "delete" | "command" | "webhook"
+		ActionValue  string `yaml:"action_value"` // folder name, command, URL, or notification text
 		Enabled      bool   `yaml:"enabled"`
 	} `yaml:"classification_actions"`
 
@@ -104,7 +104,11 @@ type Config struct {
 	} `yaml:"openai"`
 
 	AI struct {
-		Provider string `yaml:"provider"` // "ollama" | "claude" | "openai"; default: "ollama"
+		Provider                        string `yaml:"provider"`                           // "ollama" | "claude" | "openai"; default: "ollama"
+		LocalMaxConcurrency             int    `yaml:"local_max_concurrency"`              // default: 1
+		ExternalMaxConcurrency          int    `yaml:"external_max_concurrency"`           // default: 4
+		BackgroundQueueLimit            int    `yaml:"background_queue_limit"`             // default: 64
+		PauseBackgroundWhileInteractive bool   `yaml:"pause_background_while_interactive"` // default: true
 	} `yaml:"ai"`
 }
 
@@ -209,6 +213,18 @@ func (c *Config) applyDefaults() {
 	// AI provider defaults
 	if c.AI.Provider == "" {
 		c.AI.Provider = "ollama"
+	}
+	if c.AI.LocalMaxConcurrency == 0 {
+		c.AI.LocalMaxConcurrency = 1
+	}
+	if c.AI.ExternalMaxConcurrency == 0 {
+		c.AI.ExternalMaxConcurrency = 4
+	}
+	if c.AI.BackgroundQueueLimit == 0 {
+		c.AI.BackgroundQueueLimit = 64
+	}
+	if !c.AI.PauseBackgroundWhileInteractive {
+		c.AI.PauseBackgroundWhileInteractive = true
 	}
 	if c.Claude.Model == "" {
 		c.Claude.Model = "claude-sonnet-4-6"

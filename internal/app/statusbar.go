@@ -99,10 +99,17 @@ func (m *Model) renderStatusBar() string {
 		}
 	}
 
-	// Selection state
-	if len(m.selectedRows) > 0 {
-		parts = append(parts, fmt.Sprintf("%d senders selected", len(m.selectedRows)))
-	} else if len(m.selectedMessages) > 0 {
+	// Selection state is cleanup-local and should not leak into other tabs.
+	if m.activeTab == tabCleanup && len(m.selectedRows) > 0 {
+		label := "senders"
+		if m.groupByDomain {
+			label = "domains"
+		}
+		if len(m.selectedRows) == 1 {
+			label = strings.TrimSuffix(label, "s")
+		}
+		parts = append(parts, fmt.Sprintf("%d %s selected", len(m.selectedRows), label))
+	} else if m.activeTab == tabCleanup && len(m.selectedMessages) > 0 {
 		// Count how many distinct sender/domain keys have selected messages
 		keySet := map[string]bool{}
 		for key, emails := range m.emailsBySender {

@@ -285,13 +285,17 @@ func (m *Model) updateTimelineTable() {
 // renderTimelineView renders the timeline tab content.
 // When an email is selected, it splits into a list on the left and preview on the right.
 func (m *Model) renderTimelineView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	chrome := m.chromeState(plan)
+
 	var tableView string
 	if m.timeline.emails != nil && len(m.timeline.emails) == 0 {
 		tableView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 	} else {
-		// Timeline table always gets a bright border on the Timeline tab —
-		// it's the primary panel and should always stand out.
-		style := m.baseStyle.BorderForeground(defaultTheme.BorderActive)
+		style := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+		if chrome.FocusedPanel == panelTimeline {
+			style = style.BorderForeground(defaultTheme.BorderActive)
+		}
 		tableView = style.Render(renderStyledTableView(&m.timelineTable, 0))
 	}
 
@@ -305,8 +309,10 @@ func (m *Model) renderTimelineView() string {
 
 	if m.showSidebar && !m.sidebarTooWide {
 		sidebarStyle := m.baseStyle
-		if m.focusedPanel == panelSidebar {
+		if chrome.FocusedPanel == panelSidebar {
 			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
+		} else {
+			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderInactive)
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)
@@ -501,18 +507,26 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	}
 	if chrome.FocusedPanel == panelPreview {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
+		hasMultipleAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 1
 		hasUnsub := m.timeline.body != nil && m.timeline.body.ListUnsubscribe != ""
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		if hasAttachments && hasUnsub {
-			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  u: unsubscribe  │  esc: close  │  q: quit", true
-		}
+		attachmentHints := ""
 		if hasAttachments {
-			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  s: save attachment  │  esc: close  │  q: quit", true
+			attachmentHints = " │  s: save attachment"
+			if hasMultipleAttachments {
+				attachmentHints = " │  [ and ]: attachments" + attachmentHints
+			}
+		}
+		if hasAttachments && hasUnsub {
+			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit", true
 		}
 		if hasUnsub {
 			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit", true
+		}
+		if hasAttachments {
+			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
 		}
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
 	}
@@ -809,6 +823,24 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.timeline.attachmentSavePrompt = true
 		}
 		return m, nil, true
+	case "]":
+		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
+			m.timeline.body != nil && m.timeline.selectedAttachment < len(m.timeline.body.Attachments)-1 {
+			m.timeline.selectedAttachment++
+			return m, nil, true
+		}
+		if m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
+			return m, nil, true
+		}
+	case "[":
+		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
+			m.timeline.body != nil && m.timeline.selectedAttachment > 0 {
+			m.timeline.selectedAttachment--
+			return m, nil, true
+		}
+		if m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
+			return m, nil, true
+		}
 	case "R":
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {

@@ -55,8 +55,10 @@ func main() {
 	}
 
 	mailer := appsmtp.New(cfg)
-	classifier := ai.New(cfg.Ollama.Host, cfg.Ollama.Model)
-	classifier.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+	classifier, err := ai.NewFromConfig(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize AI client: %v", err)
+	}
 
 	srv, err := wish.NewServer(
 		wish.WithAddress(*addr),

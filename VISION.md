@@ -108,6 +108,9 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Star / pin important threads to top
+- [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
+- [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
+- [ ] Split Timeline and preview panels keep aligned heights at common sizes including `80x24`
 
 ### Status Bar
 
@@ -120,6 +123,9 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Deletion progress (Deleting 3/5…)
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
+- [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
+- [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
+- [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)
 
 ### Multi-Folder Sidebar
 
@@ -175,6 +181,9 @@ The app can automatically tag emails with categories (subscription, important, u
 - [x] `classify_folder` MCP tool (batch, with progress)
 - [x] Auto-classify new emails as they arrive (background, rate-limited)
 - [x] Reanalyse / override existing tags
+- [ ] Local-AI work scheduler with bounded concurrency and interactive-before-background priority
+- [ ] Degraded AI UX that surfaces concise `AI unavailable` / `deferred` states instead of noisy repeated failures
+- [ ] Local Ollama overload handling that fails open and preserves overall UI/network responsiveness
 
 ### Custom Classification Prompts
 
@@ -440,6 +449,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
 - [x] Similarity score badge (`87%`) per result row
+- [ ] Semantic search explicitly degrades when embeddings are unavailable or deferred
 - [ ] Hybrid ranking (keyword + semantic merged)
 - [ ] "Why this result?" hint (matched excerpt)
 
@@ -563,6 +573,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Tab 4 — Contacts TUI: two-panel list+detail, `/` keyword search, `?` semantic search
 - [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
+- [ ] Contact enrichment failures are deduplicated and visible without flooding the log viewer
 - [ ] Autocomplete in Compose `To`/`CC`/`BCC` fields
 - [ ] CardDAV sync (config stubs in place; implementation deferred)
 
@@ -591,12 +602,16 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 
 ## Attachment Support
 
+Attachments appear in previews and compose flows, so this section tracks both raw transport support and the user-facing interaction quality that makes them trustworthy.
+
 - [x] Attachments detected from `BodyStructure` during sync
 - [x] Attachment list shown in email preview (filename, MIME type, size)
 - [x] Save attachment to disk (prompted path, default `~/Downloads/<filename>`)
 - [x] Attach files when composing (`Ctrl+A`, tab-completion)
 - [x] Multiple attachments; each listed below the body
 - [x] Sent as `multipart/mixed`
+- [ ] Preview supports navigating between multiple attachments and saving the currently selected one
+- [ ] Attachment selection uses the same focus/highlight language as other navigable lists
 - [ ] File size warning for attachments over 10 MB
 
 ---
@@ -706,6 +721,7 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 
 - [x] IMAP mock server (`internal/testutil/imap_server.go`) — in-process IMAP server for integration tests
 - [x] Integration tests against the mock server (`internal/imap/integration_test.go`)
+- [ ] 360 TUI manual QA matrix covering demo, live IMAP, live Ollama, SSH, and MCP lanes
 - [ ] TUI snapshot tests via `teatest` or PTY (render correctness at fixed terminal sizes)
 - [ ] CI pipeline running all tests on push
 

@@ -62,6 +62,39 @@ After each sync, `StartBackgroundReconcile` fetches all server UIDs once (no env
 **SQLite WAL mode**
 `PRAGMA journal_mode=WAL` is set at cache init. This allows the TUI, SSH server, and MCP server to read and write the same `email_cache.db` simultaneously without blocking each other. No cross-process locks are held.
 
+### AI work scheduling and network safety
+
+AI work now needs its own resource model because local Ollama capacity behaves very differently from external APIs. The UI must stay responsive even when embeddings, enrichment, classification, chat, and image description are all active, so the scheduler treats local AI as scarce machine capacity and explicitly prefers interactive work over background throughput.
+
+**Interactive-before-background priority**
+
+- Highest priority: user-blocking interactive work such as chat replies, semantic query embeddings, quick replies, current-email image description, and user-triggered single-contact enrichment
+- Medium priority: explicit user-triggered folder classification or other visible batch actions
+- Lowest priority: background email embeddings and background contact enrichment
+
+**Bounded queue, fail-open behavior**
+
+- Local AI work uses a bounded queue and a low default concurrency so Herald does not exhaust local sockets or starve the rest of the machine
+- Low-priority duplicate work is dropped or coalesced instead of opening more concurrent requests
+- Background work pauses while interactive local AI work is active when `pause_background_while_interactive` is enabled
+- Queue saturation must fail open: the UI remains responsive, low-priority work is deferred or skipped, and the user gets concise status/log feedback instead of a connection storm
+
+**Transport policy**
+
+- Local AI uses a shared HTTP transport with strict per-host connection caps
+- Local queued work should not depend on one blanket short timeout because large local models can be slow but still healthy
+- External AI may use a higher bounded concurrency because remote providers tolerate parallelism better, but it remains config-driven
+
+**Configuration**
+
+These controls live under `ai:` in config:
+
+- `provider`
+- `local_max_concurrency`
+- `external_max_concurrency`
+- `background_queue_limit`
+- `pause_background_while_interactive`
+
 ---
 
 ## Phase 2 — Daemon Server (target)

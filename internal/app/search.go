@@ -48,13 +48,13 @@ func (m *Model) performSearch(query string) tea.Cmd {
 			source = "semantic"
 			if classifier == nil {
 				logger.Warn("Semantic search requires Ollama classifier — not configured")
-				return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+				return SearchResultMsg{Emails: nil, Query: query, Source: source, Err: fmt.Errorf("semantic search unavailable: AI is not configured")}
 			}
 			queryText := ai.BuildQueryText(actualQuery)
 			vec, embedErr := classifier.Embed(queryText)
 			if embedErr != nil {
 				logger.Warn("Semantic search embed error: %v", embedErr)
-				return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source}
+				return SearchResultMsg{Emails: nil, Query: query, Source: source, Err: fmt.Errorf("semantic search unavailable: %v", embedErr)}
 			}
 			results, searchErr := backend.SearchSemanticChunked(folder, vec, 20, 0.3)
 			if searchErr != nil {

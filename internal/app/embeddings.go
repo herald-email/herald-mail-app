@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/ai"
@@ -13,12 +14,14 @@ import (
 
 // --- Embedding helpers ---
 
+var backgroundAIWarnings sync.Map
+
 // embedChunksForEmail strips, chunks, and embeds an email body for semantic search.
 // Uses nomic-embed-text's search_document: prefix for asymmetric retrieval.
 // Returns nil if classifier is nil, body is empty, or all embeddings fail.
-func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai.AIClient) []models.EmbeddingChunk {
+func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai.AIClient) ([]models.EmbeddingChunk, error) {
 	if classifier == nil || email == nil || bodyText == "" {
-		return nil
+		return nil, nil
 	}
 	cleaned := ai.StripQuotedText(bodyText)
 	if cleaned == "" {
@@ -26,14 +29,18 @@ func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai
 	}
 	rawChunks := ai.ChunkText(cleaned, 800, 200, 10)
 	if len(rawChunks) == 0 {
-		return nil
+		return nil, nil
 	}
 	date := email.Date.Format("2006-01-02")
 	var result []models.EmbeddingChunk
+	var firstErr error
 	for i, chunk := range rawChunks {
 		doc := ai.BuildDocumentChunk(email.Sender, date, email.Subject, chunk)
 		vec, err := classifier.Embed(doc)
 		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
 			logger.Debug("embed chunk %d for %s: %v", i, email.MessageID, err)
 			continue
 		}
@@ -45,7 +52,18 @@ func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai
 			ContentHash: hash,
 		})
 	}
-	return result
+	if len(result) == 0 {
+		return nil, firstErr
+	}
+	return result, nil
+}
+
+func warnBackgroundAIOnce(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if _, loaded := backgroundAIWarnings.LoadOrStore(msg, struct{}{}); loaded {
+		return
+	}
+	logger.Warn("%s", msg)
 }
 
 // runEmbeddingBatch processes one batch of emails for semantic search embedding.
@@ -53,11 +71,15 @@ func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai
 // Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
 func (m *Model) runEmbeddingBatch() tea.Cmd {
 	folder := m.currentFolder
+	backgroundAI := ai.WithPriority(m.classifier, ai.PriorityBackground)
 	return func() tea.Msg {
+		if backgroundAI == nil {
+			return nil
+		}
 		// Pass 1: embed emails that already have body_text in cache
 		if ids, err := m.backend.GetUnembeddedIDsWithBody(folder); err == nil && len(ids) > 0 {
-			if len(ids) > 20 {
-				ids = ids[:20]
+			if len(ids) > 5 {
+				ids = ids[:5]
 			}
 			for _, id := range ids {
 				email, err := m.backend.GetEmailByID(id)
@@ -68,17 +90,20 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 				if err != nil || bodyText == "" {
 					continue
 				}
-				chunks := embedChunksForEmail(email, bodyText, m.classifier)
+				chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAI)
 				if len(chunks) > 0 {
 					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
 						logger.Warn("StoreEmbeddingChunks %s: %v", id, err)
 					}
+				} else if embErr != nil {
+					warnBackgroundAIOnce("runEmbeddingBatch: embeddings deferred or unavailable: %v", embErr)
+					break
 				}
 			}
 		}
 
 		// Pass 2: lazily fetch bodies for emails with neither body_text nor chunks
-		if uncached, err := m.backend.GetUncachedBodyIDs(folder, 5); err == nil {
+		if uncached, err := m.backend.GetUncachedBodyIDs(folder, 2); err == nil {
 			for _, id := range uncached {
 				email, err := m.backend.GetEmailByID(id)
 				if err != nil || email == nil {
@@ -88,11 +113,14 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 				if err != nil || body == nil || body.TextPlain == "" {
 					continue
 				}
-				chunks := embedChunksForEmail(email, body.TextPlain, m.classifier)
+				chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAI)
 				if len(chunks) > 0 {
 					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
 						logger.Warn("StoreEmbeddingChunks (lazy) %s: %v", id, err)
 					}
+				} else if embErr != nil {
+					warnBackgroundAIOnce("runEmbeddingBatch: lazy embeddings deferred or unavailable: %v", embErr)
+					break
 				}
 			}
 		}
@@ -111,10 +139,11 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 // This is a no-op (returns Count: 0) when no contacts need enrichment.
 func (m *Model) runContactEnrichment() tea.Cmd {
 	return func() tea.Msg {
-		if m.classifier == nil {
+		backgroundAI := ai.WithPriority(m.classifier, ai.PriorityBackground)
+		if backgroundAI == nil {
 			return ContactEnrichedMsg{Count: 0}
 		}
-		contacts, err := m.backend.GetContactsToEnrich(3, 5)
+		contacts, err := m.backend.GetContactsToEnrich(3, 1)
 		if err != nil {
 			logger.Warn("runContactEnrichment: GetContactsToEnrich: %v", err)
 			return ContactEnrichedMsg{Count: 0}
@@ -124,19 +153,28 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 		}
 
 		enriched := 0
+		seenWarnings := map[string]bool{}
+		logWarnOnce := func(format string, args ...any) {
+			msg := fmt.Sprintf(format, args...)
+			if seenWarnings[msg] {
+				return
+			}
+			seenWarnings[msg] = true
+			logger.Warn("%s", msg)
+		}
 		for _, contact := range contacts {
 			// Fetch recent email subjects for this contact
 			subjects, err := m.backend.GetRecentSubjectsByContact(contact.Email, 10)
 			if err != nil {
-				logger.Warn("runContactEnrichment: GetRecentSubjectsByContact %s: %v", contact.Email, err)
+				logWarnOnce("runContactEnrichment: GetRecentSubjectsByContact %s: %v", contact.Email, err)
 				continue
 			}
 
 			// Ask Ollama to extract company and topics
-			company, topics, err := m.classifier.EnrichContact(contact.Email, subjects)
+			company, topics, err := backgroundAI.EnrichContact(contact.Email, subjects)
 			if err != nil {
-				logger.Warn("runContactEnrichment: EnrichContact %s: %v", contact.Email, err)
-				continue
+				logWarnOnce("runContactEnrichment: EnrichContact %s: %v", contact.Email, err)
+				break
 			}
 
 			// Store enrichment result (even if company and topics are empty — marks as processed)
@@ -159,13 +197,13 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 				embText += ", topics: " + topicsStr
 			}
 
-			vec, embErr := m.classifier.Embed(embText)
+			vec, embErr := backgroundAI.Embed(embText)
 			if embErr != nil {
-				logger.Warn("runContactEnrichment: Embed %s: %v", contact.Email, embErr)
+				logWarnOnce("runContactEnrichment: Embed %s: %v", contact.Email, embErr)
 				// Enrichment still counts even if embedding fails
 			} else {
 				if storeErr := m.backend.UpdateContactEmbedding(contact.Email, vec); storeErr != nil {
-					logger.Warn("runContactEnrichment: UpdateContactEmbedding %s: %v", contact.Email, storeErr)
+					logWarnOnce("runContactEnrichment: UpdateContactEmbedding %s: %v", contact.Email, storeErr)
 				}
 			}
 
