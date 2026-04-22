@@ -51,8 +51,7 @@ func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai
 	var result []models.EmbeddingChunk
 	var firstErr error
 	for i, chunk := range rawChunks {
-		doc := ai.BuildDocumentChunk(email.Sender, date, email.Subject, chunk)
-		vec, err := classifier.Embed(doc)
+		vec, doc, err := embedDocumentChunkWithFallback(classifier, email.Sender, date, email.Subject, chunk)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -72,6 +71,46 @@ func embedChunksForEmail(email *models.EmailData, bodyText string, classifier ai
 		return nil, firstErr
 	}
 	return result, nil
+}
+
+func embedDocumentChunkWithFallback(classifier ai.AIClient, sender, date, subject, chunk string) ([]float32, string, error) {
+	buildDoc := func(body string) string {
+		return ai.BuildDocumentChunk(sender, date, subject, body)
+	}
+
+	body := chunk
+	doc := buildDoc(body)
+	vec, err := classifier.Embed(doc)
+	if err == nil {
+		return vec, doc, nil
+	}
+	if !ai.IsContextLengthError(err) {
+		return nil, "", err
+	}
+
+	for {
+		runes := []rune(body)
+		if len(runes) <= 120 {
+			break
+		}
+		nextLen := len(runes) / 2
+		if nextLen < 120 {
+			nextLen = 120
+		}
+		body = string(runes[:nextLen])
+		doc = buildDoc(body)
+		vec, err = classifier.Embed(doc)
+		if err == nil {
+			return vec, doc, nil
+		}
+		if !ai.IsContextLengthError(err) {
+			return nil, "", err
+		}
+	}
+
+	doc = buildDoc(subject)
+	vec, err = classifier.Embed(doc)
+	return vec, doc, err
 }
 
 func warnBackgroundAIOnce(format string, args ...any) {
@@ -114,10 +153,12 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 					}
 				} else if embErr != nil {
 					warnBackgroundAIOnce("runEmbeddingBatch: embeddings deferred or unavailable: %v", embErr)
-					if notice == "" {
+					if notice == "" && (ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred) {
 						notice = aiGuidanceNotice(embErr)
 					}
-					break
+					if ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred {
+						break
+					}
 				}
 			}
 		}
@@ -140,10 +181,12 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 					}
 				} else if embErr != nil {
 					warnBackgroundAIOnce("runEmbeddingBatch: lazy embeddings deferred or unavailable: %v", embErr)
-					if notice == "" {
+					if notice == "" && (ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred) {
 						notice = aiGuidanceNotice(embErr)
 					}
-					break
+					if ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred {
+						break
+					}
 				}
 			}
 		}

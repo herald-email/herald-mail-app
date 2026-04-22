@@ -36,7 +36,7 @@ var defaultTheme = Theme{
 	TabInactiveFg:  lipgloss.Color("245"),
 	BorderActive:   lipgloss.Color("39"),
 	BorderInactive: lipgloss.Color("240"),
-	StatusBg:       lipgloss.Color("237"),
+	StatusBg:       lipgloss.Color("0"),
 	StatusFg:       lipgloss.Color("252"),
 	HintFg:         lipgloss.Color("243"),
 	HeaderFg:       lipgloss.Color("205"),

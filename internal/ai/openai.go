@@ -182,7 +182,7 @@ type openAIAssistantMsg struct {
 
 // openAIToolResultMsg is a tool result message.
 type openAIToolResultMsg struct {
-	Role       string `json:"role"`        // "tool"
+	Role       string `json:"role"` // "tool"
 	ToolCallID string `json:"tool_call_id"`
 	Content    string `json:"content"`
 }
@@ -332,9 +332,8 @@ func (c *OpenAICompatClient) GenerateQuickReplies(sender, subject, bodyPreview s
 	if err != nil {
 		return nil, err
 	}
-	reply = stripMarkdownFences(reply)
-	var suggestions []string
-	if err := json.Unmarshal([]byte(reply), &suggestions); err != nil {
+	suggestions, err := parseQuickReplySuggestions(reply)
+	if err != nil {
 		return nil, fmt.Errorf("parse quick replies: %w", err)
 	}
 	return suggestions, nil

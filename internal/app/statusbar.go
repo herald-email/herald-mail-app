@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 )
 
@@ -27,21 +28,31 @@ func (m *Model) renderAIStatusChip() string {
 		return lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("AI: off")
 	}
 	status := m.schedulerStatus()
-	label := string(status.DisplayKind())
-	if label == "" {
-		label = "idle"
+	label := "idle"
+	switch status.DisplayKind() {
+	case ai.TaskKindEmbedding:
+		label = "embed"
+	case ai.TaskKindClassification:
+		label = "tag"
+	case ai.TaskKindQuickReply:
+		label = "reply"
+	case ai.TaskKindSemanticSearch:
+		label = "search"
+	case ai.TaskKindChat:
+		label = "chat"
+	case "deferred":
+		label = "defer"
+	case "unavailable":
+		label = "down"
 	}
-	chip := "AI: " + label
-	if queued := status.DisplayQueuedCount(); queued > 0 && label != "idle" && label != "unavailable" {
-		chip += fmt.Sprintf(" (+%d)", queued)
-	}
+	chip := fmt.Sprintf("%-10s", "AI "+label)
 	style := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
 	switch label {
 	case "idle":
-		style = style.Foreground(defaultTheme.DimFg)
-	case "deferred":
+		style = style.Foreground(defaultTheme.DimFg).Faint(true)
+	case "defer":
 		style = style.Foreground(defaultTheme.DemoFg)
-	case "unavailable":
+	case "down":
 		style = style.Foreground(defaultTheme.ConfirmFg)
 	}
 	return style.Render(chip)
@@ -131,6 +142,12 @@ func (m *Model) renderStatusBar() string {
 	if chip := m.renderAIStatusChip(); chip != "" {
 		parts = append(parts, chip)
 	}
+	if m.classifying {
+		parts = append(parts, fmt.Sprintf("tag %d/%d", m.classifyDone, m.classifyTotal))
+	}
+	if m.embeddingTotal > 0 && m.embeddingDone < m.embeddingTotal {
+		parts = append(parts, fmt.Sprintf("embed %d/%d", m.embeddingDone, m.embeddingTotal))
+	}
 
 	// Folder counts
 	if st, ok := m.folderStatus[m.currentFolder]; ok {
@@ -200,16 +217,6 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, fmt.Sprintf("%d senders  %d emails", len(m.stats), total))
 	}
 
-	// Classification progress
-	if m.classifying {
-		parts = append(parts, fmt.Sprintf("Tagging… %d/%d", m.classifyDone, m.classifyTotal))
-	}
-
-	// Background embedding progress
-	if m.embeddingTotal > 0 && m.embeddingDone < m.embeddingTotal {
-		parts = append(parts, fmt.Sprintf("⬡ embedding %d/%d", m.embeddingDone, m.embeddingTotal))
-	}
-
 	parts = m.appendTimelineStatusParts(parts)
 
 	// Sync status
@@ -255,6 +262,71 @@ func (m *Model) renderStatusBar() string {
 		Render(truncateVisual(line, w-2))
 }
 
+func wrapChromeSegments(text string, width, maxLines int) []string {
+	if width <= 0 {
+		width = 1
+	}
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	parts := strings.Split(text, "  │  ")
+	if len(parts) == 0 {
+		return []string{""}
+	}
+
+	lines := []string{}
+	current := ""
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		candidate := part
+		if current != "" {
+			candidate = current + "  │  " + part
+		}
+		if ansi.StringWidth(candidate) <= width {
+			current = candidate
+			continue
+		}
+		if current != "" {
+			lines = append(lines, current)
+			if len(lines) == maxLines {
+				lines[len(lines)-1] = truncateVisual(lines[len(lines)-1], width)
+				return lines
+			}
+		}
+		current = truncateVisual(part, width)
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	if len(lines) == 0 {
+		lines = append(lines, truncateVisual(text, width))
+	}
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		lines[len(lines)-1] = truncateVisual(lines[len(lines)-1], width)
+	}
+	return lines
+}
+
+func renderChromeLines(lines []string, width int, fg lipgloss.Color) string {
+	if width <= 0 {
+		width = 80
+	}
+	style := lipgloss.NewStyle().
+		Foreground(fg).
+		Background(defaultTheme.StatusBg).
+		Width(width).
+		Padding(0, 1)
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		rendered = append(rendered, style.Render(safeChromeLine(line, width-2)))
+	}
+	return strings.Join(rendered, "\n")
+}
+
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
@@ -284,25 +356,22 @@ func (m *Model) renderKeyHints() string {
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
-			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
 			if m.showCleanupPreview {
 				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  tab: next panel  │  D: delete  │  A: re-classify  │  q: quit"
 			} else {
-				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  a: AI tag  │  c: chat  │  l: logs  │  q: quit"
+				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  a: AI tag  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
 		}
 	}
-	// Truncate to prevent wrapping that pushes the header off-screen.
 	w := m.windowWidth
 	if w <= 0 {
 		w = 80
 	}
-	return lipgloss.NewStyle().
-		Foreground(defaultTheme.HintFg).
-		Render(truncateVisual(hints, w))
+	return renderChromeLines(wrapChromeSegments(hints, w-2, 2), w, defaultTheme.HintFg)
 }
 
 func (m *Model) setFocusedPanel(panel int) {

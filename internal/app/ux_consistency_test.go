@@ -173,8 +173,37 @@ func TestRenderStatusBar_ShowsGlobalAIChip(t *testing.T) {
 	}}
 
 	status := stripANSI(m.renderStatusBar())
-	if !strings.Contains(status, "AI: quick reply (+1)") {
+	if !strings.Contains(status, "AI reply") {
 		t.Fatalf("expected status bar to prefer queued interactive AI chip, got %q", status)
+	}
+}
+
+func TestRenderStatusBar_ShowsTaggingAndEmbeddingProgress(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.classifying = true
+	m.classifyDone = 12
+	m.classifyTotal = 48
+	m.embeddingDone = 64
+	m.embeddingTotal = 256
+
+	status := stripANSI(m.renderStatusBar())
+	if !strings.Contains(status, "tag 12/48") {
+		t.Fatalf("expected status bar to show tagging progress, got %q", status)
+	}
+	if !strings.Contains(status, "embed 64/256") {
+		t.Fatalf("expected status bar to show embedding progress, got %q", status)
+	}
+}
+
+func TestRenderKeyHints_HidesManualAITagHint(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	hints := stripANSI(m.renderKeyHints())
+	if strings.Contains(hints, "a: AI tag") {
+		t.Fatalf("expected automatic tagging flow to hide manual AI tag hint, got %q", hints)
 	}
 }
 
@@ -224,5 +253,31 @@ func TestHandleTimelineMsg_EmailBodyOpensPendingQuickReply(t *testing.T) {
 	}
 	if updated.focusedPanel != panelPreview {
 		t.Fatalf("expected focus to move to preview, got %d", updated.focusedPanel)
+	}
+}
+
+func TestHandleTimelineMsg_PrefixesAIGeneratedReplies(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+
+	model, _, handled := m.handleTimelineMsg(QuickRepliesMsg{
+		Replies: []string{
+			"I'll get back to you.",
+			"[AI] Already prefixed",
+			"",
+		},
+	})
+	if !handled {
+		t.Fatal("expected QuickRepliesMsg to be handled")
+	}
+	updated := model.(*Model)
+	if len(updated.timeline.quickReplies) != 2 {
+		t.Fatalf("expected 2 non-empty replies, got %d", len(updated.timeline.quickReplies))
+	}
+	if updated.timeline.quickReplies[0] != "[AI] I'll get back to you." {
+		t.Fatalf("expected first AI reply to be prefixed, got %q", updated.timeline.quickReplies[0])
+	}
+	if updated.timeline.quickReplies[1] != "[AI] Already prefixed" {
+		t.Fatalf("expected existing prefix to be preserved, got %q", updated.timeline.quickReplies[1])
 	}
 }

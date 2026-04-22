@@ -476,18 +476,8 @@ func (c *Classifier) GenerateQuickReplies(sender, subject, bodyPreview string) (
 		return nil, fmt.Errorf("GenerateQuickReplies: %w", err)
 	}
 	reply = strings.TrimSpace(reply)
-	// Strip markdown fences
-	if strings.HasPrefix(reply, "```") {
-		if idx := strings.Index(reply, "\n"); idx >= 0 {
-			reply = reply[idx+1:]
-		}
-		if idx := strings.LastIndex(reply, "```"); idx >= 0 {
-			reply = reply[:idx]
-		}
-		reply = strings.TrimSpace(reply)
-	}
-	var suggestions []string
-	if err := json.Unmarshal([]byte(reply), &suggestions); err != nil {
+	suggestions, err := parseQuickReplySuggestions(reply)
+	if err != nil {
 		return nil, fmt.Errorf("parse quick replies: %w", err)
 	}
 	return suggestions, nil

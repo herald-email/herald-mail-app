@@ -115,6 +115,30 @@ func TestStatusChrome_UTF8SafeAt80Cols(t *testing.T) {
 	assertFitsWidth(t, 80, hints)
 }
 
+func TestKeyHints_WrapToTwoLinesWhenNeeded(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.body = &models.EmailBody{
+		TextPlain: strings.Repeat("preview ", 30),
+		Attachments: []models.Attachment{
+			{Filename: "one.pdf"},
+			{Filename: "two.pdf"},
+		},
+	}
+	m.focusedPanel = panelPreview
+
+	hints := m.renderKeyHints()
+	assertFitsWidth(t, 80, hints)
+
+	lines := strings.Split(stripANSI(hints), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected wrapped key hints to use two lines, got %d:\n%s", len(lines), stripANSI(hints))
+	}
+}
+
 func TestMinimumSizeMessage_FitsWidthAndIncludesTarget(t *testing.T) {
 	m := makeSizedModel(t, 50, 15)
 	rendered := m.View()

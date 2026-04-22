@@ -1450,7 +1450,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.updateTableDimensions(msg.Width, msg.Height)
 		m.chatWrappedLines = nil // invalidate on resize
-		return m, nil
+		return m, tea.ClearScreen
 
 	case tickMsg:
 		if m.loading {
@@ -1839,16 +1839,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "a":
-		// Trigger AI classification for current folder.
-		// A fresh channel is allocated on each run so startClassification can
-		// safely close it when done (unblocking listenForClassification) without
-		// risking a send-on-closed-channel on any subsequent 'a' press.
-		if !m.loading && !m.classifying && m.classifier != nil {
-			m.classifying = true
-			m.classifyDone = 0
-			m.classifyTotal = 0
-			m.classifyCh = make(chan ClassifyProgressMsg, 50)
-			return m, tea.Batch(m.startClassification(), m.listenForClassification())
+		if cmd := m.startClassificationIfNeeded(); cmd != nil {
+			return m, cmd
 		}
 		return m, nil
 

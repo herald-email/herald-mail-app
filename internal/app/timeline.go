@@ -561,7 +561,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timeline.selectedEmail != nil {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit", true
 	}
-	return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit", true
+	return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  A: re-classify  │  f: sidebar  │  q: quit", true
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -582,7 +582,11 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 		if m.classifier != nil {
-			return m, tea.Batch(m.startEmbeddingBatchIfNeeded(), m.startContactEnrichmentIfNeeded()), true
+			return m, tea.Batch(
+				m.startEmbeddingBatchIfNeeded(),
+				m.startContactEnrichmentIfNeeded(),
+				m.startClassificationIfNeeded(),
+			), true
 		}
 		return m, nil, true
 
@@ -652,7 +656,16 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if msg.Err != nil {
 			logger.Warn("Quick reply generation failed: %v", msg.Err)
 		} else if len(msg.Replies) > 0 {
-			m.timeline.quickReplies = append(m.timeline.quickReplies, msg.Replies...)
+			for _, reply := range msg.Replies {
+				reply = strings.TrimSpace(reply)
+				if reply == "" {
+					continue
+				}
+				if !strings.HasPrefix(reply, "[AI] ") {
+					reply = "[AI] " + reply
+				}
+				m.timeline.quickReplies = append(m.timeline.quickReplies, reply)
+			}
 		}
 		m.timeline.quickRepliesReady = true
 		return m, nil, true

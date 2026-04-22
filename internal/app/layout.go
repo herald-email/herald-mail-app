@@ -324,7 +324,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	plan := LayoutPlan{
 		Width:          width,
 		Height:         height,
-		ContentHeight:  clamp(height-8, 5),
+		ContentHeight:  clamp(height-9, 5),
 		SidebarVisible: false,
 		ChatVisible:    m.showChat,
 	}

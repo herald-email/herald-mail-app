@@ -12,7 +12,7 @@ import (
 func (m *Model) startClassification() tea.Cmd {
 	folder := m.currentFolder
 	ch := m.classifyCh // capture the current channel
-	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityUserAction), ai.TaskKindClassification)
+	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindClassification)
 	return func() tea.Msg {
 		defer close(ch) // unblock the listener when we're done
 		if classifier == nil {
@@ -43,6 +43,17 @@ func (m *Model) startClassification() tea.Cmd {
 		}
 		return ClassifyDoneMsg{}
 	}
+}
+
+func (m *Model) startClassificationIfNeeded() tea.Cmd {
+	if m.loading || m.classifying || m.classifier == nil {
+		return nil
+	}
+	m.classifying = true
+	m.classifyDone = 0
+	m.classifyTotal = 0
+	m.classifyCh = make(chan ClassifyProgressMsg, 50)
+	return tea.Batch(m.startClassification(), m.listenForClassification())
 }
 
 // reclassifyEmailCmd re-classifies a single email and stores the result.

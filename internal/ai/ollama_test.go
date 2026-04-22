@@ -187,3 +187,30 @@ func TestMissingModelInstallHint(t *testing.T) {
 		t.Fatalf("expected install hint for missing model, got %q", hint)
 	}
 }
+
+func TestParseQuickReplySuggestions_JSONInMarkdownFence(t *testing.T) {
+	reply := "```json\n[\"Sure, that works.\", \"Thanks for the note.\", \"I'll get back to you.\"]\n```"
+
+	got, err := parseQuickReplySuggestions(reply)
+	if err != nil {
+		t.Fatalf("parseQuickReplySuggestions returned error: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 suggestions, got %d: %v", len(got), got)
+	}
+}
+
+func TestParseQuickReplySuggestions_NumberedListFallback(t *testing.T) {
+	reply := "1. Thanks for reaching out.\n2. I'll take a look.\n3. `I'll get back to you.`"
+
+	got, err := parseQuickReplySuggestions(reply)
+	if err != nil {
+		t.Fatalf("parseQuickReplySuggestions returned error: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 suggestions, got %d: %v", len(got), got)
+	}
+	if got[2] != "I'll get back to you." {
+		t.Fatalf("unexpected parsed third suggestion: %q", got[2])
+	}
+}

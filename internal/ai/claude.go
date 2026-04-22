@@ -334,9 +334,8 @@ func (c *ClaudeClient) GenerateQuickReplies(sender, subject, bodyPreview string)
 	if err != nil {
 		return nil, err
 	}
-	reply = stripMarkdownFences(reply)
-	var suggestions []string
-	if err := json.Unmarshal([]byte(reply), &suggestions); err != nil {
+	suggestions, err := parseQuickReplySuggestions(reply)
+	if err != nil {
 		return nil, fmt.Errorf("parse quick replies: %w", err)
 	}
 	return suggestions, nil

@@ -89,7 +89,8 @@ make build && ./bin/mail-processor
 make run
 
 # CLI flags
-./bin/mail-processor -debug              # Enable debug logging
+./bin/mail-processor -debug              # Enable debug logging to herald_*.log
+./bin/mail-processor -verbose            # Alias for -debug (same behavior today)
 ./bin/mail-processor -config custom.yaml # Custom config file
 ./bin/mail-processor -help
 
@@ -315,7 +316,7 @@ Cache file: `email_cache.db` (created in working directory).
 - Log file: `mail_processor_YYYYMMDD_HHMMSS.log` (created in working directory)
 - Always writes to file only (no console output, preserves TUI)
 - TUI log viewer receives logs via `logger.SetLogCallback`
-- `-debug` or `-verbose` flags enable DEBUG-level entries
+- `-debug` and `-verbose` currently enable the same DEBUG-level file logging
 
 ### Deletion Flow
 1. `deleteSelected()` sends `DeletionRequest` structs to `deletionRequestCh`

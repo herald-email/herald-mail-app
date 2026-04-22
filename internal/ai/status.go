@@ -97,3 +97,13 @@ func IsUnavailableError(err error) bool {
 	}
 	return false
 }
+
+func IsContextLengthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "context len") ||
+		strings.Contains(msg, "context length") ||
+		strings.Contains(msg, "input length exceeds")
+}

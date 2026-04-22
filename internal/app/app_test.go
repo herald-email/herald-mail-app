@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ type stubClassifier struct {
 	category           ai.Category
 	err                error
 	lastEmbeddingModel string
+	embedCalls         int
 }
 
 func (s *stubClassifier) Classify(_, _ string) (ai.Category, error) { return s.category, s.err }
@@ -33,7 +36,13 @@ func (s *stubClassifier) Chat(_ []ai.ChatMessage) (string, error)   { return "",
 func (s *stubClassifier) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string, []ai.ToolCall, error) {
 	return "", nil, ai.ErrToolsNotSupported
 }
-func (s *stubClassifier) Embed(_ string) ([]float32, error)                     { return nil, ai.ErrEmbeddingNotSupported }
+func (s *stubClassifier) Embed(text string) ([]float32, error) {
+	s.embedCalls++
+	if strings.Contains(text, "ctx-overflow") && len([]rune(text)) > 240 {
+		return nil, fmt.Errorf("ollama /api/embeddings returned 500: {\"error\":\"the input length exceeds the context length\"}")
+	}
+	return []float32{1, 2, 3}, nil
+}
 func (s *stubClassifier) SetEmbeddingModel(model string)                        { s.lastEmbeddingModel = model }
 func (s *stubClassifier) GenerateQuickReplies(_, _, _ string) ([]string, error) { return nil, nil }
 func (s *stubClassifier) EnrichContact(_ string, _ []string) (string, []string, error) {
@@ -198,5 +207,27 @@ func TestEmbeddingProgressMsg_ClearsActiveFlagWhenComplete(t *testing.T) {
 	updated := model.(*Model)
 	if updated.embeddingBatchActive {
 		t.Fatal("expected embedding batch active flag to clear when progress is complete")
+	}
+}
+
+func TestEmbedChunksForEmail_FallsBackOnContextLengthError(t *testing.T) {
+	classifier := &stubClassifier{}
+	email := &models.EmailData{
+		MessageID: "msg-1",
+		Sender:    "alice@example.com",
+		Subject:   "ctx-overflow subject",
+		Date:      time.Now(),
+	}
+	body := strings.Repeat("ctx-overflow paragraph ", 100)
+
+	chunks, err := embedChunksForEmail(email, body, classifier)
+	if err != nil {
+		t.Fatalf("embedChunksForEmail returned error: %v", err)
+	}
+	if len(chunks) == 0 {
+		t.Fatal("expected at least one embedding chunk after fallback")
+	}
+	if classifier.embedCalls < 2 {
+		t.Fatalf("expected fallback retries, got %d embed call(s)", classifier.embedCalls)
 	}
 }
