@@ -65,7 +65,19 @@ func (c *CompositeClient) Ping() error {
 	return c.chat.Ping()
 }
 
+func (c *CompositeClient) AIStatus() SchedulerStatus {
+	var status SchedulerStatus
+	if reporter, ok := c.chat.(StatusReporter); ok {
+		status = mergeSchedulerStatus(status, reporter.AIStatus())
+	}
+	if reporter, ok := c.embedding.(StatusReporter); ok {
+		status = mergeSchedulerStatus(status, reporter.AIStatus())
+	}
+	return status
+}
+
 // Compile-time checks
 var _ AIClient = (*CompositeClient)(nil)
+var _ StatusReporter = (*CompositeClient)(nil)
 var _ AIClient = (*ClaudeClient)(nil)
 var _ AIClient = (*OpenAICompatClient)(nil)

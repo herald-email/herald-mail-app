@@ -26,6 +26,16 @@ func fitPanelContentHeight(content string, target int) string {
 	return strings.Join(lines, "\n")
 }
 
+func clampInt(n, min, max int) int {
+	if n < min {
+		return min
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
 func (m *Model) timelinePreviewInnerHeight() int {
 	if h := m.timelineTable.Height() + 1; h >= 5 {
 		return h
@@ -86,13 +96,7 @@ func (m *Model) renderEmailPreview() string {
 	// Reserve rows for the quick reply picker overlay when open.
 	pickerLines := 0
 	if m.timeline.quickReplyOpen {
-		pickerLines = 2 + len(m.timeline.quickReplies) // divider + header + items
-		if len(m.timeline.quickReplies) == 0 {
-			pickerLines = 3
-		}
-		if pickerLines > 12 {
-			pickerLines = 12
-		}
+		pickerLines = m.quickReplyPickerHeight(innerW)
 		maxBodyLines -= pickerLines
 		if maxBodyLines < 1 {
 			maxBodyLines = 1
@@ -219,7 +223,10 @@ func (m *Model) renderEmailPreview() string {
 
 	// Quick reply picker overlay at the bottom of the preview panel.
 	if m.timeline.quickReplyOpen {
-		sb.WriteString(m.renderQuickReplyPicker(innerW))
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(m.renderQuickReplyPicker(innerW, pickerLines))
 	}
 
 	panelStyle := lipgloss.NewStyle().
@@ -380,7 +387,11 @@ func (m *Model) renderFullScreenEmail() string {
 
 	// Quick reply picker overlay at the bottom of full-screen view.
 	if m.timeline.quickReplyOpen {
-		sb.WriteString(m.renderQuickReplyPicker(innerW))
+		pickerLines := m.quickReplyPickerHeight(innerW)
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(m.renderQuickReplyPicker(innerW, pickerLines))
 	}
 
 	return lipgloss.NewStyle().
@@ -538,51 +549,139 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 }
 
 // renderQuickReplyPicker renders the quick reply picker overlay appended to the preview panel.
-func (m *Model) renderQuickReplyPicker(width int) string {
+func (m *Model) quickReplyPickerHeight(width int) int {
+	lines := m.quickReplyPickerLines(width, 12)
+	if len(lines) == 0 {
+		return 0
+	}
+	return len(lines)
+}
+
+func (m *Model) quickReplyPickerLines(width, maxLines int) []string {
+	if maxLines < 3 {
+		maxLines = 3
+	}
 	if width < 20 {
 		width = 20
 	}
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Width(width)
-	normalStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
-		Width(width)
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	aiLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-
-	var sb strings.Builder
-	sb.WriteString(strings.Repeat("─", width) + "\n")
+	lines := []string{strings.Repeat("─", width)}
 
 	header := "Quick Reply — ↑↓ navigate  Enter: compose  Esc: close"
 	if !m.timeline.quickRepliesReady {
 		header = "Quick Reply — generating suggestions…"
 	}
-	sb.WriteString(headerStyle.Render(truncate(header, width)) + "\n")
+	lines = append(lines, truncateVisual(header, width))
 
-	cannedCount := 5 // first 5 are always canned
-	for i, reply := range m.timeline.quickReplies {
-		num := fmt.Sprintf("%d. ", i+1)
-		var label string
-		if i >= cannedCount {
-			label = num + aiLabelStyle.Render("[AI] ") + truncate(reply, width-len(num)-5)
-		} else {
-			label = num + truncate(reply, width-len(num))
+	if len(m.timeline.quickReplies) == 0 {
+		if m.timeline.quickRepliesReady {
+			lines = append(lines, "  No suggestions available")
 		}
-		if i == m.timeline.quickReplyIdx {
-			sb.WriteString(selectedStyle.Render(label) + "\n")
+		return lines[:clampInt(len(lines), 0, maxLines)]
+	}
+
+	selected := clampInt(m.timeline.quickReplyIdx, 0, len(m.timeline.quickReplies)-1)
+	start := 0
+	available := maxLines - len(lines)
+	if available < 1 {
+		return lines[:maxLines]
+	}
+	rowsPerItem := 2
+	windowItems := available / rowsPerItem
+	if windowItems < 1 {
+		windowItems = 1
+	}
+	if windowItems > len(m.timeline.quickReplies) {
+		windowItems = len(m.timeline.quickReplies)
+	}
+	if selected >= windowItems {
+		start = selected - windowItems + 1
+	}
+	end := start + windowItems
+	if end > len(m.timeline.quickReplies) {
+		end = len(m.timeline.quickReplies)
+		start = max(0, end-windowItems)
+	}
+
+	for i := start; i < end; i++ {
+		prefix := fmt.Sprintf("%d. ", i+1)
+		replyWidth := width - ansi.StringWidth(prefix)
+		if replyWidth < 8 {
+			replyWidth = 8
+		}
+		replyLines := wrapLines(m.timeline.quickReplies[i], replyWidth)
+		if len(replyLines) == 0 {
+			replyLines = []string{""}
+		}
+		if len(replyLines) > 2 {
+			replyLines = replyLines[:2]
+			replyLines[1] = truncateVisual(replyLines[1], replyWidth)
+		}
+		lines = append(lines, prefix+truncateVisual(replyLines[0], replyWidth))
+		if len(replyLines) > 1 {
+			lines = append(lines, strings.Repeat(" ", ansi.StringWidth(prefix))+truncateVisual(replyLines[1], replyWidth))
 		} else {
-			sb.WriteString(normalStyle.Render(label) + "\n")
+			lines = append(lines, "")
+		}
+		if len(lines) >= maxLines {
+			break
 		}
 	}
 
-	if len(m.timeline.quickReplies) == 0 && m.timeline.quickRepliesReady {
-		sb.WriteString(dimStyle.Render("  No suggestions available") + "\n")
+	return lines[:clampInt(len(lines), 0, maxLines)]
+}
+
+func (m *Model) renderQuickReplyPicker(width, maxLines int) string {
+	if width < 20 {
+		width = 20
+	}
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(defaultTheme.TabActiveFg).
+		Background(defaultTheme.TabActiveBg).
+		Bold(true).
+		Width(width)
+	normalStyle := lipgloss.NewStyle().
+		Foreground(defaultTheme.TextFg).
+		Width(width)
+	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
+
+	lines := m.quickReplyPickerLines(width, maxLines)
+	selected := clampInt(m.timeline.quickReplyIdx, 0, max(0, len(m.timeline.quickReplies)-1))
+	startReplyLine := 2
+
+	var rendered []string
+	for idx, line := range lines {
+		switch {
+		case idx == 0:
+			rendered = append(rendered, dimStyle.Render(line))
+		case idx == 1:
+			rendered = append(rendered, headerStyle.Render(line))
+		default:
+			replyOffset := idx - startReplyLine
+			replyIdx := replyOffset / 2
+			actualIdx := replyIdx
+			if len(m.timeline.quickReplies) > 0 {
+				windowItems := max(1, (maxLines-startReplyLine)/2)
+				start := 0
+				if selected >= windowItems {
+					start = selected - windowItems + 1
+				}
+				end := start + windowItems
+				if end > len(m.timeline.quickReplies) {
+					end = len(m.timeline.quickReplies)
+					start = max(0, end-windowItems)
+				}
+				actualIdx = start + replyIdx
+			}
+			if actualIdx == selected {
+				rendered = append(rendered, selectedStyle.Render(truncateVisual(line, width)))
+			} else {
+				rendered = append(rendered, normalStyle.Render(truncateVisual(line, width)))
+			}
+		}
 	}
 
-	return sb.String()
+	return strings.Join(rendered, "\n")
 }
 
 func (m *Model) renderCleanupPreview() string {

@@ -204,8 +204,9 @@ type ImageDescMsg struct {
 
 // ContactEnrichedMsg signals that a batch of contacts was enriched with company/topics/embedding.
 type ContactEnrichedMsg struct {
-	Count  int
-	Notice string
+	Count      int
+	Notice     string
+	Background bool
 }
 
 // ContactsLoadedMsg carries the full contact list for the Contacts tab.
@@ -407,8 +408,10 @@ type Model struct {
 	syncCountdown  int    // seconds until next poll
 
 	// Background embedding
-	embeddingDone  int
-	embeddingTotal int
+	embeddingDone           int
+	embeddingTotal          int
+	embeddingBatchActive    bool
+	contactEnrichmentActive bool
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode bool
@@ -775,8 +778,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// close it cleanly when it emits a completion message.
 	switch msg := msg.(type) {
 	case SettingsSavedMsg:
+		previousEmbeddingModel := ""
+		if m.cfg != nil {
+			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
+		}
 		m.cfg = msg.Config
 		m.statusMessage = "Settings saved."
+		if m.classifier != nil {
+			m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+		}
+		if previousEmbeddingModel != "" && previousEmbeddingModel != m.cfg.EffectiveEmbeddingModel() {
+			type embeddingModelEnsurer interface {
+				EnsureEmbeddingModel(string) (bool, error)
+			}
+			if manager, ok := m.backend.(embeddingModelEnsurer); ok {
+				invalidated, err := manager.EnsureEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+				if err != nil {
+					m.statusMessage = fmt.Sprintf("Settings saved, but embedding reset failed: %v", err)
+				} else if invalidated {
+					m.statusMessage = "Settings saved. Embeddings reset for the new model."
+				}
+			} else {
+				m.statusMessage = "Settings saved. Restart Herald to rebuild embeddings for the new model."
+			}
+		}
 		if m.configPath != "" {
 			if err := m.cfg.Save(m.configPath); err != nil {
 				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
@@ -1378,22 +1403,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Done < msg.Total {
 			return m, m.runEmbeddingBatch()
 		}
+		m.embeddingBatchActive = false
 		return m, nil
 
 	case EmbeddingDoneMsg:
 		m.embeddingDone = 0
 		m.embeddingTotal = 0
+		m.embeddingBatchActive = false
 		return m, nil
 
 	case ContactEnrichedMsg:
 		if msg.Notice != "" {
 			m.statusMessage = msg.Notice
 		}
-		if msg.Count > 0 {
+		if msg.Background && msg.Count > 0 {
 			if msg.Notice == "" {
 				m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
 			}
 			return m, m.runContactEnrichment()
+		}
+		if msg.Background {
+			m.contactEnrichmentActive = false
+		}
+		if !msg.Background && msg.Count > 0 && msg.Notice == "" {
+			m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
 		}
 		return m, nil
 

@@ -123,6 +123,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Deletion progress (Deleting 3/5…)
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
+- [ ] Global AI status chip that stays visible when AI is configured and summarizes `idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)
@@ -182,6 +183,7 @@ The app can automatically tag emails with categories (subscription, important, u
 - [x] Auto-classify new emails as they arrive (background, rate-limited)
 - [x] Reanalyse / override existing tags
 - [ ] Local-AI work scheduler with bounded concurrency and interactive-before-background priority
+- [ ] Background embedding and enrichment coalescing so repeated Timeline loads do not create duplicate local-AI bursts
 - [ ] Degraded AI UX that surfaces concise `AI unavailable` / `deferred` states instead of noisy repeated failures
 - [ ] Local Ollama overload handling that fails open and preserves overall UI/network responsiveness
 
@@ -444,11 +446,12 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ### Semantic search
 - [x] `?` prefix in search bar triggers semantic mode
-- [x] Local embeddings via `nomic-embed-text` (Ollama)
+- [x] Local embeddings via Ollama (`nomic-embed-text-v2-moe` default)
 - [x] Vectors stored in SQLite (`email_embeddings` table)
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
 - [x] Similarity score badge (`87%`) per result row
+- [x] Embeddings are invalidated automatically when the configured embedding model changes
 - [ ] Semantic search explicitly degrades when embeddings are unavailable or deferred
 - [ ] Hybrid ranking (keyword + semantic merged)
 - [ ] "Why this result?" hint (matched excerpt)

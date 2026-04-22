@@ -116,6 +116,9 @@ func main() {
 		log.Fatalf("Failed to open cache: %v", err)
 	}
 	defer c.Close()
+	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingModel()); err != nil {
+		log.Fatalf("Failed to initialize embedding model state: %v", err)
+	}
 
 	// Classifier is optional — nil if no AI backend is configured
 	classifier, err := ai.NewFromConfig(cfg)
@@ -477,7 +480,7 @@ func main() {
 	// Tool: semantic_search_emails
 	s.AddTool(
 		mcp.NewTool("semantic_search_emails",
-			mcp.WithDescription("Find emails by semantic similarity (natural language query). Requires Ollama with nomic-embed-text."),
+			mcp.WithDescription("Find emails by semantic similarity (natural language query). Requires Ollama with a configured embedding model (default: nomic-embed-text-v2-moe)."),
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("query",
@@ -809,7 +812,7 @@ func main() {
 	// Tool: semantic_search_contacts
 	s.AddTool(
 		mcp.NewTool("semantic_search_contacts",
-			mcp.WithDescription("Semantic search over contacts using natural language (finds contacts by topics, company, or communication context). Requires Ollama with nomic-embed-text."),
+			mcp.WithDescription("Semantic search over contacts using natural language (finds contacts by topics, company, or communication context). Requires Ollama with a configured embedding model (default: nomic-embed-text-v2-moe)."),
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("query",
@@ -2184,4 +2187,3 @@ func formatContacts(contacts []models.ContactData) string {
 	}
 	return sb.String()
 }
-

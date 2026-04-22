@@ -32,8 +32,13 @@ type prioritizedClient interface {
 	withPriority(priority Priority) AIClient
 }
 
+type taskKindClient interface {
+	withTaskKind(kind TaskKind) AIClient
+}
+
 type managedTask struct {
 	priority Priority
+	kind     TaskKind
 	seq      int64
 	run      func() error
 	done     chan error
@@ -71,6 +76,13 @@ type managedScheduler struct {
 	queue   managedQueue
 	seq     int64
 	closing bool
+
+	activeKinds       map[TaskKind]int
+	activePriority    map[TaskKind]Priority
+	activeInteractive int
+	activeBackground  int
+	lastDeferred      bool
+	lastUnavailable   bool
 }
 
 func newManagedScheduler(cfg ManagedConfig) *managedScheduler {
@@ -82,6 +94,8 @@ func newManagedScheduler(cfg ManagedConfig) *managedScheduler {
 	}
 	s := &managedScheduler{cfg: cfg}
 	s.cond = sync.NewCond(&s.mu)
+	s.activeKinds = make(map[TaskKind]int)
+	s.activePriority = make(map[TaskKind]Priority)
 	for i := 0; i < cfg.MaxConcurrency; i++ {
 		go s.worker()
 	}
@@ -98,17 +112,125 @@ func (s *managedScheduler) worker() {
 			s.mu.Unlock()
 			return
 		}
-		task := heap.Pop(&s.queue).(*managedTask)
+		task := s.popNextLocked()
+		if task == nil {
+			s.cond.Wait()
+			s.mu.Unlock()
+			continue
+		}
+		s.markActiveLocked(task)
 		s.mu.Unlock()
 
 		err := task.run()
+		s.mu.Lock()
+		s.markDoneLocked(task, err)
+		s.cond.Broadcast()
+		s.mu.Unlock()
 		task.done <- err
 	}
 }
 
-func (s *managedScheduler) submit(priority Priority, run func() error) error {
+func (s *managedScheduler) popNextLocked() *managedTask {
+	if len(s.queue) == 0 {
+		return nil
+	}
+	interactivePending := s.activeInteractive > 0
+	for _, queued := range s.queue {
+		if queued.priority >= PriorityInteractive {
+			interactivePending = true
+			break
+		}
+	}
+	bestIdx := -1
+	for i, queued := range s.queue {
+		if s.cfg.PauseBackgroundWhileInteractive &&
+			queued.priority == PriorityBackground &&
+			interactivePending {
+			continue
+		}
+		if bestIdx == -1 ||
+			queued.priority > s.queue[bestIdx].priority ||
+			(queued.priority == s.queue[bestIdx].priority && queued.seq < s.queue[bestIdx].seq) {
+			bestIdx = i
+		}
+	}
+	if bestIdx == -1 {
+		return nil
+	}
+	return heap.Remove(&s.queue, bestIdx).(*managedTask)
+}
+
+func (s *managedScheduler) markActiveLocked(task *managedTask) {
+	s.lastDeferred = false
+	s.activeKinds[task.kind]++
+	s.activePriority[task.kind] = task.priority
+	if task.priority >= PriorityInteractive {
+		s.activeInteractive++
+	} else if task.priority == PriorityBackground {
+		s.activeBackground++
+	}
+}
+
+func (s *managedScheduler) markDoneLocked(task *managedTask, err error) {
+	if s.activeKinds[task.kind] > 1 {
+		s.activeKinds[task.kind]--
+	} else {
+		delete(s.activeKinds, task.kind)
+		delete(s.activePriority, task.kind)
+	}
+	if task.priority >= PriorityInteractive {
+		s.activeInteractive--
+	} else if task.priority == PriorityBackground {
+		s.activeBackground--
+	}
+	if err == nil {
+		s.lastUnavailable = false
+		return
+	}
+	if IsUnavailableError(err) {
+		s.lastUnavailable = true
+	}
+}
+
+func (s *managedScheduler) status() SchedulerStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	status := SchedulerStatus{
+		Deferred:    s.lastDeferred,
+		Unavailable: s.lastUnavailable,
+	}
+	for kind, count := range s.activeKinds {
+		if count == 0 || kind == TaskKindUnknown {
+			continue
+		}
+		priority := s.activePriority[kind]
+		if status.ActiveKind == TaskKindUnknown || priority > status.ActivePriority {
+			status.ActiveKind = kind
+			status.ActivePriority = priority
+		}
+	}
+	for _, queued := range s.queue {
+		switch {
+		case queued.priority >= PriorityInteractive:
+			status.QueuedInteractiveCount++
+			if status.QueuedInteractiveKind == TaskKindUnknown {
+				status.QueuedInteractiveKind = queued.kind
+			}
+		case queued.priority == PriorityBackground:
+			status.QueuedBackgroundCount++
+			if status.QueuedBackgroundKind == TaskKindUnknown {
+				status.QueuedBackgroundKind = queued.kind
+			}
+		}
+	}
+	return status
+}
+
+func (s *managedScheduler) submit(priority Priority, kind TaskKind, run func() error) error {
 	task := &managedTask{
 		priority: priority,
+		kind:     kind,
 		seq:      atomic.AddInt64(&s.seq, 1),
 		run:      run,
 		done:     make(chan error, 1),
@@ -122,6 +244,7 @@ func (s *managedScheduler) submit(priority Priority, run func() error) error {
 		}
 	}
 	if priority == PriorityBackground && backgroundQueued >= s.cfg.QueueLimit {
+		s.lastDeferred = true
 		s.mu.Unlock()
 		return ErrDeferred
 	}
@@ -136,6 +259,7 @@ type ManagedClient struct {
 	base      AIClient
 	scheduler *managedScheduler
 	priority  Priority
+	taskKind  TaskKind
 }
 
 func NewManagedClient(base AIClient, cfg ManagedConfig) *ManagedClient {
@@ -143,6 +267,7 @@ func NewManagedClient(base AIClient, cfg ManagedConfig) *ManagedClient {
 		base:      base,
 		scheduler: newManagedScheduler(cfg),
 		priority:  priorityUnset,
+		taskKind:  TaskKindUnknown,
 	}
 }
 
@@ -151,6 +276,16 @@ func (c *ManagedClient) withPriority(priority Priority) AIClient {
 		base:      c.base,
 		scheduler: c.scheduler,
 		priority:  priority,
+		taskKind:  c.taskKind,
+	}
+}
+
+func (c *ManagedClient) withTaskKind(kind TaskKind) AIClient {
+	return &ManagedClient{
+		base:      c.base,
+		scheduler: c.scheduler,
+		priority:  c.priority,
+		taskKind:  kind,
 	}
 }
 
@@ -164,6 +299,16 @@ func WithPriority(client AIClient, priority Priority) AIClient {
 	return client
 }
 
+func WithTaskKind(client AIClient, kind TaskKind) AIClient {
+	if client == nil {
+		return nil
+	}
+	if p, ok := client.(taskKindClient); ok {
+		return p.withTaskKind(kind)
+	}
+	return client
+}
+
 func (c *ManagedClient) effectivePriority(defaultPriority Priority) Priority {
 	if c.priority != priorityUnset {
 		return c.priority
@@ -171,16 +316,30 @@ func (c *ManagedClient) effectivePriority(defaultPriority Priority) Priority {
 	return defaultPriority
 }
 
-func (c *ManagedClient) do(priority Priority, fn func() error) error {
+func (c *ManagedClient) effectiveKind(defaultKind TaskKind) TaskKind {
+	if c.taskKind != TaskKindUnknown {
+		return c.taskKind
+	}
+	return defaultKind
+}
+
+func (c *ManagedClient) do(priority Priority, kind TaskKind, fn func() error) error {
 	if c == nil || c.base == nil || c.scheduler == nil {
 		return nil
 	}
-	return c.scheduler.submit(c.effectivePriority(priority), fn)
+	return c.scheduler.submit(c.effectivePriority(priority), c.effectiveKind(kind), fn)
+}
+
+func (c *ManagedClient) AIStatus() SchedulerStatus {
+	if c == nil || c.scheduler == nil {
+		return SchedulerStatus{}
+	}
+	return c.scheduler.status()
 }
 
 func (c *ManagedClient) Classify(sender, subject string) (Category, error) {
 	var out Category
-	err := c.do(PriorityUserAction, func() error {
+	err := c.do(PriorityUserAction, TaskKindClassification, func() error {
 		var err error
 		out, err = c.base.Classify(sender, subject)
 		return err
@@ -190,7 +349,7 @@ func (c *ManagedClient) Classify(sender, subject string) (Category, error) {
 
 func (c *ManagedClient) Chat(messages []ChatMessage) (string, error) {
 	var out string
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindChat, func() error {
 		var err error
 		out, err = c.base.Chat(messages)
 		return err
@@ -201,7 +360,7 @@ func (c *ManagedClient) Chat(messages []ChatMessage) (string, error) {
 func (c *ManagedClient) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
 	var out string
 	var calls []ToolCall
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindChat, func() error {
 		var err error
 		out, calls, err = c.base.ChatWithTools(messages, tools)
 		return err
@@ -211,7 +370,7 @@ func (c *ManagedClient) ChatWithTools(messages []ChatMessage, tools []Tool) (str
 
 func (c *ManagedClient) Embed(text string) ([]float32, error) {
 	var out []float32
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindSemanticSearch, func() error {
 		var err error
 		out, err = c.base.Embed(text)
 		return err
@@ -225,7 +384,7 @@ func (c *ManagedClient) SetEmbeddingModel(model string) {
 
 func (c *ManagedClient) GenerateQuickReplies(sender, subject, bodyPreview string) ([]string, error) {
 	var out []string
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindQuickReply, func() error {
 		var err error
 		out, err = c.base.GenerateQuickReplies(sender, subject, bodyPreview)
 		return err
@@ -236,7 +395,7 @@ func (c *ManagedClient) GenerateQuickReplies(sender, subject, bodyPreview string
 func (c *ManagedClient) EnrichContact(email string, subjects []string) (string, []string, error) {
 	var company string
 	var topics []string
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindContactEnrich, func() error {
 		var err error
 		company, topics, err = c.base.EnrichContact(email, subjects)
 		return err
@@ -250,7 +409,7 @@ func (c *ManagedClient) HasVisionModel() bool {
 
 func (c *ManagedClient) DescribeImage(ctx context.Context, imageBytes []byte, mimeType string) (string, error) {
 	var out string
-	err := c.do(PriorityInteractive, func() error {
+	err := c.do(PriorityInteractive, TaskKindImageDescription, func() error {
 		var err error
 		out, err = c.base.DescribeImage(ctx, imageBytes, mimeType)
 		return err
@@ -259,9 +418,10 @@ func (c *ManagedClient) DescribeImage(ctx context.Context, imageBytes []byte, mi
 }
 
 func (c *ManagedClient) Ping() error {
-	return c.do(PriorityInteractive, func() error {
+	return c.do(PriorityInteractive, TaskKindUnknown, func() error {
 		return c.base.Ping()
 	})
 }
 
 var _ AIClient = (*ManagedClient)(nil)
+var _ StatusReporter = (*ManagedClient)(nil)

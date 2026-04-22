@@ -38,8 +38,8 @@ type LocalBackend struct {
 
 	// validIDs is the live ground-truth set of message IDs known to exist on the server.
 	// nil means reconciliation has not run yet — all cache entries are accepted.
-	validIDsMu  sync.RWMutex
-	validIDs    map[string]bool
+	validIDsMu   sync.RWMutex
+	validIDs     map[string]bool
 	validIDsChSt chan map[string]bool // channel returned by ValidIDsCh()
 
 	// In-memory email body cache to avoid redundant IMAP fetches when
@@ -90,6 +90,10 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 	c, err := cache.New("email_cache.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cache: %w", err)
+	}
+	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingModel()); err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("failed to initialize embedding model state: %w", err)
 	}
 
 	progressCh := make(chan models.ProgressInfo, 100)
@@ -307,6 +311,10 @@ func (b *LocalBackend) Progress() <-chan models.ProgressInfo {
 // direct cache access (e.g. the cleanup engine in the daemon server).
 func (b *LocalBackend) Cache() *cache.Cache {
 	return b.cache
+}
+
+func (b *LocalBackend) EnsureEmbeddingModel(model string) (bool, error) {
+	return b.cache.EnsureEmbeddingModel(model)
 }
 
 // Close shuts down the IMAP connection and the cache database.

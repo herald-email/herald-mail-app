@@ -20,6 +20,11 @@ type Cache struct {
 	db *sql.DB
 }
 
+const (
+	cacheMetaEmbeddingModelKey  = "embedding_model"
+	legacyEmbeddingModelDefault = "nomic-embed-text"
+)
+
 // New creates a new cache instance
 func New(dbPath string) (*Cache, error) {
 	db, err := sql.Open("sqlite3", dbPath)
@@ -175,6 +180,16 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS cache_metadata (
+			key        TEXT PRIMARY KEY,
+			value      TEXT NOT NULL,
+			updated_at DATETIME NOT NULL
+		)
+	`); err != nil {
+		return err
+	}
+
 	// folder_sync_state: persists UIDVALIDITY and UIDNEXT per folder for incremental sync
 	if _, err := c.db.Exec(`
 		CREATE TABLE IF NOT EXISTS folder_sync_state (
@@ -316,6 +331,111 @@ func (c *Cache) initDB() error {
 	}
 
 	return nil
+}
+
+func (c *Cache) getMetadata(key string) (string, bool, error) {
+	var value string
+	err := c.db.QueryRow(`SELECT value FROM cache_metadata WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return value, true, nil
+}
+
+func (c *Cache) setMetadataTx(tx *sql.Tx, key, value string) error {
+	_, err := tx.Exec(
+		`INSERT INTO cache_metadata (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		key, value, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+func (c *Cache) setMetadata(key, value string) error {
+	_, err := c.db.Exec(
+		`INSERT INTO cache_metadata (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		key, value, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+func (c *Cache) hasAnyEmbeddings() (bool, error) {
+	queries := []string{
+		`SELECT EXISTS(SELECT 1 FROM email_embeddings LIMIT 1)`,
+		`SELECT EXISTS(SELECT 1 FROM email_embedding_chunks LIMIT 1)`,
+		`SELECT EXISTS(SELECT 1 FROM contacts WHERE embedding IS NOT NULL LIMIT 1)`,
+	}
+	for _, query := range queries {
+		var exists int
+		if err := c.db.QueryRow(query).Scan(&exists); err != nil {
+			return false, err
+		}
+		if exists == 1 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *Cache) invalidateEmbeddingsTx(tx *sql.Tx, model string) error {
+	for _, query := range []string{
+		`DELETE FROM email_embeddings`,
+		`DELETE FROM email_embedding_chunks`,
+		`UPDATE contacts SET embedding = NULL`,
+	} {
+		if _, err := tx.Exec(query); err != nil {
+			return err
+		}
+	}
+	return c.setMetadataTx(tx, cacheMetaEmbeddingModelKey, model)
+}
+
+// EnsureEmbeddingModel records the active embedding model in cache metadata.
+// When the configured model changes, it invalidates cached email and contact
+// embeddings so semantic features can rebuild on a consistent vector space.
+func (c *Cache) EnsureEmbeddingModel(model string) (bool, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false, nil
+	}
+
+	current, found, err := c.getMetadata(cacheMetaEmbeddingModelKey)
+	if err != nil {
+		return false, err
+	}
+	if found && current == model {
+		return false, nil
+	}
+
+	hasEmbeddings, err := c.hasAnyEmbeddings()
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		if !hasEmbeddings || model == legacyEmbeddingModelDefault {
+			return false, c.setMetadata(cacheMetaEmbeddingModelKey, model)
+		}
+	} else if !hasEmbeddings {
+		return false, c.setMetadata(cacheMetaEmbeddingModelKey, model)
+	}
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := c.invalidateEmbeddingsTx(tx, model); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // GetFolderSyncState returns the stored UIDVALIDITY and UIDNEXT for a folder.
@@ -828,7 +948,7 @@ func extractDomain(emailAddress string) string {
 
 	// Extract domain part
 	domain := emailAddress[atIndex+1:]
-	
+
 	// Split domain into parts
 	parts := []string{}
 	current := ""
@@ -849,8 +969,8 @@ func extractDomain(emailAddress string) string {
 	// Handle special cases like co.uk, com.au, etc.
 	if len(parts) > 2 {
 		secondLevel := parts[len(parts)-2]
-		if secondLevel == "co" || secondLevel == "com" || secondLevel == "org" || 
-		   secondLevel == "gov" || secondLevel == "edu" || secondLevel == "net" {
+		if secondLevel == "co" || secondLevel == "com" || secondLevel == "org" ||
+			secondLevel == "gov" || secondLevel == "edu" || secondLevel == "net" {
 			if len(parts) >= 3 {
 				return parts[len(parts)-3] + "." + parts[len(parts)-2] + "." + parts[len(parts)-1]
 			}
@@ -995,7 +1115,7 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 // GetCachedUIDs returns all cached UIDs for a folder
 func (c *Cache) GetCachedUIDs(folder string) (map[uint32]bool, error) {
 	query := `SELECT uid FROM emails WHERE folder = ? AND uid IS NOT NULL`
-	
+
 	rows, err := c.db.Query(query, folder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cached UIDs: %w", err)

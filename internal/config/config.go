@@ -40,7 +40,7 @@ type Config struct {
 	Ollama struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
 		Model          string `yaml:"model"`           // default: gemma3:4b
-		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
+		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text-v2-moe
 	} `yaml:"ollama"`
 	Sync struct {
 		Idle                bool `yaml:"idle"`                  // default: true
@@ -52,7 +52,7 @@ type Config struct {
 	} `yaml:"sync"`
 	Semantic struct {
 		Enabled   bool    `yaml:"enabled"`    // default: true when Ollama configured
-		Model     string  `yaml:"model"`      // default: nomic-embed-text
+		Model     string  `yaml:"model"`      // default: nomic-embed-text-v2-moe
 		BatchSize int     `yaml:"batch_size"` // default: 20
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
@@ -159,6 +159,16 @@ func (c *Config) IsGmailOAuth() bool {
 	return c.Gmail.RefreshToken != ""
 }
 
+// EffectiveEmbeddingModel returns the configured embedding model, preferring
+// semantic.model when it is explicitly set and otherwise falling back to the
+// Ollama embedding model.
+func (c *Config) EffectiveEmbeddingModel() string {
+	if strings.TrimSpace(c.Semantic.Model) != "" {
+		return strings.TrimSpace(c.Semantic.Model)
+	}
+	return strings.TrimSpace(c.Ollama.EmbeddingModel)
+}
+
 // Save marshals the config to YAML and writes it atomically to path with 0600 permissions.
 func (c *Config) Save(path string) error {
 	data, err := yaml.Marshal(c)
@@ -195,7 +205,10 @@ func (c *Config) applyDefaults() {
 		c.Ollama.Model = "gemma3:4b"
 	}
 	if c.Ollama.EmbeddingModel == "" {
-		c.Ollama.EmbeddingModel = "nomic-embed-text"
+		c.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+	}
+	if c.Semantic.Model == "" {
+		c.Semantic.Model = c.Ollama.EmbeddingModel
 	}
 	if c.Sync.Interval == 0 {
 		c.Sync.Interval = 60

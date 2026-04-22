@@ -5,7 +5,47 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"mail-processor/internal/ai"
 )
+
+func (m *Model) schedulerStatus() ai.SchedulerStatus {
+	if m.classifier == nil {
+		return ai.SchedulerStatus{}
+	}
+	reporter, ok := m.classifier.(ai.StatusReporter)
+	if !ok {
+		return ai.SchedulerStatus{}
+	}
+	return reporter.AIStatus()
+}
+
+func (m *Model) renderAIStatusChip() string {
+	if m.classifier == nil {
+		if m.demoMode {
+			return ""
+		}
+		return lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("AI: off")
+	}
+	status := m.schedulerStatus()
+	label := string(status.DisplayKind())
+	if label == "" {
+		label = "idle"
+	}
+	chip := "AI: " + label
+	if queued := status.DisplayQueuedCount(); queued > 0 && label != "idle" && label != "unavailable" {
+		chip += fmt.Sprintf(" (+%d)", queued)
+	}
+	style := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
+	switch label {
+	case "idle":
+		style = style.Foreground(defaultTheme.DimFg)
+	case "deferred":
+		style = style.Foreground(defaultTheme.DemoFg)
+	case "unavailable":
+		style = style.Foreground(defaultTheme.ConfirmFg)
+	}
+	return style.Render(chip)
+}
 
 func (m *Model) renderTabBar() string {
 	inactive := lipgloss.NewStyle().
@@ -88,6 +128,9 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Render(msg))
 	}
 	parts = append(parts, breadcrumb)
+	if chip := m.renderAIStatusChip(); chip != "" {
+		parts = append(parts, chip)
+	}
 
 	// Folder counts
 	if st, ok := m.folderStatus[m.currentFolder]; ok {
@@ -177,11 +220,6 @@ func (m *Model) renderStatusBar() string {
 		if m.syncCountdown > 0 {
 			parts = append(parts, fmt.Sprintf("↻ %ds", m.syncCountdown))
 		}
-	}
-
-	// AI status indicator
-	if m.classifier == nil && !m.demoMode {
-		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("AI: off"))
 	}
 
 	// Demo mode indicator

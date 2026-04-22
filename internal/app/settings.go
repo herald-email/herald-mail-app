@@ -47,24 +47,24 @@ type Settings struct {
 	done       bool // set once we've emitted the completion message
 
 	// form field backing variables — account
-	provider    string
-	email       string
-	password    string
-	imapHost    string
-	imapPort    string
-	smtpHost    string
-	smtpPort    string
+	provider string
+	email    string
+	password string
+	imapHost string
+	imapPort string
+	smtpHost string
+	smtpPort string
 
 	// form field backing variables — AI provider
-	aiProvider   string
-	claudeAPIKey string
-	claudeModel  string
-	openAIAPIKey string
+	aiProvider    string
+	claudeAPIKey  string
+	claudeModel   string
+	openAIAPIKey  string
 	openAIBaseURL string
-	openAIModel  string
-	ollamaHost   string
-	ollamaModel  string
-	embedModel   string
+	openAIModel   string
+	ollamaHost    string
+	ollamaModel   string
+	embedModel    string
 
 	// form field backing variables — sync & cleanup
 	syncPollStr        string
@@ -102,7 +102,7 @@ func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath 
 		s.aiProvider = existing.AI.Provider
 		s.ollamaHost = existing.Ollama.Host
 		s.ollamaModel = existing.Ollama.Model
-		s.embedModel = existing.Ollama.EmbeddingModel
+		s.embedModel = existing.EffectiveEmbeddingModel()
 		s.claudeAPIKey = existing.Claude.APIKey
 		s.claudeModel = existing.Claude.Model
 		s.openAIAPIKey = existing.OpenAI.APIKey
@@ -209,7 +209,7 @@ func (s *Settings) buildForm() {
 	ollamaGroup := huh.NewGroup(
 		huh.NewInput().Title("Ollama Host").Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
 		huh.NewInput().Title("Ollama Model").Value(&s.ollamaModel).Placeholder("gemma3:4b"),
-		huh.NewInput().Title("Embedding Model").Value(&s.embedModel).Placeholder("nomic-embed-text"),
+		huh.NewInput().Title("Embedding Model").Value(&s.embedModel).Placeholder("nomic-embed-text-v2-moe"),
 	).WithHideFunc(func() bool { return s.aiProvider != "ollama" })
 
 	// Group 3b — Claude settings (shown only when provider = claude)
@@ -403,6 +403,7 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.Ollama.Host = s.ollamaHost
 	cfg.Ollama.Model = s.ollamaModel
 	cfg.Ollama.EmbeddingModel = s.embedModel
+	cfg.Semantic.Model = s.embedModel
 	cfg.Claude.APIKey = s.claudeAPIKey
 	cfg.Claude.Model = s.claudeModel
 	cfg.OpenAI.APIKey = s.openAIAPIKey

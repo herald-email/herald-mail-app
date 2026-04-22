@@ -231,3 +231,92 @@ func TestTimelinePreview_PanelHeightsStayAligned(t *testing.T) {
 		t.Fatalf("expected aligned panel heights, table=%d preview=%d", len(tableLines), len(previewLines))
 	}
 }
+
+func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	rendered := strings.Split(stripANSI(m.renderMainView()), "\n")
+	if len(rendered) < 3 {
+		t.Fatalf("expected at least 3 lines, got %d", len(rendered))
+	}
+	if strings.TrimSpace(rendered[2]) == "" {
+		t.Fatalf("expected content to start immediately after tab bar, got blank line: %#v", rendered[:4])
+	}
+}
+
+func TestTimelineView_UsesConsistentPanelGaps(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+
+	rendered := strings.Split(stripANSI(m.renderTimelineView()), "\n")
+	if len(rendered) == 0 {
+		t.Fatal("expected timeline view output")
+	}
+	top := rendered[0]
+	if count := strings.Count(top, "┐  ┌"); count != 2 {
+		t.Fatalf("expected equal 2-column gaps between sidebar/timeline and timeline/preview, got top line %q", top)
+	}
+}
+
+func TestTimelineQuickReply_DoesNotOverflowScreen(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.body = &models.EmailBody{TextPlain: strings.Repeat("Body line ", 80)}
+	m.timeline.quickReplyOpen = true
+	m.timeline.quickRepliesReady = true
+	m.timeline.quickReplyIdx = 4
+	m.timeline.quickReplies = []string{
+		"No thanks.",
+		"Thank you for reaching out.",
+		"Thank you, I received it.",
+		"I'll review this and follow up.",
+		"I'll get back to you.",
+		"[AI] This is a much longer reply suggestion that should wrap instead of being crushed into a single truncated row.",
+		"[AI] Could you help me debug the setup code within the view and explain why SwiftUI keeps recreating it?",
+		"[AI] Let's look at the setup code's position in the view tree and decide what should move out of init.",
+	}
+	m.focusedPanel = panelPreview
+	m.updateTableDimensions(120, 40)
+
+	rendered := m.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) > 40 {
+		t.Fatalf("expected quick reply view to fit terminal height, got %d lines", len(lines))
+	}
+	assertFitsWidth(t, 120, rendered)
+	if strings.Contains(stripANSI(rendered), "0%────────────────") {
+		t.Fatalf("expected scroll indicator and quick-reply separator to stay on separate lines, got:\n%s", stripANSI(rendered))
+	}
+}
+
+func TestQuickReplyPicker_WrapsLongAIReplies(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.timeline.quickRepliesReady = true
+	m.timeline.quickReplyIdx = 5
+	m.timeline.quickReplies = []string{
+		"No thanks.",
+		"Thank you for reaching out.",
+		"Thank you, I received it.",
+		"I'll review this and follow up.",
+		"I'll get back to you.",
+		"[AI] This is a much longer reply suggestion that should wrap instead of being crushed into a single truncated row.",
+	}
+
+	lines := m.quickReplyPickerLines(38, 12)
+	rendered := strings.Join(lines, "\n")
+	if !strings.Contains(rendered, "6. [AI]") {
+		t.Fatalf("expected numbered AI reply in picker, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "suggestion that should wrap") {
+		t.Fatalf("expected long AI reply to continue onto a wrapped line, got:\n%s", rendered)
+	}
+}

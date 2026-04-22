@@ -12,7 +12,7 @@ import (
 func (m *Model) startClassification() tea.Cmd {
 	folder := m.currentFolder
 	ch := m.classifyCh // capture the current channel
-	classifier := ai.WithPriority(m.classifier, ai.PriorityUserAction)
+	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityUserAction), ai.TaskKindClassification)
 	return func() tea.Msg {
 		defer close(ch) // unblock the listener when we're done
 		if classifier == nil {
@@ -47,7 +47,7 @@ func (m *Model) startClassification() tea.Cmd {
 
 // reclassifyEmailCmd re-classifies a single email and stores the result.
 func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
-	classifier := ai.WithPriority(m.classifier, ai.PriorityUserAction) // snapshot before goroutine
+	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityUserAction), ai.TaskKindClassification) // snapshot before goroutine
 	b := m.backend
 	messageID := email.MessageID
 	sender := email.Sender
@@ -72,7 +72,7 @@ func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
 // forget background op triggered automatically on email arrival — no visible
 // status update is set on success.
 func (m *Model) autoClassifyEmailCmd(email *models.EmailData) tea.Cmd {
-	classifier := ai.WithPriority(m.classifier, ai.PriorityBackground) // snapshot
+	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindClassification) // snapshot
 	b := m.backend
 	messageID := email.MessageID
 	sender := email.Sender

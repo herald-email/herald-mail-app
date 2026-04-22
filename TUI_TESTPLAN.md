@@ -154,12 +154,14 @@ Check these states during every applicable lane:
 - Attachment save supports the currently selected attachment, not only the first one.
 - Local AI overload does not freeze UI and does not create runaway connection fan-out.
 - Ollama-down, 404, timeout, or invalid-model failures produce bounded and deduplicated errors.
+- A compact global AI chip remains visible whenever AI is configured and reflects the effective state of local AI work.
 - Browser and unrelated network activity should remain usable while background Herald work runs.
 
 ### Network and backpressure
 
 - Local AI work runs with bounded concurrency and prefers interactive requests over background tasks.
 - Background embedding and enrichment defer or pause while interactive local AI work is active.
+- Background work that is already in flight may finish, but no new background local-AI task starts while interactive work is queued or running.
 - Queue saturation fails open: UI stays responsive and low-priority work is skipped or deferred.
 - Herald must not suddenly open enough outbound connections to starve the rest of the machine.
 
@@ -258,6 +260,74 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Sidebar row focus matches canonical row style.
+
+### TC-07 — Global AI status chip
+
+**Lane:** A, B, C  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start with AI configured and idle.
+2. Trigger background embedding or enrichment.
+3. Trigger quick reply while background AI is active.
+4. Trigger semantic search while local AI is busy.
+5. Repeat once with Ollama unavailable or an embedding model missing.
+
+**Expect:**
+- Status bar shows a compact `AI: ...` chip whenever AI is configured.
+- Idle state reads `AI: idle`.
+- Background-only work reads `AI: embedding`.
+- When quick reply or semantic search is queued behind a running background call, the chip prefers the interactive intent over background progress.
+- Degraded states read `AI: unavailable` or `AI: deferred`, not only log spam.
+
+### TC-08 — Interactive-first local AI scheduling
+
+**Lane:** C  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start live Herald with Ollama configured.
+2. Allow background embedding or contact enrichment to begin.
+3. Trigger quick reply from Timeline.
+4. Trigger semantic search after that.
+5. Watch status bar, logs, and UI responsiveness.
+
+**Expect:**
+- Quick reply and semantic search may wait for at most one already-running local call.
+- After that call completes, queued interactive work runs before any queued background work.
+- No additional background local-AI task starts while interactive work is queued or running.
+- The UI remains navigable throughout.
+
+### TC-09 — Background batch dedupe
+
+**Lane:** B, C  
+**Sizes:** `220x50`
+
+**Steps:**
+1. Load Timeline in a folder with unembedded mail and contacts needing enrichment.
+2. Switch away and back to Timeline repeatedly.
+3. Refresh while background embedding is still progressing.
+
+**Expect:**
+- Herald does not create duplicate background embedding bursts for the same folder.
+- Herald does not create duplicate contact-enrichment bursts while one is already running or queued.
+- Logs stay bounded and do not show a storm of repeated duplicate background launches.
+
+### TC-10 — Fail-open backlog behavior
+
+**Lane:** C  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Create a local-AI backlog by letting background semantic work run.
+2. Trigger additional background-producing actions such as folder reloads or enrichment.
+3. Keep navigating the UI and open at least one interactive AI action.
+
+**Expect:**
+- Low-priority work is deferred or coalesced instead of opening a connection burst.
+- The status chip can show `AI: deferred`.
+- Browser and unrelated network activity on the machine remain usable.
+- Herald does not wedge the terminal or chat/quick-reply flows.
 - Key hints show sidebar actions while sidebar is focused.
 - Timeline border is inactive while sidebar is focused.
 
@@ -399,6 +469,7 @@ Check these states during every applicable lane:
 - Success path returns sensible results.
 - Degraded path reports AI unavailability or embedding deferral clearly.
 - No silent failure and no runaway retries.
+- Changing the configured embedding model invalidates stale embeddings and triggers clean re-embedding instead of mixing vector generations.
 
 ### TC-16 — Contact enrichment under Ollama failure
 

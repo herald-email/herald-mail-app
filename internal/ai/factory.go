@@ -8,6 +8,7 @@ import "mail-processor/internal/config"
 // IMPORTANT: This function returns a true nil interface value when no AI is
 // configured, NOT a typed nil pointer. Callers must check: if client == nil { ... }
 func NewFromConfig(cfg *config.Config) (AIClient, error) {
+	embeddingModel := cfg.EffectiveEmbeddingModel()
 	wrapLocal := func(client AIClient) AIClient {
 		if client == nil {
 			return nil
@@ -38,8 +39,8 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 		// If Ollama is also configured, use it for embedding only.
 		if cfg.Ollama.Host != "" {
 			ollama := New(cfg.Ollama.Host, cfg.Ollama.Model)
-			if cfg.Ollama.EmbeddingModel != "" {
-				ollama.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+			if embeddingModel != "" {
+				ollama.SetEmbeddingModel(embeddingModel)
 			}
 			return NewCompositeClient(claude, wrapLocal(ollama)), nil
 		}
@@ -53,8 +54,8 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 		// If Ollama is also configured, use it for embedding only.
 		if cfg.Ollama.Host != "" {
 			ollama := New(cfg.Ollama.Host, cfg.Ollama.Model)
-			if cfg.Ollama.EmbeddingModel != "" {
-				ollama.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+			if embeddingModel != "" {
+				ollama.SetEmbeddingModel(embeddingModel)
 			}
 			return NewCompositeClient(openai, wrapLocal(ollama)), nil
 		}
@@ -65,8 +66,8 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 			return nil, nil
 		}
 		c := New(cfg.Ollama.Host, cfg.Ollama.Model)
-		if cfg.Ollama.EmbeddingModel != "" {
-			c.SetEmbeddingModel(cfg.Ollama.EmbeddingModel)
+		if embeddingModel != "" {
+			c.SetEmbeddingModel(embeddingModel)
 		}
 		return wrapLocal(c), nil
 	}

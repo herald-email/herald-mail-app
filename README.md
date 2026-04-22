@@ -14,7 +14,7 @@
 | Chronological timeline with split-view email preview | ✅ |
 | Bulk cleanup — delete by sender or domain in one keystroke | ✅ |
 | AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
-| Semantic search with nomic-embed-text + chunked body embeddings | ✅ |
+| Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings | ✅ |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q) | ✅ |
 | Contact book with LLM enrichment and Apple Contacts import | ✅ |
 | Compose + reply + forward with Markdown preview | ✅ |
@@ -72,7 +72,7 @@ smtp:
 ollama:
   host: "http://localhost:11434"
   model: "gemma3:4b"             # for classification, chat, quick replies
-  embedding_model: "nomic-embed-text"  # for semantic search
+  embedding_model: "nomic-embed-text-v2-moe"  # for semantic search
 ```
 
 Vendor presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`

@@ -1,8 +1,7 @@
 [?25l[?2004h ProtonMail Analyzer [K
   1  Timeline    2  Compose    3  Cleanup    4  Contacts  [K
-[K
 ┌──────────────────────────┐  ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │  INBOX                   │  │ Sender         Subject                            Date              Size KB  Att  Tag  │
 └──────────────────────────┘  └────────────────────────────────────────────────────────────────────────────────────────┘
- INBOX  │  0 emails  │  AI: off                                                                                         
+ INBOX  │  AI: off  │  0 emails                                                                                         
 1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archiv…[120D[2K[?2004l[?25h[?1002l[?1003l[?1006l

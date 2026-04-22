@@ -336,6 +336,7 @@ func (m *Model) clearTimelineSearch() {
 
 func (m *Model) clearTimelineQuickReply() {
 	m.timeline.quickReplyOpen = false
+	m.timeline.quickReplyPending = false
 	m.timeline.quickReplyIdx = 0
 }
 
@@ -413,24 +414,35 @@ func (m *Model) openCurrentTimelineEmail() tea.Cmd {
 		return nil
 	}
 	email := ref.group.emails[ref.emailIdx]
+	return m.openTimelineEmail(email)
+}
+
+func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
+	if email == nil {
+		return nil
+	}
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
 	m.timeline.bodyLoading = true
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
+	m.timeline.bodyWrappedLines = nil
+	m.timeline.quickReplies = nil
+	m.timeline.quickRepliesReady = false
+	m.timeline.quickReplyOpen = false
+	m.timeline.quickReplyIdx = 0
 	m.timeline.quickRepliesAIFetched = false
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	return m.loadEmailBodyCmd(email.Folder, email.UID)
 }
 
-func (m *Model) toggleTimelineQuickReply() tea.Cmd {
-	if !(m.focusedPanel == panelPreview || m.timeline.fullScreen) || m.timeline.body == nil {
+func (m *Model) openTimelineQuickReply() tea.Cmd {
+	if m.timeline.selectedEmail == nil || m.timeline.body == nil {
 		return nil
 	}
-	m.timeline.quickReplyOpen = !m.timeline.quickReplyOpen
-	if !m.timeline.quickReplyOpen {
-		return nil
-	}
+	m.timeline.quickReplyPending = false
+	m.timeline.quickReplyOpen = true
+	m.setFocusedPanel(panelPreview)
 	if m.timeline.quickReplyIdx >= len(m.timeline.quickReplies) {
 		m.timeline.quickReplyIdx = 0
 	}
@@ -444,6 +456,22 @@ func (m *Model) toggleTimelineQuickReply() tea.Cmd {
 		return generateQuickRepliesCmd(m.classifier, email.Sender, email.Subject, bodyPreview)
 	}
 	return nil
+}
+
+func (m *Model) toggleTimelineQuickReply() tea.Cmd {
+	if m.timeline.selectedEmail == nil || m.timeline.body == nil {
+		if email := m.currentTimelineRowEmail(); email != nil {
+			m.timeline.quickReplyPending = true
+			return m.openTimelineEmail(email)
+		}
+		return nil
+	}
+	m.timeline.quickReplyOpen = !m.timeline.quickReplyOpen
+	if !m.timeline.quickReplyOpen {
+		m.timeline.quickReplyPending = false
+		return nil
+	}
+	return m.openTimelineQuickReply()
 }
 
 func (m *Model) timelineFilterPrefix() string {
@@ -554,7 +582,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 		if m.classifier != nil {
-			return m, tea.Batch(m.runEmbeddingBatch(), m.runContactEnrichment()), true
+			return m, tea.Batch(m.startEmbeddingBatchIfNeeded(), m.startContactEnrichmentIfNeeded()), true
 		}
 		return m, nil, true
 
@@ -601,12 +629,20 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					cmds = append(cmds, describeImagesCmd(m.classifier, body.InlineImages)...)
 				}
 				m.timeline.quickRepliesReady = true
+				if m.timeline.quickReplyPending {
+					cmds = append(cmds, m.openTimelineQuickReply())
+				}
 				if len(cmds) > 0 {
 					m.timeline.bodyWrappedLines = nil
 					return m, tea.Batch(cmds...), true
 				}
 			} else {
 				m.timeline.quickRepliesReady = true
+				if m.timeline.quickReplyPending {
+					cmd := m.openTimelineQuickReply()
+					m.timeline.bodyWrappedLines = nil
+					return m, cmd, true
+				}
 			}
 		}
 		m.timeline.bodyWrappedLines = nil

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"mail-processor/internal/models"
@@ -83,6 +84,16 @@ func mockEmails() []*models.EmailData {
 	}
 }
 
+func freezeComposeCursors(m *Model) {
+	_ = m.composeTo.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeCC.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeBCC.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeSubject.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeBody.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeAIInput.Cursor.SetMode(cursor.CursorStatic)
+	_ = m.composeAIResponse.Cursor.SetMode(cursor.CursorStatic)
+}
+
 // readAll reads all bytes from an io.Reader, fataling on error.
 func readAll(t *testing.T, r io.Reader) []byte {
 	t.Helper()
@@ -119,6 +130,7 @@ func TestSnapshot_ComposeBlank(t *testing.T) {
 	m := testModelWithEmails(nil)
 	m.activeTab = tabCompose
 	m.composeField = 0
+	freezeComposeCursors(m)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
 	time.Sleep(200 * time.Millisecond)
 	tm.Quit()
@@ -133,6 +145,7 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 	m.composeCC.SetValue("bob@example.com")
 	m.composeBCC.SetValue("carol@example.com")
 	m.composeSubject.SetValue("Hello world")
+	freezeComposeCursors(m)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
 	time.Sleep(200 * time.Millisecond)
 	tm.Quit()
@@ -145,6 +158,7 @@ func TestSnapshot_ComposeAIPanel(t *testing.T) {
 	m.composeField = 4
 	m.composeBody.SetValue("Hey Alice,\n\nCan we meet tomorrow for a quick sync?\n\nThanks")
 	m.composeAIPanel = true
+	freezeComposeCursors(m)
 	// Pre-populate with a fake AI result so the diff renders
 	original := m.composeBody.Value()
 	revised := "Hi Alice,\n\nAre you available tomorrow for a quick catch-up?\n\nBest regards"

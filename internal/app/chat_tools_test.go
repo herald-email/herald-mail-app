@@ -14,19 +14,23 @@ type stubBackend struct {
 	threadResult []*models.EmailData
 	statsResult  map[string]*models.SenderStats
 	searchErr    error
+	ensuredModel string
+	ensureCalled bool
+	ensureResult bool
+	ensureErr    error
 }
 
-func (s *stubBackend) Load(_ string)                                     {}
+func (s *stubBackend) Load(_ string) {}
 func (s *stubBackend) GetSenderStatistics(_ string) (map[string]*models.SenderStats, error) {
 	return s.statsResult, s.searchErr
 }
 func (s *stubBackend) GetEmailsBySender(_ string) (map[string][]*models.EmailData, error) {
 	return nil, nil
 }
-func (s *stubBackend) DeleteSenderEmails(_, _ string) error  { return nil }
-func (s *stubBackend) DeleteDomainEmails(_, _ string) error  { return nil }
-func (s *stubBackend) DeleteEmail(_, _ string) error         { return nil }
-func (s *stubBackend) ListFolders() ([]string, error)        { return nil, nil }
+func (s *stubBackend) DeleteSenderEmails(_, _ string) error { return nil }
+func (s *stubBackend) DeleteDomainEmails(_, _ string) error { return nil }
+func (s *stubBackend) DeleteEmail(_, _ string) error        { return nil }
+func (s *stubBackend) ListFolders() ([]string, error)       { return nil, nil }
 func (s *stubBackend) GetFolderStatus(_ []string) (map[string]models.FolderStatus, error) {
 	return nil, nil
 }
@@ -76,60 +80,65 @@ func (s *stubBackend) StoreEmbeddingChunks(_ string, _ []models.EmbeddingChunk) 
 func (s *stubBackend) SearchSemanticChunked(_ string, _ []float32, _ int, _ float64) ([]*models.SemanticSearchResult, error) {
 	return nil, nil
 }
-func (s *stubBackend) GetBodyText(_ string) (string, error)           { return "", nil }
-func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error) { return nil, nil }
-func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification { return nil }
-func (s *stubBackend) StartIDLE(_ string) error                         { return nil }
-func (s *stubBackend) StopIDLE()                                        {}
-func (s *stubBackend) StartPolling(_ string, _ int)                     {}
-func (s *stubBackend) StopPolling()                                     {}
-func (s *stubBackend) ValidIDsCh() <-chan map[string]bool               { return nil }
-func (s *stubBackend) MoveEmail(_, _, _ string) error                   { return nil }
-func (s *stubBackend) SaveRule(_ *models.Rule) error                    { return nil }
-func (s *stubBackend) GetEnabledRules() ([]*models.Rule, error)         { return nil, nil }
-func (s *stubBackend) DeleteRule(_ int64) error                         { return nil }
-func (s *stubBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error) { return nil, nil }
-func (s *stubBackend) SaveCustomPrompt(_ *models.CustomPrompt) error    { return nil }
-func (s *stubBackend) GetCustomPrompt(_ int64) (*models.CustomPrompt, error) { return nil, nil }
-func (s *stubBackend) AppendActionLog(_ *models.RuleActionLogEntry) error { return nil }
-func (s *stubBackend) TouchRuleLastTriggered(_ int64) error              { return nil }
-func (s *stubBackend) SaveCustomCategory(_ string, _ int64, _ string) error { return nil }
-func (s *stubBackend) GetContactsToEnrich(_, _ int) ([]models.ContactData, error) { return nil, nil }
+func (s *stubBackend) GetBodyText(_ string) (string, error)                         { return "", nil }
+func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error)        { return nil, nil }
+func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification             { return nil }
+func (s *stubBackend) StartIDLE(_ string) error                                     { return nil }
+func (s *stubBackend) StopIDLE()                                                    {}
+func (s *stubBackend) StartPolling(_ string, _ int)                                 {}
+func (s *stubBackend) StopPolling()                                                 {}
+func (s *stubBackend) ValidIDsCh() <-chan map[string]bool                           { return nil }
+func (s *stubBackend) MoveEmail(_, _, _ string) error                               { return nil }
+func (s *stubBackend) SaveRule(_ *models.Rule) error                                { return nil }
+func (s *stubBackend) GetEnabledRules() ([]*models.Rule, error)                     { return nil, nil }
+func (s *stubBackend) DeleteRule(_ int64) error                                     { return nil }
+func (s *stubBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error)         { return nil, nil }
+func (s *stubBackend) SaveCustomPrompt(_ *models.CustomPrompt) error                { return nil }
+func (s *stubBackend) GetCustomPrompt(_ int64) (*models.CustomPrompt, error)        { return nil, nil }
+func (s *stubBackend) AppendActionLog(_ *models.RuleActionLogEntry) error           { return nil }
+func (s *stubBackend) TouchRuleLastTriggered(_ int64) error                         { return nil }
+func (s *stubBackend) SaveCustomCategory(_ string, _ int64, _ string) error         { return nil }
+func (s *stubBackend) GetContactsToEnrich(_, _ int) ([]models.ContactData, error)   { return nil, nil }
 func (s *stubBackend) GetRecentSubjectsByContact(_ string, _ int) ([]string, error) { return nil, nil }
-func (s *stubBackend) UpdateContactEnrichment(_, _ string, _ []string) error { return nil }
-func (s *stubBackend) UpdateContactEmbedding(_ string, _ []float32) error    { return nil }
+func (s *stubBackend) UpdateContactEnrichment(_, _ string, _ []string) error        { return nil }
+func (s *stubBackend) UpdateContactEmbedding(_ string, _ []float32) error           { return nil }
 func (s *stubBackend) SearchContactsSemantic(_ []float32, _ int, _ float64) ([]*models.ContactSearchResult, error) {
 	return nil, nil
 }
 func (s *stubBackend) ListContacts(_ int, _ string) ([]models.ContactData, error) { return nil, nil }
-func (s *stubBackend) SearchContacts(_ string) ([]models.ContactData, error)       { return nil, nil }
+func (s *stubBackend) SearchContacts(_ string) ([]models.ContactData, error)      { return nil, nil }
 func (s *stubBackend) GetContactEmails(_ string, _ int) ([]*models.EmailData, error) {
 	return nil, nil
 }
-func (s *stubBackend) UpsertContacts(_ []models.ContactAddr, _ string) error { return nil }
+func (s *stubBackend) UpsertContacts(_ []models.ContactAddr, _ string) error  { return nil }
 func (s *stubBackend) GetAllCleanupRules() ([]*models.CleanupRule, error)     { return nil, nil }
-func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error             { return nil }
-func (s *stubBackend) DeleteCleanupRule(_ int64) error                         { return nil }
-func (s *stubBackend) RecordUnsubscribe(_, _, _ string) error                  { return nil }
-func (s *stubBackend) IsUnsubscribedSender(_ string) (bool, error)             { return false, nil }
-func (s *stubBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)  { return 0, "", nil }
-func (s *stubBackend) ListDrafts() ([]*models.Draft, error)                    { return nil, nil }
-func (s *stubBackend) DeleteDraft(_ uint32, _ string) error                    { return nil }
-func (s *stubBackend) ReplyToEmail(_, _ string) error                          { return nil }
-func (s *stubBackend) ForwardEmail(_, _, _ string) error                       { return nil }
-func (s *stubBackend) ListAttachments(_ string) ([]models.Attachment, error)   { return nil, nil }
-func (s *stubBackend) GetAttachment(_, _ string) (*models.Attachment, error)   { return nil, nil }
-func (s *stubBackend) DeleteThread(_, _ string) error                          { return nil }
-func (s *stubBackend) BulkDelete(_ []string) error                             { return nil }
-func (s *stubBackend) ArchiveThread(_, _ string) error                         { return nil }
-func (s *stubBackend) BulkMove(_ []string, _ string) error                     { return nil }
-func (s *stubBackend) UnsubscribeSender(_ string) error                        { return nil }
-func (s *stubBackend) SoftUnsubscribeSender(_, _ string) error                 { return nil }
-func (s *stubBackend) CreateFolder(_ string) error                             { return nil }
+func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error            { return nil }
+func (s *stubBackend) DeleteCleanupRule(_ int64) error                        { return nil }
+func (s *stubBackend) RecordUnsubscribe(_, _, _ string) error                 { return nil }
+func (s *stubBackend) IsUnsubscribedSender(_ string) (bool, error)            { return false, nil }
+func (s *stubBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) { return 0, "", nil }
+func (s *stubBackend) ListDrafts() ([]*models.Draft, error)                   { return nil, nil }
+func (s *stubBackend) DeleteDraft(_ uint32, _ string) error                   { return nil }
+func (s *stubBackend) ReplyToEmail(_, _ string) error                         { return nil }
+func (s *stubBackend) ForwardEmail(_, _, _ string) error                      { return nil }
+func (s *stubBackend) ListAttachments(_ string) ([]models.Attachment, error)  { return nil, nil }
+func (s *stubBackend) GetAttachment(_, _ string) (*models.Attachment, error)  { return nil, nil }
+func (s *stubBackend) DeleteThread(_, _ string) error                         { return nil }
+func (s *stubBackend) BulkDelete(_ []string) error                            { return nil }
+func (s *stubBackend) ArchiveThread(_, _ string) error                        { return nil }
+func (s *stubBackend) BulkMove(_ []string, _ string) error                    { return nil }
+func (s *stubBackend) UnsubscribeSender(_ string) error                       { return nil }
+func (s *stubBackend) SoftUnsubscribeSender(_, _ string) error                { return nil }
+func (s *stubBackend) CreateFolder(_ string) error                            { return nil }
 func (s *stubBackend) RenameFolder(_, _ string) error                         { return nil }
-func (s *stubBackend) DeleteFolder(_ string) error                             { return nil }
+func (s *stubBackend) DeleteFolder(_ string) error                            { return nil }
 func (s *stubBackend) SyncAllFolders() (int, error)                           { return 0, nil }
 func (s *stubBackend) GetSyncStatus() (map[string]models.FolderStatus, error) { return nil, nil }
+func (s *stubBackend) EnsureEmbeddingModel(model string) (bool, error) {
+	s.ensureCalled = true
+	s.ensuredModel = model
+	return s.ensureResult, s.ensureErr
+}
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.
 func newStubModel(b *stubBackend) *Model {

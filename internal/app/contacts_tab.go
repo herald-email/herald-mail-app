@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"mail-processor/internal/ai"
 	"mail-processor/internal/contacts"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -61,7 +62,7 @@ func (m *Model) applyContactSearch() {
 		// semantic: search via backend; fall back to keyword if classifier unavailable
 		var out []models.ContactData
 		if m.classifier != nil {
-			vec, embErr := m.classifier.Embed(m.contactSearch)
+			vec, embErr := ai.WithTaskKind(m.classifier, ai.TaskKindSemanticSearch).Embed(m.contactSearch)
 			if embErr == nil {
 				results, err := m.backend.SearchContactsSemantic(vec, 50, 0.3)
 				if err != nil {
@@ -99,7 +100,7 @@ func (m *Model) runSingleContactEnrichment(contact models.ContactData) tea.Cmd {
 			logger.Warn("runSingleContactEnrichment: GetRecentSubjectsByContact %s: %v", contact.Email, err)
 			return ContactEnrichedMsg{Count: 0}
 		}
-		company, topics, err := m.classifier.EnrichContact(contact.Email, subjects)
+		company, topics, err := ai.WithTaskKind(m.classifier, ai.TaskKindContactEnrich).EnrichContact(contact.Email, subjects)
 		if err != nil {
 			logger.Warn("runSingleContactEnrichment: EnrichContact %s: %v", contact.Email, err)
 			return ContactEnrichedMsg{Count: 0}
@@ -393,7 +394,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 				if i == m.contactsIdx {
 					bg := activeColor
 					s := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
-					line = s.Render(dn+dnPad+"  "+countStr)
+					line = s.Render(dn + dnPad + "  " + countStr)
 				} else {
 					ns := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
 					ks := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)

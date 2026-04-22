@@ -17,7 +17,7 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	existing.SMTP.Port = 587
 	existing.Ollama.Host = "http://myhost:11434"
 	existing.Ollama.Model = "llama3"
-	existing.Ollama.EmbeddingModel = "nomic-embed-text"
+	existing.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
 
 	s := NewSettings(SettingsModeWizard, existing)
 
@@ -48,8 +48,8 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	if s.ollamaModel != "llama3" {
 		t.Errorf("ollamaModel = %q, want %q", s.ollamaModel, "llama3")
 	}
-	if s.embedModel != "nomic-embed-text" {
-		t.Errorf("embedModel = %q, want %q", s.embedModel, "nomic-embed-text")
+	if s.embedModel != "nomic-embed-text-v2-moe" {
+		t.Errorf("embedModel = %q, want %q", s.embedModel, "nomic-embed-text-v2-moe")
 	}
 }
 

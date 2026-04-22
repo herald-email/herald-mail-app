@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"mail-processor/internal/ai"
+	"mail-processor/internal/config"
 	"mail-processor/internal/models"
 )
 
@@ -22,8 +23,9 @@ func TestValidIDsMsg_TypeExists(t *testing.T) {
 
 // stubClassifier is a minimal ai.AIClient for testing reclassification.
 type stubClassifier struct {
-	category ai.Category
-	err      error
+	category           ai.Category
+	err                error
+	lastEmbeddingModel string
 }
 
 func (s *stubClassifier) Classify(_, _ string) (ai.Category, error) { return s.category, s.err }
@@ -32,7 +34,7 @@ func (s *stubClassifier) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string,
 	return "", nil, ai.ErrToolsNotSupported
 }
 func (s *stubClassifier) Embed(_ string) ([]float32, error)                     { return nil, ai.ErrEmbeddingNotSupported }
-func (s *stubClassifier) SetEmbeddingModel(_ string)                            {}
+func (s *stubClassifier) SetEmbeddingModel(model string)                        { s.lastEmbeddingModel = model }
 func (s *stubClassifier) GenerateQuickReplies(_, _, _ string) ([]string, error) { return nil, nil }
 func (s *stubClassifier) EnrichContact(_ string, _ []string) (string, []string, error) {
 	return "", nil, nil
@@ -133,5 +135,68 @@ func TestReclassifyEmailCmd(t *testing.T) {
 	}
 	if rr.Category != "imp" {
 		t.Errorf("Category = %q, want %q", rr.Category, "imp")
+	}
+}
+
+func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
+	backend := &stubBackend{ensureResult: true}
+	classifier := &stubClassifier{}
+	m := New(backend, nil, "", classifier, false)
+	m.cfg = &config.Config{}
+	m.cfg.Ollama.EmbeddingModel = "nomic-embed-text"
+
+	next := &config.Config{}
+	next.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+
+	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next})
+	updated := updatedModel.(*Model)
+
+	if !backend.ensureCalled {
+		t.Fatal("expected backend embedding invalidation to run")
+	}
+	if backend.ensuredModel != "nomic-embed-text-v2-moe" {
+		t.Fatalf("EnsureEmbeddingModel called with %q", backend.ensuredModel)
+	}
+	if classifier.lastEmbeddingModel != "nomic-embed-text-v2-moe" {
+		t.Fatalf("SetEmbeddingModel called with %q", classifier.lastEmbeddingModel)
+	}
+	if updated.statusMessage != "Settings saved. Embeddings reset for the new model." {
+		t.Fatalf("statusMessage = %q", updated.statusMessage)
+	}
+}
+
+func TestHandleTimelineMsg_DedupesBackgroundEmbeddingBatchStart(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.classifier = &stubClassifier{}
+
+	model, cmd, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
+	if !handled {
+		t.Fatal("expected TimelineLoadedMsg to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected first timeline load to start background AI work")
+	}
+	updated := model.(*Model)
+	if !updated.embeddingBatchActive {
+		t.Fatal("expected embedding batch to be marked active after scheduling")
+	}
+
+	model, cmd, handled = updated.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
+	if !handled {
+		t.Fatal("expected second TimelineLoadedMsg to be handled")
+	}
+	if cmd != nil {
+		t.Fatal("expected duplicate timeline load to skip scheduling another embedding batch")
+	}
+}
+
+func TestEmbeddingProgressMsg_ClearsActiveFlagWhenComplete(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.embeddingBatchActive = true
+
+	model, _ := m.Update(EmbeddingProgressMsg{Done: 0, Total: 0})
+	updated := model.(*Model)
+	if updated.embeddingBatchActive {
+		t.Fatal("expected embedding batch active flag to clear when progress is complete")
 	}
 }

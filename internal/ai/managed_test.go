@@ -91,7 +91,7 @@ func TestManagedClient_PrioritizesInteractiveWorkAheadOfQueuedBackground(t *test
 	done2 := make(chan struct{})
 	done3 := make(chan struct{})
 	go func() {
-		_ = scheduler.submit(PriorityBackground, func() error {
+		_ = scheduler.submit(PriorityBackground, TaskKindEmbedding, func() error {
 			started <- "bg-1"
 			<-releaseFirst
 			return nil
@@ -105,7 +105,7 @@ func TestManagedClient_PrioritizesInteractiveWorkAheadOfQueuedBackground(t *test
 	}
 
 	go func() {
-		_ = scheduler.submit(PriorityBackground, func() error {
+		_ = scheduler.submit(PriorityBackground, TaskKindEmbedding, func() error {
 			started <- "bg-2"
 			return nil
 		})
@@ -113,7 +113,7 @@ func TestManagedClient_PrioritizesInteractiveWorkAheadOfQueuedBackground(t *test
 	}()
 	time.Sleep(20 * time.Millisecond)
 	go func() {
-		_ = scheduler.submit(PriorityInteractive, func() error {
+		_ = scheduler.submit(PriorityInteractive, TaskKindQuickReply, func() error {
 			started <- "interactive"
 			return nil
 		})
@@ -170,4 +170,103 @@ func TestManagedClient_BackgroundQueueLimitFailsOpen(t *testing.T) {
 	if err != ErrDeferred {
 		t.Fatalf("expected ErrDeferred, got %v", err)
 	}
+}
+
+func TestManagedScheduler_PausesBackgroundWhileInteractiveRunning(t *testing.T) {
+	started := make(chan string, 3)
+	releaseInteractive := make(chan struct{})
+	scheduler := newManagedScheduler(ManagedConfig{
+		MaxConcurrency:                  2,
+		QueueLimit:                      8,
+		PauseBackgroundWhileInteractive: true,
+	})
+
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+
+	go func() {
+		_ = scheduler.submit(PriorityInteractive, TaskKindQuickReply, func() error {
+			started <- "interactive"
+			<-releaseInteractive
+			return nil
+		})
+		close(done1)
+	}()
+
+	first := <-started
+	if first != "interactive" {
+		t.Fatalf("expected first started task to be interactive, got %q", first)
+	}
+
+	go func() {
+		_ = scheduler.submit(PriorityBackground, TaskKindEmbedding, func() error {
+			started <- "background"
+			return nil
+		})
+		close(done2)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	select {
+	case second := <-started:
+		t.Fatalf("expected background task to remain paused while interactive is running, got %q", second)
+	default:
+	}
+
+	close(releaseInteractive)
+	<-done1
+	<-done2
+
+	second := <-started
+	if second != "background" {
+		t.Fatalf("expected background task to start after interactive finished, got %q", second)
+	}
+}
+
+func TestManagedClient_StatusPrefersQueuedInteractiveIntent(t *testing.T) {
+	block := make(chan struct{})
+	base := &managedStubAI{
+		chatFn: func(_ []ChatMessage) (string, error) {
+			<-block
+			return "ok", nil
+		},
+	}
+	client := NewManagedClient(base, ManagedConfig{
+		MaxConcurrency:                  1,
+		QueueLimit:                      8,
+		PauseBackgroundWhileInteractive: true,
+	})
+
+	background := WithTaskKind(WithPriority(client, PriorityBackground), TaskKindEmbedding)
+
+	doneBackground := make(chan struct{})
+	go func() {
+		_, _ = background.Chat([]ChatMessage{{Role: "user", Content: "background"}})
+		close(doneBackground)
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+
+	doneInteractive := make(chan struct{})
+	go func() {
+		_, _ = client.GenerateQuickReplies("alice@example.com", "subject", "body")
+		close(doneInteractive)
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+
+	status := client.AIStatus()
+	if status.ActiveKind != TaskKindEmbedding {
+		t.Fatalf("expected active kind embedding, got %q", status.ActiveKind)
+	}
+	if status.QueuedInteractiveKind != TaskKindQuickReply {
+		t.Fatalf("expected queued interactive kind quick reply, got %q", status.QueuedInteractiveKind)
+	}
+	if status.DisplayKind() != TaskKindQuickReply {
+		t.Fatalf("expected display kind quick reply, got %q", status.DisplayKind())
+	}
+
+	close(block)
+	<-doneBackground
+	<-doneInteractive
 }

@@ -42,12 +42,13 @@ type tickMsg struct{}
 
 func describeImagesCmd(classifier ai.AIClient, images []models.InlineImage) []tea.Cmd {
 	cmds := make([]tea.Cmd, 0, len(images))
+	visionAI := ai.WithTaskKind(classifier, ai.TaskKindImageDescription)
 	for _, img := range images {
 		img := img // capture loop variable
 		cmds = append(cmds, func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			desc, err := classifier.DescribeImage(ctx, img.Data, img.MIMEType)
+			desc, err := visionAI.DescribeImage(ctx, img.Data, img.MIMEType)
 			return ImageDescMsg{ContentID: img.ContentID, Description: desc, Err: err}
 		})
 	}

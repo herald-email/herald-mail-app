@@ -50,6 +50,7 @@ type TimelineState struct {
 	quickReplies          []string
 	quickRepliesReady     bool
 	quickReplyOpen        bool
+	quickReplyPending     bool
 	quickReplyIdx         int
 	quickRepliesAIFetched bool
 

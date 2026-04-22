@@ -71,6 +71,8 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 - Highest priority: user-blocking interactive work such as chat replies, semantic query embeddings, quick replies, current-email image description, and user-triggered single-contact enrichment
 - Medium priority: explicit user-triggered folder classification or other visible batch actions
 - Lowest priority: background email embeddings and background contact enrichment
+- Strict interactive-first means no new background local-AI task is dispatched while interactive work is queued or running
+- The scheduler is intentionally non-preemptive: one already-running background Ollama call may finish before the waiting interactive task begins
 
 **Bounded queue, fail-open behavior**
 
@@ -78,12 +80,20 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 - Low-priority duplicate work is dropped or coalesced instead of opening more concurrent requests
 - Background work pauses while interactive local AI work is active when `pause_background_while_interactive` is enabled
 - Queue saturation must fail open: the UI remains responsive, low-priority work is deferred or skipped, and the user gets concise status/log feedback instead of a connection storm
+- The TUI exposes this state through a compact global `AI:` chip so users can tell whether Herald is idle, busy, deferred, or unavailable without opening logs
 
 **Transport policy**
 
 - Local AI uses a shared HTTP transport with strict per-host connection caps
 - Local queued work should not depend on one blanket short timeout because large local models can be slow but still healthy
 - External AI may use a higher bounded concurrency because remote providers tolerate parallelism better, but it remains config-driven
+
+**Embedding model identity**
+
+- Semantic vectors are tied to the configured embedding model, not just to the message body hash
+- Cache startup records the active embedding model in SQLite metadata
+- If the configured embedding model changes, Herald invalidates cached email and contact embeddings before new semantic work starts
+- Legacy caches without recorded embedding-model metadata are treated as compatible only with the historical default `nomic-embed-text`; switching to another model forces invalidation
 
 **Configuration**
 
@@ -286,6 +296,12 @@ CREATE TABLE email_embeddings (
     embedding   BLOB NOT NULL,   -- float32 array, little-endian
     body_hash   TEXT NOT NULL,
     created_at  DATETIME NOT NULL
+);
+
+CREATE TABLE cache_metadata (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  DATETIME NOT NULL
 );
 
 CREATE TABLE saved_searches (

@@ -16,6 +16,22 @@ import (
 
 var backgroundAIWarnings sync.Map
 
+func (m *Model) startEmbeddingBatchIfNeeded() tea.Cmd {
+	if m.classifier == nil || m.embeddingBatchActive {
+		return nil
+	}
+	m.embeddingBatchActive = true
+	return m.runEmbeddingBatch()
+}
+
+func (m *Model) startContactEnrichmentIfNeeded() tea.Cmd {
+	if m.classifier == nil || m.contactEnrichmentActive {
+		return nil
+	}
+	m.contactEnrichmentActive = true
+	return m.runContactEnrichment()
+}
+
 // embedChunksForEmail strips, chunks, and embeds an email body for semantic search.
 // Uses nomic-embed-text's search_document: prefix for asymmetric retrieval.
 // Returns nil if classifier is nil, body is empty, or all embeddings fail.
@@ -71,10 +87,10 @@ func warnBackgroundAIOnce(format string, args ...any) {
 // Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
 func (m *Model) runEmbeddingBatch() tea.Cmd {
 	folder := m.currentFolder
-	backgroundAI := ai.WithPriority(m.classifier, ai.PriorityBackground)
+	backgroundAI := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindEmbedding)
 	return func() tea.Msg {
 		if backgroundAI == nil {
-			return nil
+			return EmbeddingDoneMsg{}
 		}
 		notice := ""
 		// Pass 1: embed emails that already have body_text in cache
@@ -133,7 +149,7 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 		}
 
 		done, total, _ := m.backend.GetEmbeddingProgress(folder)
-		if total > 0 && done >= total {
+		if total == 0 || done >= total {
 			return EmbeddingDoneMsg{}
 		}
 		return EmbeddingProgressMsg{Done: done, Total: total, Notice: notice}
@@ -146,17 +162,17 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 // This is a no-op (returns Count: 0) when no contacts need enrichment.
 func (m *Model) runContactEnrichment() tea.Cmd {
 	return func() tea.Msg {
-		backgroundAI := ai.WithPriority(m.classifier, ai.PriorityBackground)
+		backgroundAI := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindContactEnrich)
 		if backgroundAI == nil {
-			return ContactEnrichedMsg{Count: 0}
+			return ContactEnrichedMsg{Count: 0, Background: true}
 		}
 		contacts, err := m.backend.GetContactsToEnrich(3, 1)
 		if err != nil {
 			logger.Warn("runContactEnrichment: GetContactsToEnrich: %v", err)
-			return ContactEnrichedMsg{Count: 0}
+			return ContactEnrichedMsg{Count: 0, Background: true}
 		}
 		if len(contacts) == 0 {
-			return nil
+			return ContactEnrichedMsg{Count: 0, Background: true}
 		}
 
 		enriched := 0
@@ -224,6 +240,6 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 			enriched++
 		}
 
-		return ContactEnrichedMsg{Count: enriched, Notice: notice}
+		return ContactEnrichedMsg{Count: enriched, Notice: notice, Background: true}
 	}
 }

@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"encoding/binary"
+	"math"
 	"testing"
 	"time"
 
@@ -16,6 +18,14 @@ func newTestCache(t *testing.T) *Cache {
 	}
 	t.Cleanup(func() { c.Close() })
 	return c
+}
+
+func encodeTestEmbedding(vec []float32) []byte {
+	buf := make([]byte, len(vec)*4)
+	for i, v := range vec {
+		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
+	}
+	return buf
 }
 
 // --- extractDomain ---
@@ -231,6 +241,108 @@ func TestGetNewestCachedDate_ReturnsNewest(t *testing.T) {
 	}
 	if !got.Equal(newer) {
 		t.Errorf("expected %v, got %v", newer, got)
+	}
+}
+
+func TestEnsureEmbeddingModel_SetsMetadataWithoutInvalidatingLegacyCache(t *testing.T) {
+	c := newTestCache(t)
+	if _, err := c.db.Exec(
+		`INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?)`,
+		"msg-1", 0, encodeTestEmbedding([]float32{0.1, 0.2}), "hash", time.Now().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed chunk embedding: %v", err)
+	}
+
+	invalidated, err := c.EnsureEmbeddingModel(legacyEmbeddingModelDefault)
+	if err != nil {
+		t.Fatalf("EnsureEmbeddingModel: %v", err)
+	}
+	if invalidated {
+		t.Fatal("expected legacy default model to keep existing embeddings on first metadata write")
+	}
+
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM email_embedding_chunks`).Scan(&count); err != nil {
+		t.Fatalf("count chunk embeddings: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected chunk embeddings to be preserved, got %d rows", count)
+	}
+}
+
+func TestEnsureEmbeddingModel_InvalidatesOnModelChange(t *testing.T) {
+	c := newTestCache(t)
+	if _, err := c.db.Exec(
+		`INSERT INTO cache_metadata (key, value, updated_at) VALUES (?, ?, ?)`,
+		cacheMetaEmbeddingModelKey, legacyEmbeddingModelDefault, time.Now().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed cache metadata: %v", err)
+	}
+	if _, err := c.db.Exec(
+		`INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?)`,
+		"msg-1", 0, encodeTestEmbedding([]float32{0.1, 0.2}), "hash", time.Now().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed chunk embedding: %v", err)
+	}
+	if _, err := c.db.Exec(
+		`INSERT INTO email_embeddings (message_id, embedding, hash, embedded_at) VALUES (?, ?, ?, ?)`,
+		"msg-1", encodeTestEmbedding([]float32{0.1, 0.2}), "hash", time.Now().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed legacy embedding: %v", err)
+	}
+	if _, err := c.db.Exec(
+		`INSERT INTO contacts (email, first_seen, last_seen, embedding) VALUES (?, ?, ?, ?)`,
+		"alice@example.com", time.Now().Format(time.RFC3339), time.Now().Format(time.RFC3339), encodeTestEmbedding([]float32{0.3, 0.4}),
+	); err != nil {
+		t.Fatalf("seed contact embedding: %v", err)
+	}
+
+	invalidated, err := c.EnsureEmbeddingModel("nomic-embed-text-v2-moe")
+	if err != nil {
+		t.Fatalf("EnsureEmbeddingModel: %v", err)
+	}
+	if !invalidated {
+		t.Fatal("expected model change to invalidate embeddings")
+	}
+
+	for _, query := range []string{
+		`SELECT COUNT(*) FROM email_embedding_chunks`,
+		`SELECT COUNT(*) FROM email_embeddings`,
+		`SELECT COUNT(*) FROM contacts WHERE embedding IS NOT NULL`,
+	} {
+		var count int
+		if err := c.db.QueryRow(query).Scan(&count); err != nil {
+			t.Fatalf("count invalidated rows for %q: %v", query, err)
+		}
+		if count != 0 {
+			t.Fatalf("expected query %q to return 0 after invalidation, got %d", query, count)
+		}
+	}
+
+	got, found, err := c.getMetadata(cacheMetaEmbeddingModelKey)
+	if err != nil {
+		t.Fatalf("getMetadata: %v", err)
+	}
+	if !found || got != "nomic-embed-text-v2-moe" {
+		t.Fatalf("expected embedding metadata to update, got found=%v value=%q", found, got)
+	}
+}
+
+func TestEnsureEmbeddingModel_InvalidatesLegacyCacheWithoutMetadataOnNewDefault(t *testing.T) {
+	c := newTestCache(t)
+	if _, err := c.db.Exec(
+		`INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?)`,
+		"msg-1", 0, encodeTestEmbedding([]float32{0.1, 0.2}), "hash", time.Now().Format(time.RFC3339),
+	); err != nil {
+		t.Fatalf("seed chunk embedding: %v", err)
+	}
+
+	invalidated, err := c.EnsureEmbeddingModel("nomic-embed-text-v2-moe")
+	if err != nil {
+		t.Fatalf("EnsureEmbeddingModel: %v", err)
+	}
+	if !invalidated {
+		t.Fatal("expected first run on a non-legacy model to invalidate metadata-less embeddings")
 	}
 }
 

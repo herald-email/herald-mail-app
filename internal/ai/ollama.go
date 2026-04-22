@@ -48,7 +48,7 @@ func New(host, model string) *Classifier {
 	return &Classifier{
 		host:           strings.TrimRight(host, "/"),
 		model:          model,
-		embeddingModel: "nomic-embed-text",
+		embeddingModel: "nomic-embed-text-v2-moe",
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
