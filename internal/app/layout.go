@@ -1,0 +1,328 @@
+package app
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+type ChromeState struct {
+	ActiveTab    int
+	FocusedPanel int
+	ShowLogs     bool
+	ShowChat     bool
+	ShowSidebar  bool
+	SidebarNarrow bool
+	StatusMessage string
+}
+
+type TimelineState struct {
+	PreviewOpen bool
+}
+
+type CleanupState struct {
+	PreviewOpen bool
+	FullScreen  bool
+	GroupByDomain bool
+}
+
+type ComposeState struct {
+	PreviewOpen bool
+	AIPanelOpen bool
+}
+
+type ContactsState struct {
+	PreviewOpen bool
+}
+
+type SyncState struct {
+	Loading bool
+}
+
+type LayoutPlan struct {
+	Width         int
+	Height        int
+	ContentHeight int
+	SidebarVisible bool
+	ChatVisible   bool
+	Timeline      TimelineLayoutPlan
+	Cleanup       CleanupLayoutPlan
+	Compose       ComposeLayoutPlan
+	Contacts      ContactsLayoutPlan
+}
+
+type TimelineLayoutPlan struct {
+	TableWidth   int
+	PreviewWidth int
+}
+
+type CleanupLayoutPlan struct {
+	SummaryWidth int
+	DetailsWidth int
+	PreviewWidth int
+}
+
+type ComposeLayoutPlan struct {
+	LabelWidth     int
+	FieldInnerWidth int
+	BodyInnerWidth int
+}
+
+type ContactsLayoutPlan struct {
+	ListWidth   int
+	DetailWidth int
+}
+
+func (m *Model) chromeState(plan LayoutPlan) ChromeState {
+	return ChromeState{
+		ActiveTab:     m.activeTab,
+		FocusedPanel:  m.focusedPanel,
+		ShowLogs:      m.showLogs,
+		ShowChat:      plan.ChatVisible,
+		ShowSidebar:   plan.SidebarVisible,
+		SidebarNarrow: m.sidebarTooWide,
+		StatusMessage: m.statusMessage,
+	}
+}
+
+func (m *Model) timelineState() TimelineState {
+	return TimelineState{
+		PreviewOpen: m.selectedTimelineEmail != nil,
+	}
+}
+
+func (m *Model) cleanupState() CleanupState {
+	return CleanupState{
+		PreviewOpen:   m.showCleanupPreview,
+		FullScreen:    m.cleanupFullScreen,
+		GroupByDomain: m.groupByDomain,
+	}
+}
+
+func (m *Model) composeState() ComposeState {
+	return ComposeState{
+		PreviewOpen: m.composePreview,
+		AIPanelOpen: m.composeAIPanel,
+	}
+}
+
+func (m *Model) contactsState() ContactsState {
+	return ContactsState{
+		PreviewOpen: m.contactPreviewEmail != nil,
+	}
+}
+
+func (m *Model) syncState() SyncState {
+	return SyncState{
+		Loading: m.loading,
+	}
+}
+
+func clamp(n, min int) int {
+	if n < min {
+		return min
+	}
+	return n
+}
+
+func truncateVisual(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return ansi.Truncate(s, width, "…")
+}
+
+func safeChromeLine(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	return ansi.Truncate(s, width, "")
+}
+
+func renderMinSizeMessage(width, height int) string {
+	lines := []string{}
+	if width < minTermWidth {
+		lines = append(lines, fmt.Sprintf("Terminal too narrow (%d cols).", width))
+	}
+	if height < minTermHeight {
+		lines = append(lines, fmt.Sprintf("Terminal too short (%d rows).", height))
+	}
+	lines = append(lines, fmt.Sprintf("Resize to at least %dx%d.", minTermWidth, minTermHeight))
+	for i, line := range lines {
+		lines[i] = "  " + safeChromeLine(line, clamp(width-2, 10))
+	}
+	return "\n" + strings.Join(lines, "\n")
+}
+
+func splitWidth(total, separator, leftMin, rightMin, leftPreferred int) (int, int) {
+	available := total - separator
+	if available < leftMin+rightMin {
+		left := clamp((available-leftMin-rightMin)/2+leftMin, leftMin)
+		right := available - left
+		if right < rightMin {
+			right = rightMin
+			left = available - right
+		}
+		return clamp(left, 1), clamp(right, 1)
+	}
+	left := leftPreferred
+	if left < leftMin {
+		left = leftMin
+	}
+	if left > available-rightMin {
+		left = available - rightMin
+	}
+	right := available - left
+	return left, right
+}
+
+func splitThreeWidth(total, leftMin, middleMin, rightMin, rightPreferred int) (int, int, int) {
+	available := total
+	if available < leftMin+middleMin+rightMin {
+		return leftMin, middleMin, rightMin
+	}
+	right := rightPreferred
+	if right < rightMin {
+		right = rightMin
+	}
+	if right > available-leftMin-middleMin {
+		right = available - leftMin - middleMin
+	}
+	remaining := available - right
+	leftPreferred := remaining * 40 / 100
+	left, middle := splitWidth(remaining, 0, leftMin, middleMin, leftPreferred)
+	return left, middle, right
+}
+
+func (m *Model) defaultFocusPanel() int {
+	if m.activeTab == tabTimeline {
+		return panelTimeline
+	}
+	return panelSummary
+}
+
+func (m *Model) normalizeFocusForLayout(plan LayoutPlan) {
+	if m.focusedPanel == panelSidebar && !plan.SidebarVisible {
+		m.setFocusedPanel(m.defaultFocusPanel())
+	}
+	if m.focusedPanel == panelChat && !plan.ChatVisible {
+		m.setFocusedPanel(m.defaultFocusPanel())
+	}
+	if m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0 && m.focusedPanel == panelSummary {
+		m.setFocusedPanel(panelDetails)
+	}
+	if m.activeTab == tabTimeline && m.selectedTimelineEmail == nil && m.focusedPanel == panelPreview {
+		m.setFocusedPanel(panelTimeline)
+	}
+}
+
+func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
+	plan := LayoutPlan{
+		Width:         width,
+		Height:        height,
+		ContentHeight: clamp(height-8, 5),
+		SidebarVisible: false,
+		ChatVisible:   m.showChat,
+	}
+
+	canShowSidebar := m.showSidebar && (m.activeTab == tabTimeline || m.activeTab == tabCleanup) && !m.showCleanupPreview
+	if canShowSidebar {
+		sidebarOuter := sidebarContentWidth + 2
+		if width-sidebarOuter >= 60 && width >= 100 {
+			plan.SidebarVisible = true
+		}
+	}
+	if m.showChat {
+		chatOuter := chatPanelWidth + 2
+		if width-chatOuter < 48 {
+			plan.ChatVisible = false
+		}
+	}
+
+	contentWidth := width
+	if plan.SidebarVisible {
+		contentWidth -= sidebarContentWidth + 2 + 2
+	}
+	if plan.ChatVisible {
+		contentWidth -= chatPanelWidth + 2 + 2
+	}
+
+	// Compose: label width + bordered field.
+	const composeLabelW = 10
+	composeWidth := width
+	if plan.ChatVisible {
+		composeWidth -= chatPanelWidth + 2 + 2
+	}
+	fieldOuter := clamp(composeWidth-composeLabelW, 12)
+	plan.Compose = ComposeLayoutPlan{
+		LabelWidth:      composeLabelW,
+		FieldInnerWidth: clamp(fieldOuter-2, 10),
+		BodyInnerWidth:  clamp(composeWidth-2, 10),
+	}
+
+	// Contacts: two bordered panels plus separator.
+	contactsWidth := width
+	if plan.ChatVisible {
+		contactsWidth -= chatPanelWidth + 2 + 2
+	}
+	contactsAvailable := clamp(contactsWidth-6, 20)
+	leftPreferred := contactsAvailable * 35 / 100
+	left, right := splitWidth(contactsAvailable, 0, 20, 20, leftPreferred)
+	plan.Contacts = ContactsLayoutPlan{ListWidth: left, DetailWidth: right}
+
+	// Timeline: table inner width plus optional preview outer width.
+	timelineWidth := width
+	if plan.ChatVisible {
+		timelineWidth -= chatPanelWidth + 2 + 2
+	}
+	if plan.SidebarVisible {
+		timelineWidth -= sidebarContentWidth + 2 + 2
+	}
+	if m.selectedTimelineEmail != nil {
+		tableOuter, previewOuter := splitWidth(clamp(timelineWidth, 20), 0, 26, 25, timelineWidth/2)
+		plan.Timeline = TimelineLayoutPlan{
+			TableWidth:   clamp(tableOuter-2, 20),
+			PreviewWidth: previewOuter,
+		}
+	} else {
+		plan.Timeline = TimelineLayoutPlan{TableWidth: clamp(timelineWidth-2, 20)}
+	}
+
+	// Cleanup: summary/details inner widths with optional preview outer width.
+	cleanupWidth := width
+	if plan.ChatVisible {
+		cleanupWidth -= chatPanelWidth + 2 + 2
+	}
+	if plan.SidebarVisible {
+		cleanupWidth -= sidebarContentWidth + 2 + 2
+	}
+	if m.showCleanupPreview && !m.cleanupFullScreen {
+		if cleanupWidth < 100 {
+			previewOuter := 24
+			if previewOuter > cleanupWidth-28 {
+				previewOuter = clamp(cleanupWidth/3, 20)
+			}
+			plan.Cleanup = CleanupLayoutPlan{
+				SummaryWidth: 0,
+				DetailsWidth: clamp(cleanupWidth-previewOuter-4, 24),
+				PreviewWidth: previewOuter,
+			}
+		} else {
+			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-6, 30), 18, 24, 24, 24)
+			plan.Cleanup = CleanupLayoutPlan{
+				SummaryWidth: leftW,
+				DetailsWidth: midW,
+				PreviewWidth: rightW,
+			}
+		}
+	} else {
+		leftW, rightW := splitWidth(clamp(cleanupWidth-6, 24), 0, 20, 24, (cleanupWidth-6)*35/100)
+		plan.Cleanup = CleanupLayoutPlan{
+			SummaryWidth: leftW,
+			DetailsWidth: rightW,
+		}
+	}
+
+	return plan
+}

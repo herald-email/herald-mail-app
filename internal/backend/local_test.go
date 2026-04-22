@@ -108,3 +108,19 @@ func TestGetUnclassifiedIDs_FiltersStale(t *testing.T) {
 		}
 	}
 }
+
+func TestSendProgress_DoesNotPanicAfterClose(t *testing.T) {
+	b := &LocalBackend{
+		progressCh: make(chan models.ProgressInfo, 1),
+	}
+	b.closed.Store(true)
+	close(b.progressCh)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("sendProgress should not panic after Close, got %v", r)
+		}
+	}()
+
+	b.sendProgress(models.ProgressInfo{Phase: "complete", Message: "done"})
+}

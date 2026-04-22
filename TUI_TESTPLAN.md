@@ -82,6 +82,8 @@ Test every scenario at all three sizes unless noted otherwise.
 - **Blank panels** — empty area where a message, spinner, or hint should appear
 - **Missing key hints** — the bottom hint bar does not reflect the available keys for the active tab
 - **Alignment** — table borders misaligned, columns shifting between rows
+- **Broken truncation** — replacement glyphs (`�`), half-rendered UTF-8, or stray border characters in status / hint chrome
+- **Wrong focus semantics** — hints advertise actions for a panel or mode that is not actually active
 - **Crash / panic output** — any raw Go stack trace visible in the terminal
 
 ---
@@ -96,7 +98,7 @@ Test every scenario at all three sizes unless noted otherwise.
 3. Capture screenshot.
 
 **Expect:**
-- Tab bar visible: `1 Timeline  2 Compose  3 Cleanup`
+- Tab bar visible: `1 Timeline  2 Compose  3 Cleanup  4 Contacts`
 - Summary table populated with senders and email counts
 - Folder sidebar visible on the left
 - Status bar at the bottom shows current folder name
@@ -110,12 +112,14 @@ Test every scenario at all three sizes unless noted otherwise.
 1. Press `1` → capture
 2. Press `2` → capture
 3. Press `3` → capture
+4. Press `4` → capture
 
 **Expect:**
 - Each tab highlights correctly in the tab bar
 - Timeline tab: chronological email list with Date, Sender, Subject columns
 - Compose tab: To / Subject fields + body textarea visible
 - Cleanup tab: summary table (senders) on the left, details table on the right
+- Contacts tab: contact list on the left, detail panel on the right
 - Key hint bar updates for each tab
 
 ---
@@ -194,6 +198,7 @@ done
 - With sidebar hidden: timeline table expands to fill the full width
 - With sidebar shown: sidebar reappears; table shrinks back without overflow
 - No abrupt layout artifacts or misaligned borders on either toggle
+- Status bar and key hints remain readable; no `�` glyphs or stray box-drawing characters appear
 
 ---
 
@@ -314,7 +319,7 @@ done
 2. Capture screenshot.
 
 **Expect:**
-- App displays a plain-text message: `Terminal too narrow (N cols). Please resize to at least 60 columns.` or similar
+- App displays a complete plain-text message with the measured terminal size and the exact target size, e.g. `Terminal too narrow (50 cols).` and `Resize to at least 60x15.`
 - No broken table borders, overlapping panels, or garbled output
 
 ---
@@ -1143,6 +1148,7 @@ Also test in Cleanup tab (panelDetails focused on a message):
 
 **Expected:**
 - Preview opens cleanly; body loads asynchronously (loading indicator shown); layout returns to normal on Escape; no layout overflow; at 80×24 the layout degrades gracefully (no content overflow beyond terminal edge)
+- At 80×24 the sender summary column may collapse entirely; details list + preview must still render as two valid bordered panels with correct preview hints
 
 ---
 
@@ -1280,6 +1286,82 @@ Also test in Cleanup tab (panelDetails focused on a message):
 - AI panel shows Thread context enabled when replying
 - Draft-only context toggle switches to "Draft only" mode
 - After sending or navigating away, reply context is cleared for next compose
+
+---
+
+### TC-58 — Narrow-screen chrome integrity (`80×24`)
+
+**Goal:** Verify footer/status truncation stays UTF-8-safe and visually consistent at standard terminal size.
+
+**Setup:** `./bin/herald --demo`, resize to `80×24`.
+
+**Steps:**
+1. Open Timeline (`1`) and capture.
+2. Toggle sidebar off/on with `f`, capturing after each toggle.
+3. Open a timeline preview (Enter) and capture.
+4. Switch to Compose (`2`) and capture.
+5. Switch to Cleanup (`3`) and capture.
+
+**Expected:**
+- Status bar and hint line never show `�`, chopped box-drawing characters, or half-rendered words
+- Truncation uses ellipsis cleanly
+- Active tab, focused panel, and available actions stay logically aligned
+- Hiding the sidebar does not introduce footer corruption
+
+**Automated coverage:** `TestStatusChrome_UTF8SafeAt80Cols` in `internal/app/layout_regression_test.go`
+
+---
+
+### TC-59 — Contacts inline preview at `80×24`
+
+**Goal:** Verify Contacts remains usable at `80×24` and inline email preview does not leak border glyphs into the footer area.
+
+**Setup:** `./bin/herald --demo`, resize to `80×24`, open Contacts (`4`).
+
+**Steps:**
+1. Press Enter on a contact to load detail emails.
+2. Press `Tab` to focus the detail panel.
+3. Press Enter on an email to open the inline preview.
+4. Capture screenshot.
+5. Press `Esc` once and capture.
+6. Press `Esc` again and capture.
+
+**Expected (step 4):**
+- Contact list and preview/detail panel both keep closed borders
+- Footer contains only status/hint content; no stray `┐`, `└`, or `┘` characters leak into it
+- Hints reflect email-preview mode, not list mode
+
+**Expected (step 5):**
+- First `Esc` closes only the inline preview and returns to contact detail
+
+**Expected (step 6):**
+- Second `Esc` closes the detail view and returns to the contact list
+
+**Automated coverage:** `TestContactsInlinePreview_NoFooterBorderLeakAt80x24` in `internal/app/layout_regression_test.go`
+
+---
+
+### TC-60 — Escape closes the most local transient state first
+
+**Goal:** Verify `Esc` consistently closes the nearest active mode before collapsing the broader screen state.
+
+**Setup:** Use `./bin/herald --demo` for layout flows; use live config only if you need search/chat/AI responses.
+
+**Steps:**
+1. Timeline: open preview, press `Esc`, capture.
+2. Cleanup: open preview, press `z` for full-screen, press `Esc`, capture.
+3. Cleanup: from normal preview mode, press `Esc`, capture.
+4. Contacts: open detail, then inline preview, press `Esc`, capture.
+5. Compose: open AI panel (`Ctrl+G`), press `Esc`, capture.
+
+**Expected:**
+- Timeline: `Esc` closes preview, not the whole tab state
+- Cleanup full-screen: first `Esc` exits full-screen but keeps preview open
+- Cleanup preview: next `Esc` closes preview and returns to list/details layout
+- Contacts: `Esc` closes inline preview before closing contact detail
+- Compose: `Esc` closes the AI panel or subject hint before clearing broader compose status
+
+**Automated coverage:** `internal/app/navigation_routing_test.go`
 
 ---
 

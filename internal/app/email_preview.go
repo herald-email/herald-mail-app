@@ -28,8 +28,11 @@ func (m *Model) renderEmailPreview() string {
 	borderColor := "238"
 	headerColor := "245"
 	if m.focusedPanel == panelPreview {
-		borderColor = "39"
-		headerColor = "255"
+		borderColor = string(defaultTheme.BorderActive)
+		headerColor = string(defaultTheme.ConfirmFg)
+	} else {
+		borderColor = string(defaultTheme.BorderInactive)
+		headerColor = string(defaultTheme.TabInactiveFg)
 	}
 
 	// Header block
@@ -177,7 +180,7 @@ func (m *Model) renderEmailPreview() string {
 				pct = m.bodyScrollOffset * 100 / maxOffset
 			}
 			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%", m.bodyScrollOffset+1, totalLines, pct)
-			sb.WriteString("\n" + dimStyle.Render(indicator))
+			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		}
 	}
 
@@ -336,11 +339,11 @@ func (m *Model) renderFullScreenEmail() string {
 			if maxOffset > 0 {
 				pct = m.bodyScrollOffset * 100 / maxOffset
 			}
-			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  z/esc: exit full-screen", m.bodyScrollOffset+1, totalLines, pct)
-			sb.WriteString("\n" + dimStyle.Render(indicator))
-		} else {
-			sb.WriteString("\n" + dimStyle.Render(" z/esc: exit full-screen"))
-		}
+		indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  z/esc: exit full-screen", m.bodyScrollOffset+1, totalLines, pct)
+		sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
+	} else {
+		sb.WriteString("\n" + dimStyle.Render(truncateVisual(" z/esc: exit full-screen", innerW)))
+	}
 	}
 
 	// Quick reply picker overlay at the bottom of full-screen view.
@@ -647,10 +650,10 @@ func (m *Model) renderCleanupPreview() string {
 				pct = m.cleanupBodyScrollOffset * 100 / maxOffset
 			}
 			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
-			sb.WriteString("\n" + dimStyle.Render(indicator))
+			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		} else {
 			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  │  %s", zHint, escHint)
-			sb.WriteString("\n" + dimStyle.Render(indicator))
+			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		}
 	} else {
 		sb.WriteString(dimStyle.Render("(No content)"))

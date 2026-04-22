@@ -39,10 +39,10 @@ func NewLogViewer(width, height int) *LogViewer {
 	vp.YPosition = 0
 
 	styles := LogStyles{
-		info:  lipgloss.NewStyle().Foreground(lipgloss.Color("86")),  // Green
-		warn:  lipgloss.NewStyle().Foreground(lipgloss.Color("214")), // Orange
-		error: lipgloss.NewStyle().Foreground(lipgloss.Color("196")), // Red
-		debug: lipgloss.NewStyle().Foreground(lipgloss.Color("241")), // Gray
+		info:  lipgloss.NewStyle().Foreground(defaultTheme.LogInfoFg),
+		warn:  lipgloss.NewStyle().Foreground(defaultTheme.LogWarnFg),
+		error: lipgloss.NewStyle().Foreground(defaultTheme.LogErrorFg),
+		debug: lipgloss.NewStyle().Foreground(defaultTheme.LogDebugFg),
 	}
 
 	return &LogViewer{

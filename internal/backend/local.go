@@ -28,6 +28,7 @@ type LocalBackend struct {
 	classifier ai.AIClient
 	cfg        *config.Config
 	progressCh chan models.ProgressInfo
+	closed     atomic.Bool
 	loading    atomic.Bool
 
 	// Background polling
@@ -112,48 +113,48 @@ func (b *LocalBackend) Load(folder string) {
 	}
 	go func() {
 		defer b.loading.Store(false)
-		b.progressCh <- models.ProgressInfo{
+		b.sendProgress(models.ProgressInfo{
 			Phase:   "connecting",
 			Message: "Connecting to IMAP server...",
-		}
+		})
 		time.Sleep(200 * time.Millisecond) // let the UI render the first frame
 
 		if err := b.imapClient.Connect(); err != nil {
 			logger.Error("Failed to connect to IMAP: %v", err)
-			b.progressCh <- models.ProgressInfo{
+			b.sendProgress(models.ProgressInfo{
 				Phase:   "error",
 				Message: fmt.Sprintf("Connection failed: %v", err),
-			}
+			})
 			return
 		}
 
 		if err := b.imapClient.ProcessEmailsIncremental(folder); err != nil {
 			logger.Error("Failed to process emails: %v", err)
-			b.progressCh <- models.ProgressInfo{
+			b.sendProgress(models.ProgressInfo{
 				Phase:   "error",
 				Message: fmt.Sprintf("Processing failed: %v", err),
-			}
+			})
 			return
 		}
 
-		b.progressCh <- models.ProgressInfo{
+		b.sendProgress(models.ProgressInfo{
 			Phase:   "finalizing",
 			Message: "Generating statistics...",
-		}
+		})
 		stats, err := b.imapClient.GetSenderStatistics(folder)
 		if err != nil {
 			logger.Error("Failed to get statistics: %v", err)
-			b.progressCh <- models.ProgressInfo{
+			b.sendProgress(models.ProgressInfo{
 				Phase:   "error",
 				Message: fmt.Sprintf("Statistics failed: %v", err),
-			}
+			})
 			return
 		}
 
-		b.progressCh <- models.ProgressInfo{
+		b.sendProgress(models.ProgressInfo{
 			Phase:   "complete",
 			Message: fmt.Sprintf("Found %d senders", len(stats)),
-		}
+		})
 		logger.Info("Load complete: %d senders", len(stats))
 
 		// Launch background reconciliation. The valid-ID map is sent on the channel
@@ -164,6 +165,18 @@ func (b *LocalBackend) Load(folder string) {
 		b.validIDsMu.Unlock()
 		b.imapClient.StartBackgroundReconcile(folder, validIDsCh)
 	}()
+}
+
+func (b *LocalBackend) sendProgress(p models.ProgressInfo) {
+	if b.progressCh == nil || b.closed.Load() {
+		return
+	}
+	defer func() {
+		if recover() != nil {
+			// Close() can race with an in-flight send during TUI/SSH shutdown.
+		}
+	}()
+	b.progressCh <- p
 }
 
 func (b *LocalBackend) GetSenderStatistics(folder string) (map[string]*models.SenderStats, error) {
@@ -298,10 +311,15 @@ func (b *LocalBackend) Cache() *cache.Cache {
 
 // Close shuts down the IMAP connection and the cache database.
 func (b *LocalBackend) Close() error {
+	b.closed.Store(true)
 	b.StopIDLE()
 	b.StopPolling()
-	close(b.progressCh)
-	close(b.newEmailsCh)
+	if b.progressCh != nil {
+		close(b.progressCh)
+	}
+	if b.newEmailsCh != nil {
+		close(b.newEmailsCh)
+	}
 	imapErr := b.imapClient.Close()
 	cacheErr := b.cache.Close()
 	if imapErr != nil {

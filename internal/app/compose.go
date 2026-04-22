@@ -117,27 +117,13 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "1":
-		m.activeTab = tabTimeline
-		m.timelineTable.Focus()
-		m.timelineTable.SetStyles(m.activeTableStyle)
-		m.summaryTable.Blur()
-		m.detailsTable.Blur()
-		m.composeBody.Blur()
-		return m, m.loadTimelineEmails()
+		return m, m.switchToTimeline()
 	case "2":
 		return m, nil // already on compose
 	case "3":
-		m.activeTab = tabCleanup
-		m.timelineTable.Blur()
-		m.timelineTable.SetStyles(m.inactiveTableStyle)
-		m.composeBody.Blur()
-		m.setFocusedPanel(m.focusedPanel)
-		return m, nil
+		return m, m.switchToCleanup()
 	case "4":
-		m.activeTab = tabContacts
-		m.contactFocusPanel = 0
-		m.composeBody.Blur()
-		return m, m.loadContacts()
+		return m, m.switchToContacts()
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":
@@ -194,21 +180,7 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cycleComposeField()
 		return m, nil
 	case "esc":
-		// Dismiss subject hint
-		if m.composeAISubjectHint != "" {
-			m.composeAISubjectHint = ""
-			return m, nil
-		}
-		// Close AI panel
-		if m.composeAIPanel {
-			m.composeAIPanel = false
-			m.composeAIDiff = ""
-			m.composeAIInput.Blur()
-			m.composeAIResponse.Blur()
-			return m, nil
-		}
-		m.composeStatus = ""
-		return m, nil
+		return m.handleEscKey()
 	}
 	// Forward all other keys to the focused field
 	var cmd tea.Cmd
@@ -237,17 +209,17 @@ func (m *Model) renderSuggestionDropdown() string {
 		return ""
 	}
 	selectedStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("57")).
-		Foreground(lipgloss.Color("255"))
+		Background(defaultTheme.TabActiveBg).
+		Foreground(defaultTheme.ConfirmFg)
 	normalStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245"))
+		Foreground(defaultTheme.TabInactiveFg)
 	maxW := m.windowWidth - 6
 	if maxW < 20 {
 		maxW = 20
 	}
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("57")).
+		BorderForeground(defaultTheme.TabActiveBg).
 		Padding(0, 1).
 		MaxWidth(maxW)
 
@@ -362,16 +334,21 @@ func (m *Model) sendCompose() tea.Cmd {
 // renderComposeView renders the compose tab content
 func (m *Model) renderComposeView() string {
 	var sb strings.Builder
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Width(10)
+		Foreground(defaultTheme.TabInactiveFg).
+		Width(plan.Compose.LabelWidth)
 	activeFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("57"))
+		BorderForeground(defaultTheme.TabActiveBg)
 	inactiveFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240"))
+		BorderForeground(defaultTheme.BorderInactive)
+
+	renderField := func(style lipgloss.Style, view string) string {
+		return style.Width(plan.Compose.FieldInnerWidth).Render(view)
+	}
 
 	// To field
 	toStyle := inactiveFieldStyle
@@ -380,7 +357,7 @@ func (m *Model) renderComposeView() string {
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
 		labelStyle.Render("To:"),
-		toStyle.Render(m.composeTo.View()),
+		renderField(toStyle, m.composeTo.View()),
 	) + "\n")
 
 	// CC field
@@ -390,7 +367,7 @@ func (m *Model) renderComposeView() string {
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
 		labelStyle.Render("CC:"),
-		ccStyle.Render(m.composeCC.View()),
+		renderField(ccStyle, m.composeCC.View()),
 	) + "\n")
 
 	// BCC field
@@ -400,7 +377,7 @@ func (m *Model) renderComposeView() string {
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
 		labelStyle.Render("BCC:"),
-		bccStyle.Render(m.composeBCC.View()),
+		renderField(bccStyle, m.composeBCC.View()),
 	) + "\n")
 
 	// Autocomplete dropdown (shown when address field has suggestions)
@@ -415,11 +392,11 @@ func (m *Model) renderComposeView() string {
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
 		labelStyle.Render("Subject:"),
-		subStyle.Render(m.composeSubject.View()),
+		renderField(subStyle, m.composeSubject.View()),
 	) + "\n")
 
 	// Divider
-	divWidth := m.windowWidth - 4
+	divWidth := plan.Compose.LabelWidth + plan.Compose.FieldInnerWidth + 2
 	if divWidth < 10 {
 		divWidth = 10
 	}
@@ -428,7 +405,7 @@ func (m *Model) renderComposeView() string {
 	// Subject hint (shown below divider when a suggestion is pending)
 	if m.composeAISubjectHint != "" {
 		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
-		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
 		hintText := m.composeAISubjectHint
 		if len(hintText) > divWidth-30 && divWidth > 35 {
 			hintText = hintText[:divWidth-30] + "…"
@@ -439,17 +416,28 @@ func (m *Model) renderComposeView() string {
 	}
 
 	// Body + optional AI panel
-	bodyAreaWidth := m.windowWidth - 4
+	bodyAreaWidth := plan.Compose.BodyInnerWidth + 2
 	if bodyAreaWidth < 10 {
 		bodyAreaWidth = 10
 	}
 	if m.composeAIPanel {
-		// Split: panel takes ~40%, body takes the rest (min panel width = 36)
-		panelWidth := 40
-		if bodyAreaWidth < 80 {
-			panelWidth = bodyAreaWidth / 2
+		// Split outer width between bordered body pane and bordered AI pane.
+		totalOuterWidth := plan.Compose.BodyInnerWidth + 2
+		panelWidth := 36 // inner width
+		if totalOuterWidth < 90 {
+			panelWidth = totalOuterWidth/2 - 3
 		}
-		bodyWidth := bodyAreaWidth - panelWidth - 3 // 3 for gap/border
+		if panelWidth < 24 {
+			panelWidth = 24
+		}
+		panelOuterWidth := panelWidth + 2
+		bodyOuterWidth := totalOuterWidth - panelOuterWidth - 2 // 2 for gap
+		if bodyOuterWidth < 24 {
+			bodyOuterWidth = 24
+			panelOuterWidth = totalOuterWidth - bodyOuterWidth - 2
+			panelWidth = panelOuterWidth - 2
+		}
+		bodyWidth := bodyOuterWidth - 2
 		if bodyWidth < 20 {
 			bodyWidth = 20
 		}
@@ -495,9 +483,9 @@ func (m *Model) renderComposeView() string {
 				sb.WriteString(body + "\n")
 			}
 		} else {
-			bodyStyle := inactiveFieldStyle
+			bodyStyle := inactiveFieldStyle.Width(plan.Compose.BodyInnerWidth)
 			if m.composeField == 4 {
-				bodyStyle = activeFieldStyle
+				bodyStyle = activeFieldStyle.Width(plan.Compose.BodyInnerWidth)
 			}
 			sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 		}
@@ -522,7 +510,7 @@ func (m *Model) renderComposeView() string {
 		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
 		attachColor := "111"
 		if att.Data == nil {
-			attachColor = "196"
+			attachColor = string(defaultTheme.ErrorFg)
 		}
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(attachColor)).Render(label) + "\n")
 	}

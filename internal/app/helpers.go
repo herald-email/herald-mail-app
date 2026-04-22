@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -327,8 +328,8 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
 
 	progressBarStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("86")).
-		Background(lipgloss.Color("235")).
+		Foreground(defaultTheme.InfoFg).
+		Background(defaultTheme.HeaderBg).
 		Padding(0, 1).
 		Margin(0, 2)
 
@@ -343,16 +344,14 @@ func sanitizeText(text string) string {
 // styledSender renders a sender string with the display name in bright white and
 // the <email> part in dim gray, making the two visually distinct in table columns.
 func styledSender(raw string, maxWidth int) string {
-	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	emailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	nameStyle := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
+	emailStyle := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
 
 	if lt := strings.Index(raw, " <"); lt > 0 && strings.HasSuffix(raw, ">") {
 		name := sanitizeText(raw[:lt])
 		email := raw[lt+1:]
 		combined := name + " " + email
-		if len([]rune(combined)) > maxWidth {
-			combined = string([]rune(combined)[:maxWidth-1]) + "…"
-		}
+		combined = ansi.Truncate(combined, maxWidth, "…")
 		if lt2 := strings.Index(combined, " <"); lt2 > 0 {
 			return nameStyle.Render(combined[:lt2]) + " " + emailStyle.Render(combined[lt2+1:])
 		}
@@ -360,9 +359,7 @@ func styledSender(raw string, maxWidth int) string {
 	}
 
 	plain := sanitizeText(raw)
-	if len([]rune(plain)) > maxWidth {
-		plain = string([]rune(plain)[:maxWidth-1]) + "…"
-	}
+	plain = ansi.Truncate(plain, maxWidth, "…")
 	return nameStyle.Render(plain)
 }
 
@@ -380,41 +377,22 @@ func (m *Model) updateTableDimensions(width, height int) {
 	if tableHeight < 5 {
 		tableHeight = 5
 	}
-
-	sidebarWouldConsume := sidebarContentWidth + 2 + 2
-	const minTimelineVariableCols = 16
+	plan := m.buildLayoutPlan(width, height)
+	m.normalizeFocusForLayout(plan)
 	m.sidebarTooWide = m.showSidebar &&
-		(width-sidebarWouldConsume) < (minTermWidth+minTimelineVariableCols)
-
-	sidebarExtra := 0
-	if m.showSidebar && !m.sidebarTooWide {
-		sidebarExtra = sidebarWouldConsume
-	}
-	chatExtra := 0
-	if m.showChat {
-		chatExtra = chatPanelWidth + 2 + 2
-	}
+		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
+		!m.showCleanupPreview &&
+		!plan.SidebarVisible
 
 	const summaryFixedCols = 41
 	const summaryNumCols = 6
 	const detailsFixedCols = 29
 	const detailsNumCols = 5
 
-	availForCleanup := width - chatExtra
 	if m.showCleanupPreview && m.cleanupFullScreen {
 		m.cleanupPreviewWidth = width
 	} else if m.showCleanupPreview {
-		availForCleanup = width - chatExtra
-		cleanupPreviewW := availForCleanup / 2
-		if cleanupPreviewW < 25 {
-			cleanupPreviewW = 25
-		}
-		m.cleanupPreviewWidth = cleanupPreviewW
-
-		tablesAvail := availForCleanup - cleanupPreviewW - 3
-		if tablesAvail < 0 {
-			tablesAvail = 0
-		}
+		m.cleanupPreviewWidth = plan.Cleanup.PreviewWidth + 2
 
 		// Progressive column hiding for cleanup tables with preview open.
 		cpAttachW := 6
@@ -428,10 +406,12 @@ func (m *Model) updateTableDimensions(width, height int) {
 
 		const cpMinSender = 8
 
-		calcSender := func() int {
-			tableHalf := tablesAvail / 2
-			return tableHalf - (sumF + sumN*2)
+		summaryAvailable := plan.Cleanup.SummaryWidth
+		detailsAvailable := plan.Cleanup.DetailsWidth
+		if summaryAvailable == 0 {
+			summaryAvailable = 12
 		}
+		calcSender := func() int { return summaryAvailable - (sumF + sumN*2) }
 
 		if calcSender() < cpMinSender && cpAttachW > 0 {
 			sumF -= cpAttachW
@@ -454,12 +434,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 			cpAvgKBW = 0
 		}
 
-		tableHalf := tablesAvail / 2
-		senderW := tableHalf - (sumF + sumN*2)
+		senderW := summaryAvailable - (sumF + sumN*2)
 		if senderW < 4 {
 			senderW = 4
 		}
-		subjectW := tablesAvail - tableHalf - (detF + detN*2)
+		subjectW := detailsAvailable - (detF + detN*2)
 		if subjectW < 4 {
 			subjectW = 4
 		}
@@ -498,9 +477,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 		sumNCols := summaryNumCols
 		detNCols := detailsNumCols
 
+		cleanupAvailable := plan.Cleanup.SummaryWidth + plan.Cleanup.DetailsWidth
 		calcVariable := func() int {
-			overhead := sumNCols*2 + detNCols*2 + 4 + 2 + sidebarExtra + chatExtra
-			v := width - overhead - sumFixed - detFixed
+			v := cleanupAvailable - sumFixed - detFixed - sumNCols*2 - detNCols*2
 			if v < 0 {
 				return 0
 			}
@@ -528,16 +507,13 @@ func (m *Model) updateTableDimensions(width, height int) {
 			avgKBW = 0
 		}
 
-		cleanupVariable := calcVariable()
-		senderWidth := cleanupVariable * 40 / 100
-		subjectWidth := cleanupVariable - senderWidth
-		if cleanupVariable >= minVariable {
-			if senderWidth < 12 {
-				senderWidth = 12
-			}
-			if subjectWidth < 12 {
-				subjectWidth = 12
-			}
+		senderWidth := plan.Cleanup.SummaryWidth - sumFixed - sumNCols*2
+		subjectWidth := plan.Cleanup.DetailsWidth - detFixed - detNCols*2
+		if senderWidth < 8 {
+			senderWidth = 8
+		}
+		if subjectWidth < 8 {
+			subjectWidth = 8
 		}
 
 		m.summaryTable.SetColumns([]table.Column{
@@ -573,24 +549,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 
 	const timelineTableFixedOverhead = timelineFixedCols + timelineNumCols*2 + 2
 	const minPreviewWidth = 25
-	availableForTimeline := width - sidebarExtra - chatExtra
 	previewWidth := 0
 	if m.selectedTimelineEmail != nil {
-		maxPreview := availableForTimeline - timelineTableFixedOverhead - 1
+		maxPreview := plan.Timeline.PreviewWidth
 		if maxPreview >= minPreviewWidth {
-			previewWidth = availableForTimeline / 2
-			if previewWidth < minPreviewWidth {
-				previewWidth = minPreviewWidth
-			}
-			if previewWidth > maxPreview {
-				previewWidth = maxPreview
-			}
-			// Ensure enough space remains for Sender + Subject columns.
-			const minSenderSubjectCols = 20
-			maxForColumns := availableForTimeline - timelineTableFixedOverhead - 1 - minSenderSubjectCols
-			if previewWidth > maxForColumns && maxForColumns >= minPreviewWidth {
-				previewWidth = maxForColumns
-			}
+			previewWidth = maxPreview
 		}
 	}
 	m.emailPreviewWidth = previewWidth
@@ -605,9 +568,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 	tNCols := timelineNumCols      // 6
 	const minTimelineVariable = 15 // minimum for usable Sender + Subject
 
+	timelineAvailable := plan.Timeline.TableWidth
 	calcTimelineVar := func() int {
-		overhead := tFixed + tNCols*2 + 2 + sidebarExtra + chatExtra + previewWidth
-		v := width - overhead
+		v := timelineAvailable - tFixed - tNCols*2
 		if v < 0 {
 			return 0
 		}
@@ -667,18 +630,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.logViewer.SetSize(logWidth, tableHeight)
 
-	composeInputWidth := width - chatExtra - 12
-	if composeInputWidth < 10 {
-		composeInputWidth = 10
-	}
-	m.composeTo.Width = composeInputWidth
-	m.composeCC.Width = composeInputWidth
-	m.composeBCC.Width = composeInputWidth
-	m.composeSubject.Width = composeInputWidth
-	composeBodyWidth := width - chatExtra - 2
-	if composeBodyWidth < 10 {
-		composeBodyWidth = 10
-	}
+	m.composeTo.Width = plan.Compose.FieldInnerWidth
+	m.composeCC.Width = plan.Compose.FieldInnerWidth
+	m.composeBCC.Width = plan.Compose.FieldInnerWidth
+	m.composeSubject.Width = plan.Compose.FieldInnerWidth
+	composeBodyWidth := plan.Compose.BodyInnerWidth
 	composeBodyHeight := tableHeight - 16
 	if composeBodyHeight < 3 {
 		composeBodyHeight = 3

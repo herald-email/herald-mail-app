@@ -1,40 +1,40 @@
-[?25l[?2004h          │> bcc@example.com, ...                                                                                       
-          └─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Subject:  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-          │> Subject                                                                                                    
-          └─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[K
-┌─────────────────────────────────────────────────────────────────────────┐  ┌────────────────────────────────────────┐[K
-│┃   1 Hey Alice,                                                         │  │🤖 AI Assistant                         │[K
-│┃   2                                                                    │  │────────────────────────────────────────│[K
-│┃   3 Can we meet tomorrow for a quick sync?                             │  │ Improve   Shorten   Lengthen   Formal  │[K
-│┃   4                                                                    │  │Casual                                  │[K
-│┃   5 Thanks                                                             │  │                                        │[K
-│┃                                                                        │  │Custom prompt:                          │[K
-│┃                                                                        │  │> Ask AI anything about this email…     │[K
-│┃                                                                        │  │                                        │[K
-│┃                                                                        │  │Changes:                                │[K
-│┃                                                                        │  │HeyHi Alice,                            │[K
-│┃                                                                        │  │                                        │[K
-│┃                                                                        │  │CanAre weyou meetavailable tomorrow     │[K
-│┃                                                                        │  │for a quick synccatch-up?               │[K
-│┃                                                                        │  │                                        │[K
-│┃                                                                        │  │ThanksBest regards                      │[K
-│┃                                                                        │  │                                        │[K
-│┃                                                                        │  │Suggestion (edit freely):               │[K
-└─────────────────────────────────────────────────────────────────────────┘  │┃   1 Hi Alice,                         │[K
-                                                                             │┃   2                                   │[K
-                                                                             │┃   3 Are you available tomorrow for    │[K
-                                                                             │┃     a quick catch-up?                 │[K
-                                                                             │┃   4                                   │[K
-                                                                             │┃   5 Best regards                      │[K
-                                                                             │┃                                       │[K
-                                                                             │┃                                       │[K
-                                                                             │                                        │[K
-                                                                             │ ✓ Accept    Discard                    │[K
-                                                                             │Ctrl+Enter: accept  Esc: discard        │[K
-                                                                             │                                        │[K
-                                                                             └────────────────────────────────────────┘[K
+[?25l[?2004h          │> bcc@example.com, ...                                                                                      │
+          └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+Subject:  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+          │> Subject                                                                                                   │
+          └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+┌──────────────────────────────────────────────────────────────────────────────┐  ┌────────────────────────────────────┐
+│┃   1 Hey Alice,                                                              │  │🤖 AI Assistant                     │
+│┃   2                                                                         │  │────────────────────────────────────│
+│┃   3 Can we meet tomorrow for a quick sync?                                  │  │ Improve   Shorten   Lengthen       │
+│┃   4                                                                         │  │Formal   Casual                     │
+│┃   5 Thanks                                                                  │  │                                    │
+│┃                                                                             │  │Custom prompt:                      │
+│┃                                                                             │  │> Ask AI anything about this email… │
+│┃                                                                             │  │                                    │
+│┃                                                                             │  │Changes:                            │
+│┃                                                                             │  │HeyHi Alice,                        │
+│┃                                                                             │  │                                    │
+│┃                                                                             │  │CanAre weyou meetavailable          │
+│┃                                                                             │  │tomorrow for a quick synccatch-up?  │
+│┃                                                                             │  │                                    │
+│┃                                                                             │  │ThanksBest regards                  │
+│┃                                                                             │  │                                    │
+│┃                                                                             │  │Suggestion (edit freely):           │
+└──────────────────────────────────────────────────────────────────────────────┘  │┃   1 Hi Alice,                     │
+                                                                                  │┃   2                               │
+                                                                                  │┃   3 Are you available tomorrow    │
+                                                                                  │┃     for a quick catch-up?         │
+                                                                                  │┃   4                               │
+                                                                                  │┃   5 Best regards                  │
+                                                                                  │┃                                   │
+                                                                                  │┃                                   │
+                                                                                  │                                    │
+                                                                                  │ ✓ Accept    Discard                │
+                                                                                  │Ctrl+Enter: accept  Esc: discard    │
+                                                                                  │                                    │
+                                                                                  └────────────────────────────────────┘
 [K
  INBOX  │  AI: off                                                                                                      
-1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  �…[K[120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  r: refresh…[120D[2K[?2004l[?25h[?1002l[?1003l[?1006l

@@ -520,26 +520,26 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	// Setup styles
 	baseStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240"))
+		BorderForeground(defaultTheme.BorderInactive)
 
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Background(lipgloss.Color("235")).
+		Foreground(defaultTheme.HeaderFg).
+		Background(defaultTheme.HeaderBg).
 		Padding(0, 1)
 
 	loadingStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86")).
-		Background(lipgloss.Color("235")).
+		Foreground(defaultTheme.InfoFg).
+		Background(defaultTheme.HeaderBg).
 		Padding(1, 3).
 		Margin(1, 0).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("86")).
+		BorderForeground(defaultTheme.InfoFg).
 		Align(lipgloss.Center)
 
 	progressStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+		Foreground(defaultTheme.DimFg).
 		Margin(0, 2)
 
 	// Create tables optimized for side-by-side display
@@ -573,24 +573,24 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	activeStyle := table.DefaultStyles()
 	activeStyle.Header = activeStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(defaultTheme.BorderInactive).
 		BorderBottom(true).
 		Bold(false)
 	activeStyle.Selected = activeStyle.Selected.
-		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("62")).
+		Foreground(defaultTheme.ConfirmFg).
+		Background(defaultTheme.TabActiveBg).
 		Bold(true)
 
 	// Create inactive table style (gray highlight)
 	inactiveStyle := table.DefaultStyles()
 	inactiveStyle.Header = inactiveStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(defaultTheme.BorderInactive).
 		BorderBottom(true).
 		Bold(false)
 	inactiveStyle.Selected = inactiveStyle.Selected.
-		Foreground(lipgloss.Color("250")).
-		Background(lipgloss.Color("238")).
+		Foreground(defaultTheme.TextFg).
+		Background(defaultTheme.StatusBg).
 		Bold(false)
 
 	summaryTable.SetStyles(inactiveStyle)
@@ -1739,10 +1739,10 @@ func (m *Model) View() string {
 		return m.cleanupManager.View()
 	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
-		return fmt.Sprintf("\n  Terminal too narrow (%d cols). Please resize to at least %d columns.", m.windowWidth, minTermWidth)
+		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
 	}
 	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
-		return fmt.Sprintf("\n  Terminal too short (%d rows). Please resize to at least %d rows.", m.windowHeight, minTermHeight)
+		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
 	}
 	if m.loading {
 		return m.renderLoadingView()
@@ -1758,128 +1758,8 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Deletion/archive confirmation prompt intercepts all keys
-	if m.pendingDeleteConfirm {
-		switch msg.String() {
-		case "y", "Y":
-			m.pendingDeleteConfirm = false
-			action := m.pendingDeleteAction
-			m.pendingDeleteAction = nil
-			m.pendingDeleteDesc = ""
-			if action != nil {
-				return m, action()
-			}
-		case "n", "N", "esc":
-			m.pendingDeleteConfirm = false
-			m.pendingDeleteAction = nil
-			m.pendingDeleteDesc = ""
-		}
-		return m, nil
-	}
-
-	// Unsubscribe confirmation prompt intercepts all keys
-	if m.pendingUnsubscribe {
-		switch msg.String() {
-		case "y", "Y":
-			m.pendingUnsubscribe = false
-			action := m.pendingUnsubscribeAction
-			m.pendingUnsubscribeAction = nil
-			m.pendingUnsubscribeDesc = ""
-			if action != nil {
-				return m, action()
-			}
-		case "n", "N", "esc":
-			m.pendingUnsubscribe = false
-			m.pendingUnsubscribeAction = nil
-			m.pendingUnsubscribeDesc = ""
-		}
-		return m, nil
-	}
-
-	// 3-way unsubscribe choice (Cleanup tab) intercepts all keys
-	if m.unsubConfirmMode {
-		switch msg.String() {
-		case "h", "H":
-			sender := m.unsubConfirmSender
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
-			// Hard unsubscribe: delete all emails from this sender via deletion worker
-			folder := m.currentFolder
-			ch := m.deletionRequestCh
-			go func() {
-				ch <- models.DeletionRequest{Sender: sender, IsDomain: false, Folder: folder}
-			}()
-			m.deleting = true
-			m.deletionsPending = 1
-			m.deletionsTotal = 1
-			return m, m.listenForDeletionResults()
-		case "s", "S":
-			sender := m.unsubConfirmSender
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
-			return m, createSoftUnsubscribeRuleCmd(m.backend, sender)
-		case "esc":
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
-		}
-		return m, nil
-	}
-
-	// Attachment save prompt intercepts all keys while active
-	if m.attachmentSavePrompt {
-		switch msg.String() {
-		case "enter":
-			if m.emailBody != nil && m.selectedAttachment < len(m.emailBody.Attachments) {
-				att := &m.emailBody.Attachments[m.selectedAttachment]
-				path := expandTilde(m.attachmentSaveInput.Value())
-				m.attachmentSavePrompt = false
-				m.attachmentSaveInput.Blur()
-				return m, saveAttachmentCmd(m.backend, att, path)
-			}
-			m.attachmentSavePrompt = false
-			m.attachmentSaveInput.Blur()
-		case "esc":
-			m.attachmentSavePrompt = false
-			m.attachmentSaveInput.Blur()
-		default:
-			var cmd tea.Cmd
-			m.attachmentSaveInput, cmd = m.attachmentSaveInput.Update(msg)
-			return m, cmd
-		}
-		return m, nil
-	}
-
-	// Search mode intercepts input when active
-	if m.searchMode && m.activeTab == tabTimeline {
-		switch msg.String() {
-		case "esc":
-			m.searchMode = false
-			m.searchInput.Blur()
-			m.searchInput.SetValue("")
-			m.searchResults = nil
-			m.semanticScores = nil
-			m.searchError = ""
-			if m.timelineEmailsCache != nil {
-				m.timelineEmails = m.timelineEmailsCache
-				m.timelineEmailsCache = nil
-			}
-			m.updateTimelineTable()
-			return m, nil
-		case "ctrl+s":
-			if q := m.searchInput.Value(); q != "" {
-				return m, m.saveCurrentSearch(q)
-			}
-		case "ctrl+i":
-			return m, m.performIMAPSearch(m.searchInput.Value())
-		case "ctrl+c":
-			m.cleanup()
-			return m, tea.Quit
-		default:
-			var cmd tea.Cmd
-			m.searchInput, cmd = m.searchInput.Update(msg)
-			return m, tea.Batch(cmd, m.performSearch(m.searchInput.Value()))
-		}
-		return m, nil
+	if model, cmd, handled := m.handleOverlayKey(msg); handled {
+		return model, cmd
 	}
 
 	// Reset pending 'yy' sequence on any key other than 'y'
@@ -1888,30 +1768,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Global quit always works
-	if msg.String() == "q" || msg.String() == "ctrl+c" {
+	if m.isGlobalQuit(msg) {
 		m.cleanup()
 		return m, tea.Quit
-	}
-
-	// Chat panel intercepts Enter/Esc when focused
-	if m.focusedPanel == panelChat && m.showChat {
-		switch msg.String() {
-		case "enter":
-			if !m.chatWaiting {
-				return m, m.submitChat()
-			}
-		case "esc":
-			m.showChat = false
-			m.chatInput.Blur()
-			if m.windowWidth > 0 {
-				m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			}
-			m.setFocusedPanel(panelSummary)
-		case "tab":
-			m.chatInput.Blur()
-			m.setFocusedPanel(panelSummary)
-		}
-		return m, nil
 	}
 
 	// Compose tab gets its own key handler
@@ -1921,12 +1780,13 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Contacts tab gets its own key handler (except for global keys handled below)
 	if m.activeTab == tabContacts {
-		switch msg.String() {
-		case "1", "2", "3", "4", "q", "ctrl+c", "r", "f", "c", "l", "L":
-			// fall through to global handler
-		default:
+		if !isGlobalContactsKey(msg.String()) {
 			return m.handleContactsKey(msg)
 		}
+	}
+
+	if model, cmd, handled := m.handleTabKey(msg); handled {
+		return model, cmd
 	}
 
 	switch msg.String() {
@@ -1940,124 +1800,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.showSidebar && m.focusedPanel == panelSidebar {
 				m.setFocusedPanel(panelSummary)
 			}
-		}
-		return m, nil
-
-	case "1":
-		if m.quickReplyOpen && len(m.quickReplies) > 0 {
-			return m.openQuickReply(m.quickReplies[0])
-		}
-		if !m.loading && m.activeTab != tabTimeline {
-			var extraCmds []tea.Cmd
-			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
-				m.draftSaving = true
-				if m.lastDraftUID != 0 {
-					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
-					m.lastDraftUID = 0
-					m.lastDraftFolder = ""
-				}
-				extraCmds = append(extraCmds, m.saveDraftCmd())
-			}
-			m.activeTab = tabTimeline
-			m.setFocusedPanel(panelTimeline)
-			extraCmds = append(extraCmds, m.loadTimelineEmails())
-			return m, tea.Batch(extraCmds...)
-		}
-		return m, nil
-
-	case "2":
-		if m.quickReplyOpen && len(m.quickReplies) > 1 {
-			return m.openQuickReply(m.quickReplies[1])
-		}
-		if !m.loading && m.activeTab != tabCompose {
-			m.activeTab = tabCompose
-			m.timelineTable.Blur()
-			m.summaryTable.Blur()
-			m.detailsTable.Blur()
-			m.composeField = 0
-			m.composeTo.Focus()
-			m.composeSubject.Blur()
-			m.composeBody.Blur()
-			// Clear reply/AI context for new compose (not a reply)
-			m.replyContextEmail = nil
-			m.composeAIThread = false
-			m.composeAIPanel = false
-			m.composeAIDiff = ""
-			m.composeAISubjectHint = ""
-			m.composeAIResponse.SetValue("")
-			m.composeAILoading = false
-		}
-		return m, nil
-
-	case "3":
-		if m.quickReplyOpen && len(m.quickReplies) > 2 {
-			return m.openQuickReply(m.quickReplies[2])
-		}
-		if !m.loading && m.activeTab != tabCleanup {
-			var extraCmds []tea.Cmd
-			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
-				m.draftSaving = true
-				if m.lastDraftUID != 0 {
-					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
-					m.lastDraftUID = 0
-					m.lastDraftFolder = ""
-				}
-				extraCmds = append(extraCmds, m.saveDraftCmd())
-			}
-			m.activeTab = tabCleanup
-			m.setFocusedPanel(panelSummary)
-			return m, tea.Batch(extraCmds...)
-		}
-		return m, nil
-
-	case "4":
-		if m.quickReplyOpen && len(m.quickReplies) > 3 {
-			return m.openQuickReply(m.quickReplies[3])
-		}
-		if !m.loading && m.activeTab != tabContacts {
-			var extraCmds []tea.Cmd
-			if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
-				m.draftSaving = true
-				if m.lastDraftUID != 0 {
-					extraCmds = append(extraCmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
-					m.lastDraftUID = 0
-					m.lastDraftFolder = ""
-				}
-				extraCmds = append(extraCmds, m.saveDraftCmd())
-			}
-			m.activeTab = tabContacts
-			m.contactFocusPanel = 0
-			m.contactDetail = nil
-			m.contactDetailEmails = nil
-			m.contactPreviewEmail = nil
-			m.contactPreviewBody = nil
-			m.contactPreviewLoading = false
-			extraCmds = append(extraCmds, m.loadContacts())
-			return m, tea.Batch(extraCmds...)
-		}
-		return m, m.loadContacts()
-
-	case "5":
-		if m.quickReplyOpen && len(m.quickReplies) > 4 {
-			return m.openQuickReply(m.quickReplies[4])
-		}
-		return m, nil
-
-	case "6":
-		if m.quickReplyOpen && len(m.quickReplies) > 5 {
-			return m.openQuickReply(m.quickReplies[5])
-		}
-		return m, nil
-
-	case "7":
-		if m.quickReplyOpen && len(m.quickReplies) > 6 {
-			return m.openQuickReply(m.quickReplies[6])
-		}
-		return m, nil
-
-	case "8":
-		if m.quickReplyOpen && len(m.quickReplies) > 7 {
-			return m.openQuickReply(m.quickReplies[7])
 		}
 		return m, nil
 
@@ -2398,58 +2140,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		if m.quickReplyOpen {
-			m.quickReplyOpen = false
-			return m, nil
-		}
-		if m.visualMode {
-			m.visualMode = false
-			m.pendingY = false
-			return m, nil
-		}
-		if m.emailFullScreen {
-			m.emailFullScreen = false
-			m.bodyWrappedLines = nil
-			return m, nil
-		}
-		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-			m.cleanupFullScreen = false
-			m.cleanupBodyWrappedLines = nil
-			m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			return m, nil
-		}
-		if m.activeTab == tabCleanup && m.showCleanupPreview {
-			m.showCleanupPreview = false
-			m.cleanupPreviewEmail = nil
-			m.cleanupEmailBody = nil
-			m.cleanupBodyLoading = false
-			m.cleanupBodyScrollOffset = 0
-			m.cleanupBodyWrappedLines = nil
-			m.cleanupFullScreen = false
-			m.cleanupPreviewDeleting = false
-			m.cleanupPreviewIsArchive = false
-			m.showSidebar = m.cleanupPreviewHadSidebar
-			m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			return m, nil
-		}
-		// Clear chat filter first; a second Esc will then close the preview.
-		if m.activeTab == tabTimeline && m.chatFilterMode {
-			m.chatFilterMode = false
-			m.chatFilteredEmails = nil
-			m.chatFilterLabel = ""
-			m.updateTimelineTable()
-			return m, nil
-		}
-		if m.activeTab == tabTimeline && m.selectedTimelineEmail != nil {
-			m.selectedTimelineEmail = nil
-			m.emailBody = nil
-			m.emailBodyLoading = false
-			m.bodyWrappedLines = nil
-			m.bodyScrollOffset = 0
-			m.setFocusedPanel(panelTimeline)
-			m.updateTableDimensions(m.windowWidth, m.windowHeight)
-		}
-		return m, nil
+		return m.handleEscKey()
 
 	case "tab":
 		if !m.loading {
@@ -2483,7 +2174,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.detailsTable.Blur()
 			} else {
 				m.chatInput.Blur()
-				m.setFocusedPanel(panelSummary)
+				m.setFocusedPanel(m.defaultFocusPanel())
 			}
 		}
 		return m, nil
@@ -2750,6 +2441,8 @@ func (m *Model) renderMainView() string {
 	// Tab bar
 	content.WriteString(m.renderTabBar() + "\n\n")
 
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+
 	// Content area
 	var mainContent string
 	if m.showLogs {
@@ -2776,8 +2469,12 @@ func (m *Model) renderMainView() string {
 			if m.showCleanupPreview {
 				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
 				previewPanel := m.renderCleanupPreview()
-				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
-			} else if m.showSidebar && !m.sidebarTooWide {
+				if plan.Cleanup.SummaryWidth == 0 {
+					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, detailsView, previewPanel)
+				} else {
+					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, "  ", detailsView, previewPanel)
+				}
+			} else if plan.SidebarVisible && !m.sidebarTooWide {
 				sidebarView := m.baseStyle.Render(m.renderSidebar())
 				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", summaryView, "  ", detailsView)
 			} else {
@@ -2785,7 +2482,7 @@ func (m *Model) renderMainView() string {
 			}
 		}
 	}
-	if m.showChat {
+	if plan.ChatVisible {
 		chatView := m.baseStyle.Render(m.renderChatPanel())
 		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, "  ", chatView) + "\n")
 	} else {

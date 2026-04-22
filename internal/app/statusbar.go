@@ -10,11 +10,11 @@ import (
 func (m *Model) renderTabBar() string {
 	inactive := lipgloss.NewStyle().
 		Padding(0, 2).
-		Foreground(lipgloss.Color("245"))
+		Foreground(defaultTheme.TabInactiveFg)
 	active := lipgloss.NewStyle().
 		Padding(0, 2).
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
+		Foreground(defaultTheme.TabActiveFg).
+		Background(defaultTheme.TabActiveBg).
 		Bold(true)
 
 	tab := func(n int, label string) string {
@@ -41,11 +41,11 @@ func (m *Model) renderStatusBar() string {
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingDeleteDesc)
 		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("160")).
+			Foreground(defaultTheme.ConfirmFg).
+			Background(defaultTheme.ConfirmBg).
 			Width(w).
 			Padding(0, 1).
-			Render(line)
+			Render(safeChromeLine(line, w-2))
 	}
 	// Unsubscribe confirmation prompt overrides everything
 	if m.pendingUnsubscribe {
@@ -55,11 +55,11 @@ func (m *Model) renderStatusBar() string {
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingUnsubscribeDesc)
 		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("202")).
+			Foreground(defaultTheme.ConfirmFg).
+			Background(defaultTheme.UnsubBg).
 			Width(w).
 			Padding(0, 1).
-			Render(line)
+			Render(safeChromeLine(line, w-2))
 	}
 
 	// 3-way unsubscribe choice prompt overrides normal status bar
@@ -70,11 +70,11 @@ func (m *Model) renderStatusBar() string {
 		}
 		line := fmt.Sprintf("  Unsubscribe from %s:  [h] Hard unsubscribe  │  [s] Soft unsubscribe (auto-move)  │  [Esc] Cancel", m.unsubConfirmSender)
 		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("202")).
+			Foreground(defaultTheme.ConfirmFg).
+			Background(defaultTheme.UnsubBg).
 			Width(w).
 			Padding(0, 1).
-			Render(line)
+			Render(safeChromeLine(line, w-2))
 	}
 
 	// Chat filter indicator
@@ -85,7 +85,7 @@ func (m *Model) renderStatusBar() string {
 			filterLabel = "filtered"
 		}
 		filterPrefix = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("14")).
+			Foreground(defaultTheme.InfoFg).
 			Bold(true).
 			Render(fmt.Sprintf("⬡ filter: %s (%d emails)  ", filterLabel, len(m.chatFilteredEmails)))
 	}
@@ -200,17 +200,17 @@ func (m *Model) renderStatusBar() string {
 
 	// AI status indicator
 	if m.classifier == nil && !m.demoMode {
-		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("AI: off"))
+		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("AI: off"))
 	}
 
 	// Demo mode indicator
 	if m.demoMode {
-		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("[DEMO]"))
+		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DemoFg).Bold(true).Render("[DEMO]"))
 	}
 
 	// Dry-run mode indicator
 	if m.dryRun {
-		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Bold(true).Render("[DRY RUN]"))
+		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DryRunFg).Bold(true).Render("[DRY RUN]"))
 	}
 
 	// Logs indicator
@@ -233,20 +233,18 @@ func (m *Model) renderStatusBar() string {
 	if w <= 0 {
 		w = 80
 	}
-	// Truncate to prevent wrapping that pushes the header off-screen.
-	if len(line) > w-2 {
-		line = line[:w-5] + "…"
-	}
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
-		Background(lipgloss.Color("237")).
+		Foreground(defaultTheme.StatusFg).
+		Background(defaultTheme.StatusBg).
 		Width(w).
 		Padding(0, 1).
-		Render(line)
+		Render(truncateVisual(line, w-2))
 }
 
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	chrome := m.chromeState(plan)
 	var hints string
 	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
@@ -260,9 +258,9 @@ func (m *Model) renderKeyHints() string {
 		} else if m.searchResults != nil && len(m.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
 			hints = fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  esc: clear  │  ctrl+i: server search", q, query)
 		}
-	} else if m.focusedPanel == panelChat && m.showChat {
+	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
-	} else if m.showLogs {
+	} else if chrome.ShowLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if m.activeTab == tabCompose {
 		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  r: refresh  │  c: chat  │  q: quit"
@@ -279,7 +277,7 @@ func (m *Model) renderKeyHints() string {
 	} else if m.chatFilterMode && m.activeTab == tabTimeline {
 		hints = "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit"
 	} else if m.activeTab == tabTimeline {
-		if m.focusedPanel == panelPreview {
+		if chrome.FocusedPanel == panelPreview {
 			hasAttachments := m.emailBody != nil && len(m.emailBody.Attachments) > 0
 			hasUnsub := m.emailBody != nil && m.emailBody.ListUnsubscribe != ""
 			if m.visualMode {
@@ -299,7 +297,7 @@ func (m *Model) renderKeyHints() string {
 			hints = "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: search  │  a: AI tag  │  A: re-classify  │  f: sidebar  │  q: quit"
 		}
 	} else {
-		switch m.focusedPanel {
+		switch chrome.FocusedPanel {
 		case panelSidebar:
 			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  a: AI tag  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
@@ -321,12 +319,9 @@ func (m *Model) renderKeyHints() string {
 	if w <= 0 {
 		w = 80
 	}
-	if len(hints) > w {
-		hints = hints[:w-3] + "…"
-	}
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243")).
-		Render(hints)
+		Foreground(defaultTheme.HintFg).
+		Render(truncateVisual(hints, w))
 }
 
 func (m *Model) setFocusedPanel(panel int) {
@@ -379,24 +374,28 @@ func (m *Model) setFocusedPanel(panel int) {
 // cyclePanel advances (forward=true) or retreats (forward=false) focus through visible panels
 func (m *Model) cyclePanel(forward bool) {
 	var panels []int
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	if m.activeTab == tabTimeline {
-		if m.showSidebar {
+		if plan.SidebarVisible {
 			panels = append(panels, panelSidebar)
 		}
 		panels = append(panels, panelTimeline)
 		if m.selectedTimelineEmail != nil {
 			panels = append(panels, panelPreview)
 		}
-		if m.showChat {
+		if plan.ChatVisible {
 			panels = append(panels, panelChat)
 		}
 	} else {
 		// Cleanup / other tabs
-		if m.showSidebar {
+		if plan.SidebarVisible {
 			panels = append(panels, panelSidebar)
 		}
-		panels = append(panels, panelSummary, panelDetails)
-		if m.showChat {
+		if !(m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0) {
+			panels = append(panels, panelSummary)
+		}
+		panels = append(panels, panelDetails)
+		if plan.ChatVisible {
 			panels = append(panels, panelChat)
 		}
 	}

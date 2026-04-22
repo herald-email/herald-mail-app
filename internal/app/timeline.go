@@ -290,7 +290,7 @@ func (m *Model) renderTimelineView() string {
 	} else {
 		// Timeline table always gets a bright border on the Timeline tab —
 		// it's the primary panel and should always stand out.
-		style := m.baseStyle.BorderForeground(lipgloss.Color("39"))
+		style := m.baseStyle.BorderForeground(defaultTheme.BorderActive)
 		tableView = style.Render(renderStyledTableView(&m.timelineTable, 0))
 	}
 
@@ -305,7 +305,7 @@ func (m *Model) renderTimelineView() string {
 	if m.showSidebar && !m.sidebarTooWide {
 		sidebarStyle := m.baseStyle
 		if m.focusedPanel == panelSidebar {
-			sidebarStyle = sidebarStyle.BorderForeground(lipgloss.Color("39"))
+			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, "  ", mainContent)

@@ -215,13 +215,13 @@ func (m *Model) renderSidebar() string {
 		if i == m.sidebarCursor {
 			if m.focusedPanel == panelSidebar {
 				line = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("229")).
-					Background(lipgloss.Color("57")).
+					Foreground(defaultTheme.TabActiveFg).
+					Background(defaultTheme.TabActiveBg).
 					Render(line)
 			} else {
 				line = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("250")).
-					Background(lipgloss.Color("238")).
+					Foreground(defaultTheme.TextFg).
+					Background(defaultTheme.StatusBg).
 					Render(line)
 			}
 		}
