@@ -134,3 +134,24 @@ func TestOAuthWaitModel_ViewContainsURL(t *testing.T) {
 		t.Errorf("View() should contain the title, got:\n%s", view)
 	}
 }
+
+func TestOAuthWaitModel_ViewMarksFlowAsExperimental(t *testing.T) {
+	cfg := &config.Config{}
+	codeCh := make(chan oauth.Result, 1)
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?client_id=test",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      codeCh,
+		cfg:         cfg,
+		configPath:  "/tmp/test-herald-conf.yaml",
+		width:       80,
+		height:      24,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "Experimental") {
+		t.Fatalf("expected experimental marker in OAuth wait view, got:\n%s", view)
+	}
+}

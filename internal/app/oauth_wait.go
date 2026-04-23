@@ -183,7 +183,7 @@ func (m *OAuthWaitModel) View() string {
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("205")).
-		Render("Herald Setup — Gmail Authorization")
+		Render("Herald Setup — Experimental Gmail OAuth")
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left,
 		title,

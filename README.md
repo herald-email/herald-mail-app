@@ -10,7 +10,8 @@
 
 | Feature | Status |
 |---------|--------|
-| Gmail (OAuth2), Protonmail Bridge, Fastmail, iCloud, Outlook, IMAP | ✅ |
+| Standard IMAP + personal Gmail IMAP onboarding | ✅ |
+| Experimental presets: Gmail OAuth, Protonmail Bridge, Fastmail, iCloud, Outlook | ⚠️ |
 | Chronological timeline with split-view email preview | ✅ |
 | Bulk cleanup — delete by sender or domain in one keystroke | ✅ |
 | AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
@@ -38,20 +39,26 @@ make build
 
 ---
 
-## Gmail OAuth2
+## Gmail Setup
 
-Herald supports native Gmail OAuth2 — no app passwords needed.
+Herald's stable Gmail onboarding path targets personal Gmail over IMAP with an App Password. The wizard prefills `imap.gmail.com:993` and `smtp.gmail.com:587`, explains the App Password step, and keeps Gmail OAuth available only as an explicitly experimental path.
 
-1. Create a Google Cloud project and enable the Gmail API
-2. Create OAuth2 credentials (Desktop app type) and note the client ID and secret
-3. Set environment variables:
+1. For personal Gmail, IMAP is generally already on as of January 2025. For Google Workspace Gmail, your admin may need to enable IMAP and Workspace accounts may require OAuth instead of a username/password flow.
+2. Turn on Google 2-Step Verification, then create an App Password for Herald.
+3. Run `./bin/herald` and choose `Gmail (IMAP + App Password)` in the setup wizard.
+
+Helpful references:
+
+- [Google Workspace Help: Set up Gmail with a third-party email client](https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client)
+- [Gmail Help: Add Gmail to another email client](https://support.google.com/mail/answer/75726?hl=en)
+- [Gmail Help: Sign in with app passwords](https://support.google.com/mail/answer/185833?hl=en)
+
+If you want to try the experimental Gmail OAuth flow instead, set:
 
 ```bash
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
 ```
-
-4. Run `./bin/herald` — the setup wizard will guide you through authorization
 
 ---
 
@@ -62,7 +69,7 @@ Config file: `~/.herald/conf.yaml`
 ```yaml
 credentials:
   username: "your@email.com"
-  password: "your-password"     # or leave blank for OAuth2
+  password: "your-password-or-app-password"
 server:
   host: "imap.fastmail.com"
   port: 993
@@ -75,7 +82,7 @@ ollama:
   embedding_model: "nomic-embed-text-v2-moe"  # for semantic search
 ```
 
-Vendor presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`
+Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`
 
 ---
 

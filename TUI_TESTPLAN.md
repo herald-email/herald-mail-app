@@ -34,6 +34,16 @@ tmux send-keys -t mp-live '/tmp/herald -config ~/.herald/conf.yaml' Enter
 sleep 8
 ```
 
+### Onboarding tmux session
+
+```bash
+rm -f /tmp/herald-onboard.yaml
+tmux kill-session -t mp-onboard 2>/dev/null || true
+tmux new-session -d -s mp-onboard -x 220 -y 50
+tmux send-keys -t mp-onboard '/tmp/herald -config /tmp/herald-onboard.yaml' Enter
+sleep 3
+```
+
 ### Capture helpers
 
 ```bash
@@ -96,6 +106,15 @@ After TUI-affecting work, validate:
 
 - `tools/list`
 - one relevant read tool such as `list_recent_emails`
+
+### Lane F — First-run Onboarding
+
+Use a missing or empty temp config file to validate:
+
+- setup wizard chrome and minimum-size handling
+- stable vs experimental account messaging
+- Standard IMAP credential labeling and navigation
+- Gmail IMAP guidance, hidden advanced defaults, and the experimental Gmail OAuth branch
 
 ---
 
@@ -807,6 +826,72 @@ Check these states during every applicable lane:
 - Mail that also belongs to `Sent`, `Archive`, or any nested subfolder is excluded.
 - If live membership inspection is incomplete, the view fails closed with a visible unsupported/error explanation rather than showing a partial result.
 
+### TC-39 — First-run wizard chrome and size guard
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald with a missing temp config path.
+2. Capture the account-selection step at each size.
+3. Resize down to `50x15`.
+
+**Expect:**
+- Wizard uses Herald-branded chrome rather than raw unframed form output.
+- Copy clearly distinguishes supported and experimental account paths.
+- At `220x50` and `80x24`, the form is centered and fully readable.
+- At `50x15`, Herald shows the minimum-size resize message instead of clipped fields.
+
+### TC-40 — Standard IMAP credentials stay labeled and navigable
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. From the first-run wizard, choose `Standard IMAP`.
+2. Advance to the credentials step.
+3. Capture before and after moving focus through the first three inputs.
+
+**Expect:**
+- The active top input still has visible context; the user can tell it is the email field.
+- `Password`, `IMAP Host`, `IMAP Port`, `SMTP Host`, and `SMTP Port` remain readable.
+- Hints match the current control.
+- At `50x15`, Herald falls back to the minimum-size guard rather than clipping later fields off-screen.
+
+### TC-41 — Gmail IMAP guidance and experimental OAuth branch
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. From the first-run wizard, choose `Gmail (IMAP + App Password)`.
+2. Capture the Gmail guidance step.
+3. Toggle advanced server editing if available and capture again.
+4. Return to account type and choose `Gmail OAuth (Experimental)`.
+5. Advance to the OAuth wait screen and capture it.
+
+**Expect:**
+- Gmail IMAP guidance includes Gmail server defaults and links or copy for IMAP/App Password setup.
+- Gmail IMAP is described as the stable personal-Gmail path, with a note that Workspace may require OAuth.
+- Advanced server fields are hidden until explicitly requested.
+- Gmail OAuth is clearly marked experimental before the browser-auth step.
+- The OAuth wait screen remains centered and framed.
+
+### TC-42 — Missing, empty, and malformed config startup behavior
+
+**Lane:** F
+**Sizes:** `220x50`
+
+**Steps:**
+1. Launch Herald with a missing temp config file.
+2. Launch Herald with an empty temp config file.
+3. Launch Herald with a non-empty malformed temp config file such as `credentials:`.
+
+**Expect:**
+- Missing config launches onboarding.
+- Empty or whitespace-only config also launches onboarding.
+- Non-empty malformed config fails with a direct validation/load error and does not overwrite the file with onboarding output.
+
 ---
 
 ## Recommendations
@@ -819,5 +904,6 @@ Run the lanes in this order for bug-fix or refactor work:
 4. Lane C with Ollama degraded or unavailable
 5. Lane D SSH smoke
 6. Lane E MCP smoke
+7. Lane F onboarding when the change touches setup or config discovery
 
 For UI-only changes, Lane A plus the relevant focused cases may be enough during iteration, but the post-completion report still needs at least one pass each of TUI, SSH, and MCP.

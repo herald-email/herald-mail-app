@@ -67,10 +67,11 @@ func TestNewSettings_NilConfigUsesDefaults(t *testing.T) {
 	}
 }
 
-func TestNewSettings_GmailUsesGmailEmail(t *testing.T) {
+func TestNewSettings_GmailIMAPUsesCredentialEmail(t *testing.T) {
 	existing := &config.Config{}
 	existing.Vendor = "gmail"
-	existing.Gmail.Email = "me@gmail.com"
+	existing.Credentials.Username = "me@gmail.com"
+	existing.Credentials.Password = "app-password"
 
 	s := NewSettings(SettingsModePanel, existing)
 
@@ -82,22 +83,59 @@ func TestNewSettings_GmailUsesGmailEmail(t *testing.T) {
 	}
 }
 
-func TestBuildConfig_GmailVendor(t *testing.T) {
+func TestNewSettings_GmailOAuthUsesExperimentalProvider(t *testing.T) {
+	existing := &config.Config{}
+	existing.Vendor = "gmail"
+	existing.Gmail.Email = "oauth@gmail.com"
+	existing.Gmail.RefreshToken = "refresh-token"
+
+	s := NewSettings(SettingsModePanel, existing)
+
+	if s.provider != "gmail-oauth" {
+		t.Errorf("provider = %q, want %q", s.provider, "gmail-oauth")
+	}
+	if s.email != "oauth@gmail.com" {
+		t.Errorf("email = %q, want %q", s.email, "oauth@gmail.com")
+	}
+}
+
+func TestBuildConfig_GmailIMAPVendor(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 	s.provider = "gmail"
 	s.email = "test@gmail.com"
+	s.password = "app-password"
 
 	cfg := s.buildConfig()
 
 	if cfg.Vendor != "gmail" {
 		t.Errorf("Vendor = %q, want %q", cfg.Vendor, "gmail")
 	}
-	if cfg.Gmail.Email != "test@gmail.com" {
-		t.Errorf("Gmail.Email = %q, want %q", cfg.Gmail.Email, "test@gmail.com")
+	if cfg.Credentials.Username != "test@gmail.com" {
+		t.Errorf("Credentials.Username = %q, want %q", cfg.Credentials.Username, "test@gmail.com")
 	}
-	// Credentials should be empty for Gmail.
+	if cfg.Credentials.Password != "app-password" {
+		t.Errorf("Credentials.Password = %q, want %q", cfg.Credentials.Password, "app-password")
+	}
+	if cfg.Gmail.Email != "" {
+		t.Errorf("Gmail.Email = %q, want empty for Gmail IMAP", cfg.Gmail.Email)
+	}
+}
+
+func TestBuildConfig_GmailOAuthVendor(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.provider = "gmail-oauth"
+	s.email = "oauth@gmail.com"
+
+	cfg := s.buildConfig()
+
+	if cfg.Vendor != "gmail" {
+		t.Errorf("Vendor = %q, want %q", cfg.Vendor, "gmail")
+	}
+	if cfg.Gmail.Email != "oauth@gmail.com" {
+		t.Errorf("Gmail.Email = %q, want %q", cfg.Gmail.Email, "oauth@gmail.com")
+	}
 	if cfg.Credentials.Username != "" {
-		t.Errorf("Credentials.Username = %q, want empty for Gmail", cfg.Credentials.Username)
+		t.Errorf("Credentials.Username = %q, want empty for Gmail OAuth", cfg.Credentials.Username)
 	}
 }
 
@@ -233,8 +271,8 @@ func TestPortToString(t *testing.T) {
 	}
 }
 
-// TestUpdateCompletedGmailSendsOAuthRequiredMsg verifies that when the provider
-// is "gmail" and the form reaches StateCompleted, the Update method emits
+// TestUpdateCompletedGmailOAuthSendsOAuthRequiredMsg verifies that when the provider
+// is "gmail-oauth" and the form reaches StateCompleted, the Update method emits
 // OAuthRequiredMsg rather than SettingsSavedMsg.
 //
 // Directly driving a huh.Form to StateCompleted in unit tests is impractical,
@@ -242,15 +280,15 @@ func TestPortToString(t *testing.T) {
 // buildConfig correctly sets Vendor="gmail", and the provider field gates which
 // message is returned.  The integration between those two pieces is exercised
 // here via a table-driven check on the provider field.
-func TestUpdateCompleted_GmailBranchesOnProvider(t *testing.T) {
-	// Confirm that a Settings with provider=="gmail" has the right state so
+func TestUpdateCompleted_GmailOAuthBranchesOnProvider(t *testing.T) {
+	// Confirm that a Settings with provider=="gmail-oauth" has the right state so
 	// the Update branch would send OAuthRequiredMsg.
 	s := NewSettings(SettingsModeWizard, nil)
-	s.provider = "gmail"
+	s.provider = "gmail-oauth"
 	s.email = "user@gmail.com"
 
-	if s.provider != "gmail" {
-		t.Fatalf("expected provider=gmail, got %q", s.provider)
+	if s.provider != "gmail-oauth" {
+		t.Fatalf("expected provider=gmail-oauth, got %q", s.provider)
 	}
 
 	// buildConfig should produce a config with Vendor="gmail" and Gmail.Email set.
@@ -269,17 +307,17 @@ func TestUpdateCompleted_GmailBranchesOnProvider(t *testing.T) {
 	}
 }
 
-// TestUpdateCompleted_NonGmailBranchesOnProvider verifies that a non-Gmail
+// TestUpdateCompleted_NonGmailBranchesOnProvider verifies that a non-Gmail-OAuth
 // provider would take the SettingsSavedMsg path (not the OAuthRequiredMsg path).
 func TestUpdateCompleted_NonGmailBranchesOnProvider(t *testing.T) {
-	providers := []string{"imap", "protonmail", "fastmail", "icloud", "outlook"}
+	providers := []string{"gmail", "imap", "protonmail", "fastmail", "icloud", "outlook"}
 	for _, p := range providers {
 		s := NewSettings(SettingsModeWizard, nil)
 		s.provider = p
 		s.email = "user@example.com"
 
-		if s.provider == "gmail" {
-			t.Errorf("provider=%q unexpectedly equals gmail; non-Gmail path would be skipped", p)
+		if s.provider == "gmail-oauth" {
+			t.Errorf("provider=%q unexpectedly equals gmail-oauth; non-OAuth path would be skipped", p)
 		}
 	}
 }

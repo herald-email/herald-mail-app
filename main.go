@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -184,6 +185,25 @@ func loadConfig() (*config.Config, string) {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	return cfg, resolvedConfig
+}
+
+func configNeedsOnboarding(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if info.IsDir() {
+		return false, fmt.Errorf("config path is a directory: %s", path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(data)) == "", nil
 }
 
 // tryConnectDaemon attempts to connect to a running daemon and returns a
@@ -427,13 +447,22 @@ func runTUI() {
 		}
 	}
 
-	// First-run: if config doesn't exist, launch the setup wizard.
-	if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
+	needsOnboarding, err := configNeedsOnboarding(resolvedConfig)
+	if err != nil {
+		log.Fatalf("Failed to inspect config %s: %v", resolvedConfig, err)
+	}
+
+	// First-run: if config doesn't exist or is empty, launch the setup wizard.
+	if needsOnboarding {
 		if err := runWizard(resolvedConfig); err != nil {
 			log.Fatalf("setup wizard failed: %v", err)
 		}
 		// Wizard exited — verify config was actually written (user may have cancelled).
-		if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
+		stillNeedsOnboarding, checkErr := configNeedsOnboarding(resolvedConfig)
+		if checkErr != nil {
+			log.Fatalf("Failed to inspect config %s after setup: %v", resolvedConfig, checkErr)
+		}
+		if stillNeedsOnboarding {
 			fmt.Fprintln(os.Stderr, "Setup cancelled. Run herald again to configure.")
 			os.Exit(0)
 		}

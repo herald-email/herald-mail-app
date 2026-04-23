@@ -55,6 +55,8 @@ type Settings struct {
 	smtpHost string
 	smtpPort string
 
+	editGmailAdvanced bool
+
 	// form field backing variables — AI provider
 	aiProvider    string
 	claudeAPIKey  string
@@ -114,8 +116,10 @@ func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath 
 		s.syncIDLE = existing.Sync.IDLEEnabled
 		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
 
-		// If Gmail OAuth, use the Gmail email field.
-		if existing.Gmail.Email != "" {
+		if existing.IsGmailOAuth() {
+			s.provider = "gmail-oauth"
+			s.email = existing.Gmail.Email
+		} else if existing.Gmail.Email != "" && s.email == "" {
 			s.email = existing.Gmail.Email
 		}
 	}
@@ -134,6 +138,7 @@ func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath 
 		s.cleanupScheduleStr = "0"
 	}
 
+	s.syncProviderDefaults("", s.provider)
 	s.buildForm()
 	return s
 }
@@ -144,54 +149,114 @@ func (s *Settings) buildForm() {
 	accountGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Account Type").
+			Description("Supported: Standard IMAP and Gmail (IMAP + App Password). Experimental: Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook.").
 			Options(
-				huh.NewOption("Gmail (OAuth2)", "gmail"),
 				huh.NewOption("Standard IMAP", "imap"),
-				huh.NewOption("ProtonMail Bridge", "protonmail"),
-				huh.NewOption("Fastmail", "fastmail"),
-				huh.NewOption("iCloud", "icloud"),
-				huh.NewOption("Outlook", "outlook"),
+				huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
+				huh.NewOption("Gmail OAuth (Experimental)", "gmail-oauth"),
+				huh.NewOption("ProtonMail Bridge (Experimental)", "protonmail"),
+				huh.NewOption("Fastmail (Experimental)", "fastmail"),
+				huh.NewOption("iCloud (Experimental)", "icloud"),
+				huh.NewOption("Outlook (Experimental)", "outlook"),
 			).
 			Value(&s.provider),
 	)
 
-	// Group 2a — Credentials for non-Gmail providers
-	credentialsGroup := huh.NewGroup(
-		huh.NewInput().Title("Email address").Value(&s.email).Validate(validateEmail),
-		huh.NewInput().Title("Password").EchoMode(huh.EchoModePassword).Value(&s.password),
-		huh.NewInput().Title("IMAP Host").Value(&s.imapHost),
-		huh.NewInput().Title("IMAP Port").Value(&s.imapPort).
-			Validate(func(v string) error {
-				if v == "" {
-					return nil
-				}
-				n, err := strconv.Atoi(v)
-				if err != nil || n < 1 || n > 65535 {
-					return errors.New("must be a port number (1–65535)")
-				}
-				return nil
-			}),
-		huh.NewInput().Title("SMTP Host").Value(&s.smtpHost),
-		huh.NewInput().Title("SMTP Port").Value(&s.smtpPort).
-			Validate(func(v string) error {
-				if v == "" {
-					return nil
-				}
-				n, err := strconv.Atoi(v)
-				if err != nil || n < 1 || n > 65535 {
-					return errors.New("must be a port number (1–65535)")
-				}
-				return nil
-			}),
-	).WithHideFunc(func() bool { return s.provider == "gmail" })
+	credentialsIntro := huh.NewNote().
+		TitleFunc(func() string {
+			if s.provider == "imap" {
+				return "Standard IMAP"
+			}
+			return "Experimental preset"
+		}, &s.provider).
+		DescriptionFunc(func() string {
+			switch s.provider {
+			case "imap":
+				return "Use this for providers where you already know the IMAP and SMTP settings."
+			case "protonmail":
+				return "Requires ProtonMail Bridge on localhost. Herald prefills the known Bridge ports, but this path is still experimental."
+			default:
+				return "Herald prefills the known IMAP/SMTP defaults for this provider, but the flow is still experimental."
+			}
+		}, &s.provider)
 
-	// Group 2b — Gmail OAuth notice
+	// Group 2a — Credentials for Standard IMAP and experimental vendor presets
+	credentialsGroup := huh.NewGroup(
+		credentialsIntro,
+		huh.NewInput().Title("Email address").Inline(true).Value(&s.email).Validate(validateEmail),
+		huh.NewInput().Title("Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost),
+		huh.NewInput().Title("IMAP Port").Inline(true).Value(&s.imapPort).
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
+		huh.NewInput().Title("SMTP Host").Inline(true).Value(&s.smtpHost),
+		huh.NewInput().Title("SMTP Port").Inline(true).Value(&s.smtpPort).
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
+	).WithHideFunc(func() bool { return s.provider == "gmail" || s.provider == "gmail-oauth" })
+
+	// Group 2b — Stable Gmail IMAP guidance and credentials
 	gmailGroup := huh.NewGroup(
 		huh.NewNote().
-			Title("Gmail OAuth2").
-			Description("After saving, you'll be guided through\nGoogle authorization in your browser."),
-		huh.NewInput().Title("Gmail address").Value(&s.email).Validate(validateEmail),
+			Title("Personal Gmail via IMAP").
+			Description("Stable path. Use your Gmail address and a Google App Password. Google Workspace accounts may still require OAuth."),
+		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
+		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		huh.NewConfirm().
+			Title("Edit advanced Gmail server settings").
+			Value(&s.editGmailAdvanced),
 	).WithHideFunc(func() bool { return s.provider != "gmail" })
+
+	gmailAdvancedGroup := huh.NewGroup(
+		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost).Placeholder("imap.gmail.com"),
+		huh.NewInput().Title("IMAP Port").Inline(true).Value(&s.imapPort).Placeholder("993").
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
+		huh.NewInput().Title("SMTP Host").Inline(true).Value(&s.smtpHost).Placeholder("smtp.gmail.com"),
+		huh.NewInput().Title("SMTP Port").Inline(true).Value(&s.smtpPort).Placeholder("587").
+			Validate(func(v string) error {
+				if v == "" {
+					return nil
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 || n > 65535 {
+					return errors.New("must be a port number (1–65535)")
+				}
+				return nil
+			}),
+	).WithHideFunc(func() bool { return s.provider != "gmail" || !s.editGmailAdvanced })
+
+	// Group 2c — Experimental Gmail OAuth notice
+	gmailOAuthGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Experimental Gmail OAuth").
+			Description("Use this only when Gmail IMAP with an App Password is not viable. Set the Google OAuth client ID and secret env vars shown above before you continue."),
+		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
+	).WithHideFunc(func() bool { return s.provider != "gmail-oauth" })
 
 	// Group 3 — AI provider selection
 	aiProviderGroup := huh.NewGroup(
@@ -207,28 +272,29 @@ func (s *Settings) buildForm() {
 
 	// Group 3a — Ollama settings (shown only when provider = ollama)
 	ollamaGroup := huh.NewGroup(
-		huh.NewInput().Title("Ollama Host").Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
-		huh.NewInput().Title("Ollama Model").Value(&s.ollamaModel).Placeholder("gemma3:4b"),
-		huh.NewInput().Title("Embedding Model").Value(&s.embedModel).Placeholder("nomic-embed-text-v2-moe"),
+		huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
+		huh.NewInput().Title("Ollama Model").Inline(true).Value(&s.ollamaModel).Placeholder("gemma3:4b"),
+		huh.NewInput().Title("Embedding Model").Inline(true).Value(&s.embedModel).Placeholder("nomic-embed-text-v2-moe"),
 	).WithHideFunc(func() bool { return s.aiProvider != "ollama" })
 
 	// Group 3b — Claude settings (shown only when provider = claude)
 	claudeGroup := huh.NewGroup(
-		huh.NewInput().Title("Claude API Key").EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey),
-		huh.NewInput().Title("Claude Model").Placeholder("claude-sonnet-4-6").Value(&s.claudeModel),
+		huh.NewInput().Title("Claude API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey),
+		huh.NewInput().Title("Claude Model").Inline(true).Placeholder("claude-sonnet-4-6").Value(&s.claudeModel),
 	).WithHideFunc(func() bool { return s.aiProvider != "claude" })
 
 	// Group 3c — OpenAI settings (shown only when provider = openai)
 	openAIGroup := huh.NewGroup(
-		huh.NewInput().Title("OpenAI API Key").EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
-		huh.NewInput().Title("OpenAI Base URL").Placeholder("https://api.openai.com/v1").Value(&s.openAIBaseURL),
-		huh.NewInput().Title("OpenAI Model").Placeholder("gpt-4o").Value(&s.openAIModel),
+		huh.NewInput().Title("OpenAI API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
+		huh.NewInput().Title("OpenAI Base URL").Inline(true).Placeholder("https://api.openai.com/v1").Value(&s.openAIBaseURL),
+		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder("gpt-4o").Value(&s.openAIModel),
 	).WithHideFunc(func() bool { return s.aiProvider != "openai" })
 
 	// Group 4 — Sync & Cleanup preferences
 	syncGroup := huh.NewGroup(
 		huh.NewInput().
 			Title("Poll Interval (minutes)").
+			Inline(true).
 			Description("0 = use IMAP IDLE only").
 			Placeholder("5").
 			Value(&s.syncPollStr).
@@ -244,6 +310,7 @@ func (s *Settings) buildForm() {
 			Value(&s.syncIDLE),
 		huh.NewInput().
 			Title("Auto-Cleanup Schedule (hours)").
+			Inline(true).
 			Description("0 = disabled").
 			Placeholder("24").
 			Value(&s.cleanupScheduleStr).
@@ -260,6 +327,8 @@ func (s *Settings) buildForm() {
 		accountGroup,
 		credentialsGroup,
 		gmailGroup,
+		gmailAdvancedGroup,
+		gmailOAuthGroup,
 		aiProviderGroup,
 		ollamaGroup,
 		claudeGroup,
@@ -273,7 +342,7 @@ func (s *Settings) buildForm() {
 		s.form = s.form.WithWidth(s.formWidth())
 	}
 	if s.height > 0 {
-		s.form = s.form.WithHeight(s.height)
+		s.form = s.form.WithHeight(s.formHeight())
 	}
 }
 
@@ -289,7 +358,36 @@ func (s *Settings) formWidth() int {
 		}
 		return w
 	}
-	return s.width
+	w := s.wizardBoxWidth() - 6
+	if w < 52 {
+		w = 52
+	}
+	return w
+}
+
+func (s *Settings) formHeight() int {
+	if s.mode == SettingsModePanel {
+		return s.height
+	}
+	h := s.height - 12
+	if h < 8 {
+		h = 8
+	}
+	return h
+}
+
+func (s *Settings) wizardBoxWidth() int {
+	if s.width <= 0 {
+		return 88
+	}
+	w := s.width - 8
+	if w > 88 {
+		w = 88
+	}
+	if w < 56 {
+		w = s.width
+	}
+	return w
 }
 
 // Init implements tea.Model.
@@ -307,7 +405,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		s.width = msg.Width
 		s.height = msg.Height
-		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.height)
+		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
 		return s, nil
 
 	case tea.KeyMsg:
@@ -321,16 +419,21 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Forward to the form.
+	prevProvider := s.provider
 	model, cmd := s.form.Update(msg)
 	if f, ok := model.(*huh.Form); ok {
 		s.form = f
+	}
+	if prevProvider != s.provider {
+		s.syncProviderDefaults(prevProvider, s.provider)
+		s.buildForm()
 	}
 
 	// Check if the form just completed.
 	if s.form.State == huh.StateCompleted && !s.done {
 		s.done = true
 		cfg := s.buildConfig()
-		if s.provider == "gmail" {
+		if s.provider == "gmail-oauth" {
 			// OAuth flow will handle saving after tokens received.
 			builtCfg := cfg
 			return s, tea.Batch(cmd, func() tea.Msg {
@@ -358,7 +461,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (s *Settings) View() string {
-	formView := s.form.View()
+	formView := strings.TrimRight(s.form.View(), "\n")
 
 	if s.mode == SettingsModePanel {
 		w := s.formWidth()
@@ -368,11 +471,42 @@ func (s *Settings) View() string {
 			BorderForeground(lipgloss.Color("62")).
 			Padding(1, 2)
 
-		rendered := box.Render(formView)
-		return lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered)
+		rendered := strings.TrimRight(box.Render(formView), "\n")
+		return strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n")
 	}
 
-	return formView
+	if s.width > 0 && s.width < minTermWidth {
+		return renderMinSizeMessage(s.width, s.height)
+	}
+	if s.height > 0 && s.height < minTermHeight {
+		return renderMinSizeMessage(s.width, s.height)
+	}
+
+	boxWidth := s.wizardBoxWidth()
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("205")).
+		Render("Herald Setup")
+	summary := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("243")).
+		MaxWidth(boxWidth).
+		Render(s.wizardSummary())
+	box := lipgloss.NewStyle().
+		Width(boxWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2)
+
+	rendered := lipgloss.JoinVertical(lipgloss.Left,
+		title,
+		summary,
+		box.Render(formView),
+	)
+	rendered = strings.TrimRight(rendered, "\n")
+	if s.width > 0 && s.height > 0 {
+		return strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n")
+	}
+	return rendered
 }
 
 // buildConfig constructs a config.Config from the current form field values.
@@ -384,9 +518,15 @@ func (s *Settings) buildConfig() *config.Config {
 	// this form does not modify are left pointing at the same underlying data
 	// (safe because we never mutate them — we only overwrite scalar fields below).
 	cfg := *s.cfg
-	cfg.Vendor = s.provider
+	cfg.Vendor = configVendorForProvider(s.provider)
+	cfg.Gmail.AccessToken = ""
+	cfg.Gmail.RefreshToken = ""
+	cfg.Gmail.TokenExpiry = ""
+	cfg.Gmail.Email = ""
+	cfg.Credentials.Username = ""
+	cfg.Credentials.Password = ""
 
-	if s.provider == "gmail" {
+	if s.provider == "gmail-oauth" {
 		cfg.Gmail.Email = s.email
 	} else {
 		cfg.Credentials.Username = s.email
@@ -421,6 +561,79 @@ func (s *Settings) buildConfig() *config.Config {
 
 	applyVendorPreset(&cfg)
 	return &cfg
+}
+
+func configVendorForProvider(provider string) string {
+	switch provider {
+	case "gmail", "gmail-oauth":
+		return "gmail"
+	default:
+		return provider
+	}
+}
+
+func providerPresetValues(provider string) (imapHost, imapPort, smtpHost, smtpPort string, ok bool) {
+	vendor := configVendorForProvider(provider)
+	if vendor == "" || vendor == "imap" {
+		return "", "", "", "", false
+	}
+	cfg := &config.Config{}
+	cfg.Vendor = vendor
+	cfg.ApplyVendorPreset()
+	if cfg.Server.Host == "" {
+		return "", "", "", "", false
+	}
+	return cfg.Server.Host, portToString(cfg.Server.Port), cfg.SMTP.Host, portToString(cfg.SMTP.Port), true
+}
+
+func (s *Settings) syncProviderDefaults(oldProvider, newProvider string) {
+	if newProvider != "gmail" {
+		s.editGmailAdvanced = false
+	}
+
+	oldIMAPHost, oldIMAPPort, oldSMTPHost, oldSMTPPort, oldOK := providerPresetValues(oldProvider)
+	newIMAPHost, newIMAPPort, newSMTPHost, newSMTPPort, newOK := providerPresetValues(newProvider)
+	if !newOK {
+		return
+	}
+
+	if s.imapHost == "" || (oldOK && s.imapHost == oldIMAPHost) {
+		s.imapHost = newIMAPHost
+	}
+	if s.imapPort == "" || (oldOK && s.imapPort == oldIMAPPort) {
+		s.imapPort = newIMAPPort
+	}
+	if s.smtpHost == "" || (oldOK && s.smtpHost == oldSMTPHost) {
+		s.smtpHost = newSMTPHost
+	}
+	if s.smtpPort == "" || (oldOK && s.smtpPort == oldSMTPPort) {
+		s.smtpPort = newSMTPPort
+	}
+}
+
+func (s *Settings) wizardSummary() string {
+	switch s.provider {
+	case "gmail":
+		return strings.Join([]string{
+			"Stable: personal Gmail via IMAP + App Password.",
+			"Defaults: imap.gmail.com:993 and smtp.gmail.com:587. Google Workspace accounts may still require OAuth.",
+			"Docs: https://support.google.com/mail/answer/185833?hl=en",
+			"https://support.google.com/mail/answer/75726?hl=en",
+			"https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client",
+		}, "\n")
+	case "gmail-oauth":
+		return strings.Join([]string{
+			"Experimental: Gmail OAuth in a browser.",
+			"Use this only if Gmail IMAP with an App Password is not viable or your Workspace account requires OAuth.",
+			"Requires HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET.",
+		}, "\n")
+	case "protonmail":
+		return "Experimental preset: requires ProtonMail Bridge running locally. Herald prefills the known localhost IMAP and SMTP ports."
+	case "fastmail", "icloud", "outlook":
+		return "Experimental preset: Herald prefills the known IMAP and SMTP defaults, but this path is not yet treated as fully supported onboarding."
+	default:
+		return "Supported: Standard IMAP and Gmail (IMAP + App Password).\nExperimental: Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook."
+	}
 }
 
 // applyVendorPreset fills in server/smtp host+port when a vendor shortcut is
