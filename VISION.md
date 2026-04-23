@@ -471,7 +471,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 - [x] `semantic_search_emails` MCP tool
 - [x] Similarity score badge (`87%`) per result row
 - [x] Embeddings are invalidated automatically when the configured embedding model changes
-- [ ] Semantic search explicitly degrades when embeddings are unavailable or deferred
+- [x] Semantic search shows an explicit unavailable or deferred message when embeddings cannot run
 - [x] Hybrid ranking (keyword + semantic merged)
 - [x] Semantic expansion is bounded by a configured similarity threshold and result cap
 - [ ] "Why this result?" hint (matched excerpt)
@@ -596,7 +596,8 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Tab 4 — Contacts TUI: two-panel list+detail, `/` keyword search, `?` semantic search
 - [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
-- [ ] Contact enrichment failures are deduplicated and visible without flooding the log viewer
+- [x] Common AI/model-related contact enrichment failures are deduplicated per batch and surfaced in the Contacts status area
+- [ ] All contact enrichment failure modes are deduplicated and surfaced without log spam
 - [x] Autocomplete in Compose `To`/`CC`/`BCC` fields
 - [ ] CardDAV sync (config stubs in place; implementation deferred)
 
