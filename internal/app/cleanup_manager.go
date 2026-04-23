@@ -268,10 +268,17 @@ func (m *CleanupManager) View() string {
 func (m *CleanupManager) viewList(borderStyle, titleStyle lipgloss.Style) string {
 	var content string
 	content += titleStyle.Render("Auto-Cleanup Rules") + "\n\n"
+	innerW := m.width - 10
+	if innerW < 20 {
+		innerW = m.width
+	}
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
+	content += infoStyle.Render("Runs on demand or on schedule. Saved cleanup rules live here.") + "\n"
+	content += infoStyle.Render("Results show up in the status bar and by mail being archived or deleted after a run.") + "\n\n"
 
 	if len(m.rules) == 0 {
 		content += lipgloss.NewStyle().Foreground(lipgloss.Color("243")).
-			Render("No rules yet. Press n to create one.") + "\n"
+			Render("No rules yet. Press n to create one. Reopen C any time to review saved cleanup rules.") + "\n"
 	} else {
 		for i, rule := range m.rules {
 			line := fmt.Sprintf("%-20s  %-8s  %-30s  %-7s  %d days",
@@ -313,6 +320,12 @@ func (m *CleanupManager) viewEdit(borderStyle, titleStyle lipgloss.Style) string
 	}
 	var content string
 	content += titleStyle.Render(title) + "\n\n"
+	innerW := m.width - 10
+	if innerW < 20 {
+		innerW = m.width
+	}
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
+	content += infoStyle.Render("This rule targets older sender/domain mail. Save it here, then run it from the manager or let the configured schedule pick it up.") + "\n\n"
 	if m.form != nil {
 		content += m.form.View()
 	}

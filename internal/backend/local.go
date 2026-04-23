@@ -890,6 +890,10 @@ func (b *LocalBackend) SaveRule(r *models.Rule) error {
 	return b.cache.SaveRule(r)
 }
 
+func (b *LocalBackend) GetAllRules() ([]*models.Rule, error) {
+	return b.cache.GetAllRules()
+}
+
 func (b *LocalBackend) GetEnabledRules() ([]*models.Rule, error) {
 	return b.cache.GetEnabledRules()
 }

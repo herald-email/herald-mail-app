@@ -361,19 +361,11 @@ func (m *Model) updateSummaryTable() {
 		sender := styledSender(item.sender, senderColW)
 		stats := item.stats
 
-		// Format date range
-		dateRange := "N/A"
-		if !stats.FirstEmail.IsZero() && !stats.LastEmail.IsZero() {
-			if stats.FirstEmail.Year() == stats.LastEmail.Year() {
-				dateRange = fmt.Sprintf("%s - %s",
-					stats.FirstEmail.Format("Jan"),
-					stats.LastEmail.Format("Jan 2006"))
-			} else {
-				dateRange = fmt.Sprintf("%s - %s",
-					stats.FirstEmail.Format("Jan 2006"),
-					stats.LastEmail.Format("Jan 2006"))
-			}
+		dateRangeW := 20
+		if cols := m.summaryTable.Columns(); len(cols) > 3 && cols[3].Width > 0 {
+			dateRangeW = cols[3].Width
 		}
+		dateRange := formatCleanupDateRange(stats.FirstEmail, stats.LastEmail, dateRangeW)
 
 		// Add selection indicator in first column
 		checkmark := " "
@@ -697,7 +689,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		if remaining < 0 {
 			remaining = 0
 		}
-		cpDateRangeW := clampInt(remaining/3, cpMinDateRange, 20)
+		cpDateRangeW := clampInt(remaining/3, cpMinDateRange, 24)
 		if remaining-cpDateRangeW < cpMinSender {
 			cpDateRangeW = remaining - cpMinSender
 		}
@@ -725,7 +717,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "Count", Width: 6},
 			{Title: "Dates", Width: cpDateRangeW},
 		})
-		m.summaryTable.SetWidth(sumF + senderW + sumN*2)
+		m.summaryTable.SetWidth(sumF + senderW + cpDateRangeW + sumN*2)
 
 		m.subjectColWidth = subjectW
 		m.detailsTable.SetColumns([]table.Column{
@@ -759,7 +751,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		if remaining < 0 {
 			remaining = 0
 		}
-		dateRangeW := clampInt(remaining/3, minDateRange, 20)
+		dateRangeW := clampInt(remaining/2, minDateRange, 30)
 		if remaining-dateRangeW < minSender {
 			dateRangeW = remaining - minSender
 		}
@@ -784,7 +776,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "Count", Width: 6},
 			{Title: "Dates", Width: dateRangeW},
 		})
-		m.summaryTable.SetWidth(sumFixed + senderWidth + sumNCols*2)
+		m.summaryTable.SetWidth(sumFixed + senderWidth + dateRangeW + sumNCols*2)
 
 		m.subjectColWidth = subjectWidth
 		m.detailsTable.SetColumns([]table.Column{
@@ -953,4 +945,33 @@ func wrapText(text string, width int) []string {
 // skipEscapeSeq delegates to render.SkipEscapeSeq.
 func skipEscapeSeq(runes []rune, pos int) int {
 	return render.SkipEscapeSeq(runes, pos)
+}
+
+func formatCleanupDateRange(first, last time.Time, width int) string {
+	if first.IsZero() || last.IsZero() {
+		return "N/A"
+	}
+	if width >= 25 {
+		return fmt.Sprintf("%s - %s",
+			first.Format("Jan 02 2006"),
+			last.Format("Jan 02 2006"))
+	}
+	if width >= 20 {
+		if first.Year() == last.Year() {
+			return fmt.Sprintf("%s - %s",
+				first.Format("Jan 02"),
+				last.Format("Jan 02 2006"))
+		}
+		return fmt.Sprintf("%s - %s",
+			first.Format("Jan 02 2006"),
+			last.Format("Jan 02 2006"))
+	}
+	if first.Year() == last.Year() {
+		return fmt.Sprintf("%s - %s",
+			first.Format("Jan"),
+			last.Format("Jan 2006"))
+	}
+	return fmt.Sprintf("%s - %s",
+		first.Format("Jan 2006"),
+		last.Format("Jan 2006"))
 }

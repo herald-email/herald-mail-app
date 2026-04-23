@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,7 +31,9 @@ type PromptEditor struct {
 	outputVar    string
 
 	// non-zero when editing an existing prompt
-	editingID int64
+	editingID    int64
+	savedPrompts []*models.CustomPrompt
+	savedErr     string
 }
 
 // NewPromptEditor creates a PromptEditor. Pass existing to pre-fill for editing; pass nil to create a new prompt.
@@ -47,6 +50,16 @@ func NewPromptEditor(existing *models.CustomPrompt, width, height int) *PromptEd
 		p.outputVar = existing.OutputVar
 	}
 	p.buildForm()
+	return p
+}
+
+func (p *PromptEditor) WithSavedPrompts(prompts []*models.CustomPrompt, err error) *PromptEditor {
+	p.savedPrompts = append([]*models.CustomPrompt(nil), prompts...)
+	if err != nil {
+		p.savedErr = err.Error()
+	} else {
+		p.savedErr = ""
+	}
 	return p
 }
 
@@ -113,9 +126,9 @@ func (p *PromptEditor) formWidth() int {
 }
 
 func (p *PromptEditor) formHeight() int {
-	h := p.height - 8
-	if h < 10 {
-		h = 10
+	h := p.height - 12
+	if h < 6 {
+		h = 6
 	}
 	if p.height > 0 && h > p.height {
 		h = p.height
@@ -188,6 +201,10 @@ func (p *PromptEditor) View() string {
 	}
 
 	w := p.formWidth()
+	innerW := w - 4
+	if innerW < 20 {
+		innerW = w
+	}
 	box := lipgloss.NewStyle().
 		Width(w).
 		Border(lipgloss.RoundedBorder()).
@@ -195,9 +212,14 @@ func (p *PromptEditor) View() string {
 		Padding(1, 2)
 
 	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render(title)
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Esc: cancel")
-
-	rendered := box.Render(header + "\n\n" + formView + "\n" + footer)
+	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
+	rendered := box.Render(
+		header + "\n\n" +
+			noteStyle.Render("Purpose: reusable AI instructions.") + "\n" +
+			noteStyle.Render("Results: a rule or MCP tool must use the prompt.") + "\n" +
+			noteStyle.Render(p.savedPromptsSummary()) + "\n\n" +
+			formView,
+	)
 	return lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered)
 }
 
@@ -214,4 +236,32 @@ func (p *PromptEditor) buildPrompt() *models.CustomPrompt {
 		UserTemplate: p.userTemplate,
 		OutputVar:    p.outputVar,
 	}
+}
+
+func (p *PromptEditor) savedPromptsSummary() string {
+	if p.savedErr != "" {
+		return "Saved prompts: unavailable (" + p.savedErr + ")"
+	}
+	if len(p.savedPrompts) == 0 {
+		return "Saved prompts: none yet. Reopen P after saving."
+	}
+	const maxShown = 3
+	parts := make([]string, 0, maxShown)
+	for i, prompt := range p.savedPrompts {
+		if i >= maxShown {
+			break
+		}
+		if prompt == nil {
+			continue
+		}
+		part := strings.TrimSpace(prompt.Name)
+		if strings.TrimSpace(prompt.OutputVar) != "" {
+			part += " (" + prompt.OutputVar + ")"
+		}
+		parts = append(parts, part)
+	}
+	if len(p.savedPrompts) > maxShown {
+		parts = append(parts, "+"+strconv.Itoa(len(p.savedPrompts)-maxShown)+" more")
+	}
+	return "Saved prompts: " + strings.Join(parts, " | ")
 }

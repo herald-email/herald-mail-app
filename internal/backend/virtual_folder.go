@@ -9,6 +9,7 @@ import (
 )
 
 const virtualFolderAllMailOnlyName = "All Mail only"
+const allMailOnlySupportedReason = "Read-only: messages in All Mail with no other folder assignment."
 
 func findAllMailFolder(folders []string, vendor string) string {
 	switch strings.ToLower(strings.TrimSpace(vendor)) {
@@ -59,7 +60,7 @@ func buildAllMailOnlyView(allMailFolder string, allMailEmails []*models.EmailDat
 	}
 
 	result.Supported = true
-	result.Reason = ""
+	result.Reason = allMailOnlySupportedReason
 	for _, email := range allMailEmails {
 		if email == nil || strings.TrimSpace(email.MessageID) == "" {
 			continue

@@ -113,6 +113,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Actions: delete, archive, reply, forward
 - [x] Star / pin important threads to top
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
+- [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
 - [ ] Split Timeline and preview panels keep aligned heights at common sizes including `80x24`
@@ -208,6 +209,7 @@ The built-in classification prompt assigns one of six fixed categories (`sub`, `
 - [x] `custom_categories` table in SQLite storing prompt name + category + extracted data per email
 - [x] TUI displays custom categories alongside the built-in tag column
 - [x] MCP tools: `list_classification_prompts`, `classify_email_custom` (run a named prompt on one email)
+- [ ] Prompt overlay explains that prompts are reusable AI instructions, shows saved prompts in the same screen, and tells the user where prompt results will appear
 
 ### Classification Actions
 
@@ -225,6 +227,7 @@ When an email matches a category, the system can trigger an action automatically
 - [x] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
 - [x] Auto-classify new emails as they arrive to trigger rules in real time
 - [x] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
+- [ ] Rule overlay explains that `W` creates future-mail automations, shows saved rules in the same screen, and tells the user where the action results surface
 
 #### Example configuration
 
@@ -284,6 +287,7 @@ The Cleanup tab groups emails by sender or domain and shows volume statistics, m
 - [ ] Selection checkmarks and `N selected` status always agree across refreshes, re-sorts, and resizes
 - [ ] Cleanup summary columns simplified to `✓`, `Sender/Domain`, `Count`, and `Date Range`
 - [ ] Cleanup summary resizes responsively at `220x50`, `120x40`, `80x24`, and `50x15` without losing the selection column
+- [ ] Wide Cleanup layouts expand the date-range column enough to show a more specific first/last date range instead of the narrow fallback format
 
 ### Email preview in Cleanup
 
@@ -330,6 +334,7 @@ Rules let the app automatically act on email from known senders — delete newsl
 - [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`; TUI-only — daemon runs rules on-demand via `/v1/cleanup-rules/run`)
 - [x] TUI rule manager (list, add, remove)
 - [x] MCP tools: `list_cleanup_rules`, `create_cleanup_rule`, `run_cleanup_rules`
+- [ ] Cleanup rule manager explains what manual vs scheduled cleanup does, where saved rules live, and how run results become visible
 
 ---
 

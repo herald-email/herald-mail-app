@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -296,5 +297,24 @@ func TestBuildAllMailOnlyView_FailsClosedWhenMembershipIncomplete(t *testing.T) 
 	}
 	if len(view.Emails) != 0 {
 		t.Fatalf("expected no partial emails on fail-closed result, got %d", len(view.Emails))
+	}
+}
+
+func TestBuildAllMailOnlyView_ExplainsFolderUnassignedSemantics(t *testing.T) {
+	allMail := []*models.EmailData{
+		{MessageID: "<keep@x.com>", Sender: "a@x.com", Subject: "keep", Folder: "All Mail"},
+	}
+	membership := map[string]map[string]bool{
+		"All Mail": {
+			"<keep@x.com>": true,
+		},
+	}
+
+	view := buildAllMailOnlyView("All Mail", allMail, membership, true, "")
+	if !view.Supported {
+		t.Fatalf("expected supported view, got unsupported: %s", view.Reason)
+	}
+	if !strings.Contains(view.Reason, "no other folder") {
+		t.Fatalf("expected supported All Mail only view to explain folder-unassigned semantics, got %q", view.Reason)
 	}
 }

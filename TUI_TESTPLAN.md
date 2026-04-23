@@ -182,7 +182,7 @@ Check these states during every applicable lane:
 
 ### TC-01 — Startup baseline
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`
 
 **Steps:**
@@ -202,7 +202,7 @@ Check these states during every applicable lane:
 
 ### TC-02 — Tab switching and hint updates
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** all except `50x15`
 
 **Steps:**
@@ -217,7 +217,7 @@ Check these states during every applicable lane:
 
 ### TC-03 — Focus border exclusivity
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -232,7 +232,7 @@ Check these states during every applicable lane:
 
 ### TC-04 — Row highlight consistency
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -246,7 +246,7 @@ Check these states during every applicable lane:
 
 ### TC-05 — Timeline preview geometry
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -263,7 +263,7 @@ Check these states during every applicable lane:
 
 ### TC-06 — Sidebar focus behavior
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -385,7 +385,7 @@ Check these states during every applicable lane:
 
 ### TC-13 — Stale status leakage across tabs
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -399,7 +399,7 @@ Check these states during every applicable lane:
 
 ### TC-14 — Compose and Contacts chrome sanity
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -414,7 +414,7 @@ Check these states during every applicable lane:
 
 ### TC-15 — Narrow screen behavior
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `80x24`, `50x15`
 
 **Steps:**
@@ -459,7 +459,7 @@ Check these states during every applicable lane:
 
 ### TC-17 — Preview unwind order
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -614,7 +614,7 @@ Check these states during every applicable lane:
 
 ### TC-27 — Virtual `All Mail only` inspector
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -633,7 +633,7 @@ Check these states during every applicable lane:
 
 ### TC-28 — `All Mail only` unsupported state
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -647,7 +647,7 @@ Check these states during every applicable lane:
 
 ### TC-29 — `All Mail only` read-only enforcement
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -663,7 +663,7 @@ Check these states during every applicable lane:
 
 ### TC-30 — Active-folder bundle settles together
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -679,7 +679,7 @@ Check these states during every applicable lane:
 
 ### TC-31 — No count drift between sync hydration and live counts
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -694,7 +694,7 @@ Check these states during every applicable lane:
 
 ### TC-32 — Cleanup selection persistence and checkmarks
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
@@ -711,7 +711,7 @@ Check these states during every applicable lane:
 
 ### TC-33 — Cleanup responsive column layout
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
@@ -724,10 +724,11 @@ Check these states during every applicable lane:
 - `Avg KB` and `Attach` do not appear.
 - The sender/domain column reclaims freed width first.
 - The first selection column remains visible and aligned at every supported size.
+- At `220x50`, the date-range column expands enough to show a more specific day-level first/last range instead of being capped to the narrow fallback width.
 
 ### TC-34 — Folder tree completeness during startup
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -741,7 +742,7 @@ Check these states during every applicable lane:
 
 ### TC-35 — Sync strip honesty and disappearance
 
-**Lane:** B  
+**Lane:** B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -757,7 +758,7 @@ Check these states during every applicable lane:
 
 ### TC-36 — Cleanup narrow controls and overlay fit
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `80x24`
 
 **Steps:**
@@ -770,6 +771,41 @@ Check these states during every applicable lane:
 - The sender summary remains keyboard-navigable after selecting a folder from the sidebar.
 - The narrow Cleanup hint bar still exposes navigation plus `W`, `C`, and `P`.
 - Rule and prompt overlays stay fully inside the viewport instead of clipping off the top or bottom.
+- Rule, cleanup, and prompt overlays explain what they do, what saving or running them changes, and where the user can come back to review saved items or results.
+
+### TC-37 — Cleanup overlays explain saved-item discovery
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Open Cleanup.
+2. Open the automation rule overlay with `W`.
+3. Open the prompt overlay with `P`.
+4. Open the cleanup rules manager with `C`.
+5. Capture each overlay.
+
+**Expect:**
+- `W` explains that it creates future-mail automations rather than immediate cleanup.
+- `W` shows a visible inventory or summary of saved automation rules in the same screen.
+- `P` explains that prompts are reusable AI instructions and do nothing until used.
+- `P` shows a visible inventory or summary of saved prompts in the same screen.
+- `C` explains that cleanup rules run on demand or on schedule and that saved cleanup rules live in that manager.
+
+### TC-38 — All Mail only stays folder-unassigned
+
+**Lane:** B
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Open the `All Mail only` virtual folder.
+2. Inspect several messages that are known to exist in `Sent`, `Archive`, or nested folders.
+3. Compare the visible rows against live folder membership when possible.
+
+**Expect:**
+- `All Mail only` contains only mail that has no other real folder assignment.
+- Mail that also belongs to `Sent`, `Archive`, or any nested subfolder is excluded.
+- If live membership inspection is incomplete, the view fails closed with a visible unsupported/error explanation rather than showing a partial result.
 
 ---
 

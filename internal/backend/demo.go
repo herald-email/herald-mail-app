@@ -631,6 +631,12 @@ func (d *DemoBackend) SaveRule(r *models.Rule) error {
 	return nil
 }
 
+func (d *DemoBackend) GetAllRules() ([]*models.Rule, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]*models.Rule(nil), d.rules...), nil
+}
+
 func (d *DemoBackend) GetEnabledRules() ([]*models.Rule, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

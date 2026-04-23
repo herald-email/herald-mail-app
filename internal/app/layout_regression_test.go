@@ -613,6 +613,71 @@ func TestCleanupSummaryColumns_SimplifiedAndResponsive(t *testing.T) {
 	}
 }
 
+func TestCleanupSummaryWideLayout_ShowsSpecificDateRange(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabCleanup
+	m.stats = map[string]*models.SenderStats{
+		"Billing <billing@example.com>": {
+			TotalEmails: 5,
+			FirstEmail:  time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC),
+			LastEmail:   time.Date(2026, 4, 23, 18, 30, 0, 0, time.UTC),
+		},
+	}
+
+	m.updateTableDimensions(220, 50)
+	m.updateSummaryTable()
+
+	cols := m.summaryTable.Columns()
+	if cols[3].Width <= 20 {
+		t.Fatalf("expected wide cleanup date column to grow past the narrow cap, got %d", cols[3].Width)
+	}
+	rows := m.summaryTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected one cleanup summary row, got %d", len(rows))
+	}
+	if got, want := rows[0][3], "Jan 02 2026 - Apr 23 2026"; got != want {
+		t.Fatalf("expected wide cleanup date range %q, got %q", want, got)
+	}
+}
+
+func TestCleanupView_WideRender_ShowsFullDateRangeColumn(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Apr 12 2026 - Apr 20 2026") {
+		t.Fatalf("expected wide cleanup render to show full date range, got:\n%s", rendered)
+	}
+}
+
+func TestSwitchToCleanup_RecalculatesWideSummaryColumns(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m = updated.(*Model)
+
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Apr 12 2026 - Apr 20 2026") {
+		t.Fatalf("expected cleanup tab switch to recalculate wide summary dates, got:\n%s", rendered)
+	}
+}
+
 func TestBuildLayoutPlan_CleanupSharesWideScreensMoreEvenly(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabCleanup

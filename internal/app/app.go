@@ -782,7 +782,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.backend.SaveRule(msg.Rule); err != nil {
 				m.statusMessage = "Error saving rule: " + err.Error()
 			} else {
-				m.statusMessage = "Rule created: " + msg.Rule.Name
+				m.statusMessage = "Rule saved: " + msg.Rule.Name + ". Reopen W to review saved automation rules."
 			}
 		}
 		return m, nil
@@ -799,7 +799,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.backend.SaveCustomPrompt(msg.Prompt); err != nil {
 				m.statusMessage = "Error saving prompt: " + err.Error()
 			} else {
-				m.statusMessage = "Prompt saved: " + msg.Prompt.Name
+				m.statusMessage = "Prompt saved: " + msg.Prompt.Name + ". Reopen P to review saved prompts."
 			}
 		}
 		return m, nil
@@ -1858,6 +1858,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.ruleEditor = NewRuleEditor(sender, domain, m.windowWidth, m.windowHeight)
+			if lister, ok := m.backend.(interface {
+				GetAllRules() ([]*models.Rule, error)
+			}); ok {
+				rules, err := lister.GetAllRules()
+				m.ruleEditor.WithSavedRules(rules, err)
+			}
 			m.showRuleEditor = true
 			return m, m.ruleEditor.Init()
 		}
@@ -1867,6 +1873,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.showRuleEditor && !m.showPromptEditor && !m.showSettings {
 			m.showPromptEditor = true
 			m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+			prompts, err := m.backend.GetAllCustomPrompts()
+			m.promptEditor.WithSavedPrompts(prompts, err)
 			return m, m.promptEditor.Init()
 		}
 		return m, nil

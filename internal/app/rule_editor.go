@@ -1,6 +1,9 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -23,6 +26,8 @@ type RuleEditor struct {
 	// pre-filled context
 	senderHint string
 	domainHint string
+	savedRules []*models.Rule
+	savedErr   string
 
 	// backing variables — trigger
 	triggerType  string // "sender" | "domain" | "category"
@@ -51,6 +56,16 @@ func NewRuleEditor(sender, domain string, width, height int) *RuleEditor {
 		height:       height,
 	}
 	r.buildForm()
+	return r
+}
+
+func (r *RuleEditor) WithSavedRules(rules []*models.Rule, err error) *RuleEditor {
+	r.savedRules = append([]*models.Rule(nil), rules...)
+	if err != nil {
+		r.savedErr = err.Error()
+	} else {
+		r.savedErr = ""
+	}
 	return r
 }
 
@@ -128,9 +143,9 @@ func (r *RuleEditor) formWidth() int {
 }
 
 func (r *RuleEditor) formHeight() int {
-	h := r.height - 5
-	if h < 10 {
-		h = 10
+	h := r.height - 11
+	if h < 6 {
+		h = 6
 	}
 	if r.height > 0 && h > r.height {
 		h = r.height
@@ -194,13 +209,25 @@ func (r *RuleEditor) View() string {
 	formView := r.form.View()
 
 	w := r.formWidth()
+	innerW := w - 4
+	if innerW < 20 {
+		innerW = w
+	}
 	box := lipgloss.NewStyle().
 		Width(w).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62")).
 		Padding(1, 2)
 
-	rendered := box.Render(formView)
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render("Automation Rule")
+	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
+	rendered := box.Render(
+		title + "\n\n" +
+			noteStyle.Render("Purpose: future matching mail automation.") + "\n" +
+			noteStyle.Render("Results: matching mail is acted on immediately.") + "\n" +
+			noteStyle.Render(r.savedRulesSummary()) + "\n\n" +
+			formView,
+	)
 	return lipgloss.Place(r.width, r.height, lipgloss.Center, lipgloss.Center, rendered)
 }
 
@@ -229,4 +256,44 @@ func (r *RuleEditor) buildRule() *models.Rule {
 		rule.Actions = append(rule.Actions, action)
 	}
 	return rule
+}
+
+func (r *RuleEditor) savedRulesSummary() string {
+	if r.savedErr != "" {
+		return "Saved automation rules: unavailable (" + r.savedErr + ")"
+	}
+	if len(r.savedRules) == 0 {
+		return "Saved automation rules: none yet. Reopen W after saving."
+	}
+	const maxShown = 2
+	parts := make([]string, 0, maxShown)
+	for i, rule := range r.savedRules {
+		if i >= maxShown {
+			break
+		}
+		parts = append(parts, summarizeSavedRule(rule))
+	}
+	if len(r.savedRules) > maxShown {
+		parts = append(parts, fmt.Sprintf("+%d more", len(r.savedRules)-maxShown))
+	}
+	return "Saved automation rules: " + strings.Join(parts, " | ")
+}
+
+func summarizeSavedRule(rule *models.Rule) string {
+	if rule == nil {
+		return "(unknown rule)"
+	}
+	actions := make([]string, 0, len(rule.Actions))
+	for _, action := range rule.Actions {
+		actions = append(actions, string(action.Type))
+	}
+	actionSummary := strings.Join(actions, "+")
+	if actionSummary == "" {
+		actionSummary = "no action"
+	}
+	name := strings.TrimSpace(rule.Name)
+	if name == "" {
+		name = fmt.Sprintf("%s:%s", rule.TriggerType, rule.TriggerValue)
+	}
+	return fmt.Sprintf("%s (%s:%s -> %s)", name, rule.TriggerType, rule.TriggerValue, actionSummary)
 }
