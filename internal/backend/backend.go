@@ -64,6 +64,9 @@ type Backend interface {
 	// Progress returns a read-only channel of processing progress updates.
 	Progress() <-chan models.ProgressInfo
 
+	// SyncEvents returns a read-only stream of generation-tagged folder sync events.
+	SyncEvents() <-chan models.FolderSyncEvent
+
 	// Close shuts down all connections and releases resources.
 	Close() error
 

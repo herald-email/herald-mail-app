@@ -64,9 +64,26 @@ func (m *Model) tickSpinner() tea.Cmd {
 
 // listenForProgress listens for progress updates from the IMAP client
 func (m *Model) listenForProgress() tea.Cmd {
+	if m.progressCh == nil {
+		return nil
+	}
 	return func() tea.Msg {
 		info := <-m.progressCh
 		return LoadingMsg{Info: info}
+	}
+}
+
+func (m *Model) listenForSyncEvents() tea.Cmd {
+	ch := m.syncEventsCh
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		event, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return SyncEventMsg{Event: event}
 	}
 }
 
@@ -121,10 +138,21 @@ func (m *Model) listenForRuleResult() tea.Cmd {
 
 // startLoading kicks off the backend's load sequence for the current folder.
 func (m *Model) startLoading() tea.Cmd {
-	return func() tea.Msg {
+	m.loading = true
+	m.startTime = time.Now()
+	m.syncCountsSettled = false
+	m.syncingFolder = m.currentFolder
+	loadCmd := func() tea.Msg {
 		m.backend.Load(m.currentFolder)
 		return nil
 	}
+	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		return loadCmd
+	}
+	return tea.Batch(
+		loadCmd,
+		m.loadFoldersCmd(500*time.Millisecond),
+	)
 }
 
 func (m *Model) loadCachedStartupCmd() tea.Cmd {
@@ -139,6 +167,27 @@ func (m *Model) loadCachedStartupCmd() tea.Cmd {
 			return StartupHydratedMsg{Err: emailsErr}
 		}
 		return StartupHydratedMsg{Stats: stats, Emails: emails}
+	}
+}
+
+func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoading bool, status string) tea.Cmd {
+	return func() tea.Msg {
+		stats, statsErr := m.backend.GetSenderStatistics(folder)
+		if statsErr != nil {
+			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: statsErr, FinishLoading: finishLoading, StatusMessage: status}
+		}
+		emails, emailsErr := m.backend.GetTimelineEmails(folder)
+		if emailsErr != nil {
+			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: emailsErr, FinishLoading: finishLoading, StatusMessage: status}
+		}
+		return SyncHydratedMsg{
+			Folder:        folder,
+			Generation:    generation,
+			Stats:         stats,
+			Emails:        emails,
+			FinishLoading: finishLoading,
+			StatusMessage: status,
+		}
 	}
 }
 
@@ -170,6 +219,28 @@ func (m *Model) hasVisibleStartupData() bool {
 		return true
 	}
 	return false
+}
+
+func (m *Model) canInteractWithVisibleData() bool {
+	return !m.loading || m.hasVisibleStartupData()
+}
+
+func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
+	load := func() tea.Msg {
+		folders, err := m.backend.ListFolders()
+		if err != nil {
+			logger.Warn("Failed to list folders: %v", err)
+			return FoldersLoadedMsg{}
+		}
+		logger.Info("Loaded %d folders", len(folders))
+		return FoldersLoadedMsg{Folders: folders}
+	}
+	if delay <= 0 {
+		return load
+	}
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return load()
+	})
 }
 
 // updateSummaryTable updates the summary table with current data

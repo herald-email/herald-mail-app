@@ -19,15 +19,16 @@ import (
 
 // RemoteBackend implements Backend by calling the Herald daemon over HTTP.
 type RemoteBackend struct {
-	baseURL     string
-	httpClient  *http.Client
-	sseClient   *http.Client
-	progressCh  chan models.ProgressInfo
-	newEmailsCh chan models.NewEmailsNotification
-	validIDsCh  chan map[string]bool
-	sseCancel   context.CancelFunc
-	closeOnce   sync.Once
-	wg          sync.WaitGroup
+	baseURL      string
+	httpClient   *http.Client
+	sseClient    *http.Client
+	progressCh   chan models.ProgressInfo
+	syncEventsCh chan models.FolderSyncEvent
+	newEmailsCh  chan models.NewEmailsNotification
+	validIDsCh   chan map[string]bool
+	sseCancel    context.CancelFunc
+	closeOnce    sync.Once
+	wg           sync.WaitGroup
 }
 
 // Compile-time check that RemoteBackend implements Backend.
@@ -36,12 +37,13 @@ var _ Backend = (*RemoteBackend)(nil)
 // NewRemote creates a RemoteBackend connected to baseURL (e.g. "http://127.0.0.1:7272").
 func NewRemote(baseURL string) (*RemoteBackend, error) {
 	b := &RemoteBackend{
-		baseURL:     strings.TrimRight(baseURL, "/"),
-		httpClient:  &http.Client{Timeout: 30 * time.Second},
-		sseClient:   &http.Client{},
-		progressCh:  make(chan models.ProgressInfo, 100),
-		newEmailsCh: make(chan models.NewEmailsNotification, 10),
-		validIDsCh:  make(chan map[string]bool, 1),
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		sseClient:    &http.Client{},
+		progressCh:   make(chan models.ProgressInfo, 100),
+		syncEventsCh: make(chan models.FolderSyncEvent, 100),
+		newEmailsCh:  make(chan models.NewEmailsNotification, 10),
+		validIDsCh:   make(chan map[string]bool, 1),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	b.sseCancel = cancel
@@ -107,6 +109,24 @@ func (b *RemoteBackend) handleSSEEvent(eventType string, data []byte) {
 		if json.Unmarshal(data, &p) == nil {
 			select {
 			case b.progressCh <- p:
+			default:
+			}
+			event := models.FolderSyncEvent{
+				Folder:  "",
+				Message: p.Message,
+				Current: p.Current,
+				Total:   p.Total,
+				Phase:   models.SyncPhaseSyncStarted,
+			}
+			if p.Phase == "fetching" {
+				event.Phase = models.SyncPhaseRowsCached
+				event.EventCount = 1
+			}
+			if p.Phase == "complete" {
+				event.Phase = models.SyncPhaseComplete
+			}
+			select {
+			case b.syncEventsCh <- event:
 			default:
 			}
 		}
@@ -212,6 +232,10 @@ func (b *RemoteBackend) Progress() <-chan models.ProgressInfo {
 	return b.progressCh
 }
 
+func (b *RemoteBackend) SyncEvents() <-chan models.FolderSyncEvent {
+	return b.syncEventsCh
+}
+
 func (b *RemoteBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
 	return b.newEmailsCh
 }
@@ -238,6 +262,7 @@ func (b *RemoteBackend) Close() error {
 		b.sseCancel()
 		b.wg.Wait()
 		close(b.progressCh)
+		close(b.syncEventsCh)
 		close(b.newEmailsCh)
 		close(b.validIDsCh)
 	})

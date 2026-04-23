@@ -436,6 +436,28 @@ func TestGetSetFolderSyncState(t *testing.T) {
 	}
 }
 
+func TestCountEmailsInFolder(t *testing.T) {
+	c := newTestCache(t)
+
+	for _, email := range []*models.EmailData{
+		{MessageID: "<1@x.com>", UID: 1, Sender: "a@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<2@x.com>", UID: 2, Sender: "b@x.com", Folder: "INBOX", Date: time.Now()},
+		{MessageID: "<3@x.com>", UID: 3, Sender: "c@x.com", Folder: "Sent", Date: time.Now()},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail: %v", err)
+		}
+	}
+
+	count, err := c.CountEmailsInFolder("INBOX")
+	if err != nil {
+		t.Fatalf("CountEmailsInFolder: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 INBOX emails, got %d", count)
+	}
+}
+
 // --- GetCachedUIDsAndMessageIDs ---
 
 func TestGetCachedUIDsAndMessageIDs(t *testing.T) {

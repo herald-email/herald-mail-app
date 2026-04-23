@@ -39,6 +39,20 @@ func TestDecideSyncStrategy_FirstRun(t *testing.T) {
 	}
 }
 
+func TestAdjustSyncStrategyForCacheRecovery_ForcesFullResyncWhenCacheIsIncomplete(t *testing.T) {
+	got := adjustSyncStrategyForCacheRecovery(syncStrategyNone, 12345, 12345, 25, 1317)
+	if got != syncStrategyFull {
+		t.Fatalf("expected incomplete cache to force full sync, got %v", got)
+	}
+}
+
+func TestAdjustSyncStrategyForCacheRecovery_PreservesNoneWhenCacheLooksHealthy(t *testing.T) {
+	got := adjustSyncStrategyForCacheRecovery(syncStrategyNone, 12345, 12345, 1317, 1317)
+	if got != syncStrategyNone {
+		t.Fatalf("expected healthy cache to preserve syncStrategyNone, got %v", got)
+	}
+}
+
 // --- buildValidIDSet ---
 
 func TestBuildValidIDSet_AllValid(t *testing.T) {
@@ -181,5 +195,23 @@ func TestRetryAfterReconnect_DoesNotRetryNonConnectionErrors(t *testing.T) {
 	}
 	if reconnects != 0 {
 		t.Fatalf("expected 0 reconnects, got %d", reconnects)
+	}
+}
+
+func TestChunkUint32s_SplitsIntoStableBatches(t *testing.T) {
+	chunks := chunkUint32s([]uint32{1, 2, 3, 4, 5}, 2)
+	if len(chunks) != 3 {
+		t.Fatalf("expected 3 chunks, got %d", len(chunks))
+	}
+	want := [][]uint32{{1, 2}, {3, 4}, {5}}
+	for i := range want {
+		if len(chunks[i]) != len(want[i]) {
+			t.Fatalf("chunk %d length = %d, want %d", i, len(chunks[i]), len(want[i]))
+		}
+		for j := range want[i] {
+			if chunks[i][j] != want[i][j] {
+				t.Fatalf("chunk %d item %d = %d, want %d", i, j, chunks[i][j], want[i][j])
+			}
+		}
 	}
 }

@@ -68,6 +68,7 @@ Use the real config to validate:
 - preview loading
 - stale-state handling across tabs
 - attachments with real messages
+- progressive startup sync visibility and mid-sync Timeline refresh
 
 ### Lane C — Live Ollama / Semantic / Attachments
 
@@ -156,6 +157,10 @@ Check these states during every applicable lane:
 - Ollama-down, 404, timeout, or invalid-model failures produce bounded and deduplicated errors.
 - A compact global AI chip remains visible whenever AI is configured and reflects the effective state of local AI work.
 - Browser and unrelated network activity should remain usable while background Herald work runs.
+- Startup live sync must visibly progress; it must not look frozen while IMAP work is still running.
+- Startup live sync should progressively refresh visible Timeline rows as new mail is cached, not only after the final completion event.
+- Startup sync refreshes should be microbatched so the screen feels alive without repainting on every single raw IMAP event.
+- Folder switches should be latest-wins: stale sync results from an older folder request must not repaint the newly selected folder.
 
 ### Network and backpressure
 
@@ -185,6 +190,8 @@ Check these states during every applicable lane:
 - Status bar present.
 - Key hint bar present.
 - Active tab and active panel are visually obvious.
+- If cached data is already visible while live sync continues, the UI explains that clearly and shows active sync progress in a human-readable way.
+- The top sync strip uses stream language (`opening`, `syncing`, `reconciled`) rather than vague spinner-only wording.
 
 ### TC-02 — Tab switching and hint updates
 

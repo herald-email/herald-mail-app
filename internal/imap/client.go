@@ -46,6 +46,8 @@ func (c *xoauth2Client) Next(_ []byte) ([]byte, error) {
 
 var discardLogger = log.New(io.Discard, "", 0)
 
+const fetchCacheBatchSize = 50
+
 // Client wraps the IMAP client with business logic.
 // mu serializes all operations that use the underlying IMAP connection;
 // the go-imap client is not safe for concurrent use.
@@ -192,6 +194,24 @@ func retryAfterReconnect[T any](attempt func() (T, error), reconnect func() erro
 	return attempt()
 }
 
+func chunkUint32s(items []uint32, size int) [][]uint32 {
+	if len(items) == 0 {
+		return nil
+	}
+	if size <= 0 {
+		size = len(items)
+	}
+	chunks := make([][]uint32, 0, (len(items)+size-1)/size)
+	for start := 0; start < len(items); start += size {
+		end := start + size
+		if end > len(items) {
+			end = len(items)
+		}
+		chunks = append(chunks, items[start:end])
+	}
+	return chunks
+}
+
 // GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
 func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
 	c.mu.Lock()
@@ -258,6 +278,22 @@ func decideSyncStrategy(storedValidity, storedNext, serverValidity, serverNext u
 	return syncStrategyIncremental
 }
 
+func adjustSyncStrategyForCacheRecovery(strategy syncStrategy, storedValidity, serverValidity uint32, cachedCount, serverMessages int) syncStrategy {
+	if strategy != syncStrategyNone {
+		return strategy
+	}
+	if storedValidity == 0 || storedValidity != serverValidity {
+		return strategy
+	}
+	if serverMessages <= 0 {
+		return strategy
+	}
+	if cachedCount <= 0 || cachedCount < serverMessages {
+		return syncStrategyFull
+	}
+	return strategy
+}
+
 // uidMsgPair holds a message-ID string and its IMAP UID as returned by the cache.
 type uidMsgPair struct {
 	MessageID string
@@ -314,7 +350,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 	c.sendProgress(models.ProgressInfo{
 		Phase:   "scanning",
 		Total:   int(mbox.Messages),
-		Message: fmt.Sprintf("Checking sync state in %s...", folder),
+		Message: fmt.Sprintf("Checking sync state in %s (%d messages on server)...", folder, mbox.Messages),
 	})
 
 	storedValidity, storedNext, err := c.cache.GetFolderSyncState(folder)
@@ -322,16 +358,39 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 		return fmt.Errorf("get folder sync state: %w", err)
 	}
 
+	totalMessages := int(mbox.Messages)
 	strategy := decideSyncStrategy(storedValidity, storedNext, mbox.UidValidity, mbox.UidNext)
+	cachedCount, err := c.cache.CountEmailsInFolder(folder)
+	if err != nil {
+		return fmt.Errorf("count cached emails in %s: %w", folder, err)
+	}
+	if recovered := adjustSyncStrategyForCacheRecovery(strategy, storedValidity, mbox.UidValidity, cachedCount, totalMessages); recovered != strategy {
+		logger.Warn(
+			"ProcessEmailsIncremental: cache recovery triggered for %s (cached=%d server=%d uidvalidity=%d)",
+			folder, cachedCount, totalMessages, mbox.UidValidity,
+		)
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "scanning",
+			Total:   totalMessages,
+			Current: cachedCount,
+			Message: fmt.Sprintf("Recovering incomplete %s cache (%d/%d cached)...", folder, cachedCount, totalMessages),
+		})
+		strategy = recovered
+	}
 	logger.Info("ProcessEmailsIncremental: strategy=%d stored(v=%d n=%d) server(v=%d n=%d)",
 		strategy, storedValidity, storedNext, mbox.UidValidity, mbox.UidNext)
 
-	totalMessages := int(mbox.Messages)
+	logger.Info("ProcessEmailsIncremental: server reports %d total messages in %s", totalMessages, folder)
 
 	switch strategy {
 	case syncStrategyNone:
 		logger.Info("ProcessEmailsIncremental: no new mail in %s", folder)
-		c.sendProgress(models.ProgressInfo{Phase: "scanning", Message: "No new mail"})
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "scanning",
+			Total:   totalMessages,
+			Current: totalMessages,
+			Message: fmt.Sprintf("No new mail in %s — %d messages already current", folder, totalMessages),
+		})
 		return nil
 
 	case syncStrategyFull:
@@ -384,6 +443,10 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 	}()
 	processed := 0
 	var newSeqNums []uint32
+	cachedIDs, err := c.cache.GetCachedIDs(folder)
+	if err != nil {
+		return fmt.Errorf("fetch envelopes cached IDs: %w", err)
+	}
 	for msg := range messages {
 		processed++
 		if processed%100 == 0 {
@@ -395,7 +458,6 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 			})
 		}
 		messageID := extractMessageID(msg)
-		cachedIDs, _ := c.cache.GetCachedIDs(folder)
 		if messageID != "" && !cachedIDs[messageID] {
 			newSeqNums = append(newSeqNums, msg.SeqNum)
 		}
@@ -404,21 +466,28 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 		return fmt.Errorf("fetch envelopes: %w", err)
 	}
 	if len(newSeqNums) > 0 {
+		logger.Info("fetchAndCacheRange: caching %d uncached messages in %s (server total %d)", len(newSeqNums), folder, total)
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "fetching",
 			Current: 0,
 			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetching %d new emails...", len(newSeqNums)),
+			Message: fmt.Sprintf("Fetching %d new emails for %s...", len(newSeqNums), folder),
 		})
-		if err := c.batchFetchDetails(newSeqNums, folder); err != nil {
-			return err
+		cachedCount := 0
+		for _, chunk := range chunkUint32s(newSeqNums, fetchCacheBatchSize) {
+			if err := c.batchFetchDetails(chunk, folder); err != nil {
+				return err
+			}
+			cachedCount += len(chunk)
+			c.sendProgress(models.ProgressInfo{
+				Phase:   "fetching",
+				Current: cachedCount,
+				Total:   len(newSeqNums),
+				Message: fmt.Sprintf("Fetched %d/%d new emails into cache", cachedCount, len(newSeqNums)),
+			})
 		}
-		c.sendProgress(models.ProgressInfo{
-			Phase:   "fetching",
-			Current: len(newSeqNums),
-			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetched %d new emails", len(newSeqNums)),
-		})
+	} else {
+		logger.Info("fetchAndCacheRange: no uncached messages to fetch in %s", folder)
 	}
 	return nil
 }
@@ -434,9 +503,12 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid}, messages)
 	}()
 	var newSeqNums []uint32
+	cachedIDs, err := c.cache.GetCachedIDs(folder)
+	if err != nil {
+		return fmt.Errorf("uid fetch cached IDs: %w", err)
+	}
 	for msg := range messages {
 		messageID := extractMessageID(msg)
-		cachedIDs, _ := c.cache.GetCachedIDs(folder)
 		if messageID != "" && !cachedIDs[messageID] {
 			newSeqNums = append(newSeqNums, msg.SeqNum)
 		}
@@ -445,21 +517,28 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 		return fmt.Errorf("uid fetch new range: %w", err)
 	}
 	if len(newSeqNums) > 0 {
+		logger.Info("fetchAndCacheUIDRange: caching %d new messages in %s (server total %d)", len(newSeqNums), folder, total)
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "fetching",
 			Current: 0,
 			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetching %d new emails...", len(newSeqNums)),
+			Message: fmt.Sprintf("Fetching %d new emails for %s...", len(newSeqNums), folder),
 		})
-		if err := c.batchFetchDetails(newSeqNums, folder); err != nil {
-			return err
+		cachedCount := 0
+		for _, chunk := range chunkUint32s(newSeqNums, fetchCacheBatchSize) {
+			if err := c.batchFetchDetails(chunk, folder); err != nil {
+				return err
+			}
+			cachedCount += len(chunk)
+			c.sendProgress(models.ProgressInfo{
+				Phase:   "fetching",
+				Current: cachedCount,
+				Total:   len(newSeqNums),
+				Message: fmt.Sprintf("Fetched %d/%d new emails into cache", cachedCount, len(newSeqNums)),
+			})
 		}
-		c.sendProgress(models.ProgressInfo{
-			Phase:   "fetching",
-			Current: len(newSeqNums),
-			Total:   len(newSeqNums),
-			Message: fmt.Sprintf("Fetched %d new emails", len(newSeqNums)),
-		})
+	} else {
+		logger.Info("fetchAndCacheUIDRange: no new uncached messages to fetch in %s", folder)
 	}
 	return nil
 }

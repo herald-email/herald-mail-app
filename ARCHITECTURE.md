@@ -51,7 +51,11 @@ cmd/mcp-server  → JSON-RPC stdio server, reads email_cache.db directly
 `internal/backend/backend.go` defines every operation the UI can perform. The Bubble Tea model imports only this interface — never `internal/imap` or `internal/cache` directly. This is the discipline that makes Phase 2 free: swap `LocalBackend` for `RemoteBackend` and the UI is unchanged.
 
 **Progress via channels**
-Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send `models.ProgressInfo` values to buffered channels. The UI listens with `tea.Cmd` functions that block on the channel and return a message when something arrives. No polling, no shared state.
+Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send channel events back to the Bubble Tea model. The UI listens with `tea.Cmd` functions that block on those channels and return a message when something arrives. No polling, no shared state.
+
+Startup sync should feel live, not frozen. When cached Timeline data is already available, the TUI stays usable and renders an explicit top-of-screen sync strip explaining that current rows are visible while live IMAP work continues. Large IMAP fetches should cache and publish progress in batches so the Timeline and sender stats can refresh incrementally during startup instead of only at the final completion event.
+
+The first IMAP/UI streaming slice now uses a generation-tagged folder sync stream plus an app-side microbatch accumulator. Each `Load(folder)` request emits `FolderSyncEvent` values such as `sync_started`, `snapshot_ready`, `rows_cached`, `counts_updated`, `reconcile_started`, `sync_complete`, and `sync_error`. The app treats folder sync as latest-wins work: a newer generation invalidates stale events from an older folder load, and visible snapshot refreshes are microbatched at `100` changes or `500ms` so the UI moves forward smoothly without repaint churn.
 
 **Valid-ID ground truth**
 After each sync, `StartBackgroundReconcile` fetches all server UIDs once (no envelopes), builds a `map[string]bool` of live message IDs, and sends it on a channel. All backend read methods filter results against this set. Stale cache rows are batch-deleted in the background (50/batch, 100ms sleep, newest UIDs first) while the UI already shows only valid data. Legacy or incomplete cache rows with no server UID are also invalidated automatically by message ID so they do not linger as half-openable search results.
@@ -162,7 +166,7 @@ These controls live under `ai:` in config:
 
 ### RemoteBackend
 
-A `RemoteBackend` struct implements the same `Backend` interface as `LocalBackend`. Reads map to HTTP GET requests; writes to HTTP POST/DELETE. Push events (new emails, valid-ID updates, sync progress) arrive via WebSocket and are forwarded to the same channels the TUI already listens on. From the Bubble Tea model's perspective, nothing changes.
+A `RemoteBackend` struct implements the same `Backend` interface as `LocalBackend`. Reads map to HTTP GET requests; writes to HTTP POST/DELETE. Push events (new emails, valid-ID updates, sync progress, and folder sync stream events) arrive via WebSocket and are forwarded to the same channels the TUI already listens on. From the Bubble Tea model's perspective, nothing changes.
 
 ### Daemon API design
 

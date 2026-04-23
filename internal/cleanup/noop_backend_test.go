@@ -33,6 +33,7 @@ func (noopBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody,
 func (noopBackend) SaveAttachment(attachment *models.Attachment, destPath string) error { return nil }
 func (noopBackend) SetGroupByDomain(bool)                                               {}
 func (noopBackend) Progress() <-chan models.ProgressInfo                                { return nil }
+func (noopBackend) SyncEvents() <-chan models.FolderSyncEvent                           { return nil }
 func (noopBackend) Close() error                                                        { return nil }
 func (noopBackend) ArchiveEmail(messageID, folder string) error                         { return nil }
 func (noopBackend) ArchiveSenderEmails(sender, folder string) error                     { return nil }

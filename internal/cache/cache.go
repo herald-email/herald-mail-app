@@ -463,6 +463,13 @@ func (c *Cache) SetFolderSyncState(folder string, uidValidity, uidNext uint32) e
 	return err
 }
 
+// CountEmailsInFolder returns the number of cached email rows for a folder.
+func (c *Cache) CountEmailsInFolder(folder string) (int, error) {
+	var count int
+	err := c.db.QueryRow(`SELECT COUNT(*) FROM emails WHERE folder = ?`, folder).Scan(&count)
+	return count, err
+}
+
 // GetCachedUIDsAndMessageIDs returns (message_id, uid) pairs for all rows in a folder.
 // Rows with NULL uid are returned with UID=0.
 func (c *Cache) GetCachedUIDsAndMessageIDs(folder string) ([]struct {

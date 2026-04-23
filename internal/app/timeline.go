@@ -983,7 +983,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				return m, m.toggleStarCmd(email), true
 			}
@@ -1005,7 +1005,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				subject := email.Subject
 				if !strings.HasPrefix(strings.ToLower(subject), "fwd:") {
@@ -1033,7 +1033,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "enter":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {
 				if m.focusedPanel == panelPreview {
 					m.setFocusedPanel(panelTimeline)
@@ -1056,7 +1056,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "tab", "shift+tab":
-		if !m.loading && m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults &&
+		if m.canInteractWithVisibleData() && m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults &&
 			m.timeline.selectedEmail != nil && m.focusedPanel == panelPreview {
 			m.setFocusedPanel(panelTimeline)
 			return m, nil, true
@@ -1129,7 +1129,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "up", "k":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.timeline.quickReplyOpen {
 				if m.timeline.quickReplyIdx > 0 {
 					m.timeline.quickReplyIdx--
@@ -1165,7 +1165,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "down", "j":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.timeline.quickReplyOpen {
 				if m.timeline.quickReplyIdx < len(m.timeline.quickReplies)-1 {
 					m.timeline.quickReplyIdx++

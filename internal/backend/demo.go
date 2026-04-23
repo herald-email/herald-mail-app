@@ -25,6 +25,7 @@ type DemoBackend struct {
 	savedSearches       []*models.SavedSearch
 	deletedIDs          map[string]bool
 	progressCh          chan models.ProgressInfo
+	syncEventsCh        chan models.FolderSyncEvent
 	newEmailsCh         chan models.NewEmailsNotification
 	validIDsCh          chan map[string]bool
 	groupByDomain       bool
@@ -49,6 +50,7 @@ func NewDemoBackend() *DemoBackend {
 		bodyCache:           make(map[string]string),
 		unsubscribedSenders: make(map[string]bool),
 		progressCh:          make(chan models.ProgressInfo, 100),
+		syncEventsCh:        make(chan models.FolderSyncEvent, 100),
 		newEmailsCh:         make(chan models.NewEmailsNotification, 10),
 		validIDsCh:          make(chan map[string]bool, 1),
 		nextSearchID:        1,
@@ -66,6 +68,19 @@ func (d *DemoBackend) IsDemo() bool { return true }
 // Load sends fake progress events and then signals completion.
 func (d *DemoBackend) Load(folder string) {
 	go func() {
+		generation := time.Now().UnixNano()
+		d.syncEventsCh <- models.FolderSyncEvent{
+			Folder:     folder,
+			Generation: generation,
+			Phase:      models.SyncPhaseSyncStarted,
+			Message:    "Connecting to demo backend…",
+		}
+		d.syncEventsCh <- models.FolderSyncEvent{
+			Folder:     folder,
+			Generation: generation,
+			Phase:      models.SyncPhaseSnapshotReady,
+			Message:    "Rendering demo data…",
+		}
 		phases := []models.ProgressInfo{
 			{Phase: "connecting", Message: "Connecting to demo backend…"},
 			{Phase: "scanning", Message: "Scanning demo emails…", Current: 25, Total: 50},
@@ -75,6 +90,25 @@ func (d *DemoBackend) Load(folder string) {
 		for _, p := range phases {
 			time.Sleep(50 * time.Millisecond)
 			d.progressCh <- p
+			eventPhase := models.SyncPhaseSyncStarted
+			eventCount := 0
+			if p.Current > 0 {
+				eventPhase = models.SyncPhaseRowsCached
+				eventCount = p.Current
+			}
+			if p.Phase == "complete" {
+				eventPhase = models.SyncPhaseComplete
+				eventCount = 1
+			}
+			d.syncEventsCh <- models.FolderSyncEvent{
+				Folder:     folder,
+				Generation: generation,
+				Phase:      eventPhase,
+				Message:    p.Message,
+				Current:    p.Current,
+				Total:      p.Total,
+				EventCount: eventCount,
+			}
 		}
 	}()
 }
@@ -82,6 +116,10 @@ func (d *DemoBackend) Load(folder string) {
 // Progress returns the read-only progress channel.
 func (d *DemoBackend) Progress() <-chan models.ProgressInfo {
 	return d.progressCh
+}
+
+func (d *DemoBackend) SyncEvents() <-chan models.FolderSyncEvent {
+	return d.syncEventsCh
 }
 
 // GetSenderStatistics computes stats from the in-memory email slice.

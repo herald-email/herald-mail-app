@@ -208,7 +208,11 @@ func (m *Model) renderSidebar() string {
 		countSuffix := ""
 		if item.node.fullPath != "" {
 			if st, ok := m.folderStatus[item.node.fullPath]; ok {
-				countSuffix = fmt.Sprintf(" %d/%d", st.Unseen, st.Total)
+				settledSuffix := ""
+				if item.node.fullPath == m.currentFolder && m.loading && !m.syncCountsSettled {
+					settledSuffix = "…"
+				}
+				countSuffix = fmt.Sprintf(" %d/%d%s", st.Unseen, st.Total, settledSuffix)
 			}
 		}
 

@@ -12,7 +12,7 @@ import (
 func (m *Model) topSyncStripSegments() (string, string) {
 	message := strings.TrimSpace(m.progressInfo.Message)
 	if message == "" {
-		return "Live sync in progress", "Waiting for IMAP updates..."
+		return "Live sync in progress", "waiting for IMAP updates"
 	}
 
 	if strings.HasPrefix(message, "Opening ") {
@@ -20,15 +20,21 @@ func (m *Model) topSyncStripSegments() (string, string) {
 		if folder == "" {
 			folder = displayFolderName(m.currentFolder)
 		}
-		return "IMAP connected; waiting for Bridge", fmt.Sprintf("opening %s — another mail client may be busy", folder)
+		return "IMAP connected", fmt.Sprintf("opening %s — another mail client may be busy", folder)
 	}
 
 	if strings.HasPrefix(message, "Checking sync state in ") {
-		folder := strings.TrimSuffix(strings.TrimPrefix(message, "Checking sync state in "), "...")
+		rest := strings.TrimSuffix(strings.TrimPrefix(message, "Checking sync state in "), "...")
+		folder := rest
+		detail := "reading mailbox state"
+		if idx := strings.Index(rest, " ("); idx >= 0 {
+			folder = rest[:idx]
+			detail = strings.Trim(rest[idx+1:], "()")
+		}
 		if folder == "" {
 			folder = displayFolderName(m.currentFolder)
 		}
-		return "IMAP connected; reading folder state", fmt.Sprintf("checking sync state in %s", folder)
+		return fmt.Sprintf("Syncing %s", folder), detail
 	}
 
 	if strings.HasPrefix(message, "Checking for new mail in ") {
@@ -36,7 +42,7 @@ func (m *Model) topSyncStripSegments() (string, string) {
 		if folder == "" {
 			folder = displayFolderName(m.currentFolder)
 		}
-		return "Live sync in progress", fmt.Sprintf("checking for new mail in %s", folder)
+		return fmt.Sprintf("Syncing %s", folder), "comparing cache with live mailbox"
 	}
 
 	if strings.HasPrefix(message, "Refreshing ") {
@@ -44,7 +50,31 @@ func (m *Model) topSyncStripSegments() (string, string) {
 		if folder == "" {
 			folder = displayFolderName(m.currentFolder)
 		}
-		return "Live sync in progress", fmt.Sprintf("refreshing %s from the server", folder)
+		return fmt.Sprintf("Refreshing %s", folder), "rebuilding local view from the server"
+	}
+
+	if strings.HasPrefix(message, "Fetching ") && strings.Contains(message, " new emails for ") {
+		rest := strings.TrimSuffix(strings.TrimPrefix(message, "Fetching "), "...")
+		parts := strings.SplitN(rest, " new emails for ", 2)
+		if len(parts) == 2 {
+			return fmt.Sprintf("Syncing %s", parts[1]), fmt.Sprintf("preparing %s new rows", parts[0])
+		}
+	}
+
+	if strings.HasPrefix(message, "Fetched ") && m.progressInfo.Total > 0 {
+		return fmt.Sprintf("Syncing %s", displayFolderName(m.currentFolder)), fmt.Sprintf("%d/%d new rows cached", m.progressInfo.Current, m.progressInfo.Total)
+	}
+
+	if strings.HasPrefix(message, "No new mail in ") {
+		return fmt.Sprintf("%s is current", displayFolderName(m.currentFolder)), "nothing new to load"
+	}
+
+	if strings.HasPrefix(message, "Generating statistics") {
+		return fmt.Sprintf("Finalizing %s", displayFolderName(m.currentFolder)), "refreshing sender stats and counts"
+	}
+
+	if strings.HasPrefix(message, "Found ") && strings.Contains(message, " senders") {
+		return fmt.Sprintf("%s synced", displayFolderName(m.currentFolder)), strings.ToLower(message)
 	}
 
 	return "Live sync in progress", message
@@ -135,7 +165,7 @@ func (m *Model) renderTopSyncStrip() string {
 
 	title, detail := m.topSyncStripSegments()
 	spinner := spinnerChars[m.loadingSpinner%len(spinnerChars)]
-	line := fmt.Sprintf(" %s  %s  │  %s  │  showing current mail while new data arrives", spinner, title, detail)
+	line := fmt.Sprintf(" %s  %s  │  %s", spinner, title, detail)
 
 	return lipgloss.NewStyle().
 		Foreground(defaultTheme.WarningFg).
@@ -217,7 +247,11 @@ func (m *Model) renderStatusBar() string {
 
 	// Folder counts
 	if st, ok := m.folderStatus[m.currentFolder]; ok {
-		parts = append(parts, fmt.Sprintf("%d unread / %d total", st.Unseen, st.Total))
+		if m.loading && !m.syncCountsSettled {
+			parts = append(parts, fmt.Sprintf("%d unread / %d total…", st.Unseen, st.Total))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d unread / %d total", st.Unseen, st.Total))
+		}
 	}
 
 	// Mode (cleanup tab only)

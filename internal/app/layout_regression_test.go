@@ -270,11 +270,32 @@ func TestMainView_ShowsTopSyncStripDuringProgressiveStartup(t *testing.T) {
 	assertFitsWidth(t, 120, rendered)
 
 	stripped := stripANSI(rendered)
-	if !strings.Contains(stripped, "IMAP connected; waiting for Bridge") {
+	if !strings.Contains(stripped, "IMAP connected") {
 		t.Fatalf("expected top sync strip in main view, got:\n%s", stripped)
 	}
 	if !strings.Contains(stripped, "opening INBOX — another mail client may be busy") {
 		t.Fatalf("expected sync strip to include the active progress message, got:\n%s", stripped)
+	}
+}
+
+func TestMainView_ShowsIncrementalFetchProgressInSyncStrip(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.loading = true
+	m.progressInfo = models.ProgressInfo{
+		Phase:   "fetching",
+		Current: 50,
+		Total:   120,
+		Message: "Fetched 50/120 new emails into cache",
+	}
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Syncing INBOX") {
+		t.Fatalf("expected sync strip to explain incremental cache updates, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "50/120 new rows cached") {
+		t.Fatalf("expected sync strip to include fetch progress, got:\n%s", rendered)
 	}
 }
 

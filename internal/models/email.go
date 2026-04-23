@@ -38,6 +38,29 @@ type ProgressInfo struct {
 	Message         string
 }
 
+const (
+	SyncPhaseSyncStarted      = "sync_started"
+	SyncPhaseSnapshotReady    = "snapshot_ready"
+	SyncPhaseRowsCached       = "rows_cached"
+	SyncPhaseCountsUpdated    = "counts_updated"
+	SyncPhaseReconcileStarted = "reconcile_started"
+	SyncPhaseComplete         = "sync_complete"
+	SyncPhaseError            = "sync_error"
+)
+
+// FolderSyncEvent is an internal sync-stream event consumed by the TUI to keep
+// folder loading flowing forward without repainting on every raw IMAP update.
+type FolderSyncEvent struct {
+	Folder     string
+	Generation int64
+	Phase      string
+	Message    string
+	Current    int
+	Total      int
+	EventCount int
+	Error      string
+}
+
 type DeletionResult struct {
 	MessageID      string `json:"message_id"`
 	Sender         string `json:"sender"`

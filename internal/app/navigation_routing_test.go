@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"mail-processor/internal/models"
 )
 
 func TestHandleOverlayKey_ChatEscapeRestoresTimelineFocus(t *testing.T) {
@@ -97,5 +98,66 @@ func TestTimelinePreview_HidesSidebarWhileOpenWithoutChangingPreference(t *testi
 	}
 	if plan := m.buildLayoutPlan(120, 40); !plan.SidebarVisible {
 		t.Fatal("expected sidebar to become visible again after closing timeline preview")
+	}
+}
+
+func TestTabCyclesFocusWhileSyncingWithVisibleTimelineData(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.showSidebar = true
+	m.focusedPanel = panelSidebar
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.updateTableDimensions(120, 40)
+
+	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyTab})
+	updated := model.(*Model)
+
+	if updated.focusedPanel != panelTimeline {
+		t.Fatalf("expected tab to move focus to timeline while syncing, got %d", updated.focusedPanel)
+	}
+}
+
+func TestCtrlITreatedAsTabOutsideSearchMode(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.showSidebar = true
+	m.focusedPanel = panelTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.updateTableDimensions(120, 40)
+
+	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyCtrlI})
+	updated := model.(*Model)
+
+	if updated.focusedPanel != panelSidebar {
+		t.Fatalf("expected ctrl+i to cycle focus like tab, got %d", updated.focusedPanel)
+	}
+}
+
+func TestFoldersLoadedMsg_PreservesExistingTreeWhenRefreshFails(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.folders = []string{"INBOX", "Sent", "Archive"}
+	m.folderTree = buildFolderTree(m.folders)
+	m.folderStatus = map[string]models.FolderStatus{
+		"INBOX": {Unseen: 5, Total: 10},
+	}
+
+	model, _ := m.Update(FoldersLoadedMsg{Folders: nil})
+	updated := model.(*Model)
+
+	items := flattenTree(updated.folderTree)
+	paths := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.node.fullPath != "" {
+			paths = append(paths, item.node.fullPath)
+		}
+	}
+
+	joined := strings.Join(paths, ",")
+	if !strings.Contains(joined, "Sent") || !strings.Contains(joined, "Archive") {
+		t.Fatalf("expected folder refresh failure to preserve existing tree, got %v", paths)
 	}
 }

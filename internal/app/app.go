@@ -277,23 +277,28 @@ type AISubjectMsg struct {
 
 // Model represents the main application state
 type Model struct {
-	backend    backend.Backend
-	progressCh <-chan models.ProgressInfo
+	backend      backend.Backend
+	progressCh   <-chan models.ProgressInfo
+	syncEventsCh <-chan models.FolderSyncEvent
 
 	// UI State
-	loading          bool
-	deleting         bool
-	deletionProgress models.DeletionResult
-	deletionsPending int  // Number of deletions waiting to complete
-	deletionsTotal   int  // Total deletions in current batch
-	connectionLost   bool // true while IMAP connection is down during deletion
-	loadingSpinner   int
-	startTime        time.Time
-	progressInfo     models.ProgressInfo
-	showLogs         bool
-	windowWidth      int
-	windowHeight     int
-	subjectColWidth  int
+	loading           bool
+	deleting          bool
+	deletionProgress  models.DeletionResult
+	deletionsPending  int  // Number of deletions waiting to complete
+	deletionsTotal    int  // Total deletions in current batch
+	connectionLost    bool // true while IMAP connection is down during deletion
+	loadingSpinner    int
+	startTime         time.Time
+	progressInfo      models.ProgressInfo
+	syncAccumulator   syncAccumulator
+	syncGeneration    int64
+	syncingFolder     string
+	syncCountsSettled bool
+	showLogs          bool
+	windowWidth       int
+	windowHeight      int
+	subjectColWidth   int
 
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
@@ -657,6 +662,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	m := &Model{
 		backend:          b,
 		progressCh:       b.Progress(),
+		syncEventsCh:     b.SyncEvents(),
 		loading:          true,
 		dryRun:           dryRun,
 		startTime:        time.Now(),
@@ -682,6 +688,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 			attachmentSaveInput: attachmentSaveInput,
 		},
 		classifyCh:          make(chan ClassifyProgressMsg, 50),
+		syncAccumulator:     newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
 		mailer:              mailer,
 		fromAddress:         fromAddress,
 		composeTo:           composeTo,
@@ -738,11 +745,17 @@ func (m *Model) SetCleanupScheduler(s *cleanup.Scheduler) {
 
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
+	if !m.loading {
+		return tea.Batch(
+			m.listenForRuleResult(),
+			m.importAppleContacts(),
+			draftSaveTick(),
+		)
+	}
 	return tea.Batch(
 		m.startLoading(),
-		m.loadCachedStartupCmd(),
 		m.tickSpinner(),
-		m.listenForProgress(),
+		m.listenForSyncEvents(),
 		m.listenForRuleResult(),
 		m.importAppleContacts(),
 		draftSaveTick(),
@@ -937,6 +950,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKeyMsg(msg)
 
 	case FoldersLoadedMsg:
+		if len(msg.Folders) == 0 {
+			if len(m.folders) <= 1 {
+				return m, m.loadFoldersCmd(time.Second)
+			}
+			if !isVirtualAllMailOnlyFolder(m.currentFolder) && m.syncStatusMode == "" {
+				return m, m.startSync(m.currentFolder)
+			}
+			return m, nil
+		}
 		m.folders = msg.Folders
 		m.folderTree = buildFolderTree(msg.Folders)
 		// Keep cursor on the active folder
@@ -951,7 +973,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only fetch counts on first load to avoid flickering on every folder switch
 		if len(m.folderStatus) == 0 {
 			folders := msg.Folders
-			return m, func() tea.Msg {
+			loadCounts := func() tea.Msg {
 				status, err := m.backend.GetFolderStatus(folders)
 				if err != nil {
 					logger.Warn("Failed to get folder status: %v", err)
@@ -959,6 +981,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FolderStatusMsg{Status: status}
 			}
+			if !isVirtualAllMailOnlyFolder(m.currentFolder) && m.syncStatusMode == "" {
+				return m, tea.Batch(loadCounts, m.startSync(m.currentFolder))
+			}
+			return m, loadCounts
+		}
+		if !isVirtualAllMailOnlyFolder(m.currentFolder) && m.syncStatusMode == "" {
+			return m, m.startSync(m.currentFolder)
 		}
 		return m, nil
 
@@ -1185,6 +1214,115 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateDetailsTable()
 		return m, m.loadTimelineEmails()
 
+	case SyncEventMsg:
+		event := msg.Event
+		if event.Generation < m.syncGeneration {
+			return m, m.listenForSyncEvents()
+		}
+		if event.Folder != "" && event.Folder != m.currentFolder {
+			// Keep listening, but do not let an older folder repaint the visible one.
+			if event.Generation > m.syncGeneration {
+				m.syncGeneration = event.Generation
+			}
+			return m, m.listenForSyncEvents()
+		}
+
+		if event.Generation > m.syncGeneration {
+			m.syncGeneration = event.Generation
+			m.syncAccumulator.reset(event.Folder, event.Generation)
+		}
+
+		if event.Phase == models.SyncPhaseReconcileStarted {
+			return m, m.listenForSyncEvents()
+		}
+
+		if event.Message != "" {
+			m.progressInfo.Message = event.Message
+			m.progressInfo.Current = event.Current
+			m.progressInfo.Total = event.Total
+		}
+		m.syncingFolder = event.Folder
+		m.loading = true
+		if event.Phase == models.SyncPhaseComplete {
+			m.syncCountsSettled = true
+		} else if event.Phase != models.SyncPhaseReconcileStarted {
+			m.syncCountsSettled = false
+		}
+
+		action := m.syncAccumulator.observe(event)
+		cmds := []tea.Cmd{m.listenForSyncEvents()}
+		if action.ArmTimer {
+			cmds = append(cmds, scheduleSyncFlush(event.Folder, event.Generation, m.syncAccumulator.flushDelay))
+		}
+		if action.FlushNow {
+			finish := event.Phase == models.SyncPhaseComplete || event.Phase == models.SyncPhaseError
+			status := ""
+			if event.Phase == models.SyncPhaseComplete {
+				status = strings.TrimSpace(event.Message)
+			}
+			cmds = append(cmds, m.loadSyncSnapshotCmd(event.Folder, event.Generation, finish, status))
+		}
+		if event.Phase == models.SyncPhaseComplete {
+			m.validIDsCh = m.backend.ValidIDsCh()
+			if m.validIDsCh != nil {
+				cmds = append(cmds, m.listenForValidIDs())
+			}
+			if !isVirtualAllMailOnlyFolder(m.currentFolder) {
+				m.syncStatusMode = ""
+				cmds = append(cmds, m.loadFoldersCmd(0))
+			}
+		}
+		if event.Phase == models.SyncPhaseError {
+			m.statusMessage = event.Message
+			m.loading = false
+		}
+		return m, tea.Batch(cmds...)
+
+	case SyncFlushMsg:
+		if !m.syncAccumulator.shouldFlush(msg) {
+			return m, nil
+		}
+		return m, m.loadSyncSnapshotCmd(msg.Folder, msg.Generation, false, "")
+
+	case SyncHydratedMsg:
+		if msg.Generation != 0 && msg.Generation != m.syncGeneration {
+			return m, nil
+		}
+		if msg.Folder != "" && msg.Folder != m.currentFolder {
+			return m, nil
+		}
+		if msg.Err != nil {
+			logger.Warn("sync snapshot hydrate failed: %v", msg.Err)
+			if msg.FinishLoading {
+				m.loading = false
+			}
+			return m, nil
+		}
+		if msg.Stats != nil {
+			m.stats = msg.Stats
+			m.updateSummaryTable()
+			m.updateDetailsTable()
+		}
+		if msg.Emails != nil {
+			m.timeline.emails = msg.Emails
+			if !isVirtualAllMailOnlyFolder(m.currentFolder) {
+				unseen := 0
+				for _, email := range msg.Emails {
+					if email != nil && !email.IsRead {
+						unseen++
+					}
+				}
+				m.folderStatus[m.currentFolder] = models.FolderStatus{Unseen: unseen, Total: len(msg.Emails)}
+			}
+			m.updateTimelineTable()
+		}
+		m.loadClassifications()
+		if msg.FinishLoading {
+			m.loading = false
+			m.statusMessage = msg.StatusMessage
+		}
+		return m, nil
+
 	case EmailBodyMsg:
 		// If this body load was triggered from the Contacts tab, handle it there.
 		if m.contactPreviewLoading {
@@ -1250,41 +1388,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LoadingMsg:
 		m.progressInfo = msg.Info
-		switch msg.Info.Phase {
-		case "complete":
-			listFoldersCmd := func() tea.Msg {
-				folders, err := m.backend.ListFolders()
-				if err != nil {
-					logger.Warn("Failed to list folders: %v", err)
-					return FoldersLoadedMsg{Folders: []string{"INBOX"}}
-				}
-				return FoldersLoadedMsg{Folders: folders}
-			}
-			// Start background sync: IDLE if supported, else fall back to polling.
-			syncCmd := m.startSync(m.currentFolder)
-			// Subscribe to background reconciliation now that Load() has set the channel.
-			m.validIDsCh = m.backend.ValidIDsCh()
-			// Always load timeline since it's the default startup tab
-			return m, tea.Batch(
-				m.loadCachedStartupFinalCmd(msg.Info.Message),
-				listFoldersCmd,
-				m.loadTimelineEmails(),
-				syncCmd,
-				m.listenForValidIDs(),
-			)
-		case "error":
-			// Stop loading; keep existing data so the user can still navigate
-			logger.Error("Load error: %s", msg.Info.Message)
-			m.loading = false
-			if m.stats == nil {
-				m.stats = map[string]*models.SenderStats{}
-			}
-			m.updateSummaryTable()
-			m.updateDetailsTable()
-			return m, nil
-		default:
-			return m, tea.Batch(m.listenForProgress(), m.loadCachedStartupCmd())
-		}
+		return m, nil
 
 	case LoadCompleteMsg:
 		m.loading = false
@@ -1626,7 +1730,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "f":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			m.showSidebar = !m.showSidebar
 			if m.windowWidth > 0 {
 				m.updateTableDimensions(m.windowWidth, m.windowHeight)
@@ -1654,7 +1758,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case " ":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.focusedPanel == panelSidebar {
 				m.toggleSidebarNode()
 			} else {
@@ -1809,7 +1913,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.focusedPanel == panelSidebar {
 				m.selectSidebarFolder()
 				m.clearTimelineChatFilter()
@@ -1852,14 +1956,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		return m.handleEscKey()
 
-	case "tab":
-		if !m.loading {
+	case "tab", "ctrl+i":
+		if m.canInteractWithVisibleData() {
 			m.cyclePanel(true)
 		}
 		return m, nil
 
 	case "shift+tab":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			m.cyclePanel(false)
 		}
 		return m, nil
@@ -1896,7 +2000,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "up", "k":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				if m.cleanupBodyScrollOffset > 0 {
 					m.cleanupBodyScrollOffset--
@@ -1910,7 +2014,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				m.cleanupBodyScrollOffset++
 				return m, nil

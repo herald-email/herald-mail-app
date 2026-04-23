@@ -49,10 +49,10 @@ func (s *stubBackend) GetTimelineEmails(_ string) ([]*models.EmailData, error) {
 func (s *stubBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error) {
 	return s.virtualFolderResult, nil
 }
-func (s *stubBackend) GetClassifications(_ string) (map[string]string, error)  { return nil, nil }
-func (s *stubBackend) SetClassification(_, _ string) error                     { return nil }
-func (s *stubBackend) GetUnclassifiedIDs(_ string) ([]string, error)           { return nil, nil }
-func (s *stubBackend) GetEmailByID(_ string) (*models.EmailData, error)        { return nil, nil }
+func (s *stubBackend) GetClassifications(_ string) (map[string]string, error) { return nil, nil }
+func (s *stubBackend) SetClassification(_, _ string) error                    { return nil }
+func (s *stubBackend) GetUnclassifiedIDs(_ string) ([]string, error)          { return nil, nil }
+func (s *stubBackend) GetEmailByID(_ string) (*models.EmailData, error)       { return nil, nil }
 func (s *stubBackend) FetchEmailBody(_ string, _ uint32) (*models.EmailBody, error) {
 	s.fetchBodyCalls++
 	return nil, nil
@@ -60,6 +60,7 @@ func (s *stubBackend) FetchEmailBody(_ string, _ uint32) (*models.EmailBody, err
 func (s *stubBackend) SaveAttachment(_ *models.Attachment, _ string) error { return nil }
 func (s *stubBackend) SetGroupByDomain(_ bool)                             {}
 func (s *stubBackend) Progress() <-chan models.ProgressInfo                { return nil }
+func (s *stubBackend) SyncEvents() <-chan models.FolderSyncEvent           { return nil }
 func (s *stubBackend) Close() error                                        { return nil }
 func (s *stubBackend) ArchiveEmail(_, _ string) error                      { return nil }
 func (s *stubBackend) ArchiveSenderEmails(_, _ string) error               { return nil }

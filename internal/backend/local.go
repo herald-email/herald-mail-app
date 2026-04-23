@@ -23,13 +23,21 @@ import (
 // LocalBackend implements Backend with a direct IMAP connection and local SQLite cache.
 // This is the single-process implementation; a future RemoteBackend will speak to a daemon.
 type LocalBackend struct {
-	imapClient *imap.Client
-	cache      *cache.Cache
-	classifier ai.AIClient
-	cfg        *config.Config
-	progressCh chan models.ProgressInfo
-	closed     atomic.Bool
-	loading    atomic.Bool
+	imapClient       *imap.Client
+	cache            *cache.Cache
+	classifier       ai.AIClient
+	cfg              *config.Config
+	progressCh       chan models.ProgressInfo
+	rawProgressCh    chan models.ProgressInfo
+	syncEventsCh     chan models.FolderSyncEvent
+	closed           atomic.Bool
+	loadCoordinator  *latestWinsLoadCoordinator
+	activeLoadMu     sync.RWMutex
+	activeLoad       folderLoadRequest
+	lastFetchMu      sync.Mutex
+	lastFetchCurrent map[int64]int
+	foldersMu        sync.RWMutex
+	cachedFolders    []string
 
 	// Background polling
 	newEmailsCh chan models.NewEmailsNotification
@@ -116,83 +124,41 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 	}
 
 	progressCh := make(chan models.ProgressInfo, 100)
-	return &LocalBackend{
-		imapClient:  imap.New(cfg, configPath, c, progressCh),
-		cache:       c,
-		classifier:  classifier,
-		cfg:         cfg,
-		progressCh:  progressCh,
-		newEmailsCh: make(chan models.NewEmailsNotification, 10),
-	}, nil
+	rawProgressCh := make(chan models.ProgressInfo, 100)
+	b := &LocalBackend{
+		imapClient:       imap.New(cfg, configPath, c, rawProgressCh),
+		cache:            c,
+		classifier:       classifier,
+		cfg:              cfg,
+		progressCh:       progressCh,
+		rawProgressCh:    rawProgressCh,
+		syncEventsCh:     make(chan models.FolderSyncEvent, 256),
+		loadCoordinator:  newLatestWinsLoadCoordinator(),
+		lastFetchCurrent: make(map[int64]int),
+		newEmailsCh:      make(chan models.NewEmailsNotification, 10),
+	}
+	go b.fanoutProgressLoop()
+	go b.loadWorker()
+	return b, nil
 }
 
-// Load runs the full sync sequence in a background goroutine:
-// connect → process new emails → cleanup stale cache → send "complete".
-// All progress is sent through Progress().
+// Load schedules a folder sync and immediately emits a generation-tagged
+// sync_started event so the UI can invalidate older work before the worker
+// reaches the IMAP lane.
 func (b *LocalBackend) Load(folder string) {
-	if !b.loading.CompareAndSwap(false, true) {
-		logger.Warn("Load already in progress, ignoring request for folder: %s", folder)
-		return
-	}
-	go func() {
-		defer b.loading.Store(false)
-		b.sendProgress(models.ProgressInfo{
-			Phase:   "connecting",
-			Message: "Connecting to IMAP server...",
-		})
-		time.Sleep(200 * time.Millisecond) // let the UI render the first frame
-
-		if err := b.imapClient.Connect(); err != nil {
-			logger.Error("Failed to connect to IMAP: %v", err)
-			b.sendProgress(models.ProgressInfo{
-				Phase:   "error",
-				Message: fmt.Sprintf("Connection failed: %v", err),
-			})
-			return
-		}
-
-		b.sendProgress(models.ProgressInfo{
-			Phase:   "scanning",
-			Message: fmt.Sprintf("Opening %s...", folder),
-		})
-
-		if err := b.imapClient.ProcessEmailsIncremental(folder); err != nil {
-			logger.Error("Failed to process emails: %v", err)
-			b.sendProgress(models.ProgressInfo{
-				Phase:   "error",
-				Message: fmt.Sprintf("Processing failed: %v", err),
-			})
-			return
-		}
-
-		b.sendProgress(models.ProgressInfo{
-			Phase:   "finalizing",
-			Message: "Generating statistics...",
-		})
-		stats, err := b.imapClient.GetSenderStatistics(folder)
-		if err != nil {
-			logger.Error("Failed to get statistics: %v", err)
-			b.sendProgress(models.ProgressInfo{
-				Phase:   "error",
-				Message: fmt.Sprintf("Statistics failed: %v", err),
-			})
-			return
-		}
-
-		b.sendProgress(models.ProgressInfo{
-			Phase:   "complete",
-			Message: fmt.Sprintf("Found %d senders", len(stats)),
-		})
-		logger.Info("Load complete: %d senders", len(stats))
-
-		// Launch background reconciliation. The valid-ID map is sent on the channel
-		// as soon as the server UID list is fetched; all views re-filter immediately.
-		validIDsCh := make(chan map[string]bool, 1)
-		b.validIDsMu.Lock()
-		b.validIDsChSt = validIDsCh
-		b.validIDsMu.Unlock()
-		b.imapClient.StartBackgroundReconcile(folder, validIDsCh)
-	}()
+	req := b.loadCoordinator.Submit(folder)
+	b.emitSyncEvent(models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Phase:      models.SyncPhaseSyncStarted,
+		Message:    fmt.Sprintf("Opening %s...", folder),
+	})
+	b.emitSyncEvent(models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Phase:      models.SyncPhaseSnapshotReady,
+		Message:    fmt.Sprintf("Showing cached %s while live sync starts", folder),
+	})
 }
 
 func (b *LocalBackend) sendProgress(p models.ProgressInfo) {
@@ -205,6 +171,211 @@ func (b *LocalBackend) sendProgress(p models.ProgressInfo) {
 		}
 	}()
 	b.progressCh <- p
+}
+
+func (b *LocalBackend) emitSyncEvent(event models.FolderSyncEvent) {
+	if b.syncEventsCh == nil || b.closed.Load() {
+		return
+	}
+	defer func() {
+		if recover() != nil {
+			// Close() can race with an in-flight send during shutdown.
+		}
+	}()
+	select {
+	case b.syncEventsCh <- event:
+	default:
+	}
+}
+
+func (b *LocalBackend) setActiveLoad(req folderLoadRequest) {
+	b.activeLoadMu.Lock()
+	b.activeLoad = req
+	b.activeLoadMu.Unlock()
+}
+
+func (b *LocalBackend) clearActiveLoad(req folderLoadRequest) {
+	b.activeLoadMu.Lock()
+	if b.activeLoad.Generation == req.Generation {
+		b.activeLoad = folderLoadRequest{}
+	}
+	b.activeLoadMu.Unlock()
+	b.lastFetchMu.Lock()
+	delete(b.lastFetchCurrent, req.Generation)
+	b.lastFetchMu.Unlock()
+}
+
+func (b *LocalBackend) currentActiveLoad() (folderLoadRequest, bool) {
+	b.activeLoadMu.RLock()
+	defer b.activeLoadMu.RUnlock()
+	if b.activeLoad.Generation == 0 {
+		return folderLoadRequest{}, false
+	}
+	return b.activeLoad, true
+}
+
+func (b *LocalBackend) fanoutProgressLoop() {
+	for info := range b.rawProgressCh {
+		if b.closed.Load() {
+			return
+		}
+		b.sendProgress(info)
+		req, ok := b.currentActiveLoad()
+		if !ok {
+			continue
+		}
+		if event, ok := b.syncEventFromProgress(req, info); ok {
+			b.emitSyncEvent(event)
+		}
+	}
+}
+
+func (b *LocalBackend) syncEventFromProgress(req folderLoadRequest, info models.ProgressInfo) (models.FolderSyncEvent, bool) {
+	event := models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Message:    info.Message,
+		Current:    info.Current,
+		Total:      info.Total,
+	}
+
+	switch info.Phase {
+	case "error":
+		event.Phase = models.SyncPhaseError
+		event.Error = info.Message
+		return event, true
+	case "complete":
+		event.Phase = models.SyncPhaseComplete
+		return event, true
+	case "fetching":
+		event.Phase = models.SyncPhaseRowsCached
+		b.lastFetchMu.Lock()
+		prev := b.lastFetchCurrent[req.Generation]
+		if info.Current < prev {
+			prev = 0
+		}
+		event.EventCount = info.Current - prev
+		if event.EventCount <= 0 {
+			event.EventCount = 1
+		}
+		b.lastFetchCurrent[req.Generation] = info.Current
+		b.lastFetchMu.Unlock()
+		return event, true
+	default:
+		event.Phase = models.SyncPhaseSyncStarted
+		return event, true
+	}
+}
+
+func (b *LocalBackend) loadWorker() {
+	for range b.loadCoordinator.Wake() {
+		for {
+			req, ok := b.loadCoordinator.DrainPending()
+			if !ok {
+				break
+			}
+			b.runLoad(req)
+		}
+	}
+}
+
+func (b *LocalBackend) runLoad(req folderLoadRequest) {
+	b.setActiveLoad(req)
+	defer b.clearActiveLoad(req)
+
+	b.sendProgress(models.ProgressInfo{
+		Phase:   "connecting",
+		Message: "Connecting to IMAP server...",
+	})
+	time.Sleep(200 * time.Millisecond)
+
+	if err := b.imapClient.Connect(); err != nil {
+		logger.Error("Failed to connect to IMAP: %v", err)
+		b.sendProgress(models.ProgressInfo{
+			Phase:   "error",
+			Message: fmt.Sprintf("Connection failed: %v", err),
+		})
+		b.emitSyncEvent(models.FolderSyncEvent{
+			Folder:     req.Folder,
+			Generation: req.Generation,
+			Phase:      models.SyncPhaseError,
+			Message:    fmt.Sprintf("Connection failed: %v", err),
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	if folders, err := b.imapClient.ListFolders(); err != nil {
+		logger.Warn("Failed to prime folder cache after connect: %v", err)
+	} else if len(folders) > 0 {
+		b.foldersMu.Lock()
+		b.cachedFolders = append(b.cachedFolders[:0], folders...)
+		b.foldersMu.Unlock()
+		logger.Info("Primed %d folders after connect", len(folders))
+	}
+
+	if err := b.imapClient.ProcessEmailsIncremental(req.Folder); err != nil {
+		logger.Error("Failed to process emails: %v", err)
+		b.sendProgress(models.ProgressInfo{
+			Phase:   "error",
+			Message: fmt.Sprintf("Processing failed: %v", err),
+		})
+		b.emitSyncEvent(models.FolderSyncEvent{
+			Folder:     req.Folder,
+			Generation: req.Generation,
+			Phase:      models.SyncPhaseError,
+			Message:    fmt.Sprintf("Processing failed: %v", err),
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	b.sendProgress(models.ProgressInfo{
+		Phase:   "finalizing",
+		Message: "Generating statistics...",
+	})
+	stats, err := b.imapClient.GetSenderStatistics(req.Folder)
+	if err != nil {
+		logger.Error("Failed to get statistics: %v", err)
+		b.sendProgress(models.ProgressInfo{
+			Phase:   "error",
+			Message: fmt.Sprintf("Statistics failed: %v", err),
+		})
+		b.emitSyncEvent(models.FolderSyncEvent{
+			Folder:     req.Folder,
+			Generation: req.Generation,
+			Phase:      models.SyncPhaseError,
+			Message:    fmt.Sprintf("Statistics failed: %v", err),
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	b.emitSyncEvent(models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Phase:      models.SyncPhaseCountsUpdated,
+		Message:    fmt.Sprintf("Found %d senders", len(stats)),
+		EventCount: 1,
+	})
+
+	b.sendProgress(models.ProgressInfo{
+		Phase:   "complete",
+		Message: fmt.Sprintf("Found %d senders", len(stats)),
+	})
+	logger.Info("Load complete: %d senders", len(stats))
+
+	validIDsCh := make(chan map[string]bool, 1)
+	b.validIDsMu.Lock()
+	b.validIDsChSt = validIDsCh
+	b.validIDsMu.Unlock()
+	b.emitSyncEvent(models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Phase:      models.SyncPhaseReconcileStarted,
+		Message:    fmt.Sprintf("Reconciling live %s state...", req.Folder),
+	})
+	b.imapClient.StartBackgroundReconcile(req.Folder, validIDsCh)
 }
 
 func (b *LocalBackend) GetSenderStatistics(folder string) (map[string]*models.SenderStats, error) {
@@ -240,6 +411,14 @@ func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
 }
 
 func (b *LocalBackend) ListFolders() ([]string, error) {
+	b.foldersMu.RLock()
+	if len(b.cachedFolders) > 0 {
+		folders := append([]string(nil), b.cachedFolders...)
+		b.foldersMu.RUnlock()
+		return folders, nil
+	}
+	b.foldersMu.RUnlock()
+
 	return b.imapClient.ListFolders()
 }
 
@@ -331,6 +510,10 @@ func (b *LocalBackend) Progress() <-chan models.ProgressInfo {
 	return b.progressCh
 }
 
+func (b *LocalBackend) SyncEvents() <-chan models.FolderSyncEvent {
+	return b.syncEventsCh
+}
+
 // Cache returns the underlying SQLite cache, for use by components that need
 // direct cache access (e.g. the cleanup engine in the daemon server).
 func (b *LocalBackend) Cache() *cache.Cache {
@@ -348,6 +531,9 @@ func (b *LocalBackend) Close() error {
 	b.StopPolling()
 	if b.progressCh != nil {
 		close(b.progressCh)
+	}
+	if b.syncEventsCh != nil {
+		close(b.syncEventsCh)
 	}
 	if b.newEmailsCh != nil {
 		close(b.newEmailsCh)

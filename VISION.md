@@ -32,6 +32,9 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Background new-email polling
 - [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
+- [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
+- [x] Stream-first folder sync with latest-wins generation invalidation so stale folder loads do not repaint the visible mailbox
+- [x] Microbatched Timeline refresh during IMAP sync (`100` changes or `500ms`) so the UI flows without jittering
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
 - [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
 - [x] IMAP IDLE (real push; currently polling only)

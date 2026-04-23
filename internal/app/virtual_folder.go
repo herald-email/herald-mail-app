@@ -43,7 +43,7 @@ func (m *Model) activateCurrentFolder() tea.Cmd {
 		m.syncCountdown = 0
 		return m.loadTimelineEmails()
 	}
-	return tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForProgress())
+	return tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForSyncEvents())
 }
 
 func filterVirtualFolderEmails(emails []*models.EmailData, query string) []*models.EmailData {
