@@ -326,14 +326,14 @@ type Model struct {
 	logViewer     *LogViewer
 
 	// Display options
-	groupByDomain    bool
-	currentFolder    string
-	selectedSender   string
-	selectedRows     map[int]bool        // Selected rows in summary table
-	selectedMessages map[string]bool     // Selected messages by MessageID (across all senders)
-	rowToSender      map[int]string      // Maps row index to original sender (before sanitization)
-	detailsEmails    []*models.EmailData // Current emails shown in details table
-	sidebarTooWide   bool                // set by layout when sidebar + terminal width leaves < 16 variable cols
+	groupByDomain       bool
+	currentFolder       string
+	selectedSender      string
+	selectedSummaryKeys map[string]bool     // Selected sender/domain keys in summary table
+	selectedMessages    map[string]bool     // Selected messages by MessageID (across all senders)
+	rowToSender         map[int]string      // Maps row index to original sender (before sanitization)
+	detailsEmails       []*models.EmailData // Current emails shown in details table
+	sidebarTooWide      bool                // set by layout when sidebar + terminal width leaves < 16 variable cols
 
 	// Tabs
 	activeTab int // tabCleanup, tabTimeline, or tabCompose
@@ -528,10 +528,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	summaryTable := table.New(
 		table.WithColumns([]table.Column{
 			{Title: "✓", Width: 2},
-			{Title: "Sender/Domain", Width: 33},
+			{Title: "Sender/Domain", Width: 46},
 			{Title: "Count", Width: 6},
-			{Title: "Avg KB", Width: 7},
-			{Title: "Attach", Width: 6},
 			{Title: "Date Range", Width: 20},
 		}),
 		table.WithFocused(true),
@@ -571,7 +569,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		Bold(false)
 	inactiveStyle.Selected = inactiveStyle.Selected.
 		Foreground(defaultTheme.TextFg).
-		Background(defaultTheme.StatusBg).
+		Background(defaultTheme.BorderInactive).
+		Underline(true).
 		Bold(false)
 
 	summaryTable.SetStyles(inactiveStyle)
@@ -660,28 +659,28 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	attachmentPathInput.CharLimit = 512
 
 	m := &Model{
-		backend:          b,
-		progressCh:       b.Progress(),
-		syncEventsCh:     b.SyncEvents(),
-		loading:          true,
-		dryRun:           dryRun,
-		startTime:        time.Now(),
-		currentFolder:    "INBOX",
-		folders:          []string{"INBOX"},
-		folderTree:       buildFolderTree([]string{"INBOX"}),
-		folderStatus:     make(map[string]models.FolderStatus),
-		showSidebar:      true,
-		focusedPanel:     panelTimeline,
-		selectedRows:     make(map[int]bool),
-		selectedMessages: make(map[string]bool),
-		rowToSender:      make(map[int]string),
-		summaryTable:     summaryTable,
-		detailsTable:     detailsTable,
-		timelineTable:    timelineTable,
-		logViewer:        logViewer,
-		chatInput:        chatInput,
-		classifier:       classifier,
-		classifications:  make(map[string]string),
+		backend:             b,
+		progressCh:          b.Progress(),
+		syncEventsCh:        b.SyncEvents(),
+		loading:             true,
+		dryRun:              dryRun,
+		startTime:           time.Now(),
+		currentFolder:       "INBOX",
+		folders:             []string{"INBOX"},
+		folderTree:          buildFolderTree([]string{"INBOX"}),
+		folderStatus:        make(map[string]models.FolderStatus),
+		showSidebar:         true,
+		focusedPanel:        panelTimeline,
+		selectedSummaryKeys: make(map[string]bool),
+		selectedMessages:    make(map[string]bool),
+		rowToSender:         make(map[int]string),
+		summaryTable:        summaryTable,
+		detailsTable:        detailsTable,
+		timelineTable:       timelineTable,
+		logViewer:           logViewer,
+		chatInput:           chatInput,
+		classifier:          classifier,
+		classifications:     make(map[string]string),
 		timeline: TimelineState{
 			expandedThreads:     make(map[string]bool),
 			searchInput:         searchInput,
@@ -1267,6 +1266,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.validIDsCh != nil {
 				cmds = append(cmds, m.listenForValidIDs())
 			}
+			cmds = append(cmds, m.loadFolderStatusCmd([]string{event.Folder}, 0))
 			if !isVirtualAllMailOnlyFolder(m.currentFolder) {
 				m.syncStatusMode = ""
 				cmds = append(cmds, m.loadFoldersCmd(0))
@@ -1305,15 +1305,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Emails != nil {
 			m.timeline.emails = msg.Emails
-			if !isVirtualAllMailOnlyFolder(m.currentFolder) {
-				unseen := 0
-				for _, email := range msg.Emails {
-					if email != nil && !email.IsRead {
-						unseen++
-					}
-				}
-				m.folderStatus[m.currentFolder] = models.FolderStatus{Unseen: unseen, Total: len(msg.Emails)}
-			}
 			m.updateTimelineTable()
 		}
 		m.loadClassifications()
@@ -1475,8 +1466,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
 			m.connectionLost = false
-			m.selectedRows = make(map[int]bool)
-			m.selectedMessages = make(map[string]bool)
+			m.resetCleanupSelection()
 
 			// Reload data after all deletions complete to sync with server
 			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
@@ -2115,9 +2105,17 @@ func (m *Model) renderMainView() string {
 			if m.stats != nil && len(m.stats) == 0 {
 				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 			} else {
-				summaryView = m.baseStyle.Render(renderStyledTableView(&m.summaryTable, 1))
+				summaryStyles := m.inactiveTableStyle
+				if m.focusedPanel == panelSummary {
+					summaryStyles = m.activeTableStyle
+				}
+				summaryView = m.baseStyle.Render(renderStyledTableViewWithStyles(&m.summaryTable, summaryStyles))
 			}
-			detailsView := m.baseStyle.Render(renderStyledTableView(&m.detailsTable, 2))
+			detailsStyles := m.inactiveTableStyle
+			if m.focusedPanel == panelDetails {
+				detailsStyles = m.activeTableStyle
+			}
+			detailsView := m.baseStyle.Render(renderStyledTableViewWithStyles(&m.detailsTable, detailsStyles))
 			if m.showCleanupPreview {
 				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
 				previewPanel := m.renderCleanupPreview()

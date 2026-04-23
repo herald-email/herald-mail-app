@@ -137,6 +137,24 @@ func TestCtrlITreatedAsTabOutsideSearchMode(t *testing.T) {
 	}
 }
 
+func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	model, _, handled := m.handleTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	if !handled {
+		t.Fatal("expected cleanup tab key to be handled while syncing with visible data")
+	}
+
+	updated := model.(*Model)
+	if updated.activeTab != tabCleanup {
+		t.Fatalf("expected active tab to switch to cleanup, got %d", updated.activeTab)
+	}
+}
+
 func TestFoldersLoadedMsg_PreservesExistingTreeWhenRefreshFails(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.folders = []string{"INBOX", "Sent", "Archive"}

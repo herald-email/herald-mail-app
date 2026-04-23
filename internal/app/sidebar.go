@@ -149,8 +149,8 @@ func (m *Model) selectSidebarFolder() {
 	m.loading = true
 	m.startTime = time.Now()
 	m.stats = nil
-	m.selectedRows = make(map[int]bool)
-	m.selectedMessages = make(map[string]bool)
+	m.selectedSender = ""
+	m.resetCleanupSelection()
 	m.timeline.virtualNotice = ""
 	if m.activeTab == tabTimeline {
 		m.focusedPanel = panelTimeline
@@ -216,7 +216,12 @@ func (m *Model) renderSidebar() string {
 			}
 		}
 
-		prefixLen := len([]rune(indent)) + 2 // icon is 2 display cells
+		selectionMarker := " "
+		if i == m.sidebarCursor && m.focusedPanel != panelSidebar {
+			selectionMarker = "›"
+		}
+
+		prefixLen := len([]rune(indent)) + 3 // selection marker (1) + icon (2)
 		available := sidebarContentWidth - prefixLen - len([]rune(countSuffix))
 		if available < 1 {
 			available = 1
@@ -231,7 +236,7 @@ func (m *Model) renderSidebar() string {
 				name = string(runes[:available])
 			}
 		}
-		line := fmt.Sprintf("%s%s%-*s%s", indent, icon, available, name, countSuffix)
+		line := fmt.Sprintf("%s%s%s%-*s%s", indent, selectionMarker, icon, available, name, countSuffix)
 
 		if i == m.sidebarCursor {
 			if m.focusedPanel == panelSidebar {
@@ -242,7 +247,8 @@ func (m *Model) renderSidebar() string {
 			} else {
 				line = lipgloss.NewStyle().
 					Foreground(defaultTheme.TextFg).
-					Background(defaultTheme.StatusBg).
+					Background(defaultTheme.BorderInactive).
+					Underline(true).
 					Render(line)
 			}
 		}

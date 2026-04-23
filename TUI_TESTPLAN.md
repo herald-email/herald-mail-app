@@ -161,6 +161,12 @@ Check these states during every applicable lane:
 - Startup live sync should progressively refresh visible Timeline rows as new mail is cached, not only after the final completion event.
 - Startup sync refreshes should be microbatched so the screen feels alive without repainting on every single raw IMAP event.
 - Folder switches should be latest-wins: stale sync results from an older folder request must not repaint the newly selected folder.
+- The active folder visible bundle settles together: rows, unread/total counts, folder label, and folder tree presence become coherent within a 2-5 second window under normal startup conditions.
+- Visible folder counts come from live IMAP folder status only; hydrated cache rows must not synthesize or overwrite sidebar, status-bar, or cleanup counts.
+- The top sync strip reflects only unsettled active-folder work and disappears once the active folder bundle is settled.
+- Startup must show the full folder tree as soon as the server folder list is known; loading the active folder must not collapse the sidebar to only a partial tree.
+- Cleanup summary selection checkmarks and cleanup selection status text must always agree.
+- Cleanup summary layout must resize cleanly without clipping the checkmark column or hiding the sender/domain column behind stale fixed-width assumptions.
 
 ### Network and backpressure
 
@@ -192,6 +198,7 @@ Check these states during every applicable lane:
 - Active tab and active panel are visually obvious.
 - If cached data is already visible while live sync continues, the UI explains that clearly and shows active sync progress in a human-readable way.
 - The top sync strip uses stream language (`opening`, `syncing`, `reconciled`) rather than vague spinner-only wording.
+- The sidebar folder tree is present as soon as the server folder list is available; it must not remain stuck on only `INBOX` and diagnostic entries while the active folder sync continues.
 
 ### TC-02 — Tab switching and hint updates
 
@@ -267,6 +274,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Sidebar row focus matches canonical row style.
+- The selected folder remains visibly selected after focus leaves the sidebar.
 
 ### TC-07 — Global AI status chip
 
@@ -443,6 +451,7 @@ Check these states during every applicable lane:
 - Focus normalization stays correct.
 - Borders remain exclusive.
 - Key hints match the visible/focused overlay.
+- Logs can be opened while visible startup data is already on screen and the active folder is still syncing.
 
 ### TC-13 — Multi-attachment navigation and save
 
@@ -614,6 +623,100 @@ Check these states during every applicable lane:
 - Key hints do not advertise delete/archive/reply/forward/re-classify/unsubscribe/quick-reply/star actions.
 - Local search works within the derived set.
 - `Esc` and preview navigation still behave normally.
+
+### TC-24 — Active-folder bundle settles together
+
+**Lane:** B  
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Start Herald against the real config.
+2. Capture the first render with visible rows.
+3. Watch the active folder for up to 5 seconds.
+4. Capture again when the sync strip disappears or the counts settle.
+
+**Expect:**
+- The active folder becomes usable before secondary background work completes.
+- Visible rows, folder counts, current folder label, and folder tree settle into one coherent state within a 2-5 second bundled window under normal conditions.
+- The UI never shows `synced` while counts are still unsettled or while the visible folder tree is still incomplete.
+
+### TC-25 — No count drift between sync hydration and live counts
+
+**Lane:** B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start Herald with a folder that already has cached rows.
+2. Capture sidebar counts, status-bar counts, and visible active-folder counts while sync is still running.
+3. Capture again after sync settles.
+
+**Expect:**
+- Sidebar and status-bar counts reflect live IMAP folder status, not the number of hydrated visible rows.
+- Hydrated cache slices do not temporarily rewrite the active folder to a smaller or contradictory count.
+- Cleanup grouping counts for the active folder match the same authoritative live folder count model.
+
+### TC-26 — Cleanup selection persistence and checkmarks
+
+**Lane:** A, B  
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Open Cleanup in sender mode.
+2. Select multiple rows with `space`.
+3. Resort or refresh if available, switch tabs, then return.
+4. Resize the terminal once and capture again.
+5. Repeat in domain mode.
+
+**Expect:**
+- Selected rows keep visible checkmarks.
+- The summary text such as `4 senders selected` or `4 domains selected` matches the visible checkmarks exactly.
+- Selection survives refreshes, reordering, tab switches, and resizes because it is tied to logical sender/domain identity rather than row index.
+
+### TC-27 — Cleanup responsive column layout
+
+**Lane:** A, B  
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Cleanup with a wide terminal.
+2. Resize down through every required size.
+3. Capture after each resize.
+
+**Expect:**
+- Cleanup summary columns are exactly `✓`, `Sender/Domain`, `Count`, and `Date Range`.
+- `Avg KB` and `Attach` do not appear.
+- The sender/domain column reclaims freed width first.
+- The first selection column remains visible and aligned at every supported size.
+
+### TC-28 — Folder tree completeness during startup
+
+**Lane:** B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start Herald against the real config.
+2. Observe the sidebar during the first visible render and during the next few seconds.
+3. Capture once during active sync and once after settling.
+
+**Expect:**
+- The folder tree appears early and stays stable while the active folder sync continues.
+- Starting a heavy `INBOX` sync does not temporarily collapse the sidebar to only the active folder and virtual entries.
+
+### TC-29 — Sync strip honesty and disappearance
+
+**Lane:** B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start Herald and observe the top sync strip.
+2. Wait until the active folder settles.
+3. Switch folders and repeat once.
+
+**Expect:**
+- The strip describes only real active-folder unsettled work such as opening, fetching, or refreshing counts.
+- It does not advertise unrelated background reconcile or sender-stat work as the main story.
+- It disappears once the active folder bundle is settled.
+- It never shows a spinner glyph.
 
 ---
 

@@ -363,6 +363,12 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Phase:   "complete",
 		Message: fmt.Sprintf("Found %d senders", len(stats)),
 	})
+	b.emitSyncEvent(models.FolderSyncEvent{
+		Folder:     req.Folder,
+		Generation: req.Generation,
+		Phase:      models.SyncPhaseComplete,
+		Message:    fmt.Sprintf("Found %d senders", len(stats)),
+	})
 	logger.Info("Load complete: %d senders", len(stats))
 
 	validIDsCh := make(chan map[string]bool, 1)

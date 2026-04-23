@@ -47,7 +47,7 @@ func (b *attachmentBackend) SaveAttachment(att *models.Attachment, destPath stri
 func TestRenderStatusBar_DoesNotLeakCleanupSelectionOutsideCleanup(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
-	m.selectedRows = map[int]bool{0: true}
+	m.selectedSummaryKeys = map[string]bool{"alice@example.com": true}
 	m.selectedMessages = map[string]bool{"msg-1": true}
 	m.emailsBySender = map[string][]*models.EmailData{
 		"alice@example.com": {{MessageID: "msg-1"}},

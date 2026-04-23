@@ -167,7 +167,7 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[0])
 			return model, cmd, true
 		}
-		if !m.loading && m.activeTab != tabTimeline {
+		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
 			return m, m.switchToTimeline(), true
 		}
 		return m, nil, true
@@ -176,7 +176,7 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
 		}
-		if !m.loading && m.activeTab != tabCompose {
+		if m.canInteractWithVisibleData() && m.activeTab != tabCompose {
 			return m, m.switchToCompose(), true
 		}
 		return m, nil, true
@@ -185,7 +185,7 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
 			return model, cmd, true
 		}
-		if !m.loading && m.activeTab != tabCleanup {
+		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
 			return m, m.switchToCleanup(), true
 		}
 		return m, nil, true
@@ -194,10 +194,13 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
 			return model, cmd, true
 		}
-		if !m.loading && m.activeTab != tabContacts {
+		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
 			return m, m.switchToContacts(), true
 		}
-		return m, m.loadContacts(), true
+		if m.canInteractWithVisibleData() {
+			return m, m.loadContacts(), true
+		}
+		return m, nil, true
 	case "5":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 4 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[4])

@@ -151,6 +151,7 @@ func (m *Model) startLoading() tea.Cmd {
 	}
 	return tea.Batch(
 		loadCmd,
+		m.loadFolderStatusCmd([]string{m.currentFolder}, 0),
 		m.loadFoldersCmd(500*time.Millisecond),
 	)
 }
@@ -243,6 +244,41 @@ func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
 	})
 }
 
+func (m *Model) loadFolderStatusCmd(folders []string, delay time.Duration) tea.Cmd {
+	load := func() tea.Msg {
+		status, err := m.backend.GetFolderStatus(folders)
+		if err != nil {
+			logger.Warn("Failed to get folder status: %v", err)
+			return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+		}
+		return FolderStatusMsg{Status: status}
+	}
+	if delay <= 0 {
+		return load
+	}
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return load()
+	})
+}
+
+func (m *Model) summaryKeyAtCursor() (string, bool) {
+	cursor := m.summaryTable.Cursor()
+	key, ok := m.rowToSender[cursor]
+	if !ok || key == "" {
+		return "", false
+	}
+	return key, true
+}
+
+func (m *Model) selectedSummaryCount() int {
+	return len(m.selectedSummaryKeys)
+}
+
+func (m *Model) resetCleanupSelection() {
+	m.selectedSummaryKeys = make(map[string]bool)
+	m.selectedMessages = make(map[string]bool)
+}
+
 // updateSummaryTable updates the summary table with current data
 func (m *Model) updateSummaryTable() {
 	if m.stats == nil {
@@ -268,16 +304,26 @@ func (m *Model) updateSummaryTable() {
 		return sortedStats[i].stats.TotalEmails > sortedStats[j].stats.TotalEmails
 	})
 
+	oldCursor := m.summaryTable.Cursor()
+	preservedKey := m.selectedSender
+	if preservedKey == "" {
+		if key, ok := m.rowToSender[oldCursor]; ok {
+			preservedKey = key
+		}
+	}
+
 	// Build table rows and mapping
 	var rows []table.Row
 	m.rowToSender = make(map[int]string) // Clear and rebuild mapping
+	keyToRow := make(map[string]int)
 	for i, item := range sortedStats {
 		// Store original sender for deletion
 		m.rowToSender[i] = item.sender
+		keyToRow[item.sender] = i
 
 		senderColW := m.summaryTable.Columns()[1].Width
 		if senderColW <= 0 {
-			senderColW = 33
+			senderColW = 46
 		}
 		sender := styledSender(item.sender, senderColW)
 		stats := item.stats
@@ -298,7 +344,7 @@ func (m *Model) updateSummaryTable() {
 
 		// Add selection indicator in first column
 		checkmark := " "
-		if m.selectedRows[i] {
+		if m.selectedSummaryKeys[item.sender] {
 			checkmark = "✓"
 		}
 
@@ -306,24 +352,45 @@ func (m *Model) updateSummaryTable() {
 			checkmark,
 			sender,
 			fmt.Sprintf("%d", stats.TotalEmails),
-			fmt.Sprintf("%.1f", stats.AvgSize/1024),
-			fmt.Sprintf("%d", stats.WithAttachments),
 			dateRange,
 		}
 		rows = append(rows, row)
 	}
 
 	m.summaryTable.SetRows(rows)
+	if len(rows) == 0 {
+		m.summaryTable.SetCursor(0)
+		m.selectedSender = ""
+		return
+	}
+	if preservedKey != "" {
+		if row, ok := keyToRow[preservedKey]; ok {
+			m.summaryTable.SetCursor(row)
+		} else if oldCursor >= 0 && oldCursor < len(rows) {
+			m.summaryTable.SetCursor(oldCursor)
+		} else {
+			m.summaryTable.SetCursor(0)
+		}
+	} else if oldCursor >= 0 && oldCursor < len(rows) {
+		m.summaryTable.SetCursor(oldCursor)
+	} else {
+		m.summaryTable.SetCursor(0)
+	}
 }
 
 // updateDetailsTable updates the details table for the selected sender
 func (m *Model) updateDetailsTable() {
 	cursor := m.summaryTable.Cursor()
-	sender, ok := m.rowToSender[cursor]
+	sender := m.selectedSender
+	if key, ok := m.rowToSender[cursor]; ok && key != "" {
+		sender = key
+	}
+	ok := sender != ""
 	if !ok || sender == "" {
 		sender, ok = m.rowToSender[0]
 	}
 	if !ok || sender == "" {
+		m.selectedSender = ""
 		m.detailsTable.SetRows([]table.Row{})
 		return
 	}
@@ -406,7 +473,8 @@ func (m *Model) toggleDomainMode() {
 	}
 
 	m.stats = stats
-	m.selectedRows = make(map[int]bool)
+	m.selectedSender = ""
+	m.resetCleanupSelection()
 	m.updateSummaryTable()
 	m.updateDetailsTable()
 }
@@ -507,8 +575,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 		!m.showCleanupPreview &&
 		!plan.SidebarVisible
 
-	const summaryFixedCols = 41
-	const summaryNumCols = 6
+	const summaryFixedCols = 8
+	const summaryNumCols = 4
 	const detailsFixedCols = 29
 	const detailsNumCols = 5
 
@@ -516,50 +584,40 @@ func (m *Model) updateTableDimensions(width, height int) {
 		m.cleanupPreviewWidth = width
 	} else if m.showCleanupPreview {
 		m.cleanupPreviewWidth = plan.Cleanup.PreviewWidth + 2
-
-		// Progressive column hiding for cleanup tables with preview open.
-		cpAttachW := 6
-		cpDateRangeW := 20
-		cpAvgKBW := 7
 		cpDetAttW := 3
-		sumF := summaryFixedCols // 41
-		sumN := summaryNumCols   // 6
-		detF := detailsFixedCols // 29
-		detN := detailsNumCols   // 5
+		sumF := summaryFixedCols
+		sumN := summaryNumCols
+		detF := detailsFixedCols
+		detN := detailsNumCols
 
-		const cpMinSender = 8
+		const cpMinSender = 6
+		const cpMinDateRange = 8
 
 		summaryAvailable := plan.Cleanup.SummaryWidth
 		detailsAvailable := plan.Cleanup.DetailsWidth
 		if summaryAvailable == 0 {
 			summaryAvailable = 12
 		}
-		calcSender := func() int { return summaryAvailable - (sumF + sumN*2) }
-
-		if calcSender() < cpMinSender && cpAttachW > 0 {
-			sumF -= cpAttachW
-			sumN--
-			cpAttachW = 0
+		remaining := summaryAvailable - (sumF + sumN*2)
+		if remaining < 0 {
+			remaining = 0
 		}
-		if calcSender() < cpMinSender && cpDetAttW > 0 {
+		cpDateRangeW := clampInt(remaining/3, cpMinDateRange, 20)
+		if remaining-cpDateRangeW < cpMinSender {
+			cpDateRangeW = remaining - cpMinSender
+		}
+		if cpDateRangeW < cpMinDateRange {
+			cpDateRangeW = cpMinDateRange
+		}
+		senderW := remaining - cpDateRangeW
+		if senderW < cpMinSender {
+			senderW = cpMinSender
+		}
+
+		if detailsAvailable-(detF+detN*2) < 8 && cpDetAttW > 0 {
 			detF -= cpDetAttW
 			detN--
 			cpDetAttW = 0
-		}
-		if calcSender() < cpMinSender && cpDateRangeW > 0 {
-			sumF -= cpDateRangeW
-			sumN--
-			cpDateRangeW = 0
-		}
-		if calcSender() < cpMinSender && cpAvgKBW > 0 {
-			sumF -= cpAvgKBW
-			sumN--
-			cpAvgKBW = 0
-		}
-
-		senderW := summaryAvailable - (sumF + sumN*2)
-		if senderW < 4 {
-			senderW = 4
 		}
 		subjectW := detailsAvailable - (detF + detN*2)
 		if subjectW < 4 {
@@ -570,8 +628,6 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "✓", Width: 2},
 			{Title: "Sender/Domain", Width: senderW},
 			{Title: "Count", Width: 6},
-			{Title: "Avg KB", Width: cpAvgKBW},
-			{Title: "Attach", Width: cpAttachW},
 			{Title: "Date Range", Width: cpDateRangeW},
 		})
 		m.summaryTable.SetWidth(sumF + senderW + sumN*2)
@@ -588,11 +644,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	} else {
 		m.cleanupPreviewWidth = 0
 
-		const minVariable = 24
-
-		attachW := 6
-		dateRangeW := 20
-		avgKBW := 7
+		const minSender = 8
+		const minDateRange = 8
 		detailsAttW := 3
 
 		sumFixed := summaryFixedCols
@@ -600,37 +653,28 @@ func (m *Model) updateTableDimensions(width, height int) {
 		sumNCols := summaryNumCols
 		detNCols := detailsNumCols
 
-		cleanupAvailable := plan.Cleanup.SummaryWidth + plan.Cleanup.DetailsWidth
-		calcVariable := func() int {
-			v := cleanupAvailable - sumFixed - detFixed - sumNCols*2 - detNCols*2
-			if v < 0 {
-				return 0
-			}
-			return v
-		}
-
-		if calcVariable() < minVariable && attachW > 0 {
-			sumFixed -= 6
-			sumNCols--
-			attachW = 0
-		}
-		if calcVariable() < minVariable && detailsAttW > 0 {
+		if plan.Cleanup.DetailsWidth-(detFixed+detNCols*2) < 8 && detailsAttW > 0 {
 			detFixed -= 3
 			detNCols--
 			detailsAttW = 0
 		}
-		if calcVariable() < minVariable && dateRangeW > 0 {
-			sumFixed -= 20
-			sumNCols--
-			dateRangeW = 0
-		}
-		if calcVariable() < minVariable && avgKBW > 0 {
-			sumFixed -= 7
-			sumNCols--
-			avgKBW = 0
-		}
 
-		senderWidth := plan.Cleanup.SummaryWidth - sumFixed - sumNCols*2
+		summaryAvailable := plan.Cleanup.SummaryWidth
+		remaining := summaryAvailable - sumFixed - sumNCols*2
+		if remaining < 0 {
+			remaining = 0
+		}
+		dateRangeW := clampInt(remaining/3, minDateRange, 20)
+		if remaining-dateRangeW < minSender {
+			dateRangeW = remaining - minSender
+		}
+		if dateRangeW < minDateRange {
+			dateRangeW = minDateRange
+		}
+		senderWidth := remaining - dateRangeW
+		if senderWidth < minSender {
+			senderWidth = minSender
+		}
 		subjectWidth := plan.Cleanup.DetailsWidth - detFixed - detNCols*2
 		if senderWidth < 8 {
 			senderWidth = 8
@@ -643,8 +687,6 @@ func (m *Model) updateTableDimensions(width, height int) {
 			{Title: "✓", Width: 2},
 			{Title: "Sender/Domain", Width: senderWidth},
 			{Title: "Count", Width: 6},
-			{Title: "Avg KB", Width: avgKBW},
-			{Title: "Attach", Width: attachW},
 			{Title: "Date Range", Width: dateRangeW},
 		})
 		m.summaryTable.SetWidth(sumFixed + senderWidth + sumNCols*2)

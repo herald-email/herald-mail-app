@@ -327,10 +327,12 @@ func (m *Model) renderTimelineView() string {
 		tableView = m.emptyStateView(notice)
 	} else {
 		style := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+		tableStyles := m.inactiveTableStyle
 		if chrome.FocusedPanel == panelTimeline {
 			style = style.BorderForeground(defaultTheme.BorderActive)
+			tableStyles = m.activeTableStyle
 		}
-		tableView = style.Render(renderStyledTableView(&m.timelineTable, 0))
+		tableView = style.Render(renderStyledTableViewWithStyles(&m.timelineTable, tableStyles))
 	}
 
 	var mainContent string
@@ -610,9 +612,11 @@ func (m *Model) timelineFilterPrefix() string {
 
 func (m *Model) appendTimelineStatusParts(parts []string) []string {
 	if m.activeTab == tabTimeline {
-		parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 		if m.timelineIsReadOnlyDiagnostic() {
+			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 			parts = append(parts, "diagnostic read-only")
+		} else if _, ok := m.folderStatus[m.currentFolder]; !ok {
+			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 		}
 	}
 	if m.timeline.searchMode {

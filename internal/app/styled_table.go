@@ -16,21 +16,22 @@ import (
 // This function uses ansi.Truncate (from charmbracelet/x/ansi) which correctly
 // measures visual width while skipping escape sequences.
 //
-// senderCol is the column index whose values may contain ANSI styling (pass -1
-// to disable; all cells are rendered plain-aware regardless).
-//
 // The bubbles table is kept for all state (cursor, key handling, row/column
 // data). Only rendering is replaced here.
 func renderStyledTableView(t *table.Model, _ int) string {
+	return renderStyledTableViewWithStyles(t, table.DefaultStyles())
+}
+
+func renderStyledTableViewWithStyles(t *table.Model, styles table.Styles) string {
 	cols := t.Columns()
 	rows := t.Rows()
 	cursor := t.Cursor()
 	height := t.Height() // visible rows (excluding header)
+	targetWidth := t.Width()
 
 	nrows := len(rows)
-	styles := table.DefaultStyles()
 	if nrows == 0 {
-		return renderTableHeader(cols, styles)
+		return fitTableLine(renderTableHeader(cols, styles), targetWidth)
 	}
 
 	// Compute the visible row window. We keep cursor at the bottom of the
@@ -50,12 +51,12 @@ func renderStyledTableView(t *table.Model, _ int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderTableHeader(cols, styles))
+	sb.WriteString(fitTableLine(renderTableHeader(cols, styles), targetWidth))
 
 	for i := start; i < end; i++ {
 		row := rows[i]
 		sb.WriteByte('\n')
-		sb.WriteString(renderTableRow(cols, row, i == cursor, styles))
+		sb.WriteString(fitTableLine(renderTableRow(cols, row, i == cursor, styles), targetWidth))
 	}
 
 	// Pad with blank rows to fill the viewport when data rows < height.
@@ -66,25 +67,40 @@ func renderStyledTableView(t *table.Model, _ int) string {
 		emptyRow := make(table.Row, len(cols))
 		for i := rendered; i < height; i++ {
 			sb.WriteByte('\n')
-			sb.WriteString(renderTableRow(cols, emptyRow, false, styles))
+			sb.WriteString(fitTableLine(renderTableRow(cols, emptyRow, false, styles), targetWidth))
 		}
 	}
 
 	return sb.String()
 }
 
+func fitTableLine(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+	line = ansi.Truncate(line, width, "")
+	if missing := width - ansi.StringWidth(line); missing > 0 {
+		line += strings.Repeat(" ", missing)
+	}
+	return line
+}
+
 // renderTableHeader renders the header row using the bubbles table header style.
 func renderTableHeader(cols []table.Column, styles table.Styles) string {
 	parts := make([]string, 0, len(cols))
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Header.GetForeground()).
+		Background(styles.Header.GetBackground()).
+		Bold(styles.Header.GetBold())
 	for _, col := range cols {
 		if col.Width <= 0 {
 			continue
 		}
 		cell := ansi.Truncate(col.Title, col.Width, "…")
-		rendered := lipgloss.NewStyle().
+		rendered := headerStyle.
 			Width(col.Width).MaxWidth(col.Width).Inline(true).
 			Render(cell)
-		parts = append(parts, styles.Header.Render(rendered))
+		parts = append(parts, styles.Cell.Render(rendered))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
@@ -112,6 +128,7 @@ func renderTableRow(cols []table.Column, row table.Row, selected bool, styles ta
 			cellStyle = cellStyle.
 				Foreground(styles.Selected.GetForeground()).
 				Background(styles.Selected.GetBackground()).
+				Underline(styles.Selected.GetUnderline()).
 				Bold(styles.Selected.GetBold())
 			// Strip inner ANSI from cell value to prevent color conflicts.
 			cell = ansi.Strip(cell)

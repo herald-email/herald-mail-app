@@ -1,8 +1,8 @@
 [?25l[?2004h[2J[H ProtonMail Analyzer [K
   1  Timeline    2  Compose    3  Cleanup    4  Contacts  [K
 ┌──────────────────────────┐  ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  INBOX                   │  │ Sender         Subject                            Date              Size KB  Att  Tag  │
-│  All Mail only           │  │ ● alice@exam…  Meeting tomorrow                   26-04-01 09:00    1.2      N         │
+│›  INBOX                  │  │ Sender         Subject                            Date              Size KB  Att  Tag  │
+│   All Mail only          │  │ ● alice@exam…  Meeting tomorrow                   26-04-01 09:00    1.2      N         │
 └──────────────────────────┘  │ ● bob@exampl…  Invoice #4521                      26-04-01 08:30    3.3      N         │
                               │ ● carol@exam…  Quarterly report                   26-03-31 14:00    8.7      N         │
                               │                                                                                        │

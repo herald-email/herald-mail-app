@@ -132,10 +132,10 @@ func TestGetUnclassifiedIDs_FiltersStale(t *testing.T) {
 
 func TestSendProgress_DoesNotPanicAfterClose(t *testing.T) {
 	b := &LocalBackend{
-		progressCh: make(chan models.ProgressInfo, 1),
+		rawProgressCh: make(chan models.ProgressInfo, 1),
 	}
 	b.closed.Store(true)
-	close(b.progressCh)
+	close(b.rawProgressCh)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -144,6 +144,56 @@ func TestSendProgress_DoesNotPanicAfterClose(t *testing.T) {
 	}()
 
 	b.sendProgress(models.ProgressInfo{Phase: "complete", Message: "done"})
+}
+
+func TestFanoutProgressLoop_EmitsCompleteSyncEventForBackendProgress(t *testing.T) {
+	rawProgressCh := make(chan models.ProgressInfo, 1)
+	progressCh := make(chan models.ProgressInfo, 1)
+	syncEventsCh := make(chan models.FolderSyncEvent, 1)
+
+	b := &LocalBackend{
+		rawProgressCh:    rawProgressCh,
+		progressCh:       progressCh,
+		syncEventsCh:     syncEventsCh,
+		lastFetchCurrent: make(map[int64]int),
+	}
+	b.setActiveLoad(folderLoadRequest{Folder: "INBOX", Generation: 7})
+
+	done := make(chan struct{})
+	go func() {
+		b.fanoutProgressLoop()
+		close(done)
+	}()
+
+	rawProgressCh <- models.ProgressInfo{Phase: "complete", Message: "Found 12 senders"}
+
+	select {
+	case event := <-syncEventsCh:
+		if event.Phase != models.SyncPhaseComplete {
+			t.Fatalf("expected complete sync phase, got %q", event.Phase)
+		}
+		if event.Folder != "INBOX" || event.Generation != 7 {
+			t.Fatalf("unexpected sync event identity: %+v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for sync completion event")
+	}
+
+	select {
+	case progress := <-progressCh:
+		if progress.Phase != "complete" {
+			t.Fatalf("expected progress copy to reach UI, got %+v", progress)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for UI progress copy")
+	}
+
+	close(rawProgressCh)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("fanout progress loop did not exit after raw progress channel closed")
+	}
 }
 
 func TestBuildAllMailOnlyView_StrictExclusions(t *testing.T) {
@@ -155,8 +205,8 @@ func TestBuildAllMailOnlyView_StrictExclusions(t *testing.T) {
 	}
 	membership := map[string]map[string]bool{
 		"All Mail": {
-			"<keep@x.com>":  true,
-			"<inbox@x.com>": true,
+			"<keep@x.com>":   true,
+			"<inbox@x.com>":  true,
 			"<custom@x.com>": true,
 		},
 		"INBOX": {

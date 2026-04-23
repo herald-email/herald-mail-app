@@ -74,6 +74,9 @@ func (m *Model) topSyncStripSegments() (string, string) {
 	}
 
 	if strings.HasPrefix(message, "Found ") && strings.Contains(message, " senders") {
+		if !m.syncCountsSettled {
+			return fmt.Sprintf("Refreshing %s", displayFolderName(m.currentFolder)), strings.ToLower(message)
+		}
 		return fmt.Sprintf("%s synced", displayFolderName(m.currentFolder)), strings.ToLower(message)
 	}
 
@@ -263,15 +266,15 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	// Selection state is cleanup-local and should not leak into other tabs.
-	if m.activeTab == tabCleanup && len(m.selectedRows) > 0 {
+	if m.activeTab == tabCleanup && len(m.selectedSummaryKeys) > 0 {
 		label := "senders"
 		if m.groupByDomain {
 			label = "domains"
 		}
-		if len(m.selectedRows) == 1 {
+		if len(m.selectedSummaryKeys) == 1 {
 			label = strings.TrimSuffix(label, "s")
 		}
-		parts = append(parts, fmt.Sprintf("%d %s selected", len(m.selectedRows), label))
+		parts = append(parts, fmt.Sprintf("%d %s selected", len(m.selectedSummaryKeys), label))
 	} else if m.activeTab == tabCleanup && len(m.selectedMessages) > 0 {
 		// Count how many distinct sender/domain keys have selected messages
 		keySet := map[string]bool{}

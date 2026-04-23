@@ -27,11 +27,14 @@ const deletionMaxRetries = 3
 
 func (m *Model) toggleSelection() {
 	if m.summaryTable.Focused() {
-		cursor := m.summaryTable.Cursor()
-		if m.selectedRows[cursor] {
-			delete(m.selectedRows, cursor)
+		key, ok := m.summaryKeyAtCursor()
+		if !ok {
+			return
+		}
+		if m.selectedSummaryKeys[key] {
+			delete(m.selectedSummaryKeys, key)
 		} else {
-			m.selectedRows[cursor] = true
+			m.selectedSummaryKeys[key] = true
 		}
 		// Refresh the table to show/hide checkmarks
 		m.updateSummaryTable()
@@ -128,20 +131,17 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 				targets = append(targets, deleteTarget{messageID: email.MessageID, folder: folder})
 			}
 		}
-	} else if len(m.selectedRows) > 0 {
+	} else if len(m.selectedSummaryKeys) > 0 {
 		// Delete multiple selected senders (or domains in domain mode)
-		for cursor := range m.selectedRows {
-			sender, ok := m.rowToSender[cursor]
-			if !ok || sender == "" {
-				logger.Warn("No sender mapping found for row %d", cursor)
+		for key := range m.selectedSummaryKeys {
+			if key == "" {
 				continue
 			}
-			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+			targets = append(targets, deleteTarget{sender: key, isDomain: m.groupByDomain, folder: folder})
 		}
 	} else {
 		// Delete current sender using row mapping (or domain in domain mode)
-		cursor := m.summaryTable.Cursor()
-		sender, ok := m.rowToSender[cursor]
+		sender, ok := m.summaryKeyAtCursor()
 		if ok && sender != "" {
 			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
 		}
@@ -320,11 +320,13 @@ func (m *Model) buildDeleteDesc() string {
 		}
 		return ""
 	}
-	if len(m.selectedRows) > 0 {
-		return fmt.Sprintf("Delete emails from %d selected sender(s)?", len(m.selectedRows))
+	if len(m.selectedSummaryKeys) > 0 {
+		if m.groupByDomain {
+			return fmt.Sprintf("Delete emails from %d selected domain(s)?", len(m.selectedSummaryKeys))
+		}
+		return fmt.Sprintf("Delete emails from %d selected sender(s)?", len(m.selectedSummaryKeys))
 	}
-	cursor := m.summaryTable.Cursor()
-	if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
+	if sender, ok := m.summaryKeyAtCursor(); ok && sender != "" {
 		if m.groupByDomain {
 			return fmt.Sprintf("Delete all emails from domain %s?", sender)
 		}
@@ -365,11 +367,16 @@ func (m *Model) buildArchiveDesc() string {
 		}
 		return ""
 	}
-	if len(m.selectedRows) > 0 {
-		return fmt.Sprintf("Archive emails from %d selected sender(s)?", len(m.selectedRows))
+	if len(m.selectedSummaryKeys) > 0 {
+		if m.groupByDomain {
+			return fmt.Sprintf("Archive emails from %d selected domain(s)?", len(m.selectedSummaryKeys))
+		}
+		return fmt.Sprintf("Archive emails from %d selected sender(s)?", len(m.selectedSummaryKeys))
 	}
-	cursor := m.summaryTable.Cursor()
-	if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
+	if sender, ok := m.summaryKeyAtCursor(); ok && sender != "" {
+		if m.groupByDomain {
+			return fmt.Sprintf("Archive all emails from domain %s?", sender)
+		}
 		return fmt.Sprintf("Archive all emails from %s?", sender)
 	}
 	return ""

@@ -116,6 +116,8 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
 - [ ] Split Timeline and preview panels keep aligned heights at common sizes including `80x24`
+- [ ] Active folder visible bundle settles together within 2-5 seconds: rows, live counts, folder title, and folder tree presence
+- [ ] Hydrated cache rows never overwrite authoritative live IMAP folder counts shown in the Timeline chrome
 
 ### Status Bar
 
@@ -132,6 +134,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)
+- [ ] Top sync strip is informational only, reports active-folder unsettled work honestly, and disappears once the active folder bundle is settled
 
 ### Multi-Folder Sidebar
 
@@ -140,6 +143,8 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Unread / total counts per folder
 - [x] Keyboard navigation (j/k, Enter to switch folder)
 - [x] Auto-hides with a hint when terminal is too narrow
+- [ ] Current folder remains visibly selected even when the sidebar is not focused
+- [ ] Folder tree appears promptly during startup and does not collapse to a partial list while the active folder is still loading
 
 ### Chat Panel
 
@@ -275,6 +280,10 @@ The Cleanup tab groups emails by sender or domain and shows volume statistics, m
 - [x] Details panel: individual emails for selected sender
 - [x] Bulk delete: all from sender, all from domain
 - [x] Bulk archive: all from sender
+- [ ] Stable sender/domain selection keyed by logical identity rather than row index
+- [ ] Selection checkmarks and `N selected` status always agree across refreshes, re-sorts, and resizes
+- [ ] Cleanup summary columns simplified to `✓`, `Sender/Domain`, `Count`, and `Date Range`
+- [ ] Cleanup summary resizes responsively at `220x50`, `120x40`, `80x24`, and `50x15` without losing the selection column
 
 ### Email preview in Cleanup
 

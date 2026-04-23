@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -342,6 +343,161 @@ func TestTopSyncStrip_DoesNotAnimateWithSpinnerGlyph(t *testing.T) {
 		if strings.Contains(rendered, glyph) {
 			t.Fatalf("expected top sync strip to avoid spinner glyphs, got %q", rendered)
 		}
+	}
+}
+
+func TestSyncHydratedMsg_DoesNotOverwriteLiveFolderCounts(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.currentFolder = "INBOX"
+	m.syncGeneration = 7
+	m.folderStatus["INBOX"] = models.FolderStatus{Unseen: 101, Total: 1317}
+
+	model, _ := m.Update(SyncHydratedMsg{
+		Folder:     "INBOX",
+		Generation: 7,
+		Emails:     mockEmails(),
+	})
+	updated := model.(*Model)
+
+	if got := updated.folderStatus["INBOX"]; got.Unseen != 101 || got.Total != 1317 {
+		t.Fatalf("expected live folder counts to remain authoritative, got %+v", got)
+	}
+}
+
+func TestStatusBar_DoesNotMixTimelineRowCountWithLiveFolderTotal(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.currentFolder = "INBOX"
+	m.folderStatus["INBOX"] = models.FolderStatus{Unseen: 1010, Total: 1318}
+	m.timeline.emails = make([]*models.EmailData, 0, 1316)
+	for i := 0; i < 1316; i++ {
+		m.timeline.emails = append(m.timeline.emails, &models.EmailData{MessageID: fmt.Sprintf("msg-%d", i)})
+	}
+
+	status := stripANSI(m.renderStatusBar())
+	if strings.Contains(status, "1316 emails") {
+		t.Fatalf("expected live status bar to avoid cache-derived row count drift, got %q", status)
+	}
+	if !strings.Contains(status, "1010 unread / 1318 total") {
+		t.Fatalf("expected live folder status in status bar, got %q", status)
+	}
+}
+
+func TestCleanupSelectionPersistsAcrossReorderAndResize(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	selectedKey, ok := m.summaryKeyAtCursor()
+	if !ok {
+		t.Fatal("expected a cleanup summary key at the current cursor")
+	}
+	m.toggleSelection()
+
+	if !m.selectedSummaryKeys[selectedKey] {
+		t.Fatalf("expected %q to be selected", selectedKey)
+	}
+
+	m.stats[selectedKey].TotalEmails = 1
+	for key, stats := range m.stats {
+		if key != selectedKey {
+			stats.TotalEmails = 20
+		}
+	}
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	foundCheckmark := false
+	for rowIdx, key := range m.rowToSender {
+		if key == selectedKey {
+			row := m.summaryTable.Rows()[rowIdx]
+			foundCheckmark = len(row) > 0 && row[0] == "✓"
+			break
+		}
+	}
+	if !foundCheckmark {
+		t.Fatalf("expected selected cleanup key %q to keep its checkmark after reorder", selectedKey)
+	}
+
+	status := stripANSI(m.renderStatusBar())
+	if !strings.Contains(status, "1 sender selected") {
+		t.Fatalf("expected cleanup status to reflect stable selection, got %q", status)
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(*Model)
+	foundCheckmark = false
+	for rowIdx, key := range m.rowToSender {
+		if key == selectedKey {
+			row := m.summaryTable.Rows()[rowIdx]
+			foundCheckmark = len(row) > 0 && row[0] == "✓"
+			break
+		}
+	}
+	if !foundCheckmark {
+		t.Fatalf("expected selected cleanup key %q to keep its checkmark after resize", selectedKey)
+	}
+}
+
+func TestCleanupSummaryColumns_SimplifiedAndResponsive(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabCleanup
+	m.updateTableDimensions(220, 50)
+
+	wantTitles := []string{"✓", "Sender/Domain", "Count", "Date Range"}
+	gotCols := m.summaryTable.Columns()
+	if len(gotCols) != len(wantTitles) {
+		t.Fatalf("expected %d cleanup summary columns, got %d", len(wantTitles), len(gotCols))
+	}
+	for i, want := range wantTitles {
+		if gotCols[i].Title != want {
+			t.Fatalf("expected cleanup summary column %d to be %q, got %q", i, want, gotCols[i].Title)
+		}
+	}
+	wideSenderWidth := gotCols[1].Width
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(*Model)
+	gotCols = m.summaryTable.Columns()
+	if len(gotCols) != len(wantTitles) {
+		t.Fatalf("expected %d cleanup summary columns after resize, got %d", len(wantTitles), len(gotCols))
+	}
+	narrowSenderWidth := gotCols[1].Width
+	if narrowSenderWidth >= wideSenderWidth {
+		t.Fatalf("expected sender/domain column to shrink on narrower terminals, got wide=%d narrow=%d", wideSenderWidth, narrowSenderWidth)
+	}
+	if gotCols[0].Width < 1 {
+		t.Fatalf("expected selection column to stay visible, got width %d", gotCols[0].Width)
+	}
+}
+
+func TestRenderSidebar_InactiveSelectedFolderRemainsVisible(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.folders = []string{"INBOX", "Sent", "Archive"}
+	m.folderTree = buildFolderTree(m.folders)
+	m.currentFolder = "INBOX"
+	m.focusedPanel = panelTimeline
+	m.showSidebar = true
+
+	rendered := m.renderSidebar()
+	lines := strings.Split(rendered, "\n")
+	var inboxLine string
+	for _, line := range lines {
+		if strings.Contains(stripANSI(line), "INBOX") {
+			inboxLine = line
+			break
+		}
+	}
+	if inboxLine == "" {
+		t.Fatal("expected INBOX line in sidebar render")
+	}
+	if !strings.Contains(stripANSI(inboxLine), "›  INBOX") {
+		t.Fatalf("expected inactive selected folder to keep a visible marker, got %q", stripANSI(inboxLine))
 	}
 }
 
