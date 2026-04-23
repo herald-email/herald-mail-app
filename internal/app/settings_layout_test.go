@@ -5,16 +5,22 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
-func renderSettingsViewForTest(t *testing.T, s *Settings, width, height int) string {
+func renderSettingsRawViewForTest(t *testing.T, s *Settings, width, height int) string {
 	t.Helper()
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	s = updated.(*Settings)
 	rendered := s.View()
 	assertFitsWidth(t, width, rendered)
 	assertFitsHeight(t, height, rendered)
-	return stripANSI(rendered)
+	return rendered
+}
+
+func renderSettingsViewForTest(t *testing.T, s *Settings, width, height int) string {
+	t.Helper()
+	return ansi.Strip(renderSettingsRawViewForTest(t, s, width, height))
 }
 
 func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
@@ -55,11 +61,58 @@ func TestSettingsWizard_GmailIMAPStepIncludesGuidance(t *testing.T) {
 		"App Password",
 		"imap.gmail.com",
 		"smtp.gmail.com",
-		"support.google.com",
+		"[click] App passwords",
 		"Workspace",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected Gmail guidance to include %q, got:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestSettingsWizard_SelectingGmailKeepsAccountTypeVisible(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	s = updated.(*Settings)
+
+	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
+	s = updated.(*Settings)
+	rendered := ansi.Strip(s.View())
+
+	for _, want := range []string{
+		"Account Type",
+		"Gmail (IMAP + App Password)",
+		"Gmail OAuth (Experimental)",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected provider switch to keep account step visible and include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	s = updated.(*Settings)
+
+	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
+	s = updated.(*Settings)
+	rendered := s.View()
+	plain := ansi.Strip(rendered)
+
+	for _, want := range []string{
+		"[click] App passwords",
+		"[click] Add Gmail to another client",
+		"[click] Workspace IMAP setup",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("expected short clickable Gmail docs label %q, got:\n%s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "https://support.google.com/mail/answer/185833?hl=en") {
+		t.Fatalf("expected raw Gmail docs URL to be hidden behind a short clickable label, got:\n%s", plain)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;https://support.google.com/mail/answer/185833?hl=en") {
+		t.Fatalf("expected OSC 8 hyperlink for Gmail docs, got raw view:\n%q", rendered)
 	}
 }

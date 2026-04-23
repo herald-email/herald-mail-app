@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/models"
 )
 
@@ -29,9 +30,8 @@ func TestContactsTab_RightPanelFits(t *testing.T) {
 		rendered := m.renderContactsTab(w, 40)
 		lines := strings.Split(rendered, "\n")
 		for i, line := range lines {
-			// Count visible width (strip ANSI codes manually by checking rune count of non-escape chars).
-			// A simpler proxy: if any line has more than w runes, it overflows.
-			// We use a basic visible-rune counter that skips ANSI escape sequences.
+			// ansi.StringWidth handles both SGR styling and OSC 8 hyperlinks, so the
+			// width check reflects what the terminal actually shows.
 			visible := visibleWidth(line)
 			if visible > w {
 				t.Errorf("w=%d: line %d visible width=%d exceeds terminal width %d: %q",
@@ -80,23 +80,9 @@ func TestContactsTab_RowsNoWrap(t *testing.T) {
 	}
 }
 
-// visibleWidth returns the number of visible (non-ANSI) runes in s.
+// visibleWidth returns the visible terminal width of s.
 func visibleWidth(s string) int {
-	inEscape := false
-	count := 0
-	for _, r := range s {
-		if r == '\x1b' {
-			inEscape = true
-		}
-		if inEscape {
-			if r == 'm' {
-				inEscape = false
-			}
-			continue
-		}
-		count++
-	}
-	return count
+	return ansi.StringWidth(s)
 }
 
 // TestContactsDetail_EmailRowsNoWrap verifies that recent email rows in the contact

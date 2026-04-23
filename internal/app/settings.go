@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/config"
+	"mail-processor/internal/render"
 )
 
 // SettingsMode controls wizard vs panel layout.
@@ -426,7 +427,6 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if prevProvider != s.provider {
 		s.syncProviderDefaults(prevProvider, s.provider)
-		s.buildForm()
 	}
 
 	// Check if the form just completed.
@@ -487,10 +487,7 @@ func (s *Settings) View() string {
 		Bold(true).
 		Foreground(lipgloss.Color("205")).
 		Render("Herald Setup")
-	summary := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243")).
-		MaxWidth(boxWidth).
-		Render(s.wizardSummary())
+	summary := s.renderWizardSummary(boxWidth)
 	box := lipgloss.NewStyle().
 		Width(boxWidth).
 		Border(lipgloss.RoundedBorder()).
@@ -611,29 +608,67 @@ func (s *Settings) syncProviderDefaults(oldProvider, newProvider string) {
 	}
 }
 
-func (s *Settings) wizardSummary() string {
+func (s *Settings) renderWizardSummary(width int) string {
+	if width <= 0 {
+		width = 80
+	}
+
+	var lines []string
+	for _, line := range s.wizardSummaryLines() {
+		lines = append(lines, render.WrapLines(line, width)...)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (s *Settings) wizardSummaryLines() []string {
 	switch s.provider {
 	case "gmail":
-		return strings.Join([]string{
-			"Stable: personal Gmail via IMAP + App Password.",
-			"Defaults: imap.gmail.com:993 and smtp.gmail.com:587. Google Workspace accounts may still require OAuth.",
-			"Docs: https://support.google.com/mail/answer/185833?hl=en",
-			"https://support.google.com/mail/answer/75726?hl=en",
-			"https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client",
-		}, "\n")
+		return []string{
+			wizardSummaryLine("Stable:", "personal Gmail via IMAP + App Password."),
+			wizardSummaryLine("Defaults:", "imap.gmail.com:993 and smtp.gmail.com:587."),
+			wizardSummaryLine("Workspace:", "some accounts may still require OAuth."),
+			wizardSummaryDoc("App passwords", "https://support.google.com/mail/answer/185833?hl=en"),
+			wizardSummaryDoc("Add Gmail to another client", "https://support.google.com/mail/answer/75726?hl=en"),
+			wizardSummaryDoc("Workspace IMAP setup", "https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client"),
+		}
 	case "gmail-oauth":
-		return strings.Join([]string{
-			"Experimental: Gmail OAuth in a browser.",
-			"Use this only if Gmail IMAP with an App Password is not viable or your Workspace account requires OAuth.",
-			"Requires HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET.",
-		}, "\n")
+		return []string{
+			wizardSummaryLine("Experimental:", "Gmail OAuth in a browser."),
+			wizardSummaryLine("Use this only when:", "Gmail IMAP with an App Password is not viable or your Workspace account requires OAuth."),
+			wizardSummaryLine("Requires:", "HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
+		}
 	case "protonmail":
-		return "Experimental preset: requires ProtonMail Bridge running locally. Herald prefills the known localhost IMAP and SMTP ports."
+		return []string{
+			wizardSummaryLine("Experimental preset:", "requires ProtonMail Bridge running locally."),
+			wizardSummaryLine("Defaults:", "Herald prefills the known localhost IMAP and SMTP ports."),
+		}
 	case "fastmail", "icloud", "outlook":
-		return "Experimental preset: Herald prefills the known IMAP and SMTP defaults, but this path is not yet treated as fully supported onboarding."
+		return []string{
+			wizardSummaryLine("Experimental preset:", "Herald prefills the known IMAP and SMTP defaults."),
+			wizardSummaryLine("Status:", "this path is not yet treated as fully supported onboarding."),
+		}
 	default:
-		return "Supported: Standard IMAP and Gmail (IMAP + App Password).\nExperimental: Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook."
+		return []string{
+			wizardSummaryLine("Supported:", "Standard IMAP and Gmail (IMAP + App Password)."),
+			wizardSummaryLine("Experimental:", "Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook."),
+		}
 	}
+}
+
+func wizardSummaryLine(label, body string) string {
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252"))
+	bodyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	return labelStyle.Render(label) + " " + bodyStyle.Render(body)
+}
+
+func wizardSummaryDoc(label, rawURL string) string {
+	linkStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
+	textStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	return wizardHyperlink(linkStyle.Render("[click]"), rawURL) + " " + textStyle.Render(label)
+}
+
+func wizardHyperlink(label, rawURL string) string {
+	return "\033]8;;" + rawURL + "\033\\" + label + "\033]8;;\033\\"
 }
 
 // applyVendorPreset fills in server/smtp host+port when a vendor shortcut is
