@@ -155,6 +155,7 @@ When the user later asks to improve GEPA itself:
 3. Run the optimizer helpers in `scripts/` to summarize recent runs, build the lightweight frontier, extract feedback patterns, and prepare an improvement brief.
 4. Identify the single highest-value workflow bottleneck.
 5. Propose and implement one focused workflow change.
-6. Update the evolution doc with what changed, what improved, what still hurts, and what to try next.
+6. Append an entry to the GEPA improvement log so the workflow has a durable improvement history suitable for future article writing.
+7. Update the evolution doc with what changed, what improved, what still hurts, and what to try next.
 
 v1 is intentionally a reflective single-run system. Do not introduce challenger worktrees or Pareto frontier selection unless the user asks for the next phase.

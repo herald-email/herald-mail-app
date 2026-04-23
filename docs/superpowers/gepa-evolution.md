@@ -2,6 +2,10 @@
 
 This document is the human-facing memory for the repo-local Herald autopilot workflow. It complements the raw run folders under `.superpowers/autopilot/runs/` by keeping a curated record of what the workflow does today, what has been learned so far, and what to improve next.
 
+Related docs:
+
+- Improvement history: [gepa-improvement-log.md](gepa-improvement-log.md)
+
 ## Current Workflow
 
 This section describes the current behavior that future sessions should treat as the stable baseline. The goal is to make it easy to answer "what does GEPA do right now?" without digging through scripts or old reports.
@@ -13,6 +17,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] The default finish line is branch + worktree + report, not push, PR, or merge.
 - [x] Verification is impact-based: code-only tasks stay focused, while TUI, SSH, and MCP checks are added only when the task touches those surfaces.
 - [x] Explicit "improve GEPA" work now has a dedicated optimizer layer that summarizes recent runs, builds a lightweight frontier, extracts feedback patterns, and syncs the ledger snapshot.
+- [x] Improvement work can now append a structured history entry and render a publication-friendly change log.
 
 ## What Changed In This Version
 
@@ -24,6 +29,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Established this living ledger as the canonical entrypoint for future "improve GEPA" work.
 - [x] Seeded three validation runs: a successful bootstrap run, a failed TUI-path run, and a workflow-tuning run.
 - [x] Added an optimizer state layer under `.superpowers/autopilot/state/` plus helper scripts for recent-run analysis, frontier building, feedback-pattern extraction, improvement-brief generation, and auto-synced ledger snapshots.
+- [x] Added a dedicated improvement-history log so GEPA changes can be tracked over time with metrics, deltas, article notes, and follow-ups.
 
 ## Run Patterns Observed
 

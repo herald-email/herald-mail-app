@@ -26,7 +26,8 @@ Read these before making workflow changes:
 3. Extract repeated failure and risk patterns.
 4. Produce one improvement brief that identifies the top bottleneck and ranked experiments.
 5. Implement only one workflow improvement at a time.
-6. Re-run the optimizer helpers and sync the ledger.
+6. Append an improvement-history entry.
+7. Re-run the optimizer helpers and sync the ledger.
 
 ## Optimizer Helpers
 
@@ -36,6 +37,8 @@ These scripts are additive and safe to run repeatedly:
 - `build_frontier.py`
 - `extract_feedback_patterns.py`
 - `prepare_gepa_improvement.py`
+- `append_improvement_log.py`
+- `render_improvement_log.py`
 - `sync_evolution_ledger.py`
 
 ## v2 Scope
