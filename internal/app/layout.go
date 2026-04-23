@@ -342,7 +342,7 @@ func (m *Model) hasTimelinePreview() bool {
 }
 
 func (m *Model) hasTopSyncStrip() bool {
-	return m.loading && m.hasVisibleStartupData()
+	return m.loading && !m.syncCountsSettled && m.hasVisibleStartupData()
 }
 
 func (m *Model) normalizeTimelineFocus() {

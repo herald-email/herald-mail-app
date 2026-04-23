@@ -1319,6 +1319,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadClassifications()
 		if msg.FinishLoading {
 			m.loading = false
+			m.progressInfo = models.ProgressInfo{}
 			m.statusMessage = msg.StatusMessage
 		}
 		return m, nil
@@ -1969,7 +1970,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l", "L":
-		if !m.loading {
+		if m.canInteractWithVisibleData() {
 			m.showLogs = !m.showLogs
 		}
 		return m, nil

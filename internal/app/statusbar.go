@@ -164,8 +164,7 @@ func (m *Model) renderTopSyncStrip() string {
 	}
 
 	title, detail := m.topSyncStripSegments()
-	spinner := spinnerChars[m.loadingSpinner%len(spinnerChars)]
-	line := fmt.Sprintf(" %s  %s  │  %s", spinner, title, detail)
+	line := fmt.Sprintf(" %s  │  %s", title, detail)
 
 	return lipgloss.NewStyle().
 		Foreground(defaultTheme.WarningFg).

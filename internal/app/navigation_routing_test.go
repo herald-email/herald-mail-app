@@ -161,3 +161,18 @@ func TestFoldersLoadedMsg_PreservesExistingTreeWhenRefreshFails(t *testing.T) {
 		t.Fatalf("expected folder refresh failure to preserve existing tree, got %v", paths)
 	}
 }
+
+func TestLogOverlayToggleWorksWhileSyncingWithVisibleData(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	updated := model.(*Model)
+
+	if !updated.showLogs {
+		t.Fatal("expected l to toggle log overlay while syncing with visible data")
+	}
+}

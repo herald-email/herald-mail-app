@@ -314,6 +314,37 @@ func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
 	}
 }
 
+func TestTopSyncStrip_HidesOnceSyncCountsAreSettled(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.syncCountsSettled = true
+	m.progressInfo.Message = "Found 426 senders"
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	if got := stripANSI(m.renderTopSyncStrip()); got != "" {
+		t.Fatalf("expected no top sync strip after counts settle, got %q", got)
+	}
+}
+
+func TestTopSyncStrip_DoesNotAnimateWithSpinnerGlyph(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = true
+	m.syncCountsSettled = false
+	m.progressInfo.Message = "Syncing INBOX | 50/120 new rows cached"
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	rendered := stripANSI(m.renderTopSyncStrip())
+	for _, glyph := range spinnerChars {
+		if strings.Contains(rendered, glyph) {
+			t.Fatalf("expected top sync strip to avoid spinner glyphs, got %q", rendered)
+		}
+	}
+}
+
 func TestTimelineView_UsesConsistentPanelGaps(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
