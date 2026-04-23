@@ -9,13 +9,15 @@ from optimizer_common import load_json, save_text, state_dir
 
 def render_table(entries: list[dict]) -> list[str]:
     lines = [
-        "| Logged At | Title | Status | Runs | Avg Score | Failed Runs | Frontier |",
-        "|---|---|---:|---:|---:|---:|---:|",
+        "| Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     for entry in reversed(entries):
         metrics = entry.get("metrics_snapshot", {})
+        grounding_rate = metrics.get("product_truth_grounding_rate")
+        grounding_display = f"{grounding_rate:.0%}" if isinstance(grounding_rate, (int, float)) else "n/a"
         lines.append(
-            f"| {entry.get('logged_at', '')[:19]} | {entry.get('title', '')} | {entry.get('status', '')} | {metrics.get('recent_run_count', 'n/a')} | {metrics.get('average_score', 'n/a')} | {metrics.get('failed_run_count', 'n/a')} | {metrics.get('frontier_count', 'n/a')} |"
+            f"| {entry.get('logged_at', '')[:19]} | {entry.get('title', '')} | {entry.get('status', '')} | {metrics.get('recent_run_count', 'n/a')} | {metrics.get('average_score', 'n/a')} | {grounding_display} | {metrics.get('failed_run_count', 'n/a')} | {metrics.get('frontier_count', 'n/a')} |"
         )
     return lines
 
@@ -70,6 +72,9 @@ def main() -> int:
                     f"- Average retries: {metrics.get('average_retry_count', 'n/a')}",
                     f"- Failed runs: {metrics.get('failed_run_count', 'n/a')}",
                     f"- Frontier members: {metrics.get('frontier_count', 'n/a')}",
+                    f"- Product-truth required runs: {metrics.get('product_truth_required_runs', 'n/a')}",
+                    f"- Product-truth grounding rate: {metrics.get('product_truth_grounding_rate', 'n/a')}",
+                    f"- Product-truth updated-first runs: {metrics.get('product_truth_updated_first_runs', 'n/a')}",
                 ]
             )
             if delta:

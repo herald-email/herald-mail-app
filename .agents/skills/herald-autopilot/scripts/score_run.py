@@ -34,6 +34,9 @@ def main() -> int:
     human_followup = bool(run["metrics"].get("human_followup_needed", False))
     baseline_pass = run["baseline"].get("status") == "pass"
     files_changed = int(run["metrics"].get("files_changed", 0))
+    product_truth = run.get("product_truth", {})
+    product_truth_required = bool(product_truth.get("required", False))
+    product_truth_grounded = (not product_truth_required) or product_truth.get("status") in {"consulted", "updated-first"}
 
     overall = 100
     if not baseline_pass:
@@ -42,6 +45,7 @@ def main() -> int:
     overall -= min(retry_count * 8, 24)
     overall -= 10 if human_followup else 0
     overall -= 5 if files_changed > 25 else 0
+    overall -= 10 if product_truth_required and not product_truth_grounded else 0
     overall = max(overall, 0)
 
     feedback = list(run.get("latest_feedback", []))
@@ -63,6 +67,7 @@ def main() -> int:
             "verification_completeness": len(passed_required) / len(required) if required else 1.0,
             "retry_efficiency": max(0, 1 - (retry_count / max(run["policy"].get("retry_limit", 1), 1))),
             "handoff_readiness": 0 if human_followup else 1,
+            "product_truth_grounding": 1 if product_truth_grounded else 0,
         },
         "counts": {
             "required_gates": len(required),
@@ -70,12 +75,15 @@ def main() -> int:
             "required_failed": len(failed_required),
             "retry_count": retry_count,
             "files_changed": files_changed,
+            "product_truth_required": 1 if product_truth_required else 0,
+            "product_truth_grounded": 1 if product_truth_required and product_truth_grounded else 0,
         },
         "feedback": feedback,
         "pareto_axes": {
             "verification": len(passed_required),
             "retries": retry_count,
             "followup_needed": 1 if human_followup else 0,
+            "grounding_gap": 0 if product_truth_grounded else 1,
         },
     }
 

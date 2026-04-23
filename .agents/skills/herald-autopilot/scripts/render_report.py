@@ -29,6 +29,9 @@ def main() -> int:
     reflections = sorted((run_dir / "reflections").glob("*.json"))
     remaining_risks = run["outcome"].get("remaining_risks", [])
     feedback = score["feedback"] if score else run.get("latest_feedback", [])
+    product_truth = run.get("product_truth", {})
+    truth_sources = product_truth.get("sources", [])
+    docs_updated = product_truth.get("docs_updated", [])
 
     lines = [
         f"# Herald Autopilot Report — {run['run_id']}",
@@ -44,6 +47,13 @@ def main() -> int:
         "",
         "## Plan Summary",
         run["plan"].get("summary") or "No plan summary recorded.",
+        "",
+        "## Product Truth",
+        f"- Required: {'yes' if product_truth.get('required') else 'no'}",
+        f"- Status: {product_truth.get('status', 'not recorded')}",
+        f"- Summary: {product_truth.get('summary') or 'No grounding summary recorded.'}",
+        f"- Sources: {', '.join(truth_sources) if truth_sources else 'none recorded'}",
+        f"- Docs updated first: {', '.join(docs_updated) if docs_updated else 'none recorded'}",
         "",
         "## Outcome",
         run["outcome"].get("summary") or "No outcome summary recorded.",

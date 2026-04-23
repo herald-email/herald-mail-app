@@ -16,6 +16,7 @@ Top-level fields:
 - `policy`: Approval mode, verification mode, retry limit
 - `baseline`: Result of pre-implementation baseline checks
 - `plan`: Short summary, whether user questions were needed, and key decisions
+- `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
 - `verification`: Required gates and observed results
 - `metrics`: Retry count, diff stats, human follow-up flag
 - `outcome`: Final outcome summary and remaining risks

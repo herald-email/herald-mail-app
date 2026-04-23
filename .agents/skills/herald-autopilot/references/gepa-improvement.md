@@ -16,24 +16,29 @@ If another agent may still be running `herald-autopilot`, treat the current exec
 Read these before making workflow changes:
 
 - `docs/superpowers/gepa-evolution.md`
+- `VISION.md`
+- `ARCHITECTURE.md`
+- `docs/superpowers/specs/`
 - recent run folders under `.superpowers/autopilot/runs/`
 - optimizer outputs under `.superpowers/autopilot/state/` when present
 
 ## Improvement Loop
 
 1. Summarize recent runs.
-2. Build a lightweight frontier from scored runs.
-3. Extract repeated failure and risk patterns.
-4. Produce one improvement brief that identifies the top bottleneck and ranked experiments.
-5. Implement only one workflow improvement at a time.
-6. Append an improvement-history entry.
-7. Re-run the optimizer helpers and sync the ledger.
+2. Snapshot the current product source of truth.
+3. Build a lightweight frontier from scored runs.
+4. Extract repeated failure and risk patterns.
+5. Produce one improvement brief that identifies the top bottleneck and ranked experiments.
+6. Implement only one workflow improvement at a time.
+7. Append an improvement-history entry.
+8. Re-run the optimizer helpers and sync the ledger.
 
 ## Optimizer Helpers
 
 These scripts are additive and safe to run repeatedly:
 
 - `analyze_recent_runs.py`
+- `snapshot_product_truth.py`
 - `build_frontier.py`
 - `extract_feedback_patterns.py`
 - `prepare_gepa_improvement.py`

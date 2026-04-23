@@ -20,11 +20,23 @@ def main() -> int:
 
     total_runs = int(summary.get("total_runs", 0))
     failed_runs = int(summary.get("status_counts", {}).get("failed", 0))
+    product_truth = summary.get("product_truth", {})
+    grounded_runs = int(product_truth.get("grounded_runs", 0))
+    required_grounding_runs = int(product_truth.get("required_runs", 0))
+    grounding_rate = product_truth.get("grounding_rate")
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
 
-    if real_task_gap:
+    if required_grounding_runs > 0 and grounding_rate is not None and grounding_rate < 0.8:
+        bottleneck = "Feature and behavior runs are not yet consistently grounded in the product-definition docs before implementation."
+        recommendation = {
+            "name": "enforce-product-truth-gating",
+            "why": "Improving doc-first grounding is a safer and more leveraged next step than expanding search while specs and vision handoff are still inconsistent.",
+            "risk": "low",
+            "value": "high",
+        }
+    elif real_task_gap:
         bottleneck = "The workflow does not yet have enough real bug or feature runs to justify aggressive self-modification."
         recommendation = {
             "name": "auto-ledger-and-state-sync",
@@ -65,10 +77,14 @@ def main() -> int:
             "recent_run_count": total_runs,
             "frontier_count": frontier.get("frontier_count", 0),
             "failed_run_count": failed_runs,
+            "product_truth_required_runs": required_grounding_runs,
+            "product_truth_grounded_runs": grounded_runs,
+            "product_truth_grounding_rate": grounding_rate,
             "top_failing_evidence": patterns.get("top_failing_evidence", []),
             "top_risks": patterns.get("top_risks", []),
         },
         "secondary_experiments": [
+            "spec-to-implementation handoff templates",
             "frontier-backed candidate comparison",
             "feedback-template mining",
             "verification cost measurement",
@@ -106,6 +122,9 @@ def main() -> int:
             f"- Recent runs: {brief['evidence']['recent_run_count']}",
             f"- Frontier members: {brief['evidence']['frontier_count']}",
             f"- Failed runs: {brief['evidence']['failed_run_count']}",
+            f"- Product-truth required runs: {brief['evidence']['product_truth_required_runs']}",
+            f"- Product-truth grounded runs: {brief['evidence']['product_truth_grounded_runs']}",
+            f"- Product-truth grounding rate: {brief['evidence']['product_truth_grounding_rate'] if brief['evidence']['product_truth_grounding_rate'] is not None else 'n/a'}",
         ]
         + [f"- Top failing evidence: {item['name']} ({item['count']})" for item in brief["evidence"]["top_failing_evidence"][:3]]
         + [""]

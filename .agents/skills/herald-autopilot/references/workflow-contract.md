@@ -28,6 +28,12 @@ Each run should move through these states in order unless it is blocked:
 - Proceed after the summary unless a non-obvious decision still needs the user.
 - Never silently push, merge, or open a PR in v1.
 
+## Product Truth Convention
+
+- For feature work and any visible behavior change, decide whether product-truth grounding is required.
+- Record the consulted sources, grounding status, and any product docs updated before code in the run artifacts.
+- Treat `VISION.md`, `ARCHITECTURE.md`, and specs as canonical product truth; code and screenshots are supporting evidence only.
+
 ## Artifact Split
 
 Keep machine-readable artifacts in `.superpowers/autopilot/runs/<run-id>/`.
@@ -36,6 +42,7 @@ Use that run folder for:
 
 - intake
 - plan summary
+- product-truth grounding notes
 - evidence manifest
 - reflections
 - score output

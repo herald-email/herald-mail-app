@@ -28,6 +28,7 @@ Read these before you start:
 - Workflow contract: [`references/workflow-contract.md`](references/workflow-contract.md)
 - Run schema: [`references/run-schema.md`](references/run-schema.md)
 - Verification routing: [`references/verification-routing.md`](references/verification-routing.md)
+- Product source of truth: [`references/product-truth.md`](references/product-truth.md)
 
 If the task touches the TUI, also read and follow [`../tui-test/SKILL.md`](../tui-test/SKILL.md) for the tmux-driven visual checks.
 If the user explicitly asks to improve GEPA itself, also read [`references/gepa-improvement.md`](references/gepa-improvement.md).
@@ -40,6 +41,32 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 4. Verify baseline, then create a dedicated worktree under `.worktrees/`.
 5. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 6. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
+
+## Product-Definition Grounding
+
+For product or behavior changes, do not infer intent from screenshots or current code alone when the repo already has product docs.
+
+Use this grounding order:
+
+1. `VISION.md` for product direction and user-visible intent
+2. `ARCHITECTURE.md` for system boundaries and high-level implementation shape
+3. `docs/superpowers/specs/*.md` for concrete feature contracts
+4. `TUI_TESTPLAN.md`, `SSH_TESTPLAN.md`, and `MCP_TESTPLAN.md` for acceptance surfaces
+
+Record the consulted product-truth sources in the run metadata and final report whenever the task needs product grounding.
+
+If the task changes product behavior and the docs are missing or stale:
+
+- update the relevant product docs first
+- then implement against that source of truth
+
+For non-trivial feature work, prefer:
+
+- update acceptance criteria
+- update `VISION.md`
+- update `ARCHITECTURE.md` if boundaries or data flow change
+- add or update a real spec under `docs/superpowers/specs/`
+- then implement
 
 ## Bootstrap A Run
 
@@ -152,7 +179,7 @@ When the user later asks to improve GEPA itself:
 
 1. Read `docs/superpowers/gepa-evolution.md`.
 2. Inspect the most recent relevant runs under `.superpowers/autopilot/runs/`.
-3. Run the optimizer helpers in `scripts/` to summarize recent runs, build the lightweight frontier, extract feedback patterns, and prepare an improvement brief.
+3. Run the optimizer helpers in `scripts/` to summarize recent runs, build the lightweight frontier, extract feedback patterns, snapshot the current product truth, and prepare an improvement brief.
 4. Identify the single highest-value workflow bottleneck.
 5. Propose and implement one focused workflow change.
 6. Append an entry to the GEPA improvement log so the workflow has a durable improvement history suitable for future article writing.

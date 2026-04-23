@@ -21,8 +21,12 @@ def main() -> int:
     surface_counts: Counter[str] = Counter()
     failure_gate_counts: Counter[str] = Counter()
     risk_counts: Counter[str] = Counter()
+    product_truth_status_counts: Counter[str] = Counter()
     score_values: list[int] = []
     retry_counts: list[int] = []
+    product_truth_required_runs = 0
+    product_truth_grounded_runs = 0
+    product_truth_updated_first_runs = 0
 
     run_items = []
     for record in runs:
@@ -37,6 +41,15 @@ def main() -> int:
                 failure_gate_counts[result["gate"]] += 1
         for risk in run.get("outcome", {}).get("remaining_risks", []):
             risk_counts[risk] += 1
+        product_truth = run.get("product_truth", {})
+        truth_status = product_truth.get("status", "not-recorded")
+        product_truth_status_counts[truth_status] += 1
+        if product_truth.get("required", False):
+            product_truth_required_runs += 1
+            if truth_status in {"consulted", "updated-first"}:
+                product_truth_grounded_runs += 1
+            if truth_status == "updated-first":
+                product_truth_updated_first_runs += 1
         if record.score is not None:
             score_values.append(int(score.get("overall_score", 0)))
         retry_counts.append(int(run.get("metrics", {}).get("retry_count", 0)))
@@ -49,6 +62,8 @@ def main() -> int:
                 "surfaces": run.get("task", {}).get("surfaces", []),
                 "score": score.get("overall_score"),
                 "retry_count": run.get("metrics", {}).get("retry_count", 0),
+                "product_truth_status": truth_status,
+                "product_truth_required": bool(product_truth.get("required", False)),
             }
         )
 
@@ -63,6 +78,13 @@ def main() -> int:
         "average_retry_count": (sum(retry_counts) / len(retry_counts)) if retry_counts else 0,
         "top_failure_gates": [{"name": name, "count": count} for name, count in failure_gate_counts.most_common(5)],
         "top_risks": [{"name": name, "count": count} for name, count in risk_counts.most_common(5)],
+        "product_truth": {
+            "required_runs": product_truth_required_runs,
+            "grounded_runs": product_truth_grounded_runs,
+            "updated_first_runs": product_truth_updated_first_runs,
+            "grounding_rate": (product_truth_grounded_runs / product_truth_required_runs) if product_truth_required_runs else None,
+            "status_counts": dict(product_truth_status_counts),
+        },
         "runs": run_items,
     }
 
@@ -83,6 +105,16 @@ def main() -> int:
         lines.extend([f"- {name}: {count}" for name, count in status_counts.most_common()])
     else:
         lines.append("- none")
+
+    lines.extend(["", "## Product Truth"])
+    lines.append(f"- Required runs: {product_truth_required_runs}")
+    lines.append(f"- Grounded runs: {product_truth_grounded_runs}")
+    lines.append(f"- Updated-first runs: {product_truth_updated_first_runs}")
+    lines.append(
+        f"- Grounding rate: {summary['product_truth']['grounding_rate'] if summary['product_truth']['grounding_rate'] is not None else 'n/a'}"
+    )
+    if product_truth_status_counts:
+        lines.extend([f"- Status {name}: {count}" for name, count in product_truth_status_counts.most_common()])
 
     lines.extend(["", "## Top Failure Gates"])
     if failure_gate_counts:

@@ -5,6 +5,7 @@ This document is the human-facing memory for the repo-local Herald autopilot wor
 Related docs:
 
 - Improvement history: [gepa-improvement-log.md](gepa-improvement-log.md)
+- Product truth snapshot: `/Users/zoomacode/Developer/mail-processor/.superpowers/autopilot/state/product-truth.md`
 
 ## Current Workflow
 
@@ -18,6 +19,8 @@ This section describes the current behavior that future sessions should treat as
 - [x] Verification is impact-based: code-only tasks stay focused, while TUI, SSH, and MCP checks are added only when the task touches those surfaces.
 - [x] Explicit "improve GEPA" work now has a dedicated optimizer layer that summarizes recent runs, builds a lightweight frontier, extracts feedback patterns, and syncs the ledger snapshot.
 - [x] Improvement work can now append a structured history entry and render a publication-friendly change log.
+- [x] Product behavior changes are now meant to ground themselves in `VISION.md`, `ARCHITECTURE.md`, and real specs before implementation.
+- [x] Run artifacts and optimizer summaries can now record whether product-truth grounding was required, whether docs were updated first, and how often grounded runs occur.
 
 ## What Changed In This Version
 
@@ -30,6 +33,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Seeded three validation runs: a successful bootstrap run, a failed TUI-path run, and a workflow-tuning run.
 - [x] Added an optimizer state layer under `.superpowers/autopilot/state/` plus helper scripts for recent-run analysis, frontier building, feedback-pattern extraction, improvement-brief generation, and auto-synced ledger snapshots.
 - [x] Added a dedicated improvement-history log so GEPA changes can be tracked over time with metrics, deltas, article notes, and follow-ups.
+- [x] Added a product-truth grounding layer so GEPA can treat `VISION.md`, `ARCHITECTURE.md`, and spec docs as the product-definition source of truth.
 
 ## Run Patterns Observed
 
@@ -46,9 +50,9 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-04-23T18:37:28+00:00.
-- [x] Recent runs analyzed: 4.
-- [x] Frontier members available: 2.
+- [x] Auto snapshot generated at 2026-04-23T18:56:34+00:00.
+- [x] Recent runs analyzed: 5.
+- [x] Frontier members available: 3.
 - [x] Most repeated failing evidence: `tui-checks` (1 occurrences).
 - [x] Current top recommended experiment: `auto-ledger-and-state-sync` (high value, low risk).
 <!-- AUTOGEN:END -->
@@ -63,6 +67,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] Verification routing is documented, but its real cost and false-positive rate are not yet measured across multiple tasks.
 - [ ] The helper scripts produce durable artifacts, but they do not yet enforce every status transition automatically.
 - [ ] If another agent is actively using `herald-autopilot`, breaking changes to the core execution helpers are still risky and should be staged additively first.
+- [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
 
 ## Candidate Next Experiments
 
@@ -73,6 +78,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Auto-summarize recent run folders into this ledger after each meaningful task to reduce manual curation.
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
 - [ ] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
+- [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 
 ## Ask Me Next
 

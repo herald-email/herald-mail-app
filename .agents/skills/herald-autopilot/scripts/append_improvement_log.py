@@ -9,12 +9,16 @@ from optimizer_common import load_json, now_utc, save_json, state_dir
 
 
 def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
+    product_truth = summary.get("product_truth", {})
     return {
         "recent_run_count": int(summary.get("total_runs", 0)),
         "average_score": summary.get("average_score"),
         "average_retry_count": summary.get("average_retry_count"),
         "failed_run_count": int(summary.get("status_counts", {}).get("failed", 0)),
         "frontier_count": int(frontier.get("frontier_count", 0)),
+        "product_truth_required_runs": int(product_truth.get("required_runs", 0)),
+        "product_truth_grounding_rate": product_truth.get("grounding_rate"),
+        "product_truth_updated_first_runs": int(product_truth.get("updated_first_runs", 0)),
         "top_recommendation": brief.get("recommended_experiment", {}).get("name", ""),
     }
 
@@ -23,7 +27,16 @@ def metric_delta(previous: dict | None, current: dict) -> dict:
     if not previous:
         return {}
     delta = {}
-    for key in ("recent_run_count", "average_score", "average_retry_count", "failed_run_count", "frontier_count"):
+    for key in (
+        "recent_run_count",
+        "average_score",
+        "average_retry_count",
+        "failed_run_count",
+        "frontier_count",
+        "product_truth_required_runs",
+        "product_truth_grounding_rate",
+        "product_truth_updated_first_runs",
+    ):
         prev_value = previous.get(key)
         curr_value = current.get(key)
         if isinstance(prev_value, (int, float)) and isinstance(curr_value, (int, float)):
@@ -79,6 +92,7 @@ def main() -> int:
             "frontier": str(out_dir / "frontier.json"),
             "feedback_patterns": str(out_dir / "feedback-patterns.json"),
             "improvement_brief": str(out_dir / "improvement-brief.json"),
+            "product_truth": str(out_dir / "product-truth.json"),
         },
     }
 

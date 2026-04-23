@@ -7,12 +7,49 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 ## Snapshot Table
 
-| Logged At | Title | Status | Runs | Avg Score | Failed Runs | Frontier |
-|---|---|---:|---:|---:|---:|---:|
-| 2026-04-23T18:42:12 | Improvement-history logging for GEPA | applied | 4 | 85.66666666666667 | 1 | 2 |
-| 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | 1 | 2 |
+| Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2026-04-23T19:00:19 | Product-definition grounding for GEPA | validated | 5 | 83.4 | 100% | 1 | 3 |
+| 2026-04-23T18:42:12 | Improvement-history logging for GEPA | applied | 4 | 85.66666666666667 | n/a | 1 | 2 |
+| 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Product-definition grounding for GEPA
+
+- Logged at: 2026-04-23T19:00:19+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Feature work could still drift because runs did not persist which product-definition docs were consulted before implementation.
+- Summary: Grounded feature and behavior work in VISION.md, ARCHITECTURE.md, and repo specs, then extended run artifacts and optimizer summaries so GEPA can record whether a run was doc-first or guess-driven.
+
+Metrics at log time:
+- Recent runs: 5
+- Average score: 83.4
+- Average retries: 0.2
+- Failed runs: 1
+- Frontier members: 3
+- Product-truth required runs: 1
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 1
+Delta from previous entry:
+- recent_run_count: +1
+- average_score: -2.2666666666666657
+- average_retry_count: -0.04999999999999999
+- failed_run_count: +0
+- frontier_count: +1
+Changes:
+- Added a product-truth reference and grounding rules to herald-autopilot.
+- Extended run artifacts, reports, and scores with product-truth requirement and status fields.
+- Added a product-truth snapshot and grounding metrics to optimizer state and the improvement log.
+Recommended experiment at log time:
+- `template-tui-checks-feedback` (medium value, low risk)
+Article notes:
+- This creates a measurable bridge between product-definition docs and agent execution instead of relying on code archaeology or screenshots.
+- A future article can compare grounded vs ungrounded runs using retries, follow-up rate, and correction churn.
+Follow-ups:
+- Measure whether grounded runs show lower retry counts and fewer post-handoff clarifications.
+- Add a spec template and doc-first gating for new feature requests.
 
 ### Improvement-history logging for GEPA
 
@@ -28,6 +65,9 @@ Metrics at log time:
 - Average retries: 0.25
 - Failed runs: 1
 - Frontier members: 2
+- Product-truth required runs: n/a
+- Product-truth grounding rate: n/a
+- Product-truth updated-first runs: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -60,6 +100,9 @@ Metrics at log time:
 - Average retries: 0.25
 - Failed runs: 1
 - Frontier members: 2
+- Product-truth required runs: n/a
+- Product-truth grounding rate: n/a
+- Product-truth updated-first runs: n/a
 Changes:
 - Created the Herald autopilot skill and run-artifact schema.
 - Added scoring, reflection, report rendering, and the first optimizer state layer.
