@@ -87,10 +87,12 @@ func (c *Client) isLocalServer() bool {
 // Connect establishes connection to IMAP server. It is a no-op if already connected.
 func (c *Client) Connect() error {
 	if c.client != nil {
+		logger.Debug("Connect: reusing existing IMAP connection")
 		return nil // reuse existing connection
 	}
 
 	addr := fmt.Sprintf("%s:%d", c.cfg.Server.Host, c.cfg.Server.Port)
+	logger.Debug("Connect: dialing IMAP addr=%s localServer=%v vendor=%s", addr, c.isLocalServer(), c.cfg.Vendor)
 
 	var err error
 	if c.isLocalServer() {
@@ -212,6 +214,19 @@ func chunkUint32s(items []uint32, size int) [][]uint32 {
 	return chunks
 }
 
+func syncStrategyName(strategy syncStrategy) string {
+	switch strategy {
+	case syncStrategyNone:
+		return "none"
+	case syncStrategyIncremental:
+		return "incremental"
+	case syncStrategyFull:
+		return "full"
+	default:
+		return fmt.Sprintf("unknown(%d)", strategy)
+	}
+}
+
 // GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
 func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
 	c.mu.Lock()
@@ -219,6 +234,7 @@ func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStat
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
+	logger.Debug("GetFolderStatus: requesting %d folders", len(folders))
 	result := make(map[string]models.FolderStatus)
 	items := []imap.StatusItem{imap.StatusMessages, imap.StatusUnseen}
 	for _, folder := range folders {
@@ -231,6 +247,7 @@ func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStat
 			Total:  int(status.Messages),
 			Unseen: int(status.Unseen),
 		}
+		logger.Debug("GetFolderStatus: folder=%s total=%d unseen=%d", folder, status.Messages, status.Unseen)
 	}
 	return result, nil
 }
@@ -242,6 +259,7 @@ func (c *Client) ListFolders() ([]string, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
+	logger.Debug("ListFolders: requesting mailbox list")
 	mailboxes := make(chan *imap.MailboxInfo, 20)
 	done := make(chan error, 1)
 	go func() {
@@ -254,6 +272,7 @@ func (c *Client) ListFolders() ([]string, error) {
 	if err := <-done; err != nil {
 		return nil, fmt.Errorf("failed to list folders: %w", err)
 	}
+	logger.Debug("ListFolders: received %d folders", len(folders))
 	return folders, nil
 }
 
@@ -334,6 +353,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	logger.Info("ProcessEmailsIncremental: starting for folder %s", folder)
+	logger.Debug("ProcessEmailsIncremental: selecting folder=%s readOnly=false", folder)
 
 	c.sendProgress(models.ProgressInfo{
 		Phase:   "scanning",
@@ -346,6 +366,15 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 	if err != nil {
 		return fmt.Errorf("select folder %s: %w", folder, err)
 	}
+	logger.Debug(
+		"ProcessEmailsIncremental: selected folder=%s messages=%d recent=%d unseen=%d uidvalidity=%d uidnext=%d",
+		folder,
+		mbox.Messages,
+		mbox.Recent,
+		mbox.Unseen,
+		mbox.UidValidity,
+		mbox.UidNext,
+	)
 
 	c.sendProgress(models.ProgressInfo{
 		Phase:   "scanning",
@@ -364,6 +393,17 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 	if err != nil {
 		return fmt.Errorf("count cached emails in %s: %w", folder, err)
 	}
+	logger.Debug(
+		"ProcessEmailsIncremental: discovered state folder=%s cached=%d serverMessages=%d storedValidity=%d storedNext=%d serverValidity=%d serverNext=%d initialStrategy=%s",
+		folder,
+		cachedCount,
+		totalMessages,
+		storedValidity,
+		storedNext,
+		mbox.UidValidity,
+		mbox.UidNext,
+		syncStrategyName(strategy),
+	)
 	if recovered := adjustSyncStrategyForCacheRecovery(strategy, storedValidity, mbox.UidValidity, cachedCount, totalMessages); recovered != strategy {
 		logger.Warn(
 			"ProcessEmailsIncremental: cache recovery triggered for %s (cached=%d server=%d uidvalidity=%d)",
@@ -376,15 +416,18 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 			Message: fmt.Sprintf("Recovering incomplete %s cache (%d/%d cached)...", folder, cachedCount, totalMessages),
 		})
 		strategy = recovered
+		logger.Debug("ProcessEmailsIncremental: recovery strategy override folder=%s -> %s", folder, syncStrategyName(strategy))
 	}
 	logger.Info("ProcessEmailsIncremental: strategy=%d stored(v=%d n=%d) server(v=%d n=%d)",
 		strategy, storedValidity, storedNext, mbox.UidValidity, mbox.UidNext)
+	logger.Debug("ProcessEmailsIncremental: strategy name for %s is %s", folder, syncStrategyName(strategy))
 
 	logger.Info("ProcessEmailsIncremental: server reports %d total messages in %s", totalMessages, folder)
 
 	switch strategy {
 	case syncStrategyNone:
 		logger.Info("ProcessEmailsIncremental: no new mail in %s", folder)
+		logger.Debug("ProcessEmailsIncremental: settled without fetch folder=%s cached=%d serverMessages=%d", folder, cachedCount, totalMessages)
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "scanning",
 			Total:   totalMessages,
@@ -395,6 +438,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 
 	case syncStrategyFull:
 		logger.Info("ProcessEmailsIncremental: UIDVALIDITY changed or first run — full resync of %s", folder)
+		logger.Debug("ProcessEmailsIncremental: full sync folder=%s storedValidity=%d serverValidity=%d cached=%d serverMessages=%d", folder, storedValidity, mbox.UidValidity, cachedCount, totalMessages)
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "scanning",
 			Total:   totalMessages,
@@ -413,6 +457,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 
 	case syncStrategyIncremental:
 		logger.Info("ProcessEmailsIncremental: fetching new UIDs [%d:*] in %s", storedNext, folder)
+		logger.Debug("ProcessEmailsIncremental: incremental sync folder=%s startUID=%d serverMessages=%d cached=%d", folder, storedNext, totalMessages, cachedCount)
 		c.sendProgress(models.ProgressInfo{
 			Phase:   "scanning",
 			Total:   totalMessages,
@@ -427,6 +472,8 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 
 	if err := c.cache.SetFolderSyncState(folder, mbox.UidValidity, mbox.UidNext); err != nil {
 		logger.Warn("ProcessEmailsIncremental: failed to persist sync state: %v", err)
+	} else {
+		logger.Debug("ProcessEmailsIncremental: persisted sync state folder=%s uidvalidity=%d uidnext=%d", folder, mbox.UidValidity, mbox.UidNext)
 	}
 	return nil
 }
@@ -434,6 +481,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 // fetchAndCacheRange fetches sequence numbers start:end and caches each message.
 // Reuses the existing processMessage path.
 func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int) error {
+	logger.Debug("fetchAndCacheRange: folder=%s seq=%d:%d serverTotal=%d", folder, start, end, total)
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(start, end)
 	messages := make(chan *imap.Message, 10)
@@ -447,6 +495,7 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 	if err != nil {
 		return fmt.Errorf("fetch envelopes cached IDs: %w", err)
 	}
+	logger.Debug("fetchAndCacheRange: folder=%s cachedIDs=%d", folder, len(cachedIDs))
 	for msg := range messages {
 		processed++
 		if processed%100 == 0 {
@@ -465,6 +514,7 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 	if err := <-done; err != nil {
 		return fmt.Errorf("fetch envelopes: %w", err)
 	}
+	logger.Debug("fetchAndCacheRange: discovered %d uncached messages in %s", len(newSeqNums), folder)
 	if len(newSeqNums) > 0 {
 		logger.Info("fetchAndCacheRange: caching %d uncached messages in %s (server total %d)", len(newSeqNums), folder, total)
 		c.sendProgress(models.ProgressInfo{
@@ -474,11 +524,14 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 			Message: fmt.Sprintf("Fetching %d new emails for %s...", len(newSeqNums), folder),
 		})
 		cachedCount := 0
-		for _, chunk := range chunkUint32s(newSeqNums, fetchCacheBatchSize) {
+		chunks := chunkUint32s(newSeqNums, fetchCacheBatchSize)
+		for i, chunk := range chunks {
+			logger.Debug("fetchAndCacheRange: chunk %d/%d folder=%s size=%d seq=%d..%d", i+1, len(chunks), folder, len(chunk), chunk[0], chunk[len(chunk)-1])
 			if err := c.batchFetchDetails(chunk, folder); err != nil {
 				return err
 			}
 			cachedCount += len(chunk)
+			logger.Debug("fetchAndCacheRange: chunk %d/%d cached folder=%s progress=%d/%d", i+1, len(chunks), folder, cachedCount, len(newSeqNums))
 			c.sendProgress(models.ProgressInfo{
 				Phase:   "fetching",
 				Current: cachedCount,
@@ -494,6 +547,7 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 
 // fetchAndCacheUIDRange fetches messages with UID >= startUID using UidFetch.
 func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int) error {
+	logger.Debug("fetchAndCacheUIDRange: folder=%s startUID=%d serverTotal=%d", folder, startUID, total)
 	seqset := new(imap.SeqSet)
 	// AddRange(start, 0) means start:* in go-imap (0 = *)
 	seqset.AddRange(startUID, 0)
@@ -507,6 +561,7 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 	if err != nil {
 		return fmt.Errorf("uid fetch cached IDs: %w", err)
 	}
+	logger.Debug("fetchAndCacheUIDRange: folder=%s cachedIDs=%d", folder, len(cachedIDs))
 	for msg := range messages {
 		messageID := extractMessageID(msg)
 		if messageID != "" && !cachedIDs[messageID] {
@@ -516,6 +571,7 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 	if err := <-done; err != nil {
 		return fmt.Errorf("uid fetch new range: %w", err)
 	}
+	logger.Debug("fetchAndCacheUIDRange: discovered %d uncached messages in %s", len(newSeqNums), folder)
 	if len(newSeqNums) > 0 {
 		logger.Info("fetchAndCacheUIDRange: caching %d new messages in %s (server total %d)", len(newSeqNums), folder, total)
 		c.sendProgress(models.ProgressInfo{
@@ -525,11 +581,14 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 			Message: fmt.Sprintf("Fetching %d new emails for %s...", len(newSeqNums), folder),
 		})
 		cachedCount := 0
-		for _, chunk := range chunkUint32s(newSeqNums, fetchCacheBatchSize) {
+		chunks := chunkUint32s(newSeqNums, fetchCacheBatchSize)
+		for i, chunk := range chunks {
+			logger.Debug("fetchAndCacheUIDRange: chunk %d/%d folder=%s size=%d seq=%d..%d", i+1, len(chunks), folder, len(chunk), chunk[0], chunk[len(chunk)-1])
 			if err := c.batchFetchDetails(chunk, folder); err != nil {
 				return err
 			}
 			cachedCount += len(chunk)
+			logger.Debug("fetchAndCacheUIDRange: chunk %d/%d cached folder=%s progress=%d/%d", i+1, len(chunks), folder, cachedCount, len(newSeqNums))
 			c.sendProgress(models.ProgressInfo{
 				Phase:   "fetching",
 				Current: cachedCount,
@@ -570,6 +629,7 @@ func (c *Client) fetchAllServerUIDs() (map[uint32]bool, error) {
 // (newest-first, in batches of 50) before closing the channel.
 func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[string]bool) {
 	go func() {
+		logger.Debug("StartBackgroundReconcile: starting for folder=%s", folder)
 		// Fetch all server UIDs (lightweight — no envelopes).
 		c.mu.Lock()
 		if _, err := c.client.Select(folder, true); err != nil {
@@ -595,6 +655,7 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			return
 		}
 		pairs := make([]uidMsgPair, len(rawRows))
+		logger.Debug("StartBackgroundReconcile: folder=%s cachedRows=%d", folder, len(rawRows))
 		for i, r := range rawRows {
 			pairs[i] = uidMsgPair{MessageID: r.MessageID, UID: r.UID}
 		}
@@ -605,6 +666,7 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 		)
 
 		// Broadcast valid IDs immediately — UI can filter right away.
+		logger.Debug("StartBackgroundReconcile: broadcasting validIDs for %s count=%d", folder, len(validIDs))
 		validIDsCh <- validIDs
 
 		// Gradually delete stale rows (newest first for UID-backed rows, batches of 50).
@@ -617,6 +679,7 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			if err := c.cache.DeleteEmailsByUIDs(folder, staleUIDs[i:end]); err != nil {
 				logger.Warn("StartBackgroundReconcile: delete batch: %v", err)
 			}
+			logger.Debug("StartBackgroundReconcile: deleted stale uid batch folder=%s size=%d remaining=%d", folder, end-i, len(staleUIDs)-end)
 			time.Sleep(100 * time.Millisecond)
 		}
 		for i := 0; i < len(staleMessageIDs); i += batchSize {
@@ -627,6 +690,7 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			if err := c.cache.DeleteEmailsByMessageIDs(folder, staleMessageIDs[i:end]); err != nil {
 				logger.Warn("StartBackgroundReconcile: delete legacy batch: %v", err)
 			}
+			logger.Debug("StartBackgroundReconcile: deleted legacy batch folder=%s size=%d remaining=%d", folder, end-i, len(staleMessageIDs)-end)
 			time.Sleep(100 * time.Millisecond)
 		}
 		logger.Info("StartBackgroundReconcile: done for %s", folder)
@@ -762,6 +826,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 	if len(seqNums) == 0 {
 		return nil
 	}
+	logger.Debug("batchFetchDetails: folder=%s size=%d firstSeq=%d lastSeq=%d", folder, len(seqNums), seqNums[0], seqNums[len(seqNums)-1])
 	seqset := new(imap.SeqSet)
 	for _, s := range seqNums {
 		seqset.AddNum(s)
@@ -845,10 +910,12 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 	if err := <-done; err != nil {
 		return fmt.Errorf("batchFetchDetails: fetch: %w", err)
 	}
+	logger.Debug("batchFetchDetails: fetched folder=%s rawMessages=%d cachedEmails=%d", folder, len(seqNums), len(emails))
 
 	if err := c.cache.BatchCacheEmails(emails); err != nil {
 		return fmt.Errorf("batchFetchDetails: cache: %w", err)
 	}
+	logger.Debug("batchFetchDetails: cached folder=%s emails=%d contactsFrom=%d contactsTo=%d", folder, len(emails), len(allFrom), len(allTo))
 
 	if len(allFrom) > 0 {
 		if err := c.cache.UpsertContacts(allFrom, "from"); err != nil {

@@ -56,6 +56,18 @@ type LocalBackend struct {
 	bodyCacheMu sync.Mutex
 }
 
+func summarizeTraceMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if len(message) <= 120 {
+		return message
+	}
+	return message[:117] + "..."
+}
+
+func (b *LocalBackend) tracef(format string, args ...interface{}) {
+	logger.Debug("LocalBackend: "+format, args...)
+}
+
 // filterByValidIDs returns only emails whose MessageID is in validIDs.
 // If validIDs is nil (not yet reconciled), the original slice is returned unchanged.
 func (b *LocalBackend) filterByValidIDs(emails []*models.EmailData) []*models.EmailData {
@@ -147,6 +159,7 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 // reaches the IMAP lane.
 func (b *LocalBackend) Load(folder string) {
 	req := b.loadCoordinator.Submit(folder)
+	b.tracef("Load requested: folder=%s generation=%d", req.Folder, req.Generation)
 	b.emitSyncEvent(models.FolderSyncEvent{
 		Folder:     req.Folder,
 		Generation: req.Generation,
@@ -165,6 +178,7 @@ func (b *LocalBackend) sendProgress(p models.ProgressInfo) {
 	if b.progressCh == nil || b.closed.Load() {
 		return
 	}
+	b.tracef("forward progress: phase=%s current=%d total=%d message=%q", p.Phase, p.Current, p.Total, summarizeTraceMessage(p.Message))
 	defer func() {
 		if recover() != nil {
 			// Close() can race with an in-flight send during TUI/SSH shutdown.
@@ -177,6 +191,17 @@ func (b *LocalBackend) emitSyncEvent(event models.FolderSyncEvent) {
 	if b.syncEventsCh == nil || b.closed.Load() {
 		return
 	}
+	b.tracef(
+		"emit sync event: folder=%s generation=%d phase=%s current=%d total=%d delta=%d error=%q message=%q",
+		event.Folder,
+		event.Generation,
+		event.Phase,
+		event.Current,
+		event.Total,
+		event.EventCount,
+		event.Error,
+		summarizeTraceMessage(event.Message),
+	)
 	defer func() {
 		if recover() != nil {
 			// Close() can race with an in-flight send during shutdown.
@@ -192,6 +217,7 @@ func (b *LocalBackend) setActiveLoad(req folderLoadRequest) {
 	b.activeLoadMu.Lock()
 	b.activeLoad = req
 	b.activeLoadMu.Unlock()
+	b.tracef("active load set: folder=%s generation=%d", req.Folder, req.Generation)
 }
 
 func (b *LocalBackend) clearActiveLoad(req folderLoadRequest) {
@@ -203,6 +229,7 @@ func (b *LocalBackend) clearActiveLoad(req folderLoadRequest) {
 	b.lastFetchMu.Lock()
 	delete(b.lastFetchCurrent, req.Generation)
 	b.lastFetchMu.Unlock()
+	b.tracef("active load cleared: folder=%s generation=%d", req.Folder, req.Generation)
 }
 
 func (b *LocalBackend) currentActiveLoad() (folderLoadRequest, bool) {
@@ -222,6 +249,7 @@ func (b *LocalBackend) fanoutProgressLoop() {
 		b.sendProgress(info)
 		req, ok := b.currentActiveLoad()
 		if !ok {
+			b.tracef("raw progress had no active load: phase=%s current=%d total=%d message=%q", info.Phase, info.Current, info.Total, summarizeTraceMessage(info.Message))
 			continue
 		}
 		if event, ok := b.syncEventFromProgress(req, info); ok {
@@ -280,8 +308,10 @@ func (b *LocalBackend) loadWorker() {
 }
 
 func (b *LocalBackend) runLoad(req folderLoadRequest) {
+	start := time.Now()
 	b.setActiveLoad(req)
 	defer b.clearActiveLoad(req)
+	b.tracef("runLoad started: folder=%s generation=%d", req.Folder, req.Generation)
 
 	b.sendProgress(models.ProgressInfo{
 		Phase:   "connecting",
@@ -289,6 +319,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	})
 	time.Sleep(200 * time.Millisecond)
 
+	b.tracef("connecting IMAP: folder=%s generation=%d", req.Folder, req.Generation)
 	if err := b.imapClient.Connect(); err != nil {
 		logger.Error("Failed to connect to IMAP: %v", err)
 		b.sendProgress(models.ProgressInfo{
@@ -304,7 +335,9 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		})
 		return
 	}
+	b.tracef("IMAP connected: folder=%s generation=%d", req.Folder, req.Generation)
 
+	b.tracef("priming folder cache after connect: folder=%s generation=%d", req.Folder, req.Generation)
 	if folders, err := b.imapClient.ListFolders(); err != nil {
 		logger.Warn("Failed to prime folder cache after connect: %v", err)
 	} else if len(folders) > 0 {
@@ -312,8 +345,10 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		b.cachedFolders = append(b.cachedFolders[:0], folders...)
 		b.foldersMu.Unlock()
 		logger.Info("Primed %d folders after connect", len(folders))
+		b.tracef("folder cache primed: folder=%s generation=%d count=%d", req.Folder, req.Generation, len(folders))
 	}
 
+	b.tracef("starting ProcessEmailsIncremental: folder=%s generation=%d", req.Folder, req.Generation)
 	if err := b.imapClient.ProcessEmailsIncremental(req.Folder); err != nil {
 		logger.Error("Failed to process emails: %v", err)
 		b.sendProgress(models.ProgressInfo{
@@ -329,11 +364,13 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		})
 		return
 	}
+	b.tracef("ProcessEmailsIncremental completed: folder=%s generation=%d elapsed=%s", req.Folder, req.Generation, time.Since(start).Round(10*time.Millisecond))
 
 	b.sendProgress(models.ProgressInfo{
 		Phase:   "finalizing",
 		Message: "Generating statistics...",
 	})
+	b.tracef("loading sender statistics: folder=%s generation=%d", req.Folder, req.Generation)
 	stats, err := b.imapClient.GetSenderStatistics(req.Folder)
 	if err != nil {
 		logger.Error("Failed to get statistics: %v", err)
@@ -350,6 +387,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		})
 		return
 	}
+	b.tracef("sender statistics loaded: folder=%s generation=%d senders=%d", req.Folder, req.Generation, len(stats))
 
 	b.emitSyncEvent(models.FolderSyncEvent{
 		Folder:     req.Folder,
@@ -370,11 +408,13 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Message:    fmt.Sprintf("Found %d senders", len(stats)),
 	})
 	logger.Info("Load complete: %d senders", len(stats))
+	b.tracef("runLoad settled visible bundle: folder=%s generation=%d senders=%d duration=%s", req.Folder, req.Generation, len(stats), time.Since(start).Round(10*time.Millisecond))
 
 	validIDsCh := make(chan map[string]bool, 1)
 	b.validIDsMu.Lock()
 	b.validIDsChSt = validIDsCh
 	b.validIDsMu.Unlock()
+	b.tracef("starting background reconcile: folder=%s generation=%d", req.Folder, req.Generation)
 	b.emitSyncEvent(models.FolderSyncEvent{
 		Folder:     req.Folder,
 		Generation: req.Generation,

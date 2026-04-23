@@ -69,6 +69,7 @@ func (m *Model) listenForProgress() tea.Cmd {
 	}
 	return func() tea.Msg {
 		info := <-m.progressCh
+		logger.Debug("listenForProgress: phase=%s current=%d total=%d message=%q", info.Phase, info.Current, info.Total, strings.TrimSpace(info.Message))
 		return LoadingMsg{Info: info}
 	}
 }
@@ -81,8 +82,10 @@ func (m *Model) listenForSyncEvents() tea.Cmd {
 	return func() tea.Msg {
 		event, ok := <-ch
 		if !ok {
+			logger.Debug("listenForSyncEvents: channel closed")
 			return nil
 		}
+		logger.Debug("listenForSyncEvents: received folder=%s generation=%d phase=%s current=%d total=%d delta=%d message=%q", event.Folder, event.Generation, event.Phase, event.Current, event.Total, event.EventCount, strings.TrimSpace(event.Message))
 		return SyncEventMsg{Event: event}
 	}
 }
@@ -142,7 +145,9 @@ func (m *Model) startLoading() tea.Cmd {
 	m.startTime = time.Now()
 	m.syncCountsSettled = false
 	m.syncingFolder = m.currentFolder
+	logger.Debug("startLoading: folder=%s visibleData=%t syncGeneration=%d", m.currentFolder, m.hasVisibleStartupData(), m.syncGeneration)
 	loadCmd := func() tea.Msg {
+		logger.Debug("startLoading: dispatching backend.Load for folder=%s", m.currentFolder)
 		m.backend.Load(m.currentFolder)
 		return nil
 	}
@@ -173,6 +178,7 @@ func (m *Model) loadCachedStartupCmd() tea.Cmd {
 
 func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoading bool, status string) tea.Cmd {
 	return func() tea.Msg {
+		logger.Debug("loadSyncSnapshotCmd: folder=%s generation=%d finish=%v status=%q", folder, generation, finishLoading, strings.TrimSpace(status))
 		stats, statsErr := m.backend.GetSenderStatistics(folder)
 		if statsErr != nil {
 			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: statsErr, FinishLoading: finishLoading, StatusMessage: status}
@@ -181,6 +187,7 @@ func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoadi
 		if emailsErr != nil {
 			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: emailsErr, FinishLoading: finishLoading, StatusMessage: status}
 		}
+		logger.Debug("loadSyncSnapshotCmd: hydrated folder=%s generation=%d stats=%d emails=%d", folder, generation, len(stats), len(emails))
 		return SyncHydratedMsg{
 			Folder:        folder,
 			Generation:    generation,
@@ -227,13 +234,16 @@ func (m *Model) canInteractWithVisibleData() bool {
 }
 
 func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
+	logger.Debug("loadFoldersCmd: scheduled delay=%s", delay)
 	load := func() tea.Msg {
+		logger.Debug("loadFoldersCmd: requesting folders")
 		folders, err := m.backend.ListFolders()
 		if err != nil {
 			logger.Warn("Failed to list folders: %v", err)
 			return FoldersLoadedMsg{}
 		}
 		logger.Info("Loaded %d folders", len(folders))
+		logger.Debug("loadFoldersCmd: loaded %d folders", len(folders))
 		return FoldersLoadedMsg{Folders: folders}
 	}
 	if delay <= 0 {
@@ -245,12 +255,15 @@ func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
 }
 
 func (m *Model) loadFolderStatusCmd(folders []string, delay time.Duration) tea.Cmd {
+	logger.Debug("loadFolderStatusCmd: scheduled delay=%s folders=%d", delay, len(folders))
 	load := func() tea.Msg {
+		logger.Debug("loadFolderStatusCmd: requesting status for %d folders", len(folders))
 		status, err := m.backend.GetFolderStatus(folders)
 		if err != nil {
 			logger.Warn("Failed to get folder status: %v", err)
 			return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
 		}
+		logger.Debug("loadFolderStatusCmd: loaded status for %d folders", len(status))
 		return FolderStatusMsg{Status: status}
 	}
 	if delay <= 0 {

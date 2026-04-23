@@ -949,7 +949,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKeyMsg(msg)
 
 	case FoldersLoadedMsg:
+		logger.Debug("FoldersLoadedMsg: folders=%d currentFolder=%s", len(msg.Folders), m.currentFolder)
 		if len(msg.Folders) == 0 {
+			logger.Debug("FoldersLoadedMsg: empty result; existing folders=%d", len(m.folders))
 			if len(m.folders) <= 1 {
 				return m, m.loadFoldersCmd(time.Second)
 			}
@@ -991,8 +993,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case FolderStatusMsg:
+		logger.Debug("FolderStatusMsg: merging %d folder statuses", len(msg.Status))
 		// Merge rather than replace so partial results don't wipe existing counts
 		for folder, st := range msg.Status {
+			logger.Debug("FolderStatusMsg: folder=%s total=%d unseen=%d", folder, st.Total, st.Unseen)
 			m.folderStatus[folder] = st
 		}
 		return m, nil
@@ -1154,6 +1158,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Warn("startup snapshot hydrate failed: %v", msg.Err)
 			return m, nil
 		}
+		logger.Debug("StartupHydratedMsg: stats=%d emails=%d finish=%v status=%q", len(msg.Stats), len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
 		if msg.Stats != nil {
 			m.stats = msg.Stats
 			m.updateSummaryTable()
@@ -1200,6 +1205,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ValidIDsMsg:
+		logger.Debug("ValidIDsMsg: folder=%s validIDs=%d", m.currentFolder, len(msg.ValidIDs))
 		// Background reconciliation has produced the live valid-ID set.
 		// The backend's filterByValidIDs now applies automatically; reload all views.
 		if isVirtualAllMailOnlyFolder(m.currentFolder) {
@@ -1215,7 +1221,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SyncEventMsg:
 		event := msg.Event
+		logger.Debug("SyncEventMsg: folder=%s generation=%d phase=%s current=%d total=%d delta=%d message=%q", event.Folder, event.Generation, event.Phase, event.Current, event.Total, event.EventCount, strings.TrimSpace(event.Message))
 		if event.Generation < m.syncGeneration {
+			logger.Debug("SyncEventMsg: ignoring stale generation=%d current=%d", event.Generation, m.syncGeneration)
 			return m, m.listenForSyncEvents()
 		}
 		if event.Folder != "" && event.Folder != m.currentFolder {
@@ -1223,15 +1231,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Generation > m.syncGeneration {
 				m.syncGeneration = event.Generation
 			}
+			logger.Debug("SyncEventMsg: ignoring event for non-current folder=%s currentFolder=%s generation=%d", event.Folder, m.currentFolder, event.Generation)
 			return m, m.listenForSyncEvents()
 		}
 
 		if event.Generation > m.syncGeneration {
 			m.syncGeneration = event.Generation
 			m.syncAccumulator.reset(event.Folder, event.Generation)
+			logger.Debug("SyncEventMsg: advanced sync generation to %d for folder=%s", m.syncGeneration, event.Folder)
 		}
 
 		if event.Phase == models.SyncPhaseReconcileStarted {
+			logger.Debug("SyncEventMsg: reconcile started for folder=%s generation=%d", event.Folder, event.Generation)
 			return m, m.listenForSyncEvents()
 		}
 
@@ -1249,6 +1260,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		action := m.syncAccumulator.observe(event)
+		logger.Debug("SyncEventMsg: accumulator action folder=%s generation=%d armTimer=%v flushNow=%v", event.Folder, event.Generation, action.ArmTimer, action.FlushNow)
 		cmds := []tea.Cmd{m.listenForSyncEvents()}
 		if action.ArmTimer {
 			cmds = append(cmds, scheduleSyncFlush(event.Folder, event.Generation, m.syncAccumulator.flushDelay))
@@ -1263,6 +1275,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if event.Phase == models.SyncPhaseComplete {
 			m.validIDsCh = m.backend.ValidIDsCh()
+			logger.Debug("SyncEventMsg: sync complete for folder=%s generation=%d validIDsChSet=%v", event.Folder, event.Generation, m.validIDsCh != nil)
 			if m.validIDsCh != nil {
 				cmds = append(cmds, m.listenForValidIDs())
 			}
@@ -1275,20 +1288,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if event.Phase == models.SyncPhaseError {
 			m.statusMessage = event.Message
 			m.loading = false
+			logger.Debug("SyncEventMsg: sync error folder=%s generation=%d error=%q", event.Folder, event.Generation, strings.TrimSpace(event.Error))
 		}
 		return m, tea.Batch(cmds...)
 
 	case SyncFlushMsg:
 		if !m.syncAccumulator.shouldFlush(msg) {
+			logger.Debug("SyncFlushMsg: ignored folder=%s generation=%d", msg.Folder, msg.Generation)
 			return m, nil
 		}
+		logger.Debug("SyncFlushMsg: flushing folder=%s generation=%d", msg.Folder, msg.Generation)
 		return m, m.loadSyncSnapshotCmd(msg.Folder, msg.Generation, false, "")
 
 	case SyncHydratedMsg:
 		if msg.Generation != 0 && msg.Generation != m.syncGeneration {
+			logger.Debug("SyncHydratedMsg: ignoring stale generation=%d current=%d folder=%s", msg.Generation, m.syncGeneration, msg.Folder)
 			return m, nil
 		}
 		if msg.Folder != "" && msg.Folder != m.currentFolder {
+			logger.Debug("SyncHydratedMsg: ignoring non-current folder=%s currentFolder=%s", msg.Folder, m.currentFolder)
 			return m, nil
 		}
 		if msg.Err != nil {
@@ -1298,6 +1316,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		logger.Debug("SyncHydratedMsg: folder=%s generation=%d stats=%d emails=%d finish=%v status=%q", msg.Folder, msg.Generation, len(msg.Stats), len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
 		if msg.Stats != nil {
 			m.stats = msg.Stats
 			m.updateSummaryTable()
@@ -1312,6 +1331,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.progressInfo = models.ProgressInfo{}
 			m.statusMessage = msg.StatusMessage
+			logger.Debug("SyncHydratedMsg: loading finished folder=%s generation=%d", msg.Folder, msg.Generation)
 		}
 		return m, nil
 
@@ -1380,6 +1400,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LoadingMsg:
 		m.progressInfo = msg.Info
+		logger.Debug("LoadingMsg: phase=%s current=%d total=%d message=%q", msg.Info.Phase, msg.Info.Current, msg.Info.Total, strings.TrimSpace(msg.Info.Message))
 		return m, nil
 
 	case LoadCompleteMsg:

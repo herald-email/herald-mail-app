@@ -1,6 +1,11 @@
 package backend
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+
+	"mail-processor/internal/logger"
+)
 
 type folderLoadRequest struct {
 	Folder     string
@@ -32,7 +37,12 @@ func (c *latestWinsLoadCoordinator) Submit(folder string) folderLoadRequest {
 		Folder:     folder,
 		Generation: c.nextGen,
 	}
+	replaced := "none"
+	if c.pending != nil {
+		replaced = fmt.Sprintf("%s#%d", c.pending.Folder, c.pending.Generation)
+	}
 	c.pending = &req
+	logger.Debug("LoadCoordinator.Submit: folder=%s generation=%d replaces=%s", folder, req.Generation, replaced)
 	select {
 	case c.wakeCh <- struct{}{}:
 	default:
@@ -49,6 +59,7 @@ func (c *latestWinsLoadCoordinator) DrainPending() (folderLoadRequest, bool) {
 	}
 	req := *c.pending
 	c.pending = nil
+	logger.Debug("LoadCoordinator.DrainPending: folder=%s generation=%d", req.Folder, req.Generation)
 	return req, true
 }
 
