@@ -152,6 +152,14 @@ type ContactsLayoutPlan struct {
 	DetailWidth int
 }
 
+func (m *Model) canRenderChat(width int) bool {
+	if width <= 0 {
+		return true
+	}
+	chatOuter := chatPanelWidth + 2
+	return width-chatOuter >= 48
+}
+
 func (m *Model) chromeState(plan LayoutPlan) ChromeState {
 	focused := m.focusedPanel
 	if focused == panelSidebar && !plan.SidebarVisible {
@@ -374,11 +382,8 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 			plan.SidebarVisible = true
 		}
 	}
-	if m.showChat {
-		chatOuter := chatPanelWidth + 2
-		if width-chatOuter < 48 {
-			plan.ChatVisible = false
-		}
+	if m.showChat && !m.canRenderChat(width) {
+		plan.ChatVisible = false
 	}
 
 	contentWidth := width

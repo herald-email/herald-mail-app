@@ -194,3 +194,21 @@ func TestLogOverlayToggleWorksWhileSyncingWithVisibleData(t *testing.T) {
 		t.Fatal("expected l to toggle log overlay while syncing with visible data")
 	}
 }
+
+func TestChatToggle_ShowsFallbackWhenTooNarrow(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	updated := model.(*Model)
+
+	if updated.showChat {
+		t.Fatal("expected chat to remain closed when the terminal is too narrow")
+	}
+	if !strings.Contains(updated.statusMessage, "Chat") || !strings.Contains(updated.statusMessage, "widen") {
+		t.Fatalf("expected a visible narrow-width fallback message, got %q", updated.statusMessage)
+	}
+}

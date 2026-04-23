@@ -630,6 +630,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.sidebarTooWide = m.showSidebar &&
 		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
 		!m.showCleanupPreview &&
+		!(m.activeTab == tabTimeline && m.timeline.selectedEmail != nil) &&
 		!plan.SidebarVisible
 
 	const summaryFixedCols = 7
@@ -857,9 +858,14 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.composeBCC.Width = plan.Compose.FieldInnerWidth
 	m.composeSubject.Width = plan.Compose.FieldInnerWidth
 	composeBodyWidth := plan.Compose.BodyInnerWidth
-	composeBodyHeight := tableHeight - 16
-	if composeBodyHeight < 3 {
-		composeBodyHeight = 3
+	composeExtraRows := m.composeAdditionalRows(tableHeight)
+	composeBodyHeight := tableHeight - 16 - composeExtraRows
+	minComposeBodyHeight := 3
+	if composeExtraRows > 0 {
+		minComposeBodyHeight = 1
+	}
+	if composeBodyHeight < minComposeBodyHeight {
+		composeBodyHeight = minComposeBodyHeight
 	}
 	m.composeBody.SetWidth(composeBodyWidth)
 	m.composeBody.SetHeight(composeBodyHeight)

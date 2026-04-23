@@ -485,6 +485,10 @@ type Model struct {
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
 
+	// Contacts-only status message. This is cleared when leaving the contacts
+	// workflow so contact actions do not leak stale notices into other tabs.
+	contactStatusMessage string
+
 	// Styles
 	baseStyle          lipgloss.Style
 	headerStyle        lipgloss.Style
@@ -1182,6 +1186,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.suggestionIdx = 0
 		}
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
 		return m, nil
 
 	case AIAssistMsg:
@@ -1569,11 +1576,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ContactEnrichedMsg:
 		if msg.Notice != "" {
-			m.statusMessage = msg.Notice
+			m.contactStatusMessage = msg.Notice
 		}
 		if msg.Background && msg.Count > 0 {
 			if msg.Notice == "" {
-				m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
+				m.contactStatusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
 			}
 			return m, m.runContactEnrichment()
 		}
@@ -1581,7 +1588,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contactEnrichmentActive = false
 		}
 		if !msg.Background && msg.Count > 0 && msg.Notice == "" {
-			m.statusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
+			m.contactStatusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
 		}
 		return m, nil
 
@@ -1989,6 +1996,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		// Toggle chat panel
 		if !m.loading {
+			if !m.showChat && m.windowWidth > 0 && !m.canRenderChat(m.windowWidth) {
+				m.statusMessage = "Chat hidden at this size — widen terminal to open it"
+				return m, nil
+			}
 			m.showChat = !m.showChat
 			if m.windowWidth > 0 {
 				m.updateTableDimensions(m.windowWidth, m.windowHeight)

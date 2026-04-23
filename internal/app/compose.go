@@ -13,6 +13,57 @@ import (
 	appsmtp "mail-processor/internal/smtp"
 )
 
+type composeSuggestionLayout struct {
+	visibleCount int
+	compact      bool
+}
+
+func (m *Model) composeSuggestionLayout(tableHeight int) composeSuggestionLayout {
+	if len(m.suggestions) == 0 {
+		return composeSuggestionLayout{}
+	}
+
+	maxVisible := len(m.suggestions)
+	if maxVisible > 5 {
+		maxVisible = 5
+	}
+
+	for visible := maxVisible; visible >= 1; visible-- {
+		if tableHeight-16-(visible+2) >= 1 {
+			return composeSuggestionLayout{visibleCount: visible}
+		}
+	}
+
+	if tableHeight-16-1 >= 1 {
+		return composeSuggestionLayout{visibleCount: 1, compact: true}
+	}
+
+	return composeSuggestionLayout{}
+}
+
+func (m *Model) composeAdditionalRows(tableHeight int) int {
+	rows := 0
+	layout := m.composeSuggestionLayout(tableHeight)
+	switch {
+	case layout.visibleCount == 0:
+	case layout.compact:
+		rows++
+	default:
+		rows += layout.visibleCount + 2
+	}
+	if m.composeAISubjectHint != "" {
+		rows++
+	}
+	if m.attachmentInputActive {
+		rows++
+	}
+	rows += len(m.composeAttachments)
+	if m.composeStatus != "" {
+		rows++
+	}
+	return rows
+}
+
 func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Attachment path input intercepts all keys while active
 	if m.attachmentInputActive {
@@ -104,15 +155,24 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.suggestions = nil
 			m.suggestionIdx = -1
+			if m.windowWidth > 0 {
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
 			return m, nil
 		case "esc":
 			m.suggestions = nil
 			m.suggestionIdx = -1
+			if m.windowWidth > 0 {
+				m.updateTableDimensions(m.windowWidth, m.windowHeight)
+			}
 			return m, nil
 		}
 		// Any other key: dismiss dropdown and fall through to normal key handling
 		m.suggestions = nil
 		m.suggestionIdx = -1
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
 	}
 
 	switch msg.String() {
@@ -208,6 +268,22 @@ func (m *Model) renderSuggestionDropdown() string {
 	if len(m.suggestions) == 0 {
 		return ""
 	}
+	tableHeight := 5
+	if m.windowHeight > 0 {
+		extraChromeRows := 0
+		if m.hasTopSyncStrip() {
+			extraChromeRows = 1
+		}
+		tableHeight = m.windowHeight - 7 - extraChromeRows
+		if tableHeight < 5 {
+			tableHeight = 5
+		}
+	}
+	layout := m.composeSuggestionLayout(tableHeight)
+	if layout.visibleCount == 0 {
+		return ""
+	}
+
 	selectedStyle := lipgloss.NewStyle().
 		Background(defaultTheme.TabActiveBg).
 		Foreground(defaultTheme.ConfirmFg)
@@ -223,8 +299,29 @@ func (m *Model) renderSuggestionDropdown() string {
 		Padding(0, 1).
 		MaxWidth(maxW)
 
+	if layout.compact {
+		selectedIdx := m.suggestionIdx
+		if selectedIdx < 0 || selectedIdx >= len(m.suggestions) {
+			selectedIdx = 0
+		}
+		selected := m.suggestions[selectedIdx]
+		label := selected.DisplayName
+		if label == "" {
+			label = selected.Email
+		} else {
+			label = fmt.Sprintf("%s <%s>", label, selected.Email)
+		}
+		more := len(m.suggestions) - 1
+		if more > 0 {
+			label = fmt.Sprintf("%s  (+%d more)", label, more)
+		}
+		return lipgloss.NewStyle().
+			Foreground(defaultTheme.InfoFg).
+			Render(truncateVisual("↓ "+label, maxW))
+	}
+
 	var rows []string
-	for i, c := range m.suggestions {
+	for i, c := range m.suggestions[:layout.visibleCount] {
 		label := c.DisplayName
 		if label == "" {
 			label = c.Email
@@ -236,6 +333,9 @@ func (m *Model) renderSuggestionDropdown() string {
 		} else {
 			rows = append(rows, normalStyle.Render(label))
 		}
+	}
+	if hidden := len(m.suggestions) - layout.visibleCount; hidden > 0 {
+		rows = append(rows, normalStyle.Render(fmt.Sprintf("... %d more", hidden)))
 	}
 	return boxStyle.Render(strings.Join(rows, "\n"))
 }

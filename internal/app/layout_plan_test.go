@@ -81,3 +81,16 @@ func TestUpdateTableDimensions_NormalizesHiddenFocus(t *testing.T) {
 		t.Fatalf("expected focus to move to details when sidebar/summary are hidden, got %d", m.focusedPanel)
 	}
 }
+
+func TestUpdateTableDimensions_TimelinePreviewDoesNotMarkSidebarTooWide(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.showSidebar = true
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1"}
+
+	m.updateTableDimensions(220, 50)
+
+	if m.sidebarTooWide {
+		t.Fatal("expected timeline preview to hide the sidebar without raising a too-narrow warning")
+	}
+}

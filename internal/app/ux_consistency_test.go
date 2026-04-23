@@ -207,6 +207,90 @@ func TestRenderKeyHints_HidesManualAITagHint(t *testing.T) {
 	}
 }
 
+func TestRenderKeyHints_PrefersChatControlsOverTimelineHints(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.updateTableDimensions(220, 50)
+
+	hints := stripANSI(m.renderKeyHints())
+	if !strings.Contains(hints, "enter: send") {
+		t.Fatalf("expected chat controls when chat is visible, got %q", hints)
+	}
+	if strings.Contains(hints, "R: reply") {
+		t.Fatalf("expected timeline hints to be hidden while chat is visible, got %q", hints)
+	}
+}
+
+func TestRenderKeyHints_PrefersLogControlsOverTimelineHints(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.showLogs = true
+
+	hints := stripANSI(m.renderKeyHints())
+	if !strings.Contains(hints, "l: close logs") {
+		t.Fatalf("expected log controls when overlay is visible, got %q", hints)
+	}
+	if strings.Contains(hints, "R: reply") {
+		t.Fatalf("expected timeline hints to be hidden while logs are visible, got %q", hints)
+	}
+}
+
+func TestRenderKeyHints_ShowsContactsPreviewControls(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabContacts
+	m.contactFocusPanel = 1
+	contact := models.ContactData{
+		Email:       "newsletter@techweekly.example",
+		DisplayName: "Tech Weekly",
+		EmailCount:  8,
+	}
+	m.contactsFiltered = []models.ContactData{contact}
+	m.contactDetail = &contact
+	m.contactDetailEmails = []*models.EmailData{
+		{
+			MessageID: "msg-1",
+			Sender:    "Tech Weekly <newsletter@techweekly.example>",
+			Subject:   "This Week in Tech #1",
+			Folder:    "INBOX",
+		},
+	}
+	m.contactPreviewEmail = m.contactDetailEmails[0]
+	m.contactPreviewBody = &models.EmailBody{TextPlain: "hello world"}
+
+	hints := stripANSI(m.renderKeyHints())
+	if !strings.Contains(strings.ToLower(hints), "back to contact") {
+		t.Fatalf("expected contacts preview controls, got %q", hints)
+	}
+	if strings.Contains(hints, "nav emails") {
+		t.Fatalf("expected email-list hints to be hidden while preview is open, got %q", hints)
+	}
+}
+
+func TestContactEnrichmentStatus_IsScopedToContactsTab(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabContacts
+
+	model, _ := m.Update(ContactEnrichedMsg{Count: 1})
+	updated := model.(*Model)
+
+	contactsStatus := stripANSI(updated.renderStatusBar())
+	if !strings.Contains(contactsStatus, "Enriched 1 contacts") {
+		t.Fatalf("expected contacts tab to show enrichment status, got %q", contactsStatus)
+	}
+
+	updated.activeTab = tabTimeline
+	timelineStatus := stripANSI(updated.renderStatusBar())
+	if strings.Contains(timelineStatus, "Enriched 1 contacts") {
+		t.Fatalf("expected enrichment status to stay scoped to contacts, got %q", timelineStatus)
+	}
+}
+
 func TestHandleTimelineKey_QuickReplyOpensCurrentEmailFromList(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

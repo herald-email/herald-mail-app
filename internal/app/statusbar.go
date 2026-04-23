@@ -230,7 +230,7 @@ func (m *Model) renderStatusBar() string {
 	breadcrumb := strings.Join(folderParts, " › ")
 
 	var parts []string
-	if msg := strings.TrimSpace(m.statusMessage); msg != "" {
+	if msg := strings.TrimSpace(m.statusMessageForActiveTab()); msg != "" {
 		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Render(msg))
 	}
 	parts = append(parts, breadcrumb)
@@ -429,6 +429,13 @@ func renderChromeLines(lines []string, width int, fg lipgloss.Color) string {
 	return strings.Join(rendered, "\n")
 }
 
+func (m *Model) statusMessageForActiveTab() string {
+	if m.activeTab == tabContacts && strings.TrimSpace(m.contactStatusMessage) != "" {
+		return m.contactStatusMessage
+	}
+	return m.statusMessage
+}
+
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
@@ -437,12 +444,12 @@ func (m *Model) renderKeyHints() string {
 	timelineHints, hasTimelineHints := m.timelineKeyHints(chrome)
 	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
-	} else if hasTimelineHints {
-		hints = timelineHints
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if chrome.ShowLogs {
 		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+	} else if hasTimelineHints {
+		hints = timelineHints
 	} else if m.activeTab == tabCompose {
 		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  r: refresh  │  c: chat  │  q: quit"
 	} else if m.activeTab == tabContacts {
@@ -450,6 +457,8 @@ func (m *Model) renderKeyHints() string {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)
 		} else if m.contactSearchMode == "semantic" {
 			hints = fmt.Sprintf("? %s  │  esc: clear search  │  q: quit", m.contactSearch)
+		} else if m.contactPreviewEmail != nil {
+			hints = "tab: next panel  │  esc: back to contact  │  q: quit"
 		} else if m.contactFocusPanel == 1 {
 			hints = "1/2/3/4: tabs  │  tab: list panel  │  ↑/k ↓/j: nav emails  │  e: enrich  │  enter: open email  │  q: quit"
 		} else {

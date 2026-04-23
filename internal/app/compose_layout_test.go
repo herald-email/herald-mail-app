@@ -1,9 +1,11 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"mail-processor/internal/models"
 )
 
 // TestComposeCCBCCWidth_MatchesToField verifies that CC and BCC textinput
@@ -85,5 +87,55 @@ func TestComposeKey4_SwitchesToContacts(t *testing.T) {
 
 	if m2.activeTab != tabContacts {
 		t.Fatalf("pressing '4' in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
+	}
+}
+
+func TestComposeAutocomplete_DoesNotPushChromeOffscreen(t *testing.T) {
+	contacts := []models.ContactData{
+		{DisplayName: "Anton Golubtsov", Email: "zoomacode@protonmail.com"},
+		{DisplayName: "Anton Golubtsov", Email: "zoomacode@proton.me"},
+		{DisplayName: "Anton Golubtsov", Email: "anton.golubtsov@protonmail.com"},
+		{DisplayName: "Anton from Manager.dev", Email: "managerdotdev@mail.beehiiv.com"},
+		{DisplayName: "Anton Golubtsov", Email: "zoomacode@pm.me"},
+	}
+
+	lineCount := func(rendered string) int {
+		stripped := strings.TrimRight(stripANSI(rendered), "\n")
+		if stripped == "" {
+			return 0
+		}
+		return len(strings.Split(stripped, "\n"))
+	}
+
+	for _, tc := range []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{name: "wide", width: 220, height: 50},
+		{name: "standard", width: 80, height: 24},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, tc.width, tc.height)
+			m.activeTab = tabCompose
+			m.composeField = 0
+			m.composeTo.SetValue("anton")
+			updated, _ := m.Update(ContactSuggestionsMsg{Contacts: contacts})
+			m = updated.(*Model)
+			freezeComposeCursors(m)
+
+			rendered := m.renderMainView()
+			if got := lineCount(rendered); got > tc.height {
+				t.Fatalf("compose autocomplete rendered %d lines at %dx%d, exceeding viewport height\n%s", got, tc.width, tc.height, stripANSI(rendered))
+			}
+
+			stripped := stripANSI(rendered)
+			if !strings.Contains(stripped, "ProtonMail Analyzer") {
+				t.Fatalf("expected compose chrome to remain visible, got:\n%s", stripped)
+			}
+			if !strings.Contains(stripped, "To:") {
+				t.Fatalf("expected active To field to remain visible, got:\n%s", stripped)
+			}
+		})
 	}
 }
