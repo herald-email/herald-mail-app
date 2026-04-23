@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/config"
 	"mail-processor/internal/models"
@@ -53,6 +54,10 @@ func (s *stubClassifier) DescribeImage(_ context.Context, _ []byte, _ string) (s
 	return "", nil
 }
 func (s *stubClassifier) Ping() error { return nil }
+
+func keyRunes(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
 
 // makeReclassifyModel builds the minimal Model state required to test reclassification.
 func makeReclassifyModel(classifier ai.AIClient) *Model {
@@ -232,7 +237,7 @@ func TestEmbedChunksForEmail_FallsBackOnContextLengthError(t *testing.T) {
 	}
 }
 
-func TestStartupHydratedMsg_FailsOpenIntoCachedData(t *testing.T) {
+func TestStartupHydratedMsg_ProgressivelyHydratesWhileLoading(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.loading = true
 
@@ -246,16 +251,62 @@ func TestStartupHydratedMsg_FailsOpenIntoCachedData(t *testing.T) {
 	updatedModel, _ := m.Update(StartupHydratedMsg{Stats: stats, Emails: emails})
 	updated := updatedModel.(*Model)
 
-	if updated.loading {
-		t.Fatal("expected startup fallback to clear loading state")
-	}
 	if updated.timeline.emails == nil || len(updated.timeline.emails) != 1 {
 		t.Fatalf("expected cached timeline emails to be loaded, got %#v", updated.timeline.emails)
 	}
 	if updated.stats == nil || updated.stats["alice@example.com"] == nil {
 		t.Fatalf("expected cached sender stats to be loaded, got %#v", updated.stats)
 	}
-	if !strings.Contains(updated.statusMessage, "Showing cached mail") {
-		t.Fatalf("expected cached-startup status message, got %q", updated.statusMessage)
+	if !updated.loading {
+		t.Fatal("expected progressive startup hydrate to keep loading active")
+	}
+	if updated.statusMessage != "" {
+		t.Fatalf("expected no explicit cached-data status message, got %q", updated.statusMessage)
+	}
+}
+
+type slowCloseBackend struct {
+	stubBackend
+	delay time.Duration
+}
+
+func (b *slowCloseBackend) Close() error {
+	time.Sleep(b.delay)
+	return nil
+}
+
+func TestHandleKeyMsg_QuitDoesNotBlockOnBackendClose(t *testing.T) {
+	m := New(&slowCloseBackend{delay: 300 * time.Millisecond}, nil, "", nil, false)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = m.handleKeyMsg(keyRunes("q"))
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected quit handling to return without waiting for backend close")
+	}
+}
+
+func TestHandleKeyMsg_QuitWorksFromTimelineSearchInput(t *testing.T) {
+	m := New(&slowCloseBackend{delay: 300 * time.Millisecond}, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.timeline.searchMode = true
+	m.timeline.searchFocus = timelineSearchFocusInput
+	m.timeline.searchInput.SetValue("distributed systems")
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = m.handleKeyMsg(keyRunes("q"))
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected global quit to work from timeline search input")
 	}
 }

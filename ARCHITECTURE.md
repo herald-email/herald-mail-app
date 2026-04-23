@@ -24,7 +24,7 @@ This document describes the current system design (Phase 1) and the target archi
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
-cmd/ssh-server  → runs the same TUI over SSH (charmbracelet/wish)
+cmd/herald-ssh-server  → runs the same TUI over SSH (charmbracelet/wish)
                   each SSH session gets its own LocalBackend
 cmd/mcp-server  → JSON-RPC stdio server, reads email_cache.db directly
                   no live IMAP; cache-only for all current tools

@@ -151,6 +151,11 @@ func (b *LocalBackend) Load(folder string) {
 			return
 		}
 
+		b.sendProgress(models.ProgressInfo{
+			Phase:   "scanning",
+			Message: fmt.Sprintf("Opening %s...", folder),
+		})
+
 		if err := b.imapClient.ProcessEmailsIncremental(folder); err != nil {
 			logger.Error("Failed to process emails: %v", err)
 			b.sendProgress(models.ProgressInfo{

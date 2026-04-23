@@ -256,6 +256,28 @@ func TestTimelinePreview_PanelHeightsStayAligned(t *testing.T) {
 	}
 }
 
+func TestMainView_ShowsTopSyncStripDuringProgressiveStartup(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.loading = true
+	m.progressInfo = models.ProgressInfo{
+		Phase:   "scanning",
+		Message: "Opening INBOX...",
+	}
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	rendered := m.renderMainView()
+	assertFitsWidth(t, 120, rendered)
+
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "IMAP connected; waiting for Bridge") {
+		t.Fatalf("expected top sync strip in main view, got:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "opening INBOX — another mail client may be busy") {
+		t.Fatalf("expected sync strip to include the active progress message, got:\n%s", stripped)
+	}
+}
+
 func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

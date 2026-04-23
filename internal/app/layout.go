@@ -341,6 +341,10 @@ func (m *Model) hasTimelinePreview() bool {
 	return m.timeline.selectedEmail != nil
 }
 
+func (m *Model) hasTopSyncStrip() bool {
+	return m.loading && m.hasVisibleStartupData()
+}
+
 func (m *Model) normalizeTimelineFocus() {
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && m.focusedPanel == panelPreview {
 		m.setFocusedPanel(panelTimeline)
@@ -348,10 +352,14 @@ func (m *Model) normalizeTimelineFocus() {
 }
 
 func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
+	extraChromeRows := 0
+	if m.hasTopSyncStrip() {
+		extraChromeRows = 1
+	}
 	plan := LayoutPlan{
 		Width:          width,
 		Height:         height,
-		ContentHeight:  clamp(height-9, 5),
+		ContentHeight:  clamp(height-(9+extraChromeRows), 5),
 		SidebarVisible: false,
 		ChatVisible:    m.showChat,
 	}

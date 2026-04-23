@@ -147,7 +147,6 @@ func (m *Model) selectSidebarFolder() {
 	}
 	m.currentFolder = node.fullPath
 	m.loading = true
-	m.startupFallbackIssued = false
 	m.startTime = time.Now()
 	m.stats = nil
 	m.selectedRows = make(map[int]bool)

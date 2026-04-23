@@ -280,7 +280,9 @@ func (m *Model) cleanup() {
 	// active causes a panic. The deletion worker goroutine will be terminated
 	// when the process exits.
 	if m.backend != nil {
-		m.backend.Close()
+		go func() {
+			_ = m.backend.Close()
+		}()
 	}
 }
 

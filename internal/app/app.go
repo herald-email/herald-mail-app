@@ -59,15 +59,14 @@ type FolderStatusMsg struct {
 	Status map[string]models.FolderStatus
 }
 
-// StartupFallbackMsg fires when startup loading has taken too long and Herald
-// should fail open into cached data while live sync continues in the background.
-type StartupFallbackMsg struct{}
-
-// StartupHydratedMsg carries cached startup data used by the fail-open path.
+// StartupHydratedMsg carries cached startup data used to progressively hydrate
+// the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
-	Stats  map[string]*models.SenderStats
-	Emails []*models.EmailData
-	Err    error
+	Stats         map[string]*models.SenderStats
+	Emails        []*models.EmailData
+	Err           error
+	FinishLoading bool
+	StatusMessage string
 }
 
 // TimelineLoadedMsg carries emails sorted by date for the timeline tab
@@ -282,20 +281,19 @@ type Model struct {
 	progressCh <-chan models.ProgressInfo
 
 	// UI State
-	loading               bool
-	deleting              bool
-	deletionProgress      models.DeletionResult
-	deletionsPending      int  // Number of deletions waiting to complete
-	deletionsTotal        int  // Total deletions in current batch
-	connectionLost        bool // true while IMAP connection is down during deletion
-	loadingSpinner        int
-	startTime             time.Time
-	startupFallbackIssued bool
-	progressInfo          models.ProgressInfo
-	showLogs              bool
-	windowWidth           int
-	windowHeight          int
-	subjectColWidth       int
+	loading          bool
+	deleting         bool
+	deletionProgress models.DeletionResult
+	deletionsPending int  // Number of deletions waiting to complete
+	deletionsTotal   int  // Total deletions in current batch
+	connectionLost   bool // true while IMAP connection is down during deletion
+	loadingSpinner   int
+	startTime        time.Time
+	progressInfo     models.ProgressInfo
+	showLogs         bool
+	windowWidth      int
+	windowHeight     int
+	subjectColWidth  int
 
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
@@ -742,7 +740,7 @@ func (m *Model) SetCleanupScheduler(s *cleanup.Scheduler) {
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.startLoading(),
-		scheduleStartupFallback(),
+		m.loadCachedStartupCmd(),
 		m.tickSpinner(),
 		m.listenForProgress(),
 		m.listenForRuleResult(),
@@ -1123,24 +1121,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case StartupFallbackMsg:
-		if !m.loading {
-			return m, nil
-		}
-		logger.Warn("Startup load is slow; falling back to cached startup data")
-		return m, m.loadCachedStartupCmd()
-
 	case StartupHydratedMsg:
-		if !m.loading {
-			return m, nil
-		}
 		if msg.Err != nil {
-			logger.Warn("cached startup fallback failed: %v", msg.Err)
+			logger.Warn("startup snapshot hydrate failed: %v", msg.Err)
 			return m, nil
 		}
-		m.loading = false
-		m.startupFallbackIssued = true
-		m.statusMessage = "Showing cached mail while live sync continues…"
 		if msg.Stats != nil {
 			m.stats = msg.Stats
 			m.updateSummaryTable()
@@ -1151,6 +1136,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateTimelineTable()
 		}
 		m.loadClassifications()
+		if msg.FinishLoading {
+			m.loading = false
+			m.statusMessage = msg.StatusMessage
+		}
 		return m, nil
 
 	case ContactSuggestionsMsg:
@@ -1263,17 +1252,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progressInfo = msg.Info
 		switch msg.Info.Phase {
 		case "complete":
-			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
-			if err != nil {
-				logger.Error("Failed to get final statistics: %v", err)
-				return m, tea.Quit
-			}
-			m.loading = false
-			m.stats = stats
-			m.loadClassifications()
-			m.updateSummaryTable()
-			m.summaryTable.GotoTop()
-			m.updateDetailsTable()
 			listFoldersCmd := func() tea.Msg {
 				folders, err := m.backend.ListFolders()
 				if err != nil {
@@ -1287,7 +1265,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Subscribe to background reconciliation now that Load() has set the channel.
 			m.validIDsCh = m.backend.ValidIDsCh()
 			// Always load timeline since it's the default startup tab
-			return m, tea.Batch(listFoldersCmd, m.loadTimelineEmails(), syncCmd, m.listenForValidIDs())
+			return m, tea.Batch(
+				m.loadCachedStartupFinalCmd(msg.Info.Message),
+				listFoldersCmd,
+				m.loadTimelineEmails(),
+				syncCmd,
+				m.listenForValidIDs(),
+			)
 		case "error":
 			// Stop loading; keep existing data so the user can still navigate
 			logger.Error("Load error: %s", msg.Info.Message)
@@ -1299,7 +1283,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateDetailsTable()
 			return m, nil
 		default:
-			return m, m.listenForProgress()
+			return m, tea.Batch(m.listenForProgress(), m.loadCachedStartupCmd())
 		}
 
 	case LoadCompleteMsg:
@@ -1509,10 +1493,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.loading {
-			if !m.startupFallbackIssued && time.Since(m.startTime) >= 5*time.Second {
-				m.startupFallbackIssued = true
-				return m, tea.Batch(m.tickSpinner(), m.loadCachedStartupCmd())
-			}
 			m.loadingSpinner = (m.loadingSpinner + 1) % len(spinnerChars)
 			return m, m.tickSpinner()
 		}
@@ -1595,7 +1575,7 @@ func (m *Model) View() string {
 	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
 		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
 	}
-	if m.loading {
+	if m.loading && !m.hasVisibleStartupData() {
 		return m.renderLoadingView()
 	}
 	if m.timeline.fullScreen {
@@ -1609,6 +1589,12 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Global quit must work even when a text input or overlay is focused.
+	if m.isGlobalQuit(msg) {
+		m.cleanup()
+		return m, tea.Quit
+	}
+
 	if model, cmd, handled := m.handleOverlayKey(msg); handled {
 		return model, cmd
 	}
@@ -1616,12 +1602,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Reset pending 'yy' sequence on any key other than 'y'
 	if m.timeline.pendingY && msg.String() != "y" {
 		m.timeline.pendingY = false
-	}
-
-	// Global quit always works
-	if m.isGlobalQuit(msg) {
-		m.cleanup()
-		return m, tea.Quit
 	}
 
 	// Compose tab gets its own key handler
@@ -1667,7 +1647,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		if !m.loading {
 			m.loading = true
-			m.startupFallbackIssued = false
 			m.startTime = time.Now()
 			m.clearTimelineChatFilter()
 			return m, m.activateCurrentFolder()
@@ -2005,6 +1984,9 @@ func (m *Model) renderMainView() string {
 
 	// Tab bar
 	content.WriteString(m.renderTabBar() + "\n")
+	if syncStrip := m.renderTopSyncStrip(); syncStrip != "" {
+		content.WriteString(syncStrip + "\n")
+	}
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 

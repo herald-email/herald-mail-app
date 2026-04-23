@@ -12,7 +12,7 @@ This manual QA specification defines the acceptance criteria for Herald's TUI ac
 
 ```bash
 go build -o /tmp/herald ./main.go
-go build -o /tmp/herald-ssh ./cmd/ssh-server
+go build -o /tmp/herald-ssh ./cmd/herald-ssh-server
 go build -o /tmp/herald-mcp ./cmd/mcp-server
 ```
 
@@ -536,7 +536,7 @@ Check these states during every applicable lane:
 **Sizes:** `120x40`, `80x24`
 
 **Steps:**
-1. Build and run `cmd/ssh-server`.
+1. Build and run `cmd/herald-ssh-server`.
 2. Connect with `ssh -p 2222 localhost`.
 3. Load the app, switch tabs, open one preview, and exit.
 

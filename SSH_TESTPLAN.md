@@ -1,7 +1,7 @@
 # SSH Server Test Plan — mail-processor
 
 Manual QA checklist for verifying that the SSH server delivers a fully functional TUI over an SSH connection.
-Run this after any change to `cmd/ssh-server/`, connection handling, or TUI rendering.
+Run this after any change to `cmd/herald-ssh-server/`, connection handling, or TUI rendering.
 
 ---
 
@@ -10,7 +10,7 @@ Run this after any change to `cmd/ssh-server/`, connection handling, or TUI rend
 ### 1. Build the SSH server binary
 
 ```bash
-go build -o /tmp/ssh-server-test ./cmd/ssh-server
+go build -o /tmp/herald-ssh-server-test ./cmd/herald-ssh-server
 ```
 
 ### 2. Start the server in a tmux pane
@@ -18,7 +18,7 @@ go build -o /tmp/ssh-server-test ./cmd/ssh-server
 ```bash
 # Pane A — server
 tmux new-session -d -s ssh_test
-tmux send-keys -t ssh_test '/tmp/ssh-server-test -config proton.yaml -addr :2222' Enter
+tmux send-keys -t ssh_test '/tmp/herald-ssh-server-test -config proton.yaml -addr :2222' Enter
 sleep 2   # wait for server to initialise
 ```
 
@@ -230,7 +230,7 @@ tmux kill-session -t ssh_test
 2. Note the host key fingerprint shown when first connecting (or check `.ssh/host_ed25519.pub`).
 3. Restart the server:
    ```bash
-   tmux send-keys -t ssh_test:0.0 '/tmp/ssh-server-test -config proton.yaml -addr :2222' Enter
+   tmux send-keys -t ssh_test:0.0 '/tmp/herald-ssh-server-test -config proton.yaml -addr :2222' Enter
    sleep 2
    ```
 4. Connect again from the client pane.
@@ -267,7 +267,7 @@ tmux kill-session -t ssh_test
 **Steps:**
 1. Start server with a non-existent config path:
    ```bash
-   /tmp/ssh-server-test -config /nonexistent/proton.yaml -addr :2223
+   /tmp/herald-ssh-server-test -config /nonexistent/proton.yaml -addr :2223
    ```
 2. Capture terminal output.
 

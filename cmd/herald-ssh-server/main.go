@@ -1,6 +1,6 @@
-// ssh-server serves the herald TUI over SSH using charmbracelet/wish.
+// herald-ssh-server serves the Herald TUI over SSH using charmbracelet/wish.
 // Any SSH client can connect and use the full email client remotely.
-// Usage: ./ssh-server [-config ~/.herald/conf.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
+// Usage: ./herald-ssh-server [-config ~/.herald/conf.yaml] [-addr :2222] [-host-key .ssh/host_ed25519]
 package main
 
 import (
@@ -97,7 +97,7 @@ func main() {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Printf("Starting SSH mail server on %s", *addr)
+	log.Printf("Starting herald-ssh-server on %s", *addr)
 	log.Printf("Connect with: ssh -p 2222 localhost")
 
 	go func() {

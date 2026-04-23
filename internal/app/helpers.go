@@ -127,12 +127,6 @@ func (m *Model) startLoading() tea.Cmd {
 	}
 }
 
-func scheduleStartupFallback() tea.Cmd {
-	return tea.Tick(5*time.Second, func(time.Time) tea.Msg {
-		return StartupFallbackMsg{}
-	})
-}
-
 func (m *Model) loadCachedStartupCmd() tea.Cmd {
 	folder := m.currentFolder
 	return func() tea.Msg {
@@ -146,6 +140,36 @@ func (m *Model) loadCachedStartupCmd() tea.Cmd {
 		}
 		return StartupHydratedMsg{Stats: stats, Emails: emails}
 	}
+}
+
+func (m *Model) loadCachedStartupFinalCmd(status string) tea.Cmd {
+	folder := m.currentFolder
+	return func() tea.Msg {
+		stats, statsErr := m.backend.GetSenderStatistics(folder)
+		if statsErr != nil {
+			return StartupHydratedMsg{Err: statsErr, FinishLoading: true}
+		}
+		emails, emailsErr := m.backend.GetTimelineEmails(folder)
+		if emailsErr != nil {
+			return StartupHydratedMsg{Err: emailsErr, FinishLoading: true}
+		}
+		return StartupHydratedMsg{
+			Stats:         stats,
+			Emails:        emails,
+			FinishLoading: true,
+			StatusMessage: status,
+		}
+	}
+}
+
+func (m *Model) hasVisibleStartupData() bool {
+	if len(m.timeline.emails) > 0 {
+		return true
+	}
+	if len(m.stats) > 0 {
+		return true
+	}
+	return false
 }
 
 // updateSummaryTable updates the summary table with current data
@@ -393,9 +417,15 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.windowWidth = width
 	m.windowHeight = height
 
-	// renderMainView chrome: header(1) + tab bar(1) + blank(1) + status bar(1) + key hints(1) = 5 rows.
-	// Each table panel adds 2 border lines (top + bottom), so total deduction = 7.
-	tableHeight := height - 7
+	extraChromeRows := 0
+	if m.hasTopSyncStrip() {
+		extraChromeRows = 1
+	}
+
+	// renderMainView chrome: header(1) + tab bar(1) + optional sync strip(1) +
+	// status bar(1) + key hints(1). Each table panel adds 2 border lines
+	// (top + bottom), so total deduction = 7 plus any extra sync chrome.
+	tableHeight := height - 7 - extraChromeRows
 	if tableHeight < 5 {
 		tableHeight = 5
 	}

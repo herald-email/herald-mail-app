@@ -26,7 +26,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Semantic search (natural-language queries via local embeddings)
 - [x] Search (in-folder, full-text FTS5, cross-folder, IMAP fallback, saved searches)
 - [x] MCP server (read/search/classify tools for Claude Code)
-- [x] SSH app mode (`cmd/ssh-server` via charmbracelet/wish)
+- [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
 - [x] Inline image placeholders (text labels with AI vision descriptions when available)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
@@ -594,7 +594,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 
 `charmbracelet/wish` serves the full TUI over SSH on port 2222. Each SSH session gets its own `LocalBackend` (independent IMAP connection).
 
-- [x] `cmd/ssh-server` binary
+- [x] `cmd/herald-ssh-server` binary
 - [x] Each session: independent LocalBackend + IMAP connection
 - [ ] In Phase 2: each session connects to the shared daemon instead
 

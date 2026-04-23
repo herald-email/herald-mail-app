@@ -180,6 +180,18 @@ func isConnectionError(err error) bool {
 		strings.Contains(s, "EOF")
 }
 
+func retryAfterReconnect[T any](attempt func() (T, error), reconnect func() error) (T, error) {
+	value, err := attempt()
+	if err == nil || !isConnectionError(err) {
+		return value, err
+	}
+	if reconnectErr := reconnect(); reconnectErr != nil {
+		var zero T
+		return zero, fmt.Errorf("reconnect after IMAP failure: %w (original error: %v)", reconnectErr, err)
+	}
+	return attempt()
+}
+
 // GetFolderStatus fetches MESSAGES and UNSEEN counts for a list of folders via IMAP STATUS
 func (c *Client) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
 	c.mu.Lock()
@@ -287,10 +299,23 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 	defer c.mu.Unlock()
 	logger.Info("ProcessEmailsIncremental: starting for folder %s", folder)
 
-	mbox, err := c.client.Select(folder, false)
+	c.sendProgress(models.ProgressInfo{
+		Phase:   "scanning",
+		Message: fmt.Sprintf("Opening %s...", folder),
+	})
+
+	mbox, err := retryAfterReconnect(func() (*imap.MailboxStatus, error) {
+		return c.client.Select(folder, false)
+	}, c.Reconnect)
 	if err != nil {
 		return fmt.Errorf("select folder %s: %w", folder, err)
 	}
+
+	c.sendProgress(models.ProgressInfo{
+		Phase:   "scanning",
+		Total:   int(mbox.Messages),
+		Message: fmt.Sprintf("Checking sync state in %s...", folder),
+	})
 
 	storedValidity, storedNext, err := c.cache.GetFolderSyncState(folder)
 	if err != nil {
@@ -311,6 +336,11 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 
 	case syncStrategyFull:
 		logger.Info("ProcessEmailsIncremental: UIDVALIDITY changed or first run — full resync of %s", folder)
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "scanning",
+			Total:   totalMessages,
+			Message: fmt.Sprintf("Refreshing %s from the server...", folder),
+		})
 		if storedValidity != 0 {
 			if err := c.cache.ClearFolder(folder); err != nil {
 				return fmt.Errorf("clear folder on uidvalidity change: %w", err)
@@ -324,6 +354,11 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 
 	case syncStrategyIncremental:
 		logger.Info("ProcessEmailsIncremental: fetching new UIDs [%d:*] in %s", storedNext, folder)
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "scanning",
+			Total:   totalMessages,
+			Message: fmt.Sprintf("Checking for new mail in %s...", folder),
+		})
 		if totalMessages > 0 {
 			if err := c.fetchAndCacheUIDRange(folder, storedNext, totalMessages); err != nil {
 				return err

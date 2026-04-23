@@ -75,7 +75,7 @@ internal/
 - **Chat Panel**: Right-side slide-out (`c` key) — converse with your emails via Ollama
 - **Multi-folder Sidebar**: Collapsible IMAP folder tree (`f` key)
 - **MCP Server**: `cmd/mcp-server` exposes list/search/stats/classify tools over stdio to Codex
-- **SSH App Mode**: `cmd/ssh-server` serves the full TUI over SSH on port 2222
+- **SSH App Mode**: `cmd/herald-ssh-server` serves the full TUI over SSH on port 2222
 - **iTerm2 Images**: Inline image rendering in the email body preview on iTerm2
 
 ## Common Commands
@@ -208,7 +208,7 @@ Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | `charmbracelet/bubbles` | Table, viewport, textinput, textarea components |
 | `charmbracelet/lipgloss` | Terminal styling |
 | `charmbracelet/glamour` | Markdown rendering in Compose preview |
-| `charmbracelet/wish` | SSH server wrapping the TUI (`cmd/ssh-server`) |
+| `charmbracelet/wish` | SSH server wrapping the TUI (`cmd/herald-ssh-server`) |
 | `emersion/go-imap` | IMAP client |
 | `mattn/go-sqlite3` | SQLite driver (CGO) |
 | `gopkg.in/yaml.v3` | Config parsing |
@@ -264,7 +264,7 @@ After a bug fix or large feature is complete, run all three surface tests and sa
 | Surface | How to test |
 |---------|-------------|
 | **TUI** | tmux workflow (see below) + relevant `TUI_TESTPLAN.md` test cases |
-| **SSH** | `go build ./cmd/ssh-server && ./bin/ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
+| **SSH** | `go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server && ./bin/herald-ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
 | **MCP** | `go build ./cmd/mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/mcp-server` — then invoke the relevant tool(s) and verify output |
 
 Save the report as `reports/TEST_REPORT_<YYYY-MM-DD>_<short-description>.md`.

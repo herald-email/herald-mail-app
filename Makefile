@@ -1,10 +1,14 @@
 # Makefile for Herald
 
-.PHONY: build run clean test deps fmt vet
+.PHONY: build build-ssh run clean test deps fmt vet
 
 # Build the application
 build:
 	go build -o bin/herald ./main.go
+
+# Build the SSH server
+build-ssh:
+	go build -o bin/herald-ssh-server ./cmd/herald-ssh-server
 
 # Run the application
 run:

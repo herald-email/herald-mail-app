@@ -9,6 +9,47 @@ import (
 	"mail-processor/internal/ai"
 )
 
+func (m *Model) topSyncStripSegments() (string, string) {
+	message := strings.TrimSpace(m.progressInfo.Message)
+	if message == "" {
+		return "Live sync in progress", "Waiting for IMAP updates..."
+	}
+
+	if strings.HasPrefix(message, "Opening ") {
+		folder := strings.TrimSuffix(strings.TrimPrefix(message, "Opening "), "...")
+		if folder == "" {
+			folder = displayFolderName(m.currentFolder)
+		}
+		return "IMAP connected; waiting for Bridge", fmt.Sprintf("opening %s — another mail client may be busy", folder)
+	}
+
+	if strings.HasPrefix(message, "Checking sync state in ") {
+		folder := strings.TrimSuffix(strings.TrimPrefix(message, "Checking sync state in "), "...")
+		if folder == "" {
+			folder = displayFolderName(m.currentFolder)
+		}
+		return "IMAP connected; reading folder state", fmt.Sprintf("checking sync state in %s", folder)
+	}
+
+	if strings.HasPrefix(message, "Checking for new mail in ") {
+		folder := strings.TrimSuffix(strings.TrimPrefix(message, "Checking for new mail in "), "...")
+		if folder == "" {
+			folder = displayFolderName(m.currentFolder)
+		}
+		return "Live sync in progress", fmt.Sprintf("checking for new mail in %s", folder)
+	}
+
+	if strings.HasPrefix(message, "Refreshing ") {
+		folder := strings.TrimSuffix(strings.TrimPrefix(message, "Refreshing "), " from the server...")
+		if folder == "" {
+			folder = displayFolderName(m.currentFolder)
+		}
+		return "Live sync in progress", fmt.Sprintf("refreshing %s from the server", folder)
+	}
+
+	return "Live sync in progress", message
+}
+
 func (m *Model) schedulerStatus() ai.SchedulerStatus {
 	if m.classifier == nil {
 		return ai.SchedulerStatus{}
@@ -82,6 +123,28 @@ func (m *Model) renderTabBar() string {
 	)
 }
 
+func (m *Model) renderTopSyncStrip() string {
+	if !m.hasTopSyncStrip() {
+		return ""
+	}
+
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+
+	title, detail := m.topSyncStripSegments()
+	spinner := spinnerChars[m.loadingSpinner%len(spinnerChars)]
+	line := fmt.Sprintf(" %s  %s  │  %s  │  showing current mail while new data arrives", spinner, title, detail)
+
+	return lipgloss.NewStyle().
+		Foreground(defaultTheme.WarningFg).
+		Background(defaultTheme.StatusBg).
+		Width(w).
+		Padding(0, 1).
+		Render(safeChromeLine(line, w-2))
+}
+
 // renderStatusBar renders the persistent bottom status bar
 func (m *Model) renderStatusBar() string {
 	// Deletion/archive confirmation prompt overrides everything
@@ -147,6 +210,9 @@ func (m *Model) renderStatusBar() string {
 	}
 	if m.embeddingTotal > 0 && m.embeddingDone < m.embeddingTotal {
 		parts = append(parts, fmt.Sprintf("embed %d/%d", m.embeddingDone, m.embeddingTotal))
+	}
+	if m.loading && strings.TrimSpace(m.progressInfo.Message) != "" {
+		parts = append(parts, m.progressInfo.Message)
 	}
 
 	// Folder counts

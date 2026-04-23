@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -127,5 +128,58 @@ func TestBuildValidIDSet_StaleOrderedDescending(t *testing.T) {
 	}
 	if len(staleMessageIDs) != 0 {
 		t.Errorf("expected no stale message IDs, got %v", staleMessageIDs)
+	}
+}
+
+func TestRetryAfterReconnect_RetriesConnectionErrors(t *testing.T) {
+	attempts := 0
+	reconnects := 0
+
+	value, err := retryAfterReconnect(func() (int, error) {
+		attempts++
+		if attempts == 1 {
+			return 0, errors.New("EOF")
+		}
+		return 42, nil
+	}, func() error {
+		reconnects++
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("retryAfterReconnect returned error: %v", err)
+	}
+	if value != 42 {
+		t.Fatalf("expected value 42, got %d", value)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+	if reconnects != 1 {
+		t.Fatalf("expected 1 reconnect, got %d", reconnects)
+	}
+}
+
+func TestRetryAfterReconnect_DoesNotRetryNonConnectionErrors(t *testing.T) {
+	attempts := 0
+	reconnects := 0
+	wantErr := errors.New("mailbox missing")
+
+	_, err := retryAfterReconnect(func() (int, error) {
+		attempts++
+		return 0, wantErr
+	}, func() error {
+		reconnects++
+		return nil
+	})
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected original error, got %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt, got %d", attempts)
+	}
+	if reconnects != 0 {
+		t.Fatalf("expected 0 reconnects, got %d", reconnects)
 	}
 }
