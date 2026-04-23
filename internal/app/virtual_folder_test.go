@@ -9,6 +9,22 @@ import (
 	"mail-processor/internal/models"
 )
 
+func readDeletionRequests(t *testing.T, ch <-chan models.DeletionRequest, want int) []models.DeletionRequest {
+	t.Helper()
+
+	reqs := make([]models.DeletionRequest, 0, want)
+	timeout := time.After(500 * time.Millisecond)
+	for len(reqs) < want {
+		select {
+		case req := <-ch:
+			reqs = append(reqs, req)
+		case <-timeout:
+			t.Fatalf("timed out waiting for %d deletion requests; got %d", want, len(reqs))
+		}
+	}
+	return reqs
+}
+
 func TestLoadTimelineEmails_AllMailOnlyUsesVirtualView(t *testing.T) {
 	b := &stubBackend{
 		virtualFolderResult: &models.VirtualFolderResult{
@@ -185,39 +201,101 @@ func TestCleanupAllMailOnly_SidebarSwitchClearsStaleSummaryRows(t *testing.T) {
 	}
 }
 
-func TestCleanupAllMailOnly_BlocksDeleteAndArchiveConfirmations(t *testing.T) {
+func TestCleanupAllMailOnly_DeleteCurrentDomainQueuesPerMessageDeletes(t *testing.T) {
 	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabCleanup
 	m.currentFolder = virtualFolderAllMailOnly
 	m.groupByDomain = true
+	m.deletionRequestCh = make(chan models.DeletionRequest, 10)
+	m.deletionResultCh = make(chan models.DeletionResult, 10)
 	m.timeline.emails = []*models.EmailData{
 		{MessageID: "<a@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "first", Date: now.Add(-2 * time.Hour), Folder: "All Mail"},
-		{MessageID: "<b@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "second", Date: now.Add(-1 * time.Hour), Folder: "All Mail"},
+		{MessageID: "<b@x.com>", Sender: "Beta <beta@example.com>", Subject: "second", Date: now.Add(-1 * time.Hour), Folder: "All Mail"},
+		{MessageID: "<c@x.com>", Sender: "Gamma <gamma@other.com>", Subject: "third", Date: now.Add(-30 * time.Minute), Folder: "All Mail"},
 	}
 	m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
 	m.setFocusedPanel(panelSummary)
 
-	for _, key := range []string{"D", "e"} {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
-		m = updated.(*Model)
-		if m.pendingDeleteConfirm {
-			t.Fatalf("expected %q to be blocked in Cleanup All Mail only view", key)
+	for rowIdx, key := range m.rowToSender {
+		if key == "example.com" {
+			m.summaryTable.SetCursor(rowIdx)
+			break
 		}
 	}
 
-	if m.statusMessage == "" {
-		t.Fatal("expected read-only Cleanup action to set a visible status message")
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	m = updated.(*Model)
+	if !m.pendingDeleteConfirm {
+		t.Fatal("expected D to open a delete confirmation in Cleanup All Mail only view")
 	}
-	if !strings.Contains(strings.ToLower(m.statusMessage), "read-only") {
-		t.Fatalf("expected read-only status message, got %q", m.statusMessage)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m = updated.(*Model)
+
+	reqs := readDeletionRequests(t, m.deletionRequestCh, 2)
+	want := map[string]bool{
+		"<a@x.com>": true,
+		"<b@x.com>": true,
 	}
-	if m.deletionsPending != 0 || m.deletionsTotal != 0 {
-		t.Fatalf("expected no queued deletions, got pending=%d total=%d", m.deletionsPending, m.deletionsTotal)
+	for _, req := range reqs {
+		if !want[req.MessageID] {
+			t.Fatalf("unexpected deletion request for %q", req.MessageID)
+		}
+		if req.Sender != "" || req.IsDomain {
+			t.Fatalf("expected per-message delete requests in virtual Cleanup view, got sender=%q isDomain=%v", req.Sender, req.IsDomain)
+		}
+		if req.Folder != "All Mail" {
+			t.Fatalf("expected per-message delete to use the underlying folder, got %q", req.Folder)
+		}
+		if req.Folder == virtualFolderAllMailOnly {
+			t.Fatalf("expected real IMAP folder, got virtual folder %q", req.Folder)
+		}
+		if req.IsArchive {
+			t.Fatalf("expected delete request, got archive for %q", req.MessageID)
+		}
+		delete(want, req.MessageID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing deletion requests for %v", want)
 	}
 }
 
-func TestCleanupAllMailOnlyHints_AdvertiseReadOnly(t *testing.T) {
+func TestCleanupAllMailOnly_PreviewDeleteQueuesUnderlyingFolder(t *testing.T) {
+	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCleanup
+	m.currentFolder = virtualFolderAllMailOnly
+	m.deletionRequestCh = make(chan models.DeletionRequest, 10)
+	m.deletionResultCh = make(chan models.DeletionResult, 10)
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "<a@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "first", Date: now.Add(-2 * time.Hour), Folder: "All Mail"},
+	}
+	m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
+	m.showCleanupPreview = true
+	m.cleanupPreviewWidth = 48
+	m.cleanupPreviewEmail = m.timeline.emails[0]
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: "hello"}
+	m.detailsEmails = []*models.EmailData{m.timeline.emails[0]}
+	m.setFocusedPanel(panelDetails)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	m = updated.(*Model)
+
+	reqs := readDeletionRequests(t, m.deletionRequestCh, 1)
+	req := reqs[0]
+	if req.MessageID != "<a@x.com>" {
+		t.Fatalf("expected preview delete for %q, got %q", "<a@x.com>", req.MessageID)
+	}
+	if req.Folder != "All Mail" {
+		t.Fatalf("expected preview delete to use the underlying folder, got %q", req.Folder)
+	}
+	if req.IsArchive {
+		t.Fatalf("expected preview D to queue a delete, got archive=%v", req.IsArchive)
+	}
+}
+
+func TestCleanupAllMailOnlyHints_KeepDeleteAndArchiveActions(t *testing.T) {
 	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabCleanup
@@ -229,11 +307,8 @@ func TestCleanupAllMailOnlyHints_AdvertiseReadOnly(t *testing.T) {
 	m.setFocusedPanel(panelSummary)
 
 	summaryHints := stripANSI(m.renderKeyHints())
-	if strings.Contains(summaryHints, "D: delete") || strings.Contains(summaryHints, "e: archive") {
-		t.Fatalf("expected Cleanup summary hints to omit mutating actions in read-only view, got %q", summaryHints)
-	}
-	if !strings.Contains(summaryHints, "read-only") {
-		t.Fatalf("expected Cleanup summary hints to advertise read-only context, got %q", summaryHints)
+	if !strings.Contains(summaryHints, "D: delete") || !strings.Contains(summaryHints, "e: archive") {
+		t.Fatalf("expected Cleanup summary hints to keep delete/archive actions in All Mail only, got %q", summaryHints)
 	}
 
 	m.showCleanupPreview = true
@@ -243,19 +318,13 @@ func TestCleanupAllMailOnlyHints_AdvertiseReadOnly(t *testing.T) {
 	m.detailsEmails = []*models.EmailData{m.timeline.emails[0]}
 	m.setFocusedPanel(panelDetails)
 
-	previewHints := stripANSI(m.renderKeyHints())
-	if strings.Contains(previewHints, "D: delete") || strings.Contains(previewHints, "e: archive") {
-		t.Fatalf("expected Cleanup preview hints to omit mutating actions in read-only view, got %q", previewHints)
-	}
-	if !strings.Contains(previewHints, "read-only") {
-		t.Fatalf("expected Cleanup preview hints to advertise read-only context, got %q", previewHints)
+	preview := stripANSI(m.renderCleanupPreview())
+	if !strings.Contains(preview, "D: delete") || !strings.Contains(preview, "e: archive") {
+		t.Fatalf("expected Cleanup preview panel to keep delete/archive actions in All Mail only, got:\n%s", preview)
 	}
 
-	preview := stripANSI(m.renderCleanupPreview())
-	if strings.Contains(preview, "D: delete") || strings.Contains(preview, "e: archive") {
-		t.Fatalf("expected Cleanup preview panel to omit mutating actions in read-only view, got:\n%s", preview)
-	}
-	if !strings.Contains(preview, "read-only") {
-		t.Fatalf("expected Cleanup preview panel to advertise read-only context, got:\n%s", preview)
+	previewHints := stripANSI(m.renderKeyHints())
+	if !strings.Contains(previewHints, "D: delete") {
+		t.Fatalf("expected Cleanup preview hints to keep delete actions in All Mail only, got %q", previewHints)
 	}
 }

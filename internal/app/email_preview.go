@@ -784,9 +784,6 @@ func (m *Model) renderCleanupPreview() string {
 			zHint = "z: exit full-screen"
 		}
 		actionHint := "D: delete  e: archive"
-		if m.cleanupIsReadOnlyDiagnostic() {
-			actionHint = "read-only"
-		}
 		if totalLines > maxBodyLines {
 			pct := 0
 			if maxOffset > 0 {

@@ -1790,9 +1790,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
 		}
-		if m.blockCleanupReadOnlyMutation() {
-			return m, nil
-		}
 		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
 			email := m.cleanupPreviewEmail
 			m.cleanupPreviewDeleting = true
@@ -1823,9 +1820,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "A":
 		// Re-classify the currently focused single email with AI.
 		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil
-		}
-		if m.blockCleanupReadOnlyMutation() {
 			return m, nil
 		}
 		if !m.loading && m.classifier != nil {
@@ -1903,9 +1897,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "e":
 		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil
-		}
-		if m.blockCleanupReadOnlyMutation() {
 			return m, nil
 		}
 		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {

@@ -485,23 +485,6 @@ func (m *Model) renderKeyHints() string {
 		} else {
 			hints = "1/2/3/4: tabs  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
-	} else if m.activeTab == tabCleanup && m.cleanupIsReadOnlyDiagnostic() {
-		switch chrome.FocusedPanel {
-		case panelSidebar:
-			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  q: quit  │  read-only"
-		case panelDetails:
-			if m.showCleanupPreview {
-				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  tab: next panel  │  q: quit  │  read-only"
-			} else {
-				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  r: refresh  │  c: chat  │  l: logs  │  q: quit  │  read-only"
-			}
-		default:
-			if w <= 80 {
-				hints = "↑/k ↓/j: nav  │  enter: details  │  space: select  │  d: domain  │  q: quit  │  read-only"
-			} else {
-				hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  d: domain  │  r: refresh  │  f: sidebar  │  c: chat  │  q: quit  │  read-only"
-			}
-		}
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:

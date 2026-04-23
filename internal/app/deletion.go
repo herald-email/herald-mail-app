@@ -81,13 +81,37 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		folder    string
 	}
 
-	if m.cleanupIsReadOnlyDiagnostic() {
-		m.statusMessage = m.readOnlyDiagnosticStatus()
+	folder := m.currentFolder
+	virtualCleanup := m.activeTab == tabCleanup && isVirtualAllMailOnlyFolder(folder)
+	var targets []deleteTarget
+	seenMessageIDs := make(map[string]bool)
+
+	findCleanupEmail := func(messageID string) *models.EmailData {
+		for _, emails := range m.emailsBySender {
+			for _, email := range emails {
+				if email != nil && email.MessageID == messageID {
+					return email
+				}
+			}
+		}
 		return nil
 	}
 
-	folder := m.currentFolder
-	var targets []deleteTarget
+	appendMessageTarget := func(email *models.EmailData) {
+		if email == nil || strings.TrimSpace(email.MessageID) == "" || seenMessageIDs[email.MessageID] {
+			return
+		}
+		targetFolder := strings.TrimSpace(email.Folder)
+		if targetFolder == "" {
+			targetFolder = folder
+		}
+		if virtualCleanup && isVirtualAllMailOnlyFolder(targetFolder) {
+			logger.Warn("Skipping virtual-folder cleanup delete for %q with unresolved real folder", email.MessageID)
+			return
+		}
+		seenMessageIDs[email.MessageID] = true
+		targets = append(targets, deleteTarget{messageID: email.MessageID, folder: targetFolder})
+	}
 
 	// Timeline tab: delete/archive current email
 	if m.activeTab == tabTimeline {
@@ -126,6 +150,10 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		if len(m.selectedMessages) > 0 {
 			// Delete all selected messages (across all senders)
 			for messageID := range m.selectedMessages {
+				if email := findCleanupEmail(messageID); email != nil {
+					appendMessageTarget(email)
+					continue
+				}
 				targets = append(targets, deleteTarget{messageID: messageID, folder: folder})
 			}
 		} else {
@@ -133,7 +161,7 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			cursor := m.detailsTable.Cursor()
 			if cursor < len(m.detailsEmails) {
 				email := m.detailsEmails[cursor]
-				targets = append(targets, deleteTarget{messageID: email.MessageID, folder: folder})
+				appendMessageTarget(email)
 			}
 		}
 	} else if len(m.selectedSummaryKeys) > 0 {
@@ -142,13 +170,25 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			if key == "" {
 				continue
 			}
+			if virtualCleanup {
+				for _, email := range m.emailsBySender[key] {
+					appendMessageTarget(email)
+				}
+				continue
+			}
 			targets = append(targets, deleteTarget{sender: key, isDomain: m.groupByDomain, folder: folder})
 		}
 	} else {
 		// Delete current sender using row mapping (or domain in domain mode)
 		sender, ok := m.summaryKeyAtCursor()
 		if ok && sender != "" {
-			targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+			if virtualCleanup {
+				for _, email := range m.emailsBySender[sender] {
+					appendMessageTarget(email)
+				}
+			} else {
+				targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+			}
 		}
 	}
 
