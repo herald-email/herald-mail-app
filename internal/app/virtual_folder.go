@@ -21,8 +21,28 @@ func displayFolderName(folder string) string {
 	return folder
 }
 
+func (m *Model) currentFolderIsReadOnlyDiagnostic() bool {
+	return isVirtualAllMailOnlyFolder(m.currentFolder)
+}
+
 func (m *Model) timelineIsReadOnlyDiagnostic() bool {
-	return m.activeTab == tabTimeline && isVirtualAllMailOnlyFolder(m.currentFolder)
+	return m.activeTab == tabTimeline && m.currentFolderIsReadOnlyDiagnostic()
+}
+
+func (m *Model) cleanupIsReadOnlyDiagnostic() bool {
+	return m.activeTab == tabCleanup && m.currentFolderIsReadOnlyDiagnostic()
+}
+
+func (m *Model) readOnlyDiagnosticStatus() string {
+	return displayFolderName(m.currentFolder) + " is read-only"
+}
+
+func (m *Model) blockCleanupReadOnlyMutation() bool {
+	if !m.cleanupIsReadOnlyDiagnostic() {
+		return false
+	}
+	m.statusMessage = m.readOnlyDiagnosticStatus()
+	return true
 }
 
 func (m *Model) selectedSidebarFolderPath() string {

@@ -783,15 +783,19 @@ func (m *Model) renderCleanupPreview() string {
 			escHint = "Esc: close preview"
 			zHint = "z: exit full-screen"
 		}
+		actionHint := "D: delete  e: archive"
+		if m.cleanupIsReadOnlyDiagnostic() {
+			actionHint = "read-only"
+		}
 		if totalLines > maxBodyLines {
 			pct := 0
 			if maxOffset > 0 {
 				pct = m.cleanupBodyScrollOffset * 100 / maxOffset
 			}
-			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
+			indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", actionHint, zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
 			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		} else {
-			indicator := fmt.Sprintf(" D: delete  e: archive  %s  ↑↓ j/k  │  %s", zHint, escHint)
+			indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  │  %s", actionHint, zHint, escHint)
 			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		}
 	} else {

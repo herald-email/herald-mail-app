@@ -184,3 +184,78 @@ func TestCleanupAllMailOnly_SidebarSwitchClearsStaleSummaryRows(t *testing.T) {
 		t.Fatal("expected no selectable stale Cleanup summary key after switching to All Mail only")
 	}
 }
+
+func TestCleanupAllMailOnly_BlocksDeleteAndArchiveConfirmations(t *testing.T) {
+	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCleanup
+	m.currentFolder = virtualFolderAllMailOnly
+	m.groupByDomain = true
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "<a@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "first", Date: now.Add(-2 * time.Hour), Folder: "All Mail"},
+		{MessageID: "<b@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "second", Date: now.Add(-1 * time.Hour), Folder: "All Mail"},
+	}
+	m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
+	m.setFocusedPanel(panelSummary)
+
+	for _, key := range []string{"D", "e"} {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		m = updated.(*Model)
+		if m.pendingDeleteConfirm {
+			t.Fatalf("expected %q to be blocked in Cleanup All Mail only view", key)
+		}
+	}
+
+	if m.statusMessage == "" {
+		t.Fatal("expected read-only Cleanup action to set a visible status message")
+	}
+	if !strings.Contains(strings.ToLower(m.statusMessage), "read-only") {
+		t.Fatalf("expected read-only status message, got %q", m.statusMessage)
+	}
+	if m.deletionsPending != 0 || m.deletionsTotal != 0 {
+		t.Fatalf("expected no queued deletions, got pending=%d total=%d", m.deletionsPending, m.deletionsTotal)
+	}
+}
+
+func TestCleanupAllMailOnlyHints_AdvertiseReadOnly(t *testing.T) {
+	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCleanup
+	m.currentFolder = virtualFolderAllMailOnly
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "<a@x.com>", Sender: "Alpha <alpha@example.com>", Subject: "first", Date: now.Add(-2 * time.Hour), Folder: "All Mail"},
+	}
+	m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
+	m.setFocusedPanel(panelSummary)
+
+	summaryHints := stripANSI(m.renderKeyHints())
+	if strings.Contains(summaryHints, "D: delete") || strings.Contains(summaryHints, "e: archive") {
+		t.Fatalf("expected Cleanup summary hints to omit mutating actions in read-only view, got %q", summaryHints)
+	}
+	if !strings.Contains(summaryHints, "read-only") {
+		t.Fatalf("expected Cleanup summary hints to advertise read-only context, got %q", summaryHints)
+	}
+
+	m.showCleanupPreview = true
+	m.cleanupPreviewWidth = 48
+	m.cleanupPreviewEmail = m.timeline.emails[0]
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: "hello"}
+	m.detailsEmails = []*models.EmailData{m.timeline.emails[0]}
+	m.setFocusedPanel(panelDetails)
+
+	previewHints := stripANSI(m.renderKeyHints())
+	if strings.Contains(previewHints, "D: delete") || strings.Contains(previewHints, "e: archive") {
+		t.Fatalf("expected Cleanup preview hints to omit mutating actions in read-only view, got %q", previewHints)
+	}
+	if !strings.Contains(previewHints, "read-only") {
+		t.Fatalf("expected Cleanup preview hints to advertise read-only context, got %q", previewHints)
+	}
+
+	preview := stripANSI(m.renderCleanupPreview())
+	if strings.Contains(preview, "D: delete") || strings.Contains(preview, "e: archive") {
+		t.Fatalf("expected Cleanup preview panel to omit mutating actions in read-only view, got:\n%s", preview)
+	}
+	if !strings.Contains(preview, "read-only") {
+		t.Fatalf("expected Cleanup preview panel to advertise read-only context, got:\n%s", preview)
+	}
+}

@@ -81,6 +81,11 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		folder    string
 	}
 
+	if m.cleanupIsReadOnlyDiagnostic() {
+		m.statusMessage = m.readOnlyDiagnosticStatus()
+		return nil
+	}
+
 	folder := m.currentFolder
 	var targets []deleteTarget
 
