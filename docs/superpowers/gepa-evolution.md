@@ -12,6 +12,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] The workflow records evidence, reflections, scores, and a human-readable report.
 - [x] The default finish line is branch + worktree + report, not push, PR, or merge.
 - [x] Verification is impact-based: code-only tasks stay focused, while TUI, SSH, and MCP checks are added only when the task touches those surfaces.
+- [x] Explicit "improve GEPA" work now has a dedicated optimizer layer that summarizes recent runs, builds a lightweight frontier, extracts feedback patterns, and syncs the ledger snapshot.
 
 ## What Changed In This Version
 
@@ -22,6 +23,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added run schema and workflow reference docs inside the skill so future sessions can load only the relevant details.
 - [x] Established this living ledger as the canonical entrypoint for future "improve GEPA" work.
 - [x] Seeded three validation runs: a successful bootstrap run, a failed TUI-path run, and a workflow-tuning run.
+- [x] Added an optimizer state layer under `.superpowers/autopilot/state/` plus helper scripts for recent-run analysis, frontier building, feedback-pattern extraction, improvement-brief generation, and auto-synced ledger snapshots.
 
 ## Run Patterns Observed
 
@@ -33,6 +35,18 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 - [ ] No meaningful production bug or feature history has been recorded yet beyond bootstrap validation.
 - [ ] No empirical comparison of retry patterns or verification cost has been recorded yet across real tasks.
 
+## Auto Snapshot
+
+This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
+
+<!-- AUTOGEN:BEGIN -->
+- [x] Auto snapshot generated at 2026-04-23T18:37:28+00:00.
+- [x] Recent runs analyzed: 4.
+- [x] Frontier members available: 2.
+- [x] Most repeated failing evidence: `tui-checks` (1 occurrences).
+- [x] Current top recommended experiment: `auto-ledger-and-state-sync` (high value, low risk).
+<!-- AUTOGEN:END -->
+
 ## Known Weaknesses And Pain Points
 
 This section should stay honest about what still hurts. Items remain unchecked until the weakness is materially addressed and validated in later runs.
@@ -42,6 +56,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] Cross-run learning is still mediated by this ledger and human judgment rather than automated frontier selection.
 - [ ] Verification routing is documented, but its real cost and false-positive rate are not yet measured across multiple tasks.
 - [ ] The helper scripts produce durable artifacts, but they do not yet enforce every status transition automatically.
+- [ ] If another agent is actively using `herald-autopilot`, breaking changes to the core execution helpers are still risky and should be staged additively first.
 
 ## Candidate Next Experiments
 

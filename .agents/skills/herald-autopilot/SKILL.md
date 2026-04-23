@@ -30,6 +30,7 @@ Read these before you start:
 - Verification routing: [`references/verification-routing.md`](references/verification-routing.md)
 
 If the task touches the TUI, also read and follow [`../tui-test/SKILL.md`](../tui-test/SKILL.md) for the tmux-driven visual checks.
+If the user explicitly asks to improve GEPA itself, also read [`references/gepa-improvement.md`](references/gepa-improvement.md).
 
 ## Default Contract
 
@@ -151,8 +152,9 @@ When the user later asks to improve GEPA itself:
 
 1. Read `docs/superpowers/gepa-evolution.md`.
 2. Inspect the most recent relevant runs under `.superpowers/autopilot/runs/`.
-3. Identify the single highest-value workflow bottleneck.
-4. Propose and implement one focused workflow change.
-5. Update the evolution doc with what changed, what improved, what still hurts, and what to try next.
+3. Run the optimizer helpers in `scripts/` to summarize recent runs, build the lightweight frontier, extract feedback patterns, and prepare an improvement brief.
+4. Identify the single highest-value workflow bottleneck.
+5. Propose and implement one focused workflow change.
+6. Update the evolution doc with what changed, what improved, what still hurts, and what to try next.
 
 v1 is intentionally a reflective single-run system. Do not introduce challenger worktrees or Pareto frontier selection unless the user asks for the next phase.

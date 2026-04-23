@@ -21,6 +21,10 @@ config.yaml
 # Go build cache
 .cache/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # IDE files
 .vscode/
 .idea/
