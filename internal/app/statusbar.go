@@ -224,6 +224,11 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	filterPrefix := m.timelineFilterPrefix()
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	compactChrome := w <= 80
 
 	// Folder breadcrumb
 	folderParts := strings.Split(displayFolderName(m.currentFolder), "/")
@@ -249,11 +254,7 @@ func (m *Model) renderStatusBar() string {
 
 	// Folder counts
 	if st, ok := m.folderStatus[m.currentFolder]; ok {
-		if m.loading && !m.syncCountsSettled {
-			parts = append(parts, fmt.Sprintf("%d unread / %d total…", st.Unseen, st.Total))
-		} else {
-			parts = append(parts, fmt.Sprintf("%d unread / %d total", st.Unseen, st.Total))
-		}
+		parts = append(parts, formatFolderCountsStatus(st.Unseen, st.Total, m.loading && !m.syncCountsSettled, compactChrome))
 	}
 
 	// Mode (cleanup tab only)
@@ -348,20 +349,36 @@ func (m *Model) renderStatusBar() string {
 
 	// Sidebar auto-hidden indicator
 	if m.sidebarTooWide {
-		parts = append(parts, "sidebar hidden (too narrow — widen terminal or press f)")
+		parts = append(parts, sidebarHiddenStatusNotice(compactChrome))
 	}
 
 	line := filterPrefix + strings.Join(parts, "  │  ")
-	w := m.windowWidth
-	if w <= 0 {
-		w = 80
-	}
 	return lipgloss.NewStyle().
 		Foreground(defaultTheme.StatusFg).
 		Background(defaultTheme.StatusBg).
 		Width(w).
 		Padding(0, 1).
 		Render(truncateVisual(line, w-2))
+}
+
+func formatFolderCountsStatus(unseen, total int, unsettled, compact bool) string {
+	if compact {
+		if unsettled {
+			return fmt.Sprintf("%du/%dt…", unseen, total)
+		}
+		return fmt.Sprintf("%du/%dt", unseen, total)
+	}
+	if unsettled {
+		return fmt.Sprintf("%d unread / %d total…", unseen, total)
+	}
+	return fmt.Sprintf("%d unread / %d total", unseen, total)
+}
+
+func sidebarHiddenStatusNotice(compact bool) string {
+	if compact {
+		return "sidebar hidden"
+	}
+	return "sidebar hidden (too narrow — widen terminal or press f)"
 }
 
 func wrapChromeSegments(text string, width, maxLines int) []string {

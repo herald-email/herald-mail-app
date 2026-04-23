@@ -195,6 +195,25 @@ func TestRenderStatusBar_ShowsTaggingAndEmbeddingProgress(t *testing.T) {
 	}
 }
 
+func TestRenderStatusBar_UsesCompactFragmentsAt80Cols(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.statusMessage = "Demo data loaded"
+	m.demoMode = true
+	m.sidebarTooWide = true
+
+	status := stripANSI(m.renderStatusBar())
+	if !strings.Contains(status, "12u/38t") {
+		t.Fatalf("expected narrow status bar to compact folder counts, got %q", status)
+	}
+	if !strings.Contains(status, "sidebar hidden") {
+		t.Fatalf("expected narrow status bar to keep the sidebar-hidden notice readable, got %q", status)
+	}
+	if strings.Contains(status, "sidebar hi…") {
+		t.Fatalf("expected narrow status bar to avoid truncating the sidebar-hidden notice, got %q", status)
+	}
+}
+
 func TestRenderKeyHints_HidesManualAITagHint(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
