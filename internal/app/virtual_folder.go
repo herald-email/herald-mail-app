@@ -63,3 +63,95 @@ func filterVirtualFolderEmails(emails []*models.EmailData, query string) []*mode
 	}
 	return out
 }
+
+func cleanupGroupKey(sender string, groupByDomain bool) string {
+	if !groupByDomain {
+		return sender
+	}
+	return cleanupExtractDomain(sender)
+}
+
+func cleanupExtractDomain(sender string) string {
+	if sender == "" {
+		return sender
+	}
+
+	atIndex := strings.LastIndex(sender, "@")
+	if atIndex == -1 || atIndex+1 >= len(sender) {
+		return sender
+	}
+
+	domain := strings.TrimRight(strings.TrimSpace(sender[atIndex+1:]), ">")
+	parts := strings.Split(domain, ".")
+	if len(parts) > 2 {
+		secondLevel := parts[len(parts)-2]
+		if secondLevel == "co" || secondLevel == "com" || secondLevel == "org" ||
+			secondLevel == "gov" || secondLevel == "edu" || secondLevel == "net" {
+			if len(parts) >= 3 {
+				return parts[len(parts)-3] + "." + parts[len(parts)-2] + "." + parts[len(parts)-1]
+			}
+		}
+	}
+	if len(parts) >= 2 {
+		return parts[len(parts)-2] + "." + parts[len(parts)-1]
+	}
+	return domain
+}
+
+func buildCleanupGroupsFromEmails(emails []*models.EmailData, groupByDomain bool) map[string][]*models.EmailData {
+	grouped := make(map[string][]*models.EmailData)
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		key := cleanupGroupKey(email.Sender, groupByDomain)
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		grouped[key] = append(grouped[key], email)
+	}
+	return grouped
+}
+
+func buildCleanupStatsFromGroups(grouped map[string][]*models.EmailData) map[string]*models.SenderStats {
+	stats := make(map[string]*models.SenderStats, len(grouped))
+	for key, emails := range grouped {
+		if len(emails) == 0 {
+			continue
+		}
+
+		totalSize := 0
+		withAttachments := 0
+		firstEmail := emails[0].Date
+		lastEmail := emails[0].Date
+
+		for _, email := range emails {
+			totalSize += email.Size
+			if email.HasAttachments {
+				withAttachments++
+			}
+			if email.Date.Before(firstEmail) {
+				firstEmail = email.Date
+			}
+			if email.Date.After(lastEmail) {
+				lastEmail = email.Date
+			}
+		}
+
+		stats[key] = &models.SenderStats{
+			TotalEmails:     len(emails),
+			AvgSize:         float64(totalSize) / float64(len(emails)),
+			WithAttachments: withAttachments,
+			FirstEmail:      firstEmail,
+			LastEmail:       lastEmail,
+		}
+	}
+	return stats
+}
+
+func (m *Model) hydrateCleanupFromVirtualFolderEmails(emails []*models.EmailData) {
+	m.emailsBySender = buildCleanupGroupsFromEmails(emails, m.groupByDomain)
+	m.stats = buildCleanupStatsFromGroups(m.emailsBySender)
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+}

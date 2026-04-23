@@ -148,9 +148,13 @@ func (m *Model) selectSidebarFolder() {
 	m.currentFolder = node.fullPath
 	m.loading = true
 	m.startTime = time.Now()
-	m.stats = nil
-	m.selectedSender = ""
 	m.resetCleanupSelection()
+	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		m.clearCleanupData()
+	} else {
+		m.stats = nil
+		m.selectedSender = ""
+	}
 	m.timeline.virtualNotice = ""
 	if m.activeTab == tabTimeline {
 		m.setFocusedPanel(panelTimeline)

@@ -312,6 +312,18 @@ func (m *Model) resetCleanupSelection() {
 	m.selectedMessages = make(map[string]bool)
 }
 
+func (m *Model) clearCleanupData() {
+	m.stats = nil
+	m.selectedSender = ""
+	m.emailsBySender = nil
+	m.detailsEmails = nil
+	m.rowToSender = make(map[int]string)
+	m.summaryTable.SetRows([]table.Row{})
+	m.summaryTable.SetCursor(0)
+	m.detailsTable.SetRows([]table.Row{})
+	m.detailsTable.SetCursor(0)
+}
+
 // updateSummaryTable updates the summary table with current data
 func (m *Model) updateSummaryTable() {
 	if m.stats == nil {
@@ -405,11 +417,17 @@ func (m *Model) updateSummaryTable() {
 
 // updateDetailsTable updates the details table for the selected sender
 func (m *Model) updateDetailsTable() {
-	emails, err := m.backend.GetEmailsBySender(m.currentFolder)
-	if err != nil {
-		logger.Warn("Failed to get emails for cleanup details: %v", err)
-		m.detailsTable.SetRows([]table.Row{})
-		return
+	var emails map[string][]*models.EmailData
+	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		emails = m.emailsBySender
+	} else {
+		var err error
+		emails, err = m.backend.GetEmailsBySender(m.currentFolder)
+		if err != nil {
+			logger.Warn("Failed to get emails for cleanup details: %v", err)
+			m.detailsTable.SetRows([]table.Row{})
+			return
+		}
 	}
 	if len(emails) == 0 {
 		if len(m.detailsEmails) > 0 {
@@ -551,6 +569,13 @@ func (m *Model) toggleDomainMode() {
 	m.backend.SetGroupByDomain(m.groupByDomain)
 
 	logger.Info("Toggling domain mode to: %v", m.groupByDomain)
+
+	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		m.selectedSender = ""
+		m.resetCleanupSelection()
+		m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
+		return
+	}
 
 	stats, err := m.backend.GetSenderStatistics(m.currentFolder)
 	if err != nil {

@@ -730,6 +730,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.timeline.virtualNotice = msg.Notice
 		if msg.ReadOnly {
 			m.loading = false
+			if isVirtualAllMailOnlyFolder(m.currentFolder) {
+				m.hydrateCleanupFromVirtualFolderEmails(msg.Emails)
+			}
 			unseen := 0
 			for _, email := range msg.Emails {
 				if email != nil && !email.IsRead {
