@@ -48,7 +48,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Chat tool calling (Ollama tool API + MCP tools in-process)
 - [x] Filtered timeline from chat results
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
-- [ ] AI writing assistant in Compose (style, tone, grammar, subject suggest)
+- [x] Compose AI assistant baseline (rewrite, tone/length adjustments, subject suggestion, accept into draft)
 - [x] Quick replies (canned + AI-generated contextual options)
 - [x] Contact book
 - [x] First-run setup wizard (detected when no config exists; account type, credentials, AI config steps)
@@ -112,7 +112,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Star / pin important threads to top
-- [ ] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
+- [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
 - [ ] Split Timeline and preview panels keep aligned heights at common sizes including `80x24`
@@ -130,7 +130,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Deletion progress (Deleting 3/5…)
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
-- [ ] Global AI status chip that stays visible when AI is configured and summarizes `idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`
+- [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)
@@ -143,8 +143,8 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Unread / total counts per folder
 - [x] Keyboard navigation (j/k, Enter to switch folder)
 - [x] Auto-hides with a hint when terminal is too narrow
-- [ ] Current folder remains visibly selected even when the sidebar is not focused
-- [ ] Folder tree appears promptly during startup and does not collapse to a partial list while the active folder is still loading
+- [x] Current folder remains visibly selected even when the sidebar is not focused
+- [x] Folder tree appears promptly during startup and does not collapse to a partial list while the active folder is still loading
 
 ### Chat Panel
 
@@ -192,10 +192,10 @@ The app can automatically tag emails with categories (subscription, important, u
 - [x] `classify_folder` MCP tool (batch, with progress)
 - [x] Auto-classify new emails as they arrive (background, rate-limited)
 - [x] Reanalyse / override existing tags
-- [ ] Local-AI work scheduler with bounded concurrency and interactive-before-background priority
-- [ ] Background embedding and enrichment coalescing so repeated Timeline loads do not create duplicate local-AI bursts
-- [ ] Degraded AI UX that surfaces concise `AI unavailable` / `deferred` states instead of noisy repeated failures
-- [ ] Local Ollama overload handling that fails open and preserves overall UI/network responsiveness
+- [x] Local-AI work scheduler with bounded concurrency and interactive-before-background priority
+- [x] Background embedding and enrichment coalescing so repeated Timeline loads do not create duplicate local-AI bursts
+- [x] Degraded AI UX that surfaces concise `AI unavailable` / `deferred` states instead of noisy repeated failures
+- [x] Local Ollama overload handling that fails open and preserves overall UI/network responsiveness
 
 ### Custom Classification Prompts
 
@@ -597,7 +597,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
 - [ ] Contact enrichment failures are deduplicated and visible without flooding the log viewer
-- [ ] Autocomplete in Compose `To`/`CC`/`BCC` fields
+- [x] Autocomplete in Compose `To`/`CC`/`BCC` fields
 - [ ] CardDAV sync (config stubs in place; implementation deferred)
 
 ---
