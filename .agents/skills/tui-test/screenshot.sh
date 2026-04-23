@@ -27,6 +27,8 @@ SESSION="${1:?Usage: screenshot.sh <tmux-session> <output.png> [window-size]}"
 OUTPUT="${2:?Usage: screenshot.sh <tmux-session> <output.png> [window-size]}"
 WINSIZE="${3:-1400x800}"
 
+mkdir -p "$(dirname "$OUTPUT")"
+
 # Check dependencies
 command -v aha >/dev/null 2>&1 || { echo "ERROR: aha not found. Install with: brew install aha" >&2; exit 1; }
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
