@@ -155,6 +155,30 @@ func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
 	}
 }
 
+func TestSelectSidebarFolder_CleanupRestoresSummaryTableFocus(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.showSidebar = true
+	m.stats = makeCleanupStats()
+	m.folderTree = buildFolderTree([]string{"INBOX", "Archive"})
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+	m.setFocusedPanel(panelSidebar)
+	m.sidebarCursor = 1
+
+	m.selectSidebarFolder()
+
+	if m.focusedPanel != panelSummary {
+		t.Fatalf("expected focus to return to cleanup summary, got %d", m.focusedPanel)
+	}
+	if !m.summaryTable.Focused() {
+		t.Fatal("expected cleanup summary table to be focused after selecting a folder from the sidebar")
+	}
+}
+
 func TestFoldersLoadedMsg_PreservesExistingTreeWhenRefreshFails(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.folders = []string{"INBOX", "Sent", "Archive"}

@@ -755,6 +755,22 @@ Check these states during every applicable lane:
 - It disappears once the active folder bundle is settled.
 - It never shows a spinner glyph.
 
+### TC-36 — Cleanup narrow controls and overlay fit
+
+**Lane:** A, B  
+**Sizes:** `80x24`
+
+**Steps:**
+1. Open Cleanup with the sender summary focused.
+2. Verify the hint bar, then move focus to the sidebar, select another folder, and return to the sender summary.
+3. Open the rule editor (`W`) and the prompt editor (`P`) from Cleanup.
+4. Capture each state.
+
+**Expect:**
+- The sender summary remains keyboard-navigable after selecting a folder from the sidebar.
+- The narrow Cleanup hint bar still exposes navigation plus `W`, `C`, and `P`.
+- Rule and prompt overlays stay fully inside the viewport instead of clipping off the top or bottom.
+
 ---
 
 ## Recommendations

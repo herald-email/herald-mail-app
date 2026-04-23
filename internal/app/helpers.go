@@ -287,6 +287,26 @@ func (m *Model) selectedSummaryCount() int {
 	return len(m.selectedSummaryKeys)
 }
 
+func (m *Model) pruneCleanupSummaryRows(emailsBySender map[string][]*models.EmailData) bool {
+	if m.stats == nil {
+		return false
+	}
+
+	pruned := false
+	for key := range m.stats {
+		if len(emailsBySender[key]) > 0 {
+			continue
+		}
+		delete(m.stats, key)
+		delete(m.selectedSummaryKeys, key)
+		if m.selectedSender == key {
+			m.selectedSender = ""
+		}
+		pruned = true
+	}
+	return pruned
+}
+
 func (m *Model) resetCleanupSelection() {
 	m.selectedSummaryKeys = make(map[string]bool)
 	m.selectedMessages = make(map[string]bool)
@@ -393,6 +413,28 @@ func (m *Model) updateSummaryTable() {
 
 // updateDetailsTable updates the details table for the selected sender
 func (m *Model) updateDetailsTable() {
+	emails, err := m.backend.GetEmailsBySender(m.currentFolder)
+	if err != nil {
+		logger.Warn("Failed to get emails for cleanup details: %v", err)
+		m.detailsTable.SetRows([]table.Row{})
+		return
+	}
+	if len(emails) == 0 {
+		if len(m.detailsEmails) > 0 {
+			m.rebuildDetailsRows()
+			return
+		}
+		m.selectedSender = ""
+		m.detailsEmails = nil
+		m.detailsTable.SetRows([]table.Row{})
+		return
+	}
+
+	m.emailsBySender = emails
+	if m.pruneCleanupSummaryRows(emails) {
+		m.updateSummaryTable()
+	}
+
 	cursor := m.summaryTable.Cursor()
 	sender := m.selectedSender
 	if key, ok := m.rowToSender[cursor]; ok && key != "" {
@@ -404,22 +446,17 @@ func (m *Model) updateDetailsTable() {
 	}
 	if !ok || sender == "" {
 		m.selectedSender = ""
+		m.detailsEmails = nil
 		m.detailsTable.SetRows([]table.Row{})
 		return
 	}
 
 	m.selectedSender = sender
 
-	emails, err := m.backend.GetEmailsBySender(m.currentFolder)
-	if err != nil {
-		logger.Warn("Failed to get emails for sender %s: %v", sender, err)
-		m.detailsTable.SetRows([]table.Row{})
-		return
-	}
-
 	senderEmails := emails[sender]
 	if len(senderEmails) == 0 {
 		logger.Debug("No emails found for sender: %s", sender)
+		m.detailsEmails = nil
 		m.detailsTable.SetRows([]table.Row{})
 		return
 	}

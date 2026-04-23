@@ -424,8 +424,48 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	b.imapClient.StartBackgroundReconcile(req.Folder, validIDsCh)
 }
 
+func senderStatisticsFromGroups(grouped map[string][]*models.EmailData) map[string]*models.SenderStats {
+	stats := make(map[string]*models.SenderStats, len(grouped))
+	for sender, emails := range grouped {
+		if len(emails) == 0 {
+			continue
+		}
+
+		totalSize := 0
+		withAttachments := 0
+		firstEmail := emails[0].Date
+		lastEmail := emails[0].Date
+
+		for _, email := range emails {
+			totalSize += email.Size
+			if email.HasAttachments {
+				withAttachments++
+			}
+			if email.Date.Before(firstEmail) {
+				firstEmail = email.Date
+			}
+			if email.Date.After(lastEmail) {
+				lastEmail = email.Date
+			}
+		}
+
+		stats[sender] = &models.SenderStats{
+			TotalEmails:     len(emails),
+			AvgSize:         float64(totalSize) / float64(len(emails)),
+			WithAttachments: withAttachments,
+			FirstEmail:      firstEmail,
+			LastEmail:       lastEmail,
+		}
+	}
+	return stats
+}
+
 func (b *LocalBackend) GetSenderStatistics(folder string) (map[string]*models.SenderStats, error) {
-	return b.imapClient.GetSenderStatistics(folder)
+	grouped, err := b.GetEmailsBySender(folder)
+	if err != nil {
+		return nil, err
+	}
+	return senderStatisticsFromGroups(grouped), nil
 }
 
 func (b *LocalBackend) GetEmailsBySender(folder string) (map[string][]*models.EmailData, error) {

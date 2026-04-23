@@ -70,6 +70,48 @@ func TestFilterSemanticResultsByValidIDs_WithSet(t *testing.T) {
 	}
 }
 
+func TestSenderStatisticsFromGroups_IgnoresEmptyGroups(t *testing.T) {
+	now := time.Now()
+	grouped := map[string][]*models.EmailData{
+		"active@example.com": {
+			{
+				MessageID:      "<a@x.com>",
+				Sender:         "active@example.com",
+				Date:           now.Add(-2 * time.Hour),
+				Size:           100,
+				HasAttachments: true,
+			},
+			{
+				MessageID:      "<b@x.com>",
+				Sender:         "active@example.com",
+				Date:           now,
+				Size:           300,
+				HasAttachments: false,
+			},
+		},
+		"stale@example.com": nil,
+	}
+
+	stats := senderStatisticsFromGroups(grouped)
+
+	if _, ok := stats["stale@example.com"]; ok {
+		t.Fatal("expected empty sender group to be skipped")
+	}
+	stat, ok := stats["active@example.com"]
+	if !ok {
+		t.Fatal("expected non-empty sender group to produce statistics")
+	}
+	if stat.TotalEmails != 2 {
+		t.Fatalf("expected 2 emails, got %d", stat.TotalEmails)
+	}
+	if stat.WithAttachments != 1 {
+		t.Fatalf("expected 1 attachment-bearing email, got %d", stat.WithAttachments)
+	}
+	if stat.AvgSize != 200 {
+		t.Fatalf("expected avg size 200, got %f", stat.AvgSize)
+	}
+}
+
 // --- isValidID ---
 
 func TestIsValidID_NilSet(t *testing.T) {

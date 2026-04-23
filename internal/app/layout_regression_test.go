@@ -57,6 +57,14 @@ func assertFitsWidth(t *testing.T, width int, rendered string) {
 	}
 }
 
+func assertFitsHeight(t *testing.T, height int, rendered string) {
+	t.Helper()
+	lines := strings.Split(rendered, "\n")
+	if len(lines) > height {
+		t.Fatalf("rendered height=%d exceeds height %d:\n%s", len(lines), height, rendered)
+	}
+}
+
 func makeCleanupEmails() map[string][]*models.EmailData {
 	now := time.Date(2026, 4, 20, 18, 38, 0, 0, time.UTC)
 	result := map[string][]*models.EmailData{
@@ -142,6 +150,21 @@ func TestKeyHints_WrapToTwoLinesWhenNeeded(t *testing.T) {
 	}
 }
 
+func TestCleanupSummaryHints_KeepCleanupActionsVisibleAt80Cols(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabCleanup
+	m.focusedPanel = panelSummary
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+
+	hints := stripANSI(m.renderKeyHints())
+	for _, want := range []string{"↑/k ↓/j: nav", "W: rule", "C: cleanup", "P: prompt"} {
+		if !strings.Contains(hints, want) {
+			t.Fatalf("expected cleanup summary hints to include %q at 80 cols, got:\n%s", want, hints)
+		}
+	}
+}
+
 func TestMinimumSizeMessage_FitsWidthAndIncludesTarget(t *testing.T) {
 	m := makeSizedModel(t, 50, 15)
 	rendered := m.View()
@@ -179,6 +202,7 @@ func TestCleanupView_Fits80x24(t *testing.T) {
 	m = updated.(*Model)
 	rendered := m.renderMainView()
 	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
 }
 
 func TestCleanupPreview_Fits80x24(t *testing.T) {
@@ -199,6 +223,49 @@ func TestCleanupPreview_Fits80x24(t *testing.T) {
 	m = updated.(*Model)
 	rendered := m.renderMainView()
 	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+}
+
+func TestCleanupView_WithTopSyncStripFits80x24(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.loading = true
+	m.syncCountsSettled = false
+	m.currentFolder = "INBOX"
+	m.folderStatus = map[string]models.FolderStatus{"INBOX": {Unseen: 12, Total: 38}}
+	m.stats = makeCleanupStats()
+	m.activeTab = tabCleanup
+	m.progressInfo.Message = "Generating statistics..."
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(*Model)
+
+	rendered := m.renderMainView()
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+}
+
+func TestPromptEditor_Fits80x24(t *testing.T) {
+	editor := NewPromptEditor(nil, 80, 24)
+
+	rendered := editor.View()
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "New Custom Prompt") {
+		t.Fatalf("expected prompt editor title, got:\n%s", stripped)
+	}
+}
+
+func TestRuleEditor_Fits80x24(t *testing.T) {
+	editor := NewRuleEditor("ShopifyBrand <orders@shopify-brand.example>", "", 80, 24)
+
+	rendered := editor.View()
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
 }
 
 func TestContactsInlinePreview_NoFooterBorderLeakAt80x24(t *testing.T) {
@@ -444,6 +511,43 @@ func TestCleanupSelectionPersistsAcrossReorderAndResize(t *testing.T) {
 	}
 	if !foundCheckmark {
 		t.Fatalf("expected selected cleanup key %q to keep its checkmark after resize", selectedKey)
+	}
+}
+
+func TestCleanupDetails_PrunesStaleSummaryRowsFromFilteredGroups(t *testing.T) {
+	freshEmails := makeCleanupEmails()
+	staleKey := "Ghost Sender <ghost@example.com>"
+
+	b := &layoutBackend{emailsBySender: freshEmails}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.stats[staleKey] = &models.SenderStats{
+		TotalEmails:     25,
+		AvgSize:         1024,
+		WithAttachments: 0,
+		FirstEmail:      time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC),
+		LastEmail:       time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC),
+	}
+	m.updateSummaryTable()
+
+	key, ok := m.summaryKeyAtCursor()
+	if !ok || key != staleKey {
+		t.Fatalf("expected stale row to sort first, got %q", key)
+	}
+
+	m.updateDetailsTable()
+
+	if _, ok := m.stats[staleKey]; ok {
+		t.Fatalf("expected stale cleanup summary row %q to be pruned after details refresh", staleKey)
+	}
+	if got := len(m.summaryTable.Rows()); got != 2 {
+		t.Fatalf("expected 2 remaining cleanup summary rows, got %d", got)
+	}
+	if got := len(m.detailsTable.Rows()); got == 0 {
+		t.Fatal("expected details table to fall back to a sender with visible emails")
 	}
 }
 

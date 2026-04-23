@@ -457,6 +457,10 @@ func (m *Model) statusMessageForActiveTab() string {
 func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	chrome := m.chromeState(plan)
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
 	var hints string
 	timelineHints, hasTimelineHints := m.timelineKeyHints(chrome)
 	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
@@ -492,12 +496,12 @@ func (m *Model) renderKeyHints() string {
 				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
-			hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			if m.activeTab == tabCleanup && w <= 80 {
+				hints = "↑/k ↓/j: nav  │  enter: details  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
+			} else {
+				hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+			}
 		}
-	}
-	w := m.windowWidth
-	if w <= 0 {
-		w = 80
 	}
 	return renderChromeLines(wrapChromeSegments(hints, w-2, 2), w, defaultTheme.HintFg)
 }

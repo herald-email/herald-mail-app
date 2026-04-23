@@ -153,9 +153,9 @@ func (m *Model) selectSidebarFolder() {
 	m.resetCleanupSelection()
 	m.timeline.virtualNotice = ""
 	if m.activeTab == tabTimeline {
-		m.focusedPanel = panelTimeline
+		m.setFocusedPanel(panelTimeline)
 	} else {
-		m.focusedPanel = panelSummary
+		m.setFocusedPanel(panelSummary)
 	}
 	logger.Info("Switching to folder: %s", m.currentFolder)
 }

@@ -96,7 +96,7 @@ func (p *PromptEditor) buildForm() {
 		p.form = p.form.WithWidth(p.formWidth())
 	}
 	if p.height > 0 {
-		p.form = p.form.WithHeight(p.height)
+		p.form = p.form.WithHeight(p.formHeight())
 	}
 }
 
@@ -110,6 +110,17 @@ func (p *PromptEditor) formWidth() int {
 		w = p.width
 	}
 	return w
+}
+
+func (p *PromptEditor) formHeight() int {
+	h := p.height - 8
+	if h < 10 {
+		h = 10
+	}
+	if p.height > 0 && h > p.height {
+		h = p.height
+	}
+	return h
 }
 
 // Init implements tea.Model.
@@ -127,7 +138,7 @@ func (p *PromptEditor) Update(msg tea.Msg) (*PromptEditor, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		p.width = msg.Width
 		p.height = msg.Height
-		p.form = p.form.WithWidth(p.formWidth()).WithHeight(p.height)
+		p.form = p.form.WithWidth(p.formWidth()).WithHeight(p.formHeight())
 		return p, nil
 
 	case tea.KeyMsg:

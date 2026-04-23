@@ -111,7 +111,7 @@ func (r *RuleEditor) buildForm() {
 		r.form = r.form.WithWidth(r.formWidth())
 	}
 	if r.height > 0 {
-		r.form = r.form.WithHeight(r.height)
+		r.form = r.form.WithHeight(r.formHeight())
 	}
 }
 
@@ -125,6 +125,17 @@ func (r *RuleEditor) formWidth() int {
 		w = r.width
 	}
 	return w
+}
+
+func (r *RuleEditor) formHeight() int {
+	h := r.height - 5
+	if h < 10 {
+		h = 10
+	}
+	if r.height > 0 && h > r.height {
+		h = r.height
+	}
+	return h
 }
 
 // Init implements tea.Model.
@@ -142,7 +153,7 @@ func (r *RuleEditor) Update(msg tea.Msg) (*RuleEditor, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		r.width = msg.Width
 		r.height = msg.Height
-		r.form = r.form.WithWidth(r.formWidth()).WithHeight(r.height)
+		r.form = r.form.WithWidth(r.formWidth()).WithHeight(r.formHeight())
 		return r, nil
 
 	case tea.KeyMsg:
