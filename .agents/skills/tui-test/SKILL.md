@@ -1,6 +1,6 @@
 ---
 name: tui-test
-description: Battle-test terminal UIs such as Herald via tmux: reset to known states, compare visible hotkeys with actual behavior, capture ANSI and PNG evidence, and run resize soak and thrash loops to catch stale layout, focus, and overlay bugs.
+description: "Battle-test terminal UIs such as Herald via tmux: reset to known states, compare visible hotkeys with actual behavior, capture ANSI and PNG evidence, and run resize soak and thrash loops to catch stale layout, focus, and overlay bugs."
 disable-model-invocation: true
 allowed-tools: Bash Read Write Glob Grep Edit Agent TodoWrite
 argument-hint: "[app: herald | generic] [focus: full | hotkeys | resize | timeline | compose | cleanup | contacts | ai]"
