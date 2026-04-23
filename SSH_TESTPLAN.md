@@ -85,7 +85,7 @@ tmux kill-session -t ssh_test
 | `email_cache.db` populated (run TUI first) | Recommended |
 | Port 2222 free on localhost | Yes |
 | `ssh` client available | Yes |
-| Ollama running (for AI test cases) | TC-SS-05 only |
+| Ollama running (for AI test cases) | TC-SS-12 semantic path, TC-SS-17 |
 
 ---
 
@@ -320,7 +320,7 @@ tmux kill-session -t ssh_test
 
 ---
 
-### TC-SS-12 — Search over SSH (all modes)
+### TC-SS-12 — Search over SSH (keyword, body, cross-folder, semantic)
 
 **Steps:**
 1. Connect via SSH, switch to Timeline.
@@ -331,16 +331,19 @@ tmux kill-session -t ssh_test
 6. Capture screenshot.
 7. Press `/`, type `/* hello` (cross-folder).
 8. Capture screenshot.
-9. Press `/`, type a term that doesn't exist in this folder (e.g. `zzznomatch`).
+9. Press `/`, type `? swiftui performance` (semantic search).
 10. Capture screenshot.
+11. Press `/`, type a term that doesn't exist in this folder (e.g. `zzznomatch`).
+12. Capture screenshot.
 
-**Expect (steps 3, 6, 8):**
+**Expect (steps 3, 6, 8, 10):**
 - Key hint bar shows search input text
 - Timeline updates in real time as text is typed
 - No rendering artifacts or overflowing lines
 - Source tags visible in status bar
+- Semantic queries either return bounded results or a clear AI/degraded-state message; they must not wedge the SSH render.
 
-**Expect (step 10 — zero results):**
+**Expect (step 12 — zero results):**
 - Status bar shows `Search: 0 results`
 - Key hint bar shows: `No results in this folder — try: /* zzznomatch`
 
@@ -433,6 +436,28 @@ tmux kill-session -t ssh_test
 
 **Expect (step 6):**
 - Status bar returns to normal; preview unchanged
+
+---
+
+### TC-SS-17 — Compose AI assistant over SSH
+
+**Prerequisites:** AI backend configured and reachable for the server config under test.
+
+**Steps:**
+1. Connect via SSH and switch to Compose (`2`).
+2. Ensure the draft body contains text.
+3. Press `Ctrl+G` to open the AI assistant.
+4. Capture the SSH pane.
+5. Trigger one quick action (`1`-`5`) or enter a prompt and press `Enter`.
+6. Wait for a suggestion or bounded error and capture again.
+7. Press `Ctrl+J` to request a subject suggestion, then press `Tab` to accept it.
+8. Repeat once with AI unavailable or misconfigured.
+
+**Expect:**
+- The AI panel opens without corrupting the SSH pane layout, tab bar, or status bar.
+- Success path shows loading and then a visible AI suggestion or diff area.
+- Subject-hint acceptance works over SSH and does not leave stale overlay state behind.
+- Failure path stays readable and bounded; no panic, raw escape corruption, or wedged session.
 
 ---
 

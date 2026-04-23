@@ -343,10 +343,47 @@ Check these states during every applicable lane:
 - The status chip can show `AI: deferred`.
 - Browser and unrelated network activity on the machine remain usable.
 - Herald does not wedge the terminal or chat/quick-reply flows.
-- Key hints show sidebar actions while sidebar is focused.
-- Timeline border is inactive while sidebar is focused.
 
-### TC-07 — Stale status leakage across tabs
+### TC-11 — Compose AI assistant success and degrade
+
+**Lane:** C  
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Open Compose with a non-empty draft body.
+2. Press `Ctrl+G` to open the AI assistant.
+3. Trigger one quick action (`1`-`5`) or enter a custom prompt and press `Enter`.
+4. Wait for a suggestion or bounded failure.
+5. Edit the suggestion once, then press `Ctrl+Enter` to accept it into the compose body.
+6. Repeat once with AI unavailable, misconfigured, or using an invalid model.
+
+**Expect:**
+- The AI panel opens without pushing the compose chrome off-screen.
+- Success path shows loading state, diff/suggestion content, and an editable response area.
+- `Ctrl+Enter` copies the accepted suggestion into the compose body and closes the panel cleanly.
+- Narrow sizes degrade cleanly without broken borders or hidden compose inputs.
+- Failure path stays responsive and shows concise bounded feedback in compose status instead of panicking or flooding logs.
+
+### TC-12 — Compose AI subject hint accept and dismiss
+
+**Lane:** C  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Open Compose with either a non-empty draft body or reply context.
+2. Press `Ctrl+J` to request a subject suggestion.
+3. Capture the hint line when it appears.
+4. Press `Tab` to accept the suggestion.
+5. Trigger another suggestion and press `Esc` to dismiss it.
+6. Repeat once with AI unavailable or no valid draft context.
+
+**Expect:**
+- A subject-hint line appears below the Subject field with visible accept/dismiss guidance.
+- `Tab` accepts the hint only while the hint is visible and does not advance focus first.
+- `Esc` dismisses the hint cleanly without disturbing the rest of the compose state.
+- Missing draft context or unavailable AI produces bounded feedback such as `Write something first` or `No AI backend configured`.
+
+### TC-13 — Stale status leakage across tabs
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `80x24`
@@ -360,7 +397,7 @@ Check these states during every applicable lane:
 - Cleanup selection counts do not appear in Timeline or Contacts.
 - Tab-local status fragments stay tab-local.
 
-### TC-08 — Compose and Contacts chrome sanity
+### TC-14 — Compose and Contacts chrome sanity
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `120x40`, `80x24`
@@ -375,7 +412,7 @@ Check these states during every applicable lane:
 - List and detail borders are closed.
 - Key hints match the focused region.
 
-### TC-09 — Narrow screen behavior
+### TC-15 — Narrow screen behavior
 
 **Lane:** A, B  
 **Sizes:** `80x24`, `50x15`
@@ -391,7 +428,7 @@ Check these states during every applicable lane:
 - Optional panels degrade before borders break.
 - `50x15` shows a complete actionable minimum-size message with exact required dimensions.
 
-### TC-10 — Timeline search and clear
+### TC-16 — Timeline search and clear
 
 **Lane:** A, B, C  
 **Sizes:** `220x50`, `80x24`
@@ -420,7 +457,7 @@ Check these states during every applicable lane:
 - The original cursor position and thread expansion state are restored after the final `Esc`.
 - Timeline search does not advertise or use `Ctrl+S`.
 
-### TC-11 — Preview unwind order
+### TC-17 — Preview unwind order
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `80x24`
@@ -437,7 +474,7 @@ Check these states during every applicable lane:
 - Full-screen exits before preview.
 - Preview exits before broader tab state changes.
 
-### TC-12 — Logs and chat resilience
+### TC-18 — Logs and chat resilience
 
 **Lane:** A, B, C  
 **Sizes:** `220x50`, `80x24`
@@ -453,7 +490,7 @@ Check these states during every applicable lane:
 - Key hints match the visible/focused overlay.
 - Logs can be opened while visible startup data is already on screen and the active folder is still syncing.
 
-### TC-13 — Multi-attachment navigation and save
+### TC-19 — Multi-attachment navigation and save
 
 **Lane:** B, C  
 **Sizes:** `220x50`, `120x40`, `80x24`
@@ -470,7 +507,7 @@ Check these states during every applicable lane:
 - Save prompt belongs to preview-local state and unwinds with `Esc`.
 - Attachment hints appear only when attachments are present.
 
-### TC-14 — Quick replies success and degrade
+### TC-20 — Quick replies success and degrade
 
 **Lane:** C  
 **Sizes:** `220x50`, `80x24`
@@ -484,7 +521,7 @@ Check these states during every applicable lane:
 - Success path shows reply options without freezing the UI.
 - Failure path stays responsive and shows concise bounded feedback.
 
-### TC-15 — Semantic search success and degrade
+### TC-21 — Semantic search success and degrade
 
 **Lane:** C  
 **Sizes:** `220x50`, `80x24`
@@ -500,7 +537,7 @@ Check these states during every applicable lane:
 - No silent failure and no runaway retries.
 - Changing the configured embedding model invalidates stale embeddings and triggers clean re-embedding instead of mixing vector generations.
 
-### TC-16 — Contact enrichment under Ollama failure
+### TC-22 — Contact enrichment under Ollama failure
 
 **Lane:** C  
 **Sizes:** `220x50`, `80x24`
@@ -515,7 +552,7 @@ Check these states during every applicable lane:
 - Failure path is concise, deduplicated, and does not flood the log viewer.
 - Contacts remain navigable throughout.
 
-### TC-17 — Image description behavior
+### TC-23 — Image description behavior
 
 **Lane:** C  
 **Sizes:** `220x50`, `80x24`
@@ -530,7 +567,7 @@ Check these states during every applicable lane:
 - Degraded path does not overflow or wedge the preview.
 - Failure is surfaced cleanly.
 
-### TC-18 — Local AI backlog and responsiveness
+### TC-24 — Local AI backlog and responsiveness
 
 **Lane:** C  
 **Sizes:** `220x50`, `80x24`
@@ -546,7 +583,7 @@ Check these states during every applicable lane:
 - Low-priority work is deferred or paused instead of creating a connection storm.
 - Browser and unrelated network activity remain usable.
 
-### TC-19 — SSH render smoke
+### TC-25 — SSH render smoke
 
 **Lane:** D  
 **Sizes:** `120x40`, `80x24`
@@ -561,7 +598,7 @@ Check these states during every applicable lane:
 - No startup panic.
 - Focus, borders, and key hints remain sane at `80x24`.
 
-### TC-20 — MCP read smoke after TUI changes
+### TC-26 — MCP read smoke after TUI changes
 
 **Lane:** E
 
@@ -575,7 +612,7 @@ Check these states during every applicable lane:
 - Tool listing succeeds.
 - One read operation succeeds and does not regress after TUI-affecting work.
 
-### TC-21 — Virtual `All Mail only` inspector
+### TC-27 — Virtual `All Mail only` inspector
 
 **Lane:** B  
 **Sizes:** `220x50`, `120x40`, `80x24`
@@ -594,7 +631,7 @@ Check these states during every applicable lane:
 - Preview and full-screen preview work normally.
 - No destructive or mutating actions are advertised from this view.
 
-### TC-22 — `All Mail only` unsupported state
+### TC-28 — `All Mail only` unsupported state
 
 **Lane:** B  
 **Sizes:** `220x50`, `80x24`
@@ -608,7 +645,7 @@ Check these states during every applicable lane:
 - Herald does not show an empty ambiguous Timeline.
 - No destructive actions are available.
 
-### TC-23 — `All Mail only` read-only enforcement
+### TC-29 — `All Mail only` read-only enforcement
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `80x24`
@@ -624,7 +661,7 @@ Check these states during every applicable lane:
 - Local search works within the derived set.
 - `Esc` and preview navigation still behave normally.
 
-### TC-24 — Active-folder bundle settles together
+### TC-30 — Active-folder bundle settles together
 
 **Lane:** B  
 **Sizes:** `220x50`, `120x40`, `80x24`
@@ -640,7 +677,7 @@ Check these states during every applicable lane:
 - Visible rows, folder counts, current folder label, and folder tree settle into one coherent state within a 2-5 second bundled window under normal conditions.
 - The UI never shows `synced` while counts are still unsettled or while the visible folder tree is still incomplete.
 
-### TC-25 — No count drift between sync hydration and live counts
+### TC-31 — No count drift between sync hydration and live counts
 
 **Lane:** B  
 **Sizes:** `220x50`, `80x24`
@@ -655,7 +692,7 @@ Check these states during every applicable lane:
 - Hydrated cache slices do not temporarily rewrite the active folder to a smaller or contradictory count.
 - Cleanup grouping counts for the active folder match the same authoritative live folder count model.
 
-### TC-26 — Cleanup selection persistence and checkmarks
+### TC-32 — Cleanup selection persistence and checkmarks
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `120x40`, `80x24`
@@ -672,7 +709,7 @@ Check these states during every applicable lane:
 - The summary text such as `4 senders selected` or `4 domains selected` matches the visible checkmarks exactly.
 - Selection survives refreshes, reordering, tab switches, and resizes because it is tied to logical sender/domain identity rather than row index.
 
-### TC-27 — Cleanup responsive column layout
+### TC-33 — Cleanup responsive column layout
 
 **Lane:** A, B  
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
@@ -688,7 +725,7 @@ Check these states during every applicable lane:
 - The sender/domain column reclaims freed width first.
 - The first selection column remains visible and aligned at every supported size.
 
-### TC-28 — Folder tree completeness during startup
+### TC-34 — Folder tree completeness during startup
 
 **Lane:** B  
 **Sizes:** `220x50`, `80x24`
@@ -702,7 +739,7 @@ Check these states during every applicable lane:
 - The folder tree appears early and stays stable while the active folder sync continues.
 - Starting a heavy `INBOX` sync does not temporarily collapse the sidebar to only the active folder and virtual entries.
 
-### TC-29 — Sync strip honesty and disappearance
+### TC-35 — Sync strip honesty and disappearance
 
 **Lane:** B  
 **Sizes:** `220x50`, `80x24`

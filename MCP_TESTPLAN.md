@@ -77,6 +77,7 @@ Remove the test binary: `rm /tmp/mcp-server-test`
 | Node.js / `npx` available | For TC-MCP-01 via Inspector |
 | Claude Code with MCP support | For TC-MCP-14 |
 | AI classifications present | TC-MCP-11 only (press `a` in TUI first) |
+| Ollama with the configured embedding model available | TC-MCP-19 and TC-MCP-20 |
 
 ---
 
@@ -101,8 +102,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 ```
 
 **Expect:**
-- Response contains a `result.tools` array with exactly 4 entries
-- Tool names present: `list_recent_emails`, `search_emails`, `get_sender_stats`, `get_email_classifications`
+- Response contains a non-empty `result.tools` array with the current catalog, not only the legacy 4-tool subset
+- Tool names present include at least:
+  - `list_recent_emails`, `search_emails`, `get_sender_stats`, `get_email_classifications`
+  - `semantic_search_emails`, `semantic_search_contacts`
+  - `classify_email`, `summarise_email`, `draft_reply`
 - Each tool has a `description` and `inputSchema` field
 - No error field in response
 
@@ -373,7 +377,7 @@ echo '{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"search_by
 
 ### TC-MCP-19 — semantic_search_emails (Ollama required)
 
-**Prerequisites:** Ollama running with `nomic-embed-text` pulled; emails with cached body vectors.
+**Prerequisites:** Ollama running with the configured embedding model available (default: `nomic-embed-text-v2-moe`); emails with cached body vectors.
 
 **Steps:**
 ```bash
@@ -389,13 +393,32 @@ echo '{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"semantic_
 
 ---
 
-### TC-MCP-20 — classify_email (Ollama required)
+### TC-MCP-20 — semantic_search_contacts (Ollama required)
+
+**Prerequisites:** Ollama running with the configured embedding model available; contacts already enriched/indexed.
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"semantic_search_contacts","arguments":{"query":"people I discuss swiftui performance with","limit":5}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect (Ollama running):**
+- Returns semantically similar contacts, ranked by relevance
+- Result text includes contact identity plus score/context fields when available
+
+**Expect (Ollama unavailable or model missing):**
+- Returns a bounded embedding/config error rather than crashing or hanging
+
+---
+
+### TC-MCP-21 — classify_email (Ollama required)
 
 **Prerequisites:** Ollama running; a known message_id.
 
 **Steps:**
 ```bash
-echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"classify_email","arguments":{"message_id":"<some-id>"}}}' \
+echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"classify_email","arguments":{"message_id":"<some-id>"}}}' \
   | /tmp/mcp-server-test -config proton.yaml
 ```
 
@@ -408,13 +431,13 @@ echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"classify_
 
 ---
 
-### TC-MCP-21 — summarise_email (Ollama required)
+### TC-MCP-22 — summarise_email (Ollama required)
 
 **Prerequisites:** Ollama running; a message_id whose body has been cached (opened in TUI).
 
 **Steps:**
 ```bash
-echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"summarise_email","arguments":{"message_id":"<some-id>","max_words":50}}}' \
+echo '{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"summarise_email","arguments":{"message_id":"<some-id>","max_words":50}}}' \
   | /tmp/mcp-server-test -config proton.yaml
 ```
 
@@ -426,6 +449,28 @@ echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"summarise
 
 **Expect (Ollama not configured):**
 - Returns: `Ollama not configured — set ollama.host in proton.yaml`
+
+---
+
+### TC-MCP-23 — draft_reply (AI required)
+
+**Prerequisites:** AI backend running; a known `message_id`; body cached preferred for higher-quality replies.
+
+**Steps:**
+```bash
+echo '{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"draft_reply","arguments":{"message_id":"<some-id>","tone":"professional"}}}' \
+  | /tmp/mcp-server-test -config proton.yaml
+```
+
+**Expect (AI running):**
+- Returns reply-body text only, without headers or JSON wrapper text
+- Output tone roughly matches the requested `professional` style
+
+**Expect (body not cached):**
+- Still returns a bounded draft using sender/subject context, or a clear cached-body guidance message
+
+**Expect (AI not configured):**
+- Returns: `AI not configured`
 
 ---
 
