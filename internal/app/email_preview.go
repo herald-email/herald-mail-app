@@ -699,8 +699,13 @@ func (m *Model) renderCleanupPreview() string {
 
 	var sb strings.Builder
 
-	borderColor := "238"
-	headerColor := "245"
+	borderColor := string(defaultTheme.BorderInactive)
+	headerColor := string(defaultTheme.TabInactiveFg)
+	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
+	if m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelDetails) {
+		borderColor = string(defaultTheme.BorderActive)
+		headerColor = string(defaultTheme.ConfirmFg)
+	}
 
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 	dimStyle := headerStyle

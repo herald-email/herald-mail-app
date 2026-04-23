@@ -527,10 +527,10 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	// Summary table: ~82 chars total (left side) - added selection column
 	summaryTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Sender/Domain", Width: 46},
 			{Title: "Count", Width: 6},
-			{Title: "Date Range", Width: 20},
+			{Title: "Dates", Width: 20},
 		}),
 		table.WithFocused(true),
 		table.WithHeight(11),
@@ -539,7 +539,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	// Details table: ~69 chars total (right side) - added selection column
 	detailsTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Date", Width: 16},
 			{Title: "Subject", Width: 32},
 			{Title: "Size", Width: 8},
@@ -2105,6 +2105,7 @@ func (m *Model) renderMainView() string {
 	}
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	chrome := m.chromeState(plan)
 
 	// Content area
 	var mainContent string
@@ -2126,27 +2127,39 @@ func (m *Model) renderMainView() string {
 			if m.stats != nil && len(m.stats) == 0 {
 				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 			} else {
+				summaryPanelStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+				if chrome.FocusedPanel == panelSummary {
+					summaryPanelStyle = summaryPanelStyle.BorderForeground(defaultTheme.BorderActive)
+				}
 				summaryStyles := m.inactiveTableStyle
-				if m.focusedPanel == panelSummary {
+				if chrome.FocusedPanel == panelSummary {
 					summaryStyles = m.activeTableStyle
 				}
-				summaryView = m.baseStyle.Render(renderStyledTableViewWithStyles(&m.summaryTable, summaryStyles))
+				summaryView = summaryPanelStyle.Render(renderStyledTableViewWithCompactLeadingCell(&m.summaryTable, summaryStyles))
+			}
+			detailsPanelStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+			if chrome.FocusedPanel == panelDetails {
+				detailsPanelStyle = detailsPanelStyle.BorderForeground(defaultTheme.BorderActive)
 			}
 			detailsStyles := m.inactiveTableStyle
-			if m.focusedPanel == panelDetails {
+			if chrome.FocusedPanel == panelDetails {
 				detailsStyles = m.activeTableStyle
 			}
-			detailsView := m.baseStyle.Render(renderStyledTableViewWithStyles(&m.detailsTable, detailsStyles))
+			detailsView := detailsPanelStyle.Render(renderStyledTableViewWithCompactLeadingCell(&m.detailsTable, detailsStyles))
 			if m.showCleanupPreview {
 				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
 				previewPanel := m.renderCleanupPreview()
 				if plan.Cleanup.SummaryWidth == 0 {
-					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, detailsView, previewPanel)
+					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, detailsView, panelGap, previewPanel)
 				} else {
-					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView, previewPanel)
+					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView, panelGap, previewPanel)
 				}
 			} else if plan.SidebarVisible && !m.sidebarTooWide {
-				sidebarView := m.baseStyle.Render(m.renderSidebar())
+				sidebarStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+				if chrome.FocusedPanel == panelSidebar {
+					sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
+				}
+				sidebarView := sidebarStyle.Render(m.renderSidebar())
 				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, summaryView, panelGap, detailsView)
 			} else {
 				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView)

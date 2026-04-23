@@ -48,6 +48,7 @@ func testModelWithEmails(emails []*models.EmailData) *Model {
 	m.windowWidth = 120
 	m.windowHeight = 40
 	m.loading = false
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	if len(emails) > 0 {
 		m.timeline.emails = emails
 		m.updateTimelineTable()
@@ -130,6 +131,7 @@ func TestSnapshot_ComposeBlank(t *testing.T) {
 	m := testModelWithEmails(nil)
 	m.activeTab = tabCompose
 	m.composeField = 0
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	freezeComposeCursors(m)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
 	time.Sleep(200 * time.Millisecond)
@@ -145,6 +147,7 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 	m.composeCC.SetValue("bob@example.com")
 	m.composeBCC.SetValue("carol@example.com")
 	m.composeSubject.SetValue("Hello world")
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	freezeComposeCursors(m)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
 	time.Sleep(200 * time.Millisecond)
@@ -164,6 +167,7 @@ func TestSnapshot_ComposeAIPanel(t *testing.T) {
 	revised := "Hi Alice,\n\nAre you available tomorrow for a quick catch-up?\n\nBest regards"
 	m.composeAIDiff = wordDiff(original, revised)
 	m.composeAIResponse.SetValue(revised)
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
 	time.Sleep(200 * time.Millisecond)
 	tm.Quit()

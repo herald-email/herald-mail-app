@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"mail-processor/internal/models"
 )
 
@@ -389,6 +391,7 @@ func TestCleanupSelectionPersistsAcrossReorderAndResize(t *testing.T) {
 	m.activeTab = tabCleanup
 	m.loading = false
 	m.currentFolder = "INBOX"
+	m.showSidebar = false
 	m.stats = makeCleanupStats()
 	m.updateSummaryTable()
 	m.updateDetailsTable()
@@ -444,12 +447,42 @@ func TestCleanupSelectionPersistsAcrossReorderAndResize(t *testing.T) {
 	}
 }
 
+func TestCleanupDetailsRows_ReflowAfterResize(t *testing.T) {
+	emailsBySender := makeCleanupEmails()
+	const longSubject = "Your order has shipped and the package is out for delivery"
+	emailsBySender["ShopifyBrand <orders@shopify-brand.example>"][0].Subject = longSubject
+
+	b := &layoutBackend{emailsBySender: emailsBySender}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+
+	if got := m.detailsTable.Rows()[0][2]; !strings.Contains(got, "…") {
+		t.Fatalf("expected narrow cleanup subject to be truncated before resize, got %q", got)
+	}
+
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+
+	want := sanitizeText(longSubject)
+	if got := m.detailsTable.Rows()[0][2]; got != want {
+		t.Fatalf("expected cleanup subject to reflow after resize, got %q want %q", got, want)
+	}
+}
+
 func TestCleanupSummaryColumns_SimplifiedAndResponsive(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabCleanup
 	m.updateTableDimensions(220, 50)
 
-	wantTitles := []string{"✓", "Sender/Domain", "Count", "Date Range"}
+	wantTitles := []string{"✓", "Sender/Domain", "Count", "Dates"}
 	gotCols := m.summaryTable.Columns()
 	if len(gotCols) != len(wantTitles) {
 		t.Fatalf("expected %d cleanup summary columns, got %d", len(wantTitles), len(gotCols))
@@ -473,6 +506,99 @@ func TestCleanupSummaryColumns_SimplifiedAndResponsive(t *testing.T) {
 	}
 	if gotCols[0].Width < 1 {
 		t.Fatalf("expected selection column to stay visible, got width %d", gotCols[0].Width)
+	}
+}
+
+func TestBuildLayoutPlan_CleanupSharesWideScreensMoreEvenly(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.activeTab = tabCleanup
+
+	plan := m.buildLayoutPlan(220, 50)
+	total := plan.Cleanup.SummaryWidth + plan.Cleanup.DetailsWidth
+	if total <= 0 {
+		t.Fatalf("expected positive cleanup widths, got summary=%d details=%d", plan.Cleanup.SummaryWidth, plan.Cleanup.DetailsWidth)
+	}
+	if plan.Cleanup.SummaryWidth*100/total < 40 {
+		t.Fatalf("expected cleanup summary panel to get a meaningful share of wide layouts, got summary=%d details=%d", plan.Cleanup.SummaryWidth, plan.Cleanup.DetailsWidth)
+	}
+}
+
+func TestCleanupView_UsesCompactLeadingSelectionCell(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+
+	lines := strings.Split(stripANSI(m.renderMainView()), "\n")
+	if len(lines) < 5 {
+		t.Fatalf("expected cleanup view output, got %d lines", len(lines))
+	}
+	if !strings.Contains(lines[2], "┌") {
+		t.Fatalf("expected cleanup border line, got %q", lines[2])
+	}
+	if !strings.Contains(lines[3], "│✓") {
+		t.Fatalf("expected cleanup summary header to start without extra left padding, got %q", lines[3])
+	}
+	if !strings.Contains(lines[4], "│ ") {
+		t.Fatalf("expected cleanup data row to render flush to the border, got %q", lines[4])
+	}
+}
+
+func TestCleanupView_TopBorderReflectsFocusedPanel(t *testing.T) {
+	oldProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(oldProfile)
+
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+
+	m.focusedPanel = panelSummary
+	summaryBorder := strings.Split(m.renderMainView(), "\n")[2]
+
+	m.focusedPanel = panelDetails
+	detailsBorder := strings.Split(m.renderMainView(), "\n")[2]
+
+	if summaryBorder == detailsBorder {
+		t.Fatalf("expected cleanup top border to reflect focused panel")
+	}
+}
+
+func TestCleanupPreview_UsesConsistentPanelGaps(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+	m.showCleanupPreview = true
+	m.cleanupPreviewEmail = m.detailsEmails[0]
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: strings.Repeat("Hello world ", 20)}
+	m.focusedPanel = panelDetails
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+
+	top := strings.Split(stripANSI(m.renderMainView()), "\n")[2]
+	if count := strings.Count(top, "┐  ┌"); count != 2 {
+		t.Fatalf("expected a single gap between each cleanup panel, got top line %q", top)
 	}
 }
 

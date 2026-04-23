@@ -432,8 +432,19 @@ func (m *Model) updateDetailsTable() {
 
 	logger.Debug("updateDetailsTable: %d messages shown, %d selected globally", len(senderEmails), len(m.selectedMessages))
 
+	m.rebuildDetailsRows()
+}
+
+func (m *Model) rebuildDetailsRows() {
+	oldCursor := m.detailsTable.Cursor()
+	if len(m.detailsEmails) == 0 {
+		m.detailsTable.SetRows([]table.Row{})
+		m.detailsTable.SetCursor(0)
+		return
+	}
+
 	var rows []table.Row
-	for _, email := range senderEmails {
+	for _, email := range m.detailsEmails {
 		dateStr := "N/A"
 		if !email.Date.IsZero() {
 			dateStr = email.Date.Format("06-01-02 15:04")
@@ -470,6 +481,39 @@ func (m *Model) updateDetailsTable() {
 	}
 
 	m.detailsTable.SetRows(rows)
+	if len(rows) == 0 {
+		m.detailsTable.SetCursor(0)
+		return
+	}
+	if oldCursor < 0 {
+		oldCursor = 0
+	}
+	if oldCursor >= len(rows) {
+		oldCursor = len(rows) - 1
+	}
+	m.detailsTable.SetCursor(oldCursor)
+}
+
+func (m *Model) reflowVisibleTableRows() {
+	if m.stats != nil {
+		m.updateSummaryTable()
+	}
+	m.rebuildDetailsRows()
+
+	cursor := m.timelineTable.Cursor()
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) == 0 {
+		m.timelineTable.SetCursor(0)
+		return
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(rows) {
+		cursor = len(rows) - 1
+	}
+	m.timelineTable.SetCursor(cursor)
 }
 
 // toggleDomainMode switches between domain and email grouping
@@ -588,9 +632,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 		!m.showCleanupPreview &&
 		!plan.SidebarVisible
 
-	const summaryFixedCols = 8
+	const summaryFixedCols = 7
 	const summaryNumCols = 4
-	const detailsFixedCols = 29
+	const detailsFixedCols = 28
 	const detailsNumCols = 5
 
 	if m.showCleanupPreview && m.cleanupFullScreen {
@@ -638,16 +682,16 @@ func (m *Model) updateTableDimensions(width, height int) {
 		}
 
 		m.summaryTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Sender/Domain", Width: senderW},
 			{Title: "Count", Width: 6},
-			{Title: "Date Range", Width: cpDateRangeW},
+			{Title: "Dates", Width: cpDateRangeW},
 		})
 		m.summaryTable.SetWidth(sumF + senderW + sumN*2)
 
 		m.subjectColWidth = subjectW
 		m.detailsTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Date", Width: 16},
 			{Title: "Subject", Width: subjectW},
 			{Title: "Size", Width: 8},
@@ -697,16 +741,16 @@ func (m *Model) updateTableDimensions(width, height int) {
 		}
 
 		m.summaryTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Sender/Domain", Width: senderWidth},
 			{Title: "Count", Width: 6},
-			{Title: "Date Range", Width: dateRangeW},
+			{Title: "Dates", Width: dateRangeW},
 		})
 		m.summaryTable.SetWidth(sumFixed + senderWidth + sumNCols*2)
 
 		m.subjectColWidth = subjectWidth
 		m.detailsTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 2},
+			{Title: "✓", Width: 1},
 			{Title: "Date", Width: 16},
 			{Title: "Subject", Width: subjectWidth},
 			{Title: "Size", Width: 8},
@@ -819,6 +863,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.composeBody.SetWidth(composeBodyWidth)
 	m.composeBody.SetHeight(composeBodyHeight)
+
+	m.reflowVisibleTableRows()
 }
 
 // truncate shortens s to at most n runes.

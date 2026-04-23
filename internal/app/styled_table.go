@@ -22,7 +22,19 @@ func renderStyledTableView(t *table.Model, _ int) string {
 	return renderStyledTableViewWithStyles(t, table.DefaultStyles())
 }
 
+type tableRenderOptions struct {
+	compactLeadingCell bool
+}
+
 func renderStyledTableViewWithStyles(t *table.Model, styles table.Styles) string {
+	return renderStyledTableViewWithStylesAndOptions(t, styles, tableRenderOptions{})
+}
+
+func renderStyledTableViewWithCompactLeadingCell(t *table.Model, styles table.Styles) string {
+	return renderStyledTableViewWithStylesAndOptions(t, styles, tableRenderOptions{compactLeadingCell: true})
+}
+
+func renderStyledTableViewWithStylesAndOptions(t *table.Model, styles table.Styles, opts tableRenderOptions) string {
 	cols := t.Columns()
 	rows := t.Rows()
 	cursor := t.Cursor()
@@ -31,7 +43,7 @@ func renderStyledTableViewWithStyles(t *table.Model, styles table.Styles) string
 
 	nrows := len(rows)
 	if nrows == 0 {
-		return fitTableLine(renderTableHeader(cols, styles), targetWidth)
+		return fitTableLine(renderTableHeader(cols, styles, opts), targetWidth)
 	}
 
 	// Compute the visible row window. We keep cursor at the bottom of the
@@ -51,12 +63,12 @@ func renderStyledTableViewWithStyles(t *table.Model, styles table.Styles) string
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fitTableLine(renderTableHeader(cols, styles), targetWidth))
+	sb.WriteString(fitTableLine(renderTableHeader(cols, styles, opts), targetWidth))
 
 	for i := start; i < end; i++ {
 		row := rows[i]
 		sb.WriteByte('\n')
-		sb.WriteString(fitTableLine(renderTableRow(cols, row, i == cursor, styles), targetWidth))
+		sb.WriteString(fitTableLine(renderTableRow(cols, row, i == cursor, styles, opts), targetWidth))
 	}
 
 	// Pad with blank rows to fill the viewport when data rows < height.
@@ -67,7 +79,7 @@ func renderStyledTableViewWithStyles(t *table.Model, styles table.Styles) string
 		emptyRow := make(table.Row, len(cols))
 		for i := rendered; i < height; i++ {
 			sb.WriteByte('\n')
-			sb.WriteString(fitTableLine(renderTableRow(cols, emptyRow, false, styles), targetWidth))
+			sb.WriteString(fitTableLine(renderTableRow(cols, emptyRow, false, styles, opts), targetWidth))
 		}
 	}
 
@@ -86,12 +98,13 @@ func fitTableLine(line string, width int) string {
 }
 
 // renderTableHeader renders the header row using the bubbles table header style.
-func renderTableHeader(cols []table.Column, styles table.Styles) string {
+func renderTableHeader(cols []table.Column, styles table.Styles, opts tableRenderOptions) string {
 	parts := make([]string, 0, len(cols))
 	headerStyle := lipgloss.NewStyle().
 		Foreground(styles.Header.GetForeground()).
 		Background(styles.Header.GetBackground()).
 		Bold(styles.Header.GetBold())
+	visibleCol := 0
 	for _, col := range cols {
 		if col.Width <= 0 {
 			continue
@@ -100,7 +113,12 @@ func renderTableHeader(cols []table.Column, styles table.Styles) string {
 		rendered := headerStyle.
 			Width(col.Width).MaxWidth(col.Width).Inline(true).
 			Render(cell)
-		parts = append(parts, styles.Cell.Render(rendered))
+		cellWrapper := styles.Cell
+		if opts.compactLeadingCell && visibleCol == 0 {
+			cellWrapper = cellWrapper.PaddingLeft(0).PaddingRight(0)
+		}
+		parts = append(parts, cellWrapper.Render(rendered))
+		visibleCol++
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
@@ -108,8 +126,9 @@ func renderTableHeader(cols []table.Column, styles table.Styles) string {
 // renderTableRow renders a single data row. When selected is true, the Selected
 // style is applied per-cell to ensure the background color covers the full row
 // (wrapping the joined line doesn't work because inner ANSI codes reset the bg).
-func renderTableRow(cols []table.Column, row table.Row, selected bool, styles table.Styles) string {
+func renderTableRow(cols []table.Column, row table.Row, selected bool, styles table.Styles, opts tableRenderOptions) string {
 	parts := make([]string, 0, len(cols))
+	visibleCol := 0
 	for i, col := range cols {
 		if col.Width <= 0 {
 			continue
@@ -133,8 +152,13 @@ func renderTableRow(cols []table.Column, row table.Row, selected bool, styles ta
 			// Strip inner ANSI from cell value to prevent color conflicts.
 			cell = ansi.Strip(cell)
 		}
-		rendered := styles.Cell.Render(cellStyle.Render(cell))
+		cellWrapper := styles.Cell
+		if opts.compactLeadingCell && visibleCol == 0 {
+			cellWrapper = cellWrapper.PaddingLeft(0).PaddingRight(0)
+		}
+		rendered := cellWrapper.Render(cellStyle.Render(cell))
 		parts = append(parts, rendered)
+		visibleCol++
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }

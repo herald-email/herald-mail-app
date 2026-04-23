@@ -287,7 +287,7 @@ func splitThreeWidth(total, leftMin, middleMin, rightMin, rightPreferred int) (i
 		right = available - leftMin - middleMin
 	}
 	remaining := available - right
-	leftPreferred := remaining * 40 / 100
+	leftPreferred := remaining * 45 / 100
 	left, middle := splitWidth(remaining, 0, leftMin, middleMin, leftPreferred)
 	return left, middle, right
 }
@@ -440,17 +440,17 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	}
 	if m.showCleanupPreview && !m.cleanupFullScreen {
 		if cleanupWidth < 100 {
-			previewOuter := 24
-			if previewOuter > cleanupWidth-28 {
-				previewOuter = clamp(cleanupWidth/3, 20)
+			previewWidth := 24
+			if previewWidth > cleanupWidth-30 {
+				previewWidth = clamp(cleanupWidth/3, 20)
 			}
 			plan.Cleanup = CleanupLayoutPlan{
 				SummaryWidth: 0,
-				DetailsWidth: clamp(cleanupWidth-previewOuter-4, 24),
-				PreviewWidth: previewOuter,
+				DetailsWidth: clamp(cleanupWidth-previewWidth-6, 24),
+				PreviewWidth: previewWidth,
 			}
 		} else {
-			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-6, 30), 18, 24, 24, 24)
+			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-10, 30), 18, 24, 24, 24)
 			plan.Cleanup = CleanupLayoutPlan{
 				SummaryWidth: leftW,
 				DetailsWidth: midW,
@@ -458,7 +458,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 			}
 		}
 	} else {
-		leftW, rightW := splitWidth(clamp(cleanupWidth-6, 24), 0, 20, 24, (cleanupWidth-6)*35/100)
+		leftW, rightW := splitWidth(clamp(cleanupWidth-6, 24), 0, 20, 24, (cleanupWidth-6)*42/100)
 		plan.Cleanup = CleanupLayoutPlan{
 			SummaryWidth: leftW,
 			DetailsWidth: rightW,

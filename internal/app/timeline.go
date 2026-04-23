@@ -306,6 +306,18 @@ func (m *Model) updateTimelineTable() {
 	}
 
 	m.timelineTable.SetRows(rows)
+	if len(rows) == 0 {
+		m.timelineTable.SetCursor(0)
+		return
+	}
+	cursor := m.timelineTable.Cursor()
+	if cursor < 0 {
+		m.timelineTable.SetCursor(0)
+		return
+	}
+	if cursor >= len(rows) {
+		m.timelineTable.SetCursor(len(rows) - 1)
+	}
 }
 
 // renderTimelineView renders the timeline tab content.
@@ -490,7 +502,7 @@ func (m *Model) openTimelineSearch() {
 
 func (m *Model) currentTimelineRowEmail() *models.EmailData {
 	cursor := m.timelineTable.Cursor()
-	if cursor >= len(m.timeline.threadRowMap) {
+	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
 		return nil
 	}
 	ref := m.timeline.threadRowMap[cursor]
@@ -502,7 +514,7 @@ func (m *Model) currentTimelineRowEmail() *models.EmailData {
 
 func (m *Model) currentTimelineRowRef() (timelineRowRef, bool) {
 	cursor := m.timelineTable.Cursor()
-	if cursor >= len(m.timeline.threadRowMap) {
+	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
 		return timelineRowRef{}, false
 	}
 	return m.timeline.threadRowMap[cursor], true
