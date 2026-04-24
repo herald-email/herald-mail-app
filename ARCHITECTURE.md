@@ -43,7 +43,7 @@ cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite ca
 | `internal/config` | YAML config load/validate plus onboarding-readiness checks such as vendor presets and empty-config detection |
 | `internal/smtp` | SMTP send (TLS-first, STARTTLS fallback) |
 | `internal/render` | Email body rendering: ANSI-aware text wrapping, URL linkification, link sanitization. No TUI dependency — usable from MCP, daemon, SSH |
-| `internal/logger` | File-based logger with TUI callback |
+| `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory |
 
 ### First-run configuration flow
 

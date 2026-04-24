@@ -401,7 +401,7 @@ func buildRuleAction(actionType, actionValue string) models.RuleAction {
 
 func runTUI() {
 	// Parse command line flags
-	var debug = flag.Bool("debug", false, "Enable debug logging to herald_*.log")
+	var debug = flag.Bool("debug", false, "Enable debug logging in the Herald user log directory")
 	var verbose = flag.Bool("verbose", false, "Alias for -debug (same behavior today)")
 	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
 	var dryRun = flag.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)")
@@ -435,11 +435,11 @@ func runTUI() {
 		fmt.Println()
 		fmt.Println("Examples:")
 		fmt.Printf("  %s                    # Run with default config (~/.herald/conf.yaml)\n", os.Args[0])
-		fmt.Printf("  %s -debug             # Run with debug logging to herald_*.log\n", os.Args[0])
+		fmt.Printf("  %s -debug             # Run with debug logging in the Herald user log directory\n", os.Args[0])
 		fmt.Printf("  %s -verbose           # Alias for -debug\n", os.Args[0])
 		fmt.Printf("  %s -config custom.yaml # Use custom config file\n", os.Args[0])
 		fmt.Println()
-		fmt.Println("Log files are created as herald_YYYYMMDD_HHMMSS.log")
+		fmt.Println("Log files are created as herald_YYYYMMDD_HHMMSS.log in the user log directory")
 		os.Exit(0)
 	}
 

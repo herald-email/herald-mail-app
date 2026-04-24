@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -19,13 +21,22 @@ var (
 // Init initializes the logging system
 func Init(debug bool) error {
 	debugMode = debug
-	
+
 	// Create log file with timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	filename := fmt.Sprintf("herald_%s.log", timestamp)
-	
-	var err error
-	logFile, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+
+	logDir, err := defaultLogDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		return fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+	}
+
+	logPath := filepath.Join(logDir, filename)
+
+	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -39,12 +50,44 @@ func Init(debug bool) error {
 	debugLogger = log.New(multiWriter, "DEBUG ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	Info("=== Herald Started ===")
-	Info("Logging to file: %s", filename)
+	Info("Logging to file: %s", logPath)
 	if debug {
 		Info("Debug mode enabled - detailed logging active")
 	}
-	
+
 	return nil
+}
+
+func defaultLogDir() (string, error) {
+	if override := os.Getenv("HERALD_LOG_DIR"); override != "" {
+		return override, nil
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve home directory for logs: %w", err)
+		}
+		return filepath.Join(home, "Library", "Logs", "Herald"), nil
+	case "windows":
+		if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+			return filepath.Join(localAppData, "Herald", "Logs"), nil
+		}
+	default:
+		if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
+			return filepath.Join(stateHome, "herald", "logs"), nil
+		}
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".local", "state", "herald", "logs"), nil
+		}
+	}
+
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user log directory: %w", err)
+	}
+	return filepath.Join(cacheDir, "herald", "logs"), nil
 }
 
 // Close closes the log file

@@ -89,7 +89,7 @@ make build && ./bin/herald
 make run
 
 # CLI flags
-./bin/herald -debug              # Enable debug logging
+./bin/herald -debug              # Enable debug logging in the Herald user log directory
 ./bin/herald -config custom.yaml # Custom config file
 ./bin/herald -help
 
@@ -312,7 +312,7 @@ CREATE TABLE email_classifications (
 Cache file: `email_cache.db` (created in working directory).
 
 ### Logging
-- Log file: `mail_processor_YYYYMMDD_HHMMSS.log` (created in working directory)
+- Log file: `herald_YYYYMMDD_HHMMSS.log` under the platform user log/state directory (`~/Library/Logs/Herald` on macOS, `${XDG_STATE_HOME:-~/.local/state}/herald/logs` on Linux/BSD, `%LOCALAPPDATA%\Herald\Logs` on Windows)
 - Always writes to file only (no console output, preserves TUI)
 - TUI log viewer receives logs via `logger.SetLogCallback`
 - `-debug` or `-verbose` flags enable DEBUG-level entries
