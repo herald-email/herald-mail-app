@@ -248,10 +248,10 @@ func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
 // deletionWorker processes deletion requests from the queue.
 // It throttles operations to avoid overwhelming the IMAP backend and
 // retries with exponential backoff when the connection drops.
-func (m *Model) deletionWorker() {
+func (m *Model) deletionWorker(requestCh <-chan models.DeletionRequest, resultCh chan<- models.DeletionResult) {
 	backoff := deletionRetryBackoff
 
-	for req := range m.deletionRequestCh {
+	for req := range requestCh {
 		result := models.DeletionResult{
 			MessageID: req.MessageID,
 			Sender:    req.Sender,
@@ -296,7 +296,7 @@ func (m *Model) deletionWorker() {
 		if req.Response != nil {
 			req.Response <- result
 		}
-		m.deletionResultCh <- result
+		resultCh <- result
 
 		// Throttle between operations to let Proton Bridge / upstream API
 		// release sockets and sync state.

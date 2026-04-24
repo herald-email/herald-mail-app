@@ -717,7 +717,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	}
 
 	// Start deletion worker goroutine
-	go m.deletionWorker()
+	go m.deletionWorker(deletionRequestCh, deletionResultCh)
 
 	// Start rule engine worker goroutine
 	go m.ruleWorker()

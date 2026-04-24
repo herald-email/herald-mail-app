@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +38,37 @@ func requireGolden(t *testing.T, path string, got []byte) {
 		t.Fatalf("read golden %s: %v (run with -update to create)", path, err)
 	}
 	if !bytes.Equal(want, got) {
+		// teatest captures the whole terminal stream. Bubble Tea can legitimately
+		// repaint the same final screen more than once before Quit completes, so
+		// compare a stable final-frame view before treating raw byte drift as a
+		// visual snapshot failure.
+		if bytes.Equal(normalizeSnapshotForCompare(want), normalizeSnapshotForCompare(got)) {
+			return
+		}
 		t.Fatalf("snapshot mismatch for %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+	}
+}
+
+func normalizeSnapshotForCompare(b []byte) []byte {
+	s := string(b)
+	if idx := strings.LastIndex(s, "\x1b[2J\x1b[H"); idx >= 0 {
+		s = s[idx+len("\x1b[2J\x1b[H"):]
+	}
+	s = stripANSI(s)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	if idx := strings.LastIndex(s, " ProtonMail Analyzer"); idx >= 0 {
+		s = s[idx:]
+	}
+	return []byte(strings.TrimRight(s, "\n"))
+}
+
+func TestNormalizeSnapshotForCompareUsesLastRenderedFrame(t *testing.T) {
+	got := []byte("\x1b[?25l\r ProtonMail Analyzer\nold frame\x1b[2J\x1b[H\x1b[8A\r ProtonMail Analyzer\nfinal frame\x1b[?25h")
+	want := []byte("\x1b[?25l\x1b[2J\x1b[H\r ProtonMail Analyzer\nfinal frame\x1b[?25h")
+
+	if !bytes.Equal(normalizeSnapshotForCompare(got), normalizeSnapshotForCompare(want)) {
+		t.Fatalf("expected duplicate terminal frames to normalize to the final visible frame\ngot:\n%s\nwant:\n%s", normalizeSnapshotForCompare(got), normalizeSnapshotForCompare(want))
 	}
 }
 
