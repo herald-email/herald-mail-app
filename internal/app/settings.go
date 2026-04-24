@@ -717,7 +717,7 @@ func (s *Settings) wizardSummaryLines() []string {
 			wizardSummaryLine("Stable:", "personal Gmail via IMAP + App Password."),
 			wizardSummaryLine("Defaults:", "imap.gmail.com:993 and smtp.gmail.com:587."),
 			wizardSummaryLine("Workspace:", "some accounts may still require OAuth."),
-			wizardSummaryDoc("App passwords", "https://support.google.com/mail/answer/185833?hl=en"),
+			wizardSummaryDoc("App passwords", "https://myaccount.google.com/apppasswords"),
 			wizardSummaryDoc("Add Gmail to another client", "https://support.google.com/mail/answer/75726?hl=en"),
 			wizardSummaryDoc("Workspace IMAP setup", "https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client"),
 		}

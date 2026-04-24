@@ -109,10 +109,10 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 			t.Fatalf("expected short clickable Gmail docs label %q, got:\n%s", want, plain)
 		}
 	}
-	if strings.Contains(plain, "https://support.google.com/mail/answer/185833?hl=en") {
+	if strings.Contains(plain, "https://myaccount.google.com/apppasswords") {
 		t.Fatalf("expected raw Gmail docs URL to be hidden behind a short clickable label, got:\n%s", plain)
 	}
-	if !strings.Contains(rendered, "\x1b]8;;https://support.google.com/mail/answer/185833?hl=en") {
+	if !strings.Contains(rendered, "\x1b]8;;https://myaccount.google.com/apppasswords") {
 		t.Fatalf("expected OSC 8 hyperlink for Gmail docs, got raw view:\n%q", rendered)
 	}
 }
