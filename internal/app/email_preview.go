@@ -82,18 +82,68 @@ func (m *Model) previewCategory(messageID string) string {
 	return m.classifications[messageID]
 }
 
-func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsubscribe bool, innerW int) []string {
+type previewHeaderStyles struct {
+	label  lipgloss.Style
+	from   lipgloss.Style
+	date   lipgloss.Style
+	subj   lipgloss.Style
+	tag    lipgloss.Style
+	action lipgloss.Style
+}
+
+func newPreviewHeaderStyles(active bool) previewHeaderStyles {
+	label := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
+	if active {
+		label = label.Bold(true)
+	}
+	valueBold := lipgloss.NewStyle().Bold(true)
+	return previewHeaderStyles{
+		label:  label,
+		from:   valueBold.Foreground(defaultTheme.InfoFg),
+		date:   lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg),
+		subj:   valueBold.Foreground(defaultTheme.WarningFg),
+		tag:    valueBold.Foreground(defaultTheme.DemoFg),
+		action: valueBold.Foreground(defaultTheme.ConfirmFg),
+	}
+}
+
+func renderPreviewHeaderLine(label, value string, innerW int, styles previewHeaderStyles, valueStyle lipgloss.Style) string {
+	line := truncate(label+" "+value, innerW)
+	return stylePreviewHeaderLine(line, label, styles, valueStyle)
+}
+
+func renderPreviewHeaderWrapped(label, value string, innerW int, styles previewHeaderStyles, valueStyle lipgloss.Style) []string {
+	lines := wrapLines(label+" "+value, innerW)
+	for i, line := range lines {
+		lines[i] = stylePreviewHeaderLine(line, label, styles, valueStyle)
+	}
+	return lines
+}
+
+func stylePreviewHeaderLine(line, label string, styles previewHeaderStyles, valueStyle lipgloss.Style) string {
+	prefix := label + " "
+	if strings.HasPrefix(line, prefix) {
+		return styles.label.Render(label) + " " + valueStyle.Render(strings.TrimPrefix(line, prefix))
+	}
+	if strings.HasPrefix(line, label) {
+		return styles.label.Render(label) + valueStyle.Render(strings.TrimPrefix(line, label))
+	}
+	return valueStyle.Render(line)
+}
+
+func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsubscribe bool, innerW int, active bool) []string {
 	if email == nil {
 		return nil
 	}
 
+	styles := newPreviewHeaderStyles(active)
 	lines := []string{
-		truncate("From: "+email.Sender, innerW),
-		truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW),
-		truncate("Subj: "+email.Subject, innerW),
+		renderPreviewHeaderLine("From:", email.Sender, innerW, styles, styles.from),
+		renderPreviewHeaderLine("Date:", email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW, styles, styles.date),
+		renderPreviewHeaderLine("Subj:", email.Subject, innerW, styles, styles.subj),
 	}
-	lines = append(lines, wrapLines("Tags: "+previewTagText(category), innerW)...)
-	lines = append(lines, wrapLines("Actions: "+previewActionText(hasUnsubscribe), innerW)...)
+	lines = append(lines, renderPreviewHeaderWrapped("Tags:", previewTagText(category), innerW, styles, styles.tag)...)
+	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe), innerW, styles, styles.action)...)
 	lines = append(lines, strings.Repeat("─", innerW))
 	return lines
 }
@@ -111,7 +161,8 @@ func (m *Model) renderEmailPreview() string {
 	borderColor := "238"
 	headerColor := "245"
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
-	if chrome.FocusedPanel == panelPreview {
+	headerActive := chrome.FocusedPanel == panelPreview
+	if headerActive {
 		borderColor = string(defaultTheme.BorderActive)
 		headerColor = string(defaultTheme.ConfirmFg)
 	} else {
@@ -127,13 +178,9 @@ func (m *Model) renderEmailPreview() string {
 	if email != nil {
 		category = m.previewCategory(email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLines(email, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW)
-	for i, line := range headerLines {
-		if i == len(headerLines)-1 {
-			sb.WriteString(line + "\n")
-		} else {
-			sb.WriteString(headerStyle.Render(line) + "\n")
-		}
+	headerLines := renderPreviewHeaderLines(email, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW, headerActive)
+	for _, line := range headerLines {
+		sb.WriteString(line + "\n")
 	}
 
 	panelHeight := m.timelinePreviewInnerHeight()
@@ -321,21 +368,14 @@ func (m *Model) renderFullScreenEmail() string {
 
 	var sb strings.Builder
 
-	headerColor := "255"
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
-
 	email := m.timeline.selectedEmail
 	category := ""
 	if email != nil {
 		category = m.previewCategory(email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW)
-	for i, line := range headerLines {
-		if i == len(headerLines)-1 {
-			sb.WriteString(line + "\n")
-		} else {
-			sb.WriteString(headerStyle.Render(line) + "\n")
-		}
+	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW, true)
+	for _, line := range headerLines {
+		sb.WriteString(line + "\n")
 	}
 
 	// Reserve 1 row at the bottom for the scroll indicator.
@@ -759,7 +799,8 @@ func (m *Model) renderCleanupPreview() string {
 	borderColor := string(defaultTheme.BorderInactive)
 	headerColor := string(defaultTheme.TabInactiveFg)
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
-	if m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelDetails) {
+	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelDetails)
+	if headerActive {
 		borderColor = string(defaultTheme.BorderActive)
 		headerColor = string(defaultTheme.ConfirmFg)
 	}
@@ -771,14 +812,10 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupPreviewEmail != nil {
 		email := m.cleanupPreviewEmail
 		category := m.previewCategory(email.MessageID)
-		header := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.cleanupEmailBody), innerW)
+		header := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.cleanupEmailBody), innerW, headerActive)
 		headerLines = len(header)
-		for i, line := range header {
-			if i == headerLines-1 {
-				sb.WriteString(line + "\n")
-			} else {
-				sb.WriteString(headerStyle.Render(line) + "\n")
-			}
+		for _, line := range header {
+			sb.WriteString(line + "\n")
 		}
 	}
 
