@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"net/url"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -99,8 +97,9 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEnter && !m.browserOpen {
-			m.browserOpen = true
-			_ = openBrowser(m.authURL)
+			if err := openBrowserFn(m.authURL); err == nil {
+				m.browserOpen = true
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -194,20 +193,6 @@ func (m *OAuthWaitModel) View() string {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered)
 	}
 	return rendered
-}
-
-// openBrowser opens url in the system default browser.
-func openBrowser(rawURL string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", rawURL)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL)
-	default: // linux, etc.
-		cmd = exec.Command("xdg-open", rawURL)
-	}
-	return cmd.Start()
 }
 
 // wrapString wraps s to fit within maxWidth characters per line.

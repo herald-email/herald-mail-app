@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -85,6 +86,16 @@ func TestOAuthWaitModel_CodeErrorSetsErrorField(t *testing.T) {
 
 // TestOAuthWaitModel_EnterOpensBrowser verifies that pressing Enter sets browserOpen.
 func TestOAuthWaitModel_EnterOpensBrowser(t *testing.T) {
+	var openedURL string
+	originalOpenBrowserFn := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		openedURL = rawURL
+		return nil
+	}
+	t.Cleanup(func() {
+		openBrowserFn = originalOpenBrowserFn
+	})
+
 	cfg := &config.Config{}
 	codeCh := make(chan oauth.Result, 1)
 	m := &OAuthWaitModel{
@@ -107,6 +118,39 @@ func TestOAuthWaitModel_EnterOpensBrowser(t *testing.T) {
 
 	if !updated.browserOpen {
 		t.Error("browserOpen should be true after pressing Enter")
+	}
+	if openedURL != m.authURL {
+		t.Errorf("openBrowserFn called with %q, want %q", openedURL, m.authURL)
+	}
+}
+
+func TestOAuthWaitModel_EnterKeepsBrowserOpenFalseWhenOpenFails(t *testing.T) {
+	originalOpenBrowserFn := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		return fmt.Errorf("refusing to open %s", rawURL)
+	}
+	t.Cleanup(func() {
+		openBrowserFn = originalOpenBrowserFn
+	})
+
+	cfg := &config.Config{}
+	codeCh := make(chan oauth.Result, 1)
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      codeCh,
+		cfg:         cfg,
+		configPath:  "/tmp/test-herald-conf.yaml",
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, _ := m.Update(enterMsg)
+	updated := updatedModel.(*OAuthWaitModel)
+
+	if updated.browserOpen {
+		t.Error("browserOpen should remain false when opening the browser fails")
 	}
 }
 
