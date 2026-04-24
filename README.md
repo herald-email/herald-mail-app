@@ -28,7 +28,7 @@
 ## Quick Start
 
 ```bash
-# Build (Go 1.23+ required)
+# Build (Go 1.25+ required)
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
