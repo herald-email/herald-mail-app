@@ -1,6 +1,6 @@
 # Makefile for Herald
 
-.PHONY: build build-ssh build-mcp run clean test deps fmt vet
+.PHONY: build build-ssh build-mcp run clean test deps fmt vet install-hooks
 
 # Build the application
 build:
@@ -30,6 +30,10 @@ fmt:
 # Vet code
 vet:
 	go vet ./...
+
+# Install repository-managed Git hooks
+install-hooks:
+	git config core.hooksPath .githooks
 
 # Run tests
 test:

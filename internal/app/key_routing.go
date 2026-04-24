@@ -106,7 +106,6 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.timeline.searchToken++
 			return m, tea.Batch(cmd, scheduleTimelineSearchDebounce(m.timeline.searchToken, m.timeline.searchInput.Value())), true
 		}
-		return m, nil, true
 	}
 
 	if m.focusedPanel == panelChat && m.showChat {
