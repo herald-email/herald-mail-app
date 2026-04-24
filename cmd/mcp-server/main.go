@@ -111,7 +111,11 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	c, err := cache.New("email_cache.db")
+	cachePath, err := config.EnsureCacheDatabasePath(expanded, cfg)
+	if err != nil {
+		log.Fatalf("Failed to resolve cache path: %v", err)
+	}
+	c, err := cache.New(cachePath)
 	if err != nil {
 		log.Fatalf("Failed to open cache: %v", err)
 	}

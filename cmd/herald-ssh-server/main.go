@@ -48,6 +48,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	if _, err := config.EnsureCacheDatabasePath(resolvedConfig, cfg); err != nil {
+		log.Fatalf("Failed to resolve cache path: %v", err)
+	}
 
 	// Ensure host key directory exists
 	if err := os.MkdirAll(".ssh", 0700); err != nil {

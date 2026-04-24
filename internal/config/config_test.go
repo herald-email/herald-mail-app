@@ -1,11 +1,38 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+func minimalOAuthConfig() *Config {
+	c := &Config{}
+	c.Gmail.RefreshToken = "rt-token"
+	c.Gmail.Email = "user@example.com"
+	c.Server.Host = "imap.example.com"
+	c.Server.Port = 993
+	return c
+}
+
+func chdirForTest(t *testing.T, dir string) {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir(%s) failed: %v", dir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Fatalf("restore cwd failed: %v", err)
+		}
+	})
+}
 
 func TestIsGmailOAuth(t *testing.T) {
 	t.Run("false when RefreshToken is empty", func(t *testing.T) {
@@ -74,6 +101,120 @@ func TestSaveRoundTrip(t *testing.T) {
 	}
 	if loaded.Server.Port != original.Server.Port {
 		t.Errorf("Server.Port: got %d, want %d", loaded.Server.Port, original.Server.Port)
+	}
+}
+
+func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "work.yaml")
+	wantPath := filepath.Join(dir, "explicit-cache.db")
+
+	original := minimalOAuthConfig()
+	original.Cache.DatabasePath = wantPath
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(before) failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	got, err := EnsureCacheDatabasePath(path, loaded)
+	if err != nil {
+		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
+	}
+	if got != wantPath {
+		t.Fatalf("got cache path %q, want %q", got, wantPath)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(after) failed: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("EnsureCacheDatabasePath rewrote a config that already had a cache path")
+	}
+}
+
+func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) {
+	dir := t.TempDir()
+	chdirForTest(t, dir)
+	path := filepath.Join(dir, "work-account.yaml")
+
+	original := minimalOAuthConfig()
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	got, err := EnsureCacheDatabasePath(path, loaded)
+	if err != nil {
+		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
+	}
+	want := filepath.Join("herald", "cached", "work-account.db")
+	if got != want {
+		t.Fatalf("got cache path %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Dir(got)); err != nil {
+		t.Fatalf("expected cache directory to exist: %v", err)
+	}
+
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(rewritten) failed: %v", err)
+	}
+	if reloaded.Cache.DatabasePath != want {
+		t.Fatalf("persisted cache path %q, want %q", reloaded.Cache.DatabasePath, want)
+	}
+}
+
+func TestEnsureCacheDatabasePathDisambiguatesExistingGeneratedPath(t *testing.T) {
+	dir := t.TempDir()
+	chdirForTest(t, dir)
+	path := filepath.Join(dir, "work-account.yaml")
+
+	if err := os.MkdirAll(filepath.Join("herald", "cached"), 0o700); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	existing := filepath.Join("herald", "cached", "work-account.db")
+	if err := os.WriteFile(existing, []byte("existing"), 0o600); err != nil {
+		t.Fatalf("WriteFile(existing) failed: %v", err)
+	}
+
+	original := minimalOAuthConfig()
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	got, err := EnsureCacheDatabasePath(path, loaded)
+	if err != nil {
+		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
+	}
+	if got == existing {
+		t.Fatalf("reused existing cache path %q", got)
+	}
+	pattern := regexp.MustCompile(`^herald/cached/work-account-[0-9]{8}-[a-f0-9]{6}\.db$`)
+	if !pattern.MatchString(filepath.ToSlash(got)) {
+		t.Fatalf("got disambiguated path %q, want herald/cached/work-account-YYYYMMDD-xxxxxx.db", got)
+	}
+
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(rewritten) failed: %v", err)
+	}
+	if reloaded.Cache.DatabasePath != got {
+		t.Fatalf("persisted cache path %q, want %q", reloaded.Cache.DatabasePath, got)
 	}
 }
 

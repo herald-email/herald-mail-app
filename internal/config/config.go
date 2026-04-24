@@ -1,10 +1,13 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	"mail-processor/internal/logger"
@@ -24,7 +27,10 @@ func ExpandPath(p string) (string, error) {
 
 // Config represents the application configuration
 type Config struct {
-	Vendor      string `yaml:"vendor"` // gmail | protonmail | fastmail | outlook | icloud
+	Vendor string `yaml:"vendor"` // gmail | protonmail | fastmail | outlook | icloud
+	Cache  struct {
+		DatabasePath string `yaml:"database_path,omitempty"`
+	} `yaml:"cache,omitempty"`
 	Credentials struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
@@ -167,6 +173,107 @@ func (c *Config) EffectiveEmbeddingModel() string {
 		return strings.TrimSpace(c.Semantic.Model)
 	}
 	return strings.TrimSpace(c.Ollama.EmbeddingModel)
+}
+
+// EnsureCacheDatabasePath returns the SQLite cache path for this config. An
+// explicit YAML path wins; otherwise Herald generates a per-config path,
+// persists it to YAML, and returns that generated path.
+func EnsureCacheDatabasePath(configPath string, c *Config) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("config is nil")
+	}
+	if configured := strings.TrimSpace(c.Cache.DatabasePath); configured != "" {
+		expanded, err := ExpandPath(configured)
+		if err != nil {
+			return "", err
+		}
+		return expanded, nil
+	}
+
+	cacheDir := filepath.Join("herald", "cached")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	stem := sanitizeCacheStem(strings.TrimSuffix(filepath.Base(configPath), filepath.Ext(configPath)))
+	candidate := filepath.Join(cacheDir, stem+".db")
+	exists, err := fileExists(candidate)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		candidate, err = disambiguatedCachePath(cacheDir, stem)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	c.Cache.DatabasePath = candidate
+	if err := c.Save(configPath); err != nil {
+		return "", fmt.Errorf("failed to persist generated cache path: %w", err)
+	}
+	return candidate, nil
+}
+
+func sanitizeCacheStem(stem string) string {
+	var b strings.Builder
+	for _, r := range stem {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	clean := strings.Trim(b.String(), "-_.")
+	if clean == "" {
+		return "config"
+	}
+	return clean
+}
+
+func disambiguatedCachePath(cacheDir, stem string) (string, error) {
+	date := time.Now().Format("20060102")
+	for i := 0; i < 20; i++ {
+		token, err := randomHex(6)
+		if err != nil {
+			return "", err
+		}
+		candidate := filepath.Join(cacheDir, fmt.Sprintf("%s-%s-%s.db", stem, date, token))
+		exists, err := fileExists(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("failed to find unused cache path for %s", stem)
+}
+
+func randomHex(chars int) (string, error) {
+	buf := make([]byte, (chars+1)/2)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate cache path suffix: %w", err)
+	}
+	return hex.EncodeToString(buf)[:chars], nil
+}
+
+func fileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to inspect cache path %s: %w", path, err)
 }
 
 // Save marshals the config to YAML and writes it atomically to path with 0600 permissions.

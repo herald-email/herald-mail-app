@@ -37,6 +37,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Microbatched Timeline refresh during IMAP sync (`100` changes or `500ms`) so the UI flows without jittering
 - [x] Background cache reconciliation (valid-ID ground truth, stale entries removed)
 - [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
+- [x] Config-specific SQLite cache paths persisted in YAML so separate account configs do not share one working-directory database
 - [x] IMAP IDLE (real push; currently polling only)
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
 - [x] Hide Future Mail sender rule (`h` key; auto-moves future emails to a local folder)
@@ -490,7 +491,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ## MCP Integration
 
-The MCP server exposes email operations as tools, enabling Claude Code and other AI agents to read, search, classify, and eventually manage email without opening the TUI. It reads directly from `email_cache.db` and shares state with the TUI via SQLite WAL mode.
+The MCP server exposes email operations as tools, enabling Claude Code and other AI agents to read, search, classify, and eventually manage email without opening the TUI. It reads directly from the configured SQLite cache path and shares state with the TUI via SQLite WAL mode.
 
 ### Implemented tools
 
@@ -546,7 +547,7 @@ The MCP server exposes email operations as tools, enabling Claude Code and other
 
 ### TUI ↔ MCP shared state
 
-Both processes read and write the same `email_cache.db` via SQLite WAL mode. Classifications set via `classify_email` appear immediately in the TUI's Tag column. Emails deleted via `delete_email` disappear from the TUI on the next render.
+Both processes read and write the same configured SQLite cache database via WAL mode. Classifications set via `classify_email` appear immediately in the TUI's Tag column. Emails deleted via `delete_email` disappear from the TUI on the next render.
 
 ### Simultaneous TUI + MCP operation
 
