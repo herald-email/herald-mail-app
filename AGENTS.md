@@ -18,8 +18,8 @@ A persistent IMAP connection is held open for the lifetime of the app (not recon
 
 ```
 cmd/
-├── ssh-server/main.go  # Serve the TUI over SSH via charmbracelet/wish (port 2222)
-└── mcp-server/main.go  # MCP JSON-RPC stdio server exposing email tools to Codex
+├── herald-ssh-server/main.go  # Serve the TUI over SSH via charmbracelet/wish (port 2222)
+└── herald-mcp-server/main.go  # MCP JSON-RPC stdio server exposing email tools to Codex
 internal/
 ├── ai/
 │   └── ollama.go    # Ollama HTTP client: Classify() + Chat() via /api/generate and /api/chat
@@ -74,7 +74,7 @@ internal/
 - **AI Classification**: Ollama-powered `Classify()` tags emails; `a` runs on current folder
 - **Chat Panel**: Right-side slide-out (`c` key) — converse with your emails via Ollama
 - **Multi-folder Sidebar**: Collapsible IMAP folder tree (`f` key)
-- **MCP Server**: `cmd/mcp-server` exposes list/search/stats/classify tools over stdio to Codex
+- **MCP Server**: `cmd/herald-mcp-server` exposes list/search/stats/classify tools over stdio to Codex
 - **SSH App Mode**: `cmd/herald-ssh-server` serves the full TUI over SSH on port 2222
 - **iTerm2 Images**: Inline image rendering in the email body preview on iTerm2
 
@@ -83,16 +83,16 @@ internal/
 ### Go Version
 ```bash
 # Build and run
-make build && ./bin/mail-processor
+make build && ./bin/herald
 
 # Or run directly
 make run
 
 # CLI flags
-./bin/mail-processor -debug              # Enable debug logging to herald_*.log
-./bin/mail-processor -verbose            # Alias for -debug (same behavior today)
-./bin/mail-processor -config custom.yaml # Custom config file
-./bin/mail-processor -help
+./bin/herald -debug              # Enable debug logging to herald_*.log
+./bin/herald -verbose            # Alias for -debug (same behavior today)
+./bin/herald -config custom.yaml # Custom config file
+./bin/herald -help
 
 # Development
 make deps     # Install dependencies
@@ -116,13 +116,13 @@ make test     # Run tests
 
 ```bash
 # 1. Build a test binary
-go build -o /tmp/mail-processor-test .
+go build -o /tmp/herald-test .
 
 # 2. Start a headless session at a specific size (WIDTHxHEIGHT)
 tmux new-session -d -s test -x 220 -y 50
 
 # 3. Launch the app inside it
-tmux send-keys -t test './tmp/mail-processor-test -config proton.yaml' Enter
+tmux send-keys -t test '/tmp/herald-test -config proton.yaml' Enter
 sleep 5   # wait for IMAP connect + initial load
 
 # 4. Capture a screenshot (plain text, ANSI escape codes included with -e)
@@ -212,7 +212,7 @@ Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | `emersion/go-imap` | IMAP client |
 | `mattn/go-sqlite3` | SQLite driver (CGO) |
 | `gopkg.in/yaml.v3` | Config parsing |
-| `mark3labs/mcp-go` | MCP JSON-RPC server (`cmd/mcp-server`) |
+| `mark3labs/mcp-go` | MCP JSON-RPC server (`cmd/herald-mcp-server`) |
 
 ## Key TUI Bindings
 
@@ -265,7 +265,7 @@ After a bug fix or large feature is complete, run all three surface tests and sa
 |---------|-------------|
 | **TUI** | tmux workflow (see below) + relevant `TUI_TESTPLAN.md` test cases |
 | **SSH** | `go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server && ./bin/herald-ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
-| **MCP** | `go build ./cmd/mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/mcp-server` — then invoke the relevant tool(s) and verify output |
+| **MCP** | `go build -o ./bin/herald-mcp-server ./cmd/herald-mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/herald-mcp-server` — then invoke the relevant tool(s) and verify output |
 
 Save the report as `reports/TEST_REPORT_<YYYY-MM-DD>_<short-description>.md`.
 

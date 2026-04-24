@@ -1,6 +1,6 @@
 # Makefile for Herald
 
-.PHONY: build build-ssh run clean test deps fmt vet
+.PHONY: build build-ssh build-mcp run clean test deps fmt vet
 
 # Build the application
 build:
@@ -9,6 +9,10 @@ build:
 # Build the SSH server
 build-ssh:
 	go build -o bin/herald-ssh-server ./cmd/herald-ssh-server
+
+# Build the MCP server
+build-mcp:
+	go build -o bin/herald-mcp-server ./cmd/herald-mcp-server
 
 # Run the application
 run:

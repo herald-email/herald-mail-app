@@ -1577,7 +1577,7 @@ go test ./internal/backend/... -v
 **Manual check (tmux):**
 ```bash
 tmux new-session -d -s test -x 220 -y 50
-tmux send-keys -t test './bin/mail-processor --demo' Enter
+tmux send-keys -t test './bin/herald --demo' Enter
 sleep 3
 tmux send-keys -t test '2' ''   # Compose tab
 sleep 0.5

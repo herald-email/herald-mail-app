@@ -88,22 +88,22 @@ Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `
 
 ## MCP Setup
 
-Herald ships a standalone MCP server binary (`cmd/mcp-server`) that exposes your email to AI tools over stdio.
+Herald ships a standalone MCP server binary (`cmd/herald-mcp-server`) that exposes your email to AI tools over stdio.
 
 ```bash
-go build -o bin/mcp-server ./cmd/mcp-server
+go build -o bin/herald-mcp-server ./cmd/herald-mcp-server
 ```
 
 ### Claude Code
 
 ```
 Add a local MCP server called "herald" that runs this command:
-/path/to/herald/bin/mcp-server -config ~/.herald/conf.yaml
+/path/to/herald/bin/herald-mcp-server -config ~/.herald/conf.yaml
 ```
 
 Or run this from the herald directory:
 ```bash
-claude mcp add herald -- "$(pwd)/bin/mcp-server" -config ~/.herald/conf.yaml
+claude mcp add herald -- "$(pwd)/bin/herald-mcp-server" -config ~/.herald/conf.yaml
 ```
 
 ### Cursor
@@ -114,7 +114,7 @@ Add to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/mcp-server",
+      "command": "/path/to/herald/bin/herald-mcp-server",
       "args": ["-config", "~/.herald/conf.yaml"]
     }
   }
@@ -129,7 +129,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/mcp-server",
+      "command": "/path/to/herald/bin/herald-mcp-server",
       "args": ["-config", "~/.herald/conf.yaml"]
     }
   }
@@ -139,13 +139,13 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ### Codex
 
 ```bash
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/mcp-server","args":["-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald-mcp-server","args":["-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ### Generic (any stdio MCP client)
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/mcp-server -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
 ```
 
 ### Available MCP Tools
