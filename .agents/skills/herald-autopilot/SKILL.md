@@ -108,6 +108,13 @@ Route verification by affected surface instead of running every surface every ti
 - `ssh`: build `cmd/herald-ssh-server`, exercise the affected flow over SSH if the change touches the SSH surface
 - `mcp`: build or run `cmd/mcp-server`, invoke the relevant tool path if the change touches MCP behavior
 
+For visual TUI changes, always capture a matched before/after pair:
+
+- capture the same state before the code change whenever the baseline can be rendered safely
+- capture the same state after the code change, using the same terminal size and navigation path
+- store PNG screenshots and plain-text/ANSI captures under the run evidence folder
+- record the screenshots with evidence summaries that include `Before:` and `After:` so reports can surface them automatically
+
 Record every verification result with:
 
 ```bash

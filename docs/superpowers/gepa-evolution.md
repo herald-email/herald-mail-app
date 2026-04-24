@@ -50,11 +50,11 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-04-23T18:56:34+00:00.
-- [x] Recent runs analyzed: 5.
-- [x] Frontier members available: 3.
-- [x] Most repeated failing evidence: `tui-checks` (1 occurrences).
-- [x] Current top recommended experiment: `auto-ledger-and-state-sync` (high value, low risk).
+- [x] Auto snapshot generated at 2026-04-24T02:01:12+00:00.
+- [x] Recent runs analyzed: 20.
+- [x] Frontier members available: 8.
+- [x] Most repeated failing evidence: `focused-tests` (2 occurrences).
+- [x] Current top recommended experiment: `template-focused-tests-feedback` (medium value, low risk).
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points

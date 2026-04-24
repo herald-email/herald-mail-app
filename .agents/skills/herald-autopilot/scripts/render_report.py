@@ -10,6 +10,45 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def artifact_path(run: dict, artifact: str) -> str:
+    if not artifact:
+        return ""
+    path = Path(artifact)
+    if not path.is_absolute():
+        path = Path(run["paths"]["repo_root"]) / path
+    return str(path)
+
+
+def visual_screenshot_sections(run: dict, results: list[dict]) -> list[str]:
+    screenshots = []
+    for item in results:
+        artifact = item.get("artifact", "")
+        if item.get("kind") != "screenshot" or not artifact.lower().endswith(".png"):
+            continue
+        summary = item.get("summary", "")
+        key = f"{summary} {artifact}".lower()
+        if "before" in key:
+            group = "Before"
+        elif "after" in key:
+            group = "After"
+        else:
+            continue
+        screenshots.append((group, summary or group, artifact_path(run, artifact)))
+
+    if not screenshots:
+        return []
+
+    lines = ["", "## Visual Evidence"]
+    for group in ("Before", "After"):
+        group_items = [item for item in screenshots if item[0] == group]
+        if not group_items:
+            continue
+        lines.extend(["", f"### {group}"])
+        for _, summary, path in group_items:
+            lines.extend([f"![{summary}]({path})", ""])
+    return lines[:-1] if lines[-1] == "" else lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Render a Herald Autopilot report from a run folder.")
     parser.add_argument("--run-dir", required=True, help="Path to the run directory")
@@ -24,6 +63,8 @@ def main() -> int:
 
     required = set(run["verification"].get("required_gates", []))
     results = run["verification"].get("results", [])
+    manifest_path = run_dir / "evidence" / "manifest.json"
+    evidence_items = load_json(manifest_path) if manifest_path.exists() else results
     required_results = [item for item in results if item["gate"] in required]
     skipped = [item for item in results if item["status"] == "skip"]
     reflections = sorted((run_dir / "reflections").glob("*.json"))
@@ -57,9 +98,10 @@ def main() -> int:
         "",
         "## Outcome",
         run["outcome"].get("summary") or "No outcome summary recorded.",
-        "",
-        "## Verification",
     ]
+
+    lines.extend(visual_screenshot_sections(run, evidence_items))
+    lines.extend(["", "## Verification"])
 
     if required_results:
         for item in required_results:

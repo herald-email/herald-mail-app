@@ -29,6 +29,13 @@ Run:
 - tmux-based visual checks
 - the relevant `TUI_TESTPLAN.md` cases
 
+For visual styling, layout, copy, or chrome changes, capture before/after evidence:
+
+- Before: same screen/state before implementation when safely reproducible
+- After: same screen/state after implementation at the matching terminal size
+- Always save PNG screenshots plus plain-text/ANSI captures in the run evidence folder
+- Use evidence summaries beginning with `Before:` and `After:` so the report renderer can include the images directly
+
 If the task is layout-only and not realistically expressible in Go tests, document the terminal-only repro and rely on tmux evidence.
 
 ### SSH tasks

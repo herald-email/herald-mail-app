@@ -44,6 +44,7 @@ Use that run folder for:
 - plan summary
 - product-truth grounding notes
 - evidence manifest
+- before/after PNG screenshots for visual TUI changes
 - reflections
 - score output
 - run-local summary

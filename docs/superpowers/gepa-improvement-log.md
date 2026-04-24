@@ -9,11 +9,48 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-04-24T02:01:12 | Show before/after screenshots for visual TUI runs | applied | 20 | 83.0 | 93% | 1 | 8 |
 | 2026-04-23T19:00:19 | Product-definition grounding for GEPA | validated | 5 | 83.4 | 100% | 1 | 3 |
 | 2026-04-23T18:42:12 | Improvement-history logging for GEPA | applied | 4 | 85.66666666666667 | n/a | 1 | 2 |
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Show before/after screenshots for visual TUI runs
+
+- Logged at: 2026-04-24T02:01:12+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: Visual TUI runs produced useful screenshots, but the workflow did not require matched before/after evidence or place those images directly in reports.
+- Summary: Added explicit before/after screenshot capture guidance for visual Herald TUI changes and taught the autopilot report renderer to surface screenshot evidence as embedded Markdown images.
+
+Metrics at log time:
+- Recent runs: 20
+- Average score: 83.0
+- Average retries: 0.2
+- Failed runs: 1
+- Frontier members: 8
+- Product-truth required runs: 14
+- Product-truth grounding rate: 0.9285714285714286
+- Product-truth updated-first runs: 3
+Delta from previous entry:
+- recent_run_count: +15
+- average_score: -0.4000000000000057
+- average_retry_count: +0.0
+- failed_run_count: +0
+- frontier_count: +5
+- product_truth_required_runs: +13
+- product_truth_grounding_rate: -0.0714285714285714
+- product_truth_updated_first_runs: +2
+Changes:
+- Documented matched before/after screenshot capture for visual TUI changes in the Herald autopilot skill and verification-routing reference.
+- Updated render_report.py to read the evidence manifest and render Before/After PNG screenshots in a Visual Evidence section.
+Recommended experiment at log time:
+- `template-focused-tests-feedback` (medium value, low risk)
+Article notes:
+- Human preference exposed a valuable GEPA signal: visual diffs are part of the handoff contract, not merely optional evidence.
+Follow-ups:
+- Consider validating screenshot pair completeness as a scored visual-evidence gate for TUI tasks.
 
 ### Product-definition grounding for GEPA
 
