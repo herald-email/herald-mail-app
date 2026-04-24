@@ -219,3 +219,13 @@ ttyd -W ./bin/herald --demo                    # Demo mode (no IMAP needed)
 ## Architecture
 
 See [VISION.md](VISION.md) for the full feature roadmap and [ARCHITECTURE.md](ARCHITECTURE.md) for the technical design.
+
+## License
+
+Herald is source-available under the Functional Source License, Version 1.1,
+ALv2 Future License (`FSL-1.1-ALv2`). You may use, copy, modify, redistribute,
+and run Herald for any permitted purpose other than a competing commercial use.
+
+Each version converts to the Apache License, Version 2.0 on the second
+anniversary of the date that version is made available, as described in
+[LICENSE](LICENSE).
