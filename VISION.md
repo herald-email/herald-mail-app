@@ -56,7 +56,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
-- [x] Daemon server (`mail-processor serve`, Ollama-style)
+- [x] Daemon server (`herald serve`, Ollama-style)
 - [x] Email rendering package (`internal/render` — independent, testable component)
 - [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc.)
 - [ ] Link display modes (full URL, title-only clickable, sanitized)
@@ -74,14 +74,14 @@ The app is designed in three phases so that each phase's work is additive and no
 Single process. The Bubble Tea model talks only to a `Backend` interface, never to IMAP or SQLite directly. All processing (IMAP, cache, AI) lives behind that interface. The discipline means the UI can be swapped or multiplied without touching the backend.
 
 ### Phase 2 — daemon server (Ollama-style)
-The backend becomes a standalone daemon: `mail-processor serve`. It runs as a persistent background process, holds the IMAP connection, owns the SQLite cache, and exposes a local HTTP + WebSocket API on a configurable port (default `localhost:7272`). Clients connect to it — they do not touch IMAP or the database directly.
+The backend becomes a standalone daemon: `herald serve`. It runs as a persistent background process, holds the IMAP connection, owns the SQLite cache, and exposes a local HTTP + WebSocket API on a configurable port (default `localhost:7272`). Clients connect to it — they do not touch IMAP or the database directly.
 
 CLI mirrors Ollama's UX:
 ```
-mail-processor serve          # start daemon (foreground; launchd/systemd for autostart)
-mail-processor status         # show running daemon info
-mail-processor stop           # graceful shutdown
-mail-processor sync           # trigger incremental IMAP sync
+herald serve          # start daemon (foreground; launchd/systemd for autostart)
+herald status         # show running daemon info
+herald stop           # graceful shutdown
+herald sync           # trigger incremental IMAP sync
 ```
 
 All existing client modes (TUI, SSH, MCP) become thin clients of the daemon. A `RemoteBackend` struct implements the same `Backend` interface over HTTP/WebSocket — TUI code is unchanged, only the backend wiring differs.
@@ -720,17 +720,17 @@ The MCP server lets Claude Code, Cursor, Codex, and other AI tools read and mana
 
 Each prompt below instructs the AI tool to register the MCP server. Users copy the prompt, run it in the relevant tool, and the server is live.
 
-- [x] **Claude Code** — prompt to add `cmd/mcp-server` to `~/.claude/claude.json` MCP config
+- [x] **Claude Code** — prompt to add `cmd/herald-mcp-server` to `~/.claude/claude.json` MCP config
 - [x] **Cursor** — prompt to add the server to Cursor's MCP settings JSON
 - [x] **Windsurf** — JSON snippet for `~/.codeium/windsurf/mcp_config.json`
 - [x] **Codex** — env-var CLI approach
 - [ ] **GitHub Copilot / VS Code** (when MCP support lands) — equivalent config snippet
-- [x] **Generic** — prompt that explains how to run `./bin/mcp-server` and wire it into any MCP-compatible client
+- [x] **Generic** — prompt that explains how to run `./bin/herald-mcp-server` and wire it into any MCP-compatible client
 
 Example (Claude Code):
 ```
 Add a local MCP server called "mail" that runs this command:
-/path/to/mail-processor/bin/mcp-server -config ~/.herald/conf.yaml
+/path/to/herald/bin/herald-mcp-server -config ~/.herald/conf.yaml
 ```
 
 ### README goals

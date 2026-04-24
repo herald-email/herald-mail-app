@@ -26,7 +26,7 @@ This document describes the current system design (Phase 1) and the target archi
 
 cmd/herald-ssh-server  → runs the same TUI over SSH (charmbracelet/wish)
                   each SSH session gets its own LocalBackend
-cmd/mcp-server  → JSON-RPC stdio server, reads the configured SQLite cache directly
+cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite cache directly
                   no live IMAP; cache-only for all current tools
 ```
 
@@ -144,7 +144,7 @@ These controls live under `ai:` in config:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  mail-processor serve  (daemon, localhost:7272)                      │
+│  herald serve  (daemon, localhost:7272)                      │
 │                                                                      │
 │  ┌─────────────────────────────────────────────────────────────┐     │
 │  │  DaemonBackend                                              │     │
@@ -212,10 +212,10 @@ Authentication: bearer token in config (`daemon.token`), checked on every reques
 ### CLI control
 
 ```
-mail-processor serve [--port 7272] [--config proton.yaml]
-mail-processor status          # prints running PID, uptime, connected account
-mail-processor stop            # SIGTERM to daemon via pidfile
-mail-processor sync [folder]   # POST /v1/sync; waits for completion
+herald serve [--port 7272] [--config proton.yaml]
+herald status          # prints running PID, uptime, connected account
+herald stop            # SIGTERM to daemon via pidfile
+herald sync [folder]   # POST /v1/sync; waits for completion
 ```
 
 Daemon writes a pidfile to `~/.local/share/mail-processor/daemon.pid` and logs to `~/.local/share/mail-processor/daemon.log`. On macOS, a launchd plist enables autostart at login.

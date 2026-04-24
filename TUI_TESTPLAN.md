@@ -13,7 +13,7 @@ This manual QA specification defines the acceptance criteria for Herald's TUI ac
 ```bash
 go build -o /tmp/herald ./main.go
 go build -o /tmp/herald-ssh ./cmd/herald-ssh-server
-go build -o /tmp/herald-mcp ./cmd/mcp-server
+go build -o /tmp/herald-mcp ./cmd/herald-mcp-server
 ```
 
 ### Demo tmux session
@@ -622,7 +622,7 @@ Check these states during every applicable lane:
 **Lane:** E
 
 **Steps:**
-1. Build and run `cmd/mcp-server`.
+1. Build and run `cmd/herald-mcp-server`.
 2. Call `tools/list`.
 3. Call one read tool such as `list_recent_emails`.
 

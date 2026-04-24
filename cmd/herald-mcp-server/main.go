@@ -1,5 +1,5 @@
-// mcp-server exposes herald email operations as MCP tools over stdio.
-// Usage: ./mcp-server [-config ~/.herald/conf.yaml]
+// herald-mcp-server exposes herald email operations as MCP tools over stdio.
+// Usage: ./herald-mcp-server [-config ~/.herald/conf.yaml]
 // Add to Claude Code's MCP config to let Claude search and manage your email.
 package main
 

@@ -1,7 +1,7 @@
 # MCP Server Test Plan — mail-processor
 
 Manual QA checklist for verifying that the MCP server correctly exposes email data as tools to AI agents and Claude Code.
-Run this after any change to `cmd/mcp-server/`, `internal/cache/`, or the SQLite schema.
+Run this after any change to `cmd/herald-mcp-server/`, `internal/cache/`, or the SQLite schema.
 
 ---
 
@@ -13,20 +13,20 @@ The MCP server reads from `email_cache.db` — it does not connect to IMAP.
 If the cache is empty, run the TUI first and wait for it to finish syncing.
 
 ```bash
-./bin/mail-processor -config proton.yaml
+./bin/herald -config proton.yaml
 # Press q once sync is complete
 ```
 
 ### 2. Build the MCP server binary
 
 ```bash
-go build -o /tmp/mcp-server-test ./cmd/mcp-server
+go build -o /tmp/herald-mcp-server-test ./cmd/herald-mcp-server
 ```
 
 ### 3a. Test with MCP Inspector (recommended — browser UI)
 
 ```bash
-npx @modelcontextprotocol/inspector /tmp/mcp-server-test -config proton.yaml
+npx @modelcontextprotocol/inspector /tmp/herald-mcp-server-test -config proton.yaml
 # Opens http://localhost:5173 — use the browser to call tools interactively
 ```
 
@@ -37,11 +37,11 @@ The MCP protocol is newline-delimited JSON-RPC 2.0. Each request must be sent as
 ```bash
 # List available tools
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 
 # Call a tool
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_recent_emails","arguments":{"folder":"INBOX"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 ### 4. Claude Code integration test
@@ -52,7 +52,7 @@ Add to `~/.claude/settings.json` (or project `.claude/settings.json`):
 {
   "mcpServers": {
     "mail": {
-      "command": "/absolute/path/to/mcp-server-test",
+      "command": "/absolute/path/to/herald-mcp-server-test",
       "args": ["-config", "/absolute/path/to/proton.yaml"]
     }
   }
@@ -64,7 +64,7 @@ Restart Claude Code, then ask: *"List my 5 most recent emails in INBOX."*
 ### 5. Teardown
 
 No persistent process to kill — the MCP server exits after stdin closes.
-Remove the test binary: `rm /tmp/mcp-server-test`
+Remove the test binary: `rm /tmp/herald-mcp-server-test`
 
 ---
 
@@ -98,7 +98,7 @@ Remove the test binary: `rm /tmp/mcp-server-test`
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -117,7 +117,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_recent_emails","arguments":{"folder":"INBOX"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -133,7 +133,7 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_recen
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_recent_emails","arguments":{"folder":"INBOX","limit":5}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -147,7 +147,7 @@ echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_recen
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_recent_emails","arguments":{"folder":"DoesNotExist"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -163,7 +163,7 @@ echo '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_recen
 2. Run:
 ```bash
 echo '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_emails","arguments":{"folder":"INBOX","query":"github.com"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -180,7 +180,7 @@ echo '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_ema
 2. Run:
 ```bash
 echo '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_emails","arguments":{"folder":"INBOX","query":"invoice"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -194,7 +194,7 @@ echo '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_ema
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"search_emails","arguments":{"folder":"INBOX","query":"xyzzy_no_match_12345"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -209,11 +209,11 @@ echo '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"search_ema
 ```bash
 # Test % wildcard
 echo '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"search_emails","arguments":{"folder":"INBOX","query":"%"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 
 # Test backslash
 echo '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"search_emails","arguments":{"folder":"INBOX","query":"\\\\"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -228,7 +228,7 @@ echo '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"search_ema
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_sender_stats","arguments":{"folder":"INBOX"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -243,7 +243,7 @@ echo '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_sende
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_sender_stats","arguments":{"folder":"INBOX","top_n":3}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -259,7 +259,7 @@ echo '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_sende
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_email_classifications","arguments":{"folder":"INBOX"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -275,7 +275,7 @@ echo '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_email
 ```bash
 # Use a folder that has never been classified
 echo '{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_email_classifications","arguments":{"folder":"Sent"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -289,7 +289,7 @@ echo '{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_email
 **Steps:**
 ```bash
 # Run with a config pointing to a non-existent DB location
-/tmp/mcp-server-test -config /nonexistent/proton.yaml
+/tmp/herald-mcp-server-test -config /nonexistent/proton.yaml
 ```
 Then attempt any tool call over stdin.
 
@@ -324,7 +324,7 @@ Then attempt any tool call over stdin.
 ```bash
 # Use a message_id from a previous list_recent_emails call that has been opened in the TUI
 echo '{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"get_email_body","arguments":{"message_id":"<some-id>"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -338,7 +338,7 @@ echo '{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"get_email
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_unread_emails","arguments":{"folder":"INBOX","limit":5}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -352,7 +352,7 @@ echo '{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_unre
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"search_by_date","arguments":{"folder":"INBOX","after":"2024-01-01","before":"2024-12-31"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -366,7 +366,7 @@ echo '{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"search_by
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"search_by_sender","arguments":{"sender":"github.com"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect:**
@@ -382,7 +382,7 @@ echo '{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"search_by
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"semantic_search_emails","arguments":{"query":"invoice or billing","folder":"INBOX","limit":5}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect (Ollama running):**
@@ -400,7 +400,7 @@ echo '{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"semantic_
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"semantic_search_contacts","arguments":{"query":"people I discuss swiftui performance with","limit":5}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect (Ollama running):**
@@ -419,7 +419,7 @@ echo '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"semantic_
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"classify_email","arguments":{"message_id":"<some-id>"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect (Ollama running):**
@@ -438,7 +438,7 @@ echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"classify_
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"summarise_email","arguments":{"message_id":"<some-id>","max_words":50}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect (body cached, Ollama running):**
@@ -459,7 +459,7 @@ echo '{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"summarise
 **Steps:**
 ```bash
 echo '{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"draft_reply","arguments":{"message_id":"<some-id>","tone":"professional"}}}' \
-  | /tmp/mcp-server-test -config proton.yaml
+  | /tmp/herald-mcp-server-test -config proton.yaml
 ```
 
 **Expect (AI running):**
