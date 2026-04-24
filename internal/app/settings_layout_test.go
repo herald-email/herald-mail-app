@@ -116,3 +116,37 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 		t.Fatalf("expected OSC 8 hyperlink for Gmail docs, got raw view:\n%q", rendered)
 	}
 }
+
+func TestSettingsWizard_AIProviderChoicesIncludeDefaultCustomAndDisabled(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.form.NextGroup()
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{
+		"Ollama (local default)",
+		"Ollama (local custom)",
+		"Claude API",
+		"OpenAI / compatible",
+		"AI features disabled",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected AI provider choices to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsWizard_OllamaDefaultDoesNotAskForCustomValues(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "ollama-default"
+	s.buildForm()
+	s.form.NextGroup()
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if strings.Contains(rendered, "Ollama Host>") || strings.Contains(rendered, "Ollama Model>") {
+		t.Fatalf("expected default Ollama path to hide custom fields, got:\n%s", rendered)
+	}
+}

@@ -65,6 +65,32 @@ func TestNewSettings_NilConfigUsesDefaults(t *testing.T) {
 	if s.form == nil {
 		t.Error("form should not be nil")
 	}
+	if s.aiProvider != "ollama-default" {
+		t.Errorf("aiProvider = %q, want %q", s.aiProvider, "ollama-default")
+	}
+	if s.ollamaHost != defaultOllamaHost {
+		t.Errorf("ollamaHost = %q, want %q", s.ollamaHost, defaultOllamaHost)
+	}
+	if s.ollamaModel != defaultOllamaModel {
+		t.Errorf("ollamaModel = %q, want %q", s.ollamaModel, defaultOllamaModel)
+	}
+	if s.embedModel != defaultEmbeddingModel {
+		t.Errorf("embedModel = %q, want %q", s.embedModel, defaultEmbeddingModel)
+	}
+}
+
+func TestNewSettings_CustomOllamaConfigUsesCustomChoice(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "ollama"
+	existing.Ollama.Host = "http://ollama.internal:11434"
+	existing.Ollama.Model = "llama3.1"
+	existing.Ollama.EmbeddingModel = "custom-embed"
+
+	s := NewSettings(SettingsModeWizard, existing)
+
+	if s.aiProvider != "ollama-custom" {
+		t.Errorf("aiProvider = %q, want %q", s.aiProvider, "ollama-custom")
+	}
 }
 
 func TestNewSettings_GmailIMAPUsesCredentialEmail(t *testing.T) {
@@ -162,6 +188,48 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	}
 	if cfg.Server.Port != 993 {
 		t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, 993)
+	}
+}
+
+func TestBuildConfig_OllamaDefaultWritesPreconfiguredValues(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "ollama-default"
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != "ollama" {
+		t.Errorf("AI.Provider = %q, want %q", cfg.AI.Provider, "ollama")
+	}
+	if cfg.Ollama.Host != defaultOllamaHost {
+		t.Errorf("Ollama.Host = %q, want %q", cfg.Ollama.Host, defaultOllamaHost)
+	}
+	if cfg.Ollama.Model != defaultOllamaModel {
+		t.Errorf("Ollama.Model = %q, want %q", cfg.Ollama.Model, defaultOllamaModel)
+	}
+	if cfg.Ollama.EmbeddingModel != defaultEmbeddingModel {
+		t.Errorf("Ollama.EmbeddingModel = %q, want %q", cfg.Ollama.EmbeddingModel, defaultEmbeddingModel)
+	}
+}
+
+func TestBuildConfig_AIDisabledClearsAIBackends(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "disabled"
+	s.ollamaHost = defaultOllamaHost
+	s.ollamaModel = defaultOllamaModel
+	s.embedModel = defaultEmbeddingModel
+	s.claudeAPIKey = "sk-ant-test"
+	s.openAIAPIKey = "sk-test"
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != "disabled" {
+		t.Errorf("AI.Provider = %q, want %q", cfg.AI.Provider, "disabled")
+	}
+	if cfg.Ollama.Host != "" || cfg.Ollama.Model != "" || cfg.Ollama.EmbeddingModel != "" {
+		t.Errorf("expected Ollama settings cleared when AI is disabled, got host=%q model=%q embed=%q", cfg.Ollama.Host, cfg.Ollama.Model, cfg.Ollama.EmbeddingModel)
+	}
+	if cfg.Claude.APIKey != "" || cfg.OpenAI.APIKey != "" {
+		t.Errorf("expected external AI API keys cleared when AI is disabled")
 	}
 }
 

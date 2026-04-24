@@ -104,7 +104,7 @@ type Config struct {
 	} `yaml:"openai"`
 
 	AI struct {
-		Provider                        string `yaml:"provider"`                           // "ollama" | "claude" | "openai"; default: "ollama"
+		Provider                        string `yaml:"provider"`                           // "ollama" | "claude" | "openai" | "disabled"; default: "ollama"
 		LocalMaxConcurrency             int    `yaml:"local_max_concurrency"`              // default: 1
 		ExternalMaxConcurrency          int    `yaml:"external_max_concurrency"`           // default: 4
 		BackgroundQueueLimit            int    `yaml:"background_queue_limit"`             // default: 64

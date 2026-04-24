@@ -23,6 +23,16 @@ const (
 	SettingsModePanel
 )
 
+const (
+	aiProviderOllamaDefault = "ollama-default"
+	aiProviderOllamaCustom  = "ollama-custom"
+	aiProviderDisabled      = "disabled"
+
+	defaultOllamaHost     = "http://localhost:11434"
+	defaultOllamaModel    = "gemma3:4b"
+	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
+)
+
 // SettingsSavedMsg is sent when the user completes the form and saves.
 type SettingsSavedMsg struct {
 	Config *config.Config
@@ -129,9 +139,7 @@ func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath 
 	if s.provider == "" {
 		s.provider = "imap"
 	}
-	if s.aiProvider == "" {
-		s.aiProvider = "ollama"
-	}
+	s.normalizeAIProvider()
 	if s.syncPollStr == "" {
 		s.syncPollStr = "5" // default only on first run; 0 is valid (IDLE-only mode)
 	}
@@ -264,19 +272,27 @@ func (s *Settings) buildForm() {
 		huh.NewSelect[string]().
 			Title("AI Provider").
 			Options(
-				huh.NewOption("Ollama (local)", "ollama"),
+				huh.NewOption("Ollama (local default)", aiProviderOllamaDefault),
+				huh.NewOption("Ollama (local custom)", aiProviderOllamaCustom),
 				huh.NewOption("Claude API", "claude"),
 				huh.NewOption("OpenAI / compatible", "openai"),
+				huh.NewOption("AI features disabled", aiProviderDisabled),
 			).
 			Value(&s.aiProvider),
 	).Title("AI Provider")
 
-	// Group 3a — Ollama settings (shown only when provider = ollama)
+	ollamaDefaultGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Ollama local default").
+			Description("Uses http://localhost:11434 with gemma3:4b and nomic-embed-text-v2-moe."),
+	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaDefault })
+
+	// Group 3a — Ollama settings (shown only when provider = custom Ollama)
 	ollamaGroup := huh.NewGroup(
-		huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder("http://localhost:11434"),
-		huh.NewInput().Title("Ollama Model").Inline(true).Value(&s.ollamaModel).Placeholder("gemma3:4b"),
-		huh.NewInput().Title("Embedding Model").Inline(true).Value(&s.embedModel).Placeholder("nomic-embed-text-v2-moe"),
-	).WithHideFunc(func() bool { return s.aiProvider != "ollama" })
+		huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder(defaultOllamaHost),
+		huh.NewInput().Title("Ollama Model").Inline(true).Value(&s.ollamaModel).Placeholder(defaultOllamaModel),
+		huh.NewInput().Title("Embedding Model").Inline(true).Value(&s.embedModel).Placeholder(defaultEmbeddingModel),
+	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaCustom })
 
 	// Group 3b — Claude settings (shown only when provider = claude)
 	claudeGroup := huh.NewGroup(
@@ -331,6 +347,7 @@ func (s *Settings) buildForm() {
 		gmailAdvancedGroup,
 		gmailOAuthGroup,
 		aiProviderGroup,
+		ollamaDefaultGroup,
 		ollamaGroup,
 		claudeGroup,
 		openAIGroup,
@@ -428,6 +445,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if prevProvider != s.provider {
 		s.syncProviderDefaults(prevProvider, s.provider)
 	}
+	s.syncAIDefaults()
 
 	// Check if the form just completed.
 	if s.form.State == huh.StateCompleted && !s.done {
@@ -536,7 +554,7 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.SMTP.Port = parsePort(s.smtpPort)
 
 	// AI provider
-	cfg.AI.Provider = s.aiProvider
+	cfg.AI.Provider = configAIProvider(s.aiProvider)
 	cfg.Ollama.Host = s.ollamaHost
 	cfg.Ollama.Model = s.ollamaModel
 	cfg.Ollama.EmbeddingModel = s.embedModel
@@ -546,6 +564,21 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.OpenAI.APIKey = s.openAIAPIKey
 	cfg.OpenAI.BaseURL = s.openAIBaseURL
 	cfg.OpenAI.Model = s.openAIModel
+
+	switch s.aiProvider {
+	case aiProviderOllamaDefault:
+		cfg.Ollama.Host = defaultOllamaHost
+		cfg.Ollama.Model = defaultOllamaModel
+		cfg.Ollama.EmbeddingModel = defaultEmbeddingModel
+		cfg.Semantic.Model = defaultEmbeddingModel
+	case aiProviderDisabled:
+		cfg.Ollama.Host = ""
+		cfg.Ollama.Model = ""
+		cfg.Ollama.EmbeddingModel = ""
+		cfg.Semantic.Model = ""
+		cfg.Claude.APIKey = ""
+		cfg.OpenAI.APIKey = ""
+	}
 
 	// Sync & cleanup
 	if n, err := strconv.Atoi(s.syncPollStr); err == nil {
@@ -566,6 +599,63 @@ func configVendorForProvider(provider string) string {
 		return "gmail"
 	default:
 		return provider
+	}
+}
+
+func configAIProvider(provider string) string {
+	switch provider {
+	case aiProviderOllamaDefault, aiProviderOllamaCustom:
+		return "ollama"
+	case aiProviderDisabled:
+		return aiProviderDisabled
+	default:
+		return provider
+	}
+}
+
+func (s *Settings) normalizeAIProvider() {
+	switch s.aiProvider {
+	case "":
+		if s.hasCustomOllamaValues() {
+			s.aiProvider = aiProviderOllamaCustom
+		} else {
+			s.aiProvider = aiProviderOllamaDefault
+		}
+	case "ollama":
+		if s.hasCustomOllamaValues() {
+			s.aiProvider = aiProviderOllamaCustom
+		} else {
+			s.aiProvider = aiProviderOllamaDefault
+		}
+	}
+	s.syncAIDefaults()
+}
+
+func (s *Settings) hasCustomOllamaValues() bool {
+	if s.ollamaHost != "" && s.ollamaHost != defaultOllamaHost {
+		return true
+	}
+	if s.ollamaModel != "" && s.ollamaModel != defaultOllamaModel {
+		return true
+	}
+	if s.embedModel != "" && s.embedModel != defaultEmbeddingModel {
+		return true
+	}
+	return false
+}
+
+func (s *Settings) syncAIDefaults() {
+	if s.aiProvider != aiProviderOllamaDefault && s.aiProvider != aiProviderOllamaCustom {
+		return
+	}
+	if s.ollamaHost == "" || s.aiProvider == aiProviderOllamaDefault {
+		s.ollamaHost = defaultOllamaHost
+	}
+	if s.ollamaModel == "" || s.aiProvider == aiProviderOllamaDefault {
+		s.ollamaModel = defaultOllamaModel
+	}
+	if s.embedModel == "" || s.aiProvider == aiProviderOllamaDefault {
+		s.embedModel = defaultEmbeddingModel
 	}
 }
 

@@ -31,6 +31,9 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 	}
 
 	switch cfg.AI.Provider {
+	case "disabled":
+		return nil, nil
+
 	case "claude":
 		if cfg.Claude.APIKey == "" {
 			return nil, nil

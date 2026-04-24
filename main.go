@@ -206,6 +206,26 @@ func configNeedsOnboarding(path string) (bool, error) {
 	return strings.TrimSpace(string(data)) == "", nil
 }
 
+func ensurePrivateConfigDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("config directory path is not a directory: %s", dir)
+	}
+	if info.Mode().Perm() != 0o700 {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // tryConnectDaemon attempts to connect to a running daemon and returns a
 // RemoteBackend if the daemon is reachable, or nil if not.
 func tryConnectDaemon(cfg *config.Config) backend.Backend {
@@ -435,14 +455,14 @@ func runTUI() {
 			if _, statErr2 := os.Stat(resolvedConfig); os.IsNotExist(statErr2) {
 				fmt.Fprintln(os.Stderr, "Found proton.yaml in current directory. Herald now uses ~/.herald/conf.yaml.")
 				fmt.Fprintln(os.Stderr, "Please move your config:")
-				fmt.Fprintln(os.Stderr, "  mkdir -p ~/.herald && mv proton.yaml ~/.herald/conf.yaml")
+				fmt.Fprintln(os.Stderr, "  mkdir -p ~/.herald && chmod 700 ~/.herald && mv proton.yaml ~/.herald/conf.yaml")
 				os.Exit(1)
 			}
 		}
 
 		// Ensure ~/.herald directory exists (only when using the default config path)
 		heraldDir := filepath.Dir(resolvedConfig)
-		if err := os.MkdirAll(heraldDir, 0700); err != nil {
+		if err := ensurePrivateConfigDir(heraldDir); err != nil {
 			log.Fatalf("Failed to create config directory %s: %v", heraldDir, err)
 		}
 	}

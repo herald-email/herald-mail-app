@@ -37,6 +37,22 @@ func TestNewFromConfigNoAI(t *testing.T) {
 	}
 }
 
+func TestNewFromConfigDisabled(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.AI.Provider = "disabled"
+	cfg.Ollama.Host = "http://localhost:11434"
+	cfg.Claude.APIKey = "sk-ant-test"
+	cfg.OpenAI.APIKey = "sk-test"
+
+	client, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client != nil {
+		t.Errorf("expected nil client when AI is disabled, got %T", client)
+	}
+}
+
 func TestNewFromConfigClaude(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.AI.Provider = "claude"
