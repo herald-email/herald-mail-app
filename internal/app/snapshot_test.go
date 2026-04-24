@@ -57,15 +57,15 @@ func normalizeSnapshotForCompare(b []byte) []byte {
 	s = stripANSI(s)
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
-	if idx := strings.LastIndex(s, " ProtonMail Analyzer"); idx >= 0 {
+	if idx := strings.LastIndex(s, " Herald"); idx >= 0 {
 		s = s[idx:]
 	}
 	return []byte(strings.TrimRight(s, "\n"))
 }
 
 func TestNormalizeSnapshotForCompareUsesLastRenderedFrame(t *testing.T) {
-	got := []byte("\x1b[?25l\r ProtonMail Analyzer\nold frame\x1b[2J\x1b[H\x1b[8A\r ProtonMail Analyzer\nfinal frame\x1b[?25h")
-	want := []byte("\x1b[?25l\x1b[2J\x1b[H\r ProtonMail Analyzer\nfinal frame\x1b[?25h")
+	got := []byte("\x1b[?25l\r Herald\nold frame\x1b[2J\x1b[H\x1b[8A\r Herald\nfinal frame\x1b[?25h")
+	want := []byte("\x1b[?25l\x1b[2J\x1b[H\r Herald\nfinal frame\x1b[?25h")
 
 	if !bytes.Equal(normalizeSnapshotForCompare(got), normalizeSnapshotForCompare(want)) {
 		t.Fatalf("expected duplicate terminal frames to normalize to the final visible frame\ngot:\n%s\nwant:\n%s", normalizeSnapshotForCompare(got), normalizeSnapshotForCompare(want))

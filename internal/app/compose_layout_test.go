@@ -130,7 +130,7 @@ func TestComposeAutocomplete_DoesNotPushChromeOffscreen(t *testing.T) {
 			}
 
 			stripped := stripANSI(rendered)
-			if !strings.Contains(stripped, "ProtonMail Analyzer") {
+			if !strings.Contains(stripped, "Herald") {
 				t.Fatalf("expected compose chrome to remain visible, got:\n%s", stripped)
 			}
 			if !strings.Contains(stripped, "To:") {

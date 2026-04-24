@@ -3,3 +3,6 @@ set -eu
 
 echo "pre-commit: running go vet"
 make vet
+
+echo "pre-commit: running go tests"
+make test

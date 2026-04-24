@@ -2078,7 +2078,7 @@ func (m *Model) renderLoadingView() string {
 	var content strings.Builder
 
 	// Header
-	content.WriteString(m.headerStyle.Render("📧 ProtonMail Analyzer") + "\n\n")
+	content.WriteString(m.headerStyle.Render("📧 Herald") + "\n\n")
 
 	// Loading banner (manually pad to center with emoji compensation)
 	icon := getPhaseIcon(m.progressInfo.Phase)
@@ -2125,7 +2125,7 @@ func (m *Model) renderMainView() string {
 	var content strings.Builder
 
 	// Header
-	content.WriteString(m.headerStyle.Render("ProtonMail Analyzer") + "\n")
+	content.WriteString(m.headerStyle.Render("Herald") + "\n")
 
 	// Tab bar
 	content.WriteString(m.renderTabBar() + "\n")

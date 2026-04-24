@@ -1,4 +1,4 @@
-# MCP Server Test Plan — mail-processor
+# MCP Server Test Plan — Herald
 
 Manual QA checklist for verifying that the MCP server correctly exposes email data as tools to AI agents and Claude Code.
 Run this after any change to `cmd/herald-mcp-server/`, `internal/cache/`, or the SQLite schema.

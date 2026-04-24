@@ -1,4 +1,4 @@
-[?25l[?2004h[2J[H ProtonMail Analyzer [K
+[?25l[?2004h[2J[H Herald [K
   1  Timeline    2  Compose    3  Cleanup    4  Contacts  [K
 To:       ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
           │> recipient@example.com                                                                                     │

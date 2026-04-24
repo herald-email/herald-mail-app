@@ -8,7 +8,7 @@ This document describes the current system design (Phase 1) and the target archi
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  mail-processor (single binary)                                 │
+│  Herald (single binary)                                         │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │  Bubble Tea UI  (internal/app)                           │   │
@@ -218,7 +218,7 @@ herald stop            # SIGTERM to daemon via pidfile
 herald sync [folder]   # POST /v1/sync; waits for completion
 ```
 
-Daemon writes a pidfile to `~/.local/share/mail-processor/daemon.pid` and logs to `~/.local/share/mail-processor/daemon.log`. On macOS, a launchd plist enables autostart at login.
+Daemon writes a pidfile to `~/.local/share/herald/daemon.pid` and logs to `~/.local/share/herald/daemon.log`. On macOS, a launchd plist enables autostart at login.
 
 ---
 

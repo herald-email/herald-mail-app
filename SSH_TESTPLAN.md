@@ -1,4 +1,4 @@
-# SSH Server Test Plan — mail-processor
+# SSH Server Test Plan — Herald
 
 Manual QA checklist for verifying that the SSH server delivers a fully functional TUI over an SSH connection.
 Run this after any change to `cmd/herald-ssh-server/`, connection handling, or TUI rendering.

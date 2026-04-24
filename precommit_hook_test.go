@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestPreCommitHookRunsVet(t *testing.T) {
+func TestPreCommitHookRunsVetAndTests(t *testing.T) {
 	info, err := os.Stat(".githooks/pre-commit")
 	if err != nil {
 		t.Fatalf("expected versioned pre-commit hook: %v", err)
@@ -24,5 +24,8 @@ func TestPreCommitHookRunsVet(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "make vet") {
 		t.Fatalf("expected pre-commit hook to run make vet, got:\n%s", string(data))
+	}
+	if !strings.Contains(string(data), "make test") {
+		t.Fatalf("expected pre-commit hook to run make test, got:\n%s", string(data))
 	}
 }

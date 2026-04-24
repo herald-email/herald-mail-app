@@ -29,8 +29,8 @@
 
 ```bash
 # Build (Go 1.23+ required)
-git clone https://github.com/your-org/herald
-cd herald
+git clone https://github.com/herald-email/herald-mail-app.git
+cd herald-mail-app
 make build
 
 # Run (first launch shows setup wizard)
