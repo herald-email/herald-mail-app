@@ -11,6 +11,8 @@ protonmail_analyzer_*.log
 # Database files
 email_cache.db*
 *.db
+*.db-*
+
 
 # Configuration (contains credentials)
 proton.yaml
@@ -39,6 +41,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
 
 # Claude Code session memory
 memory/
