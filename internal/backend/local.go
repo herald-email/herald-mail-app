@@ -126,7 +126,11 @@ func (b *LocalBackend) ValidIDsCh() <-chan map[string]bool {
 // NewLocal creates a LocalBackend. configPath is the path to the config file on disk;
 // it is used to persist refreshed OAuth tokens. The caller must call Close() when done.
 func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*LocalBackend, error) {
-	c, err := cache.New("email_cache.db")
+	cachePath, err := config.EnsureCacheDatabasePath(configPath, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve cache path: %w", err)
+	}
+	c, err := cache.New(cachePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cache: %w", err)
 	}

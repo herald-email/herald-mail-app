@@ -503,8 +503,14 @@ func runTUI() {
 		logger.Error("Failed to load config: %v", err)
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	cachePath, err := config.EnsureCacheDatabasePath(resolvedConfig, cfg)
+	if err != nil {
+		logger.Error("Failed to resolve cache database path: %v", err)
+		log.Fatalf("Failed to resolve cache database path: %v", err)
+	}
 
 	logger.Info("Configuration loaded successfully")
+	logger.Debug("Cache database: %s", cachePath)
 	logger.Debug("Server: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	logger.Debug("Username: %s", cfg.Credentials.Username)
 
@@ -517,7 +523,7 @@ func runTUI() {
 
 	// Import classification prompts from config into DB (idempotent by name).
 	if len(cfg.Classification.Prompts) > 0 {
-		if emailCache, cacheErr := cache.New("email_cache.db"); cacheErr == nil {
+		if emailCache, cacheErr := cache.New(cachePath); cacheErr == nil {
 			existing, _ := emailCache.GetAllCustomPrompts()
 			existingNames := make(map[string]bool, len(existing))
 			for _, p := range existing {
@@ -539,7 +545,7 @@ func runTUI() {
 
 	// Import classification_actions from config into DB as rules (idempotent by name).
 	if len(cfg.ClassificationActions) > 0 {
-		if emailCache, cacheErr := cache.New("email_cache.db"); cacheErr == nil {
+		if emailCache, cacheErr := cache.New(cachePath); cacheErr == nil {
 			existing, existErr := emailCache.GetAllRules()
 			if existErr != nil {
 				logger.Warn("Failed to load existing rules during config import: %v", existErr)
