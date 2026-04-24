@@ -892,6 +892,42 @@ Check these states during every applicable lane:
 - Empty or whitespace-only config also launches onboarding.
 - Non-empty malformed config fails with a direct validation/load error and does not overwrite the file with onboarding output.
 
+### TC-43 — Timeline preview exposes unsubscribe and Hide Future Mail in context
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Open Timeline and select an email whose loaded body exposes `List-Unsubscribe`.
+2. Open the email preview and capture the preview plus the bottom hint bar.
+3. Open a second Timeline preview whose loaded body does not expose `List-Unsubscribe`.
+4. Capture the preview plus the bottom hint bar again.
+
+**Expect:**
+- The preview header includes `Tags:` and `Actions:` rows.
+- With `List-Unsubscribe`, the preview metadata and hint bar both advertise `u: unsubscribe` and `h: hide future mail`.
+- Without `List-Unsubscribe`, the preview metadata and hint bar do not advertise `u`, but still advertise `h: hide future mail`.
+- End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
+- A first-time user can identify the available list/sender action from the preview itself without prior knowledge.
+
+### TC-44 — Cleanup summary and preview use the same `u` / `h` semantics
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Open Cleanup with the sender summary focused and capture the hint bar.
+2. Confirm the sender summary advertises `h: hide future mail`.
+3. Open a Cleanup preview for an email whose loaded body exposes `List-Unsubscribe` and capture the preview plus the hint bar.
+4. Open a Cleanup preview for an email whose loaded body does not expose `List-Unsubscribe` and capture again.
+
+**Expect:**
+- Cleanup sender summary advertises `h: hide future mail`.
+- Cleanup sender summary does not advertise `u: unsubscribe`.
+- Cleanup preview includes `Tags:` and `Actions:` rows in the preview header.
+- Cleanup preview uses the same availability rules as Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `h` remains visible in both cases.
+- End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
+
 ---
 
 ## Recommendations

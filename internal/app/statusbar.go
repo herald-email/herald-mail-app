@@ -208,21 +208,6 @@ func (m *Model) renderStatusBar() string {
 			Render(safeChromeLine(line, w-2))
 	}
 
-	// 3-way unsubscribe choice prompt overrides normal status bar
-	if m.unsubConfirmMode {
-		w := m.windowWidth
-		if w <= 0 {
-			w = 80
-		}
-		line := fmt.Sprintf("  Unsubscribe from %s:  [h] Hard unsubscribe  │  [s] Soft unsubscribe (auto-move)  │  [Esc] Cancel", m.unsubConfirmSender)
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.ConfirmFg).
-			Background(defaultTheme.UnsubBg).
-			Width(w).
-			Padding(0, 1).
-			Render(safeChromeLine(line, w-2))
-	}
-
 	filterPrefix := m.timelineFilterPrefix()
 	w := m.windowWidth
 	if w <= 0 {
@@ -491,19 +476,26 @@ func (m *Model) renderKeyHints() string {
 			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
 			if m.showCleanupPreview {
-				hints = "↑/k ↓/j: scroll preview  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  tab: next panel  │  D: delete  │  A: re-classify  │  q: quit"
+				hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
 			} else {
-				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
+				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
-				hints = "↑/k ↓/j: nav  │  enter: details  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
+				hints = "↑/k ↓/j: nav  │  enter: details  │  h: hide future mail  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
 			} else {
-				hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+				hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
 			}
 		}
 	}
 	return renderChromeLines(wrapChromeSegments(hints, w-2, 2), w, defaultTheme.HintFg)
+}
+
+func previewActionHintText(hasUnsubscribe bool) string {
+	if hasUnsubscribe {
+		return "u: unsubscribe  │  h: hide future mail"
+	}
+	return "h: hide future mail"
 }
 
 func (m *Model) setFocusedPanel(panel int) {

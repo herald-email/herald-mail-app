@@ -30,7 +30,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Inline image placeholders (text labels with AI vision descriptions when available)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
-- [x] Hard unsubscribe via List-Unsubscribe headers (`u` key)
+- [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
 - [x] Stream-first folder sync with latest-wins generation invalidation so stale folder loads do not repaint the visible mailbox
@@ -39,7 +39,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
 - [x] IMAP IDLE (real push; currently polling only)
 - [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
-- [x] Soft unsubscribe (auto-move future emails to a local folder)
+- [x] Hide Future Mail sender rule (`h` key; auto-moves future emails to a local folder)
 - [x] Custom classification prompts (user-defined categories + data extraction)
 - [x] Classification actions (notify, command, webhook, move, archive, delete)
 - [ ] Classification action: flag on match (set IMAP `\Flagged`)
@@ -307,7 +307,8 @@ This gives enough room to read the email while keeping both panels visible as co
 - [x] Summary and email list panels each shrink to 25% when preview is open
 - [x] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
 - [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
-- [x] `u` — unsubscribe from within Cleanup preview
+- [x] `u` — unsubscribe from within an open email preview when the message exposes `List-Unsubscribe`
+- [x] `h` — hide future mail from the open email's sender
 - [x] `D` — delete the open email from within the preview
 - [x] `e` — archive the open email from within the preview
 - [x] `z` — expand to full-screen (same as Timeline full-screen mode)
@@ -315,13 +316,17 @@ This gives enough room to read the email while keeping both panels visible as co
 
 ### Unsubscribe
 
-Triggered with `u` on any email in the Timeline or Cleanup detail view. The app reads `List-Unsubscribe` and `List-Unsubscribe-Post` headers stored during sync.
+Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers, while `h` acts on the sender and keeps future mail out of the inbox without pretending to be a real unsubscribe.
 
-- [x] Hard unsubscribe via RFC 8058 one-click POST (`List-Unsubscribe-Post`)
-- [x] Fallback: open `List-Unsubscribe` mailto link (opens in default mail client)
-- [x] Fallback: open `List-Unsubscribe` browser URL (for HTTP links)
+- [x] Preview metadata shows explicit `Tags:` and `Actions:` rows so list/sender actions are visible in context
+- [x] `u` unsubscribes the currently open Timeline or Cleanup preview email when it exposes `List-Unsubscribe`
+- [x] `h` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions`
+- [x] Cleanup sender summary exposes `h` but not `u`, because true unsubscribe depends on message-level headers
+- [x] Timeline preview and Cleanup preview share the same `u` / `h` semantics and user-facing copy
+- [x] `u` performs RFC 8058 one-click POST when `List-Unsubscribe-Post` is available
+- [x] `u` falls back to `List-Unsubscribe` mailto handling when the message only exposes an email-action target
+- [x] `u` falls back to opening a `List-Unsubscribe` browser URL for HTTP links
 - [x] Track whether emails keep arriving after unsubscribe; notify / prompt if they do
-- [x] Soft unsubscribe: auto-move all future emails from sender to a "Disabled Subscriptions" IMAP folder (local-only, inbox stays clean without touching the actual list)
 - [ ] Batch unsubscribe flow: present list of detected subscriptions, select, choose mode, execute
 
 ### Auto-Cleanup Rules

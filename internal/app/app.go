@@ -208,7 +208,7 @@ type AutoClassifyResultMsg struct {
 	Err       error
 }
 
-// SoftUnsubResultMsg carries the result of a soft-unsubscribe attempt
+// SoftUnsubResultMsg carries the result of a Hide Future Mail request.
 type SoftUnsubResultMsg struct {
 	Sender string
 	Err    error
@@ -422,10 +422,6 @@ type Model struct {
 	pendingUnsubscribe       bool
 	pendingUnsubscribeDesc   string
 	pendingUnsubscribeAction func() tea.Cmd
-
-	// 3-way unsubscribe choice (Cleanup tab)
-	unsubConfirmMode   bool
-	unsubConfirmSender string
 
 	// IMAP IDLE / background sync
 	syncStatusMode string // "idle", "polling", "off"
@@ -1119,11 +1115,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SoftUnsubResultMsg:
-		m.unsubConfirmMode = false
 		if msg.Err != nil {
-			m.statusMessage = "Error creating soft unsubscribe rule: " + msg.Err.Error()
+			m.statusMessage = "Error enabling Hide Future Mail: " + msg.Err.Error()
 		} else {
-			m.statusMessage = "Soft unsubscribe rule created for " + msg.Sender
+			m.statusMessage = "Hide Future Mail enabled for " + msg.Sender
 		}
 		return m, nil
 
@@ -1933,11 +1928,23 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.blockCleanupReadOnlyMutation() {
 			return m, nil
 		}
+		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && m.cleanupEmailBody != nil && m.cleanupEmailBody.ListUnsubscribe != "" {
+			sender := m.cleanupPreviewEmail.Sender
+			body := m.cleanupEmailBody
+			m.pendingUnsubscribe = true
+			m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
+			m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
+		}
+		return m, nil
+
+	case "h", "H":
 		if m.activeTab == tabCleanup && !m.loading && !m.deleting {
+			if m.showCleanupPreview && m.cleanupPreviewEmail != nil {
+				return m, createHideFutureMailCmd(m.backend, m.cleanupPreviewEmail.Sender)
+			}
 			cursor := m.summaryTable.Cursor()
 			if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
-				m.unsubConfirmMode = true
-				m.unsubConfirmSender = sender
+				return m, createHideFutureMailCmd(m.backend, sender)
 			}
 		}
 		return m, nil

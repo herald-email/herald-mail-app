@@ -134,21 +134,10 @@ func unsubscribeCmd(body *models.EmailBody) tea.Cmd {
 	}
 }
 
-// createSoftUnsubscribeRuleCmd creates a rule that auto-moves emails from sender
-// to "Disabled Subscriptions", providing a non-destructive alternative to hard deletion.
-func createSoftUnsubscribeRuleCmd(b backend.Backend, sender string) tea.Cmd {
+// createHideFutureMailCmd enables the Hide Future Mail sender rule.
+func createHideFutureMailCmd(b backend.Backend, sender string) tea.Cmd {
 	return func() tea.Msg {
-		rule := &models.Rule{
-			Name:         "Soft unsub: " + sender,
-			Enabled:      true,
-			TriggerType:  models.TriggerSender,
-			TriggerValue: sender,
-			Actions: []models.RuleAction{{
-				Type:       models.ActionMove,
-				DestFolder: "Disabled Subscriptions",
-			}},
-		}
-		err := b.SaveRule(rule)
+		err := b.SoftUnsubscribeSender(sender, "")
 		return SoftUnsubResultMsg{Sender: sender, Err: err}
 	}
 }

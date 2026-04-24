@@ -695,7 +695,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if chrome.FocusedPanel == panelPreview {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
 		hasMultipleAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 1
-		hasUnsub := m.timeline.body != nil && m.timeline.body.ListUnsubscribe != ""
+		hasUnsub := m.timeline.selectedEmail != nil && m.timeline.bodyMessageID == m.timeline.selectedEmail.MessageID && previewHasUnsubscribe(m.timeline.body)
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
@@ -706,16 +706,8 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				attachmentHints = " │  [ and ]: attachments" + attachmentHints
 			}
 		}
-		if hasAttachments && hasUnsub {
-			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit", true
-		}
-		if hasUnsub {
-			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  u: unsubscribe  │  esc: close  │  q: quit", true
-		}
-		if hasAttachments {
-			return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
-		}
-		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
+		actionHints := " │  " + previewActionHintText(hasUnsub)
+		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + actionHints + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
 	}
 	if m.timeline.selectedEmail != nil {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit", true
@@ -1018,6 +1010,14 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.pendingUnsubscribe = true
 			m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
 			m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
+		}
+		return m, nil, true
+	case "h", "H":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.timeline.selectedEmail != nil {
+			return m, createHideFutureMailCmd(m.backend, m.timeline.selectedEmail.Sender), true
 		}
 		return m, nil, true
 	case "F":

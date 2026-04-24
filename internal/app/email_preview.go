@@ -56,6 +56,48 @@ func (m *Model) cleanupPreviewInnerHeight() int {
 	return 5
 }
 
+func previewHasUnsubscribe(body *models.EmailBody) bool {
+	return body != nil && strings.TrimSpace(body.ListUnsubscribe) != ""
+}
+
+func previewActionText(hasUnsubscribe bool) string {
+	if hasUnsubscribe {
+		return "u unsubscribe  h hide future mail"
+	}
+	return "h hide future mail"
+}
+
+func previewTagText(category string) string {
+	category = strings.TrimSpace(category)
+	if category == "" {
+		return "none"
+	}
+	return category
+}
+
+func (m *Model) previewCategory(messageID string) string {
+	if m.classifications == nil {
+		return ""
+	}
+	return m.classifications[messageID]
+}
+
+func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsubscribe bool, innerW int) []string {
+	if email == nil {
+		return nil
+	}
+
+	lines := []string{
+		truncate("From: "+email.Sender, innerW),
+		truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW),
+		truncate("Subj: "+email.Subject, innerW),
+	}
+	lines = append(lines, wrapLines("Tags: "+previewTagText(category), innerW)...)
+	lines = append(lines, wrapLines("Actions: "+previewActionText(hasUnsubscribe), innerW)...)
+	lines = append(lines, strings.Repeat("─", innerW))
+	return lines
+}
+
 func (m *Model) renderEmailPreview() string {
 	w := m.timeline.previewWidth
 	if w <= 0 {
@@ -80,15 +122,23 @@ func (m *Model) renderEmailPreview() string {
 	// Header block
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 	email := m.timeline.selectedEmail
-	sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
-	sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
-	sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
-	sb.WriteString(strings.Repeat("─", innerW) + "\n")
+	bodyMatchesSelected := email != nil && m.timeline.bodyMessageID == email.MessageID
+	category := ""
+	if email != nil {
+		category = m.previewCategory(email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLines(email, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW)
+	for i, line := range headerLines {
+		if i == len(headerLines)-1 {
+			sb.WriteString(line + "\n")
+		} else {
+			sb.WriteString(headerStyle.Render(line) + "\n")
+		}
+	}
 
 	panelHeight := m.timelinePreviewInnerHeight()
-	// Header block is 4 rows (From + Date + Subj + separator).
-	// Reserve 1 row for scroll indicator → maxBodyLines = panelHeight - 4 - 1.
-	maxBodyLines := panelHeight - 5
+	// Reserve 1 row for scroll indicator beneath the dynamic header block.
+	maxBodyLines := panelHeight - len(headerLines) - 1
 	if maxBodyLines < 1 {
 		maxBodyLines = 1
 	}
@@ -104,7 +154,6 @@ func (m *Model) renderEmailPreview() string {
 	}
 
 	dimStyle := headerStyle
-	bodyMatchesSelected := email != nil && m.timeline.bodyMessageID == email.MessageID
 	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
@@ -276,14 +325,22 @@ func (m *Model) renderFullScreenEmail() string {
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 
 	email := m.timeline.selectedEmail
-	sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
-	sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
-	sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
-	sb.WriteString(strings.Repeat("─", innerW) + "\n")
+	category := ""
+	if email != nil {
+		category = m.previewCategory(email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW)
+	for i, line := range headerLines {
+		if i == len(headerLines)-1 {
+			sb.WriteString(line + "\n")
+		} else {
+			sb.WriteString(headerStyle.Render(line) + "\n")
+		}
+	}
 
 	// Reserve 1 row at the bottom for the scroll indicator.
 	// Also reserve rows for the quick reply picker overlay when open.
-	maxBodyLines := m.windowHeight - 5 // 4 header rows + 1 scroll indicator
+	maxBodyLines := m.windowHeight - len(headerLines) - 1
 	if m.timeline.quickReplyOpen {
 		pickerRows := 2 + len(m.timeline.quickReplies)
 		if len(m.timeline.quickReplies) == 0 {
@@ -710,17 +767,23 @@ func (m *Model) renderCleanupPreview() string {
 	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
 	dimStyle := headerStyle
 
+	headerLines := 0
 	if m.cleanupPreviewEmail != nil {
 		email := m.cleanupPreviewEmail
-		sb.WriteString(headerStyle.Render(truncate("From: "+email.Sender, innerW)) + "\n")
-		sb.WriteString(headerStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW)) + "\n")
-		sb.WriteString(headerStyle.Render(truncate("Subj: "+email.Subject, innerW)) + "\n")
-		sb.WriteString(strings.Repeat("─", innerW) + "\n")
+		category := m.previewCategory(email.MessageID)
+		header := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.cleanupEmailBody), innerW)
+		headerLines = len(header)
+		for i, line := range header {
+			if i == headerLines-1 {
+				sb.WriteString(line + "\n")
+			} else {
+				sb.WriteString(headerStyle.Render(line) + "\n")
+			}
+		}
 	}
 
 	panelHeight := m.cleanupPreviewInnerHeight()
-	// Header block is 4 rows; reserve 1 for scroll indicator → maxBodyLines = panelHeight - 4 - 1
-	maxBodyLines := panelHeight - 5
+	maxBodyLines := panelHeight - headerLines - 1
 	if maxBodyLines < 1 {
 		maxBodyLines = 1
 	}

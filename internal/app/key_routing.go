@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/models"
 )
 
 func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
@@ -40,33 +39,6 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.pendingUnsubscribe = false
 			m.pendingUnsubscribeAction = nil
 			m.pendingUnsubscribeDesc = ""
-		}
-		return m, nil, true
-	}
-
-	if m.unsubConfirmMode {
-		switch msg.String() {
-		case "h", "H":
-			sender := m.unsubConfirmSender
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
-			folder := m.currentFolder
-			ch := m.deletionRequestCh
-			go func() {
-				ch <- models.DeletionRequest{Sender: sender, IsDomain: false, Folder: folder}
-			}()
-			m.deleting = true
-			m.deletionsPending = 1
-			m.deletionsTotal = 1
-			return m, m.listenForDeletionResults(), true
-		case "s", "S":
-			sender := m.unsubConfirmSender
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
-			return m, createSoftUnsubscribeRuleCmd(m.backend, sender), true
-		case "esc":
-			m.unsubConfirmMode = false
-			m.unsubConfirmSender = ""
 		}
 		return m, nil, true
 	}
