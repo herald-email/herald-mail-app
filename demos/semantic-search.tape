@@ -1,4 +1,4 @@
-Output static/semantic-search.gif
+Output assets/demo/semantic-search.gif
 
 Set Theme "Catppuccin Mocha"
 Set FontSize 13
@@ -15,20 +15,18 @@ Type "?"
 Sleep 0.5s
 
 # Type a search query
-Type "kubernetes infrastructure"
+Type "infrastructure budget risk"
 Sleep 0.5s
 Enter
-Sleep 1.5s
+Sleep 1.2s
 
 # Navigate results
-Down
-Sleep 0.4s
 Down
 Sleep 0.4s
 
 # Open result
 Enter
-Sleep 1s
+Sleep 1.2s
 
 Escape
 Sleep 0.5s

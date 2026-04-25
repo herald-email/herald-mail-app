@@ -737,7 +737,7 @@ Add a local MCP server called "mail" that runs this command:
 - [x] One-paragraph "what this is" intro
 - [x] Quick-start: build → configure → run (under 5 commands)
 - [x] MCP setup section with copy-paste prompts per tool
-- [ ] Screenshot / GIF of the TUI (tapes written; GIFs not yet generated)
+- [x] Screenshot / GIF of the TUI in `assets/demo/` (canonical tapes written; GIFs generated)
 - [x] Key bindings reference table
 - [x] Link to VISION.md and ARCHITECTURE.md for deeper context
 
@@ -748,7 +748,10 @@ Add a local MCP server called "mail" that runs this command:
 Demo mode lets anyone try the full TUI without a live IMAP account. It launches with a synthetic set of emails covering all supported features — threads, attachments, classifications, HTML bodies — so every panel and key binding can be exercised immediately.
 
 - [x] `--demo` flag on the main binary starts the app with a `DemoBackend` instead of IMAP
-- [x] `DemoBackend` seeds synthetic emails covering senders, categories, attachments, and threads
+- [x] Shared demo fixtures seed fictional senders, categories, attachments, bodies, unsubscribe headers, contacts, and threads
+- [x] Deterministic demo AI powers classification, semantic search, chat, quick replies, and contact enrichment without Ollama
+- [x] `cmd/herald-mcp-server --demo` exposes the same synthetic mailbox without loading private config or cache files
+- [x] Canonical demo tapes generate 5-30 second GIFs in `assets/demo/`
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
 - [ ] Demo mode accessible from the first-run wizard ("Try without an account")
 

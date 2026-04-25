@@ -2,7 +2,7 @@
 
 **Fast terminal email for power users.** AI classification, semantic search, bulk cleanup, quick replies, and an MCP server for AI agents — all from your terminal.
 
-![Herald overview](static/overview.gif)
+![Herald overview](assets/demo/overview.gif)
 
 ---
 

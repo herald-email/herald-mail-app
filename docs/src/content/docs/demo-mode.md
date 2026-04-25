@@ -10,7 +10,7 @@ make build
 ./bin/herald --demo
 ```
 
-Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP credentials. AI features are optional and depend on your local AI configuration.
+Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP credentials. Demo AI features are deterministic and run offline, so classification, semantic search, chat, and quick replies can be exercised without Ollama.
 
 <!-- HERALD_SCREENSHOT id="demo-mode-timeline" page="demo-mode" alt="Demo mode Timeline with synthetic messages" state="demo mode, 120x40, Timeline tab active" desc="Shows the default screenshot source for documentation: synthetic folders and messages without a live mailbox." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
@@ -24,11 +24,12 @@ ttyd -W ./bin/herald --demo
 
 ## Regenerate demo GIFs
 
-Demo tapes live in `demos/*.tape`, and generated GIFs go to `static/*.gif`.
+Demo tapes live in `demos/*.tape`, and generated GIFs go to `assets/demo/*.gif`.
 
 ```sh
 brew install vhs
 make build
+make build-mcp
 for f in demos/*.tape; do vhs "$f"; done
 ```
 

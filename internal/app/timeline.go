@@ -500,6 +500,13 @@ func (m *Model) openTimelineSearch() {
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 }
 
+func (m *Model) openTimelineSemanticSearch() {
+	m.openTimelineSearch()
+	m.timeline.searchInput.SetValue("? ")
+	m.timeline.searchError = ""
+	m.timeline.searchResultsQuery = ""
+}
+
 func (m *Model) currentTimelineRowEmail() *models.EmailData {
 	cursor := m.timelineTable.Cursor()
 	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
@@ -747,11 +754,14 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 		if m.classifier != nil && !msg.ReadOnly {
-			return m, tea.Batch(
+			cmds := []tea.Cmd{
 				m.startEmbeddingBatchIfNeeded(),
 				m.startContactEnrichmentIfNeeded(),
-				m.startClassificationIfNeeded(),
-			), true
+			}
+			if !m.demoMode {
+				cmds = append(cmds, m.startClassificationIfNeeded())
+			}
+			return m, tea.Batch(cmds...), true
 		}
 		return m, nil, true
 
@@ -1049,6 +1059,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "/":
 		if !m.loading && !m.timeline.searchMode {
 			m.openTimelineSearch()
+		}
+		return m, nil, true
+	case "?":
+		if !m.loading && !m.timeline.searchMode {
+			m.openTimelineSemanticSearch()
 		}
 		return m, nil, true
 	case "enter":

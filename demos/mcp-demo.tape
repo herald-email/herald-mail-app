@@ -1,4 +1,4 @@
-Output static/mcp-demo.gif
+Output assets/demo/mcp-demo.gif
 
 Set Theme "Catppuccin Mocha"
 Set FontSize 13
@@ -7,12 +7,16 @@ Set Height 700
 Set Padding 8
 
 # Show MCP server in action (no interactive app needed)
-Type "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | ./bin/herald-mcp-server"
+Type "sh demos/mcp-demo.sh tools"
 Enter
-Sleep 2s
+Sleep 1.5s
 
-Type "echo '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"list_recent_emails\",\"arguments\":{\"folder\":\"INBOX\",\"limit\":5}}}' | ./bin/herald-mcp-server"
+Type "sh demos/mcp-demo.sh recent"
 Enter
-Sleep 2s
+Sleep 1.5s
 
-Sleep 1s
+Type "sh demos/mcp-demo.sh search"
+Enter
+Sleep 1.5s
+
+Sleep 0.5s

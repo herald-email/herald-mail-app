@@ -1,4 +1,4 @@
-Output static/ai-classify.gif
+Output assets/demo/ai-classify.gif
 
 Set Theme "Catppuccin Mocha"
 Set FontSize 13
@@ -12,7 +12,7 @@ Sleep 3s
 
 # Run AI classification
 Type "a"
-Sleep 4s
+Sleep 2s
 
 # Navigate to see tagged results
 Down
@@ -22,6 +22,7 @@ Sleep 0.3s
 Down
 Sleep 0.3s
 
+Type "3"
 Sleep 1s
 
 Type "q"

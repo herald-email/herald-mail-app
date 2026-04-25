@@ -68,6 +68,9 @@ sleep 0.3
 ### Lane A — Demo Deterministic UI
 
 Use `--demo` for repeatable layout, chrome, focus, and navigation checks.
+Demo mode must not require IMAP credentials, SMTP credentials, Ollama, or a
+private cache database. Its synthetic mailbox and AI responses should be stable
+enough that demo tapes can double as lightweight smoke tests.
 
 ### Lane B — Live IMAP UX
 
@@ -106,6 +109,7 @@ After TUI-affecting work, validate:
 
 - `tools/list`
 - one relevant read tool such as `list_recent_emails`
+- `--demo` mode starts without loading `~/.herald/conf.yaml`
 
 ### Lane F — First-run Onboarding
 
@@ -630,6 +634,71 @@ Check these states during every applicable lane:
 - MCP starts successfully.
 - Tool listing succeeds.
 - One read operation succeeds and does not regress after TUI-affecting work.
+
+### TC-45 — Demo mode AI and semantic search smoke
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start `/tmp/herald --demo`.
+2. Press `a` on Timeline and wait for classification to finish.
+3. Press `?`, type `infrastructure budget risk`, press `Enter`, and open the first result.
+4. Open quick replies from the preview with `Ctrl+Q`, then close the picker.
+
+**Expect:**
+- Classification tags appear without a real Ollama backend.
+- `?` opens semantic search directly and returns deterministic demo results.
+- Search results are meaningful for the query and can be opened.
+- Quick replies show deterministic suggestions without blocking navigation.
+
+### TC-46 — Demo fixtures cover public UI context
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start `/tmp/herald --demo`.
+2. Open Timeline preview for a newsletter, a billing/security message, and a message with an attachment.
+3. Switch to Cleanup, open sender details, and preview one message.
+4. Switch to Contacts, open one contact detail, and open a recent email inline.
+
+**Expect:**
+- Timeline shows fictional but realistic senders, subjects, folders, read/star states, and visible threads.
+- Preview bodies are specific to each sender rather than placeholder lorem ipsum.
+- At least one preview exposes attachments and at least one preview exposes unsubscribe actions.
+- Contacts are populated from the same demo story and their recent emails open inline.
+
+### TC-47 — MCP demo mode smoke
+
+**Lane:** E
+
+**Steps:**
+1. Build `cmd/herald-mcp-server`.
+2. Run `echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | /tmp/herald-mcp --demo`.
+3. Run `list_recent_emails` against `INBOX`.
+4. Run one search or sender-stat tool against the demo data.
+
+**Expect:**
+- `--demo` does not load or create user config/cache files.
+- Tool listing succeeds.
+- Read tools return fictional demo mailbox data.
+- Output is deterministic enough for VHS recording.
+
+### TC-48 — Canonical demo GIF generation
+
+**Lane:** A, E
+
+**Steps:**
+1. Build `bin/herald` and `bin/herald-mcp-server`.
+2. Run every tape in `demos/*.tape` with `vhs`.
+3. Inspect the generated GIF durations and final paths.
+
+**Expect:**
+- GIFs are written to `assets/demo/`.
+- Each GIF is between 5 and 30 seconds.
+- No GIF shows a panic, unavailable AI state, missing private config, or empty demo data.
+- The canonical scope is the five tapes under `demos/`; root `demo.tape` remains legacy.
 
 ### TC-27 — Virtual `All Mail only` inspector
 

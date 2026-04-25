@@ -1,4 +1,4 @@
-Output static/overview.gif
+Output assets/demo/overview.gif
 
 Set Theme "Catppuccin Mocha"
 Set FontSize 13
@@ -10,17 +10,9 @@ Type "./bin/herald --demo"
 Enter
 Sleep 3s
 
-# Navigate email list
-Down
-Sleep 0.4s
-Down
-Sleep 0.4s
-Down
-Sleep 0.4s
-
-# Open email preview
+# Open a high-priority email preview
 Enter
-Sleep 1s
+Sleep 1.2s
 
 # Scroll in preview
 Down
@@ -34,7 +26,7 @@ Sleep 0.5s
 
 # Switch to Cleanup tab
 Type "3"
-Sleep 1.5s
+Sleep 1s
 
 # Navigate senders
 Down
@@ -44,12 +36,12 @@ Sleep 0.4s
 
 # Switch to Contacts tab
 Type "4"
-Sleep 1.5s
+Sleep 1s
 
 Down
 Sleep 0.4s
-Down
-Sleep 0.4s
+Enter
+Sleep 0.8s
 
 # Back to Timeline
 Type "1"

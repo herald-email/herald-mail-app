@@ -339,7 +339,7 @@ Cache file: `email_cache.db` (created in working directory).
 
 ## Generating Demo GIFs
 
-Demo tapes live in `demos/*.tape`. Generated GIFs go to `static/*.gif`.
+Demo tapes live in `demos/*.tape`. Generated GIFs go to `assets/demo/*.gif`.
 
 **Prerequisites:**
 ```bash
@@ -348,18 +348,19 @@ brew install vhs
 
 **Regenerate all GIFs:**
 ```bash
-make build   # tapes launch ./bin/herald --demo
+make build   # TUI tapes launch ./bin/herald --demo
+make build-mcp   # MCP tape launches ./bin/herald-mcp-server --demo
 for f in demos/*.tape; do vhs "$f"; done
 ```
 
 **Individual tape:**
 ```bash
-vhs demos/overview.tape   # generates static/overview.gif
+vhs demos/overview.tape   # generates assets/demo/overview.gif
 ```
 
 **Notes:**
 - All tapes use `--demo` mode — no live IMAP or credentials needed
-- Output paths are set inside each `.tape` file (`Output static/xxx.gif`)
+- Output paths are set inside each `.tape` file (`Output assets/demo/xxx.gif`)
 - After changing a feature, regenerate the relevant tape to keep demos current
 - Keep tapes under 30 seconds — focused demos convert better
 - Tapes must be run from the project root (they reference `./bin/herald`)

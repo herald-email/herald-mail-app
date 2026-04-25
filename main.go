@@ -22,6 +22,7 @@ import (
 	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
 	"mail-processor/internal/daemon"
+	demodata "mail-processor/internal/demo"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
@@ -142,8 +143,8 @@ func runDemo() {
 	// Build demo backend
 	demoBackend := backend.NewDemoBackend()
 
-	// AI classifier is optional in demo mode; pass nil
-	var classifier ai.AIClient
+	// Demo mode uses a deterministic offline AI client.
+	var classifier ai.AIClient = demodata.NewAI()
 
 	// Create SMTP client (no-op without real config, but New() is safe)
 	mailer := appsmtp.New(cfg)

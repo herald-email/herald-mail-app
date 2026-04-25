@@ -1,4 +1,4 @@
-Output static/cleanup.gif
+Output assets/demo/cleanup.gif
 
 Set Theme "Catppuccin Mocha"
 Set FontSize 13
@@ -12,32 +12,35 @@ Sleep 3s
 
 # Switch to Cleanup tab
 Type "3"
-Sleep 1.5s
+Sleep 1s
 
 # Navigate senders
 Down
 Sleep 0.4s
 Down
 Sleep 0.4s
-Down
-Sleep 0.4s
 
-# Open details
+# Open sender details, then preview a message
+Enter
+Sleep 0.6s
+
+Tab
+Sleep 0.3s
+Down
+Sleep 0.3s
+
 Enter
 Sleep 1s
 
-# Navigate detail emails
 Down
-Sleep 0.3s
-Down
-Sleep 0.3s
+Sleep 0.4s
 
 Escape
 Sleep 0.5s
 
 # Toggle domain mode
 Type "d"
-Sleep 1.5s
+Sleep 1s
 
 Type "d"
 Sleep 0.5s

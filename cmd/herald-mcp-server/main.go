@@ -99,7 +99,15 @@ func daemonDelete(path string) (int, error) {
 
 func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
+	demoMode := flag.Bool("demo", false, "Serve deterministic synthetic demo data without loading config or cache")
 	flag.Parse()
+
+	if *demoMode {
+		if err := server.ServeStdio(newDemoMCPServer()); err != nil {
+			log.Fatalf("MCP demo server error: %v", err)
+		}
+		return
+	}
 
 	expanded, err := config.ExpandPath(*configPath)
 	if err != nil {

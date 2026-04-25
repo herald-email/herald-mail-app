@@ -40,6 +40,32 @@ func TestOpenTimelineSearch_CapturesOriginSnapshot(t *testing.T) {
 	}
 }
 
+func TestQuestionMarkOpensSemanticTimelineSearch(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	model, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if !handled {
+		t.Fatal("expected ? to be handled by timeline")
+	}
+	if cmd != nil {
+		t.Fatal("expected opening semantic search to be synchronous")
+	}
+	updated := model.(*Model)
+	if !updated.timeline.searchMode {
+		t.Fatal("expected search mode to open")
+	}
+	if got := updated.timeline.searchInput.Value(); got != "? " {
+		t.Fatalf("expected semantic search prefix %q, got %q", "? ", got)
+	}
+	if updated.timeline.searchFocus != timelineSearchFocusInput {
+		t.Fatalf("expected search input focus, got %d", updated.timeline.searchFocus)
+	}
+}
+
 func TestTimelineSearch_DebouncesTypingAndIgnoresStaleTokens(t *testing.T) {
 	backend := &layoutBackend{}
 	m := New(backend, nil, "", nil, false)

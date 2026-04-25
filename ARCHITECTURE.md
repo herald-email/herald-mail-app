@@ -21,13 +21,14 @@ This document describes the current system design (Phase 1) and the target archi
 │  │  - IMAP Client   (internal/imap)                         │   │
 │  │  - SQLite Cache  (internal/cache)                        │   │
 │  │  - AI Classifier (internal/ai)                           │   │
+│  │  DemoBackend    (internal/backend/demo.go + fixtures)    │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
 cmd/herald-ssh-server  → runs the same TUI over SSH (charmbracelet/wish)
                   each SSH session gets its own LocalBackend
 cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite cache directly
-                  no live IMAP; cache-only for all current tools
+                  no live IMAP; cache-only for normal tools; `--demo` serves fixtures
 ```
 
 ### Package responsibilities
@@ -36,6 +37,7 @@ cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite ca
 |---------|---------------|
 | `internal/app` | Bubble Tea model (Init/Update/View), all UI state, message types, key handling |
 | `internal/backend` | `Backend` interface + `LocalBackend` implementation wiring IMAP and cache |
+| `internal/demo` | Shared fictional demo fixtures and deterministic AI used by TUI demo mode and MCP `--demo` |
 | `internal/imap` | IMAP connect, incremental sync, body fetch, deletion, archive, search, background reconcile |
 | `internal/cache` | SQLite CRUD: emails, classifications, embeddings, saved searches, folder sync state |
 | `internal/ai` | Ollama HTTP client: `Classify()`, `Embed()`, `Chat()` |
