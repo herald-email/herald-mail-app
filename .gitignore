@@ -23,6 +23,11 @@ config.yaml
 # Go build cache
 .cache/
 
+# Node / Astro docs site
+node_modules/
+docs/dist/
+docs/.astro/
+
 # Python cache
 __pycache__/
 *.pyc
@@ -39,6 +44,7 @@ __pycache__/
 Thumbs.db
 
 # Temporary files
+tmp/
 *.tmp
 *.temp
 

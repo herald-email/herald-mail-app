@@ -1,4 +1,5 @@
 version: 2
+project_name: herald
 
 before:
   hooks:
@@ -6,9 +7,9 @@ before:
     - go mod download
 
 builds:
-  - id: mail-processor
+  - id: herald
     main: ./main.go
-    binary: mail-processor
+    binary: herald
     env:
       - CGO_ENABLED=1
     goos:
@@ -54,7 +55,7 @@ builds:
       - -trimpath
 
 archives:
-  - id: mail-processor
+  - id: herald
     format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
@@ -104,28 +105,28 @@ changelog:
 
 release:
   github:
-    owner: zoomacode
-    name: mail-processor
+    owner: herald-email
+    name: herald-mail-app
   draft: false
   prerelease: auto
   mode: append
   header: |
-    ## Mail Processor {{ .Tag }}
+    ## Herald {{ .Tag }}
 
-    Cross-platform email analysis tool for ProtonMail (and other IMAP servers).
+    Terminal email client and inbox cleanup tool with IMAP, AI-assisted triage, MCP tools, and SSH/browser-friendly app modes.
 
     ### Installation
 
     Download the appropriate binary for your platform below and extract it.
 
   footer: |
-    **Full Changelog**: https://github.com/zoomacode/mail-processor/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/herald-email/herald-mail-app/compare/{{ .PreviousTag }}...{{ .Tag }}
 
     ---
 
     ### Configuration
 
-    Create a `proton.yaml` file with your IMAP credentials:
+    Create `~/.herald/conf.yaml` with your IMAP credentials:
 
     ```yaml
     credentials:

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Herald Logo Candidates</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050706;
+      --panel: #0b100d;
+      --panel-2: #101812;
+      --line: #1d3424;
+      --text: #d8ffe4;
+      --muted: #7da88a;
+      --green: #00ff66;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(0, 255, 102, 0.025) 1px, transparent 1px),
+        radial-gradient(circle at 50% 0%, rgba(0, 255, 102, 0.12), transparent 38rem),
+        var(--bg);
+      background-size: 100% 4px, auto, auto;
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(24px, 3vw, 40px);
+      font-weight: 700;
+    }
+
+    header p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      max-width: 720px;
+    }
+
+    .scale-key {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .scale-key span {
+      border: 1px solid var(--line);
+      background: rgba(0, 255, 102, 0.045);
+      padding: 6px 8px;
+    }
+
+    .candidate {
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      background: rgba(11, 16, 13, 0.88);
+    }
+
+    .candidate-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .candidate h2 {
+      color: var(--green);
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .candidate-head p {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .sizes {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+    }
+
+    .sample {
+      min-width: 0;
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px 12px;
+      background: var(--panel);
+    }
+
+    .sample-label {
+      width: 100%;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .preview-box {
+      display: grid;
+      place-items: center;
+      inline-size: min(100%, 260px);
+      min-block-size: 112px;
+      background:
+        linear-gradient(rgba(0, 255, 102, 0.035) 1px, transparent 1px),
+        #020302;
+      background-size: 100% 4px;
+      border: 1px solid rgba(0, 255, 102, 0.16);
+      overflow: hidden;
+    }
+
+    img {
+      display: block;
+      max-width: none;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+
+    .s24 { width: 24px; height: 24px; }
+    .s48 { width: 48px; height: 48px; }
+    .s96 { width: 96px; height: 96px; }
+    .s180 { width: 180px; height: 180px; }
+    .s320 { width: 320px; height: 180px; }
+
+    .sample.hero {
+      grid-column: span 2;
+    }
+
+    .sample.hero .preview-box {
+      inline-size: min(100%, 460px);
+      min-block-size: 220px;
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      margin-top: 1px;
+      background: var(--line);
+    }
+
+    .note {
+      background: #070b08;
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .note strong {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    @media (max-width: 980px) {
+      header {
+        display: block;
+      }
+
+      .scale-key {
+        justify-content: flex-start;
+        margin-top: 16px;
+      }
+
+      .sizes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .sample.hero {
+        grid-column: span 2;
+      }
+
+      .notes {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      main {
+        width: min(100vw - 20px, 1440px);
+        padding-top: 18px;
+      }
+
+      .sizes {
+        grid-template-columns: 1fr;
+      }
+
+      .sample.hero {
+        grid-column: span 1;
+      }
+
+      .candidate-head {
+        display: block;
+      }
+
+      .candidate-head p {
+        margin-top: 6px;
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Herald Logo Candidates</h1>
+        <p>Each remaining candidate is shown at practical sizes so the mark can be judged as a tiny cue, app icon, TUI header, and larger brand asset.</p>
+      </div>
+      <div class="scale-key" aria-label="Preview sizes">
+        <span>24px favicon</span>
+        <span>48px sidebar</span>
+        <span>96px icon</span>
+        <span>180px app tile</span>
+        <span>320px header</span>
+      </div>
+    </header>
+
+    <section class="candidate">
+      <div class="candidate-head">
+        <h2>01 - Baseline General</h2>
+        <p>Fast envelope, wide composition</p>
+      </div>
+      <div class="sizes">
+        <div class="sample"><div class="preview-box"><img class="s24" src="originals/01-baseline-general.png" alt="01 at 24 pixels"></div><div class="sample-label">24px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s48" src="originals/01-baseline-general.png" alt="01 at 48 pixels"></div><div class="sample-label">48px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s96" src="originals/01-baseline-general.png" alt="01 at 96 pixels"></div><div class="sample-label">96px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s180" src="originals/01-baseline-general.png" alt="01 at 180 pixels"></div><div class="sample-label">180px square fit</div></div>
+        <div class="sample hero"><div class="preview-box"><img class="s320" src="originals/01-baseline-general.png" alt="01 at 320 pixels"></div><div class="sample-label">320px header fit</div></div>
+      </div>
+      <div class="notes">
+        <div class="note"><strong>Tiny:</strong> readable motion, but the envelope gets thin because the source is wide.</div>
+        <div class="note"><strong>Medium:</strong> strongest immediate “fast email” read.</div>
+        <div class="note"><strong>Large:</strong> cleanest README / website header candidate.</div>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="candidate-head">
+        <h2>04 - Popout Core</h2>
+        <p>Stacked envelope, dramatic depth</p>
+      </div>
+      <div class="sizes">
+        <div class="sample"><div class="preview-box"><img class="s24" src="originals/04-popout-core.png" alt="04 at 24 pixels"></div><div class="sample-label">24px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s48" src="originals/04-popout-core.png" alt="04 at 48 pixels"></div><div class="sample-label">48px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s96" src="originals/04-popout-core.png" alt="04 at 96 pixels"></div><div class="sample-label">96px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s180" src="originals/04-popout-core.png" alt="04 at 180 pixels"></div><div class="sample-label">180px square fit</div></div>
+        <div class="sample hero"><div class="preview-box"><img class="s320" src="originals/04-popout-core.png" alt="04 at 320 pixels"></div><div class="sample-label">320px header fit</div></div>
+      </div>
+      <div class="notes">
+        <div class="note"><strong>Tiny:</strong> may become more interesting as a compact glowing glyph.</div>
+        <div class="note"><strong>Medium:</strong> depth reads without the extra plane from 06.</div>
+        <div class="note"><strong>Large:</strong> the stacked-card feel becomes more obvious.</div>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="candidate-head">
+        <h2>06 - Popout Terminal Plane</h2>
+        <p>Envelope emerging from terminal space</p>
+      </div>
+      <div class="sizes">
+        <div class="sample"><div class="preview-box"><img class="s24" src="originals/06-popout-terminal-plane.png" alt="06 at 24 pixels"></div><div class="sample-label">24px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s48" src="originals/06-popout-terminal-plane.png" alt="06 at 48 pixels"></div><div class="sample-label">48px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s96" src="originals/06-popout-terminal-plane.png" alt="06 at 96 pixels"></div><div class="sample-label">96px</div></div>
+        <div class="sample"><div class="preview-box"><img class="s180" src="originals/06-popout-terminal-plane.png" alt="06 at 180 pixels"></div><div class="sample-label">180px square fit</div></div>
+        <div class="sample hero"><div class="preview-box"><img class="s320" src="originals/06-popout-terminal-plane.png" alt="06 at 320 pixels"></div><div class="sample-label">320px header fit</div></div>
+      </div>
+      <div class="notes">
+        <div class="note"><strong>Tiny:</strong> more complex; check whether it collapses into a bright block.</div>
+        <div class="note"><strong>Medium:</strong> best “Herald emerges from terminal” identity.</div>
+        <div class="note"><strong>Large:</strong> strongest standalone brand illustration.</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

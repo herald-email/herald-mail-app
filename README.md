@@ -28,7 +28,7 @@
 ## Quick Start
 
 ```bash
-# Build (Go 1.23+ required)
+# Build (Go 1.25+ required)
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
@@ -219,6 +219,8 @@ ttyd -W ./bin/herald --demo                    # Demo mode (no IMAP needed)
 ## Architecture
 
 See [VISION.md](VISION.md) for the full feature roadmap and [ARCHITECTURE.md](ARCHITECTURE.md) for the technical design.
+
+Long-form user and integration docs live in [docs/](docs/). Run them locally with `cd docs && npm run dev`.
 
 ## License
 
