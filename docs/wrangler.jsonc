@@ -3,6 +3,12 @@
 	"compatibility_flags": ["global_fetch_strictly_public", "nodejs_compat"],
 	"name": "herald-mail-app",
 	"main": "@astrojs/cloudflare/entrypoints/server",
+	"routes": [
+		{
+			"pattern": "docs.herald-mail.app",
+			"custom_domain": true
+		}
+	],
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"
