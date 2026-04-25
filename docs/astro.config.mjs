@@ -1,8 +1,11 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+import cloudflare from '@astrojs/cloudflare';
+
 export default defineConfig({
   site: 'https://docs.herald-mail.app',
+
   integrations: [
     starlight({
       title: 'Herald Docs',
@@ -53,4 +56,8 @@ export default defineConfig({
       ],
     }),
   ],
+
+  adapter: cloudflare({
+    imageService: 'compile',
+  }),
 });
