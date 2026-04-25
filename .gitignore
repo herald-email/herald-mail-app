@@ -27,6 +27,7 @@ config.yaml
 node_modules/
 docs/dist/
 docs/.astro/
+docs/.wrangler/
 
 # Python cache
 __pycache__/
