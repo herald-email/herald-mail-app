@@ -3,6 +3,8 @@ title: Getting Started
 description: Build Herald, run it for the first time, and understand the generated config.
 ---
 
+This page covers the shortest route from source checkout to a usable Herald session. For every visible screen after launch, continue with [Global UI](/using-herald/global-ui/) and the tab pages.
+
 ## Requirements
 
 - Go 1.25 or newer
@@ -29,7 +31,9 @@ make run
 
 Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, Herald opens a first-run setup wizard.
 
-The wizard can fill provider presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Stable setup paths are standard IMAP and personal Gmail IMAP with an App Password. Experimental paths are labeled in the UI.
+The wizard can fill provider presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Stable setup paths are standard IMAP and personal Gmail IMAP with an App Password. Experimental paths are labeled in the UI. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
+
+<!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
 ## Useful flags
 
@@ -73,3 +77,10 @@ ttyd -W ./bin/herald
 ```
 
 Open `http://localhost:7681`. The `-W` flag is required for keyboard input.
+
+## What to read next
+
+- [Demo Mode](/demo-mode/) if you want to explore without credentials.
+- [Provider Setup](/provider-setup/) for provider presets and authentication choices.
+- [Timeline](/using-herald/timeline/) for the default inbox workflow.
+- [All Keybindings](/reference/keybindings/) for a compact command table.

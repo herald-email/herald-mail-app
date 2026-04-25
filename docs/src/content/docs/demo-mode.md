@@ -12,6 +12,8 @@ make build
 
 Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP credentials. AI features are optional and depend on your local AI configuration.
 
+<!-- HERALD_SCREENSHOT id="demo-mode-timeline" page="demo-mode" alt="Demo mode Timeline with synthetic messages" state="demo mode, 120x40, Timeline tab active" desc="Shows the default screenshot source for documentation: synthetic folders and messages without a live mailbox." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
+
 ## Browser demo
 
 You can combine demo mode with `ttyd`:
@@ -31,6 +33,8 @@ for f in demos/*.tape; do vhs "$f"; done
 ```
 
 Run tapes from the repository root because they reference `./bin/herald`.
+
+See [Demo GIF Workflow](/advanced/demo-gifs/) for the full recording flow.
 
 ## What demo mode is not
 

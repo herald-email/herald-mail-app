@@ -1,11 +1,11 @@
 ---
 title: Herald Docs
-description: Learn how to install, configure, and integrate Herald.
+description: Complete end-user manual for Herald, the terminal email client and inbox cleanup tool.
 ---
 
-Herald is a fast terminal email client for power users. It combines a keyboard-first inbox, bulk cleanup, local AI classification, semantic search, quick replies, contacts, and an MCP server for AI tools.
+Herald is a keyboard-first terminal email client and inbox cleanup tool. It combines a chronological Timeline, Markdown Compose, bulk Cleanup, Contacts, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
 
-Use these docs when you want more detail than the project README: first-run setup, provider configuration, demo mode, MCP integration, privacy expectations, and cleanup instructions.
+This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
 
 ## Fastest path
 
@@ -16,22 +16,21 @@ make build
 ./bin/herald
 ```
 
-On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose a provider, enter credentials, decide whether to configure local AI, and save the generated config.
+On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose a provider, enter credentials or app-password details, decide whether to configure AI, and save the generated config.
+
+<!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="demo mode, 120x40, no saved config" desc="Shows the initial setup path users see before connecting a real mailbox." capture="tmux demo 120x40; remove or point away from config; launch ./bin/herald --demo" -->
 
 ## Main features
 
-- Timeline inbox with split email preview
-- Compose, reply, forward, Markdown preview, and quick replies
-- Bulk cleanup by sender or domain
-- AI classification, chat, and semantic search
-- Contact book with local enrichment
-- MCP server for AI agents and tools
-- SSH mode for running the TUI remotely
-- Demo mode for screenshots, GIFs, and testing without real mail
+- [Timeline](/using-herald/timeline/) lists mail chronologically, groups threads, opens split or full-screen previews, supports search, quick replies, attachment saves, starring, reading, reply, forward, and text copy.
+- [Compose](/using-herald/compose/) sends new mail, replies, and forwards with To/CC/BCC fields, address autocomplete, Markdown preview, attachments, drafts, and optional AI assistance.
+- [Cleanup](/using-herald/cleanup/) groups mail by sender or domain for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, and cleanup schedules.
+- [Contacts](/using-herald/contacts/) lists known senders, opens contact details, shows recent mail, previews messages inline, and supports keyword or semantic contact search.
+- [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, status bar, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
+- [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, and sync status.
+- [Advanced guides](/advanced/mcp/) cover MCP, SSH mode, daemon commands, demo GIF generation, and privacy/security expectations.
 
 ## Local docs commands
-
-This docs site is local-only for now.
 
 ```sh
 cd docs
