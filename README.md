@@ -220,6 +220,8 @@ ttyd -W ./bin/herald --demo                    # Demo mode (no IMAP needed)
 
 See [VISION.md](VISION.md) for the full feature roadmap and [ARCHITECTURE.md](ARCHITECTURE.md) for the technical design.
 
+Long-form user and integration docs live in [docs/](docs/). Run them locally with `cd docs && npm run dev`.
+
 ## License
 
 Herald is source-available under the Functional Source License, Version 1.1,
