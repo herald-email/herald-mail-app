@@ -51,7 +51,7 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 | --- | --- | --- |
 | Standard IMAP | You know your IMAP and SMTP host and port. | Most portable path. |
 | Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password. | Stable path for personal Gmail. |
-| Gmail OAuth | You have Google OAuth client credentials. | Experimental; stores refresh token data in config. |
+| Gmail OAuth | You have a release binary with OAuth defaults, exported Google OAuth env vars, or a local `make build-release-local` binary. | Experimental; stores refresh token data in config. |
 | Proton Mail Bridge | You run Proton Mail Bridge locally. | Uses Bridge host, ports, username, and password. |
 | Fastmail, iCloud, Outlook | You want preset host/port values. | Experimental presets; provider app passwords may still be required. |
 
@@ -68,6 +68,8 @@ If the wizard reappears every time, verify that Herald is reading the config pat
 If a provider preset connects to IMAP but sending fails, check the SMTP host, port, username, and app password. Some providers use different credentials for IMAP and SMTP.
 
 If OAuth stalls, confirm that the browser callback completes and that the config file can be written. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
+
+If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary. Export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching Herald, or rebuild with `make build-release-local` after filling `.herald-release.env`. Plain `make build` does not embed OAuth defaults.
 
 ## Related Pages
 

@@ -55,12 +55,16 @@ Helpful references:
 - [Gmail Help: Add Gmail to another email client](https://support.google.com/mail/answer/75726?hl=en)
 - [Gmail Help: Sign in with app passwords](https://support.google.com/mail/answer/185833?hl=en)
 
-If you want to try the experimental Gmail OAuth flow instead, set:
+If you want to try the experimental Gmail OAuth flow instead, use a release binary or provide Google OAuth client credentials for your local build. Release binaries produced by Herald's GitHub release workflow include desktop OAuth client defaults once the repository secrets are configured. Source builds do not embed those defaults unless you opt in.
+
+For a one-off local run, export the credentials before launching Herald:
 
 ```bash
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
 ```
+
+For a local binary with OAuth defaults built in, copy `.herald-release.env.example` to `.herald-release.env`, fill it in, and run `make build-release-local`. Plain `make build` intentionally does not embed `.herald-release.env`; it creates a normal development binary.
 
 ---
 

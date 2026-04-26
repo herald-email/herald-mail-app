@@ -17,11 +17,20 @@ This runbook covers the first beta release path. The first beta tag is `v0.1.0-b
 Release builds require these repository secrets:
 
 ```bash
-gh secret set HERALD_GOOGLE_CLIENT_ID --body "your-client-id.apps.googleusercontent.com"
-gh secret set HERALD_GOOGLE_CLIENT_SECRET --body "your-client-secret"
+gh auth login
+
+gh secret set HERALD_GOOGLE_CLIENT_ID \
+  --repo herald-email/herald-mail-app \
+  --body "your-client-id.apps.googleusercontent.com"
+
+gh secret set HERALD_GOOGLE_CLIENT_SECRET \
+  --repo herald-email/herald-mail-app \
+  --body "your-client-secret"
 ```
 
-The release workflow fails before building if either secret is missing. Runtime environment variables with the same names still override built-in defaults for local testing.
+You can also use the GitHub web UI: repository `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`.
+
+The release workflow fails before building if either secret is missing. Runtime environment variables with the same names still override built-in defaults for local testing. Desktop OAuth client secrets bundled into release binaries are convenience defaults, not confidential once distributed.
 
 ## Local OAuth-Enabled Builds
 
@@ -35,6 +44,22 @@ make build-release-local
 ```
 
 `.herald-release.env` is ignored by git. Do not commit real OAuth credentials.
+
+Plain `make build` does not embed OAuth defaults from `.herald-release.env`; it builds a normal development binary. If you run `make build && ./bin/herald` and choose Gmail OAuth without exported runtime credentials, Herald will fail with `Google OAuth credentials are not configured`.
+
+Use one of these local paths instead:
+
+```bash
+# Embed defaults into the local binary.
+make build-release-local
+./bin/herald -config ~/.herald/conf.yaml
+
+# Or keep a development binary and provide credentials at runtime.
+export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
+make build
+./bin/herald -config ~/.herald/conf.yaml
+```
 
 ## First Beta Tag
 

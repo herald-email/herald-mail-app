@@ -59,7 +59,7 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 ### Start OAuth
 
 1. Choose an OAuth-capable provider path.
-2. Start the OAuth flow.
+2. Confirm your binary has OAuth defaults or your shell has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported.
 3. In the OAuth wait overlay, press `enter` to open the browser.
 4. Complete provider consent.
 5. Wait for Herald to save token data and return to the app.
@@ -85,6 +85,8 @@ Settings reads and writes credentials, app passwords, OAuth tokens, server hosts
 If settings will not save, check file permissions for the config path and parent directory.
 
 If OAuth does not complete, copy the displayed URL into a browser, finish consent, and confirm the callback server is reachable.
+
+If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use a release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally with `make build-release-local`. A plain `make build` binary does not embed `.herald-release.env`.
 
 If AI stops working after model changes, verify the new model is installed or reachable and allow embedding regeneration to complete.
 
