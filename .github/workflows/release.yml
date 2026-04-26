@@ -111,13 +111,21 @@ jobs:
             dist/*.sha256
 
   release:
-    name: Publish GitHub prerelease
+    name: Publish GitHub release
     runs-on: ubuntu-latest
     needs: build-macos
     permissions:
       contents: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Classify release channel
+        id: channel
+        run: |
+          bash .github/scripts/release-channel.sh "${GITHUB_REF_NAME}" | tee -a "${GITHUB_OUTPUT}"
+
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
@@ -130,14 +138,83 @@ jobs:
           cd dist
           shasum -a 256 *.tar.gz > checksums.txt
 
-      - name: Publish prerelease
+      - name: Publish versioned release
         uses: softprops/action-gh-release@v2
         with:
           name: Herald ${{ github.ref_name }}
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.channel.outputs.prerelease }}
+          make_latest: ${{ steps.channel.outputs.make_latest }}
           draft: false
           files: |
             dist/*.tar.gz
             dist/*.sha256
             dist/checksums.txt
+
+      - name: Prepare beta-latest assets
+        if: steps.channel.outputs.update_beta_latest == 'true'
+        run: |
+          set -euo pipefail
+
+          rm -rf beta-channel
+          mkdir -p beta-channel
+
+          for arch in arm64 amd64; do
+            src="dist/herald-${GITHUB_REF_NAME}-darwin-${arch}.tar.gz"
+            dest="beta-channel/herald-beta-latest-darwin-${arch}.tar.gz"
+            cp "${src}" "${dest}"
+          done
+
+          (
+            cd beta-channel
+            shasum -a 256 herald-beta-latest-darwin-*.tar.gz > checksums-beta-latest.txt
+          )
+
+          cat > beta-channel/beta-latest.json <<EOF
+          {
+            "channel": "beta-latest",
+            "version": "${GITHUB_REF_NAME}",
+            "commit": "${GITHUB_SHA}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "artifacts": [
+              "herald-beta-latest-darwin-arm64.tar.gz",
+              "herald-beta-latest-darwin-amd64.tar.gz",
+              "checksums-beta-latest.txt",
+              "beta-latest.json"
+            ]
+          }
+          EOF
+
+      - name: Update beta-latest tag and release
+        if: steps.channel.outputs.update_beta_latest == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f beta-latest "${GITHUB_SHA}"
+          git push origin refs/tags/beta-latest --force
+
+          notes="Mutable beta channel for Herald.
+
+          This release is updated automatically from ${GITHUB_REF_NAME} (${GITHUB_SHA}).
+          For a permanent artifact, use the immutable release ${GITHUB_REF_NAME}."
+
+          if gh release view beta-latest >/dev/null 2>&1; then
+            gh release edit beta-latest \
+              --title "Herald beta-latest" \
+              --notes "${notes}" \
+              --prerelease=true \
+              --draft=false \
+              --target "${GITHUB_SHA}"
+          else
+            gh release create beta-latest \
+              --title "Herald beta-latest" \
+              --notes "${notes}" \
+              --prerelease \
+              --target "${GITHUB_SHA}"
+          fi
+
+          gh release upload beta-latest beta-channel/* --clobber
