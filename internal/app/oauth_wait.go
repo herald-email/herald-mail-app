@@ -97,7 +97,7 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEnter && !m.browserOpen {
-			if err := openBrowserFn(m.authURL); err == nil {
+			if err := openBrowserFn(m.authorizeURL()); err == nil {
 				m.browserOpen = true
 			}
 		}
@@ -158,9 +158,10 @@ func (m *OAuthWaitModel) View() string {
 		contentWidth = 30
 	}
 
-	urlLines := wrapString(m.authURL, contentWidth)
+	copyURL := m.authorizeURL()
+	urlLines := wrapString(copyURL, contentWidth)
 	linkLabel := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75")).Render("[here]")
-	authPrompt := "  Click: " + wizardHyperlink(linkLabel, m.authURL) + " or copy this link to the browser:"
+	authPrompt := "  Click: " + wizardHyperlink(linkLabel, copyURL) + " or copy this link to the browser:"
 
 	browserLine := "  Press Enter to open browser automatically"
 	if m.browserOpen {
@@ -193,6 +194,32 @@ func (m *OAuthWaitModel) View() string {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered)
 	}
 	return rendered
+}
+
+func (m *OAuthWaitModel) authorizeURL() string {
+	if localURL := localAuthorizeURLFromRedirectURI(m.redirectURI); localURL != "" {
+		return localURL
+	}
+	if parsed, err := url.Parse(m.authURL); err == nil {
+		if localURL := localAuthorizeURLFromRedirectURI(parsed.Query().Get("redirect_uri")); localURL != "" {
+			return localURL
+		}
+	}
+	return m.authURL
+}
+
+func localAuthorizeURLFromRedirectURI(redirectURI string) string {
+	if redirectURI == "" {
+		return ""
+	}
+	parsed, err := url.Parse(redirectURI)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	parsed.Path = "/authorize"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 // wrapString wraps s to fit within maxWidth characters per line.

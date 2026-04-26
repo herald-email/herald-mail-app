@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +74,62 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 	if !strings.Contains(authURL, "login_hint=test%40example.com") {
 		t.Errorf("expected login_hint in URL, got: %q", authURL)
 	}
+}
+
+func TestStartFlow_AuthorizeRedirectsToGoogleURL(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	authURL, codeCh, err := StartFlow(ctx, "test@example.com")
+	if err != nil {
+		t.Fatalf("StartFlow returned error: %v", err)
+	}
+	if codeCh == nil {
+		t.Fatal("StartFlow returned nil channel")
+	}
+
+	localAuthorizeURL := localAuthorizeURLFromAuthURLForTest(t, authURL)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get(localAuthorizeURL) //nolint:noctx
+	if err != nil {
+		t.Fatalf("HTTP GET %s failed: %v", localAuthorizeURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected /authorize to redirect with 302 Found, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Location"); got != authURL {
+		t.Fatalf("expected /authorize Location to be Google auth URL\n got: %s\nwant: %s", got, authURL)
+	}
+}
+
+func localAuthorizeURLFromAuthURLForTest(t *testing.T, authURL string) string {
+	t.Helper()
+
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("could not parse auth URL: %v", err)
+	}
+	redirectURI := parsed.Query().Get("redirect_uri")
+	if redirectURI == "" {
+		t.Fatalf("auth URL missing redirect_uri: %s", authURL)
+	}
+	redirect, err := url.Parse(redirectURI)
+	if err != nil {
+		t.Fatalf("could not parse redirect URI: %v", err)
+	}
+	redirect.Path = "/authorize"
+	redirect.RawQuery = ""
+	redirect.Fragment = ""
+	return redirect.String()
 }
 
 // TestStartFlow_CallbackStateValidation verifies the local callback server

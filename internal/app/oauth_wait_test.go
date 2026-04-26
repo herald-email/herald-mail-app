@@ -102,9 +102,10 @@ func TestOAuthWaitModel_EnterOpensBrowser(t *testing.T) {
 
 	cfg := &config.Config{}
 	codeCh := make(chan oauth.Result, 1)
+	authURL := "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A12345%2Fcallback&test=1"
 	m := &OAuthWaitModel{
 		email:       "test@gmail.com",
-		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		authURL:     authURL,
 		redirectURI: "http://localhost:12345/callback",
 		codeCh:      codeCh,
 		cfg:         cfg,
@@ -123,8 +124,8 @@ func TestOAuthWaitModel_EnterOpensBrowser(t *testing.T) {
 	if !updated.browserOpen {
 		t.Error("browserOpen should be true after pressing Enter")
 	}
-	if openedURL != m.authURL {
-		t.Errorf("openBrowserFn called with %q, want %q", openedURL, m.authURL)
+	if openedURL != "http://localhost:12345/authorize" {
+		t.Errorf("openBrowserFn called with %q, want short local authorize URL", openedURL)
 	}
 }
 
@@ -158,13 +159,13 @@ func TestOAuthWaitModel_EnterKeepsBrowserOpenFalseWhenOpenFails(t *testing.T) {
 	}
 }
 
-// TestOAuthWaitModel_ViewContainsURL verifies that View() renders the auth URL.
-func TestOAuthWaitModel_ViewContainsURL(t *testing.T) {
+// TestOAuthWaitModel_ViewContainsCopyURL verifies that View() renders a short copy URL.
+func TestOAuthWaitModel_ViewContainsCopyURL(t *testing.T) {
 	cfg := &config.Config{}
 	codeCh := make(chan oauth.Result, 1)
 	m := &OAuthWaitModel{
 		email:       "test@gmail.com",
-		authURL:     "https://accounts.google.com/o/oauth2/auth?client_id=test",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A12345%2Fcallback&client_id=test",
 		redirectURI: "http://localhost:12345/callback",
 		codeCh:      codeCh,
 		cfg:         cfg,
@@ -175,18 +176,19 @@ func TestOAuthWaitModel_ViewContainsURL(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "accounts.google.com") {
-		t.Errorf("View() should contain the auth URL, got:\n%s", view)
+	if !strings.Contains(ansi.Strip(view), "http://localhost:12345/authorize") {
+		t.Errorf("View() should contain the short copy URL, got:\n%s", view)
 	}
 	if !strings.Contains(view, "Herald Setup") {
 		t.Errorf("View() should contain the title, got:\n%s", view)
 	}
 }
 
-func TestOAuthWaitModel_ViewOffersClickableHereAndCopyableURLWithoutBox(t *testing.T) {
+func TestOAuthWaitModel_ViewOffersClickableHereAndShortCopyURLWithoutBox(t *testing.T) {
 	cfg := &config.Config{}
 	codeCh := make(chan oauth.Result, 1)
-	authURL := "https://accounts.google.com/o/oauth2/auth?client_id=test&scope=mail"
+	authURL := "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A12345%2Fcallback&client_id=test&scope=mail"
+	copyURL := "http://localhost:12345/authorize"
 	m := &OAuthWaitModel{
 		email:       "test@gmail.com",
 		authURL:     authURL,
@@ -204,11 +206,14 @@ func TestOAuthWaitModel_ViewOffersClickableHereAndCopyableURLWithoutBox(t *testi
 	if !strings.Contains(plain, "Click: [here] or copy this link to the browser:") {
 		t.Fatalf("expected clickable/copyable auth prompt, got:\n%s", plain)
 	}
-	if !strings.Contains(plain, authURL) {
-		t.Fatalf("expected raw auth URL to remain visible for copying, got:\n%s", plain)
+	if !strings.Contains(plain, copyURL) {
+		t.Fatalf("expected short local authorize URL to remain visible for copying, got:\n%s", plain)
 	}
-	if !strings.Contains(view, "\x1b]8;;"+authURL+"\x1b\\") {
-		t.Fatalf("expected [here] to be an OSC 8 hyperlink for the auth URL, got raw view:\n%q", view)
+	if strings.Contains(plain, "accounts.google.com") {
+		t.Fatalf("expected visible copy fallback to hide the long Google auth URL, got:\n%s", plain)
+	}
+	if !strings.Contains(view, "\x1b]8;;"+copyURL+"\x1b\\") {
+		t.Fatalf("expected [here] to be an OSC 8 hyperlink for the short local authorize URL, got raw view:\n%q", view)
 	}
 	for _, border := range []string{"╭", "╮", "╰", "╯"} {
 		if strings.Contains(plain, border) {

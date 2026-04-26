@@ -109,6 +109,10 @@ func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan
 	mux := http.NewServeMux()
 	server := &http.Server{Handler: mux}
 
+	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, url, http.StatusFound)
+	})
+
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("state") != state {
