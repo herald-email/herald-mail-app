@@ -22,6 +22,8 @@ If the cache is empty, open the TUI first and let Herald sync at least one folde
 
 <!-- HERALD_SCREENSHOT id="mcp-tools-list-terminal" page="mcp" alt="MCP tools list smoke test output" state="local shell, cache initialized" desc="Shows a tools/list JSON-RPC smoke test proving the Herald MCP server is discoverable." capture="terminal; go build -o bin/herald-mcp-server ./cmd/herald-mcp-server; echo tools/list JSON into ./bin/herald-mcp-server" -->
 
+![MCP tools list smoke test output](/screenshots/mcp-tools-list-terminal.png)
+
 ## Client Examples
 
 Claude Code:

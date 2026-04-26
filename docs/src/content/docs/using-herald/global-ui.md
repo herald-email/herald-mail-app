@@ -24,6 +24,8 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 
 <!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
+![Herald main layout with Timeline and sidebar](/screenshots/global-main-layout.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -101,9 +103,15 @@ If a prompt will not close, press `esc` first. If that does not apply, `q` or `c
 
 <!-- HERALD_SCREENSHOT id="global-chat-open" page="global-ui" alt="Chat panel open beside Timeline" state="demo mode, 120x40, Timeline tab, chat visible" desc="Shows the right-side chat panel, chat input, active focus, compressed Timeline width, status bar, and chat key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press c" -->
 
+![Chat panel open beside Timeline](/screenshots/global-chat-open.png)
+
 <!-- HERALD_SCREENSHOT id="global-logs-overlay" page="global-ui" alt="Log viewer overlay open" state="demo mode, 120x40, logs overlay visible" desc="Shows the real-time log viewer overlay, log levels, scrollable history area, and close hints." capture="tmux demo 120x40; ./bin/herald --demo; press l" -->
 
+![Log viewer overlay open](/screenshots/global-logs-overlay.png)
+
 <!-- HERALD_SCREENSHOT id="global-narrow-terminal" page="global-ui" alt="Narrow terminal size guard" state="demo mode, 50x15" desc="Shows the narrow terminal fallback or compressed layout used for minimum-size testing." capture="tmux demo 50x15; ./bin/herald --demo" -->
+
+![Narrow terminal size guard](/screenshots/global-narrow-terminal.png)
 
 ## Related Pages
 

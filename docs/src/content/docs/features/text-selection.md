@@ -21,6 +21,8 @@ Use text selection when you need to copy a quote, reference number, address, or 
 
 <!-- HERALD_SCREENSHOT id="text-selection-visual-mode" page="text-selection" alt="Timeline preview visual selection mode" state="demo mode, 120x40, preview open, visual mode active" desc="Shows selected body lines, scroll position, and copy-related key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press enter; press v; press j" -->
 
+![Timeline preview visual selection mode](/screenshots/text-selection-visual-mode.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -88,7 +90,11 @@ If clipboard copy fails, verify the local clipboard command for your platform is
 
 <!-- HERALD_SCREENSHOT id="text-selection-full-screen" page="text-selection" alt="Full-screen reader with visual selection" state="demo mode, 120x40, full-screen reader, visual mode" desc="Shows full-screen body text, expanded selection range, and copy controls." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press enter; press z; press v; press j; press j" -->
 
+![Full-screen reader with visual selection](/screenshots/text-selection-full-screen.png)
+
 <!-- HERALD_SCREENSHOT id="text-selection-mouse-mode" page="text-selection" alt="Timeline mouse-selection mode active" state="demo mode, 120x40, Timeline preview, mouse mode toggled" desc="Shows status/key hint state after toggling mouse-selection mode for terminal-native selection." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press enter; press m" -->
+
+![Timeline mouse-selection mode active](/screenshots/text-selection-mouse-mode.png)
 
 ## Related Pages
 

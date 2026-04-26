@@ -25,6 +25,8 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 
 <!-- HERALD_SCREENSHOT id="cleanup-main-summary" page="cleanup" alt="Cleanup tab sender summary and details" state="demo mode, 120x40, Cleanup tab, sender mode" desc="Shows sender summary rows, detail rows, selection column, sender mode status, and cleanup key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 3" -->
 
+![Cleanup tab sender summary and details](/screenshots/cleanup-main-summary.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -135,13 +137,23 @@ If automation actions do not run, reopen `W` or `C` to verify the rule is enable
 
 <!-- HERALD_SCREENSHOT id="cleanup-domain-mode" page="cleanup" alt="Cleanup domain grouping mode" state="demo mode, 120x40, Cleanup tab, domain mode" desc="Shows domain mode status, domain summary rows, detail table, and key hints after pressing d." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press d" -->
 
+![Cleanup domain grouping mode](/screenshots/cleanup-domain-mode.png)
+
 <!-- HERALD_SCREENSHOT id="cleanup-preview" page="cleanup" alt="Cleanup message preview open" state="demo mode, 120x40, Cleanup detail preview" desc="Shows cleanup preview body, hidden sidebar behavior, action hints for unsubscribe/hide/delete/archive, and scroll state." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press enter; press tab; press enter" -->
+
+![Cleanup message preview open](/screenshots/cleanup-preview.png)
 
 <!-- HERALD_SCREENSHOT id="cleanup-delete-confirmation" page="cleanup" alt="Cleanup delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows destructive confirmation text with y confirm and n or Esc cancel controls." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press space; press D" -->
 
+![Cleanup delete confirmation status bar](/screenshots/cleanup-delete-confirmation.png)
+
 <!-- HERALD_SCREENSHOT id="cleanup-rule-editor" page="cleanup" alt="Automation rule editor overlay" state="demo mode, 120x40, rule editor open" desc="Shows trigger fields, action multiselect, action detail fields, saved rules summary, and overlay framing." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press W" -->
 
+![Automation rule editor overlay](/screenshots/cleanup-rule-editor.png)
+
 <!-- HERALD_SCREENSHOT id="cleanup-manager" page="cleanup" alt="Cleanup manager overlay" state="demo mode, 120x40, cleanup manager open" desc="Shows saved cleanup rule list, empty or populated state, run all control, and edit entry points." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press C" -->
+
+![Cleanup manager overlay](/screenshots/cleanup-manager.png)
 
 ## Related Pages
 

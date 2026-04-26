@@ -27,6 +27,8 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 
 <!-- HERALD_SCREENSHOT id="compose-main-fields" page="compose" alt="Compose tab with empty message fields" state="demo mode, 120x40, Compose tab active" desc="Shows To, CC, BCC, Subject, Body, status area, and Compose key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 2" -->
 
+![Compose tab with empty message fields](/screenshots/compose-main-fields.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -124,11 +126,19 @@ If a send error occurs after attaching files, verify the file still exists and t
 
 <!-- HERALD_SCREENSHOT id="compose-markdown-preview" page="compose" alt="Compose Markdown preview mode" state="demo mode, 120x40, Compose tab, Markdown preview active" desc="Shows the rendered Markdown preview, original compose fields, and preview key state." capture="tmux demo 120x40; ./bin/herald --demo; press 2; fill body with markdown; press ctrl+p" -->
 
+![Compose Markdown preview mode](/screenshots/compose-markdown-preview.png)
+
 <!-- HERALD_SCREENSHOT id="compose-autocomplete" page="compose" alt="Compose address autocomplete dropdown" state="demo mode, 120x40, To field with contact suggestions" desc="Shows recipient suggestions, selected suggestion row, and accept/dismiss behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 2; type two or more contact characters in To" -->
+
+![Compose address autocomplete dropdown](/screenshots/compose-autocomplete.png)
 
 <!-- HERALD_SCREENSHOT id="compose-ai-assistant" page="compose" alt="Compose AI assistant panel" state="demo mode, 120x40, AI configured, assistant panel open" desc="Shows AI quick actions, custom instruction input, generated response area, and accept key hint." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 2; enter body text; press ctrl+g" -->
 
+![Compose AI assistant panel](/screenshots/compose-ai-assistant.png)
+
 <!-- HERALD_SCREENSHOT id="compose-attachment-input" page="compose" alt="Compose attachment path prompt" state="demo mode, 120x40, attachment input active" desc="Shows the file path input row opened by ctrl+a and the surrounding compose fields." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press ctrl+a" -->
+
+![Compose attachment path prompt](/screenshots/compose-attachment-input.png)
 
 ## Related Pages
 

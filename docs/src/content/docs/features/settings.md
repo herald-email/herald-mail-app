@@ -25,6 +25,8 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 
 <!-- HERALD_SCREENSHOT id="settings-main-panel" page="settings" alt="Settings panel open" state="demo mode, 120x40, settings panel active" desc="Shows settings form fields for provider, server, SMTP, AI, sync, cleanup, and save/cancel affordances." capture="tmux demo 120x40; ./bin/herald --demo; press S" -->
 
+![Settings panel open](/screenshots/settings-main-panel.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -88,9 +90,11 @@ If AI stops working after model changes, verify the new model is installed or re
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="settings-oauth-wait" page="settings" alt="OAuth wait overlay" state="live OAuth setup, 120x40, OAuth wait active" desc="Shows OAuth authorization URL, enter-to-open behavior, waiting status, and cancellation path." capture="tmux live 120x40; launch Gmail OAuth setup; start OAuth flow" -->
+<!-- HERALD_SCREENSHOT id="settings-oauth-wait" page="settings" alt="OAuth wait overlay" state="live OAuth setup, 120x40, OAuth wait active" desc="Shows OAuth authorization URL, enter-to-open behavior, waiting status, and cancellation path." capture="tmux live 120x40; launch Gmail OAuth setup; start OAuth flow" deferred="true" reason="requires live OAuth setup" -->
 
 <!-- HERALD_SCREENSHOT id="settings-ai-provider" page="settings" alt="Settings AI provider selection" state="demo mode, 120x40, settings AI section focused" desc="Shows AI provider choices and model fields used for classification, chat, quick replies, and embeddings." capture="tmux demo 120x40; ./bin/herald --demo; press S; navigate to AI provider section" -->
+
+![Settings AI provider selection](/screenshots/settings-ai-provider.png)
 
 ## Related Pages
 

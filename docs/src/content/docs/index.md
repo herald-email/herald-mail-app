@@ -18,7 +18,9 @@ make build
 
 On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose a provider, enter credentials or app-password details, decide whether to configure AI, and save the generated config.
 
-<!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="demo mode, 120x40, no saved config" desc="Shows the initial setup path users see before connecting a real mailbox." capture="tmux demo 120x40; remove or point away from config; launch ./bin/herald --demo" -->
+<!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="fresh config, 120x40" desc="Shows the initial setup path users see before connecting a real mailbox." capture="vhs docs media; rm -f /tmp/herald-docs-wizard.yaml; launch ./bin/herald -config /tmp/herald-docs-wizard.yaml" -->
+
+![Herald first-run wizard entry screen](/screenshots/overview-first-launch.png)
 
 ## Main features
 

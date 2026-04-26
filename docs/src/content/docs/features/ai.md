@@ -25,6 +25,8 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 
 <!-- HERALD_SCREENSHOT id="ai-status-chip" page="ai" alt="AI status chip in Herald status bar" state="demo mode, 120x40, AI configured" desc="Shows AI status chip in the bottom status bar alongside folder status and key hints." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 1" -->
 
+![AI status chip in Herald status bar](/screenshots/ai-status-chip.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -112,9 +114,15 @@ If Compose AI says "Write something first", add body text or open Compose from a
 
 <!-- HERALD_SCREENSHOT id="ai-classification-progress" page="ai" alt="AI classification progress in status bar" state="demo mode, 120x40, classification running" desc="Shows classification progress, AI tag status, tag column changes, and responsive UI while classification is active." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 1; press a" -->
 
+![AI classification progress in status bar](/screenshots/ai-classification-progress.png)
+
 <!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI panel with response" desc="Shows AI rewrite response, quick action controls, custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 2; write body; press ctrl+g; press 1" -->
 
+![Compose AI assistant response](/screenshots/ai-compose-assist.png)
+
 <!-- HERALD_SCREENSHOT id="ai-prompt-editor" page="ai" alt="Custom prompt editor overlay" state="demo mode, 120x40, prompt editor open" desc="Shows prompt name, output variable, system prompt, user template, saved prompt summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press P" -->
+
+![Custom prompt editor overlay](/screenshots/ai-prompt-editor.png)
 
 ## Related Pages
 

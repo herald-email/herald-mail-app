@@ -11,6 +11,8 @@ Use the wizard to choose an account type, enter credentials, configure optional 
 
 <!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the account type choices including standard IMAP, Gmail IMAP App Password, Gmail OAuth, Proton Mail Bridge, Fastmail, iCloud, and Outlook." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
 
+![First-run wizard account type selection](/screenshots/wizard-account-type.png)
+
 ## Screen Anatomy
 
 The wizard replaces the normal tabbed interface until it completes or is cancelled.

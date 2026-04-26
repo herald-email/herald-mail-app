@@ -26,6 +26,8 @@ Herald keeps a persistent IMAP connection open while the app runs. It processes 
 
 <!-- HERALD_SCREENSHOT id="sync-status-main-bar" page="sync-status" alt="Herald status bar with folder counts and sync mode" state="demo mode, 120x40, Timeline tab active" desc="Shows status message, folder breadcrumb, AI chip, folder counts, sync live/countdown state, demo flag, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
+![Herald status bar with folder counts and sync mode](/screenshots/sync-status-main-bar.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -89,7 +91,11 @@ If startup takes a long time, cached data should appear as soon as possible; ope
 
 <!-- HERALD_SCREENSHOT id="sync-top-strip" page="sync-status" alt="Top sync strip during folder refresh" state="demo mode, 120x40, refresh in progress" desc="Shows the top sync strip with a folder refresh message while cached rows remain visible." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press r" -->
 
+![Top sync strip during folder refresh](/screenshots/sync-top-strip.png)
+
 <!-- HERALD_SCREENSHOT id="sync-loading-view" page="sync-status" alt="Startup loading view" state="demo mode, 120x40, startup loading" desc="Shows loading banner, spinner, progress text, optional progress bar, elapsed time, and quit hint before visible data." capture="tmux demo 120x40; ./bin/herald --demo; capture immediately after launch" -->
+
+![Startup loading view](/screenshots/sync-loading-view.png)
 
 ## Related Pages
 

@@ -22,6 +22,8 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 
 <!-- HERALD_SCREENSHOT id="destructive-delete-confirm" page="destructive-actions" alt="Delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows confirmation description, y confirm, n or Esc cancel, selected rows, and status override." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press space; press D" -->
 
+![Delete confirmation status bar](/screenshots/destructive-delete-confirm.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -98,9 +100,15 @@ If mail reappears after delete/archive, refresh with `r` and verify provider Tra
 
 <!-- HERALD_SCREENSHOT id="destructive-archive-confirm" page="destructive-actions" alt="Archive confirmation status bar" state="demo mode, 120x40, archive confirmation active" desc="Shows archive target description, confirmation controls, and selection context." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press space; press e" -->
 
+![Archive confirmation status bar](/screenshots/destructive-archive-confirm.png)
+
 <!-- HERALD_SCREENSHOT id="destructive-unsubscribe-confirm" page="destructive-actions" alt="Unsubscribe confirmation status bar" state="demo mode, 120x40, unsubscribe confirmation active" desc="Shows sender unsubscribe confirmation from a preview that includes List-Unsubscribe data." capture="tmux demo 120x40; ./bin/herald --demo; open a message with List-Unsubscribe; press u" -->
 
+![Unsubscribe confirmation status bar](/screenshots/destructive-unsubscribe-confirm.png)
+
 <!-- HERALD_SCREENSHOT id="destructive-progress" page="destructive-actions" alt="Delete or archive progress in status bar" state="demo mode, 120x40, deletion worker active" desc="Shows serialized worker progress, completed/total count, sender label, and reconnecting state if applicable." capture="tmux demo 120x40; ./bin/herald --demo; press 3; select rows; press D; press y; capture during progress" -->
+
+![Delete or archive progress in status bar](/screenshots/destructive-progress.png)
 
 ## Related Pages
 

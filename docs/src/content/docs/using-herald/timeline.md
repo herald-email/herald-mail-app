@@ -27,6 +27,8 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 
 <!-- HERALD_SCREENSHOT id="timeline-main-list" page="timeline" alt="Timeline tab with inbox rows" state="demo mode, 120x40, sidebar visible" desc="Shows the main Timeline list, unread/star indicators, tag column, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
+![Timeline tab with inbox rows](/screenshots/timeline-main-list.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -134,11 +136,19 @@ If quick replies only show canned choices, the AI backend is unavailable or stil
 
 <!-- HERALD_SCREENSHOT id="timeline-split-preview" page="timeline" alt="Timeline split preview open" state="demo mode, 120x40, email preview open" desc="Shows selected row, preview header fields, body text, action hint line, attachment area if present, and split layout." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press enter" -->
 
+![Timeline split preview open](/screenshots/timeline-split-preview.png)
+
 <!-- HERALD_SCREENSHOT id="timeline-search-results" page="timeline" alt="Timeline search results mode" state="demo mode, 120x40, local search active" desc="Shows search input, result rows, result focus behavior, and search-related status fragments." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press /; type newsletter; press enter" -->
+
+![Timeline search results mode](/screenshots/timeline-search-results.png)
 
 <!-- HERALD_SCREENSHOT id="timeline-quick-reply-picker" page="timeline" alt="Quick reply picker on Timeline" state="demo mode, 120x40, quick reply picker visible" desc="Shows canned replies, optional AI replies, selection cursor, number shortcuts, and cancellation hint." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press ctrl+q" -->
 
+![Quick reply picker on Timeline](/screenshots/timeline-quick-reply-picker.png)
+
 <!-- HERALD_SCREENSHOT id="timeline-full-screen-reader" page="timeline" alt="Full-screen email reader" state="demo mode, 120x40, full-screen preview" desc="Shows expanded body reading mode, scrollable wrapped body, action hints, and text selection affordances." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press enter; press z" -->
+
+![Full-screen email reader](/screenshots/timeline-full-screen-reader.png)
 
 ## Related Pages
 

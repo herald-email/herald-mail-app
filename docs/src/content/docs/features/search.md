@@ -23,6 +23,8 @@ Use `/` on Timeline for mail search and `/` or `?` on Contacts for contact searc
 
 <!-- HERALD_SCREENSHOT id="search-timeline-input" page="search" alt="Timeline search input active" state="demo mode, 120x40, Timeline search input focused" desc="Shows slash search prompt, query text area, Timeline rows, status prefix, and key hints before results are opened." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press /; type invoice" -->
 
+![Timeline search input active](/screenshots/search-timeline-input.png)
+
 ## Controls
 
 | Key or prefix | Context | Preconditions | Result |
@@ -117,9 +119,15 @@ If you feel trapped in search, press `esc` repeatedly until the original Timelin
 
 <!-- HERALD_SCREENSHOT id="search-timeline-results" page="search" alt="Timeline search results focused" state="demo mode, 120x40, Timeline search results active" desc="Shows result rows, focused result behavior, status search prefix, and key hints after pressing enter." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press /; type invoice; press enter" -->
 
+![Timeline search results focused](/screenshots/search-timeline-results.png)
+
 <!-- HERALD_SCREENSHOT id="search-body-query" page="search" alt="Timeline body search query" state="demo mode, 120x40, body search prefix typed" desc="Shows /b body-search query syntax and the Timeline search input before or after body results load." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press /; type /b invoice" -->
 
+![Timeline body search query](/screenshots/search-body-query.png)
+
 <!-- HERALD_SCREENSHOT id="search-contacts-semantic" page="search" alt="Contacts semantic search active" state="demo mode, 120x40, Contacts semantic search prompt" desc="Shows the question-mark semantic contact search prompt and filtered contacts state." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press ?; type investors" -->
+
+![Contacts semantic search active](/screenshots/search-contacts-semantic.png)
 
 ## Related Pages
 

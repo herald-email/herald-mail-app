@@ -31,7 +31,7 @@ Use the daemon backend instead of opening IMAP per SSH session:
 ./bin/herald-ssh-server -config ~/.herald/conf.yaml -daemon http://127.0.0.1:7272
 ```
 
-<!-- HERALD_SCREENSHOT id="ssh-mode-session" page="ssh-mode" alt="Herald TUI inside SSH session" state="local SSH, 120x40 client terminal" desc="Shows the full Herald TUI rendered through an SSH client with normal tab bar, panels, status bar, and key hints." capture="terminal; build ssh server; run ./bin/herald-ssh-server; connect with ssh -p 2222 localhost" -->
+<!-- HERALD_SCREENSHOT id="ssh-mode-session" page="ssh-mode" alt="Herald TUI inside SSH session" state="local SSH, 120x40 client terminal" desc="Shows the full Herald TUI rendered through an SSH client with normal tab bar, panels, status bar, and key hints." capture="terminal; build ssh server; run ./bin/herald-ssh-server; connect with ssh -p 2222 localhost" deferred="true" reason="requires local SSH server session" -->
 
 ## User-Facing Behavior
 

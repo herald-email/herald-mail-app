@@ -22,6 +22,8 @@ Use Timeline preview attachment controls when receiving files. Use Compose `ctrl
 
 <!-- HERALD_SCREENSHOT id="attachments-timeline-list" page="attachments" alt="Timeline attachment indicator column" state="demo mode, 120x40, Timeline tab with attachment rows" desc="Shows the Att column in Timeline and messages that can expose attachments in preview." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
+![Timeline attachment indicator column](/screenshots/attachments-timeline-list.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -85,7 +87,11 @@ If sending fails with attachments, reduce file size or verify SMTP provider limi
 
 <!-- HERALD_SCREENSHOT id="attachments-save-prompt" page="attachments" alt="Attachment save prompt in Timeline preview" state="demo mode, 120x40, attachment save prompt active" desc="Shows selected attachment, default Downloads destination, editable save path, and cancel behavior." capture="tmux demo 120x40; ./bin/herald --demo; open a message with attachment; press s" -->
 
+![Attachment save prompt in Timeline preview](/screenshots/attachments-save-prompt.png)
+
 <!-- HERALD_SCREENSHOT id="attachments-compose-added" page="attachments" alt="Compose with outgoing attachment added" state="demo mode, 120x40, Compose draft with attachment" desc="Shows attachment line in Compose after adding a local file and the send/preview key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press ctrl+a; enter a fixture path; press enter" -->
+
+![Compose with outgoing attachment added](/screenshots/attachments-compose-added.png)
 
 ## Related Pages
 

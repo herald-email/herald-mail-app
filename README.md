@@ -23,6 +23,8 @@
 | SSH server — run the full TUI over SSH | ✅ |
 | IMAP IDLE push sync — new mail appears instantly | ✅ |
 
+![Herald semantic search demo](assets/demo/semantic-search.gif)
+
 ---
 
 ## Quick Start
@@ -89,6 +91,8 @@ Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `
 ## MCP Setup
 
 Herald ships a standalone MCP server binary (`cmd/herald-mcp-server`) that exposes your email to AI tools over stdio.
+
+![Herald MCP server demo](assets/demo/mcp-demo.gif)
 
 ```bash
 go build -o bin/herald-mcp-server ./cmd/herald-mcp-server

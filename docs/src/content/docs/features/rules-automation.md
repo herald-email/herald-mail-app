@@ -24,6 +24,8 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 
 <!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Cleanup tab, W overlay open" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press W" -->
 
+![Automation rule editor form](/screenshots/automation-rule-editor.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -113,9 +115,15 @@ If experimenting with delete rules, use dry-run mode when available and verify t
 
 <!-- HERALD_SCREENSHOT id="automation-prompt-editor" page="rules-automation" alt="Custom prompt editor form" state="demo mode, 120x40, prompt editor open" desc="Shows prompt identity fields, system prompt, user template, template-variable descriptions, and saved prompt summary." capture="tmux demo 120x40; ./bin/herald --demo; press P" -->
 
+![Custom prompt editor form](/screenshots/automation-prompt-editor.png)
+
 <!-- HERALD_SCREENSHOT id="automation-cleanup-manager-list" page="rules-automation" alt="Cleanup manager rule list" state="demo mode, 120x40, Cleanup manager list" desc="Shows saved cleanup rule rows or empty state, n/enter/d/r/esc controls, and last run details when present." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press C" -->
 
+![Cleanup manager rule list](/screenshots/automation-cleanup-manager-list.png)
+
 <!-- HERALD_SCREENSHOT id="automation-cleanup-manager-edit" page="rules-automation" alt="Cleanup manager edit form" state="demo mode, 120x40, new cleanup rule form" desc="Shows cleanup rule name, match type, match value, action, older-than days, enabled field, and cancel hint." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press C; press n" -->
+
+![Cleanup manager edit form](/screenshots/automation-cleanup-manager-edit.png)
 
 ## Related Pages
 

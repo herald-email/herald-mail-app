@@ -22,7 +22,7 @@ The Herald daemon is a local HTTP server that owns a backend connection, cache a
 | `stop` | Sends SIGTERM to the pidfile process and waits for pidfile removal. |
 | `sync` | Calls `/v1/sync` for `INBOX` by default or a folder argument when provided. |
 
-<!-- HERALD_SCREENSHOT id="daemon-status-output" page="daemon" alt="Herald daemon status output" state="local shell, daemon running" desc="Shows status command output with pid, uptime, version, or HTTP reachability details." capture="terminal; ./bin/herald serve in one terminal; ./bin/herald status in another" -->
+<!-- HERALD_SCREENSHOT id="daemon-status-output" page="daemon" alt="Herald daemon status output" state="local shell, daemon running" desc="Shows status command output with pid, uptime, version, or HTTP reachability details." capture="terminal; ./bin/herald serve in one terminal; ./bin/herald status in another" deferred="true" reason="requires live daemon process" -->
 
 ## HTTP Surface
 

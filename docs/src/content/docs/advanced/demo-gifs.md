@@ -8,19 +8,20 @@ Demo GIFs are recorded from synthetic data so documentation and project media ca
 ## Prerequisites
 
 ```sh
-brew install vhs
-make build
+brew install vhs ffmpeg
 ```
 
 ## Regenerate All GIFs
 
 ```sh
-for f in demos/*.tape; do vhs "$f"; done
+make docs-media
 ```
 
-Demo tapes live in `demos/*.tape`. Output GIFs are written to `static/*.gif` according to each tape's `Output` line. Run tapes from the repository root because they reference `./bin/herald`.
+Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`.
 
-<!-- HERALD_SCREENSHOT id="demo-gif-vhs-run" page="demo-gifs" alt="VHS demo tape generation command" state="local shell, demo tapes present" desc="Shows the command used to regenerate all Herald demo GIFs from demos/*.tape into static/*.gif." capture="terminal; make build; for f in demos/*.tape; do vhs $f; done" -->
+<!-- HERALD_SCREENSHOT id="demo-gif-vhs-run" page="demo-gifs" alt="VHS demo tape generation command" state="local shell, demo tapes present" desc="Shows the command used to regenerate all Herald demo GIFs and screenshots." capture="terminal; make docs-media" -->
+
+![VHS demo tape generation command](/screenshots/demo-gif-vhs-run.png)
 
 ## Recording Guidance
 

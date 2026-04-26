@@ -22,6 +22,8 @@ Press `c` from the main UI to open chat. Chat is available when Herald is not lo
 
 <!-- HERALD_SCREENSHOT id="chat-panel-open" page="chat" alt="Herald chat panel open" state="demo mode, 120x40, chat panel focused" desc="Shows chat history area, input line, active focus, and compressed main Timeline view." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 1; press c" -->
 
+![Herald chat panel open](/screenshots/chat-panel-open.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -76,7 +78,11 @@ If a filter hides too much, press `esc` in Timeline to clear the filter.
 
 <!-- HERALD_SCREENSHOT id="chat-waiting-response" page="chat" alt="Chat panel waiting for assistant response" state="demo mode, 120x40, chat request in flight" desc="Shows chat waiting state, submitted user question, and status while AI is responding." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press c; type summarize recent unread; press enter" -->
 
+![Chat panel waiting for assistant response](/screenshots/chat-waiting-response.png)
+
 <!-- HERALD_SCREENSHOT id="chat-filtered-timeline" page="chat" alt="Timeline filtered by chat result" state="demo mode, 120x40, chat filter active" desc="Shows Timeline rows narrowed by a chat filter and the status hint used to clear it." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; ask chat for a filter-producing query" -->
+
+![Timeline filtered by chat result](/screenshots/chat-filtered-timeline.png)
 
 ## Related Pages
 

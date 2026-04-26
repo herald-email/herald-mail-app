@@ -23,6 +23,8 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 
 <!-- HERALD_SCREENSHOT id="contacts-main-list" page="contacts" alt="Contacts tab list and detail panels" state="demo mode, 120x40, Contacts tab active" desc="Shows contact list columns, empty or selected detail panel, contact count, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 4" -->
 
+![Contacts tab list and detail panels](/screenshots/contacts-main-list.png)
+
 ## Controls
 
 | Key | Context | Preconditions | Result |
@@ -103,9 +105,15 @@ If inline preview seems stale, close with `esc`, move to the message again, and 
 
 <!-- HERALD_SCREENSHOT id="contacts-detail" page="contacts" alt="Contact detail with recent emails" state="demo mode, 120x40, contact detail open" desc="Shows selected contact metadata, recent emails, detail focus behavior, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press enter" -->
 
+![Contact detail with recent emails](/screenshots/contacts-detail.png)
+
 <!-- HERALD_SCREENSHOT id="contacts-keyword-search" page="contacts" alt="Contacts keyword search mode" state="demo mode, 120x40, keyword search active" desc="Shows slash search prompt, filtered contact list, search text in hints, and clear behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press /; type demo" -->
 
+![Contacts keyword search mode](/screenshots/contacts-keyword-search.png)
+
 <!-- HERALD_SCREENSHOT id="contacts-inline-preview" page="contacts" alt="Contact recent email inline preview" state="demo mode, 120x40, contact detail email preview" desc="Shows recent email preview loading or body text inside the detail panel and Esc return behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press enter; press tab; press enter" -->
+
+![Contact recent email inline preview](/screenshots/contacts-inline-preview.png)
 
 ## Related Pages
 

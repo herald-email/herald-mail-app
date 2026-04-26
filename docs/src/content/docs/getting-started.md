@@ -35,6 +35,8 @@ The wizard can fill provider presets for common accounts, including Gmail, Proto
 
 <!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
+![Herald main interface after initial sync](/screenshots/getting-started-main-tui.png)
+
 ## Useful flags
 
 ```sh
