@@ -143,17 +143,24 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m *OAuthWaitModel) View() string {
-	boxWidth := 60
-	if m.width > 0 && m.width-4 < boxWidth {
-		boxWidth = m.width - 4
+	if m.width > 0 && m.width < minTermWidth {
+		return renderMinSizeMessage(m.width, m.height)
 	}
-	if boxWidth < 30 {
-		boxWidth = 30
+	if m.height > 0 && m.height < minTermHeight {
+		return renderMinSizeMessage(m.width, m.height)
 	}
 
-	// Wrap the URL so it fits inside the box.
-	innerWidth := boxWidth - 4 // account for border + padding
-	urlLines := wrapString(m.authURL, innerWidth)
+	contentWidth := 88
+	if m.width > 0 && m.width-8 < contentWidth {
+		contentWidth = m.width - 8
+	}
+	if contentWidth < 30 {
+		contentWidth = 30
+	}
+
+	urlLines := wrapString(m.authURL, contentWidth)
+	linkLabel := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75")).Render("[here]")
+	authPrompt := "  Click: " + wizardHyperlink(linkLabel, m.authURL) + " or copy this link to the browser:"
 
 	browserLine := "  Press Enter to open browser automatically"
 	if m.browserOpen {
@@ -162,22 +169,15 @@ func (m *OAuthWaitModel) View() string {
 
 	content := strings.Join([]string{
 		"",
-		"  Open this URL in your browser to authorize Herald:",
+		authPrompt,
 		"",
 		urlLines,
 		"",
 		"  " + m.spinner.View() + " Waiting for authorization…",
 		"",
 		browserLine,
-		"  (URL shown above if you prefer to paste manually)",
 		"",
 	}, "\n")
-
-	box := lipgloss.NewStyle().
-		Width(boxWidth).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(0, 1)
 
 	title := lipgloss.NewStyle().
 		Bold(true).
@@ -186,7 +186,7 @@ func (m *OAuthWaitModel) View() string {
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left,
 		title,
-		box.Render(content),
+		content,
 	)
 
 	if m.width > 0 && m.height > 0 {

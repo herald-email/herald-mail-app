@@ -944,7 +944,7 @@ Check these states during every applicable lane:
 - Gmail IMAP is described as the stable personal-Gmail path, with a note that Workspace may require OAuth.
 - Advanced server fields are hidden until explicitly requested.
 - Gmail OAuth is clearly marked experimental before the browser-auth step.
-- The OAuth wait screen remains centered and framed.
+- The OAuth wait screen remains centered and shows an unboxed browser-auth prompt: `Click: [here] or copy this link to the browser:`, where `[here]` is an OSC 8 terminal hyperlink and the raw URL remains visible for copying.
 
 ### TC-42 — Missing, empty, and malformed config startup behavior
 

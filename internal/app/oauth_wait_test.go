@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/config"
 	"mail-processor/internal/oauth"
 )
@@ -179,6 +180,64 @@ func TestOAuthWaitModel_ViewContainsURL(t *testing.T) {
 	}
 	if !strings.Contains(view, "Herald Setup") {
 		t.Errorf("View() should contain the title, got:\n%s", view)
+	}
+}
+
+func TestOAuthWaitModel_ViewOffersClickableHereAndCopyableURLWithoutBox(t *testing.T) {
+	cfg := &config.Config{}
+	codeCh := make(chan oauth.Result, 1)
+	authURL := "https://accounts.google.com/o/oauth2/auth?client_id=test&scope=mail"
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     authURL,
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      codeCh,
+		cfg:         cfg,
+		configPath:  "/tmp/test-herald-conf.yaml",
+		width:       120,
+		height:      32,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	view := m.View()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, "Click: [here] or copy this link to the browser:") {
+		t.Fatalf("expected clickable/copyable auth prompt, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, authURL) {
+		t.Fatalf("expected raw auth URL to remain visible for copying, got:\n%s", plain)
+	}
+	if !strings.Contains(view, "\x1b]8;;"+authURL+"\x1b\\") {
+		t.Fatalf("expected [here] to be an OSC 8 hyperlink for the auth URL, got raw view:\n%q", view)
+	}
+	for _, border := range []string{"╭", "╮", "╰", "╯"} {
+		if strings.Contains(plain, border) {
+			t.Fatalf("expected OAuth wait prompt to avoid boxed link chrome, found %q in:\n%s", border, plain)
+		}
+	}
+}
+
+func TestOAuthWaitModel_ViewUsesMinimumSizeGuardWhenTooNarrow(t *testing.T) {
+	cfg := &config.Config{}
+	codeCh := make(chan oauth.Result, 1)
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?client_id=test",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      codeCh,
+		cfg:         cfg,
+		configPath:  "/tmp/test-herald-conf.yaml",
+		width:       50,
+		height:      15,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, "Terminal too narrow") {
+		t.Fatalf("expected OAuth wait view to use minimum-size guard, got:\n%s", plain)
+	}
+	if strings.Contains(plain, "accounts.google.com") {
+		t.Fatalf("expected minimum-size guard to replace the clipped auth prompt, got:\n%s", plain)
 	}
 }
 
