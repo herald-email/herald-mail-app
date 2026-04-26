@@ -25,6 +25,7 @@ import (
 	"mail-processor/internal/config"
 	"mail-processor/internal/models"
 	rulesengine "mail-processor/internal/rules"
+	buildversion "mail-processor/internal/version"
 )
 
 // daemonURL is the base URL of the running herald daemon.
@@ -100,7 +101,13 @@ func daemonDelete(path string) (int, error) {
 func main() {
 	configPath := flag.String("config", "~/.herald/conf.yaml", "Path to configuration file")
 	demoMode := flag.Bool("demo", false, "Serve deterministic synthetic demo data without loading config or cache")
+	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(buildversion.String("herald-mcp-server"))
+		return
+	}
 
 	if *demoMode {
 		if err := server.ServeStdio(newDemoMCPServer()); err != nil {
@@ -142,7 +149,7 @@ func main() {
 
 	s := server.NewMCPServer(
 		"herald",
-		"1.0.0",
+		buildversion.Version,
 		server.WithToolCapabilities(false),
 	)
 

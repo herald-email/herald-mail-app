@@ -45,6 +45,9 @@ func TestRefreshIfNeeded_EmptyRefreshToken(t *testing.T) {
 // TestStartFlow_ReturnsGoogleURL verifies that StartFlow starts an HTTP server
 // and returns a valid Google OAuth2 authorization URL.
 func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -75,6 +78,9 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 // TestStartFlow_CallbackStateValidation verifies the local callback server
 // rejects requests with an invalid state parameter and sends an error on the channel.
 func TestStartFlow_CallbackStateValidation(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

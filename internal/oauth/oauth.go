@@ -25,25 +25,26 @@ var Scopes = []string{
 }
 
 // clientID and clientSecret are the OAuth2 application credentials.
-// Set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET at build time
-// or via environment variables. The placeholder values below are not functional.
-const (
-	placeholderClientID     = "SET_HERALD_GOOGLE_CLIENT_ID"
-	placeholderClientSecret = "SET_HERALD_GOOGLE_CLIENT_SECRET"
+// Release builds set defaultClientID and defaultClientSecret with -ldflags -X.
+// Runtime environment variables still take precedence for local testing.
+var (
+	defaultClientID     = ""
+	defaultClientSecret = ""
 )
 
-func clientID() string {
-	if v := os.Getenv("HERALD_GOOGLE_CLIENT_ID"); v != "" {
-		return v
+func credentials() (string, string, error) {
+	id := os.Getenv("HERALD_GOOGLE_CLIENT_ID")
+	if id == "" {
+		id = defaultClientID
 	}
-	return placeholderClientID
-}
-
-func clientSecret() string {
-	if v := os.Getenv("HERALD_GOOGLE_CLIENT_SECRET"); v != "" {
-		return v
+	secret := os.Getenv("HERALD_GOOGLE_CLIENT_SECRET")
+	if secret == "" {
+		secret = defaultClientSecret
 	}
-	return placeholderClientSecret
+	if id == "" || secret == "" {
+		return "", "", fmt.Errorf("Google OAuth credentials are not configured; set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET or build with OAuth defaults")
+	}
+	return id, secret, nil
 }
 
 // NewGmailConfig returns an OAuth2 config for Gmail using the provided
@@ -71,6 +72,11 @@ type Result struct {
 // receive the authorization code when the user completes the flow.
 // The server shuts down automatically after receiving one code or when ctx is cancelled.
 func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan Result, err error) {
+	clientID, clientSecret, err := credentials()
+	if err != nil {
+		return "", nil, err
+	}
+
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to start local HTTP server: %w", err)
@@ -79,7 +85,7 @@ func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan
 	port := listener.Addr().(*net.TCPAddr).Port
 	redirectURI := fmt.Sprintf("http://localhost:%d/callback", port)
 
-	cfg := NewGmailConfig(clientID(), clientSecret(), redirectURI)
+	cfg := NewGmailConfig(clientID, clientSecret, redirectURI)
 
 	// Generate a random state parameter for CSRF protection.
 	stateBytes := make([]byte, 16)
@@ -153,7 +159,11 @@ func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan
 
 // ExchangeCode exchanges an authorization code for OAuth2 tokens.
 func ExchangeCode(ctx context.Context, code, redirectURI string) (*oauth2.Token, error) {
-	cfg := NewGmailConfig(clientID(), clientSecret(), redirectURI)
+	clientID, clientSecret, err := credentials()
+	if err != nil {
+		return nil, err
+	}
+	cfg := NewGmailConfig(clientID, clientSecret, redirectURI)
 	token, err := cfg.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
@@ -184,7 +194,11 @@ func RefreshIfNeeded(ctx context.Context, cfg *config.Config) (string, error) {
 		return cfg.Gmail.AccessToken, nil
 	}
 
-	oauthCfg := NewGmailConfig(clientID(), clientSecret(), "")
+	clientID, clientSecret, err := credentials()
+	if err != nil {
+		return "", err
+	}
+	oauthCfg := NewGmailConfig(clientID, clientSecret, "")
 	existing := &oauth2.Token{
 		RefreshToken: cfg.Gmail.RefreshToken,
 		// Set Expiry to the zero value to force the token source to refresh.

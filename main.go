@@ -26,6 +26,7 @@ import (
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
+	buildversion "mail-processor/internal/version"
 )
 
 // wizardState tracks which sub-model is active during the first-run wizard.
@@ -409,7 +410,13 @@ func runTUI() {
 	const defaultConfig = "~/.herald/conf.yaml"
 	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
+	var showVersion = flag.Bool("version", false, "Show version information")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(buildversion.String("herald"))
+		return
+	}
 
 	// Demo mode: skip all real IMAP setup
 	if *demo {

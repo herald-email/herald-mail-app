@@ -15,6 +15,9 @@ import (
 // TestNewOAuthWaitModel_ReturnsValidModel verifies that NewOAuthWaitModel returns a
 // non-nil model and that the authURL is a valid Google authorization URL.
 func TestNewOAuthWaitModel_ReturnsValidModel(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+
 	cfg := &config.Config{}
 	cfg.Gmail.Email = "test@gmail.com"
 

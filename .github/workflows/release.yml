@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25.x"
+
+jobs:
+  test:
+    name: Test and vet (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+  build-macos:
+    name: Build macOS release (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: amd64
+            runner: macos-15-intel
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build, smoke, and package binaries
+        env:
+          CGO_ENABLED: "1"
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          HERALD_GOOGLE_CLIENT_ID: ${{ secrets.HERALD_GOOGLE_CLIENT_ID }}
+          HERALD_GOOGLE_CLIENT_SECRET: ${{ secrets.HERALD_GOOGLE_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HERALD_GOOGLE_CLIENT_ID}" ] || [ -z "${HERALD_GOOGLE_CLIENT_SECRET}" ]; then
+            echo "::error::Missing HERALD_GOOGLE_CLIENT_ID or HERALD_GOOGLE_CLIENT_SECRET repository secret"
+            exit 1
+          fi
+
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          artifact="herald-${GITHUB_REF_NAME}-darwin-${GOARCH}"
+          out_dir="dist/${artifact}"
+          mkdir -p "${out_dir}"
+
+          ldflags="-s -w"
+          ldflags="${ldflags} -X mail-processor/internal/version.Version=${GITHUB_REF_NAME}"
+          ldflags="${ldflags} -X mail-processor/internal/version.Commit=${GITHUB_SHA}"
+          ldflags="${ldflags} -X mail-processor/internal/version.Date=${build_date}"
+          ldflags="${ldflags} -X mail-processor/internal/oauth.defaultClientID=${HERALD_GOOGLE_CLIENT_ID}"
+          ldflags="${ldflags} -X mail-processor/internal/oauth.defaultClientSecret=${HERALD_GOOGLE_CLIENT_SECRET}"
+
+          go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald" ./main.go
+          go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald-mcp-server" ./cmd/herald-mcp-server
+          go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald-ssh-server" ./cmd/herald-ssh-server
+
+          "${out_dir}/herald" --version
+          "${out_dir}/herald-mcp-server" --version
+          "${out_dir}/herald-ssh-server" --version
+          "${out_dir}/herald" --help >/tmp/herald-help.txt
+          "${out_dir}/herald-mcp-server" --help >/tmp/herald-mcp-help.txt
+          "${out_dir}/herald-ssh-server" --help >/tmp/herald-ssh-help.txt
+          printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | "${out_dir}/herald-mcp-server" --demo >/tmp/herald-mcp-tools.json
+          grep -q '"tools"' /tmp/herald-mcp-tools.json
+
+          tar -czf "dist/${artifact}.tar.gz" -C dist "${artifact}"
+          shasum -a 256 "dist/${artifact}.tar.gz" | tee "dist/${artifact}.sha256"
+
+      - name: Upload macOS release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: herald-darwin-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  release:
+    name: Publish GitHub prerelease
+    runs-on: ubuntu-latest
+    needs: build-macos
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: herald-darwin-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create combined checksum file
+        run: |
+          cd dist
+          shasum -a 256 *.tar.gz > checksums.txt
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Herald ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          draft: false
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+            dist/checksums.txt

@@ -18,6 +18,7 @@ email_cache.db*
 proton.yaml
 config.yaml
 *.yaml
+.herald-release.env
 .ssh
 
 # Go build cache

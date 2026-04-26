@@ -25,6 +25,7 @@ import (
 	"mail-processor/internal/config"
 	"mail-processor/internal/logger"
 	appsmtp "mail-processor/internal/smtp"
+	buildversion "mail-processor/internal/version"
 )
 
 func main() {
@@ -32,7 +33,13 @@ func main() {
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := flag.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
+	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(buildversion.String("herald-ssh-server"))
+		return
+	}
 
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to init logger: %v", err)
