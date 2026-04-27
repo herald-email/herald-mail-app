@@ -31,6 +31,12 @@
 
 ## Quick Start
 
+### Prerequisites
+
+- An IMAP account and SMTP settings, unless you run demo mode.
+- Recommended: a terminal with OSC 8 hyperlink support for Herald's hardened clickable link rendering. Popular supported terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/).
+- For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.
+
 ### macOS via Homebrew
 
 ```bash
