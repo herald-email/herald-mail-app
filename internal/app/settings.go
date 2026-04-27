@@ -158,11 +158,11 @@ func (s *Settings) buildForm() {
 	accountGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Account Type").
-			Description("Supported: Standard IMAP and Gmail (IMAP + App Password). Experimental: Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook.").
+			Description("Recommended: Gmail OAuth. Supported: Standard IMAP and Gmail App Password. Experimental: ProtonMail Bridge, Fastmail, iCloud, Outlook.").
 			Options(
 				huh.NewOption("Standard IMAP", "imap"),
+				huh.NewOption("Gmail OAuth", "gmail-oauth"),
 				huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
-				huh.NewOption("Gmail OAuth (Experimental)", "gmail-oauth"),
 				huh.NewOption("ProtonMail Bridge (Experimental)", "protonmail"),
 				huh.NewOption("Fastmail (Experimental)", "fastmail"),
 				huh.NewOption("iCloud (Experimental)", "icloud"),
@@ -220,11 +220,11 @@ func (s *Settings) buildForm() {
 			}),
 	).WithHideFunc(func() bool { return s.provider == "gmail" || s.provider == "gmail-oauth" })
 
-	// Group 2b — Stable Gmail IMAP guidance and credentials
+	// Group 2b — Gmail IMAP fallback guidance and credentials
 	gmailGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Personal Gmail via IMAP").
-			Description("Stable path. Use your Gmail address and a Google App Password. Google Workspace accounts may still require OAuth."),
+			Description("Supported fallback. Use your Gmail address and a Google App Password when OAuth is unavailable. Google Workspace accounts may still require OAuth."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
 		huh.NewConfirm().
@@ -259,11 +259,11 @@ func (s *Settings) buildForm() {
 			}),
 	).WithHideFunc(func() bool { return s.provider != "gmail" || !s.editGmailAdvanced })
 
-	// Group 2c — Experimental Gmail OAuth notice
+	// Group 2c — Gmail OAuth notice
 	gmailOAuthGroup := huh.NewGroup(
 		huh.NewNote().
-			Title("Experimental Gmail OAuth").
-			Description("Use this only when Gmail IMAP with an App Password is not viable. Set the Google OAuth client ID and secret env vars shown above before you continue."),
+			Title("Gmail OAuth").
+			Description("Recommended for Gmail when using Homebrew or release binaries. Source builds need Google OAuth env vars or make build-release-local."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
 	).WithHideFunc(func() bool { return s.provider != "gmail-oauth" })
 
@@ -714,7 +714,7 @@ func (s *Settings) wizardSummaryLines() []string {
 	switch s.provider {
 	case "gmail":
 		return []string{
-			wizardSummaryLine("Stable:", "personal Gmail via IMAP + App Password."),
+			wizardSummaryLine("Fallback:", "personal Gmail via IMAP + App Password."),
 			wizardSummaryLine("Defaults:", "imap.gmail.com:993 and smtp.gmail.com:587."),
 			wizardSummaryLine("Workspace:", "some accounts may still require OAuth."),
 			wizardSummaryDoc("App passwords", "https://myaccount.google.com/apppasswords"),
@@ -723,9 +723,9 @@ func (s *Settings) wizardSummaryLines() []string {
 		}
 	case "gmail-oauth":
 		return []string{
-			wizardSummaryLine("Experimental:", "Gmail OAuth in a browser."),
-			wizardSummaryLine("Use this only when:", "Gmail IMAP with an App Password is not viable or your Workspace account requires OAuth."),
-			wizardSummaryLine("Requires:", "HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
+			wizardSummaryLine("Recommended:", "Gmail OAuth in a browser."),
+			wizardSummaryLine("Best with:", "Homebrew or release binaries, which include OAuth defaults."),
+			wizardSummaryLine("Source builds:", "set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
 		}
 	case "protonmail":
 		return []string{
@@ -739,8 +739,9 @@ func (s *Settings) wizardSummaryLines() []string {
 		}
 	default:
 		return []string{
+			wizardSummaryLine("Recommended:", "Gmail OAuth for Homebrew/release binaries."),
 			wizardSummaryLine("Supported:", "Standard IMAP and Gmail (IMAP + App Password)."),
-			wizardSummaryLine("Experimental:", "Gmail OAuth, ProtonMail Bridge, Fastmail, iCloud, Outlook."),
+			wizardSummaryLine("Experimental:", "ProtonMail Bridge, Fastmail, iCloud, Outlook."),
 		}
 	}
 }

@@ -3,7 +3,21 @@ title: Uninstall
 description: Remove Herald binaries, config, cache files, and logs.
 ---
 
-Herald does not install a background service unless you explicitly run or configure one. For a local checkout, uninstalling usually means deleting build outputs and local data.
+Herald does not install a background service unless you explicitly run or configure one. Homebrew installs the release binaries on macOS; source checkouts create local build outputs.
+
+## Remove Homebrew install
+
+```sh
+brew uninstall herald
+```
+
+For a full tap reset before reinstalling:
+
+```sh
+brew untap herald-email/herald
+brew tap herald-email/herald
+brew install herald
+```
 
 ## Remove build outputs
 

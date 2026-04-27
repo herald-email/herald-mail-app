@@ -47,7 +47,7 @@ ollama:
 | `semantic.model` | Embedding model name. Defaults to Ollama embedding model. |
 | `semantic.batch_size` | Embedding batch size. Default `20`. |
 | `semantic.min_score` | Minimum semantic result score. Default `0.30`. |
-| `gmail.access_token` | Gmail OAuth access token for experimental OAuth. |
+| `gmail.access_token` | Gmail OAuth access token. |
 | `gmail.refresh_token` | Gmail OAuth refresh token. Treat as credential. |
 | `gmail.token_expiry` | OAuth access-token expiry in RFC3339 format. |
 | `gmail.email` | OAuth Gmail account email. |

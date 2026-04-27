@@ -246,7 +246,7 @@ func TestOAuthWaitModel_ViewUsesMinimumSizeGuardWhenTooNarrow(t *testing.T) {
 	}
 }
 
-func TestOAuthWaitModel_ViewMarksFlowAsExperimental(t *testing.T) {
+func TestOAuthWaitModel_ViewShowsGmailOAuthTitle(t *testing.T) {
 	cfg := &config.Config{}
 	codeCh := make(chan oauth.Result, 1)
 	m := &OAuthWaitModel{
@@ -262,7 +262,10 @@ func TestOAuthWaitModel_ViewMarksFlowAsExperimental(t *testing.T) {
 	}
 
 	view := stripANSI(m.View())
-	if !strings.Contains(view, "Experimental") {
-		t.Fatalf("expected experimental marker in OAuth wait view, got:\n%s", view)
+	if !strings.Contains(view, "Gmail OAuth") {
+		t.Fatalf("expected Gmail OAuth title in OAuth wait view, got:\n%s", view)
+	}
+	if strings.Contains(view, "Experimental") {
+		t.Fatalf("expected OAuth wait view to avoid experimental marker, got:\n%s", view)
 	}
 }
