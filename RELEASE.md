@@ -9,7 +9,8 @@ This runbook covers the first beta release path. The first beta tag is `v0.1.0-b
 - Each artifact includes `herald`, `herald-mcp-server`, and `herald-ssh-server`.
 - Stable releases are immutable `v*` tags without a hyphen, such as `v0.1.0`, and own GitHub's `/releases/latest` URL.
 - Beta releases are immutable `v*-beta.*` prereleases and also update the mutable `beta-latest` convenience channel.
-- Homebrew, DMG packaging, code signing, and notarization are deferred to the next packaging milestone.
+- The Homebrew tap `herald-email/homebrew-herald` is the recommended macOS install path: `brew tap herald-email/herald && brew install herald`.
+- DMG packaging, code signing, and notarization are deferred to a later packaging milestone.
 - Built-in Google OAuth credentials are convenience defaults for desktop OAuth. They are not confidential once distributed in a binary.
 
 ## Required GitHub Secrets
@@ -28,9 +29,29 @@ gh secret set HERALD_GOOGLE_CLIENT_SECRET \
   --body "your-client-secret"
 ```
 
+The release workflow also updates the separate Homebrew tap repository. Create a fine-grained token or classic PAT with write access to `herald-email/homebrew-herald`, then save it on the app repository:
+
+```bash
+gh secret set TAP_GITHUB_TOKEN \
+  --repo herald-email/herald-mail-app \
+  --body "github-token-with-homebrew-tap-write-access"
+```
+
 You can also use the GitHub web UI: repository `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`.
 
-The release workflow fails before building if either secret is missing. Runtime environment variables with the same names still override built-in defaults for local testing. Desktop OAuth client secrets bundled into release binaries are convenience defaults, not confidential once distributed.
+The release workflow fails before building if either OAuth secret is missing, and fails after GitHub release publication with a clear error if `TAP_GITHUB_TOKEN` is missing. Runtime environment variables with the same names still override built-in defaults for local testing. Desktop OAuth client secrets bundled into release binaries are convenience defaults, not confidential once distributed.
+
+## Homebrew Install
+
+Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow.
+
+```bash
+brew tap herald-email/herald
+brew install herald
+herald --version
+```
+
+The Homebrew formula is generated from immutable versioned release assets and checksums. It must not point at the mutable `beta-latest` release assets.
 
 ## Local OAuth-Enabled Builds
 
@@ -78,7 +99,7 @@ git tag -a v0.1.0-beta.1 -m "Herald v0.1.0-beta.1"
 git push origin v0.1.0-beta.1
 ```
 
-The `Release` workflow runs tests, builds both macOS architectures, smokes all three binaries, uploads checksums, and publishes a GitHub prerelease.
+The `Release` workflow runs tests, builds both macOS architectures, smokes all three binaries, uploads checksums, publishes a GitHub prerelease, and updates `herald-email/homebrew-herald`.
 
 It also updates `beta-latest` when the tag matches `v*-beta.*`. Maintainers should not manually create, push, or edit the `beta-latest` tag or release; the workflow owns that mutable channel.
 
@@ -136,6 +157,21 @@ gh release download beta-latest --pattern 'checksums-beta-latest.txt'
 shasum -a 256 -c checksums-beta-latest.txt
 ```
 
+Verify the Homebrew tap:
+
+```bash
+brew update
+brew tap herald-email/herald
+brew audit --strict --online --formula herald-email/herald/herald
+brew install herald-email/herald/herald
+herald --version
+herald-mcp-server --version
+printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' \
+  | herald-mcp-server --demo
+```
+
+Run the Homebrew install verification on Apple Silicon for every release. Repeat on Intel hardware or Rosetta before announcing Intel support for a release.
+
 ## Rollback
 
 If the tag workflow publishes a bad prerelease:
@@ -153,8 +189,8 @@ If `beta-latest` points at a bad beta, publish a fixed immutable beta tag. The w
 
 ## Future Packaging Milestone
 
-- Create a `herald-email/homebrew-herald` tap so users can install with `brew tap herald-email/herald && brew install herald`.
-- Decide whether Homebrew should install formula tarballs first or a cask once a DMG exists.
+- Keep the `herald-email/homebrew-herald` formula tracking immutable release tarballs.
+- Decide whether to add a cask once a signed and notarized DMG exists.
 - Add Apple Developer ID signing and notarization before DMG/cask distribution.
 - Consider GoReleaser when the release matrix expands beyond the current macOS beta artifacts.
 

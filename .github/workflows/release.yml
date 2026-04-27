@@ -151,6 +151,38 @@ jobs:
             dist/*.sha256
             dist/checksums.txt
 
+      - name: Update Homebrew tap
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TAP_GITHUB_TOKEN}" ]; then
+            echo "::error::Missing TAP_GITHUB_TOKEN repository secret with write access to herald-email/homebrew-herald"
+            exit 1
+          fi
+
+          rm -rf homebrew-herald
+          git clone --depth 1 "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/herald-email/homebrew-herald.git" homebrew-herald
+
+          .github/scripts/render-homebrew-formula.sh \
+            "${GITHUB_REF_NAME}" \
+            "dist/checksums.txt" \
+            "homebrew-herald/Formula/herald.rb"
+
+          cd homebrew-herald
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/herald.rb
+
+          if git diff --cached --quiet; then
+            echo "Homebrew tap formula is already current for ${GITHUB_REF_NAME}."
+            exit 0
+          fi
+
+          git commit -m "Update herald to ${GITHUB_REF_NAME}"
+          git push
+
       - name: Prepare beta-latest assets
         if: steps.channel.outputs.update_beta_latest == 'true'
         run: |

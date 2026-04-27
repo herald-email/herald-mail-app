@@ -29,6 +29,22 @@
 
 ## Quick Start
 
+### macOS via Homebrew
+
+```bash
+brew tap herald-email/herald
+brew install herald
+
+# First launch shows setup wizard
+herald
+```
+
+Homebrew is the recommended macOS install path for release binaries. Direct
+browser downloads from GitHub are not Developer ID signed or notarized yet, so
+macOS Gatekeeper may warn until the packaging milestone adds signing.
+
+### Build from source
+
 ```bash
 # Build (Go 1.25+ required)
 git clone https://github.com/herald-email/herald-mail-app.git
