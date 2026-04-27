@@ -59,10 +59,11 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 ### Start OAuth
 
 1. Choose an OAuth-capable provider path.
-2. Confirm you are using Homebrew/a release binary with OAuth defaults, or that your shell has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported.
-3. In the OAuth wait overlay, press `enter` to open the browser.
-4. Complete provider consent.
-5. Wait for Herald to save token data and return to the app.
+2. In first-run onboarding, launch Herald with `-experimental` first; in the in-app settings panel, choose the OAuth path directly.
+3. Confirm you are using Homebrew/a release binary with OAuth defaults, or that your shell has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported.
+4. In the OAuth wait overlay, press `enter` to open the browser.
+5. Complete provider consent.
+6. Wait for Herald to save token data and return to the app.
 
 ## States
 
@@ -86,7 +87,7 @@ If settings will not save, check file permissions for the config path and parent
 
 If OAuth does not complete, copy the displayed URL into a browser, finish consent, and confirm the callback server is reachable.
 
-If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use Homebrew or another release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally with `make build-release-local`. A plain `make build` binary does not embed `.herald-release.env`.
+If OAuth is missing from first-run onboarding, relaunch with `-experimental`. If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use Homebrew or another release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally with `make build-release-local`. A plain `make build` binary does not embed `.herald-release.env`.
 
 If AI stops working after model changes, verify the new model is installed or reachable and allow embedding regeneration to complete.
 

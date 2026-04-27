@@ -591,7 +591,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [ ] Status bar shows active account name
 - [ ] Compose "From" field lets user pick sending account
 - [ ] Unified Timeline view across accounts (opt-in)
-- [x] Gmail OAuth is the recommended Gmail onboarding path for Homebrew and release binaries
+- [x] Gmail OAuth is experimental first-run onboarding, hidden unless Herald starts with `-experimental`
 - [ ] Outlook OAuth
 - [x] Vendor presets: `protonmail`, `gmail`, `outlook`, `fastmail`, `icloud`
 
@@ -681,10 +681,10 @@ First-run experience and ongoing configuration should not require the user to ed
 ### First-run wizard
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
 - [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
-- [x] Step 1 — Account type: recommended `Gmail OAuth`, supported `Standard IMAP` and `Gmail (IMAP + App Password)`, with remaining vendor presets clearly marked experimental
-- [x] Step 2 — Credentials: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and experimental presets keep editable server fields
+- [x] Step 1 — Account type: recommended `Gmail (IMAP + App Password)`, supported `Standard IMAP` plus IMAP presets for ProtonMail Bridge, Fastmail, iCloud, and Outlook; `Gmail OAuth (Experimental)` appears only when launched with `-experimental`
+- [x] Step 2 — Credentials: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
-- [x] Gmail OAuth remains available as a separate browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
+- [x] Gmail OAuth remains available as an experimental browser-based path behind `-experimental`; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
 - [x] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, pick embedding model; skip if Ollama not running
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
 - [ ] Step 5 — Test connection button; shows result inline before saving

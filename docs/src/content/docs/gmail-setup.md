@@ -1,32 +1,13 @@
 ---
 title: Gmail Setup
-description: Configure Gmail with OAuth or the App Password fallback.
+description: Configure Gmail with an App Password or experimental OAuth.
 ---
 
-For Homebrew and release binaries, Gmail OAuth is the recommended Gmail setup path. It opens a local browser authorization flow and stores the resulting refresh token in Herald's config so access can refresh later.
+Gmail IMAP with an App Password is the normal Gmail setup path while Gmail OAuth onboarding is experimental. The first-run wizard hides OAuth unless Herald starts with `-experimental`.
 
-## Recommended: Gmail OAuth
+## Recommended: Gmail with an App Password
 
-1. Install with Homebrew:
-
-   ```sh
-   brew tap herald-email/herald
-   brew install herald
-   ```
-
-2. Run `herald`.
-3. Choose `Gmail OAuth` in the setup wizard.
-4. Complete browser authorization, then return to Herald.
-
-Homebrew and release binaries include the desktop OAuth defaults needed by the wizard.
-
-OAuth stores refresh token data in the Herald config so it can refresh access tokens later. Treat the config file like a credential.
-
-OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
-
-## Fallback: Gmail with an App Password
-
-Use this path when OAuth is unavailable for your account, or when you are using a source-built development binary without OAuth defaults.
+Use this path for personal Gmail accounts with 2-Step Verification.
 
 1. Make sure 2-Step Verification is enabled for your Google account.
 2. Create a Google App Password for Herald.
@@ -48,16 +29,37 @@ smtp:
 
 For personal Gmail, IMAP is generally already enabled. Google Workspace accounts may require an admin to allow IMAP or may require OAuth instead of password-based IMAP.
 
+## Experimental: Gmail OAuth
+
+OAuth opens a local browser authorization flow and stores the resulting refresh token in Herald's config so access can refresh later. This path is opt-in because Google OAuth onboarding and verification can take weeks and significant cost.
+
+1. Install with Homebrew:
+
+   ```sh
+   brew tap herald-email/herald
+   brew install herald
+   ```
+
+2. Run `herald -experimental`.
+3. Choose `Gmail OAuth (Experimental)` in the setup wizard.
+4. Complete browser authorization, then return to Herald.
+
+Homebrew and release binaries include the desktop OAuth defaults needed by the experimental wizard.
+
+OAuth stores refresh token data in the Herald config so it can refresh access tokens later. Treat the config file like a credential.
+
+OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
+
 ## Source builds with OAuth
 
-Plain `make build` intentionally does not embed OAuth defaults from `.herald-release.env`; it creates a normal development binary. If you run `make build && ./bin/herald` without exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
+Plain `make build` intentionally does not embed OAuth defaults from `.herald-release.env`; it creates a normal development binary. If you run `make build && ./bin/herald -experimental` without exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
 
 For a one-off local run, export credentials in the same shell that launches Herald:
 
 ```sh
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
-./bin/herald -config ~/.herald/conf.yaml
+./bin/herald -experimental -config ~/.herald/conf.yaml
 ```
 
 For a local binary with OAuth defaults built in:
@@ -66,7 +68,7 @@ For a local binary with OAuth defaults built in:
 cp .herald-release.env.example .herald-release.env
 $EDITOR .herald-release.env
 make build-release-local
-./bin/herald -config ~/.herald/conf.yaml
+./bin/herald -experimental -config ~/.herald/conf.yaml
 ```
 
 ## Helpful Google references

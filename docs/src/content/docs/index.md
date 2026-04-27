@@ -16,7 +16,7 @@ herald
 ```
 
 On macOS, Homebrew is the default install path and includes release binaries
-with Gmail OAuth defaults built in.
+with Gmail OAuth defaults built in for the experimental OAuth path.
 
 For source development:
 
@@ -27,7 +27,7 @@ make build
 ./bin/herald
 ```
 
-On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail OAuth, another provider path, or standard IMAP, decide whether to configure AI, and save the generated config.
+On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
 
 <!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="fresh config, 120x40" desc="Shows the initial setup path users see before connecting a real mailbox." capture="vhs docs media; rm -f /tmp/herald-docs-wizard.yaml; launch ./bin/herald -config /tmp/herald-docs-wizard.yaml" -->
 

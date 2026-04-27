@@ -118,7 +118,7 @@ Use a missing or empty temp config file to validate:
 - setup wizard chrome and minimum-size handling
 - recommended, supported, and experimental account messaging
 - Standard IMAP credential labeling and navigation
-- Gmail OAuth recommendation, Gmail IMAP fallback guidance, and hidden advanced defaults
+- default-hidden Gmail OAuth, Gmail IMAP guidance, IMAP preset visibility, and hidden advanced defaults
 
 ---
 
@@ -907,7 +907,9 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Wizard uses Herald-branded chrome rather than raw unframed form output.
-- Copy clearly distinguishes recommended, supported, and experimental account paths.
+- Copy clearly distinguishes supported IMAP account paths from experimental OAuth onboarding.
+- Default account choices include Standard IMAP, Gmail IMAP App Password, ProtonMail Bridge, Fastmail, iCloud, and Outlook, without experimental labels on IMAP-based presets.
+- Default account choices do not include Gmail OAuth.
 - At `220x50` and `80x24`, the form is centered and fully readable.
 - At `50x15`, Herald shows the minimum-size resize message instead of clipped fields.
 
@@ -927,24 +929,26 @@ Check these states during every applicable lane:
 - Hints match the current control.
 - At `50x15`, Herald falls back to the minimum-size guard rather than clipping later fields off-screen.
 
-### TC-41 — Gmail OAuth recommendation and IMAP fallback guidance
+### TC-41 — Gmail OAuth experimental gate and IMAP guidance
 
 **Lane:** F
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. From the first-run wizard, choose `Gmail OAuth`.
-2. Capture the OAuth account guidance and advance to the OAuth wait screen.
-3. Return to account type and choose `Gmail (IMAP + App Password)`.
-4. Capture the Gmail IMAP fallback guidance step.
+1. Launch Herald with a missing temp config path and no `-experimental` flag.
+2. Capture the account-selection step and confirm Gmail OAuth is absent.
+3. Choose `Gmail (IMAP + App Password)`.
+4. Capture the Gmail IMAP guidance step.
 5. Toggle advanced server editing and capture again.
+6. Relaunch with `-experimental` and a missing temp config path.
+7. Choose `Gmail OAuth (Experimental)` and capture the OAuth account guidance and wait screen.
 
 **Expect:**
-- Gmail OAuth is described as the recommended Gmail path for Homebrew/release binaries.
-- Gmail OAuth is not marked experimental before the browser-auth step.
+- Gmail OAuth is hidden in default first-run onboarding.
+- Gmail OAuth appears as `Gmail OAuth (Experimental)` only when launched with `-experimental`.
 - The OAuth wait screen remains centered and shows an unboxed browser-auth prompt: `Click: [here] or copy this link to the browser:`, where `[here]` is an OSC 8 terminal hyperlink and a short `http://localhost:<port>/authorize` URL remains visible for copying.
 - Gmail IMAP guidance includes Gmail server defaults and links or copy for IMAP/App Password setup.
-- Gmail IMAP is described as a supported fallback, with a note that Workspace may require OAuth.
+- Gmail IMAP is described as the normal Gmail setup path while OAuth onboarding is experimental, with a note that Workspace may require OAuth.
 - Advanced server fields are hidden until explicitly requested.
 
 ### TC-42 — Missing, empty, and malformed config startup behavior

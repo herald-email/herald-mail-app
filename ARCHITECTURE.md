@@ -51,7 +51,7 @@ cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite ca
 
 Startup resolves the config path before logging or backend setup and distinguishes between three states: missing config, empty or whitespace-only config, and existing non-empty config. Missing or empty configs launch the standalone onboarding wizard, while existing non-empty configs still go through normal YAML load and validation so malformed user configs fail loudly instead of being replaced.
 
-The standalone wizard reuses `internal/app.Settings` in a dedicated fullscreen shell rather than the in-app settings overlay. For Homebrew and release binaries, Gmail OAuth is the recommended Gmail onboarding path and hands off to `OAuthWaitModel`, which uses the same centered modal treatment as the in-app overlay path. Standard IMAP and Gmail IMAP with an App Password remain supported, while the other provider presets remain explicitly experimental branches.
+The standalone wizard reuses `internal/app.Settings` in a dedicated fullscreen shell rather than the in-app settings overlay. First-run onboarding defaults to IMAP-based paths: Standard IMAP, Gmail IMAP with an App Password, ProtonMail Bridge, Fastmail, iCloud, and Outlook presets. Gmail OAuth is an experimental first-run branch hidden unless the process starts with `-experimental`; when selected it hands off to `OAuthWaitModel`, which uses the same centered modal treatment as the in-app overlay path. The in-app settings panel can still expose the full provider list for existing configured users.
 
 ### Key design patterns
 

@@ -7,27 +7,27 @@ Herald talks to mail providers through IMAP for reading and SMTP for sending. Pr
 
 ## Overview
 
-Choose the narrowest supported path that matches your account. Gmail users on Homebrew or release binaries should prefer Gmail OAuth; Gmail IMAP with an App Password remains available as a fallback. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or a preset.
+Choose the narrowest supported path that matches your account. Gmail users should use Gmail IMAP with an App Password unless they explicitly opt into experimental OAuth with `-experimental`. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset.
 
 ## Provider Matrix
 
 | Provider path | IMAP | SMTP | Credential type |
 | --- | --- | --- | --- |
-| Gmail OAuth | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
 | Gmail IMAP | `imap.gmail.com:993` | `smtp.gmail.com:587` | Google App Password |
 | Proton Mail Bridge | `127.0.0.1:1143` | `127.0.0.1:1025` | Bridge-generated username and password |
 | Fastmail | `imap.fastmail.com:993` | `smtp.fastmail.com:587` | Provider password or app password |
 | iCloud | `imap.mail.me.com:993` | `smtp.mail.me.com:587` | App-specific password |
 | Outlook | `outlook.office365.com:993` | `smtp.office365.com:587` | Provider-supported IMAP credential |
 | Custom IMAP | Your provider value | Your provider value | Provider-specific |
+| Gmail OAuth (Experimental) | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
 
 ## Workflows
 
 ### Gmail OAuth
 
 1. Install with Homebrew or another release binary.
-2. Run `herald`.
-3. Choose `Gmail OAuth`.
+2. Run `herald -experimental`.
+3. Choose `Gmail OAuth (Experimental)`.
 4. Complete browser authorization and return to Herald.
 5. Save the generated config and let Herald sync.
 

@@ -19,7 +19,7 @@ brew install herald
 herald
 ```
 
-Homebrew installs the release binaries for `herald`, `herald-mcp-server`, and `herald-ssh-server`, including the Gmail OAuth defaults used by the setup wizard.
+Homebrew installs the release binaries for `herald`, `herald-mcp-server`, and `herald-ssh-server`, including the Gmail OAuth defaults used only when experimental OAuth onboarding is enabled.
 
 Update and upgrade:
 
@@ -56,7 +56,7 @@ make run
 
 Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, Herald opens a first-run setup wizard.
 
-The wizard can fill provider presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. For Homebrew and release binaries, Gmail OAuth is the recommended Gmail path; standard IMAP and Gmail IMAP with an App Password remain supported. Experimental provider presets are labeled in the UI. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
+The wizard can fill IMAP presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Gmail IMAP with an App Password is the normal Gmail path; Gmail OAuth is experimental and appears in first-run onboarding only when Herald starts with `-experimental`. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
 
 <!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
@@ -69,10 +69,11 @@ herald -help
 herald -debug
 herald -verbose
 herald -config custom.yaml
+herald -experimental
 herald --demo
 ```
 
-Use `./bin/herald` instead when running from a source checkout. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
+Use `./bin/herald` instead when running from a source checkout. `-experimental` shows experimental first-run email service onboarding options such as Gmail OAuth. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
 
 ## Example config
 

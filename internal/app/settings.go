@@ -23,6 +23,12 @@ const (
 	SettingsModePanel
 )
 
+// SettingsOptions controls optional settings-form behavior for callers that
+// need a narrower first-run surface than the in-app settings panel.
+type SettingsOptions struct {
+	ShowExperimentalEmailServices bool
+}
+
 const (
 	aiProviderOllamaDefault = "ollama-default"
 	aiProviderOllamaCustom  = "ollama-custom"
@@ -57,6 +63,8 @@ type Settings struct {
 	height     int
 	done       bool // set once we've emitted the completion message
 
+	showExperimentalEmailServices bool
+
 	// form field backing variables — account
 	provider string
 	email    string
@@ -88,16 +96,28 @@ type Settings struct {
 // NewSettings creates a Settings component, pre-filling fields from an existing config.
 // If existing is nil, a zero-value config is used.
 func NewSettings(mode SettingsMode, existing *config.Config) *Settings {
-	return NewSettingsWithPath(mode, existing, "")
+	return NewSettingsWithOptions(mode, existing, defaultSettingsOptions(mode))
+}
+
+// NewSettingsWithOptions creates a Settings component with caller-specified options.
+func NewSettingsWithOptions(mode SettingsMode, existing *config.Config, opts SettingsOptions) *Settings {
+	return NewSettingsWithPathAndOptions(mode, existing, "", opts)
 }
 
 // NewSettingsWithPath creates a Settings component with an explicit config file path for saving.
 func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath string) *Settings {
+	return NewSettingsWithPathAndOptions(mode, existing, configPath, defaultSettingsOptions(mode))
+}
+
+// NewSettingsWithPathAndOptions creates a Settings component with an explicit
+// config path and caller-specified options.
+func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, configPath string, opts SettingsOptions) *Settings {
 	s := &Settings{
-		mode:       mode,
-		cfg:        &config.Config{},
-		configPath: configPath,
-		syncIDLE:   true, // sensible default
+		mode:                          mode,
+		cfg:                           &config.Config{},
+		configPath:                    configPath,
+		syncIDLE:                      true, // sensible default
+		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
 	}
 
 	if existing != nil {
@@ -152,22 +172,65 @@ func NewSettingsWithPath(mode SettingsMode, existing *config.Config, configPath 
 	return s
 }
 
+func defaultSettingsOptions(mode SettingsMode) SettingsOptions {
+	return SettingsOptions{
+		ShowExperimentalEmailServices: mode == SettingsModePanel,
+	}
+}
+
+func (s *Settings) accountTypeDescription() string {
+	if s.mode == SettingsModePanel {
+		return "Recommended: Gmail OAuth. Supported: Standard IMAP and Gmail App Password. Experimental: ProtonMail Bridge, Fastmail, iCloud, Outlook."
+	}
+	if s.showExperimentalEmailServices {
+		return "Experimental: Gmail OAuth."
+	}
+	return "OAuth onboarding is hidden unless -experimental is set."
+}
+
+func (s *Settings) accountTypeOptions() []huh.Option[string] {
+	if s.mode == SettingsModePanel {
+		return []huh.Option[string]{
+			huh.NewOption("Standard IMAP", "imap"),
+			huh.NewOption("Gmail OAuth", "gmail-oauth"),
+			huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
+			huh.NewOption("ProtonMail Bridge (Experimental)", "protonmail"),
+			huh.NewOption("Fastmail (Experimental)", "fastmail"),
+			huh.NewOption("iCloud (Experimental)", "icloud"),
+			huh.NewOption("Outlook (Experimental)", "outlook"),
+		}
+	}
+
+	options := []huh.Option[string]{
+		huh.NewOption("Standard IMAP", "imap"),
+		huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
+	}
+	if s.showExperimentalEmailServices {
+		options = append(options, huh.NewOption("Gmail OAuth (Experimental)", "gmail-oauth"))
+	}
+	return append(options,
+		huh.NewOption("ProtonMail Bridge", "protonmail"),
+		huh.NewOption("Fastmail", "fastmail"),
+		huh.NewOption("iCloud", "icloud"),
+		huh.NewOption("Outlook", "outlook"),
+	)
+}
+
+func (s *Settings) providerPresetDescription(base string) string {
+	if s.mode == SettingsModeWizard {
+		return base
+	}
+	return base + " This path is still experimental."
+}
+
 // buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
 func (s *Settings) buildForm() {
 	// Group 1 — Account type selection
 	accountGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Account Type").
-			Description("Recommended: Gmail OAuth. Supported: Standard IMAP and Gmail App Password. Experimental: ProtonMail Bridge, Fastmail, iCloud, Outlook.").
-			Options(
-				huh.NewOption("Standard IMAP", "imap"),
-				huh.NewOption("Gmail OAuth", "gmail-oauth"),
-				huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
-				huh.NewOption("ProtonMail Bridge (Experimental)", "protonmail"),
-				huh.NewOption("Fastmail (Experimental)", "fastmail"),
-				huh.NewOption("iCloud (Experimental)", "icloud"),
-				huh.NewOption("Outlook (Experimental)", "outlook"),
-			).
+			Description(s.accountTypeDescription()).
+			Options(s.accountTypeOptions()...).
 			Value(&s.provider),
 	)
 
@@ -176,6 +239,9 @@ func (s *Settings) buildForm() {
 			if s.provider == "imap" {
 				return "Standard IMAP"
 			}
+			if s.mode == SettingsModeWizard {
+				return "IMAP preset"
+			}
 			return "Experimental preset"
 		}, &s.provider).
 		DescriptionFunc(func() string {
@@ -183,9 +249,9 @@ func (s *Settings) buildForm() {
 			case "imap":
 				return "Use this for providers where you already know the IMAP and SMTP settings."
 			case "protonmail":
-				return "Requires ProtonMail Bridge on localhost. Herald prefills the known Bridge ports, but this path is still experimental."
+				return s.providerPresetDescription("Requires ProtonMail Bridge on localhost. Herald prefills the known Bridge ports.")
 			default:
-				return "Herald prefills the known IMAP/SMTP defaults for this provider, but the flow is still experimental."
+				return s.providerPresetDescription("Herald prefills the known IMAP/SMTP defaults for this provider.")
 			}
 		}, &s.provider)
 
@@ -224,7 +290,7 @@ func (s *Settings) buildForm() {
 	gmailGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Personal Gmail via IMAP").
-			Description("Supported fallback. Use your Gmail address and a Google App Password when OAuth is unavailable. Google Workspace accounts may still require OAuth."),
+			Description("Normal Gmail setup. Use your Gmail address and a Google App Password. Google Workspace accounts may still require OAuth."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
 		huh.NewConfirm().
@@ -263,7 +329,7 @@ func (s *Settings) buildForm() {
 	gmailOAuthGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Gmail OAuth").
-			Description("Recommended for Gmail when using Homebrew or release binaries. Source builds need Google OAuth env vars or make build-release-local."),
+			Description("Experimental browser-based Gmail setup. Source builds need Google OAuth env vars or make build-release-local."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
 	).WithHideFunc(func() bool { return s.provider != "gmail-oauth" })
 
@@ -714,7 +780,7 @@ func (s *Settings) wizardSummaryLines() []string {
 	switch s.provider {
 	case "gmail":
 		return []string{
-			wizardSummaryLine("Fallback:", "personal Gmail via IMAP + App Password."),
+			wizardSummaryLine("Recommended:", "Gmail via IMAP + App Password."),
 			wizardSummaryLine("Defaults:", "imap.gmail.com:993 and smtp.gmail.com:587."),
 			wizardSummaryLine("Workspace:", "some accounts may still require OAuth."),
 			wizardSummaryDoc("App passwords", "https://myaccount.google.com/apppasswords"),
@@ -723,25 +789,26 @@ func (s *Settings) wizardSummaryLines() []string {
 		}
 	case "gmail-oauth":
 		return []string{
-			wizardSummaryLine("Recommended:", "Gmail OAuth in a browser."),
+			wizardSummaryLine("Experimental:", "Gmail OAuth in a browser."),
+			wizardSummaryLine("Visible with:", "-experimental during first-run setup, or from in-app settings."),
 			wizardSummaryLine("Best with:", "Homebrew or release binaries, which include OAuth defaults."),
 			wizardSummaryLine("Source builds:", "set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
 		}
 	case "protonmail":
 		return []string{
-			wizardSummaryLine("Experimental preset:", "requires ProtonMail Bridge running locally."),
+			wizardSummaryLine("IMAP preset:", "requires ProtonMail Bridge running locally."),
 			wizardSummaryLine("Defaults:", "Herald prefills the known localhost IMAP and SMTP ports."),
 		}
 	case "fastmail", "icloud", "outlook":
 		return []string{
-			wizardSummaryLine("Experimental preset:", "Herald prefills the known IMAP and SMTP defaults."),
-			wizardSummaryLine("Status:", "this path is not yet treated as fully supported onboarding."),
+			wizardSummaryLine("IMAP preset:", "Herald prefills the known IMAP and SMTP defaults."),
+			wizardSummaryLine("Credentials:", "use the provider password or app password required by your account."),
 		}
 	default:
 		return []string{
-			wizardSummaryLine("Recommended:", "Gmail OAuth for Homebrew/release binaries."),
-			wizardSummaryLine("Supported:", "Standard IMAP and Gmail (IMAP + App Password)."),
-			wizardSummaryLine("Experimental:", "ProtonMail Bridge, Fastmail, iCloud, Outlook."),
+			wizardSummaryLine("Recommended:", "Gmail (IMAP + App Password) for Gmail."),
+			wizardSummaryLine("Supported:", "Standard IMAP plus ProtonMail Bridge, Fastmail, iCloud, Outlook."),
+			wizardSummaryLine("Experimental:", "start with -experimental to include OAuth onboarding."),
 		}
 	}
 }

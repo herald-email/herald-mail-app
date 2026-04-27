@@ -72,26 +72,59 @@ func TestSettingsWizard_GmailIMAPStepIncludesGuidance(t *testing.T) {
 	}
 }
 
-func TestSettingsWizard_SelectingGmailOAuthKeepsAccountTypeVisible(t *testing.T) {
+func TestSettingsWizard_DefaultHidesGmailOAuthAndShowsIMAPPresets(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
-	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	s = updated.(*Settings)
 
-	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
-	s = updated.(*Settings)
-	rendered := ansi.Strip(s.View())
+	var labels []string
+	for _, option := range s.accountTypeOptions() {
+		labels = append(labels, option.Key)
+	}
+	rendered := strings.Join(labels, "\n")
 
 	for _, want := range []string{
-		"Account Type",
 		"Gmail (IMAP + App Password)",
-		"Gmail OAuth",
+		"ProtonMail Bridge",
+		"Fastmail",
+		"iCloud",
+		"Outlook",
 	} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected provider switch to keep account step visible and include %q, got:\n%s", want, rendered)
+			t.Fatalf("expected default wizard account choices to include %q, got:\n%s", want, rendered)
 		}
 	}
-	if strings.Contains(rendered, "Gmail OAuth (Experimental)") {
-		t.Fatalf("expected Gmail OAuth option to avoid experimental marker, got:\n%s", rendered)
+	if strings.Contains(rendered, "Gmail OAuth") {
+		t.Fatalf("expected default wizard account choices to hide Gmail OAuth, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "(Experimental)") {
+		t.Fatalf("expected IMAP-based wizard account choices to avoid experimental labels, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsWizard_ExperimentalShowsGmailOAuthMarked(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{ShowExperimentalEmailServices: true})
+
+	var labels []string
+	for _, option := range s.accountTypeOptions() {
+		labels = append(labels, option.Key)
+	}
+	rendered := strings.Join(labels, "\n")
+
+	if !strings.Contains(rendered, "Gmail OAuth (Experimental)") {
+		t.Fatalf("expected experimental wizard account choices to include marked Gmail OAuth, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsPanel_StillShowsGmailOAuth(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+
+	var labels []string
+	for _, option := range s.accountTypeOptions() {
+		labels = append(labels, option.Key)
+	}
+	rendered := strings.Join(labels, "\n")
+
+	if !strings.Contains(rendered, "Gmail OAuth") {
+		t.Fatalf("expected in-app settings panel to keep Gmail OAuth visible, got:\n%s", rendered)
 	}
 }
 
@@ -100,8 +133,6 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	s = updated.(*Settings)
 
-	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
-	s = updated.(*Settings)
 	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
 	s = updated.(*Settings)
 	rendered := s.View()

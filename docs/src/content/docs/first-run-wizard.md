@@ -7,9 +7,9 @@ The first-run wizard appears when Herald cannot find a usable config at the defa
 
 ## Overview
 
-Use the wizard to choose an account type, enter credentials, configure optional AI, and save `conf.yaml`. For Homebrew and release binaries, Gmail OAuth is the recommended Gmail path. Standard IMAP and Gmail IMAP with an App Password remain supported, while several provider-specific presets are labeled experimental in the UI.
+Use the wizard to choose an account type, enter credentials, configure optional AI, and save `conf.yaml`. The default first-run wizard focuses on IMAP-based setup: Standard IMAP, Gmail with an App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
 
-<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the account type choices including standard IMAP, Gmail IMAP App Password, Gmail OAuth, Proton Mail Bridge, Fastmail, iCloud, and Outlook." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
+<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the default account type choices including standard IMAP, Gmail IMAP App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook; Gmail OAuth is hidden unless launched with -experimental." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
 
 ![First-run wizard account type selection](/screenshots/wizard-account-type.png)
 
@@ -40,7 +40,7 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 1. Install Herald with Homebrew or build it from source.
 2. Run `herald`, or use `./bin/herald` from a source checkout. Pass an explicit path with `herald -config ~/.herald/conf.yaml` when needed.
 3. Choose the provider path that matches your account.
-4. Enter the provider credentials or complete browser authorization. For Gmail IMAP and iCloud, use an app password when required by the provider.
+4. Enter the provider credentials. For Gmail IMAP and iCloud, use an app password when required by the provider. If you launched with `-experimental` and selected Gmail OAuth, complete browser authorization instead.
 5. Pick an AI provider. Choose disabled if you only want mail sync, reading, composing, and cleanup.
 6. Review the generated settings and save.
 7. Herald connects to IMAP, creates or opens the SQLite cache, processes new mail, and opens the Timeline tab.
@@ -49,11 +49,11 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 
 | Choice | Use when | Notes |
 | --- | --- | --- |
-| Gmail OAuth | You installed with Homebrew or another release binary and want browser-based Gmail authorization. | Recommended Gmail path; stores refresh token data in config. |
 | Standard IMAP | You know your IMAP and SMTP host and port. | Most portable path. |
-| Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password, or OAuth is unavailable. | Supported fallback for Gmail. |
+| Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password. | Normal Gmail path while OAuth onboarding is experimental. |
 | Proton Mail Bridge | You run Proton Mail Bridge locally. | Uses Bridge host, ports, username, and password. |
-| Fastmail, iCloud, Outlook | You want preset host/port values. | Experimental presets; provider app passwords may still be required. |
+| Fastmail, iCloud, Outlook | You want preset host/port values. | IMAP presets; provider app passwords may still be required. |
+| Gmail OAuth (Experimental) | You launched with `-experimental` and want browser-based Gmail authorization. | Hidden by default; stores refresh token data in config. |
 
 ## Data And Privacy
 
@@ -67,9 +67,9 @@ If the wizard reappears every time, verify that Herald is reading the config pat
 
 If a provider preset connects to IMAP but sending fails, check the SMTP host, port, username, and app password. Some providers use different credentials for IMAP and SMTP.
 
-If OAuth stalls, confirm that the browser callback completes and that the config file can be written. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
+If Gmail OAuth is missing from the first-run choices, relaunch with `-experimental`. If OAuth stalls, confirm that the browser callback completes and that the config file can be written. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
 
-If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary. Homebrew and release binaries include OAuth defaults. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching Herald, or rebuild with `make build-release-local` after filling `.herald-release.env`. Plain `make build` does not embed OAuth defaults.
+If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary. Homebrew and release binaries include OAuth defaults for the experimental path. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching `herald -experimental`, or rebuild with `make build-release-local` after filling `.herald-release.env`. Plain `make build` does not embed OAuth defaults.
 
 ## Related Pages
 

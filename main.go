@@ -114,8 +114,10 @@ func (m wizardModel) View() string {
 }
 
 // runWizard runs the first-run setup wizard as a standalone Bubble Tea program.
-func runWizard(configPath string) error {
-	s := app.NewSettings(app.SettingsModeWizard, nil)
+func runWizard(configPath string, experimental bool) error {
+	s := app.NewSettingsWithPathAndOptions(app.SettingsModeWizard, nil, configPath, app.SettingsOptions{
+		ShowExperimentalEmailServices: experimental,
+	})
 	wm := wizardModel{settings: s, configPath: configPath}
 	p := tea.NewProgram(wm, tea.WithAltScreen())
 	finalModel, err := p.Run()
@@ -407,6 +409,7 @@ func runTUI() {
 	var verbose = flag.Bool("verbose", false, "Alias for -debug (same behavior today)")
 	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
 	var dryRun = flag.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)")
+	var experimental = flag.Bool("experimental", false, "Show experimental email service onboarding options")
 	const defaultConfig = "~/.herald/conf.yaml"
 	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
@@ -445,6 +448,7 @@ func runTUI() {
 		fmt.Printf("  %s                    # Run with default config (~/.herald/conf.yaml)\n", os.Args[0])
 		fmt.Printf("  %s -debug             # Run with debug logging in the Herald user log directory\n", os.Args[0])
 		fmt.Printf("  %s -verbose           # Alias for -debug\n", os.Args[0])
+		fmt.Printf("  %s -experimental      # Show experimental first-run email service onboarding\n", os.Args[0])
 		fmt.Printf("  %s -config custom.yaml # Use custom config file\n", os.Args[0])
 		fmt.Println()
 		fmt.Println("Log files are created as herald_YYYYMMDD_HHMMSS.log in the user log directory")
@@ -482,7 +486,7 @@ func runTUI() {
 
 	// First-run: if config doesn't exist or is empty, launch the setup wizard.
 	if needsOnboarding {
-		if err := runWizard(resolvedConfig); err != nil {
+		if err := runWizard(resolvedConfig, *experimental); err != nil {
 			log.Fatalf("setup wizard failed: %v", err)
 		}
 		// Wizard exited — verify config was actually written (user may have cancelled).
