@@ -109,7 +109,7 @@ func TestNewSettings_GmailIMAPUsesCredentialEmail(t *testing.T) {
 	}
 }
 
-func TestNewSettings_GmailOAuthUsesExperimentalProvider(t *testing.T) {
+func TestNewSettings_GmailOAuthUsesOAuthProvider(t *testing.T) {
 	existing := &config.Config{}
 	existing.Vendor = "gmail"
 	existing.Gmail.Email = "oauth@gmail.com"

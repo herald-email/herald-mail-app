@@ -1,18 +1,43 @@
 ---
 title: Getting Started
-description: Build Herald, run it for the first time, and understand the generated config.
+description: Install Herald, run it for the first time, and understand the generated config.
 ---
 
-This page covers the shortest route from source checkout to a usable Herald session. For every visible screen after launch, continue with [Global UI](/using-herald/global-ui/) and the tab pages.
+This page covers the shortest route to a usable Herald session. For every visible screen after launch, continue with [Global UI](/using-herald/global-ui/) and the tab pages.
 
 ## Requirements
 
-- Go 1.25 or newer
-- A C compiler such as `clang` or `gcc` for SQLite CGO support
 - An IMAP account and SMTP settings, unless you run demo mode
 - Optional: Ollama for local AI features
+- For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support
 
-## Build and run
+## macOS with Homebrew
+
+```sh
+brew tap herald-email/herald
+brew install herald
+herald
+```
+
+Homebrew installs the release binaries for `herald`, `herald-mcp-server`, and `herald-ssh-server`, including the Gmail OAuth defaults used by the setup wizard.
+
+Update and upgrade:
+
+```sh
+brew update
+brew upgrade herald
+```
+
+For a full tap reset:
+
+```sh
+brew uninstall herald
+brew untap herald-email/herald
+brew tap herald-email/herald
+brew install herald
+```
+
+## Build from source
 
 ```sh
 git clone https://github.com/herald-email/herald-mail-app.git
@@ -31,7 +56,7 @@ make run
 
 Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, Herald opens a first-run setup wizard.
 
-The wizard can fill provider presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Stable setup paths are standard IMAP and personal Gmail IMAP with an App Password. Experimental paths are labeled in the UI. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
+The wizard can fill provider presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. For Homebrew and release binaries, Gmail OAuth is the recommended Gmail path; standard IMAP and Gmail IMAP with an App Password remain supported. Experimental provider presets are labeled in the UI. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
 
 <!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
@@ -40,14 +65,14 @@ The wizard can fill provider presets for common accounts, including Gmail, Proto
 ## Useful flags
 
 ```sh
-./bin/herald -help
-./bin/herald -debug
-./bin/herald -verbose
-./bin/herald -config custom.yaml
-./bin/herald --demo
+herald -help
+herald -debug
+herald -verbose
+herald -config custom.yaml
+herald --demo
 ```
 
-`-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
+Use `./bin/herald` instead when running from a source checkout. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
 
 ## Example config
 
@@ -75,7 +100,7 @@ Herald can run in a browser tab through `ttyd`:
 
 ```sh
 brew install ttyd
-ttyd -W ./bin/herald
+ttyd -W herald
 ```
 
 Open `http://localhost:7681`. The `-W` flag is required for keyboard input.

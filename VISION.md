@@ -591,7 +591,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [ ] Status bar shows active account name
 - [ ] Compose "From" field lets user pick sending account
 - [ ] Unified Timeline view across accounts (opt-in)
-- [x] Gmail OAuth remains available only as an explicitly experimental onboarding path
+- [x] Gmail OAuth is the recommended Gmail onboarding path for Homebrew and release binaries
 - [ ] Outlook OAuth
 - [x] Vendor presets: `protonmail`, `gmail`, `outlook`, `fastmail`, `icloud`
 
@@ -680,11 +680,11 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### First-run wizard
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
-- [x] Herald-styled setup shell with supported vs experimental account messaging and the same minimum-size guard used by the main TUI
-- [x] Step 1 — Account type: stable `Standard IMAP` and `Gmail (IMAP + App Password)` choices first, with Gmail OAuth / vendor presets clearly marked experimental
+- [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
+- [x] Step 1 — Account type: recommended `Gmail OAuth`, supported `Standard IMAP` and `Gmail (IMAP + App Password)`, with remaining vendor presets clearly marked experimental
 - [x] Step 2 — Credentials: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and experimental presets keep editable server fields
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
-- [x] Experimental Gmail OAuth remains available as a separate browser-based path when Google OAuth client credentials are configured
+- [x] Gmail OAuth remains available as a separate browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
 - [x] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, pick embedding model; skip if Ollama not running
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
 - [ ] Step 5 — Test connection button; shows result inline before saving

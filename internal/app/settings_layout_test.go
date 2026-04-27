@@ -31,8 +31,10 @@ func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
 	if !strings.Contains(rendered, "Herald Setup") {
 		t.Fatalf("expected Herald setup title, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "Supported") || !strings.Contains(rendered, "Experimental") {
-		t.Fatalf("expected supported vs experimental messaging, got:\n%s", rendered)
+	for _, want := range []string{"Recommended", "Supported", "Experimental"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected setup messaging to include %q, got:\n%s", want, rendered)
+		}
 	}
 	if !strings.Contains(rendered, "╭") || !strings.Contains(rendered, "╯") {
 		t.Fatalf("expected bordered wizard shell, got:\n%s", rendered)
@@ -70,7 +72,7 @@ func TestSettingsWizard_GmailIMAPStepIncludesGuidance(t *testing.T) {
 	}
 }
 
-func TestSettingsWizard_SelectingGmailKeepsAccountTypeVisible(t *testing.T) {
+func TestSettingsWizard_SelectingGmailOAuthKeepsAccountTypeVisible(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	s = updated.(*Settings)
@@ -82,11 +84,14 @@ func TestSettingsWizard_SelectingGmailKeepsAccountTypeVisible(t *testing.T) {
 	for _, want := range []string{
 		"Account Type",
 		"Gmail (IMAP + App Password)",
-		"Gmail OAuth (Experimental)",
+		"Gmail OAuth",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected provider switch to keep account step visible and include %q, got:\n%s", want, rendered)
 		}
+	}
+	if strings.Contains(rendered, "Gmail OAuth (Experimental)") {
+		t.Fatalf("expected Gmail OAuth option to avoid experimental marker, got:\n%s", rendered)
 	}
 }
 
@@ -95,6 +100,8 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	s = updated.(*Settings)
 
+	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
+	s = updated.(*Settings)
 	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
 	s = updated.(*Settings)
 	rendered := s.View()

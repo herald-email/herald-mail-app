@@ -32,3 +32,11 @@ This section defines the acceptance checks for the tap and release automation. T
 - [x] Run `brew audit --strict --online --formula herald-email/herald/herald`.
 - [x] Run a local Apple Silicon Homebrew install and smoke `herald`, `herald-mcp-server`, `herald-ssh-server`, and MCP `tools/list`.
 - [ ] Repeat the install smoke on Intel hardware or Rosetta before announcing Intel release support.
+
+## User Instructions
+
+This section records the installed-user operations that should appear in the public docs. Homebrew is the default macOS install path, so users should have clear update, upgrade, and reset commands without needing to inspect the tap repository.
+
+- [x] Document `brew tap herald-email/herald && brew install herald` as the default macOS install.
+- [x] Document `brew update` and `brew upgrade herald` for routine upgrades.
+- [x] Document uninstall, untap, retap, and reinstall as the full reset path.
