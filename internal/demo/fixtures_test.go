@@ -59,6 +59,31 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 	}
 }
 
+func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
+	var found bool
+	for _, msg := range Mailbox().Messages {
+		if msg.Email.Subject != "Link rendering stress preview" {
+			continue
+		}
+		found = true
+		if !msg.Body.IsFromHTML {
+			t.Fatal("link stress fixture should exercise HTML-derived markdown rendering")
+		}
+		if !strings.Contains(msg.Body.TextPlain, "[Display in your browser](") {
+			t.Fatalf("link stress fixture should include an anchor-text markdown link, got:\n%s", msg.Body.TextPlain)
+		}
+		if !strings.Contains(msg.Body.TextPlain, "![Taskpad logo](") {
+			t.Fatalf("link stress fixture should include an image markdown link, got:\n%s", msg.Body.TextPlain)
+		}
+		if !strings.Contains(msg.Body.TextPlain, "abcdefghijklmnopqrstuvwxyz0123456789") {
+			t.Fatalf("link stress fixture should include a long naked URL, got:\n%s", msg.Body.TextPlain)
+		}
+	}
+	if !found {
+		t.Fatal("expected demo mailbox to include Link rendering stress preview fixture")
+	}
+}
+
 func TestDemoAIIsDeterministicAndOffline(t *testing.T) {
 	ai := NewAI()
 

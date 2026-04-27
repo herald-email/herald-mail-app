@@ -339,6 +339,9 @@ func buildMailbox() MailboxFixture {
 	add(24, "Market Lane <offers@marketlane.example>", "Gift card bonus weekend", "INBOX", 23, 5248, true, false, ai.CategorySubscription, []string{"shopping", "promotion"},
 		"Market Lane is running a gift card bonus this weekend.\n\nThis promotional email can be ignored unless you are shopping soon.",
 		withUnsub("https://marketlane.example/unsubscribe/demo"))
+	add(25, "Taskpad Teams <teams@taskpad.example>", "Link rendering stress preview", "INBOX", 24, 52224, true, false, ai.CategoryNewsletter, []string{"newsletter", "links", "rendering"},
+		"# Free team trial inside\n\nSign in on your computer to unlock the team features.\n\n[Display in your browser](https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY)\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nOpen the workspace directly: https://app.taskpad.example/app/team/welcome/path/that/is/long/enough/to/prove/wrapping?utm_source=email&utm_medium=trial&token=abcdefghijklmnopqrstuvwxyz0123456789",
+		withHTML)
 
 	return MailboxFixture{
 		Messages: messages,

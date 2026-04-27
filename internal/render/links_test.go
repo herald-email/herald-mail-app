@@ -3,6 +3,8 @@ package render
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestShortenURL(t *testing.T) {
@@ -49,6 +51,92 @@ func TestLinkifyWrappedLines(t *testing.T) {
 	}
 	if !strings.Contains(result[1], "\033]8;;") {
 		t.Errorf("line with URL should be linkified: got %q", result[1])
+	}
+}
+
+func TestRenderEmailBodyLines_MarkdownLinksUseAnchorText(t *testing.T) {
+	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
+	lines := RenderEmailBodyLines("Welcome\n\n[Display in your browser]("+longURL+")\n\nHi Anton", 80)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if !strings.Contains(visible, "Display in your browser") {
+		t.Fatalf("expected anchor text to be visible, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "taskpad.mail.example") || strings.Contains(visible, "eyJmaXJ") {
+		t.Fatalf("expected long URL to be hidden from visible text, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
+		t.Fatalf("expected full URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_LabelFollowedByBracketedURLBecomesOneLink(t *testing.T) {
+	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
+	lines := RenderEmailBodyLines("Display in your browser\n["+longURL+"]", 80)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if strings.TrimSpace(visible) != "Display in your browser" {
+		t.Fatalf("expected label+bracketed URL to render as one visible label, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "taskpad.mail.example") || strings.Contains(visible, "3TyPkavY9d1vRxPgY") {
+		t.Fatalf("expected bracketed URL to be hidden from visible text, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "[") || strings.Contains(visible, "]") {
+		t.Fatalf("expected markdown brackets to be hidden, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
+		t.Fatalf("expected full URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_ImageLinksUseAltText(t *testing.T) {
+	logoURL := "https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png"
+	lines := RenderEmailBodyLines("![Taskpad logo]("+logoURL+")", 80)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if strings.TrimSpace(visible) != "Taskpad logo" {
+		t.Fatalf("expected image alt text as visible link label, got %q", visible)
+	}
+	if strings.Contains(visible, "taskpad-logo") {
+		t.Fatalf("expected image URL to be hidden from visible text, got %q", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+logoURL+"\x1b\\") {
+		t.Fatalf("expected logo URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
+	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
+	lines := RenderEmailBodyLines("Open "+longURL+" today", 80)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if !strings.Contains(visible, "example.com/path/to/a/very/long/resource/name") {
+		t.Fatalf("expected shortened domain/path label, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "abcdefghijklmnopqrstuvwxyz0123456789") || strings.Contains(visible, "utm_source=email") {
+		t.Fatalf("expected long query string to be hidden from visible text, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
+		t.Fatalf("expected full naked URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_ClosesHyperlinksPerWrappedLine(t *testing.T) {
+	longURL := "https://example.com/path?token=abcdefghijklmnopqrstuvwxyz0123456789"
+	body := "Before [This is a deliberately long label that must not leave the terminal hyperlink open](" + longURL + ") after"
+	lines := RenderEmailBodyLines(body, 24)
+
+	for i, line := range lines {
+		if strings.Contains(line, "\x1b]8;;https://") && !strings.Contains(line, "\x1b]8;;\x1b\\") {
+			t.Fatalf("line %d opens an OSC 8 hyperlink without closing it: %q", i, line)
+		}
+		if visibleWidth := ansi.StringWidth(line); visibleWidth > 24 {
+			t.Fatalf("line %d visible width=%d exceeds width 24: %q", i, visibleWidth, line)
+		}
 	}
 }
 

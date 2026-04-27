@@ -1002,6 +1002,24 @@ Check these states during every applicable lane:
 - Cleanup preview uses the same availability rules as Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `h` remains visible in both cases.
 - End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
 
+### TC-49 — Email preview hides long link destinations behind OSC 8 labels
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Launch Herald in demo mode.
+2. Open Timeline and search for `Link rendering stress preview`.
+3. Open the Taskpad demo email preview.
+4. Capture plain text and ANSI output at `220x50`.
+5. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
+
+**Expect:**
+- Visible preview text shows readable labels such as `Display in your browser` and `Taskpad logo`.
+- Long destination fragments such as `eyJmaXJ`, `_next/static/media`, and `abcdefghijklmnopqrstuvwxyz0123456789` do not appear in visible preview text.
+- ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
+- The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
+
 ---
 
 ## Recommendations

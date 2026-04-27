@@ -952,6 +952,11 @@ func linkifyWrappedLines(lines []string) []string {
 	return render.LinkifyWrappedLines(lines)
 }
 
+// renderEmailBodyLines delegates to render.RenderEmailBodyLines.
+func renderEmailBodyLines(text string, width int) []string {
+	return render.RenderEmailBodyLines(text, width)
+}
+
 // linkifyURLs delegates to render.LinkifyURLs.
 func linkifyURLs(text string) string {
 	return render.LinkifyURLs(text)

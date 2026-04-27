@@ -7,7 +7,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
@@ -248,34 +247,10 @@ func (m *Model) renderEmailPreview() string {
 			body = "(No plain text — HTML only)"
 		}
 		if m.timeline.bodyWrappedLines == nil || m.timeline.bodyWrappedWidth != innerW {
-			if m.timeline.body.IsFromHTML {
-				// Render markdown (converted from HTML) via glamour at panel width.
-				// Don't linkify before glamour — OSC 8 escape sequences break
-				// glamour's width calculation and cause lines to overflow the panel.
-				renderer, rerr := glamour.NewTermRenderer(
-					glamour.WithStandardStyle("dark"),
-					glamour.WithWordWrap(innerW),
-				)
-				if rerr == nil {
-					if rendered, err := renderer.Render(body); err == nil {
-						rendered = strings.TrimRight(rendered, "\n")
-						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
-						rendered = strings.TrimRight(rendered, "\n")
-						m.timeline.bodyWrappedLines = strings.Split(rendered, "\n")
-					} else {
-						m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-					}
-				} else {
-					m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-				}
-				// Safety: hard-truncate every line to innerW visual chars.
-				// Glamour and linkification can produce lines with ANSI/OSC sequences
-				// that break lipgloss width math, causing panel overflow.
-				for i, line := range m.timeline.bodyWrappedLines {
-					m.timeline.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
-				}
-			} else {
-				m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
+			m.timeline.bodyWrappedLines = renderEmailBodyLines(body, innerW)
+			// Safety: hard-truncate every line to innerW visual chars.
+			for i, line := range m.timeline.bodyWrappedLines {
+				m.timeline.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
 			}
 			m.timeline.bodyWrappedWidth = innerW
 		}
@@ -425,25 +400,9 @@ func (m *Model) renderFullScreenEmail() string {
 		}
 		// Re-wrap if width changed (full-screen uses different innerW than split view)
 		if m.timeline.bodyWrappedLines == nil || m.timeline.bodyWrappedWidth != innerW {
-			if m.timeline.body.IsFromHTML {
-				renderer, rerr := glamour.NewTermRenderer(
-					glamour.WithStandardStyle("dark"),
-					glamour.WithWordWrap(innerW),
-				)
-				if rerr == nil {
-					if rendered, err := renderer.Render(body); err == nil {
-						rendered = strings.TrimRight(rendered, "\n")
-						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
-						rendered = strings.TrimRight(rendered, "\n")
-						m.timeline.bodyWrappedLines = strings.Split(rendered, "\n")
-					} else {
-						m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-					}
-				} else {
-					m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-				}
-			} else {
-				m.timeline.bodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
+			m.timeline.bodyWrappedLines = renderEmailBodyLines(body, innerW)
+			for i, line := range m.timeline.bodyWrappedLines {
+				m.timeline.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
 			}
 			m.timeline.bodyWrappedWidth = innerW
 		}
@@ -833,25 +792,9 @@ func (m *Model) renderCleanupPreview() string {
 			body = "(No plain text — HTML only)"
 		}
 		if m.cleanupBodyWrappedLines == nil || m.cleanupBodyWrappedWidth != innerW {
-			if m.cleanupEmailBody.IsFromHTML {
-				renderer, rerr := glamour.NewTermRenderer(
-					glamour.WithStandardStyle("dark"),
-					glamour.WithWordWrap(innerW),
-				)
-				if rerr == nil {
-					if rendered, err := renderer.Render(body); err == nil {
-						rendered = strings.TrimRight(rendered, "\n")
-						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
-						rendered = strings.TrimRight(rendered, "\n")
-						m.cleanupBodyWrappedLines = strings.Split(rendered, "\n")
-					} else {
-						m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-					}
-				} else {
-					m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
-				}
-			} else {
-				m.cleanupBodyWrappedLines = linkifyWrappedLines(wrapLines(body, innerW))
+			m.cleanupBodyWrappedLines = renderEmailBodyLines(body, innerW)
+			for i, line := range m.cleanupBodyWrappedLines {
+				m.cleanupBodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
 			}
 			m.cleanupBodyWrappedWidth = innerW
 		}

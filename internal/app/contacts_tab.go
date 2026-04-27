@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
@@ -430,28 +429,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 			if innerW < 10 {
 				innerW = 10
 			}
-			// Render markdown via glamour for HTML-converted content (same as Timeline)
-			var lines []string
-			if m.contactPreviewBody.IsFromHTML {
-				renderer, rerr := glamour.NewTermRenderer(
-					glamour.WithStandardStyle("dark"),
-					glamour.WithWordWrap(innerW),
-				)
-				if rerr == nil {
-					if rendered, err := renderer.Render(body); err == nil {
-						rendered = strings.TrimRight(rendered, "\n")
-						rendered = lipgloss.NewStyle().MaxWidth(innerW).Render(rendered)
-						rendered = strings.TrimRight(rendered, "\n")
-						lines = strings.Split(rendered, "\n")
-					} else {
-						lines = linkifyWrappedLines(wrapLines(body, innerW))
-					}
-				} else {
-					lines = linkifyWrappedLines(wrapLines(body, innerW))
-				}
-			} else {
-				lines = linkifyWrappedLines(wrapLines(body, innerW))
-			}
+			lines := renderEmailBodyLines(body, innerW)
 			maxLines := contentH - 6 // header(4) + hint(1) + margin
 			if maxLines < 1 {
 				maxLines = 1
