@@ -31,10 +31,10 @@ If you used custom config files, remove those paths too.
 
 ## Remove cache files
 
-Check `cache.database_path` in your config before deleting it. Generated cache files usually live under `herald/cached/` relative to the directory where Herald was run.
+Check `cache.database_path` in your config before deleting it. Generated cache files usually live under `~/.herald/cached/`.
 
 ```sh
-rm -rf herald/cached/
+rm -rf ~/.herald/cached/
 ```
 
 If you used a custom cache path, remove that file directly.

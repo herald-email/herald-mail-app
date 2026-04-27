@@ -39,10 +39,10 @@ Herald stores a SQLite cache path in config:
 
 ```yaml
 cache:
-  database_path: "herald/cached/conf.db"
+  database_path: "~/.herald/cached/conf.db"
 ```
 
-If the path is missing, Herald creates a per-config cache path and writes it back to the YAML file. This prevents different account configs from sharing one working-directory database.
+If the path is missing, Herald creates a per-config absolute cache path under `~/.herald/cached/` and writes it back to the YAML file. This prevents different account configs from sharing one database and keeps the cache usable no matter which directory Herald starts from.
 
 ## Sync behavior
 

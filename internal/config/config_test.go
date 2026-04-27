@@ -34,6 +34,12 @@ func chdirForTest(t *testing.T, dir string) {
 	})
 }
 
+func setHomeForTest(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+}
+
 func TestIsGmailOAuth(t *testing.T) {
 	t.Run("false when RefreshToken is empty", func(t *testing.T) {
 		c := &Config{}
@@ -140,9 +146,90 @@ func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
 	}
 }
 
+func TestEnsureCacheDatabasePathKeepsExplicitRelativeYAMLPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "work.yaml")
+	wantPath := filepath.Join("custom", "relative-cache.db")
+
+	original := minimalOAuthConfig()
+	original.Cache.DatabasePath = wantPath
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(before) failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	got, err := EnsureCacheDatabasePath(path, loaded)
+	if err != nil {
+		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
+	}
+	if got != wantPath {
+		t.Fatalf("got cache path %q, want explicit relative path %q", got, wantPath)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(after) failed: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("EnsureCacheDatabasePath rewrote an explicit relative cache path")
+	}
+}
+
+func TestEnsureCacheDatabasePathExpandsExplicitHomeYAMLPath(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	setHomeForTest(t, home)
+	path := filepath.Join(dir, "work.yaml")
+	configuredPath := filepath.Join("~", ".herald", "cached", "explicit-cache.db")
+	wantPath := filepath.Join(home, ".herald", "cached", "explicit-cache.db")
+
+	original := minimalOAuthConfig()
+	original.Cache.DatabasePath = configuredPath
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(before) failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	got, err := EnsureCacheDatabasePath(path, loaded)
+	if err != nil {
+		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
+	}
+	if got != wantPath {
+		t.Fatalf("got cache path %q, want expanded path %q", got, wantPath)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(after) failed: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("EnsureCacheDatabasePath rewrote an explicit home-relative cache path")
+	}
+}
+
 func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) {
 	dir := t.TempDir()
-	chdirForTest(t, dir)
+	home := filepath.Join(dir, "home")
+	setHomeForTest(t, home)
+	workingDir := filepath.Join(dir, "working-dir")
+	if err := os.MkdirAll(workingDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll(workingDir) failed: %v", err)
+	}
+	chdirForTest(t, workingDir)
 	path := filepath.Join(dir, "work-account.yaml")
 
 	original := minimalOAuthConfig()
@@ -158,7 +245,7 @@ func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) 
 	if err != nil {
 		t.Fatalf("EnsureCacheDatabasePath() failed: %v", err)
 	}
-	want := filepath.Join("herald", "cached", "work-account.db")
+	want := filepath.Join(home, ".herald", "cached", "work-account.db")
 	if got != want {
 		t.Fatalf("got cache path %q, want %q", got, want)
 	}
@@ -177,13 +264,20 @@ func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) 
 
 func TestEnsureCacheDatabasePathDisambiguatesExistingGeneratedPath(t *testing.T) {
 	dir := t.TempDir()
-	chdirForTest(t, dir)
+	home := filepath.Join(dir, "home")
+	setHomeForTest(t, home)
+	workingDir := filepath.Join(dir, "working-dir")
+	if err := os.MkdirAll(workingDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll(workingDir) failed: %v", err)
+	}
+	chdirForTest(t, workingDir)
 	path := filepath.Join(dir, "work-account.yaml")
 
-	if err := os.MkdirAll(filepath.Join("herald", "cached"), 0o700); err != nil {
+	cacheDir := filepath.Join(home, ".herald", "cached")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll() failed: %v", err)
 	}
-	existing := filepath.Join("herald", "cached", "work-account.db")
+	existing := filepath.Join(cacheDir, "work-account.db")
 	if err := os.WriteFile(existing, []byte("existing"), 0o600); err != nil {
 		t.Fatalf("WriteFile(existing) failed: %v", err)
 	}
@@ -204,9 +298,9 @@ func TestEnsureCacheDatabasePathDisambiguatesExistingGeneratedPath(t *testing.T)
 	if got == existing {
 		t.Fatalf("reused existing cache path %q", got)
 	}
-	pattern := regexp.MustCompile(`^herald/cached/work-account-[0-9]{8}-[a-f0-9]{6}\.db$`)
+	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(filepath.ToSlash(cacheDir)) + `/work-account-[0-9]{8}-[a-f0-9]{6}\.db$`)
 	if !pattern.MatchString(filepath.ToSlash(got)) {
-		t.Fatalf("got disambiguated path %q, want herald/cached/work-account-YYYYMMDD-xxxxxx.db", got)
+		t.Fatalf("got disambiguated path %q, want absolute ~/.herald/cached/work-account-YYYYMMDD-xxxxxx.db", got)
 	}
 
 	reloaded, err := Load(path)

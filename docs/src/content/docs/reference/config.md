@@ -28,7 +28,7 @@ ollama:
 | YAML path | Purpose |
 | --- | --- |
 | `vendor` | Optional provider shortcut: `gmail`, `protonmail`, `fastmail`, `outlook`, or `icloud`. |
-| `cache.database_path` | SQLite cache file path. Generated per config when missing. |
+| `cache.database_path` | SQLite cache file path. Generated as an absolute `<home>/.herald/cached/<config-name>.db` path when missing. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
 | `credentials.password` | Password, app password, or bridge password. |
 | `server.host` | IMAP host. Required for non-demo mode. |

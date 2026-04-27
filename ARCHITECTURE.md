@@ -82,7 +82,7 @@ Cleanup summary selection is treated as logical sender/domain identity, not row 
 `DeletionRequest` values are sent to a buffered channel. A single `deletionWorker` goroutine processes them serially (IMAP copy-to-Trash → mark Deleted → expunge → remove from cache). Results flow back via `deletionResultCh`. The UI updates immediately on result without waiting for a full reload.
 
 **Config-specific SQLite cache**
-The SQLite database path is part of configuration. If YAML already contains a cache database path, every local cache reader and writer uses it as authoritative. If it is missing, startup generates `herald/cached/<config-name>.db` from the config filename, disambiguates with a date and short random suffix when that file already exists, writes the chosen path back to YAML, and then opens the cache.
+The SQLite database path is part of configuration. If YAML already contains a cache database path, every local cache reader and writer uses it as authoritative. If it is missing, startup generates an absolute `<home>/.herald/cached/<config-name>.db` path from the config filename, disambiguates with a date and short random suffix when that file already exists, writes the chosen absolute path back to YAML, and then opens the cache.
 
 **SQLite WAL mode**
 `PRAGMA journal_mode=WAL` is set at cache init. This allows the TUI, SSH server, daemon, and MCP server to read and write the same configured SQLite database simultaneously without blocking each other. No cross-process locks are held.

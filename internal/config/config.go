@@ -190,7 +190,11 @@ func EnsureCacheDatabasePath(configPath string, c *Config) (string, error) {
 		return expanded, nil
 	}
 
-	cacheDir := filepath.Join("herald", "cached")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	cacheDir := filepath.Join(home, ".herald", "cached")
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to create cache directory: %w", err)
 	}

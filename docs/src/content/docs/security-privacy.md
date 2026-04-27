@@ -19,7 +19,7 @@ The config can contain credentials, app passwords, OAuth refresh tokens, AI prov
 chmod 600 ~/.herald/conf.yaml
 ```
 
-SQLite cache paths are stored in the config. By default, generated cache files live under `herald/cached/` relative to the working directory.
+SQLite cache paths are stored in the config. By default, generated cache files live under the current user's `~/.herald/cached/` directory and are written to YAML as absolute paths.
 
 ## Logs
 
