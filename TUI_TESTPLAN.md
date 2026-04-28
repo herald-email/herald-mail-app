@@ -756,13 +756,14 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
-1. Open Timeline and search for the demo email with inline and remote images.
+1. Open Timeline and search for `Creative Commons image sampler for terminal previews`.
 2. Open the split preview and capture the image hint plus body links.
 3. Press `z` to enter full-screen and capture.
 4. Repeat in a non-iTerm terminal, an iTerm2-compatible terminal if available, and SSH mode.
 5. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
+- The Creative Commons sampler fixture exposes four embedded inline images with different dimensions.
 - Split preview stays compact and does not promise image viewing when no full-screen image path is available.
 - iTerm2-compatible terminals render bounded inline images inside the full-screen viewport.
 - Non-iTerm local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.

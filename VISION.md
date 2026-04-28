@@ -776,6 +776,7 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] `cmd/herald-mcp-server --demo` exposes the same synthetic mailbox without loading private config or cache files
 - [x] Canonical demo tapes generate 5-30 second GIFs in `assets/demo/`
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
+- [x] Creative Commons image sampler email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode
 - [ ] Demo mode accessible from the first-run wizard ("Try without an account")
 
 ---

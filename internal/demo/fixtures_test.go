@@ -103,6 +103,49 @@ func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 	}
 }
 
+func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
+	const subject = "Creative Commons image sampler for terminal previews"
+
+	var found bool
+	for _, msg := range Mailbox().Messages {
+		if msg.Email.Subject != subject {
+			continue
+		}
+		found = true
+		if msg.Email.Sender != "Open Commons Gallery <images@opencommons.example>" {
+			t.Fatalf("unexpected sampler sender: %q", msg.Email.Sender)
+		}
+		if msg.Email.Folder != "INBOX" {
+			t.Fatalf("sampler folder = %q, want INBOX", msg.Email.Folder)
+		}
+		if len(msg.Body.InlineImages) != 4 {
+			t.Fatalf("sampler inline image count = %d, want 4", len(msg.Body.InlineImages))
+		}
+		wantMIMEs := []string{"image/png", "image/png", "image/jpeg", "image/jpeg"}
+		for i, want := range wantMIMEs {
+			img := msg.Body.InlineImages[i]
+			if img.MIMEType != want {
+				t.Fatalf("image %d MIME type = %q, want %q", i+1, img.MIMEType, want)
+			}
+			if img.ContentID == "" {
+				t.Fatalf("image %d has empty content ID", i+1)
+			}
+			if len(img.Data) == 0 {
+				t.Fatalf("image %d has empty embedded data", i+1)
+			}
+		}
+		body := strings.ToLower(msg.Body.TextPlain)
+		for _, want := range []string{"creative commons", "cc0", "cc by 4.0", "46x21", "330px", "960px", "![remote commons thumbnail]("} {
+			if !strings.Contains(body, strings.ToLower(want)) {
+				t.Fatalf("sampler body missing %q:\n%s", want, msg.Body.TextPlain)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected demo mailbox to include %q fixture", subject)
+	}
+}
+
 func TestDemoAIIsDeterministicAndOffline(t *testing.T) {
 	ai := NewAI()
 

@@ -40,6 +40,46 @@ func TestDemoBackendFetchesRichFixtureBodies(t *testing.T) {
 	}
 }
 
+func TestDemoBackendFetchesCreativeCommonsImageSampler(t *testing.T) {
+	const subject = "Creative Commons image sampler for terminal previews"
+
+	b := NewDemoBackend()
+	emails, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+
+	var targetUID uint32
+	for _, email := range emails {
+		if email.Subject == subject {
+			targetUID = email.UID
+			break
+		}
+	}
+	if targetUID == 0 {
+		t.Fatalf("expected %q demo email", subject)
+	}
+
+	body, err := b.FetchEmailBody("INBOX", targetUID)
+	if err != nil {
+		t.Fatalf("FetchEmailBody: %v", err)
+	}
+	if body == nil {
+		t.Fatal("expected body")
+	}
+	if len(body.InlineImages) != 4 {
+		t.Fatalf("inline image count = %d, want 4", len(body.InlineImages))
+	}
+	for i, img := range body.InlineImages {
+		if len(img.Data) == 0 {
+			t.Fatalf("inline image %d has empty data", i+1)
+		}
+	}
+	if !strings.Contains(strings.ToLower(body.TextPlain), "creative commons") {
+		t.Fatalf("expected attribution text in sampler body, got:\n%s", body.TextPlain)
+	}
+}
+
 func TestDemoBackendSemanticSearchRanksInfrastructureResults(t *testing.T) {
 	b := NewDemoBackend()
 	vec, err := demo.NewAI().Embed("search_query: infrastructure budget risk")
