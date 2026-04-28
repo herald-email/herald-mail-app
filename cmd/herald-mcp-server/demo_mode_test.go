@@ -27,4 +27,7 @@ func TestDemoMCPServerListsAndReadsDemoEmails(t *testing.T) {
 	if !strings.Contains(string(callJSON), "Northstar Cloud") {
 		t.Fatalf("expected fictional demo mailbox data in response: %s", callJSON)
 	}
+	if !strings.Contains(string(callJSON), "message_id=") {
+		t.Fatalf("expected list_recent_emails response to expose message_id values: %s", callJSON)
+	}
 }

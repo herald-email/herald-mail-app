@@ -13,9 +13,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -30,27 +33,76 @@ import (
 
 // daemonURL is the base URL of the running herald daemon.
 // Empty string means daemon is not available; write operations will fail gracefully.
-var daemonURL string
+var (
+	daemonMu        sync.Mutex
+	daemonURL       string
+	daemonProbeBind = "127.0.0.1"
+	daemonProbePort int
+)
+
+func configureDaemonProbe(bind string, port int) {
+	if bind == "" {
+		bind = "127.0.0.1"
+	}
+	daemonMu.Lock()
+	daemonProbeBind = bind
+	daemonProbePort = port
+	daemonMu.Unlock()
+}
 
 // probeDaemon checks if the daemon is running and sets daemonURL.
 func probeDaemon(port int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	configureDaemonProbe("127.0.0.1", port)
+	_ = probeConfiguredDaemon()
+}
+
+func probeConfiguredDaemon() bool {
+	daemonMu.Lock()
+	bind := daemonProbeBind
+	port := daemonProbePort
+	daemonMu.Unlock()
+	if port == 0 {
+		return false
+	}
+
+	url := "http://" + net.JoinHostPort(bind, strconv.Itoa(port))
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(url + "/v1/status")
 	if err != nil {
-		return
+		return false
 	}
 	resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
+		daemonMu.Lock()
 		daemonURL = url
-		log.Printf("daemon available at %s", daemonURL)
+		daemonMu.Unlock()
+		log.Printf("daemon available at %s", url)
+		return true
 	}
+	return false
+}
+
+func currentDaemonURL() string {
+	daemonMu.Lock()
+	defer daemonMu.Unlock()
+	return daemonURL
+}
+
+func ensureDaemonAvailable() (string, error) {
+	if url := currentDaemonURL(); url != "" {
+		return url, nil
+	}
+	if probeConfiguredDaemon() {
+		return currentDaemonURL(), nil
+	}
+	return "", fmt.Errorf("daemon not running — start herald daemon first")
 }
 
 // daemonPost makes a POST to the daemon. Returns error if daemon unavailable.
 func daemonPost(path string, body any) ([]byte, int, error) {
-	if daemonURL == "" {
-		return nil, 0, fmt.Errorf("daemon not running — start herald daemon first")
+	baseURL, err := ensureDaemonAvailable()
+	if err != nil {
+		return nil, 0, err
 	}
 	var buf bytes.Buffer
 	if body != nil {
@@ -58,7 +110,7 @@ func daemonPost(path string, body any) ([]byte, int, error) {
 			return nil, 0, err
 		}
 	}
-	resp, err := http.Post(daemonURL+path, "application/json", &buf)
+	resp, err := http.Post(baseURL+path, "application/json", &buf)
 	if err != nil {
 		return nil, 0, fmt.Errorf("daemon unreachable: %w", err)
 	}
@@ -69,10 +121,11 @@ func daemonPost(path string, body any) ([]byte, int, error) {
 
 // daemonGet makes a GET to the daemon. Returns error if daemon unavailable.
 func daemonGet(path string) ([]byte, int, error) {
-	if daemonURL == "" {
-		return nil, 0, fmt.Errorf("daemon not running — start herald daemon first")
+	baseURL, err := ensureDaemonAvailable()
+	if err != nil {
+		return nil, 0, err
 	}
-	resp, err := http.Get(daemonURL + path)
+	resp, err := http.Get(baseURL + path)
 	if err != nil {
 		return nil, 0, fmt.Errorf("daemon unreachable: %w", err)
 	}
@@ -83,10 +136,11 @@ func daemonGet(path string) ([]byte, int, error) {
 
 // daemonDelete makes a DELETE to the daemon.
 func daemonDelete(path string) (int, error) {
-	if daemonURL == "" {
-		return 0, fmt.Errorf("daemon not running — start herald daemon first")
+	baseURL, err := ensureDaemonAvailable()
+	if err != nil {
+		return 0, err
 	}
-	req, err := http.NewRequest(http.MethodDelete, daemonURL+path, nil)
+	req, err := http.NewRequest(http.MethodDelete, baseURL+path, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -145,7 +199,8 @@ func main() {
 		log.Fatalf("Failed to init AI client: %v", err)
 	}
 
-	probeDaemon(cfg.Daemon.Port)
+	configureDaemonProbe(cfg.Daemon.BindAddr, cfg.Daemon.Port)
+	_ = probeConfiguredDaemon()
 
 	s := server.NewMCPServer(
 		"herald",
@@ -199,8 +254,8 @@ func main() {
 				if !e.IsRead {
 					unread = " [unread]"
 				}
-				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s%s%s\n",
-					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject, att, unread))
+				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s%s%s  %s\n",
+					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject, att, unread, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -242,8 +297,8 @@ func main() {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Found %d emails matching %q in %s:\n\n", len(emails), query, folder))
 			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  [%s]  From: %-45s  %s\n",
-					e.Date.Format("2006-01-02"), e.Sender, e.Subject))
+				sb.WriteString(fmt.Sprintf("  [%s]  From: %-45s  %s  %s\n",
+					e.Date.Format("2006-01-02"), e.Sender, e.Subject, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -400,8 +455,8 @@ func main() {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Unread emails in %s (%d):\n\n", folder, len(emails)))
 			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s\n",
-					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject))
+				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s  %s\n",
+					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -452,8 +507,8 @@ func main() {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Found %d emails in %s:\n\n", len(emails), folder))
 			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s\n",
-					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject))
+				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s  %s\n",
+					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -489,8 +544,8 @@ func main() {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Found %d emails from %q:\n\n", len(emails), sender))
 			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  [%s] %-20s  %s  %s\n",
-					e.Folder, e.Date.Format("2006-01-02"), e.Sender, e.Subject))
+				sb.WriteString(fmt.Sprintf("  [%s] %-20s  %s  %s  %s\n",
+					e.Folder, e.Date.Format("2006-01-02"), e.Sender, e.Subject, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -547,8 +602,8 @@ func main() {
 			sb.WriteString(fmt.Sprintf("Found %d emails semantically similar to %q:\n\n", len(results), query))
 			for _, result := range results {
 				pct := int(result.Score * 100)
-				sb.WriteString(fmt.Sprintf("  [%d%%] %s  %-40s  %s\n",
-					pct, result.Email.Date.Format("2006-01-02"), result.Email.Sender, result.Email.Subject))
+				sb.WriteString(fmt.Sprintf("  [%d%%] %s  %-40s  %s  %s\n",
+					pct, result.Email.Date.Format("2006-01-02"), result.Email.Sender, result.Email.Subject, mcpMessageIDRef(result.Email)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -922,7 +977,7 @@ func main() {
 			if len(recentEmails) > 0 {
 				sb.WriteString(fmt.Sprintf("\nRecent Emails (%d):\n", len(recentEmails)))
 				for _, e := range recentEmails {
-					sb.WriteString(fmt.Sprintf("- %s %s\n", e.Date.Format("2006-01-02"), e.Subject))
+					sb.WriteString(fmt.Sprintf("- %s %s  %s\n", e.Date.Format("2006-01-02"), e.Subject, mcpMessageIDRef(e)))
 				}
 			}
 			return mcp.NewToolResultText(sb.String()), nil
@@ -1159,8 +1214,8 @@ func main() {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Thread: %q — %d emails in %s\n\n", subject, len(emails), folder))
 			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s\n",
-					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject))
+				sb.WriteString(fmt.Sprintf("  %s  %-40s  %s  %s\n",
+					e.Date.Format("2006-01-02 15:04"), e.Sender, e.Subject, mcpMessageIDRef(e)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},

@@ -51,6 +51,8 @@ If `sync` fails, confirm the daemon is running and that `daemon.bind`/`daemon.po
 
 If MCP write tools fail, start the daemon before starting the MCP client.
 
+If `serve` crashes with `panic: parsing "POST /v1/folders/{name...}/rename": ... wildcard not at end`, upgrade Herald. That panic came from an older invalid Go `ServeMux` route pattern and prevents every daemon-backed surface from starting.
+
 ## Related Pages
 
 - [MCP Server](/advanced/mcp/)

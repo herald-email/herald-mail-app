@@ -16,6 +16,33 @@ func newFolderTestServer(t *testing.T) *Server {
 	return &Server{backend: b}
 }
 
+func TestRegisterRoutes_RoutesFolderRenameWithoutPanic(t *testing.T) {
+	s := newFolderTestServer(t)
+	mux := http.NewServeMux()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("registerRoutes panicked: %v", r)
+		}
+	}()
+	s.registerRoutes(mux)
+
+	for _, path := range []string{
+		"/v1/folders/OldFolder/rename",
+		"/v1/folders/Work%2FProjects/rename",
+	} {
+		body, _ := json.Marshal(map[string]string{"new_name": "Archive/2025"})
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d — body: %s", path, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestHandleCreateFolder(t *testing.T) {
 	s := newFolderTestServer(t)
 

@@ -247,6 +247,24 @@ CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald-mcp-server",
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
 ```
 
+### MCP Readiness Checklist
+
+The MCP server can answer cache-only questions after Herald has synced mail, but live IMAP/SMTP actions need the local daemon:
+
+```bash
+herald serve -config ~/.herald/conf.yaml
+herald status
+```
+
+| Capability | Requirement |
+|------------|-------------|
+| Recent/unread/search/sender stats/classification reads | Open the TUI or run the daemon so the SQLite cache has synced mail. |
+| Email body, summaries, action items, and draft replies | Open the email in the TUI first so its body text is cached. |
+| Semantic search, summaries, classification, and action-item extraction | Configure an AI provider, such as Ollama, Claude, or OpenAI-compatible settings. |
+| Sync, drafts, attachments, send/reply/forward, folder changes, and mail mutations | Start `herald serve` with the same `-config` used by the MCP server. |
+
+If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binaries had an invalid daemon route pattern for folder rename.
+
 ### Available MCP Tools
 
 | Tool | Description |

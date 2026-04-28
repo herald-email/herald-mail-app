@@ -24,6 +24,25 @@ If the cache is empty, open the TUI first and let Herald sync at least one folde
 
 ![MCP tools list smoke test output](/screenshots/mcp-tools-list-terminal.png)
 
+## Readiness Checklist
+
+MCP has a few capability levels because some tools read the SQLite cache while others need live IMAP, SMTP, attachments, or AI. Use the same `-config` path for the TUI, daemon, and MCP server so they share the same cache and daemon settings.
+
+| Capability | Requirement |
+| --- | --- |
+| Cache-only read tools such as recent mail, unread mail, keyword search, sender stats, contacts, rules, and stored classifications | Run the TUI or daemon long enough to sync the SQLite cache. |
+| Body lookup, email summaries, action-item extraction, and draft-reply generation | Cache the message body first, usually by opening the email in the TUI. MCP listing outputs include `message_id=...` for these follow-up tools. |
+| Semantic search, summarization, classification, action items, and AI draft replies | Configure an AI provider in settings or YAML. Ollama can also provide embeddings for semantic search. |
+| Sync, drafts, attachments, send/reply/forward, folder mutation, cleanup execution, unsubscribe, and mail mutation tools | Start `herald serve -config ~/.herald/conf.yaml` before or during the MCP client session. The MCP server re-checks the daemon when a daemon-backed tool runs. |
+
+Recommended live setup:
+
+```sh
+herald serve -config ~/.herald/conf.yaml
+herald status
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
+```
+
 ## Client Examples
 
 Claude Code:
@@ -83,6 +102,8 @@ The MCP server exposes cached email data to the MCP client you configure. The cl
 ## Troubleshooting
 
 If `tools/list` fails, confirm the binary path and `-config` path. If read tools return no rows, run the TUI and sync a folder. If write tools fail, start `herald serve` and check `herald status`.
+
+If `herald serve` prints `panic: parsing "POST /v1/folders/{name...}/rename": ... wildcard not at end`, upgrade Herald. That older binary cannot start the daemon, so daemon-backed MCP tools such as sync, drafts, attachments, sending, and folder/mail mutation will remain unavailable.
 
 ## Related Pages
 

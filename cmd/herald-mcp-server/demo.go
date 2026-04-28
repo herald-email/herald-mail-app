@@ -51,8 +51,8 @@ func newDemoMCPServer() *server.MCPServer {
 				if !email.IsRead {
 					flags += " [unread]"
 				}
-				sb.WriteString(fmt.Sprintf("  %s  %-46s  %s%s\n",
-					email.Date.Format("2006-01-02 15:04"), email.Sender, email.Subject, flags))
+				sb.WriteString(fmt.Sprintf("  %s  %-46s  %s%s  %s\n",
+					email.Date.Format("2006-01-02 15:04"), email.Sender, email.Subject, flags, mcpMessageIDRef(email)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
@@ -94,8 +94,8 @@ func newDemoMCPServer() *server.MCPServer {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("Found %d demo emails matching %q in %s:\n\n", len(matches), query, folder))
 			for _, email := range matches {
-				sb.WriteString(fmt.Sprintf("  [%s] %-46s %s\n",
-					email.Date.Format("2006-01-02"), email.Sender, email.Subject))
+				sb.WriteString(fmt.Sprintf("  [%s] %-46s %s  %s\n",
+					email.Date.Format("2006-01-02"), email.Sender, email.Subject, mcpMessageIDRef(email)))
 			}
 			return mcp.NewToolResultText(sb.String()), nil
 		},
