@@ -96,7 +96,7 @@ func main() {
 				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
 				m.SetConfigPath(resolvedConfig)
 				m.SetConfig(cfg)
-				return m, []tea.ProgramOption{tea.WithAltScreen()}
+				return m, []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
 			}),
 		),
 	)

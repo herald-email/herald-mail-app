@@ -948,6 +948,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 
+	case tea.MouseMsg:
+		if model, cmd, handled := m.handleMouseMsg(msg); handled {
+			return model, cmd
+		}
+
 	case FoldersLoadedMsg:
 		logger.Debug("FoldersLoadedMsg: folders=%d currentFolder=%s", len(msg.Folders), m.currentFolder)
 		if len(msg.Folders) == 0 {
@@ -1743,6 +1748,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "m":
+		if m.activeTab == tabCleanup && m.showCleanupPreview {
+			return m, m.toggleMouseCaptureMode()
+		}
+		return m, nil
+
 	case "f":
 		if m.canInteractWithVisibleData() {
 			m.showSidebar = !m.showSidebar

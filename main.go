@@ -158,7 +158,7 @@ func runDemo() {
 	model.SetConfig(cfg)
 
 	logger.Info("Starting demo TUI application...")
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		logger.Error("Demo application error: %v", err)
 		fmt.Printf("Error running demo: %v\n", err)
@@ -619,7 +619,7 @@ func runTUI() {
 	logger.Info("Starting TUI application...")
 
 	// Run the application
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		logger.Error("Application error: %v", err)
 		fmt.Printf("Error running application: %v", err)

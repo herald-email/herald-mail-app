@@ -21,6 +21,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Markdown compose → HTML send (multipart HTML + plain)
 - [x] Full-screen email preview (`z`)
 - [x] Text selection (mouse mode + vim visual mode + clipboard)
+- [x] Mouse navigation (cell-motion click and wheel controls for tabs, lists, sidebars, and previews)
 - [x] AI classification via Ollama
 - [x] Chat panel (ask questions about your inbox)
 - [x] Semantic search (natural-language queries via local embeddings)
@@ -94,6 +95,8 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 ## UI Layout
 
 The TUI uses a fixed tab bar at the top, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
+
+- [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
 
 ### Tabs (top-level navigation)
 Keyboard (number keys) and mouse clickable.
@@ -657,6 +660,7 @@ Attachments appear in previews and compose flows, so this section tracks both ra
 Bubble Tea's alt-screen captures all input, so the terminal's native mouse selection is disabled. Two mechanisms restore copy-ability.
 
 - [x] `m` toggles mouse-selection mode (releases mouse capture; status bar indicator)
+- [x] `m` restores TUI mouse capture after temporary terminal-native text selection
 - [x] `v` in preview enters vim-style visual line mode
 - [x] `y` yanks selected lines to system clipboard (`pbcopy` / `xclip`)
 - [x] `Esc` cancels visual mode

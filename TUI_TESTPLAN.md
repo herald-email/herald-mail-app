@@ -1020,6 +1020,26 @@ Check these states during every applicable lane:
 - ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
 - The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
 
+### TC-50 — Mouse navigation parity
+
+**Lane:** A
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode with mouse capture enabled.
+2. Click each top tab and confirm the active tab changes without typing into Compose fields.
+3. In Timeline, click a visible row to open preview, then wheel over the list and the preview.
+4. In Cleanup, click a sender/domain row, click a details row to open preview, then wheel over the summary, details, and preview regions.
+5. Click the sidebar when visible, then press `m` in a preview to release mouse capture and press `m` again to restore it.
+6. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
+
+**Expect:**
+- Mouse click and wheel behavior matches the equivalent keyboard actions and never changes hidden state outside the clicked region.
+- Preview wheel events scroll the body without moving the underlying list cursor.
+- List wheel events move the focused list cursor and refresh an open preview when applicable.
+- The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.
+- The minimum-size guard still appears at `50x15` and recovery restores normal mouse-capable layouts.
+
 ---
 
 ## Recommendations

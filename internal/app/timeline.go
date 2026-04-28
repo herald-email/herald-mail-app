@@ -1246,11 +1246,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "m":
-		m.timeline.mouseMode = !m.timeline.mouseMode
-		if m.timeline.mouseMode {
-			return m, tea.DisableMouse, true
-		}
-		return m, tea.EnableMouseCellMotion, true
+		return m, m.toggleMouseCaptureMode(), true
 	case "y":
 		if m.timeline.pendingY {
 			m.timeline.pendingY = false
