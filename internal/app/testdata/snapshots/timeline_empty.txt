@@ -5,5 +5,5 @@
 │   All Mail only          │  └────────────────────────────────────────────────────────────────────────────────────────┘
 └──────────────────────────┘                                                                                            
  INBOX  │  AI: off  │  0 emails                                                                                         
- F1-F4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive 
- /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit                                                         [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+ F1-F4: tabs  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward    
+ D: delete  │  e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit                            [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l

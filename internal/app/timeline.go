@@ -1165,7 +1165,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timeline.selectedEmail != nil {
 		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
 	}
-	return joinHintSegments(append([]string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+	return joinHintSegments(append([]string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
 }
 
 func joinHintSegments(segments ...string) string {

@@ -254,6 +254,7 @@ Check these states during every applicable lane:
 - Exactly one panel shows active border at a time.
 - Timeline border deactivates when sidebar or preview owns focus.
 - Inactive panels remain readable but visually secondary.
+- The Timeline bottom hint bar advertises `Tab` / `Shift+Tab` panel switching when navigation hints are visible.
 
 ### TC-04 — Row highlight consistency
 

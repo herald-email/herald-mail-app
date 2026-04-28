@@ -139,6 +139,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
 - [x] Compose-safe command layer: `F1/F2/F3/F4` are the primary advertised tab shortcuts, secondary `Alt+1/2/3/4` aliases remain supported, and `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
+- [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)

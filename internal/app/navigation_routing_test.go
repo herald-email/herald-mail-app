@@ -398,6 +398,18 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	}
 }
 
+func TestRenderKeyHints_TimelineListAdvertisesPanelSwitching(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	hints := stripANSI(m.renderKeyHints())
+	if !strings.Contains(hints, "tab/shift+tab: panels") {
+		t.Fatalf("expected Timeline list hints to advertise panel switching, got %q", hints)
+	}
+}
+
 func TestRenderTabBar_AdvertisesFunctionKeys(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	rendered := stripANSI(m.renderTabBar())
