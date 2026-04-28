@@ -87,6 +87,11 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		return &models.EmailBody{TextPlain: string(raw)}, nil
 	}
 	result := &models.EmailBody{}
+	result.From = mailMsg.Header.Get("From")
+	result.To = mailMsg.Header.Get("To")
+	result.CC = mailMsg.Header.Get("Cc")
+	result.BCC = mailMsg.Header.Get("Bcc")
+	result.Subject = mailMsg.Header.Get("Subject")
 	result.MessageID = mailMsg.Header.Get("Message-Id")
 	result.InReplyTo = mailMsg.Header.Get("In-Reply-To")
 	result.References = mailMsg.Header.Get("References")

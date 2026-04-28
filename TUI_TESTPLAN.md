@@ -521,6 +521,29 @@ Check these states during every applicable lane:
 - Paths with spaces are inserted literally.
 - At `50x15`, the minimum-size guard appears and the Compose view recovers cleanly when resized back to `80x24`.
 
+### TC-14E — Timeline draft edit workflow
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start `/tmp/herald --demo`.
+2. Open Timeline and find a thread with at least one draft message.
+3. Confirm the collapsed thread row marks the draft count as `Draft` or `Draft N`.
+4. Expand the thread and confirm the individual draft row is marked without using the classification Tag column.
+5. Open the draft preview and capture the header.
+6. Press `E` from the draft row or preview.
+7. Confirm Compose opens with the draft recipients, subject, and body restored.
+8. Send the message in demo mode and return to Timeline.
+9. Repeat at `80x24`; at `50x15`, confirm the minimum-size guard or compact layout does not render overlapping draft labels.
+
+**Expect:**
+- Draft state is visible in both Timeline thread rows and individual message rows.
+- Preview header shows `State: Draft - E edit draft`.
+- Draft preview/list hints prioritize `E: edit draft` and `D: discard draft`.
+- `E` opens Compose from a highlighted draft, from draft preview focus, and from a collapsed thread that contains a draft.
+- Sending deletes the source draft only after send success; autosave replacement never deletes the previous draft before the new save succeeds.
+
 ### TC-15 — Narrow screen behavior
 
 **Lane:** A, B

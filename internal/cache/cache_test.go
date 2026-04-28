@@ -108,6 +108,76 @@ func TestCacheEmail_UIDisPersisted(t *testing.T) {
 	}
 }
 
+func TestCacheEmail_DraftFlagIsPersistedAndReadable(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{
+		MessageID: "<draft-test@example.com>",
+		UID:       101,
+		Sender:    "me@example.com",
+		Subject:   "Draft candidate",
+		Date:      time.Now(),
+		Folder:    "Drafts",
+		IsDraft:   true,
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	got, err := c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if !got.IsDraft {
+		t.Fatalf("expected GetEmailByID to preserve IsDraft=true, got %#v", got)
+	}
+
+	timeline, err := c.GetEmailsSortedByDate("Drafts")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(timeline) != 1 || !timeline[0].IsDraft {
+		t.Fatalf("expected timeline draft flag to roundtrip, got %#v", timeline)
+	}
+}
+
+func TestBatchUpdateEmailFlagsByUID_BackfillsDraftFlag(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{
+		MessageID: "<existing-draft@example.com>",
+		UID:       202,
+		Sender:    "me@example.com",
+		Subject:   "Existing Gmail draft",
+		Date:      time.Now(),
+		Folder:    "INBOX",
+		IsRead:    false,
+		IsStarred: false,
+		IsDraft:   false,
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	err := c.BatchUpdateEmailFlagsByUID("INBOX", []EmailFlagState{{
+		UID:       202,
+		IsRead:    true,
+		IsStarred: true,
+		IsDraft:   true,
+	}})
+	if err != nil {
+		t.Fatalf("BatchUpdateEmailFlagsByUID: %v", err)
+	}
+
+	got, err := c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if !got.IsRead || !got.IsStarred || !got.IsDraft {
+		t.Fatalf("expected flags to be backfilled, got read=%v starred=%v draft=%v", got.IsRead, got.IsStarred, got.IsDraft)
+	}
+}
+
 func TestGetCachedIDs_EmptyFolderReturnsEmpty(t *testing.T) {
 	c := newTestCache(t)
 

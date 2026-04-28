@@ -17,6 +17,7 @@ type EmailData struct {
 	LastUpdated    time.Time `db:"last_updated"`
 	IsRead         bool      `db:"is_read"`
 	IsStarred      bool      `db:"is_starred"`
+	IsDraft        bool      `db:"is_draft"`
 }
 
 // SenderStats represents statistics for a sender
@@ -78,6 +79,11 @@ type FolderStatus struct {
 
 // EmailBody holds the fetched body content of a single email message.
 type EmailBody struct {
+	From                string
+	To                  string
+	CC                  string
+	BCC                 string
+	Subject             string
 	TextPlain           string
 	TextHTML            string
 	InlineImages        []InlineImage

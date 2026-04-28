@@ -3,6 +3,8 @@ package imap
 import (
 	"errors"
 	"testing"
+
+	goimap "github.com/emersion/go-imap"
 )
 
 // --- decideSyncStrategy ---
@@ -50,6 +52,58 @@ func TestAdjustSyncStrategyForCacheRecovery_PreservesNoneWhenCacheLooksHealthy(t
 	got := adjustSyncStrategyForCacheRecovery(syncStrategyNone, 12345, 12345, 1317, 1317)
 	if got != syncStrategyNone {
 		t.Fatalf("expected healthy cache to preserve syncStrategyNone, got %v", got)
+	}
+}
+
+func TestMessageFlagStateFromIMAPDetectsDraftFlagAndCanonicalDraftFolder(t *testing.T) {
+	tests := []struct {
+		name      string
+		flags     []string
+		folder    string
+		wantRead  bool
+		wantStar  bool
+		wantDraft bool
+	}{
+		{
+			name:      "explicit draft flag",
+			flags:     []string{goimap.SeenFlag, goimap.FlaggedFlag, "\\Draft"},
+			folder:    "INBOX",
+			wantRead:  true,
+			wantStar:  true,
+			wantDraft: true,
+		},
+		{
+			name:      "gmail drafts folder",
+			flags:     []string{goimap.SeenFlag},
+			folder:    "[Gmail]/Drafts",
+			wantRead:  true,
+			wantDraft: true,
+		},
+		{
+			name:      "inbox drafts folder",
+			flags:     nil,
+			folder:    "INBOX.Drafts",
+			wantDraft: true,
+		},
+		{
+			name:     "regular inbox",
+			flags:    []string{goimap.SeenFlag},
+			folder:   "INBOX",
+			wantRead: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := messageFlagStateFromIMAP(77, tt.flags, tt.folder)
+			if got.UID != 77 {
+				t.Fatalf("UID = %d, want 77", got.UID)
+			}
+			if got.IsRead != tt.wantRead || got.IsStarred != tt.wantStar || got.IsDraft != tt.wantDraft {
+				t.Fatalf("flags = read:%v starred:%v draft:%v, want read:%v starred:%v draft:%v",
+					got.IsRead, got.IsStarred, got.IsDraft, tt.wantRead, tt.wantStar, tt.wantDraft)
+			}
+		})
 	}
 }
 

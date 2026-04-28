@@ -7,14 +7,7 @@ func (m *Model) composeExitCmds() []tea.Cmd {
 		return nil
 	}
 	m.draftSaving = true
-	var cmds []tea.Cmd
-	if m.lastDraftUID != 0 {
-		cmds = append(cmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
-		m.lastDraftUID = 0
-		m.lastDraftFolder = ""
-	}
-	cmds = append(cmds, m.saveDraftCmd())
-	return cmds
+	return []tea.Cmd{m.saveDraftCmd()}
 }
 
 func (m *Model) resetComposeMode() {

@@ -117,6 +117,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Star / pin important threads to top
+- [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
@@ -363,6 +364,8 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use Alt chords while composing
 - [x] Preserved HTML replies and forwards: Compose edits only the user's top note while Herald sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
 - [x] Forwarded attachments are included by default and removable individually before sending
+- [x] Timeline drafts open as editable Compose messages with recipients, subject, and body restored from the saved draft; sending deletes the source draft only after SMTP success
+- [x] Draft autosave replacement saves the new draft before deleting the previously saved draft, so a failed save cannot discard the only copy
 - [ ] Browser preview (open rendered HTML in default browser before sending)
 - [x] Inline images (paste / drag file path → base64 `multipart/related`)
 - [x] `send_email` MCP tool
@@ -640,6 +643,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Reply/forward Compose shows a preserved-content summary with HTML, inline image, attachment, and preservation-mode status
 - [x] `D` in Timeline deletes the highlighted email (single message)
 - [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
+- [x] `D` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command
 - [x] `e` archives the highlighted email or sender
 - [x] Inline confirmation prompt (`y` to confirm, `Esc` to cancel)
 

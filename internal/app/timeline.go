@@ -37,6 +37,23 @@ const (
 	threadNestedPrefix    = "  ↳ "
 )
 
+func draftLabel(count int) string {
+	if count <= 1 {
+		return "Draft"
+	}
+	return fmt.Sprintf("Draft %d", count)
+}
+
+func threadDraftCount(emails []*models.EmailData) int {
+	count := 0
+	for _, email := range emails {
+		if email != nil && email.IsDraft {
+			count++
+		}
+	}
+	return count
+}
+
 // timelineRowRef maps a table-cursor position to a thread group and email.
 type timelineRowRef struct {
 	kind     timelineRowKind
@@ -255,6 +272,9 @@ func (m *Model) updateTimelineTable() {
 		if subject == "" {
 			subject = "(no subject)"
 		}
+		if email.IsDraft {
+			subject = draftLabel(1) + ": " + subject
+		}
 		// Prepend similarity score badge for semantic search results
 		if m.timeline.semanticScores != nil {
 			if score, ok := m.timeline.semanticScores[email.MessageID]; ok {
@@ -358,6 +378,9 @@ func (m *Model) updateTimelineTable() {
 				tag = m.classifications[newest.MessageID]
 			}
 			threadSubj := fmt.Sprintf("[%d] %s", len(g.emails), subject)
+			if drafts := threadDraftCount(g.emails); drafts > 0 {
+				threadSubj = draftLabel(drafts) + " " + threadSubj
+			}
 			// Build sender cell with the same indicators as single-email rows
 			// so columns stay aligned across all timeline rows.
 			unreadDot := " "
@@ -624,6 +647,30 @@ func (m *Model) currentTimelineRowEmail() *models.EmailData {
 	return ref.group.emails[ref.emailIdx]
 }
 
+func (m *Model) currentTimelineDraftEmail() *models.EmailData {
+	if m.focusedPanel == panelPreview && m.timeline.selectedEmail != nil && m.timeline.selectedEmail.IsDraft {
+		return m.timeline.selectedEmail
+	}
+	cursor := m.timelineTable.Cursor()
+	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
+		return nil
+	}
+	ref := m.timeline.threadRowMap[cursor]
+	if ref.kind == rowKindThread {
+		for _, email := range ref.group.emails {
+			if email != nil && email.IsDraft {
+				return email
+			}
+		}
+		return nil
+	}
+	email := ref.group.emails[ref.emailIdx]
+	if email != nil && email.IsDraft {
+		return email
+	}
+	return nil
+}
+
 func buildForwardSubject(subject string) string {
 	if strings.HasPrefix(strings.ToLower(subject), "fwd:") {
 		return subject
@@ -711,6 +758,43 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeBody.Focus()
 }
 
+func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
+	if body == nil {
+		body = &models.EmailBody{}
+	}
+	subject := strings.TrimSpace(body.Subject)
+	if subject == "" && email != nil {
+		subject = email.Subject
+	}
+	m.activeTab = tabCompose
+	m.replyContextEmail = nil
+	m.composeAIThread = false
+	m.composePreserved = nil
+	m.composePreview = false
+	m.composeTo.SetValue(body.To)
+	m.composeCC.SetValue(body.CC)
+	m.composeBCC.SetValue(body.BCC)
+	m.composeSubject.SetValue(subject)
+	m.composeBody.SetValue(body.TextPlain)
+	m.composeAttachments = nil
+	m.composeStatus = composeStatus
+	if m.composeStatus == "" {
+		m.composeStatus = "Editing draft"
+	}
+	m.statusMessage = ""
+	if email != nil {
+		m.lastDraftUID = email.UID
+		m.lastDraftFolder = email.Folder
+	}
+	m.draftSaving = false
+	m.composeField = composeFieldBody
+	m.composeTo.Blur()
+	m.composeCC.Blur()
+	m.composeBCC.Blur()
+	m.composeSubject.Blur()
+	m.composeBody.Focus()
+}
+
 func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
 	if email == nil {
 		return nil
@@ -742,6 +826,47 @@ func (m *Model) loadTimelineForwardBodyCmd(email *models.EmailData, requestID in
 		}
 		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
 		return TimelineForwardBodyMsg{
+			Email:     &emailCopy,
+			Body:      body,
+			Err:       err,
+			MessageID: emailCopy.MessageID,
+			RequestID: requestID,
+		}
+	}
+}
+
+func (m *Model) startTimelineDraft(email *models.EmailData) tea.Cmd {
+	if email == nil || !email.IsDraft {
+		return nil
+	}
+	if m.timelineBodyLoadedFor(email) {
+		m.openTimelineDraftCompose(email, m.timeline.body, "")
+		return nil
+	}
+	m.timeline.draftRequestID++
+	requestID := m.timeline.draftRequestID
+	m.timeline.draftPendingMessage = email.MessageID
+	m.statusMessage = "Loading draft body..."
+	return m.loadTimelineDraftBodyCmd(email, requestID)
+}
+
+func (m *Model) loadTimelineDraftBodyCmd(email *models.EmailData, requestID int) tea.Cmd {
+	emailCopy := *email
+	b := m.backend
+	return func() tea.Msg {
+		if emailCopy.UID == 0 {
+			return TimelineDraftBodyMsg{
+				Email: &emailCopy,
+				Body: &models.EmailBody{
+					Subject:   emailCopy.Subject,
+					TextPlain: "(Draft body unavailable: this cached draft has no server UID yet, so Herald cannot safely edit it. Re-sync the folder to refresh it.)",
+				},
+				MessageID: emailCopy.MessageID,
+				RequestID: requestID,
+			}
+		}
+		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		return TimelineDraftBodyMsg{
 			Email:     &emailCopy,
 			Body:      body,
 			Err:       err,
@@ -988,7 +1113,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				}
 				return joinHintSegments(append(
 					[]string{"tab: back to results", "↑/k ↓/j: scroll"},
-					append(timelineMessageActionHintSegments(),
+					append(m.timelineMessageActionHintSegments(),
 						"z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
 				)...), true
 			}
@@ -1026,7 +1151,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
 		segments := []string{"tab/shift+tab: panels", "↑/k ↓/j: scroll"}
-		segments = append(segments, timelineMessageActionHintSegments()...)
+		segments = append(segments, m.timelineMessageActionHintSegments()...)
 		segments = append(segments, previewActionHintText(hasUnsub))
 		if hasAttachments {
 			if hasMultipleAttachments {
@@ -1038,9 +1163,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open", "esc: close"}, append(timelineMessageActionHintSegments(), "q: quit")...)...), true
+		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
 	}
-	return joinHintSegments(append([]string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "enter: open"}, append(timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+	return joinHintSegments(append([]string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
 }
 
 func joinHintSegments(segments ...string) string {
@@ -1053,11 +1178,18 @@ func joinHintSegments(segments ...string) string {
 	return strings.Join(parts, "  │  ")
 }
 
-func timelineMessageActionHintSegments() []string {
-	return append(timelinePrimaryMessageActionHintSegments(), "A: re-classify")
+func (m *Model) timelineMessageActionHintSegments() []string {
+	segments := m.timelinePrimaryMessageActionHintSegments()
+	if m.currentTimelineDraftEmail() != nil {
+		return segments
+	}
+	return append(segments, "A: re-classify")
 }
 
-func timelinePrimaryMessageActionHintSegments() []string {
+func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
+	if m.currentTimelineDraftEmail() != nil {
+		return []string{"E: edit draft", "D: discard draft"}
+	}
 	return []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive"}
 }
 
@@ -1360,6 +1492,28 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.openTimelineReplyCompose(email, body, composeStatus)
 		return m, nil, true
 
+	case TimelineDraftBodyMsg:
+		if msg.RequestID != m.timeline.draftRequestID || msg.MessageID != m.timeline.draftPendingMessage {
+			return m, nil, true
+		}
+		m.timeline.draftPendingMessage = ""
+		if m.activeTab != tabTimeline {
+			return m, nil, true
+		}
+		email := msg.Email
+		if email == nil {
+			return m, nil, true
+		}
+		body := msg.Body
+		composeStatus := ""
+		if msg.Err != nil {
+			logger.Warn("Failed to fetch draft email body: %v", msg.Err)
+			composeStatus = "Draft body failed to load: " + msg.Err.Error()
+			body = &models.EmailBody{Subject: email.Subject, TextPlain: "(" + composeStatus + ")"}
+		}
+		m.openTimelineDraftCompose(email, body, composeStatus)
+		return m, nil, true
+
 	case StarResultMsg:
 		if msg.Err != nil {
 			m.statusMessage = "Star failed: " + msg.Err.Error()
@@ -1415,6 +1569,16 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.timeline.selectedEmail != nil {
 			return m, createHideFutureMailCmd(m.backend, m.timeline.selectedEmail.Sender), true
+		}
+		return m, nil, true
+	case "E":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			if email := m.currentTimelineDraftEmail(); email != nil {
+				return m, m.startTimelineDraft(email), true
+			}
 		}
 		return m, nil, true
 	case "F":

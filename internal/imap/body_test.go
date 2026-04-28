@@ -118,3 +118,43 @@ func TestHTMLToText_AdjacentInlineElements(t *testing.T) {
 		})
 	}
 }
+
+func TestParseMIMEBody_ExposesEditableDraftHeaders(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		"From: Anton <anton@example.com>",
+		"To: Shea <shea@anthropic.com>, Tyitana <tytiana@anthropic.com>",
+		"Cc: Recruiter <recruiting@example.com>",
+		"Bcc: Hidden <hidden@example.com>",
+		"Subject: Re: Invitation to Technical Interview",
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		"Hi Shea,",
+		"",
+		"Thanks for the details.",
+	}, "\r\n"))
+
+	body, err := parseMIMEBody(raw)
+	if err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+
+	if body.From != "Anton <anton@example.com>" {
+		t.Fatalf("From = %q", body.From)
+	}
+	if body.To != "Shea <shea@anthropic.com>, Tyitana <tytiana@anthropic.com>" {
+		t.Fatalf("To = %q", body.To)
+	}
+	if body.CC != "Recruiter <recruiting@example.com>" {
+		t.Fatalf("CC = %q", body.CC)
+	}
+	if body.BCC != "Hidden <hidden@example.com>" {
+		t.Fatalf("BCC = %q", body.BCC)
+	}
+	if body.Subject != "Re: Invitation to Technical Interview" {
+		t.Fatalf("Subject = %q", body.Subject)
+	}
+	if !strings.Contains(body.TextPlain, "Thanks for the details.") {
+		t.Fatalf("TextPlain missing draft body: %q", body.TextPlain)
+	}
+}

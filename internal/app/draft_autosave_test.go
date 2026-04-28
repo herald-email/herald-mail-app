@@ -12,13 +12,15 @@ func newDraftTestModel() *Model {
 	to := textinput.New()
 	subject := textinput.New()
 	body := textarea.New()
+	aiResponse := textarea.New()
 	return &Model{
-		backend:         &stubBackend{},
-		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
-		classifications: make(map[string]string),
-		composeTo:       to,
-		composeSubject:  subject,
-		composeBody:     body,
+		backend:           &stubBackend{},
+		timeline:          TimelineState{expandedThreads: make(map[string]bool)},
+		classifications:   make(map[string]string),
+		composeTo:         to,
+		composeSubject:    subject,
+		composeBody:       body,
+		composeAIResponse: aiResponse,
 	}
 }
 
@@ -113,9 +115,10 @@ func TestDraftSaveTickNoSaveWhenAlreadySaving(t *testing.T) {
 	}
 }
 
-// TestDraftSaveTickDeletesOldDraftFirst verifies that when lastDraftUID is set,
-// the tick clears it before saving a new draft.
-func TestDraftSaveTickDeletesOldDraftFirst(t *testing.T) {
+// TestDraftSaveTickKeepsOldDraftUntilReplacementSaves verifies that when
+// lastDraftUID is set, autosave does not discard the previous draft before the
+// replacement save succeeds.
+func TestDraftSaveTickKeepsOldDraftUntilReplacementSaves(t *testing.T) {
 	m := newDraftTestModel()
 	m.activeTab = tabCompose
 	m.composeTo.SetValue("to@test.com")
@@ -125,15 +128,71 @@ func TestDraftSaveTickDeletesOldDraftFirst(t *testing.T) {
 	updatedModel, _ := m.Update(DraftSaveTickMsg{})
 	um := updatedModel.(*Model)
 
-	// After the tick the UID should be cleared (delete was issued) and draftSaving true
-	if um.lastDraftUID != 0 {
-		t.Errorf("expected lastDraftUID to be cleared, got %d", um.lastDraftUID)
+	if um.lastDraftUID != 10 {
+		t.Errorf("expected lastDraftUID to stay 10 until replacement saves, got %d", um.lastDraftUID)
 	}
-	if um.lastDraftFolder != "" {
-		t.Errorf("expected lastDraftFolder to be cleared, got %q", um.lastDraftFolder)
+	if um.lastDraftFolder != "Drafts" {
+		t.Errorf("expected lastDraftFolder to stay Drafts, got %q", um.lastDraftFolder)
 	}
 	if !um.draftSaving {
 		t.Error("expected draftSaving=true after tick with prior draft UID")
+	}
+}
+
+func TestDraftSavedMsgDeletesPreviousDraftAfterSuccessfulReplacement(t *testing.T) {
+	backend := &draftDeleteRecordingBackend{}
+	m := newDraftTestModel()
+	m.backend = backend
+	m.draftSaving = true
+	m.lastDraftUID = 10
+	m.lastDraftFolder = "Drafts"
+
+	updatedModel, cmd := m.Update(DraftSavedMsg{
+		UID:           11,
+		Folder:        "Drafts",
+		ReplaceUID:    10,
+		ReplaceFolder: "Drafts",
+	})
+	um := updatedModel.(*Model)
+
+	if um.lastDraftUID != 11 || um.lastDraftFolder != "Drafts" {
+		t.Fatalf("expected current draft to become 11/Drafts, got %d/%q", um.lastDraftUID, um.lastDraftFolder)
+	}
+	if cmd == nil {
+		t.Fatal("expected delete command for replaced draft")
+	}
+	if _, ok := cmd().(DraftDeletedMsg); !ok {
+		t.Fatalf("expected DraftDeletedMsg from delete command")
+	}
+	if len(backend.deleted) != 1 || backend.deleted[0].uid != 10 || backend.deleted[0].folder != "Drafts" {
+		t.Fatalf("expected old draft delete after replacement save, got %#v", backend.deleted)
+	}
+}
+
+func TestComposeStatusDeletesTrackedDraftAfterSendSuccess(t *testing.T) {
+	backend := &draftDeleteRecordingBackend{}
+	m := newDraftTestModel()
+	m.backend = backend
+	m.composeTo.SetValue("to@test.com")
+	m.composeSubject.SetValue("Tracked draft")
+	m.composeBody.SetValue("Body")
+	m.lastDraftUID = 42
+	m.lastDraftFolder = "Drafts"
+
+	updatedModel, cmd := m.Update(ComposeStatusMsg{Message: "Message sent!"})
+	um := updatedModel.(*Model)
+
+	if um.lastDraftUID != 0 || um.lastDraftFolder != "" {
+		t.Fatalf("expected tracked draft state to clear after send, got %d/%q", um.lastDraftUID, um.lastDraftFolder)
+	}
+	if cmd == nil {
+		t.Fatal("expected send success to delete tracked draft")
+	}
+	if _, ok := cmd().(DraftDeletedMsg); !ok {
+		t.Fatalf("expected DraftDeletedMsg from send-success delete command")
+	}
+	if len(backend.deleted) != 1 || backend.deleted[0].uid != 42 || backend.deleted[0].folder != "Drafts" {
+		t.Fatalf("expected tracked draft delete after send success, got %#v", backend.deleted)
 	}
 }
 
@@ -179,3 +238,18 @@ var errDraftSaveStub = &draftStubErr{"draft save failed"}
 type draftStubErr struct{ msg string }
 
 func (e *draftStubErr) Error() string { return e.msg }
+
+type draftDeleteRecordingBackend struct {
+	stubBackend
+	deleted []recordedDraftDelete
+}
+
+type recordedDraftDelete struct {
+	uid    uint32
+	folder string
+}
+
+func (b *draftDeleteRecordingBackend) DeleteDraft(uid uint32, folder string) error {
+	b.deleted = append(b.deleted, recordedDraftDelete{uid: uid, folder: folder})
+	return nil
+}

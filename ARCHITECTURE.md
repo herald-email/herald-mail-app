@@ -61,6 +61,9 @@ The standalone wizard reuses `internal/app.Settings` in a dedicated fullscreen s
 **Preserved reply and forward composition**
 Compose treats replies and forwards as two pieces of state: the editable top note and a read-only preserved original-message context fetched from IMAP. The context carries the original HTML, plain fallback, inline CID images, attachments, and threading headers; `internal/smtp` assembles the final outgoing MIME so Herald does not round-trip rich messages through Markdown. The TUI, daemon, RemoteBackend, and MCP entrypoints all route reply/forward sends through this preserved-context path, while new messages continue to use the regular Markdown compose flow.
 
+**Draft composition workflow**
+IMAP `\Draft` flags and canonical draft folder membership populate `models.EmailData.IsDraft` in the cache, and active-folder reconcile refreshes that flag for existing rows. Timeline and preview use the cached draft state for labels and key hints, while Compose fetches the draft body plus editable headers (`To`, `CC`, `BCC`, `Subject`) before opening the message for editing. Compose tracks the source draft UID/folder so sending deletes the source only after SMTP success, and autosave replacement saves the new draft before deleting the previous saved copy.
+
 **Progress via channels**
 Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send channel events back to the Bubble Tea model. The UI listens with `tea.Cmd` functions that block on those channels and return a message when something arrives. No polling, no shared state.
 
@@ -323,6 +326,7 @@ CREATE TABLE emails (
     has_attachments INTEGER,
     folder          TEXT,
     is_read         INTEGER DEFAULT 0,
+    is_draft        INTEGER DEFAULT 0,
     list_unsubscribe      TEXT,
     list_unsubscribe_post TEXT,
     body_text       TEXT,

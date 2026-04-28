@@ -141,6 +141,9 @@ func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsub
 		renderPreviewHeaderLine("Date:", email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW, styles, styles.date),
 		renderPreviewHeaderLine("Subj:", email.Subject, innerW, styles, styles.subj),
 	}
+	if email.IsDraft {
+		lines = append(lines, renderPreviewHeaderLine("State:", "Draft - E edit draft", innerW, styles, styles.action))
+	}
 	lines = append(lines, renderPreviewHeaderWrapped("Tags:", previewTagText(category), innerW, styles, styles.tag)...)
 	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe), innerW, styles, styles.action)...)
 	lines = append(lines, strings.Repeat("─", innerW))

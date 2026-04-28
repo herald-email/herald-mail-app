@@ -80,6 +80,8 @@ type TimelineState struct {
 	forwardPendingMessage string
 	replyRequestID        int
 	replyPendingMessage   string
+	draftRequestID        int
+	draftPendingMessage   string
 
 	searchMode             bool
 	searchInput            textinput.Model

@@ -904,6 +904,12 @@ func (d *DemoBackend) ListDrafts() ([]*models.Draft, error) {
 func (d *DemoBackend) DeleteDraft(uid uint32, folder string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	for _, email := range d.emails {
+		if email != nil && email.UID == uid && (folder == "" || email.Folder == folder) {
+			d.deletedIDs[email.MessageID] = true
+			return nil
+		}
+	}
 	for i, dr := range d.drafts {
 		if dr.UID == uid {
 			d.drafts = append(d.drafts[:i], d.drafts[i+1:]...)

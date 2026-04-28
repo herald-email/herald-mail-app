@@ -1094,6 +1094,8 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	body := m.composeBody.Value()
 	attachments := m.composeAttachments
 	preserved := m.composePreserved
+	replaceUID := m.lastDraftUID
+	replaceFolder := m.lastDraftFolder
 	preservedReq, preservedErr := appsmtp.PreservedMessageRequest{}, error(nil)
 	if preserved != nil {
 		preservedReq, preservedErr = m.buildPreservedComposeRequest(from, to, subject, attachments)
@@ -1101,17 +1103,17 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	return func() tea.Msg {
 		if preserved != nil {
 			if preservedErr != nil {
-				return DraftSavedMsg{Err: preservedErr}
+				return DraftSavedMsg{ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: preservedErr}
 			}
 			raw, err := appsmtp.BuildPreservedMIMEMessage(preservedReq)
 			if err != nil {
-				return DraftSavedMsg{Err: err}
+				return DraftSavedMsg{ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
 			}
 			uid, folder, err := backend.SaveRawDraft([]byte(raw))
-			return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
+			return DraftSavedMsg{UID: uid, Folder: folder, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
 		}
 		uid, folder, err := backend.SaveDraft(to, cc, bcc, subject, body)
-		return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
+		return DraftSavedMsg{UID: uid, Folder: folder, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
 	}
 }
 

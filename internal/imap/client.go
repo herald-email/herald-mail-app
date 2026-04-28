@@ -25,6 +25,37 @@ import (
 // ErrIDLENotSupported is returned by StartIDLE when the server lacks IDLE capability.
 var ErrIDLENotSupported = errors.New("imap: server does not support IDLE")
 
+func isDraftFolderName(folder string) bool {
+	name := strings.ToLower(strings.TrimSpace(folder))
+	if name == "" {
+		return false
+	}
+	for _, candidate := range draftFolderCandidates {
+		if name == strings.ToLower(candidate) {
+			return true
+		}
+	}
+	return strings.HasSuffix(name, "/drafts") || strings.HasSuffix(name, ".drafts")
+}
+
+func messageFlagStateFromIMAP(uid uint32, flags []string, folder string) cache.EmailFlagState {
+	state := cache.EmailFlagState{
+		UID:     uid,
+		IsDraft: isDraftFolderName(folder),
+	}
+	for _, flag := range flags {
+		switch strings.ToLower(flag) {
+		case strings.ToLower(imap.SeenFlag):
+			state.IsRead = true
+		case strings.ToLower(imap.FlaggedFlag):
+			state.IsStarred = true
+		case "\\draft":
+			state.IsDraft = true
+		}
+	}
+	return state
+}
+
 // xoauth2Client implements the XOAUTH2 SASL mechanism required by Gmail's IMAP server.
 // XOAUTH2 is distinct from OAUTHBEARER (RFC 7628); Gmail only supports XOAUTH2.
 // Format: "user=<username>\x01auth=Bearer <access_token>\x01\x01"
@@ -602,26 +633,35 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 	return nil
 }
 
-// fetchAllServerUIDs returns the set of all UIDs currently on the server for the
-// already-selected folder. Caller must hold c.mu.
-func (c *Client) fetchAllServerUIDs() (map[uint32]bool, error) {
+// fetchAllServerUIDFlagStates returns the set of all UIDs and flag states
+// currently on the server for the already-selected folder. Caller must hold c.mu.
+func (c *Client) fetchAllServerUIDFlagStates(folder string) (map[uint32]bool, []cache.EmailFlagState, error) {
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(1, 0) // 1:*
 	messages := make(chan *imap.Message, 50)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchUid}, messages)
+		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchUid, imap.FetchFlags}, messages)
 	}()
 	serverUIDs := make(map[uint32]bool)
+	flagStates := make([]cache.EmailFlagState, 0)
 	for msg := range messages {
 		if msg.Uid > 0 {
 			serverUIDs[msg.Uid] = true
+			flagStates = append(flagStates, messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder))
 		}
 	}
 	if err := <-done; err != nil {
-		return nil, fmt.Errorf("uid fetch all: %w", err)
+		return nil, nil, fmt.Errorf("uid fetch all: %w", err)
 	}
-	return serverUIDs, nil
+	return serverUIDs, flagStates, nil
+}
+
+// fetchAllServerUIDs returns the set of all UIDs currently on the server for the
+// already-selected folder. Caller must hold c.mu.
+func (c *Client) fetchAllServerUIDs() (map[uint32]bool, error) {
+	serverUIDs, _, err := c.fetchAllServerUIDFlagStates("")
+	return serverUIDs, err
 }
 
 // StartBackgroundReconcile fetches all server UIDs for folder, immediately sends
@@ -638,7 +678,7 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			close(validIDsCh)
 			return
 		}
-		serverUIDs, err := c.fetchAllServerUIDs()
+		serverUIDs, flagStates, err := c.fetchAllServerUIDFlagStates(folder)
 		c.mu.Unlock()
 		if err != nil {
 			logger.Warn("StartBackgroundReconcile: fetchAllServerUIDs: %v", err)
@@ -646,6 +686,9 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 			return
 		}
 		logger.Info("StartBackgroundReconcile: %d UIDs on server for %s", len(serverUIDs), folder)
+		if err := c.cache.BatchUpdateEmailFlagsByUID(folder, flagStates); err != nil {
+			logger.Warn("StartBackgroundReconcile: refresh flags: %v", err)
+		}
 
 		// Build valid-ID set from cache without holding the IMAP mutex.
 		rawRows, err := c.cache.GetCachedUIDsAndMessageIDs(folder)
@@ -879,13 +922,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 			hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
 		}
 
-		isRead := false
-		for _, flag := range msg.Flags {
-			if flag == imap.SeenFlag {
-				isRead = true
-				break
-			}
-		}
+		flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder)
 
 		emails = append(emails, &models.EmailData{
 			MessageID:      messageID,
@@ -895,7 +932,9 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 			Date:           msg.Envelope.Date,
 			Size:           int(msg.Size),
 			HasAttachments: hasAttach,
-			IsRead:         isRead,
+			IsRead:         flagState.IsRead,
+			IsStarred:      flagState.IsStarred,
+			IsDraft:        flagState.IsDraft,
 			Folder:         folder,
 		})
 
@@ -984,14 +1023,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		messageID = fmt.Sprintf("uid-%d", msg.Uid)
 	}
 
-	// Check \Seen flag
-	isRead := false
-	for _, flag := range msg.Flags {
-		if flag == imap.SeenFlag {
-			isRead = true
-			break
-		}
-	}
+	flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder)
 
 	// Extract email data from Envelope
 	emailData := &models.EmailData{
@@ -1002,7 +1034,9 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		Date:           msg.Envelope.Date,
 		Size:           int(msg.Size),
 		HasAttachments: hasAttach,
-		IsRead:         isRead,
+		IsRead:         flagState.IsRead,
+		IsStarred:      flagState.IsStarred,
+		IsDraft:        flagState.IsDraft,
 		Folder:         folder,
 	}
 

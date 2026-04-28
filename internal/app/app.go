@@ -131,6 +131,15 @@ type TimelineReplyBodyMsg struct {
 	RequestID int
 }
 
+// TimelineDraftBodyMsg carries a body fetch result for Timeline draft editing.
+type TimelineDraftBodyMsg struct {
+	Email     *models.EmailData
+	Body      *models.EmailBody
+	Err       error
+	MessageID string
+	RequestID int
+}
+
 // QuickRepliesMsg is sent when AI quick reply generation completes.
 type QuickRepliesMsg struct {
 	Replies []string
@@ -266,9 +275,11 @@ type DraftSaveTickMsg struct{}
 
 // DraftSavedMsg is returned after a SaveDraft call completes.
 type DraftSavedMsg struct {
-	UID    uint32
-	Folder string
-	Err    error
+	UID           uint32
+	Folder        string
+	ReplaceUID    uint32
+	ReplaceFolder string
+	Err           error
 }
 
 // DraftDeletedMsg is returned after a DeleteDraft call completes.
@@ -1158,11 +1169,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds := []tea.Cmd{draftSaveTick()} // always reschedule
 		if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
 			m.draftSaving = true
-			if m.lastDraftUID != 0 {
-				cmds = append(cmds, m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder))
-				m.lastDraftUID = 0
-				m.lastDraftFolder = ""
-			}
 			cmds = append(cmds, m.saveDraftCmd())
 		}
 		return m, tea.Batch(cmds...)
@@ -1175,6 +1181,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastDraftUID = msg.UID
 			m.lastDraftFolder = msg.Folder
 			m.statusMessage = "Draft saved"
+			if msg.ReplaceUID != 0 && (msg.ReplaceUID != msg.UID || msg.ReplaceFolder != msg.Folder) {
+				return m, m.deleteDraftCmd(msg.ReplaceUID, msg.ReplaceFolder)
+			}
 		}
 		return m, nil
 

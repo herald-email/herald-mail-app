@@ -115,8 +115,13 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 
 	// Timeline tab: delete/archive current email
 	if m.activeTab == tabTimeline {
+		if !isArchive {
+			if draft := m.currentTimelineDraftEmail(); draft != nil {
+				targets = append(targets, deleteTarget{messageID: draft.MessageID, folder: draft.Folder})
+			}
+		}
 		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.timeline.threadRowMap) {
+		if len(targets) == 0 && cursor < len(m.timeline.threadRowMap) {
 			ref := m.timeline.threadRowMap[cursor]
 			var email *models.EmailData
 			if ref.kind == rowKindThread {
@@ -336,6 +341,13 @@ func (m *Model) cleanup() {
 // buildDeleteDesc builds a human-readable description for the deletion confirmation prompt.
 func (m *Model) buildDeleteDesc() string {
 	if m.activeTab == tabTimeline {
+		if draft := m.currentTimelineDraftEmail(); draft != nil {
+			subj := draft.Subject
+			if len(subj) > 50 {
+				subj = subj[:47] + "..."
+			}
+			return fmt.Sprintf("Discard draft \"%s\"?", subj)
+		}
 		cursor := m.timelineTable.Cursor()
 		if cursor < len(m.timeline.threadRowMap) {
 			ref := m.timeline.threadRowMap[cursor]
