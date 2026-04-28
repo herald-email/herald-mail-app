@@ -113,6 +113,15 @@ type EmailBodyMsg struct {
 	MessageID string // used to discard stale body fetches from rapid cursor movement
 }
 
+// TimelineForwardBodyMsg carries a body fetch result for Timeline forwarding.
+type TimelineForwardBodyMsg struct {
+	Email     *models.EmailData
+	Body      *models.EmailBody
+	Err       error
+	MessageID string
+	RequestID int
+}
+
 // QuickRepliesMsg is sent when AI quick reply generation completes.
 type QuickRepliesMsg struct {
 	Replies []string
