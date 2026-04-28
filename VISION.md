@@ -217,7 +217,7 @@ The built-in classification prompt assigns one of six fixed categories (`sub`, `
 - [x] `custom_categories` table in SQLite storing prompt name + category + extracted data per email
 - [x] TUI displays custom categories alongside the built-in tag column
 - [x] MCP tools: `list_classification_prompts`, `classify_email_custom` (run a named prompt on one email)
-- [ ] Prompt overlay explains that prompts are reusable AI instructions, shows saved prompts in the same screen, and tells the user where prompt results will appear
+- [x] Prompt overlay explains that prompts are reusable AI instructions, shows saved prompts in the same screen, and tells the user where prompt results will appear
 
 ### Classification Actions
 

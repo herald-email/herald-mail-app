@@ -82,6 +82,11 @@ func TestPromptOverlay_ExplainsPurposeAndShowsSavedPrompts(t *testing.T) {
 
 	for _, want := range []string{
 		"reusable AI instructions",
+		"Saving does not run",
+		"Example: sender triage",
+		"Use W to attach",
+		"classify_email_custom",
+		"Results are stored per email",
 		"Saved prompts",
 		"invoice-extractor",
 	} {

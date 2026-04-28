@@ -255,8 +255,30 @@ func TestPromptEditor_Fits80x24(t *testing.T) {
 	assertFitsHeight(t, 24, rendered)
 
 	stripped := stripANSI(rendered)
-	if !strings.Contains(stripped, "New Custom Prompt") {
-		t.Fatalf("expected prompt editor title, got:\n%s", stripped)
+	for _, want := range []string{
+		"New Custom Prompt",
+		"Saving does not run the prompt",
+		"Example:",
+		"Use W",
+	} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected prompt editor to contain %q, got:\n%s", want, stripped)
+		}
+	}
+}
+
+func TestPromptEditor_MinimumSizeGuardAt50x15(t *testing.T) {
+	editor := NewPromptEditor(nil, 50, 15)
+
+	rendered := editor.View()
+	assertFitsWidth(t, 50, rendered)
+
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "Terminal too narrow") {
+		t.Fatalf("expected prompt editor to use minimum-size guard, got:\n%s", stripped)
+	}
+	if strings.Contains(stripped, "New Custom Prompt") {
+		t.Fatalf("expected guard to replace clipped prompt editor, got:\n%s", stripped)
 	}
 }
 

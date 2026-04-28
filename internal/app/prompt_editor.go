@@ -87,7 +87,7 @@ func (p *PromptEditor) buildForm() {
 	systemGroup := huh.NewGroup(
 		huh.NewText().
 			Title("System prompt").
-			Description("Instructions for the AI. Use {{.Sender}}, {{.Subject}}, {{.Body}} as placeholders.").
+			Description("Instructions for the AI. {{.Sender}} and {{.Subject}} are ready; {{.Body}} may be empty.").
 			Lines(6).
 			Value(&p.systemText),
 	)
@@ -96,7 +96,7 @@ func (p *PromptEditor) buildForm() {
 	userGroup := huh.NewGroup(
 		huh.NewText().
 			Title("User template").
-			Description("Message sent to the model per email. Use {{.Sender}}, {{.Subject}}, {{.Body}} as placeholders.").
+			Description("Message sent to the model per email. Prefer {{.Sender}} and {{.Subject}} today.").
 			Lines(6).
 			Value(&p.userTemplate),
 	)
@@ -126,7 +126,7 @@ func (p *PromptEditor) formWidth() int {
 }
 
 func (p *PromptEditor) formHeight() int {
-	h := p.height - 12
+	h := p.height - 9 - p.guideHeight()
 	if h < 6 {
 		h = 6
 	}
@@ -193,6 +193,13 @@ func (p *PromptEditor) Update(msg tea.Msg) (*PromptEditor, tea.Cmd) {
 
 // View implements tea.Model.
 func (p *PromptEditor) View() string {
+	if p.width > 0 && p.width < minTermWidth {
+		return renderMinSizeMessage(p.width, p.height)
+	}
+	if p.height > 0 && p.height < minTermHeight {
+		return renderMinSizeMessage(p.width, p.height)
+	}
+
 	formView := p.form.View()
 
 	title := "New Custom Prompt"
@@ -212,12 +219,9 @@ func (p *PromptEditor) View() string {
 		Padding(1, 2)
 
 	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render(title)
-	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
 	rendered := box.Render(
 		header + "\n\n" +
-			noteStyle.Render("Purpose: reusable AI instructions.") + "\n" +
-			noteStyle.Render("Results: a rule or MCP tool must use the prompt.") + "\n" +
-			noteStyle.Render(p.savedPromptsSummary()) + "\n\n" +
+			p.guideView(innerW) + "\n\n" +
 			formView,
 	)
 	return lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered)
@@ -264,4 +268,72 @@ func (p *PromptEditor) savedPromptsSummary() string {
 		parts = append(parts, "+"+strconv.Itoa(len(p.savedPrompts)-maxShown)+" more")
 	}
 	return "Saved prompts: " + strings.Join(parts, " | ")
+}
+
+func (p *PromptEditor) guideHeight() int {
+	if p.compactGuide() {
+		return 6
+	}
+	return 14
+}
+
+func (p *PromptEditor) compactGuide() bool {
+	return p.width < 110 || p.height < 32
+}
+
+func (p *PromptEditor) guideView(width int) string {
+	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(width)
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
+
+	if p.compactGuide() {
+		lines := []string{
+			"Purpose: reusable AI instructions.",
+			"Saving does not run the prompt.",
+			"Example: sender triage with {{.Sender}} and {{.Subject}}.",
+			"Next: Use W to attach, or MCP classify_email_custom.",
+			"Results are stored per email in custom category storage.",
+			p.savedPromptsSummary(),
+		}
+		for i, line := range lines {
+			lines[i] = noteStyle.Render(line)
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	sections := []struct {
+		label string
+		body  string
+	}{
+		{
+			label: "How it works",
+			body:  "reusable AI instructions for one email at a time. Saving does not run the prompt.",
+		},
+		{
+			label: "Example prompts",
+			body:  "Example: sender triage -> label {{.Sender}} / {{.Subject}}.\nInvoice extractor -> return an invoice id from the subject.",
+		},
+		{
+			label: "Template variables",
+			body:  "{{.Sender}} and {{.Subject}} are ready. {{.Body}} may be empty in current rule and MCP runs.",
+		},
+		{
+			label: "Next",
+			body:  "Use W to attach this prompt to an automation rule.\nRun manually through MCP classify_email_custom.",
+		},
+		{
+			label: "Results",
+			body:  "Results are stored per email in custom category storage and can be read back through MCP.",
+		},
+		{
+			label: "Saved prompts",
+			body:  strings.TrimPrefix(p.savedPromptsSummary(), "Saved prompts: "),
+		},
+	}
+
+	lines := make([]string, 0, len(sections)*2)
+	for _, section := range sections {
+		lines = append(lines, labelStyle.Render(section.label))
+		lines = append(lines, noteStyle.Render(section.body))
+	}
+	return strings.Join(lines, "\n")
 }

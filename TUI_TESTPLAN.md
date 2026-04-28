@@ -1014,6 +1014,9 @@ Check these states during every applicable lane:
 - `W` explains that it creates future-mail automations rather than immediate cleanup.
 - `W` shows a visible inventory or summary of saved automation rules in the same screen.
 - `P` explains that prompts are reusable AI instructions and do nothing until used.
+- `P` uses otherwise empty space for practical guidance: example prompt ideas, supported template variables, and a clear next step.
+- `P` tells users to attach a prompt with `W` for automation or run one manually through MCP `classify_email_custom`.
+- `P` tells users that prompt results are stored per email in custom category storage/MCP results.
 - `P` shows a visible inventory or summary of saved prompts in the same screen.
 - `C` explains that cleanup rules run on demand or on schedule and that saved cleanup rules live in that manager.
 
