@@ -270,7 +270,7 @@ func (m *Model) handleTimelineMouse(msg tea.MouseMsg, plan LayoutPlan, top int) 
 		if msg.Button == tea.MouseButtonLeft {
 			if row, ok := mouseTableRowAt(&m.timelineTable, tableRect, msg.Y); ok {
 				m.timelineTable.SetCursor(row)
-				return m, m.openCurrentTimelineEmail(), true
+				return m, m.activateCurrentTimelineRowFromMouse(), true
 			}
 			return m, nil, true
 		}

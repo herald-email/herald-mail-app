@@ -1137,13 +1137,16 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode with mouse capture enabled.
 2. Click each top tab and confirm the active tab changes without typing into Compose fields.
-3. In Timeline, click a visible row to open preview, then wheel over the list and the preview.
-4. In Cleanup, click a sender/domain row, click a details row to open preview, then wheel over the summary, details, and preview regions.
-5. Click the sidebar when visible, then press `m` in a preview to release mouse capture and press `m` again to restore it.
-6. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
+3. In Timeline, click a visible single-message row to open preview, then wheel over the list and the preview.
+4. In Timeline, click a collapsed thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays collapsed. Click the same selected root again; confirm the thread expands.
+5. In Timeline, click an expanded thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays expanded. Click the same selected root again; confirm the thread folds.
+6. In Cleanup, click a sender/domain row, click a details row to open preview, then wheel over the summary, details, and preview regions.
+7. Click the sidebar when visible, then press `m` in a preview to release mouse capture and press `m` again to restore it.
+8. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
 
 **Expect:**
 - Mouse click and wheel behavior matches the equivalent keyboard actions and never changes hidden state outside the clicked region.
+- Timeline thread-root mouse clicks use two-step semantics: select/update preview first, then fold/unfold only when the top thread email is already selected.
 - Preview wheel events scroll the body without moving the underlying list cursor.
 - List wheel events move the focused list cursor and refresh an open preview when applicable.
 - The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.

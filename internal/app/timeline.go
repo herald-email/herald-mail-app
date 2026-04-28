@@ -823,6 +823,46 @@ func (m *Model) openCurrentTimelineEmail() tea.Cmd {
 	return m.openTimelineEmail(email)
 }
 
+func (m *Model) activateCurrentTimelineRowFromMouse() tea.Cmd {
+	ref, ok := m.currentTimelineRowRef()
+	if !ok || ref.group == nil || len(ref.group.emails) == 0 {
+		return nil
+	}
+
+	toggleThread := func(key string) {
+		savedCursor := m.timelineTable.Cursor()
+		m.timeline.expandedThreads[key] = !m.timeline.expandedThreads[key]
+		m.updateTimelineTable()
+		m.timelineTable.SetCursor(savedCursor)
+	}
+	isSelected := func(email *models.EmailData) bool {
+		return email != nil &&
+			m.timeline.selectedEmail != nil &&
+			email.MessageID == m.timeline.selectedEmail.MessageID
+	}
+
+	if ref.kind == rowKindThread {
+		email := ref.group.emails[0]
+		if isSelected(email) {
+			toggleThread(ref.group.normalizedSubject)
+			return nil
+		}
+		return m.openTimelineEmail(email)
+	}
+
+	if ref.emailIdx < 0 || ref.emailIdx >= len(ref.group.emails) {
+		return nil
+	}
+	email := ref.group.emails[ref.emailIdx]
+	if ref.emailIdx == 0 && len(ref.group.emails) > 1 &&
+		m.timeline.expandedThreads[ref.group.normalizedSubject] &&
+		isSelected(email) {
+		toggleThread(ref.group.normalizedSubject)
+		return nil
+	}
+	return m.openTimelineEmail(email)
+}
+
 func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	if email == nil {
 		return nil

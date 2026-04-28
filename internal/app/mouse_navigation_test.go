@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/models"
@@ -30,6 +31,36 @@ func makeMouseTimelineModel(t *testing.T) *Model {
 	m.updateTimelineTable()
 	m.setFocusedPanel(panelTimeline)
 	return m
+}
+
+func makeMouseThreadTimelineModel(t *testing.T) (*Model, *models.EmailData, *models.EmailData) {
+	t.Helper()
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.showSidebar = false
+	now := time.Date(2026, 4, 28, 12, 0, 0, 0, time.UTC)
+	root := &models.EmailData{
+		MessageID: "thread-root",
+		Sender:    "Anton Golubtsov <demo@demo.local>",
+		Subject:   "Re: Next Steps with Anthropic!",
+		Date:      now,
+		Size:      8704,
+		Folder:    "INBOX",
+		UID:       26,
+	}
+	child := &models.EmailData{
+		MessageID: "thread-child",
+		Sender:    "Tyitana Horton <tytiana@anthropic.example>",
+		Subject:   "Next Steps with Anthropic!",
+		Date:      root.Date.Add(-3 * time.Minute),
+		Size:      9216,
+		Folder:    "INBOX",
+		UID:       27,
+	}
+	m.timeline.emails = []*models.EmailData{root, child}
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelTimeline)
+	return m, root, child
 }
 
 func makeMouseCleanupModel(t *testing.T) *Model {
@@ -76,6 +107,98 @@ func TestMouseClickTimelineRowOpensPreview(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected row click to request body loading")
+	}
+}
+
+func TestMouseClickCollapsedThreadRootFirstSelectsPreviewWithoutExpanding(t *testing.T) {
+	m, root, _ := makeMouseThreadTimelineModel(t)
+
+	model, cmd := m.Update(mousePress(5, 4))
+	updated := model.(*Model)
+
+	if updated.timeline.selectedEmail == nil {
+		t.Fatal("expected collapsed thread-root click to select the top email")
+	}
+	if updated.timeline.selectedEmail.MessageID != root.MessageID {
+		t.Fatalf("selected email = %q, want %q", updated.timeline.selectedEmail.MessageID, root.MessageID)
+	}
+	if updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
+		t.Fatal("expected first click on unselected collapsed root to keep thread collapsed")
+	}
+	if len(updated.timeline.threadRowMap) != 1 {
+		t.Fatalf("expected collapsed thread to remain one visible row, got %d", len(updated.timeline.threadRowMap))
+	}
+	if cmd == nil {
+		t.Fatal("expected first collapsed root click to request body loading")
+	}
+}
+
+func TestMouseClickSelectedCollapsedThreadRootExpandsWithoutRefetch(t *testing.T) {
+	m, root, _ := makeMouseThreadTimelineModel(t)
+	m.timeline.selectedEmail = root
+
+	model, cmd := m.Update(mousePress(5, 4))
+	updated := model.(*Model)
+
+	if !updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
+		t.Fatal("expected second click on selected collapsed root to expand the thread")
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != root.MessageID {
+		t.Fatal("expected selected root email to remain selected after expand")
+	}
+	if len(updated.timeline.threadRowMap) != 2 {
+		t.Fatalf("expected expanded thread rows, got %d", len(updated.timeline.threadRowMap))
+	}
+	if cmd != nil {
+		t.Fatal("expected expand click not to refetch the already selected preview")
+	}
+}
+
+func TestMouseClickExpandedThreadRootFirstSelectsPreviewWithoutFolding(t *testing.T) {
+	m, root, _ := makeMouseThreadTimelineModel(t)
+	m.timeline.expandedThreads[normalizeSubject(root.Subject)] = true
+	m.updateTimelineTable()
+
+	model, cmd := m.Update(mousePress(5, 4))
+	updated := model.(*Model)
+
+	if updated.timeline.selectedEmail == nil {
+		t.Fatal("expected expanded thread-root click to select the top email")
+	}
+	if updated.timeline.selectedEmail.MessageID != root.MessageID {
+		t.Fatalf("selected email = %q, want %q", updated.timeline.selectedEmail.MessageID, root.MessageID)
+	}
+	if !updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
+		t.Fatal("expected first click on unselected expanded root to keep thread expanded")
+	}
+	if len(updated.timeline.threadRowMap) != 2 {
+		t.Fatalf("expected expanded thread to remain two visible rows, got %d", len(updated.timeline.threadRowMap))
+	}
+	if cmd == nil {
+		t.Fatal("expected first expanded root click to request body loading")
+	}
+}
+
+func TestMouseClickSelectedExpandedThreadRootFoldsWithoutClearingPreview(t *testing.T) {
+	m, root, _ := makeMouseThreadTimelineModel(t)
+	m.timeline.expandedThreads[normalizeSubject(root.Subject)] = true
+	m.timeline.selectedEmail = root
+	m.updateTimelineTable()
+
+	model, cmd := m.Update(mousePress(5, 4))
+	updated := model.(*Model)
+
+	if updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
+		t.Fatal("expected second click on selected expanded root to fold the thread")
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != root.MessageID {
+		t.Fatal("expected selected root email to remain selected after fold")
+	}
+	if len(updated.timeline.threadRowMap) != 1 {
+		t.Fatalf("expected folded thread to become one visible row, got %d", len(updated.timeline.threadRowMap))
+	}
+	if cmd != nil {
+		t.Fatal("expected fold click not to refetch the already selected preview")
 	}
 }
 
