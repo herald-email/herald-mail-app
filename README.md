@@ -233,7 +233,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server 
 | Key | Action |
 |-----|--------|
 | `1` / `2` / `3` / `4` | Timeline / Compose / Cleanup / Contacts tab in browse contexts |
-| `Alt+1` / `Alt+2` / `Alt+3` / `Alt+4` | Timeline / Compose / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
+| `F1` / `F2` / `F3` / `F4` | Timeline / Compose / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
+| `Alt+1` / `Alt+2` / `Alt+3` / `Alt+4` | Secondary Timeline / Compose / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
 | `j` / `k` | Navigate down / up |
 | `Enter` | Open email preview |
 | `Escape` | Close preview / picker |

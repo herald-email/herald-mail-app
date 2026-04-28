@@ -443,14 +443,16 @@ Check these states during every applicable lane:
 **Steps:**
 1. Open Compose.
 2. Type `q123` into the focused address field, then tab to the body and type `q123` again.
-3. Press `Alt+1`, return to Compose with `Alt+2`, then press `Alt+3` and `Alt+4`.
-4. Return to Compose with `Alt+2`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
-5. Press `Alt+R` from Compose.
-6. Repeat with Timeline search open: type `q` into the query and press `Ctrl+C` only after confirming the query text is editable.
+3. Press `F1`, return to Compose with `F2`, then press `F3` and `F4`.
+4. Return to Compose with `F2`, then repeat the same tab switching with `Alt+1/2/3/4` where the terminal supports Alt-modified digits.
+5. Return to Compose with `F2`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
+6. Press `Alt+R` from Compose.
+7. Repeat with Timeline search open: type `q` into the query and press `Ctrl+C` only after confirming the query text is editable.
 
 **Expect:**
 - Plain `q` and digits remain in Compose text fields and do not quit or switch tabs.
-- `Alt+1/2/3/4` switch tabs from Compose, and leaving a non-empty draft starts draft persistence.
+- `F1/F2/F3/F4` switch tabs from Compose, and leaving a non-empty draft starts draft persistence.
+- `Alt+1/2/3/4` keep working as secondary aliases when the terminal sends those chords.
 - `Alt+L` opens and closes logs from Compose without typing into the draft.
 - `Alt+C` opens chat from Compose when width allows, and `Esc` closes it cleanly.
 - `Alt+F` toggles the sidebar preference from Compose without typing into the draft.

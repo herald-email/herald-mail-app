@@ -36,5 +36,5 @@ Subject:  ┌──────────────────────�
                                                                                   └────────────────────────────────────┘
 [K
  INBOX  │  AI: off                                                                                                      
- alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI           
- alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit                                                                [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+ F1-F4: tabs  │  alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach          
+ ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit                                                 [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
