@@ -313,6 +313,9 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 		t.Fatalf("expected one collapsed thread row, got %d", len(rows))
 	}
 	sender := stripANSI(rows[0][0])
+	if !strings.Contains(sender, "▸") {
+		t.Fatalf("expected collapsed sender to include disclosure marker, got %q", sender)
+	}
 	if !strings.Contains(sender, "me") {
 		t.Fatalf("expected collapsed participants to include me, got %q", sender)
 	}
@@ -324,7 +327,7 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 	}
 }
 
-func TestUpdateTimelineTable_ExpandedReplyRowsShowReplyMarker(t *testing.T) {
+func TestUpdateTimelineTable_ExpandedThreadReplyRowsShowReplyMarker(t *testing.T) {
 	now := time.Now()
 	m := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
 	m.timeline.senderWidth = 30
@@ -353,12 +356,41 @@ func TestUpdateTimelineTable_ExpandedReplyRowsShowReplyMarker(t *testing.T) {
 		t.Fatalf("expected expanded thread rows, got %d", len(rows))
 	}
 	replySender := stripANSI(rows[0][0])
+	if !strings.Contains(replySender, "▾") {
+		t.Fatalf("expected expanded root row sender to include disclosure marker, got %q", replySender)
+	}
 	if !strings.Contains(replySender, "↩") {
 		t.Fatalf("expected reply row sender to include reply marker, got %q", replySender)
 	}
 	originalSender := stripANSI(rows[1][0])
 	if !strings.Contains(originalSender, "↳") {
 		t.Fatalf("expected non-reply child row to keep nested marker, got %q", originalSender)
+	}
+}
+
+func TestUpdateTimelineTable_SingleEmailThreadRowsDoNotShowDisclosureMarker(t *testing.T) {
+	now := time.Now()
+	m := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	m.timeline.senderWidth = 30
+	m.timeline.subjectWidth = 42
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "solo",
+			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
+			Subject:   "Next Steps with Anthropic!",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected one single-email row, got %d", len(rows))
+	}
+	sender := stripANSI(rows[0][0])
+	if strings.Contains(sender, "▸") || strings.Contains(sender, "▾") {
+		t.Fatalf("expected single-email row sender not to include thread disclosure marker, got %q", sender)
 	}
 }
 

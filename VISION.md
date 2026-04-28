@@ -112,6 +112,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 
 - [x] Full-width thread list sorted by date
 - [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
+- [x] Sender-cell disclosure markers make collapsed and expanded Timeline threads recognizable before opening them
 - [x] Body preview split (right panel, auto-updates on navigation)
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward

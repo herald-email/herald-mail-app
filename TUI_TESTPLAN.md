@@ -531,14 +531,16 @@ Check these states during every applicable lane:
 **Steps:**
 1. Start `/tmp/herald --demo`.
 2. Open Timeline and select a thread that contains a reply between `demo@demo.local` and another participant.
-3. Confirm the collapsed row shows multiple participants, including `me`.
+3. Confirm the collapsed row shows a `▸` disclosure marker and multiple participants, including `me`.
 4. Press `Enter` to expand the thread.
-5. Move through the expanded rows.
+5. Confirm the expanded root row shows a `▾` disclosure marker.
+6. Move through the expanded rows.
 
 **Expect:**
 - Messages with the same normalized subject appear as one thread even when participants differ.
-- The collapsed sender cell shows the newest unique participants rather than only the newest sender.
-- Rows whose subject starts with a reply prefix show a visible `↩` reply marker at the beginning of the sender cell.
+- The collapsed sender cell starts with `▸` after unread/star indicators and shows the newest unique participants rather than only the newest sender.
+- The expanded root sender cell starts with `▾` after unread/star indicators.
+- Rows whose subject starts with a reply prefix show a visible `↩` reply marker at the beginning of the sender cell; an expanded reply root shows `▾ ↩`.
 - Non-reply child rows still use the existing `↳` indentation marker.
 
 ### TC-17 — Preview unwind order

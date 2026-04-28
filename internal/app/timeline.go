@@ -30,6 +30,13 @@ const (
 	rowKindEmail                         // individual email row
 )
 
+const (
+	threadCollapsedPrefix = "▸ "
+	threadExpandedPrefix  = "▾ "
+	threadReplyPrefix     = "↩ "
+	threadNestedPrefix    = "  ↳ "
+)
+
 // timelineRowRef maps a table-cursor position to a thread group and email.
 type timelineRowRef struct {
 	kind     timelineRowKind
@@ -361,12 +368,12 @@ func (m *Model) updateTimelineTable() {
 			if newest.IsStarred {
 				starDot = "★"
 			}
-			indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot))
+			indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot)) + len([]rune(threadCollapsedPrefix))
 			senderAvail := maxSend - indicatorWidth
 			if senderAvail < 1 {
 				senderAvail = 1
 			}
-			threadSender := unreadDot + starDot + styledThreadParticipants(threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
+			threadSender := unreadDot + starDot + threadCollapsedPrefix + styledThreadParticipants(threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
 			rows = append(rows, table.Row{
 				threadSender,
 				trunc(threadSubj, maxSubj),
@@ -383,10 +390,15 @@ func (m *Model) updateTimelineTable() {
 			// non-reply rows so conversation shape is visible at a glance.
 			for ei, email := range g.emails {
 				prefix := ""
-				if isReplySubject(email.Subject) {
-					prefix = "↩ "
+				if ei == 0 {
+					prefix = threadExpandedPrefix
+					if isReplySubject(email.Subject) {
+						prefix += threadReplyPrefix
+					}
+				} else if isReplySubject(email.Subject) {
+					prefix = threadReplyPrefix
 				} else if ei > 0 {
-					prefix = "  ↳ "
+					prefix = threadNestedPrefix
 				}
 				rows = append(rows, emailRow(email, prefix))
 				m.timeline.threadRowMap = append(m.timeline.threadRowMap, timelineRowRef{
