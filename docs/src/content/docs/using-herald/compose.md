@@ -7,7 +7,7 @@ Compose is Herald's writing screen. It supports normal message composition, repl
 
 ## Overview
 
-Press `2` to open Compose. Compose sends through the configured SMTP server and can be opened directly or pre-filled by Timeline reply, Timeline forward, or quick reply workflows.
+Press `F2` to open Compose. Compose sends through the configured SMTP server and can be opened directly or pre-filled by Timeline reply, Timeline forward, or quick reply workflows.
 
 ## Screen Anatomy
 
@@ -34,6 +34,7 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
 | Plain letters and digits | Compose fields | Any Compose text field is focused. | Inserts text, including `q` and numbers, without switching tabs or quitting. |
+| `F1` / `F2` / `F3` / `F4` | Compose | Main Compose handler active. | Switches to Timeline, Compose, Cleanup, or Contacts without inserting text. |
 | `alt+1` / `alt+2` / `alt+3` / `alt+4` | Compose | Main Compose handler active. | Switches to Timeline, Compose, Cleanup, or Contacts without inserting text. |
 | `alt+l` / `alt+c` / `alt+f` / `alt+r` | Compose | Main Compose handler active. | Toggles logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Compose fields | No autocomplete selection is being accepted and no subject hint is pending. | Moves focus To -> CC -> BCC -> Subject -> Body -> To. |
@@ -57,7 +58,7 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 
 ### Send a New Message
 
-1. Press `2`.
+1. Press `F2`.
 2. Enter at least one `To` recipient.
 3. Press `tab` through CC, BCC, Subject, and Body as needed.
 4. Write the body.
@@ -107,7 +108,7 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 | AI unavailable | `ctrl+g` and `ctrl+j` report no AI backend configured. |
 | AI loading | The assistant waits for provider output and then displays a response. |
 | Draft saved | Compose auto-saves drafts about every 30 seconds when there is content. |
-| Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `Alt+1/2/3/4`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` for global actions while writing. |
+| Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `F1-F4` for tabs, with `Alt+1/2/3/4`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` as secondary global actions while writing. |
 | Send success | Fields clear, saved draft is deleted, and status reports send success. |
 | Send error | Draft content remains available so you can fix configuration or message fields. |
 

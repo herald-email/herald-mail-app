@@ -68,18 +68,10 @@ func (m *Model) handleMouseTabClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 	if !m.canInteractWithVisibleData() {
 		return nil, true
 	}
-	tabWidths := []struct {
-		tab int
-		w   int
-	}{
-		{tabTimeline, len("1  Timeline") + 4},
-		{tabCompose, len("2  Compose") + 4},
-		{tabCleanup, len("3  Cleanup") + 4},
-		{tabContacts, len("4  Contacts") + 4},
-	}
 	x := 0
-	for _, item := range tabWidths {
-		if msg.X >= x && msg.X < x+item.w {
+	for _, item := range topLevelTabNavigation {
+		w := tabMouseWidth(item)
+		if msg.X >= x && msg.X < x+w {
 			switch item.tab {
 			case tabTimeline:
 				if m.activeTab != tabTimeline {
@@ -100,7 +92,7 @@ func (m *Model) handleMouseTabClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 			}
 			return nil, true
 		}
-		x += item.w
+		x += w
 	}
 	return nil, false
 }

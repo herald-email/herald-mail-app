@@ -14,7 +14,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | Area | What it shows | Notes |
 | --- | --- | --- |
 | Header | `Herald` while the main TUI is active. | The loading view shows a larger startup banner before cached data is visible. |
-| Tab bar | `1 Timeline`, `2 Compose`, `3 Cleanup`, `4 Contacts`. | The active tab is highlighted. Number keys switch tabs in browse contexts; `Alt+1/2/3/4` switch tabs while text fields are focused; mouse clicks switch tabs when the terminal sends mouse events. |
+| Tab bar | `F1 Timeline`, `F2 Compose`, `F3 Cleanup`, `F4 Contacts`. | The active tab is highlighted. `F1-F4` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3/4` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
 | Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
@@ -22,7 +22,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | Status bar | Folder breadcrumb, AI chip, search or cleanup state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
 | Key hints | The currently valid keys for the focused tab, panel, or overlay. | Hints wrap to at most two lines. |
 
-<!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
+<!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press F1" -->
 
 ![Herald main layout with Timeline and sidebar](/screenshots/global-main-layout.png)
 
@@ -30,11 +30,9 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `1` | Browse contexts | Visible data can be interacted with. | Switches to Timeline. In the quick reply picker, chooses reply 1. |
-| `2` | Browse contexts | Visible data can be interacted with. | Switches to Compose. In the quick reply picker, chooses reply 2. |
-| `3` | Browse contexts | Visible data can be interacted with. | Switches to Cleanup. In the quick reply picker, chooses reply 3. |
-| `4` | Browse contexts | Visible data can be interacted with. | Switches to Contacts or loads Contacts if already selected. In the quick reply picker, chooses reply 4. |
-| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Main TUI | Visible data can be interacted with. | Switches tabs even when Compose text fields are focused. |
+| `F1` / `F2` / `F3` / `F4` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Compose, Cleanup, or Contacts from any main tab. |
+| `1` / `2` / `3` / `4` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches tabs as compatibility aliases. In the quick reply picker, chooses replies 1-4. |
+| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Main TUI | Visible data can be interacted with. | Switches tabs as secondary aliases, including when Compose text fields are focused. |
 | `q` | Browse contexts | No text input is being edited. | Quits Herald after cleanup. |
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
@@ -70,11 +68,11 @@ Press `m` in Timeline to temporarily release Herald's mouse capture for terminal
 
 ### Move Between Tabs
 
-1. Press `1`, `2`, `3`, or `4`.
+1. Press `F1`, `F2`, `F3`, or `F4`.
 2. Watch the tab bar highlight move.
 3. Use the bottom key hints to learn the active tab's controls.
 
-When a text field is focused, press `Alt+1`, `Alt+2`, `Alt+3`, or `Alt+4` instead. This keeps Compose and search text entry safe while preserving fast tab navigation.
+Browse contexts also accept `1`, `2`, `3`, and `4` as compatibility aliases. When a terminal does not send function keys cleanly, `Alt+1`, `Alt+2`, `Alt+3`, and `Alt+4` remain secondary aliases that keep Compose text entry safe.
 
 ### Use Panel Focus
 

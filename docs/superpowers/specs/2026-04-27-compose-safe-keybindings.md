@@ -13,6 +13,7 @@ These requirements describe what a user can observe in the main TUI after the ch
 - [x] Plain `q` still quits from browse contexts where no text input is being edited.
 - [x] Plain `1/2/3/4`, `l`, `c`, `f`, and `r` continue to work in browse contexts where they do not conflict with text entry.
 - [x] `F1/F2/F3/F4` switch to Timeline, Compose, Cleanup, and Contacts from anywhere in the main TUI, including Compose.
+- [x] Bottom key hints and the tab bar use `F1-F4` as the primary visible tab-switching annotation across tabs.
 - [x] `Alt+1/2/3/4` remain supported as secondary aliases for terminals that reliably send Alt-modified digits.
 - [x] `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` toggle logs, chat, sidebar, and refresh from Compose without inserting text.
 

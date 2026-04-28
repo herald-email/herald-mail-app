@@ -763,7 +763,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
 	}
 	if m.timeline.chatFilterMode {
-		return "esc: clear filter  │  1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
+		return "esc: clear filter  │  " + primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
@@ -772,7 +772,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  q: quit  │  read-only", true
 	}
 	if m.timelineIsReadOnlyDiagnostic() {
-		return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  f: sidebar  │  q: quit  │  read-only", true
+		return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  f: sidebar  │  q: quit  │  read-only", true
 	}
 	if chrome.FocusedPanel == panelPreview {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
@@ -794,7 +794,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timeline.selectedEmail != nil {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit", true
 	}
-	return "1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit", true
+	return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit", true
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {

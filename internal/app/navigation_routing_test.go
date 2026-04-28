@@ -287,6 +287,133 @@ func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 	}
 }
 
+func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T) {
+	tests := []struct {
+		name  string
+		model func() *Model
+	}{
+		{
+			name: "timeline list",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabTimeline
+				m.timeline.emails = mockEmails()
+				m.updateTimelineTable()
+				return m
+			},
+		},
+		{
+			name: "timeline chat filter",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabTimeline
+				m.timeline.chatFilterMode = true
+				m.timeline.emails = mockEmails()
+				m.updateTimelineTable()
+				return m
+			},
+		},
+		{
+			name: "timeline read-only diagnostic",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabTimeline
+				m.currentFolder = virtualFolderAllMailOnly
+				m.timeline.emails = mockEmails()
+				m.updateTimelineTable()
+				return m
+			},
+		},
+		{
+			name: "compose",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabCompose
+				return m
+			},
+		},
+		{
+			name: "contacts list",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabContacts
+				m.contactFocusPanel = 0
+				return m
+			},
+		},
+		{
+			name: "contacts detail",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabContacts
+				m.contactFocusPanel = 1
+				return m
+			},
+		},
+		{
+			name: "cleanup summary",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabCleanup
+				m.stats = makeCleanupStats()
+				m.updateSummaryTable()
+				return m
+			},
+		},
+		{
+			name: "cleanup details",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabCleanup
+				m.stats = makeCleanupStats()
+				m.updateSummaryTable()
+				m.setFocusedPanel(panelDetails)
+				return m
+			},
+		},
+		{
+			name: "sidebar",
+			model: func() *Model {
+				m := makeSizedModel(t, 120, 40)
+				m.activeTab = tabCleanup
+				m.showSidebar = true
+				m.setFocusedPanel(panelSidebar)
+				return m
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hints := stripANSI(tc.model().renderKeyHints())
+			if !strings.Contains(hints, "F1-F4: tabs") {
+				t.Fatalf("expected primary F-key tab hint, got %q", hints)
+			}
+			for _, stale := range []string{"1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
+				if strings.Contains(hints, stale) {
+					t.Fatalf("expected no stale tab hint %q, got %q", stale, hints)
+				}
+			}
+		})
+	}
+}
+
+func TestRenderTabBar_AdvertisesFunctionKeys(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	rendered := stripANSI(m.renderTabBar())
+
+	for _, want := range []string{"F1  Timeline", "F2  Compose", "F3  Cleanup", "F4  Contacts"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected tab bar to include %q, got %q", want, rendered)
+		}
+	}
+	for _, stale := range []string{"  1  Timeline", "  2  Compose", "  3  Cleanup", "  4  Contacts"} {
+		if strings.Contains(rendered, stale) {
+			t.Fatalf("expected tab bar not to include stale label %q, got %q", stale, rendered)
+		}
+	}
+}
+
 func TestTimelinePreview_HidesSidebarWhileOpenWithoutChangingPreference(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

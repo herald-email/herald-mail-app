@@ -229,13 +229,15 @@ Check these states during every applicable lane:
 **Sizes:** all except `50x15`
 
 **Steps:**
-1. Press `1`, `2`, `3`, `4`.
+1. Press `F1`, `F2`, `F3`, `F4`.
 2. Capture after each switch.
+3. In a non-text browse context, press `1`, `2`, `3`, `4` as compatibility aliases.
 
 **Expect:**
 - Correct tab highlight.
 - Tab-specific layout appears.
-- Key hints change with the tab.
+- Key hints change with the tab and consistently advertise `F1-F4: tabs`.
+- Browse-number aliases keep working but are not the primary tab hint.
 - No stale status fragments from previous tabs.
 
 ### TC-03 — Focus border exclusivity
@@ -453,6 +455,7 @@ Check these states during every applicable lane:
 - Plain `q` and digits remain in Compose text fields and do not quit or switch tabs.
 - `F1/F2/F3/F4` switch tabs from Compose, and leaving a non-empty draft starts draft persistence.
 - `Alt+1/2/3/4` keep working as secondary aliases when the terminal sends those chords.
+- Compose and browse hints use `F1-F4: tabs` as the visible tab-switching annotation rather than mixing number-key and Alt-key tab labels.
 - `Alt+L` opens and closes logs from Compose without typing into the draft.
 - `Alt+C` opens chat from Compose when width allows, and `Esc` closes it cleanly.
 - `Alt+F` toggles the sidebar preference from Compose without typing into the draft.

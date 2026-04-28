@@ -142,18 +142,18 @@ func (m *Model) renderTabBar() string {
 		Background(defaultTheme.TabActiveBg).
 		Bold(true)
 
-	tab := func(n int, label string) string {
-		if m.activeTab == n {
+	tab := func(item tabNavigationItem) string {
+		label := tabBarLabel(item)
+		if m.activeTab == item.tab {
 			return active.Render(label)
 		}
 		return inactive.Render(label)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		tab(tabTimeline, "1  Timeline"),
-		tab(tabCompose, "2  Compose"),
-		tab(tabCleanup, "3  Cleanup"),
-		tab(tabContacts, "4  Contacts"),
-	)
+	rendered := make([]string, 0, len(topLevelTabNavigation))
+	for _, item := range topLevelTabNavigation {
+		rendered = append(rendered, tab(item))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
 }
 
 func (m *Model) renderTopSyncStrip() string {
@@ -457,7 +457,7 @@ func (m *Model) renderKeyHints() string {
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = "F1-F4: tabs  │  alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
+		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)
@@ -466,25 +466,25 @@ func (m *Model) renderKeyHints() string {
 		} else if m.contactPreviewEmail != nil {
 			hints = "tab: next panel  │  esc: back to contact  │  q: quit"
 		} else if m.contactFocusPanel == 1 {
-			hints = "1/2/3/4: tabs  │  tab: list panel  │  ↑/k ↓/j: nav emails  │  e: enrich  │  enter: open email  │  q: quit"
+			hints = primaryTabShortcutHint + "  │  tab: list panel  │  ↑/k ↓/j: nav emails  │  e: enrich  │  enter: open email  │  q: quit"
 		} else {
-			hints = "1/2/3/4: tabs  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
+			hints = primaryTabShortcutHint + "  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
-			hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
+			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
 			if m.showCleanupPreview {
 				hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
 			} else {
-				hints = "1/2/3/4: tabs  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
+				hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
 			}
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
-				hints = "↑/k ↓/j: nav  │  enter: details  │  h: hide future mail  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
+				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: nav  │  enter: details  │  h: hide  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
 			} else {
-				hints = "1/2/3/4: tabs  │  tab: panel  │  enter: details  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+				hints = primaryTabShortcutHint + "  │  tab: panel  │  enter: details  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
 			}
 		}
 	}

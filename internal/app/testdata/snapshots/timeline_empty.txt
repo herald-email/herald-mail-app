@@ -1,9 +1,9 @@
 [?25l[?2004h[2J[H Herald [K
-  1  Timeline    2  Compose    3  Cleanup    4  Contacts  [K
+  F1  Timeline    F2  Compose    F3  Cleanup    F4  Contacts  [K
 ┌──────────────────────────┐  ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │›  INBOX                  │  │ Sender         Subject                            Date              Size KB  Att  Tag  │
 │   All Mail only          │  └────────────────────────────────────────────────────────────────────────────────────────┘
 └──────────────────────────┘                                                                                            
  INBOX  │  AI: off  │  0 emails                                                                                         
- 1/2/3/4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete              
- e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit                                          [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+ F1-F4: tabs  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive 
+ /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit                                                         [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
