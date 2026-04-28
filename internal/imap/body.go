@@ -87,6 +87,9 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		return &models.EmailBody{TextPlain: string(raw)}, nil
 	}
 	result := &models.EmailBody{}
+	result.MessageID = mailMsg.Header.Get("Message-Id")
+	result.InReplyTo = mailMsg.Header.Get("In-Reply-To")
+	result.References = mailMsg.Header.Get("References")
 	result.ListUnsubscribe = mailMsg.Header.Get("List-Unsubscribe")
 	result.ListUnsubscribePost = mailMsg.Header.Get("List-Unsubscribe-Post")
 	parseMIMEPart(textproto.MIMEHeader(mailMsg.Header), mailMsg.Body, result, "")

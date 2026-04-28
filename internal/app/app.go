@@ -122,6 +122,15 @@ type TimelineForwardBodyMsg struct {
 	RequestID int
 }
 
+// TimelineReplyBodyMsg carries a body fetch result for Timeline replying.
+type TimelineReplyBodyMsg struct {
+	Email     *models.EmailData
+	Body      *models.EmailBody
+	Err       error
+	MessageID string
+	RequestID int
+}
+
 // QuickRepliesMsg is sent when AI quick reply generation completes.
 type QuickRepliesMsg struct {
 	Replies []string
@@ -391,6 +400,7 @@ type Model struct {
 	composeStatus      string // last send result message
 	composePreview     bool   // show glamour markdown preview
 	composeAttachments []models.ComposeAttachment
+	composePreserved   *composePreservedContext
 
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
@@ -1025,6 +1035,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeAttachments = nil
 			// Clear reply/AI context after successful send
 			m.replyContextEmail = nil
+			m.composePreserved = nil
 			m.composeAIThread = false
 			m.composeAIPanel = false
 			m.composeAIDiff = ""

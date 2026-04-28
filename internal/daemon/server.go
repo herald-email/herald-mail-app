@@ -706,6 +706,27 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"uid": uid, "folder": folder})
 }
 
+func (s *Server) handleSaveRawDraft(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Raw string `json:"raw"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	raw, err := base64.StdEncoding.DecodeString(req.Raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "raw must be base64 encoded")
+		return
+	}
+	uid, folder, err := s.backend.SaveRawDraft(raw)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"uid": uid, "folder": folder})
+}
+
 // handleListDrafts returns all draft emails from the IMAP Drafts folder.
 func (s *Server) handleListDrafts(w http.ResponseWriter, _ *http.Request) {
 	drafts, err := s.backend.ListDrafts()
@@ -793,13 +814,17 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReplyEmail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Body string `json:"body"`
+		Body             string                  `json:"body"`
+		PreservationMode models.PreservationMode `json:"preservation_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := s.backend.ReplyToEmail(id, req.Body); err != nil {
+	if err := s.backend.ReplyToEmailWithOptions(id, models.ReplyEmailOptions{
+		Body:             req.Body,
+		PreservationMode: models.NormalizePreservationMode(req.PreservationMode),
+	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -810,8 +835,11 @@ func (s *Server) handleReplyEmail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleForwardEmail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		To   string `json:"to"`
-		Body string `json:"body"`
+		To                             string                  `json:"to"`
+		Body                           string                  `json:"body"`
+		PreservationMode               models.PreservationMode `json:"preservation_mode"`
+		OmitOriginalAttachments        bool                    `json:"omit_original_attachments"`
+		OmittedOriginalAttachmentNames []string                `json:"omitted_original_attachment_names"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -821,7 +849,13 @@ func (s *Server) handleForwardEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "to is required")
 		return
 	}
-	if err := s.backend.ForwardEmail(id, req.To, req.Body); err != nil {
+	if err := s.backend.ForwardEmailWithOptions(id, models.ForwardEmailOptions{
+		To:                             req.To,
+		Body:                           req.Body,
+		PreservationMode:               models.NormalizePreservationMode(req.PreservationMode),
+		OmitOriginalAttachments:        req.OmitOriginalAttachments,
+		OmittedOriginalAttachmentNames: req.OmittedOriginalAttachmentNames,
+	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -981,6 +981,13 @@ func (b *LocalBackend) IsUnsubscribedSender(sender string) (bool, error) {
 // --- Reply / Forward / Attachments ---
 
 func (b *LocalBackend) ReplyToEmail(messageID, replyBody string) error {
+	return b.ReplyToEmailWithOptions(messageID, models.ReplyEmailOptions{
+		Body:             replyBody,
+		PreservationMode: models.PreservationModeSafe,
+	})
+}
+
+func (b *LocalBackend) ReplyToEmailWithOptions(messageID string, opts models.ReplyEmailOptions) error {
 	email, err := b.cache.GetEmailByID(messageID)
 	if err != nil {
 		return fmt.Errorf("get email: %w", err)
@@ -988,17 +995,33 @@ func (b *LocalBackend) ReplyToEmail(messageID, replyBody string) error {
 	if email == nil {
 		return fmt.Errorf("email %s not found", messageID)
 	}
-	subject := email.Subject
-	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-		subject = "Re: " + subject
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return fmt.Errorf("fetch original body: %w", err)
 	}
+	subject := buildReplySubject(email.Subject)
 	from := b.cfg.Credentials.Username
-	html, plain := appsmtp.MarkdownToHTMLAndPlain(replyBody)
 	mailer := appsmtp.New(b.cfg)
-	return mailer.SendReply(from, email.Sender, subject, plain, html, email.MessageID, "")
+	return mailer.SendPreserved(appsmtp.PreservedMessageRequest{
+		Kind:            models.PreservedMessageKindReply,
+		Mode:            models.NormalizePreservationMode(opts.PreservationMode),
+		From:            from,
+		To:              email.Sender,
+		Subject:         subject,
+		TopNoteMarkdown: opts.Body,
+		Original:        preservedOriginalFromEmail(email, body, false),
+	})
 }
 
 func (b *LocalBackend) ForwardEmail(messageID, to, forwardBody string) error {
+	return b.ForwardEmailWithOptions(messageID, models.ForwardEmailOptions{
+		To:               to,
+		Body:             forwardBody,
+		PreservationMode: models.PreservationModeSafe,
+	})
+}
+
+func (b *LocalBackend) ForwardEmailWithOptions(messageID string, opts models.ForwardEmailOptions) error {
 	email, err := b.cache.GetEmailByID(messageID)
 	if err != nil {
 		return fmt.Errorf("get email: %w", err)
@@ -1006,21 +1029,68 @@ func (b *LocalBackend) ForwardEmail(messageID, to, forwardBody string) error {
 	if email == nil {
 		return fmt.Errorf("email %s not found", messageID)
 	}
-	// Build subject: strip existing Re:/Fwd: prefix then prepend Fwd:
-	subject := email.Subject
+	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	if err != nil {
+		return fmt.Errorf("fetch original body: %w", err)
+	}
+	subject := buildForwardSubject(email.Subject)
+	from := b.cfg.Credentials.Username
+	mailer := appsmtp.New(b.cfg)
+	return mailer.SendPreserved(appsmtp.PreservedMessageRequest{
+		Kind:                           models.PreservedMessageKindForward,
+		Mode:                           models.NormalizePreservationMode(opts.PreservationMode),
+		From:                           from,
+		To:                             opts.To,
+		Subject:                        subject,
+		TopNoteMarkdown:                opts.Body,
+		Original:                       preservedOriginalFromEmail(email, body, true),
+		OmitOriginalAttachments:        opts.OmitOriginalAttachments,
+		OmittedOriginalAttachmentNames: opts.OmittedOriginalAttachmentNames,
+	})
+}
+
+func preservedOriginalFromEmail(email *models.EmailData, body *models.EmailBody, includeAttachments bool) models.PreservedMessageOriginal {
+	if body == nil {
+		body = &models.EmailBody{}
+	}
+	messageID := body.MessageID
+	if messageID == "" && email != nil {
+		messageID = email.MessageID
+	}
+	original := models.PreservedMessageOriginal{
+		MessageID:    messageID,
+		InReplyTo:    body.InReplyTo,
+		References:   body.References,
+		TextPlain:    body.TextPlain,
+		TextHTML:     body.TextHTML,
+		InlineImages: body.InlineImages,
+	}
+	if email != nil {
+		original.Sender = email.Sender
+		original.Subject = email.Subject
+		original.Date = email.Date
+	}
+	if includeAttachments {
+		original.Attachments = body.Attachments
+	}
+	return original
+}
+
+func buildReplySubject(subject string) string {
+	if strings.HasPrefix(strings.ToLower(subject), "re:") {
+		return subject
+	}
+	return "Re: " + subject
+}
+
+func buildForwardSubject(subject string) string {
 	lower := strings.ToLower(subject)
 	if strings.HasPrefix(lower, "re: ") {
 		subject = subject[4:]
 	} else if strings.HasPrefix(lower, "fwd: ") {
 		subject = subject[5:]
 	}
-	subject = "Fwd: " + subject
-
-	body := forwardBody + "\n\n---------- Forwarded message ----------\nFrom: " + email.Sender + "\nSubject: " + email.Subject
-	html, plain := appsmtp.MarkdownToHTMLAndPlain(body)
-	from := b.cfg.Credentials.Username
-	mailer := appsmtp.New(b.cfg)
-	return mailer.Send(from, to, subject, plain, html)
+	return "Fwd: " + subject
 }
 
 func (b *LocalBackend) ListAttachments(messageID string) ([]models.Attachment, error) {
@@ -1071,6 +1141,10 @@ func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, str
 	if err != nil {
 		return 0, "", fmt.Errorf("build draft message: %w", err)
 	}
+	return b.imapClient.AppendDraft(raw)
+}
+
+func (b *LocalBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
 	return b.imapClient.AppendDraft(raw)
 }
 

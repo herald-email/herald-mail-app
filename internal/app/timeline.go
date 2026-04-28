@@ -638,23 +638,75 @@ func buildForwardBody(email *models.EmailData, bodyText string) string {
 	return forwarded + bodyText
 }
 
+func buildReplySubject(subject string) string {
+	if strings.HasPrefix(strings.ToLower(subject), "re:") {
+		return subject
+	}
+	return "Re: " + subject
+}
+
+func newComposePreservedContext(kind models.PreservedMessageKind, email *models.EmailData, body *models.EmailBody, warning string) *composePreservedContext {
+	if body == nil {
+		body = &models.EmailBody{}
+	}
+	if body.MessageID == "" && email != nil {
+		body.MessageID = email.MessageID
+	}
+	ctx := &composePreservedContext{
+		kind:        kind,
+		mode:        models.PreservationModeSafe,
+		email:       email,
+		body:        body,
+		loadWarning: warning,
+	}
+	if kind == models.PreservedMessageKindForward {
+		ctx.forwardedAttachments = make([]models.ForwardedAttachment, 0, len(body.Attachments))
+		for _, att := range body.Attachments {
+			ctx.forwardedAttachments = append(ctx.forwardedAttachments, models.ForwardedAttachment{
+				Attachment: att,
+				Include:    len(att.Data) > 0,
+			})
+		}
+	}
+	return ctx
+}
+
 func (m *Model) timelineBodyLoadedFor(email *models.EmailData) bool {
 	return email != nil &&
 		m.timeline.body != nil &&
 		m.timeline.bodyMessageID == email.MessageID
 }
 
-func (m *Model) openTimelineForwardCompose(email *models.EmailData, bodyText, composeStatus string) {
+func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
 	m.activeTab = tabCompose
 	m.composeTo.SetValue("")
 	m.composeSubject.SetValue(buildForwardSubject(email.Subject))
-	m.composeBody.SetValue(buildForwardBody(email, bodyText))
+	m.composeBody.SetValue("")
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
+	m.replyContextEmail = nil
+	m.composeAIThread = false
+	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindForward, email, body, composeStatus)
 	m.composeField = 0
 	m.composeTo.Focus()
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
+}
+
+func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
+	m.activeTab = tabCompose
+	m.replyContextEmail = email
+	m.composeAIThread = true
+	m.composeTo.SetValue(email.Sender)
+	m.composeSubject.SetValue(buildReplySubject(email.Subject))
+	m.composeBody.SetValue("")
+	m.composeStatus = composeStatus
+	m.statusMessage = ""
+	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindReply, email, body, composeStatus)
+	m.composeField = composeFieldBody
+	m.composeTo.Blur()
+	m.composeSubject.Blur()
+	m.composeBody.Focus()
 }
 
 func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
@@ -662,7 +714,7 @@ func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
 		return nil
 	}
 	if m.timelineBodyLoadedFor(email) {
-		m.openTimelineForwardCompose(email, m.timeline.body.TextPlain, "")
+		m.openTimelineForwardCompose(email, m.timeline.body, "")
 		return nil
 	}
 	m.timeline.forwardRequestID++
@@ -688,6 +740,46 @@ func (m *Model) loadTimelineForwardBodyCmd(email *models.EmailData, requestID in
 		}
 		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
 		return TimelineForwardBodyMsg{
+			Email:     &emailCopy,
+			Body:      body,
+			Err:       err,
+			MessageID: emailCopy.MessageID,
+			RequestID: requestID,
+		}
+	}
+}
+
+func (m *Model) startTimelineReply(email *models.EmailData) tea.Cmd {
+	if email == nil {
+		return nil
+	}
+	if m.timelineBodyLoadedFor(email) {
+		m.openTimelineReplyCompose(email, m.timeline.body, "")
+		return nil
+	}
+	m.timeline.replyRequestID++
+	requestID := m.timeline.replyRequestID
+	m.timeline.replyPendingMessage = email.MessageID
+	m.statusMessage = "Loading reply message body..."
+	return m.loadTimelineReplyBodyCmd(email, requestID)
+}
+
+func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int) tea.Cmd {
+	emailCopy := *email
+	b := m.backend
+	return func() tea.Msg {
+		if emailCopy.UID == 0 {
+			return TimelineReplyBodyMsg{
+				Email: &emailCopy,
+				Body: &models.EmailBody{
+					TextPlain: "(Body unavailable: this cached email has no server UID yet, so Herald cannot safely load its full contents. Re-sync the folder or use server search to refresh it.)",
+				},
+				MessageID: emailCopy.MessageID,
+				RequestID: requestID,
+			}
+		}
+		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		return TimelineReplyBodyMsg{
 			Email:     &emailCopy,
 			Body:      body,
 			Err:       err,
@@ -1163,16 +1255,36 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if email == nil {
 			return m, nil, true
 		}
-		bodyText := ""
+		body := msg.Body
 		composeStatus := ""
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch forwarded email body: %v", msg.Err)
 			composeStatus = "Forward body failed to load: " + msg.Err.Error()
-			bodyText = "(" + composeStatus + ")"
-		} else if msg.Body != nil {
-			bodyText = msg.Body.TextPlain
+			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
 		}
-		m.openTimelineForwardCompose(email, bodyText, composeStatus)
+		m.openTimelineForwardCompose(email, body, composeStatus)
+		return m, nil, true
+
+	case TimelineReplyBodyMsg:
+		if msg.RequestID != m.timeline.replyRequestID || msg.MessageID != m.timeline.replyPendingMessage {
+			return m, nil, true
+		}
+		m.timeline.replyPendingMessage = ""
+		if m.activeTab != tabTimeline {
+			return m, nil, true
+		}
+		email := msg.Email
+		if email == nil {
+			return m, nil, true
+		}
+		body := msg.Body
+		composeStatus := ""
+		if msg.Err != nil {
+			logger.Warn("Failed to fetch reply email body: %v", msg.Err)
+			composeStatus = "Reply body failed to load: " + msg.Err.Error()
+			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
+		}
+		m.openTimelineReplyCompose(email, body, composeStatus)
 		return m, nil, true
 
 	case StarResultMsg:
@@ -1332,19 +1444,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
-				m.activeTab = tabCompose
-				m.replyContextEmail = email
-				m.composeAIThread = true
-				m.composeTo.SetValue(email.Sender)
-				subject := email.Subject
-				if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-					subject = "Re: " + subject
-				}
-				m.composeSubject.SetValue(subject)
-				m.composeField = 4
-				m.composeTo.Blur()
-				m.composeSubject.Blur()
-				m.composeBody.Focus()
+				return m, m.startTimelineReply(email), true
 			}
 		}
 		return m, nil, true

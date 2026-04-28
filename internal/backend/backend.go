@@ -263,8 +263,14 @@ type Backend interface {
 	// ReplyToEmail sends a reply to the given message. replyBody is Markdown.
 	ReplyToEmail(messageID, replyBody string) error
 
+	// ReplyToEmailWithOptions sends a reply with preservation settings.
+	ReplyToEmailWithOptions(messageID string, opts models.ReplyEmailOptions) error
+
 	// ForwardEmail forwards the given message to `to` with an optional covering note. forwardBody is Markdown.
 	ForwardEmail(messageID, to, forwardBody string) error
+
+	// ForwardEmailWithOptions forwards the given message with preservation and attachment settings.
+	ForwardEmailWithOptions(messageID string, opts models.ForwardEmailOptions) error
 
 	// ListAttachments returns attachment metadata for the given email (no binary data).
 	ListAttachments(messageID string) ([]models.Attachment, error)
@@ -277,6 +283,9 @@ type Backend interface {
 	// SaveDraft saves a draft email to the IMAP Drafts folder.
 	// Returns the UID and folder of the saved draft.
 	SaveDraft(to, cc, bcc, subject, body string) (uid uint32, folder string, err error)
+
+	// SaveRawDraft saves an already assembled RFC 2822 draft message.
+	SaveRawDraft(raw []byte) (uid uint32, folder string, err error)
 
 	// ListDrafts returns all draft emails from the IMAP Drafts folder.
 	ListDrafts() ([]*models.Draft, error)

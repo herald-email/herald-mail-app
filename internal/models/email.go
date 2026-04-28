@@ -85,6 +85,76 @@ type EmailBody struct {
 	IsFromHTML          bool   // TextPlain was converted from HTML; render via markdown
 	ListUnsubscribe     string // raw List-Unsubscribe header value
 	ListUnsubscribePost string // raw List-Unsubscribe-Post header value (RFC 8058)
+	MessageID           string // raw Message-ID header from the fetched MIME message
+	InReplyTo           string // raw In-Reply-To header from the fetched MIME message
+	References          string // raw References header from the fetched MIME message
+}
+
+// PreservationMode controls how much of an original HTML message Herald keeps
+// when replying or forwarding with preserved inline content.
+type PreservationMode string
+
+const (
+	PreservationModeSafe     PreservationMode = "safe"
+	PreservationModeFidelity PreservationMode = "fidelity"
+	PreservationModePrivacy  PreservationMode = "privacy"
+)
+
+// NormalizePreservationMode returns a supported preservation mode, defaulting
+// to Safe for empty or unknown values.
+func NormalizePreservationMode(mode PreservationMode) PreservationMode {
+	switch mode {
+	case PreservationModeSafe, PreservationModeFidelity, PreservationModePrivacy:
+		return mode
+	default:
+		return PreservationModeSafe
+	}
+}
+
+// PreservedMessageKind identifies whether a preserved context is being sent as
+// a reply or forward.
+type PreservedMessageKind string
+
+const (
+	PreservedMessageKindReply   PreservedMessageKind = "reply"
+	PreservedMessageKindForward PreservedMessageKind = "forward"
+)
+
+// PreservedMessageOriginal is the original email context embedded below a new
+// top note when replying or forwarding.
+type PreservedMessageOriginal struct {
+	MessageID    string
+	InReplyTo    string
+	References   string
+	Sender       string
+	Subject      string
+	Date         time.Time
+	TextPlain    string
+	TextHTML     string
+	InlineImages []InlineImage
+	Attachments  []Attachment
+}
+
+// ForwardedAttachment tracks an original attachment staged for forwarding.
+type ForwardedAttachment struct {
+	Attachment Attachment
+	Include    bool
+	LoadError  string
+}
+
+// ReplyEmailOptions configures a preserved reply send.
+type ReplyEmailOptions struct {
+	Body             string
+	PreservationMode PreservationMode
+}
+
+// ForwardEmailOptions configures a preserved forward send.
+type ForwardEmailOptions struct {
+	To                             string
+	Body                           string
+	PreservationMode               PreservationMode
+	OmitOriginalAttachments        bool
+	OmittedOriginalAttachmentNames []string
 }
 
 // InlineImage is an image MIME part embedded inline in an email body.

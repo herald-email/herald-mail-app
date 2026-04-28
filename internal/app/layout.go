@@ -77,6 +77,8 @@ type TimelineState struct {
 	quickRepliesAIFetched bool
 	forwardRequestID      int
 	forwardPendingMessage string
+	replyRequestID        int
+	replyPendingMessage   string
 
 	searchMode             bool
 	searchInput            textinput.Model

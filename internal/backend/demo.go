@@ -832,6 +832,12 @@ func (d *DemoBackend) IsUnsubscribedSender(sender string) (bool, error) {
 
 func (d *DemoBackend) ReplyToEmail(_, _ string) error    { return nil }
 func (d *DemoBackend) ForwardEmail(_, _, _ string) error { return nil }
+func (d *DemoBackend) ReplyToEmailWithOptions(_ string, _ models.ReplyEmailOptions) error {
+	return nil
+}
+func (d *DemoBackend) ForwardEmailWithOptions(_ string, _ models.ForwardEmailOptions) error {
+	return nil
+}
 
 func (d *DemoBackend) ListAttachments(messageID string) ([]models.Attachment, error) {
 	if body, ok := demo.BodyByMessageID(messageID); ok {
@@ -866,6 +872,21 @@ func (d *DemoBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, stri
 		BCC:     bcc,
 		Subject: subject,
 		Body:    body,
+		Date:    time.Now(),
+	}
+	d.drafts = append(d.drafts, draft)
+	return draft.UID, draft.Folder, nil
+}
+
+func (d *DemoBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.nextDraftUID++
+	draft := &models.Draft{
+		UID:     d.nextDraftUID,
+		Folder:  "Drafts",
+		Subject: "Preserved MIME draft",
+		Body:    string(raw),
 		Date:    time.Now(),
 	}
 	d.drafts = append(d.drafts, draft)

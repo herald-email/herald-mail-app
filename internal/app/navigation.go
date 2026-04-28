@@ -28,6 +28,7 @@ func (m *Model) resetComposeMode() {
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
 	m.replyContextEmail = nil
+	m.composePreserved = nil
 	m.composeAIThread = false
 	m.composeAIPanel = false
 	m.composeAIDiff = ""

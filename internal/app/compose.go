@@ -10,8 +10,28 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
+	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
 )
+
+const (
+	composeFieldTo = iota
+	composeFieldCC
+	composeFieldBCC
+	composeFieldSubject
+	composeFieldBody
+	composeFieldForwardedAttachments
+)
+
+type composePreservedContext struct {
+	kind                 models.PreservedMessageKind
+	mode                 models.PreservationMode
+	email                *models.EmailData
+	body                 *models.EmailBody
+	forwardedAttachments []models.ForwardedAttachment
+	selectedAttachment   int
+	loadWarning          string
+}
 
 type composeSuggestionLayout struct {
 	visibleCount int
@@ -56,6 +76,10 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	}
 	if m.attachmentInputActive {
 		rows++
+	}
+	if m.composePreserved != nil {
+		rows++
+		rows += len(m.composePreserved.forwardedAttachments)
 	}
 	rows += len(m.composeAttachments)
 	if m.composeStatus != "" {
@@ -181,6 +205,11 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+p":
 		m.composePreview = !m.composePreview
 		return m, nil
+	case "ctrl+o":
+		if m.composePreserved != nil {
+			m.cyclePreservationMode()
+			return m, nil
+		}
 	case "ctrl+a":
 		m.attachmentInputActive = true
 		m.attachmentPathInput.SetValue("")
@@ -234,24 +263,67 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		return m.handleEscKey()
 	}
+	if m.composeField == composeFieldForwardedAttachments {
+		return m.handleForwardedAttachmentKey(msg)
+	}
 	// Forward all other keys to the focused field
 	var cmd tea.Cmd
 	switch m.composeField {
-	case 0:
+	case composeFieldTo:
 		m.composeTo, cmd = m.composeTo.Update(msg)
 		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeTo.Value())))
-	case 1:
+	case composeFieldCC:
 		m.composeCC, cmd = m.composeCC.Update(msg)
 		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeCC.Value())))
-	case 2:
+	case composeFieldBCC:
 		m.composeBCC, cmd = m.composeBCC.Update(msg)
 		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeBCC.Value())))
-	case 3:
+	case composeFieldSubject:
 		m.composeSubject, cmd = m.composeSubject.Update(msg)
-	case 4:
+	case composeFieldBody:
 		m.composeBody, cmd = m.composeBody.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m *Model) cyclePreservationMode() {
+	if m.composePreserved == nil {
+		return
+	}
+	switch m.composePreserved.mode {
+	case models.PreservationModeSafe:
+		m.composePreserved.mode = models.PreservationModeFidelity
+	case models.PreservationModeFidelity:
+		m.composePreserved.mode = models.PreservationModePrivacy
+	default:
+		m.composePreserved.mode = models.PreservationModeSafe
+	}
+}
+
+func (m *Model) handleForwardedAttachmentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.composePreserved == nil || len(m.composePreserved.forwardedAttachments) == 0 {
+		return m, nil
+	}
+	switch msg.String() {
+	case "up", "k":
+		if m.composePreserved.selectedAttachment > 0 {
+			m.composePreserved.selectedAttachment--
+		}
+	case "down", "j":
+		if m.composePreserved.selectedAttachment < len(m.composePreserved.forwardedAttachments)-1 {
+			m.composePreserved.selectedAttachment++
+		}
+	case "x", "delete", "backspace":
+		idx := m.composePreserved.selectedAttachment
+		if idx >= 0 && idx < len(m.composePreserved.forwardedAttachments) {
+			m.composePreserved.forwardedAttachments[idx].Include = false
+		}
+	case "ctrl+o":
+		m.cyclePreservationMode()
+	case "enter", "tab":
+		m.cycleComposeField()
+	}
+	return m, nil
 }
 
 // renderSuggestionDropdown renders the autocomplete dropdown list.
@@ -343,13 +415,13 @@ func (m *Model) acceptSuggestion(label string) {
 	}
 
 	switch m.composeField {
-	case 0:
+	case composeFieldTo:
 		m.composeTo.SetValue(replaceToken(m.composeTo.Value(), label))
 		m.composeTo.CursorEnd()
-	case 1:
+	case composeFieldCC:
 		m.composeCC.SetValue(replaceToken(m.composeCC.Value(), label))
 		m.composeCC.CursorEnd()
-	case 2:
+	case composeFieldBCC:
 		m.composeBCC.SetValue(replaceToken(m.composeBCC.Value(), label))
 		m.composeBCC.CursorEnd()
 	}
@@ -358,9 +430,13 @@ func (m *Model) acceptSuggestion(label string) {
 // cycleComposeField advances focus to the next compose input field.
 // Order: To(0) → CC(1) → BCC(2) → Subject(3) → Body(4) → wrap.
 func (m *Model) cycleComposeField() {
-	m.composeField = (m.composeField + 1) % 5
+	fieldCount := 5
+	if m.hasForwardedAttachments() {
+		fieldCount = 6
+	}
+	m.composeField = (m.composeField + 1) % fieldCount
 	// Clear autocomplete when moving away from address fields (0–2)
-	if m.composeField > 2 {
+	if m.composeField > composeFieldBCC {
 		m.suggestions = nil
 		m.suggestionIdx = -1
 	}
@@ -370,17 +446,73 @@ func (m *Model) cycleComposeField() {
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
 	switch m.composeField {
-	case 0:
+	case composeFieldTo:
 		m.composeTo.Focus()
-	case 1:
+	case composeFieldCC:
 		m.composeCC.Focus()
-	case 2:
+	case composeFieldBCC:
 		m.composeBCC.Focus()
-	case 3:
+	case composeFieldSubject:
 		m.composeSubject.Focus()
-	case 4:
+	case composeFieldBody:
 		m.composeBody.Focus()
 	}
+}
+
+func (m *Model) hasForwardedAttachments() bool {
+	return m.composePreserved != nil && len(m.composePreserved.forwardedAttachments) > 0
+}
+
+func (m *Model) buildPreservedComposeRequest(from, to, subject string, attachments []models.ComposeAttachment) (appsmtp.PreservedMessageRequest, error) {
+	ctx := m.composePreserved
+	if ctx == nil || ctx.email == nil || ctx.body == nil {
+		return appsmtp.PreservedMessageRequest{}, fmt.Errorf("missing preserved reply/forward context")
+	}
+	originalAttachments := ctx.body.Attachments
+	var omitted []string
+	if ctx.kind == models.PreservedMessageKindForward && len(ctx.forwardedAttachments) > 0 {
+		originalAttachments = make([]models.Attachment, 0, len(ctx.forwardedAttachments))
+		for _, item := range ctx.forwardedAttachments {
+			originalAttachments = append(originalAttachments, item.Attachment)
+			if !item.Include || len(item.Attachment.Data) == 0 {
+				omitted = append(omitted, item.Attachment.Filename)
+			}
+		}
+	}
+	messageID := firstNonEmptyString(ctx.body.MessageID, ctx.email.MessageID)
+	return appsmtp.PreservedMessageRequest{
+		Kind:            ctx.kind,
+		Mode:            ctx.mode,
+		From:            from,
+		To:              to,
+		CC:              m.composeCC.Value(),
+		BCC:             m.composeBCC.Value(),
+		Subject:         subject,
+		TopNoteMarkdown: m.composeBody.Value(),
+		Original: models.PreservedMessageOriginal{
+			MessageID:    messageID,
+			InReplyTo:    ctx.body.InReplyTo,
+			References:   ctx.body.References,
+			Sender:       ctx.email.Sender,
+			Subject:      ctx.email.Subject,
+			Date:         ctx.email.Date,
+			TextPlain:    ctx.body.TextPlain,
+			TextHTML:     ctx.body.TextHTML,
+			InlineImages: ctx.body.InlineImages,
+			Attachments:  originalAttachments,
+		},
+		ManualAttachments:              attachments,
+		OmittedOriginalAttachmentNames: omitted,
+	}, nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // sendCompose sends the composed message via SMTP as multipart/alternative
@@ -399,6 +531,11 @@ func (m *Model) sendCompose() tea.Cmd {
 	subject := m.composeSubject.Value()
 	markdownBody := m.composeBody.Value()
 	attachments := m.composeAttachments // snapshot; cleared on success in Update()
+	preserved := m.composePreserved
+	preservedReq, preservedErr := appsmtp.PreservedMessageRequest{}, error(nil)
+	if preserved != nil {
+		preservedReq, preservedErr = m.buildPreservedComposeRequest(from, to, subject, attachments)
+	}
 	return func() tea.Msg {
 		if to == "" {
 			return ComposeStatusMsg{Message: "Error: To field is empty"}
@@ -416,6 +553,15 @@ func (m *Model) sendCompose() tea.Cmd {
 		}
 		if mailer == nil {
 			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
+		}
+		if preserved != nil {
+			if preservedErr != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", preservedErr), Err: preservedErr}
+			}
+			if err := mailer.SendPreserved(preservedReq); err != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
+			}
+			return ComposeStatusMsg{Message: "Message sent!"}
 		}
 		htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(markdownBody)
 		if inlineErr != nil {
@@ -560,7 +706,7 @@ func (m *Model) renderComposeView() string {
 			bodyPane = previewLabel + "\n" + lipgloss.NewStyle().Width(bodyWidth).Render(rendered)
 		} else {
 			bodyStyle := inactiveFieldStyle.Width(bodyWidth)
-			if m.composeField == 4 {
+			if m.composeField == composeFieldBody {
 				bodyStyle = activeFieldStyle.Width(bodyWidth)
 			}
 			m.composeBody.SetWidth(bodyWidth)
@@ -586,11 +732,15 @@ func (m *Model) renderComposeView() string {
 			}
 		} else {
 			bodyStyle := inactiveFieldStyle.Width(plan.Compose.BodyInnerWidth)
-			if m.composeField == 4 {
+			if m.composeField == composeFieldBody {
 				bodyStyle = activeFieldStyle.Width(plan.Compose.BodyInnerWidth)
 			}
 			sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 		}
+	}
+
+	if summary := m.renderComposePreservedSummary(plan.Compose.BodyInnerWidth); summary != "" {
+		sb.WriteString(summary + "\n")
 	}
 
 	// Attachment path input prompt
@@ -629,6 +779,94 @@ func (m *Model) renderComposeView() string {
 	}
 
 	return sb.String()
+}
+
+func (m *Model) renderComposePreservedSummary(width int) string {
+	ctx := m.composePreserved
+	if ctx == nil {
+		return ""
+	}
+	if width < 20 {
+		width = 20
+	}
+	htmlStatus := "plain fallback"
+	if ctx.body != nil && strings.TrimSpace(ctx.body.TextHTML) != "" {
+		htmlStatus = "HTML"
+	}
+	inlineCount := 0
+	if ctx.body != nil {
+		inlineCount = len(ctx.body.InlineImages)
+	}
+	included, total := 0, len(ctx.forwardedAttachments)
+	for _, item := range ctx.forwardedAttachments {
+		if item.Include && len(item.Attachment.Data) > 0 {
+			included++
+		}
+	}
+	attachmentText := ""
+	if ctx.kind == models.PreservedMessageKindForward {
+		attachmentText = fmt.Sprintf("  |  %d attachments", included)
+		if total != included {
+			attachmentText = fmt.Sprintf("  |  %d/%d attachments", included, total)
+		}
+	}
+	summary := fmt.Sprintf("Preserved %s  |  %s  |  %s  |  %d inline%s%s  |  Ctrl+O: mode",
+		preservedKindLabel(ctx.kind),
+		preservationModeLabel(ctx.mode),
+		htmlStatus,
+		inlineCount,
+		pluralSuffix(inlineCount),
+		attachmentText,
+	)
+	rows := []string{truncateVisual(summary, width)}
+	if len(ctx.forwardedAttachments) > 0 {
+		selectedStyle := lipgloss.NewStyle().Foreground(defaultTheme.ConfirmFg)
+		normalStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
+		removedStyle := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+		for i, item := range ctx.forwardedAttachments {
+			status := "include"
+			style := normalStyle
+			if !item.Include || len(item.Attachment.Data) == 0 {
+				status = "removed"
+				style = removedStyle
+			}
+			prefix := "  "
+			if m.composeField == composeFieldForwardedAttachments && i == ctx.selectedAttachment {
+				prefix = "> "
+				style = selectedStyle
+			}
+			label := fmt.Sprintf("%s[%s] %s  (x remove)", prefix, status, item.Attachment.Filename)
+			rows = append(rows, style.Render(truncateVisual(label, width)))
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+func preservedKindLabel(kind models.PreservedMessageKind) string {
+	switch kind {
+	case models.PreservedMessageKindReply:
+		return "reply"
+	default:
+		return "forward"
+	}
+}
+
+func preservationModeLabel(mode models.PreservationMode) string {
+	switch models.NormalizePreservationMode(mode) {
+	case models.PreservationModeFidelity:
+		return "Fidelity"
+	case models.PreservationModePrivacy:
+		return "Privacy"
+	default:
+		return "Safe"
+	}
+}
+
+func pluralSuffix(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // --- Draft auto-save helpers ---
@@ -671,19 +909,37 @@ func (m *Model) searchContactsCmd(token string) tea.Cmd {
 
 // composeHasContent returns true if any compose field is non-empty.
 func composeHasContent(m *Model) bool {
-	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != ""
+	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != "" || m.composePreserved != nil
 }
 
 // saveDraftCmd saves the current compose content as a draft.
 // Snapshots the values before the goroutine to prevent data races.
 func (m *Model) saveDraftCmd() tea.Cmd {
 	backend := m.backend
+	from := m.fromAddress
 	to := m.composeTo.Value()
 	cc := m.composeCC.Value()
 	bcc := m.composeBCC.Value()
 	subject := m.composeSubject.Value()
 	body := m.composeBody.Value()
+	attachments := m.composeAttachments
+	preserved := m.composePreserved
+	preservedReq, preservedErr := appsmtp.PreservedMessageRequest{}, error(nil)
+	if preserved != nil {
+		preservedReq, preservedErr = m.buildPreservedComposeRequest(from, to, subject, attachments)
+	}
 	return func() tea.Msg {
+		if preserved != nil {
+			if preservedErr != nil {
+				return DraftSavedMsg{Err: preservedErr}
+			}
+			raw, err := appsmtp.BuildPreservedMIMEMessage(preservedReq)
+			if err != nil {
+				return DraftSavedMsg{Err: err}
+			}
+			uid, folder, err := backend.SaveRawDraft([]byte(raw))
+			return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
+		}
 		uid, folder, err := backend.SaveDraft(to, cc, bcc, subject, body)
 		return DraftSavedMsg{UID: uid, Folder: folder, Err: err}
 	}

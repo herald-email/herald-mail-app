@@ -58,6 +58,9 @@ The standalone wizard reuses `internal/app.Settings` in a dedicated fullscreen s
 **Backend interface as the seam**
 `internal/backend/backend.go` defines every operation the UI can perform. The Bubble Tea model imports only this interface — never `internal/imap` or `internal/cache` directly. This is the discipline that makes Phase 2 free: swap `LocalBackend` for `RemoteBackend` and the UI is unchanged.
 
+**Preserved reply and forward composition**
+Compose treats replies and forwards as two pieces of state: the editable top note and a read-only preserved original-message context fetched from IMAP. The context carries the original HTML, plain fallback, inline CID images, attachments, and threading headers; `internal/smtp` assembles the final outgoing MIME so Herald does not round-trip rich messages through Markdown. The TUI, daemon, RemoteBackend, and MCP entrypoints all route reply/forward sends through this preserved-context path, while new messages continue to use the regular Markdown compose flow.
+
 **Progress via channels**
 Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send channel events back to the Bubble Tea model. The UI listens with `tea.Cmd` functions that block on those channels and return a message when something arrives. No polling, no shared state.
 

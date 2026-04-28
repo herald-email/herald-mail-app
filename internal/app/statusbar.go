@@ -458,6 +458,9 @@ func (m *Model) renderKeyHints() string {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
 		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
+		if m.composePreserved != nil {
+			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: remove fwd attach  │  ctrl+c: quit"
+		}
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)

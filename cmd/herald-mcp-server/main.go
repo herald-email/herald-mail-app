@@ -119,6 +119,18 @@ func daemonPost(path string, body any) ([]byte, int, error) {
 	return respBody, resp.StatusCode, nil
 }
 
+func splitCommaList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			values = append(values, part)
+		}
+	}
+	return values
+}
+
 // daemonGet makes a GET to the daemon. Returns error if daemon unavailable.
 func daemonGet(path string) ([]byte, int, error) {
 	baseURL, err := ensureDaemonAvailable()
@@ -1708,6 +1720,7 @@ func main() {
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to reply to")),
 			mcp.WithString("body", mcp.Required(), mcp.Description("Reply body (Markdown supported)")),
+			mcp.WithString("preservation_mode", mcp.Description("HTML preservation mode: safe, fidelity, or privacy (default: safe)")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			messageID, err := req.RequireString("message_id")
@@ -1718,7 +1731,11 @@ func main() {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/reply", map[string]string{"body": body})
+			payload := map[string]any{"body": body}
+			if mode := req.GetString("preservation_mode", ""); mode != "" {
+				payload["preservation_mode"] = mode
+			}
+			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/reply", payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1738,6 +1755,9 @@ func main() {
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to forward")),
 			mcp.WithString("to", mcp.Required(), mcp.Description("Recipient email address")),
 			mcp.WithString("body", mcp.Description("Optional covering note (Markdown supported)")),
+			mcp.WithString("preservation_mode", mcp.Description("HTML preservation mode: safe, fidelity, or privacy (default: safe)")),
+			mcp.WithString("omit_original_attachments", mcp.Description("Set to true to omit all original file attachments from the forward")),
+			mcp.WithString("omitted_original_attachment_names", mcp.Description("Comma-separated original attachment filenames to omit")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			messageID, err := req.RequireString("message_id")
@@ -1749,7 +1769,21 @@ func main() {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			body := req.GetString("body", "")
-			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/forward", map[string]string{"to": to, "body": body})
+			payload := map[string]any{"to": to, "body": body}
+			if mode := req.GetString("preservation_mode", ""); mode != "" {
+				payload["preservation_mode"] = mode
+			}
+			if omitRaw := req.GetString("omit_original_attachments", ""); omitRaw != "" {
+				omit, parseErr := strconv.ParseBool(omitRaw)
+				if parseErr != nil {
+					return mcp.NewToolResultError("omit_original_attachments must be true or false"), nil
+				}
+				payload["omit_original_attachments"] = omit
+			}
+			if omitted := req.GetString("omitted_original_attachment_names", ""); omitted != "" {
+				payload["omitted_original_attachment_names"] = splitCommaList(omitted)
+			}
+			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/forward", payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

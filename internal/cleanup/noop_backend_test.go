@@ -123,20 +123,27 @@ func (noopBackend) DeleteCleanupRule(id int64) error                            
 func (noopBackend) RecordUnsubscribe(_, _, _ string) error                            { return nil }
 func (noopBackend) IsUnsubscribedSender(_ string) (bool, error)                       { return false, nil }
 func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)            { return 0, "", nil }
+func (noopBackend) SaveRawDraft(_ []byte) (uint32, string, error)                     { return 0, "", nil }
 func (noopBackend) ListDrafts() ([]*models.Draft, error)                              { return nil, nil }
 func (noopBackend) DeleteDraft(_ uint32, _ string) error                              { return nil }
 func (noopBackend) ReplyToEmail(_, _ string) error                                    { return nil }
 func (noopBackend) ForwardEmail(_, _, _ string) error                                 { return nil }
-func (noopBackend) ListAttachments(_ string) ([]models.Attachment, error)             { return nil, nil }
-func (noopBackend) GetAttachment(_, _ string) (*models.Attachment, error)             { return nil, nil }
-func (noopBackend) DeleteThread(_, _ string) error                                    { return nil }
-func (noopBackend) BulkDelete(_ []string) error                                       { return nil }
-func (noopBackend) ArchiveThread(_, _ string) error                                   { return nil }
-func (noopBackend) BulkMove(_ []string, _ string) error                               { return nil }
-func (noopBackend) UnsubscribeSender(_ string) error                                  { return nil }
-func (noopBackend) SoftUnsubscribeSender(_, _ string) error                           { return nil }
-func (noopBackend) CreateFolder(_ string) error                                       { return nil }
-func (noopBackend) RenameFolder(_, _ string) error                                    { return nil }
-func (noopBackend) DeleteFolder(_ string) error                                       { return nil }
-func (noopBackend) SyncAllFolders() (int, error)                                      { return 0, nil }
-func (noopBackend) GetSyncStatus() (map[string]models.FolderStatus, error)            { return nil, nil }
+func (noopBackend) ReplyToEmailWithOptions(_ string, _ models.ReplyEmailOptions) error {
+	return nil
+}
+func (noopBackend) ForwardEmailWithOptions(_ string, _ models.ForwardEmailOptions) error {
+	return nil
+}
+func (noopBackend) ListAttachments(_ string) ([]models.Attachment, error)  { return nil, nil }
+func (noopBackend) GetAttachment(_, _ string) (*models.Attachment, error)  { return nil, nil }
+func (noopBackend) DeleteThread(_, _ string) error                         { return nil }
+func (noopBackend) BulkDelete(_ []string) error                            { return nil }
+func (noopBackend) ArchiveThread(_, _ string) error                        { return nil }
+func (noopBackend) BulkMove(_ []string, _ string) error                    { return nil }
+func (noopBackend) UnsubscribeSender(_ string) error                       { return nil }
+func (noopBackend) SoftUnsubscribeSender(_, _ string) error                { return nil }
+func (noopBackend) CreateFolder(_ string) error                            { return nil }
+func (noopBackend) RenameFolder(_, _ string) error                         { return nil }
+func (noopBackend) DeleteFolder(_ string) error                            { return nil }
+func (noopBackend) SyncAllFolders() (int, error)                           { return 0, nil }
+func (noopBackend) GetSyncStatus() (map[string]models.FolderStatus, error) { return nil, nil }

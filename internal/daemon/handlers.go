@@ -82,6 +82,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Drafts — literal "send" segment must be registered before the {uid} wildcard
 	mux.HandleFunc("POST /v1/drafts/{uid}/send", s.handleSendDraft)
+	mux.HandleFunc("POST /v1/drafts/raw", s.handleSaveRawDraft)
 	mux.HandleFunc("GET /v1/drafts", s.handleListDrafts)
 	mux.HandleFunc("POST /v1/drafts", s.handleSaveDraft)
 	mux.HandleFunc("DELETE /v1/drafts/{uid}", s.handleDeleteDraft)

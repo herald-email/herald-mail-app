@@ -478,6 +478,26 @@ Check these states during every applicable lane:
 - Demo mode does not show `Send failed` or require `smtp.host`.
 - The success status remains visible and readable at `80x24`.
 
+### TC-14C — Preserved HTML reply and forward compose
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Open a Timeline message that has an HTML body, inline image, and attachment.
+2. Press `R` and confirm Compose opens as a top-note editor rather than pasting the original body into the textarea.
+3. Press `Ctrl+O` repeatedly and confirm the preservation mode cycles through Safe, Fidelity, and Privacy.
+4. Return to Timeline, press `F`, and confirm forwarded attachments appear below Compose as included original attachments.
+5. Focus the forwarded attachment list, move with `j`/`k`, remove one attachment with `x`, and send or preview the draft summary.
+6. Repeat at `80x24` and confirm the summary remains readable without overflow.
+
+**Expect:**
+- Replies and forwards show a concise preserved-content summary with mode, original HTML status, inline image count, and forwarded attachment count.
+- The body textarea contains only the user's new note, not the converted original message.
+- Reply sends preserve the original HTML quote and threading headers.
+- Forward sends preserve original HTML, preserve referenced inline images, include original attachments by default, and omit attachments removed with `x`.
+- Missing HTML falls back to escaped plain-text quote without blocking send.
+
 ### TC-15 — Narrow screen behavior
 
 **Lane:** A, B

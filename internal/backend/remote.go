@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -682,8 +683,25 @@ func (b *RemoteBackend) ReplyToEmail(messageID, replyBody string) error {
 	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/reply", map[string]string{"body": replyBody})
 }
 
+func (b *RemoteBackend) ReplyToEmailWithOptions(messageID string, opts models.ReplyEmailOptions) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/reply", map[string]any{
+		"body":              opts.Body,
+		"preservation_mode": opts.PreservationMode,
+	})
+}
+
 func (b *RemoteBackend) ForwardEmail(messageID, to, forwardBody string) error {
 	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/forward", map[string]string{"to": to, "body": forwardBody})
+}
+
+func (b *RemoteBackend) ForwardEmailWithOptions(messageID string, opts models.ForwardEmailOptions) error {
+	return b.post("/v1/emails/"+url.PathEscape(messageID)+"/forward", map[string]any{
+		"to":                                opts.To,
+		"body":                              opts.Body,
+		"preservation_mode":                 opts.PreservationMode,
+		"omit_original_attachments":         opts.OmitOriginalAttachments,
+		"omitted_original_attachment_names": opts.OmittedOriginalAttachmentNames,
+	})
 }
 
 func (b *RemoteBackend) ListAttachments(messageID string) ([]models.Attachment, error) {
@@ -705,6 +723,17 @@ func (b *RemoteBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, st
 	}
 	payload := map[string]string{"to": to, "cc": cc, "bcc": bcc, "subject": subject, "body": body}
 	if err := b.postOut("/v1/drafts", payload, &resp); err != nil {
+		return 0, "", err
+	}
+	return resp.UID, resp.Folder, nil
+}
+
+func (b *RemoteBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
+	var resp struct {
+		UID    uint32 `json:"uid"`
+		Folder string `json:"folder"`
+	}
+	if err := b.postOut("/v1/drafts/raw", map[string]string{"raw": base64.StdEncoding.EncodeToString(raw)}, &resp); err != nil {
 		return 0, "", err
 	}
 	return resp.UID, resp.Folder, nil

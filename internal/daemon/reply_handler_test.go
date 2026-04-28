@@ -29,6 +29,34 @@ type attachmentBackend struct {
 	mimeType        string
 }
 
+type trackingReplyForwardBackend struct {
+	backend.Backend
+	replyOptions   *models.ReplyEmailOptions
+	forwardOptions *models.ForwardEmailOptions
+}
+
+func newTrackingReplyForwardBackend() *trackingReplyForwardBackend {
+	return &trackingReplyForwardBackend{Backend: backend.NewDemoBackend()}
+}
+
+func (b *trackingReplyForwardBackend) ReplyToEmail(_ string, _ string) error {
+	return nil
+}
+
+func (b *trackingReplyForwardBackend) ForwardEmail(_, _, _ string) error {
+	return nil
+}
+
+func (b *trackingReplyForwardBackend) ReplyToEmailWithOptions(_ string, opts models.ReplyEmailOptions) error {
+	b.replyOptions = &opts
+	return nil
+}
+
+func (b *trackingReplyForwardBackend) ForwardEmailWithOptions(_ string, opts models.ForwardEmailOptions) error {
+	b.forwardOptions = &opts
+	return nil
+}
+
 func newAttachmentBackend(data []byte, filename, mimeType string) *attachmentBackend {
 	return &attachmentBackend{
 		Backend:  backend.NewDemoBackend(),
@@ -79,6 +107,32 @@ func TestHandleReplyEmail(t *testing.T) {
 	}
 }
 
+func TestHandleReplyEmail_PassesPreservationMode(t *testing.T) {
+	b := newTrackingReplyForwardBackend()
+	s := &Server{backend: b}
+
+	body, _ := json.Marshal(map[string]string{"body": "Thanks", "preservation_mode": "privacy"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/emails/msg123/reply", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "msg123")
+	rr := httptest.NewRecorder()
+
+	s.handleReplyEmail(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d — body: %s", rr.Code, rr.Body.String())
+	}
+	if b.replyOptions == nil {
+		t.Fatal("expected ReplyToEmailWithOptions to be called")
+	}
+	if b.replyOptions.Body != "Thanks" {
+		t.Fatalf("reply body = %q", b.replyOptions.Body)
+	}
+	if b.replyOptions.PreservationMode != models.PreservationModePrivacy {
+		t.Fatalf("preservation mode = %q, want privacy", b.replyOptions.PreservationMode)
+	}
+}
+
 func TestHandleReplyEmail_BadBody(t *testing.T) {
 	s := newReplyTestServer(t)
 
@@ -113,6 +167,40 @@ func TestHandleForwardEmail(t *testing.T) {
 	}
 	if result["message"] != "Forwarded" {
 		t.Errorf("expected 'Forwarded', got %q", result["message"])
+	}
+}
+
+func TestHandleForwardEmail_PassesAttachmentOptions(t *testing.T) {
+	b := newTrackingReplyForwardBackend()
+	s := &Server{backend: b}
+
+	body, _ := json.Marshal(map[string]any{
+		"to":                                "friend@example.com",
+		"body":                              "FYI",
+		"preservation_mode":                 "fidelity",
+		"omitted_original_attachment_names": []string{"secret.pdf"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/emails/msg123/forward", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "msg123")
+	rr := httptest.NewRecorder()
+
+	s.handleForwardEmail(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d — body: %s", rr.Code, rr.Body.String())
+	}
+	if b.forwardOptions == nil {
+		t.Fatal("expected ForwardEmailWithOptions to be called")
+	}
+	if b.forwardOptions.To != "friend@example.com" || b.forwardOptions.Body != "FYI" {
+		t.Fatalf("forward options = %#v", b.forwardOptions)
+	}
+	if b.forwardOptions.PreservationMode != models.PreservationModeFidelity {
+		t.Fatalf("preservation mode = %q, want fidelity", b.forwardOptions.PreservationMode)
+	}
+	if len(b.forwardOptions.OmittedOriginalAttachmentNames) != 1 || b.forwardOptions.OmittedOriginalAttachmentNames[0] != "secret.pdf" {
+		t.Fatalf("omitted names = %#v", b.forwardOptions.OmittedOriginalAttachmentNames)
 	}
 }
 
