@@ -519,6 +519,81 @@ func (m *Model) currentTimelineRowEmail() *models.EmailData {
 	return ref.group.emails[ref.emailIdx]
 }
 
+func buildForwardSubject(subject string) string {
+	if strings.HasPrefix(strings.ToLower(subject), "fwd:") {
+		return subject
+	}
+	return "Fwd: " + subject
+}
+
+func buildForwardBody(email *models.EmailData, bodyText string) string {
+	if email == nil {
+		return bodyText
+	}
+	forwarded := fmt.Sprintf("\n\n--- Forwarded message ---\nFrom: %s\nDate: %s\nSubject: %s\n\n",
+		email.Sender, email.Date.Format("Mon, 02 Jan 2006 15:04"), email.Subject)
+	return forwarded + bodyText
+}
+
+func (m *Model) timelineBodyLoadedFor(email *models.EmailData) bool {
+	return email != nil &&
+		m.timeline.body != nil &&
+		m.timeline.bodyMessageID == email.MessageID
+}
+
+func (m *Model) openTimelineForwardCompose(email *models.EmailData, bodyText, composeStatus string) {
+	m.activeTab = tabCompose
+	m.composeTo.SetValue("")
+	m.composeSubject.SetValue(buildForwardSubject(email.Subject))
+	m.composeBody.SetValue(buildForwardBody(email, bodyText))
+	m.composeStatus = composeStatus
+	m.statusMessage = ""
+	m.composeField = 0
+	m.composeTo.Focus()
+	m.composeSubject.Blur()
+	m.composeBody.Blur()
+}
+
+func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
+	if email == nil {
+		return nil
+	}
+	if m.timelineBodyLoadedFor(email) {
+		m.openTimelineForwardCompose(email, m.timeline.body.TextPlain, "")
+		return nil
+	}
+	m.timeline.forwardRequestID++
+	requestID := m.timeline.forwardRequestID
+	m.timeline.forwardPendingMessage = email.MessageID
+	m.statusMessage = "Loading forwarded message body..."
+	return m.loadTimelineForwardBodyCmd(email, requestID)
+}
+
+func (m *Model) loadTimelineForwardBodyCmd(email *models.EmailData, requestID int) tea.Cmd {
+	emailCopy := *email
+	b := m.backend
+	return func() tea.Msg {
+		if emailCopy.UID == 0 {
+			return TimelineForwardBodyMsg{
+				Email: &emailCopy,
+				Body: &models.EmailBody{
+					TextPlain: "(Body unavailable: this cached email has no server UID yet, so Herald cannot safely load its full contents. Re-sync the folder or use server search to refresh it.)",
+				},
+				MessageID: emailCopy.MessageID,
+				RequestID: requestID,
+			}
+		}
+		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		return TimelineForwardBodyMsg{
+			Email:     &emailCopy,
+			Body:      body,
+			Err:       err,
+			MessageID: emailCopy.MessageID,
+			RequestID: requestID,
+		}
+	}
+}
+
 func (m *Model) currentTimelineRowRef() (timelineRowRef, bool) {
 	cursor := m.timelineTable.Cursor()
 	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
@@ -973,6 +1048,30 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, m.listenForExpunged(), true
 
+	case TimelineForwardBodyMsg:
+		if msg.RequestID != m.timeline.forwardRequestID || msg.MessageID != m.timeline.forwardPendingMessage {
+			return m, nil, true
+		}
+		m.timeline.forwardPendingMessage = ""
+		if m.activeTab != tabTimeline {
+			return m, nil, true
+		}
+		email := msg.Email
+		if email == nil {
+			return m, nil, true
+		}
+		bodyText := ""
+		composeStatus := ""
+		if msg.Err != nil {
+			logger.Warn("Failed to fetch forwarded email body: %v", msg.Err)
+			composeStatus = "Forward body failed to load: " + msg.Err.Error()
+			bodyText = "(" + composeStatus + ")"
+		} else if msg.Body != nil {
+			bodyText = msg.Body.TextPlain
+		}
+		m.openTimelineForwardCompose(email, bodyText, composeStatus)
+		return m, nil, true
+
 	case StarResultMsg:
 		if msg.Err != nil {
 			m.statusMessage = "Star failed: " + msg.Err.Error()
@@ -1036,23 +1135,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.canInteractWithVisibleData() {
 			if email := m.currentTimelineRowEmail(); email != nil {
-				subject := email.Subject
-				if !strings.HasPrefix(strings.ToLower(subject), "fwd:") {
-					subject = "Fwd: " + subject
-				}
-				fwdBody := fmt.Sprintf("\n\n--- Forwarded message ---\nFrom: %s\nDate: %s\nSubject: %s\n\n",
-					email.Sender, email.Date.Format("Mon, 02 Jan 2006 15:04"), email.Subject)
-				if m.timeline.body != nil && m.timeline.selectedEmail != nil && m.timeline.selectedEmail.MessageID == email.MessageID {
-					fwdBody += m.timeline.body.TextPlain
-				}
-				m.activeTab = tabCompose
-				m.composeTo.SetValue("")
-				m.composeSubject.SetValue(subject)
-				m.composeBody.SetValue(fwdBody)
-				m.composeField = 0
-				m.composeTo.Focus()
-				m.composeSubject.Blur()
-				m.composeBody.Blur()
+				return m, m.startTimelineForward(email), true
 			}
 		}
 		return m, nil, true
