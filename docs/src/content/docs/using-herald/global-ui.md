@@ -7,14 +7,14 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, and context-sensitive key hints. Most work happens in one of four tabs: Timeline, Compose, Cleanup, or Contacts.
+Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, and context-sensitive key hints. Most work happens in one of four tabs: Timeline, Compose, Cleanup, or Contacts, and the common navigation surfaces work with both keys and mouse input.
 
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
 | --- | --- | --- |
 | Header | `Herald` while the main TUI is active. | The loading view shows a larger startup banner before cached data is visible. |
-| Tab bar | `1 Timeline`, `2 Compose`, `3 Cleanup`, `4 Contacts`. | The active tab is highlighted. Number keys switch tabs in browse contexts; `Alt+1/2/3/4` switch tabs while text fields are focused. |
+| Tab bar | `1 Timeline`, `2 Compose`, `3 Cleanup`, `4 Contacts`. | The active tab is highlighted. Number keys switch tabs in browse contexts; `Alt+1/2/3/4` switch tabs while text fields are focused; mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
 | Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
@@ -46,6 +46,25 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a full-screen panel. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, or status message. |
+
+## Mouse Controls
+
+Mouse controls are convenience shortcuts over the same model as keyboard focus and selection. They are useful for trackpad-heavy terminal sessions, SSH clients that forward mouse events, and browser terminal sessions such as `ttyd`.
+
+| Mouse action | Context | Result |
+| --- | --- | --- |
+| Click a top tab | Main UI | Switches to Timeline, Compose, Cleanup, or Contacts. |
+| Click a folder/sidebar row | Timeline or Cleanup with sidebar visible | Selects the folder and loads it. |
+| Click a Timeline row | Timeline table | Selects the row and opens the split preview. |
+| Scroll over Timeline rows | Timeline table | Moves the Timeline cursor by small steps and refreshes the open preview. |
+| Scroll over an email preview | Timeline or Cleanup preview | Scrolls the message body. |
+| Click a Cleanup summary row | Cleanup summary | Selects the sender or domain and refreshes detail rows. |
+| Click a Cleanup detail row | Cleanup detail table | Opens that message in the Cleanup preview. |
+| Click an OSC 8 email link | Terminal-supported email preview links | Opens the original URL through the terminal. |
+
+Press `m` in Timeline to temporarily release Herald's mouse capture for terminal-native text selection. Press `m` again to restore Herald's clickable and scrollable navigation.
+
+![Mouse navigation and clickable email links in Herald](/screenshots/mouse-navigation-links.png)
 
 ## Workflows
 

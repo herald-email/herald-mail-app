@@ -173,6 +173,10 @@ capture_tui "global-logs-overlay" $'Type "l"\nSleep 0.6s'
 capture_tui "global-narrow-terminal" "" 520 300
 
 capture_tui "timeline-split-preview" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1.2s'
+capture_tui "mouse-navigation-links" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "Link rendering stress"\nSleep 0.2s\nEnter\nSleep 0.8s\nEnter\nSleep 1s\nTab\nSleep 0.3s\nDown\nSleep 0.2s\nDown\nSleep 0.2s\nDown\nSleep 0.2s'
+if should_capture "mouse-navigation-links"; then
+	cp "$SCREENSHOT_DIR/mouse-navigation-links.png" assets/demo/mouse-navigation-links.png
+fi
 capture_tui "timeline-search-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "newsletter"\nSleep 0.2s\nEnter\nSleep 0.8s'
 capture_tui "timeline-quick-reply-picker" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nCtrl+Q\nSleep 1.2s'
 capture_tui "timeline-full-screen-reader" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.6s'

@@ -4,6 +4,14 @@
 
 ![Herald overview](assets/demo/overview.gif)
 
+Herald is keyboard-first, but it is not keyboard-only. In modern terminals you
+can click the top tabs, folder/sidebar rows, Timeline and Cleanup rows, and use
+the mouse wheel or trackpad to scroll lists and email previews. Email links
+render as OSC 8 hyperlinks when your terminal supports them, so readable labels
+like `Display in your browser` still open the real URL.
+
+![Mouse navigation and clickable email links in Herald](assets/demo/mouse-navigation-links.png)
+
 ---
 
 ## Try The Demo First
@@ -29,6 +37,7 @@ Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not s
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook | ✅ |
 | Experimental Gmail OAuth onboarding (`-experimental`) | ⚠️ |
 | Chronological timeline with split-view email preview | ✅ |
+| Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅ |
 | Bulk cleanup — delete by sender or domain in one keystroke | ✅ |
 | AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
 | Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings | ✅ |
@@ -48,7 +57,7 @@ Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not s
 ### Prerequisites
 
 - An IMAP account and SMTP settings, unless you run demo mode.
-- Recommended: a terminal with OSC 8 hyperlink support for Herald's hardened clickable link rendering. Popular supported terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/).
+- Recommended: a modern terminal with mouse event support and OSC 8 hyperlink support for Herald's clickable navigation and hardened email link rendering. Popular supported terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/).
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.
 
 ### macOS via Homebrew
@@ -153,6 +162,24 @@ ollama:
 ```
 
 Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`
+
+---
+
+## Mouse And Clickable Links
+
+Keyboard controls remain complete, but mouse users get the comfortable path too:
+
+| Mouse action | Result |
+|--------------|--------|
+| Click a top tab | Switches to Timeline, Compose, Cleanup, or Contacts |
+| Click a folder/sidebar row | Selects and opens that folder |
+| Click a Timeline row | Opens the email preview for that message or thread |
+| Scroll over Timeline or Cleanup rows | Moves through the list in small steps |
+| Scroll over an email preview | Scrolls the message body |
+| Click an OSC 8 email link | Opens the target URL through your terminal |
+
+Press `m` in Timeline when you want terminal-native mouse text selection, then
+press `m` again to restore Herald's mouse capture.
 
 ---
 

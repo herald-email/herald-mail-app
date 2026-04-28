@@ -7,7 +7,7 @@ Cleanup is Herald's high-leverage inbox reduction screen. It groups mail by send
 
 ## Overview
 
-Press `3` to open Cleanup. Use it when you want to answer questions like "which senders have the most mail?", "what can I archive?", "what can I delete?", and "which future mail should be hidden or automated?"
+Press `3` to open Cleanup. Use it when you want to answer questions like "which senders have the most mail?", "what can I archive?", "what can I delete?", and "which future mail should be hidden or automated?" Summary rows, detail rows, and previews also support mouse clicks and wheel scrolling for quick review.
 
 ## Screen Anatomy
 
@@ -51,6 +51,10 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 | `z` | Cleanup preview | Preview open. | Toggles full-screen cleanup reader. |
 | `esc` | Cleanup preview/overlays | Preview, full-screen, or overlay active. | Closes the active state. |
 | `tab` / `shift+tab` | Cleanup | Visible panels available. | Cycles between sidebar, summary, details, and chat when present. |
+| Click summary row | Summary | Terminal sends mouse events and a summary row is visible. | Selects the sender or domain and refreshes details. |
+| Click detail row | Details | Terminal sends mouse events and a detail row is visible. | Opens that message in the cleanup preview. |
+| Wheel/trackpad scroll | Summary/details | Terminal sends mouse wheel events. | Moves through rows in the hovered panel. |
+| Wheel/trackpad scroll | Preview/full-screen | Preview content is scrollable. | Scrolls the cleanup message body. |
 
 ## Workflows
 
@@ -62,6 +66,8 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 4. Press `enter` to load details.
 5. Press `tab` to focus details, then move through messages.
 6. Press `enter` to preview a message.
+
+Mouse path: click a summary row to refresh details, click a detail row to open its preview, then scroll over the preview to read more of the message body.
 
 ### Delete or Archive a Group
 

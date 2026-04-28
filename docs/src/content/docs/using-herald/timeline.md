@@ -7,7 +7,7 @@ Timeline is Herald's primary reading view. It shows chronological mail rows, thr
 
 ## Overview
 
-Press `1` to open Timeline. Use it when you want to scan mail, switch folders, search across cached content, read a message, reply or forward, save attachments, star important threads, unsubscribe, or copy message text.
+Press `1` to open Timeline. Use it when you want to scan mail, switch folders, search across cached content, read a message, reply or forward, save attachments, star important threads, unsubscribe, or copy message text. You can drive the same flow with keys or by clicking rows and scrolling the list or preview with a mouse or trackpad.
 
 ## Screen Anatomy
 
@@ -59,6 +59,10 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `y` then `y` | Preview/full-screen | Body wrapped lines are available. | Copies the current visible body line. |
 | `Y` | Preview/full-screen | Body wrapped lines are available. | Copies the full wrapped body. |
 | `m` | Timeline | Any Timeline state. | Toggles mouse-selection mode for terminal copy behavior. |
+| Click row | Timeline list | Terminal sends mouse events and a row is visible. | Selects the row and opens the split preview. |
+| Wheel/trackpad scroll | Timeline list | Terminal sends mouse wheel events. | Moves through Timeline rows in small steps and refreshes the open preview. |
+| Wheel/trackpad scroll | Preview/full-screen | Preview content is scrollable. | Scrolls the message body. |
+| Click OSC 8 link | Preview/full-screen | Terminal supports OSC 8 hyperlinks. | Opens the linked URL through the terminal. |
 
 ## Workflows
 
@@ -69,6 +73,13 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 3. Press `enter`.
 4. Read in the split preview. Press `z` for full-screen.
 5. Press `esc` to leave full-screen or close the preview.
+
+### Read with a Mouse
+
+1. Click a Timeline row to select it and open the split preview.
+2. Scroll over the Timeline list to move between messages, or scroll over the preview to read more body text.
+3. Click readable email links such as `Display in your browser` when your terminal supports OSC 8 hyperlinks.
+4. Press `m` if you want to temporarily hand the mouse back to the terminal for native text selection.
 
 ### Search Timeline
 

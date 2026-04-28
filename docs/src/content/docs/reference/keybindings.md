@@ -26,6 +26,23 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `a` | Start AI classification for the current folder. |
 | `esc` | Close or unwind the active transient state. |
 
+## Mouse
+
+These actions work when the terminal sends mouse events to Herald. OSC 8 link clicks are handled by the terminal, so compatible terminals open the real URL while Herald keeps the preview text readable.
+
+| Mouse action | Result |
+| --- | --- |
+| Click top tab | Switch to Timeline, Compose, Cleanup, or Contacts. |
+| Click folder/sidebar row | Select and load that folder. |
+| Click Timeline row | Select the message or thread and open the preview. |
+| Scroll Timeline rows | Move the Timeline cursor by small steps. |
+| Scroll Timeline preview | Scroll the message body. |
+| Click Cleanup summary row | Select the sender or domain and refresh detail rows. |
+| Click Cleanup detail row | Open that message in the Cleanup preview. |
+| Scroll Cleanup summary/detail/preview | Move rows or preview body depending on the hovered panel. |
+| Click OSC 8 email link | Open the target URL through the terminal. |
+| Press `m` in Timeline | Release or restore Herald mouse capture for terminal-native text selection. |
+
 ## Sidebar
 
 | Key | Result |

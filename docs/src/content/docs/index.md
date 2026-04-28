@@ -3,7 +3,7 @@ title: Herald Docs
 description: Complete end-user manual for Herald, the terminal email client and inbox cleanup tool.
 ---
 
-Herald is a keyboard-first terminal email client and inbox cleanup tool. It combines a chronological Timeline, Markdown Compose, bulk Cleanup, Contacts, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
+Herald is a keyboard-first and mouse-friendly terminal email client and inbox cleanup tool. It combines a chronological Timeline, Markdown Compose, bulk Cleanup, Contacts, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
 
 This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
 
@@ -33,13 +33,21 @@ On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missi
 
 ![Herald first-run wizard entry screen](/screenshots/overview-first-launch.png)
 
+## Mouse-friendly terminal controls
+
+Herald's keyboard model stays complete, but you can also click and scroll the main TUI. Top tabs, folder rows, Timeline rows, and Cleanup rows respond to clicks; Timeline and Cleanup lists and message previews respond to wheel or trackpad scrolling. Email links render as OSC 8 terminal hyperlinks when supported, so readable labels and shortened URLs still open the original target.
+
+<!-- HERALD_SCREENSHOT id="mouse-navigation-links" page="overview" alt="Mouse navigation and clickable email links in Herald" state="demo mode, 120x40, Timeline preview with OSC 8 links" desc="Shows clickable tabs, a selected Timeline row, a scrollable email preview, and OSC 8-rendered links." capture="tmux demo 120x40; ./bin/herald --demo; search Link rendering stress; open preview; focus preview; scroll to links" -->
+
+![Mouse navigation and clickable email links in Herald](/screenshots/mouse-navigation-links.png)
+
 ## Main features
 
-- [Timeline](/using-herald/timeline/) lists mail chronologically, groups threads, opens split or full-screen previews, supports search, quick replies, attachment saves, starring, reading, reply, forward, and text copy.
+- [Timeline](/using-herald/timeline/) lists mail chronologically, groups threads, opens split or full-screen previews, supports mouse row clicks, preview scrolling, search, quick replies, attachment saves, starring, reading, reply, forward, and text copy.
 - [Compose](/using-herald/compose/) sends new mail, replies, and forwards with To/CC/BCC fields, address autocomplete, Markdown preview, attachments, drafts, and optional AI assistance.
-- [Cleanup](/using-herald/cleanup/) groups mail by sender or domain for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, and cleanup schedules.
+- [Cleanup](/using-herald/cleanup/) groups mail by sender or domain for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, cleanup schedules, and mouse-assisted summary/detail navigation.
 - [Contacts](/using-herald/contacts/) lists known senders, opens contact details, shows recent mail, previews messages inline, and supports keyword or semantic contact search.
-- [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, status bar, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
+- [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
 - [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, and sync status.
 - [Advanced guides](/advanced/mcp/) cover MCP, SSH mode, daemon commands, demo GIF generation, and privacy/security expectations.
 
