@@ -9,18 +9,19 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 
 | Key | Result |
 | --- | --- |
-| `q` | Quit Herald. |
+| `q` | Quit Herald from browse contexts. In Compose and search inputs, plain `q` is text. |
 | `ctrl+c` | Quit Herald from any state, including text inputs and overlays. |
-| `1` | Switch to Timeline, or choose quick reply 1 when quick reply picker is open. |
-| `2` | Switch to Compose, or choose quick reply 2 when quick reply picker is open. |
-| `3` | Switch to Cleanup, or choose quick reply 3 when quick reply picker is open. |
-| `4` | Switch/load Contacts, or choose quick reply 4 when quick reply picker is open. |
+| `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
+| `2` | Switch to Compose in browse contexts, or choose quick reply 2 when quick reply picker is open. |
+| `3` | Switch to Cleanup in browse contexts, or choose quick reply 3 when quick reply picker is open. |
+| `4` | Switch/load Contacts in browse contexts, or choose quick reply 4 when quick reply picker is open. |
+| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Switch to Timeline / Compose / Cleanup / Contacts from anywhere in the main TUI, including Compose. |
 | `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
 | `shift+tab` | Cycle focus backward where supported. |
-| `f` | Toggle folder sidebar on tabs that support it. |
-| `c` | Toggle chat panel. |
-| `l` / `L` | Toggle log viewer. |
-| `r` | Refresh the current folder. |
+| `f` / `alt+f` | Toggle folder sidebar on tabs that support it; use `alt+f` while composing. |
+| `c` / `alt+c` | Toggle chat panel; use `alt+c` while composing. |
+| `l` / `L` / `alt+l` | Toggle log viewer; use `alt+l` while composing. |
+| `r` / `alt+r` | Refresh the current folder; use `alt+r` while composing. |
 | `S` | Open settings. |
 | `a` | Start AI classification for the current folder. |
 | `esc` | Close or unwind the active transient state. |
@@ -86,6 +87,9 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 
 | Key | Result |
 | --- | --- |
+| Plain letters and digits | Insert text into the focused Compose field; use Alt chords for global commands while composing. |
+| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Switch to Timeline / Compose / Cleanup / Contacts without inserting text. |
+| `alt+l` / `alt+c` / `alt+f` / `alt+r` | Toggle logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
 | `ctrl+s` | Send message. |
 | `ctrl+p` | Toggle Markdown preview. |

@@ -453,11 +453,11 @@ func (m *Model) renderKeyHints() string {
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if chrome.ShowLogs {
-		hints = "l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+		hints = "l/alt+l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = "1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  r: refresh  │  c: chat  │  q: quit"
+		hints = "alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)

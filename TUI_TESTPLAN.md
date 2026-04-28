@@ -435,6 +435,28 @@ Check these states during every applicable lane:
 - List and detail borders are closed.
 - Key hints match the focused region.
 
+### TC-14A — Compose-safe command layer
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Open Compose.
+2. Type `q123` into the focused address field, then tab to the body and type `q123` again.
+3. Press `Alt+1`, return to Compose with `Alt+2`, then press `Alt+3` and `Alt+4`.
+4. Return to Compose with `Alt+2`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
+5. Press `Alt+R` from Compose.
+6. Repeat with Timeline search open: type `q` into the query and press `Ctrl+C` only after confirming the query text is editable.
+
+**Expect:**
+- Plain `q` and digits remain in Compose text fields and do not quit or switch tabs.
+- `Alt+1/2/3/4` switch tabs from Compose, and leaving a non-empty draft starts draft persistence.
+- `Alt+L` opens and closes logs from Compose without typing into the draft.
+- `Alt+C` opens chat from Compose when width allows, and `Esc` closes it cleanly.
+- `Alt+F` toggles the sidebar preference from Compose without typing into the draft.
+- `Alt+R` refreshes from Compose without typing into the draft.
+- Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
+
 ### TC-15 — Narrow screen behavior
 
 **Lane:** A, B

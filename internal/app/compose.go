@@ -176,14 +176,6 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "1":
-		return m, m.switchToTimeline()
-	case "2":
-		return m, nil // already on compose
-	case "3":
-		return m, m.switchToCleanup()
-	case "4":
-		return m, m.switchToContacts()
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":

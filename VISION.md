@@ -136,6 +136,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
+- [x] Compose-safe command layer: `Alt+1/2/3/4`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)
@@ -358,6 +359,7 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Forward (`F` key — pre-fills Fwd: subject, forwarding header, body quote)
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
+- [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use Alt chords while composing
 - [ ] Browser preview (open rendered HTML in default browser before sending)
 - [x] Inline images (paste / drag file path → base64 `multipart/related`)
 - [x] `send_email` MCP tool

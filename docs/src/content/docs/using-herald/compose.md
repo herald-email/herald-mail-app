@@ -33,6 +33,9 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
+| Plain letters and digits | Compose fields | Any Compose text field is focused. | Inserts text, including `q` and numbers, without switching tabs or quitting. |
+| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Compose | Main Compose handler active. | Switches to Timeline, Compose, Cleanup, or Contacts without inserting text. |
+| `alt+l` / `alt+c` / `alt+f` / `alt+r` | Compose | Main Compose handler active. | Toggles logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Compose fields | No autocomplete selection is being accepted and no subject hint is pending. | Moves focus To -> CC -> BCC -> Subject -> Body -> To. |
 | `tab` | Subject hint | AI subject hint is visible. | Accepts the suggested subject. |
 | `ctrl+s` | Compose | SMTP configured, To not empty, Subject not empty. | Sends the message with Markdown-derived HTML/plain text and attachments. |
@@ -49,7 +52,6 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 | `up` / `down` | Autocomplete dropdown | Suggestions are visible. | Moves the selected suggestion. |
 | `enter` / `tab` | Autocomplete dropdown | Suggestions are visible. | Accepts the selected suggestion into the active address field. |
 | `esc` | Autocomplete dropdown | Suggestions are visible. | Dismisses suggestions. |
-| `1` / `3` / `4` | Compose tab | Main Compose handler active. | Switches to Timeline, Cleanup, or Contacts. |
 
 ## Workflows
 
@@ -105,6 +107,7 @@ Press `2` to open Compose. Compose sends through the configured SMTP server and 
 | AI unavailable | `ctrl+g` and `ctrl+j` report no AI backend configured. |
 | AI loading | The assistant waits for provider output and then displays a response. |
 | Draft saved | Compose auto-saves drafts about every 30 seconds when there is content. |
+| Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `Alt+1/2/3/4`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` for global actions while writing. |
 | Send success | Fields clear, saved draft is deleted, and status reports send success. |
 | Send error | Draft content remains available so you can fix configuration or message fields. |
 
@@ -117,6 +120,8 @@ Compose reads contacts for autocomplete and writes drafts through Herald's backe
 If autocomplete does not appear, keep typing until the current token is long enough and confirm contacts have been imported or learned from mail.
 
 If `ctrl+s` does not send, read the compose status for missing To, missing Subject, SMTP configuration, or provider errors.
+
+If a tab, logs, chat, sidebar, or refresh shortcut appears to type into your draft, use the Alt version while composing.
 
 If an AI subject suggestion appears but you do not want it, press `esc`. If you do want it, press `tab`.
 

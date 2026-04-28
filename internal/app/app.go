@@ -1712,10 +1712,12 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global quit must work even when a text input or overlay is focused.
-	if m.isGlobalQuit(msg) {
-		m.cleanup()
-		return m, tea.Quit
+	if model, cmd, handled := m.handleGlobalCommandKey(msg); handled {
+		return model, cmd
+	}
+
+	if model, cmd, handled := m.handleLogsOverlayKey(msg); handled {
+		return model, cmd
 	}
 
 	if model, cmd, handled := m.handleOverlayKey(msg); handled {
@@ -1734,6 +1736,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Contacts tab gets its own key handler (except for global keys handled below)
 	if m.activeTab == tabContacts {
+		if m.contactSearchMode != "" {
+			return m.handleContactsKey(msg)
+		}
 		if !isGlobalContactsKey(msg.String()) {
 			return m.handleContactsKey(msg)
 		}
@@ -1755,17 +1760,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "f":
-		if m.canInteractWithVisibleData() {
-			m.showSidebar = !m.showSidebar
-			if m.windowWidth > 0 {
-				m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			}
-			// If sidebar was hidden and focus was on it, move to summary
-			if !m.showSidebar && m.focusedPanel == panelSidebar {
-				m.setFocusedPanel(panelSummary)
-			}
-		}
-		return m, nil
+		return m, m.toggleSidebar()
 
 	case "d":
 		if !m.loading {
@@ -1774,13 +1769,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "r":
-		if !m.loading {
-			m.loading = true
-			m.startTime = time.Now()
-			m.clearTimelineChatFilter()
-			return m, m.activateCurrentFolder()
-		}
-		return m, nil
+		return m, m.refreshCurrentFolder()
 
 	case " ":
 		if m.canInteractWithVisibleData() {
@@ -2017,33 +2006,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l", "L":
-		if m.canInteractWithVisibleData() {
-			m.showLogs = !m.showLogs
-		}
-		return m, nil
+		return m, m.toggleLogs()
 
 	case "c":
-		// Toggle chat panel
-		if !m.loading {
-			if !m.showChat && m.windowWidth > 0 && !m.canRenderChat(m.windowWidth) {
-				m.statusMessage = "Chat hidden at this size — widen terminal to open it"
-				return m, nil
-			}
-			m.showChat = !m.showChat
-			if m.windowWidth > 0 {
-				m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			}
-			if m.showChat {
-				m.focusedPanel = panelChat
-				m.chatInput.Focus()
-				m.summaryTable.Blur()
-				m.detailsTable.Blur()
-			} else {
-				m.chatInput.Blur()
-				m.setFocusedPanel(m.defaultFocusPanel())
-			}
-		}
-		return m, nil
+		return m, m.toggleChat()
+
+	case "q":
+		m.cleanup()
+		return m, tea.Quit
 
 	case "a":
 		if cmd := m.startClassificationIfNeeded(); cmd != nil {

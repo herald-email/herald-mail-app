@@ -232,7 +232,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server 
 
 | Key | Action |
 |-----|--------|
-| `1` / `2` / `3` / `4` | Timeline / Compose / Cleanup / Contacts tab |
+| `1` / `2` / `3` / `4` | Timeline / Compose / Cleanup / Contacts tab in browse contexts |
+| `Alt+1` / `Alt+2` / `Alt+3` / `Alt+4` | Timeline / Compose / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
 | `j` / `k` | Navigate down / up |
 | `Enter` | Open email preview |
 | `Escape` | Close preview / picker |
@@ -244,12 +245,15 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server 
 | `u` | Unsubscribe |
 | `z` | Full-screen preview |
 | `S` | Open settings |
-| `c` | Toggle AI chat panel |
+| `c` / `Alt+C` | Toggle AI chat panel (`Alt+C` also works while composing) |
 | `a` | Run AI classification on current folder |
-| `f` | Toggle folder sidebar |
+| `f` / `Alt+F` | Toggle folder sidebar (`Alt+F` also works while composing) |
+| `l` / `Alt+L` | Toggle logs (`Alt+L` also works while composing) |
+| `r` / `Alt+R` | Refresh current folder (`Alt+R` also works while composing) |
 | `/` | Search |
 | `?` | Semantic search |
-| `q` | Quit |
+| `q` | Quit in browse contexts only |
+| `Ctrl+C` | Quit from any state, including text inputs |
 
 ---
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -129,6 +130,116 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	return m, nil, false
+}
+
+func (m *Model) handleLogsOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	if !m.showLogs {
+		return m, nil, false
+	}
+	switch msg.String() {
+	case "l", "L", "alt+l", "alt+L", "esc":
+		m.showLogs = false
+		return m, nil, true
+	case "q":
+		m.cleanup()
+		return m, tea.Quit, true
+	}
+	var cmd tea.Cmd
+	_, cmd = m.logViewer.Update(msg)
+	return m, cmd, true
+}
+
+func (m *Model) handleGlobalCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.cleanup()
+		return m, tea.Quit, true
+	case "alt+1":
+		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
+			return m, m.switchToTimeline(), true
+		}
+		return m, nil, true
+	case "alt+2":
+		if m.canInteractWithVisibleData() && m.activeTab != tabCompose {
+			return m, m.switchToCompose(), true
+		}
+		return m, nil, true
+	case "alt+3":
+		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
+			return m, m.switchToCleanup(), true
+		}
+		return m, nil, true
+	case "alt+4":
+		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
+			return m, m.switchToContacts(), true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.loadContacts(), true
+		}
+		return m, nil, true
+	case "alt+l", "alt+L":
+		return m, m.toggleLogs(), true
+	case "alt+c", "alt+C":
+		return m, m.toggleChat(), true
+	case "alt+f", "alt+F":
+		return m, m.toggleSidebar(), true
+	case "alt+r", "alt+R":
+		return m, m.refreshCurrentFolder(), true
+	}
+	return m, nil, false
+}
+
+func (m *Model) toggleSidebar() tea.Cmd {
+	if m.canInteractWithVisibleData() {
+		m.showSidebar = !m.showSidebar
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
+		if !m.showSidebar && m.focusedPanel == panelSidebar {
+			m.setFocusedPanel(panelSummary)
+		}
+	}
+	return nil
+}
+
+func (m *Model) toggleLogs() tea.Cmd {
+	if m.canInteractWithVisibleData() {
+		m.showLogs = !m.showLogs
+	}
+	return nil
+}
+
+func (m *Model) refreshCurrentFolder() tea.Cmd {
+	if !m.loading {
+		m.loading = true
+		m.startTime = time.Now()
+		m.clearTimelineChatFilter()
+		return m.activateCurrentFolder()
+	}
+	return nil
+}
+
+func (m *Model) toggleChat() tea.Cmd {
+	if !m.loading {
+		if !m.showChat && m.windowWidth > 0 && !m.canRenderChat(m.windowWidth) {
+			m.statusMessage = "Chat hidden at this size — widen terminal to open it"
+			return nil
+		}
+		m.showChat = !m.showChat
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
+		if m.showChat {
+			m.focusedPanel = panelChat
+			m.chatInput.Focus()
+			m.summaryTable.Blur()
+			m.detailsTable.Blur()
+		} else {
+			m.chatInput.Blur()
+			m.setFocusedPanel(m.defaultFocusPanel())
+		}
+	}
+	return nil
 }
 
 func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
@@ -270,18 +381,6 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
-}
-
-func (m *Model) isGlobalQuit(msg tea.KeyMsg) bool {
-	return msg.String() == "q" || msg.String() == "ctrl+c"
-}
-
-func (m *Model) isComposeGlobalPassThrough(msg tea.KeyMsg) bool {
-	switch msg.String() {
-	case "1", "2", "3", "4":
-		return true
-	}
-	return false
 }
 
 func isGlobalContactsKey(key string) bool {

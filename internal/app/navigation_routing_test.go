@@ -8,6 +8,18 @@ import (
 	"mail-processor/internal/models"
 )
 
+func altKey(r rune) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true}
+}
+
+func commandIsQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
+}
+
 func TestHandleOverlayKey_ChatEscapeRestoresTimelineFocus(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabTimeline
@@ -52,6 +64,140 @@ func TestHandleTabKey_SwitchingAwayFromComposeStartsDraftPersistence(t *testing.
 	}
 	if !updated.draftSaving {
 		t.Fatal("expected draftSaving=true when leaving non-empty compose tab")
+	}
+}
+
+func TestComposePlainQAndDigitsInsertTextInsteadOfGlobalActions(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabCompose
+	m.composeField = 4
+	m.composeTo.Blur()
+	m.composeBody.Focus()
+
+	for _, key := range []string{"q", "1", "2", "3", "4"} {
+		model, cmd := m.handleKeyMsg(keyRunes(key))
+		if commandIsQuit(cmd) {
+			t.Fatalf("plain %q from compose returned quit command", key)
+		}
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("plain %q changed active tab to %d", key, m.activeTab)
+		}
+	}
+
+	if got, want := m.composeBody.Value(), "q1234"; got != want {
+		t.Fatalf("compose body value=%q, want %q", got, want)
+	}
+}
+
+func TestBrowsePlainQStillQuits(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+
+	_, cmd := m.handleKeyMsg(keyRunes("q"))
+	if !commandIsQuit(cmd) {
+		t.Fatal("expected plain q to quit from browse context")
+	}
+}
+
+func TestComposeAltTabSwitchesAndPersistsDraft(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabCompose
+	m.composeTo.SetValue("alice@example.com")
+	m.composeBody.SetValue("draft body")
+
+	model, cmd := m.handleKeyMsg(altKey('1'))
+	updated := model.(*Model)
+
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("alt+1 activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if cmd == nil {
+		t.Fatal("expected alt+1 leaving non-empty compose to produce draft persistence command")
+	}
+	if !updated.draftSaving {
+		t.Fatal("expected alt+1 leaving non-empty compose to mark draftSaving")
+	}
+}
+
+func TestComposeAltGlobalCommandsDoNotTypeIntoDraft(t *testing.T) {
+	m := makeSizedModel(t, 180, 40)
+	m.activeTab = tabCompose
+	m.composeField = 4
+	m.composeTo.Blur()
+	m.composeBody.Focus()
+	m.composeBody.SetValue("draft")
+	m.showSidebar = false
+
+	model, _ := m.handleKeyMsg(altKey('l'))
+	m = model.(*Model)
+	if !m.showLogs {
+		t.Fatal("expected alt+l to open logs from compose")
+	}
+	if got := m.composeBody.Value(); got != "draft" {
+		t.Fatalf("alt+l typed into draft, body=%q", got)
+	}
+
+	model, _ = m.handleKeyMsg(altKey('l'))
+	m = model.(*Model)
+	if m.showLogs {
+		t.Fatal("expected second alt+l to close logs from compose")
+	}
+
+	model, _ = m.handleKeyMsg(altKey('c'))
+	m = model.(*Model)
+	if !m.showChat {
+		t.Fatal("expected alt+c to open chat from compose")
+	}
+	if got := m.composeBody.Value(); got != "draft" {
+		t.Fatalf("alt+c typed into draft, body=%q", got)
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	m = model.(*Model)
+	if m.showChat {
+		t.Fatal("expected esc to close chat after alt+c")
+	}
+
+	model, _ = m.handleKeyMsg(altKey('f'))
+	m = model.(*Model)
+	if !m.showSidebar {
+		t.Fatal("expected alt+f to toggle sidebar preference from compose")
+	}
+	if got := m.composeBody.Value(); got != "draft" {
+		t.Fatalf("alt+f typed into draft, body=%q", got)
+	}
+
+	model, cmd := m.handleKeyMsg(altKey('r'))
+	m = model.(*Model)
+	if !m.loading {
+		t.Fatal("expected alt+r to start refresh from compose")
+	}
+	if cmd == nil {
+		t.Fatal("expected alt+r refresh to return a command")
+	}
+	if got := m.composeBody.Value(); got != "draft" {
+		t.Fatalf("alt+r typed into draft, body=%q", got)
+	}
+}
+
+func TestTimelineSearchPlainQIsTextAndCtrlCQuits(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.openTimelineSearch()
+
+	model, cmd := m.handleKeyMsg(keyRunes("q"))
+	m = model.(*Model)
+	if commandIsQuit(cmd) {
+		t.Fatal("plain q from timeline search returned quit command")
+	}
+	if got := m.timeline.searchInput.Value(); got != "q" {
+		t.Fatalf("timeline search value=%q, want q", got)
+	}
+
+	_, cmd = m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !commandIsQuit(cmd) {
+		t.Fatal("expected ctrl+c to quit from timeline search")
 	}
 }
 

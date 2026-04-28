@@ -68,13 +68,12 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 	}
 }
 
-// TestComposeKey4_SwitchesToContacts verifies that pressing "4" while on the
-// compose tab switches to the Contacts tab, consistent with "1"/"2"/"3" which
-// already switch tabs from compose mode.
+// TestComposeAlt4_SwitchesToContacts verifies that Alt+4 switches from Compose
+// to Contacts while plain "4" remains available as draft text.
 //
-// Regression test for the bug where "4" was missing from handleComposeKey,
-// causing it to fall through and type "4" into the focused text field.
-func TestComposeKey4_SwitchesToContacts(t *testing.T) {
+// Regression test for the compose-safe command layer: global tab switching uses
+// Alt chords when a Compose text field is focused.
+func TestComposeAlt4_SwitchesToContacts(t *testing.T) {
 	b := &stubBackend{}
 	m := New(b, nil, "", nil, false)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -82,11 +81,11 @@ func TestComposeKey4_SwitchesToContacts(t *testing.T) {
 	m.loading = false
 	m.activeTab = tabCompose
 
-	updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+	updated2, _ := m.Update(altKey('4'))
 	m2 := updated2.(*Model)
 
 	if m2.activeTab != tabContacts {
-		t.Fatalf("pressing '4' in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
+		t.Fatalf("pressing alt+4 in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
 	}
 }
 

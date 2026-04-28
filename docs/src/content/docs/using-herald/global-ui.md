@@ -14,7 +14,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | Area | What it shows | Notes |
 | --- | --- | --- |
 | Header | `Herald` while the main TUI is active. | The loading view shows a larger startup banner before cached data is visible. |
-| Tab bar | `1 Timeline`, `2 Compose`, `3 Cleanup`, `4 Contacts`. | The active tab is highlighted. Number keys switch tabs when the current overlay allows it. |
+| Tab bar | `1 Timeline`, `2 Compose`, `3 Cleanup`, `4 Contacts`. | The active tab is highlighted. Number keys switch tabs in browse contexts; `Alt+1/2/3/4` switch tabs while text fields are focused. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
 | Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
@@ -30,18 +30,19 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `1` | Global | Visible data can be interacted with. | Switches to Timeline. In the quick reply picker, chooses reply 1. |
-| `2` | Global | Visible data can be interacted with. | Switches to Compose. In the quick reply picker, chooses reply 2. |
-| `3` | Global | Visible data can be interacted with. | Switches to Cleanup. In the quick reply picker, chooses reply 3. |
-| `4` | Global | Visible data can be interacted with. | Switches to Contacts or loads Contacts if already selected. In the quick reply picker, chooses reply 4. |
-| `q` | Global | Any state. | Quits Herald after cleanup. |
+| `1` | Browse contexts | Visible data can be interacted with. | Switches to Timeline. In the quick reply picker, chooses reply 1. |
+| `2` | Browse contexts | Visible data can be interacted with. | Switches to Compose. In the quick reply picker, chooses reply 2. |
+| `3` | Browse contexts | Visible data can be interacted with. | Switches to Cleanup. In the quick reply picker, chooses reply 3. |
+| `4` | Browse contexts | Visible data can be interacted with. | Switches to Contacts or loads Contacts if already selected. In the quick reply picker, chooses reply 4. |
+| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Main TUI | Visible data can be interacted with. | Switches tabs even when Compose text fields are focused. |
+| `q` | Browse contexts | No text input is being edited. | Quits Herald after cleanup. |
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
 | `shift+tab` | Most tabs | Visible data can be interacted with. | Cycles focus backward through visible panels. |
-| `f` | Timeline/Cleanup | Visible data can be interacted with. | Toggles the folder sidebar when that tab can render it. |
-| `c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input. |
-| `l` / `L` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay. |
-| `r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters. |
+| `f` / `alt+f` | Timeline/Cleanup | Visible data can be interacted with. | Toggles the folder sidebar when that tab can render it; use `alt+f` while composing. |
+| `c` / `alt+c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input; use `alt+c` while composing. |
+| `l` / `L` / `alt+l` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay; use `alt+l` while composing. |
+| `r` / `alt+r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters; use `alt+r` while composing. |
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a full-screen panel. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, or status message. |
@@ -53,6 +54,8 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 1. Press `1`, `2`, `3`, or `4`.
 2. Watch the tab bar highlight move.
 3. Use the bottom key hints to learn the active tab's controls.
+
+When a text field is focused, press `Alt+1`, `Alt+2`, `Alt+3`, or `Alt+4` instead. This keeps Compose and search text entry safe while preserving fast tab navigation.
 
 ### Use Panel Focus
 
@@ -84,7 +87,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | Sidebar auto-hidden | Status includes a sidebar hidden notice. | Widen the terminal or press `f` when the tab supports the sidebar. |
 | Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `c` again. |
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
-| Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` to close. |
+| Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
 | Confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. | Confirm only if the described action matches your intent. |
 
 ## Data And Privacy
@@ -97,7 +100,7 @@ If a key seems to do nothing, check the bottom key hints and focused panel. Many
 
 If a panel disappeared, check terminal width. Herald hides the sidebar or refuses to open chat when there is not enough room to render the remaining mail view.
 
-If a prompt will not close, press `esc` first. If that does not apply, `q` or `ctrl+c` still quits globally.
+If a prompt will not close, press `esc` first. If that does not apply, `ctrl+c` still quits globally. Plain `q` quits from browse contexts, but it is normal text inside Compose and search inputs.
 
 ## Screenshot Placeholders
 
