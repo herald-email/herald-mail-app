@@ -943,7 +943,14 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		q := m.timeline.searchInput.View()
 		if m.timeline.searchFocus == timelineSearchFocusResults {
 			if m.timeline.selectedEmail != nil && chrome.FocusedPanel == panelPreview {
-				return "tab: back to results  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: back to results  │  q: quit", true
+				if m.timelineIsReadOnlyDiagnostic() {
+					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
+				}
+				return joinHintSegments(append(
+					[]string{"tab: back to results", "↑/k ↓/j: scroll"},
+					append(timelineMessageActionHintSegments(),
+						"z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
+				)...), true
 			}
 			return fmt.Sprintf("/ %s  │  %d results  │  ↑/k ↓/j: results  │  enter: open  │  esc: back to search", q, len(m.timeline.threadRowMap)), true
 		}
@@ -963,7 +970,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return "esc: clear filter  │  " + primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
-		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll  │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
+		return timelineReadOnlyPreviewHintText("tab/shift+tab: panels", "esc: close"), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && m.timeline.selectedEmail != nil {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  q: quit  │  read-only", true
@@ -978,20 +985,44 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		attachmentHints := ""
+		segments := []string{"tab/shift+tab: panels", "↑/k ↓/j: scroll"}
+		segments = append(segments, timelineMessageActionHintSegments()...)
+		segments = append(segments, previewActionHintText(hasUnsub))
 		if hasAttachments {
-			attachmentHints = " │  s: save attachment"
 			if hasMultipleAttachments {
-				attachmentHints = " │  [ and ]: attachments" + attachmentHints
+				segments = append(segments, "[ and ]: attachments")
 			}
+			segments = append(segments, "s: save attachment")
 		}
-		actionHints := " │  " + previewActionHintText(hasUnsub)
-		return "tab/shift+tab: panels  │  ↑/k ↓/j: scroll" + actionHints + attachmentHints + " │  z: full-screen  │  v: visual  │  yy: copy line  │  Y: copy all  │  m: mouse mode  │  esc: close  │  q: quit", true
+		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", "q: quit")
+		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit", true
+		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open", "esc: close"}, append(timelineMessageActionHintSegments(), "q: quit")...)...), true
 	}
-	return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: hybrid search  │  A: re-classify  │  f: sidebar  │  q: quit", true
+	return joinHintSegments(append([]string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "enter: open"}, append(timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+}
+
+func joinHintSegments(segments ...string) string {
+	parts := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if segment = strings.TrimSpace(segment); segment != "" {
+			parts = append(parts, segment)
+		}
+	}
+	return strings.Join(parts, "  │  ")
+}
+
+func timelineMessageActionHintSegments() []string {
+	return append(timelinePrimaryMessageActionHintSegments(), "A: re-classify")
+}
+
+func timelinePrimaryMessageActionHintSegments() []string {
+	return []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive"}
+}
+
+func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
+	return joinHintSegments(backHint, "↑/k ↓/j: scroll", "read-only", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", closeHint, "q: quit")
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {

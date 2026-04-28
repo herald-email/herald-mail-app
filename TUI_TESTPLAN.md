@@ -285,6 +285,7 @@ Check these states during every applicable lane:
 - Timeline and preview panels have aligned top/bottom borders in split mode.
 - Preview border is active only when preview has focus.
 - Key hints reflect list mode vs preview mode correctly.
+- When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `R: reply`, `F: forward`, `D: delete`, and `e: archive`.
 
 ### TC-06 — Sidebar focus behavior
 

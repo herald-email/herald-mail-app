@@ -318,6 +318,92 @@ func TestRenderKeyHints_HidesManualAITagHint(t *testing.T) {
 	}
 }
 
+func requireHintSegments(t *testing.T, hints string, segments ...string) {
+	t.Helper()
+	for _, segment := range segments {
+		if !strings.Contains(hints, segment) {
+			t.Fatalf("expected hints to include %q, got %q", segment, hints)
+		}
+	}
+}
+
+func TestRenderKeyHints_TimelinePreviewFocusKeepsMessageActions(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
+	m.focusedPanel = panelPreview
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints, "*: star", "R: reply", "F: forward", "D: delete", "e: archive", "A: re-classify")
+}
+
+func TestRenderKeyHints_TimelineSearchPreviewFocusKeepsMessageActions(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.openTimelineSearch()
+	m.timeline.searchInput.SetValue("test")
+	m.timeline.searchResults = []*models.EmailData{m.timeline.emails[0]}
+	m.timeline.searchResultsQuery = "test"
+	m.timeline.searchFocus = timelineSearchFocusResults
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
+	m.focusedPanel = panelPreview
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints, "*: star", "R: reply", "F: forward", "D: delete", "e: archive", "A: re-classify")
+}
+
+func TestRenderKeyHints_TimelinePreviewActionsStayVisibleAt80Cols(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextPlain: "hello world",
+		Attachments: []models.Attachment{
+			{Filename: "report.pdf"},
+		},
+	}
+	m.focusedPanel = panelPreview
+
+	hints := m.renderKeyHints()
+	assertFitsWidth(t, 80, hints)
+	requireHintSegments(t, stripANSI(hints), "R: reply", "F: forward", "D: delete", "e: archive")
+}
+
+func TestRenderKeyHints_ReadOnlyTimelinePreviewStillHidesMessageActions(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.currentFolder = virtualFolderAllMailOnly
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "<a@x.com>", Sender: "a@x.com", Subject: "only in all mail", Folder: "All Mail"},
+	}
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "read only"}
+	m.focusedPanel = panelPreview
+
+	hints := stripANSI(m.renderKeyHints())
+	for _, forbidden := range []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive", "A: re-classify"} {
+		if strings.Contains(hints, forbidden) {
+			t.Fatalf("expected read-only preview hints to omit %q, got %q", forbidden, hints)
+		}
+	}
+	if !strings.Contains(hints, "read-only") {
+		t.Fatalf("expected read-only hint context, got %q", hints)
+	}
+}
+
 func TestRenderKeyHints_PrefersChatControlsOverTimelineHints(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline
