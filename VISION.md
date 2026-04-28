@@ -136,7 +136,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
-- [x] Compose-safe command layer: `Alt+1/2/3/4`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
+- [x] Compose-safe command layer: `F1/F2/F3/F4`, secondary `Alt+1/2/3/4` aliases, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)

@@ -457,7 +457,7 @@ func (m *Model) renderKeyHints() string {
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = "alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
+		hints = "F1-F4: tabs  │  alt+1/2/3/4: tabs  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {
 			hints = fmt.Sprintf("/ %s  │  esc: clear search  │  q: quit", m.contactSearch)

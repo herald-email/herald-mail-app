@@ -154,22 +154,22 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool
 	case "ctrl+c":
 		m.cleanup()
 		return m, tea.Quit, true
-	case "alt+1":
+	case "f1", "alt+1":
 		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
 			return m, m.switchToTimeline(), true
 		}
 		return m, nil, true
-	case "alt+2":
+	case "f2", "alt+2":
 		if m.canInteractWithVisibleData() && m.activeTab != tabCompose {
 			return m, m.switchToCompose(), true
 		}
 		return m, nil, true
-	case "alt+3":
+	case "f3", "alt+3":
 		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
 			return m, m.switchToCleanup(), true
 		}
 		return m, nil, true
-	case "alt+4":
+	case "f4", "alt+4":
 		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
 			return m, m.switchToContacts(), true
 		}

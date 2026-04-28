@@ -12,6 +12,21 @@ func altKey(r rune) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true}
 }
 
+func functionKey(n int) tea.KeyMsg {
+	switch n {
+	case 1:
+		return tea.KeyMsg{Type: tea.KeyF1}
+	case 2:
+		return tea.KeyMsg{Type: tea.KeyF2}
+	case 3:
+		return tea.KeyMsg{Type: tea.KeyF3}
+	case 4:
+		return tea.KeyMsg{Type: tea.KeyF4}
+	default:
+		return tea.KeyMsg{}
+	}
+}
+
 func commandIsQuit(cmd tea.Cmd) bool {
 	if cmd == nil {
 		return false
@@ -117,6 +132,58 @@ func TestComposeAltTabSwitchesAndPersistsDraft(t *testing.T) {
 	}
 	if !updated.draftSaving {
 		t.Fatal("expected alt+1 leaving non-empty compose to mark draftSaving")
+	}
+}
+
+func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
+	tests := []struct {
+		name string
+		key  tea.KeyMsg
+		want int
+	}{
+		{name: "F1", key: functionKey(1), want: tabTimeline},
+		{name: "F3", key: functionKey(3), want: tabCleanup},
+		{name: "F4", key: functionKey(4), want: tabContacts},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 140, 40)
+			m.activeTab = tabCompose
+			m.composeField = 4
+			m.composeTo.SetValue("alice@example.com")
+			m.composeTo.Blur()
+			m.composeBody.Focus()
+			m.composeBody.SetValue("draft body")
+
+			model, cmd := m.handleKeyMsg(tc.key)
+			updated := model.(*Model)
+
+			if updated.activeTab != tc.want {
+				t.Fatalf("%s activeTab=%d, want %d", tc.name, updated.activeTab, tc.want)
+			}
+			if got := updated.composeBody.Value(); got != "draft body" {
+				t.Fatalf("%s typed into draft, body=%q", tc.name, got)
+			}
+			if cmd == nil {
+				t.Fatalf("expected %s leaving non-empty compose to produce draft persistence command", tc.name)
+			}
+			if !updated.draftSaving {
+				t.Fatalf("expected %s leaving non-empty compose to mark draftSaving", tc.name)
+			}
+		})
+	}
+}
+
+func TestFunctionKeyF2ReturnsToCompose(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+
+	model, _ := m.handleKeyMsg(functionKey(2))
+	updated := model.(*Model)
+
+	if updated.activeTab != tabCompose {
+		t.Fatalf("F2 activeTab=%d, want Compose", updated.activeTab)
 	}
 }
 
