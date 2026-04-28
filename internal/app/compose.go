@@ -77,6 +77,7 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	if m.attachmentInputActive {
 		rows++
 	}
+	rows += m.attachmentCompletionVisibleRows()
 	if m.composePreserved != nil {
 		rows++
 		rows += len(m.composePreserved.forwardedAttachments)
@@ -91,23 +92,7 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Attachment path input intercepts all keys while active
 	if m.attachmentInputActive {
-		switch msg.String() {
-		case "enter":
-			path := expandTilde(m.attachmentPathInput.Value())
-			m.attachmentInputActive = false
-			m.attachmentPathInput.SetValue("")
-			m.attachmentPathInput.Blur()
-			return m, addAttachmentCmd(path)
-		case "esc":
-			m.attachmentInputActive = false
-			m.attachmentPathInput.SetValue("")
-			m.attachmentPathInput.Blur()
-			return m, nil
-		default:
-			var cmd tea.Cmd
-			m.attachmentPathInput, cmd = m.attachmentPathInput.Update(msg)
-			return m, cmd
-		}
+		return m.handleAttachmentPathKey(msg)
 	}
 
 	// When AI panel prompt is focused, route keystrokes to it
@@ -214,6 +199,7 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.attachmentInputActive = true
 		m.attachmentPathInput.SetValue("")
 		m.attachmentPathInput.Focus()
+		m.clearAttachmentCompletions()
 		return m, nil
 	case "ctrl+g":
 		if m.classifier == nil {
@@ -326,6 +312,144 @@ func (m *Model) handleForwardedAttachmentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+func (m *Model) handleAttachmentPathKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		path := m.attachmentPathInput.Value()
+		if isDirectoryPath(path) {
+			m.attachmentPathInput.SetValue(ensureTrailingPathSeparator(path))
+			m.attachmentPathInput.CursorEnd()
+			m.clearAttachmentCompletions()
+			return m, nil
+		}
+		m.attachmentInputActive = false
+		m.attachmentPathInput.SetValue("")
+		m.attachmentPathInput.Blur()
+		m.clearAttachmentCompletions()
+		return m, addAttachmentCmd(expandTilde(path))
+	case tea.KeyEsc:
+		m.attachmentInputActive = false
+		m.attachmentPathInput.SetValue("")
+		m.attachmentPathInput.Blur()
+		m.clearAttachmentCompletions()
+		return m, nil
+	case tea.KeyTab:
+		m.applyAttachmentCompletion(1)
+		return m, nil
+	case tea.KeyShiftTab:
+		m.applyAttachmentCompletion(-1)
+		return m, nil
+	case tea.KeyUp:
+		if m.attachmentCompletionVisible {
+			m.moveAttachmentCompletion(-1)
+			return m, nil
+		}
+	case tea.KeyDown:
+		if m.attachmentCompletionVisible {
+			m.moveAttachmentCompletion(1)
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.attachmentPathInput, cmd = m.attachmentPathInput.Update(msg)
+	m.clearAttachmentCompletions()
+	return m, cmd
+}
+
+func (m *Model) applyAttachmentCompletion(delta int) {
+	if m.attachmentCompletionVisible && len(m.attachmentCompletions) > 0 {
+		m.moveAttachmentCompletion(delta)
+		return
+	}
+
+	input := m.attachmentPathInput.Value()
+	result := completeAttachmentPath(input, ".")
+	if result.Status != "" {
+		m.composeStatus = result.Status
+		m.clearAttachmentCompletions()
+		return
+	}
+
+	m.composeStatus = ""
+	m.attachmentCompletions = result.Candidates
+	if result.Completed != "" && result.Completed != input {
+		m.attachmentPathInput.SetValue(result.Completed)
+		m.attachmentPathInput.CursorEnd()
+		m.attachmentCompletionIdx = 0
+		m.attachmentCompletionAnchor = result.Completed
+		m.attachmentCompletionVisible = false
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
+		return
+	}
+
+	if len(result.Candidates) == 1 {
+		m.attachmentPathInput.SetValue(result.Candidates[0].Value)
+		m.attachmentPathInput.CursorEnd()
+		m.attachmentCompletionIdx = 0
+		m.attachmentCompletionAnchor = result.Candidates[0].Value
+		m.attachmentCompletionVisible = false
+		return
+	}
+
+	if m.attachmentCompletionAnchor != input {
+		m.attachmentCompletionIdx = 0
+		m.attachmentCompletionAnchor = input
+		m.attachmentCompletionVisible = false
+		m.composeStatus = fmt.Sprintf("%d matches (Tab again to show)", len(result.Candidates))
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
+		return
+	}
+
+	m.attachmentCompletionVisible = true
+	m.attachmentCompletionIdx = 0
+	m.moveAttachmentCompletion(0)
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+}
+
+func (m *Model) moveAttachmentCompletion(delta int) {
+	if len(m.attachmentCompletions) == 0 {
+		return
+	}
+	if m.attachmentCompletionIdx < 0 || m.attachmentCompletionIdx >= len(m.attachmentCompletions) {
+		m.attachmentCompletionIdx = 0
+	}
+	m.attachmentCompletionIdx = (m.attachmentCompletionIdx + delta) % len(m.attachmentCompletions)
+	if m.attachmentCompletionIdx < 0 {
+		m.attachmentCompletionIdx += len(m.attachmentCompletions)
+	}
+	selected := m.attachmentCompletions[m.attachmentCompletionIdx]
+	m.attachmentPathInput.SetValue(selected.Value)
+	m.attachmentPathInput.CursorEnd()
+	m.composeStatus = ""
+}
+
+func (m *Model) clearAttachmentCompletions() {
+	m.attachmentCompletions = nil
+	m.attachmentCompletionIdx = -1
+	m.attachmentCompletionVisible = false
+	m.attachmentCompletionAnchor = ""
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+}
+
+func (m *Model) attachmentCompletionVisibleRows() int {
+	if !m.attachmentCompletionVisible || len(m.attachmentCompletions) == 0 {
+		return 0
+	}
+	if len(m.attachmentCompletions) > 5 {
+		return 5
+	}
+	return len(m.attachmentCompletions)
+}
+
 // renderSuggestionDropdown renders the autocomplete dropdown list.
 // Returns an empty string when there are no suggestions.
 func (m *Model) renderSuggestionDropdown() string {
@@ -402,6 +526,49 @@ func (m *Model) renderSuggestionDropdown() string {
 		rows = append(rows, normalStyle.Render(fmt.Sprintf("... %d more", hidden)))
 	}
 	return boxStyle.Render(strings.Join(rows, "\n"))
+}
+
+func (m *Model) renderAttachmentCompletionDropdown() string {
+	rows := m.attachmentCompletionVisibleRows()
+	if rows == 0 {
+		return ""
+	}
+
+	start := 0
+	if m.attachmentCompletionIdx >= rows {
+		start = m.attachmentCompletionIdx - rows + 1
+	}
+	if start+rows > len(m.attachmentCompletions) {
+		start = len(m.attachmentCompletions) - rows
+	}
+	if start < 0 {
+		start = 0
+	}
+
+	maxW := m.windowWidth - 6
+	if maxW < 20 {
+		maxW = 20
+	}
+	selectedStyle := lipgloss.NewStyle().
+		Background(defaultTheme.TabActiveBg).
+		Foreground(defaultTheme.ConfirmFg)
+	normalStyle := lipgloss.NewStyle().
+		Foreground(defaultTheme.TabInactiveFg)
+
+	rendered := make([]string, 0, rows)
+	for i := start; i < start+rows && i < len(m.attachmentCompletions); i++ {
+		prefix := "  "
+		if i == m.attachmentCompletionIdx {
+			prefix = "> "
+		}
+		label := truncateVisual(prefix+m.attachmentCompletions[i].Display, maxW)
+		if i == m.attachmentCompletionIdx {
+			rendered = append(rendered, selectedStyle.Render(label))
+		} else {
+			rendered = append(rendered, normalStyle.Render(label))
+		}
+	}
+	return strings.Join(rendered, "\n")
 }
 
 // acceptSuggestion replaces the current token in the active address field
@@ -747,6 +914,9 @@ func (m *Model) renderComposeView() string {
 	if m.attachmentInputActive {
 		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
 		sb.WriteString(promptStyle.Render("Attach file: ") + m.attachmentPathInput.View() + "\n")
+		if drop := m.renderAttachmentCompletionDropdown(); drop != "" {
+			sb.WriteString(drop + "\n")
+		}
 	}
 
 	// Staged attachments list

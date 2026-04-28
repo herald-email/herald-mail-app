@@ -911,6 +911,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.composeCC.Width = plan.Compose.FieldInnerWidth
 	m.composeBCC.Width = plan.Compose.FieldInnerWidth
 	m.composeSubject.Width = plan.Compose.FieldInnerWidth
+	m.attachmentPathInput.Width = plan.Compose.FieldInnerWidth
 	composeBodyWidth := plan.Compose.BodyInnerWidth
 	composeExtraRows := m.composeAdditionalRows(tableHeight)
 	composeBodyHeight := tableHeight - 16 - composeExtraRows

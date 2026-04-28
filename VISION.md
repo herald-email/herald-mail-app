@@ -17,7 +17,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
 - [x] Archive (`e` key — moves to an explicit archive folder; provider-aware fallback only)
 - [x] Deletion confirmation prompt
-- [x] Attachment support (download + attach when composing)
+- [x] Attachment support (download + attach when composing, with terminal-style path completion)
 - [x] Markdown compose → HTML send (multipart HTML + plain)
 - [x] Full-screen email preview (`z`)
 - [x] Text selection (mouse mode + vim visual mode + clipboard)
@@ -652,7 +652,8 @@ Attachments appear in previews and compose flows, so this section tracks both ra
 - [x] Attachments detected from `BodyStructure` during sync
 - [x] Attachment list shown in email preview (filename, MIME type, size)
 - [x] Save attachment to disk (prompted path, default `~/Downloads/<filename>`)
-- [x] Attach files when composing (`Ctrl+A`, tab-completion)
+- [x] Attach files when composing (`Ctrl+A`)
+- [x] Terminal-style path autocomplete in the Compose attachment prompt
 - [x] Multiple attachments; each listed below the body
 - [x] Sent as `multipart/mixed`
 - [x] Attachment downloads never silently overwrite existing local files; interactive saves suggest the next available filename

@@ -418,6 +418,12 @@ type Model struct {
 	attachmentPathInput   textinput.Model
 	attachmentInputActive bool
 
+	// Compose attachment path completion
+	attachmentCompletions       []attachmentPathCandidate
+	attachmentCompletionIdx     int
+	attachmentCompletionVisible bool
+	attachmentCompletionAnchor  string
+
 	// Draft auto-save state
 	lastDraftUID    uint32 // UID of last auto-saved draft; 0 = not saved yet
 	lastDraftFolder string // folder of last auto-saved draft
@@ -705,29 +711,30 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 			searchInput:         searchInput,
 			attachmentSaveInput: attachmentSaveInput,
 		},
-		classifyCh:          make(chan ClassifyProgressMsg, 50),
-		syncAccumulator:     newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
-		mailer:              mailer,
-		fromAddress:         fromAddress,
-		composeTo:           composeTo,
-		composeCC:           composeCC,
-		composeBCC:          composeBCC,
-		composeSubject:      composeSubject,
-		composeBody:         composeBody,
-		suggestionIdx:       -1,
-		composeAIInput:      composeAIInput,
-		composeAIResponse:   composeAIResponse,
-		baseStyle:           baseStyle,
-		headerStyle:         headerStyle,
-		loadingStyle:        loadingStyle,
-		progressStyle:       progressStyle,
-		activeTableStyle:    activeStyle,
-		inactiveTableStyle:  inactiveStyle,
-		deletionRequestCh:   deletionRequestCh,
-		deletionResultCh:    deletionResultCh,
-		ruleRequestCh:       ruleRequestCh,
-		ruleResultCh:        ruleResultCh,
-		attachmentPathInput: attachmentPathInput,
+		classifyCh:              make(chan ClassifyProgressMsg, 50),
+		syncAccumulator:         newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
+		mailer:                  mailer,
+		fromAddress:             fromAddress,
+		composeTo:               composeTo,
+		composeCC:               composeCC,
+		composeBCC:              composeBCC,
+		composeSubject:          composeSubject,
+		composeBody:             composeBody,
+		suggestionIdx:           -1,
+		composeAIInput:          composeAIInput,
+		composeAIResponse:       composeAIResponse,
+		attachmentCompletionIdx: -1,
+		baseStyle:               baseStyle,
+		headerStyle:             headerStyle,
+		loadingStyle:            loadingStyle,
+		progressStyle:           progressStyle,
+		activeTableStyle:        activeStyle,
+		inactiveTableStyle:      inactiveStyle,
+		deletionRequestCh:       deletionRequestCh,
+		deletionResultCh:        deletionResultCh,
+		ruleRequestCh:           ruleRequestCh,
+		ruleResultCh:            ruleResultCh,
+		attachmentPathInput:     attachmentPathInput,
 	}
 
 	// Detect demo mode via DemoBackendMarker interface

@@ -499,6 +499,28 @@ Check these states during every applicable lane:
 - Forward sends preserve original HTML, preserve referenced inline images, include original attachments by default, and omit attachments removed with `x`.
 - Missing HTML falls back to escaped plain-text quote without blocking send.
 
+### TC-14D — Compose attachment path autocomplete
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Create a temp directory with two files that share a prefix, one subdirectory, one filename containing a space, and one dotfile.
+2. Open Compose, press `Ctrl+A`, type the temp path plus the shared file prefix, and press `Tab`.
+3. Press `Tab` again when the common prefix is exhausted.
+4. Cycle suggestions with `Tab`, `Shift+Tab`, `up`, and `down`.
+5. Select a directory and press `Enter`, then select a file and press `Enter`.
+6. Repeat the prompt and press `Esc` to cancel.
+
+**Expect:**
+- First `Tab` completes a unique match or longest common prefix.
+- Repeated `Tab` shows a compact suggestion list only when multiple matches remain.
+- Suggestions list directories before files, appends `/` to directories, and hides dotfiles until the typed segment starts with `.`.
+- Selecting a directory keeps the prompt open with a trailing `/`.
+- Selecting a file stages exactly that attachment and closes the prompt.
+- Paths with spaces are inserted literally.
+- At `50x15`, the minimum-size guard appears and the Compose view recovers cleanly when resized back to `80x24`.
+
 ### TC-15 — Narrow screen behavior
 
 **Lane:** A, B
