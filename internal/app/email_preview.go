@@ -210,7 +210,7 @@ func (m *Model) renderEmailPreview() string {
 		// Full-screen (z) renders actual images.
 		imageLines := 0
 		if nImg := len(m.timeline.body.InlineImages); nImg > 0 {
-			label := fmt.Sprintf("[%d image(s) — press z for full-screen to view]", nImg)
+			label := splitInlineImageHint(nImg, m.fullScreenImagesAvailable())
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
 			imageLines++
 		}
@@ -382,21 +382,12 @@ func (m *Model) renderFullScreenEmail() string {
 	if m.timeline.bodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
-		// Show inline images as text placeholders with AI description when available.
-		imageLines := 0
-		for _, img := range m.timeline.body.InlineImages {
-			var label string
-			if desc, ok := m.timeline.inlineImageDescs[img.ContentID]; ok {
-				label = fmt.Sprintf("[Image: %s]", desc)
-			} else {
-				label = fmt.Sprintf("[image: %s  %d KB]", img.MIMEType, len(img.Data)/1024)
-			}
-			label = truncate(label, innerW)
-			sb.WriteString(dimStyle.Render(label) + "\n")
-			imageLines++
+		imageBlock, imageRows := m.renderInlineImagesForPreview("timeline:"+m.timeline.bodyMessageID, m.timeline.body.InlineImages, m.timeline.inlineImageDescs, innerW, maxBodyLines-1)
+		if imageBlock != "" {
+			sb.WriteString(dimStyle.Render(imageBlock) + "\n")
 		}
-		// Reserve lines used by image labels so body scroll accounting is correct
-		maxBodyLines -= imageLines
+		// Reserve rows used by image labels/graphics so body scroll accounting is correct.
+		maxBodyLines -= imageRows
 		if maxBodyLines < 1 {
 			maxBodyLines = 1
 		}
@@ -506,6 +497,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	if email.MessageID == m.timeline.selectedEmail.MessageID {
 		return nil // same email already shown
 	}
+	m.revokeImagePreviews()
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
@@ -794,6 +786,27 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.cleanupEmailBody != nil {
+		imageLines := 0
+		if m.cleanupFullScreen {
+			scopeKey := "cleanup"
+			if m.cleanupPreviewEmail != nil {
+				scopeKey += ":" + m.cleanupPreviewEmail.MessageID
+			}
+			imageBlock, rows := m.renderInlineImagesForPreview(scopeKey, m.cleanupEmailBody.InlineImages, nil, innerW, maxBodyLines-1)
+			if imageBlock != "" {
+				sb.WriteString(dimStyle.Render(imageBlock) + "\n")
+				imageLines = rows
+			}
+		} else if nImg := len(m.cleanupEmailBody.InlineImages); nImg > 0 {
+			label := splitInlineImageHint(nImg, m.fullScreenImagesAvailable())
+			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
+			imageLines = 1
+		}
+		maxBodyLines -= imageLines
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+
 		body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
 		if body == "" {
 			body = "(No plain text — HTML only)"

@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"encoding/base64"
 	"math"
 	"sort"
 	"strings"
@@ -279,6 +280,15 @@ func buildMailbox() MailboxFixture {
 			})
 		}
 	}
+	withInlineImage := func(contentID, mime string, data []byte) func(*Message) {
+		return func(msg *Message) {
+			msg.Body.InlineImages = append(msg.Body.InlineImages, models.InlineImage{
+				ContentID: contentID,
+				MIMEType:  mime,
+				Data:      append([]byte(nil), data...),
+			})
+		}
+	}
 	withDraft := func(to, cc, bcc string) func(*Message) {
 		return func(msg *Message) {
 			msg.Email.IsDraft = true
@@ -359,7 +369,8 @@ func buildMailbox() MailboxFixture {
 		withUnsub("https://marketlane.example/unsubscribe/demo"))
 	add(25, "Taskpad Teams <teams@taskpad.example>", "Link rendering stress preview", "INBOX", 24, 52224, true, false, ai.CategoryNewsletter, []string{"newsletter", "links", "rendering"},
 		"# Free team trial inside\n\nSign in on your computer to unlock the team features.\n\n[Display in your browser](https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY)\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nOpen the workspace directly: https://app.taskpad.example/app/team/welcome/path/that/is/long/enough/to/prove/wrapping?utm_source=email&utm_medium=trial&token=abcdefghijklmnopqrstuvwxyz0123456789",
-		withHTML)
+		withHTML,
+		withInlineImage("taskpad-inline-logo", "image/png", demoPNG()))
 
 	return MailboxFixture{
 		Messages: messages,
@@ -373,6 +384,14 @@ func buildMailbox() MailboxFixture {
 			contact(7, "orders@marketlane.example", "Market Lane", "Market Lane", []string{"shopping", "orders", "receipts"}, 3, 0, 7),
 		},
 	}
+}
+
+func demoPNG() []byte {
+	data, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
+	if err != nil {
+		return []byte("png")
+	}
+	return data
 }
 
 func contact(id int64, email, display, company string, topics []string, received, sent, daysAgo int) models.ContactData {

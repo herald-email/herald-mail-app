@@ -94,6 +94,7 @@ func main() {
 					b = lb
 				}
 				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
+				m.SetLocalImageLinksEnabled(false)
 				m.SetConfigPath(resolvedConfig)
 				m.SetConfig(cfg)
 				return m, []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}

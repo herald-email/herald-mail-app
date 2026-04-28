@@ -187,7 +187,31 @@ func htmlToMarkdown(htmlStr string) string {
 		case html.ElementNode:
 			tag := strings.ToLower(n.Data)
 			switch tag {
-			case "style", "script", "head", "img":
+			case "style", "script", "head":
+				return
+			case "img":
+				var src, alt, title string
+				for _, attr := range n.Attr {
+					switch strings.ToLower(attr.Key) {
+					case "src":
+						src = strings.TrimSpace(attr.Val)
+					case "alt":
+						alt = strings.TrimSpace(attr.Val)
+					case "title":
+						title = strings.TrimSpace(attr.Val)
+					}
+				}
+				lowerSrc := strings.ToLower(src)
+				if strings.HasPrefix(lowerSrc, "http://") || strings.HasPrefix(lowerSrc, "https://") {
+					label := alt
+					if label == "" {
+						label = title
+					}
+					if label == "" {
+						label = "image"
+					}
+					writeText(fmt.Sprintf("![%s](%s)", escapeMarkdownLabel(label), src))
+				}
 				return
 			case "br":
 				addNL(1)
@@ -295,6 +319,13 @@ func htmlToMarkdown(htmlStr string) string {
 		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
 	}
 	return strings.TrimSpace(result)
+}
+
+func escapeMarkdownLabel(label string) string {
+	label = strings.ReplaceAll(label, `\`, `\\`)
+	label = strings.ReplaceAll(label, `[`, `\[`)
+	label = strings.ReplaceAll(label, `]`, `\]`)
+	return label
 }
 
 // stripTags is a naive fallback that removes all < > delimited tags.

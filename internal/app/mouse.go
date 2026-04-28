@@ -354,6 +354,7 @@ func (m *Model) openCleanupPreviewEmail(email *models.EmailData) tea.Cmd {
 	if email == nil {
 		return nil
 	}
+	m.revokeImagePreviews()
 	m.cleanupPreviewEmail = email
 	m.showCleanupPreview = true
 	m.cleanupBodyLoading = true

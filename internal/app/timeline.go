@@ -656,6 +656,7 @@ func (m *Model) clearTimelineFullScreen() {
 }
 
 func (m *Model) clearTimelinePreview() {
+	m.revokeImagePreviews()
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
@@ -1367,6 +1368,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.timeline.quickRepliesReady = false
 		m.timeline.quickReplyOpen = false
 		m.timeline.quickReplyIdx = 0
+		m.revokeImagePreviews()
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.timeline.body = &models.EmailBody{TextPlain: "(Failed to load body)"}

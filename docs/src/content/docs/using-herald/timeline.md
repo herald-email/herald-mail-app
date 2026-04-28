@@ -21,7 +21,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | Att column | Attachment indicator when Herald detected attachments. |
 | Tag column | AI classification/category when present. |
 | Preview panel | Message header, body text, tags, unsubscribe/hide actions, attachments, inline image notes, loading/error state, and scroll position. |
-| Full-screen preview | Same message content expanded across the terminal, with more room for body text and image descriptions. |
+| Full-screen preview | Same message content expanded across the terminal, with bounded inline images in iTerm2-compatible terminals and safe OSC 8 fallback links in local TUI sessions. |
 | Search input/results | Search prompt, search mode, result count, and focused result rows. |
 | Quick reply picker | A small choice list of canned and optional AI-generated replies. |
 
@@ -130,6 +130,8 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 ## Data And Privacy
 
 Timeline reads message metadata from SQLite and IMAP-backed cache. Opening a message fetches the full message body by UID, parses text/plain content, inline images, attachments, and unsubscribe headers, and can cache body text for later use. Marking read, starring, deleting, archiving, unsubscribing, hiding future mail, and attachment saving write to IMAP, SQLite, local files, or rules depending on the action.
+
+Inline MIME image bytes are never written to disk for preview. In local TUI sessions that cannot render inline graphics, Herald serves the currently previewed images from a random localhost URL and exposes short OSC 8 links; those links are revoked when the preview changes. Remote HTML image URLs are shown as links only and are not fetched by Herald.
 
 AI actions such as semantic search, classification, image descriptions, and quick replies send selected query or message context to the configured AI backend. Ollama is local by default; external providers receive the context required for the requested action.
 

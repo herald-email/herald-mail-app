@@ -341,6 +341,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview {
+		m.revokeImagePreviews()
 		m.showCleanupPreview = false
 		m.cleanupPreviewEmail = nil
 		m.cleanupEmailBody = nil

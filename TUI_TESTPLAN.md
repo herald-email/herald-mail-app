@@ -750,6 +750,26 @@ Check these states during every applicable lane:
 - Degraded path does not overflow or wedge the preview.
 - Failure is surfaced cleanly.
 
+### TC-23A — Full-screen inline image rendering and fallback links
+
+**Lane:** A, B, C
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline and search for the demo email with inline and remote images.
+2. Open the split preview and capture the image hint plus body links.
+3. Press `z` to enter full-screen and capture.
+4. Repeat in a non-iTerm terminal, an iTerm2-compatible terminal if available, and SSH mode.
+5. Run the standard resize cycle while full-screen preview is open.
+
+**Expect:**
+- Split preview stays compact and does not promise image viewing when no full-screen image path is available.
+- iTerm2-compatible terminals render bounded inline images inside the full-screen viewport.
+- Non-iTerm local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
+- SSH mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs.
+- Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
+- At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
+
 ### TC-24 — Local AI backlog and responsiveness
 
 **Lane:** C  

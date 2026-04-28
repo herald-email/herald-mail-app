@@ -514,6 +514,11 @@ type Model struct {
 	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
 	oauthWait *OAuthWaitModel
 
+	// Local inline-image preview links. Disabled for SSH sessions, where
+	// localhost would point at the server instead of the user's browser.
+	localImageLinks   bool
+	imagePreviewLinks *imagePreviewServer
+
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
 
@@ -737,6 +742,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		composeAIInput:          composeAIInput,
 		composeAIResponse:       composeAIResponse,
 		attachmentCompletionIdx: -1,
+		localImageLinks:         true,
+		imagePreviewLinks:       newImagePreviewServer(),
 		baseStyle:               baseStyle,
 		headerStyle:             headerStyle,
 		loadingStyle:            loadingStyle,
@@ -779,6 +786,13 @@ func (m *Model) SetConfig(cfg *config.Config) {
 // CleanupRunNowMsg actually executes the rules.
 func (m *Model) SetCleanupScheduler(s *cleanup.Scheduler) {
 	m.cleanupScheduler = s
+}
+
+func (m *Model) SetLocalImageLinksEnabled(enabled bool) {
+	m.localImageLinks = enabled
+	if !enabled {
+		m.revokeImagePreviews()
+	}
 }
 
 // Init implements tea.Model
@@ -1395,6 +1409,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CleanupEmailBodyMsg:
 		m.cleanupBodyLoading = false
+		m.revokeImagePreviews()
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch cleanup email body: %v", msg.Err)
 			m.cleanupEmailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
@@ -1496,6 +1511,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.detailsEmails = filtered
 				// Close the preview
+				m.revokeImagePreviews()
 				m.showCleanupPreview = false
 				m.cleanupPreviewEmail = nil
 				m.cleanupEmailBody = nil
@@ -2006,6 +2022,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					idx := m.detailsTable.Cursor()
 					if idx < len(m.detailsEmails) {
 						email := m.detailsEmails[idx]
+						m.revokeImagePreviews()
 						m.cleanupPreviewEmail = email
 						m.showCleanupPreview = true
 						m.cleanupBodyLoading = true

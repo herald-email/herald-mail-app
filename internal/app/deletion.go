@@ -379,6 +379,9 @@ func isConnectionErrorStr(s string) bool {
 
 // cleanup cleans up resources
 func (m *Model) cleanup() {
+	if m.imagePreviewLinks != nil {
+		m.imagePreviewLinks.Close()
+	}
 	// Do not close deletionRequestCh: the goroutine spawned by deleteSelected
 	// may still be sending to it, and closing a channel while a sender is
 	// active causes a panic. The deletion worker goroutine will be terminated

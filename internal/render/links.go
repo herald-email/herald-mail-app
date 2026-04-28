@@ -426,6 +426,11 @@ func renderEmailWords(words []emailWord) string {
 }
 
 func terminalHyperlink(label, rawURL string) string {
+	return TerminalHyperlink(label, rawURL)
+}
+
+// TerminalHyperlink wraps a visible label in an OSC 8 hyperlink target.
+func TerminalHyperlink(label, rawURL string) string {
 	coloredLabel := "\033[38;5;75m" + label + "\033[39m"
 	return "\033]8;;" + rawURL + "\033\\" + coloredLabel + "\033]8;;\033\\"
 }

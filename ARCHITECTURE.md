@@ -99,6 +99,10 @@ The SQLite database path is part of configuration. If YAML already contains a ca
 
 AI work now needs its own resource model because local Ollama capacity behaves very differently from external APIs. The UI must stay responsive even when embeddings, enrichment, classification, chat, and image description are all active, so the scheduler treats local AI as scarce machine capacity and explicitly prefers interactive work over background throughput.
 
+### Inline image preview safety
+
+Timeline and Cleanup previews keep image bytes local to the TUI process. Full-screen preview renders bounded iTerm2 inline images when the terminal supports OSC 1337; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. SSH sessions do not advertise localhost image links because a user's browser would not be on the same host, and remote HTML image URLs are rendered as links without being fetched by Herald.
+
 **Interactive-before-background priority**
 
 - Highest priority: user-blocking interactive work such as chat replies, semantic query embeddings, quick replies, current-email image description, and user-triggered single-contact enrichment

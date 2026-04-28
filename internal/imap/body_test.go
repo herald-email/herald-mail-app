@@ -48,6 +48,17 @@ func TestHTMLToText_BRTag(t *testing.T) {
 	}
 }
 
+func TestHTMLToText_RemoteImagesBecomeMarkdownLinks(t *testing.T) {
+	html := `<p>Logo below</p><img alt="Taskpad logo" src="https://taskpad.example/logo.png"><img alt="cid" src="cid:logo">`
+	got := htmlToMarkdown(html)
+	if !strings.Contains(got, "![Taskpad logo](https://taskpad.example/logo.png)") {
+		t.Fatalf("expected remote image to become markdown image link, got %q", got)
+	}
+	if strings.Contains(got, "cid:logo") {
+		t.Fatalf("cid images should not become remote links, got %q", got)
+	}
+}
+
 func TestHTMLToText_SkipsStyleScript(t *testing.T) {
 	html := `<style>body{color:red}</style><p>Hello</p><script>alert(1)</script>`
 	got := htmlToMarkdown(html)
