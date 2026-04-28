@@ -25,6 +25,13 @@ const deletionMaxBackoff = 30 * time.Second
 // request before giving up and moving to the next one.
 const deletionMaxRetries = 3
 
+func countLabel(count int, singular, plural string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, singular)
+	}
+	return fmt.Sprintf("%d %s", count, plural)
+}
+
 func (m *Model) toggleSelection() {
 	if m.summaryTable.Focused() {
 		key, ok := m.summaryKeyAtCursor()
@@ -58,6 +65,45 @@ func (m *Model) toggleSelection() {
 			m.updateDetailsTable()
 		}
 	}
+}
+
+func (m *Model) toggleTimelineSelection() {
+	if m.activeTab != tabTimeline || m.timelineIsReadOnlyDiagnostic() {
+		return
+	}
+	if m.focusedPanel != panelTimeline {
+		return
+	}
+	targets := m.currentTimelineRowEmails()
+	if len(targets) == 0 {
+		return
+	}
+	m.ensureTimelineSelection()
+	allSelected := true
+	selectable := 0
+	for _, email := range targets {
+		if email == nil || email.MessageID == "" {
+			continue
+		}
+		selectable++
+		if !m.timeline.selectedMessageIDs[email.MessageID] {
+			allSelected = false
+		}
+	}
+	if selectable == 0 {
+		return
+	}
+	for _, email := range targets {
+		if email == nil || email.MessageID == "" {
+			continue
+		}
+		if allSelected {
+			delete(m.timeline.selectedMessageIDs, email.MessageID)
+		} else {
+			m.timeline.selectedMessageIDs[email.MessageID] = true
+		}
+	}
+	m.updateTimelineTable()
 }
 
 // deleteSelected deletes the selected senders or individual messages via queue.
@@ -115,22 +161,29 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 
 	// Timeline tab: delete/archive current email
 	if m.activeTab == tabTimeline {
-		if !isArchive {
-			if draft := m.currentTimelineDraftEmail(); draft != nil {
-				targets = append(targets, deleteTarget{messageID: draft.MessageID, folder: draft.Folder})
+		selectedTargets := m.selectedTimelineEmails(true)
+		if len(selectedTargets) > 0 {
+			for _, email := range selectedTargets {
+				if isArchive && email.IsDraft {
+					continue
+				}
+				appendMessageTarget(email)
+			}
+			if len(targets) == 0 {
+				m.statusMessage = "Selected drafts cannot be archived"
+				return nil
+			}
+		} else if !isArchive {
+			if draft := m.currentTimelineFocusedDraftEmail(); draft != nil {
+				appendMessageTarget(draft)
 			}
 		}
-		cursor := m.timelineTable.Cursor()
-		if len(targets) == 0 && cursor < len(m.timeline.threadRowMap) {
-			ref := m.timeline.threadRowMap[cursor]
-			var email *models.EmailData
-			if ref.kind == rowKindThread {
-				email = ref.group.emails[0]
-			} else {
-				email = ref.group.emails[ref.emailIdx]
-			}
-			if email != nil {
-				targets = append(targets, deleteTarget{messageID: email.MessageID, folder: email.Folder})
+		if len(targets) == 0 {
+			for _, email := range m.currentTimelineRowEmails() {
+				if isArchive && email != nil && email.IsDraft {
+					continue
+				}
+				appendMessageTarget(email)
 			}
 		}
 		if len(targets) == 0 {
@@ -148,6 +201,7 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		}()
 		m.deletionsPending = len(targets)
 		m.deletionsTotal = len(targets)
+		logger.Info("Queued %d timeline deletion(s) isArchive=%v", len(targets), isArchive)
 		return m.listenForDeletionResults()
 	}
 
@@ -341,29 +395,36 @@ func (m *Model) cleanup() {
 // buildDeleteDesc builds a human-readable description for the deletion confirmation prompt.
 func (m *Model) buildDeleteDesc() string {
 	if m.activeTab == tabTimeline {
-		if draft := m.currentTimelineDraftEmail(); draft != nil {
+		if selected := m.selectedTimelineEmails(true); len(selected) > 0 {
+			drafts := 0
+			for _, email := range selected {
+				if email != nil && email.IsDraft {
+					drafts++
+				}
+			}
+			desc := "Delete " + countLabel(len(selected), "selected message", "selected messages")
+			if drafts > 0 {
+				desc += " (discard " + countLabel(drafts, "draft", "drafts") + ")"
+			}
+			return desc + "?"
+		}
+		if draft := m.currentTimelineFocusedDraftEmail(); draft != nil {
 			subj := draft.Subject
 			if len(subj) > 50 {
 				subj = subj[:47] + "..."
 			}
 			return fmt.Sprintf("Discard draft \"%s\"?", subj)
 		}
-		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.timeline.threadRowMap) {
-			ref := m.timeline.threadRowMap[cursor]
-			var email *models.EmailData
-			if ref.kind == rowKindThread {
-				email = ref.group.emails[0]
-			} else {
-				email = ref.group.emails[ref.emailIdx]
+		targets := m.currentTimelineRowEmails()
+		if len(targets) > 0 {
+			subj := targets[0].Subject
+			if len(subj) > 50 {
+				subj = subj[:47] + "..."
 			}
-			if email != nil {
-				subj := email.Subject
-				if len(subj) > 50 {
-					subj = subj[:47] + "..."
-				}
-				return fmt.Sprintf("Delete \"%s\"?", subj)
+			if len(targets) > 1 {
+				return fmt.Sprintf("Delete thread \"%s\" (%d messages)?", subj, len(targets))
 			}
+			return fmt.Sprintf("Delete \"%s\"?", subj)
 		}
 		return ""
 	}
@@ -395,22 +456,51 @@ func (m *Model) buildDeleteDesc() string {
 // buildArchiveDesc builds a human-readable description for the archive confirmation prompt.
 func (m *Model) buildArchiveDesc() string {
 	if m.activeTab == tabTimeline {
-		cursor := m.timelineTable.Cursor()
-		if cursor < len(m.timeline.threadRowMap) {
-			ref := m.timeline.threadRowMap[cursor]
-			var email *models.EmailData
-			if ref.kind == rowKindThread {
-				email = ref.group.emails[0]
-			} else {
-				email = ref.group.emails[ref.emailIdx]
-			}
-			if email != nil {
-				subj := email.Subject
-				if len(subj) > 50 {
-					subj = subj[:47] + "..."
+		if selected := m.selectedTimelineEmails(true); len(selected) > 0 {
+			eligible := 0
+			drafts := 0
+			for _, email := range selected {
+				if email != nil && email.IsDraft {
+					drafts++
+				} else if email != nil {
+					eligible++
 				}
-				return fmt.Sprintf("Archive \"%s\"?", subj)
 			}
+			if eligible == 0 {
+				return ""
+			}
+			desc := "Archive " + countLabel(eligible, "selected message", "selected messages")
+			if drafts > 0 {
+				desc += " (skipping " + countLabel(drafts, "draft", "drafts") + ")"
+			}
+			return desc + "?"
+		}
+		targets := m.currentTimelineRowEmails()
+		var eligible []*models.EmailData
+		drafts := 0
+		for _, email := range targets {
+			if email == nil {
+				continue
+			}
+			if email.IsDraft {
+				drafts++
+			} else {
+				eligible = append(eligible, email)
+			}
+		}
+		if len(eligible) > 0 {
+			subj := eligible[0].Subject
+			if len(subj) > 50 {
+				subj = subj[:47] + "..."
+			}
+			if len(targets) > 1 {
+				desc := fmt.Sprintf("Archive thread \"%s\" (%s", subj, countLabel(len(eligible), "message", "messages"))
+				if drafts > 0 {
+					desc += ", skipping " + countLabel(drafts, "draft", "drafts")
+				}
+				return desc + ")?"
+			}
+			return fmt.Sprintf("Archive \"%s\"?", subj)
 		}
 		return ""
 	}

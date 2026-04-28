@@ -58,16 +58,16 @@ func TestUpdateTimelineTable_MarksDraftRowsAndCollapsedThreads(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected collapsed thread plus single draft row, got %d rows: %#v", len(rows), rows)
 	}
-	if got := rows[0][1]; !strings.Contains(got, "Draft") || !strings.Contains(got, "[2]") {
+	if got := rows[0][2]; !strings.Contains(got, "Draft") || !strings.Contains(got, "[2]") {
 		t.Fatalf("expected collapsed thread subject to show draft marker and count, got %q", got)
 	}
-	if got := rows[0][5]; got != "" {
+	if got := rows[0][6]; got != "" {
 		t.Fatalf("draft marker must not use Tag column, got tag %q", got)
 	}
-	if got := rows[1][1]; !strings.Contains(got, "Draft") || !strings.Contains(got, "Follow-up note") {
+	if got := rows[1][2]; !strings.Contains(got, "Draft") || !strings.Contains(got, "Follow-up note") {
 		t.Fatalf("expected single draft subject to show draft marker, got %q", got)
 	}
-	if got := rows[1][5]; got != "" {
+	if got := rows[1][6]; got != "" {
 		t.Fatalf("single draft marker must not use Tag column, got tag %q", got)
 	}
 }
