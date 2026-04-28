@@ -283,6 +283,10 @@ func buildMailbox() MailboxFixture {
 	add(1, "Northstar Cloud <billing@northstar-cloud.example>", "Invoice and usage alert for Project Orion", "INBOX", 0, 18432, false, true, ai.CategoryImportant, []string{"infrastructure", "budget", "risk", "cloud"},
 		"Northstar Cloud detected a usage change on Project Orion.\n\nThe compute cluster is 18 percent above forecast and the attached invoice highlights the services driving the budget risk.\n\nReview before Friday so the infrastructure owner can right-size the workload.",
 		withAttachment("northstar-orion-invoice.pdf", "application/pdf", 184320))
+	add(26, "Anton Golubtsov <demo@demo.local>", "Re: Next Steps with Anthropic!", "INBOX", 0, 8704, false, true, ai.CategoryImportant, []string{"reply", "scheduling", "interview"},
+		"Hi Tyitana,\n\nThanks for the update - looking forward to it. I'll keep an eye out for Shea's message.\n\nBest regards,\nAnton Golubtsov")
+	add(27, "Tyitana Horton <tytiana@anthropic.example>", "Next Steps with Anthropic!", "INBOX", 1, 9216, true, false, ai.CategoryImportant, []string{"scheduling", "interview", "follow-up"},
+		"Hi Anton,\n\nThank you for taking the time to speak with me. For next steps, we'd like to invite you to complete our technical assessment. Shea will reach out separately with a scheduling link and more details on what to expect.\n\nPlease don't hesitate to reach out if you have any questions.\n\nCheers,\nTyitana")
 	add(2, "Mara Vale <mara@forgepoint.example>", "Storage policy migration review", "INBOX", 1, 9216, false, true, ai.CategoryImportant, []string{"code", "infrastructure", "migration"},
 		"Mara shared the storage policy migration plan.\n\nThe risky bit is the cache backfill window. She needs a review on the rollback checklist and the release candidate notes before standup.")
 	add(3, "Mara Vale <mara@forgepoint.example>", "Re: Storage policy migration review", "INBOX", 2, 8704, true, false, ai.CategoryImportant, []string{"code", "infrastructure", "migration"},

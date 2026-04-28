@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"net/mail"
 	"sort"
 	"strings"
 
@@ -94,12 +95,100 @@ func normalizeSubject(s string) string {
 	return s
 }
 
+func isReplySubject(s string) bool {
+	replyPrefixes := []string{"re:", "aw:", "tr:"}
+	s = strings.TrimSpace(strings.ToLower(s))
+	for _, p := range replyPrefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func senderAddress(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if addr, err := mail.ParseAddress(raw); err == nil && addr.Address != "" {
+		return strings.ToLower(strings.TrimSpace(addr.Address))
+	}
+	start := strings.LastIndex(raw, "<")
+	end := strings.LastIndex(raw, ">")
+	if start >= 0 && end > start {
+		return strings.ToLower(strings.TrimSpace(raw[start+1 : end]))
+	}
+	return strings.ToLower(raw)
+}
+
+func senderDisplayLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "(unknown)"
+	}
+	if addr, err := mail.ParseAddress(raw); err == nil {
+		if name := sanitizeText(addr.Name); name != "" {
+			return name
+		}
+		if addr.Address != "" {
+			return addr.Address
+		}
+	}
+	if lt := strings.Index(raw, " <"); lt > 0 {
+		if name := sanitizeText(raw[:lt]); name != "" {
+			return name
+		}
+	}
+	if cleaned := sanitizeText(raw); cleaned != "" {
+		return cleaned
+	}
+	return raw
+}
+
+func threadParticipantLabels(emails []*models.EmailData, fromAddress string) []string {
+	labels := make([]string, 0, len(emails))
+	seen := make(map[string]bool)
+	from := strings.ToLower(strings.TrimSpace(fromAddress))
+
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		addr := senderAddress(email.Sender)
+		label := senderDisplayLabel(email.Sender)
+		key := addr
+		if from != "" && addr == from {
+			label = "me"
+			key = "me"
+		}
+		if key == "" {
+			key = strings.ToLower(label)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		labels = append(labels, label)
+	}
+
+	return labels
+}
+
+func styledThreadParticipants(labels []string, maxWidth int) string {
+	if len(labels) == 0 {
+		labels = []string{"(unknown)"}
+	}
+	joined := truncate(strings.Join(labels, ", "), maxWidth)
+	return lipgloss.NewStyle().Foreground(defaultTheme.TextFg).Render(joined)
+}
+
 // buildThreadGroups groups emails by normalised subject.
 // emails must already be sorted newest-first; group order is determined by each
 // group's most-recent email, so groups are also implicitly newest-first.
 func buildThreadGroups(emails []*models.EmailData) []threadGroup {
 	var groups []threadGroup
-	seen := make(map[string]int) // (normalised subject + "\n" + sender) → index in groups
+	seen := make(map[string]int) // normalised subject → index in groups
 
 	for _, e := range emails {
 		ns := normalizeSubject(e.Subject)
@@ -111,11 +200,10 @@ func buildThreadGroups(emails []*models.EmailData) []threadGroup {
 			})
 			continue
 		}
-		key := ns + "\n" + strings.ToLower(e.Sender)
-		if idx, ok := seen[key]; ok {
+		if idx, ok := seen[ns]; ok {
 			groups[idx].emails = append(groups[idx].emails, e)
 		} else {
-			seen[key] = len(groups)
+			seen[ns] = len(groups)
 			groups = append(groups, threadGroup{
 				normalizedSubject: ns,
 				emails:            []*models.EmailData{e},
@@ -278,7 +366,7 @@ func (m *Model) updateTimelineTable() {
 			if senderAvail < 1 {
 				senderAvail = 1
 			}
-			threadSender := unreadDot + starDot + styledSender(newest.Sender, senderAvail)
+			threadSender := unreadDot + starDot + styledThreadParticipants(threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
 			rows = append(rows, table.Row{
 				threadSender,
 				trunc(threadSubj, maxSubj),
@@ -291,10 +379,13 @@ func (m *Model) updateTimelineTable() {
 				kind: rowKindThread, group: g,
 			})
 		} else {
-			// Expanded: show each email with an indent prefix on all but the first
+			// Expanded: mark replies explicitly and keep nested markers for older
+			// non-reply rows so conversation shape is visible at a glance.
 			for ei, email := range g.emails {
 				prefix := ""
-				if ei > 0 {
+				if isReplySubject(email.Subject) {
+					prefix = "↩ "
+				} else if ei > 0 {
 					prefix = "  ↳ "
 				}
 				rows = append(rows, emailRow(email, prefix))

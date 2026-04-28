@@ -237,6 +237,27 @@ func TestBuildThreadGroups_Grouping(t *testing.T) {
 	}
 }
 
+func TestBuildThreadGroups_GroupAcrossSendersBySubject(t *testing.T) {
+	now := time.Now()
+	reply := makeEmail("Re: Next Steps with Anthropic!", now)
+	reply.Sender = "Anton Golubtsov <demo@demo.local>"
+	original := makeEmail("Next Steps with Anthropic!", now.Add(-3*time.Minute))
+	original.Sender = "Tyitana Horton <tytiana@anthropic.example>"
+	other := makeEmail("Different topic", now.Add(-time.Hour))
+	other.Sender = "Tyitana Horton <tytiana@anthropic.example>"
+
+	groups := buildThreadGroups([]*models.EmailData{reply, original, other})
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+	if groups[0].normalizedSubject != "next steps with anthropic!" {
+		t.Fatalf("expected cross-participant thread first, got %q", groups[0].normalizedSubject)
+	}
+	if len(groups[0].emails) != 2 {
+		t.Fatalf("expected reply and original in same thread, got %d emails", len(groups[0].emails))
+	}
+}
+
 func TestBuildThreadGroups_Order(t *testing.T) {
 	now := time.Now()
 	// Older thread first in input, newer thread second
@@ -261,6 +282,83 @@ func TestBuildThreadGroups_SingleEmail(t *testing.T) {
 	}
 	if len(groups[0].emails) != 1 {
 		t.Errorf("expected 1 email in group, got %d", len(groups[0].emails))
+	}
+}
+
+func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
+	now := time.Now()
+	m := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	m.timeline.senderWidth = 28
+	m.timeline.subjectWidth = 42
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "reply",
+			Sender:    "Anton Golubtsov <demo@demo.local>",
+			Subject:   "Re: Next Steps with Anthropic!",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "original",
+			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
+			Subject:   "Next Steps with Anthropic!",
+			Date:      now.Add(-3 * time.Minute),
+			Folder:    "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected one collapsed thread row, got %d", len(rows))
+	}
+	sender := stripANSI(rows[0][0])
+	if !strings.Contains(sender, "me") {
+		t.Fatalf("expected collapsed participants to include me, got %q", sender)
+	}
+	if !strings.Contains(sender, "Tyitana Horton") {
+		t.Fatalf("expected collapsed participants to include other sender display name, got %q", sender)
+	}
+	if subject := rows[0][1]; !strings.Contains(subject, "[2]") {
+		t.Fatalf("expected collapsed thread count prefix, got %q", subject)
+	}
+}
+
+func TestUpdateTimelineTable_ExpandedReplyRowsShowReplyMarker(t *testing.T) {
+	now := time.Now()
+	m := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	m.timeline.senderWidth = 30
+	m.timeline.subjectWidth = 42
+	m.timeline.expandedThreads["next steps with anthropic!"] = true
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "reply",
+			Sender:    "Anton Golubtsov <demo@demo.local>",
+			Subject:   "Re: Next Steps with Anthropic!",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "original",
+			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
+			Subject:   "Next Steps with Anthropic!",
+			Date:      now.Add(-3 * time.Minute),
+			Folder:    "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("expected expanded thread rows, got %d", len(rows))
+	}
+	replySender := stripANSI(rows[0][0])
+	if !strings.Contains(replySender, "↩") {
+		t.Fatalf("expected reply row sender to include reply marker, got %q", replySender)
+	}
+	originalSender := stripANSI(rows[1][0])
+	if !strings.Contains(originalSender, "↳") {
+		t.Fatalf("expected non-reply child row to keep nested marker, got %q", originalSender)
 	}
 }
 

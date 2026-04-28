@@ -14,8 +14,9 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 		t.Fatalf("expected at least 6 demo contacts, got %d", len(mailbox.Contacts))
 	}
 
-	var hasAttachment, hasUnsubscribe, hasHTML, hasThread bool
+	var hasAttachment, hasUnsubscribe, hasHTML, hasThread, hasCrossParticipantThread, hasDemoAccountReplyThread bool
 	subjects := make(map[string]int)
+	threadParticipants := make(map[string]map[string]bool)
 	for _, msg := range mailbox.Messages {
 		lowerSender := strings.ToLower(msg.Email.Sender)
 		for _, brand := range []string{"aws", "github", "airbnb", "shopify", "twitter"} {
@@ -40,8 +41,20 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 		}
 		normalized := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(msg.Email.Subject), "re: "), "fwd: ")
 		subjects[normalized]++
+		if threadParticipants[normalized] == nil {
+			threadParticipants[normalized] = make(map[string]bool)
+		}
+		threadParticipants[normalized][strings.ToLower(msg.Email.Sender)] = true
 		if subjects[normalized] > 1 {
 			hasThread = true
+		}
+		if len(threadParticipants[normalized]) > 1 {
+			hasCrossParticipantThread = true
+			for participant := range threadParticipants[normalized] {
+				if strings.Contains(participant, "demo@demo.local") {
+					hasDemoAccountReplyThread = true
+				}
+			}
 		}
 	}
 
@@ -56,6 +69,12 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 	}
 	if !hasThread {
 		t.Fatal("expected at least one visible thread in demo messages")
+	}
+	if !hasCrossParticipantThread {
+		t.Fatal("expected at least one demo thread with multiple participants")
+	}
+	if !hasDemoAccountReplyThread {
+		t.Fatal("expected at least one demo thread involving demo@demo.local")
 	}
 }
 

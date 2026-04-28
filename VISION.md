@@ -111,7 +111,7 @@ Keyboard (`F1`-`F4` as the primary visible shortcuts, with browse-context number
 The primary reading interface. Shows emails sorted newest-first, grouped by thread when multiple messages share the same subject. Selecting a row opens a body preview split on the right.
 
 - [x] Full-width thread list sorted by date
-- [x] Thread grouping (fold/unfold inline with `Enter`)
+- [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
 - [x] Body preview split (right panel, auto-updates on navigation)
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
