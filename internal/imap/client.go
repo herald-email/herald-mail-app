@@ -465,7 +465,6 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 			Current: totalMessages,
 			Message: fmt.Sprintf("No new mail in %s — %d messages already current", folder, totalMessages),
 		})
-		return nil
 
 	case syncStrategyFull:
 		logger.Info("ProcessEmailsIncremental: UIDVALIDITY changed or first run — full resync of %s", folder)
@@ -501,11 +500,30 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 		}
 	}
 
+	if err := c.refreshCachedFlags(folder, totalMessages); err != nil {
+		return err
+	}
+
 	if err := c.cache.SetFolderSyncState(folder, mbox.UidValidity, mbox.UidNext); err != nil {
 		logger.Warn("ProcessEmailsIncremental: failed to persist sync state: %v", err)
 	} else {
 		logger.Debug("ProcessEmailsIncremental: persisted sync state folder=%s uidvalidity=%d uidnext=%d", folder, mbox.UidValidity, mbox.UidNext)
 	}
+	return nil
+}
+
+func (c *Client) refreshCachedFlags(folder string, totalMessages int) error {
+	if totalMessages == 0 {
+		return nil
+	}
+	_, flagStates, err := c.fetchAllServerUIDFlagStates(folder)
+	if err != nil {
+		return fmt.Errorf("refresh cached flags for %s: %w", folder, err)
+	}
+	if err := c.cache.BatchUpdateEmailFlagsByUID(folder, flagStates); err != nil {
+		return fmt.Errorf("refresh cached flags in %s: %w", folder, err)
+	}
+	logger.Debug("refreshCachedFlags: folder=%s refreshed=%d", folder, len(flagStates))
 	return nil
 }
 

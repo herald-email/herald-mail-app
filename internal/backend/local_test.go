@@ -21,7 +21,7 @@ func makeEmail(id string) *models.EmailData {
 // --- filterByValidIDs ---
 
 func TestFilterByValidIDs_NilSet(t *testing.T) {
-	b := &LocalBackend{} // validIDs is nil by default
+	b := &LocalBackend{} // validIDsByFolder is nil by default
 	emails := []*models.EmailData{makeEmail("<a@x.com>"), makeEmail("<b@x.com>")}
 	got := b.filterByValidIDs(emails)
 	if len(got) != 2 {
@@ -31,7 +31,7 @@ func TestFilterByValidIDs_NilSet(t *testing.T) {
 
 func TestFilterByValidIDs_WithSet(t *testing.T) {
 	b := &LocalBackend{}
-	b.validIDs = map[string]bool{"<a@x.com>": true, "<c@x.com>": true}
+	b.setValidIDsForFolder("INBOX", map[string]bool{"<a@x.com>": true, "<c@x.com>": true})
 
 	emails := []*models.EmailData{
 		makeEmail("<a@x.com>"),
@@ -50,9 +50,30 @@ func TestFilterByValidIDs_WithSet(t *testing.T) {
 	}
 }
 
+func TestFilterByValidIDs_IsScopedByFolder(t *testing.T) {
+	b := &LocalBackend{}
+	b.setValidIDsForFolder("INBOX", map[string]bool{"<inbox-live@x.com>": true})
+
+	archiveEmail := makeEmail("<archive-not-yet-reconciled@x.com>")
+	archiveEmail.Folder = "Archive"
+	emails := []*models.EmailData{
+		makeEmail("<inbox-live@x.com>"),
+		makeEmail("<inbox-stale@x.com>"),
+		archiveEmail,
+	}
+
+	got := b.filterByValidIDs(emails)
+	if len(got) != 2 {
+		t.Fatalf("expected INBOX to be filtered without hiding Archive, got %d emails", len(got))
+	}
+	if got[0].MessageID != "<inbox-live@x.com>" || got[1].MessageID != "<archive-not-yet-reconciled@x.com>" {
+		t.Fatalf("unexpected scoped valid-ID result: %q, %q", got[0].MessageID, got[1].MessageID)
+	}
+}
+
 func TestFilterSemanticResultsByValidIDs_WithSet(t *testing.T) {
 	b := &LocalBackend{}
-	b.validIDs = map[string]bool{"<a@x.com>": true, "<c@x.com>": true}
+	b.setValidIDsForFolder("INBOX", map[string]bool{"<a@x.com>": true, "<c@x.com>": true})
 
 	results := []*models.SemanticSearchResult{
 		{Email: makeEmail("<a@x.com>"), Score: 0.91},
@@ -117,20 +138,57 @@ func TestSenderStatisticsFromGroups_IgnoresEmptyGroups(t *testing.T) {
 
 func TestIsValidID_NilSet(t *testing.T) {
 	b := &LocalBackend{}
-	if !b.isValidID("<anything@x.com>") {
+	if !b.isValidID("INBOX", "<anything@x.com>") {
 		t.Error("nil validIDs: all IDs should be considered valid")
 	}
 }
 
 func TestIsValidID_WithSet(t *testing.T) {
 	b := &LocalBackend{}
-	b.validIDs = map[string]bool{"<a@x.com>": true}
+	b.setValidIDsForFolder("INBOX", map[string]bool{"<a@x.com>": true})
 
-	if !b.isValidID("<a@x.com>") {
+	if !b.isValidID("INBOX", "<a@x.com>") {
 		t.Error("expected <a> to be valid")
 	}
-	if b.isValidID("<b@x.com>") {
+	if b.isValidID("INBOX", "<b@x.com>") {
 		t.Error("expected <b> to be invalid")
+	}
+	if !b.isValidID("Archive", "<b@x.com>") {
+		t.Error("unreconciled folders should remain valid until their own valid-ID set arrives")
+	}
+}
+
+func TestPrepareValidIDsChannelPublishesBeforeValuesAndStoresByFolder(t *testing.T) {
+	b := &LocalBackend{}
+	internalCh := b.prepareValidIDsChannelForFolder("INBOX")
+	publicCh := b.ValidIDsCh()
+	if publicCh == nil {
+		t.Fatal("expected public valid-ID channel to be available before reconcile sends values")
+	}
+
+	internalCh <- map[string]bool{"<a@x.com>": true}
+	close(internalCh)
+
+	select {
+	case ids, ok := <-publicCh:
+		if !ok {
+			t.Fatal("public valid-ID channel closed before forwarding IDs")
+		}
+		if !ids["<a@x.com>"] {
+			t.Fatalf("forwarded IDs missing <a@x.com>: %v", ids)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for public valid-ID channel")
+	}
+
+	if !b.isValidID("INBOX", "<a@x.com>") {
+		t.Fatal("expected forwarded IDs to be stored for INBOX")
+	}
+	if b.isValidID("INBOX", "<b@x.com>") {
+		t.Fatal("expected missing INBOX ID to be invalid")
+	}
+	if !b.isValidID("Archive", "<b@x.com>") {
+		t.Fatal("expected other folders to remain unfiltered")
 	}
 }
 
@@ -141,7 +199,7 @@ func TestIsValidID_WithSet(t *testing.T) {
 func filterUnclassifiedIDs(b *LocalBackend, ids []string) []string {
 	out := ids[:0:0]
 	for _, id := range ids {
-		if b.isValidID(id) {
+		if b.isValidID("INBOX", id) {
 			out = append(out, id)
 		}
 	}
@@ -150,11 +208,11 @@ func filterUnclassifiedIDs(b *LocalBackend, ids []string) []string {
 
 func TestGetUnclassifiedIDs_FiltersStale(t *testing.T) {
 	b := &LocalBackend{}
-	b.validIDs = map[string]bool{
+	b.setValidIDsForFolder("INBOX", map[string]bool{
 		"<a@x.com>": true,
 		"<c@x.com>": true,
 		"<e@x.com>": true,
-	}
+	})
 
 	all := []string{"<a@x.com>", "<b@x.com>", "<c@x.com>", "<d@x.com>", "<e@x.com>"}
 	got := filterUnclassifiedIDs(b, all)

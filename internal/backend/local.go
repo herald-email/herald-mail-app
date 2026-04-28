@@ -44,11 +44,12 @@ type LocalBackend struct {
 	pollStop    chan struct{}
 	pollMu      sync.Mutex
 
-	// validIDs is the live ground-truth set of message IDs known to exist on the server.
-	// nil means reconciliation has not run yet — all cache entries are accepted.
-	validIDsMu   sync.RWMutex
-	validIDs     map[string]bool
-	validIDsChSt chan map[string]bool // channel returned by ValidIDsCh()
+	// validIDsByFolder is the live ground-truth set of message IDs known to exist
+	// on the server for each reconciled folder. A missing folder entry means that
+	// folder has not been reconciled yet, so its cache entries are accepted.
+	validIDsMu       sync.RWMutex
+	validIDsByFolder map[string]map[string]bool
+	validIDsChSt     chan map[string]bool // channel returned by ValidIDsCh()
 
 	// In-memory email body cache to avoid redundant IMAP fetches when
 	// the user navigates back-and-forth through the same emails.
@@ -68,18 +69,67 @@ func (b *LocalBackend) tracef(format string, args ...interface{}) {
 	logger.Debug("LocalBackend: "+format, args...)
 }
 
-// filterByValidIDs returns only emails whose MessageID is in validIDs.
-// If validIDs is nil (not yet reconciled), the original slice is returned unchanged.
+func cloneValidIDSet(ids map[string]bool) map[string]bool {
+	if ids == nil {
+		return nil
+	}
+	cloned := make(map[string]bool, len(ids))
+	for id, valid := range ids {
+		if valid {
+			cloned[id] = true
+		}
+	}
+	return cloned
+}
+
+func (b *LocalBackend) setValidIDsForFolder(folder string, ids map[string]bool) {
+	b.validIDsMu.Lock()
+	defer b.validIDsMu.Unlock()
+	if b.validIDsByFolder == nil {
+		b.validIDsByFolder = make(map[string]map[string]bool)
+	}
+	b.validIDsByFolder[folder] = cloneValidIDSet(ids)
+}
+
+func (b *LocalBackend) prepareValidIDsChannelForFolder(folder string) chan map[string]bool {
+	internalCh := make(chan map[string]bool, 1)
+	publicCh := make(chan map[string]bool, 1)
+
+	b.validIDsMu.Lock()
+	b.validIDsChSt = publicCh
+	b.validIDsMu.Unlock()
+
+	go func() {
+		defer close(publicCh)
+		ids, ok := <-internalCh
+		if !ok {
+			return
+		}
+		b.setValidIDsForFolder(folder, ids)
+		publicCh <- cloneValidIDSet(ids)
+		for range internalCh {
+		}
+	}()
+
+	return internalCh
+}
+
+// filterByValidIDs returns only emails whose MessageID is in the reconciled
+// valid-ID set for that email's folder. Folders without a valid-ID set are
+// accepted until their own reconcile result arrives.
 func (b *LocalBackend) filterByValidIDs(emails []*models.EmailData) []*models.EmailData {
 	b.validIDsMu.RLock()
-	ids := b.validIDs
-	b.validIDsMu.RUnlock()
-	if ids == nil {
+	defer b.validIDsMu.RUnlock()
+	if len(b.validIDsByFolder) == 0 {
 		return emails
 	}
 	out := make([]*models.EmailData, 0, len(emails))
 	for _, e := range emails {
-		if ids[e.MessageID] {
+		if e == nil {
+			continue
+		}
+		ids, ok := b.validIDsByFolder[e.Folder]
+		if !ok || ids[e.MessageID] {
 			out = append(out, e)
 		}
 	}
@@ -88,9 +138,8 @@ func (b *LocalBackend) filterByValidIDs(emails []*models.EmailData) []*models.Em
 
 func (b *LocalBackend) filterSemanticResultsByValidIDs(results []*models.SemanticSearchResult) []*models.SemanticSearchResult {
 	b.validIDsMu.RLock()
-	ids := b.validIDs
-	b.validIDsMu.RUnlock()
-	if ids == nil {
+	defer b.validIDsMu.RUnlock()
+	if len(b.validIDsByFolder) == 0 {
 		return results
 	}
 	out := make([]*models.SemanticSearchResult, 0, len(results))
@@ -98,20 +147,21 @@ func (b *LocalBackend) filterSemanticResultsByValidIDs(results []*models.Semanti
 		if result == nil || result.Email == nil {
 			continue
 		}
-		if ids[result.Email.MessageID] {
+		ids, ok := b.validIDsByFolder[result.Email.Folder]
+		if !ok || ids[result.Email.MessageID] {
 			out = append(out, result)
 		}
 	}
 	return out
 }
 
-// isValidID returns true when the message exists in the valid set, or when no
-// valid set has been established yet (nil → accept all).
-func (b *LocalBackend) isValidID(msgID string) bool {
+// isValidID returns true when the message exists in the folder's valid set, or
+// when no valid set has been established for that folder yet.
+func (b *LocalBackend) isValidID(folder, msgID string) bool {
 	b.validIDsMu.RLock()
-	ids := b.validIDs
-	b.validIDsMu.RUnlock()
-	return ids == nil || ids[msgID]
+	defer b.validIDsMu.RUnlock()
+	ids, ok := b.validIDsByFolder[folder]
+	return !ok || ids[msgID]
 }
 
 // ValidIDsCh returns the channel that will receive the valid-ID map from
@@ -401,6 +451,8 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		EventCount: 1,
 	})
 
+	validIDsCh := b.prepareValidIDsChannelForFolder(req.Folder)
+
 	b.sendProgress(models.ProgressInfo{
 		Phase:   "complete",
 		Message: fmt.Sprintf("Found %d senders", len(stats)),
@@ -414,10 +466,6 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	logger.Info("Load complete: %d senders", len(stats))
 	b.tracef("runLoad settled visible bundle: folder=%s generation=%d senders=%d duration=%s", req.Folder, req.Generation, len(stats), time.Since(start).Round(10*time.Millisecond))
 
-	validIDsCh := make(chan map[string]bool, 1)
-	b.validIDsMu.Lock()
-	b.validIDsChSt = validIDsCh
-	b.validIDsMu.Unlock()
 	b.tracef("starting background reconcile: folder=%s generation=%d", req.Folder, req.Generation)
 	b.emitSyncEvent(models.FolderSyncEvent{
 		Folder:     req.Folder,
@@ -539,7 +587,7 @@ func (b *LocalBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
 	}
 	out := ids[:0:0]
 	for _, id := range ids {
-		if b.isValidID(id) {
+		if b.isValidID(folder, id) {
 			out = append(out, id)
 		}
 	}
@@ -547,10 +595,14 @@ func (b *LocalBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
 }
 
 func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error) {
-	if !b.isValidID(messageID) {
+	email, err := b.cache.GetEmailByID(messageID)
+	if err != nil {
+		return nil, err
+	}
+	if email != nil && !b.isValidID(email.Folder, email.MessageID) {
 		return nil, fmt.Errorf("email %s not in valid set", messageID)
 	}
-	return b.cache.GetEmailByID(messageID)
+	return email, nil
 }
 
 func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {

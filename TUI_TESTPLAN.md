@@ -186,6 +186,7 @@ Check these states during every applicable lane:
 - Folder switches should be latest-wins: stale sync results from an older folder request must not repaint the newly selected folder.
 - The active folder visible bundle settles together: rows, unread/total counts, folder label, and folder tree presence become coherent within a 2-5 second window under normal startup conditions.
 - Visible folder counts come from live IMAP folder status only; hydrated cache rows must not synthesize or overwrite sidebar, status-bar, or cleanup counts.
+- Timeline unread dots reflect live IMAP `\Seen` flags after refresh/sync, including messages read externally in Gmail when no new mail arrived.
 - The top sync strip reflects only unsettled active-folder work and disappears once the active folder bundle is settled.
 - Startup must show the full folder tree as soon as the server folder list is known; loading the active folder must not collapse the sidebar to only a partial tree.
 - Cleanup summary selection checkmarks and cleanup selection status text must always agree.

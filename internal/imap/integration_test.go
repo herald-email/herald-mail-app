@@ -121,6 +121,52 @@ func TestProcessEmailsIncremental_NoNewMail(t *testing.T) {
 	}
 }
 
+// TestProcessEmailsIncremental_RefreshesReadFlagsWhenNoNewMail verifies that
+// a second sync refreshes IMAP flags even when UIDNEXT is unchanged. This
+// mirrors reading a message externally in Gmail, then returning to Herald.
+func TestProcessEmailsIncremental_RefreshesReadFlagsWhenNoNewMail(t *testing.T) {
+	_, cfg, stop := testutil.StartMockIMAPServer(t)
+	defer stop()
+
+	progressCh := make(chan models.ProgressInfo, 50)
+	ch := newIntegrationCache(t)
+	c := New(cfg, "", ch, progressCh)
+
+	if err := c.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	if err := c.ProcessEmailsIncremental("INBOX"); err != nil {
+		t.Fatalf("first ProcessEmailsIncremental: %v", err)
+	}
+
+	const targetID = "<test-msg-2@localhost>"
+	before, err := ch.GetEmailByID(targetID)
+	if err != nil {
+		t.Fatalf("GetEmailByID before mark read: %v", err)
+	}
+	if before.IsRead {
+		t.Fatalf("test setup expected %s to start unread", targetID)
+	}
+
+	if err := c.MarkRead(before.UID, "INBOX"); err != nil {
+		t.Fatalf("MarkRead on IMAP server: %v", err)
+	}
+
+	if err := c.ProcessEmailsIncremental("INBOX"); err != nil {
+		t.Fatalf("second ProcessEmailsIncremental: %v", err)
+	}
+
+	after, err := ch.GetEmailByID(targetID)
+	if err != nil {
+		t.Fatalf("GetEmailByID after refresh: %v", err)
+	}
+	if !after.IsRead {
+		t.Fatalf("expected cached %s to become read after IMAP flag refresh", targetID)
+	}
+}
+
 // TestBatchFetchDetails_ProcessesAllEmails verifies that batchFetchDetails
 // retrieves all seeded messages in a single round trip and stores them in the
 // cache correctly. This exercises the batch-fetch path introduced to replace
