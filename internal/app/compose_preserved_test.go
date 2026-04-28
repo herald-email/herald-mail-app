@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"mail-processor/internal/models"
 )
 
@@ -73,6 +75,39 @@ func TestComposeForwardedAttachmentFocusRemovesSelectedAttachment(t *testing.T) 
 	}
 }
 
+func TestComposeForwardedAttachmentFocusTogglesSelectedAttachment(t *testing.T) {
+	m := newPreservedComposeModel()
+	m.composeField = composeFieldForwardedAttachments
+	m.composePreserved.selectedAttachment = 1
+
+	model, _ := m.handleComposeKey(keyRunes("x"))
+	updated := model.(*Model)
+	if updated.composePreserved.forwardedAttachments[1].Include {
+		t.Fatalf("expected selected forwarded attachment to be excluded after first x: %#v", updated.composePreserved.forwardedAttachments)
+	}
+
+	model, _ = updated.handleComposeKey(keyRunes("x"))
+	updated = model.(*Model)
+	if !updated.composePreserved.forwardedAttachments[1].Include {
+		t.Fatalf("expected selected forwarded attachment to be included after second x: %#v", updated.composePreserved.forwardedAttachments)
+	}
+}
+
+func TestComposeForwardedAttachmentFocusDoesNotRestoreUnavailableAttachment(t *testing.T) {
+	m := newPreservedComposeModel()
+	m.composeField = composeFieldForwardedAttachments
+	m.composePreserved.selectedAttachment = 1
+	m.composePreserved.forwardedAttachments[1].Include = false
+	m.composePreserved.forwardedAttachments[1].Attachment.Data = nil
+
+	model, _ := m.handleComposeKey(keyRunes("x"))
+	updated := model.(*Model)
+
+	if updated.composePreserved.forwardedAttachments[1].Include {
+		t.Fatalf("unavailable forwarded attachment should stay excluded: %#v", updated.composePreserved.forwardedAttachments)
+	}
+}
+
 func TestComposeForwardedAttachmentFocusKeepsGlobalSendShortcut(t *testing.T) {
 	m := newPreservedComposeModel()
 	m.composeField = composeFieldForwardedAttachments
@@ -93,6 +128,87 @@ func TestRenderComposePreservedSummary(t *testing.T) {
 	for _, want := range []string{"Preserved forward", "Safe", "HTML", "1 inline", "2 attachments"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("summary missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderForwardComposeSeparatesResponseAndOriginalMessage(t *testing.T) {
+	m := newPreservedComposeModel()
+	m.loading = false
+	m.composeBody.SetValue("Please review this.")
+	m.updateTableDimensions(100, 32)
+	freezeComposeCursors(m)
+
+	rendered := stripANSI(m.renderComposeView())
+	for _, want := range []string{"Response", "Original message", "sender@example.com", "Styled mail", "plain"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("forward compose render missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(m.composeBody.Value(), "plain") {
+		t.Fatalf("compose body should contain only the response note, got %q", m.composeBody.Value())
+	}
+}
+
+func TestRenderForwardComposeSelectedAttachmentUsesActiveFocusStyle(t *testing.T) {
+	oldProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(oldProfile)
+
+	m := newPreservedComposeModel()
+	m.composeField = composeFieldForwardedAttachments
+	m.composePreserved.selectedAttachment = 1
+
+	rendered := m.renderComposePreservedSummary(80)
+	if !strings.Contains(rendered, "\x1b[38;5;229") || !strings.Contains(rendered, "48;5;57") {
+		t.Fatalf("selected forwarded attachment should use active foreground/background styling, got:\n%q", rendered)
+	}
+}
+
+func TestForwardComposePreservedViewFits80x24(t *testing.T) {
+	m := newPreservedComposeModel()
+	m.loading = false
+	m.composeBody.SetValue("Please review this.")
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	rendered := m.renderMainView()
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+	stripped := stripANSI(rendered)
+	for _, want := range []string{"Response", "Original message"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("forward compose at 80x24 missing %q:\n%s", want, stripped)
+		}
+	}
+}
+
+func TestOpenTimelineForwardComposeReflowsPreservedRowsAtWideSize(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	email := &models.EmailData{
+		MessageID: "wide-forward",
+		Sender:    "Northstar Cloud <billing@northstar-cloud.example>",
+		Subject:   "Invoice and usage alert for Project Orion",
+		Date:      time.Date(2026, 4, 24, 9, 30, 0, 0, time.UTC),
+	}
+	body := &models.EmailBody{
+		TextPlain: "Northstar Cloud detected a usage change on Project Orion. The compute cluster is above forecast and the attached invoice highlights the services driving the budget risk.",
+		Attachments: []models.Attachment{
+			{Filename: "northstar-orion-invoice.pdf", MIMEType: "application/pdf", Data: []byte("pdf")},
+		},
+	}
+
+	m.openTimelineForwardCompose(email, body, "")
+	freezeComposeCursors(m)
+	rendered := m.renderMainView()
+
+	assertFitsWidth(t, 220, rendered)
+	assertFitsHeight(t, 50, rendered)
+	stripped := stripANSI(rendered)
+	for _, want := range []string{"Herald", "To:", "Response", "Original message"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("wide forward compose missing %q:\n%s", want, stripped)
 		}
 	}
 }

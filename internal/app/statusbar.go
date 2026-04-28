@@ -459,7 +459,10 @@ func (m *Model) renderKeyHints() string {
 	} else if m.activeTab == tabCompose {
 		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 		if m.composePreserved != nil {
-			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: remove fwd attach  │  ctrl+c: quit"
+			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+c: quit"
+			if m.hasForwardedAttachments() {
+				hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  ctrl+c: quit"
+			}
 		}
 	} else if m.activeTab == tabContacts {
 		if m.contactSearchMode == "keyword" {

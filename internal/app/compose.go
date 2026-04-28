@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -80,6 +81,9 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	rows += m.attachmentCompletionVisibleRows()
 	if m.composePreserved != nil {
 		rows++
+		if m.composePreserved.kind == models.PreservedMessageKindForward {
+			rows += m.composeOriginalPreviewRows(tableHeight)
+		}
 		rows += len(m.composePreserved.forwardedAttachments)
 	}
 	rows += len(m.composeAttachments)
@@ -302,7 +306,10 @@ func (m *Model) handleForwardedAttachmentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	case "x", "delete", "backspace":
 		idx := m.composePreserved.selectedAttachment
 		if idx >= 0 && idx < len(m.composePreserved.forwardedAttachments) {
-			m.composePreserved.forwardedAttachments[idx].Include = false
+			item := &m.composePreserved.forwardedAttachments[idx]
+			if len(item.Attachment.Data) > 0 {
+				item.Include = !item.Include
+			}
 		}
 	case "ctrl+o":
 		m.cyclePreservationMode()
@@ -815,7 +822,11 @@ func (m *Model) renderComposeView() string {
 	if divWidth < 10 {
 		divWidth = 10
 	}
-	sb.WriteString(strings.Repeat("─", divWidth) + "\n")
+	if m.isForwardCompose() {
+		sb.WriteString(composeSectionDivider("Response", divWidth) + "\n")
+	} else {
+		sb.WriteString(strings.Repeat("─", divWidth) + "\n")
+	}
 
 	// Subject hint (shown below divider when a suggestion is pending)
 	if m.composeAISubjectHint != "" {
@@ -835,7 +846,9 @@ func (m *Model) renderComposeView() string {
 	if bodyAreaWidth < 10 {
 		bodyAreaWidth = 10
 	}
-	if m.composeAIPanel {
+	if m.compactForwardCompose() {
+		sb.WriteString(m.renderCompactForwardResponse(plan.Compose.BodyInnerWidth) + "\n")
+	} else if m.composeAIPanel {
 		// Split outer width between bordered body pane and bordered AI pane.
 		totalOuterWidth := plan.Compose.BodyInnerWidth + 2
 		panelWidth := 36 // inner width
@@ -906,6 +919,10 @@ func (m *Model) renderComposeView() string {
 		}
 	}
 
+	if original := m.renderComposeOriginalMessagePreview(plan.Compose.BodyInnerWidth); original != "" {
+		sb.WriteString(original + "\n")
+	}
+
 	if summary := m.renderComposePreservedSummary(plan.Compose.BodyInnerWidth); summary != "" {
 		sb.WriteString(summary + "\n")
 	}
@@ -951,6 +968,137 @@ func (m *Model) renderComposeView() string {
 	return sb.String()
 }
 
+func (m *Model) isForwardCompose() bool {
+	return m.composePreserved != nil && m.composePreserved.kind == models.PreservedMessageKindForward
+}
+
+func (m *Model) compactForwardCompose() bool {
+	return m.isForwardCompose() && m.windowHeight > 0 && m.windowHeight <= 24
+}
+
+func composeSectionDivider(label string, width int) string {
+	if width < 10 {
+		width = 10
+	}
+	title := " " + label + " "
+	if ansi.StringWidth(title) >= width {
+		return truncateVisual(label, width)
+	}
+	left := 2
+	right := width - left - ansi.StringWidth(title)
+	if right < 0 {
+		right = 0
+	}
+	return strings.Repeat("─", left) + title + strings.Repeat("─", right)
+}
+
+func (m *Model) renderCompactForwardResponse(width int) string {
+	if width < 20 {
+		width = 20
+	}
+	value := strings.TrimSpace(m.composeBody.Value())
+	if value == "" {
+		value = "Write your message here (Markdown supported)..."
+	}
+	value = strings.ReplaceAll(value, "\n", " ")
+	line := truncateVisual("Response: "+value, width)
+	style := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
+	if m.composeField == composeFieldBody {
+		style = style.Foreground(defaultTheme.TabActiveFg).Background(defaultTheme.TabActiveBg)
+	}
+	return style.Render(line)
+}
+
+func (m *Model) composeOriginalPreviewRows(tableHeight int) int {
+	if m.compactForwardCompose() || tableHeight <= 18 {
+		return 1
+	}
+	if tableHeight <= 26 {
+		return 5
+	}
+	return 6
+}
+
+func (m *Model) renderComposeOriginalMessagePreview(width int) string {
+	ctx := m.composePreserved
+	if ctx == nil || ctx.kind != models.PreservedMessageKindForward {
+		return ""
+	}
+	if width < 20 {
+		width = 20
+	}
+	maxRows := m.composeOriginalPreviewRows(m.composeContentHeight())
+	if maxRows < 1 {
+		maxRows = 1
+	}
+
+	body := ""
+	if ctx.body != nil {
+		body = strings.TrimSpace(stripInvisibleChars(ctx.body.TextPlain))
+	}
+	if body == "" && ctx.body != nil && strings.TrimSpace(ctx.body.TextHTML) != "" {
+		body = "(Original has HTML-only content; Herald will preserve it when sending.)"
+	}
+	if body == "" {
+		body = "(Original message body unavailable.)"
+	}
+	body = strings.Join(strings.Fields(body), " ")
+
+	sender := ""
+	subject := ""
+	date := ""
+	if ctx.email != nil {
+		sender = ctx.email.Sender
+		subject = ctx.email.Subject
+		if !ctx.email.Date.IsZero() {
+			date = ctx.email.Date.Format("Mon, 02 Jan 2006 15:04")
+		}
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
+	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
+	if maxRows == 1 {
+		parts := []string{"Original message"}
+		for _, part := range []string{sender, subject, body} {
+			if strings.TrimSpace(part) != "" {
+				parts = append(parts, strings.TrimSpace(part))
+			}
+		}
+		return labelStyle.Render(truncateVisual(strings.Join(parts, "  |  "), width))
+	}
+
+	rows := []string{labelStyle.Render("Original message")}
+	if sender != "" {
+		rows = append(rows, dimStyle.Render(truncateVisual("From: "+sender, width)))
+	}
+	if subject != "" && len(rows) < maxRows {
+		rows = append(rows, dimStyle.Render(truncateVisual("Subject: "+subject, width)))
+	}
+	if date != "" && len(rows) < maxRows {
+		rows = append(rows, dimStyle.Render(truncateVisual("Date: "+date, width)))
+	}
+	if len(rows) < maxRows {
+		remaining := maxRows - len(rows)
+		bodyLines := wrapLines(body, width)
+		for i := 0; i < remaining && i < len(bodyLines); i++ {
+			rows = append(rows, dimStyle.Render(truncateVisual(bodyLines[i], width)))
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+func (m *Model) composeContentHeight() int {
+	extraChromeRows := 0
+	if m.hasTopSyncStrip() {
+		extraChromeRows = 1
+	}
+	tableHeight := m.windowHeight - 7 - extraChromeRows
+	if tableHeight < 5 {
+		tableHeight = 5
+	}
+	return tableHeight
+}
+
 func (m *Model) renderComposePreservedSummary(width int) string {
 	ctx := m.composePreserved
 	if ctx == nil {
@@ -990,14 +1138,22 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 	)
 	rows := []string{truncateVisual(summary, width)}
 	if len(ctx.forwardedAttachments) > 0 {
-		selectedStyle := lipgloss.NewStyle().Foreground(defaultTheme.ConfirmFg)
+		selectedStyle := lipgloss.NewStyle().
+			Foreground(defaultTheme.TabActiveFg).
+			Background(defaultTheme.TabActiveBg)
 		normalStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
 		removedStyle := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
 		for i, item := range ctx.forwardedAttachments {
 			status := "include"
+			action := "x remove"
 			style := normalStyle
-			if !item.Include || len(item.Attachment.Data) == 0 {
+			if len(item.Attachment.Data) == 0 {
+				status = "unavailable"
+				action = "not loaded"
+				style = removedStyle
+			} else if !item.Include {
 				status = "removed"
+				action = "x include"
 				style = removedStyle
 			}
 			prefix := "  "
@@ -1005,7 +1161,7 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 				prefix = "> "
 				style = selectedStyle
 			}
-			label := fmt.Sprintf("%s[%s] %s  (x remove)", prefix, status, item.Attachment.Filename)
+			label := fmt.Sprintf("%s[%s] %s  (%s)", prefix, status, item.Attachment.Filename, action)
 			rows = append(rows, style.Render(truncateVisual(label, width)))
 		}
 	}

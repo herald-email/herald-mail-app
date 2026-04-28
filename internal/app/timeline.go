@@ -740,6 +740,9 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.composeTo.Focus()
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
 }
 
 func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
@@ -756,6 +759,9 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeTo.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
 }
 
 func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {

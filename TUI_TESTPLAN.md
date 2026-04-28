@@ -489,15 +489,18 @@ Check these states during every applicable lane:
 1. Open a Timeline message that has an HTML body, inline image, and attachment.
 2. Press `R` and confirm Compose opens as a top-note editor rather than pasting the original body into the textarea.
 3. Press `Ctrl+O` repeatedly and confirm the preservation mode cycles through Safe, Fidelity, and Privacy.
-4. Return to Timeline, press `F`, and confirm forwarded attachments appear below Compose as included original attachments.
-5. Focus the forwarded attachment list, move with `j`/`k`, remove one attachment with `x`, and send or preview the draft summary.
-6. Repeat at `80x24` and confirm the summary remains readable without overflow.
+4. Return to Timeline, press `F`, and confirm Compose shows separate `Response` and `Original message` regions.
+5. Confirm forwarded attachments appear below Compose as included original attachments.
+6. Focus the forwarded attachment list, move with `j`/`k`, press `x` to mark one attachment removed, then press `x` again to include it.
+7. Repeat at `80x24` and confirm the response/original split and summary remain readable without overflow.
 
 **Expect:**
 - Replies and forwards show a concise preserved-content summary with mode, original HTML status, inline image count, and forwarded attachment count.
 - The body textarea contains only the user's new note, not the converted original message.
+- Forward Compose labels the editable top note as `Response` and shows a read-only `Original message` preview rendered from preserved original content.
+- The forwarded attachment focused row uses the same active focus color language as other navigable lists.
 - Reply sends preserve the original HTML quote and threading headers.
-- Forward sends preserve original HTML, preserve referenced inline images, include original attachments by default, and omit attachments removed with `x`.
+- Forward sends preserve original HTML, preserve referenced inline images, include original attachments by default, and omit attachments toggled off with `x`.
 - Missing HTML falls back to escaped plain-text quote without blocking send.
 
 ### TC-14D — Compose attachment path autocomplete
