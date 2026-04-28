@@ -6,6 +6,20 @@
 
 ---
 
+## Try The Demo First
+
+Curious, but not ready to connect your inbox? Run Herald with a fictional mailbox, seeded contacts, attachments, threads, and deterministic demo AI:
+
+```bash
+herald --demo
+# or, from a source checkout:
+./bin/herald --demo
+```
+
+Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not send anything to Ollama. Your real email is never loaded or shared.
+
+---
+
 ## Features
 
 | Feature | Status |
