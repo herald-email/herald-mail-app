@@ -404,7 +404,8 @@ tmux kill-session -t ssh_test
 5. Tab to focus the preview panel.
 6. Press `s`.
 7. Capture screenshot (save-path prompt).
-8. Press Escape to cancel.
+8. Create a file at the prompted save path, press `Enter`, and capture screenshot.
+9. Press Escape to cancel.
 
 **Expect (step 4):**
 - `[attach] filename  mime/type  X KB` label visible below body
@@ -413,9 +414,15 @@ tmux kill-session -t ssh_test
 
 **Expect (step 7):**
 - Save-path input appears with pre-filled `~/Downloads/<filename>`
+- If that path already exists on the server, the input is pre-filled with the next available filename and a warning is visible
 - No crash or rendering artifacts
 
 **Expect (step 8):**
+- Existing file contents are not overwritten
+- Prompt remains open with a suggested non-conflicting filename
+- Warning text explains that the requested path already exists
+
+**Expect (step 9):**
 - Prompt dismissed; preview returns to normal state
 
 ---

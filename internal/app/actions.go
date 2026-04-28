@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/filesafe"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -32,6 +33,17 @@ func saveAttachmentCmd(b backend.Backend, att *models.Attachment, destPath strin
 		}
 		return AttachmentSavedMsg{Filename: att.Filename, Path: destPath}
 	}
+}
+
+func attachmentSaveCollision(path string) (suggested string, warning string, blocked bool) {
+	suggested, exists, err := filesafe.SuggestIfExists(path)
+	if err != nil {
+		return path, fmt.Sprintf("Cannot check destination: %v", err), true
+	}
+	if !exists {
+		return path, "", false
+	}
+	return suggested, fmt.Sprintf("%s already exists. Suggested: %s", path, suggested), true
 }
 
 // addAttachmentCmd reads a file from path and returns an AttachmentAddedMsg.

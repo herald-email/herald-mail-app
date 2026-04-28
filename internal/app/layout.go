@@ -65,9 +65,10 @@ type TimelineState struct {
 	bodyWrappedWidth int
 	bodyScrollOffset int
 
-	selectedAttachment   int
-	attachmentSavePrompt bool
-	attachmentSaveInput  textinput.Model
+	selectedAttachment    int
+	attachmentSavePrompt  bool
+	attachmentSaveInput   textinput.Model
+	attachmentSaveWarning string
 
 	quickReplies          []string
 	quickRepliesReady     bool

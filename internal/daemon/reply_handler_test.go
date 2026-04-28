@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"mail-processor/internal/backend"
@@ -313,14 +314,9 @@ func TestHandleGetAttachment_SaveToPath(t *testing.T) {
 	b := newAttachmentBackend(rawData, "doc.txt", "text/plain")
 	s := &Server{backend: b}
 
-	tmpFile, err := os.CreateTemp("", "attachment-test-*.txt")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
+	tmpFile := filepath.Join(t.TempDir(), "doc.txt")
 
-	url := fmt.Sprintf("/v1/emails/msg123/attachments/doc.txt?dest_path=%s", tmpFile.Name())
+	url := fmt.Sprintf("/v1/emails/msg123/attachments/doc.txt?dest_path=%s", tmpFile)
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	req.SetPathValue("id", "msg123")
 	req.SetPathValue("filename", "doc.txt")
@@ -336,16 +332,58 @@ func TestHandleGetAttachment_SaveToPath(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result["path"] != tmpFile.Name() {
-		t.Errorf("expected path %q, got %q", tmpFile.Name(), result["path"])
+	if result["path"] != tmpFile {
+		t.Errorf("expected path %q, got %q", tmpFile, result["path"])
 	}
 
 	// Verify file was written
-	written, err := os.ReadFile(tmpFile.Name())
+	written, err := os.ReadFile(tmpFile)
 	if err != nil {
 		t.Fatalf("read written file: %v", err)
 	}
 	if string(written) != string(rawData) {
 		t.Errorf("file content mismatch: expected %q, got %q", string(rawData), string(written))
+	}
+}
+
+func TestHandleGetAttachment_SaveToPathRefusesExistingFile(t *testing.T) {
+	rawData := []byte("file content")
+	b := newAttachmentBackend(rawData, "doc.txt", "text/plain")
+	s := &Server{backend: b}
+
+	tmpFile := filepath.Join(t.TempDir(), "doc.txt")
+	if err := os.WriteFile(tmpFile, []byte("original"), 0o644); err != nil {
+		t.Fatalf("write existing destination: %v", err)
+	}
+
+	url := fmt.Sprintf("/v1/emails/msg123/attachments/doc.txt?dest_path=%s", tmpFile)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.SetPathValue("id", "msg123")
+	req.SetPathValue("filename", "doc.txt")
+	rr := httptest.NewRecorder()
+
+	s.handleGetAttachment(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d — body: %s", rr.Code, rr.Body.String())
+	}
+
+	var result map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result["path"] != tmpFile {
+		t.Fatalf("path got %q, want %q", result["path"], tmpFile)
+	}
+	if result["suggested_path"] != filepath.Join(filepath.Dir(tmpFile), "doc (1).txt") {
+		t.Fatalf("suggested path got %q", result["suggested_path"])
+	}
+
+	written, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read existing file: %v", err)
+	}
+	if string(written) != "original" {
+		t.Fatalf("existing file was overwritten: %q", written)
 	}
 }

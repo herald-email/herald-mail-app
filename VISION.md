@@ -655,6 +655,7 @@ Attachments appear in previews and compose flows, so this section tracks both ra
 - [x] Attach files when composing (`Ctrl+A`, tab-completion)
 - [x] Multiple attachments; each listed below the body
 - [x] Sent as `multipart/mixed`
+- [x] Attachment downloads never silently overwrite existing local files; interactive saves suggest the next available filename
 - [ ] Preview supports navigating between multiple attachments and saving the currently selected one
 - [ ] Attachment selection uses the same focus/highlight language as other navigable lists
 - [ ] File size warning for attachments over 10 MB

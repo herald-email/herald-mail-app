@@ -146,6 +146,34 @@ func daemonGet(path string) ([]byte, int, error) {
 	return respBody, resp.StatusCode, nil
 }
 
+func attachmentDownloadDaemonPath(messageID, filename, destPath string) string {
+	urlPath := "/v1/emails/" + url.PathEscape(messageID) + "/attachments/" + url.PathEscape(filename)
+	if destPath == "" {
+		return urlPath
+	}
+	values := url.Values{}
+	values.Set("dest_path", destPath)
+	return urlPath + "?" + values.Encode()
+}
+
+func formatAttachmentDownloadError(status int, respBody []byte) string {
+	if status == http.StatusConflict {
+		var conflict struct {
+			Error         string `json:"error"`
+			Path          string `json:"path"`
+			SuggestedPath string `json:"suggested_path"`
+		}
+		if err := json.Unmarshal(respBody, &conflict); err == nil && conflict.SuggestedPath != "" {
+			msg := conflict.Error
+			if msg == "" {
+				msg = "file already exists"
+			}
+			return fmt.Sprintf("%s: %s (suggested: %s)", msg, conflict.Path, conflict.SuggestedPath)
+		}
+	}
+	return fmt.Sprintf("daemon returned %d: %s", status, string(respBody))
+}
+
 // daemonDelete makes a DELETE to the daemon.
 func daemonDelete(path string) (int, error) {
 	baseURL, err := ensureDaemonAvailable()
@@ -1856,16 +1884,13 @@ func main() {
 			}
 			destPath := req.GetString("dest_path", "")
 
-			urlPath := "/v1/emails/" + messageID + "/attachments/" + filename
-			if destPath != "" {
-				urlPath += "?dest_path=" + destPath
-			}
+			urlPath := attachmentDownloadDaemonPath(messageID, filename, destPath)
 			respBody, status, err := daemonGet(urlPath)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if status != http.StatusOK {
-				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+				return mcp.NewToolResultError(formatAttachmentDownloadError(status, respBody)), nil
 			}
 			var result map[string]any
 			if err := json.Unmarshal(respBody, &result); err != nil {

@@ -198,6 +198,8 @@ A `RemoteBackend` struct implements the same `Backend` interface as `LocalBacken
 | Read | Timeline | `GET  /v1/emails?folder=&limit=&offset=` |
 | Read | By sender | `GET  /v1/emails/by-sender?folder=` |
 | Read | Email body | `GET  /v1/emails/{id}/body` |
+| Read | Attachment list | `GET  /v1/emails/{id}/attachments` |
+| Read | Attachment download | `GET  /v1/emails/{id}/attachments/{filename}?dest_path=` |
 | Read | Sender stats | `GET  /v1/stats?folder=` |
 | Read | Folders | `GET  /v1/folders` |
 | Read | Folder status | `GET  /v1/folders/status` |
@@ -213,6 +215,8 @@ A `RemoteBackend` struct implements the same `Backend` interface as `LocalBacken
 | Push | WebSocket | `GET  /v1/ws` — streams `ProgressEvent`, `NewEmailsEvent`, `ValidIDsEvent` |
 
 Authentication: bearer token in config (`daemon.token`), checked on every request. Localhost-only by default; opt-in to bind on a LAN address.
+
+Attachment downloads that include `dest_path` use create-exclusive local writes. If the requested file already exists, the daemon returns `409 Conflict` with `error`, `path`, and `suggested_path` fields so TUI, MCP, and native clients can avoid silent overwrites.
 
 ### CLI control
 

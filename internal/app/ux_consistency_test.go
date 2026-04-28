@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -150,6 +152,96 @@ func TestHandleOverlayKey_AttachmentSaveUsesCurrentSelection(t *testing.T) {
 	}
 	if backend.savedPath != "/tmp/second.pdf" {
 		t.Fatalf("expected save path /tmp/second.pdf, got %q", backend.savedPath)
+	}
+}
+
+func TestHandleTimelineKey_AttachmentSavePromptSuggestsAvailableDefaultPath(t *testing.T) {
+	home := t.TempDir()
+	downloads := filepath.Join(home, "Downloads")
+	if err := os.MkdirAll(downloads, 0o755); err != nil {
+		t.Fatalf("create downloads dir: %v", err)
+	}
+	existing := filepath.Join(downloads, "report.pdf")
+	if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
+		t.Fatalf("write existing attachment path: %v", err)
+	}
+	t.Setenv("HOME", home)
+
+	m := New(&attachmentBackend{}, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.focusedPanel = panelPreview
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1"}
+	m.timeline.body = &models.EmailBody{
+		Attachments: []models.Attachment{{Filename: "report.pdf"}},
+	}
+
+	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if !handled {
+		t.Fatal("expected s to be handled in preview with attachments")
+	}
+	updated := model.(*Model)
+	if !updated.timeline.attachmentSavePrompt {
+		t.Fatal("expected attachment save prompt to open")
+	}
+
+	want := filepath.Join(downloads, "report (1).pdf")
+	if got := updated.timeline.attachmentSaveInput.Value(); got != want {
+		t.Fatalf("save input got %q, want %q", got, want)
+	}
+	if !strings.Contains(updated.timeline.attachmentSaveWarning, "already exists") {
+		t.Fatalf("expected collision warning, got %q", updated.timeline.attachmentSaveWarning)
+	}
+}
+
+func TestHandleOverlayKey_AttachmentSaveRefusesExistingCustomPath(t *testing.T) {
+	backend := &attachmentBackend{}
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "second.pdf")
+	if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
+		t.Fatalf("write existing attachment path: %v", err)
+	}
+
+	m := New(backend, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.focusedPanel = panelPreview
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1"}
+	m.timeline.body = &models.EmailBody{
+		Attachments: []models.Attachment{{Filename: "first.pdf"}, {Filename: "second.pdf"}},
+	}
+	m.timeline.selectedAttachment = 1
+	m.timeline.attachmentSavePrompt = true
+	m.timeline.attachmentSaveInput.SetValue(existing)
+
+	model, cmd, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("expected attachment save overlay to handle Enter")
+	}
+	if cmd != nil {
+		t.Fatal("expected no save command for an existing destination")
+	}
+	updated := model.(*Model)
+	if !updated.timeline.attachmentSavePrompt {
+		t.Fatal("expected attachment save prompt to remain open")
+	}
+	if backend.savedAttachment != nil {
+		t.Fatalf("expected backend save to be skipped, got %+v", backend.savedAttachment)
+	}
+	want := filepath.Join(dir, "second (1).pdf")
+	if got := updated.timeline.attachmentSaveInput.Value(); got != want {
+		t.Fatalf("save input got %q, want %q", got, want)
+	}
+	if !strings.Contains(updated.timeline.attachmentSaveWarning, "already exists") {
+		t.Fatalf("expected collision warning, got %q", updated.timeline.attachmentSaveWarning)
+	}
+
+	contents, err := os.ReadFile(existing)
+	if err != nil {
+		t.Fatalf("read existing path: %v", err)
+	}
+	if string(contents) != "original" {
+		t.Fatalf("existing file was overwritten: %q", contents)
 	}
 }
 

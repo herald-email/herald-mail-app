@@ -16,6 +16,7 @@ import (
 	"mail-processor/internal/cache"
 	"mail-processor/internal/cleanup"
 	"mail-processor/internal/config"
+	"mail-processor/internal/filesafe"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -901,7 +902,15 @@ func (s *Server) handleGetAttachment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if destPath != "" {
-		if err := os.WriteFile(destPath, attachment.Data, 0644); err != nil {
+		if err := filesafe.WriteFileExclusive(destPath, attachment.Data, 0644); err != nil {
+			if existingErr, ok := filesafe.AsExistingFileError(err); ok {
+				writeJSON(w, http.StatusConflict, map[string]string{
+					"error":          "file already exists",
+					"path":           existingErr.Path,
+					"suggested_path": existingErr.SuggestedPath,
+				})
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

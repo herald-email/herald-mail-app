@@ -50,14 +50,23 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			if m.timeline.body != nil && m.timeline.selectedAttachment < len(m.timeline.body.Attachments) {
 				att := &m.timeline.body.Attachments[m.timeline.selectedAttachment]
 				path := expandTilde(m.timeline.attachmentSaveInput.Value())
+				if suggested, warning, blocked := attachmentSaveCollision(path); blocked {
+					m.timeline.attachmentSaveInput.SetValue(suggested)
+					m.timeline.attachmentSaveWarning = warning
+					m.timeline.attachmentSaveInput.Focus()
+					return m, nil, true
+				}
 				m.timeline.attachmentSavePrompt = false
+				m.timeline.attachmentSaveWarning = ""
 				m.timeline.attachmentSaveInput.Blur()
 				return m, saveAttachmentCmd(m.backend, att, path), true
 			}
 			m.timeline.attachmentSavePrompt = false
+			m.timeline.attachmentSaveWarning = ""
 			m.timeline.attachmentSaveInput.Blur()
 		case "esc":
 			m.timeline.attachmentSavePrompt = false
+			m.timeline.attachmentSaveWarning = ""
 			m.timeline.attachmentSaveInput.Blur()
 		default:
 			var cmd tea.Cmd

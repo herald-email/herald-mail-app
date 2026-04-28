@@ -474,6 +474,25 @@ echo '{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"draft_rep
 
 ---
 
+### TC-MCP-24 — get_attachment refuses existing dest_path
+
+**Prerequisites:** Herald daemon running; a known `message_id` with an attachment filename from `list_attachments`; a local file already exists at `/tmp/herald-existing-attachment.txt`.
+
+**Steps:**
+```bash
+printf 'do not replace me' > /tmp/herald-existing-attachment.txt
+echo '{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"get_attachment","arguments":{"message_id":"<some-id>","filename":"<attachment-name>","dest_path":"/tmp/herald-existing-attachment.txt"}}}' \
+  | /tmp/herald-mcp-server-test -config proton.yaml
+cat /tmp/herald-existing-attachment.txt
+```
+
+**Expect:**
+- Tool response reports that `/tmp/herald-existing-attachment.txt` already exists.
+- Tool response includes a suggested non-conflicting path such as `/tmp/herald-existing-attachment (1).txt`.
+- The file still contains `do not replace me`.
+
+---
+
 ## Result Format
 
 After completing all test cases, write up findings using this structure:

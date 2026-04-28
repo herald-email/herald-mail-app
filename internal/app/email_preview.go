@@ -237,6 +237,10 @@ func (m *Model) renderEmailPreview() string {
 		// Save-path prompt
 		if m.timeline.attachmentSavePrompt {
 			promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+			if m.timeline.attachmentSaveWarning != "" {
+				sb.WriteString(promptStyle.Render(truncate(m.timeline.attachmentSaveWarning, innerW)) + "\n")
+				imageLines++
+			}
 			sb.WriteString(promptStyle.Render("Save to: ") + m.timeline.attachmentSaveInput.View() + "\n")
 			imageLines++
 		}

@@ -606,12 +606,15 @@ Check these states during every applicable lane:
 2. Move between attachments with `[` and `]`.
 3. Press `s` to save.
 4. Cancel once with `Esc`, then save again.
+5. Create a file at the prompted save path, press `s` again, and press `Enter` without editing the colliding path.
 
 **Expect:**
 - Selected attachment visibly changes.
 - Save targets the currently selected attachment.
 - Save prompt belongs to preview-local state and unwinds with `Esc`.
 - Attachment hints appear only when attachments are present.
+- If the default save path already exists, the prompt is pre-filled with the next available filename such as `report (1).pdf` and shows a warning.
+- Pressing `Enter` on any existing save path keeps the prompt open, changes the input to a non-conflicting suggestion, warns about the existing file, and does not overwrite file contents.
 
 ### TC-20 — Quick replies success and degrade
 

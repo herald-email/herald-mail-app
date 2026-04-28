@@ -501,6 +501,7 @@ func (m *Model) clearTimelineSearch() {
 		m.timeline.quickReplyPending = false
 		m.timeline.quickReplyIdx = 0
 		m.timeline.attachmentSavePrompt = false
+		m.timeline.attachmentSaveWarning = ""
 		m.timeline.attachmentSaveInput.Blur()
 		m.updateTimelineTable()
 		maxCursor := len(m.timeline.threadRowMap) - 1
@@ -591,6 +592,7 @@ func (m *Model) openTimelineSearch() {
 	m.timeline.quickReplyPending = false
 	m.timeline.quickReplyIdx = 0
 	m.timeline.attachmentSavePrompt = false
+	m.timeline.attachmentSaveWarning = ""
 	m.timeline.attachmentSaveInput.Blur()
 	m.timeline.searchInput.SetValue("")
 	m.timeline.searchResults = nil
@@ -1409,7 +1411,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			len(m.timeline.body.Attachments) > 0 && !m.timeline.attachmentSavePrompt {
 			att := m.timeline.body.Attachments[m.timeline.selectedAttachment]
 			defaultPath := expandTilde("~/Downloads/" + att.Filename)
-			m.timeline.attachmentSaveInput.SetValue(defaultPath)
+			savePath, warning, _ := attachmentSaveCollision(defaultPath)
+			m.timeline.attachmentSaveInput.SetValue(savePath)
+			m.timeline.attachmentSaveWarning = warning
 			m.timeline.attachmentSaveInput.Focus()
 			m.timeline.attachmentSavePrompt = true
 		}

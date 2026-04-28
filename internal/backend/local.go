@@ -3,7 +3,6 @@ package backend
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"mail-processor/internal/ai"
 	"mail-processor/internal/cache"
 	"mail-processor/internal/config"
+	"mail-processor/internal/filesafe"
 	"mail-processor/internal/imap"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
@@ -589,7 +589,7 @@ func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) e
 	if att.Data == nil {
 		return fmt.Errorf("attachment data not loaded")
 	}
-	return os.WriteFile(destPath, att.Data, 0644)
+	return filesafe.WriteFileExclusive(destPath, att.Data, 0644)
 }
 
 func (b *LocalBackend) SetGroupByDomain(v bool) {
