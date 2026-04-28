@@ -35,8 +35,17 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 		port = 1025 // ProtonMail Bridge default SMTP port
 	}
 
+	fromHeader, fromEnvelope, err := normalizeMailbox("From", from)
+	if err != nil {
+		return err
+	}
+	rcpts, err := normalizeRecipientFields(to, "", "")
+	if err != nil {
+		return err
+	}
+
 	addr := fmt.Sprintf("%s:%d", host, port)
-	rawMsg := buildMIMEMessage(from, to, subject, plainText, htmlBody, "")
+	rawMsg := buildMIMEMessage(fromHeader, rcpts.ToHeader, subject, plainText, htmlBody, "")
 
 	// Connect with TLS (required for ProtonMail Bridge)
 	tlsCfg := &tls.Config{
@@ -47,7 +56,7 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
 		// Fall back to plain SMTP with STARTTLS
-		return c.sendPlain(addr, from, []string{to}, rawMsg)
+		return c.sendPlain(addr, fromEnvelope, rcpts.AllEnvelope, rawMsg)
 	}
 	defer conn.Close()
 
@@ -62,11 +71,13 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
 
-	if err := client.Mail(from); err != nil {
+	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp RCPT TO: %w", err)
+	for _, rcpt := range rcpts.AllEnvelope {
+		if err := client.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp RCPT TO %s: %w", rcpt, err)
+		}
 	}
 
 	w, err := client.Data()
@@ -128,10 +139,18 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 
 	outerBoundary := fmt.Sprintf("outer_%d", time.Now().UnixNano())
 	innerBoundary := fmt.Sprintf("inner_%d", time.Now().UnixNano()+1)
+	fromHeader, fromEnvelope, err := normalizeMailbox("From", from)
+	if err != nil {
+		return err
+	}
+	rcpts, err := normalizeRecipientFields(to, "", "")
+	if err != nil {
+		return err
+	}
 
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", rcpts.ToHeader))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n", outerBoundary))
@@ -192,7 +211,7 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return c.sendPlain(addr, from, []string{to}, rawMsg)
+		return c.sendPlain(addr, fromEnvelope, rcpts.AllEnvelope, rawMsg)
 	}
 	defer conn.Close()
 
@@ -206,11 +225,13 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
-	if err := client.Mail(from); err != nil {
+	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp RCPT TO: %w", err)
+	for _, rcpt := range rcpts.AllEnvelope {
+		if err := client.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp RCPT TO %s: %w", rcpt, err)
+		}
 	}
 	w, err := client.Data()
 	if err != nil {
@@ -242,12 +263,20 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	outerBoundary := fmt.Sprintf("outer_%d", time.Now().UnixNano())
 	relatedBoundary := fmt.Sprintf("related_%d", time.Now().UnixNano()+1)
 	innerBoundary := fmt.Sprintf("inner_%d", time.Now().UnixNano()+2)
+	fromHeader, fromEnvelope, err := normalizeMailbox("From", from)
+	if err != nil {
+		return err
+	}
+	rcpts, err := normalizeRecipientFields(to, cc, bcc)
+	if err != nil {
+		return err
+	}
 
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	if cc != "" {
-		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", rcpts.ToHeader))
+	if rcpts.CCHeader != "" {
+		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", rcpts.CCHeader))
 	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
@@ -331,9 +360,7 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		allRcpts := append([]string{to}, parseAddrs(cc)...)
-		allRcpts = append(allRcpts, parseAddrs(bcc)...)
-		return c.sendPlain(addr, from, allRcpts, rawMsg)
+		return c.sendPlain(addr, fromEnvelope, rcpts.AllEnvelope, rawMsg)
 	}
 	defer conn.Close()
 
@@ -347,20 +374,12 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
-	if err := client.Mail(from); err != nil {
+	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp RCPT TO: %w", err)
-	}
-	for _, addr := range parseAddrs(cc) {
-		if err := client.Rcpt(addr); err != nil {
-			return fmt.Errorf("smtp RCPT CC %s: %w", addr, err)
-		}
-	}
-	for _, addr := range parseAddrs(bcc) {
-		if err := client.Rcpt(addr); err != nil {
-			return fmt.Errorf("smtp RCPT BCC %s: %w", addr, err)
+	for _, rcpt := range rcpts.AllEnvelope {
+		if err := client.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp RCPT TO %s: %w", rcpt, err)
 		}
 	}
 	w, err := client.Data()
@@ -429,7 +448,15 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
-	rawMsg := buildReplyMIMEMessage(from, to, subject, plainText, htmlBody, inReplyTo, references)
+	fromHeader, fromEnvelope, err := normalizeMailbox("From", from)
+	if err != nil {
+		return err
+	}
+	rcpts, err := normalizeRecipientFields(to, "", "")
+	if err != nil {
+		return err
+	}
+	rawMsg := buildReplyMIMEMessage(fromHeader, rcpts.ToHeader, subject, plainText, htmlBody, inReplyTo, references)
 
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: true,
@@ -438,7 +465,7 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return c.sendPlain(addr, from, []string{to}, rawMsg)
+		return c.sendPlain(addr, fromEnvelope, rcpts.AllEnvelope, rawMsg)
 	}
 	defer conn.Close()
 
@@ -452,11 +479,13 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
-	if err := client.Mail(from); err != nil {
+	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp RCPT TO: %w", err)
+	for _, rcpt := range rcpts.AllEnvelope {
+		if err := client.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp RCPT TO %s: %w", rcpt, err)
+		}
 	}
 	w, err := client.Data()
 	if err != nil {
@@ -489,18 +518,13 @@ func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) err
 	return smtp.SendMail(addr, auth, from, rcpts, []byte(rawMsg))
 }
 
-// parseAddrs splits a comma-separated address string into a slice of trimmed
-// non-empty addresses.
+// parseAddrs returns bare envelope addresses from a comma-separated header
+// address list. It is kept for older tests and helpers; send paths use
+// normalizeRecipientFields directly so validation errors can be surfaced.
 func parseAddrs(s string) []string {
-	if s == "" {
+	_, envelope, err := normalizeAddressList("recipient", s, false)
+	if err != nil {
 		return nil
 	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if t := strings.TrimSpace(p); t != "" {
-			out = append(out, t)
-		}
-	}
-	return out
+	return envelope
 }
