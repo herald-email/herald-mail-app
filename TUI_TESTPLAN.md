@@ -462,6 +462,22 @@ Check these states during every applicable lane:
 - `Alt+R` refreshes from Compose without typing into the draft.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
 
+### TC-14B — Demo Compose send is offline
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start `/tmp/herald --demo` with no SMTP credentials configured.
+2. Open Compose, fill To, Subject, and Body.
+3. Press `Ctrl+S` and capture the resulting status line.
+4. Repeat at `80x24`.
+
+**Expect:**
+- Demo mode shows `Message sent!` after `Ctrl+S`.
+- Demo mode does not show `Send failed` or require `smtp.host`.
+- The success status remains visible and readable at `80x24`.
+
 ### TC-15 — Narrow screen behavior
 
 **Lane:** A, B

@@ -390,6 +390,8 @@ func (m *Model) cycleComposeField() {
 // embedded as multipart/related parts with cid: references.
 func (m *Model) sendCompose() tea.Cmd {
 	mailer := m.mailer // snapshot before goroutine to avoid data races
+	backend := m.backend
+	demoMode := m.demoMode
 	from := m.fromAddress
 	to := m.composeTo.Value()
 	cc := m.composeCC.Value()
@@ -398,14 +400,22 @@ func (m *Model) sendCompose() tea.Cmd {
 	markdownBody := m.composeBody.Value()
 	attachments := m.composeAttachments // snapshot; cleared on success in Update()
 	return func() tea.Msg {
-		if mailer == nil {
-			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
-		}
 		if to == "" {
 			return ComposeStatusMsg{Message: "Error: To field is empty"}
 		}
 		if subject == "" {
 			return ComposeStatusMsg{Message: "Error: Subject is empty"}
+		}
+		if demoMode {
+			if backend != nil {
+				if err := backend.SendEmail(to, subject, markdownBody, from); err != nil {
+					return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
+				}
+			}
+			return ComposeStatusMsg{Message: "Message sent!"}
+		}
+		if mailer == nil {
+			return ComposeStatusMsg{Message: "Error: SMTP not configured", Err: fmt.Errorf("smtp not configured")}
 		}
 		htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(markdownBody)
 		if inlineErr != nil {
