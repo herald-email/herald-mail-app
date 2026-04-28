@@ -57,6 +57,11 @@ func normalizeSnapshotForCompare(b []byte) []byte {
 	s = stripANSI(s)
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	s = strings.Join(lines, "\n")
 	if idx := strings.LastIndex(s, " Herald"); idx >= 0 {
 		s = s[idx:]
 	}

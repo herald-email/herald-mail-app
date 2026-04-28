@@ -821,8 +821,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.summaryTable.SetHeight(tableHeight - 1)
 	m.detailsTable.SetHeight(tableHeight - 1)
 
-	const timelineFixedCols = 30
-	const timelineNumCols = 6
+	const timelineFixedCols = 31
+	const timelineNumCols = 7
 
 	const timelineTableFixedOverhead = timelineFixedCols + timelineNumCols*2 + 2
 	const minPreviewWidth = 25
@@ -841,8 +841,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	tAttW := 3
 	tSizeW := 7
 	tDateW := 16
-	tFixed := timelineFixedCols    // 30 = Date(16) + Size(7) + Att(3) + Tag(4)
-	tNCols := timelineNumCols      // 6
+	tFixed := timelineFixedCols    // 31 = Select(1) + Date(16) + Size(7) + Att(3) + Tag(4)
+	tNCols := timelineNumCols      // 7
 	const minTimelineVariable = 15 // minimum for usable Sender + Subject
 
 	timelineAvailable := plan.Timeline.TableWidth
@@ -891,6 +891,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.timeline.senderWidth = tSenderWidth
 	m.timeline.subjectWidth = tSubjectWidth
 	m.timelineTable.SetColumns([]table.Column{
+		{Title: "✓", Width: 1},
 		{Title: "Sender", Width: tSenderWidth},
 		{Title: "Subject", Width: tSubjectWidth},
 		{Title: "Date", Width: tDateW},

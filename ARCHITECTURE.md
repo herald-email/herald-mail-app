@@ -84,6 +84,8 @@ Some investigative views should not pretend to be real IMAP mailboxes. The first
 **Stable selection identity**
 Cleanup summary selection is treated as logical sender/domain identity, not row position. Checkmarks, selection counts, bulk actions, and resize/re-sort behavior must all derive from the same stable key set so refreshes and resizes cannot desynchronize what the user sees from what the app thinks is selected.
 
+Timeline bulk selection follows the same identity rule at message granularity. The UI stores selected Timeline message IDs separately from Cleanup selections, renders the checkmark column from those IDs, expands collapsed thread-row selections to every represented message, and prunes the set when the active Timeline working set changes or a bulk action completes.
+
 **Deletion worker**
 `DeletionRequest` values are sent to a buffered channel. A single `deletionWorker` goroutine processes them serially (IMAP copy-to-Trash → mark Deleted → expunge → remove from cache). Results flow back via `deletionResultCh`. The UI updates immediately on result without waiting for a full reload.
 

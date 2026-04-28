@@ -44,10 +44,11 @@ type timelineSearchOrigin struct {
 }
 
 type TimelineState struct {
-	emails        []*models.EmailData
-	senderWidth   int
-	subjectWidth  int
-	virtualNotice string
+	emails             []*models.EmailData
+	senderWidth        int
+	subjectWidth       int
+	virtualNotice      string
+	selectedMessageIDs map[string]bool
 
 	threadGroups    []threadGroup
 	threadRowMap    []timelineRowRef

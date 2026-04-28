@@ -312,7 +312,7 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected one collapsed thread row, got %d", len(rows))
 	}
-	sender := stripANSI(rows[0][0])
+	sender := stripANSI(rows[0][1])
 	if !strings.Contains(sender, "▸") {
 		t.Fatalf("expected collapsed sender to include disclosure marker, got %q", sender)
 	}
@@ -322,7 +322,7 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 	if !strings.Contains(sender, "Tyitana Horton") {
 		t.Fatalf("expected collapsed participants to include other sender display name, got %q", sender)
 	}
-	if subject := rows[0][1]; !strings.Contains(subject, "[2]") {
+	if subject := rows[0][2]; !strings.Contains(subject, "[2]") {
 		t.Fatalf("expected collapsed thread count prefix, got %q", subject)
 	}
 }
@@ -355,14 +355,14 @@ func TestUpdateTimelineTable_ExpandedThreadReplyRowsShowReplyMarker(t *testing.T
 	if len(rows) != 2 {
 		t.Fatalf("expected expanded thread rows, got %d", len(rows))
 	}
-	replySender := stripANSI(rows[0][0])
+	replySender := stripANSI(rows[0][1])
 	if !strings.Contains(replySender, "▾") {
 		t.Fatalf("expected expanded root row sender to include disclosure marker, got %q", replySender)
 	}
 	if !strings.Contains(replySender, "↩") {
 		t.Fatalf("expected reply row sender to include reply marker, got %q", replySender)
 	}
-	originalSender := stripANSI(rows[1][0])
+	originalSender := stripANSI(rows[1][1])
 	if !strings.Contains(originalSender, "↳") {
 		t.Fatalf("expected non-reply child row to keep nested marker, got %q", originalSender)
 	}
@@ -388,7 +388,7 @@ func TestUpdateTimelineTable_SingleEmailThreadRowsDoNotShowDisclosureMarker(t *t
 	if len(rows) != 1 {
 		t.Fatalf("expected one single-email row, got %d", len(rows))
 	}
-	sender := stripANSI(rows[0][0])
+	sender := stripANSI(rows[0][1])
 	if strings.Contains(sender, "▸") || strings.Contains(sender, "▾") {
 		t.Fatalf("expected single-email row sender not to include thread disclosure marker, got %q", sender)
 	}

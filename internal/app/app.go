@@ -615,6 +615,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	// Timeline table: full-width chronological email list
 	timelineTable := table.New(
 		table.WithColumns([]table.Column{
+			{Title: "✓", Width: 1},
 			{Title: "Sender", Width: 20},
 			{Title: "Subject", Width: 40},
 			{Title: "Date", Width: 16},
@@ -719,6 +720,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		classifications:     make(map[string]string),
 		timeline: TimelineState{
 			expandedThreads:     make(map[string]bool),
+			selectedMessageIDs:  make(map[string]bool),
 			searchInput:         searchInput,
 			attachmentSaveInput: attachmentSaveInput,
 		},
@@ -1531,6 +1533,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsTotal = 0
 			m.connectionLost = false
 			m.resetCleanupSelection()
+			m.clearTimelineSelection()
 
 			// Reload data after all deletions complete to sync with server
 			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
@@ -1944,6 +1947,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.listenForDeletionResults()
 		}
 		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
+			if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 && len(m.selectedTimelineArchiveEmails()) == 0 {
+				m.statusMessage = "Selected drafts cannot be archived"
+				return m, nil
+			}
 			desc := m.buildArchiveDesc()
 			if desc != "" {
 				m.pendingDeleteConfirm = true

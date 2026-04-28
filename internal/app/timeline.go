@@ -237,9 +237,111 @@ func buildThreadGroups(emails []*models.EmailData) []threadGroup {
 	return groups
 }
 
+func (m *Model) ensureTimelineSelection() {
+	if m.timeline.selectedMessageIDs == nil {
+		m.timeline.selectedMessageIDs = make(map[string]bool)
+	}
+}
+
+func (m *Model) pruneTimelineSelection(displayEmails []*models.EmailData) {
+	if len(m.timeline.selectedMessageIDs) == 0 {
+		return
+	}
+	visible := make(map[string]bool, len(displayEmails))
+	for _, email := range displayEmails {
+		if email != nil && email.MessageID != "" {
+			visible[email.MessageID] = true
+		}
+	}
+	for messageID := range m.timeline.selectedMessageIDs {
+		if !visible[messageID] {
+			delete(m.timeline.selectedMessageIDs, messageID)
+		}
+	}
+}
+
+func (m *Model) clearTimelineSelection() {
+	m.timeline.selectedMessageIDs = make(map[string]bool)
+}
+
+func (m *Model) timelineSelectionMark(emails []*models.EmailData) string {
+	if len(emails) == 0 || len(m.timeline.selectedMessageIDs) == 0 {
+		return ""
+	}
+	selectable := 0
+	selected := 0
+	for _, email := range emails {
+		if email == nil || email.MessageID == "" {
+			continue
+		}
+		selectable++
+		if m.timeline.selectedMessageIDs[email.MessageID] {
+			selected++
+		}
+	}
+	if selectable == 0 || selected == 0 {
+		return ""
+	}
+	if selected == selectable {
+		return "✓"
+	}
+	return "•"
+}
+
+func (m *Model) currentTimelineRowEmails() []*models.EmailData {
+	ref, ok := m.currentTimelineRowRef()
+	if !ok || ref.group == nil {
+		return nil
+	}
+	if ref.kind == rowKindThread {
+		return ref.group.emails
+	}
+	if ref.emailIdx < 0 || ref.emailIdx >= len(ref.group.emails) {
+		return nil
+	}
+	return []*models.EmailData{ref.group.emails[ref.emailIdx]}
+}
+
+func (m *Model) currentTimelineFocusedDraftEmail() *models.EmailData {
+	if m.focusedPanel == panelPreview && m.timeline.selectedEmail != nil && m.timeline.selectedEmail.IsDraft {
+		return m.timeline.selectedEmail
+	}
+	emails := m.currentTimelineRowEmails()
+	if len(emails) == 1 && emails[0] != nil && emails[0].IsDraft {
+		return emails[0]
+	}
+	return nil
+}
+
+func (m *Model) selectedTimelineEmails(includeDrafts bool) []*models.EmailData {
+	if len(m.timeline.selectedMessageIDs) == 0 {
+		return nil
+	}
+	var out []*models.EmailData
+	for _, email := range m.timelineDisplayEmails() {
+		if email == nil || email.MessageID == "" || !m.timeline.selectedMessageIDs[email.MessageID] {
+			continue
+		}
+		if !includeDrafts && email.IsDraft {
+			continue
+		}
+		out = append(out, email)
+	}
+	return out
+}
+
+func (m *Model) timelineSelectedCount() int {
+	return len(m.selectedTimelineEmails(true))
+}
+
+func (m *Model) selectedTimelineArchiveEmails() []*models.EmailData {
+	return m.selectedTimelineEmails(false)
+}
+
 // updateTimelineTable rebuilds the timeline table rows from m.timeline.emails,
 // grouping them into collapsed threads where appropriate.
 func (m *Model) updateTimelineTable() {
+	m.ensureTimelineSelection()
 	maxSubj := m.timeline.subjectWidth
 	if maxSubj <= 0 {
 		maxSubj = 40
@@ -305,6 +407,7 @@ func (m *Model) updateTimelineTable() {
 			tag = m.classifications[email.MessageID]
 		}
 		return table.Row{
+			m.timelineSelectionMark([]*models.EmailData{email}),
 			sender,
 			trunc(subject, maxSubj),
 			dateStr,
@@ -314,16 +417,8 @@ func (m *Model) updateTimelineTable() {
 		}
 	}
 
-	// Priority: chat filter > search results > full list
-	var displayEmails []*models.EmailData
-	switch {
-	case m.timeline.chatFilterMode:
-		displayEmails = m.timeline.chatFilteredEmails
-	case m.timeline.searchMode && m.timeline.searchResults != nil:
-		displayEmails = m.timeline.searchResults
-	default:
-		displayEmails = m.timeline.emails
-	}
+	displayEmails := m.timelineDisplayEmails()
+	m.pruneTimelineSelection(displayEmails)
 
 	// Build thread groups from the full email list
 	m.timeline.threadGroups = buildThreadGroups(displayEmails)
@@ -398,6 +493,7 @@ func (m *Model) updateTimelineTable() {
 			}
 			threadSender := unreadDot + starDot + threadCollapsedPrefix + styledThreadParticipants(threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
 			rows = append(rows, table.Row{
+				m.timelineSelectionMark(g.emails),
 				threadSender,
 				trunc(threadSubj, maxSubj),
 				dateStr,
@@ -1080,6 +1176,9 @@ func (m *Model) appendTimelineStatusParts(parts []string) []string {
 		} else if _, ok := m.folderStatus[m.currentFolder]; !ok {
 			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 		}
+		if selected := m.timelineSelectedCount(); selected > 0 {
+			parts = append(parts, fmt.Sprintf("%d messages selected", selected))
+		}
 	}
 	if m.timeline.searchMode {
 		if m.timeline.searchFocus == timelineSearchFocusResults {
@@ -1123,7 +1222,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 						"z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
 				)...), true
 			}
-			return fmt.Sprintf("/ %s  │  %d results  │  ↑/k ↓/j: results  │  enter: open  │  esc: back to search", q, len(m.timeline.threadRowMap)), true
+			return fmt.Sprintf("/ %s  │  %d results  │  ↑/k ↓/j: results  │  space: select  │  enter: open  │  esc: back to search", q, len(m.timeline.threadRowMap)), true
 		}
 		if m.timeline.searchError != "" {
 			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: back", q, m.timeline.searchError), true
@@ -1138,7 +1237,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
 	}
 	if m.timeline.chatFilterMode {
-		return "esc: clear filter  │  " + primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  q: quit", true
+		return "esc: clear filter  │  " + primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  space: select  │  enter: open  │  q: quit", true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
 		return timelineReadOnlyPreviewHintText("tab/shift+tab: panels", "esc: close"), true
@@ -1169,9 +1268,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
+		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
 	}
-	return joinHintSegments(append([]string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+	return joinHintSegments(append([]string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
 }
 
 func joinHintSegments(segments ...string) string {
@@ -1186,14 +1285,21 @@ func joinHintSegments(segments ...string) string {
 
 func (m *Model) timelineMessageActionHintSegments() []string {
 	segments := m.timelinePrimaryMessageActionHintSegments()
-	if m.currentTimelineDraftEmail() != nil {
+	if m.timelineSelectedCount() > 0 || m.currentTimelineFocusedDraftEmail() != nil {
 		return segments
 	}
 	return append(segments, "A: re-classify")
 }
 
 func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
-	if m.currentTimelineDraftEmail() != nil {
+	if m.timelineSelectedCount() > 0 {
+		segments := []string{"D: delete selected"}
+		if len(m.selectedTimelineArchiveEmails()) > 0 {
+			segments = append(segments, "e: archive selected")
+		}
+		return segments
+	}
+	if m.currentTimelineFocusedDraftEmail() != nil {
 		return []string{"E: edit draft", "D: discard draft"}
 	}
 	return []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive"}
@@ -1547,6 +1653,17 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, false
 	}
 	switch msg.String() {
+	case " ", "space":
+		if m.focusedPanel != panelTimeline {
+			return m, nil, false
+		}
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			m.toggleTimelineSelection()
+		}
+		return m, nil, true
 	case "*":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true

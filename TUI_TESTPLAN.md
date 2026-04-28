@@ -289,6 +289,29 @@ Check these states during every applicable lane:
 - Key hints reflect list mode vs preview mode correctly.
 - When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `R: reply`, `F: forward`, `D: delete`, and `e: archive`.
 
+### TC-05A — Timeline bulk selection for delete and archive
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline.
+2. Press `space` on a single-message row.
+3. Move to a collapsed thread row and press `space`.
+4. Press `D`, confirm the prompt copy references selected messages, then cancel with `Esc`.
+5. Press `e`, confirm archive prompt copy references selected non-draft messages, then cancel with `Esc`.
+6. Expand a thread with `Enter`, select one child row with `space`, resize through the required sizes, and capture.
+7. Select a virtual read-only Timeline view such as `All Mail only` and try `space`, `D`, and `e`.
+
+**Expect:**
+- Timeline rows include a leading `✓` selection column.
+- Selected individual rows show `✓`; collapsed thread rows show checked or partial state based on represented messages.
+- Status text shows `N messages selected` only on Timeline and does not leak into Cleanup or Contacts.
+- Hints advertise `space: select`, and selected-state hints advertise `D: delete selected` and `e: archive selected`.
+- `D` and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected.
+- Read-only diagnostic views do not allow selection or destructive actions.
+- At `50x15`, the minimum-size guard appears instead of clipped selection UI.
+
 ### TC-06 — Sidebar focus behavior
 
 **Lane:** A, B
