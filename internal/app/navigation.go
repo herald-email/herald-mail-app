@@ -34,9 +34,33 @@ func (m *Model) clearContactsStatus() {
 	m.contactStatusMessage = ""
 }
 
+func (m *Model) closeCleanupPreviewForTabSwitch() {
+	if !m.cleanupFullScreen && !m.showCleanupPreview {
+		return
+	}
+	m.revokeImagePreviews()
+	m.showCleanupPreview = false
+	m.cleanupPreviewEmail = nil
+	m.cleanupEmailBody = nil
+	m.cleanupBodyLoading = false
+	m.cleanupBodyScrollOffset = 0
+	m.cleanupBodyWrappedLines = nil
+	m.cleanupFullScreen = false
+	m.cleanupPreviewDeleting = false
+	m.cleanupPreviewIsArchive = false
+	m.showSidebar = m.cleanupPreviewHadSidebar
+	m.clearCleanupPreviewDocumentCache()
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+}
+
 func (m *Model) switchToTimeline() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.clearContactsStatus()
+	if m.activeTab == tabCleanup {
+		m.closeCleanupPreviewForTabSwitch()
+	}
 	m.activeTab = tabTimeline
 	m.setFocusedPanel(panelTimeline)
 	cmds = append(cmds, m.loadTimelineEmails())
@@ -45,6 +69,9 @@ func (m *Model) switchToTimeline() tea.Cmd {
 
 func (m *Model) switchToCompose() tea.Cmd {
 	m.clearContactsStatus()
+	if m.activeTab == tabCleanup {
+		m.closeCleanupPreviewForTabSwitch()
+	}
 	m.activeTab = tabCompose
 	m.resetComposeMode()
 	return nil
@@ -60,6 +87,9 @@ func (m *Model) switchToCleanup() tea.Cmd {
 
 func (m *Model) switchToContacts() tea.Cmd {
 	cmds := m.composeExitCmds()
+	if m.activeTab == tabCleanup {
+		m.closeCleanupPreviewForTabSwitch()
+	}
 	m.activeTab = tabContacts
 	m.contactFocusPanel = 0
 	m.contactDetail = nil

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
 
@@ -33,6 +34,22 @@ func clampInt(n, min, max int) int {
 		return max
 	}
 	return n
+}
+
+func (m *Model) clearTimelinePreviewDocumentCache() {
+	m.timeline.previewDocLayout = nil
+	m.timeline.previewDocWidth = 0
+	m.timeline.previewDocRows = 0
+	m.timeline.previewDocMode = ""
+	m.timeline.previewDocMessageID = ""
+}
+
+func (m *Model) clearCleanupPreviewDocumentCache() {
+	m.cleanupPreviewDocLayout = nil
+	m.cleanupPreviewDocWidth = 0
+	m.cleanupPreviewDocRows = 0
+	m.cleanupPreviewDocMode = ""
+	m.cleanupPreviewDocMessageID = ""
 }
 
 func (m *Model) timelinePreviewInnerHeight() int {
@@ -343,10 +360,7 @@ func renderBodyLines(lines []string, start, end int, visualMode bool, visualStar
 }
 
 func (m *Model) renderFullScreenEmail() string {
-	innerW := m.windowWidth - 2
-	if innerW < 10 {
-		innerW = 10
-	}
+	innerW, maxBodyLines := m.timelineFullScreenDocumentBudget()
 
 	var sb strings.Builder
 
@@ -360,80 +374,24 @@ func (m *Model) renderFullScreenEmail() string {
 		sb.WriteString(line + "\n")
 	}
 
-	// Reserve 1 row at the bottom for the scroll indicator.
-	// Also reserve rows for the quick reply picker overlay when open.
-	maxBodyLines := m.windowHeight - len(headerLines) - 1
-	if m.timeline.quickReplyOpen {
-		pickerRows := 2 + len(m.timeline.quickReplies)
-		if len(m.timeline.quickReplies) == 0 {
-			pickerRows = 3
-		}
-		if pickerRows > 12 {
-			pickerRows = 12
-		}
-		maxBodyLines -= pickerRows
-	}
-	if maxBodyLines < 1 {
-		maxBodyLines = 1
-	}
-
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
 	if m.timeline.bodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
-		imageBlock, imageRows := m.renderInlineImagesForPreview("timeline:"+m.timeline.bodyMessageID, m.timeline.body.InlineImages, m.timeline.inlineImageDescs, innerW, maxBodyLines-1)
-		if imageBlock != "" {
-			sb.WriteString(dimStyle.Render(imageBlock) + "\n")
-		}
-		// Reserve rows used by image labels/graphics so body scroll accounting is correct.
-		maxBodyLines -= imageRows
-		if maxBodyLines < 1 {
-			maxBodyLines = 1
-		}
+		layout := m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
+		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, maxBodyLines)
+		viewport := renderPreviewDocumentViewportWithVisual(layout, m.timeline.bodyScrollOffset, maxBodyLines,
+			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
+		sb.WriteString(viewport.Content)
 
-		body := stripInvisibleChars(m.timeline.body.TextPlain)
-		if body == "" {
-			body = "(No plain text — HTML only)"
-		}
-		// Re-wrap if width changed (full-screen uses different innerW than split view)
-		if m.timeline.bodyWrappedLines == nil || m.timeline.bodyWrappedWidth != innerW {
-			m.timeline.bodyWrappedLines = renderEmailBodyLines(body, innerW)
-			for i, line := range m.timeline.bodyWrappedLines {
-				m.timeline.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
-			}
-			m.timeline.bodyWrappedWidth = innerW
-		}
-
-		totalLines := len(m.timeline.bodyWrappedLines)
-		maxOffset := totalLines - maxBodyLines
-		if maxOffset < 0 {
-			maxOffset = 0
-		}
-		if m.timeline.bodyScrollOffset > maxOffset {
-			m.timeline.bodyScrollOffset = maxOffset
-		}
-
-		end := m.timeline.bodyScrollOffset + maxBodyLines
-		if end > totalLines {
-			end = totalLines
-		}
-		sb.WriteString(renderBodyLines(m.timeline.bodyWrappedLines, m.timeline.bodyScrollOffset, end,
-			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd))
-
-		// Pad short content so the indicator always sits at the bottom of the panel.
-		visibleLines := end - m.timeline.bodyScrollOffset
-		for i := visibleLines; i < maxBodyLines; i++ {
-			sb.WriteString("\n")
-		}
-
-		// Scroll indicator (pinned to bottom)
-		if totalLines > maxBodyLines {
+		if layout.TotalRows > maxBodyLines {
+			maxOffset := layout.TotalRows - maxBodyLines
 			pct := 0
 			if maxOffset > 0 {
 				pct = m.timeline.bodyScrollOffset * 100 / maxOffset
 			}
-			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  z/esc: exit full-screen", m.timeline.bodyScrollOffset+1, totalLines, pct)
+			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%  │  z/esc: exit full-screen", m.timeline.bodyScrollOffset+1, layout.TotalRows, pct)
 			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		} else {
 			sb.WriteString("\n" + dimStyle.Render(truncateVisual(" z/esc: exit full-screen", innerW)))
@@ -453,6 +411,179 @@ func (m *Model) renderFullScreenEmail() string {
 		Width(m.windowWidth).
 		Height(m.windowHeight).
 		Render(sb.String())
+}
+
+func (m *Model) currentPreviewImageMode() previewImageMode {
+	return detectPreviewImageMode(previewImageModeAuto, m.localImageLinks, !m.localImageLinks)
+}
+
+func (m *Model) timelineFullScreenDocumentBudget() (int, int) {
+	innerW := m.windowWidth - 2
+	if innerW < 10 {
+		innerW = 10
+	}
+
+	email := m.timeline.selectedEmail
+	category := ""
+	if email != nil {
+		category = m.previewCategory(email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW, true)
+
+	maxBodyLines := m.windowHeight - len(headerLines) - 1
+	if m.timeline.quickReplyOpen {
+		pickerRows := 2 + len(m.timeline.quickReplies)
+		if len(m.timeline.quickReplies) == 0 {
+			pickerRows = 3
+		}
+		if pickerRows > 12 {
+			pickerRows = 12
+		}
+		maxBodyLines -= pickerRows
+	}
+	if maxBodyLines < 1 {
+		maxBodyLines = 1
+	}
+	return innerW, maxBodyLines
+}
+
+func (m *Model) timelineFullScreenDocumentLayout() previewDocumentLayout {
+	innerW, maxBodyLines := m.timelineFullScreenDocumentBudget()
+	return m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
+}
+
+func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) previewDocumentLayout {
+	mode := m.currentPreviewImageMode()
+	messageID := m.timeline.bodyMessageID
+	scopeKey := "timeline:" + messageID
+	if m.timeline.previewDocLayout != nil &&
+		m.timeline.previewDocWidth == innerW &&
+		m.timeline.previewDocRows == availableRows &&
+		m.timeline.previewDocMode == mode &&
+		m.timeline.previewDocMessageID == messageID &&
+		(mode != previewImageModeLinks || m.imagePreviewLinks == nil || m.imagePreviewLinks.CurrentKey() == scopeKey) {
+		return *m.timeline.previewDocLayout
+	}
+
+	doc := buildPreviewDocument(m.timeline.body, m.timeline.inlineImageDescs)
+	var images []models.InlineImage
+	if m.timeline.body != nil {
+		images = m.timeline.body.InlineImages
+	}
+	imageLinks := m.localImageLinkMap(scopeKey, images, mode)
+	layout := layoutPreviewDocument(doc, previewLayoutOptions{
+		InnerWidth:    innerW,
+		AvailableRows: availableRows,
+		ImageMode:     mode,
+		Descriptions:  m.timeline.inlineImageDescs,
+		ImageLinks:    imageLinks,
+	})
+	m.timeline.previewDocLayout = &layout
+	m.timeline.previewDocWidth = innerW
+	m.timeline.previewDocRows = availableRows
+	m.timeline.previewDocMode = mode
+	m.timeline.previewDocMessageID = messageID
+	return layout
+}
+
+func (m *Model) cleanupPreviewDocumentLayout(innerW, availableRows int) previewDocumentLayout {
+	mode := m.currentPreviewImageMode()
+	messageID := ""
+	if m.cleanupPreviewEmail != nil {
+		messageID = m.cleanupPreviewEmail.MessageID
+	}
+	scopeKey := "cleanup"
+	if messageID != "" {
+		scopeKey += ":" + messageID
+	}
+	if m.cleanupPreviewDocLayout != nil &&
+		m.cleanupPreviewDocWidth == innerW &&
+		m.cleanupPreviewDocRows == availableRows &&
+		m.cleanupPreviewDocMode == mode &&
+		m.cleanupPreviewDocMessageID == messageID &&
+		(mode != previewImageModeLinks || m.imagePreviewLinks == nil || m.imagePreviewLinks.CurrentKey() == scopeKey) {
+		return *m.cleanupPreviewDocLayout
+	}
+
+	doc := buildPreviewDocument(m.cleanupEmailBody, nil)
+	var images []models.InlineImage
+	if m.cleanupEmailBody != nil {
+		images = m.cleanupEmailBody.InlineImages
+	}
+	imageLinks := m.localImageLinkMap(scopeKey, images, mode)
+	layout := layoutPreviewDocument(doc, previewLayoutOptions{
+		InnerWidth:    innerW,
+		AvailableRows: availableRows,
+		ImageMode:     mode,
+		ImageLinks:    imageLinks,
+	})
+	m.cleanupPreviewDocLayout = &layout
+	m.cleanupPreviewDocWidth = innerW
+	m.cleanupPreviewDocRows = availableRows
+	m.cleanupPreviewDocMode = mode
+	m.cleanupPreviewDocMessageID = messageID
+	return layout
+}
+
+func (m *Model) timelineFullScreenDocumentPlainRows() []string {
+	layout := m.timelineFullScreenDocumentLayout()
+	rows := make([]string, 0, len(layout.Rows))
+	for _, row := range layout.Rows {
+		rows = append(rows, ansi.Strip(row.Content))
+	}
+	return rows
+}
+
+func (m *Model) timelineFullScreenSelectedPlainText() string {
+	rows := m.timelineFullScreenDocumentPlainRows()
+	if len(rows) == 0 {
+		return ""
+	}
+	start, end := m.timeline.visualStart, m.timeline.visualEnd
+	if start > end {
+		start, end = end, start
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end >= len(rows) {
+		end = len(rows) - 1
+	}
+	if start > end || start >= len(rows) {
+		return ""
+	}
+	return strings.Join(rows[start:end+1], "\n")
+}
+
+func (m *Model) timelineFullScreenCurrentPlainLine() string {
+	rows := m.timelineFullScreenDocumentPlainRows()
+	if m.timeline.bodyScrollOffset < 0 || m.timeline.bodyScrollOffset >= len(rows) {
+		return ""
+	}
+	return rows[m.timeline.bodyScrollOffset]
+}
+
+func (m *Model) timelineFullScreenAllPlainText() string {
+	return strings.Join(m.timelineFullScreenDocumentPlainRows(), "\n")
+}
+
+func (m *Model) localImageLinkMap(scopeKey string, images []models.InlineImage, mode previewImageMode) map[string]imagePreviewLink {
+	if mode != previewImageModeLinks || len(images) == 0 {
+		return nil
+	}
+	if m.imagePreviewLinks == nil {
+		m.imagePreviewLinks = newImagePreviewServer()
+	}
+	links, err := m.imagePreviewLinks.RegisterSet(scopeKey, images)
+	if err != nil {
+		logger.Warn("local image preview links unavailable: %v", err)
+		return nil
+	}
+	out := make(map[string]imagePreviewLink, len(links))
+	for _, link := range links {
+		out[normalizeContentID(link.ContentID)] = link
+	}
+	return out
 }
 
 // emptyStateView returns a placeholder string the same height as the content
@@ -505,6 +636,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.bodyWrappedLines = nil
+	m.clearTimelinePreviewDocumentCache()
 	m.timeline.quickRepliesReady = false
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesAIFetched = false
@@ -548,7 +680,7 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 func fetchCleanupBodyCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
 	return func() tea.Msg {
 		body, err := b.FetchEmailBody(email.Folder, email.UID)
-		return CleanupEmailBodyMsg{Body: body, Err: err}
+		return CleanupEmailBodyMsg{MessageID: email.MessageID, Body: body, Err: err}
 	}
 }
 
@@ -777,8 +909,14 @@ func (m *Model) renderCleanupPreview() string {
 		}
 	}
 
-	panelHeight := m.cleanupPreviewInnerHeight()
-	maxBodyLines := panelHeight - headerLines - 1
+	contentHeight := m.cleanupPreviewInnerHeight()
+	if m.cleanupFullScreen {
+		contentHeight = m.windowHeight
+		if contentHeight > 2 {
+			contentHeight -= 2
+		}
+	}
+	maxBodyLines := contentHeight - headerLines - 1
 	if maxBodyLines < 1 {
 		maxBodyLines = 1
 	}
@@ -786,77 +924,86 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupBodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.cleanupEmailBody != nil {
-		imageLines := 0
 		if m.cleanupFullScreen {
-			scopeKey := "cleanup"
-			if m.cleanupPreviewEmail != nil {
-				scopeKey += ":" + m.cleanupPreviewEmail.MessageID
+			layout := m.cleanupPreviewDocumentLayout(innerW, maxBodyLines)
+			m.cleanupBodyScrollOffset = clampPreviewScrollOffset(m.cleanupBodyScrollOffset, layout.TotalRows, maxBodyLines)
+			viewport := renderPreviewDocumentViewport(layout, m.cleanupBodyScrollOffset, maxBodyLines)
+			sb.WriteString(viewport.Content)
+
+			escHint := "Esc: close preview"
+			zHint := "z: exit full-screen"
+			actionHint := "D: delete  e: archive"
+			if layout.TotalRows > maxBodyLines {
+				maxOffset := layout.TotalRows - maxBodyLines
+				pct := 0
+				if maxOffset > 0 {
+					pct = m.cleanupBodyScrollOffset * 100 / maxOffset
+				}
+				indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", actionHint, zHint, m.cleanupBodyScrollOffset+1, layout.TotalRows, pct, escHint)
+				sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
+			} else {
+				indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  │  %s", actionHint, zHint, escHint)
+				sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 			}
-			imageBlock, rows := m.renderInlineImagesForPreview(scopeKey, m.cleanupEmailBody.InlineImages, nil, innerW, maxBodyLines-1)
-			if imageBlock != "" {
-				sb.WriteString(dimStyle.Render(imageBlock) + "\n")
-				imageLines = rows
-			}
-		} else if nImg := len(m.cleanupEmailBody.InlineImages); nImg > 0 {
-			label := splitInlineImageHint(nImg, m.fullScreenImagesAvailable())
-			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
-			imageLines = 1
-		}
-		maxBodyLines -= imageLines
-		if maxBodyLines < 1 {
-			maxBodyLines = 1
-		}
-
-		body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
-		if body == "" {
-			body = "(No plain text — HTML only)"
-		}
-		if m.cleanupBodyWrappedLines == nil || m.cleanupBodyWrappedWidth != innerW {
-			m.cleanupBodyWrappedLines = renderEmailBodyLines(body, innerW)
-			for i, line := range m.cleanupBodyWrappedLines {
-				m.cleanupBodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
-			}
-			m.cleanupBodyWrappedWidth = innerW
-		}
-
-		totalLines := len(m.cleanupBodyWrappedLines)
-		maxOffset := totalLines - maxBodyLines
-		if maxOffset < 0 {
-			maxOffset = 0
-		}
-		if m.cleanupBodyScrollOffset > maxOffset {
-			m.cleanupBodyScrollOffset = maxOffset
-		}
-
-		end := m.cleanupBodyScrollOffset + maxBodyLines
-		if end > totalLines {
-			end = totalLines
-		}
-		sb.WriteString(strings.Join(m.cleanupBodyWrappedLines[m.cleanupBodyScrollOffset:end], "\n"))
-
-		// Pad short content so the indicator always sits at the bottom of the panel.
-		visibleLines := end - m.cleanupBodyScrollOffset
-		for i := visibleLines; i < maxBodyLines; i++ {
-			sb.WriteString("\n")
-		}
-
-		escHint := "Esc: close"
-		zHint := "z: full-screen"
-		if m.cleanupFullScreen {
-			escHint = "Esc: close preview"
-			zHint = "z: exit full-screen"
-		}
-		actionHint := "D: delete  e: archive"
-		if totalLines > maxBodyLines {
-			pct := 0
-			if maxOffset > 0 {
-				pct = m.cleanupBodyScrollOffset * 100 / maxOffset
-			}
-			indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", actionHint, zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
-			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		} else {
-			indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  │  %s", actionHint, zHint, escHint)
-			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
+			imageLines := 0
+			if nImg := len(m.cleanupEmailBody.InlineImages); nImg > 0 {
+				label := splitInlineImageHint(nImg, m.fullScreenImagesAvailable())
+				sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
+				imageLines = 1
+			}
+			maxBodyLines -= imageLines
+			if maxBodyLines < 1 {
+				maxBodyLines = 1
+			}
+
+			body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
+			if body == "" {
+				body = "(No plain text — HTML only)"
+			}
+			if m.cleanupBodyWrappedLines == nil || m.cleanupBodyWrappedWidth != innerW {
+				m.cleanupBodyWrappedLines = renderEmailBodyLines(body, innerW)
+				for i, line := range m.cleanupBodyWrappedLines {
+					m.cleanupBodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
+				}
+				m.cleanupBodyWrappedWidth = innerW
+			}
+
+			totalLines := len(m.cleanupBodyWrappedLines)
+			maxOffset := totalLines - maxBodyLines
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
+			if m.cleanupBodyScrollOffset > maxOffset {
+				m.cleanupBodyScrollOffset = maxOffset
+			}
+
+			end := m.cleanupBodyScrollOffset + maxBodyLines
+			if end > totalLines {
+				end = totalLines
+			}
+			sb.WriteString(strings.Join(m.cleanupBodyWrappedLines[m.cleanupBodyScrollOffset:end], "\n"))
+
+			// Pad short content so the indicator always sits at the bottom of the panel.
+			visibleLines := end - m.cleanupBodyScrollOffset
+			for i := visibleLines; i < maxBodyLines; i++ {
+				sb.WriteString("\n")
+			}
+
+			escHint := "Esc: close"
+			zHint := "z: full-screen"
+			actionHint := "D: delete  e: archive"
+			if totalLines > maxBodyLines {
+				pct := 0
+				if maxOffset > 0 {
+					pct = m.cleanupBodyScrollOffset * 100 / maxOffset
+				}
+				indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  line %d/%d  %d%%  │  %s", actionHint, zHint, m.cleanupBodyScrollOffset+1, totalLines, pct, escHint)
+				sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
+			} else {
+				indicator := fmt.Sprintf(" %s  %s  ↑↓ j/k  │  %s", actionHint, zHint, escHint)
+				sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
+			}
 		}
 	} else {
 		sb.WriteString(dimStyle.Render("(No content)"))
@@ -864,9 +1011,10 @@ func (m *Model) renderCleanupPreview() string {
 
 	panelStyle := lipgloss.NewStyle().
 		Width(w - 2). // subtract 2 for left+right borders
+		Height(contentHeight).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color(borderColor)).
 		PaddingLeft(1)
 
-	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
+	return panelStyle.Render(fitPanelContentHeight(sb.String(), contentHeight))
 }

@@ -70,6 +70,9 @@ func TestDemoBackendFetchesCreativeCommonsImageSampler(t *testing.T) {
 	if len(body.InlineImages) != 4 {
 		t.Fatalf("inline image count = %d, want 4", len(body.InlineImages))
 	}
+	if body.TextHTML == "" || !strings.Contains(body.TextHTML, "cid:cc-by-sa-badge") {
+		t.Fatalf("sampler should expose HTML CID placement, got HTML:\n%s", body.TextHTML)
+	}
 	for i, img := range body.InlineImages {
 		if len(img.Data) == 0 {
 			t.Fatalf("inline image %d has empty data", i+1)

@@ -96,7 +96,7 @@ func TestBuildPreviewDocument_HTMLCIDImagesStayInAuthoredOrder(t *testing.T) {
 
 	doc := buildPreviewDocument(body, nil)
 
-	if got, want := len(doc.Blocks), 5; got != want {
+	if got, want := len(doc.Blocks), 6; got != want {
 		t.Fatalf("block count = %d, want %d: %#v", got, want, doc.Blocks)
 	}
 	if doc.Blocks[0].Kind != previewBlockText || !strings.Contains(doc.Blocks[0].Text, "# Gallery") {
@@ -113,6 +113,9 @@ func TestBuildPreviewDocument_HTMLCIDImagesStayInAuthoredOrder(t *testing.T) {
 	}
 	if doc.Blocks[4].Kind != previewBlockInlineImage || doc.Blocks[4].Image.ContentID != "bee@local" {
 		t.Fatalf("fifth block should be bee image, got %#v", doc.Blocks[4])
+	}
+	if doc.Blocks[5].Kind != previewBlockText || !strings.Contains(doc.Blocks[5].Text, "After bee") {
+		t.Fatalf("sixth block should be text after bee, got %#v", doc.Blocks[5])
 	}
 }
 
@@ -277,6 +280,13 @@ func normalizeContentID(cid string) string {
 		cid = decoded
 	}
 	return strings.ToLower(strings.TrimSpace(cid))
+}
+
+func escapeMarkdownLabel(label string) string {
+	label = strings.ReplaceAll(label, `\`, `\\`)
+	label = strings.ReplaceAll(label, `[`, `\[`)
+	label = strings.ReplaceAll(label, `]`, `\]`)
+	return label
 }
 
 func buildPreviewDocumentFromHTML(htmlText string, imagesByCID map[string]models.InlineImage, placed map[string]bool) ([]previewDocumentBlock, bool) {
@@ -792,7 +802,6 @@ func renderIterm2PreviewImages(images []models.InlineImage, descs map[string]str
 		}
 		if used > 0 {
 			sb.WriteByte('\n')
-			used++
 		}
 		desc := ""
 		if descs != nil {
@@ -823,7 +832,7 @@ Run:
 go test ./internal/app -run 'TestDetectPreviewImageMode|TestPreviewImageCellSize|TestIterm2PreviewRenderer|TestPreviewImageRendererFallbacks|TestItermPreviewImagesDoNotExceedAvailableRows|TestTimelineFullScreen_ItermRendersBoundedInlineImage' -count=1
 ```
 
-Expected: PASS. If `TestTimelineFullScreen_ItermRendersBoundedInlineImage` still expects exact `width=76` and `height=8`, update that assertion to verify bounded `width=` and `height=` values are present and `height` is no more than available rows, because the new sizing avoids upscaling small images.
+Expected: PASS after updating existing assertions for the new row accounting. `TestTimelineFullScreen_ItermRendersBoundedInlineImage` should verify bounded `width=` and `height=` values are present and `height` is no more than available rows, because the new sizing avoids upscaling small images. `TestItermPreviewImagesDoNotExceedAvailableRows` should expect two one-row images when two rows are available, because the separator newline moves to the next occupied row but does not consume a separate blank row.
 
 - [ ] **Step 5: Commit image renderer**
 
@@ -1203,7 +1212,7 @@ Add to `internal/app/email_preview.go` near `renderFullScreenEmail`:
 
 ```go
 func (m *Model) currentPreviewImageMode() previewImageMode {
-	return detectPreviewImageMode(previewImageModeAuto, m.localImageLinks, m.sshMode)
+	return detectPreviewImageMode(previewImageModeAuto, m.localImageLinks, !m.localImageLinks)
 }
 
 func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) previewDocumentLayout {

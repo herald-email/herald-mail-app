@@ -64,41 +64,28 @@ func boundedPreviewImages(images []models.InlineImage) []models.InlineImage {
 }
 
 func renderIterm2PreviewImages(images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {
-	width := innerW - 2
-	if width < 10 {
-		width = innerW
-	}
-	if width < 1 {
-		width = 1
-	}
-	rows := previewImageRows(availableRows, len(images))
 	var sb strings.Builder
 	used := 0
-	for i, img := range images {
+	for _, img := range images {
 		if used >= availableRows {
 			break
 		}
 		if used > 0 {
 			sb.WriteByte('\n')
 		}
-		if len(img.Data) == 0 {
-			sb.WriteString(truncateVisual(fmt.Sprintf("[image %d unavailable: empty data]", i+1), innerW))
-			used++
+		req := previewImageRenderRequest{
+			Mode:          previewImageModeIterm2,
+			Image:         img,
+			Description:   imageDescription(img, descs),
+			InnerWidth:    innerW,
+			AvailableRows: availableRows - used,
+		}
+		rendered := renderPreviewImageBlock(req)
+		if rendered.Rows == 0 {
 			continue
 		}
-		if len(img.Data) > maxPreviewImageBytes {
-			sb.WriteString(truncateVisual(fmt.Sprintf("[image %d too large to render inline: %s]", i+1, img.MIMEType), innerW))
-			used++
-			continue
-		}
-		rendered := strings.TrimRight(iterm2.Render(img.Data, width, rows), "\n")
-		if rendered == "" {
-			sb.WriteString(imagePlaceholderLine(i+1, img, descs, innerW))
-			used++
-			continue
-		}
-		sb.WriteString(rendered)
-		used += rows
+		sb.WriteString(rendered.Content)
+		used += rendered.Rows
 	}
 	return sb.String(), clampInt(used, 0, availableRows)
 }
@@ -136,12 +123,17 @@ func renderImagePlaceholders(images []models.InlineImage, descs map[string]strin
 }
 
 func imagePlaceholderLine(index int, img models.InlineImage, descs map[string]string, innerW int) string {
-	if descs != nil {
-		if desc := strings.TrimSpace(descs[img.ContentID]); desc != "" {
-			return truncateVisual(fmt.Sprintf("[Image: %s]", desc), innerW)
-		}
+	if desc := imageDescription(img, descs); desc != "" {
+		return truncateVisual(fmt.Sprintf("[Image: %s]", desc), innerW)
 	}
 	return truncateVisual(fmt.Sprintf("[image %d: %s  %d KB]", index, img.MIMEType, len(img.Data)/1024), innerW)
+}
+
+func imageDescription(img models.InlineImage, descs map[string]string) string {
+	if descs == nil {
+		return ""
+	}
+	return strings.TrimSpace(descs[img.ContentID])
 }
 
 func previewImageRows(availableRows, imageCount int) int {
@@ -166,4 +158,6 @@ func (m *Model) revokeImagePreviews() {
 	if m.imagePreviewLinks != nil {
 		m.imagePreviewLinks.RevokeAll()
 	}
+	m.clearTimelinePreviewDocumentCache()
+	m.clearCleanupPreviewDocumentCache()
 }

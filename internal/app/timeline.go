@@ -614,6 +614,7 @@ func (m *Model) clearTimelineSearch() {
 		m.timeline.fullScreen = origin.fullScreen
 		m.timeline.bodyScrollOffset = origin.bodyScrollOffset
 		m.timeline.bodyWrappedLines = nil
+		m.clearTimelinePreviewDocumentCache()
 		m.timeline.visualMode = false
 		m.timeline.pendingY = false
 		m.timeline.quickReplyOpen = false
@@ -653,6 +654,7 @@ func (m *Model) clearTimelineQuickReply() {
 func (m *Model) clearTimelineFullScreen() {
 	m.timeline.fullScreen = false
 	m.timeline.bodyWrappedLines = nil
+	m.clearTimelinePreviewDocumentCache()
 }
 
 func (m *Model) clearTimelinePreview() {
@@ -662,6 +664,7 @@ func (m *Model) clearTimelinePreview() {
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = false
 	m.timeline.bodyWrappedLines = nil
+	m.clearTimelinePreviewDocumentCache()
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.visualMode = false
 	m.timeline.pendingY = false
@@ -705,6 +708,7 @@ func (m *Model) openTimelineSearch() {
 	m.timeline.inlineImageDescs = nil
 	m.timeline.fullScreen = false
 	m.timeline.bodyWrappedLines = nil
+	m.clearTimelinePreviewDocumentCache()
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.visualMode = false
 	m.timeline.pendingY = false
@@ -1102,6 +1106,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.bodyWrappedLines = nil
+	m.clearTimelinePreviewDocumentCache()
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesReady = false
 	m.timeline.quickReplyOpen = false
@@ -1408,6 +1413,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 				if len(cmds) > 0 {
 					m.timeline.bodyWrappedLines = nil
+					m.clearTimelinePreviewDocumentCache()
 					return m, tea.Batch(cmds...), true
 				}
 			} else {
@@ -1415,11 +1421,13 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				if m.timeline.quickReplyPending {
 					cmd := m.openTimelineQuickReply()
 					m.timeline.bodyWrappedLines = nil
+					m.clearTimelinePreviewDocumentCache()
 					return m, cmd, true
 				}
 			}
 		}
 		m.timeline.bodyWrappedLines = nil
+		m.clearTimelinePreviewDocumentCache()
 		return m, nil, true
 
 	case QuickRepliesMsg:
@@ -1446,6 +1454,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.timeline.inlineImageDescs = make(map[string]string)
 			}
 			m.timeline.inlineImageDescs[msg.ContentID] = msg.Description
+			m.clearTimelinePreviewDocumentCache()
 		}
 		return m, nil, true
 
@@ -1761,6 +1770,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if !m.loading && m.timeline.selectedEmail != nil {
 			m.timeline.fullScreen = !m.timeline.fullScreen
 			m.timeline.bodyWrappedLines = nil
+			m.clearTimelinePreviewDocumentCache()
 		}
 		return m, nil, true
 	case "s":
@@ -1858,7 +1868,8 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			if m.timeline.fullScreen {
 				if m.timeline.visualMode {
-					if m.timeline.visualEnd < len(m.timeline.bodyWrappedLines)-1 {
+					totalRows := m.timelineFullScreenDocumentLayout().TotalRows
+					if m.timeline.visualEnd < totalRows-1 {
 						m.timeline.visualEnd++
 					}
 				} else {
@@ -1885,7 +1896,15 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case "v":
-		if m.timeline.fullScreen || m.focusedPanel == panelPreview {
+		if m.timeline.fullScreen {
+			if m.timelineFullScreenDocumentLayout().TotalRows > 0 {
+				m.timeline.visualMode = !m.timeline.visualMode
+				if m.timeline.visualMode {
+					m.timeline.visualStart = m.timeline.bodyScrollOffset
+					m.timeline.visualEnd = m.timeline.bodyScrollOffset
+				}
+			}
+		} else if m.focusedPanel == panelPreview {
 			if len(m.timeline.bodyWrappedLines) > 0 {
 				m.timeline.visualMode = !m.timeline.visualMode
 				if m.timeline.visualMode {
@@ -1900,22 +1919,32 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "y":
 		if m.timeline.pendingY {
 			m.timeline.pendingY = false
-			if m.timeline.bodyScrollOffset < len(m.timeline.bodyWrappedLines) {
+			if m.timeline.fullScreen {
+				if line := m.timelineFullScreenCurrentPlainLine(); line != "" {
+					return m, copyToClipboard(line), true
+				}
+			} else if m.timeline.bodyScrollOffset < len(m.timeline.bodyWrappedLines) {
 				return m, copyToClipboard(m.timeline.bodyWrappedLines[m.timeline.bodyScrollOffset]), true
 			}
 		} else if m.timeline.visualMode {
 			m.timeline.visualMode = false
 			m.timeline.pendingY = false
-			start, end := m.timeline.visualStart, m.timeline.visualEnd
-			if start > end {
-				start, end = end, start
-			}
-			if end >= len(m.timeline.bodyWrappedLines) {
-				end = len(m.timeline.bodyWrappedLines) - 1
-			}
-			if start < len(m.timeline.bodyWrappedLines) {
-				selected := strings.Join(m.timeline.bodyWrappedLines[start:end+1], "\n")
-				return m, copyToClipboard(selected), true
+			if m.timeline.fullScreen {
+				if selected := m.timelineFullScreenSelectedPlainText(); selected != "" {
+					return m, copyToClipboard(selected), true
+				}
+			} else {
+				start, end := m.timeline.visualStart, m.timeline.visualEnd
+				if start > end {
+					start, end = end, start
+				}
+				if end >= len(m.timeline.bodyWrappedLines) {
+					end = len(m.timeline.bodyWrappedLines) - 1
+				}
+				if start < len(m.timeline.bodyWrappedLines) {
+					selected := strings.Join(m.timeline.bodyWrappedLines[start:end+1], "\n")
+					return m, copyToClipboard(selected), true
+				}
 			}
 		} else {
 			m.timeline.pendingY = true
@@ -1924,7 +1953,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "Y":
 		m.timeline.visualMode = false
 		m.timeline.pendingY = false
-		if len(m.timeline.bodyWrappedLines) > 0 {
+		if m.timeline.fullScreen {
+			if text := m.timelineFullScreenAllPlainText(); text != "" {
+				return m, copyToClipboard(text), true
+			}
+		} else if len(m.timeline.bodyWrappedLines) > 0 {
 			return m, copyToClipboard(strings.Join(m.timeline.bodyWrappedLines, "\n")), true
 		}
 		return m, nil, true

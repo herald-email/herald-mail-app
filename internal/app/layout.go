@@ -54,17 +54,22 @@ type TimelineState struct {
 	threadRowMap    []timelineRowRef
 	expandedThreads map[string]bool
 
-	selectedEmail    *models.EmailData
-	body             *models.EmailBody
-	bodyMessageID    string
-	bodyLoading      bool
-	inlineImageDescs map[string]string
-	previewWidth     int
-	fullScreen       bool
-	bodyFetchCancel  context.CancelFunc
-	bodyWrappedLines []string
-	bodyWrappedWidth int
-	bodyScrollOffset int
+	selectedEmail       *models.EmailData
+	body                *models.EmailBody
+	bodyMessageID       string
+	bodyLoading         bool
+	inlineImageDescs    map[string]string
+	previewWidth        int
+	fullScreen          bool
+	bodyFetchCancel     context.CancelFunc
+	bodyWrappedLines    []string
+	bodyWrappedWidth    int
+	bodyScrollOffset    int
+	previewDocLayout    *previewDocumentLayout
+	previewDocWidth     int
+	previewDocRows      int
+	previewDocMode      previewImageMode
+	previewDocMessageID string
 
 	selectedAttachment    int
 	attachmentSavePrompt  bool

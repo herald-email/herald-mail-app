@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,120 @@ func TestCleanupEscClosesPreview(t *testing.T) {
 	}
 	if updated.cleanupPreviewEmail != nil {
 		t.Error("expected cleanupPreviewEmail=nil after closing preview")
+	}
+}
+
+func TestCleanupEmailBodyMsgDropsStaleResultForDifferentPreviewEmail(t *testing.T) {
+	m := makeCleanupPreviewModel()
+	current := m.detailsEmails[1]
+	m.cleanupPreviewEmail = current
+	m.cleanupBodyLoading = true
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: "body for current preview"}
+	m.cleanupPreviewDocLayout = &previewDocumentLayout{TotalRows: 1}
+	m.cleanupPreviewDocWidth = 44
+	m.cleanupPreviewDocRows = 9
+	m.cleanupPreviewDocMode = previewImageModeLinks
+	m.cleanupPreviewDocMessageID = current.MessageID
+
+	newM, _ := m.Update(CleanupEmailBodyMsg{
+		MessageID: "test-msg-1",
+		Body:      &models.EmailBody{TextPlain: "stale body from previous preview"},
+	})
+	updated := newM.(*Model)
+
+	if updated.cleanupBodyLoading != true {
+		t.Fatalf("stale result should leave current loading state alone")
+	}
+	if got := updated.cleanupEmailBody.TextPlain; got != "body for current preview" {
+		t.Fatalf("stale result overwrote current body: %q", got)
+	}
+	if updated.cleanupPreviewDocLayout == nil ||
+		updated.cleanupPreviewDocWidth != 44 ||
+		updated.cleanupPreviewDocRows != 9 ||
+		updated.cleanupPreviewDocMode != previewImageModeLinks ||
+		updated.cleanupPreviewDocMessageID != current.MessageID {
+		t.Fatalf("stale result should not clear current cleanup document cache")
+	}
+
+	newM, _ = updated.Update(CleanupEmailBodyMsg{
+		MessageID: current.MessageID,
+		Body:      &models.EmailBody{TextPlain: "accepted body for current preview"},
+	})
+	accepted := newM.(*Model)
+	if accepted.cleanupBodyLoading {
+		t.Fatalf("matching result should finish loading")
+	}
+	if got := accepted.cleanupEmailBody.TextPlain; got != "accepted body for current preview" {
+		t.Fatalf("matching result was not accepted: %q", got)
+	}
+	if accepted.cleanupPreviewDocLayout != nil {
+		t.Fatalf("matching result should clear stale document layout cache")
+	}
+}
+
+func TestCleanupFullScreenUsesTerminalHeightBudget(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	defer m.cleanup()
+	m.activeTab = tabCleanup
+	m.focusedPanel = panelDetails
+	m.showCleanupPreview = true
+	m.cleanupFullScreen = true
+	m.cleanupPreviewWidth = 80
+	m.cleanupPreviewEmail = &models.EmailData{
+		MessageID: "tall-cleanup",
+		Subject:   "Tall Cleanup",
+		Sender:    "sender@example.com",
+		Folder:    "INBOX",
+		Date:      time.Now(),
+	}
+	m.detailsTable.SetHeight(5)
+
+	var html strings.Builder
+	for i := 1; i <= 20; i++ {
+		html.WriteString("Line ")
+		html.WriteString(string(rune('A' + i - 1)))
+		html.WriteString("<br>")
+	}
+	m.cleanupEmailBody = &models.EmailBody{TextHTML: html.String()}
+
+	rendered := m.renderCleanupPreview()
+	assertFitsHeight(t, 24, rendered)
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected cleanup full-screen preview to fill terminal height, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(stripANSI(rendered), "Line L") {
+		t.Fatalf("expected full-screen document budget to show rows beyond split preview height, got:\n%s", stripANSI(rendered))
+	}
+}
+
+func TestCleanupFullScreenScrollIgnoresHiddenFocus(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	defer m.cleanup()
+	m.activeTab = tabCleanup
+	m.focusedPanel = panelSummary
+	m.showCleanupPreview = true
+	m.cleanupFullScreen = true
+	m.cleanupPreviewWidth = 80
+	m.cleanupPreviewEmail = &models.EmailData{
+		MessageID: "cleanup-scroll",
+		Subject:   "Cleanup Scroll",
+		Sender:    "sender@example.com",
+		Folder:    "INBOX",
+		Date:      time.Now(),
+	}
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: strings.Repeat("line\n", 40)}
+
+	model, _ := m.handleKeyMsg(keyRunes("j"))
+	updated := model.(*Model)
+	if updated.cleanupBodyScrollOffset != 1 {
+		t.Fatalf("cleanup full-screen j should scroll preview regardless of hidden focus, got offset=%d", updated.cleanupBodyScrollOffset)
+	}
+
+	model, _ = updated.handleKeyMsg(keyRunes("k"))
+	updated = model.(*Model)
+	if updated.cleanupBodyScrollOffset != 0 {
+		t.Fatalf("cleanup full-screen k should scroll preview regardless of hidden focus, got offset=%d", updated.cleanupBodyScrollOffset)
 	}
 }
 

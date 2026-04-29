@@ -16,10 +16,11 @@ import (
 )
 
 type imagePreviewLink struct {
-	Label    string
-	URL      string
-	MIMEType string
-	Size     int
+	Label     string
+	URL       string
+	MIMEType  string
+	Size      int
+	ContentID string
 }
 
 type imagePreviewEntry struct {
@@ -48,6 +49,12 @@ func (s *imagePreviewServer) baseURL() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.base
+}
+
+func (s *imagePreviewServer) CurrentKey() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.currentKey
 }
 
 func (s *imagePreviewServer) RegisterSet(key string, images []models.InlineImage) ([]imagePreviewLink, error) {
@@ -87,10 +94,11 @@ func (s *imagePreviewServer) RegisterSet(key string, images []models.InlineImage
 		}
 		s.entries[token] = entry
 		s.links = append(s.links, imagePreviewLink{
-			Label:    fmt.Sprintf("open image %d", i+1),
-			URL:      s.base + "/image/" + token,
-			MIMEType: mimeType,
-			Size:     len(img.Data),
+			Label:     fmt.Sprintf("open image %d", i+1),
+			URL:       s.base + "/image/" + token,
+			MIMEType:  mimeType,
+			Size:      len(img.Data),
+			ContentID: inlineImageDocumentKey(img, i),
 		})
 	}
 	return append([]imagePreviewLink(nil), s.links...), nil

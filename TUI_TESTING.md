@@ -1148,6 +1148,8 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 
 **Capture is a point-in-time snapshot.** `capture-pane` reads the current state of tmux's internal screen buffer. If the TUI is mid-render, you may get a partial frame. Always wait for settle first.
 
+**Terminal raster image protocols.** tmux captures are still required for layout, key routing, fallback links, and escape-sequence checks, but tmux cannot prove actual raster placement for protocols such as iTerm2 OSC 1337, Kitty graphics, or Sixel. For changes that affect inline raster images, run the demo in a real compatible terminal as well, capture screenshots, record the terminal app/version and selected graphics mode, and verify native scrollback does not show images displacing pinned preview chrome.
+
 **Trailing whitespace varies.** `capture-pane -p` strips trailing spaces per line but preserves blank lines up to the terminal height. For golden file comparison, decide whether to normalize this:
 
 ```bash

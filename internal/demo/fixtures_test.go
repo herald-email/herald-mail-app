@@ -146,6 +146,28 @@ func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
 	}
 }
 
+func TestCreativeCommonsSamplerIncludesHTMLCIDPlacement(t *testing.T) {
+	box := Mailbox()
+	var found *Message
+	for i := range box.Messages {
+		if box.Messages[i].Email.Subject == "Creative Commons image sampler for terminal previews" {
+			found = &box.Messages[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected sampler fixture")
+	}
+	if !found.Body.IsFromHTML {
+		t.Fatal("sampler should exercise HTML-derived preview behavior")
+	}
+	for _, cid := range []string{"cc-by-sa-badge", "color-chart-330px", "bee-on-sunflower-330px", "changing-landscape-960px"} {
+		if !strings.Contains(found.Body.TextHTML, "cid:"+cid) {
+			t.Fatalf("sampler HTML missing cid reference %q:\n%s", cid, found.Body.TextHTML)
+		}
+	}
+}
+
 func TestDemoAIIsDeterministicAndOffline(t *testing.T) {
 	ai := NewAI()
 

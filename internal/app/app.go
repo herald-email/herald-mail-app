@@ -148,8 +148,9 @@ type QuickRepliesMsg struct {
 
 // CleanupEmailBodyMsg carries the result of fetching an email body from the Cleanup tab
 type CleanupEmailBodyMsg struct {
-	Body *models.EmailBody
-	Err  error
+	MessageID string
+	Body      *models.EmailBody
+	Err       error
 }
 
 // ChatResponseMsg carries an Ollama chat reply
@@ -371,18 +372,23 @@ type Model struct {
 	timeline TimelineState
 
 	// Email body preview (cleanup tab)
-	showCleanupPreview       bool
-	cleanupPreviewEmail      *models.EmailData
-	cleanupEmailBody         *models.EmailBody
-	cleanupBodyLoading       bool
-	cleanupBodyScrollOffset  int
-	cleanupBodyWrappedLines  []string
-	cleanupBodyWrappedWidth  int
-	cleanupPreviewWidth      int // computed in updateTableDimensions
-	cleanupPreviewHadSidebar bool
-	cleanupFullScreen        bool // true = preview takes entire screen
-	cleanupPreviewDeleting   bool // true = deletion/archive was triggered from preview
-	cleanupPreviewIsArchive  bool // true = the preview action was archive (not delete)
+	showCleanupPreview         bool
+	cleanupPreviewEmail        *models.EmailData
+	cleanupEmailBody           *models.EmailBody
+	cleanupBodyLoading         bool
+	cleanupBodyScrollOffset    int
+	cleanupBodyWrappedLines    []string
+	cleanupBodyWrappedWidth    int
+	cleanupPreviewDocLayout    *previewDocumentLayout
+	cleanupPreviewDocWidth     int
+	cleanupPreviewDocRows      int
+	cleanupPreviewDocMode      previewImageMode
+	cleanupPreviewDocMessageID string
+	cleanupPreviewWidth        int // computed in updateTableDimensions
+	cleanupPreviewHadSidebar   bool
+	cleanupFullScreen          bool // true = preview takes entire screen
+	cleanupPreviewDeleting     bool // true = deletion/archive was triggered from preview
+	cleanupPreviewIsArchive    bool // true = the preview action was archive (not delete)
 
 	// Chat panel
 	showChat         bool
@@ -793,6 +799,7 @@ func (m *Model) SetLocalImageLinksEnabled(enabled bool) {
 	if !enabled {
 		m.revokeImagePreviews()
 	}
+	m.clearCleanupPreviewDocumentCache()
 }
 
 // Init implements tea.Model
@@ -1408,6 +1415,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CleanupEmailBodyMsg:
+		if m.cleanupPreviewEmail == nil || msg.MessageID != m.cleanupPreviewEmail.MessageID {
+			return m, nil
+		}
 		m.cleanupBodyLoading = false
 		m.revokeImagePreviews()
 		if msg.Err != nil {
@@ -1417,6 +1427,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cleanupEmailBody = msg.Body
 			m.cleanupBodyWrappedLines = nil // force rewrap on next render
 		}
+		m.clearCleanupPreviewDocumentCache()
 		return m, nil
 
 	case ChatResponseMsg:
@@ -1522,6 +1533,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cleanupPreviewDeleting = false
 				m.cleanupPreviewIsArchive = false
 				m.showSidebar = m.cleanupPreviewHadSidebar
+				m.clearCleanupPreviewDocumentCache()
 				m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			}
 
@@ -1759,7 +1771,7 @@ func (m *Model) View() string {
 	if m.timeline.fullScreen {
 		return m.renderFullScreenEmail()
 	}
-	if m.cleanupFullScreen {
+	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
 		return m.renderCleanupPreview()
 	}
 	return m.renderMainView()
@@ -2029,6 +2041,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.cleanupEmailBody = nil
 						m.cleanupBodyScrollOffset = 0
 						m.cleanupBodyWrappedLines = nil
+						m.clearCleanupPreviewDocumentCache()
 						m.cleanupPreviewHadSidebar = m.showSidebar
 						m.showSidebar = false
 						m.updateTableDimensions(m.windowWidth, m.windowHeight)
@@ -2045,6 +2058,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeTab == tabCleanup && m.showCleanupPreview {
 			m.cleanupFullScreen = !m.cleanupFullScreen
 			m.cleanupBodyWrappedLines = nil // force re-wrap at new width
+			m.clearCleanupPreviewDocumentCache()
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			return m, nil
 		}
@@ -2083,6 +2097,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		if m.canInteractWithVisibleData() {
+			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
+				if m.cleanupBodyScrollOffset > 0 {
+					m.cleanupBodyScrollOffset--
+				}
+				return m, nil
+			}
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				if m.cleanupBodyScrollOffset > 0 {
 					m.cleanupBodyScrollOffset--
@@ -2097,6 +2117,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		if m.canInteractWithVisibleData() {
+			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
+				m.cleanupBodyScrollOffset++
+				return m, nil
+			}
 			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
 				m.cleanupBodyScrollOffset++
 				return m, nil
@@ -2189,7 +2213,7 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
 	} else {
 		// Cleanup tab
-		if m.showCleanupPreview && m.cleanupFullScreen {
+		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
 			// Full-screen: the entire content area is the preview
 			mainContent = m.renderCleanupPreview()
 		} else {

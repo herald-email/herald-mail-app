@@ -337,6 +337,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
 		m.cleanupFullScreen = false
 		m.cleanupBodyWrappedLines = nil
+		m.clearCleanupPreviewDocumentCache()
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		return m, nil
 	}
@@ -352,6 +353,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		m.cleanupPreviewDeleting = false
 		m.cleanupPreviewIsArchive = false
 		m.showSidebar = m.cleanupPreviewHadSidebar
+		m.clearCleanupPreviewDocumentCache()
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		return m, nil
 	}

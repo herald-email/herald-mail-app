@@ -758,18 +758,23 @@ Check these states during every applicable lane:
 **Steps:**
 1. Open Timeline and search for `Creative Commons image sampler for terminal previews`.
 2. Open the split preview and capture the image hint plus body links.
-3. Press `z` to enter full-screen and capture.
-4. Repeat in a non-iTerm terminal, an iTerm2-compatible terminal if available, and SSH mode.
-5. Run the standard resize cycle while full-screen preview is open.
+3. Press `z` to enter full-screen and capture the top of the document.
+4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
+5. In iTerm2/Kitty/Sixel raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
+6. Repeat in a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+7. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
-- The Creative Commons sampler fixture exposes four embedded inline images with different dimensions.
+- The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
 - Split preview stays compact and does not promise image viewing when no full-screen image path is available.
-- iTerm2-compatible terminals render bounded inline images inside the full-screen viewport.
+- Full-screen preview renders text and inline images as one scrollable document below the pinned header.
+- Raster images appear near their authored positions and do not push the header/title out of the visible app viewport or terminal scrollback.
+- iTerm2-compatible terminals render bounded inline images using the selected raster mode.
 - Non-iTerm local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs.
 - Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
+- Test reports include terminal app/version, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 
 ### TC-24 — Local AI backlog and responsiveness
 

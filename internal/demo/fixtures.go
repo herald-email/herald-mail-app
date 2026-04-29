@@ -262,6 +262,12 @@ func buildMailbox() MailboxFixture {
 	withHTML := func(msg *Message) {
 		msg.Body.IsFromHTML = true
 	}
+	withHTMLBody := func(html string) func(*Message) {
+		return func(msg *Message) {
+			msg.Body.IsFromHTML = true
+			msg.Body.TextHTML = html
+		}
+	}
 	withUnsub := func(url string) func(*Message) {
 		return func(msg *Message) {
 			msg.Body.ListUnsubscribe = "<" + url + ">"
@@ -373,7 +379,24 @@ func buildMailbox() MailboxFixture {
 		withInlineImage("taskpad-inline-logo", "image/png", demoPNG()))
 	add(29, "Open Commons Gallery <images@opencommons.example>", "Creative Commons image sampler for terminal previews", "INBOX", 0, 270336, true, false, ai.CategoryNewsletter, []string{"newsletter", "images", "creative commons", "rendering", "terminal"},
 		"# Creative Commons image sampler for terminal previews\n\nThis demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime.\n\nEmbedded inline images:\n- CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png\n- Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: https://commons.wikimedia.org/wiki/File:ColorChart.svg\n- Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg\n- Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg\n\nRemote image link, intentionally not fetched by Herald:\n![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)\n\nPress z from the preview to open full-screen mode. In iTerm2, embedded images should render inline; in other local terminals, Herald should expose safe local open-image links for the embedded MIME bytes.",
-		withHTML,
+		withHTMLBody(`<html><body>
+<h1>Creative Commons image sampler for terminal previews</h1>
+<p>This demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime.</p>
+<p><img alt="CC BY-SA badge" src="cid:cc-by-sa-badge"></p>
+<p><img alt="Color chart" src="cid:color-chart-330px"></p>
+<p><img alt="Bee on sunflower" src="cid:bee-on-sunflower-330px"></p>
+<p><img alt="Changing landscape" src="cid:changing-landscape-960px"></p>
+<h2>Embedded inline images</h2>
+<ul>
+<li>CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: <a href="https://commons.wikimedia.org/wiki/File:CC-BY-SA.png">CC-BY-SA.png</a></li>
+<li>Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: <a href="https://commons.wikimedia.org/wiki/File:ColorChart.svg">ColorChart.svg</a></li>
+<li>Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: <a href="https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg">Bee on Sunflower</a></li>
+<li>Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: <a href="https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg">Changing Landscape</a></li>
+</ul>
+<p>Remote image link, intentionally not fetched by Herald:</p>
+<p><img alt="Remote Commons thumbnail" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png"></p>
+<p>Press z from the preview to open full-screen mode. In iTerm2, embedded images should render inline; in other local terminals, Herald should expose safe local open-image links for the embedded MIME bytes.</p>
+</body></html>`),
 		withInlineImage("cc-by-sa-badge", "image/png", demoCCBySABadgePNG),
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
 		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),

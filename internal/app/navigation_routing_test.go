@@ -187,6 +187,70 @@ func TestFunctionKeyF2ReturnsToCompose(t *testing.T) {
 	}
 }
 
+func TestCleanupFullScreenPlainTabSwitchClosesPreview(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCleanup
+	m.showCleanupPreview = true
+	m.cleanupFullScreen = true
+	m.cleanupPreviewEmail = &models.EmailData{MessageID: "cleanup-a", Subject: "Cleanup A"}
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: "cleanup body"}
+	m.cleanupPreviewHadSidebar = true
+	m.showSidebar = false
+	m.cleanupPreviewDocLayout = &previewDocumentLayout{TotalRows: 1}
+
+	model, _ := m.handleKeyMsg(keyRunes("1"))
+	updated := model.(*Model)
+
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if updated.cleanupFullScreen {
+		t.Fatal("cleanupFullScreen should be false after switching tabs")
+	}
+	if updated.showCleanupPreview || updated.cleanupPreviewEmail != nil || updated.cleanupEmailBody != nil {
+		t.Fatal("cleanup preview should be closed when switching away")
+	}
+	if !updated.showSidebar {
+		t.Fatal("sidebar should be restored from cleanup preview state")
+	}
+	if updated.cleanupPreviewDocLayout != nil {
+		t.Fatal("cleanup document cache should be cleared")
+	}
+
+	model, _ = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	afterEsc := model.(*Model)
+	if afterEsc.activeTab != tabTimeline {
+		t.Fatalf("Esc after tab switch should not be trapped, activeTab=%d", afterEsc.activeTab)
+	}
+}
+
+func TestCleanupFullScreenAltTabSwitchClosesPreview(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCleanup
+	m.showCleanupPreview = true
+	m.cleanupFullScreen = true
+	m.cleanupPreviewEmail = &models.EmailData{MessageID: "cleanup-a", Subject: "Cleanup A"}
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: "cleanup body"}
+	m.cleanupPreviewHadSidebar = true
+	m.showSidebar = false
+
+	model, _ := m.handleKeyMsg(altKey('1'))
+	updated := model.(*Model)
+
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if updated.cleanupFullScreen {
+		t.Fatal("cleanupFullScreen should be false after alt tab switch")
+	}
+	if updated.showCleanupPreview || updated.cleanupPreviewEmail != nil || updated.cleanupEmailBody != nil {
+		t.Fatal("cleanup preview should be closed after alt tab switch")
+	}
+	if !updated.showSidebar {
+		t.Fatal("sidebar should be restored from cleanup preview state")
+	}
+}
+
 func TestComposeAltGlobalCommandsDoNotTypeIntoDraft(t *testing.T) {
 	m := makeSizedModel(t, 180, 40)
 	m.activeTab = tabCompose
