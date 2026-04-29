@@ -22,6 +22,12 @@ func TestRenderInlineUsesExplicitCellDimensions(t *testing.T) {
 	}
 }
 
+func TestClearNativeRasterScreenMovesHomeAndClearsDisplay(t *testing.T) {
+	if got := ClearNativeRasterScreen(); got != "\x1b[2J\x1b[H" {
+		t.Fatalf("ClearNativeRasterScreen = %q, want full display clear then cursor home", got)
+	}
+}
+
 func TestRenderInlineReservesRowsBeforeDrawingWholeImage(t *testing.T) {
 	rendered := RenderInline([]byte("image-bytes"), 64, 18)
 

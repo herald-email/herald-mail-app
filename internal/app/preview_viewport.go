@@ -111,6 +111,14 @@ func layoutPreviewImageBlock(block previewDocumentBlock, opts previewLayoutOptio
 }
 
 func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth int) []previewRenderedRow {
+	if rendered.TerminalConsumesRows {
+		rows := []previewRenderedRow{{Content: rendered.Content}}
+		for len(rows) < rendered.Rows {
+			rows = append(rows, previewRenderedRow{TerminalConsumed: true})
+		}
+		return rows
+	}
+
 	contentLines := strings.Split(rendered.Content, "\n")
 	rows := make([]previewRenderedRow, 0, rendered.Rows)
 	for i, line := range contentLines {
@@ -118,12 +126,6 @@ func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth 
 			break
 		}
 		rows = append(rows, previewRenderedRow{Content: ansi.Truncate(line, innerWidth, "")})
-	}
-	if rendered.TerminalConsumesRows {
-		for len(rows) < rendered.Rows {
-			rows = append(rows, previewRenderedRow{TerminalConsumed: true})
-		}
-		return rows
 	}
 	for len(rows) < rendered.Rows {
 		rows = append(rows, previewRenderedRow{})

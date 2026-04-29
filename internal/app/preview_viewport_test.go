@@ -122,6 +122,31 @@ func TestPreviewRowsFromIterm2ImageMarksConsumedRows(t *testing.T) {
 	}
 }
 
+func TestPreviewRowsFromIterm2ControlBlockKeepsProtocolAtomic(t *testing.T) {
+	rendered := previewImageRenderResult{
+		Content:              "\r\x1b[2K\x1b[64C\n\r\x1b[2K\x1b[64C\n\r\x1b[2K\x1b[2A\x1b]1337;File=inline=1;width=64;height=3:payload\a",
+		Rows:                 3,
+		TerminalConsumesRows: true,
+	}
+
+	rows := previewRowsFromRenderedImage(rendered, 80)
+
+	if len(rows) != 3 {
+		t.Fatalf("row count = %d, want 3", len(rows))
+	}
+	if rows[0].TerminalConsumed {
+		t.Fatal("first row must carry the complete iTerm2 control block")
+	}
+	if rows[0].Content != rendered.Content {
+		t.Fatalf("iTerm2 control block was split or truncated:\ngot  %q\nwant %q", rows[0].Content, rendered.Content)
+	}
+	for i := 1; i < len(rows); i++ {
+		if !rows[i].TerminalConsumed {
+			t.Fatalf("row %d should be terminal-consumed reservation: %#v", i, rows[i])
+		}
+	}
+}
+
 func TestRenderPreviewDocumentViewportSkipsIterm2ConsumedPhysicalRows(t *testing.T) {
 	layout := previewDocumentLayout{
 		ImageMode: previewImageModeIterm2,

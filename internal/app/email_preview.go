@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/ai"
 	"mail-processor/internal/backend"
+	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 )
@@ -363,6 +364,9 @@ func (m *Model) renderFullScreenEmail() string {
 	innerW, maxBodyLines := m.timelineFullScreenDocumentBudget()
 
 	var sb strings.Builder
+	if m.currentPreviewImageMode() == previewImageModeIterm2 {
+		sb.WriteString(iterm2.ClearNativeRasterScreen())
+	}
 
 	email := m.timeline.selectedEmail
 	category := ""

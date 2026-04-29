@@ -177,6 +177,33 @@ func TestTimelineFullScreen_ItermRendersBoundedInlineImage(t *testing.T) {
 	}
 }
 
+func TestTimelineFullScreen_ItermClearsNativeRasterBeforeDrawing(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 80, 24)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+	m.timeline.fullScreen = true
+
+	rendered := m.renderFullScreenEmail()
+
+	if !strings.HasPrefix(rendered, "\x1b[2J\x1b[H") {
+		t.Fatalf("iTerm2 full-screen preview should clear stale native raster before drawing, got prefix %q", rendered[:min(len(rendered), 20)])
+	}
+	if !strings.Contains(rendered, "\x1b]1337;File=") {
+		t.Fatalf("expected iTerm2 raster escape after clear, got raw:\n%q", rendered)
+	}
+}
+
 func TestTimelineFullScreen_ItermUsesSafeLandscapeRasterBox(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	m := makeSizedModel(t, 120, 32)

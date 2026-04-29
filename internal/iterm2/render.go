@@ -10,9 +10,18 @@ import (
 	"strings"
 )
 
+const clearNativeRasterScreen = "\x1b[2J\x1b[H"
+
 // IsSupported returns true when the current terminal is iTerm2.
 func IsSupported() bool {
 	return strings.Contains(os.Getenv("TERM_PROGRAM"), "iTerm")
+}
+
+// ClearNativeRasterScreen clears the visible terminal before redrawing iTerm2
+// inline images. Native iTerm2 raster pixels can survive Bubble Tea's
+// line-diffed redraws, so full-screen image views need an explicit reset.
+func ClearNativeRasterScreen() string {
+	return clearNativeRasterScreen
 }
 
 // Render encodes imageData as an iTerm2 inline image escape sequence when the
