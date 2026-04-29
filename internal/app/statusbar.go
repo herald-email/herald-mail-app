@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/ai"
 )
 
 func (m *Model) topSyncStripSegments() (string, string) {

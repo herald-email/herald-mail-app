@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/cache"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // mockBackend is a minimal Backend stub for engine tests.

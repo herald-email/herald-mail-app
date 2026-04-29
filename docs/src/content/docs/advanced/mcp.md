@@ -3,24 +3,24 @@ title: MCP Server
 description: Connect Herald's cached mail, AI, contacts, drafts, rules, and daemon-backed write tools to MCP clients.
 ---
 
-Herald includes a standalone MCP server in `cmd/herald-mcp-server`. It speaks JSON-RPC over stdio, reads the configured SQLite cache, and uses the daemon for tools that must mutate mail or talk to IMAP/SMTP live.
+Herald exposes its MCP server through the primary `herald mcp` subcommand. It speaks JSON-RPC over stdio, reads the configured SQLite cache, and uses the daemon for tools that must mutate mail or talk to IMAP/SMTP live. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper for existing MCP configs.
 
 ## Build and Run
 
 ```sh
-go build -o bin/herald-mcp-server ./cmd/herald-mcp-server
-./bin/herald-mcp-server -config ~/.herald/conf.yaml
+go build -o bin/herald ./cmd/herald
+./bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 Smoke-test the server:
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 If the cache is empty, open the TUI first and let Herald sync at least one folder.
 
-<!-- HERALD_SCREENSHOT id="mcp-tools-list-terminal" page="mcp" alt="MCP tools list smoke test output" state="local shell, cache initialized" desc="Shows a tools/list JSON-RPC smoke test proving the Herald MCP server is discoverable." capture="terminal; go build -o bin/herald-mcp-server ./cmd/herald-mcp-server; echo tools/list JSON into ./bin/herald-mcp-server" -->
+<!-- HERALD_SCREENSHOT id="mcp-tools-list-terminal" page="mcp" alt="MCP tools list smoke test output" state="local shell, cache initialized" desc="Shows a tools/list JSON-RPC smoke test proving the Herald MCP server is discoverable." capture="terminal; go build -o bin/herald ./cmd/herald; echo tools/list JSON into ./bin/herald mcp" -->
 
 ![MCP tools list smoke test output](/screenshots/mcp-tools-list-terminal.png)
 
@@ -40,7 +40,7 @@ Recommended live setup:
 ```sh
 herald serve -config ~/.herald/conf.yaml
 herald status
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 ## Client Examples
@@ -48,7 +48,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server 
 Claude Code:
 
 ```sh
-claude mcp add herald -- "$(pwd)/bin/herald-mcp-server" -config ~/.herald/conf.yaml
+claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
 ```
 
 Cursor `.cursor/mcp.json`:
@@ -57,8 +57,8 @@ Cursor `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald-mcp-server",
-      "args": ["-config", "~/.herald/conf.yaml"]
+      "command": "/path/to/herald/bin/herald",
+      "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
 }
@@ -67,7 +67,7 @@ Cursor `.cursor/mcp.json`:
 Codex:
 
 ```sh
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald-mcp-server","args":["-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ## Tool Categories

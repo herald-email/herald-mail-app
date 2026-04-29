@@ -106,13 +106,25 @@ yet, so macOS Gatekeeper may warn until the packaging milestone adds signing.
 ### Build from source
 
 ```bash
-# Build (Go 1.25+ required)
+# Install the primary CLI from source (Go 1.25+ required)
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+
+# Or build from a checkout
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
 
 # Run (first launch shows setup wizard)
 ./bin/herald
+```
+
+The canonical Go install path is `github.com/herald-email/herald-mail-app/cmd/herald`;
+it installs a binary named `herald`. The legacy wrapper packages remain
+installable for compatibility:
+
+```bash
+go install github.com/herald-email/herald-mail-app/cmd/herald-mcp-server@latest
+go install github.com/herald-email/herald-mail-app/cmd/herald-ssh-server@latest
 ```
 
 ---
@@ -199,7 +211,7 @@ Herald exposes an MCP server over stdio through `herald mcp`, so AI tools can re
 ![Herald MCP server demo](assets/demo/mcp-demo.gif)
 
 ```bash
-go build -o bin/herald ./main.go
+go build -o bin/herald ./cmd/herald
 ```
 
 ### Claude Code

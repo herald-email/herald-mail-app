@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"mail-processor/internal/sshserver"
+	"github.com/herald-email/herald-mail-app/internal/sshserver"
 )
 
 func main() {

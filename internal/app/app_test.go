@@ -9,9 +9,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/config"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // TestValidIDsMsg_HandlerExists verifies that ValidIDsMsg is a defined type and

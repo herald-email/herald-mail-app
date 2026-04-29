@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/ai"
 )
 
 const maxToolRounds = 5

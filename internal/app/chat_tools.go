@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // chatToolRegistry returns the list of tools available in the chat panel

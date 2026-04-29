@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/config"
-	"mail-processor/internal/render"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 // SettingsMode controls wizard vs panel layout.

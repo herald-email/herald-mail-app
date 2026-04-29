@@ -1,7 +1,7 @@
 package cleanup
 
 import (
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // noopBackend is a no-op implementation of backend.Backend for tests.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"mail-processor/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/demo"
 )
 
 func TestDemoBackendFetchesRichFixtureBodies(t *testing.T) {

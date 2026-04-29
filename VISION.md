@@ -59,6 +59,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`herald serve`, Ollama-style)
+- [x] Source installs use the canonical Go module path and `cmd/herald` package so `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` creates a `herald` binary.
 - [x] Email rendering package (`internal/render` — independent, testable component)
 - [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc.)
 - [ ] Link display modes (full URL, title-only clickable, sanitized)

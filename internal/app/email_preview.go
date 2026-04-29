@@ -9,12 +9,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/iterm2"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	emailrender "mail-processor/internal/render"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/iterm2"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
 
 func fitPanelContentHeight(content string, target int) string {

@@ -13,11 +13,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	"mail-processor/internal/render"
-	"mail-processor/internal/rules"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
+	"github.com/herald-email/herald-mail-app/internal/rules"
 )
 
 var spinnerChars = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}

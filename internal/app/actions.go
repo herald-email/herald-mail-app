@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/filesafe"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/filesafe"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func expandTilde(path string) string {

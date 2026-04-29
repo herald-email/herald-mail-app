@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 type imagePreviewLink struct {

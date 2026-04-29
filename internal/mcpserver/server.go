@@ -20,14 +20,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
+	buildversion "github.com/herald-email/herald-mail-app/internal/version"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/config"
-	"mail-processor/internal/models"
-	rulesengine "mail-processor/internal/rules"
-	buildversion "mail-processor/internal/version"
 )
 
 // daemonURL is the base URL of the running herald daemon.

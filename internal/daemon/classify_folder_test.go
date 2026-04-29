@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // mockClassifier implements ai.AIClient and always returns the given category.
@@ -23,12 +23,12 @@ type mockClassifier struct {
 func (m *mockClassifier) Classify(sender, subject string) (ai.Category, error) {
 	return m.category, m.err
 }
-func (m *mockClassifier) Chat(_ []ai.ChatMessage) (string, error)                            { return "", nil }
+func (m *mockClassifier) Chat(_ []ai.ChatMessage) (string, error) { return "", nil }
 func (m *mockClassifier) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string, []ai.ToolCall, error) {
 	return "", nil, nil
 }
-func (m *mockClassifier) Embed(_ string) ([]float32, error)     { return nil, nil }
-func (m *mockClassifier) SetEmbeddingModel(_ string)             {}
+func (m *mockClassifier) Embed(_ string) ([]float32, error) { return nil, nil }
+func (m *mockClassifier) SetEmbeddingModel(_ string)        {}
 func (m *mockClassifier) GenerateQuickReplies(_, _, _ string) ([]string, error) {
 	return nil, nil
 }

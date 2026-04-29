@@ -15,11 +15,11 @@ import (
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap-idle"
 	"github.com/emersion/go-imap/client"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/config"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	"mail-processor/internal/oauth"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
 // ErrIDLENotSupported is returned by StartIDLE when the server lacks IDLE capability.

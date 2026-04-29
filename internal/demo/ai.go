@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"mail-processor/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/ai"
 )
 
 // AI is a deterministic offline AI client for demo mode.

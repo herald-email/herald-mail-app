@@ -1,7 +1,7 @@
 package ai
 
 import (
-	"mail-processor/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"testing"
 )
 

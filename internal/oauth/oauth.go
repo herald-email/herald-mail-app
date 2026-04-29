@@ -16,7 +16,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	"mail-processor/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 // Scopes required for Gmail IMAP access.

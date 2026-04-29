@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // notify sends a desktop notification.

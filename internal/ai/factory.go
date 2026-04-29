@@ -1,6 +1,6 @@
 package ai
 
-import "mail-processor/internal/config"
+import "github.com/herald-email/herald-mail-app/internal/config"
 
 // NewFromConfig constructs the right AIClient based on cfg.AI.Provider.
 // Returns (nil, nil) when no AI credentials are configured.

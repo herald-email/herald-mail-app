@@ -1,6 +1,6 @@
 package mcpserver
 
-import "mail-processor/internal/models"
+import "github.com/herald-email/herald-mail-app/internal/models"
 
 func mcpMessageIDRef(email *models.EmailData) string {
 	if email == nil || email.MessageID == "" {

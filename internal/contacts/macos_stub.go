@@ -2,7 +2,7 @@
 
 package contacts
 
-import "mail-processor/internal/models"
+import "github.com/herald-email/herald-mail-app/internal/models"
 
 // ImportFromAppleContacts is a no-op on non-macOS platforms.
 func ImportFromAppleContacts() ([]models.ContactAddr, error) {

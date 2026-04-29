@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/config"
-	"mail-processor/internal/oauth"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
 // OAuthWaitModel is a tea.Model for the OAuth waiting screen.

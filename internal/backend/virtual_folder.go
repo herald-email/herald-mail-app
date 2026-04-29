@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 const virtualFolderAllMailOnlyName = "All Mail only"

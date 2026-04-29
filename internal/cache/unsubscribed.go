@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // RecordUnsubscribe inserts or replaces an unsubscribe record for a sender.

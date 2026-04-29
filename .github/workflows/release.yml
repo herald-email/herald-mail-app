@@ -80,13 +80,13 @@ jobs:
           mkdir -p "${out_dir}"
 
           ldflags="-s -w"
-          ldflags="${ldflags} -X mail-processor/internal/version.Version=${GITHUB_REF_NAME}"
-          ldflags="${ldflags} -X mail-processor/internal/version.Commit=${GITHUB_SHA}"
-          ldflags="${ldflags} -X mail-processor/internal/version.Date=${build_date}"
-          ldflags="${ldflags} -X mail-processor/internal/oauth.defaultClientID=${HERALD_GOOGLE_CLIENT_ID}"
-          ldflags="${ldflags} -X mail-processor/internal/oauth.defaultClientSecret=${HERALD_GOOGLE_CLIENT_SECRET}"
+          ldflags="${ldflags} -X github.com/herald-email/herald-mail-app/internal/version.Version=${GITHUB_REF_NAME}"
+          ldflags="${ldflags} -X github.com/herald-email/herald-mail-app/internal/version.Commit=${GITHUB_SHA}"
+          ldflags="${ldflags} -X github.com/herald-email/herald-mail-app/internal/version.Date=${build_date}"
+          ldflags="${ldflags} -X github.com/herald-email/herald-mail-app/internal/oauth.defaultClientID=${HERALD_GOOGLE_CLIENT_ID}"
+          ldflags="${ldflags} -X github.com/herald-email/herald-mail-app/internal/oauth.defaultClientSecret=${HERALD_GOOGLE_CLIENT_SECRET}"
 
-          go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald" ./main.go
+          go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald" ./cmd/herald
           go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald-mcp-server" ./cmd/herald-mcp-server
           go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald-ssh-server" ./cmd/herald-ssh-server
 

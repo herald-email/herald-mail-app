@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mail-processor/internal/backend"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // newReplyTestServer builds a daemon Server wired to a DemoBackend for reply/forward/attachment tests.

@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // RuleEditorDoneMsg is sent when the user completes the rule editor form.

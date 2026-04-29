@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"mail-processor/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 type folderLoadRequest struct {

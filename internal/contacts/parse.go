@@ -3,7 +3,7 @@ package contacts
 import (
 	"strings"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // parseAppleScriptOutput parses the "Name|email\n" output from the AppleScript.

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // RemoteBackend implements Backend by calling the Herald daemon over HTTP.

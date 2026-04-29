@@ -11,7 +11,7 @@ This manual QA specification defines the acceptance criteria for Herald's TUI ac
 ### Build targets
 
 ```bash
-go build -o /tmp/herald ./main.go
+go build -o /tmp/herald ./cmd/herald
 go build -o /tmp/herald-ssh ./cmd/herald-ssh-server  # compatibility wrapper
 go build -o /tmp/herald-mcp ./cmd/herald-mcp-server  # compatibility wrapper
 ```

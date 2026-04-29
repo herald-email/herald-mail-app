@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"mail-processor/internal/app"
+	"github.com/herald-email/herald-mail-app/internal/app"
 )
 
 func TestConfigNeedsOnboarding_MissingFile(t *testing.T) {

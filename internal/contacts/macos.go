@@ -5,7 +5,7 @@ package contacts
 import (
 	"os/exec"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // ImportFromAppleContacts runs an AppleScript to list all contacts from macOS Contacts.app.

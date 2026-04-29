@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // SaveRule inserts or replaces a rule. Marshals Actions to JSON.

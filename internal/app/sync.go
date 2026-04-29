@@ -5,8 +5,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	imapClient "mail-processor/internal/imap"
-	"mail-processor/internal/logger"
+	imapClient "github.com/herald-email/herald-mail-app/internal/imap"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 // --- Background sync helpers ---

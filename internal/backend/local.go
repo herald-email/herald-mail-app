@@ -10,14 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/config"
-	"mail-processor/internal/filesafe"
-	"mail-processor/internal/imap"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	appsmtp "mail-processor/internal/smtp"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/filesafe"
+	"github.com/herald-email/herald-mail-app/internal/imap"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 // LocalBackend implements Backend with a direct IMAP connection and local SQLite cache.

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	_ "github.com/mattn/go-sqlite3"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
 )
 
 // Cache manages the SQLite email cache

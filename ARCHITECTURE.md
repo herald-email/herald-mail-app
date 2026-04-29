@@ -25,6 +25,9 @@ This document describes the current system design (Phase 1) and the target archi
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
+cmd/herald       → primary Go-installable CLI package (`go install .../cmd/herald@latest`)
+                  delegates to the shared internal CLI runner
+root main.go     → local development wrapper around the same shared CLI runner
 herald ssh       → runs the same TUI over SSH (charmbracelet/wish)
                   each SSH session gets its own LocalBackend
 cmd/herald-ssh-server  → compatibility wrapper for `herald ssh`
@@ -37,6 +40,7 @@ cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 
 | Package | Responsibility |
 |---------|---------------|
+| `internal/cli` | Shared primary CLI runner used by `cmd/herald` and the repository-root development wrapper; dispatches TUI, daemon, MCP, and SSH subcommands |
 | `internal/app` | Bubble Tea model (Init/Update/View), all UI state, message types, key handling |
 | `internal/backend` | `Backend` interface + `LocalBackend` implementation wiring IMAP and cache |
 | `internal/demo` | Shared fictional demo fixtures and deterministic AI used by TUI demo mode and MCP `--demo` |

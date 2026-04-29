@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 type aiStatusStub struct {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"golang.org/x/net/html"
-	"mail-processor/internal/models"
 )
 
 // PreservedMessageRequest describes an outgoing reply or forward where the

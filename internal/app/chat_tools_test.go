@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // stubBackend is a minimal backend.Backend implementation for unit tests.

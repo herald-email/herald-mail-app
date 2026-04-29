@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // Message is one complete demo email fixture: metadata, body, expected AI tag,

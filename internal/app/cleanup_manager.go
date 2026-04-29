@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // CleanupManagerOpenMsg opens the cleanup manager overlay.

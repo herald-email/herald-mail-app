@@ -5,9 +5,9 @@ package imap
 import (
 	"testing"
 
-	"mail-processor/internal/cache"
-	"mail-processor/internal/models"
-	"mail-processor/internal/testutil"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/testutil"
 )
 
 // newIntegrationCache returns an in-memory SQLite cache for integration tests.

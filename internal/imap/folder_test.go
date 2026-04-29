@@ -5,8 +5,8 @@ package imap
 import (
 	"testing"
 
-	"mail-processor/internal/models"
-	"mail-processor/internal/testutil"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/testutil"
 )
 
 // TestCreateMailbox verifies that CreateMailbox creates a new mailbox

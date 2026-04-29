@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- mock Store ---
 
 type mockStore struct {
-	rules            []*models.Rule
-	prompts          map[int64]*models.CustomPrompt
-	log              []*models.RuleActionLogEntry
-	savedCategories  map[string]string // "messageID:promptID" -> result
+	rules           []*models.Rule
+	prompts         map[int64]*models.CustomPrompt
+	log             []*models.RuleActionLogEntry
+	savedCategories map[string]string // "messageID:promptID" -> result
 }
 
 func (m *mockStore) GetEnabledRules() ([]*models.Rule, error) { return m.rules, nil }
@@ -50,9 +50,9 @@ func (m *mockStore) TouchRuleLastTriggered(int64) error { return nil }
 // --- mock Executor ---
 
 type mockExecutor struct {
-	moved    []string
-	archived []string
-	deleted  []string
+	moved     []string
+	archived  []string
+	deleted   []string
 	errOnMove error
 }
 
@@ -318,8 +318,8 @@ func (m *mockAI) ChatWithTools(messages []ai.ChatMessage, tools []ai.Tool) (stri
 	return m.response, nil, m.err
 }
 func (m *mockAI) Classify(sender, subject string) (ai.Category, error) { return "", nil }
-func (m *mockAI) Embed(text string) ([]float32, error)                  { return nil, nil }
-func (m *mockAI) SetEmbeddingModel(model string)                        {}
+func (m *mockAI) Embed(text string) ([]float32, error)                 { return nil, nil }
+func (m *mockAI) SetEmbeddingModel(model string)                       {}
 func (m *mockAI) GenerateQuickReplies(sender, subject, bodyPreview string) ([]string, error) {
 	return nil, nil
 }

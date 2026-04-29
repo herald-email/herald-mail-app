@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/emersion/go-imap"
-	"mail-processor/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 // DeleteSenderEmails deletes all emails from a sender in both IMAP and cache.

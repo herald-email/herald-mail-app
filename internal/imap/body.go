@@ -13,9 +13,9 @@ import (
 	"strings"
 
 	"github.com/emersion/go-imap"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	emailrender "mail-processor/internal/render"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
 
 // FetchEmailBody retrieves the full MIME body of the email identified by uid

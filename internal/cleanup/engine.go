@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"mail-processor/internal/backend"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // Engine executes cleanup rules against the email backend.

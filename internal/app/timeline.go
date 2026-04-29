@@ -9,9 +9,9 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/iterm2"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/iterm2"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- Thread grouping types ---

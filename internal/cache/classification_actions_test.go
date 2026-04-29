@@ -3,7 +3,7 @@ package cache
 import (
 	"testing"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func newTestCacheForRules(t *testing.T) *Cache {

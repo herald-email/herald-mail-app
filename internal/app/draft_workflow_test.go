@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 type timelineDraftBackend struct {

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // draftFolderCandidates is the ordered list of well-known Drafts folder names to try.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // seedContact inserts a single contact row directly via UpsertContacts.
@@ -344,4 +344,3 @@ func TestCosineSimilarity_SanityCheck(t *testing.T) {
 		t.Errorf("opposite vectors: expected ~-1.0, got %f", got)
 	}
 }
-

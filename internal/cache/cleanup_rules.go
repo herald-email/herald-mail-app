@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // SaveCleanupRule inserts a new rule (ID==0) or updates an existing one.

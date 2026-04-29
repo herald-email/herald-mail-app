@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"mail-processor/internal/kittyimg"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/kittyimg"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestLayoutPreviewDocumentOrdersTextAndImages(t *testing.T) {

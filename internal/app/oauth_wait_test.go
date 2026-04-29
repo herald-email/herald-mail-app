@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/config"
-	"mail-processor/internal/oauth"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
 // TestNewOAuthWaitModel_ReturnsValidModel verifies that NewOAuthWaitModel returns a

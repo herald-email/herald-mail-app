@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"golang.org/x/net/html"
-	"mail-processor/internal/models"
 )
 
 // EmailBodyMarkdown returns the terminal-preview Markdown for a received email.

@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"mail-processor/internal/demo"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func seedDemoContacts() []models.ContactData {

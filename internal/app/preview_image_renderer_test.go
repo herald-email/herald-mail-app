@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func tinyPNG(t *testing.T, w, h int) []byte {

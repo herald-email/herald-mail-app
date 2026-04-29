@@ -24,7 +24,7 @@ import (
 	"github.com/emersion/go-imap/backend"
 	imapmemory "github.com/emersion/go-imap/backend/memory"
 	"github.com/emersion/go-imap/server"
-	"mail-processor/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 // bytesLiteral wraps a []byte so it satisfies the imap.Literal interface.

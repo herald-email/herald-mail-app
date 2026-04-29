@@ -20,7 +20,7 @@ If the cache is empty, run the TUI first and wait for it to finish syncing.
 ### 2. Build the Herald binary
 
 ```bash
-go build -o /tmp/herald-test ./main.go
+go build -o /tmp/herald-test ./cmd/herald
 go build -o /tmp/herald-mcp-server-test ./cmd/herald-mcp-server  # compatibility wrapper
 ```
 
@@ -107,6 +107,7 @@ Remove the test binaries: `rm /tmp/herald-test /tmp/herald-mcp-server-test`
 - Root help advertises `herald mcp`.
 - `herald mcp --version` exits successfully without loading config.
 - Legacy `herald-mcp-server --version` exits successfully and remains available for existing MCP configs.
+- `GOBIN=$(mktemp -d) go install ./cmd/herald` creates a binary named `herald`.
 
 ### TC-MCP-01 — Server starts and registers tools
 

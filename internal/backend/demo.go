@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"mail-processor/internal/demo"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // DemoBackendMarker is detected by the app to show [DEMO] in the status bar.

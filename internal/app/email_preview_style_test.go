@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/muesli/termenv"
-	"mail-processor/internal/models"
 )
 
 func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T) {

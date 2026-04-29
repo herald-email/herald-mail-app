@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- Embedding helpers ---

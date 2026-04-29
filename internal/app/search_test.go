@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/config"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 type embedErrorClassifier struct{ err error }

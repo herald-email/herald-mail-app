@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func readDeletionRequests(t *testing.T, ch <-chan models.DeletionRequest, want int) []models.DeletionRequest {

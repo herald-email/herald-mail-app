@@ -41,6 +41,13 @@ brew install herald
 ## Build from source
 
 ```sh
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+herald
+```
+
+That command installs the primary CLI binary as `herald`. For a local checkout:
+
+```sh
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build

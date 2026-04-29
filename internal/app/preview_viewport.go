@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"mail-processor/internal/kittyimg"
+	"github.com/herald-email/herald-mail-app/internal/kittyimg"
 )
 
 type previewLayoutOptions struct {

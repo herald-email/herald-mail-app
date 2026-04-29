@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/iterm2"
-	"mail-processor/internal/kittyimg"
-	"mail-processor/internal/models"
-	"mail-processor/internal/render"
+	"github.com/herald-email/herald-mail-app/internal/iterm2"
+	"github.com/herald-email/herald-mail-app/internal/kittyimg"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 const decodedPreviewImageMaxRows = 18

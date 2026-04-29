@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"mail-processor/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 )
 
 func newFolderTestServer(t *testing.T) *Server {

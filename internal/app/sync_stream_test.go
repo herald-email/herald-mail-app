@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestSyncAccumulator_MicrobatchesByCountThreshold(t *testing.T) {

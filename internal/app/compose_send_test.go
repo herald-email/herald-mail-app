@@ -3,9 +3,9 @@ package app
 import (
 	"testing"
 
-	"mail-processor/internal/backend"
-	"mail-processor/internal/config"
-	appsmtp "mail-processor/internal/smtp"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 func TestDemoComposeSendSimulatesSuccessWithoutSMTPConfig(t *testing.T) {

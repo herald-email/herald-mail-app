@@ -12,6 +12,8 @@ This section captures the user-visible behavior that makes the feature valuable 
 - [x] Running `herald ssh` starts the same Wish SSH TUI server that `herald-ssh-server` starts today.
 - [x] Running `herald mcp --version` and `herald ssh --version` works without loading config or opening network services.
 - [x] Legacy `herald-mcp-server` and `herald-ssh-server` binaries remain thin wrappers, so Homebrew formulas, MCP configs, and scripts do not break immediately.
+- [x] Source installs use `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` and produce a `herald` binary.
+- [x] The Go module path is the canonical GitHub import path, so remote `go install` and downstream imports do not use the local `mail-processor` module name.
 
 ## Architecture
 
@@ -22,6 +24,8 @@ This section defines the package boundary so the root binary and wrappers share 
 - [x] Keep `cmd/herald-mcp-server/main.go` and `cmd/herald-ssh-server/main.go` as small wrapper entrypoints.
 - [x] Add root command dispatch in `main.go` for `mcp` and `ssh` before falling back to the TUI.
 - [x] Keep daemon control subcommands (`serve`, `status`, `stop`, `sync`) unchanged.
+- [x] Move reusable root CLI startup into an importable internal package, then make both the repository-root development entrypoint and `cmd/herald` call it.
+- [x] Add `cmd/herald/main.go` as the canonical Go-installable package for the primary CLI.
 
 ## Acceptance
 
@@ -33,3 +37,7 @@ This section defines the minimum proof needed before the feature is ready for ha
 - [x] MCP smoke uses `herald mcp --demo` and `tools/list`.
 - [x] SSH smoke verifies `herald ssh --version` and `herald ssh --help` without starting a long-running server.
 - [x] README, VISION, ARCHITECTURE, MCP test plan, SSH test plan, TUI test plan, release workflow, and Homebrew formula tests document the new primary entrypoints while noting wrapper compatibility.
+- [x] `GOBIN=$(mktemp -d) go install ./cmd/herald` creates a binary named `herald`.
+- [x] `go build -o /tmp/herald ./cmd/herald` succeeds and `/tmp/herald --help` advertises `herald mcp` and `herald ssh`.
+- [x] `printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | /tmp/herald mcp --demo` returns a tools list.
+- [x] Source-install docs prefer `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` while keeping wrapper install paths documented as compatibility options.

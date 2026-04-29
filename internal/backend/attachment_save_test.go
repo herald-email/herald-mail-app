@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mail-processor/internal/filesafe"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/filesafe"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestLocalBackendSaveAttachmentRefusesExistingDestination(t *testing.T) {

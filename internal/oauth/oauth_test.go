@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 // TestRefreshIfNeeded_NonExpired verifies that when the stored access token

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"mail-processor/internal/config"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // Client sends email via SMTP (ProtonMail Bridge or compatible server)

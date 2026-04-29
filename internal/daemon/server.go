@@ -11,14 +11,14 @@ import (
 	"strconv"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/cache"
-	"mail-processor/internal/cleanup"
-	"mail-processor/internal/config"
-	"mail-processor/internal/filesafe"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/cleanup"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/filesafe"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // Server is the HTTP daemon that exposes the email backend over a REST+SSE API.

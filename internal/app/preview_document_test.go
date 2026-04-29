@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func blockTexts(blocks []previewDocumentBlock) []string {

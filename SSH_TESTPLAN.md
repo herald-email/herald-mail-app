@@ -10,7 +10,7 @@ Run this after any change to `herald ssh`, `internal/sshserver/`, `cmd/herald-ss
 ### 1. Build the Herald binary
 
 ```bash
-go build -o /tmp/herald-test ./main.go
+go build -o /tmp/herald-test ./cmd/herald
 go build -o /tmp/herald-ssh-server-test ./cmd/herald-ssh-server  # compatibility wrapper
 ```
 
@@ -115,6 +115,7 @@ tmux kill-session -t ssh_test
 - Root help advertises `herald ssh`.
 - `herald ssh --version` exits successfully without starting a listener.
 - Legacy `herald-ssh-server --version` exits successfully and remains available for existing scripts.
+- `GOBIN=$(mktemp -d) go install ./cmd/herald` creates a binary named `herald`.
 
 ### TC-SS-01 — Successful connection and initial render
 

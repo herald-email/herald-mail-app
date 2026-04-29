@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/herald-email/herald-mail-app/internal/models"
+	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 	"golang.org/x/net/html"
-	"mail-processor/internal/models"
-	emailrender "mail-processor/internal/render"
 )
 
 type previewDocumentBlockKind int

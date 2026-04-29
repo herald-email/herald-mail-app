@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/muesli/termenv"
-	"mail-processor/internal/models"
 )
 
 type layoutBackend struct {

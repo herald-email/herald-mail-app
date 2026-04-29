@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestSaveGetCustomCategory(t *testing.T) {

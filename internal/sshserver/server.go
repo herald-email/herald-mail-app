@@ -18,13 +18,13 @@ import (
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/bubbletea"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/app"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/config"
-	"mail-processor/internal/logger"
-	appsmtp "mail-processor/internal/smtp"
-	buildversion "mail-processor/internal/version"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/app"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
+	buildversion "github.com/herald-email/herald-mail-app/internal/version"
 )
 
 func Run(commandName string, args []string) error {

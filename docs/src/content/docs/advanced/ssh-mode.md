@@ -8,8 +8,8 @@ SSH mode wraps the full Herald TUI in a Charm Wish SSH server. Each SSH session 
 ## Build and Run
 
 ```sh
-go build -o bin/herald-ssh-server ./cmd/herald-ssh-server
-./bin/herald-ssh-server -config ~/.herald/conf.yaml -addr :2222
+go build -o bin/herald ./cmd/herald
+./bin/herald ssh -config ~/.herald/conf.yaml -addr :2222
 ```
 
 Connect from another terminal:
@@ -21,17 +21,17 @@ ssh -p 2222 localhost
 Use a specific host key path:
 
 ```sh
-./bin/herald-ssh-server -host-key .ssh/host_ed25519
+./bin/herald ssh -host-key .ssh/host_ed25519
 ```
 
 Use the daemon backend instead of opening IMAP per SSH session:
 
 ```sh
 ./bin/herald serve -config ~/.herald/conf.yaml
-./bin/herald-ssh-server -config ~/.herald/conf.yaml -daemon http://127.0.0.1:7272
+./bin/herald ssh -config ~/.herald/conf.yaml -daemon http://127.0.0.1:7272
 ```
 
-<!-- HERALD_SCREENSHOT id="ssh-mode-session" page="ssh-mode" alt="Herald TUI inside SSH session" state="local SSH, 120x40 client terminal" desc="Shows the full Herald TUI rendered through an SSH client with normal tab bar, panels, status bar, and key hints." capture="terminal; build ssh server; run ./bin/herald-ssh-server; connect with ssh -p 2222 localhost" deferred="true" reason="requires local SSH server session" -->
+<!-- HERALD_SCREENSHOT id="ssh-mode-session" page="ssh-mode" alt="Herald TUI inside SSH session" state="local SSH, 120x40 client terminal" desc="Shows the full Herald TUI rendered through an SSH client with normal tab bar, panels, status bar, and key hints." capture="terminal; build herald; run ./bin/herald ssh; connect with ssh -p 2222 localhost" deferred="true" reason="requires local SSH server session" -->
 
 ## User-Facing Behavior
 

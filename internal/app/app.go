@@ -11,13 +11,13 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/backend"
-	"mail-processor/internal/cleanup"
-	"mail-processor/internal/config"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	appsmtp "mail-processor/internal/smtp"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/cleanup"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 // Panel focus constants

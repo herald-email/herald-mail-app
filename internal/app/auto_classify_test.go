@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"mail-processor/internal/ai"
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // makeAutoClassifyModel builds a minimal Model suitable for auto-classify tests.

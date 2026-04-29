@@ -1,7 +1,7 @@
 package backend
 
 import (
-	"mail-processor/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // Backend defines the contract between the UI and email backend logic.

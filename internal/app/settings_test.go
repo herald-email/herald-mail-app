@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"mail-processor/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {

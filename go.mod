@@ -1,4 +1,4 @@
-module mail-processor
+module github.com/herald-email/herald-mail-app
 
 go 1.25.0
 

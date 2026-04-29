@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"mail-processor/internal/mcpserver"
+	"github.com/herald-email/herald-mail-app/internal/mcpserver"
 )
 
 func main() {

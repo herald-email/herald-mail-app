@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/logger"
 	"gopkg.in/yaml.v3"
-	"mail-processor/internal/logger"
 )
 
 // ExpandPath replaces a leading "~" with the current user's home directory.

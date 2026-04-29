@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"mail-processor/internal/ai"
-	"mail-processor/internal/logger"
-	"mail-processor/internal/models"
-	appsmtp "mail-processor/internal/smtp"
+	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 const (
