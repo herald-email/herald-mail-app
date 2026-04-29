@@ -3,24 +3,33 @@ title: MCP Setup
 description: Expose Herald email search and management tools to AI clients over stdio.
 ---
 
-Herald exposes MCP through the primary `herald mcp` subcommand. It reads the configured SQLite cache and exposes email tools over stdio. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper for existing configs.
+Herald exposes MCP through the primary `herald mcp` subcommand. It reads the configured SQLite cache and exposes email tools over stdio. The legacy `herald-mcp-server` binary remains available only as a compatibility wrapper for older configs.
 
-## Build
+## Install or Build
+
+```sh
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+```
+
+From a local checkout, you can also build the same primary CLI:
 
 ```sh
 go build -o bin/herald ./cmd/herald
 ```
 
+Use `./bin/herald` instead of `herald` in the examples below when you are
+testing the checkout binary directly.
+
 Use the same config path as the TUI:
 
 ```sh
-./bin/herald mcp -config ~/.herald/conf.yaml
+herald mcp -config ~/.herald/conf.yaml
 ```
 
 ## Quick smoke test
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | herald mcp -config ~/.herald/conf.yaml
 ```
 
 If the cache is empty, open the TUI first and let Herald sync at least one folder.
@@ -39,7 +48,7 @@ Use the same `-config` path for the TUI, daemon, and MCP server. Cache-only tool
 ## Claude Code
 
 ```sh
-claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
+claude mcp add herald -- herald mcp -config ~/.herald/conf.yaml
 ```
 
 ## Cursor
@@ -50,7 +59,7 @@ Add to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald",
+      "command": "herald",
       "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
@@ -65,7 +74,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald",
+      "command": "herald",
       "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
@@ -75,7 +84,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ## Codex
 
 ```sh
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ## Available tool categories

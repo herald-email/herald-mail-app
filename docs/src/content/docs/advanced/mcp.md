@@ -3,9 +3,17 @@ title: MCP Server
 description: Connect Herald's cached mail, AI, contacts, drafts, rules, and daemon-backed write tools to MCP clients.
 ---
 
-Herald exposes its MCP server through the primary `herald mcp` subcommand. It speaks JSON-RPC over stdio, reads the configured SQLite cache, and uses the daemon for tools that must mutate mail or talk to IMAP/SMTP live. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper for existing MCP configs.
+Herald exposes its MCP server through the primary `herald mcp` subcommand. It speaks JSON-RPC over stdio, reads the configured SQLite cache, and uses the daemon for tools that must mutate mail or talk to IMAP/SMTP live. The legacy `herald-mcp-server` binary remains available only as a compatibility wrapper for older MCP configs.
 
-## Build and Run
+## Install or Build
+
+```sh
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+herald mcp -config ~/.herald/conf.yaml
+```
+
+From a local checkout, build the same primary CLI and substitute `./bin/herald`
+for `herald` in the examples:
 
 ```sh
 go build -o bin/herald ./cmd/herald
@@ -15,7 +23,7 @@ go build -o bin/herald ./cmd/herald
 Smoke-test the server:
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | herald mcp -config ~/.herald/conf.yaml
 ```
 
 If the cache is empty, open the TUI first and let Herald sync at least one folder.
@@ -40,7 +48,7 @@ Recommended live setup:
 ```sh
 herald serve -config ~/.herald/conf.yaml
 herald status
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | herald mcp -config ~/.herald/conf.yaml
 ```
 
 ## Client Examples
@@ -48,7 +56,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config
 Claude Code:
 
 ```sh
-claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
+claude mcp add herald -- herald mcp -config ~/.herald/conf.yaml
 ```
 
 Cursor `.cursor/mcp.json`:
@@ -57,7 +65,7 @@ Cursor `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald",
+      "command": "herald",
       "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
@@ -67,7 +75,7 @@ Cursor `.cursor/mcp.json`:
 Codex:
 
 ```sh
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ## Tool Categories
@@ -92,7 +100,7 @@ At startup, the MCP server probes the configured daemon port, defaulting to `127
 Start the daemon when you want MCP tools to mutate mail:
 
 ```sh
-./bin/herald serve -config ~/.herald/conf.yaml
+herald serve -config ~/.herald/conf.yaml
 ```
 
 ## Data And Privacy

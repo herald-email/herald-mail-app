@@ -20,7 +20,11 @@ brew install herald
 herald
 ```
 
-Homebrew installs the release binaries for `herald`, `herald-mcp-server`, and `herald-ssh-server`, including the Gmail OAuth defaults used only when experimental OAuth onboarding is enabled.
+Homebrew installs the primary `herald` CLI. Use `herald mcp` for MCP and
+`herald ssh` for SSH mode; the package also includes `herald-mcp-server` and
+`herald-ssh-server` as compatibility wrappers for older configs and scripts.
+Release builds include the Gmail OAuth defaults used only when experimental
+OAuth onboarding is enabled.
 
 Update and upgrade:
 
@@ -38,14 +42,16 @@ brew tap herald-email/herald
 brew install herald
 ```
 
-## Build from source
+## Install from source with Go
 
 ```sh
 go install github.com/herald-email/herald-mail-app/cmd/herald@latest
 herald
 ```
 
-That command installs the primary CLI binary as `herald`. For a local checkout:
+That command installs the primary CLI binary as `herald`; its `mcp` and `ssh`
+subcommands replace the older standalone command names for new setups. For a
+local checkout:
 
 ```sh
 git clone https://github.com/herald-email/herald-mail-app.git

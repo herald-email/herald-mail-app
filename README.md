@@ -4,11 +4,12 @@
 
 ![Herald overview](assets/demo/overview.gif)
 
-Herald is keyboard-first, but it is not keyboard-only. In modern terminals you
-can click the top tabs, folder/sidebar rows, Timeline and Cleanup rows, and use
-the mouse wheel or trackpad to scroll lists and email previews. Email links
-render as OSC 8 hyperlinks when your terminal supports them, so readable labels
-like `Display in your browser` still open the real URL.
+Herald is keyboard-first, but it is not keyboard-only. Press `?` anywhere
+Herald owns keyboard input to open context-sensitive shortcut help. In modern
+terminals you can click the top tabs, folder/sidebar rows, Timeline and Cleanup
+rows, and use the mouse wheel or trackpad to scroll lists and email previews.
+Email links render as OSC 8 hyperlinks when your terminal supports them, so
+readable labels like `Display in your browser` still open the real URL.
 
 ![Mouse navigation and clickable email links in Herald](assets/demo/mouse-navigation-links.png)
 
@@ -103,7 +104,7 @@ brew install herald
 Direct browser downloads from GitHub are not Developer ID signed or notarized
 yet, so macOS Gatekeeper may warn until the packaging milestone adds signing.
 
-### Build from source
+### Install from source with Go
 
 ```bash
 # Install the primary CLI from source (Go 1.25+ required)
@@ -119,8 +120,9 @@ make build
 ```
 
 The canonical Go install path is `github.com/herald-email/herald-mail-app/cmd/herald`;
-it installs a binary named `herald`. The legacy wrapper packages remain
-installable for compatibility:
+it installs a binary named `herald`. Use `herald mcp` and `herald ssh` for the
+MCP and SSH surfaces. The legacy wrapper packages remain installable only for
+existing configs and scripts that still call the old binary names:
 
 ```bash
 go install github.com/herald-email/herald-mail-app/cmd/herald-mcp-server@latest
@@ -206,22 +208,28 @@ press `m` again to restore Herald's mouse capture.
 
 ## MCP Setup
 
-Herald exposes an MCP server over stdio through `herald mcp`, so AI tools can read and manage email without opening the TUI. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper.
+Herald exposes an MCP server over stdio through `herald mcp`, so AI tools can read and manage email without opening the TUI. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper for older MCP configs.
 
 ![Herald MCP server demo](assets/demo/mcp-demo.gif)
 
 ```bash
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+
+# Or build from a checkout:
 go build -o bin/herald ./cmd/herald
 ```
+
+Use `./bin/herald` instead of `herald` in the examples below when you are
+testing the checkout binary directly.
 
 ### Claude Code
 
 ```
 Add a local MCP server called "herald" that runs this command:
-/path/to/herald/bin/herald mcp -config ~/.herald/conf.yaml
+herald mcp -config ~/.herald/conf.yaml
 ```
 
-Or run this from the herald directory:
+Or run this from a source checkout:
 ```bash
 claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
 ```
@@ -234,7 +242,7 @@ Add to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald",
+      "command": "herald",
       "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
@@ -249,7 +257,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald",
+      "command": "herald",
       "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
@@ -259,13 +267,13 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ### Codex
 
 ```bash
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ### Generic (any stdio MCP client)
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | herald mcp -config ~/.herald/conf.yaml
 ```
 
 ### MCP Readiness Checklist
@@ -331,8 +339,8 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 | `f` / `Alt+F` | Toggle folder sidebar (`Alt+F` also works while composing) |
 | `l` / `Alt+L` | Toggle logs (`Alt+L` also works while composing) |
 | `r` / `Alt+R` | Refresh current folder (`Alt+R` also works while composing) |
-| `/` | Search |
-| `?` | Semantic search |
+| `/` | Search; type `? query` inside search for semantic search when AI/embeddings are available |
+| `?` | Open context-sensitive shortcut help |
 | `q` | Quit in browse contexts only |
 | `Ctrl+C` | Quit from any state, including text inputs |
 

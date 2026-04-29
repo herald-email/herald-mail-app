@@ -18,7 +18,7 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 | Recent email list | Up to 20 recent messages for the selected contact. |
 | Inline preview | Body preview for the selected recent email. |
 | Keyword search | `/` prompt and filtered contact list. |
-| Semantic search | `?` prompt and AI/embedding-backed contact results. |
+| Semantic search | `/` search input with a `? query` prefix and AI/embedding-backed contact results. |
 | Status and hints | Contact load/enrichment messages and contact-specific key hints. |
 
 <!-- HERALD_SCREENSHOT id="contacts-main-list" page="contacts" alt="Contacts tab list and detail panels" state="demo mode, 120x40, Contacts tab active" desc="Shows contact list columns, empty or selected detail panel, contact count, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 4" -->
@@ -30,7 +30,8 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
 | `/` | Contacts list | Search mode closed. | Opens keyword search. |
-| `?` | Contacts list | Search mode closed. | Opens semantic search. |
+| `?` | Contacts list | Search mode closed. | Opens context-sensitive shortcut help. |
+| `? query` | Contacts search | AI/embeddings available. | Runs semantic search. |
 | Printable text | Search mode | Keyword or semantic search active. | Updates the search query and filtered list. |
 | `backspace` / `ctrl+h` | Search mode | Search query has characters. | Deletes one character and reapplies search. |
 | `enter` | Search mode | Search active. | Confirms current results and closes search input. |
@@ -64,8 +65,8 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 
 ### Search Contacts
 
-1. Press `/` for keyword search or `?` for semantic search.
-2. Type a name, email, company, topic, or concept.
+1. Press `/`.
+2. Type a name, email, company, topic, or concept. Begin with `?` for semantic search.
 3. Press `enter` to keep the filtered results.
 4. Press `esc` to clear search.
 

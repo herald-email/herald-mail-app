@@ -24,6 +24,7 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `r` / `alt+r` | Refresh the current folder; use `alt+r` while composing. |
 | `S` | Open settings. |
 | `a` | Start AI classification for the current folder. |
+| `?` | Open context-sensitive shortcut help. When help is open, `?`, `esc`, or `q` closes it. |
 | `esc` | Close or unwind the active transient state. |
 
 ## Mouse
@@ -85,7 +86,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Plain query | Local search while typing. |
 | `/b ` | Body/FTS search over cached bodies. |
 | `/*` | Cross-folder cached search. |
-| `?` prefix | Semantic search when AI/embeddings are available. |
+| `?` prefix after `/` | Semantic search when AI/embeddings are available. |
 | `enter` | Run search or focus existing results. |
 | `tab` / `ctrl+i` | Run server IMAP search from search input. |
 | `esc` | Close preview, leave results, or clear search depending on current search state. |
@@ -144,7 +145,8 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Key | Result |
 | --- | --- |
 | `/` | Start keyword contact search. |
-| `?` | Start semantic contact search. |
+| `?` | Open context-sensitive shortcut help. |
+| `?` prefix after `/` | Run semantic contact search when AI/embeddings are available. |
 | Printable text | Add characters to active contact search. |
 | `backspace` / `ctrl+h` | Delete a search character. |
 | `enter` | Confirm search, open contact detail, or open recent email preview depending on focus. |
@@ -163,6 +165,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Attachment save prompt | `enter` save, `esc` cancel, text edits path. |
 | Logs | `l` close, `j`/`k` or arrows scroll, `q` quit. |
 | Chat | `enter` send, `esc` or `tab` close/leave chat, `q` quit. |
+| Shortcut help | `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
 | Rule editor | Form navigation, `esc` cancel. |
 | Prompt editor | Form navigation, `esc` cancel. |
 | Cleanup manager | `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |

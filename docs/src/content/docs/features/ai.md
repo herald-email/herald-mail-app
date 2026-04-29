@@ -17,7 +17,7 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | Classification tags | Timeline and Cleanup tag columns or preview tag lines. |
 | Classification progress | Status fragment like current/total tag progress. |
 | Embedding progress | Status fragment for embedding batch processing. |
-| Semantic search | Timeline `?` query prefix and Contacts `?` mode. |
+| Semantic search | Timeline and Contacts search queries that start with `?` after opening search with `/`. |
 | Quick reply picker | Canned replies plus optional AI-generated replies. |
 | Chat panel | AI conversation over recent mailbox context and tool results. |
 | Compose AI panel | Rewrite prompt, quick actions, AI response, and accept control. |
@@ -33,8 +33,8 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | --- | --- | --- | --- |
 | `a` | Main UI | AI classifier configured and folder has classifiable mail. | Starts classification for the current folder. |
 | `A` | Timeline or Cleanup preview | AI configured and a target email is selected. | Re-classifies the current single email. |
-| `?` | Timeline search prefix | AI/embeddings available. | Runs semantic email search. |
-| `?` | Contacts | AI/embeddings available. | Opens semantic contact search. |
+| `? query` | Timeline search after `/` | AI/embeddings available. | Runs semantic email search. |
+| `? query` | Contacts search after `/` | AI/embeddings available. | Runs semantic contact search. |
 | `ctrl+q` | Timeline | Current email exists. | Opens quick reply picker with canned and optional AI choices. |
 | `c` | Main UI | AI configured, not loading, width allows chat. | Opens chat panel. |
 | `ctrl+g` | Compose | AI configured. | Opens Compose AI assistant panel. |

@@ -18,9 +18,13 @@ herald
 On macOS, Homebrew is the default install path and includes release binaries
 with Gmail OAuth defaults built in for the experimental OAuth path.
 
-For source development:
+For source installs or development:
 
 ```sh
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+herald
+
+# Or build from a checkout:
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
@@ -47,7 +51,7 @@ Herald's keyboard model stays complete, but you can also click and scroll the ma
 - [Compose](/using-herald/compose/) sends new mail, replies, and forwards with To/CC/BCC fields, address autocomplete, Markdown preview, attachments, drafts, and optional AI assistance.
 - [Cleanup](/using-herald/cleanup/) groups mail by sender or domain for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, cleanup schedules, and mouse-assisted summary/detail navigation.
 - [Contacts](/using-herald/contacts/) lists known senders, opens contact details, shows recent mail, previews messages inline, and supports keyword or semantic contact search.
-- [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
+- [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, `?` shortcut help, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
 - [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, and sync status.
 - [Advanced guides](/advanced/mcp/) cover MCP, SSH mode, daemon commands, demo GIF generation, and privacy/security expectations.
 

@@ -3,9 +3,17 @@ title: SSH Mode
 description: Serve the Herald TUI over SSH for remote terminal access.
 ---
 
-SSH mode wraps the full Herald TUI in a Charm Wish SSH server. Each SSH session can either open its own local backend connection or connect to a running Herald daemon.
+SSH mode wraps the full Herald TUI in a Charm Wish SSH server. Each SSH session can either open its own local backend connection or connect to a running Herald daemon. New setups should use the primary `herald ssh` subcommand; `herald-ssh-server` is retained only as a compatibility wrapper for older scripts.
 
-## Build and Run
+## Install or Build
+
+```sh
+go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+herald ssh -config ~/.herald/conf.yaml -addr :2222
+```
+
+From a local checkout, build the same primary CLI and substitute `./bin/herald`
+for `herald` in the examples:
 
 ```sh
 go build -o bin/herald ./cmd/herald
@@ -21,14 +29,14 @@ ssh -p 2222 localhost
 Use a specific host key path:
 
 ```sh
-./bin/herald ssh -host-key .ssh/host_ed25519
+herald ssh -host-key .ssh/host_ed25519
 ```
 
 Use the daemon backend instead of opening IMAP per SSH session:
 
 ```sh
-./bin/herald serve -config ~/.herald/conf.yaml
-./bin/herald ssh -config ~/.herald/conf.yaml -daemon http://127.0.0.1:7272
+herald serve -config ~/.herald/conf.yaml
+herald ssh -config ~/.herald/conf.yaml -daemon http://127.0.0.1:7272
 ```
 
 <!-- HERALD_SCREENSHOT id="ssh-mode-session" page="ssh-mode" alt="Herald TUI inside SSH session" state="local SSH, 120x40 client terminal" desc="Shows the full Herald TUI rendered through an SSH client with normal tab bar, panels, status bar, and key hints." capture="terminal; build herald; run ./bin/herald ssh; connect with ssh -p 2222 localhost" deferred="true" reason="requires local SSH server session" -->
@@ -43,7 +51,7 @@ SSH mode creates or uses an SSH host key path. Bind to a local address or protec
 
 ## Troubleshooting
 
-If connection fails, verify the server is running and listening on the expected address. If the TUI opens but mail fails, check config path and provider connectivity on the server machine. If daemon mode fails, run `./bin/herald status`.
+If connection fails, verify the server is running and listening on the expected address. If the TUI opens but mail fails, check config path and provider connectivity on the server machine. If daemon mode fails, run `herald status`.
 
 ## Related Pages
 

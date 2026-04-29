@@ -7,7 +7,7 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, and context-sensitive key hints. Most work happens in one of four tabs: Timeline, Compose, Cleanup, or Contacts, and the common navigation surfaces work with both keys and mouse input.
+Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and a `?` shortcut help overlay. Most work happens in one of four tabs: Timeline, Compose, Cleanup, or Contacts, and the common navigation surfaces work with both keys and mouse input.
 
 ## Screen Anatomy
 
@@ -21,6 +21,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | Chat panel | Right-side AI chat input and transcript. | Opens with `c` when AI is configured and the terminal is wide enough. |
 | Status bar | Folder breadcrumb, AI chip, search or cleanup state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
 | Key hints | The currently valid keys for the focused tab, panel, or overlay. | Hints wrap to at most two lines. |
+| Shortcut help | A scrollable overlay opened with `?`. | Lists the fuller shortcut catalog for the current tab, pane, overlay, or Compose mode. |
 
 <!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press F1" -->
 
@@ -43,6 +44,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | `r` / `alt+r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters; use `alt+r` while composing. |
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a full-screen panel. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
+| `?` | Main UI and Herald-owned overlays | Visible data can be interacted with. | Opens context-sensitive shortcut help; pressing `?`, `esc`, or `q` closes it. |
 | `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, or status message. |
 
 ## Mouse Controls
@@ -94,6 +96,12 @@ Browse contexts also accept `1`, `2`, `3`, and `4` as compatibility aliases. Whe
 2. Scroll with `j`/`k` or arrow keys.
 3. Press `l` again to close.
 
+### Open Shortcut Help
+
+1. Press `?`.
+2. Scroll with `j`/`k`, arrow keys, page keys, or the mouse wheel when the overlay is taller than the terminal.
+3. Press `?`, `esc`, or `q` to return to the same tab, panel, or overlay.
+
 ## States
 
 | State | What you see | What to do |
@@ -105,6 +113,7 @@ Browse contexts also accept `1`, `2`, `3`, and `4` as compatibility aliases. Whe
 | Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `c` again. |
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
 | Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
+| Shortcut help | A scrollable command reference is on top of the current tab or overlay. | Press `?`, `esc`, or `q` to close it. |
 | Confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. | Confirm only if the described action matches your intent. |
 
 ## Data And Privacy
@@ -113,7 +122,7 @@ The global UI reads cached message metadata, folder counts, sync state, deletion
 
 ## Troubleshooting
 
-If a key seems to do nothing, check the bottom key hints and focused panel. Many keys are context-sensitive: for example, `space` expands a folder when the sidebar is focused but selects a cleanup row when Cleanup is focused.
+If a key seems to do nothing, press `?` to open shortcut help or check the bottom key hints and focused panel. Many keys are context-sensitive: for example, `space` expands a folder when the sidebar is focused but selects a cleanup row when Cleanup is focused.
 
 If a panel disappeared, check terminal width. Herald hides the sidebar or refuses to open chat when there is not enough room to render the remaining mail view.
 

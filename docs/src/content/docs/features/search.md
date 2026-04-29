@@ -7,7 +7,7 @@ Search in Herald is split between Timeline mail search and Contacts search. Time
 
 ## Overview
 
-Use `/` on Timeline for mail search and `/` or `?` on Contacts for contact search. Timeline search is optimized for fast local feedback while typing, with explicit prefixes for body, cross-folder, and semantic modes.
+Use `/` on Timeline or Contacts to open search. Plain `?` opens shortcut help; type a query that starts with `?` inside the search input to run semantic search when AI/embeddings are available. Timeline search is optimized for fast local feedback while typing, with explicit prefixes for body, cross-folder, and semantic modes.
 
 ## Screen Anatomy
 
@@ -19,7 +19,7 @@ Use `/` on Timeline for mail search and `/` or `?` on Contacts for contact searc
 | Search focus | Input focus while typing; result focus after `enter` or after automatic focus. |
 | Server search state | IMAP search results after `ctrl+i`/`tab` from the Timeline search input. |
 | Contacts keyword search | Slash prompt and filtered contact list. |
-| Contacts semantic search | Question-mark prompt and semantic contact results. |
+| Contacts semantic search | Slash search prompt with a `? query` semantic prefix and semantic contact results. |
 
 <!-- HERALD_SCREENSHOT id="search-timeline-input" page="search" alt="Timeline search input active" state="demo mode, 120x40, Timeline search input focused" desc="Shows slash search prompt, query text area, Timeline rows, status prefix, and key hints before results are opened." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press /; type invoice" -->
 
@@ -33,13 +33,13 @@ Use `/` on Timeline for mail search and `/` or `?` on Contacts for contact searc
 | Plain query | Timeline search | Search input focused. | Runs debounced local search over visible/cached metadata and available semantic support. |
 | `/b ` | Timeline search prefix | Body search supported for cached bodies. | Searches cached body text through the local body/FTS path. |
 | `/*` | Timeline search prefix | Cross-folder search is allowed for current mode. | Searches across cached folders instead of only the current folder. |
-| `?` | Timeline query prefix | AI/embeddings available. | Runs semantic search. |
+| `? query` | Timeline query prefix after `/` | AI/embeddings available. | Runs semantic search. |
 | `enter` | Timeline search input | Query is non-empty. | Runs search or moves focus to existing results for the same query. |
 | `ctrl+i` / `tab` | Timeline search input | Query is non-empty. | Runs server IMAP search. |
 | `esc` | Timeline search results | Search results focused. | Returns focus to search input or closes preview first if preview is active. |
 | `esc` | Timeline search input | Search input focused. | Clears Timeline search and restores the original Timeline rows. |
 | `/` | Contacts | Search mode closed. | Opens keyword contact search. |
-| `?` | Contacts | Search mode closed. | Opens semantic contact search. |
+| `? query` | Contacts search after `/` | AI/embeddings available. | Runs semantic contact search. |
 | `enter` | Contacts search | Search mode active. | Confirms current filtered results. |
 | `esc` | Contacts search | Search mode active. | Clears search and restores all contacts. |
 
@@ -84,8 +84,8 @@ Semantic search uses embeddings and AI availability. If semantic features are un
 ### Search Contacts
 
 1. Press `4`.
-2. Press `/` for keyword search or `?` for semantic search.
-3. Type the query.
+2. Press `/`.
+3. Type a plain query for keyword search, or begin with `?` for semantic search.
 4. Press `enter` to keep results or `esc` to clear.
 
 ## States
@@ -125,7 +125,7 @@ If you feel trapped in search, press `esc` repeatedly until the original Timelin
 
 ![Timeline body search query](/screenshots/search-body-query.png)
 
-<!-- HERALD_SCREENSHOT id="search-contacts-semantic" page="search" alt="Contacts semantic search active" state="demo mode, 120x40, Contacts semantic search prompt" desc="Shows the question-mark semantic contact search prompt and filtered contacts state." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press ?; type investors" -->
+<!-- HERALD_SCREENSHOT id="search-contacts-semantic" page="search" alt="Contacts semantic search active" state="demo mode, 120x40, Contacts search input with semantic query prefix" desc="Shows slash search with a question-mark semantic query prefix and filtered contacts state." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press /; type ? investors" -->
 
 ![Contacts semantic search active](/screenshots/search-contacts-semantic.png)
 

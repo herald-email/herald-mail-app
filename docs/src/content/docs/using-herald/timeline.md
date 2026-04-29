@@ -85,7 +85,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 
 1. Press `/`.
 2. Type a query. Herald debounces local search while you type.
-3. Use prefixes when needed: `/b ` for body search, `/*` for cross-folder search, or `?` for semantic search.
+3. Use prefixes when needed: `/b ` for body search, `/*` for cross-folder search, or `? query` for semantic search.
 4. Press `enter` to run or focus existing results.
 5. Press `ctrl+i` or `tab` from the search input to run server IMAP search.
 6. Press `esc` once to leave results or twice to clear search.
