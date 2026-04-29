@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 
 	"mail-processor/internal/app"
@@ -107,5 +111,78 @@ func TestParseImageProtocolFlagReturnsAppMode(t *testing.T) {
 	}
 	if mode != app.PreviewImageModeKitty {
 		t.Fatalf("mode = %q, want %q", mode, app.PreviewImageModeKitty)
+	}
+}
+
+func TestRootCommandFromArgsRoutesSubcommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		want     rootCommand
+		wantArgs []string
+	}{
+		{
+			name:     "default tui",
+			args:     []string{"herald"},
+			want:     rootCommandTUI,
+			wantArgs: nil,
+		},
+		{
+			name:     "mcp",
+			args:     []string{"herald", "mcp", "--demo"},
+			want:     rootCommandMCP,
+			wantArgs: []string{"--demo"},
+		},
+		{
+			name:     "ssh",
+			args:     []string{"herald", "ssh", "-addr", ":2223"},
+			want:     rootCommandSSH,
+			wantArgs: []string{"-addr", ":2223"},
+		},
+		{
+			name:     "serve unchanged",
+			args:     []string{"herald", "serve", "-config", "test.yaml"},
+			want:     rootCommandServe,
+			wantArgs: []string{"-config", "test.yaml"},
+		},
+		{
+			name:     "unknown remains tui argument",
+			args:     []string{"herald", "mailbox"},
+			want:     rootCommandTUI,
+			wantArgs: []string{"mailbox"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotArgs := rootCommandFromArgs(tt.args)
+			if got != tt.want {
+				t.Fatalf("rootCommandFromArgs(%v) command = %v, want %v", tt.args, got, tt.want)
+			}
+			if !slices.Equal(gotArgs, tt.wantArgs) {
+				t.Fatalf("rootCommandFromArgs(%v) args = %v, want %v", tt.args, gotArgs, tt.wantArgs)
+			}
+		})
+	}
+}
+
+func TestRootHelpTextAdvertisesMCPAndSSHSubcommands(t *testing.T) {
+	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
+	fs.Bool("debug", false, "Enable debug logging")
+	fs.Bool("version", false, "Show version information")
+
+	var buf bytes.Buffer
+	printRootHelp(&buf, "herald", fs)
+	help := buf.String()
+
+	for _, want := range []string{
+		"herald mcp",
+		"herald ssh",
+		"herald-mcp-server",
+		"herald-ssh-server",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("root help missing %q:\n%s", want, help)
+		}
 	}
 }

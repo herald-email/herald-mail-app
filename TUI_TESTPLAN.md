@@ -12,8 +12,8 @@ This manual QA specification defines the acceptance criteria for Herald's TUI ac
 
 ```bash
 go build -o /tmp/herald ./main.go
-go build -o /tmp/herald-ssh ./cmd/herald-ssh-server
-go build -o /tmp/herald-mcp ./cmd/herald-mcp-server
+go build -o /tmp/herald-ssh ./cmd/herald-ssh-server  # compatibility wrapper
+go build -o /tmp/herald-mcp ./cmd/herald-mcp-server  # compatibility wrapper
 ```
 
 ### Demo tmux session
@@ -805,7 +805,7 @@ Check these states during every applicable lane:
 **Sizes:** `120x40`, `80x24`
 
 **Steps:**
-1. Build and run `cmd/herald-ssh-server`.
+1. Build and run `/tmp/herald ssh`.
 2. Connect with `ssh -p 2222 localhost`.
 3. Load the app, switch tabs, open one preview, and exit.
 
@@ -819,7 +819,7 @@ Check these states during every applicable lane:
 **Lane:** E
 
 **Steps:**
-1. Build and run `cmd/herald-mcp-server`.
+1. Build and run `/tmp/herald mcp`.
 2. Call `tools/list`.
 3. Call one read tool such as `list_recent_emails`.
 
@@ -867,8 +867,8 @@ Check these states during every applicable lane:
 **Lane:** E
 
 **Steps:**
-1. Build `cmd/herald-mcp-server`.
-2. Run `echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | /tmp/herald-mcp --demo`.
+1. Build `/tmp/herald`.
+2. Run `echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | /tmp/herald mcp --demo`.
 3. Run `list_recent_emails` against `INBOX`.
 4. Run one search or sender-stat tool against the demo data.
 
@@ -883,7 +883,7 @@ Check these states during every applicable lane:
 **Lane:** A, E
 
 **Steps:**
-1. Build `bin/herald` and `bin/herald-mcp-server`.
+1. Build `bin/herald` and the compatibility `bin/herald-mcp-server`.
 2. Run every tape in `demos/*.tape` with `vhs`.
 3. Inspect the generated GIF durations and final paths.
 

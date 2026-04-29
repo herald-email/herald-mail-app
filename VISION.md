@@ -28,6 +28,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Search (in-folder, full-text FTS5, cross-folder, IMAP fallback, saved searches)
 - [x] MCP server (read/search/classify tools for Claude Code)
 - [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
+- [x] Unified CLI subcommands (`herald mcp`, `herald ssh`) with legacy wrapper binaries preserved
 - [x] Inline image placeholders (text labels with AI vision descriptions when available)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
@@ -506,7 +507,15 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ## MCP Integration
 
-The MCP server exposes email operations as tools, enabling Claude Code and other AI agents to read, search, classify, and eventually manage email without opening the TUI. It reads directly from the configured SQLite cache path and shares state with the TUI via SQLite WAL mode.
+The MCP server exposes email operations as tools, enabling Claude Code and other AI agents to read, search, classify, and eventually manage email without opening the TUI. It reads directly from the configured SQLite cache path and shares state with the TUI via SQLite WAL mode. The primary entrypoint is `herald mcp`; `herald-mcp-server` remains available as a compatibility wrapper for existing MCP configs and scripts.
+
+### Entry points
+
+These commands make the MCP surface discoverable from the main `herald --help` path while avoiding a breaking migration.
+
+- [x] `herald mcp` starts the stdio MCP server.
+- [x] `herald mcp --demo` serves deterministic demo mailbox tools without loading private config.
+- [x] `herald-mcp-server` delegates to the same implementation for at least one compatibility release.
 
 ### Implemented tools
 
@@ -632,9 +641,10 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 
 ## SSH App Mode
 
-`charmbracelet/wish` serves the full TUI over SSH on port 2222. Each SSH session gets its own `LocalBackend` (independent IMAP connection).
+`charmbracelet/wish` serves the full TUI over SSH on port 2222. Each SSH session gets its own `LocalBackend` (independent IMAP connection). The primary entrypoint is `herald ssh`; `herald-ssh-server` remains available as a compatibility wrapper for existing deployment scripts.
 
-- [x] `cmd/herald-ssh-server` binary
+- [x] `herald ssh` subcommand
+- [x] `cmd/herald-ssh-server` compatibility wrapper binary
 - [x] Each session: independent LocalBackend + IMAP connection
 - [ ] In Phase 2: each session connects to the shared daemon instead
 
@@ -744,17 +754,17 @@ The MCP server lets Claude Code, Cursor, Codex, and other AI tools read and mana
 
 Each prompt below instructs the AI tool to register the MCP server. Users copy the prompt, run it in the relevant tool, and the server is live.
 
-- [x] **Claude Code** — prompt to add `cmd/herald-mcp-server` to `~/.claude/claude.json` MCP config
+- [x] **Claude Code** — prompt to add `herald mcp` to `~/.claude/claude.json` MCP config
 - [x] **Cursor** — prompt to add the server to Cursor's MCP settings JSON
 - [x] **Windsurf** — JSON snippet for `~/.codeium/windsurf/mcp_config.json`
 - [x] **Codex** — env-var CLI approach
 - [ ] **GitHub Copilot / VS Code** (when MCP support lands) — equivalent config snippet
-- [x] **Generic** — prompt that explains how to run `./bin/herald-mcp-server` and wire it into any MCP-compatible client
+- [x] **Generic** — prompt that explains how to run `./bin/herald mcp` and wire it into any MCP-compatible client
 
 Example (Claude Code):
 ```
 Add a local MCP server called "mail" that runs this command:
-/path/to/herald/bin/herald-mcp-server -config ~/.herald/conf.yaml
+/path/to/herald/bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 ### README goals
@@ -774,7 +784,7 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] `--demo` flag on the main binary starts the app with a `DemoBackend` instead of IMAP
 - [x] Shared demo fixtures seed fictional senders, categories, attachments, bodies, unsubscribe headers, contacts, and threads
 - [x] Deterministic demo AI powers classification, semantic search, chat, quick replies, and contact enrichment without Ollama
-- [x] `cmd/herald-mcp-server --demo` exposes the same synthetic mailbox without loading private config or cache files
+- [x] `herald mcp --demo` exposes the same synthetic mailbox without loading private config or cache files
 - [x] Canonical demo tapes generate 5-30 second GIFs in `assets/demo/`
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
 - [x] Creative Commons image sampler email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode

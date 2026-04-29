@@ -48,8 +48,11 @@ func TestRenderHomebrewFormulaUsesImmutableReleaseAssets(t *testing.T) {
 		`bin.install "herald-mcp-server"`,
 		`bin.install "herald-ssh-server"`,
 		`system bin/"herald", "--version"`,
+		`system bin/"herald", "mcp", "--version"`,
+		`system bin/"herald", "ssh", "--version"`,
 		`system bin/"herald-mcp-server", "--version"`,
-		`assert_match "\"tools\"", shell_output("echo '#{request}' | #{bin}/herald-mcp-server --demo")`,
+		`system bin/"herald-ssh-server", "--version"`,
+		`assert_match "\"tools\"", shell_output("echo '#{request}' | #{bin}/herald mcp --demo")`,
 	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(formula, want) {

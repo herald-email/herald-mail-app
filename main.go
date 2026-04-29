@@ -24,8 +24,10 @@ import (
 	"mail-processor/internal/daemon"
 	demodata "mail-processor/internal/demo"
 	"mail-processor/internal/logger"
+	"mail-processor/internal/mcpserver"
 	"mail-processor/internal/models"
 	appsmtp "mail-processor/internal/smtp"
+	"mail-processor/internal/sshserver"
 	buildversion "mail-processor/internal/version"
 )
 
@@ -173,6 +175,40 @@ type loadConfigResult struct {
 	configPath string
 }
 
+type rootCommand int
+
+const (
+	rootCommandTUI rootCommand = iota
+	rootCommandServe
+	rootCommandStatus
+	rootCommandStop
+	rootCommandSync
+	rootCommandMCP
+	rootCommandSSH
+)
+
+func rootCommandFromArgs(args []string) (rootCommand, []string) {
+	if len(args) < 2 {
+		return rootCommandTUI, nil
+	}
+	switch args[1] {
+	case "serve":
+		return rootCommandServe, args[2:]
+	case "status":
+		return rootCommandStatus, args[2:]
+	case "stop":
+		return rootCommandStop, args[2:]
+	case "sync":
+		return rootCommandSync, args[2:]
+	case "mcp":
+		return rootCommandMCP, args[2:]
+	case "ssh":
+		return rootCommandSSH, args[2:]
+	default:
+		return rootCommandTUI, args[1:]
+	}
+}
+
 // loadConfig loads and returns the app config using the default config path logic.
 // It expands ~ and handles the backwards-compat proton.yaml check.
 // Returns nil cfg on error (prints to stderr and exits).
@@ -252,21 +288,30 @@ func tryConnectDaemon(cfg *config.Config) backend.Backend {
 }
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "serve":
-			runServe(os.Args[2:])
-			return
-		case "status":
-			runStatus(os.Args[2:])
-			return
-		case "stop":
-			runStop(os.Args[2:])
-			return
-		case "sync":
-			runSync(os.Args[2:])
-			return
+	cmd, args := rootCommandFromArgs(os.Args)
+	switch cmd {
+	case rootCommandServe:
+		runServe(args)
+		return
+	case rootCommandStatus:
+		runStatus(args)
+		return
+	case rootCommandStop:
+		runStop(args)
+		return
+	case rootCommandSync:
+		runSync(args)
+		return
+	case rootCommandMCP:
+		if err := mcpserver.Run("herald mcp", args); err != nil {
+			log.Fatal(err)
 		}
+		return
+	case rootCommandSSH:
+		if err := sshserver.Run("herald ssh", args); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	runTUI()
 }
@@ -387,6 +432,39 @@ func runSync(args []string) {
 	fmt.Printf("sync started for %s\n", folder)
 }
 
+func printRootHelp(w io.Writer, executable string, fs *flag.FlagSet) {
+	fmt.Fprintln(w, "Herald - Email analysis and cleanup tool")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintf(w, "  %s [flags]\n", executable)
+	fmt.Fprintf(w, "  %s <subcommand> [flags]\n", executable)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintf(w, "  %s mcp     # Start the stdio MCP server (legacy wrapper: herald-mcp-server)\n", executable)
+	fmt.Fprintf(w, "  %s ssh     # Serve the Herald TUI over SSH (legacy wrapper: herald-ssh-server)\n", executable)
+	fmt.Fprintf(w, "  %s serve   # Start the Herald daemon\n", executable)
+	fmt.Fprintf(w, "  %s status  # Show daemon status\n", executable)
+	fmt.Fprintf(w, "  %s stop    # Stop the running daemon\n", executable)
+	fmt.Fprintf(w, "  %s sync    # Trigger a sync (optionally pass folder name)\n", executable)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	oldOutput := fs.Output()
+	fs.SetOutput(w)
+	fs.PrintDefaults()
+	fs.SetOutput(oldOutput)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintf(w, "  %s                         # Run with default config (~/.herald/conf.yaml)\n", executable)
+	fmt.Fprintf(w, "  %s -debug                  # Run with debug logging in the Herald user log directory\n", executable)
+	fmt.Fprintf(w, "  %s -verbose                # Alias for -debug\n", executable)
+	fmt.Fprintf(w, "  %s -experimental           # Show experimental first-run email service onboarding\n", executable)
+	fmt.Fprintf(w, "  %s -config custom.yaml     # Use custom config file\n", executable)
+	fmt.Fprintf(w, "  %s mcp --demo              # Run the MCP server with deterministic demo data\n", executable)
+	fmt.Fprintf(w, "  %s ssh -addr :2222         # Serve the TUI over SSH\n", executable)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Log files are created as herald_YYYYMMDD_HHMMSS.log in the user log directory")
+}
+
 // buildRuleAction converts a flat action_type + action_value pair (from YAML config)
 // into a models.RuleAction, populating the appropriate sub-field by type.
 func buildRuleAction(actionType, actionValue string) models.RuleAction {
@@ -437,28 +515,7 @@ func runTUI() {
 	usingDefault := (*configPath == defaultConfig)
 
 	if *showHelp {
-		fmt.Println("Herald - Email analysis and cleanup tool")
-		fmt.Println()
-		fmt.Println("Usage:")
-		fmt.Printf("  %s [flags]\n", os.Args[0])
-		fmt.Println()
-		fmt.Println("Subcommands:")
-		fmt.Printf("  %s serve   # Start the Herald daemon\n", os.Args[0])
-		fmt.Printf("  %s status  # Show daemon status\n", os.Args[0])
-		fmt.Printf("  %s stop    # Stop the running daemon\n", os.Args[0])
-		fmt.Printf("  %s sync    # Trigger a sync (optionally pass folder name)\n", os.Args[0])
-		fmt.Println()
-		fmt.Println("Flags:")
-		flag.PrintDefaults()
-		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Printf("  %s                    # Run with default config (~/.herald/conf.yaml)\n", os.Args[0])
-		fmt.Printf("  %s -debug             # Run with debug logging in the Herald user log directory\n", os.Args[0])
-		fmt.Printf("  %s -verbose           # Alias for -debug\n", os.Args[0])
-		fmt.Printf("  %s -experimental      # Show experimental first-run email service onboarding\n", os.Args[0])
-		fmt.Printf("  %s -config custom.yaml # Use custom config file\n", os.Args[0])
-		fmt.Println()
-		fmt.Println("Log files are created as herald_YYYYMMDD_HHMMSS.log in the user log directory")
+		printRootHelp(os.Stdout, os.Args[0], flag.CommandLine)
 		os.Exit(0)
 	}
 

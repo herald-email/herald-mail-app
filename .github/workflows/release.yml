@@ -91,12 +91,18 @@ jobs:
           go build -trimpath -ldflags "${ldflags}" -o "${out_dir}/herald-ssh-server" ./cmd/herald-ssh-server
 
           "${out_dir}/herald" --version
+          "${out_dir}/herald" mcp --version
+          "${out_dir}/herald" ssh --version
           "${out_dir}/herald-mcp-server" --version
           "${out_dir}/herald-ssh-server" --version
           "${out_dir}/herald" --help >/tmp/herald-help.txt
+          grep -q 'herald mcp' /tmp/herald-help.txt
+          grep -q 'herald ssh' /tmp/herald-help.txt
+          "${out_dir}/herald" mcp --help >/tmp/herald-mcp-subcommand-help.txt
+          "${out_dir}/herald" ssh --help >/tmp/herald-ssh-subcommand-help.txt
           "${out_dir}/herald-mcp-server" --help >/tmp/herald-mcp-help.txt
           "${out_dir}/herald-ssh-server" --help >/tmp/herald-ssh-help.txt
-          printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | "${out_dir}/herald-mcp-server" --demo >/tmp/herald-mcp-tools.json
+          printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | "${out_dir}/herald" mcp --demo >/tmp/herald-mcp-tools.json
           grep -q '"tools"' /tmp/herald-mcp-tools.json
 
           tar -czf "dist/${artifact}.tar.gz" -C dist "${artifact}"

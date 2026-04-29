@@ -25,10 +25,12 @@ This document describes the current system design (Phase 1) and the target archi
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 
-cmd/herald-ssh-server  → runs the same TUI over SSH (charmbracelet/wish)
+herald ssh       → runs the same TUI over SSH (charmbracelet/wish)
                   each SSH session gets its own LocalBackend
-cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite cache directly
+cmd/herald-ssh-server  → compatibility wrapper for `herald ssh`
+herald mcp       → JSON-RPC stdio server, reads the configured SQLite cache directly
                   no live IMAP; cache-only for normal tools; `--demo` serves fixtures
+cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 ```
 
 ### Package responsibilities
@@ -45,6 +47,8 @@ cmd/herald-mcp-server  → JSON-RPC stdio server, reads the configured SQLite ca
 | `internal/config` | YAML config load/validate plus onboarding-readiness checks such as vendor presets and empty-config detection |
 | `internal/smtp` | SMTP send (TLS-first, STARTTLS fallback) |
 | `internal/render` | Email body rendering: shared HTML-to-Markdown conversion, ANSI-aware text wrapping, URL linkification, link sanitization. No TUI dependency — usable from MCP, daemon, SSH |
+| `internal/mcpserver` | Shared MCP stdio server implementation used by `herald mcp` and the legacy `herald-mcp-server` wrapper |
+| `internal/sshserver` | Shared SSH server implementation used by `herald ssh` and the legacy `herald-ssh-server` wrapper |
 | `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory |
 
 ### First-run configuration flow

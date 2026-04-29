@@ -20,12 +20,12 @@ build:
 	@mkdir -p bin
 	@go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/herald ./main.go
 
-# Build the SSH server
+# Build the legacy SSH server compatibility wrapper
 build-ssh:
 	@mkdir -p bin
 	@go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/herald-ssh-server ./cmd/herald-ssh-server
 
-# Build the MCP server
+# Build the legacy MCP server compatibility wrapper
 build-mcp:
 	@mkdir -p bin
 	@go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/herald-mcp-server ./cmd/herald-mcp-server

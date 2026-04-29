@@ -1,16 +1,17 @@
 # SSH Server Test Plan — Herald
 
 Manual QA checklist for verifying that the SSH server delivers a fully functional TUI over an SSH connection.
-Run this after any change to `cmd/herald-ssh-server/`, connection handling, or TUI rendering.
+Run this after any change to `herald ssh`, `internal/sshserver/`, `cmd/herald-ssh-server/`, connection handling, or TUI rendering.
 
 ---
 
 ## Setup
 
-### 1. Build the SSH server binary
+### 1. Build the Herald binary
 
 ```bash
-go build -o /tmp/herald-ssh-server-test ./cmd/herald-ssh-server
+go build -o /tmp/herald-test ./main.go
+go build -o /tmp/herald-ssh-server-test ./cmd/herald-ssh-server  # compatibility wrapper
 ```
 
 ### 2. Start the server in a tmux pane
@@ -18,7 +19,7 @@ go build -o /tmp/herald-ssh-server-test ./cmd/herald-ssh-server
 ```bash
 # Pane A — server
 tmux new-session -d -s ssh_test
-tmux send-keys -t ssh_test '/tmp/herald-ssh-server-test -config proton.yaml -addr :2222' Enter
+tmux send-keys -t ssh_test '/tmp/herald-test ssh -config proton.yaml -addr :2222' Enter
 sleep 2   # wait for server to initialise
 ```
 
@@ -100,6 +101,20 @@ tmux kill-session -t ssh_test
 ---
 
 ## Test Cases
+
+### TC-SS-00 — CLI discovery and compatibility wrapper
+
+**Steps:**
+```bash
+/tmp/herald-test --help
+/tmp/herald-test ssh --version
+/tmp/herald-ssh-server-test --version
+```
+
+**Expect:**
+- Root help advertises `herald ssh`.
+- `herald ssh --version` exits successfully without starting a listener.
+- Legacy `herald-ssh-server --version` exits successfully and remains available for existing scripts.
 
 ### TC-SS-01 — Successful connection and initial render
 
@@ -230,7 +245,7 @@ tmux kill-session -t ssh_test
 2. Note the host key fingerprint shown when first connecting (or check `.ssh/host_ed25519.pub`).
 3. Restart the server:
    ```bash
-   tmux send-keys -t ssh_test:0.0 '/tmp/herald-ssh-server-test -config proton.yaml -addr :2222' Enter
+  tmux send-keys -t ssh_test:0.0 '/tmp/herald-test ssh -config proton.yaml -addr :2222' Enter
    sleep 2
    ```
 4. Connect again from the client pane.
@@ -267,7 +282,7 @@ tmux kill-session -t ssh_test
 **Steps:**
 1. Start server with a non-existent config path:
    ```bash
-   /tmp/herald-ssh-server-test -config /nonexistent/proton.yaml -addr :2223
+   /tmp/herald-test ssh -config /nonexistent/proton.yaml -addr :2223
    ```
 2. Capture terminal output.
 

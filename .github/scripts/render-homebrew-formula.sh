@@ -69,11 +69,13 @@ class Herald < Formula
 
   test do
     system bin/"herald", "--version"
+    system bin/"herald", "mcp", "--version"
+    system bin/"herald", "ssh", "--version"
     system bin/"herald-mcp-server", "--version"
     system bin/"herald-ssh-server", "--version"
 
     request = '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-    assert_match "\"tools\"", shell_output("echo '#{request}' | #{bin}/herald-mcp-server --demo")
+    assert_match "\"tools\"", shell_output("echo '#{request}' | #{bin}/herald mcp --demo")
   end
 end
 EOF

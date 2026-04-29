@@ -1,4 +1,4 @@
-package main
+package mcpserver
 
 import "mail-processor/internal/models"
 

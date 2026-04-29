@@ -77,10 +77,12 @@ brew install herald
 herald
 ```
 
-Homebrew is the default macOS install path. The formula installs the release
-binaries for `herald`, `herald-mcp-server`, and `herald-ssh-server`, including
-the bundled Gmail OAuth defaults used when experimental OAuth onboarding is
-explicitly enabled.
+Homebrew is the default macOS install path. The formula installs `herald`,
+whose `mcp` and `ssh` subcommands are the primary MCP and SSH entrypoints. It
+also installs the compatibility wrappers `herald-mcp-server` and
+`herald-ssh-server` for existing MCP configs and scripts. Release binaries
+include the bundled Gmail OAuth defaults used when experimental OAuth
+onboarding is explicitly enabled.
 
 Update Homebrew metadata and upgrade Herald:
 
@@ -192,24 +194,24 @@ press `m` again to restore Herald's mouse capture.
 
 ## MCP Setup
 
-Herald ships a standalone MCP server binary (`cmd/herald-mcp-server`) that exposes your email to AI tools over stdio.
+Herald exposes an MCP server over stdio through `herald mcp`, so AI tools can read and manage email without opening the TUI. The legacy `herald-mcp-server` binary remains available as a compatibility wrapper.
 
 ![Herald MCP server demo](assets/demo/mcp-demo.gif)
 
 ```bash
-go build -o bin/herald-mcp-server ./cmd/herald-mcp-server
+go build -o bin/herald ./main.go
 ```
 
 ### Claude Code
 
 ```
 Add a local MCP server called "herald" that runs this command:
-/path/to/herald/bin/herald-mcp-server -config ~/.herald/conf.yaml
+/path/to/herald/bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 Or run this from the herald directory:
 ```bash
-claude mcp add herald -- "$(pwd)/bin/herald-mcp-server" -config ~/.herald/conf.yaml
+claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
 ```
 
 ### Cursor
@@ -220,8 +222,8 @@ Add to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald-mcp-server",
-      "args": ["-config", "~/.herald/conf.yaml"]
+      "command": "/path/to/herald/bin/herald",
+      "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
 }
@@ -235,8 +237,8 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "herald": {
-      "command": "/path/to/herald/bin/herald-mcp-server",
-      "args": ["-config", "~/.herald/conf.yaml"]
+      "command": "/path/to/herald/bin/herald",
+      "args": ["mcp", "-config", "~/.herald/conf.yaml"]
     }
   }
 }
@@ -245,13 +247,13 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ### Codex
 
 ```bash
-CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald-mcp-server","args":["-config","~/.herald/conf.yaml"]}}' codex
+CODEX_MCP_SERVERS='{"herald":{"command":"/path/to/herald/bin/herald","args":["mcp","-config","~/.herald/conf.yaml"]}}' codex
 ```
 
 ### Generic (any stdio MCP client)
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server -config ~/.herald/conf.yaml
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald mcp -config ~/.herald/conf.yaml
 ```
 
 ### MCP Readiness Checklist
