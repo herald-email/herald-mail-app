@@ -28,8 +28,8 @@ func TestUpdateTimelineTable_MarksDraftRowsAndCollapsedThreads(t *testing.T) {
 		{
 			MessageID: "latest",
 			UID:       1,
-			Sender:    "Shea <shea@anthropic.com>",
-			Subject:   "Interview with Anthropic",
+			Sender:    "Rae <rae@cobalt-works.example>",
+			Subject:   "Interview with Cobalt Works",
 			Date:      now,
 			Folder:    "INBOX",
 		},
@@ -37,7 +37,7 @@ func TestUpdateTimelineTable_MarksDraftRowsAndCollapsedThreads(t *testing.T) {
 			MessageID: "draft",
 			UID:       2,
 			Sender:    "me@example.com",
-			Subject:   "Re: Interview with Anthropic",
+			Subject:   "Re: Interview with Cobalt Works",
 			Date:      now.Add(-time.Minute),
 			Folder:    "Drafts",
 			IsDraft:   true,
@@ -90,11 +90,11 @@ func TestRenderPreviewHeaderLines_DraftStateNote(t *testing.T) {
 func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 	now := time.Now()
 	backend := &timelineDraftBackend{body: &models.EmailBody{
-		To:        "shea@anthropic.com, tytiana@anthropic.com",
+		To:        "rae@cobalt-works.example, mina@cobalt-works.example",
 		CC:        "recruiting@example.com",
 		BCC:       "hidden@example.com",
-		Subject:   "Re: Interview with Anthropic",
-		TextPlain: "Hi Shea,\n\nThanks for the details.",
+		Subject:   "Re: Interview with Cobalt Works",
+		TextPlain: "Hi Rae,\n\nThanks for the details.",
 	}}
 	m := New(backend, nil, "me@example.com", nil, false)
 	m.loading = false
@@ -106,8 +106,8 @@ func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 		{
 			MessageID: "latest",
 			UID:       1,
-			Sender:    "Shea <shea@anthropic.com>",
-			Subject:   "Interview with Anthropic",
+			Sender:    "Rae <rae@cobalt-works.example>",
+			Subject:   "Interview with Cobalt Works",
 			Date:      now,
 			Folder:    "INBOX",
 		},
@@ -115,7 +115,7 @@ func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 			MessageID: "draft",
 			UID:       42,
 			Sender:    "me@example.com",
-			Subject:   "Re: Interview with Anthropic",
+			Subject:   "Re: Interview with Cobalt Works",
 			Date:      now.Add(-time.Minute),
 			Folder:    "Drafts",
 			IsDraft:   true,
@@ -151,7 +151,7 @@ func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab = %d, want Compose", updated.activeTab)
 	}
-	if got := updated.composeTo.Value(); got != "shea@anthropic.com, tytiana@anthropic.com" {
+	if got := updated.composeTo.Value(); got != "rae@cobalt-works.example, mina@cobalt-works.example" {
 		t.Fatalf("compose To = %q", got)
 	}
 	if got := updated.composeCC.Value(); got != "recruiting@example.com" {
@@ -160,7 +160,7 @@ func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 	if got := updated.composeBCC.Value(); got != "hidden@example.com" {
 		t.Fatalf("compose BCC = %q", got)
 	}
-	if got := updated.composeSubject.Value(); got != "Re: Interview with Anthropic" {
+	if got := updated.composeSubject.Value(); got != "Re: Interview with Cobalt Works" {
 		t.Fatalf("compose Subject = %q", got)
 	}
 	if got := updated.composeBody.Value(); !strings.Contains(got, "Thanks for the details.") {

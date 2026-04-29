@@ -7,14 +7,14 @@ import (
 )
 
 func TestNormalizeAddressList_AcceptsAutocompleteDisplayNameWithTrailingComma(t *testing.T) {
-	header, envelope, err := normalizeAddressList("To", "Anton Golubtsov <zoomacode@icloud.com>, ", true)
+	header, envelope, err := normalizeAddressList("To", "Rowan Finch <rowan@example.com>, ", true)
 	if err != nil {
 		t.Fatalf("normalizeAddressList returned error: %v", err)
 	}
-	if header != "Anton Golubtsov <zoomacode@icloud.com>" {
+	if header != "Rowan Finch <rowan@example.com>" {
 		t.Fatalf("header = %q, want display-name address without trailing comma", header)
 	}
-	if want := []string{"zoomacode@icloud.com"}; !reflect.DeepEqual(envelope, want) {
+	if want := []string{"rowan@example.com"}; !reflect.DeepEqual(envelope, want) {
 		t.Fatalf("envelope = %#v, want %#v", envelope, want)
 	}
 }

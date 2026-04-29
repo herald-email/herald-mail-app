@@ -310,13 +310,13 @@ func buildMailbox() MailboxFixture {
 	add(1, "Northstar Cloud <billing@northstar-cloud.example>", "Invoice and usage alert for Project Orion", "INBOX", 0, 18432, false, true, ai.CategoryImportant, []string{"infrastructure", "budget", "risk", "cloud"},
 		"Northstar Cloud detected a usage change on Project Orion.\n\nThe compute cluster is 18 percent above forecast and the attached invoice highlights the services driving the budget risk.\n\nReview before Friday so the infrastructure owner can right-size the workload.",
 		withAttachment("northstar-orion-invoice.pdf", "application/pdf", 184320))
-	add(26, "Anton Golubtsov <demo@demo.local>", "Re: Next Steps with Anthropic!", "INBOX", 0, 8704, false, true, ai.CategoryImportant, []string{"reply", "scheduling", "interview"},
-		"Hi Tyitana,\n\nThanks for the update - looking forward to it. I'll keep an eye out for Shea's message.\n\nBest regards,\nAnton Golubtsov")
-	add(27, "Tyitana Horton <tytiana@anthropic.example>", "Next Steps with Anthropic!", "INBOX", 1, 9216, true, false, ai.CategoryImportant, []string{"scheduling", "interview", "follow-up"},
-		"Hi Anton,\n\nThank you for taking the time to speak with me. For next steps, we'd like to invite you to complete our technical assessment. Shea will reach out separately with a scheduling link and more details on what to expect.\n\nPlease don't hesitate to reach out if you have any questions.\n\nCheers,\nTyitana")
-	add(28, "Anton Golubtsov <demo@demo.local>", "Re: Next Steps with Anthropic!", "Drafts", 0, 6144, true, false, ai.CategoryImportant, []string{"draft", "scheduling", "interview"},
-		"Hi Tyitana,\n\nThanks for the details and the scheduling link. I'll use it to select a time shortly.\n\nLooking forward to the next step.\n\nBest regards,\nAnton Golubtsov",
-		withDraft("tytiana@anthropic.example, shea@anthropic.example", "", ""))
+	add(26, "Rowan Finch <demo@demo.local>", "Re: Next Steps with Cobalt Works!", "INBOX", 0, 8704, false, true, ai.CategoryImportant, []string{"reply", "scheduling", "interview"},
+		"Hi Mina,\n\nThanks for the update - looking forward to it. I'll keep an eye out for Rae's message.\n\nBest regards,\nRowan Finch")
+	add(27, "Mina Park <mina@cobalt-works.example>", "Next Steps with Cobalt Works!", "INBOX", 1, 9216, true, false, ai.CategoryImportant, []string{"scheduling", "interview", "follow-up"},
+		"Hi Rowan,\n\nThank you for taking the time to speak with me. For next steps, we'd like to invite you to complete our technical assessment. Rae will reach out separately with a scheduling link and more details on what to expect.\n\nPlease don't hesitate to reach out if you have any questions.\n\nCheers,\nMina")
+	add(28, "Rowan Finch <demo@demo.local>", "Re: Next Steps with Cobalt Works!", "Drafts", 0, 6144, true, false, ai.CategoryImportant, []string{"draft", "scheduling", "interview"},
+		"Hi Mina,\n\nThanks for the details and the scheduling link. I'll use it to select a time shortly.\n\nLooking forward to the next step.\n\nBest regards,\nRowan Finch",
+		withDraft("mina@cobalt-works.example, rae@cobalt-works.example", "", ""))
 	add(2, "Mara Vale <mara@forgepoint.example>", "Storage policy migration review", "INBOX", 1, 9216, false, true, ai.CategoryImportant, []string{"code", "infrastructure", "migration"},
 		"Mara shared the storage policy migration plan.\n\nThe risky bit is the cache backfill window. She needs a review on the rollback checklist and the release candidate notes before standup.")
 	add(3, "Mara Vale <mara@forgepoint.example>", "Re: Storage policy migration review", "INBOX", 2, 8704, true, false, ai.CategoryImportant, []string{"code", "infrastructure", "migration"},
@@ -374,7 +374,7 @@ func buildMailbox() MailboxFixture {
 		"Market Lane is running a gift card bonus this weekend.\n\nThis promotional email can be ignored unless you are shopping soon.",
 		withUnsub("https://marketlane.example/unsubscribe/demo"))
 	add(25, "Taskpad Teams <teams@taskpad.example>", "Link rendering stress preview", "INBOX", 24, 52224, true, false, ai.CategoryNewsletter, []string{"newsletter", "links", "rendering"},
-		"# Free team trial inside\n\nSign in on your computer to unlock the team features.\n\n[Display in your browser](https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY)\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nOpen the workspace directly: https://app.taskpad.example/app/team/welcome/path/that/is/long/enough/to/prove/wrapping?utm_source=email&utm_medium=trial&token=abcdefghijklmnopqrstuvwxyz0123456789",
+		"# Free team trial inside\n\nSign in on your computer to unlock the team features.\n\n[Display in your browser](https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY)\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nOpen the workspace directly: https://app.taskpad.example/app/team/welcome/path/that/is/long/enough/to/prove/wrapping?utm_source=email&utm_medium=trial&token=abcdefghijklmnopqrstuvwxyz0123456789",
 		withHTML,
 		withInlineImage("taskpad-inline-logo", "image/png", demoPNG()))
 	add(30, "Preview Lab <design@previewlab.example>", "Rich HTML rendering showcase", "INBOX", 0, 32768, true, false, ai.CategoryNewsletter, []string{"newsletter", "html", "rendering", "preview"},

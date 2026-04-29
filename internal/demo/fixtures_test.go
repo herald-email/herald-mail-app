@@ -78,6 +78,45 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 	}
 }
 
+func TestMailboxOmitsPrivateDemoIdentityTerms(t *testing.T) {
+	mailbox := Mailbox()
+	forbidden := []string{"anthropic", "anton", "golubtsov", "tatiana", "tytiana"}
+
+	assertClean := func(label, value string) {
+		t.Helper()
+		lower := strings.ToLower(value)
+		for _, term := range forbidden {
+			if strings.Contains(lower, term) {
+				t.Fatalf("%s contains forbidden demo identity term %q: %q", label, term, value)
+			}
+		}
+	}
+
+	for _, msg := range mailbox.Messages {
+		assertClean(msg.Email.MessageID+" sender", msg.Email.Sender)
+		assertClean(msg.Email.MessageID+" subject", msg.Email.Subject)
+		assertClean(msg.Email.MessageID+" message id", msg.Email.MessageID)
+		assertClean(msg.Email.MessageID+" body", msg.Body.TextPlain)
+		assertClean(msg.Email.MessageID+" html body", msg.Body.TextHTML)
+		assertClean(msg.Email.MessageID+" from", msg.Body.From)
+		assertClean(msg.Email.MessageID+" to", msg.Body.To)
+		assertClean(msg.Email.MessageID+" cc", msg.Body.CC)
+		assertClean(msg.Email.MessageID+" bcc", msg.Body.BCC)
+		assertClean(msg.Email.MessageID+" body subject", msg.Body.Subject)
+		for _, topic := range msg.Topics {
+			assertClean(msg.Email.MessageID+" topic", topic)
+		}
+	}
+	for _, contact := range mailbox.Contacts {
+		assertClean(contact.Email+" email", contact.Email)
+		assertClean(contact.Email+" display name", contact.DisplayName)
+		assertClean(contact.Email+" company", contact.Company)
+		for _, topic := range contact.Topics {
+			assertClean(contact.Email+" topic", topic)
+		}
+	}
+}
+
 func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 	var found bool
 	for _, msg := range Mailbox().Messages {

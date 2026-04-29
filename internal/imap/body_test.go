@@ -132,15 +132,15 @@ func TestHTMLToText_AdjacentInlineElements(t *testing.T) {
 
 func TestParseMIMEBody_ExposesEditableDraftHeaders(t *testing.T) {
 	raw := []byte(strings.Join([]string{
-		"From: Anton <anton@example.com>",
-		"To: Shea <shea@anthropic.com>, Tyitana <tytiana@anthropic.com>",
+		"From: Rowan <rowan@example.com>",
+		"To: Rae <rae@cobalt-works.example>, Mina <mina@cobalt-works.example>",
 		"Cc: Recruiter <recruiting@example.com>",
 		"Bcc: Hidden <hidden@example.com>",
 		"Subject: Re: Invitation to Technical Interview",
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=utf-8",
 		"",
-		"Hi Shea,",
+		"Hi Rae,",
 		"",
 		"Thanks for the details.",
 	}, "\r\n"))
@@ -150,10 +150,10 @@ func TestParseMIMEBody_ExposesEditableDraftHeaders(t *testing.T) {
 		t.Fatalf("parseMIMEBody: %v", err)
 	}
 
-	if body.From != "Anton <anton@example.com>" {
+	if body.From != "Rowan <rowan@example.com>" {
 		t.Fatalf("From = %q", body.From)
 	}
-	if body.To != "Shea <shea@anthropic.com>, Tyitana <tytiana@anthropic.com>" {
+	if body.To != "Rae <rae@cobalt-works.example>, Mina <mina@cobalt-works.example>" {
 		t.Fatalf("To = %q", body.To)
 	}
 	if body.CC != "Recruiter <recruiting@example.com>" {
