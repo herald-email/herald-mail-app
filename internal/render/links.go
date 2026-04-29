@@ -4,8 +4,12 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
-	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/glamour"
+	glamouransi "github.com/charmbracelet/glamour/ansi"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	goldtext "github.com/yuin/goldmark/text"
@@ -58,9 +62,259 @@ func RenderEmailBodyLines(body string, width int) []string {
 	}
 	body = collapseLabelURLReferenceLines(body)
 	body = unwrapInlineBracketedURLs(body)
-	body = protectBareURLsForMarkdown(body)
-	tokens := splitNakedURLTokens(markdownEmailTokens(body))
+	body = labelBareURLsForMarkdown(body)
+	if lines, err := renderGlamourEmailBodyLines(body, width); err == nil {
+		return lines
+	}
+	tokens := splitNakedURLTokens(markdownEmailTokens(protectBareURLsForMarkdown(body)))
 	return wrapEmailLinkTokens(tokens, width)
+}
+
+func renderGlamourEmailBodyLines(body string, width int) ([]string, error) {
+	linkTargets := markdownLinkTargets(body)
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(glamourEmailStyle()),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return nil, err
+	}
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		return nil, err
+	}
+	rendered = strings.ReplaceAll(rendered, "\r\n", "\n")
+	rendered = strings.Trim(rendered, "\n")
+	if rendered == "" {
+		return nil, nil
+	}
+	renderedLines := strings.Split(rendered, "\n")
+	lines := make([]string, 0, len(renderedLines))
+	for i := 0; i < len(renderedLines); i++ {
+		line := trimRightANSIWhitespace(renderedLines[i])
+		wrapped := wrapGlamourLineToWidth(line, width)
+		if len(wrapped) > 1 && i+1 < len(renderedLines) && canMergeShortWrappedTail(line, wrapped[len(wrapped)-1], renderedLines[i+1], width) {
+			wrapped[len(wrapped)-1] = wrapped[len(wrapped)-1] + " " + trimRightANSIWhitespace(renderedLines[i+1])
+			i++
+		}
+		for _, wrapped := range wrapped {
+			lines = append(lines, applyTerminalHyperlinks(wrapped, linkTargets))
+		}
+	}
+	return lines, nil
+}
+
+func wrapGlamourLineToWidth(line string, width int) []string {
+	if width <= 0 || xansi.StringWidth(line) <= width {
+		return []string{line}
+	}
+	wrapped := xansi.Wordwrap(line, width, "")
+	if strings.TrimSpace(wrapped) == "" {
+		return []string{line}
+	}
+	return strings.Split(wrapped, "\n")
+}
+
+func canMergeShortWrappedTail(originalLine, tail, nextLine string, width int) bool {
+	if strings.Contains(originalLine, "│") || strings.Contains(originalLine, "─") {
+		return false
+	}
+	tailText := strings.TrimSpace(xansi.Strip(tail))
+	nextText := strings.TrimSpace(xansi.Strip(nextLine))
+	if tailText == "" || nextText == "" || utf8.RuneCountInString(tailText) > 3 {
+		return false
+	}
+	if strings.HasPrefix(nextText, "•") || strings.HasPrefix(nextText, "#") || strings.Contains(nextText, "│") {
+		return false
+	}
+	return xansi.StringWidth(tail+" "+trimRightANSIWhitespace(nextLine)) <= width
+}
+
+func glamourEmailStyle() glamouransi.StyleConfig {
+	style := glamour.DarkStyleConfig
+	style.Document.BlockPrefix = ""
+	style.Document.BlockSuffix = ""
+	style.Document.Margin = uintPtr(0)
+	style.Link.Format = `{{ "" }}`
+	style.LinkText.Color = stringPtr("39")
+	style.LinkText.Underline = boolPtr(true)
+	style.LinkText.Bold = boolPtr(false)
+	style.Image.Format = `{{ "" }}`
+	style.ImageText.Format = "{{ .text }}"
+	style.ImageText.Color = stringPtr("39")
+	style.ImageText.Underline = boolPtr(true)
+	return style
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func uintPtr(value uint) *uint {
+	return &value
+}
+
+type emailLinkTarget struct {
+	Label string
+	URL   string
+}
+
+func markdownLinkTargets(body string) []emailLinkTarget {
+	tokens := markdownEmailTokens(body)
+	targets := make([]emailLinkTarget, 0, len(tokens))
+	seen := make(map[emailLinkTarget]bool)
+	for _, token := range tokens {
+		if token.URL == "" || token.Text == "" {
+			continue
+		}
+		target := emailLinkTarget{Label: token.Text, URL: token.URL}
+		if seen[target] {
+			continue
+		}
+		seen[target] = true
+		targets = append(targets, target)
+	}
+	return targets
+}
+
+func trimRightANSIWhitespace(line string) string {
+	cut := 0
+	includeEscapesAfterLastText := false
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			j := skipEscapeSeqBytes(line, i)
+			if includeEscapesAfterLastText {
+				cut = j
+			}
+			i = j
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		if unicode.IsSpace(r) {
+			includeEscapesAfterLastText = false
+		} else {
+			cut = i + size
+			includeEscapesAfterLastText = true
+		}
+		i += size
+	}
+	return line[:cut]
+}
+
+func applyTerminalHyperlinks(line string, targets []emailLinkTarget) string {
+	for _, target := range targets {
+		line = wrapVisibleLabelWithTerminalHyperlink(line, target.Label, target.URL)
+	}
+	return line
+}
+
+func wrapVisibleLabelWithTerminalHyperlink(line, label, rawURL string) string {
+	if line == "" || label == "" || rawURL == "" || strings.Contains(line, "\033]8;;"+rawURL+"\033\\") {
+		return line
+	}
+	visibleRunes := []rune(xansi.Strip(line))
+	labelRunes := []rune(label)
+	visibleRanges := visibleLabelRanges(visibleRunes, labelRunes)
+	if len(visibleRanges) == 0 {
+		return line
+	}
+	rawRanges := make([][2]int, 0, len(visibleRanges))
+	for _, visibleRange := range visibleRanges {
+		rawStart, rawEnd, ok := rawRangeForVisibleRuneRange(line, visibleRange[0], visibleRange[1])
+		if ok {
+			rawRanges = append(rawRanges, [2]int{rawStart, rawEnd})
+		}
+	}
+	for i := len(rawRanges) - 1; i >= 0; i-- {
+		rawStart, rawEnd := rawRanges[i][0], rawRanges[i][1]
+		line = line[:rawStart] + "\033]8;;" + rawURL + "\033\\" + line[rawStart:rawEnd] + "\033]8;;\033\\" + line[rawEnd:]
+	}
+	return line
+}
+
+func visibleLabelRanges(haystack, needle []rune) [][2]int {
+	if len(needle) == 0 || len(needle) > len(haystack) {
+		return nil
+	}
+	var ranges [][2]int
+	for i := 0; i <= len(haystack)-len(needle); {
+		matched := true
+		for j := range needle {
+			if haystack[i+j] != needle[j] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			ranges = append(ranges, [2]int{i, i + len(needle)})
+			i += len(needle)
+			continue
+		}
+		i++
+	}
+	return ranges
+}
+
+func rawRangeForVisibleRuneRange(line string, startRune, endRune int) (int, int, bool) {
+	rawStart, rawEnd := -1, -1
+	visible := 0
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			i = skipEscapeSeqBytes(line, i)
+			continue
+		}
+		_, size := utf8.DecodeRuneInString(line[i:])
+		if visible == startRune {
+			rawStart = i
+		}
+		visible++
+		i += size
+		if visible == endRune {
+			rawEnd = i
+			for rawEnd < len(line) && line[rawEnd] == '\033' {
+				rawEnd = skipEscapeSeqBytes(line, rawEnd)
+			}
+			break
+		}
+	}
+	return rawStart, rawEnd, rawStart >= 0 && rawEnd >= rawStart
+}
+
+func skipEscapeSeqBytes(s string, start int) int {
+	if start >= len(s) || s[start] != '\033' {
+		return start + 1
+	}
+	if start+1 >= len(s) {
+		return len(s)
+	}
+	switch s[start+1] {
+	case ']':
+		for i := start + 2; i < len(s); i++ {
+			if s[i] == '\a' {
+				return i + 1
+			}
+			if s[i] == '\033' && i+1 < len(s) && s[i+1] == '\\' {
+				return i + 2
+			}
+		}
+		return len(s)
+	case '[':
+		for i := start + 2; i < len(s); i++ {
+			if s[i] >= 0x40 && s[i] <= 0x7e {
+				return i + 1
+			}
+		}
+		return len(s)
+	default:
+		return start + 2
+	}
 }
 
 func collapseLabelURLReferenceLines(body string) string {
@@ -117,6 +371,47 @@ func escapeMarkdownLabel(label string) string {
 
 func unwrapInlineBracketedURLs(body string) string {
 	return bracketedURLRe.ReplaceAllString(body, "$1")
+}
+
+func labelBareURLsForMarkdown(body string) string {
+	matches := URLRe.FindAllStringIndex(body, -1)
+	if len(matches) == 0 {
+		return body
+	}
+	var out strings.Builder
+	pos := 0
+	for _, match := range matches {
+		if match[0] < pos {
+			continue
+		}
+		out.WriteString(body[pos:match[0]])
+		raw := body[match[0]:match[1]]
+		trimmed := strings.TrimRight(raw, ".,;:!?)")
+		suffix := raw[len(trimmed):]
+		if isMarkdownURLDestination(body, match[0], match[1]) {
+			out.WriteString(raw)
+		} else {
+			out.WriteString("[")
+			out.WriteString(escapeMarkdownLabel(ShortenURL(StripTrackers(trimmed))))
+			out.WriteString("](")
+			out.WriteString(trimmed)
+			out.WriteString(")")
+			out.WriteString(suffix)
+		}
+		pos = match[1]
+	}
+	out.WriteString(body[pos:])
+	return out.String()
+}
+
+func isMarkdownURLDestination(body string, start, end int) bool {
+	if start > 0 && body[start-1] == '(' {
+		return true
+	}
+	if start > 1 && body[start-1] == '<' && body[start-2] == '(' && end < len(body) && body[end] == '>' {
+		return true
+	}
+	return start > 0 && body[start-1] == '<' && end < len(body) && body[end] == '>'
 }
 
 func protectBareURLsForMarkdown(body string) string {
@@ -357,10 +652,10 @@ func wrapEmailLinkTokens(tokens []emailLinkToken, width int) []string {
 			currentWidth = 0
 		}
 		for _, word := range paragraph {
-			wordWidth := ansi.StringWidth(word.Label)
+			wordWidth := xansi.StringWidth(word.Label)
 			if wordWidth > width {
-				word.Label = ansi.Truncate(word.Label, width, "")
-				wordWidth = ansi.StringWidth(word.Label)
+				word.Label = xansi.Truncate(word.Label, width, "")
+				wordWidth = xansi.StringWidth(word.Label)
 			}
 			if len(current) == 0 {
 				current = append(current, word)
@@ -413,7 +708,7 @@ func emailParagraphs(tokens []emailLinkToken) [][]emailWord {
 func renderEmailWords(words []emailWord) string {
 	var b strings.Builder
 	for i, word := range words {
-		if i > 0 {
+		if i > 0 && !emailWordJoinsPrevious(word.Label) {
 			b.WriteByte(' ')
 		}
 		if word.URL == "" {
@@ -423,6 +718,18 @@ func renderEmailWords(words []emailWord) string {
 		}
 	}
 	return b.String()
+}
+
+func emailWordJoinsPrevious(label string) bool {
+	if label == "" {
+		return false
+	}
+	switch []rune(label)[0] {
+	case '.', ',', '!', '?', ':', ';', ')', ']', '}':
+		return true
+	default:
+		return false
+	}
 }
 
 func terminalHyperlink(label, rawURL string) string {

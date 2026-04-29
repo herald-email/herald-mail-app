@@ -1154,17 +1154,15 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 
 ```bash
 make build
-mkdir -p reports/ttyd-image-harness
-$EDITOR reports/ttyd-image-harness/index.html
 TERM_PROGRAM=iTerm.app ttyd -W -p 7682 \
-  -I reports/ttyd-image-harness/index.html \
+  -I tools/ttyd-image-harness/index.html \
   -t rendererType=canvas \
   -t disableLeaveAlert=true \
   -t disableResizeOverlay=true \
   ./bin/herald --demo
 ```
 
-The custom page must load xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image`, with image addon options such as `iipSupport: true` and `sixelSupport: true`. ttyd also requires a specific websocket handshake: fetch `/token`, connect to `/ws` with the `tty` subprotocol, and send the first websocket frame as raw JSON:
+The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image`, with image addon options such as `iipSupport: true` and `sixelSupport: true`. ttyd also requires a specific websocket handshake: fetch `/token`, connect to `/ws` with the `tty` subprotocol, and send the first websocket frame as raw JSON:
 
 ```json
 {"AuthToken":"","columns":120,"rows":40}

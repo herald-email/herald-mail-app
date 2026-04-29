@@ -377,6 +377,22 @@ func buildMailbox() MailboxFixture {
 		"# Free team trial inside\n\nSign in on your computer to unlock the team features.\n\n[Display in your browser](https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiQW50b24iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldReVpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY)\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nOpen the workspace directly: https://app.taskpad.example/app/team/welcome/path/that/is/long/enough/to/prove/wrapping?utm_source=email&utm_medium=trial&token=abcdefghijklmnopqrstuvwxyz0123456789",
 		withHTML,
 		withInlineImage("taskpad-inline-logo", "image/png", demoPNG()))
+	add(30, "Preview Lab <design@previewlab.example>", "Rich HTML rendering showcase", "INBOX", 0, 32768, true, false, ai.CategoryNewsletter, []string{"newsletter", "html", "rendering", "preview"},
+		"# HTML preview quality\n\n**Budget alert** for *Project Orion*.\n\n- Headings survive in compact previews\n- Lists keep their bullets\n- Links keep readable labels\n\n[Open dashboard](https://reports.example.test/orion?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789)\n\n![Remote status chart](https://reports.example.test/chart.png)\n\nThe same body should look good in Timeline, Cleanup, Contacts, and full-screen readers.",
+		withHTMLBody(`<html><body>
+<h1>HTML preview quality</h1>
+<p><strong>Budget alert</strong> for <em>Project Orion</em>.</p>
+<ul>
+<li>Headings survive in compact previews</li>
+<li>Lists keep their bullets</li>
+<li>Links keep readable labels</li>
+</ul>
+<blockquote>Shared rendering should make every preview surface feel consistent.</blockquote>
+<table><tr><th>Surface</th><th>Status</th></tr><tr><td>Timeline</td><td>Ready</td></tr><tr><td>Cleanup</td><td>Ready</td></tr><tr><td>Contacts</td><td>Ready</td></tr></table>
+<p><a href="https://reports.example.test/orion?utm_source=email&amp;token=abcdefghijklmnopqrstuvwxyz0123456789">Open dashboard</a></p>
+<p><img alt="Remote status chart" src="https://reports.example.test/chart.png"></p>
+<p>The same body should look good in Timeline, Cleanup, Contacts, and full-screen readers.</p>
+</body></html>`))
 	add(29, "Open Commons Gallery <images@opencommons.example>", "Creative Commons image sampler for terminal previews", "INBOX", 0, 270336, true, false, ai.CategoryNewsletter, []string{"newsletter", "images", "creative commons", "rendering", "terminal"},
 		"# Creative Commons image sampler for terminal previews\n\nThis demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime.\n\nEmbedded inline images:\n- CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png\n- Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: https://commons.wikimedia.org/wiki/File:ColorChart.svg\n- Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg\n- Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg\n\nRemote image link, intentionally not fetched by Herald:\n![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)\n\nPress z from the preview to open full-screen mode. In iTerm2, embedded images should render inline; in other local terminals, Herald should expose safe local open-image links for the embedded MIME bytes.",
 		withHTMLBody(`<html><body>
@@ -412,6 +428,7 @@ func buildMailbox() MailboxFixture {
 			contact(5, "alerts@harborledger.example", "Harbor Ledger", "Harbor Ledger", []string{"security", "finance"}, 2, 0, 5),
 			contact(6, "care@greenhouse-clinic.example", "Greenhouse Clinic", "Greenhouse Clinic", []string{"health", "appointments"}, 1, 1, 6),
 			contact(7, "orders@marketlane.example", "Market Lane", "Market Lane", []string{"shopping", "orders", "receipts"}, 3, 0, 7),
+			contact(8, "design@previewlab.example", "Preview Lab", "Preview Lab", []string{"html preview", "rendering", "design"}, 1, 0, 0),
 		},
 	}
 }

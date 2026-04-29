@@ -146,6 +146,37 @@ func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
 	}
 }
 
+func TestMailboxIncludesRichHTMLRenderingShowcase(t *testing.T) {
+	const subject = "Rich HTML rendering showcase"
+
+	var found bool
+	for _, msg := range Mailbox().Messages {
+		if msg.Email.Subject != subject {
+			continue
+		}
+		found = true
+		if !msg.Body.IsFromHTML {
+			t.Fatal("rich HTML showcase should exercise HTML-derived preview rendering")
+		}
+		if msg.Body.TextHTML == "" {
+			t.Fatal("rich HTML showcase should include original HTML")
+		}
+		for _, want := range []string{"<h1", "<strong>", "<em>", "<ul>", "<a href=", "<img"} {
+			if !strings.Contains(strings.ToLower(msg.Body.TextHTML), strings.ToLower(want)) {
+				t.Fatalf("rich HTML showcase HTML missing %q:\n%s", want, msg.Body.TextHTML)
+			}
+		}
+		for _, want := range []string{"# HTML preview quality", "- Headings survive", "[Open dashboard](", "![Remote status chart]("} {
+			if !strings.Contains(msg.Body.TextPlain, want) {
+				t.Fatalf("rich HTML showcase markdown body missing %q:\n%s", want, msg.Body.TextPlain)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected demo mailbox to include %q fixture", subject)
+	}
+}
+
 func TestCreativeCommonsSamplerIncludesHTMLCIDPlacement(t *testing.T) {
 	box := Mailbox()
 	var found *Message

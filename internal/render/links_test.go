@@ -108,6 +108,30 @@ func TestRenderEmailBodyLines_ImageLinksUseAltText(t *testing.T) {
 	}
 }
 
+func TestRenderEmailBodyLines_KeepsPunctuationTightAfterInlineFormatting(t *testing.T) {
+	lines := RenderEmailBodyLines("**Budget alert** for *Project Orion*.", 80)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+	if visible != "Budget alert for Project Orion." {
+		t.Fatalf("expected punctuation to stay attached, got %q", visible)
+	}
+}
+
+func TestRenderEmailBodyLines_UsesGlamourStyledMarkdown(t *testing.T) {
+	lines := RenderEmailBodyLines("# HTML preview quality\n\n**Budget alert** for *Project Orion*.", 80)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if !strings.Contains(visible, "HTML preview quality") {
+		t.Fatalf("expected heading text to render, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "# HTML preview quality") || strings.Contains(visible, "**Budget alert**") || strings.Contains(visible, "*Project Orion*") {
+		t.Fatalf("expected markdown markers to be rendered away, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b[") {
+		t.Fatalf("expected Glamour ANSI styling, got raw:\n%q", rendered)
+	}
+}
+
 func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
 	lines := RenderEmailBodyLines("Open "+longURL+" today", 80)
@@ -136,6 +160,60 @@ func TestRenderEmailBodyLines_ClosesHyperlinksPerWrappedLine(t *testing.T) {
 		}
 		if visibleWidth := ansi.StringWidth(line); visibleWidth > 24 {
 			t.Fatalf("line %d visible width=%d exceeds width 24: %q", i, visibleWidth, line)
+		}
+	}
+}
+
+func TestRenderEmailBodyLines_PreservesLongLinkTargetWhenWrapped(t *testing.T) {
+	longURL := "https://example.com/path?token=abcdefghijklmnopqrstuvwxyz0123456789"
+	body := "Before [Open dashboard](" + longURL + ") after"
+	lines := RenderEmailBodyLines(body, 24)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if !strings.Contains(visible, "Open dashboard") {
+		t.Fatalf("expected link label to remain visible, got:\n%s", visible)
+	}
+	if strings.Contains(visible, "abcdefghijklmnopqrstuvwxyz0123456789") {
+		t.Fatalf("expected URL token to stay hidden from visible text, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
+		t.Fatalf("expected original URL to remain as OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_DuplicateVisibleLabelDoesNotStealLink(t *testing.T) {
+	linkURL := "https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg"
+	body := "Changing Landscape: 960px JPEG thumbnail. Source: [Changing Landscape](" + linkURL + ")"
+	lines := RenderEmailBodyLines(body, 120)
+	rendered := strings.Join(lines, "\n")
+	sourceIndex := strings.Index(rendered, "Source:")
+	targetIndex := strings.LastIndex(rendered, "\x1b]8;;"+linkURL+"\x1b\\")
+
+	if sourceIndex < 0 {
+		t.Fatalf("expected rendered text to contain Source:, got raw:\n%q", rendered)
+	}
+	if targetIndex < sourceIndex {
+		t.Fatalf("expected source label to receive OSC 8 target, got raw:\n%q", rendered)
+	}
+}
+
+func TestRenderEmailBodyLines_DoesNotEmitOversizedGlamourLines(t *testing.T) {
+	body := "This demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime."
+	const width = 218
+	lines := RenderEmailBodyLines(body, width)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+	visibleFlow := strings.Join(strings.Fields(visible), " ")
+
+	if !strings.Contains(visibleFlow, "at runtime") {
+		t.Fatalf("expected wrapped text to preserve phrase %q, got:\n%s", "at runtime", visible)
+	}
+	for i, line := range lines {
+		if strings.TrimSpace(ansi.Strip(line)) == "at" {
+			t.Fatalf("line %d split a short phrase awkwardly:\n%s", i, visible)
+		}
+		if visibleWidth := ansi.StringWidth(line); visibleWidth > width {
+			t.Fatalf("line %d visible width=%d exceeds width %d: %q", i, visibleWidth, width, line)
 		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"mail-processor/internal/backend"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	emailrender "mail-processor/internal/render"
 )
 
 func fitPanelContentHeight(content string, target int) string {
@@ -266,7 +267,7 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Body — wrap/render once and cache; re-render only if panel width changed
-		body := stripInvisibleChars(m.timeline.body.TextPlain)
+		body := stripInvisibleChars(emailrender.EmailBodyMarkdown(m.timeline.body))
 		if body == "" {
 			body = "(No plain text — HTML only)"
 		}
@@ -957,7 +958,7 @@ func (m *Model) renderCleanupPreview() string {
 				maxBodyLines = 1
 			}
 
-			body := stripInvisibleChars(m.cleanupEmailBody.TextPlain)
+			body := stripInvisibleChars(emailrender.EmailBodyMarkdown(m.cleanupEmailBody))
 			if body == "" {
 				body = "(No plain text — HTML only)"
 			}
