@@ -1,6 +1,6 @@
 Output assets/demo/mcp-demo.gif
 
-Set Theme "Catppuccin Mocha"
+Set Theme "Builtin Solarized Dark"
 Set FontSize 13
 Set Width 1400
 Set Height 700

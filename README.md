@@ -26,6 +26,12 @@ herald --demo
 
 Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not send anything to Ollama. Your real email is never loaded or shared.
 
+To test terminal image rendering, run demo mode in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself, then open the Creative Commons image sampler email:
+
+```bash
+./bin/herald --demo -image-protocol=kitty
+```
+
 ---
 
 ## Features
@@ -37,6 +43,7 @@ Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not s
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook | ✅ |
 | Experimental Gmail OAuth onboarding (`-experimental`) | ⚠️ |
 | Chronological timeline with split-view email preview | ✅ |
+| Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews | ✅ |
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅ |
 | Bulk cleanup — delete by sender or domain in one keystroke | ✅ |
 | AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
@@ -57,7 +64,7 @@ Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not s
 ### Prerequisites
 
 - An IMAP account and SMTP settings, unless you run demo mode.
-- Recommended: a modern terminal with mouse event support and OSC 8 hyperlink support for Herald's clickable navigation and hardened email link rendering. Popular supported terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/).
+- Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe text placeholders or local `open image` links when available. See the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for link support.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.
 
 ### macOS via Homebrew

@@ -16,6 +16,16 @@ Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP 
 
 ![Demo mode Timeline with synthetic messages](/screenshots/demo-mode-timeline.png)
 
+## Image rendering demo
+
+Demo mode includes a Creative Commons image sampler email with embedded inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
+
+```sh
+./bin/herald --demo -image-protocol=kitty
+```
+
+Search for `Creative Commons image sampler`, open the message, and press `z` for full-screen preview. iTerm2 can use `-image-protocol=iterm2`; terminals without raster graphics show safe placeholders or local `open image` links when available.
+
 ## Browser demo
 
 You can combine demo mode with `ttyd`:
@@ -26,7 +36,7 @@ ttyd -W ./bin/herald --demo
 
 ## Regenerate demo GIFs
 
-Demo tapes live in `demos/*.tape`, canonical GIFs go to `assets/demo/*.gif`, and docs-facing copies go to `docs/public/demo/*.gif`.
+Demo tapes live in `demos/*.tape`, canonical GIFs go to `assets/demo/*.gif`, and docs-facing copies go to `docs/public/demo/*.gif`. Tapes use the brighter `Builtin Solarized Dark` VHS theme for documentation captures.
 
 ```sh
 brew install vhs ffmpeg

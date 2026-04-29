@@ -26,6 +26,7 @@ SCREENSHOT_DIR="docs/public/screenshots"
 DOC_DEMO_DIR="docs/public/demo"
 ATTACHMENT_FIXTURE="$TMP_DIR/demo-attachment.txt"
 ONLY_LIST=",${HERALD_DOC_MEDIA_ONLY:-},"
+INCLUDE_RASTER="${HERALD_DOC_MEDIA_INCLUDE_RASTER:-0}"
 
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR" "$SCREENSHOT_DIR" "$DOC_DEMO_DIR" assets/demo
@@ -39,6 +40,10 @@ should_capture() {
 run_demo_gifs() {
 	local tape
 	for tape in demos/*.tape; do
+		if [[ "$(basename "$tape")" == "image-preview.tape" && "$INCLUDE_RASTER" != "1" ]]; then
+			echo "==> skip $tape (set HERALD_DOC_MEDIA_INCLUDE_RASTER=1 after confirming raster capture support)"
+			continue
+		fi
 		echo "==> vhs $tape"
 		vhs "$tape"
 	done
@@ -53,7 +58,7 @@ write_tape_header() {
 
 	{
 		printf 'Output %s\n\n' "$out"
-		printf 'Set Theme "Catppuccin Mocha"\n'
+		printf 'Set Theme "Builtin Solarized Dark"\n'
 		printf 'Set FontSize 13\n'
 		printf 'Set Width %s\n' "$width"
 		printf 'Set Height %s\n' "$height"
@@ -180,6 +185,9 @@ fi
 capture_tui "timeline-search-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "newsletter"\nSleep 0.2s\nEnter\nSleep 0.8s'
 capture_tui "timeline-quick-reply-picker" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nCtrl+Q\nSleep 1.2s'
 capture_tui "timeline-full-screen-reader" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.6s'
+if [[ "$INCLUDE_RASTER" == "1" ]]; then
+	capture_tui "timeline-inline-image-preview" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "Creative Commons image sampler"\nSleep 0.2s\nEnter\nSleep 0.8s\nEnter\nSleep 1s\nType "z"\nSleep 1.2s\nDown 14\nSleep 2s' 1400 700 "./bin/herald --demo -image-protocol=kitty"
+fi
 
 capture_tui "search-timeline-input" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.6s'
 capture_tui "search-timeline-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.2s\nEnter\nSleep 0.8s'

@@ -9,7 +9,7 @@ This page covers the shortest route to a usable Herald session. For every visibl
 
 - An IMAP account and SMTP settings, unless you run demo mode
 - Optional: Ollama for local AI features
-- Recommended: a modern terminal with mouse event support and OSC 8 hyperlink support for Herald's clickable navigation and hardened email link rendering. Popular supported terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/).
+- Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe placeholders or local `open image` links when available. See the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for link support.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support
 
 ## macOS with Homebrew

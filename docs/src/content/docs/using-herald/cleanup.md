@@ -17,7 +17,7 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 | Summary table | Group rows by sender or domain with columns for selection, Sender/Domain, Count, and Dates. |
 | Detail table | Emails for the focused summary row with columns for selection, Date, Subject, Size, and Att. |
 | Preview panel | Current cleanup email body, header metadata, action hints, unsubscribe visibility, scroll state, delete/archive progress. |
-| Full-screen preview | Cleanup preview expanded across the terminal, including bounded inline-image display or safe fallback links when available. |
+| Full-screen preview | Cleanup preview expanded across the terminal, including bounded Kitty/Ghostty or iTerm2 inline-image display, or safe fallback links when graphics are unavailable. |
 | Rule editor overlay | Full-screen `Automation Rule` form opened by `W`. |
 | Custom prompt overlay | Full-screen prompt editor opened by `P`. |
 | Cleanup manager overlay | Full-screen saved cleanup rules manager opened by `C`. |
@@ -129,7 +129,7 @@ Mouse path: click a summary row to refresh details, click a detail row to open i
 
 Cleanup reads cached sender statistics, message metadata, message bodies for previews, unsubscribe headers, classifications, and rules. Delete and archive write to the IMAP mailbox and update SQLite cache. Hide-future-mail, automation rules, custom prompts, and cleanup rules are stored through Herald's backend. Webhook and shell-command automation can send or expose email-derived values outside Herald when you configure those actions.
 
-Inline MIME image previews use the same safety rules as Timeline: iTerm2-compatible terminals can render bounded images in full-screen, local non-iTerm sessions get short OSC 8 links to random localhost preview URLs, and SSH sessions avoid localhost links that would point at the server machine. Remote HTML image URLs remain external links and are not fetched automatically.
+Inline MIME image previews use the same safety rules as Timeline: Kitty-protocol terminals such as Ghostty on macOS or Kitty itself can render bounded images in full-screen, iTerm2-compatible terminals use iTerm2 inline images, local non-raster sessions get short OSC 8 links to random localhost preview URLs, and SSH sessions avoid localhost links that would point at the server machine. Remote HTML image URLs remain external links and are not fetched automatically.
 
 ## Troubleshooting
 
