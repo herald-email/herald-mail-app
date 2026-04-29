@@ -30,17 +30,46 @@ func Render(imageData []byte, width, height int) string {
 // RenderInline encodes imageData as an iTerm2 inline image escape sequence
 // without checking the current terminal. Use this for explicit user overrides.
 func RenderInline(imageData []byte, width, height int) string {
+	return RenderInlineInCellBox(imageData, width, height, width)
+}
+
+// RenderInlineInCellBox renders an image with explicit image dimensions while
+// reserving and clearing a wider cell box. The wider clear box prevents stale
+// split-view text from leaking beside iTerm2 raster output during full redraws.
+func RenderInlineInCellBox(imageData []byte, width, height, clearWidth int) string {
 	if len(imageData) == 0 {
 		return ""
 	}
 	b64 := base64.StdEncoding.EncodeToString(imageData)
-	args := fmt.Sprintf("inline=1;preserveAspectRatio=1;size=%d", len(imageData))
+	args := fmt.Sprintf("inline=1;preserveAspectRatio=0;size=%d", len(imageData))
 	if width > 0 {
 		args += fmt.Sprintf(";width=%d", width)
 	}
 	if height > 0 {
 		args += fmt.Sprintf(";height=%d", height)
 	}
+	var placement strings.Builder
+	if width > 0 && height > 1 {
+		moveRight := fmt.Sprintf("\033[%dC", width)
+		clearCells := ""
+		if clearWidth > 0 {
+			clearCells = strings.Repeat(" ", clearWidth)
+		}
+		for i := 0; i < height-1; i++ {
+			placement.WriteByte('\r')
+			placement.WriteString("\033[2K")
+			placement.WriteString(clearCells)
+			placement.WriteByte('\r')
+			placement.WriteString(moveRight)
+			placement.WriteByte('\n')
+		}
+		placement.WriteByte('\r')
+		placement.WriteString("\033[2K")
+		placement.WriteString(clearCells)
+		placement.WriteByte('\r')
+		placement.WriteString(fmt.Sprintf("\033[%dA", height-1))
+	}
 	// OSC 1337 ; File=<args> : <base64data> BEL
-	return fmt.Sprintf("\033]1337;File=%s:%s\a\n", args, b64)
+	placement.WriteString(fmt.Sprintf("\033]1337;File=%s:%s\a", args, b64))
+	return placement.String()
 }

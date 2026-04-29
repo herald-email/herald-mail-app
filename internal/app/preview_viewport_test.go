@@ -102,6 +102,52 @@ func TestPreviewRowsFromRenderedImagePadsSinglePhysicalLineToReportedRows(t *tes
 	}
 }
 
+func TestPreviewRowsFromIterm2ImageMarksConsumedRows(t *testing.T) {
+	rows := previewRowsFromRenderedImage(previewImageRenderResult{
+		Content:              "\x1b]1337;File=inline=1;width=64;height=18:payload\a",
+		Rows:                 4,
+		TerminalConsumesRows: true,
+	}, 80)
+
+	if len(rows) != 4 {
+		t.Fatalf("row count = %d, want 4", len(rows))
+	}
+	if rows[0].TerminalConsumed {
+		t.Fatalf("first row must carry the OSC output")
+	}
+	for i := 1; i < len(rows); i++ {
+		if !rows[i].TerminalConsumed {
+			t.Fatalf("row %d should be terminal-consumed reservation: %#v", i, rows[i])
+		}
+	}
+}
+
+func TestRenderPreviewDocumentViewportSkipsIterm2ConsumedPhysicalRows(t *testing.T) {
+	layout := previewDocumentLayout{
+		ImageMode: previewImageModeIterm2,
+		Rows: []previewRenderedRow{
+			{Content: "before"},
+			{Content: "\x1b]1337;File=inline=1;width=64;height=3:payload\a"},
+			{TerminalConsumed: true},
+			{TerminalConsumed: true},
+			{Content: "after"},
+		},
+		TotalRows: 5,
+	}
+
+	rendered := renderPreviewDocumentViewport(layout, 0, 5)
+
+	if rendered.Rows != 5 {
+		t.Fatalf("rendered rows = %d, want logical viewport rows 5", rendered.Rows)
+	}
+	if strings.Count(rendered.Content, "\n") != 2 {
+		t.Fatalf("iTerm2 terminal-consumed rows should not print duplicate blank lines, got %q", rendered.Content)
+	}
+	if !strings.Contains(rendered.Content, "before") || !strings.Contains(rendered.Content, "after") {
+		t.Fatalf("viewport lost surrounding text: %q", rendered.Content)
+	}
+}
+
 func TestPreviewRowsFromRenderedImageCapsPhysicalLinesToReportedRows(t *testing.T) {
 	rows := previewRowsFromRenderedImage(previewImageRenderResult{
 		Content: "[Image: first line\nsecond line]",

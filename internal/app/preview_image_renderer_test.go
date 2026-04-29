@@ -160,6 +160,46 @@ func TestPreviewImageCellSizeBoundsLargeImages(t *testing.T) {
 	}
 }
 
+func TestIterm2PreviewImageCellSizeUsesSafeLandscapeBox(t *testing.T) {
+	img := models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)}
+
+	size := previewImageCellSizeForMode(previewImageModeIterm2, img, 160, 18)
+
+	if size.Rows != 18 {
+		t.Fatalf("iTerm2 landscape rows = %d, want exact row cap 18", size.Rows)
+	}
+	if size.Width > 72 {
+		t.Fatalf("iTerm2 landscape width = %d cells, want conservative safe width <= 72", size.Width)
+	}
+	if size.Width < 48 {
+		t.Fatalf("iTerm2 landscape width = %d cells, want useful raster thumbnail >= 48", size.Width)
+	}
+}
+
+func TestIterm2PreviewRendererMarksTerminalConsumedRows(t *testing.T) {
+	img := models.InlineImage{ContentID: "photo", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)}
+
+	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+		Mode:          previewImageModeIterm2,
+		Image:         img,
+		InnerWidth:    160,
+		AvailableRows: 18,
+	})
+
+	if !rendered.TerminalConsumesRows {
+		t.Fatalf("iTerm2 rendered block should mark terminal-consumed rows: %#v", rendered)
+	}
+	if rendered.Rows != 18 {
+		t.Fatalf("iTerm2 rows = %d, want 18", rendered.Rows)
+	}
+	if strings.Count(rendered.Content, "\n") != rendered.Rows-1 {
+		t.Fatalf("iTerm2 content should reserve exactly %d rows before drawing, got %q", rendered.Rows, rendered.Content)
+	}
+	if !strings.Contains(rendered.Content, "\x1b[17A\x1b]1337;File=") {
+		t.Fatalf("iTerm2 content should move back to the reserved box top before drawing, got %q", rendered.Content)
+	}
+}
+
 func TestIterm2PreviewRendererReportsRowsWithoutTrailingNewline(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	img := models.InlineImage{ContentID: "photo", MIMEType: "image/png", Data: tinyPNG(t, 120, 80)}

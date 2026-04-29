@@ -18,7 +18,8 @@ type previewLayoutOptions struct {
 }
 
 type previewRenderedRow struct {
-	Content string
+	Content          string
+	TerminalConsumed bool
 }
 
 type previewDocumentLayout struct {
@@ -118,6 +119,12 @@ func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth 
 		}
 		rows = append(rows, previewRenderedRow{Content: ansi.Truncate(line, innerWidth, "")})
 	}
+	if rendered.TerminalConsumesRows {
+		for len(rows) < rendered.Rows {
+			rows = append(rows, previewRenderedRow{TerminalConsumed: true})
+		}
+		return rows
+	}
 	for len(rows) < rendered.Rows {
 		rows = append(rows, previewRenderedRow{})
 	}
@@ -159,19 +166,27 @@ func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offse
 		lo, hi = hi, lo
 	}
 	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	hasTerminalConsumedRows := false
 	for i := offset; i < end && i < len(layout.Rows); i++ {
-		content := layout.Rows[i].Content
+		row := layout.Rows[i]
+		if row.TerminalConsumed {
+			hasTerminalConsumedRows = true
+			continue
+		}
+		content := row.Content
 		if visualMode && i >= lo && i <= hi {
 			content = highlightStyle.Render(content)
 		}
 		lines = append(lines, content)
 	}
-	for len(lines) < visibleRows {
-		lines = append(lines, "")
+	if !hasTerminalConsumedRows {
+		for len(lines) < visibleRows {
+			lines = append(lines, "")
+		}
 	}
 	content := strings.Join(lines, "\n")
 	if layout.ImageMode == previewImageModeKitty {
 		content = kittyimg.DeleteVisiblePlacements() + content
 	}
-	return previewViewportRender{Content: content, Rows: len(lines)}
+	return previewViewportRender{Content: content, Rows: visibleRows}
 }

@@ -55,8 +55,9 @@ type previewImageRenderRequest struct {
 }
 
 type previewImageRenderResult struct {
-	Content string
-	Rows    int
+	Content              string
+	Rows                 int
+	TerminalConsumesRows bool
 }
 
 func detectPreviewImageMode(requested previewImageMode, localLinks bool, sshMode bool) previewImageMode {
@@ -90,11 +91,22 @@ func ParsePreviewImageMode(value string) (PreviewImageMode, error) {
 }
 
 func previewImageCellSize(img models.InlineImage, innerW, availableRows int) previewImageSize {
+	return previewImageCellSizeForMode(previewImageModeKitty, img, innerW, availableRows)
+}
+
+func previewImageCellSizeForMode(mode previewImageMode, img models.InlineImage, innerW, availableRows int) previewImageSize {
+	if mode == previewImageModeIterm2 {
+		return previewIterm2ImageCellSize(img, innerW, availableRows)
+	}
+	return previewAspectFitImageCellSize(img, innerW, availableRows, decodedPreviewImageMaxRows)
+}
+
+func previewAspectFitImageCellSize(img models.InlineImage, innerW, availableRows, maxRows int) previewImageSize {
 	widthCap := innerW - 2
 	if widthCap < 1 {
 		widthCap = 1
 	}
-	rowCap := minInt(availableRows, decodedPreviewImageMaxRows)
+	rowCap := minInt(availableRows, maxRows)
 	if rowCap < 1 {
 		rowCap = 1
 	}
@@ -118,13 +130,68 @@ func previewImageCellSize(img models.InlineImage, innerW, availableRows int) pre
 	if rowCells < 1 {
 		rowCells = 1
 	}
+	if widthCells > widthCap || rowCells > rowCap {
+		if widthCap*rowCells <= rowCap*widthCells {
+			rowCells = ceilDivInt(rowCells*widthCap, widthCells)
+			widthCells = widthCap
+		} else {
+			widthCells = ceilDivInt(widthCells*rowCap, rowCells)
+			rowCells = rowCap
+		}
+	}
 	if widthCells > widthCap {
 		widthCells = widthCap
 	}
 	if rowCells > rowCap {
 		rowCells = rowCap
 	}
+	if widthCells < 1 {
+		widthCells = 1
+	}
+	if rowCells < 1 {
+		rowCells = 1
+	}
 	return previewImageSize{Width: widthCells, Rows: rowCells}
+}
+
+func previewIterm2ImageCellSize(img models.InlineImage, innerW, availableRows int) previewImageSize {
+	size := previewAspectFitImageCellSize(img, innerW, availableRows, decodedPreviewImageMaxRows)
+	widthCap := innerW - 2
+	if widthCap < 1 {
+		widthCap = 1
+	}
+	rowCap := minInt(availableRows, decodedPreviewImageMaxRows)
+	if rowCap < 1 {
+		rowCap = 1
+	}
+
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(img.Data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return size
+	}
+
+	aspectMilli := cfg.Width * 1000 / cfg.Height
+	switch {
+	case cfg.Width <= 80 && cfg.Height <= 40:
+		size.Width = minInt(size.Width, minInt(widthCap, 10))
+		size.Rows = minInt(size.Rows, minInt(rowCap, 3))
+	case aspectMilli >= 1500:
+		size.Rows = minInt(rowCap, maxInt(6, minInt(rowCap, 18)))
+		size.Width = minInt(widthCap, maxInt(24, minInt(ceilDivInt(size.Rows*16*cfg.Width, 8*cfg.Height), 72)))
+	case aspectMilli <= 800:
+		size.Rows = minInt(rowCap, maxInt(8, minInt(rowCap, 16)))
+		size.Width = minInt(widthCap, maxInt(12, minInt(ceilDivInt(size.Rows*16*cfg.Width, 8*cfg.Height), 44)))
+	default:
+		size.Rows = minInt(rowCap, maxInt(8, minInt(rowCap, 14)))
+		size.Width = minInt(widthCap, maxInt(18, minInt(ceilDivInt(size.Rows*16*cfg.Width, 8*cfg.Height), 56)))
+	}
+	if size.Width < 1 {
+		size.Width = 1
+	}
+	if size.Rows < 1 {
+		size.Rows = 1
+	}
+	return size
 }
 
 func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderResult {
@@ -144,17 +211,17 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 		if len(req.Image.Data) > maxPreviewImageBytes {
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
-		size := previewImageCellSize(req.Image, req.InnerWidth, req.AvailableRows)
-		rendered := strings.TrimRight(iterm2.RenderInline(req.Image.Data, size.Width, size.Rows), "\n")
+		size := previewImageCellSizeForMode(mode, req.Image, req.InnerWidth, req.AvailableRows)
+		rendered := strings.TrimRight(iterm2.RenderInlineInCellBox(req.Image.Data, size.Width, size.Rows, req.InnerWidth), "\n")
 		if rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
-		return previewImageRenderResult{Content: rendered, Rows: size.Rows}
+		return previewImageRenderResult{Content: rendered, Rows: size.Rows, TerminalConsumesRows: true}
 	case previewImageModeKitty:
 		if len(req.Image.Data) > maxPreviewImageBytes {
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
-		size := previewImageCellSize(req.Image, req.InnerWidth, req.AvailableRows)
+		size := previewImageCellSizeForMode(mode, req.Image, req.InnerWidth, req.AvailableRows)
 		rendered, err := kittyimg.RenderInline(req.Image.Data, size.Width, size.Rows)
 		if err != nil || rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
@@ -220,6 +287,20 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func ceilDivInt(a, b int) int {
+	if b <= 0 {
+		return 0
+	}
+	return (a + b - 1) / b
 }
 
 func isUsefulPreviewAlt(alt string) bool {

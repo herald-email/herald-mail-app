@@ -177,6 +177,41 @@ func TestTimelineFullScreen_ItermRendersBoundedInlineImage(t *testing.T) {
 	}
 }
 
+func TestTimelineFullScreen_ItermUsesSafeLandscapeRasterBox(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 120, 32)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+	m.timeline.fullScreen = true
+
+	rendered := m.renderFullScreenEmail()
+	if !strings.Contains(rendered, "\x1b]1337;File=") {
+		t.Fatalf("expected iTerm2 raster escape, got raw:\n%q", rendered)
+	}
+	if strings.Contains(rendered, "open image") || strings.Contains(rendered, "127.0.0.1") {
+		t.Fatalf("iTerm2 target path must not use fallback links, got:\n%s", stripANSI(rendered))
+	}
+	width := itermImageDimension(t, rendered, "width")
+	height := itermImageDimension(t, rendered, "height")
+	if width < 48 || width > 72 {
+		t.Fatalf("safe landscape width = %d cells, want 48..72; raw:\n%q", width, rendered)
+	}
+	if height != 18 {
+		t.Fatalf("safe landscape height = %d cells, want 18; raw:\n%q", height, rendered)
+	}
+	assertFitsHeight(t, 32, rendered)
+}
+
 func TestTimelineFullScreen_RendersCIDImageInDocumentOrder(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "")
 	m := makeSizedModel(t, 100, 30)
