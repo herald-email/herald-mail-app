@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Herald ttyd Preview Harness</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm/css/xterm.css" />
+    <style>
+      html,
+      body,
+      #terminal {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background: #002b36;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="terminal"></div>
+    <script type="module">
+      import { Terminal } from "https://cdn.jsdelivr.net/npm/@xterm/xterm/+esm";
+      import { FitAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-fit/+esm";
+      import { ImageAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-image/+esm";
+
+      // Solarized Dark values mirror:
+      // https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/schemes/iTerm2%20Solarized%20Dark.itermcolors
+      const solarizedDark = {
+        background: "#002b36",
+        foreground: "#839496",
+        cursor: "#839496",
+        cursorAccent: "#073642",
+        selectionBackground: "#073642",
+        black: "#073642",
+        red: "#dc322f",
+        green: "#859900",
+        yellow: "#b58900",
+        blue: "#268bd2",
+        magenta: "#d33682",
+        cyan: "#2aa198",
+        white: "#eee8d5",
+        brightBlack: "#002b36",
+        brightRed: "#cb4b16",
+        brightGreen: "#586e75",
+        brightYellow: "#657b83",
+        brightBlue: "#839496",
+        brightMagenta: "#6c71c4",
+        brightCyan: "#93a1a1",
+        brightWhite: "#fdf6e3",
+      };
+
+      const terminal = new Terminal({
+        cursorBlink: false,
+        convertEol: false,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 14,
+        rendererType: "canvas",
+        scrollback: 5000,
+        theme: solarizedDark,
+        windowOptions: {
+          getWinSizePixels: true,
+          getCellSizePixels: true,
+          getWinSizeChars: true,
+        },
+      });
+
+      const fitAddon = new FitAddon();
+      const imageAddon = new ImageAddon({
+        enableSizeReports: true,
+        iipSupport: true,
+        sixelSupport: true,
+        sixelScrolling: true,
+        showPlaceholder: true,
+      });
+
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(imageAddon);
+      terminal.open(document.getElementById("terminal"));
+      fitAddon.fit();
+      terminal.focus();
+
+      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      let authToken = "";
+      try {
+        const tokenResponse = await fetch(`${location.protocol}//${location.host}/token`);
+        if (tokenResponse.ok) {
+          const tokenBody = await tokenResponse.json();
+          authToken = tokenBody.token || "";
+        }
+      } catch (error) {
+        console.error("[herald-preview-harness] failed to fetch ttyd token", error);
+      }
+
+      const socket = new WebSocket(`${protocol}//${location.host}/ws`, ["tty"]);
+      socket.binaryType = "arraybuffer";
+
+      const encode = new TextEncoder();
+      const sendText = (command, payload) => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(encode.encode(command + payload));
+        }
+      };
+
+      socket.addEventListener("open", () => {
+        const sendResize = () => {
+          fitAddon.fit();
+          sendText("1", JSON.stringify({ columns: terminal.cols, rows: terminal.rows }));
+        };
+        socket.send(
+          encode.encode(
+            JSON.stringify({
+              AuthToken: authToken,
+              columns: terminal.cols,
+              rows: terminal.rows,
+            }),
+          ),
+        );
+        terminal.onData((data) => sendText("0", data));
+        terminal.onResize(({ cols, rows }) => {
+          sendText("1", JSON.stringify({ columns: cols, rows }));
+        });
+        window.addEventListener("resize", sendResize);
+        sendResize();
+      });
+
+      socket.addEventListener("message", (event) => {
+        if (typeof event.data === "string") {
+          const command = event.data.slice(0, 1);
+          const payload = event.data.slice(1);
+          if (command === "0") terminal.write(payload);
+          return;
+        }
+        const bytes = new Uint8Array(event.data);
+        if (bytes.length > 1 && bytes[0] === 48) {
+          terminal.write(bytes.slice(1));
+        }
+      });
+
+      socket.addEventListener("close", () => {
+        terminal.writeln("");
+        terminal.writeln("[ttyd websocket closed]");
+      });
+
+      socket.addEventListener("error", () => {
+        terminal.writeln("");
+        terminal.writeln("[ttyd websocket error]");
+      });
+    </script>
+  </body>
+</html>

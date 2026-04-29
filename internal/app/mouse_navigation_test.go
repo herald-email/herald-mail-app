@@ -41,8 +41,8 @@ func makeMouseThreadTimelineModel(t *testing.T) (*Model, *models.EmailData, *mod
 	now := time.Date(2026, 4, 28, 12, 0, 0, 0, time.UTC)
 	root := &models.EmailData{
 		MessageID: "thread-root",
-		Sender:    "Anton Golubtsov <demo@demo.local>",
-		Subject:   "Re: Next Steps with Anthropic!",
+		Sender:    "Rowan Finch <demo@demo.local>",
+		Subject:   "Re: Next Steps with Cobalt Works!",
 		Date:      now,
 		Size:      8704,
 		Folder:    "INBOX",
@@ -50,8 +50,8 @@ func makeMouseThreadTimelineModel(t *testing.T) (*Model, *models.EmailData, *mod
 	}
 	child := &models.EmailData{
 		MessageID: "thread-child",
-		Sender:    "Tyitana Horton <tytiana@anthropic.example>",
-		Subject:   "Next Steps with Anthropic!",
+		Sender:    "Mina Park <mina@cobalt-works.example>",
+		Subject:   "Next Steps with Cobalt Works!",
 		Date:      root.Date.Add(-3 * time.Minute),
 		Size:      9216,
 		Folder:    "INBOX",

@@ -78,6 +78,45 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 	}
 }
 
+func TestMailboxOmitsPrivateDemoIdentityTerms(t *testing.T) {
+	mailbox := Mailbox()
+	forbidden := []string{"anthropic", "anton", "golubtsov", "tatiana", "tytiana"}
+
+	assertClean := func(label, value string) {
+		t.Helper()
+		lower := strings.ToLower(value)
+		for _, term := range forbidden {
+			if strings.Contains(lower, term) {
+				t.Fatalf("%s contains forbidden demo identity term %q: %q", label, term, value)
+			}
+		}
+	}
+
+	for _, msg := range mailbox.Messages {
+		assertClean(msg.Email.MessageID+" sender", msg.Email.Sender)
+		assertClean(msg.Email.MessageID+" subject", msg.Email.Subject)
+		assertClean(msg.Email.MessageID+" message id", msg.Email.MessageID)
+		assertClean(msg.Email.MessageID+" body", msg.Body.TextPlain)
+		assertClean(msg.Email.MessageID+" html body", msg.Body.TextHTML)
+		assertClean(msg.Email.MessageID+" from", msg.Body.From)
+		assertClean(msg.Email.MessageID+" to", msg.Body.To)
+		assertClean(msg.Email.MessageID+" cc", msg.Body.CC)
+		assertClean(msg.Email.MessageID+" bcc", msg.Body.BCC)
+		assertClean(msg.Email.MessageID+" body subject", msg.Body.Subject)
+		for _, topic := range msg.Topics {
+			assertClean(msg.Email.MessageID+" topic", topic)
+		}
+	}
+	for _, contact := range mailbox.Contacts {
+		assertClean(contact.Email+" email", contact.Email)
+		assertClean(contact.Email+" display name", contact.DisplayName)
+		assertClean(contact.Email+" company", contact.Company)
+		for _, topic := range contact.Topics {
+			assertClean(contact.Email+" topic", topic)
+		}
+	}
+}
+
 func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 	var found bool
 	for _, msg := range Mailbox().Messages {
@@ -138,6 +177,37 @@ func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
 		for _, want := range []string{"creative commons", "cc0", "cc by 4.0", "46x21", "330px", "960px", "![remote commons thumbnail]("} {
 			if !strings.Contains(body, strings.ToLower(want)) {
 				t.Fatalf("sampler body missing %q:\n%s", want, msg.Body.TextPlain)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected demo mailbox to include %q fixture", subject)
+	}
+}
+
+func TestMailboxIncludesRichHTMLRenderingShowcase(t *testing.T) {
+	const subject = "Rich HTML rendering showcase"
+
+	var found bool
+	for _, msg := range Mailbox().Messages {
+		if msg.Email.Subject != subject {
+			continue
+		}
+		found = true
+		if !msg.Body.IsFromHTML {
+			t.Fatal("rich HTML showcase should exercise HTML-derived preview rendering")
+		}
+		if msg.Body.TextHTML == "" {
+			t.Fatal("rich HTML showcase should include original HTML")
+		}
+		for _, want := range []string{"<h1", "<strong>", "<em>", "<ul>", "<a href=", "<img"} {
+			if !strings.Contains(strings.ToLower(msg.Body.TextHTML), strings.ToLower(want)) {
+				t.Fatalf("rich HTML showcase HTML missing %q:\n%s", want, msg.Body.TextHTML)
+			}
+		}
+		for _, want := range []string{"# HTML preview quality", "- Headings survive", "[Open dashboard](", "![Remote status chart]("} {
+			if !strings.Contains(msg.Body.TextPlain, want) {
+				t.Fatalf("rich HTML showcase markdown body missing %q:\n%s", want, msg.Body.TextPlain)
 			}
 		}
 	}

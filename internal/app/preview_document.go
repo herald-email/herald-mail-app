@@ -1,12 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
 	"mail-processor/internal/models"
+	emailrender "mail-processor/internal/render"
 )
 
 type previewDocumentBlockKind int
@@ -37,7 +39,7 @@ func buildPreviewDocument(body *models.EmailBody, imageDescriptions map[string]s
 	placed := make(map[string]bool)
 	blocks, ok := buildPreviewDocumentFromHTML(body.TextHTML, imagesByCID, placed)
 	if !ok {
-		text := strings.TrimSpace(stripInvisibleChars(body.TextPlain))
+		text := strings.TrimSpace(stripInvisibleChars(emailrender.EmailBodyMarkdown(body)))
 		if text == "" {
 			text = "(No plain text - HTML only)"
 		}
@@ -89,13 +91,6 @@ func inlineImageDocumentKey(image models.InlineImage, index int) string {
 	return fmt.Sprintf("__inline_image_%d", index)
 }
 
-func escapeMarkdownLabel(label string) string {
-	label = strings.ReplaceAll(label, `\`, `\\`)
-	label = strings.ReplaceAll(label, `[`, `\[`)
-	label = strings.ReplaceAll(label, `]`, `\]`)
-	return label
-}
-
 func buildPreviewDocumentFromHTML(htmlText string, imagesByCID map[string]models.InlineImage, placed map[string]bool) ([]previewDocumentBlock, bool) {
 	if strings.TrimSpace(htmlText) == "" {
 		return nil, false
@@ -117,7 +112,7 @@ func buildPreviewDocumentFromHTML(htmlText string, imagesByCID map[string]models
 		placed:      placed,
 	}
 	builder.walk(root)
-	builder.flushText()
+	builder.flushHTML()
 	return builder.blocks, len(builder.blocks) > 0
 }
 
@@ -158,7 +153,7 @@ func orphanInlineImageBlocks(images []models.InlineImage, placed map[string]bool
 
 type previewHTMLBuilder struct {
 	blocks      []previewDocumentBlock
-	text        strings.Builder
+	html        strings.Builder
 	imagesByCID map[string]models.InlineImage
 	placed      map[string]bool
 }
@@ -167,84 +162,46 @@ func (b *previewHTMLBuilder) walk(n *html.Node) {
 	if n == nil {
 		return
 	}
-	if n.Type == html.TextNode {
-		b.writeText(n.Data)
-		return
-	}
-	if n.Type != html.ElementNode {
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			b.walk(child)
-		}
-		return
-	}
-
-	switch strings.ToLower(n.Data) {
-	case "script", "style", "head":
-		return
-	case "br":
-		b.writeText("\n")
-	case "h1", "h2", "h3", "h4", "h5", "h6":
-		b.flushText()
-		text := strings.TrimSpace(collapseWhitespace(nodeText(n)))
-		if text != "" {
-			level := headingLevel(n.Data)
-			b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: strings.Repeat("#", level) + " " + text})
-		}
-	case "p", "div", "section", "article", "blockquote", "ul", "ol", "li":
-		b.flushText()
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			b.walk(child)
-		}
-		b.flushText()
-	case "a":
-		b.writeAnchor(n)
-	case "img":
-		b.flushText()
+	if n.Type == html.ElementNode && strings.EqualFold(n.Data, "img") && isCIDImageNode(n) {
+		b.flushHTML()
 		b.writeImage(n)
-	default:
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			b.walk(child)
-		}
-	}
-}
-
-func (b *previewHTMLBuilder) writeText(text string) {
-	if strings.TrimSpace(text) == "" {
-		b.text.WriteString(" ")
 		return
 	}
-	b.text.WriteString(text)
-	b.text.WriteString(" ")
-}
 
-func (b *previewHTMLBuilder) flushText() {
-	text := strings.TrimSpace(stripInvisibleChars(collapseWhitespace(b.text.String())))
-	b.text.Reset()
-	if text != "" {
-		b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: text})
-	}
-}
-
-func (b *previewHTMLBuilder) writeAnchor(n *html.Node) {
-	if nodeContainsElement(n, "img") {
+	if n.Type == html.DocumentNode || nodeContainsCIDImage(n) {
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			b.walk(child)
 		}
 		return
 	}
 
-	href := strings.TrimSpace(attrValue(n, "href"))
-	if href == "" || strings.HasPrefix(strings.ToLower(href), "javascript:") {
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			b.walk(child)
+	if n.Type == html.ElementNode {
+		switch strings.ToLower(n.Data) {
+		case "script", "style", "head":
+			return
 		}
+	}
+
+	b.writeHTMLNode(n)
+	if n.Type == html.ElementNode && isPreviewMarkdownBlockElement(n.Data) {
+		b.flushHTML()
+	}
+}
+
+func (b *previewHTMLBuilder) writeHTMLNode(n *html.Node) {
+	var buf bytes.Buffer
+	if err := html.Render(&buf, n); err != nil {
 		return
 	}
-	label := strings.TrimSpace(collapseWhitespace(nodeText(n)))
-	if label == "" {
-		label = href
+	b.html.Write(buf.Bytes())
+}
+
+func (b *previewHTMLBuilder) flushHTML() {
+	markdown := strings.TrimSpace(stripInvisibleChars(emailrender.HTMLToMarkdown(b.html.String())))
+	b.html.Reset()
+	if markdown != "" {
+		b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: markdown})
 	}
-	b.writeText("[" + escapeMarkdownLabel(label) + "](" + href + ")")
 }
 
 func (b *previewHTMLBuilder) writeImage(n *html.Node) {
@@ -268,64 +225,37 @@ func (b *previewHTMLBuilder) writeImage(n *html.Node) {
 		b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: "[missing inline image: " + cid + "]"})
 		return
 	}
-	if isRemoteImageURL(src) {
-		b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: "![" + escapeMarkdownLabel(alt) + "](" + src + ")"})
-	}
 }
 
-func headingLevel(tag string) int {
-	switch strings.ToLower(tag) {
-	case "h1":
-		return 1
-	case "h2":
-		return 2
-	default:
-		return 3
-	}
+func isCIDImageNode(n *html.Node) bool {
+	return n != nil &&
+		n.Type == html.ElementNode &&
+		strings.EqualFold(n.Data, "img") &&
+		strings.HasPrefix(strings.ToLower(strings.TrimSpace(attrValue(n, "src"))), "cid:")
 }
 
-func nodeText(n *html.Node) string {
-	if n == nil {
-		return ""
-	}
-	if n.Type == html.TextNode {
-		return n.Data
-	}
-	if n.Type == html.ElementNode {
-		switch strings.ToLower(n.Data) {
-		case "script", "style", "head":
-			return ""
-		}
-	}
-	var parts []string
-	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if text := nodeText(child); strings.TrimSpace(text) != "" {
-			parts = append(parts, text)
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
-func nodeContainsElement(n *html.Node, tag string) bool {
+func nodeContainsCIDImage(n *html.Node) bool {
 	if n == nil {
 		return false
 	}
-	if n.Type == html.ElementNode && strings.EqualFold(n.Data, tag) {
+	if isCIDImageNode(n) {
 		return true
 	}
 	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if nodeContainsElement(child, tag) {
+		if nodeContainsCIDImage(child) {
 			return true
 		}
 	}
 	return false
 }
 
-func collapseWhitespace(text string) string {
-	return strings.Join(strings.Fields(text), " ")
-}
-
-func isRemoteImageURL(src string) bool {
-	lower := strings.ToLower(src)
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+func isPreviewMarkdownBlockElement(tag string) bool {
+	switch strings.ToLower(tag) {
+	case "h1", "h2", "h3", "h4", "h5", "h6",
+		"p", "div", "section", "article", "blockquote",
+		"ul", "ol", "table", "tr":
+		return true
+	default:
+		return false
+	}
 }

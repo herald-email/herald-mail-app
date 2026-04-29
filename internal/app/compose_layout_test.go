@@ -91,11 +91,11 @@ func TestComposeAlt4_SwitchesToContacts(t *testing.T) {
 
 func TestComposeAutocomplete_DoesNotPushChromeOffscreen(t *testing.T) {
 	contacts := []models.ContactData{
-		{DisplayName: "Anton Golubtsov", Email: "zoomacode@protonmail.com"},
-		{DisplayName: "Anton Golubtsov", Email: "zoomacode@proton.me"},
-		{DisplayName: "Anton Golubtsov", Email: "anton.golubtsov@protonmail.com"},
-		{DisplayName: "Anton from Manager.dev", Email: "managerdotdev@mail.beehiiv.com"},
-		{DisplayName: "Anton Golubtsov", Email: "zoomacode@pm.me"},
+		{DisplayName: "Rowan Finch", Email: "rowan@protonmail.com"},
+		{DisplayName: "Rowan Finch", Email: "rowan@proton.me"},
+		{DisplayName: "Rowan Finch", Email: "rowan.finch@protonmail.com"},
+		{DisplayName: "Rowan from Manager.dev", Email: "managerdotdev@mail.beehiiv.com"},
+		{DisplayName: "Rowan Finch", Email: "rowan@pm.me"},
 	}
 
 	lineCount := func(rendered string) int {
@@ -118,7 +118,7 @@ func TestComposeAutocomplete_DoesNotPushChromeOffscreen(t *testing.T) {
 			m := makeSizedModel(t, tc.width, tc.height)
 			m.activeTab = tabCompose
 			m.composeField = 0
-			m.composeTo.SetValue("anton")
+			m.composeTo.SetValue("rowan")
 			updated, _ := m.Update(ContactSuggestionsMsg{Contacts: contacts})
 			m = updated.(*Model)
 			freezeComposeCursors(m)

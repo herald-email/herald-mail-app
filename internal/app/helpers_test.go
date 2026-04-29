@@ -239,18 +239,18 @@ func TestBuildThreadGroups_Grouping(t *testing.T) {
 
 func TestBuildThreadGroups_GroupAcrossSendersBySubject(t *testing.T) {
 	now := time.Now()
-	reply := makeEmail("Re: Next Steps with Anthropic!", now)
-	reply.Sender = "Anton Golubtsov <demo@demo.local>"
-	original := makeEmail("Next Steps with Anthropic!", now.Add(-3*time.Minute))
-	original.Sender = "Tyitana Horton <tytiana@anthropic.example>"
+	reply := makeEmail("Re: Next Steps with Cobalt Works!", now)
+	reply.Sender = "Rowan Finch <demo@demo.local>"
+	original := makeEmail("Next Steps with Cobalt Works!", now.Add(-3*time.Minute))
+	original.Sender = "Mina Park <mina@cobalt-works.example>"
 	other := makeEmail("Different topic", now.Add(-time.Hour))
-	other.Sender = "Tyitana Horton <tytiana@anthropic.example>"
+	other.Sender = "Mina Park <mina@cobalt-works.example>"
 
 	groups := buildThreadGroups([]*models.EmailData{reply, original, other})
 	if len(groups) != 2 {
 		t.Fatalf("expected 2 groups, got %d", len(groups))
 	}
-	if groups[0].normalizedSubject != "next steps with anthropic!" {
+	if groups[0].normalizedSubject != "next steps with cobalt works!" {
 		t.Fatalf("expected cross-participant thread first, got %q", groups[0].normalizedSubject)
 	}
 	if len(groups[0].emails) != 2 {
@@ -293,15 +293,15 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 	m.timeline.emails = []*models.EmailData{
 		{
 			MessageID: "reply",
-			Sender:    "Anton Golubtsov <demo@demo.local>",
-			Subject:   "Re: Next Steps with Anthropic!",
+			Sender:    "Rowan Finch <demo@demo.local>",
+			Subject:   "Re: Next Steps with Cobalt Works!",
 			Date:      now,
 			Folder:    "INBOX",
 		},
 		{
 			MessageID: "original",
-			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
-			Subject:   "Next Steps with Anthropic!",
+			Sender:    "Mina Park <mina@cobalt-works.example>",
+			Subject:   "Next Steps with Cobalt Works!",
 			Date:      now.Add(-3 * time.Minute),
 			Folder:    "INBOX",
 		},
@@ -319,7 +319,7 @@ func TestUpdateTimelineTable_CollapsedThreadShowsParticipants(t *testing.T) {
 	if !strings.Contains(sender, "me") {
 		t.Fatalf("expected collapsed participants to include me, got %q", sender)
 	}
-	if !strings.Contains(sender, "Tyitana Horton") {
+	if !strings.Contains(sender, "Mina Park") {
 		t.Fatalf("expected collapsed participants to include other sender display name, got %q", sender)
 	}
 	if subject := rows[0][2]; !strings.Contains(subject, "[2]") {
@@ -332,19 +332,19 @@ func TestUpdateTimelineTable_ExpandedThreadReplyRowsShowReplyMarker(t *testing.T
 	m := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
 	m.timeline.senderWidth = 30
 	m.timeline.subjectWidth = 42
-	m.timeline.expandedThreads["next steps with anthropic!"] = true
+	m.timeline.expandedThreads["next steps with cobalt works!"] = true
 	m.timeline.emails = []*models.EmailData{
 		{
 			MessageID: "reply",
-			Sender:    "Anton Golubtsov <demo@demo.local>",
-			Subject:   "Re: Next Steps with Anthropic!",
+			Sender:    "Rowan Finch <demo@demo.local>",
+			Subject:   "Re: Next Steps with Cobalt Works!",
 			Date:      now,
 			Folder:    "INBOX",
 		},
 		{
 			MessageID: "original",
-			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
-			Subject:   "Next Steps with Anthropic!",
+			Sender:    "Mina Park <mina@cobalt-works.example>",
+			Subject:   "Next Steps with Cobalt Works!",
 			Date:      now.Add(-3 * time.Minute),
 			Folder:    "INBOX",
 		},
@@ -376,8 +376,8 @@ func TestUpdateTimelineTable_SingleEmailThreadRowsDoNotShowDisclosureMarker(t *t
 	m.timeline.emails = []*models.EmailData{
 		{
 			MessageID: "solo",
-			Sender:    "Tyitana Horton <tytiana@anthropic.example>",
-			Subject:   "Next Steps with Anthropic!",
+			Sender:    "Mina Park <mina@cobalt-works.example>",
+			Subject:   "Next Steps with Cobalt Works!",
 			Date:      now,
 			Folder:    "INBOX",
 		},

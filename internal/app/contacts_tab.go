@@ -11,6 +11,7 @@ import (
 	"mail-processor/internal/contacts"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
+	emailrender "mail-processor/internal/render"
 )
 
 // --- Contacts tab ---
@@ -421,7 +422,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))
 		} else if m.contactPreviewBody != nil {
-			body := stripInvisibleChars(m.contactPreviewBody.TextPlain)
+			body := stripInvisibleChars(emailrender.EmailBodyMarkdown(m.contactPreviewBody))
 			if body == "" {
 				body = "(No text content)"
 			}

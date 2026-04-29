@@ -1216,6 +1216,25 @@ Check these states during every applicable lane:
 - ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
 - The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
 
+### TC-49A — Shared HTML Markdown previews across surfaces
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode.
+2. Open Timeline and search for `Rich HTML rendering showcase`.
+3. Open the split preview, capture it, then press `z` and capture full-screen mode.
+4. Open Cleanup, locate the same sender/message, open its preview, capture split and full-screen modes.
+5. Open Contacts, select `Preview Lab`, open the `Rich HTML rendering showcase` email inline, and capture the preview.
+6. Resize to `80x24` and `50x15`, then back to `220x50`, capturing the affected preview surface at each size.
+
+**Expect:**
+- Timeline, Cleanup, Contacts, and full-screen previews all show the HTML-derived body rather than stale plain-text fallback.
+- Visible preview text preserves readable structure: `HTML preview quality`, list bullets, `Open dashboard`, and `Remote status chart`.
+- Long tracking URL fragments such as `abcdefghijklmnopqrstuvwxyz0123456789` and `utm_source=email` do not appear in visible preview text.
+- `50x15` shows the minimum-size guard and resizing back restores a clean preview.
+
 ### TC-50 — Mouse navigation parity
 
 **Lane:** A
