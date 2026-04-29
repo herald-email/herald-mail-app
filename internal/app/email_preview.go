@@ -414,7 +414,7 @@ func (m *Model) renderFullScreenEmail() string {
 }
 
 func (m *Model) currentPreviewImageMode() previewImageMode {
-	return detectPreviewImageMode(previewImageModeAuto, m.localImageLinks, !m.localImageLinks)
+	return detectPreviewImageMode(m.previewImageMode, m.localImageLinks, !m.localImageLinks)
 }
 
 func (m *Model) timelineFullScreenDocumentBudget() (int, int) {

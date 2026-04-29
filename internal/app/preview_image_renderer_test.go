@@ -40,6 +40,101 @@ func TestDetectPreviewImageMode(t *testing.T) {
 	}
 }
 
+func TestDetectPreviewImageModeKittyAndGhostty(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want previewImageMode
+	}{
+		{
+			name: "kitty window id",
+			env:  map[string]string{"KITTY_WINDOW_ID": "12"},
+			want: previewImageModeKitty,
+		},
+		{
+			name: "kitty term",
+			env:  map[string]string{"TERM": "xterm-kitty"},
+			want: previewImageModeKitty,
+		},
+		{
+			name: "ghostty term",
+			env:  map[string]string{"TERM": "xterm-ghostty"},
+			want: previewImageModeKitty,
+		},
+		{
+			name: "ghostty term program",
+			env:  map[string]string{"TERM_PROGRAM": "Ghostty"},
+			want: previewImageModeKitty,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearTerminalImageEnv(t)
+			for key, value := range tt.env {
+				t.Setenv(key, value)
+			}
+			if got := detectPreviewImageMode(previewImageModeAuto, true, false); got != tt.want {
+				t.Fatalf("auto mode = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDetectPreviewImageModeSSHAndForcedModes(t *testing.T) {
+	clearTerminalImageEnv(t)
+	t.Setenv("KITTY_WINDOW_ID", "12")
+	if got := detectPreviewImageMode(previewImageModeAuto, true, true); got != previewImageModePlaceholder {
+		t.Fatalf("ssh auto mode = %q, want placeholder", got)
+	}
+	if got := detectPreviewImageMode(previewImageModeKitty, false, true); got != previewImageModeKitty {
+		t.Fatalf("forced kitty over ssh = %q, want kitty", got)
+	}
+	if got := detectPreviewImageMode(previewImageModeIterm2, false, false); got != previewImageModeIterm2 {
+		t.Fatalf("forced iterm2 without iTerm env = %q, want iterm2", got)
+	}
+}
+
+func TestDetectPreviewImageModeFallsBackToLinksLocally(t *testing.T) {
+	clearTerminalImageEnv(t)
+	if got := detectPreviewImageMode(previewImageModeAuto, true, false); got != previewImageModeLinks {
+		t.Fatalf("local fallback mode = %q, want links", got)
+	}
+}
+
+func TestParsePreviewImageMode(t *testing.T) {
+	for _, value := range []string{"auto", "iterm2", "kitty", "links", "placeholder", "off"} {
+		if _, err := ParsePreviewImageMode(value); err != nil {
+			t.Fatalf("ParsePreviewImageMode(%q) unexpected error: %v", value, err)
+		}
+	}
+	if _, err := ParsePreviewImageMode("sixel"); err == nil {
+		t.Fatal("ParsePreviewImageMode(\"sixel\") returned nil error, want invalid mode error")
+	}
+}
+
+func TestModelPreviewImageModeOverrideForcesKitty(t *testing.T) {
+	clearTerminalImageEnv(t)
+	m := New(&stubBackend{}, nil, "", nil, false)
+	defer m.cleanup()
+	m.SetLocalImageLinksEnabled(false)
+	m.SetPreviewImageMode(PreviewImageModeKitty)
+
+	if got := m.currentPreviewImageMode(); got != previewImageModeKitty {
+		t.Fatalf("current preview mode = %q, want kitty", got)
+	}
+	if !m.fullScreenImagesAvailable() {
+		t.Fatal("forced kitty mode should make full-screen image viewing available")
+	}
+}
+
+func clearTerminalImageEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{"TERM_PROGRAM", "TERM", "KITTY_WINDOW_ID"} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestPreviewImageCellSizeAvoidsUpscalingTinyImages(t *testing.T) {
 	img := models.InlineImage{ContentID: "small", MIMEType: "image/png", Data: tinyPNG(t, 32, 16)}
 	size := previewImageCellSize(img, 120, 20)
@@ -83,6 +178,56 @@ func TestIterm2PreviewRendererReportsRowsWithoutTrailingNewline(t *testing.T) {
 	}
 	if strings.HasSuffix(rendered.Content, "\n") {
 		t.Fatalf("image renderer content should not hide trailing newline: %q", rendered.Content)
+	}
+}
+
+func TestForcedIterm2PreviewRendererDoesNotRequireItermEnv(t *testing.T) {
+	clearTerminalImageEnv(t)
+	img := models.InlineImage{ContentID: "photo", MIMEType: "image/png", Data: tinyPNG(t, 120, 80)}
+	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+		Mode:          previewImageModeIterm2,
+		Image:         img,
+		InnerWidth:    100,
+		AvailableRows: 12,
+	})
+
+	if !strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("forced iTerm2 should emit OSC 1337 without iTerm env, got %q", rendered.Content)
+	}
+}
+
+func TestKittyPreviewRendererReportsRowsWithoutTrailingNewline(t *testing.T) {
+	img := models.InlineImage{ContentID: "photo", MIMEType: "image/png", Data: tinyPNG(t, 120, 80)}
+	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+		Mode:          previewImageModeKitty,
+		Image:         img,
+		InnerWidth:    100,
+		AvailableRows: 12,
+	})
+
+	if rendered.Rows <= 0 || rendered.Rows > 12 {
+		t.Fatalf("rows = %d, want 1..12", rendered.Rows)
+	}
+	if !strings.Contains(rendered.Content, "\x1b_G") {
+		t.Fatalf("expected Kitty image escape, got %q", rendered.Content)
+	}
+	if strings.HasSuffix(rendered.Content, "\n") {
+		t.Fatalf("image renderer content should not hide trailing newline: %q", rendered.Content)
+	}
+}
+
+func TestPreviewRowsPreserveKittyEscapeContent(t *testing.T) {
+	img := models.InlineImage{ContentID: "photo", MIMEType: "image/png", Data: tinyPNG(t, 120, 80)}
+	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+		Mode:          previewImageModeKitty,
+		Image:         img,
+		InnerWidth:    100,
+		AvailableRows: 12,
+	})
+
+	rows := previewRowsFromRenderedImage(rendered, 100)
+	if len(rows) == 0 || !strings.Contains(rows[0].Content, "\x1b_G") {
+		t.Fatalf("expected first preview row to preserve Kitty escape, got %#v", rows)
 	}
 }
 

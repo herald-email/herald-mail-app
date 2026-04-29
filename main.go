@@ -131,7 +131,7 @@ func runWizard(configPath string, experimental bool) error {
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo() {
+func runDemo(imageMode app.PreviewImageMode) {
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -154,6 +154,7 @@ func runDemo() {
 
 	// Build the TUI model
 	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, false)
+	model.SetPreviewImageMode(imageMode)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
 
@@ -410,6 +411,7 @@ func runTUI() {
 	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
 	var dryRun = flag.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)")
 	var experimental = flag.Bool("experimental", false, "Show experimental email service onboarding options")
+	var imageProtocol = flag.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
 	const defaultConfig = "~/.herald/conf.yaml"
 	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
 	var showHelp = flag.Bool("help", false, "Show help message")
@@ -421,9 +423,14 @@ func runTUI() {
 		return
 	}
 
+	imageMode, err := parseImageProtocolFlag(*imageProtocol)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	// Demo mode: skip all real IMAP setup
 	if *demo {
-		runDemo()
+		runDemo(imageMode)
 		return
 	}
 
@@ -605,6 +612,7 @@ func runTUI() {
 
 	// Create the TUI application
 	app := app.New(b, mailer, cfg.Credentials.Username, classifier, *dryRun)
+	app.SetPreviewImageMode(imageMode)
 	app.SetConfigPath(resolvedConfig)
 	app.SetConfig(cfg)
 
@@ -627,4 +635,8 @@ func runTUI() {
 	}
 
 	logger.Info("Application finished successfully")
+}
+
+func parseImageProtocolFlag(value string) (app.PreviewImageMode, error) {
+	return app.ParsePreviewImageMode(value)
 }

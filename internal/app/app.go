@@ -523,6 +523,7 @@ type Model struct {
 	// Local inline-image preview links. Disabled for SSH sessions, where
 	// localhost would point at the server instead of the user's browser.
 	localImageLinks   bool
+	previewImageMode  previewImageMode
 	imagePreviewLinks *imagePreviewServer
 
 	// General status message (shown briefly after actions like settings save)
@@ -749,6 +750,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		composeAIResponse:       composeAIResponse,
 		attachmentCompletionIdx: -1,
 		localImageLinks:         true,
+		previewImageMode:        previewImageModeAuto,
 		imagePreviewLinks:       newImagePreviewServer(),
 		baseStyle:               baseStyle,
 		headerStyle:             headerStyle,
@@ -799,6 +801,12 @@ func (m *Model) SetLocalImageLinksEnabled(enabled bool) {
 	if !enabled {
 		m.revokeImagePreviews()
 	}
+	m.clearCleanupPreviewDocumentCache()
+}
+
+func (m *Model) SetPreviewImageMode(mode PreviewImageMode) {
+	m.previewImageMode = previewImageMode(mode)
+	m.clearTimelinePreviewDocumentCache()
 	m.clearCleanupPreviewDocumentCache()
 }
 

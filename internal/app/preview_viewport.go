@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"mail-processor/internal/kittyimg"
 )
 
 type previewLayoutOptions struct {
@@ -20,6 +22,7 @@ type previewRenderedRow struct {
 }
 
 type previewDocumentLayout struct {
+	ImageMode previewImageMode
 	Rows      []previewRenderedRow
 	TotalRows int
 }
@@ -53,7 +56,7 @@ func layoutPreviewDocument(doc previewDocument, opts previewLayoutOptions) previ
 	if len(rows) == 0 {
 		rows = append(rows, previewRenderedRow{Content: "(No content)"})
 	}
-	return previewDocumentLayout{Rows: rows, TotalRows: len(rows)}
+	return previewDocumentLayout{ImageMode: opts.ImageMode, Rows: rows, TotalRows: len(rows)}
 }
 
 func layoutPreviewDocumentBlock(block previewDocumentBlock, opts previewLayoutOptions) []previewRenderedRow {
@@ -166,5 +169,9 @@ func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offse
 	for len(lines) < visibleRows {
 		lines = append(lines, "")
 	}
-	return previewViewportRender{Content: strings.Join(lines, "\n"), Rows: len(lines)}
+	content := strings.Join(lines, "\n")
+	if layout.ImageMode == previewImageModeKitty {
+		content = kittyimg.DeleteVisiblePlacements() + content
+	}
+	return previewViewportRender{Content: content, Rows: len(lines)}
 }

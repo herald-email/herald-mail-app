@@ -760,21 +760,25 @@ Check these states during every applicable lane:
 2. Open the split preview and capture the image hint plus body links.
 3. Press `z` to enter full-screen and capture the top of the document.
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
-5. In iTerm2/Kitty/Sixel raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
+5. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
 6. Repeat in stock ttyd and confirm the browser flow reaches full-screen; stock ttyd may show fallback `open image` links instead of raster output.
 7. Repeat in a custom ttyd xterm.js frontend with `@xterm/addon-image` enabled and `TERM_PROGRAM=iTerm.app` on the Herald process; see `TUI_TESTING.md` for the required `/token` + websocket handshake details.
-8. Repeat in a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
-9. Run the standard resize cycle while full-screen preview is open.
+8. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
+9. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
+10. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+11. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
 - Split preview stays compact and does not promise image viewing when no full-screen image path is available.
 - Full-screen preview renders text and inline images as one scrollable document below the pinned header.
 - Raster images appear near their authored positions and do not push the header/title out of the visible app viewport or terminal scrollback.
-- iTerm2-compatible terminals render bounded inline images using the selected raster mode.
+- iTerm2-compatible terminals render bounded inline images using OSC 1337 when selected or auto-detected.
+- Kitty-compatible terminals, including Ghostty, render bounded inline images using Kitty graphics protocol when selected or auto-detected.
+- Kitty/Ghostty scrolling does not leave stale image placements over text or unrelated images.
 - Custom ttyd + xterm image-addon mode can reproduce browser-visible iTerm2 OSC 1337 image behavior; if the custom page is blank, the test report records whether the initial ttyd websocket handshake was sent.
-- Non-iTerm local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
-- SSH mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs.
+- Non-raster local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
+- SSH auto mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs; forced `-image-protocol=iterm2` or `-image-protocol=kitty` emits the selected raster protocol.
 - Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
 - Test reports include terminal app/version, ttyd/frontend mode, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.

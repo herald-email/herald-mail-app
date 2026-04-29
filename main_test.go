@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"mail-processor/internal/app"
 )
 
 func TestConfigNeedsOnboarding_MissingFile(t *testing.T) {
@@ -77,5 +79,33 @@ func TestEnsurePrivateConfigDir_TightensExistingDirectory(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0o700 {
 		t.Fatalf("expected config dir permissions 0700, got %04o", perm)
+	}
+}
+
+func TestParseImageProtocolFlagAcceptsSupportedModes(t *testing.T) {
+	for _, value := range []string{"auto", "iterm2", "kitty", "links", "placeholder", "off"} {
+		mode, err := parseImageProtocolFlag(value)
+		if err != nil {
+			t.Fatalf("parseImageProtocolFlag(%q) unexpected error: %v", value, err)
+		}
+		if string(mode) != value {
+			t.Fatalf("parseImageProtocolFlag(%q) = %q", value, mode)
+		}
+	}
+}
+
+func TestParseImageProtocolFlagRejectsInvalidMode(t *testing.T) {
+	if _, err := parseImageProtocolFlag("sixel"); err == nil {
+		t.Fatal("parseImageProtocolFlag(\"sixel\") returned nil error, want invalid mode error")
+	}
+}
+
+func TestParseImageProtocolFlagReturnsAppMode(t *testing.T) {
+	mode, err := parseImageProtocolFlag("kitty")
+	if err != nil {
+		t.Fatalf("parseImageProtocolFlag(\"kitty\"): %v", err)
+	}
+	if mode != app.PreviewImageModeKitty {
+		t.Fatalf("mode = %q, want %q", mode, app.PreviewImageModeKitty)
 	}
 }

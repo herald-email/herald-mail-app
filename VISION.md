@@ -411,9 +411,9 @@ Received emails are converted from HTML to Markdown for display in the terminal.
 - [x] HTML → Markdown conversion for body preview
 - [x] Inline image text placeholders (`[image: type  size]` in split view, `[Image: AI description]` when vision model available)
 - [x] Remote HTML image links render as readable OSC 8 links without auto-fetching remote image bytes
-- [x] Full-screen inline image viewing uses bounded iTerm2 rendering when supported, or localhost OSC 8 links for local MIME image bytes in local TUI sessions
+- [x] Full-screen inline image viewing uses bounded iTerm2 or Kitty rendering when supported, or localhost OSC 8 links for local MIME image bytes in local TUI sessions
 - [ ] AI vision image descriptions — use a vision-capable model (e.g. gemma3:4b, gpt-4o, claude) to generate a one-line description for each inline image on demand. Show as `[Image: A promotional banner showing...]` instead of raw MIME type. Generate lazily when email is opened, cache in SQLite. Requires `HasVisionModel()` on the classifier.
-- [ ] Kitty graphics protocol support (for non-iTerm2 terminals)
+- [x] Kitty graphics protocol support with Ghostty autodetection and `-image-protocol` override for non-iTerm2 terminals
 
 ---
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"mail-processor/internal/iterm2"
 	"mail-processor/internal/logger"
 	"mail-processor/internal/models"
 	"mail-processor/internal/render"
@@ -17,7 +16,12 @@ const (
 )
 
 func (m *Model) fullScreenImagesAvailable() bool {
-	return iterm2.IsSupported() || m.localImageLinks
+	switch m.currentPreviewImageMode() {
+	case previewImageModeIterm2, previewImageModeKitty, previewImageModeLinks:
+		return true
+	default:
+		return false
+	}
 }
 
 func splitInlineImageHint(count int, available bool) string {
@@ -39,11 +43,15 @@ func (m *Model) renderInlineImagesForPreview(scopeKey string, images []models.In
 		return "", 0
 	}
 
-	if iterm2.IsSupported() {
-		return renderIterm2PreviewImages(displayImages, descs, innerW, availableRows)
-	}
-	if m.localImageLinks {
+	switch m.currentPreviewImageMode() {
+	case previewImageModeIterm2:
+		return renderRasterPreviewImages(previewImageModeIterm2, displayImages, descs, innerW, availableRows)
+	case previewImageModeKitty:
+		return renderRasterPreviewImages(previewImageModeKitty, displayImages, descs, innerW, availableRows)
+	case previewImageModeLinks:
 		return m.renderLocalImageLinks(scopeKey, displayImages, descs, innerW, availableRows)
+	case previewImageModeOff:
+		return "", 0
 	}
 	return renderImagePlaceholders(displayImages, descs, innerW, availableRows)
 }
@@ -64,6 +72,10 @@ func boundedPreviewImages(images []models.InlineImage) []models.InlineImage {
 }
 
 func renderIterm2PreviewImages(images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {
+	return renderRasterPreviewImages(previewImageModeIterm2, images, descs, innerW, availableRows)
+}
+
+func renderRasterPreviewImages(mode previewImageMode, images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {
 	var sb strings.Builder
 	used := 0
 	for _, img := range images {
@@ -74,7 +86,7 @@ func renderIterm2PreviewImages(images []models.InlineImage, descs map[string]str
 			sb.WriteByte('\n')
 		}
 		req := previewImageRenderRequest{
-			Mode:          previewImageModeIterm2,
+			Mode:          mode,
 			Image:         img,
 			Description:   imageDescription(img, descs),
 			InnerWidth:    innerW,

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"mail-processor/internal/kittyimg"
 	"mail-processor/internal/models"
 )
 
@@ -49,6 +50,26 @@ func TestRenderPreviewDocumentViewportClampsRows(t *testing.T) {
 	}
 	if got := len(strings.Split(rendered.Content, "\n")); got != 8 {
 		t.Fatalf("content line count = %d, want 8:\n%s", got, rendered.Content)
+	}
+}
+
+func TestRenderPreviewDocumentViewportClearsKittyPlacements(t *testing.T) {
+	layout := previewDocumentLayout{
+		ImageMode: previewImageModeKitty,
+		Rows: []previewRenderedRow{
+			{Content: "first"},
+			{Content: "\x1b_Ga=T,f=100,t=d,q=2,c=10,r=4;payload\x1b\\"},
+			{Content: "third"},
+		},
+		TotalRows: 3,
+	}
+
+	rendered := renderPreviewDocumentViewport(layout, 0, 3)
+	if !strings.HasPrefix(rendered.Content, kittyimg.DeleteVisiblePlacements()) {
+		t.Fatalf("Kitty viewport should clear previous placements before redraw, got %q", rendered.Content[:min(len(rendered.Content), 80)])
+	}
+	if rendered.Rows != 3 {
+		t.Fatalf("rendered rows = %d, want 3", rendered.Rows)
 	}
 }
 

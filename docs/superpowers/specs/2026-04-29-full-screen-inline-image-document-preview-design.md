@@ -54,12 +54,13 @@ When an email body loads or the terminal width/protocol changes, Herald should r
 
 Protocol selection should be explicit enough to support future terminals without hard-coding protocol decisions into preview rendering. Autodetection remains the default, but users should be able to override it when terminal detection is wrong.
 
-- [ ] Support `auto`, `iterm2`, `links`, `placeholder`, and `off` as the initial internal modes.
-- [ ] Design the mode enum/API so `kitty` and `sixel` can be added without changing preview document block semantics.
-- [ ] Prefer iTerm2 when `TERM_PROGRAM` indicates iTerm2 and no user override is set.
-- [ ] Use local OSC 8 image links only for local TUI sessions where localhost points at the user's machine.
-- [ ] Use placeholders in SSH mode unless a future remote-safe image strategy is designed.
-- [ ] Leave the exact config key or CLI flag name to the implementation plan, but include tests for forced mode selection.
+- [x] Support `auto`, `iterm2`, `kitty`, `links`, `placeholder`, and `off` as internal modes.
+- [x] Design the mode enum/API so future protocols such as `sixel` can be added without changing preview document block semantics.
+- [x] Prefer iTerm2 when `TERM_PROGRAM` indicates iTerm2 and no user override is set.
+- [x] Prefer Kitty graphics when Kitty or Ghostty is detected and no higher-priority user override or iTerm2 detection applies.
+- [x] Use local OSC 8 image links only for local TUI sessions where localhost points at the user's machine.
+- [x] Use placeholders in SSH auto mode, while allowing explicit raster overrides with `-image-protocol=iterm2` or `-image-protocol=kitty`.
+- [x] Expose `-image-protocol` with tests for forced mode selection.
 
 ## Error Handling
 
@@ -78,9 +79,9 @@ Unit tests should cover deterministic document construction and row accounting. 
 
 - [ ] Add unit tests showing HTML `cid:` images become ordered image blocks at their authored positions.
 - [ ] Add unit tests for orphan inline MIME images, missing CIDs, remote image links, empty images, and oversized images.
-- [ ] Add unit tests proving iTerm2 image row accounting includes raster rows and separator rows exactly.
+- [x] Add unit tests proving iTerm2 and Kitty image row accounting includes raster rows and avoids hidden trailing newlines.
 - [ ] Add viewport tests proving full-screen rendering never emits more visible rows than the available terminal budget.
-- [ ] Update `TUI_TESTPLAN.md` TC-23A to require app-scroll and terminal-native scrollback checks for the Creative Commons sampler.
+- [x] Update `TUI_TESTPLAN.md` TC-23A to require app-scroll, terminal-native scrollback, and Kitty/Ghostty stale-placement checks for the Creative Commons sampler.
 - [ ] Update `TUI_TESTING.md` with guidance that tmux can verify layout and escape output but cannot validate actual raster placement.
 - [ ] Require real-terminal test report evidence for raster modes: terminal app/version, selected protocol mode, screenshots, and ANSI capture when possible.
 - [ ] Keep the standard `220x50`, `120x40`, `80x24`, and `50x15` size checks.
@@ -90,7 +91,7 @@ Unit tests should cover deterministic document construction and row accounting. 
 This design intentionally avoids turning Herald into a full HTML email renderer. The target is trustworthy text plus well-placed, bounded inline images in terminal preview, not CSS-perfect email layout.
 
 - [ ] Do not fetch remote image bytes automatically.
-- [ ] Do not implement Kitty or Sixel in the first pass unless the implementation plan chooses to pull one in after the iTerm2 abstraction is stable.
+- [x] Implement Kitty after the iTerm2 abstraction is stable; Sixel remains out of scope.
 - [ ] Do not change send/compose inline image MIME behavior.
 - [ ] Do not redesign split preview layout.
 - [ ] Do not attempt CSS table/layout fidelity beyond preserving sensible text flow and image placement.

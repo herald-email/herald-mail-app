@@ -11,20 +11,31 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"mail-processor/internal/iterm2"
+	"mail-processor/internal/kittyimg"
 	"mail-processor/internal/models"
 	"mail-processor/internal/render"
 )
 
 const decodedPreviewImageMaxRows = 18
 
-type previewImageMode string
+type PreviewImageMode string
+
+type previewImageMode = PreviewImageMode
 
 const (
-	previewImageModeAuto        previewImageMode = "auto"
-	previewImageModeIterm2      previewImageMode = "iterm2"
-	previewImageModeLinks       previewImageMode = "links"
-	previewImageModePlaceholder previewImageMode = "placeholder"
-	previewImageModeOff         previewImageMode = "off"
+	PreviewImageModeAuto        PreviewImageMode = "auto"
+	PreviewImageModeIterm2      PreviewImageMode = "iterm2"
+	PreviewImageModeKitty       PreviewImageMode = "kitty"
+	PreviewImageModeLinks       PreviewImageMode = "links"
+	PreviewImageModePlaceholder PreviewImageMode = "placeholder"
+	PreviewImageModeOff         PreviewImageMode = "off"
+
+	previewImageModeAuto        previewImageMode = PreviewImageModeAuto
+	previewImageModeIterm2      previewImageMode = PreviewImageModeIterm2
+	previewImageModeKitty       previewImageMode = PreviewImageModeKitty
+	previewImageModeLinks       previewImageMode = PreviewImageModeLinks
+	previewImageModePlaceholder previewImageMode = PreviewImageModePlaceholder
+	previewImageModeOff         previewImageMode = PreviewImageModeOff
 )
 
 type previewImageSize struct {
@@ -50,7 +61,7 @@ type previewImageRenderResult struct {
 
 func detectPreviewImageMode(requested previewImageMode, localLinks bool, sshMode bool) previewImageMode {
 	switch requested {
-	case previewImageModeIterm2, previewImageModeLinks, previewImageModePlaceholder, previewImageModeOff:
+	case previewImageModeIterm2, previewImageModeKitty, previewImageModeLinks, previewImageModePlaceholder, previewImageModeOff:
 		return requested
 	}
 	if sshMode {
@@ -59,10 +70,23 @@ func detectPreviewImageMode(requested previewImageMode, localLinks bool, sshMode
 	if iterm2.IsSupported() {
 		return previewImageModeIterm2
 	}
+	if kittyimg.IsSupported() {
+		return previewImageModeKitty
+	}
 	if localLinks {
 		return previewImageModeLinks
 	}
 	return previewImageModePlaceholder
+}
+
+func ParsePreviewImageMode(value string) (PreviewImageMode, error) {
+	mode := PreviewImageMode(strings.ToLower(strings.TrimSpace(value)))
+	switch mode {
+	case PreviewImageModeAuto, PreviewImageModeIterm2, PreviewImageModeKitty, PreviewImageModeLinks, PreviewImageModePlaceholder, PreviewImageModeOff:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid image protocol %q (valid: auto, iterm2, kitty, links, placeholder, off)", value)
+	}
 }
 
 func previewImageCellSize(img models.InlineImage, innerW, availableRows int) previewImageSize {
@@ -121,11 +145,21 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
 		size := previewImageCellSize(req.Image, req.InnerWidth, req.AvailableRows)
-		rendered := strings.TrimRight(iterm2.Render(req.Image.Data, size.Width, size.Rows), "\n")
+		rendered := strings.TrimRight(iterm2.RenderInline(req.Image.Data, size.Width, size.Rows), "\n")
 		if rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
 		return previewImageRenderResult{Content: rendered, Rows: size.Rows}
+	case previewImageModeKitty:
+		if len(req.Image.Data) > maxPreviewImageBytes {
+			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
+		}
+		size := previewImageCellSize(req.Image, req.InnerWidth, req.AvailableRows)
+		rendered, err := kittyimg.RenderInline(req.Image.Data, size.Width, size.Rows)
+		if err != nil || rendered == "" {
+			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
+		}
+		return previewImageRenderResult{Content: strings.TrimRight(rendered, "\n"), Rows: size.Rows}
 	case previewImageModeLinks:
 		if req.LinkURL != "" && req.LinkLabel != "" {
 			label := render.TerminalHyperlink("["+req.LinkLabel+"]", req.LinkURL)

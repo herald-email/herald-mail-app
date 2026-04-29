@@ -33,12 +33,18 @@ func main() {
 	addr := flag.String("addr", ":2222", "SSH server listen address")
 	hostKey := flag.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := flag.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
+	imageProtocol := flag.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
 	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(buildversion.String("herald-ssh-server"))
 		return
+	}
+
+	imageMode, err := app.ParsePreviewImageMode(*imageProtocol)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	if err := logger.Init(false); err != nil {
@@ -95,6 +101,7 @@ func main() {
 				}
 				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
 				m.SetLocalImageLinksEnabled(false)
+				m.SetPreviewImageMode(imageMode)
 				m.SetConfigPath(resolvedConfig)
 				m.SetConfig(cfg)
 				return m, []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
