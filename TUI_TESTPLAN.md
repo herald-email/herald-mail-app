@@ -761,8 +761,10 @@ Check these states during every applicable lane:
 3. Press `z` to enter full-screen and capture the top of the document.
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
 5. In iTerm2/Kitty/Sixel raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
-6. Repeat in a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
-7. Run the standard resize cycle while full-screen preview is open.
+6. Repeat in stock ttyd and confirm the browser flow reaches full-screen; stock ttyd may show fallback `open image` links instead of raster output.
+7. Repeat in a custom ttyd xterm.js frontend with `@xterm/addon-image` enabled and `TERM_PROGRAM=iTerm.app` on the Herald process; see `TUI_TESTING.md` for the required `/token` + websocket handshake details.
+8. Repeat in a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+9. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
@@ -770,11 +772,12 @@ Check these states during every applicable lane:
 - Full-screen preview renders text and inline images as one scrollable document below the pinned header.
 - Raster images appear near their authored positions and do not push the header/title out of the visible app viewport or terminal scrollback.
 - iTerm2-compatible terminals render bounded inline images using the selected raster mode.
+- Custom ttyd + xterm image-addon mode can reproduce browser-visible iTerm2 OSC 1337 image behavior; if the custom page is blank, the test report records whether the initial ttyd websocket handshake was sent.
 - Non-iTerm local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs.
 - Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
-- Test reports include terminal app/version, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
+- Test reports include terminal app/version, ttyd/frontend mode, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 
 ### TC-24 — Local AI backlog and responsiveness
 

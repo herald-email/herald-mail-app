@@ -1150,6 +1150,28 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 
 **Terminal raster image protocols.** tmux captures are still required for layout, key routing, fallback links, and escape-sequence checks, but tmux cannot prove actual raster placement for protocols such as iTerm2 OSC 1337, Kitty graphics, or Sixel. For changes that affect inline raster images, run the demo in a real compatible terminal as well, capture screenshots, record the terminal app/version and selected graphics mode, and verify native scrollback does not show images displacing pinned preview chrome.
 
+**Browser raster image repro with ttyd + xterm.js.** Stock ttyd is useful for proving the Herald key flow, but its bundled frontend may not render iTerm2 OSC 1337 inline images. For browser proof, serve a custom ttyd index that loads `@xterm/addon-image`, then run Herald with `TERM_PROGRAM=iTerm.app` so Herald emits the iTerm2 inline image protocol:
+
+```bash
+make build
+mkdir -p reports/ttyd-image-harness
+$EDITOR reports/ttyd-image-harness/index.html
+TERM_PROGRAM=iTerm.app ttyd -W -p 7682 \
+  -I reports/ttyd-image-harness/index.html \
+  -t rendererType=canvas \
+  -t disableLeaveAlert=true \
+  -t disableResizeOverlay=true \
+  ./bin/herald --demo
+```
+
+The custom page must load xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image`, with image addon options such as `iipSupport: true` and `sixelSupport: true`. ttyd also requires a specific websocket handshake: fetch `/token`, connect to `/ws` with the `tty` subprotocol, and send the first websocket frame as raw JSON:
+
+```json
+{"AuthToken":"","columns":120,"rows":40}
+```
+
+After that initial frame, send terminal input as `0` + input bytes and resize messages as `1` + `{"columns":120,"rows":40}`. If the browser page is blank and ttyd logs a websocket connection but no `started process`, the initial JSON handshake is probably missing. Once the custom client renders, open the demo email `Creative Commons image sampler for terminal previews`, press `z`, save a browser screenshot under `reports/`, and record the ttyd command, browser, addon status, and whether raster output displaced preview chrome.
+
 **Trailing whitespace varies.** `capture-pane -p` strips trailing spaces per line but preserves blank lines up to the terminal height. For golden file comparison, decide whether to normalize this:
 
 ```bash
