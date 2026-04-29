@@ -72,6 +72,9 @@ Compose treats replies and forwards as two pieces of state: the editable top not
 **Draft composition workflow**
 IMAP `\Draft` flags and canonical draft folder membership populate `models.EmailData.IsDraft` in the cache, and active-folder reconcile refreshes that flag for existing rows. Timeline and preview use the cached draft state for labels and key hints, while Compose fetches the draft body plus editable headers (`To`, `CC`, `BCC`, `Subject`) before opening the message for editing. Compose tracks the source draft UID/folder so sending deletes the source only after SMTP success, and autosave replacement saves the new draft before deleting the previous saved copy.
 
+**Shortcut help catalog**
+The TUI owns a structured, context-sensitive shortcut catalog in `internal/app` because key routing, visible focus normalization, and overlay state all live there. The bottom hint bar stays abbreviated, while the `?` help overlay renders the full catalog for the current tab, pane, overlay, and Compose mode; semantic search is reached through the Timeline/Contacts search input with a `? query` prefix so plain `?` can remain globally reserved for help.
+
 **Progress via channels**
 Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send channel events back to the Bubble Tea model. The UI listens with `tea.Cmd` functions that block on those channels and return a message when something arrives. No polling, no shared state.
 

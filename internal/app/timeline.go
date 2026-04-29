@@ -1730,11 +1730,6 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.openTimelineSearch()
 		}
 		return m, nil, true
-	case "?":
-		if !m.loading && !m.timeline.searchMode {
-			m.openTimelineSemanticSearch()
-		}
-		return m, nil, true
 	case "enter":
 		if m.canInteractWithVisibleData() {
 			if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {

@@ -494,6 +494,9 @@ func (m *Model) renderKeyHints() string {
 			}
 		}
 	}
+	if m.shouldAdvertiseShortcutHelp() {
+		hints = joinHintSegments("?: help", hints)
+	}
 	return renderChromeLines(wrapChromeSegments(hints, w-2, 2), w, defaultTheme.HintFg)
 }
 

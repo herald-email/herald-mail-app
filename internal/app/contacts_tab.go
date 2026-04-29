@@ -139,6 +139,15 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 			m.contactSearch = ""
 			m.contactsFiltered = m.contactsList
 			m.contactsIdx = 0
+		case "?":
+			if m.contactSearchMode == "keyword" && m.contactSearch == "" {
+				m.contactSearchMode = "semantic"
+				m.contactSearch = ""
+				m.applyContactSearch()
+			} else {
+				m.contactSearch += key
+				m.applyContactSearch()
+			}
 		case "backspace", "ctrl+h":
 			runes := []rune(m.contactSearch)
 			if len(runes) > 0 {
@@ -149,6 +158,9 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 			m.contactSearchMode = "" // confirm; keep results
 		default:
 			if len(key) == 1 {
+				if m.contactSearchMode == "semantic" && strings.TrimSpace(m.contactSearch) == "" && strings.TrimSpace(key) == "" {
+					return m, nil
+				}
 				m.contactSearch += key
 				m.applyContactSearch()
 			}
@@ -161,8 +173,9 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		m.contactSearchMode = "keyword"
 		m.contactSearch = ""
 	case "?":
-		m.contactSearchMode = "semantic"
-		m.contactSearch = ""
+		// Plain ? is reserved for global shortcut help; the app-level key
+		// router handles it before Contacts sees this branch.
+		return m, nil
 	case "esc":
 		// Close inline email preview first, then detail, then search
 		if m.contactPreviewEmail != nil {

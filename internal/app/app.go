@@ -326,6 +326,8 @@ type Model struct {
 	syncingFolder     string
 	syncCountsSettled bool
 	showLogs          bool
+	showHelp          bool
+	helpScrollOffset  int
 	windowWidth       int
 	windowHeight      int
 	subjectColWidth   int
@@ -1773,6 +1775,9 @@ func (m *Model) View() string {
 	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
 		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
 	}
+	if m.showHelp {
+		return m.renderShortcutHelpView()
+	}
 	if m.loading && !m.hasVisibleStartupData() {
 		return m.renderLoadingView()
 	}
@@ -1787,6 +1792,10 @@ func (m *Model) View() string {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if model, cmd, handled := m.handleShortcutHelpKey(msg); handled {
+		return model, cmd
+	}
+
 	if model, cmd, handled := m.handleGlobalCommandKey(msg); handled {
 		return model, cmd
 	}

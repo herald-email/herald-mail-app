@@ -164,6 +164,7 @@ Check these states during every applicable lane:
   - cleanup summary/details
   - contacts list/detail email list
 - Key hints always match the normalized visible focus.
+- `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
 - Status bar never leaks stale mode or selection from another tab.
 - Adjacent panels have aligned heights and closed borders.
 - Tab-local overlays unwind in the right order with `Esc`.
@@ -238,6 +239,7 @@ Check these states during every applicable lane:
 - Correct tab highlight.
 - Tab-specific layout appears.
 - Key hints change with the tab and consistently advertise `F1-F4: tabs`.
+- Key hints consistently include `?: help` when there is room or wrapped hint space.
 - Browse-number aliases keep working but are not the primary tab hint.
 - No stale status fragments from previous tabs.
 
@@ -602,6 +604,7 @@ Check these states during every applicable lane:
 6. Press `Esc` repeatedly to unwind.
 7. Repeat with a query that returns no matches.
 8. Repeat and use `Ctrl+I` from the search input.
+9. Repeat with `/`, type `? infrastructure budget risk`, press `Enter`, and open a semantic result.
 
 **Expect:**
 - Search state is visible.
@@ -610,6 +613,7 @@ Check these states during every applicable lane:
 - Results are navigable.
 - Preview opened from search behaves like normal Timeline preview.
 - Default Timeline search merges keyword and semantic results when embeddings are available.
+- Semantic search remains available from search input with a leading `? query` prefix; plain `?` opens shortcut help instead.
 - Exact keyword matches remain predictable and appear before semantic-only tail results.
 - Duplicate emails from the keyword and semantic legs appear only once.
 - No-match case gives a clear fallback hint.
@@ -669,6 +673,25 @@ Check these states during every applicable lane:
 - Borders remain exclusive.
 - Key hints match the visible/focused overlay.
 - Logs can be opened while visible startup data is already on screen and the active folder is still syncing.
+
+### TC-18A — Context-sensitive shortcut help overlay
+
+**Lane:** A, B  
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Press `?` from Timeline list, Timeline preview, Compose, Cleanup summary, Cleanup preview, Contacts list, chat, logs, and a confirmation prompt.
+2. Scroll the help overlay with `j/k` or arrow keys when content is taller than the viewport.
+3. Close the overlay with `Esc`, `?`, and `q` in separate passes.
+4. In Compose reply or forward mode, press `?` after `Ctrl+O` is available.
+5. In Contacts, press `/`, type `? budget risk`, and confirm semantic results still work through the search input.
+
+**Expect:**
+- Plain `?` opens shortcut help, not semantic search, in Herald-owned contexts.
+- The overlay title names the current context and the body lists global, tab, pane, overlay, and mode-specific shortcuts.
+- Compose help explains what preservation mode means and lists `Ctrl+O` only when reply/forward context exists.
+- Overlay scroll state is bounded and resets when reopened from a different context.
+- Closing help returns to the same tab/pane/overlay state without triggering the underlying key action.
 
 ### TC-19 — Multi-attachment navigation and save
 
@@ -836,12 +859,12 @@ Check these states during every applicable lane:
 **Steps:**
 1. Start `/tmp/herald --demo`.
 2. Press `a` on Timeline and wait for classification to finish.
-3. Press `?`, type `infrastructure budget risk`, press `Enter`, and open the first result.
+3. Press `/`, type `? infrastructure budget risk`, press `Enter`, and open the first result.
 4. Open quick replies from the preview with `Ctrl+Q`, then close the picker.
 
 **Expect:**
 - Classification tags appear without a real Ollama backend.
-- `?` opens semantic search directly and returns deterministic demo results.
+- `/` plus `? query` opens semantic search and returns deterministic demo results.
 - Search results are meaningful for the query and can be opened.
 - Quick replies show deterministic suggestions without blocking navigation.
 
