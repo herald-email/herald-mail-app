@@ -104,6 +104,9 @@ func (c *Cache) initDB() error {
 
 	// is_draft column for IMAP/Gmail draft workflow tracking
 	_, _ = c.db.Exec(`ALTER TABLE emails ADD COLUMN is_draft INTEGER NOT NULL DEFAULT 0`)
+	if err := c.backfillDraftFolderFlags(); err != nil {
+		logger.Warn("Failed to backfill draft folder flags: %v", err)
+	}
 
 	// list_unsubscribe columns for one-click unsubscribe
 	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN list_unsubscribe TEXT`); err != nil {
@@ -334,6 +337,20 @@ func (c *Cache) initDB() error {
 	}
 
 	return nil
+}
+
+func (c *Cache) backfillDraftFolderFlags() error {
+	_, err := c.db.Exec(`
+		UPDATE emails
+		SET is_draft = 1
+		WHERE COALESCE(is_draft, 0) = 0
+		  AND (
+			lower(trim(folder)) IN ('drafts', '[gmail]/drafts', 'inbox.drafts', 'inbox/drafts')
+			OR lower(trim(folder)) LIKE '%/drafts'
+			OR lower(trim(folder)) LIKE '%.drafts'
+		  )
+	`)
+	return err
 }
 
 func (c *Cache) getMetadata(key string) (string, bool, error) {

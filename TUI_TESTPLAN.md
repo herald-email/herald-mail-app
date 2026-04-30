@@ -562,18 +562,23 @@ Check these states during every applicable lane:
 1. Start `/tmp/herald --demo`.
 2. Open Timeline and find a thread with at least one draft message.
 3. Confirm the collapsed thread row marks the draft count as `Draft` or `Draft N`.
-4. Expand the thread and confirm the individual draft row is marked without using the classification Tag column.
-5. Open the draft preview and capture the header.
-6. Press `E` from the draft row or preview.
-7. Confirm Compose opens with the draft recipients, subject, and body restored.
-8. Send the message in demo mode and return to Timeline.
-9. Repeat at `80x24`; at `50x15`, confirm the minimum-size guard or compact layout does not render overlapping draft labels.
+4. Expand the thread and confirm the individual reply draft row is marked `Draft reply` without using the classification Tag column.
+5. Open the draft preview and capture the header plus the thread context above the body.
+6. Press `Ctrl+S` from the draft preview, confirm the send prompt, and confirm the draft is removed only after send success.
+7. Repeat from a draft row without opening Compose.
+8. Press `E` from the draft row or preview.
+9. Confirm Compose opens with the draft recipients, subject, and body restored.
+10. Send the message in demo mode and return to Timeline.
+11. Repeat at `80x24`; at `50x15`, confirm the minimum-size guard or compact layout does not render overlapping draft labels.
 
 **Expect:**
-- Draft state is visible in both Timeline thread rows and individual message rows.
-- Preview header shows `State: Draft - E edit draft`.
-- Draft preview/list hints prioritize `E: edit draft` and `D: discard draft`.
+- Draft state is visible in both Timeline thread rows and individual message rows, including rows that are also marked as replies.
+- Reply drafts show `Draft reply` in Timeline and preview state text.
+- Draft reply preview shows compact thread context with the other visible messages in the conversation before the draft body.
+- Preview header shows `State: Draft - E edit draft - Ctrl+S send` for plain drafts or `State: Draft reply - E edit draft - Ctrl+S send` for reply drafts.
+- Draft preview/list hints prioritize `E: edit draft`, `Ctrl+S: send draft`, and `D: discard draft`.
 - `E` opens Compose from a highlighted draft, from draft preview focus, and from a collapsed thread that contains a draft.
+- `Ctrl+S` sends a highlighted draft, draft preview, or collapsed thread draft without switching to Compose.
 - Sending deletes the source draft only after send success; autosave replacement never deletes the previous draft before the new save succeeds.
 
 ### TC-15 — Narrow screen behavior

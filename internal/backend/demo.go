@@ -919,6 +919,10 @@ func (d *DemoBackend) DeleteDraft(uid uint32, folder string) error {
 	return nil // not found is not an error
 }
 
+func (d *DemoBackend) SendDraft(uid uint32, folder string) error {
+	return d.DeleteDraft(uid, folder)
+}
+
 // --- Bulk operations ---
 
 func (d *DemoBackend) DeleteThread(folder, subject string) error           { return nil }

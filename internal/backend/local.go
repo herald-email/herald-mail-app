@@ -1208,6 +1208,41 @@ func (b *LocalBackend) DeleteDraft(uid uint32, folder string) error {
 	return b.imapClient.DeleteDraft(uid, folder)
 }
 
+func (b *LocalBackend) SendDraft(uid uint32, folder string) error {
+	body, err := b.FetchEmailBody(folder, uid)
+	if err != nil {
+		return fmt.Errorf("fetch draft body: %w", err)
+	}
+	if body == nil {
+		return fmt.Errorf("draft body unavailable")
+	}
+	to := strings.TrimSpace(body.To)
+	subject := strings.TrimSpace(body.Subject)
+	if to == "" {
+		return fmt.Errorf("draft has no To header")
+	}
+	if subject == "" {
+		return fmt.Errorf("draft has no Subject header")
+	}
+	from := strings.TrimSpace(body.From)
+	if from == "" {
+		from = b.cfg.Credentials.Username
+	}
+	plain := body.TextPlain
+	htmlBody := body.TextHTML
+	if strings.TrimSpace(htmlBody) == "" {
+		htmlBody, plain = appsmtp.MarkdownToHTMLAndPlain(plain)
+	}
+	mailer := appsmtp.New(b.cfg)
+	if err := mailer.SendWithInlineImages(from, to, subject, plain, htmlBody, body.CC, body.BCC, nil, nil); err != nil {
+		return err
+	}
+	if err := b.DeleteDraft(uid, folder); err != nil {
+		logger.Error("SendDraft: sent uid %d from %s but failed to delete source draft: %v", uid, folder, err)
+	}
+	return nil
+}
+
 // --- Bulk operations ---
 
 func (b *LocalBackend) DeleteThread(folder, subject string) error {

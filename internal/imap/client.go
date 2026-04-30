@@ -25,6 +25,8 @@ import (
 // ErrIDLENotSupported is returned by StartIDLE when the server lacks IDLE capability.
 var ErrIDLENotSupported = errors.New("imap: server does not support IDLE")
 
+const fetchGmailLabels imap.FetchItem = "X-GM-LABELS"
+
 func isDraftFolderName(folder string) bool {
 	name := strings.ToLower(strings.TrimSpace(folder))
 	if name == "" {
@@ -38,7 +40,12 @@ func isDraftFolderName(folder string) bool {
 	return strings.HasSuffix(name, "/drafts") || strings.HasSuffix(name, ".drafts")
 }
 
-func messageFlagStateFromIMAP(uid uint32, flags []string, folder string) cache.EmailFlagState {
+func isDraftMarker(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return value == "\\draft" || value == "draft" || value == "[gmail]/drafts"
+}
+
+func messageFlagStateFromIMAP(uid uint32, flags []string, folder string, labels ...string) cache.EmailFlagState {
 	state := cache.EmailFlagState{
 		UID:     uid,
 		IsDraft: isDraftFolderName(folder),
@@ -53,7 +60,39 @@ func messageFlagStateFromIMAP(uid uint32, flags []string, folder string) cache.E
 			state.IsDraft = true
 		}
 	}
+	for _, label := range labels {
+		if isDraftMarker(label) {
+			state.IsDraft = true
+		}
+	}
 	return state
+}
+
+func gmailLabelsFromMessage(msg *imap.Message) []string {
+	if msg == nil || msg.Items == nil {
+		return nil
+	}
+	return appendGmailLabels(nil, msg.Items[fetchGmailLabels])
+}
+
+func appendGmailLabels(labels []string, value interface{}) []string {
+	switch v := value.(type) {
+	case nil:
+		return labels
+	case []interface{}:
+		for _, item := range v {
+			labels = appendGmailLabels(labels, item)
+		}
+	case []string:
+		labels = append(labels, v...)
+	case string:
+		labels = append(labels, v)
+	case imap.RawString:
+		labels = append(labels, string(v))
+	case []byte:
+		labels = append(labels, string(v))
+	}
+	return labels
 }
 
 // xoauth2Client implements the XOAUTH2 SASL mechanism required by Gmail's IMAP server.
@@ -113,6 +152,30 @@ func New(cfg *config.Config, configPath string, cache *cache.Cache, progressCh c
 func (c *Client) isLocalServer() bool {
 	h := c.cfg.Server.Host
 	return h == "127.0.0.1" || h == "localhost" || c.cfg.Vendor == "protonmail"
+}
+
+func (c *Client) supportsGmailLabels() bool {
+	if c == nil || c.cfg == nil {
+		return false
+	}
+	vendor := strings.ToLower(strings.TrimSpace(c.cfg.Vendor))
+	host := strings.ToLower(strings.TrimSpace(c.cfg.Server.Host))
+	return vendor == "gmail" || strings.Contains(host, "gmail.com")
+}
+
+func (c *Client) fetchItemsWithGmailLabels(items []imap.FetchItem) []imap.FetchItem {
+	if !c.supportsGmailLabels() {
+		return items
+	}
+	for _, item := range items {
+		if item == fetchGmailLabels {
+			return items
+		}
+	}
+	out := make([]imap.FetchItem, 0, len(items)+1)
+	out = append(out, items...)
+	out = append(out, fetchGmailLabels)
+	return out
 }
 
 // Connect establishes connection to IMAP server. It is a no-op if already connected.
@@ -659,14 +722,14 @@ func (c *Client) fetchAllServerUIDFlagStates(folder string) (map[uint32]bool, []
 	messages := make(chan *imap.Message, 50)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchUid, imap.FetchFlags}, messages)
+		done <- c.client.UidFetch(seqset, c.fetchItemsWithGmailLabels([]imap.FetchItem{imap.FetchUid, imap.FetchFlags}), messages)
 	}()
 	serverUIDs := make(map[uint32]bool)
 	flagStates := make([]cache.EmailFlagState, 0)
 	for msg := range messages {
 		if msg.Uid > 0 {
 			serverUIDs[msg.Uid] = true
-			flagStates = append(flagStates, messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder))
+			flagStates = append(flagStates, messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...))
 		}
 	}
 	if err := <-done; err != nil {
@@ -892,13 +955,13 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 	for _, s := range seqNums {
 		seqset.AddNum(s)
 	}
-	items := []imap.FetchItem{
+	items := c.fetchItemsWithGmailLabels([]imap.FetchItem{
 		imap.FetchEnvelope,
 		imap.FetchUid,
 		imap.FetchRFC822Size,
 		imap.FetchBodyStructure,
 		imap.FetchFlags,
-	}
+	})
 	messages := make(chan *imap.Message, len(seqNums))
 	done := make(chan error, 1)
 	go func() {
@@ -940,7 +1003,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 			hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
 		}
 
-		flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder)
+		flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...)
 
 		emails = append(emails, &models.EmailData{
 			MessageID:      messageID,
@@ -997,7 +1060,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	done := make(chan error, 1)
 
 	// Fetch using Envelope + basic fields to avoid RFC822 parsing issues
-	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, imap.FetchRFC822Size, imap.FetchBodyStructure, imap.FetchFlags}
+	items := c.fetchItemsWithGmailLabels([]imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, imap.FetchRFC822Size, imap.FetchBodyStructure, imap.FetchFlags})
 
 	go func() {
 		done <- c.client.Fetch(seqset, items, messages)
@@ -1041,7 +1104,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		messageID = fmt.Sprintf("uid-%d", msg.Uid)
 	}
 
-	flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder)
+	flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...)
 
 	// Extract email data from Envelope
 	emailData := &models.EmailData{

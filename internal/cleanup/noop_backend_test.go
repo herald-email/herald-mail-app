@@ -126,6 +126,7 @@ func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)      
 func (noopBackend) SaveRawDraft(_ []byte) (uint32, string, error)                     { return 0, "", nil }
 func (noopBackend) ListDrafts() ([]*models.Draft, error)                              { return nil, nil }
 func (noopBackend) DeleteDraft(_ uint32, _ string) error                              { return nil }
+func (noopBackend) SendDraft(_ uint32, _ string) error                                { return nil }
 func (noopBackend) ReplyToEmail(_, _ string) error                                    { return nil }
 func (noopBackend) ForwardEmail(_, _, _ string) error                                 { return nil }
 func (noopBackend) ReplyToEmailWithOptions(_ string, _ models.ReplyEmailOptions) error {

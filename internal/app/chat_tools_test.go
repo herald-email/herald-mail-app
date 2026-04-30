@@ -150,6 +150,7 @@ func (s *stubBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) { 
 func (s *stubBackend) SaveRawDraft(_ []byte) (uint32, string, error)          { return 0, "", nil }
 func (s *stubBackend) ListDrafts() ([]*models.Draft, error)                   { return nil, nil }
 func (s *stubBackend) DeleteDraft(_ uint32, _ string) error                   { return nil }
+func (s *stubBackend) SendDraft(_ uint32, _ string) error                     { return nil }
 func (s *stubBackend) ReplyToEmail(_, _ string) error                         { return nil }
 func (s *stubBackend) ForwardEmail(_, _, _ string) error                      { return nil }
 func (s *stubBackend) ReplyToEmailWithOptions(_ string, _ models.ReplyEmailOptions) error {

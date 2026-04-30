@@ -748,6 +748,10 @@ func (b *RemoteBackend) DeleteDraft(uid uint32, folder string) error {
 	return b.delete(fmt.Sprintf("/v1/drafts/%d?folder=%s", uid, url.QueryEscape(folder)))
 }
 
+func (b *RemoteBackend) SendDraft(uid uint32, folder string) error {
+	return b.post(fmt.Sprintf("/v1/drafts/%d/send?folder=%s", uid, url.QueryEscape(folder)), nil)
+}
+
 // --- Unsubscribed senders ---
 
 func (b *RemoteBackend) RecordUnsubscribe(sender, method, url string) error { return nil }

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"database/sql"
 	"encoding/binary"
 	"math"
 	"testing"
@@ -175,6 +176,55 @@ func TestBatchUpdateEmailFlagsByUID_BackfillsDraftFlag(t *testing.T) {
 	}
 	if !got.IsRead || !got.IsStarred || !got.IsDraft {
 		t.Fatalf("expected flags to be backfilled, got read=%v starred=%v draft=%v", got.IsRead, got.IsStarred, got.IsDraft)
+	}
+}
+
+func TestNew_BackfillsExistingDraftFolderRows(t *testing.T) {
+	dbPath := t.TempDir() + "/cache.db"
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE emails (
+			message_id TEXT PRIMARY KEY,
+			uid INTEGER,
+			sender TEXT,
+			subject TEXT,
+			date DATETIME,
+			size INTEGER,
+			has_attachments INTEGER,
+			folder TEXT,
+			last_updated DATETIME,
+			is_read INTEGER NOT NULL DEFAULT 0,
+			is_starred INTEGER NOT NULL DEFAULT 0,
+			is_draft INTEGER NOT NULL DEFAULT 0
+		);
+		INSERT INTO emails
+			(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_draft)
+		VALUES
+			('<legacy-draft@example.com>', 8907, 'me@example.com', 'Legacy cached draft',
+			 ?, 1234, 0, '[Gmail]/Drafts', ?, 0);
+	`, time.Now().Format(time.RFC3339), time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatalf("seed db: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	c, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer c.Close()
+
+	got, err := c.GetEmailByID("<legacy-draft@example.com>")
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if !got.IsDraft {
+		t.Fatalf("expected existing [Gmail]/Drafts row to be backfilled as draft, got %#v", got)
 	}
 }
 

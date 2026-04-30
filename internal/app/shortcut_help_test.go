@@ -77,6 +77,38 @@ func TestShortcutHelpIncludesComposePreservationMode(t *testing.T) {
 	}
 }
 
+func TestShortcutHelpTimelineDraftPreviewIncludesDraftActions(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "draft",
+			UID:       42,
+			Sender:    "me@example.com",
+			Subject:   "Re: Interview",
+			Folder:    "Drafts",
+			IsDraft:   true,
+		},
+	}
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = "draft"
+	m.timeline.body = &models.EmailBody{TextPlain: "draft body"}
+	m.focusedPanel = panelPreview
+
+	updated := pressQuestion(m)
+
+	rendered := stripANSI(updated.View())
+	for _, want := range []string{"Timeline Draft", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected draft preview help to include %q, got:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "reply or forward") {
+		t.Fatalf("draft preview help should not advertise normal reply/forward actions, got:\n%s", rendered)
+	}
+}
+
 func TestShortcutHelpOpensFromLogsChatCleanupAndConfirmation(t *testing.T) {
 	tests := []struct {
 		name  string

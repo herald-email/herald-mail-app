@@ -293,6 +293,10 @@ type Backend interface {
 	// DeleteDraft removes a draft by UID from the given folder.
 	DeleteDraft(uid uint32, folder string) error
 
+	// SendDraft sends a saved draft by UID from the given folder, then removes
+	// the source draft only after send success.
+	SendDraft(uid uint32, folder string) error
+
 	// --- Bulk operations ---
 
 	// DeleteThread deletes all emails in a thread (matched by subject in folder).

@@ -374,6 +374,18 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		}}
 	}
 	if m.timeline.selectedEmail != nil && (m.focusedPanel == panelPreview || m.timeline.fullScreen) {
+		if m.timeline.selectedEmail.IsDraft {
+			return shortcutHelpSection{"Timeline Draft", []shortcutHelpEntry{
+				{"j/k or arrows", "scroll preview"},
+				{"Tab", "switch between list and preview"},
+				{"E", "edit draft in Compose"},
+				{"Ctrl+S", "send draft after confirmation"},
+				{"D", "discard draft after confirmation"},
+				{"z", "toggle full-screen preview"},
+				{"v / y / Y", "visual selection and copy"},
+				{"Esc", "close preview"},
+			}}
+		}
 		return shortcutHelpSection{"Timeline Preview", []shortcutHelpEntry{
 			{"j/k or arrows", "scroll preview"},
 			{"Tab", "switch between list and preview"},
@@ -390,7 +402,8 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		{"j/k or arrows", "navigate messages and threads"},
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
-		{"R / F", "reply or forward the highlighted email"},
+		{"E / Ctrl+S", "edit or send highlighted draft"},
+		{"R / F", "reply or forward highlighted non-draft email"},
 		{"D / e", "delete or archive after confirmation"},
 		{"* / A", "star or re-classify"},
 		{"/", "start Timeline search; type ? query for semantic search"},

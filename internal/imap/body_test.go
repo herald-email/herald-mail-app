@@ -169,3 +169,29 @@ func TestParseMIMEBody_ExposesEditableDraftHeaders(t *testing.T) {
 		t.Fatalf("TextPlain missing draft body: %q", body.TextPlain)
 	}
 }
+
+func TestParseMIMEBody_DecodesEditableDraftHeaders(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		"From: =?UTF-8?Q?Fl=C3=A1via_da_Silva?= <flavia.iespa@fractional.ai>",
+		"To: =?UTF-8?Q?Anton_Golubtsov?= <logrusadm@gmail.com>",
+		"Subject: =?UTF-8?B?UmU6IFN0YWZmIFNvZnR3YXJlIEVuZ2luZWVyIGF0IEZyYWN0aW9uYWwgQUk6IHdvcnRoIGEgbG9vaz8=?=",
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		"Hi Flavia,",
+	}, "\r\n"))
+
+	body, err := parseMIMEBody(raw)
+	if err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if body.Subject != "Re: Staff Software Engineer at Fractional AI: worth a look?" {
+		t.Fatalf("Subject = %q", body.Subject)
+	}
+	if strings.Contains(body.From, "=?") || !strings.Contains(body.From, "Flávia da Silva") {
+		t.Fatalf("From header was not decoded: %q", body.From)
+	}
+	if strings.Contains(body.To, "=?") || !strings.Contains(body.To, "Anton Golubtsov") {
+		t.Fatalf("To header was not decoded: %q", body.To)
+	}
+}

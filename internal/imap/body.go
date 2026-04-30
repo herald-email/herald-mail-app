@@ -87,11 +87,11 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		return &models.EmailBody{TextPlain: string(raw)}, nil
 	}
 	result := &models.EmailBody{}
-	result.From = mailMsg.Header.Get("From")
-	result.To = mailMsg.Header.Get("To")
-	result.CC = mailMsg.Header.Get("Cc")
-	result.BCC = mailMsg.Header.Get("Bcc")
-	result.Subject = mailMsg.Header.Get("Subject")
+	result.From = decodeHeaderValue(mailMsg.Header.Get("From"))
+	result.To = decodeHeaderValue(mailMsg.Header.Get("To"))
+	result.CC = decodeHeaderValue(mailMsg.Header.Get("Cc"))
+	result.BCC = decodeHeaderValue(mailMsg.Header.Get("Bcc"))
+	result.Subject = decodeHeaderValue(mailMsg.Header.Get("Subject"))
 	result.MessageID = mailMsg.Header.Get("Message-Id")
 	result.InReplyTo = mailMsg.Header.Get("In-Reply-To")
 	result.References = mailMsg.Header.Get("References")
@@ -104,6 +104,17 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		result.IsFromHTML = true
 	}
 	return result, nil
+}
+
+func decodeHeaderValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	decoded, err := (&mime.WordDecoder{}).DecodeHeader(value)
+	if err != nil {
+		return value
+	}
+	return decoded
 }
 
 // htmlToMarkdown is retained for package-local tests and delegates to the

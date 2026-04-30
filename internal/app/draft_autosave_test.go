@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // newDraftTestModel creates a minimal Model suitable for draft auto-save tests.
@@ -169,6 +170,47 @@ func TestDraftSavedMsgDeletesPreviousDraftAfterSuccessfulReplacement(t *testing.
 	}
 }
 
+func TestSaveDraftCmdFromGmailInboxGraftDoesNotReplaceThreadVisibleDraft(t *testing.T) {
+	backend := &draftDeleteRecordingBackend{saveUID: 8908, saveFolder: "[Gmail]/Drafts"}
+	m := newDraftTestModel()
+	m.backend = backend
+	m.openTimelineDraftCompose(
+		&models.EmailData{
+			MessageID: "gmail-graft",
+			UID:       58133,
+			Folder:    "INBOX",
+			Subject:   "Re: Staff Software Engineer at Fractional AI",
+			IsDraft:   true,
+		},
+		&models.EmailBody{
+			To:        "flavia.iespa@fractional.ai",
+			Subject:   "Re: Staff Software Engineer at Fractional AI",
+			TextPlain: "Hi Flavia,\n\nThanks for reaching out.",
+		},
+		"",
+	)
+
+	msg := m.saveDraftCmd()().(DraftSavedMsg)
+	if msg.Err != nil {
+		t.Fatalf("saveDraftCmd returned error: %v", msg.Err)
+	}
+	if msg.ReplaceUID != 0 || msg.ReplaceFolder != "" {
+		t.Fatalf("expected Gmail INBOX graft not to be replacement target, got %d/%q", msg.ReplaceUID, msg.ReplaceFolder)
+	}
+
+	updatedModel, cmd := m.Update(msg)
+	um := updatedModel.(*Model)
+	if cmd != nil {
+		t.Fatal("expected no delete command for thread-visible Gmail draft graft")
+	}
+	if len(backend.deleted) != 0 {
+		t.Fatalf("expected no draft deletes, got %#v", backend.deleted)
+	}
+	if um.lastDraftUID != 8908 || um.lastDraftFolder != "[Gmail]/Drafts" {
+		t.Fatalf("expected new canonical draft tracking 8908/[Gmail]/Drafts, got %d/%q", um.lastDraftUID, um.lastDraftFolder)
+	}
+}
+
 func TestComposeStatusDeletesTrackedDraftAfterSendSuccess(t *testing.T) {
 	backend := &draftDeleteRecordingBackend{}
 	m := newDraftTestModel()
@@ -178,6 +220,7 @@ func TestComposeStatusDeletesTrackedDraftAfterSendSuccess(t *testing.T) {
 	m.composeBody.SetValue("Body")
 	m.lastDraftUID = 42
 	m.lastDraftFolder = "Drafts"
+	m.lastDraftReplaceable = true
 
 	updatedModel, cmd := m.Update(ComposeStatusMsg{Message: "Message sent!"})
 	um := updatedModel.(*Model)
@@ -193,6 +236,31 @@ func TestComposeStatusDeletesTrackedDraftAfterSendSuccess(t *testing.T) {
 	}
 	if len(backend.deleted) != 1 || backend.deleted[0].uid != 42 || backend.deleted[0].folder != "Drafts" {
 		t.Fatalf("expected tracked draft delete after send success, got %#v", backend.deleted)
+	}
+}
+
+func TestComposeStatusDoesNotDeleteThreadVisibleGmailGraftAfterSendSuccess(t *testing.T) {
+	backend := &draftDeleteRecordingBackend{}
+	m := newDraftTestModel()
+	m.backend = backend
+	m.composeTo.SetValue("to@test.com")
+	m.composeSubject.SetValue("Tracked graft")
+	m.composeBody.SetValue("Body")
+	m.lastDraftUID = 58133
+	m.lastDraftFolder = "INBOX"
+	m.lastDraftReplaceable = false
+
+	updatedModel, cmd := m.Update(ComposeStatusMsg{Message: "Message sent!"})
+	um := updatedModel.(*Model)
+
+	if um.lastDraftUID != 0 || um.lastDraftFolder != "" || um.lastDraftReplaceable {
+		t.Fatalf("expected tracked graft state to clear after send, got %d/%q replaceable=%v", um.lastDraftUID, um.lastDraftFolder, um.lastDraftReplaceable)
+	}
+	if cmd != nil {
+		t.Fatal("expected send success not to delete thread-visible Gmail draft graft")
+	}
+	if len(backend.deleted) != 0 {
+		t.Fatalf("expected no tracked graft delete after send success, got %#v", backend.deleted)
 	}
 }
 
@@ -241,7 +309,9 @@ func (e *draftStubErr) Error() string { return e.msg }
 
 type draftDeleteRecordingBackend struct {
 	stubBackend
-	deleted []recordedDraftDelete
+	deleted    []recordedDraftDelete
+	saveUID    uint32
+	saveFolder string
 }
 
 type recordedDraftDelete struct {
@@ -252,4 +322,8 @@ type recordedDraftDelete struct {
 func (b *draftDeleteRecordingBackend) DeleteDraft(uid uint32, folder string) error {
 	b.deleted = append(b.deleted, recordedDraftDelete{uid: uid, folder: folder})
 	return nil
+}
+
+func (b *draftDeleteRecordingBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) {
+	return b.saveUID, b.saveFolder, nil
 }

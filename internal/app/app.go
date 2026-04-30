@@ -140,6 +140,14 @@ type TimelineDraftBodyMsg struct {
 	RequestID int
 }
 
+// TimelineDraftSentMsg carries the result of sending a saved draft directly
+// from Timeline without opening Compose.
+type TimelineDraftSentMsg struct {
+	Email     *models.EmailData
+	Err       error
+	MessageID string
+}
+
 // QuickRepliesMsg is sent when AI quick reply generation completes.
 type QuickRepliesMsg struct {
 	Replies []string
@@ -444,9 +452,10 @@ type Model struct {
 	attachmentCompletionAnchor  string
 
 	// Draft auto-save state
-	lastDraftUID    uint32 // UID of last auto-saved draft; 0 = not saved yet
-	lastDraftFolder string // folder of last auto-saved draft
-	draftSaving     bool   // true while a SaveDraft cmd is in flight (prevents concurrent saves)
+	lastDraftUID         uint32 // UID of last auto-saved draft; 0 = not saved yet
+	lastDraftFolder      string // folder of last auto-saved draft
+	lastDraftReplaceable bool   // true when lastDraftUID points at a canonical Drafts-folder copy
+	draftSaving          bool   // true while a SaveDraft cmd is in flight (prevents concurrent saves)
 
 	// Sidebar
 	folders       []string
@@ -1095,9 +1104,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeAILoading = false
 			// Delete the auto-saved draft (if any) since the email was sent
 			if m.lastDraftUID != 0 {
+				if !m.lastDraftReplaceable {
+					m.lastDraftUID = 0
+					m.lastDraftFolder = ""
+					m.lastDraftReplaceable = false
+					return m, nil
+				}
 				cmd := m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder)
 				m.lastDraftUID = 0
 				m.lastDraftFolder = ""
+				m.lastDraftReplaceable = false
 				return m, cmd
 			}
 		}
@@ -1213,6 +1229,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.lastDraftUID = msg.UID
 			m.lastDraftFolder = msg.Folder
+			m.lastDraftReplaceable = true
 			m.statusMessage = "Draft saved"
 			if msg.ReplaceUID != 0 && (msg.ReplaceUID != msg.UID || msg.ReplaceFolder != msg.Folder) {
 				return m, m.deleteDraftCmd(msg.ReplaceUID, msg.ReplaceFolder)

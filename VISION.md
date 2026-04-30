@@ -120,7 +120,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Actions: delete, archive, reply, forward
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
 - [x] Star / pin important threads to top
-- [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, and `E` opens the draft in Compose for editing
+- [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, including reply drafts, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
@@ -370,6 +370,8 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Preserved HTML replies and forwards: Compose edits only the user's top note, shows the original message as read-only context while composing replies and forwards, and sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
 - [x] Forwarded attachments are included by default and individually toggleable before sending
 - [x] Timeline drafts open as editable Compose messages with recipients, subject, and body restored from the saved draft; sending deletes the source draft only after SMTP success
+- [x] Timeline drafts can be sent directly with `Ctrl+S` from the draft row, draft preview, or collapsed thread draft without switching to Compose
+- [x] Timeline reply drafts are labelled as both draft and reply, and their preview shows the visible thread context before the draft body
 - [x] Draft autosave replacement saves the new draft before deleting the previously saved draft, so a failed save cannot discard the only copy
 - [ ] Browser preview (open rendered HTML in default browser before sending)
 - [x] Inline images (paste / drag file path → base64 `multipart/related`)
@@ -662,7 +664,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
 - [x] `Space` in Timeline selects messages for bulk delete/archive; collapsed thread rows select the represented thread
 - [x] `D` / `e` in Timeline act on selected messages when selection exists, with confirmation copy showing selected counts
-- [x] `D` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command
+- [x] `D` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command and `Ctrl+S` as the explicit send-draft command
 - [x] `e` archives the highlighted email or sender
 - [x] Inline confirmation prompt (`y` to confirm, `Esc` to cancel)
 

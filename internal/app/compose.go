@@ -1347,6 +1347,20 @@ func composeHasContent(m *Model) bool {
 	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != "" || m.composePreserved != nil
 }
 
+func draftFolderIsReplaceable(folder string) bool {
+	name := strings.ToLower(strings.TrimSpace(folder))
+	if name == "" {
+		return false
+	}
+	return name == "drafts" ||
+		name == "[gmail]/drafts" ||
+		name == "[google mail]/drafts" ||
+		name == "inbox.drafts" ||
+		name == "inbox/drafts" ||
+		strings.HasSuffix(name, "/drafts") ||
+		strings.HasSuffix(name, ".drafts")
+}
+
 // saveDraftCmd saves the current compose content as a draft.
 // Snapshots the values before the goroutine to prevent data races.
 func (m *Model) saveDraftCmd() tea.Cmd {
@@ -1359,8 +1373,12 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	body := m.composeBody.Value()
 	attachments := m.composeAttachments
 	preserved := m.composePreserved
-	replaceUID := m.lastDraftUID
-	replaceFolder := m.lastDraftFolder
+	replaceUID := uint32(0)
+	replaceFolder := ""
+	if m.lastDraftReplaceable {
+		replaceUID = m.lastDraftUID
+		replaceFolder = m.lastDraftFolder
+	}
 	preservedReq, preservedErr := appsmtp.PreservedMessageRequest{}, error(nil)
 	if preserved != nil {
 		preservedReq, preservedErr = m.buildPreservedComposeRequest(from, to, subject, attachments)

@@ -60,6 +60,7 @@ func TestMessageFlagStateFromIMAPDetectsDraftFlagAndCanonicalDraftFolder(t *test
 		name      string
 		flags     []string
 		folder    string
+		labels    []string
 		wantRead  bool
 		wantStar  bool
 		wantDraft bool
@@ -91,11 +92,19 @@ func TestMessageFlagStateFromIMAPDetectsDraftFlagAndCanonicalDraftFolder(t *test
 			folder:   "INBOX",
 			wantRead: true,
 		},
+		{
+			name:      "gmail draft label on inbox graft",
+			flags:     []string{goimap.SeenFlag},
+			folder:    "INBOX",
+			wantRead:  true,
+			wantDraft: true,
+			labels:    []string{"\\Inbox", "\\Draft"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := messageFlagStateFromIMAP(77, tt.flags, tt.folder)
+			got := messageFlagStateFromIMAP(77, tt.flags, tt.folder, tt.labels...)
 			if got.UID != 77 {
 				t.Fatalf("UID = %d, want 77", got.UID)
 			}

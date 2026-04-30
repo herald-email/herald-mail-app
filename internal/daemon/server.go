@@ -774,38 +774,9 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request) {
 		folder = "Drafts"
 	}
 
-	drafts, err := s.backend.ListDrafts()
-	if err != nil {
+	if err := s.backend.SendDraft(uid, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
-	}
-	var draft *models.Draft
-	for _, d := range drafts {
-		if d.UID == uid {
-			draft = d
-			break
-		}
-	}
-	if draft == nil {
-		writeError(w, http.StatusNotFound, "draft not found")
-		return
-	}
-
-	// Fetch the full body — ListDrafts only returns envelope metadata.
-	body, fetchErr := s.backend.FetchEmailBody(draft.Folder, draft.UID)
-	if fetchErr != nil {
-		logger.Warn("daemon: fetch draft body uid=%d: %v — sending with empty body", draft.UID, fetchErr)
-	} else if body != nil {
-		draft.Body = body.TextPlain
-	}
-
-	if err := s.backend.SendEmail(draft.To, draft.Subject, draft.Body, ""); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if err := s.backend.DeleteDraft(uid, folder); err != nil {
-		logger.Error("daemon: delete draft after send: %v", err)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Draft sent and deleted"})

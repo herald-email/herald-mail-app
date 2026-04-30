@@ -44,6 +44,17 @@ func draftLabel(count int) string {
 	return fmt.Sprintf("Draft %d", count)
 }
 
+func draftKindLabel(email *models.EmailData) string {
+	if email != nil && email.IsDraft && isReplySubject(email.Subject) {
+		return "Draft reply"
+	}
+	return "Draft"
+}
+
+func draftStateText(email *models.EmailData) string {
+	return draftKindLabel(email) + " - E edit draft - Ctrl+S send"
+}
+
 func threadDraftCount(emails []*models.EmailData) int {
 	count := 0
 	for _, email := range emails {
@@ -375,7 +386,8 @@ func (m *Model) updateTimelineTable() {
 			subject = "(no subject)"
 		}
 		if email.IsDraft {
-			subject = draftLabel(1) + ": " + subject
+			subject = draftKindLabel(email) + ": " + subject
+			senderPrefix += draftLabel(1) + " "
 		}
 		// Prepend similarity score badge for semantic search results
 		if m.timeline.semanticScores != nil {
@@ -772,6 +784,34 @@ func (m *Model) currentTimelineDraftEmail() *models.EmailData {
 	return nil
 }
 
+func (m *Model) removeTimelineEmail(messageID string) {
+	if strings.TrimSpace(messageID) == "" {
+		return
+	}
+	remove := func(emails []*models.EmailData) []*models.EmailData {
+		out := emails[:0]
+		for _, email := range emails {
+			if email == nil || email.MessageID != messageID {
+				out = append(out, email)
+			}
+		}
+		return out
+	}
+	m.timeline.emails = remove(m.timeline.emails)
+	if m.timeline.emailsCache != nil {
+		m.timeline.emailsCache = remove(m.timeline.emailsCache)
+	}
+	if m.timeline.searchResults != nil {
+		m.timeline.searchResults = remove(m.timeline.searchResults)
+	}
+	if m.timeline.chatFilteredEmails != nil {
+		m.timeline.chatFilteredEmails = remove(m.timeline.chatFilteredEmails)
+	}
+	if m.timeline.selectedMessageIDs != nil {
+		delete(m.timeline.selectedMessageIDs, messageID)
+	}
+}
+
 func buildForwardSubject(subject string) string {
 	if strings.HasPrefix(strings.ToLower(subject), "fwd:") {
 		return subject
@@ -892,6 +932,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	if email != nil {
 		m.lastDraftUID = email.UID
 		m.lastDraftFolder = email.Folder
+		m.lastDraftReplaceable = draftFolderIsReplaceable(email.Folder)
 	}
 	m.draftSaving = false
 	m.composeField = composeFieldBody
@@ -979,6 +1020,45 @@ func (m *Model) loadTimelineDraftBodyCmd(email *models.EmailData, requestID int)
 			Err:       err,
 			MessageID: emailCopy.MessageID,
 			RequestID: requestID,
+		}
+	}
+}
+
+func (m *Model) buildSendDraftDesc(email *models.EmailData) string {
+	if email == nil {
+		return ""
+	}
+	subj := email.Subject
+	if len(subj) > 50 {
+		subj = subj[:47] + "..."
+	}
+	return fmt.Sprintf("Send draft \"%s\"?", subj)
+}
+
+func (m *Model) startTimelineSendDraft(email *models.EmailData) tea.Cmd {
+	if email == nil || !email.IsDraft {
+		return nil
+	}
+	m.statusMessage = "Sending draft..."
+	return m.sendTimelineDraftCmd(email)
+}
+
+func (m *Model) sendTimelineDraftCmd(email *models.EmailData) tea.Cmd {
+	emailCopy := *email
+	b := m.backend
+	return func() tea.Msg {
+		if emailCopy.UID == 0 {
+			return TimelineDraftSentMsg{
+				Email:     &emailCopy,
+				MessageID: emailCopy.MessageID,
+				Err:       fmt.Errorf("cached draft has no server UID; re-sync the folder to refresh it"),
+			}
+		}
+		err := b.SendDraft(emailCopy.UID, emailCopy.Folder)
+		return TimelineDraftSentMsg{
+			Email:     &emailCopy,
+			MessageID: emailCopy.MessageID,
+			Err:       err,
 		}
 	}
 }
@@ -1305,8 +1385,14 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		}
 		return segments
 	}
-	if m.currentTimelineFocusedDraftEmail() != nil {
-		return []string{"E: edit draft", "D: discard draft"}
+	if m.currentTimelineDraftEmail() != nil {
+		segments := []string{"E: edit draft", "ctrl+s: send draft"}
+		if m.currentTimelineFocusedDraftEmail() != nil {
+			segments = append(segments, "D: discard draft")
+		} else {
+			segments = append(segments, "D: delete")
+		}
+		return segments
 	}
 	return []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive"}
 }
@@ -1637,6 +1723,19 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.openTimelineDraftCompose(email, body, composeStatus)
 		return m, nil, true
 
+	case TimelineDraftSentMsg:
+		if msg.Err != nil {
+			m.statusMessage = "Send draft failed: " + msg.Err.Error()
+			return m, nil, true
+		}
+		m.statusMessage = "Draft sent"
+		m.removeTimelineEmail(msg.MessageID)
+		if m.timeline.selectedEmail != nil && m.timeline.selectedEmail.MessageID == msg.MessageID {
+			m.clearTimelinePreview()
+		}
+		m.updateTimelineTable()
+		return m, nil, true
+
 	case StarResultMsg:
 		if msg.Err != nil {
 			m.statusMessage = "Star failed: " + msg.Err.Error()
@@ -1712,6 +1811,23 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if m.canInteractWithVisibleData() {
 			if email := m.currentTimelineDraftEmail(); email != nil {
 				return m, m.startTimelineDraft(email), true
+			}
+		}
+		return m, nil, true
+	case "ctrl+s":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() && !m.pendingDeleteConfirm {
+			if email := m.currentTimelineDraftEmail(); email != nil {
+				if desc := m.buildSendDraftDesc(email); desc != "" {
+					m.pendingDeleteConfirm = true
+					m.pendingDeleteDesc = desc
+					m.pendingArchive = false
+					m.pendingDeleteAction = func() tea.Cmd {
+						return m.startTimelineSendDraft(email)
+					}
+				}
 			}
 		}
 		return m, nil, true

@@ -161,11 +161,108 @@ func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsub
 		renderPreviewHeaderLine("Subj:", email.Subject, innerW, styles, styles.subj),
 	}
 	if email.IsDraft {
-		lines = append(lines, renderPreviewHeaderLine("State:", "Draft - E edit draft", innerW, styles, styles.action))
+		lines = append(lines, renderPreviewHeaderLine("State:", draftStateText(email), innerW, styles, styles.action))
 	}
 	lines = append(lines, renderPreviewHeaderWrapped("Tags:", previewTagText(category), innerW, styles, styles.tag)...)
 	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe), innerW, styles, styles.action)...)
 	lines = append(lines, strings.Repeat("─", innerW))
+	return lines
+}
+
+func sameTimelineMessage(a, b *models.EmailData) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	if a.MessageID != "" && b.MessageID != "" {
+		return a.MessageID == b.MessageID
+	}
+	if a.UID != 0 && b.UID != 0 {
+		return a.UID == b.UID && a.Folder == b.Folder
+	}
+	return a == b
+}
+
+func (m *Model) visibleTimelineThreadEmails(email *models.EmailData) []*models.EmailData {
+	if email == nil {
+		return nil
+	}
+	normalized := normalizeSubject(email.Subject)
+	if normalized == "" {
+		return nil
+	}
+
+	var out []*models.EmailData
+	seenSelected := false
+	for _, candidate := range m.timelineDisplayEmails() {
+		if candidate == nil || normalizeSubject(candidate.Subject) != normalized {
+			continue
+		}
+		if sameTimelineMessage(candidate, email) {
+			seenSelected = true
+		}
+		out = append(out, candidate)
+	}
+	if !seenSelected {
+		out = append([]*models.EmailData{email}, out...)
+	}
+	return out
+}
+
+func draftThreadContextRole(email *models.EmailData) string {
+	if email == nil {
+		return "Message"
+	}
+	if email.IsDraft {
+		return draftKindLabel(email)
+	}
+	if isReplySubject(email.Subject) {
+		return "Reply"
+	}
+	return "Message"
+}
+
+func draftThreadContextLine(email *models.EmailData, innerW int) string {
+	if email == nil {
+		return ""
+	}
+	date := "N/A"
+	if !email.Date.IsZero() {
+		date = email.Date.Format("01-02 15:04")
+	}
+	subject := sanitizeText(email.Subject)
+	if subject == "" {
+		subject = "(no subject)"
+	}
+	line := fmt.Sprintf("%s  %s  %s  %s", draftThreadContextRole(email), date, senderDisplayLabel(email.Sender), subject)
+	return truncate(line, innerW)
+}
+
+func (m *Model) renderDraftThreadContextLines(email *models.EmailData, innerW, maxMessages int) []string {
+	if email == nil || !email.IsDraft || !isReplySubject(email.Subject) {
+		return nil
+	}
+	threadEmails := m.visibleTimelineThreadEmails(email)
+	if len(threadEmails) <= 1 {
+		return nil
+	}
+	if maxMessages <= 0 {
+		maxMessages = len(threadEmails)
+	}
+	limit := len(threadEmails)
+	if limit > maxMessages {
+		limit = maxMessages
+	}
+	lines := []string{truncate(fmt.Sprintf("Thread: %d messages", len(threadEmails)), innerW)}
+	for _, threadEmail := range threadEmails[:limit] {
+		line := draftThreadContextLine(threadEmail, innerW)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if hidden := len(threadEmails) - limit; hidden > 0 {
+		lines = append(lines, truncate(fmt.Sprintf("+%d more in thread", hidden), innerW))
+	}
+	lines = append(lines, strings.Repeat("-", innerW))
 	return lines
 }
 
@@ -222,6 +319,16 @@ func (m *Model) renderEmailPreview() string {
 	}
 
 	dimStyle := headerStyle
+	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 4)
+	if len(threadContextLines) > 0 {
+		maxBodyLines -= len(threadContextLines)
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+		for _, line := range threadContextLines {
+			sb.WriteString(dimStyle.Render(line) + "\n")
+		}
+	}
 	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
@@ -380,6 +487,16 @@ func (m *Model) renderFullScreenEmail() string {
 	}
 
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 6)
+	if len(threadContextLines) > 0 {
+		maxBodyLines -= len(threadContextLines)
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+		for _, line := range threadContextLines {
+			sb.WriteString(dimStyle.Render(line) + "\n")
+		}
+	}
 
 	if m.timeline.bodyLoading {
 		sb.WriteString(dimStyle.Render("Loading…"))
