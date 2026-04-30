@@ -457,16 +457,16 @@ func (m *Model) renderKeyHints() string {
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
+		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 		if m.composePreserved != nil {
-			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+c: quit"
+			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  esc: back  │  ctrl+c: quit"
 			if m.composeField == composeFieldOriginalMessage {
-				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+c: quit"
+				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
 			}
 			if m.hasForwardedAttachments() {
-				hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  ctrl+c: quit"
+				hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  esc: back  │  ctrl+c: quit"
 				if m.composeField == composeFieldOriginalMessage {
-					hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: attachments  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+c: quit"
+					hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: attachments  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
 				}
 			}
 		}

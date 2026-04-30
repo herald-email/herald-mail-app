@@ -245,7 +245,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		Title: "Global",
 		Entries: []shortcutHelpEntry{
 			{"?", "open or close this shortcut help"},
-			{"F1-F4", "switch tabs"},
+			{"F1-F3", "switch tabs"},
 			{"Alt+L / Alt+C", "open logs or chat from text-entry contexts"},
 			{"Alt+F / Alt+R", "toggle sidebar or refresh from text-entry contexts"},
 			{"Ctrl+C", "quit Herald"},
@@ -390,6 +390,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		{"j/k or arrows", "navigate messages and threads"},
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
+		{"C", "open a blank Compose screen"},
 		{"R / F", "reply or forward the highlighted email"},
 		{"D / e", "delete or archive after confirmation"},
 		{"* / A", "star or re-classify"},

@@ -68,12 +68,12 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 	}
 }
 
-// TestComposeAlt4_SwitchesToContacts verifies that Alt+4 switches from Compose
-// to Contacts while plain "4" remains available as draft text.
+// TestComposeAlt3_SwitchesToContacts verifies that Alt+3 switches from Compose
+// to Contacts while plain "3" remains available as draft text.
 //
 // Regression test for the compose-safe command layer: global tab switching uses
 // Alt chords when a Compose text field is focused.
-func TestComposeAlt4_SwitchesToContacts(t *testing.T) {
+func TestComposeAlt3_SwitchesToContacts(t *testing.T) {
 	b := &stubBackend{}
 	m := New(b, nil, "", nil, false)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -81,11 +81,11 @@ func TestComposeAlt4_SwitchesToContacts(t *testing.T) {
 	m.loading = false
 	m.activeTab = tabCompose
 
-	updated2, _ := m.Update(altKey('4'))
+	updated2, _ := m.Update(altKey('3'))
 	m2 := updated2.(*Model)
 
 	if m2.activeTab != tabContacts {
-		t.Fatalf("pressing alt+4 in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
+		t.Fatalf("pressing alt+3 in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
 	}
 }
 

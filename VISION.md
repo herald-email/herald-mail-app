@@ -101,12 +101,11 @@ The TUI uses a fixed tab bar at the top, a collapsible folder sidebar on the lef
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
 
 ### Tabs (top-level navigation)
-Keyboard (`F1`-`F4` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable.
+Keyboard (`F1`-`F3` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
 - [x] `F1` — Timeline: chronological email list with body preview split
-- [x] `F2` — Compose: write and send email
-- [x] `F3` — Cleanup: sender/domain grouping for bulk deletion
-- [x] `F4` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
+- [x] `F2` — Cleanup: sender/domain grouping for bulk deletion
+- [x] `F3` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
 
 ### Timeline View
 
@@ -141,7 +140,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
-- [x] Compose-safe command layer: `F1/F2/F3/F4` are the primary advertised tab shortcuts, secondary `Alt+1/2/3/4` aliases remain supported, and `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
+- [x] Compose-safe command layer: `F1/F2/F3` are the primary advertised tab shortcuts, secondary `Alt+1/2/3` aliases remain supported, and `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?`, lists every relevant key for the current tab, pane, overlay, and Compose mode, and keeps semantic search available through `/` with a `? query` prefix
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
@@ -357,16 +356,17 @@ Rules let the app automatically act on email from known senders — delete newsl
 
 ## Compose and Reply
 
-Write in Markdown, deliver as properly formatted HTML email. The compose tab is a full-screen editor with a live preview mode and attachment support.
+Write in Markdown, deliver as properly formatted HTML email. Compose is a transient full-screen editor launched from Timeline with `C`, contextual reply/forward/draft actions, or quick replies; `Esc` returns to the screen that initiated it after local Compose transient state is dismissed.
 
 - [x] Markdown editor (textarea)
+- [x] Timeline `C` opens a blank Compose screen for a new message
 - [x] Live Markdown preview (`Ctrl+P`)
 - [x] Send as multipart HTML + plain-text via SMTP
 - [x] Reply (`R` key — pre-fills To, Re: subject, quotes original)
 - [x] Forward (`F` key — pre-fills Fwd: subject, forwarding header, body quote)
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
-- [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use Alt chords while composing
+- [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use function keys or Alt chords while composing
 - [x] Preserved HTML replies and forwards: Compose edits only the user's top note, shows the original message as read-only context while composing replies and forwards, and sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
 - [x] Forwarded attachments are included by default and individually toggleable before sending
 - [x] Timeline drafts open as editable Compose messages with recipients, subject, and body restored from the saved draft; sending deletes the source draft only after SMTP success

@@ -142,8 +142,8 @@ func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 		want int
 	}{
 		{name: "F1", key: functionKey(1), want: tabTimeline},
-		{name: "F3", key: functionKey(3), want: tabCleanup},
-		{name: "F4", key: functionKey(4), want: tabContacts},
+		{name: "F2", key: functionKey(2), want: tabCleanup},
+		{name: "F3", key: functionKey(3), want: tabContacts},
 	}
 
 	for _, tc := range tests {
@@ -175,15 +175,190 @@ func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 	}
 }
 
-func TestFunctionKeyF2ReturnsToCompose(t *testing.T) {
+func TestFunctionKeyF2SwitchesToCleanup(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
 
 	model, _ := m.handleKeyMsg(functionKey(2))
 	updated := model.(*Model)
 
+	if updated.activeTab != tabCleanup {
+		t.Fatalf("F2 activeTab=%d, want Cleanup", updated.activeTab)
+	}
+}
+
+func TestTimelineCOpensBlankComposeAndEscapeReturnsTimeline(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(1)
+	m.setFocusedPanel(panelTimeline)
+	m.composeTo.SetValue("stale@example.com")
+	m.composeSubject.SetValue("stale subject")
+	m.composeBody.SetValue("stale body")
+	m.suggestions = []models.ContactData{{Email: "stale@example.com"}}
+	m.suggestionIdx = 0
+	m.attachmentInputActive = true
+	m.attachmentPathInput.SetValue("/tmp/stale.txt")
+	m.attachmentCompletions = []attachmentPathCandidate{{Display: "stale.txt", Value: "/tmp/stale.txt"}}
+	m.attachmentCompletionVisible = true
+	m.attachmentCompletionIdx = 0
+	m.composeAIInput.SetValue("stale prompt")
+
+	model, cmd := m.handleKeyMsg(keyRunes("C"))
+	updated := model.(*Model)
+	if cmd != nil {
+		t.Fatalf("expected Timeline C to open blank Compose synchronously, got command %T", cmd)
+	}
 	if updated.activeTab != tabCompose {
-		t.Fatalf("F2 activeTab=%d, want Compose", updated.activeTab)
+		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
+	}
+	if updated.composeTo.Value() != "" || updated.composeSubject.Value() != "" || updated.composeBody.Value() != "" {
+		t.Fatalf("expected blank Compose fields, got to=%q subject=%q body=%q", updated.composeTo.Value(), updated.composeSubject.Value(), updated.composeBody.Value())
+	}
+	if len(updated.suggestions) != 0 || updated.suggestionIdx != -1 {
+		t.Fatalf("expected blank Compose to clear autocomplete state, suggestions=%d idx=%d", len(updated.suggestions), updated.suggestionIdx)
+	}
+	if updated.attachmentInputActive || updated.attachmentPathInput.Value() != "" || len(updated.attachmentCompletions) != 0 {
+		t.Fatalf("expected blank Compose to clear attachment prompt, active=%v path=%q completions=%d", updated.attachmentInputActive, updated.attachmentPathInput.Value(), len(updated.attachmentCompletions))
+	}
+	if updated.composeAIInput.Value() != "" {
+		t.Fatalf("expected blank Compose to clear AI prompt, got %q", updated.composeAIInput.Value())
+	}
+	if updated.composeField != composeFieldTo {
+		t.Fatalf("composeField=%d, want To field", updated.composeField)
+	}
+
+	model, cmd = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	updated = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
+	}
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("Esc activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if updated.timelineTable.Cursor() != 1 {
+		t.Fatalf("timeline cursor=%d, want restored cursor 1", updated.timelineTable.Cursor())
+	}
+	if updated.focusedPanel != panelTimeline {
+		t.Fatalf("focusedPanel=%d, want Timeline panel", updated.focusedPanel)
+	}
+}
+
+func TestComposeEscapeReturnsToTimelinePreviewOrigin(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	email := m.timeline.emails[0]
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "preview body"}
+	m.setFocusedPanel(panelPreview)
+
+	model, _ := m.handleKeyMsg(keyRunes("C"))
+	updated := model.(*Model)
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
+	}
+
+	model, cmd := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	updated = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
+	}
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("Esc activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != email.MessageID {
+		t.Fatalf("expected preview email %q restored, got %#v", email.MessageID, updated.timeline.selectedEmail)
+	}
+	if updated.focusedPanel != panelPreview {
+		t.Fatalf("focusedPanel=%d, want Preview panel", updated.focusedPanel)
+	}
+}
+
+func TestComposeEscapeReturnsToTimelineSearchResultsOrigin(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.openTimelineSearch()
+	m.timeline.searchInput.SetValue("meeting")
+	m.timeline.searchResults = []*models.EmailData{m.timeline.emails[0]}
+	m.timeline.searchResultsQuery = "meeting"
+	m.timeline.searchFocus = timelineSearchFocusResults
+	m.timeline.searchInput.Blur()
+	m.timeline.emails = m.timeline.searchResults
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelTimeline)
+
+	model, _ := m.handleKeyMsg(keyRunes("C"))
+	updated := model.(*Model)
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
+	}
+
+	model, cmd := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	updated = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
+	}
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("Esc activeTab=%d, want Timeline", updated.activeTab)
+	}
+	if !updated.timeline.searchMode || updated.timeline.searchFocus != timelineSearchFocusResults {
+		t.Fatalf("expected Timeline search results origin, searchMode=%v focus=%d", updated.timeline.searchMode, updated.timeline.searchFocus)
+	}
+	if got := updated.timeline.searchInput.Value(); got != "meeting" {
+		t.Fatalf("search query=%q, want meeting", got)
+	}
+}
+
+func TestRenumberedTopLevelTabNavigationRoutesCleanupAndContacts(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+
+	model, _ := m.handleKeyMsg(functionKey(2))
+	updated := model.(*Model)
+	if updated.activeTab != tabCleanup {
+		t.Fatalf("F2 activeTab=%d, want Cleanup", updated.activeTab)
+	}
+
+	updated.activeTab = tabTimeline
+	model, _ = updated.handleKeyMsg(functionKey(3))
+	updated = model.(*Model)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("F3 activeTab=%d, want Contacts", updated.activeTab)
+	}
+
+	updated.activeTab = tabTimeline
+	model, _ = updated.handleKeyMsg(keyRunes("2"))
+	updated = model.(*Model)
+	if updated.activeTab != tabCleanup {
+		t.Fatalf("2 activeTab=%d, want Cleanup", updated.activeTab)
+	}
+
+	updated.activeTab = tabTimeline
+	model, _ = updated.handleKeyMsg(keyRunes("3"))
+	updated = model.(*Model)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("3 activeTab=%d, want Contacts", updated.activeTab)
+	}
+
+	tabBar := stripANSI(updated.renderTabBar())
+	if strings.Contains(tabBar, "Compose") || strings.Contains(tabBar, "F4") {
+		t.Fatalf("expected top tab bar without Compose/F4, got %q", tabBar)
+	}
+	for _, want := range []string{"F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
+		if !strings.Contains(tabBar, want) {
+			t.Fatalf("expected tab bar to contain %q, got %q", want, tabBar)
+		}
 	}
 }
 
@@ -450,10 +625,10 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hints := stripANSI(tc.model().renderKeyHints())
-			if !strings.Contains(hints, "F1-F4: tabs") {
+			if !strings.Contains(hints, "F1-F3: tabs") {
 				t.Fatalf("expected primary F-key tab hint, got %q", hints)
 			}
-			for _, stale := range []string{"1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
+			for _, stale := range []string{"F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
 				if strings.Contains(hints, stale) {
 					t.Fatalf("expected no stale tab hint %q, got %q", stale, hints)
 				}
@@ -478,12 +653,12 @@ func TestRenderTabBar_AdvertisesFunctionKeys(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	rendered := stripANSI(m.renderTabBar())
 
-	for _, want := range []string{"F1  Timeline", "F2  Compose", "F3  Cleanup", "F4  Contacts"} {
+	for _, want := range []string{"F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected tab bar to include %q, got %q", want, rendered)
 		}
 	}
-	for _, stale := range []string{"  1  Timeline", "  2  Compose", "  3  Cleanup", "  4  Contacts"} {
+	for _, stale := range []string{"F2  Compose", "F4", "  1  Timeline", "  2  Cleanup", "  3  Contacts"} {
 		if strings.Contains(rendered, stale) {
 			t.Fatalf("expected tab bar not to include stale label %q, got %q", stale, rendered)
 		}
@@ -560,7 +735,7 @@ func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _, handled := m.handleTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	model, _, handled := m.handleTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 	if !handled {
 		t.Fatal("expected cleanup tab key to be handled while syncing with visible data")
 	}

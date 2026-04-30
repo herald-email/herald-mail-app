@@ -194,7 +194,7 @@ Keyboard controls remain complete, but mouse users get the comfortable path too:
 
 | Mouse action | Result |
 |--------------|--------|
-| Click a top tab | Switches to Timeline, Compose, Cleanup, or Contacts |
+| Click a top tab | Switches to Timeline, Cleanup, or Contacts |
 | Click a folder/sidebar row | Selects and opens that folder |
 | Click a Timeline row | Opens the email preview for that message or thread |
 | Scroll over Timeline or Cleanup rows | Moves through the list in small steps |
@@ -320,12 +320,13 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 
 | Key | Action |
 |-----|--------|
-| `1` / `2` / `3` / `4` | Timeline / Compose / Cleanup / Contacts tab in browse contexts |
-| `F1` / `F2` / `F3` / `F4` | Timeline / Compose / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
-| `Alt+1` / `Alt+2` / `Alt+3` / `Alt+4` | Secondary Timeline / Compose / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
+| `1` / `2` / `3` | Timeline / Cleanup / Contacts tab in browse contexts |
+| `F1` / `F2` / `F3` | Timeline / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
+| `Alt+1` / `Alt+2` / `Alt+3` | Secondary Timeline / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
+| `C` | Open a new Compose screen from Timeline |
 | `j` / `k` | Navigate down / up |
 | `Enter` | Open email preview |
-| `Escape` | Close preview / picker |
+| `Escape` | Close preview / picker, or return from Compose to its originating Timeline screen |
 | `D` | Delete selected email or sender |
 | `e` | Archive |
 | `R` | Reply |

@@ -85,8 +85,8 @@ func TestMouseClickTabSwitchesWithoutTypingIntoCompose(t *testing.T) {
 	model, _ := m.Update(mousePress(20, 1))
 	updated := model.(*Model)
 
-	if updated.activeTab != tabCompose {
-		t.Fatalf("expected mouse click on tab bar to switch to Compose, got tab %d", updated.activeTab)
+	if updated.activeTab != tabCleanup {
+		t.Fatalf("expected mouse click on tab bar to switch to Cleanup, got tab %d", updated.activeTab)
 	}
 	if got := updated.composeTo.Value(); got != "" {
 		t.Fatalf("expected tab mouse click not to type into compose field, got %q", got)

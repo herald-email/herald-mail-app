@@ -12,10 +12,10 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `q` | Quit Herald from browse contexts. In Compose and search inputs, plain `q` is text. |
 | `ctrl+c` | Quit Herald from any state, including text inputs and overlays. |
 | `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
-| `2` | Switch to Compose in browse contexts, or choose quick reply 2 when quick reply picker is open. |
-| `3` | Switch to Cleanup in browse contexts, or choose quick reply 3 when quick reply picker is open. |
-| `4` | Switch/load Contacts in browse contexts, or choose quick reply 4 when quick reply picker is open. |
-| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Switch to Timeline / Compose / Cleanup / Contacts from anywhere in the main TUI, including Compose. |
+| `2` | Switch to Cleanup in browse contexts, or choose quick reply 2 when quick reply picker is open. |
+| `3` | Switch/load Contacts in browse contexts, or choose quick reply 3 when quick reply picker is open. |
+| `4` | Choose quick reply 4 when quick reply picker is open. |
+| `alt+1` / `alt+2` / `alt+3` | Switch to Timeline / Cleanup / Contacts from anywhere in the main TUI, including Compose. |
 | `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
 | `shift+tab` | Cycle focus backward where supported. |
 | `f` / `alt+f` | Toggle folder sidebar on tabs that support it; use `alt+f` while composing. |
@@ -33,7 +33,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Mouse action | Result |
 | --- | --- |
-| Click top tab | Switch to Timeline, Compose, Cleanup, or Contacts. |
+| Click top tab | Switch to Timeline, Cleanup, or Contacts. |
 | Click folder/sidebar row | Select and load that folder. |
 | Click Timeline row | Select the message or thread and open the preview. |
 | Scroll Timeline rows | Move the Timeline cursor by small steps. |
@@ -61,6 +61,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `j` / `down` | Move down list, scroll preview, or move quick reply selection depending on focus. |
 | `k` / `up` | Move up list, scroll preview, or move quick reply selection depending on focus. |
 | `/` | Open Timeline search. |
+| `C` | Open a blank Compose screen for a new message. |
 | `*` | Toggle star on current email. |
 | `R` | Reply to current email in Compose. |
 | `F` | Forward current email in Compose. |
@@ -106,7 +107,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Key | Result |
 | --- | --- |
 | Plain letters and digits | Insert text into the focused Compose field; use Alt chords for global commands while composing. |
-| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Switch to Timeline / Compose / Cleanup / Contacts without inserting text. |
+| `alt+1` / `alt+2` / `alt+3` | Switch to Timeline / Cleanup / Contacts without inserting text. |
 | `alt+l` / `alt+c` / `alt+f` / `alt+r` | Toggle logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
 | `ctrl+s` | Send message. |
@@ -115,7 +116,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `ctrl+g` | Toggle Compose AI assistant panel. |
 | `ctrl+j` | Generate AI subject suggestion. |
 | `ctrl+enter` | Accept AI response into body. |
-| `esc` | Dismiss subject hint, AI panel, or compose status. |
+| `esc` | Dismiss subject hint, AI panel, or compose status; then return to the screen that opened Compose. |
 | `up` / `down` | Move autocomplete selection when suggestions are visible. |
 | `enter` / `tab` | Accept autocomplete suggestion when visible. |
 | `esc` | Dismiss autocomplete or attachment prompt when active. |

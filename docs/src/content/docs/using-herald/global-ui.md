@@ -7,14 +7,14 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and a `?` shortcut help overlay. Most work happens in one of four tabs: Timeline, Compose, Cleanup, or Contacts, and the common navigation surfaces work with both keys and mouse input.
+Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and a `?` shortcut help overlay. Most browsing work happens in three tabs: Timeline, Cleanup, or Contacts. Compose is a transient writing screen launched from Timeline, and the common navigation surfaces work with both keys and mouse input.
 
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
 | --- | --- | --- |
 | Header | `Herald` while the main TUI is active. | The loading view shows a larger startup banner before cached data is visible. |
-| Tab bar | `F1 Timeline`, `F2 Compose`, `F3 Cleanup`, `F4 Contacts`. | The active tab is highlighted. `F1-F4` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3/4` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
+| Tab bar | `F1 Timeline`, `F2 Cleanup`, `F3 Contacts`. | The active tab is highlighted. `F1-F3` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
 | Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
@@ -31,9 +31,9 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `F1` / `F2` / `F3` / `F4` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Compose, Cleanup, or Contacts from any main tab. |
-| `1` / `2` / `3` / `4` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches tabs as compatibility aliases. In the quick reply picker, chooses replies 1-4. |
-| `alt+1` / `alt+2` / `alt+3` / `alt+4` | Main TUI | Visible data can be interacted with. | Switches tabs as secondary aliases, including when Compose text fields are focused. |
+| `F1` / `F2` / `F3` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Cleanup, or Contacts from any main tab or Compose screen. |
+| `1` / `2` / `3` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches tabs as compatibility aliases. In the quick reply picker, chooses replies 1-3. |
+| `alt+1` / `alt+2` / `alt+3` | Main TUI | Visible data can be interacted with. | Switches tabs as secondary aliases, including when Compose text fields are focused. |
 | `q` | Browse contexts | No text input is being edited. | Quits Herald after cleanup. |
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
@@ -45,7 +45,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a full-screen panel. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `?` | Main UI and Herald-owned overlays | Visible data can be interacted with. | Opens context-sensitive shortcut help; pressing `?`, `esc`, or `q` closes it. |
-| `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, or status message. |
+| `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, Compose status message, or the Compose screen itself. |
 
 ## Mouse Controls
 
@@ -53,7 +53,7 @@ Mouse controls are convenience shortcuts over the same model as keyboard focus a
 
 | Mouse action | Context | Result |
 | --- | --- | --- |
-| Click a top tab | Main UI | Switches to Timeline, Compose, Cleanup, or Contacts. |
+| Click a top tab | Main UI | Switches to Timeline, Cleanup, or Contacts. |
 | Click a folder/sidebar row | Timeline or Cleanup with sidebar visible | Selects the folder and loads it. |
 | Click a Timeline row | Timeline table | Selects the row and opens the split preview. |
 | Scroll over Timeline rows | Timeline table | Moves the Timeline cursor by small steps and refreshes the open preview. |
@@ -70,11 +70,11 @@ Press `m` in Timeline to temporarily release Herald's mouse capture for terminal
 
 ### Move Between Tabs
 
-1. Press `F1`, `F2`, `F3`, or `F4`.
+1. Press `F1`, `F2`, or `F3`.
 2. Watch the tab bar highlight move.
 3. Use the bottom key hints to learn the active tab's controls.
 
-Browse contexts also accept `1`, `2`, `3`, and `4` as compatibility aliases. When a terminal does not send function keys cleanly, `Alt+1`, `Alt+2`, `Alt+3`, and `Alt+4` remain secondary aliases that keep Compose text entry safe.
+Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a terminal does not send function keys cleanly, `Alt+1`, `Alt+2`, and `Alt+3` remain secondary aliases that keep Compose text entry safe.
 
 ### Use Panel Focus
 

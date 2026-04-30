@@ -420,6 +420,9 @@ type Model struct {
 	composePreview     bool   // show glamour markdown preview
 	composeAttachments []models.ComposeAttachment
 	composePreserved   *composePreservedContext
+	composeReturnSet   bool
+	composeReturnTab   int
+	composeReturnPanel int
 
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
@@ -1815,7 +1818,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.timeline.pendingY = false
 	}
 
-	// Compose tab gets its own key handler
+	// Compose screen gets its own key handler
 	if m.activeTab == tabCompose {
 		return m.handleComposeKey(msg)
 	}

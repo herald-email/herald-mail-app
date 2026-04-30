@@ -722,14 +722,18 @@ func generateQuickRepliesCmd(classifier ai.AIClient, sender, subject, bodyPrevie
 	}
 }
 
-// openQuickReply pre-fills the Compose tab with the selected reply template and switches to it.
+// openQuickReply pre-fills Compose with the selected reply template and switches to it.
 func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	m.timeline.quickReplyOpen = false
 	if m.timeline.selectedEmail == nil {
 		return m, nil
 	}
 	email := m.timeline.selectedEmail
+	m.rememberComposeReturn()
 	m.activeTab = tabCompose
+	m.composePreserved = nil
+	m.replyContextEmail = email
+	m.composeAIThread = true
 	m.composeTo.SetValue(email.Sender)
 	subject := email.Subject
 	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
