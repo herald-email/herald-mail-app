@@ -121,16 +121,34 @@ func (m *Model) archiveSelected() tea.Cmd {
 // queueRequests builds deletion/archive requests and sends them to the worker.
 func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	type deleteTarget struct {
-		messageID string
-		sender    string
-		isDomain  bool
-		folder    string
+		messageID          string
+		sender             string
+		isDomain           bool
+		folder             string
+		affectedMessageIDs []string
 	}
 
 	folder := m.currentFolder
 	virtualCleanup := m.activeTab == tabCleanup && isVirtualAllMailOnlyFolder(folder)
 	var targets []deleteTarget
 	seenMessageIDs := make(map[string]bool)
+
+	affectedIDsForEmails := func(emails []*models.EmailData) []string {
+		ids := make([]string, 0, len(emails))
+		seen := make(map[string]bool, len(emails))
+		for _, email := range emails {
+			if email == nil {
+				continue
+			}
+			id := strings.TrimSpace(email.MessageID)
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			ids = append(ids, id)
+		}
+		return ids
+	}
 
 	findCleanupEmail := func(messageID string) *models.EmailData {
 		for _, emails := range m.emailsBySender {
@@ -156,7 +174,11 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			return
 		}
 		seenMessageIDs[email.MessageID] = true
-		targets = append(targets, deleteTarget{messageID: email.MessageID, folder: targetFolder})
+		targets = append(targets, deleteTarget{
+			messageID:          email.MessageID,
+			folder:             targetFolder,
+			affectedMessageIDs: []string{email.MessageID},
+		})
 	}
 
 	// Timeline tab: delete/archive current email
@@ -193,9 +215,10 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		go func() {
 			for _, t := range targets {
 				ch <- models.DeletionRequest{
-					MessageID: t.messageID,
-					Folder:    t.folder,
-					IsArchive: isArchive,
+					MessageID:          t.messageID,
+					Folder:             t.folder,
+					IsArchive:          isArchive,
+					AffectedMessageIDs: t.affectedMessageIDs,
 				}
 			}
 		}()
@@ -213,7 +236,11 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 					appendMessageTarget(email)
 					continue
 				}
-				targets = append(targets, deleteTarget{messageID: messageID, folder: folder})
+				targets = append(targets, deleteTarget{
+					messageID:          messageID,
+					folder:             folder,
+					affectedMessageIDs: []string{messageID},
+				})
 			}
 		} else {
 			// Delete current message
@@ -235,7 +262,12 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 				}
 				continue
 			}
-			targets = append(targets, deleteTarget{sender: key, isDomain: m.groupByDomain, folder: folder})
+			targets = append(targets, deleteTarget{
+				sender:             key,
+				isDomain:           m.groupByDomain,
+				folder:             folder,
+				affectedMessageIDs: affectedIDsForEmails(m.emailsBySender[key]),
+			})
 		}
 	} else {
 		// Delete current sender using row mapping (or domain in domain mode)
@@ -246,7 +278,12 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 					appendMessageTarget(email)
 				}
 			} else {
-				targets = append(targets, deleteTarget{sender: sender, isDomain: m.groupByDomain, folder: folder})
+				targets = append(targets, deleteTarget{
+					sender:             sender,
+					isDomain:           m.groupByDomain,
+					folder:             folder,
+					affectedMessageIDs: affectedIDsForEmails(m.emailsBySender[sender]),
+				})
 			}
 		}
 	}
@@ -261,11 +298,12 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	go func() {
 		for _, t := range targets {
 			ch <- models.DeletionRequest{
-				MessageID: t.messageID,
-				Sender:    t.sender,
-				IsDomain:  t.isDomain,
-				Folder:    t.folder,
-				IsArchive: isArchive,
+				MessageID:          t.messageID,
+				Sender:             t.sender,
+				IsDomain:           t.isDomain,
+				Folder:             t.folder,
+				IsArchive:          isArchive,
+				AffectedMessageIDs: t.affectedMessageIDs,
 			}
 		}
 	}()
@@ -312,9 +350,15 @@ func (m *Model) deletionWorker(requestCh <-chan models.DeletionRequest, resultCh
 
 	for req := range requestCh {
 		result := models.DeletionResult{
-			MessageID: req.MessageID,
-			Sender:    req.Sender,
-			Folder:    req.Folder,
+			MessageID:          req.MessageID,
+			Sender:             req.Sender,
+			Folder:             req.Folder,
+			IsDomain:           req.IsDomain,
+			IsArchive:          req.IsArchive,
+			AffectedMessageIDs: append([]string(nil), req.AffectedMessageIDs...),
+		}
+		if result.MessageID != "" && len(result.AffectedMessageIDs) == 0 {
+			result.AffectedMessageIDs = []string{result.MessageID}
 		}
 
 		// Try the deletion, retrying on connection errors with backoff.
@@ -361,6 +405,145 @@ func (m *Model) deletionWorker(requestCh <-chan models.DeletionRequest, resultCh
 		// release sockets and sync state.
 		time.Sleep(deletionThrottle)
 	}
+}
+
+func affectedDeletionMessageIDSet(result models.DeletionResult) map[string]bool {
+	ids := make(map[string]bool, len(result.AffectedMessageIDs)+1)
+	if id := strings.TrimSpace(result.MessageID); id != "" {
+		ids[id] = true
+	}
+	for _, id := range result.AffectedMessageIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
+func pruneEmailSliceByMessageID(emails []*models.EmailData, ids map[string]bool) ([]*models.EmailData, bool) {
+	if len(emails) == 0 || len(ids) == 0 {
+		return emails, false
+	}
+	filtered := emails[:0]
+	pruned := false
+	for _, email := range emails {
+		if email != nil && ids[email.MessageID] {
+			pruned = true
+			continue
+		}
+		filtered = append(filtered, email)
+	}
+	return filtered, pruned
+}
+
+func (m *Model) clearTimelinePreviewIfDeleted(ids map[string]bool) {
+	if len(ids) == 0 {
+		return
+	}
+	if origin := m.timeline.searchOrigin; origin != nil && origin.selectedEmail != nil && ids[origin.selectedEmail.MessageID] {
+		origin.selectedEmail = nil
+		origin.body = nil
+		origin.bodyMessageID = ""
+		origin.bodyLoading = false
+		origin.bodyScrollOffset = 0
+	}
+	if m.timeline.selectedEmail == nil || !ids[m.timeline.selectedEmail.MessageID] {
+		return
+	}
+	if m.timeline.bodyFetchCancel != nil {
+		m.timeline.bodyFetchCancel()
+		m.timeline.bodyFetchCancel = nil
+	}
+	m.revokeImagePreviews()
+	m.timeline.selectedEmail = nil
+	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
+	m.timeline.bodyLoading = false
+	m.timeline.inlineImageDescs = nil
+	m.timeline.fullScreen = false
+	m.timeline.bodyWrappedLines = nil
+	m.timeline.bodyWrappedWidth = 0
+	m.timeline.bodyScrollOffset = 0
+	m.timeline.selectedAttachment = 0
+	m.timeline.attachmentSavePrompt = false
+	m.timeline.attachmentSaveWarning = ""
+	m.timeline.quickReplies = nil
+	m.timeline.quickRepliesReady = false
+	m.timeline.quickReplyOpen = false
+	m.timeline.quickReplyPending = false
+	m.timeline.quickReplyIdx = 0
+	m.timeline.quickRepliesAIFetched = false
+	m.timeline.visualMode = false
+	m.timeline.visualStart = 0
+	m.timeline.visualEnd = 0
+	m.timeline.pendingY = false
+}
+
+func (m *Model) pruneCleanupStateAfterDeletion(ids map[string]bool) bool {
+	if len(ids) == 0 {
+		return false
+	}
+	pruned := false
+	for id := range ids {
+		delete(m.selectedMessages, id)
+	}
+	if filtered, ok := pruneEmailSliceByMessageID(m.detailsEmails, ids); ok {
+		m.detailsEmails = filtered
+		pruned = true
+	}
+	for key, emails := range m.emailsBySender {
+		filtered, ok := pruneEmailSliceByMessageID(emails, ids)
+		if !ok {
+			continue
+		}
+		pruned = true
+		if len(filtered) == 0 {
+			delete(m.emailsBySender, key)
+			delete(m.selectedSummaryKeys, key)
+			if m.selectedSender == key {
+				m.selectedSender = ""
+			}
+			continue
+		}
+		m.emailsBySender[key] = filtered
+	}
+	return pruned
+}
+
+func (m *Model) pruneTimelineStateAfterDeletion(result models.DeletionResult) bool {
+	ids := affectedDeletionMessageIDSet(result)
+	if len(ids) == 0 {
+		return false
+	}
+	pruned := false
+	for id := range ids {
+		if m.timeline.selectedMessageIDs != nil && m.timeline.selectedMessageIDs[id] {
+			delete(m.timeline.selectedMessageIDs, id)
+			pruned = true
+		}
+	}
+	if filtered, ok := pruneEmailSliceByMessageID(m.timeline.emails, ids); ok {
+		m.timeline.emails = filtered
+		pruned = true
+	}
+	if filtered, ok := pruneEmailSliceByMessageID(m.timeline.searchResults, ids); ok {
+		m.timeline.searchResults = filtered
+		pruned = true
+	}
+	if filtered, ok := pruneEmailSliceByMessageID(m.timeline.chatFilteredEmails, ids); ok {
+		m.timeline.chatFilteredEmails = filtered
+		pruned = true
+	}
+	m.clearTimelinePreviewIfDeleted(ids)
+	if m.pruneCleanupStateAfterDeletion(ids) {
+		pruned = true
+	}
+	if pruned {
+		m.updateTimelineTable()
+		m.rebuildDetailsRows()
+	}
+	return pruned
 }
 
 // isConnectionErrorStr checks if an error message indicates a dead connection.

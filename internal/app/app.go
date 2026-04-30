@@ -1558,6 +1558,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// We don't have sender info here, so we'll update on full reload
 			}
 
+			m.pruneTimelineStateAfterDeletion(msg)
+
 			// Update UI immediately
 			m.updateSummaryTable()
 			m.updateDetailsTable()
@@ -1878,7 +1880,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.deletionsTotal++
 			ch := m.deletionRequestCh
 			go func() {
-				ch <- models.DeletionRequest{MessageID: email.MessageID, Folder: email.Folder, IsArchive: false}
+				ch <- models.DeletionRequest{
+					MessageID:          email.MessageID,
+					Folder:             email.Folder,
+					IsArchive:          false,
+					AffectedMessageIDs: []string{email.MessageID},
+				}
 			}()
 			return m, m.listenForDeletionResults()
 		}
@@ -1987,7 +1994,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.deletionsTotal++
 			ch := m.deletionRequestCh
 			go func() {
-				ch <- models.DeletionRequest{MessageID: email.MessageID, Folder: email.Folder, IsArchive: true}
+				ch <- models.DeletionRequest{
+					MessageID:          email.MessageID,
+					Folder:             email.Folder,
+					IsArchive:          true,
+					AffectedMessageIDs: []string{email.MessageID},
+				}
 			}()
 			return m, m.listenForDeletionResults()
 		}

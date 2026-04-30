@@ -1015,6 +1015,25 @@ Check these states during every applicable lane:
 - The summary text such as `4 senders selected` or `4 domains selected` matches the visible checkmarks exactly.
 - Selection survives refreshes, reordering, tab switches, and resizes because it is tied to logical sender/domain identity rather than row index.
 
+### TC-32A — Cleanup delete/archive propagates to Timeline
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode.
+2. Open Cleanup, focus a sender with visible messages, and capture the sender/details state.
+3. Delete or archive one visible Cleanup message, confirming the prompt when shown.
+4. Switch immediately to Timeline and search or navigate to the same sender/subject.
+5. Repeat for a Cleanup sender/domain batch when demo data makes a safe target obvious.
+6. Resize to `50x15`, then recover to `80x24` and Timeline.
+
+**Expect:**
+- The deleted or archived Cleanup message disappears from Timeline on the next render, without waiting for a later refresh.
+- Stale Timeline search results, chat-filtered rows, selections, and open previews for the affected message are cleared.
+- Cleanup details, Timeline rows, and folder/status counts settle coherently after the follow-up reload.
+- `50x15` shows the minimum-size guard and resizing back restores a clean Timeline without stale deleted rows.
+
 ### TC-33 — Cleanup responsive column layout
 
 **Lane:** A, B

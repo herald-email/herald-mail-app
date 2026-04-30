@@ -63,12 +63,15 @@ type FolderSyncEvent struct {
 }
 
 type DeletionResult struct {
-	MessageID      string `json:"message_id"`
-	Sender         string `json:"sender"`
-	Folder         string `json:"folder"`
-	DeletedCount   int    `json:"deleted_count"`
-	Error          error
-	ConnectionLost bool // true when the IMAP connection dropped during deletion
+	MessageID          string   `json:"message_id"`
+	Sender             string   `json:"sender"`
+	Folder             string   `json:"folder"`
+	DeletedCount       int      `json:"deleted_count"`
+	IsDomain           bool     `json:"is_domain"`
+	IsArchive          bool     `json:"is_archive"`
+	AffectedMessageIDs []string `json:"affected_message_ids,omitempty"`
+	Error              error
+	ConnectionLost     bool // true when the IMAP connection dropped during deletion
 }
 
 // FolderStatus holds message counts for a mailbox
@@ -189,12 +192,13 @@ type ComposeAttachment struct {
 
 // Deletion Request
 type DeletionRequest struct {
-	MessageID string `json:"message_id"`
-	Sender    string `json:"sender"`
-	IsDomain  bool   `json:"is_domain"` // True if Sender is a domain, not a full email
-	Folder    string `json:"folder"`
-	IsArchive bool   `json:"is_archive"` // True = archive instead of delete
-	Response  chan DeletionResult
+	MessageID          string   `json:"message_id"`
+	Sender             string   `json:"sender"`
+	IsDomain           bool     `json:"is_domain"` // True if Sender is a domain, not a full email
+	Folder             string   `json:"folder"`
+	IsArchive          bool     `json:"is_archive"` // True = archive instead of delete
+	AffectedMessageIDs []string `json:"affected_message_ids,omitempty"`
+	Response           chan DeletionResult
 }
 
 // NewEmailsNotification carries new emails found by background polling
