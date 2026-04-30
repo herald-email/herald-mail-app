@@ -460,8 +460,14 @@ func (m *Model) renderKeyHints() string {
 		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
 		if m.composePreserved != nil {
 			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+c: quit"
+			if m.composeField == composeFieldOriginalMessage {
+				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+c: quit"
+			}
 			if m.hasForwardedAttachments() {
 				hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  ctrl+c: quit"
+				if m.composeField == composeFieldOriginalMessage {
+					hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: attachments  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+c: quit"
+				}
 			}
 		}
 	} else if m.activeTab == tabContacts {

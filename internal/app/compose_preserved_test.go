@@ -39,6 +39,34 @@ func newPreservedComposeModel() *Model {
 	return m
 }
 
+func newReplyPreservedComposeModel() *Model {
+	m := New(&stubBackend{}, nil, "me@example.com", nil, false)
+	m.activeTab = tabCompose
+	m.composeField = composeFieldBody
+	m.composeTo.SetValue("sender@example.com")
+	m.composeSubject.SetValue("Re: Styled mail")
+	m.composeBody.SetValue("Thanks, I will review this.")
+	m.replyContextEmail = &models.EmailData{
+		MessageID: "msg-reply",
+		Sender:    "sender@example.com",
+		Subject:   "Styled mail",
+		Date:      time.Date(2026, 4, 28, 9, 30, 0, 0, time.UTC),
+	}
+	m.composePreserved = &composePreservedContext{
+		kind:  models.PreservedMessageKindReply,
+		mode:  models.PreservationModeSafe,
+		email: m.replyContextEmail,
+		body: &models.EmailBody{
+			TextPlain: "Original reply context line one.\nOriginal reply context line two.",
+			TextHTML:  "<p>Original reply context line one.</p><p>Original reply context line two.</p>",
+			InlineImages: []models.InlineImage{
+				{ContentID: "logo", MIMEType: "image/png", Data: []byte("png")},
+			},
+		},
+	}
+	return m
+}
+
 func TestComposeCtrlOCyclesPreservationMode(t *testing.T) {
 	m := newPreservedComposeModel()
 
@@ -150,6 +178,59 @@ func TestRenderForwardComposeSeparatesResponseAndOriginalMessage(t *testing.T) {
 	}
 }
 
+func TestRenderReplyComposeSeparatesResponseAndOriginalMessage(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.loading = false
+	m.updateTableDimensions(100, 32)
+	freezeComposeCursors(m)
+
+	rendered := stripANSI(m.renderComposeView())
+	for _, want := range []string{"Response", "Original message", "sender@example.com", "Styled mail", "Original reply context line one"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("reply compose render missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(m.composeBody.Value(), "Original reply context") {
+		t.Fatalf("compose body should contain only the response note, got %q", m.composeBody.Value())
+	}
+}
+
+func TestReplyComposeOriginalMessagePaneScrollsWithoutEditingResponse(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.loading = false
+	m.composePreserved.body.TextPlain = strings.Join([]string{
+		"Line 01 original context",
+		"Line 02 original context",
+		"Line 03 original context",
+		"Line 04 original context",
+		"Line 05 original context",
+		"Line 06 original context",
+		"Line 07 original context",
+		"Line 08 original context",
+		"Line 09 original context",
+	}, "\n")
+	m.updateTableDimensions(100, 32)
+
+	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	updated := model.(*Model)
+	beforeBody := updated.composeBody.Value()
+	for i := 0; i < 10; i++ {
+		model, _ = updated.handleComposeKey(keyRunes("j"))
+		updated = model.(*Model)
+	}
+
+	if updated.composeBody.Value() != beforeBody {
+		t.Fatalf("scrolling original pane edited response body: %q", updated.composeBody.Value())
+	}
+	rendered := stripANSI(updated.renderComposeView())
+	if !strings.Contains(rendered, "Line 07 original context") {
+		t.Fatalf("expected scrolled original context to show later lines, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Line 01 original context") {
+		t.Fatalf("expected top original context line to scroll out, got:\n%s", rendered)
+	}
+}
+
 func TestRenderForwardComposeSelectedAttachmentUsesActiveFocusStyle(t *testing.T) {
 	oldProfile := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.ANSI256)
@@ -163,6 +244,82 @@ func TestRenderForwardComposeSelectedAttachmentUsesActiveFocusStyle(t *testing.T
 	if !strings.Contains(rendered, "\x1b[38;5;229") || !strings.Contains(rendered, "48;5;57") {
 		t.Fatalf("selected forwarded attachment should use active foreground/background styling, got:\n%q", rendered)
 	}
+}
+
+func TestReplyComposePreservedViewFits80x24(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.loading = false
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	rendered := m.renderMainView()
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+	stripped := stripANSI(rendered)
+	for _, want := range []string{"Response", "Original message"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("reply compose at 80x24 missing %q:\n%s", want, stripped)
+		}
+	}
+}
+
+func TestReplyComposeOriginalMessagePaneIsBoundedAndBalanced(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.loading = false
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	rendered := stripANSI(m.renderMainView())
+	responseHeight, originalHeight := composePreservedPaneHeights(t, rendered)
+	if originalHeight < responseHeight-1 {
+		t.Fatalf("expected original pane to be roughly balanced with response pane, response=%d original=%d\n%s", responseHeight, originalHeight, rendered)
+	}
+	if !strings.Contains(rendered, "┌") || !strings.Contains(rendered, "Original message") {
+		t.Fatalf("expected original message to render inside a bordered pane, got:\n%s", rendered)
+	}
+}
+
+func composePreservedPaneHeights(t *testing.T, rendered string) (responseHeight, originalHeight int) {
+	t.Helper()
+	lines := strings.Split(rendered, "\n")
+	responseDivider := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Response") {
+			responseDivider = i
+			break
+		}
+	}
+	if responseDivider < 0 {
+		t.Fatalf("response divider not found:\n%s", rendered)
+	}
+	responseStart := findLineWithPrefix(lines, responseDivider+1, "┌")
+	responseEnd := findLineWithPrefix(lines, responseStart+1, "└")
+	if responseStart < 0 || responseEnd < 0 {
+		t.Fatalf("response pane border not found:\n%s", rendered)
+	}
+	responseHeight = responseEnd - responseStart + 1
+
+	originalStart := findLineWithPrefix(lines, responseEnd+1, "┌")
+	originalEnd := findLineWithPrefix(lines, originalStart+1, "└")
+	if originalStart < 0 || originalEnd < 0 {
+		t.Fatalf("original pane border not found after response pane:\n%s", rendered)
+	}
+	originalHeight = originalEnd - originalStart + 1
+	return responseHeight, originalHeight
+}
+
+func findLineWithPrefix(lines []string, start int, prefix string) int {
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), prefix) {
+			return i
+		}
+	}
+	return -1
 }
 
 func TestForwardComposePreservedViewFits80x24(t *testing.T) {

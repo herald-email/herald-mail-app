@@ -21,6 +21,7 @@ const (
 	composeFieldBCC
 	composeFieldSubject
 	composeFieldBody
+	composeFieldOriginalMessage
 	composeFieldForwardedAttachments
 )
 
@@ -31,6 +32,7 @@ type composePreservedContext struct {
 	body                 *models.EmailBody
 	forwardedAttachments []models.ForwardedAttachment
 	selectedAttachment   int
+	originalScrollOffset int
 	loadWarning          string
 }
 
@@ -80,10 +82,8 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	}
 	rows += m.attachmentCompletionVisibleRows()
 	if m.composePreserved != nil {
+		rows += m.composeOriginalPreviewRows(tableHeight)
 		rows++
-		if m.composePreserved.kind == models.PreservedMessageKindForward {
-			rows += m.composeOriginalPreviewRows(tableHeight)
-		}
 		rows += len(m.composePreserved.forwardedAttachments)
 	}
 	rows += len(m.composeAttachments)
@@ -256,6 +256,9 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.composeField == composeFieldForwardedAttachments {
 		return m.handleForwardedAttachmentKey(msg)
 	}
+	if m.composeField == composeFieldOriginalMessage {
+		return m.handleOriginalMessageKey(msg)
+	}
 	// Forward all other keys to the focused field
 	var cmd tea.Cmd
 	switch m.composeField {
@@ -274,6 +277,23 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.composeBody, cmd = m.composeBody.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m *Model) handleOriginalMessageKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.composePreserved == nil {
+		return m, nil
+	}
+	switch msg.String() {
+	case "up", "k":
+		if m.composePreserved.originalScrollOffset > 0 {
+			m.composePreserved.originalScrollOffset--
+		}
+	case "down", "j":
+		m.composePreserved.originalScrollOffset++
+	case "enter":
+		m.cycleComposeField()
+	}
+	return m, nil
 }
 
 func (m *Model) cyclePreservationMode() {
@@ -605,8 +625,11 @@ func (m *Model) acceptSuggestion(label string) {
 // Order: To(0) → CC(1) → BCC(2) → Subject(3) → Body(4) → wrap.
 func (m *Model) cycleComposeField() {
 	fieldCount := 5
+	if m.composePreserved != nil {
+		fieldCount = composeFieldOriginalMessage + 1
+	}
 	if m.hasForwardedAttachments() {
-		fieldCount = 6
+		fieldCount = composeFieldForwardedAttachments + 1
 	}
 	m.composeField = (m.composeField + 1) % fieldCount
 	// Clear autocomplete when moving away from address fields (0–2)
@@ -822,7 +845,7 @@ func (m *Model) renderComposeView() string {
 	if divWidth < 10 {
 		divWidth = 10
 	}
-	if m.isForwardCompose() {
+	if m.composePreserved != nil {
 		sb.WriteString(composeSectionDivider("Response", divWidth) + "\n")
 	} else {
 		sb.WriteString(strings.Repeat("─", divWidth) + "\n")
@@ -846,8 +869,8 @@ func (m *Model) renderComposeView() string {
 	if bodyAreaWidth < 10 {
 		bodyAreaWidth = 10
 	}
-	if m.compactForwardCompose() {
-		sb.WriteString(m.renderCompactForwardResponse(plan.Compose.BodyInnerWidth) + "\n")
+	if m.compactPreservedCompose() {
+		sb.WriteString(m.renderCompactPreservedResponse(plan.Compose.BodyInnerWidth) + "\n")
 	} else if m.composeAIPanel {
 		// Split outer width between bordered body pane and bordered AI pane.
 		totalOuterWidth := plan.Compose.BodyInnerWidth + 2
@@ -976,6 +999,10 @@ func (m *Model) compactForwardCompose() bool {
 	return m.isForwardCompose() && m.windowHeight > 0 && m.windowHeight <= 24
 }
 
+func (m *Model) compactPreservedCompose() bool {
+	return m.composePreserved != nil && m.windowHeight > 0 && m.windowHeight <= 24
+}
+
 func composeSectionDivider(label string, width int) string {
 	if width < 10 {
 		width = 10
@@ -992,7 +1019,7 @@ func composeSectionDivider(label string, width int) string {
 	return strings.Repeat("─", left) + title + strings.Repeat("─", right)
 }
 
-func (m *Model) renderCompactForwardResponse(width int) string {
+func (m *Model) renderCompactPreservedResponse(width int) string {
 	if width < 20 {
 		width = 20
 	}
@@ -1010,81 +1037,163 @@ func (m *Model) renderCompactForwardResponse(width int) string {
 }
 
 func (m *Model) composeOriginalPreviewRows(tableHeight int) int {
-	if m.compactForwardCompose() || tableHeight <= 18 {
+	if m.compactPreservedCompose() || tableHeight <= 22 {
 		return 1
 	}
-	if tableHeight <= 26 {
-		return 5
+	rows := (tableHeight - 15) / 2
+	if rows < 3 {
+		return 3
 	}
-	return 6
+	return rows
 }
 
 func (m *Model) renderComposeOriginalMessagePreview(width int) string {
 	ctx := m.composePreserved
-	if ctx == nil || ctx.kind != models.PreservedMessageKindForward {
+	if ctx == nil {
 		return ""
 	}
 	if width < 20 {
 		width = 20
 	}
-	maxRows := m.composeOriginalPreviewRows(m.composeContentHeight())
-	if maxRows < 1 {
-		maxRows = 1
+	outerRows := m.composeOriginalPreviewRows(m.composeContentHeight())
+	if outerRows < 1 {
+		outerRows = 1
 	}
 
+	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
+	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
+	borderColor := defaultTheme.BorderInactive
+	if m.composeField == composeFieldOriginalMessage {
+		dimStyle = dimStyle.Foreground(defaultTheme.TabActiveFg)
+		labelStyle = labelStyle.Foreground(defaultTheme.TabActiveFg).Background(defaultTheme.TabActiveBg)
+		borderColor = defaultTheme.BorderActive
+	}
+	if outerRows == 1 {
+		parts := m.composeOriginalMessageCompactParts(width)
+		return labelStyle.Render(truncateVisual(strings.Join(parts, "  |  "), width))
+	}
+
+	innerRows := outerRows - 2
+	if innerRows < 1 {
+		innerRows = 1
+	}
+	rows := m.composeOriginalMessageRows(width, innerRows)
+	maxOffset := len(rows) - innerRows
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	ctx.originalScrollOffset = clampInt(ctx.originalScrollOffset, 0, maxOffset)
+	start := ctx.originalScrollOffset
+	end := start + innerRows
+	if end > len(rows) {
+		end = len(rows)
+	}
+	visible := rows[start:end]
+	for i, row := range visible {
+		style := dimStyle
+		if start+i == 0 {
+			style = labelStyle
+		}
+		visible[i] = style.Render(truncateVisual(row, width))
+	}
+	content := fitPanelContentHeight(strings.Join(visible, "\n"), innerRows)
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
+		Width(width).
+		Height(innerRows).
+		Render(content)
+}
+
+func (m *Model) composeOriginalMessageCompactParts(width int) []string {
+	ctx := m.composePreserved
+	parts := []string{"Original message"}
+	sender, subject, _ := composeOriginalMessageHeader(ctx)
+	bodyLines := composeOriginalMessageBodyLines(ctx, width)
+	maxOffset := len(bodyLines) - 1
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	ctx.originalScrollOffset = clampInt(ctx.originalScrollOffset, 0, maxOffset)
+	for _, part := range []string{sender, subject} {
+		if strings.TrimSpace(part) != "" {
+			parts = append(parts, strings.TrimSpace(part))
+		}
+	}
+	if len(bodyLines) > 0 {
+		parts = append(parts, bodyLines[ctx.originalScrollOffset])
+	}
+	return parts
+}
+
+func (m *Model) composeOriginalMessageRows(width, visibleRows int) []string {
+	ctx := m.composePreserved
+	sender, subject, date := composeOriginalMessageHeader(ctx)
+	if visibleRows <= 4 {
+		parts := []string{"Original message"}
+		for _, part := range []string{sender, subject, date} {
+			if strings.TrimSpace(part) != "" {
+				parts = append(parts, strings.TrimSpace(part))
+			}
+		}
+		rows := []string{strings.Join(parts, "  |  ")}
+		rows = append(rows, composeOriginalMessageBodyLines(ctx, width)...)
+		return rows
+	}
+
+	rows := []string{"Original message"}
+	if sender != "" {
+		rows = append(rows, "From: "+sender)
+	}
+	if subject != "" {
+		rows = append(rows, "Subject: "+subject)
+	}
+	if date != "" {
+		rows = append(rows, "Date: "+date)
+	}
+	rows = append(rows, composeOriginalMessageBodyLines(ctx, width)...)
+	return rows
+}
+
+func composeOriginalMessageHeader(ctx *composePreservedContext) (sender, subject, date string) {
+	if ctx == nil || ctx.email == nil {
+		return "", "", ""
+	}
+	sender = ctx.email.Sender
+	subject = ctx.email.Subject
+	if !ctx.email.Date.IsZero() {
+		date = ctx.email.Date.Format("Mon, 02 Jan 2006 15:04")
+	}
+	return sender, subject, date
+}
+
+func composeOriginalMessageBodyLines(ctx *composePreservedContext, width int) []string {
 	body := ""
-	if ctx.body != nil {
+	if ctx != nil && ctx.body != nil {
 		body = strings.TrimSpace(stripInvisibleChars(ctx.body.TextPlain))
 	}
-	if body == "" && ctx.body != nil && strings.TrimSpace(ctx.body.TextHTML) != "" {
+	if body == "" && ctx != nil && ctx.body != nil && strings.TrimSpace(ctx.body.TextHTML) != "" {
 		body = "(Original has HTML-only content; Herald will preserve it when sending.)"
 	}
 	if body == "" {
 		body = "(Original message body unavailable.)"
 	}
-	body = strings.Join(strings.Fields(body), " ")
 
-	sender := ""
-	subject := ""
-	date := ""
-	if ctx.email != nil {
-		sender = ctx.email.Sender
-		subject = ctx.email.Subject
-		if !ctx.email.Date.IsZero() {
-			date = ctx.email.Date.Format("Mon, 02 Jan 2006 15:04")
+	var lines []string
+	for _, raw := range strings.Split(body, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			lines = append(lines, "")
+			continue
 		}
-	}
-
-	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
-	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
-	if maxRows == 1 {
-		parts := []string{"Original message"}
-		for _, part := range []string{sender, subject, body} {
-			if strings.TrimSpace(part) != "" {
-				parts = append(parts, strings.TrimSpace(part))
-			}
+		wrapped := wrapLines(line, width)
+		if len(wrapped) == 0 {
+			lines = append(lines, line)
+			continue
 		}
-		return labelStyle.Render(truncateVisual(strings.Join(parts, "  |  "), width))
+		lines = append(lines, wrapped...)
 	}
-
-	rows := []string{labelStyle.Render("Original message")}
-	if sender != "" {
-		rows = append(rows, dimStyle.Render(truncateVisual("From: "+sender, width)))
-	}
-	if subject != "" && len(rows) < maxRows {
-		rows = append(rows, dimStyle.Render(truncateVisual("Subject: "+subject, width)))
-	}
-	if date != "" && len(rows) < maxRows {
-		rows = append(rows, dimStyle.Render(truncateVisual("Date: "+date, width)))
-	}
-	if len(rows) < maxRows {
-		remaining := maxRows - len(rows)
-		bodyLines := wrapLines(body, width)
-		for i := 0; i < remaining && i < len(bodyLines); i++ {
-			rows = append(rows, dimStyle.Render(truncateVisual(bodyLines[i], width)))
-		}
-	}
-	return strings.Join(rows, "\n")
+	return lines
 }
 
 func (m *Model) composeContentHeight() int {

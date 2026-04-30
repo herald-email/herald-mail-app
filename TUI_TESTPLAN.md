@@ -513,7 +513,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Open a Timeline message that has an HTML body, inline image, and attachment.
-2. Press `R` and confirm Compose opens as a top-note editor rather than pasting the original body into the textarea.
+2. Press `R` and confirm Compose opens as a top-note editor with a read-only `Original message` pane rather than pasting the original body into the textarea.
 3. Press `Ctrl+O` repeatedly and confirm the preservation mode cycles through Safe, Fidelity, and Privacy.
 4. Return to Timeline, press `F`, and confirm Compose shows separate `Response` and `Original message` regions.
 5. Confirm forwarded attachments appear below Compose as included original attachments.
@@ -523,7 +523,9 @@ Check these states during every applicable lane:
 **Expect:**
 - Replies and forwards show a concise preserved-content summary with mode, original HTML status, inline image count, and forwarded attachment count.
 - The body textarea contains only the user's new note, not the converted original message.
+- Reply Compose labels the editable top note as `Response` and shows a read-only `Original message` preview rendered from preserved original content.
 - Forward Compose labels the editable top note as `Response` and shows a read-only `Original message` preview rendered from preserved original content.
+- When the original-message pane has focus, `j`/`k` or arrow keys scroll the source without changing the editable response.
 - The forwarded attachment focused row uses the same active focus color language as other navigable lists.
 - Reply sends preserve the original HTML quote and threading headers.
 - Forward sends preserve original HTML, preserve referenced inline images, include original attachments by default, and omit attachments toggled off with `x`.

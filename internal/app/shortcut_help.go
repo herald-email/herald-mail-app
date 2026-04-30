@@ -298,6 +298,7 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 	}
 	if m.composePreserved != nil {
 		entries = append(entries, shortcutHelpEntry{"Ctrl+O", "cycle preservation mode for the original reply or forward context"})
+		entries = append(entries, shortcutHelpEntry{"j / k", "scroll the focused original-message context"})
 		if m.hasForwardedAttachments() {
 			entries = append(entries, shortcutHelpEntry{"x", "toggle whether the selected forwarded attachment is included"})
 		}

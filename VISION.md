@@ -367,7 +367,7 @@ Write in Markdown, deliver as properly formatted HTML email. The compose tab is 
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
 - [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use Alt chords while composing
-- [x] Preserved HTML replies and forwards: Compose edits only the user's top note while Herald sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
+- [x] Preserved HTML replies and forwards: Compose edits only the user's top note, shows the original message as read-only context while composing replies and forwards, and sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
 - [x] Forwarded attachments are included by default and individually toggleable before sending
 - [x] Timeline drafts open as editable Compose messages with recipients, subject, and body restored from the saved draft; sending deletes the source draft only after SMTP success
 - [x] Draft autosave replacement saves the new draft before deleting the previously saved draft, so a failed save cannot discard the only copy
@@ -657,7 +657,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] `F` key in Timeline opens Compose pre-filled for forward (Fwd: subject, quoted body)
 - [x] `R` key in Timeline opens Compose pre-filled for reply (Re: subject, quoted body, To pre-filled)
 - [x] Reply/forward Compose shows a preserved-content summary with HTML, inline image, attachment, and preservation-mode status
-- [x] Forward Compose separates the editable response from a read-only original-message preview so users can confirm what they are forwarding
+- [x] Reply/forward Compose separates the editable response from a read-only original-message preview so users can keep source context visible while writing
 - [x] `D` in Timeline deletes the highlighted email (single message)
 - [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
 - [x] `Space` in Timeline selects messages for bulk delete/archive; collapsed thread rows select the represented thread
