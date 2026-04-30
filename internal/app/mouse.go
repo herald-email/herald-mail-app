@@ -77,10 +77,6 @@ func (m *Model) handleMouseTabClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 				if m.activeTab != tabTimeline {
 					return m.switchToTimeline(), true
 				}
-			case tabCompose:
-				if m.activeTab != tabCompose {
-					return m.switchToCompose(), true
-				}
 			case tabCleanup:
 				if m.activeTab != tabCleanup {
 					return m.switchToCleanup(), true

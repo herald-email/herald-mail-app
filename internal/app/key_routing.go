@@ -169,16 +169,11 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	case "f2", "alt+2":
-		if m.canInteractWithVisibleData() && m.activeTab != tabCompose {
-			return m, m.switchToCompose(), true
-		}
-		return m, nil, true
-	case "f3", "alt+3":
 		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
 			return m, m.switchToCleanup(), true
 		}
 		return m, nil, true
-	case "f4", "alt+4":
+	case "f3", "alt+3":
 		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
 			return m, m.switchToContacts(), true
 		}
@@ -267,22 +262,13 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
 		}
-		if m.canInteractWithVisibleData() && m.activeTab != tabCompose {
-			return m, m.switchToCompose(), true
+		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
+			return m, m.switchToCleanup(), true
 		}
 		return m, nil, true
 	case "3":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
-			return model, cmd, true
-		}
-		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
-			return m, m.switchToCleanup(), true
-		}
-		return m, nil, true
-	case "4":
-		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 3 {
-			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
 			return model, cmd, true
 		}
 		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
@@ -292,6 +278,12 @@ func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, m.loadContacts(), true
 		}
 		return m, nil, true
+	case "4":
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 3 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
+			return model, cmd, true
+		}
+		return m, nil, false
 	case "5":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 4 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[4])
@@ -387,8 +379,10 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 			m.composeAIDiff = ""
 			m.composeAIInput.Blur()
 			m.composeAIResponse.Blur()
-		} else {
+		} else if m.composeStatus != "" {
 			m.composeStatus = ""
+		} else {
+			return m, m.returnFromCompose()
 		}
 		return m, nil
 	}
@@ -397,7 +391,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 
 func isGlobalContactsKey(key string) bool {
 	switch key {
-	case "1", "2", "3", "4", "q", "ctrl+c", "r", "f", "c", "l", "L":
+	case "1", "2", "3", "q", "ctrl+c", "r", "f", "c", "l", "L":
 		return true
 	}
 	return false

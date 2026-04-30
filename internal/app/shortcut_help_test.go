@@ -28,7 +28,7 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 	if updated.timeline.searchMode {
 		t.Fatal("expected plain ? not to open Timeline semantic search")
 	}
-	if !strings.Contains(rendered, "F1-F4") || !strings.Contains(rendered, "Timeline") {
+	if !strings.Contains(rendered, "F1-F3") || !strings.Contains(rendered, "Timeline") || !strings.Contains(rendered, "open a blank Compose") {
 		t.Fatalf("expected global and Timeline shortcuts in help, got:\n%s", rendered)
 	}
 

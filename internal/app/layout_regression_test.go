@@ -691,7 +691,7 @@ func TestSwitchToCleanup_RecalculatesWideSummaryColumns(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
 	m = updated.(*Model)
 
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 	m = updated.(*Model)
 
 	rendered := stripANSI(m.renderMainView())

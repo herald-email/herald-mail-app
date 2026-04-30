@@ -89,7 +89,7 @@ If sending fails with attachments, reduce file size or verify SMTP provider limi
 
 ![Attachment save prompt in Timeline preview](/screenshots/attachments-save-prompt.png)
 
-<!-- HERALD_SCREENSHOT id="attachments-compose-added" page="attachments" alt="Compose with outgoing attachment added" state="demo mode, 120x40, Compose draft with attachment" desc="Shows attachment line in Compose after adding a local file and the send/preview key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press ctrl+a; enter a fixture path; press enter" -->
+<!-- HERALD_SCREENSHOT id="attachments-compose-added" page="attachments" alt="Compose with outgoing attachment added" state="demo mode, 120x40, Compose draft with attachment" desc="Shows attachment line in Compose after adding a local file and the send/preview key hints." capture="tmux demo 120x40; ./bin/herald --demo; press C; press ctrl+a; enter a fixture path; press enter" -->
 
 ![Compose with outgoing attachment added](/screenshots/attachments-compose-added.png)
 

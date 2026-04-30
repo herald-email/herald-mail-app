@@ -116,7 +116,7 @@ If Compose AI says "Write something first", add body text or open Compose from a
 
 ![AI classification progress in status bar](/screenshots/ai-classification-progress.png)
 
-<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI panel with response" desc="Shows AI rewrite response, quick action controls, custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 2; write body; press ctrl+g; press 1" -->
+<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI panel with response" desc="Shows AI rewrite response, quick action controls, custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; write body; press ctrl+g; press 1" -->
 
 ![Compose AI assistant response](/screenshots/ai-compose-assist.png)
 

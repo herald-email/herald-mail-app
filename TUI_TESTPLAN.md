@@ -231,16 +231,17 @@ Check these states during every applicable lane:
 **Sizes:** all except `50x15`
 
 **Steps:**
-1. Press `F1`, `F2`, `F3`, `F4`.
+1. Press `F1`, `F2`, `F3`.
 2. Capture after each switch.
-3. In a non-text browse context, press `1`, `2`, `3`, `4` as compatibility aliases.
+3. In a non-text browse context, press `1`, `2`, `3` as compatibility aliases.
 
 **Expect:**
 - Correct tab highlight.
 - Tab-specific layout appears.
-- Key hints change with the tab and consistently advertise `F1-F4: tabs`.
+- Key hints change with the tab and consistently advertise `F1-F3: tabs`.
 - Key hints consistently include `?: help` when there is room or wrapped hint space.
 - Browse-number aliases keep working but are not the primary tab hint.
+- Compose is not shown as a top-level tab.
 - No stale status fragments from previous tabs.
 
 ### TC-03 — Focus border exclusivity
@@ -403,7 +404,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Compose with a non-empty draft body.
+1. Open Timeline and press `C` to open Compose with a non-empty draft body.
 2. Press `Ctrl+G` to open the AI assistant.
 3. Trigger one quick action (`1`-`5`) or enter a custom prompt and press `Enter`.
 4. Wait for a suggestion or bounded failure.
@@ -423,7 +424,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Open Compose with either a non-empty draft body or reply context.
+1. Open Timeline and press `C` for a non-empty draft body, or press `R` from a Timeline message for reply context.
 2. Press `Ctrl+J` to request a subject suggestion.
 3. Capture the hint line when it appears.
 4. Press `Tab` to accept the suggestion.
@@ -456,7 +457,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Compose and cycle focus through fields and preview.
+1. Open Timeline, press `C` to open Compose, and cycle focus through fields and preview.
 2. Open Contacts and cycle list/detail/preview focus.
 3. Capture each state.
 
@@ -471,19 +472,21 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Compose.
+1. Open Timeline and press `C` to open Compose.
 2. Type `q123` into the focused address field, then tab to the body and type `q123` again.
-3. Press `F1`, return to Compose with `F2`, then press `F3` and `F4`.
-4. Return to Compose with `F2`, then repeat the same tab switching with `Alt+1/2/3/4` where the terminal supports Alt-modified digits.
-5. Return to Compose with `F2`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
+3. Press `Esc`, confirm Timeline returns, press `C` again, then press `F1`, `F2`, and `F3` from Compose in separate passes.
+4. Return to Timeline and press `C`, then repeat the same tab switching with `Alt+1/2/3` where the terminal supports Alt-modified digits.
+5. Return to Timeline and press `C`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
 6. Press `Alt+R` from Compose.
 7. Repeat with Timeline search open: type `q` into the query and press `Ctrl+C` only after confirming the query text is editable.
 
 **Expect:**
 - Plain `q` and digits remain in Compose text fields and do not quit or switch tabs.
-- `F1/F2/F3/F4` switch tabs from Compose, and leaving a non-empty draft starts draft persistence.
-- `Alt+1/2/3/4` keep working as secondary aliases when the terminal sends those chords.
-- Compose and browse hints use `F1-F4: tabs` as the visible tab-switching annotation rather than mixing number-key and Alt-key tab labels.
+- `Esc` from Compose returns to the Timeline state that opened it after local Compose transient state is dismissed.
+- `F1/F2/F3` switch to Timeline/Cleanup/Contacts from Compose, and leaving a non-empty draft starts draft persistence.
+- `Alt+1/2/3` keep working as secondary aliases when the terminal sends those chords.
+- Compose and browse hints use `F1-F3: tabs` as the visible tab-switching annotation rather than mixing number-key and Alt-key tab labels.
+- Timeline `C` opens blank Compose; lowercase `c` still opens chat.
 - `Alt+L` opens and closes logs from Compose without typing into the draft.
 - `Alt+C` opens chat from Compose when width allows, and `Esc` closes it cleanly.
 - `Alt+F` toggles the sidebar preference from Compose without typing into the draft.
@@ -497,7 +500,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start `/tmp/herald --demo` with no SMTP credentials configured.
-2. Open Compose, fill To, Subject, and Body.
+2. Open Timeline, press `C`, then fill To, Subject, and Body.
 3. Press `Ctrl+S` and capture the resulting status line.
 4. Repeat at `80x24`.
 
@@ -515,7 +518,7 @@ Check these states during every applicable lane:
 1. Open a Timeline message that has an HTML body, inline image, and attachment.
 2. Press `R` and confirm Compose opens as a top-note editor with a read-only `Original message` pane rather than pasting the original body into the textarea.
 3. Press `Ctrl+O` repeatedly and confirm the preservation mode cycles through Safe, Fidelity, and Privacy.
-4. Return to Timeline, press `F`, and confirm Compose shows separate `Response` and `Original message` regions.
+4. Press `Esc` to return to Timeline, press `F`, and confirm Compose shows separate `Response` and `Original message` regions.
 5. Confirm forwarded attachments appear below Compose as included original attachments.
 6. Focus the forwarded attachment list, move with `j`/`k`, press `x` to mark one attachment removed, then press `x` again to include it.
 7. Repeat at `80x24` and confirm the response/original split and summary remain readable without overflow.
@@ -538,7 +541,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Create a temp directory with two files that share a prefix, one subdirectory, one filename containing a space, and one dotfile.
-2. Open Compose, press `Ctrl+A`, type the temp path plus the shared file prefix, and press `Tab`.
+2. Open Timeline, press `C` to open Compose, press `Ctrl+A`, type the temp path plus the shared file prefix, and press `Tab`.
 3. Press `Tab` again when the common prefix is exhausted.
 4. Cycle suggestions with `Tab`, `Shift+Tab`, `up`, and `down`.
 5. Select a directory and press `Enter`, then select a file and press `Enter`.
@@ -568,7 +571,7 @@ Check these states during every applicable lane:
 7. Repeat from a draft row without opening Compose.
 8. Press `E` from the draft row or preview.
 9. Confirm Compose opens with the draft recipients, subject, and body restored.
-10. Send the message in demo mode and return to Timeline.
+10. Send the message in demo mode and press `Esc` to return to Timeline.
 11. Repeat at `80x24`; at `50x15`, confirm the minimum-size guard or compact layout does not render overlapping draft labels.
 
 **Expect:**
@@ -588,7 +591,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Resize the session to `80x24`.
-2. Open Timeline, Compose, Cleanup, Contacts.
+2. Open Timeline, Timeline-launched Compose, Cleanup, Contacts.
 3. Resize to `50x15`.
 4. Capture all screens.
 
@@ -1292,6 +1295,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode with mouse capture enabled.
 2. Click each top tab and confirm the active tab changes without typing into Compose fields.
+3. Confirm the top tab row contains Timeline, Cleanup, and Contacts only.
 3. In Timeline, click a visible single-message row to open preview, then wheel over the list and the preview.
 4. In Timeline, click a collapsed thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays collapsed. Click the same selected root again; confirm the thread expands.
 5. In Timeline, click an expanded thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays expanded. Click the same selected root again; confirm the thread folds.

@@ -868,6 +868,7 @@ func (m *Model) timelineBodyLoadedFor(email *models.EmailData) bool {
 }
 
 func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
+	m.rememberComposeReturn()
 	m.activeTab = tabCompose
 	m.composeTo.SetValue("")
 	m.composeSubject.SetValue(buildForwardSubject(email.Subject))
@@ -887,6 +888,7 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 }
 
 func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
+	m.rememberComposeReturn()
 	m.activeTab = tabCompose
 	m.replyContextEmail = email
 	m.composeAIThread = true
@@ -913,6 +915,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	if subject == "" && email != nil {
 		subject = email.Subject
 	}
+	m.rememberComposeReturn()
 	m.activeTab = tabCompose
 	m.replyContextEmail = nil
 	m.composeAIThread = false
@@ -1356,7 +1359,11 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timeline.selectedEmail != nil {
 		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
 	}
-	return joinHintSegments(append([]string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open"}, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+	segments := []string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open"}
+	if m.timelineSelectedCount() == 0 {
+		segments = append(segments, "C: compose")
+	}
+	return joinHintSegments(append(segments, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
 }
 
 func joinHintSegments(segments ...string) string {
@@ -1839,6 +1846,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			if email := m.currentTimelineRowEmail(); email != nil {
 				return m, m.startTimelineForward(email), true
 			}
+		}
+		return m, nil, true
+	case "C":
+		if m.canInteractWithVisibleData() {
+			return m, m.openBlankComposeFromCurrent(), true
 		}
 		return m, nil, true
 	case "/":

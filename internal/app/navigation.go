@@ -62,25 +62,21 @@ func (m *Model) switchToTimeline() tea.Cmd {
 		m.closeCleanupPreviewForTabSwitch()
 	}
 	m.activeTab = tabTimeline
+	m.clearComposeReturn()
 	m.setFocusedPanel(panelTimeline)
 	cmds = append(cmds, m.loadTimelineEmails())
 	return tea.Batch(cmds...)
 }
 
 func (m *Model) switchToCompose() tea.Cmd {
-	m.clearContactsStatus()
-	if m.activeTab == tabCleanup {
-		m.closeCleanupPreviewForTabSwitch()
-	}
-	m.activeTab = tabCompose
-	m.resetComposeMode()
-	return nil
+	return m.openBlankComposeFromCurrent()
 }
 
 func (m *Model) switchToCleanup() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.clearContactsStatus()
 	m.activeTab = tabCleanup
+	m.clearComposeReturn()
 	m.setFocusedPanel(panelSummary)
 	return tea.Batch(cmds...)
 }
@@ -91,6 +87,7 @@ func (m *Model) switchToContacts() tea.Cmd {
 		m.closeCleanupPreviewForTabSwitch()
 	}
 	m.activeTab = tabContacts
+	m.clearComposeReturn()
 	m.contactFocusPanel = 0
 	m.contactDetail = nil
 	m.contactDetailEmails = nil
