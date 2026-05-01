@@ -19,10 +19,20 @@ Top-level fields:
 - `plan`: Short summary, whether user questions were needed, and key decisions
 - `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
 - `publication`: Requested publish actions that were actually performed plus a short summary
+- `visual_evidence`: Whether the canonical visual gate is required, its current status, required terminal sizes, and the recorded before/after pairs
 - `verification`: Required gates and observed results
 - `metrics`: Retry count, diff stats, human follow-up flag
 - `outcome`: Final outcome summary and remaining risks
 - `latest_feedback`: Most recent reflection feedback strings
+
+## `run.json.visual_evidence`
+
+Use this block to make TUI-facing verification explicit instead of implicit. It should track whether the run owes canonical visual evidence and whether that gate is actually closed.
+
+- `required`: Whether the task must close the visual-evidence gate
+- `status`: `pending`, `passed`, or `not-needed`
+- `required_sizes`: Canonical terminal sizes such as `220x50`, `80x24`, and `50x15`
+- `pairs`: Recorded evidence pairs, each including `state_label`, `size`, before/after PNG paths, before/after ANSI-text paths, repro steps, snapshot-fidelity notes, and completion issues if any remain
 
 ## `evidence/manifest.json`
 
@@ -63,6 +73,7 @@ Scoring is intentionally simple in v1:
 
 - gate completeness
 - preflight readiness
+- visual-evidence readiness
 - baseline cleanliness
 - retry efficiency
 - human follow-up required

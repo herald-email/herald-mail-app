@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from artifact_io import save_json, save_text
+from visual_evidence import VISUAL_GATE, default_visual_evidence
 
 
 def slugify(value: str) -> str:
@@ -70,6 +71,7 @@ def main() -> int:
     surfaces = parse_surfaces(args.surfaces)
     product_truth_required = args.requires_product_truth or args.task_type == "feature"
     product_truth_status = infer_product_truth_status(args, product_truth_required)
+    visual_required = "tui" in surfaces
 
     evidence_dir.mkdir(parents=True, exist_ok=True)
     reflections_dir.mkdir(parents=True, exist_ok=True)
@@ -127,8 +129,9 @@ def main() -> int:
             "actions": [],
             "summary": "",
         },
+        "visual_evidence": default_visual_evidence(required=visual_required),
         "verification": {
-            "required_gates": [],
+            "required_gates": [VISUAL_GATE] if visual_required else [],
             "results": [],
         },
         "metrics": {

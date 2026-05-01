@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T18:35:30 | Canonical visual-evidence gate for TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T17:21:43 | Workflow safety preflight and serialized artifact writes | validated | 30 | 86.46153846153847 | 100% | 0 | 2 |
 | 2026-05-01T17:04:56 | Reusable remediation templates for repeated test failures | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:47:32 | Visible post-publish self-reflection | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
@@ -19,6 +20,54 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Canonical visual-evidence gate for TUI runs
+
+- Logged at: 2026-05-01T18:35:30+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Recovered reflections kept showing that screenshot guidance was useful but optional, which made small-terminal regressions and repro-path drift easy to rediscover.
+- Summary: Added a first-class visual-evidence gate so TUI-facing Herald autopilot runs must record matched before/after PNG plus ANSI captures at 220x50, 80x24, and 50x15, and surfaced that gate in scoring, reports, and optimizer summaries.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.42857142857143
+- Average retries: 0.6666666666666666
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 25
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 17
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+- Visual-required runs: 1
+- Visual-ready runs: 1
+- Visual readiness rate: 1.0
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +0.9670329670329636
+- average_retry_count: +0.0
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: -1
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: -1
+- preflight_required_runs: +0
+- preflight_ready_runs: +0
+- preflight_readiness_rate: +0.0
+Changes:
+- Added a shared visual-evidence model plus record_visual_evidence.py for canonical TUI gate capture.
+- Updated bootstrap, scoring, reports, and optimizer summaries to treat visual evidence as an explicit readiness axis.
+- Validated a synthetic TUI run that closed the gate across all required sizes and rendered the new report section.
+Recommended experiment at log time:
+- `template-red-compose-comma-alias-feedback` (medium value, low risk)
+Article notes:
+- This phase turns screenshots from optional decoration into structured verification evidence, which is a cleaner story for a future article about agentic UI development.
+- The gate also preserves repro-path knowledge, making visual verification more repeatable than ad hoc screenshots.
+Follow-ups:
+- Add the missing input-routing safety gate for shortcut and alias changes.
+- Measure whether explicit visual gating reduces TUI retry count or post-handoff questions.
 
 ### Workflow safety preflight and serialized artifact writes
 
@@ -40,6 +89,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: -0.8241758241758248
@@ -82,6 +134,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -124,6 +179,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: -0.04761904761903679
@@ -166,6 +224,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: +4.333333333333329
@@ -206,6 +267,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +15
 - average_score: -0.4000000000000057
@@ -245,6 +309,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +1
 - average_score: -2.2666666666666657
@@ -284,6 +351,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -322,6 +392,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Visual-required runs: n/a
+- Visual-ready runs: n/a
+- Visual readiness rate: n/a
 Changes:
 - Created the Herald autopilot skill and run-artifact schema.
 - Added scoring, reflection, report rendering, and the first optimizer state layer.

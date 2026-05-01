@@ -6,6 +6,7 @@ from pathlib import Path
 
 from artifact_io import load_json, save_json, save_text
 from remediation_templates import load_remediation_templates, match_remediation_template
+from visual_evidence import covered_sizes, ensure_visual_evidence, missing_sizes, summarize_visual_gate, visual_feedback_messages
 
 
 def load_optional_json(path: Path):
@@ -25,6 +26,7 @@ def artifact_path(run: dict, artifact: str) -> str:
 
 def visual_screenshot_sections(run: dict, results: list[dict]) -> list[str]:
     screenshots = []
+    seen: set[tuple[str, str]] = set()
     for item in results:
         artifact = item.get("artifact", "")
         if item.get("kind") != "screenshot" or not artifact.lower().endswith(".png"):
@@ -37,7 +39,12 @@ def visual_screenshot_sections(run: dict, results: list[dict]) -> list[str]:
             group = "After"
         else:
             continue
-        screenshots.append((group, summary or group, artifact_path(run, artifact)))
+        path = artifact_path(run, artifact)
+        dedupe_key = (group, path)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        screenshots.append((group, summary or group, path))
 
     if not screenshots:
         return []
@@ -74,6 +81,47 @@ def latest_preflight_results(preflight: dict) -> list[dict]:
     return [latest[name] for name in sorted(latest)]
 
 
+def latest_verification_results(run: dict) -> list[dict]:
+    latest: dict[str, dict] = {}
+    for item in run.get("verification", {}).get("results", []):
+        gate = item.get("gate")
+        if gate:
+            latest[gate] = item
+    return [latest[name] for name in sorted(latest)]
+
+
+def visual_gate_section(run: dict) -> list[str]:
+    visual = ensure_visual_evidence(run)
+    lines = [
+        "",
+        "## Visual Evidence Gate",
+        f"- Required: {'yes' if visual.get('required') else 'no'}",
+        f"- Status: {visual.get('status', 'not recorded')}",
+        f"- Required sizes: {', '.join(visual.get('required_sizes', [])) if visual.get('required_sizes') else 'none recorded'}",
+        f"- Covered sizes: {', '.join(sorted(covered_sizes(visual))) if covered_sizes(visual) else 'none yet'}",
+        f"- Summary: {summarize_visual_gate(visual)}",
+    ]
+    missing = missing_sizes(visual)
+    if missing:
+        lines.append(f"- Missing sizes: {', '.join(missing)}")
+    if visual.get("pairs"):
+        lines.append("- Recorded pairs:")
+        for pair in sorted(visual["pairs"], key=lambda item: (item.get("size", ""), item.get("state_label", ""))):
+            issues = pair.get("issues") or []
+            lines.append(
+                f"- `{pair.get('state_label', 'state')}` at `{pair.get('size', 'unknown')}` — {'complete' if pair.get('complete') else 'incomplete'}"
+            )
+            if pair.get("repro_steps"):
+                lines.append(f"- Repro: {' -> '.join(pair['repro_steps'])}")
+            if issues:
+                lines.append(f"- Needs: {', '.join(issues)}")
+            if pair.get("note"):
+                lines.append(f"- Note: {pair['note']}")
+    else:
+        lines.append("- No visual evidence pairs recorded.")
+    return lines
+
+
 def build_self_reflection(run: dict, score: dict | None, reflections: list[Path], results: list[dict]) -> dict:
     publication = run.get("publication", {})
     actions = unique(publication.get("actions", []))
@@ -82,7 +130,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     preflight_results = latest_preflight_results(preflight)
     failed_preflight = [item for item in preflight_results if item.get("status") == "fail"]
     required = set(run.get("verification", {}).get("required_gates", []))
-    required_results = [item for item in results if item.get("gate") in required]
+    required_results = [item for item in latest_verification_results(run) if item.get("gate") in required]
     skipped = [item for item in results if item.get("status") == "skip"]
     failed_required = [item for item in required_results if item.get("status") == "fail"]
     latest_feedback = unique(run.get("latest_feedback", []))
@@ -90,6 +138,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     repo_root = Path(run["paths"]["repo_root"])
     current_brief = load_optional_json(repo_root / ".superpowers" / "autopilot" / "state" / "improvement-brief.json")
     templates = load_remediation_templates(repo_root)
+    visual = ensure_visual_evidence(run)
 
     strengths: list[str] = []
     drag: list[str] = []
@@ -108,6 +157,10 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         strengths.append(f"All required verification gates passed ({len(required_results)}/{len(required_results)}).")
     if product_truth.get("required") and product_truth.get("status") in {"consulted", "updated-first"}:
         strengths.append(f"Product intent was grounded through `{product_truth.get('status')}` doc usage.")
+    if visual.get("required") and visual.get("status") == "passed":
+        strengths.append(
+            f"Canonical visual evidence was captured across {len(covered_sizes(visual))}/{len(visual.get('required_sizes', []))} required terminal sizes."
+        )
     if retry_count == 0:
         strengths.append("The run reached handoff without needing a bounded retry loop.")
 
@@ -125,6 +178,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         drag.append("Product docs informed the run, but the workflow did not update them first before implementation.")
     if score and score.get("status") == "needs_followup":
         drag.append("The scored handoff still flagged human follow-up as needed.")
+    drag.extend(visual_feedback_messages(visual)[:3])
 
     if retry_count > 0 or latest_feedback:
         if reflections:
@@ -229,7 +283,7 @@ def main() -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     required = set(run["verification"].get("required_gates", []))
-    results = run["verification"].get("results", [])
+    results = latest_verification_results(run)
     manifest_path = run_dir / "evidence" / "manifest.json"
     evidence_items = load_json(manifest_path) if manifest_path.exists() else results
     required_results = [item for item in results if item["gate"] in required]
@@ -244,6 +298,7 @@ def main() -> int:
     preflight = run.get("preflight", {})
     preflight_results = latest_preflight_results(preflight)
     preflight_resources = preflight.get("resources", {})
+    ensure_visual_evidence(run)
     self_reflection = build_self_reflection(run, score, reflections, results)
     self_reflection_json_path = run_dir / "self_reflection.json"
     self_reflection_md_path = run_dir / "self_reflection.md"
@@ -294,6 +349,7 @@ def main() -> int:
         run["outcome"].get("summary") or "No outcome summary recorded.",
         ]
     )
+    lines.extend(visual_gate_section(run))
 
     lines.extend(visual_screenshot_sections(run, evidence_items))
     lines.extend(["", "## Verification"])
@@ -372,6 +428,7 @@ def main() -> int:
                 f"- Overall score: {score['overall_score']}",
                 f"- Status: {score['status']}",
                 f"- Preflight readiness: {score['axes'].get('preflight_readiness', 'n/a')}",
+                f"- Visual evidence readiness: {score['axes'].get('visual_evidence_readiness', 'n/a')}",
                 f"- Required gates passed: {score['counts']['required_passed']}/{score['counts']['required_gates']}",
                 f"- Required preflight checks passed: {score['counts'].get('preflight_required', 0) - score['counts'].get('preflight_failed', 0) - score['counts'].get('preflight_missing', 0)}/{score['counts'].get('preflight_required', 0)}",
                 f"- Retry count: {score['counts']['retry_count']}",

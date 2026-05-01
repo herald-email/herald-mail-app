@@ -55,6 +55,7 @@ Use that run folder for:
 - preflight results and prepared environment resources
 - product-truth grounding notes
 - publication metadata when commit, merge, push, or PR actions happen
+- canonical visual-evidence gate state, repro-path notes, and before/after image-plus-text pairs for TUI-facing work
 - evidence manifest
 - before/after PNG screenshots for visual TUI changes
 - reflections
@@ -73,6 +74,7 @@ Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for imp
 - Run environment preflight before implementation whenever the task touches docs, SSH, or long-running media workflows
 - Required failures generate explicit natural-language feedback
 - Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time
+- TUI-facing runs should record canonical visual evidence at `220x50`, `80x24`, and `50x15` before they can claim handoff readiness
 - `run.json` and `evidence/manifest.json` updates should be serialized so adjacent helpers cannot clobber each other
 - Score the run on comparable axes so future versions can support multiple candidates without changing the interface
 
@@ -83,6 +85,7 @@ Success means:
 - the task has a branch
 - the task has a worktree
 - required preflight is recorded when the task touches docs, SSH, or media-heavy work
+- required visual evidence is recorded when the task touches the TUI
 - required verification is recorded
 - the report is rendered
 - requested publish actions are recorded when the user asked for them

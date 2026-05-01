@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 
 from optimizer_common import list_runs, now_utc, save_json, save_text, state_dir
+from visual_evidence import ensure_visual_evidence
 
 
 def main() -> int:
@@ -24,6 +25,7 @@ def main() -> int:
     product_truth_status_counts: Counter[str] = Counter()
     preflight_status_counts: Counter[str] = Counter()
     preflight_failed_check_counts: Counter[str] = Counter()
+    visual_status_counts: Counter[str] = Counter()
     score_values: list[int] = []
     retry_counts: list[int] = []
     product_truth_required_runs = 0
@@ -31,6 +33,8 @@ def main() -> int:
     product_truth_updated_first_runs = 0
     preflight_required_runs = 0
     preflight_ready_runs = 0
+    visual_required_runs = 0
+    visual_ready_runs = 0
 
     run_items = []
     for record in runs:
@@ -51,6 +55,9 @@ def main() -> int:
         preflight = run.get("preflight", {})
         preflight_status = preflight.get("status", "not-recorded")
         preflight_status_counts[preflight_status] += 1
+        visual = ensure_visual_evidence(run)
+        visual_status = visual.get("status", "not-recorded")
+        visual_status_counts[visual_status] += 1
         required_preflight = set(preflight.get("required_checks", []))
         latest_preflight = {}
         for item in preflight.get("results", []):
@@ -64,6 +71,10 @@ def main() -> int:
             for name in required_preflight:
                 if latest_preflight.get(name, {}).get("status") == "fail":
                     preflight_failed_check_counts[name] += 1
+        if visual.get("required", False):
+            visual_required_runs += 1
+            if visual_status == "passed":
+                visual_ready_runs += 1
         if product_truth.get("required", False):
             product_truth_required_runs += 1
             if truth_status in {"consulted", "updated-first"}:
@@ -84,6 +95,8 @@ def main() -> int:
                 "retry_count": run.get("metrics", {}).get("retry_count", 0),
                 "preflight_status": preflight_status,
                 "preflight_required": sorted(required_preflight),
+                "visual_status": visual_status,
+                "visual_required": bool(visual.get("required", False)),
                 "product_truth_status": truth_status,
                 "product_truth_required": bool(product_truth.get("required", False)),
             }
@@ -113,6 +126,12 @@ def main() -> int:
             "readiness_rate": (preflight_ready_runs / preflight_required_runs) if preflight_required_runs else None,
             "status_counts": dict(preflight_status_counts),
             "failed_checks": [{"name": name, "count": count} for name, count in preflight_failed_check_counts.most_common(5)],
+        },
+        "visual_evidence": {
+            "required_runs": visual_required_runs,
+            "ready_runs": visual_ready_runs,
+            "readiness_rate": (visual_ready_runs / visual_required_runs) if visual_required_runs else None,
+            "status_counts": dict(visual_status_counts),
         },
         "runs": run_items,
     }
@@ -153,6 +172,15 @@ def main() -> int:
         lines.extend([f"- Status {name}: {count}" for name, count in preflight_status_counts.most_common()])
     if preflight_failed_check_counts:
         lines.extend([f"- Failed check {name}: {count}" for name, count in preflight_failed_check_counts.most_common(5)])
+
+    lines.extend(["", "## Visual Evidence"])
+    lines.append(f"- Required runs: {visual_required_runs}")
+    lines.append(f"- Ready runs: {visual_ready_runs}")
+    lines.append(
+        f"- Readiness rate: {summary['visual_evidence']['readiness_rate'] if summary['visual_evidence']['readiness_rate'] is not None else 'n/a'}"
+    )
+    if visual_status_counts:
+        lines.extend([f"- Status {name}: {count}" for name, count in visual_status_counts.most_common()])
 
     lines.extend(["", "## Top Failure Gates"])
     if failure_gate_counts:

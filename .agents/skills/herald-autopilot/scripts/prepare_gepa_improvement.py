@@ -26,6 +26,10 @@ def main() -> int:
     grounded_runs = int(product_truth.get("grounded_runs", 0))
     required_grounding_runs = int(product_truth.get("required_runs", 0))
     grounding_rate = product_truth.get("grounding_rate")
+    visual = summary.get("visual_evidence", {})
+    visual_required_runs = int(visual.get("required_runs", 0))
+    visual_ready_runs = int(visual.get("ready_runs", 0))
+    visual_readiness_rate = visual.get("readiness_rate")
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
@@ -42,6 +46,14 @@ def main() -> int:
         recommendation = {
             "name": "enforce-product-truth-gating",
             "why": "Improving doc-first grounding is a safer and more leveraged next step than expanding search while specs and vision handoff are still inconsistent.",
+            "risk": "low",
+            "value": "high",
+        }
+    elif visual_required_runs >= 3 and visual_readiness_rate is not None and visual_readiness_rate < 0.8:
+        bottleneck = "TUI-facing runs are still not consistently closing the visual-evidence gate across the canonical terminal sizes."
+        recommendation = {
+            "name": "enforce-visual-evidence-gate-adoption",
+            "why": "Phase 3 only pays off if TUI-facing runs reliably capture canonical before/after evidence instead of treating screenshots as optional.",
             "risk": "low",
             "value": "high",
         }
@@ -105,6 +117,9 @@ def main() -> int:
             "product_truth_required_runs": required_grounding_runs,
             "product_truth_grounded_runs": grounded_runs,
             "product_truth_grounding_rate": grounding_rate,
+            "visual_required_runs": visual_required_runs,
+            "visual_ready_runs": visual_ready_runs,
+            "visual_readiness_rate": visual_readiness_rate,
             "top_failing_evidence": patterns.get("top_failing_evidence", []),
             "top_risks": patterns.get("top_risks", []),
         },
@@ -150,6 +165,9 @@ def main() -> int:
             f"- Product-truth required runs: {brief['evidence']['product_truth_required_runs']}",
             f"- Product-truth grounded runs: {brief['evidence']['product_truth_grounded_runs']}",
             f"- Product-truth grounding rate: {brief['evidence']['product_truth_grounding_rate'] if brief['evidence']['product_truth_grounding_rate'] is not None else 'n/a'}",
+            f"- Visual-required runs: {brief['evidence']['visual_required_runs']}",
+            f"- Visual-ready runs: {brief['evidence']['visual_ready_runs']}",
+            f"- Visual readiness rate: {brief['evidence']['visual_readiness_rate'] if brief['evidence']['visual_readiness_rate'] is not None else 'n/a'}",
         ]
         + [f"- Top failing evidence: {item['name']} ({item['count']})" for item in brief["evidence"]["top_failing_evidence"][:3]]
         + [""]

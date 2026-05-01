@@ -35,6 +35,9 @@ For visual styling, layout, copy, or chrome changes, capture before/after eviden
 - After: same screen/state after implementation at the matching terminal size
 - Always save PNG screenshots plus plain-text/ANSI captures in the run evidence folder
 - Use evidence summaries beginning with `Before:` and `After:` so the report renderer can include the images directly
+- Close the explicit `visual-evidence` gate with canonical captures at `220x50`, `80x24`, and `50x15`
+- Record the exact repro path for each captured state so future sessions can repeat the same terminal navigation instead of guessing
+- If the change touched terminal goldens or snapshot-sensitive whitespace, mark that the snapshot review was done when recording the visual pair
 
 If the task is layout-only and not realistically expressible in Go tests, document the terminal-only repro and rely on tmux evidence.
 

@@ -78,6 +78,9 @@ def main() -> int:
                     f"- Preflight required runs: {metrics.get('preflight_required_runs', 'n/a')}",
                     f"- Preflight ready runs: {metrics.get('preflight_ready_runs', 'n/a')}",
                     f"- Preflight readiness rate: {metrics.get('preflight_readiness_rate', 'n/a')}",
+                    f"- Visual-required runs: {metrics.get('visual_required_runs', 'n/a')}",
+                    f"- Visual-ready runs: {metrics.get('visual_ready_runs', 'n/a')}",
+                    f"- Visual readiness rate: {metrics.get('visual_readiness_rate', 'n/a')}",
                 ]
             )
             if delta:

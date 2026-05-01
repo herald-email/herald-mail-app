@@ -6,6 +6,7 @@ import datetime as dt
 from pathlib import Path
 
 from artifact_io import load_json, locked_paths, save_json
+from visual_evidence import ensure_visual_evidence, require_visual_evidence
 
 
 def now_utc() -> str:
@@ -38,6 +39,16 @@ def ensure_preflight(run: dict) -> dict:
     return preflight
 
 
+def configure_visual_requirement(run: dict, required: bool) -> dict:
+    if required:
+        return require_visual_evidence(run)
+    visual = ensure_visual_evidence(run)
+    visual["required"] = False
+    visual["status"] = "not-needed"
+    visual["required_sizes"] = []
+    return visual
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Update summary fields on a Herald Autopilot run.")
     parser.add_argument("--run-dir", required=True, help="Path to the run directory")
@@ -61,6 +72,9 @@ def main() -> int:
     parser.add_argument("--publish-action", action="append", default=[], help="Append a publish action such as commit, merge, push, or pr")
     parser.add_argument("--clear-publish-actions", action="store_true", help="Clear recorded publish actions")
     parser.add_argument("--publication-summary", default="", help="Set the publication summary")
+    parser.add_argument("--require-visual-evidence", action="store_true", help="Require the canonical visual-evidence gate for this run")
+    parser.add_argument("--no-require-visual-evidence", action="store_true", help="Mark the visual-evidence gate as not required")
+    parser.add_argument("--visual-status", default="", choices=["pending", "passed", "not-needed"], help="Override the visual-evidence status")
     args = parser.parse_args()
 
     run_path = Path(args.run_dir).resolve() / "run.json"
@@ -70,6 +84,7 @@ def main() -> int:
         product_truth = ensure_product_truth(run)
         publication = ensure_publication(run)
         ensure_preflight(run)
+        visual = ensure_visual_evidence(run)
 
         if args.status:
             run["status"] = args.status
@@ -111,6 +126,12 @@ def main() -> int:
             publication["actions"].extend(args.publish_action)
         if args.publication_summary:
             publication["summary"] = args.publication_summary
+        if args.require_visual_evidence:
+            visual = configure_visual_requirement(run, required=True)
+        if args.no_require_visual_evidence:
+            visual = configure_visual_requirement(run, required=False)
+        if args.visual_status:
+            visual["status"] = args.visual_status
 
         run["updated_at"] = now_utc()
         save_json(run_path, run)

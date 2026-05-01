@@ -44,6 +44,7 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 6. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
 8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
+9. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
 
 ## GitHub Issue Association
 
@@ -143,6 +144,22 @@ For visual TUI changes, always capture a matched before/after pair:
 - capture the same state after the code change, using the same terminal size and navigation path
 - store PNG screenshots and plain-text/ANSI captures under the run evidence folder
 - record the screenshots with evidence summaries that include `Before:` and `After:` so reports can surface them automatically
+- close the explicit visual-evidence gate for `220x50`, `80x24`, and `50x15` so small-terminal regressions stay visible instead of being rediscovered later
+
+Use the helper to record the canonical visual gate:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/record_visual_evidence.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>" \
+  --state-label "cleanup-preview" \
+  --size "80x24" \
+  --before-png ".superpowers/autopilot/runs/<run-id>/evidence/before-cleanup-preview-80x24.png" \
+  --after-png ".superpowers/autopilot/runs/<run-id>/evidence/after-cleanup-preview-80x24.png" \
+  --before-text ".superpowers/autopilot/runs/<run-id>/evidence/before-cleanup-preview-80x24.ansi.txt" \
+  --after-text ".superpowers/autopilot/runs/<run-id>/evidence/after-cleanup-preview-80x24.ansi.txt" \
+  --repro-step "Launch Herald in tmux." \
+  --repro-step "Open the cleanup preview for the selected sender."
+```
 
 Record every verification result with:
 
