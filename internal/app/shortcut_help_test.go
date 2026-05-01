@@ -39,6 +39,73 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 	}
 }
 
+func TestShortcutHelpRendersCompactCenteredModalOverCurrentView(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressQuestion(m)
+
+	rendered := updated.View()
+	assertFitsWidth(t, 220, rendered)
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) < 40 {
+		t.Fatalf("expected full terminal-height view with modal overlay, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(lines[0], "Herald") {
+		t.Fatalf("expected current view to remain visible above centered help modal, got first line %q", lines[0])
+	}
+
+	titleRow := -1
+	titleCol := -1
+	for i, line := range lines {
+		if col := strings.Index(line, "Shortcut Help - Timeline"); col >= 0 {
+			titleRow = i
+			titleCol = col
+			break
+		}
+	}
+	if titleRow < 8 {
+		t.Fatalf("expected help title to be vertically centered below the top chrome, row=%d:\n%s", titleRow, stripANSI(rendered))
+	}
+	if titleCol < 40 || titleCol > 80 {
+		t.Fatalf("expected help title to be horizontally centered in a compact modal, col=%d:\n%s", titleCol, stripANSI(rendered))
+	}
+}
+
+func TestShortcutHelpFitsAt80ColsAsModal(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressQuestion(m)
+
+	rendered := updated.View()
+	assertFitsWidth(t, 80, rendered)
+	lines := strings.Split(strings.TrimRight(stripANSI(rendered), "\n"), "\n")
+	if len(lines) > 24 {
+		t.Fatalf("expected shortcut help modal to fit 80x24 height, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(stripANSI(rendered), "Shortcut Help - Timeline") {
+		t.Fatalf("expected shortcut help title at 80x24, got:\n%s", stripANSI(rendered))
+	}
+}
+
+func TestShortcutHelpPageStepUsesModalVisibleRows(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressQuestion(m)
+
+	if got, want := updated.shortcutHelpPageStep(), 19; got != want {
+		t.Fatalf("page step should use compact modal visible rows, got %d want %d", got, want)
+	}
+}
+
 func TestShortcutHelpQuestionMarkClosesOverlay(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

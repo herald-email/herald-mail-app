@@ -698,6 +698,8 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Plain `?` opens shortcut help, not semantic search, in Herald-owned contexts.
+- At `220x50`, shortcut help appears as a compact centered modal over the current view, not a full-screen replacement.
+- At `80x24`, shortcut help shrinks to fit without horizontal overflow.
 - The overlay title names the current context and the body lists global, tab, pane, overlay, and mode-specific shortcuts.
 - Compose help explains what preservation mode means and lists `Ctrl+O` only when reply/forward context exists.
 - Overlay scroll state is bounded and resets when reopened from a different context.

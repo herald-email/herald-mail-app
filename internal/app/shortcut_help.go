@@ -19,6 +19,19 @@ type shortcutHelpEntry struct {
 	Desc string
 }
 
+type shortcutHelpLayout struct {
+	panelWidth  int
+	panelHeight int
+	styleWidth  int
+	contentW    int
+	visibleRows int
+}
+
+const (
+	shortcutHelpMaxWidth  = 88
+	shortcutHelpMaxHeight = 24
+)
+
 func (m *Model) handleShortcutHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	key := msg.String()
 	if m.showHelp {
@@ -77,10 +90,65 @@ func (m *Model) shouldAdvertiseShortcutHelp() bool {
 }
 
 func (m *Model) shortcutHelpPageStep() int {
-	if m.windowHeight > 8 {
-		return m.windowHeight - 8
+	layout := m.shortcutHelpLayout()
+	if layout.visibleRows > 0 {
+		return layout.visibleRows
 	}
 	return 6
+}
+
+func (m *Model) shortcutHelpLayout() shortcutHelpLayout {
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	h := m.windowHeight
+	if h <= 0 {
+		h = 24
+	}
+
+	panelW := shortcutHelpMaxWidth
+	if maxW := w - 4; maxW < panelW {
+		panelW = maxW
+	}
+	if panelW < 30 {
+		panelW = w
+	}
+	if panelW < 30 {
+		panelW = 30
+	}
+
+	panelH := shortcutHelpMaxHeight
+	if maxH := h - 4; maxH < panelH {
+		panelH = maxH
+	}
+	if panelH < 10 {
+		panelH = h
+	}
+	if panelH < 6 {
+		panelH = 6
+	}
+
+	styleW := panelW - 2
+	if styleW < 28 {
+		styleW = 28
+	}
+	contentW := styleW - 4
+	if contentW < 20 {
+		contentW = 20
+	}
+	visibleRows := panelH - 5
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	return shortcutHelpLayout{
+		panelWidth:  panelW,
+		panelHeight: panelH,
+		styleWidth:  styleW,
+		contentW:    contentW,
+		visibleRows: visibleRows,
+	}
 }
 
 func (m *Model) renderShortcutHelpView() string {
@@ -93,26 +161,29 @@ func (m *Model) renderShortcutHelpView() string {
 		h = 24
 	}
 
-	outerW := w - 2
-	if outerW < 30 {
-		outerW = 30
-	}
-	innerW := outerW - 4
-	if innerW < 20 {
-		innerW = 20
-	}
-	innerH := h - 4
-	if innerH < 6 {
-		innerH = 6
-	}
+	backdrop := m.renderShortcutHelpBackdropView()
+	panel := m.renderShortcutHelpPanel()
+	return overlayCentered(backdrop, panel, w, h)
+}
 
-	title := "Shortcut Help - " + m.shortcutHelpContextTitle()
-	lines := m.shortcutHelpLines(innerW)
-	visibleRows := innerH - 2
-	if visibleRows < 1 {
-		visibleRows = 1
+func (m *Model) renderShortcutHelpBackdropView() string {
+	if m.loading && !m.hasVisibleStartupData() {
+		return m.renderLoadingView()
 	}
-	maxOffset := len(lines) - visibleRows
+	if m.timeline.fullScreen {
+		return m.renderFullScreenEmail()
+	}
+	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
+		return m.renderCleanupPreview()
+	}
+	return m.renderMainView()
+}
+
+func (m *Model) renderShortcutHelpPanel() string {
+	layout := m.shortcutHelpLayout()
+	title := "Shortcut Help - " + m.shortcutHelpContextTitle()
+	lines := m.shortcutHelpLines(layout.contentW)
+	maxOffset := len(lines) - layout.visibleRows
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -122,42 +193,110 @@ func (m *Model) renderShortcutHelpView() string {
 	if m.helpScrollOffset < 0 {
 		m.helpScrollOffset = 0
 	}
-	end := m.helpScrollOffset + visibleRows
+	end := m.helpScrollOffset + layout.visibleRows
 	if end > len(lines) {
 		end = len(lines)
 	}
 
 	bodyLines := append([]string{}, lines[m.helpScrollOffset:end]...)
-	for len(bodyLines) < visibleRows {
+	for len(bodyLines) < layout.visibleRows {
 		bodyLines = append(bodyLines, "")
 	}
 
 	scroll := "Esc/?/q close"
-	if len(lines) > visibleRows {
+	if len(lines) > layout.visibleRows {
 		scroll = fmt.Sprintf("j/k scroll  %d/%d  Esc/?/q close", m.helpScrollOffset+1, len(lines))
 	}
 
 	headerStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Bold(true)
 	footerStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
 	content := []string{
-		headerStyle.Render(ansi.Truncate(title, innerW, "")),
-		strings.Repeat("─", innerW),
+		headerStyle.Render(ansi.Truncate(title, layout.contentW, "")),
+		strings.Repeat("─", layout.contentW),
 	}
 	content = append(content, bodyLines...)
-	content = append(content, footerStyle.Render(ansi.Truncate(scroll, innerW, "")))
+	content = append(content, footerStyle.Render(ansi.Truncate(scroll, layout.contentW, "")))
 
-	panel := lipgloss.NewStyle().
-		Width(outerW).
-		Height(innerH).
+	return lipgloss.NewStyle().
+		Width(layout.styleWidth).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(defaultTheme.BorderActive).
 		Padding(0, 1).
 		Render(strings.Join(content, "\n"))
+}
 
-	if w > outerW {
-		return lipgloss.PlaceHorizontal(w, lipgloss.Center, panel)
+func overlayCentered(backdrop, overlay string, width, height int) string {
+	if width <= 0 {
+		width = 80
 	}
-	return panel
+	if height <= 0 {
+		height = 24
+	}
+
+	backdropLines := splitViewportLines(backdrop, height)
+	overlayLines := strings.Split(strings.TrimRight(overlay, "\n"), "\n")
+	if len(overlayLines) == 0 {
+		return strings.Join(backdropLines, "\n")
+	}
+
+	overlayW := 0
+	for _, line := range overlayLines {
+		if w := ansi.StringWidth(line); w > overlayW {
+			overlayW = w
+		}
+	}
+	if overlayW > width {
+		overlayW = width
+	}
+	overlayH := len(overlayLines)
+	if overlayH > height {
+		overlayH = height
+		overlayLines = overlayLines[:height]
+	}
+
+	startX := (width - overlayW) / 2
+	if startX < 0 {
+		startX = 0
+	}
+	startY := (height - overlayH) / 2
+	if startY < 0 {
+		startY = 0
+	}
+
+	for i, overlayLine := range overlayLines {
+		y := startY + i
+		if y < 0 || y >= len(backdropLines) {
+			continue
+		}
+		line := backdropLines[y]
+		mid := padANSIToWidth(ansi.Cut(overlayLine, 0, overlayW), overlayW)
+		left := padANSIToWidth(ansi.Cut(line, 0, startX), startX)
+		right := ansi.Cut(line, startX+overlayW, width)
+		backdropLines[y] = ansi.Cut(left+mid+right, 0, width)
+	}
+
+	return strings.Join(backdropLines, "\n")
+}
+
+func splitViewportLines(view string, height int) []string {
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return lines
+}
+
+func padANSIToWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if current := ansi.StringWidth(s); current < width {
+		return s + strings.Repeat(" ", width-current)
+	}
+	return ansi.Cut(s, 0, width)
 }
 
 func (m *Model) shortcutHelpContextTitle() string {
