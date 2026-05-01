@@ -1,0 +1,59 @@
+{
+  "focused-tests": {
+    "title": "Focused test remediation template",
+    "aliases": [
+      "red-focused-tests",
+      "focused-tests-red",
+      "red-tests",
+      "tdd-red",
+      "red-forward-compose-tests",
+      "green-forward-compose-tests-attempt1"
+    ],
+    "why": "Repeated run history shows focused test failures usually come from stale expectations, overspecified assertions, or missing adjacent regression coverage rather than the core feature direction being wrong.",
+    "checklist": [
+      "Confirm the failing assertion still matches the requested user-visible behavior instead of an implementation detail.",
+      "If the requested change intentionally altered copy or rendering output, update the affected snapshots or goldens instead of forcing code back toward stale expectations.",
+      "Add or adjust the smallest adjacent regression test that proves the real requested behavior after the fix.",
+      "Record the exact failing command and the smallest green retry command in the evidence manifest."
+    ],
+    "approval_prompt": "Approve keeping the focused-tests remediation template as a default GEPA retry aid."
+  },
+  "app-tests": {
+    "title": "Application test-suite remediation template",
+    "aliases": [
+      "all-tests"
+    ],
+    "why": "Recoverable reflections show app-wide test failures often surface package-local mocks, contract drift, or stale fixtures outside the focused feature slice.",
+    "checklist": [
+      "Treat app-wide failures as contract-checking evidence before assuming the feature implementation is wrong.",
+      "If interfaces, backends, or shared state changed, run the full relevant suite early instead of waiting until the end of the run.",
+      "Update package-local mocks, fixtures, or shared helpers together with the feature change so the suite reflects the new contract.",
+      "Capture which failure was feature-adjacent versus infrastructure-adjacent to keep the retry plan bounded."
+    ],
+    "approval_prompt": "Approve keeping the app-tests remediation template as a default GEPA retry aid."
+  },
+  "app-package-tests": {
+    "title": "Package-level test remediation template",
+    "aliases": [],
+    "why": "Package-level failures usually indicate a narrow contract or snapshot expectation drift that should be repaired without exploding the retry scope.",
+    "checklist": [
+      "Check whether the package failure is protecting a user-visible contract such as hints, status text, or layout at constrained widths.",
+      "Refresh package-local snapshots or fixtures when the requested user-visible change made the old expectation obsolete.",
+      "Avoid widening immediately to a full-suite retry unless the package failure indicates a shared interface change.",
+      "Document the preserved contract explicitly in the retry note so the next attempt stays focused."
+    ],
+    "approval_prompt": "Approve keeping the app-package-tests remediation template as a default GEPA retry aid."
+  },
+  "diff-check": {
+    "title": "Diff-check remediation template",
+    "aliases": [],
+    "why": "Diff-check failures in terminal UIs often come from intentional whitespace, frame, or snapshot fidelity rather than a functional regression.",
+    "checklist": [
+      "Verify whether the diff is protecting terminal fidelity such as trailing spaces, frame borders, or line wrapping rather than semantic behavior.",
+      "Do not normalize snapshot output just to satisfy the diff when the formatting is part of the rendered contract.",
+      "Update the snapshot only after confirming the new output matches the requested UI behavior and terminal size expectations.",
+      "Capture the exact before/after artifact pair that justified the snapshot change."
+    ],
+    "approval_prompt": "Approve keeping the diff-check remediation template as a default GEPA retry aid."
+  }
+}

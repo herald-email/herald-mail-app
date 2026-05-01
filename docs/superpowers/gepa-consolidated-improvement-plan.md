@@ -25,7 +25,7 @@ This section captures the recurring problems that appeared often enough to justi
 
 This section ranks the workflow changes that would pay down the most repeated friction first. The order favors fixes that should reduce retries across many future runs before more ambitious GEPA search features are added.
 
-- [ ] Build reusable remediation templates for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check` so repeated failures produce standardized next steps instead of bespoke retry reasoning.
+- [x] Built reusable remediation templates for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check` so repeated failures can surface standardized next steps instead of bespoke retry reasoning.
 - [ ] Add workflow preflight checks for docs dependencies, SSH host-key paths, and resumable long-running media batches so environment failures are caught before feature-level verification starts.
 - [ ] Serialize `run.json` and evidence-manifest writes so helpers cannot clobber each other when multiple workflow steps run close together.
 - [ ] Promote native-terminal repro paths, small-terminal guards, and golden-snapshot whitespace rules into explicit visual-evidence gates for TUI-facing work.
@@ -36,7 +36,7 @@ This section ranks the workflow changes that would pay down the most repeated fr
 
 This section sequences the backlog into a practical rollout. The idea is to stabilize the most repeated sources of wasted effort first, then improve visibility and approval flow, and only after that consider more autonomous GEPA behavior.
 
-- [ ] Phase 1: ship `template-focused-tests-feedback` and `template-app-tests-feedback` because verification-template failures are the densest repeated signal in recovered reflections.
+- [x] Phase 1: shipped `template-focused-tests-feedback` and `template-app-tests-feedback`, along with adjacent `app-package-tests` and `diff-check` coverage, because verification-template failures were the densest repeated signal in recovered reflections.
 - [ ] Phase 2: harden workflow infrastructure with serialized artifact writes and preflight environment checks because those failures waste time before feature-level learning begins.
 - [ ] Phase 3: convert visual-evidence and input-routing lessons into scored gates for TUI-facing work because those failures are user-visible and expensive to rediscover.
 - [ ] Phase 4: add the pending-approval queue so post-publish self-reflection becomes a reviewable backlog instead of scattered report text.

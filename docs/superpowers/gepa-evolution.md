@@ -24,6 +24,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] Run artifacts and optimizer summaries can now record whether product-truth grounding was required, whether docs were updated first, and how often grounded runs occur.
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
+- [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check`.
 
 ## What Changed In This Version
 
@@ -39,6 +40,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a product-truth grounding layer so GEPA can treat `VISION.md`, `ARCHITECTURE.md`, and spec docs as the product-definition source of truth.
 - [x] Added a GitHub issue association rule after issue #7 was completed locally without a closing keyword in the squash commit.
 - [x] Added publish-action tracking plus self-reflection artifacts so normal feature runs can surface suggested GEPA changes without silently changing the workflow.
+- [x] Added an initial remediation-template layer so repeated verification failures can reuse checklists instead of rediscovering the same retry strategy in each run.
 
 ## Run Patterns Observed
 
@@ -55,11 +57,11 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-01T16:31:54+00:00.
+- [x] Auto snapshot generated at 2026-05-01T17:04:46+00:00.
 - [x] Recent runs analyzed: 30.
 - [x] Frontier members available: 2.
 - [x] Most repeated failing evidence: `focused-tests` (4 occurrences).
-- [x] Current top recommended experiment: `template-app-tests-feedback` (medium value, low risk).
+- [x] Current top recommended experiment: `template-red-compose-comma-alias-feedback` (medium value, low risk).
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points
@@ -84,6 +86,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Auto-summarize recent run folders into this ledger after each meaningful task to reduce manual curation.
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
 - [ ] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
+- [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 - [ ] Add a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.

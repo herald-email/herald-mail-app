@@ -5,6 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
+from remediation_templates import load_remediation_templates, match_remediation_template
+
 
 def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
@@ -77,11 +79,15 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     failed_required = [item for item in required_results if item.get("status") == "fail"]
     latest_feedback = unique(run.get("latest_feedback", []))
     retry_count = int(run.get("metrics", {}).get("retry_count", 0))
-    current_brief = load_optional_json(Path(run["paths"]["repo_root"]) / ".superpowers" / "autopilot" / "state" / "improvement-brief.json")
+    repo_root = Path(run["paths"]["repo_root"])
+    current_brief = load_optional_json(repo_root / ".superpowers" / "autopilot" / "state" / "improvement-brief.json")
+    templates = load_remediation_templates(repo_root)
 
     strengths: list[str] = []
     drag: list[str] = []
     suggestions: list[dict] = []
+    matched_templates: list[dict] = []
+    latest_evidence_name = ""
 
     if actions:
         strengths.append(f"Completed the requested publish action(s): {', '.join(actions)}.")
@@ -108,17 +114,36 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         drag.append("The scored handoff still flagged human follow-up as needed.")
 
     if retry_count > 0 or latest_feedback:
-        evidence_name = "a repeated failure mode"
         if reflections:
             latest_reflection = load_json(reflections[-1])
-            evidence_name = latest_reflection.get("failing_evidence") or evidence_name
-        suggestions.append(
-            {
-                "title": f"Template `{evidence_name}` remediation guidance",
-                "why": "This run needed retries or explicit feedback that could become reusable autopilot guidance.",
-                "approval_prompt": f"Approve turning the `{evidence_name}` lesson from this run into a reusable GEPA workflow template.",
-            }
-        )
+            latest_evidence_name = latest_reflection.get("failing_evidence") or ""
+        template_key, template = match_remediation_template(latest_evidence_name, templates)
+        if template_key and template:
+            matched_templates.append(
+                {
+                    "key": template_key,
+                    "title": template.get("title", template_key),
+                    "why": template.get("why", ""),
+                    "checklist": template.get("checklist", []),
+                    "approval_prompt": template.get("approval_prompt", ""),
+                }
+            )
+            suggestions.append(
+                {
+                    "title": template.get("title", template_key),
+                    "why": template.get("why", "This repeated failure class now has a reusable remediation template."),
+                    "approval_prompt": template.get("approval_prompt", f"Approve keeping the `{template_key}` remediation template in GEPA."),
+                }
+            )
+        else:
+            evidence_name = latest_evidence_name or "a repeated failure mode"
+            suggestions.append(
+                {
+                    "title": f"Template `{evidence_name}` remediation guidance",
+                    "why": "This run needed retries or explicit feedback that could become reusable autopilot guidance.",
+                    "approval_prompt": f"Approve turning the `{evidence_name}` lesson from this run into a reusable GEPA workflow template.",
+                }
+            )
     if run.get("task", {}).get("type") == "feature" and product_truth.get("status") != "updated-first":
         suggestions.append(
             {
@@ -173,6 +198,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         "summary": summary,
         "what_went_well": strengths,
         "what_created_drag": drag,
+        "matched_templates": matched_templates,
         "suggested_changes": deduped_suggestions,
     }
 
@@ -266,6 +292,13 @@ def main() -> int:
     else:
         lines.append("- No reflection feedback recorded.")
 
+    if self_reflection["matched_templates"]:
+        lines.extend(["", "Matched remediation templates:"])
+        for template in self_reflection["matched_templates"]:
+            lines.append(f"- {template['title']}: {template['why']}")
+            for item in template.get("checklist", []):
+                lines.append(f"- Checklist: {item}")
+
     lines.extend(
         [
             "",
@@ -331,6 +364,12 @@ def main() -> int:
         self_reflection_md_lines.extend([f"- {item}" for item in self_reflection["what_created_drag"]])
     else:
         self_reflection_md_lines.append("- No notable drag points were recorded.")
+    if self_reflection["matched_templates"]:
+        self_reflection_md_lines.extend(["", "## Matched Remediation Templates"])
+        for template in self_reflection["matched_templates"]:
+            self_reflection_md_lines.append(f"- {template['title']}: {template['why']}")
+            for item in template.get("checklist", []):
+                self_reflection_md_lines.append(f"- Checklist: {item}")
     self_reflection_md_lines.extend(["", "## Suggested Changes Pending Approval"])
     if self_reflection["suggested_changes"]:
         for item in self_reflection["suggested_changes"]:

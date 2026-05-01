@@ -70,6 +70,8 @@ When a run reaches final reporting, the renderer should also produce a self-refl
 
 These suggestions are advisory until the user explicitly approves an improvement pass.
 
+When a run matches a reusable remediation template, the self-reflection artifact should record that matched template and its checklist so future sessions can recover the lesson without rereading every reflection file.
+
 ## Future Compatibility
 
 Phase 2 can add:

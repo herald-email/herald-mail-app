@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 
 from optimizer_common import load_json, now_utc, save_json, save_text, state_dir
+from remediation_templates import load_remediation_templates, match_remediation_template
 
 
 def main() -> int:
@@ -17,6 +18,7 @@ def main() -> int:
     summary = load_json(out_dir / "recent-run-summary.json")
     frontier = load_json(out_dir / "frontier.json")
     patterns = load_json(out_dir / "feedback-patterns.json")
+    templates = load_remediation_templates(repo_root)
 
     total_runs = int(summary.get("total_runs", 0))
     failed_runs = int(summary.get("status_counts", {}).get("failed", 0))
@@ -27,6 +29,13 @@ def main() -> int:
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
+    top_failure_template_key, _ = match_remediation_template(top_failure_name, templates)
+    next_uncovered_failure = ""
+    for item in top_failure:
+        key, _ = match_remediation_template(item.get("name", ""), templates)
+        if key is None:
+            next_uncovered_failure = item.get("name", "")
+            break
 
     if required_grounding_runs > 0 and grounding_rate is not None and grounding_rate < 0.8:
         bottleneck = "Feature and behavior runs are not yet consistently grounded in the product-definition docs before implementation."
@@ -43,6 +52,22 @@ def main() -> int:
             "why": "The safest next step is to reduce operator effort and accumulate higher-quality history before adding challenger worktrees.",
             "risk": "low",
             "value": "high",
+        }
+    elif top_failure_name and top_failure_template_key and next_uncovered_failure:
+        bottleneck = f"The most repeated failure `{top_failure_name}` now has a reusable template, so the next uncovered repeated failure is `{next_uncovered_failure}`."
+        recommendation = {
+            "name": f"template-{next_uncovered_failure}-feedback",
+            "why": "The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.",
+            "risk": "low",
+            "value": "medium",
+        }
+    elif top_failure_name and top_failure_template_key:
+        bottleneck = f"The most repeated failure `{top_failure_name}` already has a reusable template, so the next step is to measure and enforce template adoption consistently."
+        recommendation = {
+            "name": "measure-remediation-template-adoption",
+            "why": "Once the main repeated failure classes have templates, the next leverage comes from checking whether runs actually use them and whether retries decline.",
+            "risk": "low",
+            "value": "medium",
         }
     elif top_failure_name:
         bottleneck = f"The most repeated failing evidence is `{top_failure_name}`, which suggests a reusable verification or remediation pattern is missing."

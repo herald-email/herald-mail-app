@@ -29,6 +29,7 @@ Read these before you start:
 - Run schema: [`references/run-schema.md`](references/run-schema.md)
 - Verification routing: [`references/verification-routing.md`](references/verification-routing.md)
 - Product source of truth: [`references/product-truth.md`](references/product-truth.md)
+- Remediation templates: [`references/remediation-templates.json`](references/remediation-templates.json)
 
 If the task touches the TUI, also read and follow [`../tui-test/SKILL.md`](../tui-test/SKILL.md) for the tmux-driven visual checks.
 If the user explicitly asks to improve GEPA itself, also read [`references/gepa-improvement.md`](references/gepa-improvement.md).
@@ -155,6 +156,8 @@ python3 .agents/skills/herald-autopilot/scripts/record_reflection.py \
 ```
 
 Stay in the same worktree for v1. Keep retries bounded by the run's retry limit.
+
+When the failing evidence matches a reusable remediation template such as `focused-tests`, `app-tests`, `app-package-tests`, or `diff-check`, use that checklist before inventing a new retry plan from scratch.
 
 ## Update Run State
 

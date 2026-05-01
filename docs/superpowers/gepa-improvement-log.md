@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T17:04:56 | Reusable remediation templates for repeated test failures | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:47:32 | Visible post-publish self-reflection | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:32:02 | Preserve GitHub issue references in autopilot handoffs | applied | 25 | 87.33333333333333 | 100% | 0 | 2 |
 | 2026-04-24T02:01:12 | Show before/after screenshots for visual TUI runs | applied | 20 | 83.0 | 93% | 1 | 8 |
@@ -17,6 +18,45 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Reusable remediation templates for repeated test failures
+
+- Logged at: 2026-05-01T17:04:56+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Repeated verification failures were still being rediscovered run by run even after we recovered the reflection history and wrote the consolidated improvement plan.
+- Summary: Implemented the first remediation-template layer for herald-autopilot so repeated failures like focused-tests and app-tests map to reusable checklists in self-reflection reports, and the optimizer now looks past already-covered failure classes.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.28571428571429
+- Average retries: 0.7666666666666667
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 28
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 19
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +0.0
+- average_retry_count: +0.0
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: +0
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +0
+Changes:
+- Added a remediation-template catalog for focused-tests, app-tests, app-package-tests, and diff-check.
+- Updated report rendering so matched templates appear directly in self-reflection artifacts and human-readable reports.
+- Updated the improvement brief logic so GEPA skips already-covered failure classes and recommends the next uncovered repeated failure.
+Recommended experiment at log time:
+- `template-red-compose-comma-alias-feedback` (medium value, low risk)
+Article notes:
+- This is the first real bridge from reflection mining to reusable workflow policy: the agent can now surface specific retry checklists instead of only saying that a pattern exists.
+- The workflow is still user-controlled because template adoption is visible and approval-ready rather than silently self-modifying.
+Follow-ups:
+- Add a pending-approval queue for template adoption and expansion suggestions.
+- Expand template coverage to the next uncovered repeated failure class, currently red-compose-comma-alias.
 
 ### Visible post-publish self-reflection
 

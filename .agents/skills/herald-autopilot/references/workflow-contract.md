@@ -69,6 +69,7 @@ Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for imp
 - One active candidate per run
 - Same-worktree retries only
 - Required failures generate explicit natural-language feedback
+- Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time
 - Score the run on comparable axes so future versions can support multiple candidates without changing the interface
 
 ## Terminal State
