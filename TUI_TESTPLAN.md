@@ -292,6 +292,37 @@ Check these states during every applicable lane:
 - Key hints reflect list mode vs preview mode correctly.
 - When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `R: reply`, `F: forward`, `D: delete`, and `e: archive`.
 
+### TC-05B — Timeline horizontal reading movement
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline with the sidebar visible and focus the Timeline list.
+2. Press right arrow on a single-message row.
+3. With that preview open and Timeline still focused, press right arrow or `]`.
+4. Move to a collapsed thread row and press right arrow.
+5. Focus the preview panel and press left arrow.
+6. Move Timeline focus to an expanded thread parent row and press left arrow or `[`.
+7. Move Timeline focus to a collapsed thread row or single-email row and press left arrow or `[`.
+8. With no preview open, press left arrow or `[` from Timeline focus.
+9. Focus the folder sidebar and press right arrow or `]`.
+10. Open a preview with multiple attachments, focus the preview panel, and press `[` / `]`.
+11. Press `U` from a previewed message, then repeat in a virtual read-only Timeline view such as `All Mail only`.
+
+**Expect:**
+- Right arrow and `]` open the split preview without moving focus out of the Timeline list when no preview is open.
+- With a preview already open, right arrow and `]` from Timeline focus move focus into the preview without changing the previewed message.
+- Collapsed thread rows preview the newest thread message and do not unfold.
+- Left arrow from preview focus moves focus back to the Timeline list without closing the preview.
+- Left arrow and `[` from Timeline focus fold an expanded thread parent row before moving focus farther left.
+- Left arrow and `[` from Timeline focus close an open preview and focus folders when the current row is a single email or collapsed thread.
+- With no preview open, left arrow and `[` show and focus the folder sidebar when the terminal can render it.
+- Right arrow and `]` from folder focus return focus to the Timeline list.
+- When preview focus is active and the email has multiple attachments, brackets navigate attachments instead of closing/opening panes.
+- `U` marks the current previewed or focused Timeline message unread, updates the unread dot immediately, and is blocked in read-only diagnostic views.
+- At `50x15`, the minimum-size guard appears instead of clipped horizontal-navigation UI.
+
 ### TC-05A — Timeline bulk selection for delete and archive
 
 **Lane:** A, B

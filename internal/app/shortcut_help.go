@@ -517,6 +517,10 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			return shortcutHelpSection{"Timeline Draft", []shortcutHelpEntry{
 				{"j/k or arrows", "scroll preview"},
 				{"Tab", "switch between list and preview"},
+				{"Left arrow", "return focus to the Timeline list without closing preview"},
+				{"[ / ]", "navigate attachments when preview focus has attachments"},
+				{"Right / ]", "open preview, or focus an already-open preview from list focus"},
+				{"U", "mark unread"},
 				{"E", "edit draft in Compose"},
 				{"Ctrl+S", "send draft after confirmation"},
 				{"D", "discard draft after confirmation"},
@@ -528,6 +532,10 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		return shortcutHelpSection{"Timeline Preview", []shortcutHelpEntry{
 			{"j/k or arrows", "scroll preview"},
 			{"Tab", "switch between list and preview"},
+			{"Left arrow", "return focus to the Timeline list without closing preview"},
+			{"[ / ]", "navigate attachments when preview focus has attachments"},
+			{"Right / ]", "open preview, or focus an already-open preview from list focus"},
+			{"U", "mark unread"},
 			{"R / F", "reply or forward"},
 			{"D / e", "delete or archive after confirmation"},
 			{"* / A", "star or re-classify"},
@@ -539,8 +547,11 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 	}
 	return shortcutHelpSection{"Timeline", []shortcutHelpEntry{
 		{"j/k or arrows", "navigate messages and threads"},
+		{"Right / ]", "preview the highlighted message, or focus an already-open preview"},
+		{"Left / [", "fold an expanded thread, or close preview and focus folders"},
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
+		{"U", "mark unread"},
 		{"C", "open a blank Compose screen"},
 		{"E / Ctrl+S", "edit or send highlighted draft"},
 		{"R / F", "reply or forward highlighted non-draft email"},

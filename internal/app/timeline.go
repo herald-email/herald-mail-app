@@ -760,6 +760,168 @@ func (m *Model) currentTimelineRowEmail() *models.EmailData {
 	return ref.group.emails[ref.emailIdx]
 }
 
+func (m *Model) currentTimelinePreviewTarget() *models.EmailData {
+	ref, ok := m.currentTimelineRowRef()
+	if !ok || ref.group == nil || len(ref.group.emails) == 0 {
+		return nil
+	}
+	if ref.kind == rowKindThread {
+		return ref.group.emails[0]
+	}
+	if ref.emailIdx < 0 || ref.emailIdx >= len(ref.group.emails) {
+		return nil
+	}
+	return ref.group.emails[ref.emailIdx]
+}
+
+func (m *Model) previewCurrentTimelineRow() tea.Cmd {
+	if m.focusedPanel == panelSidebar {
+		m.setFocusedPanel(panelTimeline)
+		return nil
+	}
+	if m.focusedPanel == panelPreview {
+		return nil
+	}
+	if m.timeline.selectedEmail != nil {
+		m.setFocusedPanel(panelPreview)
+		return nil
+	}
+	return m.openTimelineEmail(m.currentTimelinePreviewTarget())
+}
+
+func (m *Model) foldCurrentTimelineThreadIfOpen() bool {
+	ref, ok := m.currentTimelineRowRef()
+	if !ok || ref.group == nil {
+		return false
+	}
+	key := ref.group.normalizedSubject
+	isExpandedThreadHeader := ref.kind == rowKindEmail &&
+		ref.emailIdx == 0 &&
+		len(ref.group.emails) > 1 &&
+		m.timeline.expandedThreads[key]
+	isExpandedThreadRow := ref.kind == rowKindThread && m.timeline.expandedThreads[key]
+	if !isExpandedThreadHeader && !isExpandedThreadRow {
+		return false
+	}
+	if !m.timeline.expandedThreads[key] {
+		return false
+	}
+	savedCursor := m.timelineTable.Cursor()
+	m.timeline.expandedThreads[key] = false
+	m.updateTimelineTable()
+	if savedCursor >= len(m.timeline.threadRowMap) {
+		savedCursor = len(m.timeline.threadRowMap) - 1
+	}
+	if savedCursor >= 0 {
+		m.timelineTable.SetCursor(savedCursor)
+	}
+	return true
+}
+
+func (m *Model) focusTimelineFolders() {
+	if !m.showSidebar {
+		m.showSidebar = true
+		if m.windowWidth > 0 {
+			m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		}
+	}
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	if plan.SidebarVisible {
+		m.setFocusedPanel(panelSidebar)
+	} else {
+		m.statusMessage = "Folders hidden at this size — widen terminal"
+	}
+}
+
+func (m *Model) closeTimelinePreviewOrFocusFolders() tea.Cmd {
+	if m.focusedPanel == panelPreview {
+		m.setFocusedPanel(panelTimeline)
+		return nil
+	}
+	if m.focusedPanel == panelTimeline && m.foldCurrentTimelineThreadIfOpen() {
+		return nil
+	}
+	if m.timeline.selectedEmail != nil {
+		m.clearTimelinePreview()
+	}
+	m.focusTimelineFolders()
+	return nil
+}
+
+func (m *Model) setTimelineEmailReadState(email *models.EmailData, read bool) bool {
+	if email == nil {
+		return false
+	}
+	messageID := email.MessageID
+	changed := false
+	visit := func(candidate *models.EmailData) {
+		if candidate == nil {
+			return
+		}
+		same := candidate == email
+		if messageID != "" && candidate.MessageID == messageID {
+			same = true
+		}
+		if !same || candidate.IsRead == read {
+			return
+		}
+		candidate.IsRead = read
+		changed = true
+	}
+	visit(email)
+	for _, emails := range [][]*models.EmailData{
+		m.timeline.emails,
+		m.timeline.emailsCache,
+		m.timeline.searchResults,
+		m.timeline.chatFilteredEmails,
+	} {
+		for _, candidate := range emails {
+			visit(candidate)
+		}
+	}
+	visit(m.timeline.selectedEmail)
+	if changed && m.folderStatus != nil {
+		folder := email.Folder
+		if folder == "" {
+			folder = m.currentFolder
+		}
+		if st, ok := m.folderStatus[folder]; ok {
+			if read {
+				if st.Unseen > 0 {
+					st.Unseen--
+				}
+			} else {
+				st.Unseen++
+			}
+			m.folderStatus[folder] = st
+		}
+	}
+	return changed
+}
+
+func (m *Model) currentTimelineUnreadTarget() *models.EmailData {
+	if m.timeline.selectedEmail != nil {
+		return m.timeline.selectedEmail
+	}
+	return m.currentTimelinePreviewTarget()
+}
+
+func (m *Model) markCurrentTimelineUnread() tea.Cmd {
+	email := m.currentTimelineUnreadTarget()
+	if email == nil {
+		return nil
+	}
+	if !email.IsRead {
+		m.statusMessage = "Already unread"
+		return nil
+	}
+	if m.setTimelineEmailReadState(email, false) {
+		m.updateTimelineTable()
+	}
+	m.statusMessage = "Marked unread"
+	return markUnreadCmd(m.backend, email.MessageID, email.Folder)
+}
+
 func (m *Model) currentTimelineDraftEmail() *models.EmailData {
 	if m.focusedPanel == panelPreview && m.timeline.selectedEmail != nil && m.timeline.selectedEmail.IsDraft {
 		return m.timeline.selectedEmail
@@ -1344,8 +1506,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		segments := []string{"tab/shift+tab: panels", "↑/k ↓/j: scroll"}
+		segments := []string{"tab/shift+tab: panels", "left: Timeline", "↑/k ↓/j: scroll"}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
+		segments = append(segments, "U: unread")
 		segments = append(segments, previewActionHintText(hasUnsub))
 		if hasAttachments {
 			if hasMultipleAttachments {
@@ -1357,9 +1520,15 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "q: quit")...)...), true
+		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: focus preview", "left/[: fold/folders", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "U: unread", "q: quit")...)...), true
 	}
-	segments := []string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "enter: open"}
+	if m.timelineSelectedCount() > 0 {
+		segments := []string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "space: select"}
+		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
+		segments = append(segments, "right/]: preview", "left/[: folders", "enter: open", "q: quit")
+		return joinHintSegments(segments...), true
+	}
+	segments := []string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: preview", "left/[: folders", "space: select", "enter: open", "U: unread"}
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, "C: compose")
 	}
@@ -1491,7 +1660,8 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				body := msg.Body
 				var cmds []tea.Cmd
 				if !email.IsRead && !m.timelineIsReadOnlyDiagnostic() {
-					email.IsRead = true
+					m.setTimelineEmailReadState(email, true)
+					m.updateTimelineTable()
 					cmds = append(cmds, markReadCmd(m.backend, email.MessageID, email.Folder))
 				}
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") && !m.timelineIsReadOnlyDiagnostic() {
@@ -1853,6 +2023,16 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, m.openBlankComposeFromCurrent(), true
 		}
 		return m, nil, true
+	case "right":
+		if m.canInteractWithVisibleData() {
+			return m, m.previewCurrentTimelineRow(), true
+		}
+		return m, nil, true
+	case "left":
+		if m.canInteractWithVisibleData() {
+			return m, m.closeTimelinePreviewOrFocusFolders(), true
+		}
+		return m, nil, true
 	case "/":
 		if !m.loading && !m.timeline.searchMode {
 			m.openTimelineSearch()
@@ -1911,30 +2091,42 @@ func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.timeline.attachmentSavePrompt = true
 		}
 		return m, nil, true
-	case "]":
+	case "U":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
+		if m.canInteractWithVisibleData() {
+			return m, m.markCurrentTimelineUnread(), true
+		}
+		return m, nil, true
+	case "]":
 		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
 			m.timeline.body != nil && m.timeline.selectedAttachment < len(m.timeline.body.Attachments)-1 {
 			m.timeline.selectedAttachment++
 			return m, nil, true
 		}
-		if m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
+		if (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
+			m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
 			return m, nil, true
 		}
+		if m.canInteractWithVisibleData() {
+			return m, m.previewCurrentTimelineRow(), true
+		}
+		return m, nil, true
 	case "[":
-		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil, true
-		}
 		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
 			m.timeline.body != nil && m.timeline.selectedAttachment > 0 {
 			m.timeline.selectedAttachment--
 			return m, nil, true
 		}
-		if m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
+		if (m.focusedPanel == panelPreview || m.timeline.fullScreen) &&
+			m.timeline.body != nil && len(m.timeline.body.Attachments) > 1 {
 			return m, nil, true
 		}
+		if m.canInteractWithVisibleData() {
+			return m, m.closeTimelinePreviewOrFocusFolders(), true
+		}
+		return m, nil, true
 	case "R":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true

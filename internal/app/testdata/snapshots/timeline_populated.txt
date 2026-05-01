@@ -34,5 +34,5 @@
                               │                                                                                        │
                               └────────────────────────────────────────────────────────────────────────────────────────┘
  INBOX  │  AI: off  │  3 emails                                                                                         
- ?: help  │  F1-F3: tabs  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  space: select  │  enter: open              
- C: compose  │  *: star  │  R: reply  │  F: forward  │  D: delete  │  e: archive  │  /: hybrid search                   [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l
+ ?: help  │  F1-F3: tabs  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  right/]: preview  │  left/[: folders       
+ space: select  │  enter: open  │  U: unread  │  C: compose  │  *: star  │  R: reply  │  F: forward  │  D: delete       [120D[2K[?2004l[?25h[?1002l[?1003l[?1006l

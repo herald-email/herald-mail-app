@@ -164,6 +164,16 @@ func markReadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
 	}
 }
 
+// markUnreadCmd fires and forgets; marks the email as unread on IMAP and in cache.
+func markUnreadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
+	return func() tea.Msg {
+		if err := b.MarkUnread(messageID, folder); err != nil {
+			logger.Warn("markUnreadCmd failed for %s: %v", messageID, err)
+		}
+		return nil
+	}
+}
+
 // toggleStarCmd toggles the \Flagged IMAP flag and returns a StarResultMsg.
 func (m *Model) toggleStarCmd(email *models.EmailData) tea.Cmd {
 	b := m.backend

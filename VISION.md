@@ -20,6 +20,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Attachment support (download + attach when composing, with terminal-style path completion)
 - [x] Markdown compose → HTML send (multipart HTML + plain)
 - [x] Full-screen email preview (`z`)
+- [x] Horizontal Timeline reading slice (right arrow / `]` preview/focus, left arrow / `[` list/fold/folders, `U` mark unread)
 - [x] Text selection (mouse mode + vim visual mode + clipboard)
 - [x] Mouse navigation (cell-motion click and wheel controls for tabs, lists, sidebars, and previews)
 - [x] AI classification via Ollama
@@ -115,6 +116,8 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
 - [x] Sender-cell disclosure markers make collapsed and expanded Timeline threads recognizable before opening them
 - [x] Body preview split (right panel, auto-updates on navigation)
+- [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders
+- [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
