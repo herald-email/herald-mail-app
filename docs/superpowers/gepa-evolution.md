@@ -5,6 +5,7 @@ This document is the human-facing memory for the repo-local Herald autopilot wor
 Related docs:
 
 - Improvement history: [gepa-improvement-log.md](gepa-improvement-log.md)
+- Consolidated improvement plan: [gepa-consolidated-improvement-plan.md](gepa-consolidated-improvement-plan.md)
 - Product truth snapshot: `.superpowers/autopilot/state/product-truth.md`
 
 ## Current Workflow
