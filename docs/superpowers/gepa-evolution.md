@@ -6,6 +6,7 @@ Related docs:
 
 - Improvement history: [gepa-improvement-log.md](gepa-improvement-log.md)
 - Consolidated improvement plan: [gepa-consolidated-improvement-plan.md](gepa-consolidated-improvement-plan.md)
+- Pending approvals: [gepa-pending-approvals.md](gepa-pending-approvals.md)
 - Product truth snapshot: `.superpowers/autopilot/state/product-truth.md`
 
 ## Current Workflow
@@ -24,6 +25,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] Run artifacts and optimizer summaries can now record whether product-truth grounding was required, whether docs were updated first, and how often grounded runs occur.
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
+- [x] Post-publish self-reflection suggestions can now sync into a visible pending-approval queue with stable queue keys and batch-approval commands.
 - [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check`.
 - [x] Docs, SSH, and media-heavy runs can now execute a first-class preflight step that records prerequisites and prepared resources before baseline verification starts.
 - [x] Run metadata and evidence manifests now use serialized helper writes so nearby workflow steps do not clobber each other.
@@ -44,6 +46,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a product-truth grounding layer so GEPA can treat `VISION.md`, `ARCHITECTURE.md`, and spec docs as the product-definition source of truth.
 - [x] Added a GitHub issue association rule after issue #7 was completed locally without a closing keyword in the squash commit.
 - [x] Added publish-action tracking plus self-reflection artifacts so normal feature runs can surface suggested GEPA changes without silently changing the workflow.
+- [x] Added a cross-run pending-approval queue so published runs contribute to one visible approval backlog instead of leaving GEPA suggestions scattered across per-run reports.
 - [x] Added an initial remediation-template layer so repeated verification failures can reuse checklists instead of rediscovering the same retry strategy in each run.
 - [x] Added workflow-safety infrastructure with explicit preflight checks and locked artifact writes for `run.json` and `evidence/manifest.json`.
 - [x] Added a scored visual-evidence gate so TUI runs must record canonical terminal captures and repro paths instead of treating screenshots as optional.
@@ -64,11 +67,12 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-01T19:36:22+00:00.
+- [x] Auto snapshot generated at 2026-05-01T20:36:49+00:00.
 - [x] Recent runs analyzed: 30.
 - [x] Frontier members available: 2.
 - [x] Most repeated failing evidence: `focused-tests` (3 occurrences).
-- [x] Current top recommended experiment: `template-evidence-manifest-feedback` (medium value, low risk).
+- [x] Current top recommended experiment: `template-user-repro-after-ed02a1d-feedback` (medium value, low risk).
+- [x] Pending-approval queue: 3 pending, 0 approved, 0 implemented.
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points
@@ -83,7 +87,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] If another agent is actively using `herald-autopilot`, breaking changes to the core execution helpers are still risky and should be staged additively first.
 - [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
 - [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
-- [ ] The workflow still lacks a pending-approval queue, so cross-run GEPA suggestions remain visible in reports but not yet collected into one approval backlog.
+- [ ] The queue is visible now, but approvals are still user-driven decisions rather than automatically turning into measured workflow changes.
 
 ## Candidate Next Experiments
 
@@ -96,9 +100,9 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
 - [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
 - [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
+- [x] Added a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
-- [ ] Add a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
 - [ ] Measure whether the visual and input-routing gates reduce TUI retry count and post-handoff clarification load enough to justify stricter automatic enforcement.
 
 ## Ask Me Next
@@ -110,5 +114,5 @@ This section is the handoff bridge for future sessions. Each prompt should be ph
 - [ ] "Improve GEPA by summarizing the last three runs and updating the ranked experiment list."
 - [ ] "Improve GEPA by tightening the run schema and removing fields we never actually use."
 - [ ] "Improve GEPA by adding an issue-reference validator before commit, PR, or merge handoff."
-- [ ] "Improve GEPA by turning approved post-publish reflection suggestions into a tracked pending-approval queue."
-- [ ] "Improve GEPA by adding the pending-approval queue now that the TUI-safety gate set is complete."
+- [ ] "Improve GEPA by reviewing the pending-approval queue and turning the approved items into tracked workflow changes."
+- [ ] "Improve GEPA by measuring whether the pending-approval queue reduced follow-up questions and hidden process drift."

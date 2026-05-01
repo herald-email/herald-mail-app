@@ -84,6 +84,9 @@ def main() -> int:
                     f"- Input-routing required runs: {metrics.get('input_routing_required_runs', 'n/a')}",
                     f"- Input-routing ready runs: {metrics.get('input_routing_ready_runs', 'n/a')}",
                     f"- Input-routing readiness rate: {metrics.get('input_routing_readiness_rate', 'n/a')}",
+                    f"- Pending approval items: {metrics.get('pending_approval_items', 'n/a')}",
+                    f"- Approved approval items: {metrics.get('approved_approval_items', 'n/a')}",
+                    f"- Implemented approval items: {metrics.get('implemented_approval_items', 'n/a')}",
                 ]
             )
             if delta:

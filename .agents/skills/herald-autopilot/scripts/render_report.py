@@ -12,6 +12,7 @@ from input_routing import (
     missing_surfaces,
     summarize_input_routing_gate,
 )
+from pending_approvals import make_suggestion_key
 from remediation_templates import load_remediation_templates, match_remediation_template
 from visual_evidence import covered_sizes, ensure_visual_evidence, missing_sizes, summarize_visual_gate, visual_feedback_messages
 
@@ -298,6 +299,8 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         if not title or title in seen_titles:
             continue
         seen_titles.add(title)
+        item = dict(item)
+        item["queue_key"] = make_suggestion_key(item)
         deduped_suggestions.append(item)
         if len(deduped_suggestions) >= 3:
             break
@@ -460,6 +463,7 @@ def main() -> int:
     if self_reflection["suggested_changes"]:
         for item in self_reflection["suggested_changes"]:
             lines.append(f"- {item['title']}: {item['why']}")
+            lines.append(f"Queue key: `{item['queue_key']}`")
             lines.append(f"Approval required: {item['approval_prompt']}")
     else:
         lines.append("- No approval-ready workflow changes were suggested by this run.")
@@ -517,6 +521,7 @@ def main() -> int:
     if self_reflection["suggested_changes"]:
         for item in self_reflection["suggested_changes"]:
             self_reflection_md_lines.append(f"- {item['title']}: {item['why']}")
+            self_reflection_md_lines.append(f"- Queue key: `{item['queue_key']}`")
             self_reflection_md_lines.append(f"Approval required: {item['approval_prompt']}")
     else:
         self_reflection_md_lines.append("- No approval-ready workflow changes were suggested by this run.")

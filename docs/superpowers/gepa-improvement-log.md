@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T20:37:11 | Pending-approval queue for post-publish GEPA suggestions | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T19:36:56 | Input-routing safety gate for shortcut-sensitive TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T18:35:30 | Canonical visual-evidence gate for TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T17:21:43 | Workflow safety preflight and serialized artifact writes | validated | 30 | 86.46153846153847 | 100% | 0 | 2 |
@@ -21,6 +22,67 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Pending-approval queue for post-publish GEPA suggestions
+
+- Logged at: 2026-05-01T20:37:11+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Post-publish workflow suggestions were visible inside individual reports, but there was still no durable backlog where you could review or batch-approve them across runs.
+- Summary: Added a cross-run pending-approval queue so post-publish self-reflection suggestions now sync into a visible backlog with stable queue keys, batch-approval commands, and ledger/log visibility instead of disappearing into per-run reports.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.42857142857143
+- Average retries: 0.7
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 24
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 17
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+- Visual-required runs: 2
+- Visual-ready runs: 2
+- Visual readiness rate: 1.0
+- Input-routing required runs: 1
+- Input-routing ready runs: 1
+- Input-routing readiness rate: 1.0
+- Pending approval items: 3
+- Approved approval items: 0
+- Implemented approval items: 0
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +0.0
+- average_retry_count: +0.033333333333333326
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: +0
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +0
+- preflight_required_runs: +0
+- preflight_ready_runs: +0
+- preflight_readiness_rate: +0.0
+- visual_required_runs: +0
+- visual_ready_runs: +0
+- visual_readiness_rate: +0.0
+- input_routing_required_runs: +0
+- input_routing_ready_runs: +0
+- input_routing_readiness_rate: +0.0
+Changes:
+- Added pending_approvals.py plus sync_pending_approvals.py and update_pending_approvals.py for queue construction and approval-state management.
+- Updated self-reflection rendering to emit stable queue keys so repeated suggestions can be deduplicated across published runs.
+- Surfaced queue counts in the evolution ledger, improvement brief evidence, and improvement-history metrics.
+- Synced the first real queue snapshot to docs/superpowers/gepa-pending-approvals.md with three pending items recovered from published runs.
+Recommended experiment at log time:
+- `template-user-repro-after-ed02a1d-feedback` (medium value, low risk)
+Article notes:
+- This phase turns reflective workflow suggestions into a visible decision backlog, which is a cleaner bridge from agent introspection to controlled process evolution.
+- The queue creates a stronger story for a future article because approvals and rejections become part of the methodology record instead of staying implicit.
+Follow-ups:
+- Measure whether queue review reduces hidden process drift and post-handoff follow-up questions.
+- Review the current pending items and decide which should become approved workflow changes.
 
 ### Input-routing safety gate for shortcut-sensitive TUI runs
 
@@ -48,6 +110,9 @@ Metrics at log time:
 - Input-routing required runs: 1
 - Input-routing ready runs: 1
 - Input-routing readiness rate: 1.0
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -103,6 +168,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.9670329670329636
@@ -154,6 +222,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: -0.8241758241758248
@@ -202,6 +273,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -250,6 +324,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: -0.04761904761903679
@@ -298,6 +375,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: +4.333333333333329
@@ -344,6 +424,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +15
 - average_score: -0.4000000000000057
@@ -389,6 +472,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +1
 - average_score: -2.2666666666666657
@@ -434,6 +520,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -478,6 +567,9 @@ Metrics at log time:
 - Input-routing required runs: n/a
 - Input-routing ready runs: n/a
 - Input-routing readiness rate: n/a
+- Pending approval items: n/a
+- Approved approval items: n/a
+- Implemented approval items: n/a
 Changes:
 - Created the Herald autopilot skill and run-artifact schema.
 - Added scoring, reflection, report rendering, and the first optimizer state layer.

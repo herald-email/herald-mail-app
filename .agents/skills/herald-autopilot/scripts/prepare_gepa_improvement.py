@@ -19,6 +19,8 @@ def main() -> int:
     frontier = load_json(out_dir / "frontier.json")
     patterns = load_json(out_dir / "feedback-patterns.json")
     templates = load_remediation_templates(repo_root)
+    queue_path = out_dir / "pending-approvals.json"
+    queue = load_json(queue_path) if queue_path.exists() else {"summary": {}}
 
     total_runs = int(summary.get("total_runs", 0))
     failed_runs = int(summary.get("status_counts", {}).get("failed", 0))
@@ -34,6 +36,10 @@ def main() -> int:
     input_routing_required_runs = int(input_routing.get("required_runs", 0))
     input_routing_ready_runs = int(input_routing.get("ready_runs", 0))
     input_routing_readiness_rate = input_routing.get("readiness_rate")
+    queue_summary = queue.get("summary", {})
+    queue_pending = int(queue_summary.get("pending", 0))
+    queue_approved = int(queue_summary.get("approved", 0))
+    queue_implemented = int(queue_summary.get("implemented", 0))
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
@@ -135,6 +141,9 @@ def main() -> int:
             "input_routing_required_runs": input_routing_required_runs,
             "input_routing_ready_runs": input_routing_ready_runs,
             "input_routing_readiness_rate": input_routing_readiness_rate,
+            "pending_approval_items": queue_pending,
+            "approved_approval_items": queue_approved,
+            "implemented_approval_items": queue_implemented,
             "top_failing_evidence": patterns.get("top_failing_evidence", []),
             "top_risks": patterns.get("top_risks", []),
         },
@@ -186,6 +195,9 @@ def main() -> int:
             f"- Input-routing required runs: {brief['evidence']['input_routing_required_runs']}",
             f"- Input-routing ready runs: {brief['evidence']['input_routing_ready_runs']}",
             f"- Input-routing readiness rate: {brief['evidence']['input_routing_readiness_rate'] if brief['evidence']['input_routing_readiness_rate'] is not None else 'n/a'}",
+            f"- Pending approval items: {brief['evidence']['pending_approval_items']}",
+            f"- Approved approval items: {brief['evidence']['approved_approval_items']}",
+            f"- Implemented approval items: {brief['evidence']['implemented_approval_items']}",
         ]
         + [f"- Top failing evidence: {item['name']} ({item['count']})" for item in brief["evidence"]["top_failing_evidence"][:3]]
         + [""]

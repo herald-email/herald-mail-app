@@ -32,6 +32,8 @@ def main() -> int:
     frontier = load_json(out_dir / "frontier.json")
     patterns = load_json(out_dir / "feedback-patterns.json")
     brief = load_json(out_dir / "improvement-brief.json")
+    queue_path = out_dir / "pending-approvals.json"
+    queue = load_json(queue_path) if queue_path.exists() else None
     ledger_path = repo_root / "docs" / "superpowers" / "gepa-evolution.md"
     content = ledger_path.read_text(encoding="utf-8")
 
@@ -49,6 +51,11 @@ def main() -> int:
     lines.append(
         f"- [x] Current top recommended experiment: `{recommendation['name']}` ({recommendation['value']} value, {recommendation['risk']} risk)."
     )
+    if queue:
+        queue_summary = queue.get("summary", {})
+        lines.append(
+            f"- [x] Pending-approval queue: {queue_summary.get('pending', 0)} pending, {queue_summary.get('approved', 0)} approved, {queue_summary.get('implemented', 0)} implemented."
+        )
 
     updated = replace_block(content, "\n".join(lines))
     ledger_path.write_text(updated, encoding="utf-8")

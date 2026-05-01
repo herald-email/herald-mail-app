@@ -28,7 +28,7 @@ Each run should move through these states in order unless it is blocked:
 - A concise plan summary is required before implementation.
 - Proceed after the summary unless a non-obvious decision still needs the user.
 - Never silently push, merge, or open a PR in v1.
-- If the user explicitly asks for a commit, merge, push, or PR, perform that publish step and then produce a visible self-reflection report with approval-ready workflow suggestions.
+- If the user explicitly asks for a commit, merge, push, or PR, perform that publish step, produce a visible self-reflection report with approval-ready workflow suggestions, and sync those suggestions into the cross-run pending-approval queue.
 
 ## GitHub Issue Linking Convention
 
@@ -67,6 +67,7 @@ Use that run folder for:
 Keep the human report in `reports/`.
 
 Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for improving the workflow itself.
+Use `docs/superpowers/gepa-pending-approvals.md` as the curated approval backlog for suggested workflow changes recovered from published runs.
 
 ## GEPA-Compatible v1 Rules
 
@@ -93,6 +94,7 @@ Success means:
 - the report is rendered
 - requested publish actions are recorded when the user asked for them
 - a self-reflection report is rendered after requested publish actions
+- the pending-approval queue is synced after requested publish actions so suggested changes stay visible across runs
 - the evolution ledger is updated if the workflow changed
 
 Success does not mean:

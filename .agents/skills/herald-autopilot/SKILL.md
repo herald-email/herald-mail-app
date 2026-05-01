@@ -44,8 +44,9 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 6. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
 8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
-9. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
-10. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+9. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
+10. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
+11. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
 
 ## GitHub Issue Association
 
@@ -258,6 +259,23 @@ After a requested publish action, the rendered report should also make it easy t
 - What went well in this run?
 - What slowed the run down?
 - Which workflow changes does the agent recommend next?
+
+After rendering a post-publish self-reflection, sync the visible approval backlog:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/sync_pending_approvals.py \
+  --repo-root "$(pwd)"
+```
+
+If the user approves one or more queue items, record that decision instead of editing the queue by hand:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/update_pending_approvals.py \
+  --repo-root "$(pwd)" \
+  --status approved \
+  --key "<queue-key>" \
+  --note "Approved after reviewing the reflected workflow change."
+```
 - Which of those changes require explicit approval before GEPA should apply them?
 
 ## Evolving GEPA

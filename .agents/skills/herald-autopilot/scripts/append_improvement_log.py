@@ -13,6 +13,7 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
     preflight = summary.get("preflight", {})
     visual = summary.get("visual_evidence", {})
     input_routing = summary.get("input_routing", {})
+    queue = brief.get("evidence", {})
     return {
         "recent_run_count": int(summary.get("total_runs", 0)),
         "average_score": summary.get("average_score"),
@@ -31,6 +32,9 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
         "input_routing_required_runs": int(input_routing.get("required_runs", 0)),
         "input_routing_ready_runs": int(input_routing.get("ready_runs", 0)),
         "input_routing_readiness_rate": input_routing.get("readiness_rate"),
+        "pending_approval_items": int(queue.get("pending_approval_items", 0)),
+        "approved_approval_items": int(queue.get("approved_approval_items", 0)),
+        "implemented_approval_items": int(queue.get("implemented_approval_items", 0)),
         "top_recommendation": brief.get("recommended_experiment", {}).get("name", ""),
     }
 
@@ -57,6 +61,9 @@ def metric_delta(previous: dict | None, current: dict) -> dict:
         "input_routing_required_runs",
         "input_routing_ready_runs",
         "input_routing_readiness_rate",
+        "pending_approval_items",
+        "approved_approval_items",
+        "implemented_approval_items",
     ):
         prev_value = previous.get(key)
         curr_value = current.get(key)

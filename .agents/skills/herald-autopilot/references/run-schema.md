@@ -103,7 +103,22 @@ When a run reaches final reporting, the renderer should also produce a self-refl
 
 These suggestions are advisory until the user explicitly approves an improvement pass.
 
+Each suggested change should include a stable `queue_key` so later queue syncs can deduplicate the same lesson across multiple published runs without guessing from prose alone.
+
 When a run matches a reusable remediation template, the self-reflection artifact should record that matched template and its checklist so future sessions can recover the lesson without rereading every reflection file.
+
+## `pending-approvals.json` and `gepa-pending-approvals.md`
+
+These cross-run artifacts turn post-publish reflection suggestions into a reviewable backlog instead of leaving them buried in individual reports. They should live under `.superpowers/autopilot/state/pending-approvals.json` and `docs/superpowers/gepa-pending-approvals.md`.
+
+The queue should track:
+
+- stable suggestion keys
+- current approval status such as `pending`, `approved`, `rejected`, or `implemented`
+- first and last seen timestamps
+- occurrence count across published runs
+- source run references
+- the user-facing approval prompt and the decision note when one exists
 
 ## Future Compatibility
 
