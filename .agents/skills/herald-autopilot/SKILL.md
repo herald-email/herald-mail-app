@@ -41,6 +41,7 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 4. Verify baseline, then create a dedicated worktree under `.worktrees/`.
 5. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 6. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
+7. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
 
 ## GitHub Issue Association
 
@@ -183,6 +184,15 @@ python3 .agents/skills/herald-autopilot/scripts/render_report.py \
   --run-dir ".superpowers/autopilot/runs/<run-id>"
 ```
 
+If the run performed a requested publish action such as a commit or merge, record that first:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/update_run.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>" \
+  --publish-action commit \
+  --publication-summary "Created the requested local commit before handoff."
+```
+
 The report should make it easy for the user to answer:
 
 - What was requested?
@@ -190,6 +200,13 @@ The report should make it easy for the user to answer:
 - Which gates passed, failed, or were skipped?
 - What remains risky?
 - Where is the worktree and branch?
+
+After a requested publish action, the rendered report should also make it easy to answer:
+
+- What went well in this run?
+- What slowed the run down?
+- Which workflow changes does the agent recommend next?
+- Which of those changes require explicit approval before GEPA should apply them?
 
 ## Evolving GEPA
 

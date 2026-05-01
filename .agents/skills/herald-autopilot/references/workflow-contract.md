@@ -27,6 +27,7 @@ Each run should move through these states in order unless it is blocked:
 - A concise plan summary is required before implementation.
 - Proceed after the summary unless a non-obvious decision still needs the user.
 - Never silently push, merge, or open a PR in v1.
+- If the user explicitly asks for a commit, merge, push, or PR, perform that publish step and then produce a visible self-reflection report with approval-ready workflow suggestions.
 
 ## GitHub Issue Linking Convention
 
@@ -51,9 +52,11 @@ Use that run folder for:
 - intake
 - plan summary
 - product-truth grounding notes
+- publication metadata when commit, merge, push, or PR actions happen
 - evidence manifest
 - before/after PNG screenshots for visual TUI changes
 - reflections
+- self-reflection report and suggested workflow changes
 - score output
 - run-local summary
 
@@ -76,6 +79,8 @@ Success means:
 - the task has a worktree
 - required verification is recorded
 - the report is rendered
+- requested publish actions are recorded when the user asked for them
+- a self-reflection report is rendered after requested publish actions
 - the evolution ledger is updated if the workflow changed
 
 Success does not mean:

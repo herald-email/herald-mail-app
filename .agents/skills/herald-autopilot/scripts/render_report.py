@@ -10,6 +10,12 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_optional_json(path: Path):
+    if not path.exists():
+        return None
+    return load_json(path)
+
+
 def artifact_path(run: dict, artifact: str) -> str:
     if not artifact:
         return ""
@@ -49,6 +55,128 @@ def visual_screenshot_sections(run: dict, results: list[dict]) -> list[str]:
     return lines[:-1] if lines[-1] == "" else lines
 
 
+def unique(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        text = item.strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        ordered.append(text)
+    return ordered
+
+
+def build_self_reflection(run: dict, score: dict | None, reflections: list[Path], results: list[dict]) -> dict:
+    publication = run.get("publication", {})
+    actions = unique(publication.get("actions", []))
+    product_truth = run.get("product_truth", {})
+    required = set(run.get("verification", {}).get("required_gates", []))
+    required_results = [item for item in results if item.get("gate") in required]
+    skipped = [item for item in results if item.get("status") == "skip"]
+    failed_required = [item for item in required_results if item.get("status") == "fail"]
+    latest_feedback = unique(run.get("latest_feedback", []))
+    retry_count = int(run.get("metrics", {}).get("retry_count", 0))
+    current_brief = load_optional_json(Path(run["paths"]["repo_root"]) / ".superpowers" / "autopilot" / "state" / "improvement-brief.json")
+
+    strengths: list[str] = []
+    drag: list[str] = []
+    suggestions: list[dict] = []
+
+    if actions:
+        strengths.append(f"Completed the requested publish action(s): {', '.join(actions)}.")
+    if publication.get("summary"):
+        strengths.append(publication["summary"])
+    if required_results and not failed_required:
+        strengths.append(f"All required verification gates passed ({len(required_results)}/{len(required_results)}).")
+    if product_truth.get("required") and product_truth.get("status") in {"consulted", "updated-first"}:
+        strengths.append(f"Product intent was grounded through `{product_truth.get('status')}` doc usage.")
+    if retry_count == 0:
+        strengths.append("The run reached handoff without needing a bounded retry loop.")
+
+    if failed_required:
+        drag.extend([f"Required gate `{item.get('gate', 'ungated')}` failed: {item.get('summary', '')}" for item in failed_required])
+    if skipped:
+        drag.extend([f"Gate `{item.get('gate') or 'ungated'}` was skipped: {item.get('summary', '')}" for item in skipped[:3]])
+    if retry_count > 0:
+        drag.append(f"The run needed {retry_count} retry attempt(s), which suggests reusable guidance is still missing.")
+    if latest_feedback:
+        drag.extend(latest_feedback[:3])
+    if product_truth.get("required") and product_truth.get("status") != "updated-first":
+        drag.append("Product docs informed the run, but the workflow did not update them first before implementation.")
+    if score and score.get("status") == "needs_followup":
+        drag.append("The scored handoff still flagged human follow-up as needed.")
+
+    if retry_count > 0 or latest_feedback:
+        evidence_name = "a repeated failure mode"
+        if reflections:
+            latest_reflection = load_json(reflections[-1])
+            evidence_name = latest_reflection.get("failing_evidence") or evidence_name
+        suggestions.append(
+            {
+                "title": f"Template `{evidence_name}` remediation guidance",
+                "why": "This run needed retries or explicit feedback that could become reusable autopilot guidance.",
+                "approval_prompt": f"Approve turning the `{evidence_name}` lesson from this run into a reusable GEPA workflow template.",
+            }
+        )
+    if run.get("task", {}).get("type") == "feature" and product_truth.get("status") != "updated-first":
+        suggestions.append(
+            {
+                "title": "Require doc-first feature grounding",
+                "why": "Feature work is safer when VISION, ARCHITECTURE, and specs are updated before code rather than only consulted during implementation.",
+                "approval_prompt": "Approve a stricter doc-first gate for non-trivial feature runs.",
+            }
+        )
+    if actions and not publication.get("summary"):
+        suggestions.append(
+            {
+                "title": "Require a publication summary after commit or merge",
+                "why": "Publish actions are more legible when the run records exactly what was committed or merged and why.",
+                "approval_prompt": "Approve enforcing a publication summary whenever a run performs a commit, merge, push, or PR step.",
+            }
+        )
+    if current_brief:
+        recommendation = current_brief.get("recommended_experiment", {})
+        name = recommendation.get("name")
+        why = recommendation.get("why")
+        if name and why:
+            suggestions.append(
+                {
+                    "title": name,
+                    "why": why,
+                    "approval_prompt": f"Approve exploring `{name}` as the next explicit GEPA improvement pass.",
+                }
+            )
+
+    strengths = unique(strengths)
+    drag = unique(drag)
+
+    deduped_suggestions: list[dict] = []
+    seen_titles: set[str] = set()
+    for item in suggestions:
+        title = item["title"].strip()
+        if not title or title in seen_titles:
+            continue
+        seen_titles.add(title)
+        deduped_suggestions.append(item)
+        if len(deduped_suggestions) >= 3:
+            break
+
+    if actions:
+        summary = "The requested publish step completed, and this reflection captures what the run suggests improving next before GEPA changes itself."
+    else:
+        summary = "This reflection captures what the run suggests improving next, but no explicit publish step was recorded."
+
+    return {
+        "generated_from_run": run["run_id"],
+        "publication_actions": actions,
+        "summary": summary,
+        "what_went_well": strengths,
+        "what_created_drag": drag,
+        "suggested_changes": deduped_suggestions,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Render a Herald Autopilot report from a run folder.")
     parser.add_argument("--run-dir", required=True, help="Path to the run directory")
@@ -73,6 +201,10 @@ def main() -> int:
     product_truth = run.get("product_truth", {})
     truth_sources = product_truth.get("sources", [])
     docs_updated = product_truth.get("docs_updated", [])
+    publication = run.get("publication", {})
+    self_reflection = build_self_reflection(run, score, reflections, results)
+    self_reflection_json_path = run_dir / "self_reflection.json"
+    self_reflection_md_path = run_dir / "self_reflection.md"
 
     lines = [
         f"# Herald Autopilot Report — {run['run_id']}",
@@ -95,6 +227,10 @@ def main() -> int:
         f"- Summary: {product_truth.get('summary') or 'No grounding summary recorded.'}",
         f"- Sources: {', '.join(truth_sources) if truth_sources else 'none recorded'}",
         f"- Docs updated first: {', '.join(docs_updated) if docs_updated else 'none recorded'}",
+        "",
+        "## Publication",
+        f"- Actions: {', '.join(publication.get('actions', [])) if publication.get('actions') else 'none recorded'}",
+        f"- Summary: {publication.get('summary') or 'No publication summary recorded.'}",
         "",
         "## Outcome",
         run["outcome"].get("summary") or "No outcome summary recorded.",
@@ -130,6 +266,32 @@ def main() -> int:
     else:
         lines.append("- No reflection feedback recorded.")
 
+    lines.extend(
+        [
+            "",
+            "## Self-Reflection",
+            self_reflection["summary"],
+            "",
+            "What went well:",
+        ]
+    )
+    if self_reflection["what_went_well"]:
+        lines.extend([f"- {item}" for item in self_reflection["what_went_well"]])
+    else:
+        lines.append("- No standout strengths were recorded.")
+    lines.append("What created drag:")
+    if self_reflection["what_created_drag"]:
+        lines.extend([f"- {item}" for item in self_reflection["what_created_drag"]])
+    else:
+        lines.append("- No notable drag points were recorded.")
+    lines.append("Suggested GEPA changes pending approval:")
+    if self_reflection["suggested_changes"]:
+        for item in self_reflection["suggested_changes"]:
+            lines.append(f"- {item['title']}: {item['why']}")
+            lines.append(f"Approval required: {item['approval_prompt']}")
+    else:
+        lines.append("- No approval-ready workflow changes were suggested by this run.")
+
     lines.extend(["", "## Risks"])
     if remaining_risks:
         lines.extend([f"- {item}" for item in remaining_risks])
@@ -149,6 +311,34 @@ def main() -> int:
         )
 
     markdown = "\n".join(lines) + "\n"
+    self_reflection_json_path.write_text(json.dumps(self_reflection, indent=2) + "\n", encoding="utf-8")
+    self_reflection_md_lines = [
+        f"# Herald Autopilot Self-Reflection — {run['run_id']}",
+        "",
+        f"- Publication actions: {', '.join(self_reflection['publication_actions']) if self_reflection['publication_actions'] else 'none recorded'}",
+        "",
+        "## Summary",
+        self_reflection["summary"],
+        "",
+        "## What Went Well",
+    ]
+    if self_reflection["what_went_well"]:
+        self_reflection_md_lines.extend([f"- {item}" for item in self_reflection["what_went_well"]])
+    else:
+        self_reflection_md_lines.append("- No standout strengths were recorded.")
+    self_reflection_md_lines.extend(["", "## What Created Drag"])
+    if self_reflection["what_created_drag"]:
+        self_reflection_md_lines.extend([f"- {item}" for item in self_reflection["what_created_drag"]])
+    else:
+        self_reflection_md_lines.append("- No notable drag points were recorded.")
+    self_reflection_md_lines.extend(["", "## Suggested Changes Pending Approval"])
+    if self_reflection["suggested_changes"]:
+        for item in self_reflection["suggested_changes"]:
+            self_reflection_md_lines.append(f"- {item['title']}: {item['why']}")
+            self_reflection_md_lines.append(f"Approval required: {item['approval_prompt']}")
+    else:
+        self_reflection_md_lines.append("- No approval-ready workflow changes were suggested by this run.")
+    self_reflection_md_path.write_text("\n".join(self_reflection_md_lines) + "\n", encoding="utf-8")
     report_path.write_text(markdown, encoding="utf-8")
     (run_dir / "summary.md").write_text(markdown, encoding="utf-8")
     print(str(report_path))

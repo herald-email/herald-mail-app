@@ -116,6 +116,10 @@ def main() -> int:
             "sources": args.truth_source,
             "docs_updated": args.doc_updated,
         },
+        "publication": {
+            "actions": [],
+            "summary": "",
+        },
         "verification": {
             "required_gates": [],
             "results": [],

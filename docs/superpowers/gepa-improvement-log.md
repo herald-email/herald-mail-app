@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T16:47:32 | Visible post-publish self-reflection | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:32:02 | Preserve GitHub issue references in autopilot handoffs | applied | 25 | 87.33333333333333 | 100% | 0 | 2 |
 | 2026-04-24T02:01:12 | Show before/after screenshots for visual TUI runs | applied | 20 | 83.0 | 93% | 1 | 8 |
 | 2026-04-23T19:00:19 | Product-definition grounding for GEPA | validated | 5 | 83.4 | 100% | 1 | 3 |
@@ -16,6 +17,45 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Visible post-publish self-reflection
+
+- Logged at: 2026-05-01T16:47:32+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Normal runs produced useful reflections, but workflow-improvement suggestions stayed too hidden unless a separate explicit improve-GEPA pass happened.
+- Summary: Extended herald-autopilot so requested commit, merge, push, and PR steps are recorded in the run, and the final report now includes a visible self-reflection section with approval-ready workflow suggestions instead of burying process learning in raw artifacts.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.28571428571429
+- Average retries: 0.7666666666666667
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 28
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 19
+Delta from previous entry:
+- recent_run_count: +5
+- average_score: -0.04761904761903679
+- average_retry_count: +0.00666666666666671
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: +5
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +3
+Changes:
+- Added publication tracking to run metadata for commit, merge, push, and PR actions.
+- Updated the report renderer to emit self_reflection.json and self_reflection.md alongside the main report.
+- Embedded approval-ready GEPA suggestions directly into the final human-readable report after publish actions.
+Recommended experiment at log time:
+- `template-focused-tests-feedback` (medium value, low risk)
+Article notes:
+- Visibility matters as much as learning: a workflow that reflects privately but never surfaces suggested changes is hard to trust or improve collaboratively.
+- This separates run-local self-reflection from approved cross-run GEPA changes, which is a cleaner story for a future article.
+Follow-ups:
+- Add a pending-approval queue that collects suggested GEPA changes across recent published runs.
+- Consider a scored gate for missing publication summaries or missing post-publish reflections.
 
 ### Preserve GitHub issue references in autopilot handoffs
 

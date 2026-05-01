@@ -17,6 +17,7 @@ Top-level fields:
 - `baseline`: Result of pre-implementation baseline checks
 - `plan`: Short summary, whether user questions were needed, and key decisions
 - `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
+- `publication`: Requested publish actions that were actually performed plus a short summary
 - `verification`: Required gates and observed results
 - `metrics`: Retry count, diff stats, human follow-up flag
 - `outcome`: Final outcome summary and remaining risks
@@ -57,6 +58,17 @@ Scoring is intentionally simple in v1:
 - diff size if known
 
 The score document should expose both numeric values and natural-language reasons so later versions can rank candidates without losing interpretability.
+
+## `self_reflection.json` and `self_reflection.md`
+
+When a run reaches final reporting, the renderer should also produce a self-reflection artifact that summarizes:
+
+- what worked well in the run
+- what created drag or uncertainty
+- any requested publish actions that were performed
+- approval-ready GEPA or workflow changes suggested by the run
+
+These suggestions are advisory until the user explicitly approves an improvement pass.
 
 ## Future Compatibility
 

@@ -29,6 +29,13 @@ def ensure_product_truth(run: dict) -> dict:
     return product_truth
 
 
+def ensure_publication(run: dict) -> dict:
+    publication = run.setdefault("publication", {})
+    publication.setdefault("actions", [])
+    publication.setdefault("summary", "")
+    return publication
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Update summary fields on a Herald Autopilot run.")
     parser.add_argument("--run-dir", required=True, help="Path to the run directory")
@@ -49,11 +56,15 @@ def main() -> int:
     parser.add_argument("--doc-updated", action="append", default=[], help="Append a product doc updated before code")
     parser.add_argument("--clear-truth-sources", action="store_true", help="Clear recorded product-truth sources")
     parser.add_argument("--clear-docs-updated", action="store_true", help="Clear recorded pre-code doc updates")
+    parser.add_argument("--publish-action", action="append", default=[], help="Append a publish action such as commit, merge, push, or pr")
+    parser.add_argument("--clear-publish-actions", action="store_true", help="Clear recorded publish actions")
+    parser.add_argument("--publication-summary", default="", help="Set the publication summary")
     args = parser.parse_args()
 
     run_path = Path(args.run_dir).resolve() / "run.json"
     run = load_json(run_path)
     product_truth = ensure_product_truth(run)
+    publication = ensure_publication(run)
 
     if args.status:
         run["status"] = args.status
@@ -89,6 +100,12 @@ def main() -> int:
         product_truth["docs_updated"] = []
     if args.doc_updated:
         product_truth["docs_updated"].extend(args.doc_updated)
+    if args.clear_publish_actions:
+        publication["actions"] = []
+    if args.publish_action:
+        publication["actions"].extend(args.publish_action)
+    if args.publication_summary:
+        publication["summary"] = args.publication_summary
 
     run["updated_at"] = now_utc()
     save_json(run_path, run)
