@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -32,8 +32,9 @@ const (
 	shortcutHelpMaxHeight = 24
 )
 
-func (m *Model) handleShortcutHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	key := msg.String()
+func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	rawKey := msg.String()
+	key := shortcutKey(msg)
 	if m.showHelp {
 		switch key {
 		case "ctrl+c":
@@ -70,12 +71,34 @@ func (m *Model) handleShortcutHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 		return m, nil, true
 	}
 
+	if rawKey != key && key == "?" && m.shortcutAliasBelongsToTextInput() {
+		return m, nil, false
+	}
 	if key == "?" && !m.questionMarkBelongsToTextInput() {
 		m.showHelp = true
 		m.helpScrollOffset = 0
 		return m, nil, true
 	}
 	return m, nil, false
+}
+
+func (m *Model) shortcutAliasBelongsToTextInput() bool {
+	if m.questionMarkBelongsToTextInput() {
+		return true
+	}
+	if m.activeTab != tabCompose {
+		return false
+	}
+	if m.attachmentInputActive {
+		return true
+	}
+	if m.composeAIPanel && m.composeAIInput.Focused() {
+		return true
+	}
+	if m.composeField == composeFieldOriginalMessage || m.composeField == composeFieldForwardedAttachments {
+		return false
+	}
+	return true
 }
 
 func (m *Model) questionMarkBelongsToTextInput() bool {

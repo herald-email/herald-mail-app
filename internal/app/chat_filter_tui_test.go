@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -56,7 +56,7 @@ func TestChatFilterClearedOnEsc(t *testing.T) {
 	m.activeTab = tabTimeline
 	m.timeline.expandedThreads = make(map[string]bool)
 
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated := newM.(*Model)
 
 	if updated.timeline.chatFilterMode {

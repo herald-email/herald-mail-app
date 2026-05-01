@@ -2,9 +2,10 @@ package app
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 )
@@ -415,7 +416,7 @@ func wrapChromeSegments(text string, width, maxLines int) []string {
 	return lines
 }
 
-func renderChromeLines(lines []string, width int, fg lipgloss.Color) string {
+func renderChromeLines(lines []string, width int, fg color.Color) string {
 	if width <= 0 {
 		width = 80
 	}

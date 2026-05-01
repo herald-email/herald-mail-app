@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -59,7 +59,7 @@ func makeHorizontalTimelineModel(t *testing.T, backend *readTrackingBackend) *Mo
 func TestHorizontalTimelineRightOpensPreviewThenFocusesExistingPreview(t *testing.T) {
 	m := makeHorizontalTimelineModel(t, &readTrackingBackend{})
 
-	model, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRight})
+	model, cmd, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyRight})
 	if !handled {
 		t.Fatal("expected right arrow to be handled")
 	}
@@ -76,7 +76,7 @@ func TestHorizontalTimelineRightOpensPreviewThenFocusesExistingPreview(t *testin
 
 	updated.timeline.bodyMessageID = "msg-001"
 	updated.timeline.body = &models.EmailBody{TextPlain: "preview"}
-	model, cmd, handled = updated.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRight})
+	model, cmd, handled = updated.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyRight})
 	if !handled {
 		t.Fatal("expected right arrow on an open preview to be handled")
 	}
@@ -117,7 +117,7 @@ func TestHorizontalTimelineRightOnCollapsedThreadPreviewsNewestWithoutExpanding(
 	}
 	m.updateTimelineTable()
 
-	model, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRight})
+	model, cmd, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyRight})
 	if !handled {
 		t.Fatal("expected right arrow to be handled")
 	}
@@ -140,7 +140,7 @@ func TestHorizontalTimelineLeftFromPreviewFocusesTimelineWithoutClosing(t *testi
 	m.timeline.body = &models.EmailBody{TextPlain: "preview"}
 	m.setFocusedPanel(panelPreview)
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyLeft})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if !handled {
 		t.Fatal("expected left arrow to be handled")
 	}
@@ -171,7 +171,7 @@ func TestHorizontalTimelineLeftFromTimelineFoldsExpandedThreadBeforeFolders(t *t
 	m.timeline.body = &models.EmailBody{TextPlain: "thread preview"}
 	m.setFocusedPanel(panelTimeline)
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyLeft})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if !handled {
 		t.Fatal("expected left arrow to be handled")
 	}
@@ -196,7 +196,7 @@ func TestHorizontalTimelineLeftFromTimelineClosesPreviewAndFocusesFolders(t *tes
 	m.updateTableDimensions(140, 40)
 	m.setFocusedPanel(panelTimeline)
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyLeft})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if !handled {
 		t.Fatal("expected left arrow to be handled")
 	}
@@ -241,7 +241,7 @@ func TestHorizontalTimelineLeftFromTimelineClosesPreviewAndFocusesFolders(t *tes
 	collapsed.updateTableDimensions(140, 40)
 	collapsed.setFocusedPanel(panelTimeline)
 
-	model, _, handled = collapsed.handleTimelineKey(tea.KeyMsg{Type: tea.KeyLeft})
+	model, _, handled = collapsed.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if !handled {
 		t.Fatal("expected left arrow on collapsed thread to be handled")
 	}
@@ -260,7 +260,7 @@ func TestHorizontalTimelineRightFromSidebarFocusesTimeline(t *testing.T) {
 	m.updateTableDimensions(140, 40)
 	m.setFocusedPanel(panelSidebar)
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRight})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyRight})
 	if !handled {
 		t.Fatal("expected right arrow from sidebar to be handled")
 	}
@@ -285,7 +285,7 @@ func TestHorizontalTimelineBracketKeepsPreviewAttachmentPrecedence(t *testing.T)
 	}
 	m.setFocusedPanel(panelPreview)
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyLeft})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if !handled {
 		t.Fatal("expected left arrow to be handled as pane navigation")
 	}

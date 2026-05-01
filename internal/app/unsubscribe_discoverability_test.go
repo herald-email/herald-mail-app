@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -123,7 +123,7 @@ func TestHandleTimelineKey_HCreatesHideFutureMailRule(t *testing.T) {
 		Sender:    "Tech Weekly <newsletter@techweekly.example>",
 	}
 
-	_, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	_, cmd, handled := m.handleTimelineKey(keyRune('h'))
 	if !handled {
 		t.Fatal("expected h to be handled in timeline preview")
 	}
@@ -213,7 +213,7 @@ func TestHandleKeyMsg_CleanupSummaryHCreatesHideFutureMailRule(t *testing.T) {
 	m.updateSummaryTable()
 	m.setFocusedPanel(panelSummary)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	_, cmd := m.Update(keyRune('h'))
 	if cmd == nil {
 		t.Fatal("expected h on cleanup summary to return a hide-future-mail command")
 	}

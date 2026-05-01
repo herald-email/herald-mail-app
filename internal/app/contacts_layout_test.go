@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -228,7 +228,7 @@ func TestContactsEnter_OpensInlinePreview(t *testing.T) {
 	m.contactDetailIdx = 1 // user has selected the second email (msg-2)
 
 	// Press Enter: should open inline preview, staying on Contacts tab.
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = updated.(*Model)
 
 	if m.activeTab != tabContacts {

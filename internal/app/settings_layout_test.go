@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -12,7 +12,7 @@ func renderSettingsRawViewForTest(t *testing.T, s *Settings, width, height int) 
 	t.Helper()
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	s = updated.(*Settings)
-	rendered := s.View()
+	rendered := s.View().Content
 	assertFitsWidth(t, width, rendered)
 	assertFitsHeight(t, height, rendered)
 	return rendered
@@ -133,9 +133,9 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	s = updated.(*Settings)
 
-	updated, _ = s.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = s.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	s = updated.(*Settings)
-	rendered := s.View()
+	rendered := s.View().Content
 	plain := ansi.Strip(rendered)
 
 	for _, want := range []string{

@@ -3,28 +3,22 @@ package app
 import (
 	"bytes"
 	"flag"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/x/exp/teatest"
-
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
+
+var updateSnapshots = flag.Bool("update", false, "update golden snapshots")
 
 // requireGolden compares got against the golden file at path.
 // Pass -update to the test binary to write got to the file instead.
 func requireGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
-	// Check for -update via flag lookup to avoid re-declaring a flag that
-	// teatest's golden package already registers.
-	updateFlag := flag.Lookup("update")
-	doUpdate := updateFlag != nil && updateFlag.Value.String() == "true"
-	if doUpdate {
+	if *updateSnapshots {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 		}
@@ -122,45 +116,57 @@ func mockEmails() []*models.EmailData {
 }
 
 func freezeComposeCursors(m *Model) {
-	_ = m.composeTo.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeCC.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeBCC.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeSubject.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeBody.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeAIInput.Cursor.SetMode(cursor.CursorStatic)
-	_ = m.composeAIResponse.Cursor.SetMode(cursor.CursorStatic)
+	toStyles := m.composeTo.Styles()
+	toStyles.Cursor.Blink = false
+	m.composeTo.SetStyles(toStyles)
+
+	ccStyles := m.composeCC.Styles()
+	ccStyles.Cursor.Blink = false
+	m.composeCC.SetStyles(ccStyles)
+
+	bccStyles := m.composeBCC.Styles()
+	bccStyles.Cursor.Blink = false
+	m.composeBCC.SetStyles(bccStyles)
+
+	subjectStyles := m.composeSubject.Styles()
+	subjectStyles.Cursor.Blink = false
+	m.composeSubject.SetStyles(subjectStyles)
+
+	bodyStyles := m.composeBody.Styles()
+	bodyStyles.Cursor.Blink = false
+	m.composeBody.SetStyles(bodyStyles)
+
+	aiInputStyles := m.composeAIInput.Styles()
+	aiInputStyles.Cursor.Blink = false
+	m.composeAIInput.SetStyles(aiInputStyles)
+
+	aiResponseStyles := m.composeAIResponse.Styles()
+	aiResponseStyles.Cursor.Blink = false
+	m.composeAIResponse.SetStyles(aiResponseStyles)
 }
 
-// readAll reads all bytes from an io.Reader, fataling on error.
-func readAll(t *testing.T, r io.Reader) []byte {
-	t.Helper()
-	b, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
+func snapshotView(m *Model) []byte {
+	return []byte(normalizeSnapshot(m.View().Content))
+}
+
+func normalizeSnapshot(content string) string {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
 	}
-	return b
+	return strings.Join(lines, "\n")
 }
 
 func TestSnapshot_TimelineEmpty(t *testing.T) {
 	m := testModelWithEmails(nil)
 	m.activeTab = tabTimeline
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
-	// Give the program time to render, then quit. FinalOutput waits for the
-	// program to finish and returns the entire accumulated output buffer.
-	// Do NOT call WaitFor before FinalOutput — WaitFor drains tm.Output() via
-	// io.ReadAll, leaving nothing for FinalOutput to read.
-	time.Sleep(200 * time.Millisecond)
-	tm.Quit()
-	requireGolden(t, "testdata/snapshots/timeline_empty.txt", readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+	requireGolden(t, "testdata/snapshots/timeline_empty.txt", snapshotView(m))
 }
 
 func TestSnapshot_TimelinePopulated(t *testing.T) {
 	m := testModelWithEmails(mockEmails())
 	m.activeTab = tabTimeline
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
-	time.Sleep(200 * time.Millisecond)
-	tm.Quit()
-	requireGolden(t, "testdata/snapshots/timeline_populated.txt", readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+	requireGolden(t, "testdata/snapshots/timeline_populated.txt", snapshotView(m))
 }
 
 func TestSnapshot_ComposeBlank(t *testing.T) {
@@ -169,10 +175,7 @@ func TestSnapshot_ComposeBlank(t *testing.T) {
 	m.composeField = 0
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	freezeComposeCursors(m)
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
-	time.Sleep(200 * time.Millisecond)
-	tm.Quit()
-	requireGolden(t, "testdata/snapshots/compose_blank.txt", readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+	requireGolden(t, "testdata/snapshots/compose_blank.txt", snapshotView(m))
 }
 
 func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
@@ -185,10 +188,7 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 	m.composeSubject.SetValue("Hello world")
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	freezeComposeCursors(m)
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
-	time.Sleep(200 * time.Millisecond)
-	tm.Quit()
-	requireGolden(t, "testdata/snapshots/compose_with_cc_bcc.txt", readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+	requireGolden(t, "testdata/snapshots/compose_with_cc_bcc.txt", snapshotView(m))
 }
 
 func TestSnapshot_ComposeAIPanel(t *testing.T) {
@@ -204,9 +204,5 @@ func TestSnapshot_ComposeAIPanel(t *testing.T) {
 	m.composeAIDiff = wordDiff(original, revised)
 	m.composeAIResponse.SetValue(revised)
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 40))
-	time.Sleep(200 * time.Millisecond)
-	tm.Quit()
-	requireGolden(t, "testdata/snapshots/compose_ai_panel.txt",
-		readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(5*time.Second))))
+	requireGolden(t, "testdata/snapshots/compose_ai_panel.txt", snapshotView(m))
 }

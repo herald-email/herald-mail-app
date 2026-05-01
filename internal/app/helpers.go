@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/logger"
@@ -908,11 +908,11 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.logViewer.SetSize(logWidth, tableHeight)
 
-	m.composeTo.Width = plan.Compose.FieldInnerWidth
-	m.composeCC.Width = plan.Compose.FieldInnerWidth
-	m.composeBCC.Width = plan.Compose.FieldInnerWidth
-	m.composeSubject.Width = plan.Compose.FieldInnerWidth
-	m.attachmentPathInput.Width = plan.Compose.FieldInnerWidth
+	m.composeTo.SetWidth(plan.Compose.FieldInnerWidth)
+	m.composeCC.SetWidth(plan.Compose.FieldInnerWidth)
+	m.composeBCC.SetWidth(plan.Compose.FieldInnerWidth)
+	m.composeSubject.SetWidth(plan.Compose.FieldInnerWidth)
+	m.attachmentPathInput.SetWidth(plan.Compose.FieldInnerWidth)
 	composeBodyWidth := plan.Compose.BodyInnerWidth
 	composeExtraRows := m.composeAdditionalRows(tableHeight)
 	composeBodyHeight := tableHeight - 16 - composeExtraRows

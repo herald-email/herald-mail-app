@@ -2,10 +2,11 @@ package app
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/contacts"
@@ -128,7 +129,7 @@ func (m *Model) importAppleContacts() tea.Cmd {
 }
 
 // handleContactsKey handles key events for the Contacts tab.
-func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
+func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 	key := msg.String()
 
 	// In search mode route printable chars to the search buffer
@@ -168,6 +169,7 @@ func (m *Model) handleContactsKey(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		return m, nil
 	}
 
+	key = shortcutKey(msg)
 	switch key {
 	case "/":
 		m.contactSearchMode = "keyword"
@@ -277,7 +279,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 		rightBorderColor = activeColor
 	}
 
-	makePanel := func(borderColor lipgloss.Color, w int) lipgloss.Style {
+	makePanel := func(borderColor color.Color, w int) lipgloss.Style {
 		return lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(borderColor).
@@ -316,8 +318,12 @@ func (m *Model) renderContactsTab(width, height int) string {
 		for i := start; i < end; i++ {
 			c := m.contactsFiltered[i]
 
-			// Inner content width = Width(leftW) - PaddingLeft(1) = leftW-1.
-			innerW := leftW - 1
+			// Bubble Tea v2/Lip Gloss v2 treat Width as the total panel width.
+			// Border(2) + PaddingLeft(1) + right padding(1) leaves w-4 content cells.
+			innerW := leftW - 4
+			if innerW < 1 {
+				innerW = 1
+			}
 
 			// Progressive column layout based on available width:
 			// Wide (>=60): Name | Email | Company | Count
@@ -426,12 +432,16 @@ func (m *Model) renderContactsTab(width, height int) string {
 	if m.contactPreviewEmail != nil {
 		// Inline email preview within the Contacts tab
 		email := m.contactPreviewEmail
+		rightInnerW := rightW - 4
+		if rightInnerW < 10 {
+			rightInnerW = 10
+		}
 		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
 		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.HeaderFg)
-		rightSb.WriteString(boldStyle.Render(truncate("From: "+sanitizeText(email.Sender), rightW-1)) + "\n")
-		rightSb.WriteString(dimStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), rightW-1)) + "\n")
-		rightSb.WriteString(boldStyle.Render(truncate("Subj: "+sanitizeText(email.Subject), rightW-1)) + "\n")
-		rightSb.WriteString(strings.Repeat("─", rightW-1) + "\n")
+		rightSb.WriteString(boldStyle.Render(truncate("From: "+sanitizeText(email.Sender), rightInnerW)) + "\n")
+		rightSb.WriteString(dimStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), rightInnerW)) + "\n")
+		rightSb.WriteString(boldStyle.Render(truncate("Subj: "+sanitizeText(email.Subject), rightInnerW)) + "\n")
+		rightSb.WriteString(strings.Repeat("─", rightInnerW) + "\n")
 		if m.contactPreviewLoading {
 			rightSb.WriteString(dimStyle.Render("Loading…"))
 		} else if m.contactPreviewBody != nil {
@@ -439,11 +449,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 			if body == "" {
 				body = "(No text content)"
 			}
-			innerW := rightW - 1
-			if innerW < 10 {
-				innerW = 10
-			}
-			lines := renderEmailBodyLines(body, innerW)
+			lines := renderEmailBodyLines(body, rightInnerW)
 			maxLines := contentH - 6 // header(4) + hint(1) + margin
 			if maxLines < 1 {
 				maxLines = 1
@@ -502,10 +508,12 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if len(m.contactDetailEmails) == 0 {
 			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
 		} else {
-			// Inner content = Width(rightW) - PaddingLeft(1) = rightW-1.
-			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) + " "(1 right padding) = maxSubjW+15.
-			// To fit: maxSubjW+15 <= rightW-1 → maxSubjW = rightW-16.
-			maxSubjW := rightW - 16
+			rightInnerW := rightW - 4
+			if rightInnerW < 1 {
+				rightInnerW = 1
+			}
+			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) = maxSubjW+14.
+			maxSubjW := rightInnerW - 14
 			if maxSubjW < 10 {
 				maxSubjW = 10
 			}

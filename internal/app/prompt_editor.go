@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -154,8 +154,8 @@ func (p *PromptEditor) Update(msg tea.Msg) (*PromptEditor, tea.Cmd) {
 		p.form = p.form.WithWidth(p.formWidth()).WithHeight(p.formHeight())
 		return p, nil
 
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEscape {
+	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEscape {
 			if p.form.State != huh.StateCompleted {
 				p.done = true
 				return p, func() tea.Msg { return PromptEditorCancelledMsg{} }
@@ -192,12 +192,12 @@ func (p *PromptEditor) Update(msg tea.Msg) (*PromptEditor, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (p *PromptEditor) View() string {
+func (p *PromptEditor) View() tea.View {
 	if p.width > 0 && p.width < minTermWidth {
-		return renderMinSizeMessage(p.width, p.height)
+		return newHeraldView(renderMinSizeMessage(p.width, p.height))
 	}
 	if p.height > 0 && p.height < minTermHeight {
-		return renderMinSizeMessage(p.width, p.height)
+		return newHeraldView(renderMinSizeMessage(p.width, p.height))
 	}
 
 	formView := p.form.View()
@@ -224,7 +224,7 @@ func (p *PromptEditor) View() string {
 			p.guideView(innerW) + "\n\n" +
 			formView,
 	)
-	return lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered)
+	return newHeraldView(lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered))
 }
 
 // buildPrompt constructs a models.CustomPrompt from the current form field values.

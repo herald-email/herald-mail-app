@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -20,14 +20,14 @@ func TestComposeCCBCCWidth_MatchesToField(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(*Model)
 
-	if m.composeCC.Width == 0 {
+	if m.composeCC.Width() == 0 {
 		t.Fatal("composeCC.Width is 0 — width was never set")
 	}
-	if m.composeCC.Width != m.composeTo.Width {
-		t.Fatalf("CC width %d != To width %d", m.composeCC.Width, m.composeTo.Width)
+	if m.composeCC.Width() != m.composeTo.Width() {
+		t.Fatalf("CC width %d != To width %d", m.composeCC.Width(), m.composeTo.Width())
 	}
-	if m.composeBCC.Width != m.composeTo.Width {
-		t.Fatalf("BCC width %d != To width %d", m.composeBCC.Width, m.composeTo.Width)
+	if m.composeBCC.Width() != m.composeTo.Width() {
+		t.Fatalf("BCC width %d != To width %d", m.composeBCC.Width(), m.composeTo.Width())
 	}
 }
 

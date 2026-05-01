@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -276,20 +276,20 @@ func (m *Model) renderEmailPreview() string {
 	var sb strings.Builder
 
 	// Focus-aware colors: brighter when preview panel has focus
-	borderColor := "238"
-	headerColor := "245"
+	borderColor := lipgloss.Color("238")
+	headerColor := lipgloss.Color("245")
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := chrome.FocusedPanel == panelPreview
 	if headerActive {
-		borderColor = string(defaultTheme.BorderActive)
-		headerColor = string(defaultTheme.ConfirmFg)
+		borderColor = defaultTheme.BorderActive
+		headerColor = defaultTheme.ConfirmFg
 	} else {
-		borderColor = string(defaultTheme.BorderInactive)
-		headerColor = string(defaultTheme.TabInactiveFg)
+		borderColor = defaultTheme.BorderInactive
+		headerColor = defaultTheme.TabInactiveFg
 	}
 
 	// Header block
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
+	headerStyle := lipgloss.NewStyle().Foreground(headerColor)
 	email := m.timeline.selectedEmail
 	bodyMatchesSelected := email != nil && m.timeline.bodyMessageID == email.MessageID
 	category := ""
@@ -435,9 +435,9 @@ func (m *Model) renderEmailPreview() string {
 	}
 
 	panelStyle := lipgloss.NewStyle().
-		Width(w - 2). // subtract 2 for left+right borders
+		Width(w).
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
+		BorderForeground(borderColor).
 		PaddingLeft(1)
 
 	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
@@ -1012,16 +1012,16 @@ func (m *Model) renderCleanupPreview() string {
 
 	var sb strings.Builder
 
-	borderColor := string(defaultTheme.BorderInactive)
-	headerColor := string(defaultTheme.TabInactiveFg)
+	borderColor := defaultTheme.BorderInactive
+	headerColor := defaultTheme.TabInactiveFg
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelDetails)
 	if headerActive {
-		borderColor = string(defaultTheme.BorderActive)
-		headerColor = string(defaultTheme.ConfirmFg)
+		borderColor = defaultTheme.BorderActive
+		headerColor = defaultTheme.ConfirmFg
 	}
 
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(headerColor))
+	headerStyle := lipgloss.NewStyle().Foreground(headerColor)
 	dimStyle := headerStyle
 
 	headerLines := 0
@@ -1136,10 +1136,10 @@ func (m *Model) renderCleanupPreview() string {
 	}
 
 	panelStyle := lipgloss.NewStyle().
-		Width(w - 2). // subtract 2 for left+right borders
+		Width(w).
 		Height(contentHeight).
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
+		BorderForeground(borderColor).
 		PaddingLeft(1)
 
 	return panelStyle.Render(fitPanelContentHeight(sb.String(), contentHeight))

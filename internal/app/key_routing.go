@@ -4,12 +4,12 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	if m.pendingDeleteConfirm {
-		switch msg.String() {
+		switch shortcutKey(msg) {
 		case "y", "Y":
 			m.pendingDeleteConfirm = false
 			action := m.pendingDeleteAction
@@ -27,7 +27,7 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	if m.pendingUnsubscribe {
-		switch msg.String() {
+		switch shortcutKey(msg) {
 		case "y", "Y":
 			m.pendingUnsubscribe = false
 			action := m.pendingUnsubscribeAction
@@ -141,11 +141,11 @@ func (m *Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m *Model) handleLogsOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	if !m.showLogs {
 		return m, nil, false
 	}
-	switch msg.String() {
+	switch shortcutKey(msg) {
 	case "l", "L", "alt+l", "alt+L", "esc":
 		m.showLogs = false
 		return m, nil, true
@@ -158,8 +158,8 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) 
 	return m, cmd, true
 }
 
-func (m *Model) handleGlobalCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch msg.String() {
+func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	switch shortcutKey(msg) {
 	case "ctrl+c":
 		m.cleanup()
 		return m, tea.Quit, true
@@ -246,8 +246,8 @@ func (m *Model) toggleChat() tea.Cmd {
 	return nil
 }
 
-func (m *Model) handleTabKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch msg.String() {
+func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	switch shortcutKey(msg) {
 	case "1":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 0 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[0])

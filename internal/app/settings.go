@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/render"
 )
@@ -492,9 +492,9 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
 		return s, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// In panel mode, esc cancels if the form isn't yet complete.
-		if s.mode == SettingsModePanel && msg.Type == tea.KeyEscape {
+		if s.mode == SettingsModePanel && msg.Code == tea.KeyEscape {
 			if s.form.State != huh.StateCompleted {
 				s.done = true
 				return s, func() tea.Msg { return SettingsCancelledMsg{} }
@@ -544,7 +544,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (s *Settings) View() string {
+func (s *Settings) View() tea.View {
 	formView := strings.TrimRight(s.form.View(), "\n")
 
 	if s.mode == SettingsModePanel {
@@ -556,14 +556,14 @@ func (s *Settings) View() string {
 			Padding(1, 2)
 
 		rendered := strings.TrimRight(box.Render(formView), "\n")
-		return strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n")
+		return newHeraldView(strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n"))
 	}
 
 	if s.width > 0 && s.width < minTermWidth {
-		return renderMinSizeMessage(s.width, s.height)
+		return newHeraldView(renderMinSizeMessage(s.width, s.height))
 	}
 	if s.height > 0 && s.height < minTermHeight {
-		return renderMinSizeMessage(s.width, s.height)
+		return newHeraldView(renderMinSizeMessage(s.width, s.height))
 	}
 
 	boxWidth := s.wizardBoxWidth()
@@ -585,9 +585,9 @@ func (s *Settings) View() string {
 	)
 	rendered = strings.TrimRight(rendered, "\n")
 	if s.width > 0 && s.height > 0 {
-		return strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n")
+		return newHeraldView(strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n"))
 	}
-	return rendered
+	return newHeraldView(rendered)
 }
 
 // buildConfig constructs a config.Config from the current form field values.

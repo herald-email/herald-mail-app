@@ -5,10 +5,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
-	"github.com/muesli/termenv"
 )
 
 func newPreservedComposeModel() *Model {
@@ -70,17 +68,17 @@ func newReplyPreservedComposeModel() *Model {
 func TestComposeCtrlOCyclesPreservationMode(t *testing.T) {
 	m := newPreservedComposeModel()
 
-	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyCtrlO})
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	updated := model.(*Model)
 	if updated.composePreserved.mode != models.PreservationModeFidelity {
 		t.Fatalf("mode after first ctrl+o = %q, want fidelity", updated.composePreserved.mode)
 	}
-	model, _ = updated.handleComposeKey(tea.KeyMsg{Type: tea.KeyCtrlO})
+	model, _ = updated.handleComposeKey(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	updated = model.(*Model)
 	if updated.composePreserved.mode != models.PreservationModePrivacy {
 		t.Fatalf("mode after second ctrl+o = %q, want privacy", updated.composePreserved.mode)
 	}
-	model, _ = updated.handleComposeKey(tea.KeyMsg{Type: tea.KeyCtrlO})
+	model, _ = updated.handleComposeKey(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	updated = model.(*Model)
 	if updated.composePreserved.mode != models.PreservationModeSafe {
 		t.Fatalf("mode after third ctrl+o = %q, want safe", updated.composePreserved.mode)
@@ -142,7 +140,7 @@ func TestComposeForwardedAttachmentFocusKeepsGlobalSendShortcut(t *testing.T) {
 	m.composeTo.SetValue("you@example.com")
 	m.composeSubject.SetValue("Fwd: Styled mail")
 
-	_, cmd := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Fatal("expected ctrl+s to keep sending while forwarded attachment list is focused")
@@ -211,7 +209,7 @@ func TestReplyComposeOriginalMessagePaneScrollsWithoutEditingResponse(t *testing
 	}, "\n")
 	m.updateTableDimensions(100, 32)
 
-	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	updated := model.(*Model)
 	beforeBody := updated.composeBody.Value()
 	for i := 0; i < 10; i++ {
@@ -232,10 +230,6 @@ func TestReplyComposeOriginalMessagePaneScrollsWithoutEditingResponse(t *testing
 }
 
 func TestRenderForwardComposeSelectedAttachmentUsesActiveFocusStyle(t *testing.T) {
-	oldProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	defer lipgloss.SetColorProfile(oldProfile)
-
 	m := newPreservedComposeModel()
 	m.composeField = composeFieldForwardedAttachments
 	m.composePreserved.selectedAttachment = 1

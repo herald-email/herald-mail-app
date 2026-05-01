@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -197,7 +197,7 @@ func TestHandleTimelineSpaceIgnoredInReadOnlyDiagnostic(t *testing.T) {
 	m.timeline.emails = []*models.EmailData{{MessageID: "readonly", Sender: "a@example.com", Subject: "Read only"}}
 	m.updateTimelineTable()
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeySpace})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeySpace})
 	if !handled {
 		t.Fatal("expected Timeline space key to be handled in read-only view")
 	}

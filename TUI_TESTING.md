@@ -188,7 +188,7 @@ In-process testing harness for Bubbletea models.
 
 ```go
 import (
-    tea "github.com/charmbracelet/bubbletea"
+    tea "charm.land/bubbletea/v2"
     "github.com/charmbracelet/x/exp/teatest"
 )
 
@@ -198,9 +198,9 @@ tm := teatest.NewTestModel(t, yourModel,
 )
 
 // Send messages (key presses, custom messages, etc.)
-tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+tm.Send(tea.KeyPressMsg{Text: "hello"})
 tm.Type("hello") // convenience for typing text
 
 // Read output (returns an io.Reader that streams rendered frames)
@@ -433,7 +433,7 @@ import (
     "testing"
     "time"
 
-    tea "github.com/charmbracelet/bubbletea"
+    tea "charm.land/bubbletea/v2"
     "github.com/charmbracelet/x/exp/teatest"
 )
 
@@ -463,9 +463,9 @@ func (a *InProcessAgent) WaitForContent(t *testing.T, text string) {
     })
 }
 
-// SendKey sends a Bubbletea key message.
-func (a *InProcessAgent) SendKey(keyType tea.KeyType) {
-    a.tm.Send(tea.KeyMsg{Type: keyType})
+// SendKey sends a Bubble Tea v2 key press message.
+func (a *InProcessAgent) SendKey(code rune) {
+    a.tm.Send(tea.KeyPressMsg{Code: code})
 }
 
 // SendRunes sends character input.
@@ -1177,7 +1177,7 @@ After that initial frame, send terminal input as `0` + input bytes and resize me
 tmux capture-pane -t test -p | sed 's/[[:space:]]*$//' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
 ```
 
-**Alt-screen apps.** Bubbletea apps using `tea.WithAltScreen()` enter the alternate screen buffer. `capture-pane -p` correctly captures this. But if the app exits and returns to the normal screen, a capture right after will show the normal (empty) screen, not the last alt-screen frame.
+**Alt-screen apps.** Bubble Tea v2 apps enter the alternate screen buffer by returning a `tea.View` with `AltScreen = true`. `capture-pane -p` correctly captures this. But if the app exits and returns to the normal screen, a capture right after will show the normal (empty) screen, not the last alt-screen frame.
 
 **Mouse events.** tmux 3.0+ supports sending mouse events, but the syntax is complex. For TUI testing, prefer keyboard-driven test scenarios. If you must test mouse interaction, use the PTY + vt approach instead.
 
@@ -1342,7 +1342,7 @@ tm.Send(tea.WindowSizeMsg{Width: 120, Height: 40})
 ```
 go get github.com/charmbracelet/x/vt@latest
 go get github.com/charmbracelet/x/exp/teatest@latest
-go get github.com/charmbracelet/bubbletea@latest
+go get charm.land/bubbletea/v2@latest
 go get github.com/creack/pty@latest
 ```
 

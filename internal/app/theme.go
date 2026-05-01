@@ -1,33 +1,37 @@
 package app
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 type Theme struct {
-	TabActiveBg    lipgloss.Color
-	TabActiveFg    lipgloss.Color
-	TabInactiveFg  lipgloss.Color
-	BorderActive   lipgloss.Color
-	BorderInactive lipgloss.Color
-	StatusBg       lipgloss.Color
-	StatusFg       lipgloss.Color
-	HintFg         lipgloss.Color
-	HeaderFg       lipgloss.Color
-	HeaderBg       lipgloss.Color
-	DimFg          lipgloss.Color
-	TextFg         lipgloss.Color
-	MutedFg        lipgloss.Color
-	InfoFg         lipgloss.Color
-	WarningFg      lipgloss.Color
-	ErrorFg        lipgloss.Color
-	ConfirmFg      lipgloss.Color
-	ConfirmBg      lipgloss.Color
-	UnsubBg        lipgloss.Color
-	DemoFg         lipgloss.Color
-	DryRunFg       lipgloss.Color
-	LogInfoFg      lipgloss.Color
-	LogWarnFg      lipgloss.Color
-	LogErrorFg     lipgloss.Color
-	LogDebugFg     lipgloss.Color
+	TabActiveBg    color.Color
+	TabActiveFg    color.Color
+	TabInactiveFg  color.Color
+	BorderActive   color.Color
+	BorderInactive color.Color
+	StatusBg       color.Color
+	StatusFg       color.Color
+	HintFg         color.Color
+	HeaderFg       color.Color
+	HeaderBg       color.Color
+	DimFg          color.Color
+	TextFg         color.Color
+	MutedFg        color.Color
+	InfoFg         color.Color
+	WarningFg      color.Color
+	ErrorFg        color.Color
+	ConfirmFg      color.Color
+	ConfirmBg      color.Color
+	UnsubBg        color.Color
+	DemoFg         color.Color
+	DryRunFg       color.Color
+	LogInfoFg      color.Color
+	LogWarnFg      color.Color
+	LogErrorFg     color.Color
+	LogDebugFg     color.Color
 }
 
 var defaultTheme = Theme{

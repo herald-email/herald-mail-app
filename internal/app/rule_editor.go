@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -171,8 +171,8 @@ func (r *RuleEditor) Update(msg tea.Msg) (*RuleEditor, tea.Cmd) {
 		r.form = r.form.WithWidth(r.formWidth()).WithHeight(r.formHeight())
 		return r, nil
 
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEscape {
+	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEscape {
 			if r.form.State != huh.StateCompleted {
 				r.done = true
 				return r, func() tea.Msg { return RuleEditorCancelledMsg{} }
@@ -205,7 +205,7 @@ func (r *RuleEditor) Update(msg tea.Msg) (*RuleEditor, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (r *RuleEditor) View() string {
+func (r *RuleEditor) View() tea.View {
 	formView := r.form.View()
 
 	w := r.formWidth()
@@ -228,7 +228,7 @@ func (r *RuleEditor) View() string {
 			noteStyle.Render(r.savedRulesSummary()) + "\n\n" +
 			formView,
 	)
-	return lipgloss.Place(r.width, r.height, lipgloss.Center, lipgloss.Center, rendered)
+	return newHeraldView(lipgloss.Place(r.width, r.height, lipgloss.Center, lipgloss.Center, rendered))
 }
 
 // buildRule constructs a models.Rule from the current form field values.

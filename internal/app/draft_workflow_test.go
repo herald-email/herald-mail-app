@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -309,7 +309,7 @@ func TestTimelineSendDraftFromCollapsedThreadDoesNotOpenCompose(t *testing.T) {
 	m.updateTimelineTable()
 	m.timelineTable.SetCursor(0)
 
-	model, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	model, cmd, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	updated := model.(*Model)
 	if !handled {
 		t.Fatal("expected Ctrl+S to be handled on collapsed thread containing a draft")

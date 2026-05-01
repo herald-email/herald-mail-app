@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
@@ -117,7 +117,7 @@ func TestOAuthWaitModel_EnterOpensBrowser(t *testing.T) {
 		t.Fatal("browserOpen should be false before Enter")
 	}
 
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	enterMsg := tea.KeyPressMsg{Code: tea.KeyEnter}
 	updatedModel, _ := m.Update(enterMsg)
 	updated := updatedModel.(*OAuthWaitModel)
 
@@ -150,7 +150,7 @@ func TestOAuthWaitModel_EnterKeepsBrowserOpenFalseWhenOpenFails(t *testing.T) {
 		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 
-	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	enterMsg := tea.KeyPressMsg{Code: tea.KeyEnter}
 	updatedModel, _ := m.Update(enterMsg)
 	updated := updatedModel.(*OAuthWaitModel)
 
@@ -175,7 +175,7 @@ func TestOAuthWaitModel_ViewContainsCopyURL(t *testing.T) {
 		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(ansi.Strip(view), "http://localhost:12345/authorize") {
 		t.Errorf("View() should contain the short copy URL, got:\n%s", view)
 	}
@@ -201,7 +201,7 @@ func TestOAuthWaitModel_ViewOffersClickableHereAndShortCopyURLWithoutBox(t *test
 		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 
-	view := m.View()
+	view := m.View().Content
 	plain := ansi.Strip(view)
 	if !strings.Contains(plain, "Click: [here] or copy this link to the browser:") {
 		t.Fatalf("expected clickable/copyable auth prompt, got:\n%s", plain)
@@ -237,7 +237,7 @@ func TestOAuthWaitModel_ViewUsesMinimumSizeGuardWhenTooNarrow(t *testing.T) {
 		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 
-	plain := ansi.Strip(m.View())
+	plain := ansi.Strip(m.View().Content)
 	if !strings.Contains(plain, "Terminal too narrow") {
 		t.Fatalf("expected OAuth wait view to use minimum-size guard, got:\n%s", plain)
 	}
@@ -261,7 +261,7 @@ func TestOAuthWaitModel_ViewShowsGmailOAuthTitle(t *testing.T) {
 		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 
-	view := stripANSI(m.View())
+	view := stripANSI(m.View().Content)
 	if !strings.Contains(view, "Gmail OAuth") {
 		t.Fatalf("expected Gmail OAuth title in OAuth wait view, got:\n%s", view)
 	}

@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // LogEntry represents a single log entry
@@ -35,7 +35,7 @@ type LogStyles struct {
 
 // NewLogViewer creates a new log viewer
 func NewLogViewer(width, height int) *LogViewer {
-	vp := viewport.New(width, height)
+	vp := viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 	vp.YPosition = 0
 
 	styles := LogStyles{
@@ -79,7 +79,7 @@ func (lv *LogViewer) updateContent() {
 
 	for _, entry := range lv.logs {
 		timestamp := entry.Timestamp.Format("15:04:05")
-		
+
 		var styledLine string
 		switch entry.Level {
 		case "ERROR":
@@ -112,16 +112,16 @@ func (lv *LogViewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the log viewer
-func (lv *LogViewer) View() string {
+func (lv *LogViewer) View() tea.View {
 	lv.mutex.RLock()
 	defer lv.mutex.RUnlock()
-	return lv.viewport.View()
+	return newHeraldView(lv.viewport.View())
 }
 
 // SetSize updates the viewport size
 func (lv *LogViewer) SetSize(width, height int) {
-	lv.viewport.Width = width
-	lv.viewport.Height = height
+	lv.viewport.SetWidth(width)
+	lv.viewport.SetHeight(height)
 }
 
 // GetLogCount returns the number of logs

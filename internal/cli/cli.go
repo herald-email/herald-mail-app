@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -106,7 +106,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m wizardModel) View() string {
+func (m wizardModel) View() tea.View {
 	switch m.state {
 	case wizardStateOAuth:
 		return m.oauthWait.View()
@@ -121,7 +121,7 @@ func runWizard(configPath string, experimental bool) error {
 		ShowExperimentalEmailServices: experimental,
 	})
 	wm := wizardModel{settings: s, configPath: configPath}
-	p := tea.NewProgram(wm, tea.WithAltScreen())
+	p := tea.NewProgram(wm)
 	finalModel, err := p.Run()
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func runDemo(imageMode app.PreviewImageMode) {
 	model.SetConfig(cfg)
 
 	logger.Info("Starting demo TUI application...")
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		logger.Error("Demo application error: %v", err)
 		fmt.Printf("Error running demo: %v\n", err)
@@ -684,7 +684,7 @@ func runTUI() {
 	logger.Info("Starting TUI application...")
 
 	// Run the application
-	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(app)
 	if _, err := p.Run(); err != nil {
 		logger.Error("Application error: %v", err)
 		fmt.Printf("Error running application: %v", err)

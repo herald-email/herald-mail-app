@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
@@ -95,8 +95,8 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEnter && !m.browserOpen {
+	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEnter && !m.browserOpen {
 			if err := openBrowserFn(m.authorizeURL()); err == nil {
 				m.browserOpen = true
 			}
@@ -142,12 +142,12 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (m *OAuthWaitModel) View() string {
+func (m *OAuthWaitModel) View() tea.View {
 	if m.width > 0 && m.width < minTermWidth {
-		return renderMinSizeMessage(m.width, m.height)
+		return newHeraldView(renderMinSizeMessage(m.width, m.height))
 	}
 	if m.height > 0 && m.height < minTermHeight {
-		return renderMinSizeMessage(m.width, m.height)
+		return newHeraldView(renderMinSizeMessage(m.width, m.height))
 	}
 
 	contentWidth := 88
@@ -191,9 +191,9 @@ func (m *OAuthWaitModel) View() string {
 	)
 
 	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered)
+		return newHeraldView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered))
 	}
-	return rendered
+	return newHeraldView(rendered)
 }
 
 func (m *OAuthWaitModel) authorizeURL() string {

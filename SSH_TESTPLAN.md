@@ -149,6 +149,23 @@ tmux kill-session -t ssh_test
 - Cleanup: two-panel layout (senders left, messages right)
 - No layout corruption when switching
 
+### TC-SS-02A — Non-Latin browse shortcuts over SSH
+
+**Steps:**
+1. Connect (TC-SS-01 setup) and start in Timeline.
+2. If the SSH client and terminal report Bubble Tea v2 physical-key data, press the non-Latin-layout physical positions for `j` and `k`.
+3. Press the physical `l` position twice to open and close logs.
+4. In fallback mode, press `о`, `л`, and `д` to exercise the Russian-layout aliases for `j`, `k`, and `l`.
+5. Press the physical `/` position or fallback `.` to open Timeline search, type a Cyrillic query, then press Escape to leave search.
+
+**Expect:**
+- Timeline selection moves down and up just as it does for `j` and `k`.
+- Logs open and close just as they do for `l`.
+- Timeline search opens just as it does for `/`.
+- The search input preserves the typed Cyrillic query text instead of rewriting it as Latin shortcut characters.
+- Physical-key support depends on the terminal/SSH client; Cyrillic fallback aliases continue to work when Herald receives normal UTF-8 key messages.
+- No crash, freeze, or garbled UTF-8 appears in the SSH client pane.
+
 ---
 
 ### TC-SS-03 — Email navigation and body preview

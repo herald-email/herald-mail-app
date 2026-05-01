@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -55,8 +55,31 @@ func (s *stubClassifier) DescribeImage(_ context.Context, _ []byte, _ string) (s
 }
 func (s *stubClassifier) Ping() error { return nil }
 
-func keyRunes(s string) tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+func keyRunes(s string) tea.KeyPressMsg {
+	runes := []rune(s)
+	msg := tea.KeyPressMsg{Text: s}
+	if len(runes) == 1 {
+		msg.Code = runes[0]
+	}
+	return msg
+}
+
+func keyRune(r rune) tea.KeyPressMsg {
+	return keyRunes(string(r))
+}
+
+func keyCode(code rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: code}
+}
+
+func keyCtrl(r rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl}
+}
+
+func keyPhysical(text string, base rune) tea.KeyPressMsg {
+	msg := keyRunes(text)
+	msg.BaseCode = base
+	return msg
 }
 
 // makeReclassifyModel builds the minimal Model state required to test reclassification.

@@ -100,6 +100,7 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 The TUI uses a fixed tab bar at the top, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
 
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
+- [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
 
 ### Tabs (top-level navigation)
 Keyboard (`F1`-`F3` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable. Compose is a transient writing screen launched from Timeline, not a top-level tab.

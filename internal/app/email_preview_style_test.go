@@ -5,16 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/herald-email/herald-mail-app/internal/models"
-	"github.com/muesli/termenv"
 )
 
 func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T) {
-	oldProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	defer lipgloss.SetColorProfile(oldProfile)
-
 	email := &models.EmailData{
 		Sender:  "Tech Weekly <newsletter@techweekly.example>",
 		Subject: "This Week in Tech",

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cleanup"
@@ -1027,7 +1027,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKeyMsg(msg)
 
 	case tea.MouseMsg:
@@ -1770,7 +1770,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 const minTermWidth = 60
 const minTermHeight = 15
 
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
 	// OAuth wait overlay takes over the entire screen when active.
 	if m.oauthWait != nil {
 		return m.oauthWait.View()
@@ -1792,28 +1792,36 @@ func (m *Model) View() string {
 		return m.cleanupManager.View()
 	}
 	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
-		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
+		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
 	}
 	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
-		return renderMinSizeMessage(m.windowWidth, m.windowHeight)
+		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
 	}
 	if m.showHelp {
-		return m.renderShortcutHelpView()
+		return m.buildView(m.renderShortcutHelpView())
 	}
 	if m.loading && !m.hasVisibleStartupData() {
-		return m.renderLoadingView()
+		return m.buildView(m.renderLoadingView())
 	}
 	if m.timeline.fullScreen {
-		return m.renderFullScreenEmail()
+		return m.buildView(m.renderFullScreenEmail())
 	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-		return m.renderCleanupPreview()
+		return m.buildView(m.renderCleanupPreview())
 	}
-	return m.renderMainView()
+	return m.buildView(m.renderMainView())
+}
+
+func (m *Model) buildView(content string) tea.View {
+	v := newHeraldView(content)
+	if !m.timeline.mouseMode {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
+	return v
 }
 
 // handleKeyMsg handles keyboard input
-func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if model, cmd, handled := m.handleShortcutHelpKey(msg); handled {
 		return model, cmd
 	}
@@ -1830,8 +1838,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
+	key := shortcutKey(msg)
+
 	// Reset pending 'yy' sequence on any key other than 'y'
-	if m.timeline.pendingY && msg.String() != "y" {
+	if m.timeline.pendingY && key != "y" {
 		m.timeline.pendingY = false
 	}
 
@@ -1845,7 +1855,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.contactSearchMode != "" {
 			return m.handleContactsKey(msg)
 		}
-		if !isGlobalContactsKey(msg.String()) {
+		if !isGlobalContactsKey(key) {
 			return m.handleContactsKey(msg)
 		}
 	}
@@ -1858,7 +1868,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	switch msg.String() {
+	switch key {
 	case "m":
 		if m.activeTab == tabCleanup && m.showCleanupPreview {
 			return m, m.toggleMouseCaptureMode()
@@ -2253,7 +2263,7 @@ func (m *Model) renderMainView() string {
 	// Content area
 	var mainContent string
 	if m.showLogs {
-		mainContent = m.baseStyle.Render(m.logViewer.View())
+		mainContent = m.baseStyle.Width(m.logViewer.viewport.Width() + 2).Render(m.logViewer.View().Content)
 	} else if m.activeTab == tabTimeline {
 		mainContent = m.renderTimelineView()
 	} else if m.activeTab == tabCompose {
@@ -2270,7 +2280,9 @@ func (m *Model) renderMainView() string {
 			if m.stats != nil && len(m.stats) == 0 {
 				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
 			} else {
-				summaryPanelStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+				summaryPanelStyle := m.baseStyle.
+					Width(plan.Cleanup.SummaryWidth + 2).
+					BorderForeground(defaultTheme.BorderInactive)
 				if chrome.FocusedPanel == panelSummary {
 					summaryPanelStyle = summaryPanelStyle.BorderForeground(defaultTheme.BorderActive)
 				}
@@ -2280,7 +2292,9 @@ func (m *Model) renderMainView() string {
 				}
 				summaryView = summaryPanelStyle.Render(renderStyledTableViewWithCompactLeadingCell(&m.summaryTable, summaryStyles))
 			}
-			detailsPanelStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+			detailsPanelStyle := m.baseStyle.
+				Width(plan.Cleanup.DetailsWidth + 2).
+				BorderForeground(defaultTheme.BorderInactive)
 			if chrome.FocusedPanel == panelDetails {
 				detailsPanelStyle = detailsPanelStyle.BorderForeground(defaultTheme.BorderActive)
 			}
@@ -2298,7 +2312,9 @@ func (m *Model) renderMainView() string {
 					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView, panelGap, previewPanel)
 				}
 			} else if plan.SidebarVisible && !m.sidebarTooWide {
-				sidebarStyle := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+				sidebarStyle := m.baseStyle.
+					Width(sidebarContentWidth + 2).
+					BorderForeground(defaultTheme.BorderInactive)
 				if chrome.FocusedPanel == panelSidebar {
 					sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
 				}
@@ -2310,7 +2326,7 @@ func (m *Model) renderMainView() string {
 		}
 	}
 	if plan.ChatVisible {
-		chatView := m.baseStyle.Render(m.renderChatPanel())
+		chatView := m.baseStyle.Width(chatPanelWidth + 2).Render(m.renderChatPanel())
 		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, panelGap, chatView) + "\n")
 	} else {
 		content.WriteString(mainContent + "\n")

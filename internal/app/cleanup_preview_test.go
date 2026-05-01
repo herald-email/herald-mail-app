@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -45,7 +45,7 @@ func TestCleanupFullScreen(t *testing.T) {
 	}
 
 	// Press z — should enter full-screen
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+	newM, _ := m.Update(keyRunes("z"))
 	updated := newM.(*Model)
 
 	if !updated.cleanupFullScreen {
@@ -56,7 +56,7 @@ func TestCleanupFullScreen(t *testing.T) {
 	}
 
 	// Press z again — should exit full-screen
-	newM2, _ := updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+	newM2, _ := updated.Update(keyRunes("z"))
 	updated2 := newM2.(*Model)
 
 	if updated2.cleanupFullScreen {
@@ -72,7 +72,7 @@ func TestCleanupEscInFullScreen(t *testing.T) {
 	m := makeCleanupPreviewModel()
 	m.cleanupFullScreen = true
 
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated := newM.(*Model)
 
 	if updated.cleanupFullScreen {
@@ -88,7 +88,7 @@ func TestCleanupEscClosesPreview(t *testing.T) {
 	m := makeCleanupPreviewModel()
 	m.cleanupFullScreen = false
 
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated := newM.(*Model)
 
 	if updated.showCleanupPreview {
@@ -220,7 +220,7 @@ func TestCleanupPreviewDelete(t *testing.T) {
 	m := makeCleanupPreviewModel()
 
 	// Press D
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	newM, _ := m.Update(keyRunes("D"))
 	updated := newM.(*Model)
 
 	// The DeletionRequest is sent in a goroutine; wait briefly for it.
@@ -279,7 +279,7 @@ func TestCleanupPreviewArchive(t *testing.T) {
 	m := makeCleanupPreviewModel()
 
 	// Press e
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	newM, _ := m.Update(keyRunes("e"))
 	updated := newM.(*Model)
 
 	// The DeletionRequest (with IsArchive=true) is sent in a goroutine; wait briefly.

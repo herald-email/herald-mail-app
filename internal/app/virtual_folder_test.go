@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -94,7 +94,7 @@ func TestAllMailOnlyIgnoresMutatingKeys(t *testing.T) {
 	m.updateTimelineTable()
 
 	for _, key := range []string{"D", "e", "A", "R", "F", "*", "u"} {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		updated, _ := m.Update(keyRunes(key))
 		m = updated.(*Model)
 	}
 
@@ -224,13 +224,13 @@ func TestCleanupAllMailOnly_DeleteCurrentDomainQueuesPerMessageDeletes(t *testin
 		}
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	updated, _ := m.Update(keyRunes("D"))
 	m = updated.(*Model)
 	if !m.pendingDeleteConfirm {
 		t.Fatal("expected D to open a delete confirmation in Cleanup All Mail only view")
 	}
 
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	updated, _ = m.Update(keyRunes("y"))
 	m = updated.(*Model)
 
 	reqs := readDeletionRequests(t, m.deletionRequestCh, 2)
@@ -279,7 +279,7 @@ func TestCleanupAllMailOnly_PreviewDeleteQueuesUnderlyingFolder(t *testing.T) {
 	m.detailsEmails = []*models.EmailData{m.timeline.emails[0]}
 	m.setFocusedPanel(panelDetails)
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	updated, _ := m.Update(keyRunes("D"))
 	m = updated.(*Model)
 
 	reqs := readDeletionRequests(t, m.deletionRequestCh, 1)

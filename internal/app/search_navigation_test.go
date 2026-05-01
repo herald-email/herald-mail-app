@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -47,7 +47,7 @@ func TestTimelineSemanticSearchUsesSlashQuestionPrefix(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, cmd := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model, cmd := m.handleKeyMsg(keyRune('/'))
 	updated := model.(*Model)
 	if cmd != nil {
 		t.Fatal("expected opening search to be synchronous")
@@ -56,7 +56,7 @@ func TestTimelineSemanticSearchUsesSlashQuestionPrefix(t *testing.T) {
 		t.Fatal("expected search mode to open")
 	}
 
-	model, _ = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	model, _ = updated.handleKeyMsg(keyRune('?'))
 	updated = model.(*Model)
 	if !updated.timeline.searchMode {
 		t.Fatal("expected search mode to remain open")
@@ -81,7 +81,7 @@ func TestTimelineSearch_DebouncesTypingAndIgnoresStaleTokens(t *testing.T) {
 	m.updateTimelineTable()
 	m.openTimelineSearch()
 
-	if _, _, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")}); !handled {
+	if _, _, handled := m.handleOverlayKey(keyRunes("d")); !handled {
 		t.Fatal("expected search input to handle typing")
 	}
 	firstToken := m.timeline.searchToken
@@ -89,7 +89,7 @@ func TestTimelineSearch_DebouncesTypingAndIgnoresStaleTokens(t *testing.T) {
 		t.Fatalf("expected no immediate search call, got %d", backend.searchCalls)
 	}
 
-	if _, _, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")}); !handled {
+	if _, _, handled := m.handleOverlayKey(keyRunes("i")); !handled {
 		t.Fatal("expected second search input update to be handled")
 	}
 	secondToken := m.timeline.searchToken
@@ -136,7 +136,7 @@ func TestTimelineSearch_EnterMovesFromInputToResults(t *testing.T) {
 	m.timeline.searchResults = []*models.EmailData{m.timeline.emails[0]}
 	m.timeline.searchResultsQuery = "swift"
 
-	model, _, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !handled {
 		t.Fatal("expected Enter in search input to be handled")
 	}
@@ -223,7 +223,7 @@ func TestHandleOverlayKey_CtrlIBypassesDebounceAndCtrlSIsIgnored(t *testing.T) {
 	m.openTimelineSearch()
 	m.timeline.searchInput.SetValue("distributed systems")
 
-	model, cmd, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	model, cmd, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	if !handled {
 		t.Fatal("expected Ctrl+S in search mode to be handled")
 	}
@@ -235,7 +235,7 @@ func TestHandleOverlayKey_CtrlIBypassesDebounceAndCtrlSIsIgnored(t *testing.T) {
 		t.Fatalf("expected Ctrl+S to avoid save-search path, got %d calls", backend.saveSearchCalls)
 	}
 
-	_, cmd, handled = m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyCtrlI})
+	_, cmd, handled = m.handleOverlayKey(tea.KeyPressMsg{Code: 'i', Mod: tea.ModCtrl})
 	if !handled {
 		t.Fatal("expected Ctrl+I to be handled")
 	}
@@ -262,7 +262,7 @@ func TestHandleTimelineKey_TabFromSearchPreviewReturnsToResults(t *testing.T) {
 	m.timeline.body = &models.EmailBody{TextPlain: "preview"}
 	m.focusedPanel = panelPreview
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	if !handled {
 		t.Fatal("expected tab to be handled from search preview")
 	}

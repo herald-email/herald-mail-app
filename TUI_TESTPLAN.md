@@ -165,6 +165,7 @@ Check these states during every applicable lane:
   - contacts list/detail email list
 - Key hints always match the normalized visible focus.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
+- Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
 - Status bar never leaks stale mode or selection from another tab.
 - Adjacent panels have aligned heights and closed borders.
 - Tab-local overlays unwind in the right order with `Esc`.
@@ -243,6 +244,29 @@ Check these states during every applicable lane:
 - Browse-number aliases keep working but are not the primary tab hint.
 - Compose is not shown as a top-level tab.
 - No stale status fragments from previous tabs.
+
+### TC-02A — Layout-independent physical-key shortcuts
+
+**Lane:** A, D
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Start in Timeline with the app in a browse context.
+2. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `j`, `k`, `l`, `c`, `/`, and `?`.
+3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
+4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
+5. Open Timeline search with the physical `/` key, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
+6. Open Compose from Timeline with the physical `Shift+C` key or Cyrillic fallback uppercase `С`, type native body text, and then leave Compose with `Esc`.
+7. Repeat the safe browse-key portion over SSH.
+
+**Expect:**
+- Physical `j` and `k` positions move the active row regardless of the active text layout when the terminal reports `BaseCode`.
+- Physical `l` opens and closes the log overlay, and physical `c` toggles the chat panel where chat is available.
+- Physical `/` opens Timeline search and physical `?` opens shortcut help.
+- The Cyrillic and direct-kana fallback aliases continue to behave the same way when `BaseCode` is unavailable and the terminal sends one committed character per keypress.
+- Search and Compose text fields preserve the typed native characters instead of converting them to Latin shortcut names.
+- Japanese romaji IME pre-edit is not treated as command input before the IME commits text; those sessions need terminal `BaseCode`/keyboard-enhancement support for true physical shortcuts while composing.
+- SSH supports the fallback aliases everywhere it receives normal UTF-8 key messages; physical-key support depends on the SSH client and terminal reporting keyboard enhancements.
 
 ### TC-03 — Focus border exclusivity
 

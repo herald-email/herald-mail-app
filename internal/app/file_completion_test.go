@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func writeCompletionFixture(t *testing.T, dir, name string) string {
@@ -120,7 +120,7 @@ func TestHandleComposeKey_AttachmentTabCompletesPrefixThenShowsAndCycles(t *test
 	m.attachmentPathInput.Focus()
 	m.attachmentPathInput.SetValue(filepath.Join(root, "rep"))
 
-	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = model.(*Model)
 	wantPrefix := filepath.Join(root, "report-")
 	if got := m.attachmentPathInput.Value(); got != wantPrefix {
@@ -130,7 +130,7 @@ func TestHandleComposeKey_AttachmentTabCompletesPrefixThenShowsAndCycles(t *test
 		t.Fatal("first Tab should complete prefix without showing list")
 	}
 
-	model, _ = m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ = m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = model.(*Model)
 	if !m.attachmentCompletionVisible {
 		t.Fatal("second Tab should show suggestions when prefix is exhausted")
@@ -140,14 +140,14 @@ func TestHandleComposeKey_AttachmentTabCompletesPrefixThenShowsAndCycles(t *test
 		t.Fatalf("visible list should select first match %q, got %q", first, got)
 	}
 
-	model, _ = m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ = m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = model.(*Model)
 	second := filepath.Join(root, "report-notes.pdf")
 	if got := m.attachmentPathInput.Value(); got != second {
 		t.Fatalf("Tab with visible list should cycle to %q, got %q", second, got)
 	}
 
-	model, _ = m.handleComposeKey(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model, _ = m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	m = model.(*Model)
 	if got := m.attachmentPathInput.Value(); got != first {
 		t.Fatalf("Shift+Tab should cycle back to %q, got %q", first, got)
@@ -164,13 +164,13 @@ func TestHandleComposeKey_AttachmentEnterDirectoryKeepsPromptOpen(t *testing.T) 
 	m.attachmentPathInput.Focus()
 	m.attachmentPathInput.SetValue(filepath.Join(root, "do"))
 
-	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = model.(*Model)
 	if got := m.attachmentPathInput.Value(); got != dir+string(os.PathSeparator) {
 		t.Fatalf("directory completion Value=%q, want %q", got, dir+string(os.PathSeparator))
 	}
 
-	model, cmd := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
 	if cmd != nil {
 		t.Fatal("Enter on directory should not start addAttachmentCmd")
@@ -191,7 +191,7 @@ func TestComposeAttachmentSuggestions_DoNotPushChromeOffscreen(t *testing.T) {
 	m.attachmentInputActive = true
 	m.attachmentPathInput.Focus()
 	m.attachmentPathInput.SetValue(filepath.Join(root, "report-"))
-	model, _ := m.handleComposeKey(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = model.(*Model)
 
 	rendered := m.renderMainView()

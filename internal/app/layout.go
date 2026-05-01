@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"charm.land/bubbles/v2/textinput"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -441,11 +441,11 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	if m.timeline.selectedEmail != nil {
 		tableOuter, previewOuter := splitWidth(clamp(timelineWidth, 20), panelGapWidth, 26, 25, timelineWidth/2)
 		plan.Timeline = TimelineLayoutPlan{
-			TableWidth:   clamp(tableOuter-2, 20),
+			TableWidth:   clamp(tableOuter-3, 20),
 			PreviewWidth: previewOuter,
 		}
 	} else {
-		plan.Timeline = TimelineLayoutPlan{TableWidth: clamp(timelineWidth-2, 20)}
+		plan.Timeline = TimelineLayoutPlan{TableWidth: clamp(timelineWidth-3, 20)}
 	}
 
 	// Cleanup: summary/details inner widths with optional preview outer width.

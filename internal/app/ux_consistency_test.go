@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -77,7 +77,7 @@ func TestHandleTimelineKey_AttachmentNavigationMovesSelection(t *testing.T) {
 		},
 	}
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}})
+	model, _, handled := m.handleTimelineKey(keyRune(']'))
 	if !handled {
 		t.Fatal("expected ] to be handled in preview with attachments")
 	}
@@ -86,7 +86,7 @@ func TestHandleTimelineKey_AttachmentNavigationMovesSelection(t *testing.T) {
 		t.Fatalf("expected selected attachment to advance to 1, got %d", updated.timeline.selectedAttachment)
 	}
 
-	model, _, handled = updated.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
+	model, _, handled = updated.handleTimelineKey(keyRune('['))
 	if !handled {
 		t.Fatal("expected [ to be handled in preview with attachments")
 	}
@@ -131,7 +131,7 @@ func TestHandleOverlayKey_AttachmentSaveUsesCurrentSelection(t *testing.T) {
 	m.timeline.attachmentSavePrompt = true
 	m.timeline.attachmentSaveInput.SetValue("/tmp/second.pdf")
 
-	model, cmd, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, cmd, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !handled {
 		t.Fatal("expected attachment save overlay to handle Enter")
 	}
@@ -176,7 +176,7 @@ func TestHandleTimelineKey_AttachmentSavePromptSuggestsAvailableDefaultPath(t *t
 		Attachments: []models.Attachment{{Filename: "report.pdf"}},
 	}
 
-	model, _, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	model, _, handled := m.handleTimelineKey(keyRune('s'))
 	if !handled {
 		t.Fatal("expected s to be handled in preview with attachments")
 	}
@@ -214,7 +214,7 @@ func TestHandleOverlayKey_AttachmentSaveRefusesExistingCustomPath(t *testing.T) 
 	m.timeline.attachmentSavePrompt = true
 	m.timeline.attachmentSaveInput.SetValue(existing)
 
-	model, cmd, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, cmd, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !handled {
 		t.Fatal("expected attachment save overlay to handle Enter")
 	}
@@ -495,7 +495,7 @@ func TestHandleTimelineKey_QuickReplyOpensCurrentEmailFromList(t *testing.T) {
 	m.updateTimelineTable()
 	m.focusedPanel = panelTimeline
 
-	model, cmd, handled := m.handleTimelineKey(tea.KeyMsg{Type: tea.KeyCtrlQ})
+	model, cmd, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
 	if !handled {
 		t.Fatal("expected ctrl+q to be handled")
 	}

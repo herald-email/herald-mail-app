@@ -1,25 +1,24 @@
 package app
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
-func mousePress(x, y int) tea.MouseMsg {
-	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+func mousePress(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
 }
 
-func mouseWheelDown(x, y int) tea.MouseMsg {
-	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress, Type: tea.MouseWheelDown}
+func mouseWheelDown(x, y int) tea.MouseWheelMsg {
+	return tea.MouseWheelMsg{X: x, Y: y, Button: tea.MouseWheelDown}
 }
 
-func mouseWheelUp(x, y int) tea.MouseMsg {
-	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress, Type: tea.MouseWheelUp}
+func mouseWheelUp(x, y int) tea.MouseWheelMsg {
+	return tea.MouseWheelMsg{X: x, Y: y, Button: tea.MouseWheelUp}
 }
 
 func makeMouseTimelineModel(t *testing.T) *Model {
@@ -290,22 +289,28 @@ func TestMouseWheelCleanupPreviewScrollsBody(t *testing.T) {
 func TestMouseModeToggleReleasesAndRestoresCapture(t *testing.T) {
 	m := makeMouseTimelineModel(t)
 
-	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	model, cmd := m.Update(keyRunes("m"))
 	updated := model.(*Model)
 	if !updated.timeline.mouseMode {
 		t.Fatal("expected m to enter terminal mouse-selection mode")
 	}
-	if cmd == nil || reflect.TypeOf(cmd()) != reflect.TypeOf(tea.DisableMouse()) {
-		t.Fatal("expected m to disable Bubble Tea mouse capture")
+	if cmd != nil {
+		t.Fatal("expected m to update mouse capture through the next Bubble Tea v2 view")
+	}
+	if got := updated.View().MouseMode; got != tea.MouseModeNone {
+		t.Fatalf("MouseMode=%v, want MouseModeNone", got)
 	}
 
-	model, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	model, cmd = updated.Update(keyRunes("m"))
 	updated = model.(*Model)
 	if updated.timeline.mouseMode {
 		t.Fatal("expected second m to restore TUI mouse capture mode")
 	}
-	if cmd == nil || reflect.TypeOf(cmd()) != reflect.TypeOf(tea.EnableMouseCellMotion()) {
-		t.Fatal("expected second m to enable Bubble Tea cell-motion mouse capture")
+	if cmd != nil {
+		t.Fatal("expected second m to update mouse capture through the next Bubble Tea v2 view")
+	}
+	if got := updated.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("MouseMode=%v, want MouseModeCellMotion", got)
 	}
 }
 
@@ -315,21 +320,27 @@ func TestMouseModeToggleWorksInCleanupPreview(t *testing.T) {
 	m.cleanupPreviewEmail = m.detailsEmails[0]
 	m.setFocusedPanel(panelDetails)
 
-	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	model, cmd := m.Update(keyRunes("m"))
 	updated := model.(*Model)
 	if !updated.timeline.mouseMode {
 		t.Fatal("expected m to enter terminal mouse-selection mode from cleanup preview")
 	}
-	if cmd == nil || reflect.TypeOf(cmd()) != reflect.TypeOf(tea.DisableMouse()) {
-		t.Fatal("expected cleanup preview m to disable Bubble Tea mouse capture")
+	if cmd != nil {
+		t.Fatal("expected cleanup preview m to update mouse capture through the next Bubble Tea v2 view")
+	}
+	if got := updated.View().MouseMode; got != tea.MouseModeNone {
+		t.Fatalf("MouseMode=%v, want MouseModeNone", got)
 	}
 
-	model, cmd = updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	model, cmd = updated.Update(keyRunes("m"))
 	updated = model.(*Model)
 	if updated.timeline.mouseMode {
 		t.Fatal("expected second cleanup preview m to restore TUI mouse capture mode")
 	}
-	if cmd == nil || reflect.TypeOf(cmd()) != reflect.TypeOf(tea.EnableMouseCellMotion()) {
-		t.Fatal("expected cleanup preview second m to enable Bubble Tea cell-motion mouse capture")
+	if cmd != nil {
+		t.Fatal("expected cleanup preview second m to update mouse capture through the next Bubble Tea v2 view")
+	}
+	if got := updated.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("MouseMode=%v, want MouseModeCellMotion", got)
 	}
 }

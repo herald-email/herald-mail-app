@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/logger"
@@ -93,7 +93,7 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	return rows
 }
 
-func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Attachment path input intercepts all keys while active
 	if m.attachmentInputActive {
 		return m.handleAttachmentPathKey(msg)
@@ -188,7 +188,7 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch msg.String() {
+	switch shortcutKey(msg) {
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":
@@ -279,11 +279,11 @@ func (m *Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) handleOriginalMessageKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleOriginalMessageKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.composePreserved == nil {
 		return m, nil
 	}
-	switch msg.String() {
+	switch shortcutKey(msg) {
 	case "up", "k":
 		if m.composePreserved.originalScrollOffset > 0 {
 			m.composePreserved.originalScrollOffset--
@@ -310,11 +310,11 @@ func (m *Model) cyclePreservationMode() {
 	}
 }
 
-func (m *Model) handleForwardedAttachmentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleForwardedAttachmentKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.composePreserved == nil || len(m.composePreserved.forwardedAttachments) == 0 {
 		return m, nil
 	}
-	switch msg.String() {
+	switch shortcutKey(msg) {
 	case "up", "k":
 		if m.composePreserved.selectedAttachment > 0 {
 			m.composePreserved.selectedAttachment--
@@ -339,8 +339,8 @@ func (m *Model) handleForwardedAttachmentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
-func (m *Model) handleAttachmentPathKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
+func (m *Model) handleAttachmentPathKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.Code {
 	case tea.KeyEnter:
 		path := m.attachmentPathInput.Value()
 		if isDirectoryPath(path) {
@@ -361,10 +361,11 @@ func (m *Model) handleAttachmentPathKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.clearAttachmentCompletions()
 		return m, nil
 	case tea.KeyTab:
+		if msg.Mod.Contains(tea.ModShift) {
+			m.applyAttachmentCompletion(-1)
+			return m, nil
+		}
 		m.applyAttachmentCompletion(1)
-		return m, nil
-	case tea.KeyShiftTab:
-		m.applyAttachmentCompletion(-1)
 		return m, nil
 	case tea.KeyUp:
 		if m.attachmentCompletionVisible {
@@ -970,11 +971,11 @@ func (m *Model) renderComposeView() string {
 			warnIcon = " ⚠ (>10 MB)"
 		}
 		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
-		attachColor := "111"
+		attachColor := lipgloss.Color("111")
 		if att.Data == nil {
-			attachColor = string(defaultTheme.ErrorFg)
+			attachColor = defaultTheme.ErrorFg
 		}
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(attachColor)).Render(label) + "\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(attachColor).Render(label) + "\n")
 	}
 
 	// Status message
@@ -1679,7 +1680,7 @@ func (m *Model) renderAIPanel(width int) string {
 
 	// Free-form prompt input
 	sb.WriteString(labelStyle.Render("Custom prompt:") + "\n")
-	m.composeAIInput.Width = width - 2
+	m.composeAIInput.SetWidth(width - 2)
 	sb.WriteString(m.composeAIInput.View() + "\n\n")
 
 	// Loading spinner

@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -120,8 +120,8 @@ func (m *CleanupManager) Update(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 
 func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch shortcutKey(msg) {
 		case "esc":
 			return m, func() tea.Msg { return CleanupManagerCloseMsg{} }
 
@@ -197,7 +197,7 @@ func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 
 func (m *CleanupManager) updateEdit(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if msg.String() == "esc" {
 			m.state = cleanupManagerList
 			m.form = nil
@@ -245,7 +245,7 @@ func (m *CleanupManager) updateEdit(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 }
 
 // View renders the overlay.
-func (m *CleanupManager) View() string {
+func (m *CleanupManager) View() tea.View {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62")).
@@ -258,11 +258,11 @@ func (m *CleanupManager) View() string {
 
 	switch m.state {
 	case cleanupManagerList:
-		return m.viewList(borderStyle, titleStyle)
+		return newHeraldView(m.viewList(borderStyle, titleStyle))
 	case cleanupManagerEdit:
-		return m.viewEdit(borderStyle, titleStyle)
+		return newHeraldView(m.viewEdit(borderStyle, titleStyle))
 	}
-	return ""
+	return newHeraldView("")
 }
 
 func (m *CleanupManager) viewList(borderStyle, titleStyle lipgloss.Style) string {

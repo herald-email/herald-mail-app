@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/wish/v2"
+	"charm.land/wish/v2/bubbletea"
 	"github.com/charmbracelet/ssh"
-	"github.com/charmbracelet/wish"
-	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -106,7 +106,7 @@ func Run(commandName string, args []string) error {
 				m.SetPreviewImageMode(imageMode)
 				m.SetConfigPath(resolvedConfig)
 				m.SetConfig(cfg)
-				return m, []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+				return m, nil
 			}),
 		),
 	)

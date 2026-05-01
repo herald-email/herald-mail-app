@@ -7,10 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
-	"github.com/muesli/termenv"
 )
 
 type layoutBackend struct {
@@ -167,7 +165,7 @@ func TestCleanupSummaryHints_KeepCleanupActionsVisibleAt80Cols(t *testing.T) {
 
 func TestMinimumSizeMessage_FitsWidthAndIncludesTarget(t *testing.T) {
 	m := makeSizedModel(t, 50, 15)
-	rendered := m.View()
+	rendered := m.View().Content
 	assertFitsWidth(t, 50, rendered)
 
 	stripped := stripANSI(rendered)
@@ -250,7 +248,7 @@ func TestCleanupView_WithTopSyncStripFits80x24(t *testing.T) {
 func TestPromptEditor_Fits80x24(t *testing.T) {
 	editor := NewPromptEditor(nil, 80, 24)
 
-	rendered := editor.View()
+	rendered := editor.View().Content
 	assertFitsWidth(t, 80, rendered)
 	assertFitsHeight(t, 24, rendered)
 
@@ -270,7 +268,7 @@ func TestPromptEditor_Fits80x24(t *testing.T) {
 func TestPromptEditor_MinimumSizeGuardAt50x15(t *testing.T) {
 	editor := NewPromptEditor(nil, 50, 15)
 
-	rendered := editor.View()
+	rendered := editor.View().Content
 	assertFitsWidth(t, 50, rendered)
 
 	stripped := stripANSI(rendered)
@@ -285,7 +283,7 @@ func TestPromptEditor_MinimumSizeGuardAt50x15(t *testing.T) {
 func TestRuleEditor_Fits80x24(t *testing.T) {
 	editor := NewRuleEditor("ShopifyBrand <orders@shopify-brand.example>", "", 80, 24)
 
-	rendered := editor.View()
+	rendered := editor.View().Content
 	assertFitsWidth(t, 80, rendered)
 	assertFitsHeight(t, 24, rendered)
 }
@@ -691,7 +689,7 @@ func TestSwitchToCleanup_RecalculatesWideSummaryColumns(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
 	m = updated.(*Model)
 
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	updated, _ = m.Update(keyRunes("2"))
 	m = updated.(*Model)
 
 	rendered := stripANSI(m.renderMainView())
@@ -743,10 +741,6 @@ func TestCleanupView_UsesCompactLeadingSelectionCell(t *testing.T) {
 }
 
 func TestCleanupView_TopBorderReflectsFocusedPanel(t *testing.T) {
-	oldProfile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	defer lipgloss.SetColorProfile(oldProfile)
-
 	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
 	m := New(b, nil, "", nil, false)
 	m.activeTab = tabCleanup

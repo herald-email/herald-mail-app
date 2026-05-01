@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -20,20 +20,23 @@ func (r mouseRect) contains(x, y int) bool {
 }
 
 func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
-	if msg.Action != tea.MouseActionPress {
+	switch msg.(type) {
+	case tea.MouseClickMsg, tea.MouseWheelMsg:
+	default:
 		return m, nil, false
 	}
+	mouse := msg.Mouse()
 	if m.windowWidth > 0 && (m.windowWidth < minTermWidth || m.windowHeight < minTermHeight) {
 		return m, nil, true
 	}
-	if cmd, handled := m.handleMouseTabClick(msg); handled {
+	if cmd, handled := m.handleMouseTabClick(mouse); handled {
 		return m, cmd, true
 	}
 	if m.timeline.fullScreen {
-		return m.handleTimelinePreviewMouse(msg)
+		return m.handleTimelinePreviewMouse(mouse)
 	}
 	if m.cleanupFullScreen {
-		return m.handleCleanupPreviewMouse(msg)
+		return m.handleCleanupPreviewMouse(mouse)
 	}
 	if m.showLogs {
 		return m, nil, false
@@ -47,22 +50,22 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	if plan.SidebarVisible {
 		sidebar := mouseRect{x: 0, y: top, w: sidebarContentWidth + 2, h: m.mousePanelHeight()}
-		if sidebar.contains(msg.X, msg.Y) {
-			return m.handleSidebarMouse(msg, sidebar)
+		if sidebar.contains(mouse.X, mouse.Y) {
+			return m.handleSidebarMouse(mouse, sidebar)
 		}
 	}
 
 	switch m.activeTab {
 	case tabTimeline:
-		return m.handleTimelineMouse(msg, plan, top)
+		return m.handleTimelineMouse(mouse, plan, top)
 	case tabCleanup:
-		return m.handleCleanupMouse(msg, plan, top)
+		return m.handleCleanupMouse(mouse, plan, top)
 	}
 	return m, nil, false
 }
 
-func (m *Model) handleMouseTabClick(msg tea.MouseMsg) (tea.Cmd, bool) {
-	if msg.Button != tea.MouseButtonLeft || msg.Y != 1 {
+func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
+	if msg.Button != tea.MouseLeft || msg.Y != 1 {
 		return nil, false
 	}
 	if !m.canInteractWithVisibleData() {
@@ -145,8 +148,8 @@ func mouseTableRowAt(t *table.Model, rect mouseRect, y int) (int, bool) {
 	return row, true
 }
 
-func (m *Model) handleSidebarMouse(msg tea.MouseMsg, rect mouseRect) (tea.Model, tea.Cmd, bool) {
-	if msg.Button != tea.MouseButtonLeft {
+func (m *Model) handleSidebarMouse(msg tea.Mouse, rect mouseRect) (tea.Model, tea.Cmd, bool) {
+	if msg.Button != tea.MouseLeft {
 		return m, nil, true
 	}
 	items := flattenTree(m.folderTree)
@@ -179,15 +182,15 @@ func (m *Model) handleSidebarMouse(msg tea.MouseMsg, rect mouseRect) (tea.Model,
 	return m, m.activateCurrentFolder(), true
 }
 
-func mouseIsWheel(msg tea.MouseMsg) bool {
-	return msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelUp
+func mouseIsWheel(msg tea.Mouse) bool {
+	return msg.Button == tea.MouseWheelDown || msg.Button == tea.MouseWheelUp
 }
 
-func mouseWheelDirection(msg tea.MouseMsg) int {
-	if msg.Button == tea.MouseButtonWheelUp {
+func mouseWheelDirection(msg tea.Mouse) int {
+	if msg.Button == tea.MouseWheelUp {
 		return -1
 	}
-	if msg.Button == tea.MouseButtonWheelDown {
+	if msg.Button == tea.MouseWheelDown {
 		return 1
 	}
 	return 0
@@ -195,10 +198,7 @@ func mouseWheelDirection(msg tea.MouseMsg) int {
 
 func (m *Model) toggleMouseCaptureMode() tea.Cmd {
 	m.timeline.mouseMode = !m.timeline.mouseMode
-	if m.timeline.mouseMode {
-		return tea.DisableMouse
-	}
-	return tea.EnableMouseCellMotion
+	return nil
 }
 
 func (m *Model) scrollTimelinePreview(direction int) {
@@ -227,7 +227,7 @@ func (m *Model) scrollCleanupPreview(direction int) {
 	}
 }
 
-func (m *Model) handleTimelinePreviewMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, bool) {
 	if !mouseIsWheel(msg) {
 		m.setFocusedPanel(panelPreview)
 		return m, nil, true
@@ -237,7 +237,7 @@ func (m *Model) handleTimelinePreviewMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd
 	return m, nil, true
 }
 
-func (m *Model) handleCleanupPreviewMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleCleanupPreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, bool) {
 	if !mouseIsWheel(msg) {
 		m.setFocusedPanel(panelDetails)
 		return m, nil, true
@@ -247,7 +247,7 @@ func (m *Model) handleCleanupPreviewMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd,
 	return m, nil, true
 }
 
-func (m *Model) handleTimelineMouse(msg tea.MouseMsg, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleTimelineMouse(msg tea.Mouse, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
 	x := 0
 	if plan.SidebarVisible {
 		x += sidebarContentWidth + 2 + panelGapWidth
@@ -263,7 +263,7 @@ func (m *Model) handleTimelineMouse(msg tea.MouseMsg, plan LayoutPlan, top int) 
 			}
 			return m, m.maybeUpdatePreview(), true
 		}
-		if msg.Button == tea.MouseButtonLeft {
+		if msg.Button == tea.MouseLeft {
 			if row, ok := mouseTableRowAt(&m.timelineTable, tableRect, msg.Y); ok {
 				m.timelineTable.SetCursor(row)
 				return m, m.activateCurrentTimelineRowFromMouse(), true
@@ -285,7 +285,7 @@ func (m *Model) handleTimelineMouse(msg tea.MouseMsg, plan LayoutPlan, top int) 
 	return m, nil, false
 }
 
-func (m *Model) handleCleanupMouse(msg tea.MouseMsg, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleCleanupMouse(msg tea.Mouse, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
 	x := 0
 	if plan.SidebarVisible {
 		x += sidebarContentWidth + 2 + panelGapWidth
@@ -304,7 +304,7 @@ func (m *Model) handleCleanupMouse(msg tea.MouseMsg, plan LayoutPlan, top int) (
 				m.updateDetailsTable()
 				return m, nil, true
 			}
-			if msg.Button == tea.MouseButtonLeft {
+			if msg.Button == tea.MouseLeft {
 				if row, ok := mouseTableRowAt(&m.summaryTable, summaryRect, msg.Y); ok {
 					m.summaryTable.SetCursor(row)
 					m.updateDetailsTable()
@@ -326,7 +326,7 @@ func (m *Model) handleCleanupMouse(msg tea.MouseMsg, plan LayoutPlan, top int) (
 			}
 			return m, nil, true
 		}
-		if msg.Button == tea.MouseButtonLeft {
+		if msg.Button == tea.MouseLeft {
 			if row, ok := mouseTableRowAt(&m.detailsTable, detailsRect, msg.Y); ok {
 				m.detailsTable.SetCursor(row)
 				if row < len(m.detailsEmails) {

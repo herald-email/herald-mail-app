@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -21,7 +21,7 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 
 	updated := pressQuestion(m)
 
-	rendered := stripANSI(updated.View())
+	rendered := stripANSI(updated.View().Content)
 	if !strings.Contains(rendered, "Shortcut Help") {
 		t.Fatalf("expected ? to open shortcut help, got:\n%s", rendered)
 	}
@@ -32,9 +32,9 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 		t.Fatalf("expected global and Timeline shortcuts in help, got:\n%s", rendered)
 	}
 
-	model, _ := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ := updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	closed := model.(*Model)
-	if strings.Contains(stripANSI(closed.View()), "Shortcut Help") {
+	if strings.Contains(stripANSI(closed.View().Content), "Shortcut Help") {
 		t.Fatal("expected Esc to close shortcut help")
 	}
 }
@@ -47,7 +47,7 @@ func TestShortcutHelpRendersCompactCenteredModalOverCurrentView(t *testing.T) {
 
 	updated := pressQuestion(m)
 
-	rendered := updated.View()
+	rendered := updated.View().Content
 	assertFitsWidth(t, 220, rendered)
 	lines := strings.Split(stripANSI(rendered), "\n")
 	if len(lines) < 40 {
@@ -82,7 +82,7 @@ func TestShortcutHelpFitsAt80ColsAsModal(t *testing.T) {
 
 	updated := pressQuestion(m)
 
-	rendered := updated.View()
+	rendered := updated.View().Content
 	assertFitsWidth(t, 80, rendered)
 	lines := strings.Split(strings.TrimRight(stripANSI(rendered), "\n"), "\n")
 	if len(lines) > 24 {
@@ -115,7 +115,7 @@ func TestShortcutHelpQuestionMarkClosesOverlay(t *testing.T) {
 	opened := pressQuestion(m)
 	closed := pressQuestion(opened)
 
-	if strings.Contains(stripANSI(closed.View()), "Shortcut Help") {
+	if strings.Contains(stripANSI(closed.View().Content), "Shortcut Help") {
 		t.Fatal("expected ? to close shortcut help when it is already open")
 	}
 }
@@ -130,7 +130,7 @@ func TestShortcutHelpIncludesComposePreservationMode(t *testing.T) {
 
 	updated := pressQuestion(m)
 
-	rendered := stripANSI(updated.View())
+	rendered := stripANSI(updated.View().Content)
 	if !strings.Contains(rendered, "Shortcut Help") {
 		t.Fatalf("expected ? to open shortcut help from Compose, got:\n%s", rendered)
 	}
@@ -165,7 +165,7 @@ func TestShortcutHelpTimelineDraftPreviewIncludesDraftActions(t *testing.T) {
 
 	updated := pressQuestion(m)
 
-	rendered := stripANSI(updated.View())
+	rendered := stripANSI(updated.View().Content)
 	for _, want := range []string{"Timeline Draft", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected draft preview help to include %q, got:\n%s", want, rendered)
@@ -228,7 +228,7 @@ func TestShortcutHelpOpensFromLogsChatCleanupAndConfirmation(t *testing.T) {
 
 			updated := pressQuestion(m)
 
-			rendered := stripANSI(updated.View())
+			rendered := stripANSI(updated.View().Content)
 			if !strings.Contains(rendered, "Shortcut Help") || !strings.Contains(rendered, tc.want) {
 				t.Fatalf("expected help for %s context, got:\n%s", tc.want, rendered)
 			}
@@ -273,16 +273,16 @@ func TestContactsPlainQuestionMarkOpensHelpAndSemanticSearchUsesSlashPrefix(t *t
 	if updated.contactSearchMode == "semantic" {
 		t.Fatal("expected plain ? not to enter Contacts semantic search")
 	}
-	if !strings.Contains(stripANSI(updated.View()), "Shortcut Help") {
+	if !strings.Contains(stripANSI(updated.View().Content), "Shortcut Help") {
 		t.Fatal("expected plain ? to open Contacts shortcut help")
 	}
 
-	model, _ := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ := updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = model.(*Model)
 	model, _ = m.handleContactsKey(keyRunes("/"))
 	m = model.(*Model)
 	for _, r := range "? mara" {
-		model, _ = m.handleContactsKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		model, _ = m.handleContactsKey(keyRune(r))
 		m = model.(*Model)
 	}
 

@@ -78,6 +78,9 @@ Compose is an internal full-screen writing state rather than a top-level tab. Ti
 **Shortcut help catalog**
 The TUI owns a structured, context-sensitive shortcut catalog in `internal/app` because key routing, visible focus normalization, and overlay state all live there. The bottom hint bar stays abbreviated, while the `?` help overlay renders the full catalog for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view; semantic search is reached through the Timeline/Contacts search input with a `? query` prefix so plain `?` can remain globally reserved for help.
 
+**Layout-independent shortcut matching**
+Herald-owned command routing uses Bubble Tea v2 `KeyPressMsg` physical-key data before matching shortcuts, but only in command contexts. `BaseCode` makes browse shortcuts layout-independent on terminals with keyboard enhancement support, while printable fallbacks preserve Cyrillic and direct Japanese kana behavior for terminals that do not report physical keys. Text-entry surfaces such as Compose, Timeline search, Contacts search, attachment paths, and AI prompts keep raw key text so users can type native characters normally; Japanese romaji IME pre-edit remains outside the app until the IME commits text.
+
 **Progress via channels**
 Long-running operations (IMAP sync, classification, reconcile) run in goroutines and send channel events back to the Bubble Tea model. The UI listens with `tea.Cmd` functions that block on those channels and return a message when something arrives. No polling, no shared state.
 

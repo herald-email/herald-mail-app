@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -30,7 +30,7 @@ func (b *cleanupDiscoverabilityBackend) GetAllCleanupRules() ([]*models.CleanupR
 
 func pressKey(t *testing.T, m *Model, key string) *Model {
 	t.Helper()
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	updated, _ := m.Update(keyRunes(key))
 	return updated.(*Model)
 }
 
@@ -53,7 +53,7 @@ func TestCleanupRuleOverlay_ExplainsPurposeAndShowsSavedRules(t *testing.T) {
 	m = updated.(*Model)
 
 	m = pressKey(t, m, "W")
-	rendered := stripANSI(m.View())
+	rendered := stripANSI(m.View().Content)
 
 	for _, want := range []string{
 		"future matching mail",
@@ -78,7 +78,7 @@ func TestPromptOverlay_ExplainsPurposeAndShowsSavedPrompts(t *testing.T) {
 	m = updated.(*Model)
 
 	m = pressKey(t, m, "P")
-	rendered := stripANSI(m.View())
+	rendered := stripANSI(m.View().Content)
 
 	for _, want := range []string{
 		"reusable AI instructions",
@@ -118,7 +118,7 @@ func TestCleanupManager_ExplainsManualVsScheduledResults(t *testing.T) {
 		mgr, _ = mgr.Update(msg)
 	}
 
-	rendered := stripANSI(mgr.View())
+	rendered := stripANSI(mgr.View().Content)
 	for _, want := range []string{
 		"Runs on demand or on schedule",
 		"Saved cleanup rules live here",

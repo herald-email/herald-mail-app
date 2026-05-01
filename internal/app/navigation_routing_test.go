@@ -4,26 +4,26 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
-func altKey(r rune) tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true}
+func altKey(r rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Text: string(r), Code: r, Mod: tea.ModAlt}
 }
 
-func functionKey(n int) tea.KeyMsg {
+func functionKey(n int) tea.KeyPressMsg {
 	switch n {
 	case 1:
-		return tea.KeyMsg{Type: tea.KeyF1}
+		return tea.KeyPressMsg{Code: tea.KeyF1}
 	case 2:
-		return tea.KeyMsg{Type: tea.KeyF2}
+		return tea.KeyPressMsg{Code: tea.KeyF2}
 	case 3:
-		return tea.KeyMsg{Type: tea.KeyF3}
+		return tea.KeyPressMsg{Code: tea.KeyF3}
 	case 4:
-		return tea.KeyMsg{Type: tea.KeyF4}
+		return tea.KeyPressMsg{Code: tea.KeyF4}
 	default:
-		return tea.KeyMsg{}
+		return tea.KeyPressMsg{}
 	}
 }
 
@@ -44,7 +44,7 @@ func TestHandleOverlayKey_ChatEscapeRestoresTimelineFocus(t *testing.T) {
 	m.windowWidth = 120
 	m.windowHeight = 40
 
-	model, _, handled := m.handleOverlayKey(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !handled {
 		t.Fatal("expected chat escape to be handled")
 	}
@@ -65,7 +65,7 @@ func TestHandleTabKey_SwitchingAwayFromComposeStartsDraftPersistence(t *testing.
 	m.composeTo.SetValue("alice@example.com")
 	m.composeBody.SetValue("hello")
 
-	model, cmd, handled := m.handleTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	model, cmd, handled := m.handleTabKey(keyRune('1'))
 	if !handled {
 		t.Fatal("expected tab key to be handled")
 	}
@@ -138,7 +138,7 @@ func TestComposeAltTabSwitchesAndPersistsDraft(t *testing.T) {
 func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 	tests := []struct {
 		name string
-		key  tea.KeyMsg
+		key  tea.KeyPressMsg
 		want int
 	}{
 		{name: "F1", key: functionKey(1), want: tabTimeline},
@@ -231,7 +231,7 @@ func TestTimelineCOpensBlankComposeAndEscapeReturnsTimeline(t *testing.T) {
 		t.Fatalf("composeField=%d, want To field", updated.composeField)
 	}
 
-	model, cmd = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, cmd = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated = model.(*Model)
 	if cmd != nil {
 		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
@@ -265,7 +265,7 @@ func TestComposeEscapeReturnsToTimelinePreviewOrigin(t *testing.T) {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
 	}
 
-	model, cmd := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, cmd := updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated = model.(*Model)
 	if cmd != nil {
 		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
@@ -303,7 +303,7 @@ func TestComposeEscapeReturnsToTimelineSearchResultsOrigin(t *testing.T) {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
 	}
 
-	model, cmd := updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, cmd := updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	updated = model.(*Model)
 	if cmd != nil {
 		t.Fatalf("expected Esc from empty Compose to be synchronous, got command %T", cmd)
@@ -392,7 +392,7 @@ func TestCleanupFullScreenPlainTabSwitchClosesPreview(t *testing.T) {
 		t.Fatal("cleanup document cache should be cleared")
 	}
 
-	model, _ = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	afterEsc := model.(*Model)
 	if afterEsc.activeTab != tabTimeline {
 		t.Fatalf("Esc after tab switch should not be trapped, activeTab=%d", afterEsc.activeTab)
@@ -459,7 +459,7 @@ func TestComposeAltGlobalCommandsDoNotTypeIntoDraft(t *testing.T) {
 		t.Fatalf("alt+c typed into draft, body=%q", got)
 	}
 
-	model, _ = m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = model.(*Model)
 	if m.showChat {
 		t.Fatal("expected esc to close chat after alt+c")
@@ -501,7 +501,7 @@ func TestTimelineSearchPlainQIsTextAndCtrlCQuits(t *testing.T) {
 		t.Fatalf("timeline search value=%q, want q", got)
 	}
 
-	_, cmd = m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd = m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !commandIsQuit(cmd) {
 		t.Fatal("expected ctrl+c to quit from timeline search")
 	}
@@ -702,7 +702,7 @@ func TestTabCyclesFocusWhileSyncingWithVisibleTimelineData(t *testing.T) {
 	m.updateTimelineTable()
 	m.updateTableDimensions(120, 40)
 
-	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyTab})
 	updated := model.(*Model)
 
 	if updated.focusedPanel != panelTimeline {
@@ -720,7 +720,7 @@ func TestCtrlITreatedAsTabOutsideSearchMode(t *testing.T) {
 	m.updateTimelineTable()
 	m.updateTableDimensions(120, 40)
 
-	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyCtrlI})
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'i', Mod: tea.ModCtrl})
 	updated := model.(*Model)
 
 	if updated.focusedPanel != panelSidebar {
@@ -735,7 +735,7 @@ func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _, handled := m.handleTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	model, _, handled := m.handleTabKey(keyRune('2'))
 	if !handled {
 		t.Fatal("expected cleanup tab key to be handled while syncing with visible data")
 	}
@@ -802,7 +802,7 @@ func TestLogOverlayToggleWorksWhileSyncingWithVisibleData(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	model, _ := m.handleKeyMsg(keyRune('l'))
 	updated := model.(*Model)
 
 	if !updated.showLogs {
@@ -817,7 +817,7 @@ func TestChatToggle_ShowsFallbackWhenTooNarrow(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	model, _ := m.handleKeyMsg(keyRune('c'))
 	updated := model.(*Model)
 
 	if updated.showChat {

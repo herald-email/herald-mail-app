@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/iterm2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -572,7 +572,9 @@ func (m *Model) renderTimelineView() string {
 		}
 		tableView = m.emptyStateView(notice)
 	} else {
-		style := m.baseStyle.BorderForeground(defaultTheme.BorderInactive)
+		style := m.baseStyle.
+			Width(plan.Timeline.TableWidth + 2).
+			BorderForeground(defaultTheme.BorderInactive)
 		tableStyles := m.inactiveTableStyle
 		if chrome.FocusedPanel == panelTimeline {
 			style = style.BorderForeground(defaultTheme.BorderActive)
@@ -590,7 +592,7 @@ func (m *Model) renderTimelineView() string {
 	}
 
 	if plan.SidebarVisible {
-		sidebarStyle := m.baseStyle
+		sidebarStyle := m.baseStyle.Width(sidebarContentWidth + 2)
 		if chrome.FocusedPanel == panelSidebar {
 			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
 		} else {
@@ -1935,11 +1937,11 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m *Model) handleTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	if m.activeTab != tabTimeline {
 		return m, nil, false
 	}
-	switch msg.String() {
+	switch shortcutKey(msg) {
 	case " ", "space":
 		if m.focusedPanel != panelTimeline {
 			return m, nil, false
@@ -2325,18 +2327,18 @@ func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 	if m.summaryTable.Focused() {
 		// Let the table handle navigation properly (including scrolling)
 		if direction > 0 {
-			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		} else {
-			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyMsg{Type: tea.KeyUp})
+			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 		}
 		// Auto-update details table on navigation
 		m.updateDetailsTable()
 	} else if m.detailsTable.Focused() {
 		// Let the table handle navigation properly (including scrolling)
 		if direction > 0 {
-			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyMsg{Type: tea.KeyDown})
+			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		} else {
-			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyMsg{Type: tea.KeyUp})
+			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 		}
 	}
 
