@@ -20,6 +20,7 @@ Top-level fields:
 - `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
 - `publication`: Requested publish actions that were actually performed plus a short summary
 - `visual_evidence`: Whether the canonical visual gate is required, its current status, required terminal sizes, and the recorded before/after pairs
+- `input_routing`: Whether the input-routing safety gate is required, its current status, required text-entry surfaces, and the recorded per-surface routing checks
 - `verification`: Required gates and observed results
 - `metrics`: Retry count, diff stats, human follow-up flag
 - `outcome`: Final outcome summary and remaining risks
@@ -33,6 +34,15 @@ Use this block to make TUI-facing verification explicit instead of implicit. It 
 - `status`: `pending`, `passed`, or `not-needed`
 - `required_sizes`: Canonical terminal sizes such as `220x50`, `80x24`, and `50x15`
 - `pairs`: Recorded evidence pairs, each including `state_label`, `size`, before/after PNG paths, before/after ANSI-text paths, repro steps, snapshot-fidelity notes, and completion issues if any remain
+
+## `run.json.input_routing`
+
+Use this block to make shortcut and alias safety explicit whenever a TUI task changes keyboard dispatch. It should record which text-entry surfaces were exercised and whether normal typing stayed intact.
+
+- `required`: Whether the run must close the input-routing safety gate
+- `status`: `pending`, `passed`, or `not-needed`
+- `required_surfaces`: Canonical text-entry surfaces such as `compose`, `prompt`, and `editor`
+- `checks`: Recorded routing checks, each including `surface`, `input_sequence`, expected and observed behavior, the proving artifact path, whether text was preserved, repro steps, and completion issues if any remain
 
 ## `evidence/manifest.json`
 
@@ -74,6 +84,7 @@ Scoring is intentionally simple in v1:
 - gate completeness
 - preflight readiness
 - visual-evidence readiness
+- input-routing readiness
 - baseline cleanliness
 - retry efficiency
 - human follow-up required

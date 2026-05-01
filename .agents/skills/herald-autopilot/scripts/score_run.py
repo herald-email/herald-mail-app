@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from artifact_io import load_json, save_json
+from input_routing import ensure_input_routing, input_routing_feedback_messages
 from visual_evidence import ensure_visual_evidence, unique_strings, visual_feedback_messages
 
 
@@ -55,6 +56,9 @@ def main() -> int:
     visual = ensure_visual_evidence(run)
     visual_required = bool(visual.get("required", False))
     visual_ready = (not visual_required) or visual.get("status") == "passed"
+    input_routing = ensure_input_routing(run)
+    input_routing_required = bool(input_routing.get("required", False))
+    input_routing_ready = (not input_routing_required) or input_routing.get("status") == "passed"
 
     overall = 100
     if not baseline_pass:
@@ -68,6 +72,7 @@ def main() -> int:
     overall -= 5 if files_changed > 25 else 0
     overall -= 10 if product_truth_required and not product_truth_grounded else 0
     overall -= 12 if visual_required and not visual_ready else 0
+    overall -= 12 if input_routing_required and not input_routing_ready else 0
     overall = max(overall, 0)
 
     feedback = list(run.get("latest_feedback", []))
@@ -76,10 +81,18 @@ def main() -> int:
     feedback.extend(item["summary"] for item in failed_required_preflight)
     feedback.extend(f"Required preflight `{check}` did not run before implementation." for check in missing_required_preflight)
     feedback.extend(visual_feedback_messages(visual))
+    feedback.extend(input_routing_feedback_messages(input_routing))
     feedback = unique_strings(feedback)
 
     status = "pass"
-    if failed_required or missing_required or failed_required_preflight or missing_required_preflight or (visual_required and not visual_ready):
+    if (
+        failed_required
+        or missing_required
+        or failed_required_preflight
+        or missing_required_preflight
+        or (visual_required and not visual_ready)
+        or (input_routing_required and not input_routing_ready)
+    ):
         status = "fail"
     elif human_followup:
         status = "needs_followup"
@@ -97,6 +110,7 @@ def main() -> int:
             "handoff_readiness": 0 if human_followup else 1,
             "product_truth_grounding": 1 if product_truth_grounded else 0,
             "visual_evidence_readiness": 1 if visual_ready else 0,
+            "input_routing_readiness": 1 if input_routing_ready else 0,
         },
         "counts": {
             "required_gates": len(required),
@@ -112,6 +126,8 @@ def main() -> int:
             "product_truth_grounded": 1 if product_truth_required and product_truth_grounded else 0,
             "visual_required": 1 if visual_required else 0,
             "visual_complete": 1 if visual_required and visual_ready else 0,
+            "input_routing_required": 1 if input_routing_required else 0,
+            "input_routing_complete": 1 if input_routing_required and input_routing_ready else 0,
         },
         "feedback": feedback,
         "pareto_axes": {
@@ -121,6 +137,7 @@ def main() -> int:
             "preflight_gap": 0 if preflight_ready else 1,
             "grounding_gap": 0 if product_truth_grounded else 1,
             "visual_gap": 0 if visual_ready else 1,
+            "input_routing_gap": 0 if input_routing_ready else 1,
         },
     }
 

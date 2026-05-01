@@ -81,6 +81,9 @@ def main() -> int:
                     f"- Visual-required runs: {metrics.get('visual_required_runs', 'n/a')}",
                     f"- Visual-ready runs: {metrics.get('visual_ready_runs', 'n/a')}",
                     f"- Visual readiness rate: {metrics.get('visual_readiness_rate', 'n/a')}",
+                    f"- Input-routing required runs: {metrics.get('input_routing_required_runs', 'n/a')}",
+                    f"- Input-routing ready runs: {metrics.get('input_routing_ready_runs', 'n/a')}",
+                    f"- Input-routing readiness rate: {metrics.get('input_routing_readiness_rate', 'n/a')}",
                 ]
             )
             if delta:

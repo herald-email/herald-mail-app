@@ -5,6 +5,7 @@ import argparse
 from collections import Counter
 from pathlib import Path
 
+from input_routing import ensure_input_routing
 from optimizer_common import list_runs, now_utc, save_json, save_text, state_dir
 from visual_evidence import ensure_visual_evidence
 
@@ -26,6 +27,7 @@ def main() -> int:
     preflight_status_counts: Counter[str] = Counter()
     preflight_failed_check_counts: Counter[str] = Counter()
     visual_status_counts: Counter[str] = Counter()
+    input_routing_status_counts: Counter[str] = Counter()
     score_values: list[int] = []
     retry_counts: list[int] = []
     product_truth_required_runs = 0
@@ -35,6 +37,8 @@ def main() -> int:
     preflight_ready_runs = 0
     visual_required_runs = 0
     visual_ready_runs = 0
+    input_routing_required_runs = 0
+    input_routing_ready_runs = 0
 
     run_items = []
     for record in runs:
@@ -58,6 +62,9 @@ def main() -> int:
         visual = ensure_visual_evidence(run)
         visual_status = visual.get("status", "not-recorded")
         visual_status_counts[visual_status] += 1
+        input_routing = ensure_input_routing(run)
+        input_routing_status = input_routing.get("status", "not-recorded")
+        input_routing_status_counts[input_routing_status] += 1
         required_preflight = set(preflight.get("required_checks", []))
         latest_preflight = {}
         for item in preflight.get("results", []):
@@ -75,6 +82,10 @@ def main() -> int:
             visual_required_runs += 1
             if visual_status == "passed":
                 visual_ready_runs += 1
+        if input_routing.get("required", False):
+            input_routing_required_runs += 1
+            if input_routing_status == "passed":
+                input_routing_ready_runs += 1
         if product_truth.get("required", False):
             product_truth_required_runs += 1
             if truth_status in {"consulted", "updated-first"}:
@@ -97,6 +108,8 @@ def main() -> int:
                 "preflight_required": sorted(required_preflight),
                 "visual_status": visual_status,
                 "visual_required": bool(visual.get("required", False)),
+                "input_routing_status": input_routing_status,
+                "input_routing_required": bool(input_routing.get("required", False)),
                 "product_truth_status": truth_status,
                 "product_truth_required": bool(product_truth.get("required", False)),
             }
@@ -132,6 +145,12 @@ def main() -> int:
             "ready_runs": visual_ready_runs,
             "readiness_rate": (visual_ready_runs / visual_required_runs) if visual_required_runs else None,
             "status_counts": dict(visual_status_counts),
+        },
+        "input_routing": {
+            "required_runs": input_routing_required_runs,
+            "ready_runs": input_routing_ready_runs,
+            "readiness_rate": (input_routing_ready_runs / input_routing_required_runs) if input_routing_required_runs else None,
+            "status_counts": dict(input_routing_status_counts),
         },
         "runs": run_items,
     }
@@ -181,6 +200,15 @@ def main() -> int:
     )
     if visual_status_counts:
         lines.extend([f"- Status {name}: {count}" for name, count in visual_status_counts.most_common()])
+
+    lines.extend(["", "## Input Routing"])
+    lines.append(f"- Required runs: {input_routing_required_runs}")
+    lines.append(f"- Ready runs: {input_routing_ready_runs}")
+    lines.append(
+        f"- Readiness rate: {summary['input_routing']['readiness_rate'] if summary['input_routing']['readiness_rate'] is not None else 'n/a'}"
+    )
+    if input_routing_status_counts:
+        lines.extend([f"- Status {name}: {count}" for name, count in input_routing_status_counts.most_common()])
 
     lines.extend(["", "## Top Failure Gates"])
     if failure_gate_counts:

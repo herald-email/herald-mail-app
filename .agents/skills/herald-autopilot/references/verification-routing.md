@@ -41,6 +41,20 @@ For visual styling, layout, copy, or chrome changes, capture before/after eviden
 
 If the task is layout-only and not realistically expressible in Go tests, document the terminal-only repro and rely on tmux evidence.
 
+### Shortcut and alias tasks
+
+Run:
+
+- focused tests for the key-routing or alias logic when it is expressible in Go
+- tmux or transcript-based proof that literal text entry still works on `compose`, `prompt`, and `editor` surfaces
+- the explicit `input-routing-safety` gate recorder for each required surface
+
+For shortcut, alias, IME, or routing changes:
+
+- record the exact typed sequence that was at risk of being stolen
+- record whether the text stayed in the field or whether a shortcut fired unexpectedly
+- attach one proving artifact per exercised surface so future sessions can replay the same safety check
+
 ### SSH tasks
 
 Run:

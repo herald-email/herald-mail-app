@@ -30,6 +30,10 @@ def main() -> int:
     visual_required_runs = int(visual.get("required_runs", 0))
     visual_ready_runs = int(visual.get("ready_runs", 0))
     visual_readiness_rate = visual.get("readiness_rate")
+    input_routing = summary.get("input_routing", {})
+    input_routing_required_runs = int(input_routing.get("required_runs", 0))
+    input_routing_ready_runs = int(input_routing.get("ready_runs", 0))
+    input_routing_readiness_rate = input_routing.get("readiness_rate")
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
@@ -54,6 +58,14 @@ def main() -> int:
         recommendation = {
             "name": "enforce-visual-evidence-gate-adoption",
             "why": "Phase 3 only pays off if TUI-facing runs reliably capture canonical before/after evidence instead of treating screenshots as optional.",
+            "risk": "low",
+            "value": "high",
+        }
+    elif input_routing_required_runs >= 3 and input_routing_readiness_rate is not None and input_routing_readiness_rate < 0.8:
+        bottleneck = "Shortcut-sensitive TUI runs are still not consistently proving that aliases and hotkeys stay out of text-entry surfaces."
+        recommendation = {
+            "name": "enforce-input-routing-gate-adoption",
+            "why": "The input-routing gate only helps if compose, prompt, and editor surfaces are actually exercised whenever shortcut work is in scope.",
             "risk": "low",
             "value": "high",
         }
@@ -120,6 +132,9 @@ def main() -> int:
             "visual_required_runs": visual_required_runs,
             "visual_ready_runs": visual_ready_runs,
             "visual_readiness_rate": visual_readiness_rate,
+            "input_routing_required_runs": input_routing_required_runs,
+            "input_routing_ready_runs": input_routing_ready_runs,
+            "input_routing_readiness_rate": input_routing_readiness_rate,
             "top_failing_evidence": patterns.get("top_failing_evidence", []),
             "top_risks": patterns.get("top_risks", []),
         },
@@ -168,6 +183,9 @@ def main() -> int:
             f"- Visual-required runs: {brief['evidence']['visual_required_runs']}",
             f"- Visual-ready runs: {brief['evidence']['visual_ready_runs']}",
             f"- Visual readiness rate: {brief['evidence']['visual_readiness_rate'] if brief['evidence']['visual_readiness_rate'] is not None else 'n/a'}",
+            f"- Input-routing required runs: {brief['evidence']['input_routing_required_runs']}",
+            f"- Input-routing ready runs: {brief['evidence']['input_routing_ready_runs']}",
+            f"- Input-routing readiness rate: {brief['evidence']['input_routing_readiness_rate'] if brief['evidence']['input_routing_readiness_rate'] is not None else 'n/a'}",
         ]
         + [f"- Top failing evidence: {item['name']} ({item['count']})" for item in brief["evidence"]["top_failing_evidence"][:3]]
         + [""]

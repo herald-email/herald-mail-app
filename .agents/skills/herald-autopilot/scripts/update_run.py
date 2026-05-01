@@ -6,7 +6,13 @@ import datetime as dt
 from pathlib import Path
 
 from artifact_io import load_json, locked_paths, save_json
-from visual_evidence import ensure_visual_evidence, require_visual_evidence
+from input_routing import INPUT_ROUTING_GATE, ensure_input_routing, require_input_routing
+from visual_evidence import VISUAL_GATE, ensure_visual_evidence, require_visual_evidence
+
+
+def remove_required_gate(run: dict, gate_name: str) -> None:
+    verification = run.setdefault("verification", {})
+    verification["required_gates"] = [gate for gate in verification.get("required_gates", []) if gate != gate_name]
 
 
 def now_utc() -> str:
@@ -46,7 +52,19 @@ def configure_visual_requirement(run: dict, required: bool) -> dict:
     visual["required"] = False
     visual["status"] = "not-needed"
     visual["required_sizes"] = []
+    remove_required_gate(run, VISUAL_GATE)
     return visual
+
+
+def configure_input_routing_requirement(run: dict, required: bool) -> dict:
+    gate = ensure_input_routing(run)
+    if required:
+        return require_input_routing(run)
+    gate["required"] = False
+    gate["status"] = "not-needed"
+    gate["required_surfaces"] = []
+    remove_required_gate(run, INPUT_ROUTING_GATE)
+    return gate
 
 
 def main() -> int:
@@ -75,6 +93,9 @@ def main() -> int:
     parser.add_argument("--require-visual-evidence", action="store_true", help="Require the canonical visual-evidence gate for this run")
     parser.add_argument("--no-require-visual-evidence", action="store_true", help="Mark the visual-evidence gate as not required")
     parser.add_argument("--visual-status", default="", choices=["pending", "passed", "not-needed"], help="Override the visual-evidence status")
+    parser.add_argument("--require-input-routing", action="store_true", help="Require the canonical input-routing safety gate for this run")
+    parser.add_argument("--no-require-input-routing", action="store_true", help="Mark the input-routing safety gate as not required")
+    parser.add_argument("--input-routing-status", default="", choices=["pending", "passed", "not-needed"], help="Override the input-routing safety status")
     args = parser.parse_args()
 
     run_path = Path(args.run_dir).resolve() / "run.json"
@@ -85,6 +106,7 @@ def main() -> int:
         publication = ensure_publication(run)
         ensure_preflight(run)
         visual = ensure_visual_evidence(run)
+        input_routing = ensure_input_routing(run)
 
         if args.status:
             run["status"] = args.status
@@ -132,6 +154,12 @@ def main() -> int:
             visual = configure_visual_requirement(run, required=False)
         if args.visual_status:
             visual["status"] = args.visual_status
+        if args.require_input_routing:
+            input_routing = configure_input_routing_requirement(run, required=True)
+        if args.no_require_input_routing:
+            input_routing = configure_input_routing_requirement(run, required=False)
+        if args.input_routing_status:
+            input_routing["status"] = args.input_routing_status
 
         run["updated_at"] = now_utc()
         save_json(run_path, run)

@@ -56,6 +56,7 @@ Use that run folder for:
 - product-truth grounding notes
 - publication metadata when commit, merge, push, or PR actions happen
 - canonical visual-evidence gate state, repro-path notes, and before/after image-plus-text pairs for TUI-facing work
+- canonical input-routing gate state, text-preservation checks, and per-surface routing transcripts for shortcut-sensitive TUI work
 - evidence manifest
 - before/after PNG screenshots for visual TUI changes
 - reflections
@@ -75,6 +76,7 @@ Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for imp
 - Required failures generate explicit natural-language feedback
 - Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time
 - TUI-facing runs should record canonical visual evidence at `220x50`, `80x24`, and `50x15` before they can claim handoff readiness
+- Shortcut-sensitive TUI runs should prove aliases and hotkeys stay out of `compose`, `prompt`, and `editor` text-entry surfaces before they can claim handoff readiness
 - `run.json` and `evidence/manifest.json` updates should be serialized so adjacent helpers cannot clobber each other
 - Score the run on comparable axes so future versions can support multiple candidates without changing the interface
 
@@ -86,6 +88,7 @@ Success means:
 - the task has a worktree
 - required preflight is recorded when the task touches docs, SSH, or media-heavy work
 - required visual evidence is recorded when the task touches the TUI
+- required input-routing evidence is recorded when the task changes shortcut, alias, IME, or key-routing behavior on the TUI
 - required verification is recorded
 - the report is rendered
 - requested publish actions are recorded when the user asked for them

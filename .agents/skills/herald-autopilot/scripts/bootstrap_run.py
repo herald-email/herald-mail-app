@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from artifact_io import save_json, save_text
+from input_routing import INPUT_ROUTING_GATE, default_input_routing, infer_input_routing_required
 from visual_evidence import VISUAL_GATE, default_visual_evidence
 
 
@@ -72,6 +73,12 @@ def main() -> int:
     product_truth_required = args.requires_product_truth or args.task_type == "feature"
     product_truth_status = infer_product_truth_status(args, product_truth_required)
     visual_required = "tui" in surfaces
+    input_routing_required = infer_input_routing_required(args.task, slug, surfaces)
+    required_gates = []
+    if visual_required:
+        required_gates.append(VISUAL_GATE)
+    if input_routing_required:
+        required_gates.append(INPUT_ROUTING_GATE)
 
     evidence_dir.mkdir(parents=True, exist_ok=True)
     reflections_dir.mkdir(parents=True, exist_ok=True)
@@ -130,8 +137,9 @@ def main() -> int:
             "summary": "",
         },
         "visual_evidence": default_visual_evidence(required=visual_required),
+        "input_routing": default_input_routing(required=input_routing_required),
         "verification": {
-            "required_gates": [VISUAL_GATE] if visual_required else [],
+            "required_gates": required_gates,
             "results": [],
         },
         "metrics": {

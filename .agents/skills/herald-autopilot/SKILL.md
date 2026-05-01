@@ -45,6 +45,7 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
 8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
 9. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
+10. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
 
 ## GitHub Issue Association
 
@@ -159,6 +160,21 @@ python3 .agents/skills/herald-autopilot/scripts/record_visual_evidence.py \
   --after-text ".superpowers/autopilot/runs/<run-id>/evidence/after-cleanup-preview-80x24.ansi.txt" \
   --repro-step "Launch Herald in tmux." \
   --repro-step "Open the cleanup preview for the selected sender."
+```
+
+For shortcut, alias, or key-routing changes on text-entry surfaces, also record the input-routing gate:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/record_input_routing_check.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>" \
+  --surface "compose" \
+  --input-sequence "," \
+  --expected-behavior "Literal comma is inserted into the active text field." \
+  --observed-behavior "Literal comma stayed in the field and no alias fired." \
+  --artifact ".superpowers/autopilot/runs/<run-id>/evidence/compose-comma-transcript.txt" \
+  --text-preserved \
+  --repro-step "Focus the compose text field." \
+  --repro-step "Type a comma while the alias feature is enabled."
 ```
 
 Record every verification result with:

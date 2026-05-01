@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T19:36:56 | Input-routing safety gate for shortcut-sensitive TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T18:35:30 | Canonical visual-evidence gate for TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T17:21:43 | Workflow safety preflight and serialized artifact writes | validated | 30 | 86.46153846153847 | 100% | 0 | 2 |
 | 2026-05-01T17:04:56 | Reusable remediation templates for repeated test failures | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
@@ -20,6 +21,61 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Input-routing safety gate for shortcut-sensitive TUI runs
+
+- Logged at: 2026-05-01T19:36:56+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Recovered reflections showed that alias and shortcut changes were being validated on their trigger path but not on the text-entry surfaces where accidental interception hurts users most.
+- Summary: Added a first-class input-routing safety gate so shortcut- or alias-sensitive Herald autopilot runs must prove text entry survives on compose, prompt, and editor surfaces, and paired that gate with a reusable remediation template for red-compose-comma-alias.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.42857142857143
+- Average retries: 0.6666666666666666
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 24
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 17
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+- Visual-required runs: 2
+- Visual-ready runs: 2
+- Visual readiness rate: 1.0
+- Input-routing required runs: 1
+- Input-routing ready runs: 1
+- Input-routing readiness rate: 1.0
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +0.0
+- average_retry_count: +0.0
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: -1
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +0
+- preflight_required_runs: +0
+- preflight_ready_runs: +0
+- preflight_readiness_rate: +0.0
+- visual_required_runs: +1
+- visual_ready_runs: +1
+- visual_readiness_rate: +0.0
+Changes:
+- Added a shared input-routing model plus record_input_routing_check.py for per-surface text-preservation proof.
+- Updated bootstrap, scoring, reports, and optimizer summaries to treat input-routing safety as an explicit readiness axis.
+- Added the input-routing remediation template with aliases including red-compose-comma-alias so the optimizer can move to the next uncovered failure class.
+- Validated a synthetic shortcut-sensitive TUI run that closed both the visual and input-routing gates.
+Recommended experiment at log time:
+- `template-evidence-manifest-feedback` (medium value, low risk)
+Article notes:
+- This phase turns keyboard-safety regressions into structured verification evidence instead of relying on narrative notes about what probably stayed safe.
+- Pairing the scored gate with a reusable remediation template is a strong example of GEPA moving from reflection to policy without losing visibility.
+Follow-ups:
+- Add the pending-approval queue now that the TUI-safety gate set is complete.
+- Measure whether the combined visual and input-routing gates reduce TUI retries and post-handoff questions.
 
 ### Canonical visual-evidence gate for TUI runs
 
@@ -44,6 +100,9 @@ Metrics at log time:
 - Visual-required runs: 1
 - Visual-ready runs: 1
 - Visual readiness rate: 1.0
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.9670329670329636
@@ -92,6 +151,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: -0.8241758241758248
@@ -137,6 +199,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -182,6 +247,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: -0.04761904761903679
@@ -227,6 +295,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: +4.333333333333329
@@ -270,6 +341,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +15
 - average_score: -0.4000000000000057
@@ -312,6 +386,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +1
 - average_score: -2.2666666666666657
@@ -354,6 +431,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -395,6 +475,9 @@ Metrics at log time:
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
+- Input-routing required runs: n/a
+- Input-routing ready runs: n/a
+- Input-routing readiness rate: n/a
 Changes:
 - Created the Herald autopilot skill and run-artifact schema.
 - Added scoring, reflection, report rendering, and the first optimizer state layer.

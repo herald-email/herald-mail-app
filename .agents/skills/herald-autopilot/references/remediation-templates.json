@@ -55,5 +55,22 @@
       "Capture the exact before/after artifact pair that justified the snapshot change."
     ],
     "approval_prompt": "Approve keeping the diff-check remediation template as a default GEPA retry aid."
+  },
+  "input-routing-safety": {
+    "title": "Input-routing safety remediation template",
+    "aliases": [
+      "red-compose-comma-alias",
+      "compose-comma-alias",
+      "alias-text-entry",
+      "shortcut-routing"
+    ],
+    "why": "Recovered shortcut and alias failures show that text-entry regressions usually come from routing changes that were validated on the trigger path but not on compose, prompt, and editor surfaces.",
+    "checklist": [
+      "Prove the change on each affected text-entry surface, not just on the shortcut trigger path that motivated the change.",
+      "Record whether the typed literal stayed in the field and whether any alias or hotkey fired unexpectedly.",
+      "Capture one transcript or screenshot artifact per exercised surface so future sessions can replay the same routing proof.",
+      "Keep alias expansion scoped away from text-entry contexts unless the product truth explicitly says the field should intercept that input."
+    ],
+    "approval_prompt": "Approve keeping the input-routing safety remediation template as a default GEPA retry aid."
   }
 }

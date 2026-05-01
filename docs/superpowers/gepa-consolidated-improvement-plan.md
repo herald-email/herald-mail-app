@@ -29,7 +29,7 @@ This section ranks the workflow changes that would pay down the most repeated fr
 - [x] Added workflow preflight checks for docs dependencies, SSH host-key paths, and resumable long-running media batches so environment failures are caught before feature-level verification starts.
 - [x] Serialized `run.json` and evidence-manifest writes so helpers cannot clobber each other when multiple workflow steps run close together.
 - [x] Promoted native-terminal repro paths, small-terminal guards, and canonical before/after capture requirements into an explicit visual-evidence gate for TUI-facing work.
-- [ ] Add an input-routing safety gate that requires shortcut and alias changes to prove they do not steal text entry on compose, prompt, or editor surfaces.
+- [x] Added an input-routing safety gate that requires shortcut and alias changes to prove they do not steal text entry on compose, prompt, or editor surfaces.
 - [ ] Build a pending-approval queue that collects post-publish self-reflection suggestions across runs so the user can review and batch-approve GEPA changes.
 
 ## Execution Order
@@ -38,7 +38,7 @@ This section sequences the backlog into a practical rollout. The idea is to stab
 
 - [x] Phase 1: shipped `template-focused-tests-feedback` and `template-app-tests-feedback`, along with adjacent `app-package-tests` and `diff-check` coverage, because verification-template failures were the densest repeated signal in recovered reflections.
 - [x] Phase 2: hardened workflow infrastructure with serialized artifact writes and preflight environment checks because those failures waste time before feature-level learning begins.
-- [ ] Phase 3: finish the scored TUI-safety gate set by pairing the completed visual-evidence gate with the still-missing input-routing safety gate.
+- [x] Phase 3: finished the scored TUI-safety gate set by pairing the completed visual-evidence gate with the input-routing safety gate.
 - [ ] Phase 4: add the pending-approval queue so post-publish self-reflection becomes a reviewable backlog instead of scattered report text.
 - [ ] Phase 5: measure whether the first four phases reduce retry count, skipped gates, and manual clarification load before expanding into challenger worktrees or autonomous self-editing.
 
@@ -49,5 +49,6 @@ This section converts the plan into direct asks that future sessions can execute
 - [ ] Approve a verification-template pass focused on `focused-tests` and `app-tests`.
 - [x] Approved and completed a workflow-safety pass focused on serialized writes and preflight checks.
 - [x] Approved and completed a visual-evidence gate pass focused on canonical TUI before/after capture at `220x50`, `80x24`, and `50x15`.
+- [x] Approved and completed an input-routing safety gate pass focused on compose, prompt, and editor text-entry proof for shortcut-sensitive TUI work.
 - [ ] Approve a visibility pass that adds a pending-approval queue for post-publish reflection suggestions.
 - [ ] Approve a measurement pass that compares retry counts and follow-up load before and after the first three improvements.

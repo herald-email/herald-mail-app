@@ -5,6 +5,13 @@ import argparse
 from pathlib import Path
 
 from artifact_io import load_json, save_json, save_text
+from input_routing import (
+    covered_surfaces,
+    ensure_input_routing,
+    input_routing_feedback_messages,
+    missing_surfaces,
+    summarize_input_routing_gate,
+)
 from remediation_templates import load_remediation_templates, match_remediation_template
 from visual_evidence import covered_sizes, ensure_visual_evidence, missing_sizes, summarize_visual_gate, visual_feedback_messages
 
@@ -122,6 +129,41 @@ def visual_gate_section(run: dict) -> list[str]:
     return lines
 
 
+def input_routing_section(run: dict) -> list[str]:
+    gate = ensure_input_routing(run)
+    lines = [
+        "",
+        "## Input Routing Safety Gate",
+        f"- Required: {'yes' if gate.get('required') else 'no'}",
+        f"- Status: {gate.get('status', 'not recorded')}",
+        f"- Required surfaces: {', '.join(gate.get('required_surfaces', [])) if gate.get('required_surfaces') else 'none recorded'}",
+        f"- Covered surfaces: {', '.join(sorted(covered_surfaces(gate))) if covered_surfaces(gate) else 'none yet'}",
+        f"- Summary: {summarize_input_routing_gate(gate)}",
+    ]
+    missing = missing_surfaces(gate)
+    if missing:
+        lines.append(f"- Missing surfaces: {', '.join(missing)}")
+    if gate.get("checks"):
+        lines.append("- Recorded checks:")
+        for check in sorted(gate["checks"], key=lambda item: item.get("surface", "")):
+            issues = check.get("issues") or []
+            lines.append(
+                f"- `{check.get('surface', 'surface')}` with `{check.get('input_sequence', '')}` — {'complete' if check.get('complete') else 'incomplete'}"
+            )
+            lines.append(f"- Expected: {check.get('expected_behavior', '')}")
+            lines.append(f"- Observed: {check.get('observed_behavior', '')}")
+            lines.append(f"- Text preserved: {'yes' if check.get('text_preserved') else 'no'}")
+            if check.get("repro_steps"):
+                lines.append(f"- Repro: {' -> '.join(check['repro_steps'])}")
+            if issues:
+                lines.append(f"- Needs: {', '.join(issues)}")
+            if check.get("note"):
+                lines.append(f"- Note: {check['note']}")
+    else:
+        lines.append("- No input-routing checks recorded.")
+    return lines
+
+
 def build_self_reflection(run: dict, score: dict | None, reflections: list[Path], results: list[dict]) -> dict:
     publication = run.get("publication", {})
     actions = unique(publication.get("actions", []))
@@ -139,6 +181,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     current_brief = load_optional_json(repo_root / ".superpowers" / "autopilot" / "state" / "improvement-brief.json")
     templates = load_remediation_templates(repo_root)
     visual = ensure_visual_evidence(run)
+    input_routing = ensure_input_routing(run)
 
     strengths: list[str] = []
     drag: list[str] = []
@@ -161,6 +204,10 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         strengths.append(
             f"Canonical visual evidence was captured across {len(covered_sizes(visual))}/{len(visual.get('required_sizes', []))} required terminal sizes."
         )
+    if input_routing.get("required") and input_routing.get("status") == "passed":
+        strengths.append(
+            f"Input-routing safety was proven across {len(covered_surfaces(input_routing))}/{len(input_routing.get('required_surfaces', []))} required text-entry surfaces."
+        )
     if retry_count == 0:
         strengths.append("The run reached handoff without needing a bounded retry loop.")
 
@@ -179,6 +226,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     if score and score.get("status") == "needs_followup":
         drag.append("The scored handoff still flagged human follow-up as needed.")
     drag.extend(visual_feedback_messages(visual)[:3])
+    drag.extend(input_routing_feedback_messages(input_routing)[:3])
 
     if retry_count > 0 or latest_feedback:
         if reflections:
@@ -299,6 +347,7 @@ def main() -> int:
     preflight_results = latest_preflight_results(preflight)
     preflight_resources = preflight.get("resources", {})
     ensure_visual_evidence(run)
+    ensure_input_routing(run)
     self_reflection = build_self_reflection(run, score, reflections, results)
     self_reflection_json_path = run_dir / "self_reflection.json"
     self_reflection_md_path = run_dir / "self_reflection.md"
@@ -350,6 +399,7 @@ def main() -> int:
         ]
     )
     lines.extend(visual_gate_section(run))
+    lines.extend(input_routing_section(run))
 
     lines.extend(visual_screenshot_sections(run, evidence_items))
     lines.extend(["", "## Verification"])
@@ -429,6 +479,7 @@ def main() -> int:
                 f"- Status: {score['status']}",
                 f"- Preflight readiness: {score['axes'].get('preflight_readiness', 'n/a')}",
                 f"- Visual evidence readiness: {score['axes'].get('visual_evidence_readiness', 'n/a')}",
+                f"- Input routing readiness: {score['axes'].get('input_routing_readiness', 'n/a')}",
                 f"- Required gates passed: {score['counts']['required_passed']}/{score['counts']['required_gates']}",
                 f"- Required preflight checks passed: {score['counts'].get('preflight_required', 0) - score['counts'].get('preflight_failed', 0) - score['counts'].get('preflight_missing', 0)}/{score['counts'].get('preflight_required', 0)}",
                 f"- Retry count: {score['counts']['retry_count']}",

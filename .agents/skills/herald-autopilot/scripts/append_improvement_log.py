@@ -12,6 +12,7 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
     product_truth = summary.get("product_truth", {})
     preflight = summary.get("preflight", {})
     visual = summary.get("visual_evidence", {})
+    input_routing = summary.get("input_routing", {})
     return {
         "recent_run_count": int(summary.get("total_runs", 0)),
         "average_score": summary.get("average_score"),
@@ -27,6 +28,9 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
         "visual_required_runs": int(visual.get("required_runs", 0)),
         "visual_ready_runs": int(visual.get("ready_runs", 0)),
         "visual_readiness_rate": visual.get("readiness_rate"),
+        "input_routing_required_runs": int(input_routing.get("required_runs", 0)),
+        "input_routing_ready_runs": int(input_routing.get("ready_runs", 0)),
+        "input_routing_readiness_rate": input_routing.get("readiness_rate"),
         "top_recommendation": brief.get("recommended_experiment", {}).get("name", ""),
     }
 
@@ -50,6 +54,9 @@ def metric_delta(previous: dict | None, current: dict) -> dict:
         "visual_required_runs",
         "visual_ready_runs",
         "visual_readiness_rate",
+        "input_routing_required_runs",
+        "input_routing_ready_runs",
+        "input_routing_readiness_rate",
     ):
         prev_value = previous.get(key)
         curr_value = current.get(key)
