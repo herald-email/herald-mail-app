@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T17:21:43 | Workflow safety preflight and serialized artifact writes | validated | 30 | 86.46153846153847 | 100% | 0 | 2 |
 | 2026-05-01T17:04:56 | Reusable remediation templates for repeated test failures | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:47:32 | Visible post-publish self-reflection | validated | 30 | 87.28571428571429 | 100% | 0 | 2 |
 | 2026-05-01T16:32:02 | Preserve GitHub issue references in autopilot handoffs | applied | 25 | 87.33333333333333 | 100% | 0 | 2 |
@@ -18,6 +19,48 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Workflow safety preflight and serialized artifact writes
+
+- Logged at: 2026-05-01T17:21:43+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: Recoverable reflections kept showing late docs dependency failures, fragile SSH host-key setup, media-batch restart pain, and direct evidence that nearby helper writes could clobber each other.
+- Summary: Added a first-class preflight step for docs, SSH, and media-heavy runs, and hardened herald-autopilot artifact writes so run.json and evidence manifests survive concurrent helper activity.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 86.46153846153847
+- Average retries: 0.6666666666666666
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 26
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 18
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: -0.8241758241758248
+- average_retry_count: -0.10000000000000009
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: -2
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: -1
+Changes:
+- Added preflight_run.py to record docs dependency readiness, a run-local SSH host-key path, and a resumable media-batch state file before baseline verification.
+- Added a shared artifact_io.py helper and moved run.json plus evidence-manifest writers to locked atomic writes.
+- Extended reports, scores, optimizer summaries, and workflow docs with preflight readiness visibility.
+Recommended experiment at log time:
+- `template-red-compose-comma-alias-feedback` (medium value, low risk)
+Article notes:
+- This phase turns ambient setup assumptions into explicit measured state, which is a stronger story for workflow reliability than treating environment issues as random operator error.
+- The concurrent-write validation gives us a concrete before/after systems lesson for a future article: reflection quality depends on artifact integrity.
+Follow-ups:
+- Convert visual-evidence and input-routing lessons into explicit scored gates for TUI-facing work.
+- Decide whether the next GEPA pass should prioritize the phase backlog or the next uncovered failure template.
 
 ### Reusable remediation templates for repeated test failures
 
@@ -36,6 +79,9 @@ Metrics at log time:
 - Product-truth required runs: 28
 - Product-truth grounding rate: 1.0
 - Product-truth updated-first runs: 19
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -75,6 +121,9 @@ Metrics at log time:
 - Product-truth required runs: 28
 - Product-truth grounding rate: 1.0
 - Product-truth updated-first runs: 19
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: -0.04761904761903679
@@ -114,6 +163,9 @@ Metrics at log time:
 - Product-truth required runs: 23
 - Product-truth grounding rate: 1.0
 - Product-truth updated-first runs: 16
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +5
 - average_score: +4.333333333333329
@@ -151,6 +203,9 @@ Metrics at log time:
 - Product-truth required runs: 14
 - Product-truth grounding rate: 0.9285714285714286
 - Product-truth updated-first runs: 3
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +15
 - average_score: -0.4000000000000057
@@ -187,6 +242,9 @@ Metrics at log time:
 - Product-truth required runs: 1
 - Product-truth grounding rate: 1.0
 - Product-truth updated-first runs: 1
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +1
 - average_score: -2.2666666666666657
@@ -223,6 +281,9 @@ Metrics at log time:
 - Product-truth required runs: n/a
 - Product-truth grounding rate: n/a
 - Product-truth updated-first runs: n/a
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Delta from previous entry:
 - recent_run_count: +0
 - average_score: +0.0
@@ -258,6 +319,9 @@ Metrics at log time:
 - Product-truth required runs: n/a
 - Product-truth grounding rate: n/a
 - Product-truth updated-first runs: n/a
+- Preflight required runs: n/a
+- Preflight ready runs: n/a
+- Preflight readiness rate: n/a
 Changes:
 - Created the Herald autopilot skill and run-artifact schema.
 - Added scoring, reflection, report rendering, and the first optimizer state layer.

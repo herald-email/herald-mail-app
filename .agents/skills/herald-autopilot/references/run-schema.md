@@ -14,6 +14,7 @@ Top-level fields:
 - `task`: Request, type, slug, and affected surfaces
 - `paths`: Repo root, worktree, branch, report path, evolution doc path
 - `policy`: Approval mode, verification mode, retry limit
+- `preflight`: Required environment checks, latest results, and prepared resources such as run-local SSH host-key paths or resumable media-batch state
 - `baseline`: Result of pre-implementation baseline checks
 - `plan`: Short summary, whether user questions were needed, and key decisions
 - `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
@@ -35,6 +36,15 @@ JSON array of evidence objects. Each object should include:
 - `gate`: Optional verification gate name
 - `artifact`: Path to captured output, screenshot, or log
 
+## `preflight.json`
+
+Mirror of the latest `run.json.preflight` block so a future session can inspect environment readiness without diffing the full run document. It should include:
+
+- `status`
+- `required_checks`
+- `results`
+- `resources`
+
 ## `reflections/<attempt>.json`
 
 Each reflection document should include:
@@ -52,6 +62,7 @@ Each reflection document should include:
 Scoring is intentionally simple in v1:
 
 - gate completeness
+- preflight readiness
 - baseline cleanliness
 - retry efficiency
 - human follow-up required
@@ -74,7 +85,7 @@ When a run matches a reusable remediation template, the self-reflection artifact
 
 ## Future Compatibility
 
-Phase 2 can add:
+Later phases can add:
 
 - multiple candidates per task
 - challenger worktrees

@@ -7,12 +7,13 @@ This skill is the repo-local conductor for one Herald task at a time. It is inte
 Each run should move through these states in order unless it is blocked:
 
 1. `initialized`
-2. `baseline_checked`
-3. `worktree_ready`
-4. `in_progress`
-5. `verifying`
-6. `passed` or `failed` or `blocked`
-7. `reported`
+2. `preflight_checked`
+3. `baseline_checked`
+4. `worktree_ready`
+5. `in_progress`
+6. `verifying`
+7. `passed` or `failed` or `blocked`
+8. `reported`
 
 ## Worktree Convention
 
@@ -51,6 +52,7 @@ Use that run folder for:
 
 - intake
 - plan summary
+- preflight results and prepared environment resources
 - product-truth grounding notes
 - publication metadata when commit, merge, push, or PR actions happen
 - evidence manifest
@@ -68,8 +70,10 @@ Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for imp
 
 - One active candidate per run
 - Same-worktree retries only
+- Run environment preflight before implementation whenever the task touches docs, SSH, or long-running media workflows
 - Required failures generate explicit natural-language feedback
 - Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time
+- `run.json` and `evidence/manifest.json` updates should be serialized so adjacent helpers cannot clobber each other
 - Score the run on comparable axes so future versions can support multiple candidates without changing the interface
 
 ## Terminal State
@@ -78,6 +82,7 @@ Success means:
 
 - the task has a branch
 - the task has a worktree
+- required preflight is recorded when the task touches docs, SSH, or media-heavy work
 - required verification is recorded
 - the report is rendered
 - requested publish actions are recorded when the user asked for them

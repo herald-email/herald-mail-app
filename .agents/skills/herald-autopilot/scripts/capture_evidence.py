@@ -3,21 +3,14 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import uuid
 from pathlib import Path
+
+from artifact_io import load_json, locked_paths, save_json
 
 
 def now_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
-
-
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_json(path: Path, payload) -> None:
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -35,44 +28,44 @@ def main() -> int:
     run_dir = Path(args.run_dir).resolve()
     manifest_path = run_dir / "evidence" / "manifest.json"
     run_path = run_dir / "run.json"
+    with locked_paths(manifest_path, run_path):
+        manifest = load_json(manifest_path)
+        run = load_json(run_path)
 
-    manifest = load_json(manifest_path)
-    run = load_json(run_path)
-
-    entry = {
-        "id": str(uuid.uuid4()),
-        "timestamp": now_utc(),
-        "kind": args.kind,
-        "summary": args.summary,
-        "status": args.status,
-        "gate": args.gate or None,
-        "artifact": args.artifact or None,
-    }
-    manifest.append(entry)
-    save_json(manifest_path, manifest)
-
-    if args.baseline:
-        run["baseline"] = {
-            "status": "pass" if args.status == "pass" else "fail",
+        entry = {
+            "id": str(uuid.uuid4()),
+            "timestamp": now_utc(),
+            "kind": args.kind,
             "summary": args.summary,
-            "artifact": args.artifact or "",
-        }
-
-    if args.gate:
-        if args.gate not in run["verification"]["required_gates"] and args.required:
-            run["verification"]["required_gates"].append(args.gate)
-        result = {
-            "gate": args.gate,
             "status": args.status,
-            "summary": args.summary,
-            "artifact": args.artifact or "",
-            "required": args.required,
-            "recorded_at": now_utc(),
+            "gate": args.gate or None,
+            "artifact": args.artifact or None,
         }
-        run["verification"]["results"].append(result)
+        manifest.append(entry)
+        save_json(manifest_path, manifest)
 
-    run["updated_at"] = now_utc()
-    save_json(run_path, run)
+        if args.baseline:
+            run["baseline"] = {
+                "status": "pass" if args.status == "pass" else "fail",
+                "summary": args.summary,
+                "artifact": args.artifact or "",
+            }
+
+        if args.gate:
+            if args.gate not in run["verification"]["required_gates"] and args.required:
+                run["verification"]["required_gates"].append(args.gate)
+            result = {
+                "gate": args.gate,
+                "status": args.status,
+                "summary": args.summary,
+                "artifact": args.artifact or "",
+                "required": args.required,
+                "recorded_at": now_utc(),
+            }
+            run["verification"]["results"].append(result)
+
+        run["updated_at"] = now_utc()
+        save_json(run_path, run)
     print(entry["id"])
     return 0
 

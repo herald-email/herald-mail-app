@@ -26,8 +26,8 @@ This section captures the recurring problems that appeared often enough to justi
 This section ranks the workflow changes that would pay down the most repeated friction first. The order favors fixes that should reduce retries across many future runs before more ambitious GEPA search features are added.
 
 - [x] Built reusable remediation templates for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check` so repeated failures can surface standardized next steps instead of bespoke retry reasoning.
-- [ ] Add workflow preflight checks for docs dependencies, SSH host-key paths, and resumable long-running media batches so environment failures are caught before feature-level verification starts.
-- [ ] Serialize `run.json` and evidence-manifest writes so helpers cannot clobber each other when multiple workflow steps run close together.
+- [x] Added workflow preflight checks for docs dependencies, SSH host-key paths, and resumable long-running media batches so environment failures are caught before feature-level verification starts.
+- [x] Serialized `run.json` and evidence-manifest writes so helpers cannot clobber each other when multiple workflow steps run close together.
 - [ ] Promote native-terminal repro paths, small-terminal guards, and golden-snapshot whitespace rules into explicit visual-evidence gates for TUI-facing work.
 - [ ] Add an input-routing safety gate that requires shortcut and alias changes to prove they do not steal text entry on compose, prompt, or editor surfaces.
 - [ ] Build a pending-approval queue that collects post-publish self-reflection suggestions across runs so the user can review and batch-approve GEPA changes.
@@ -37,7 +37,7 @@ This section ranks the workflow changes that would pay down the most repeated fr
 This section sequences the backlog into a practical rollout. The idea is to stabilize the most repeated sources of wasted effort first, then improve visibility and approval flow, and only after that consider more autonomous GEPA behavior.
 
 - [x] Phase 1: shipped `template-focused-tests-feedback` and `template-app-tests-feedback`, along with adjacent `app-package-tests` and `diff-check` coverage, because verification-template failures were the densest repeated signal in recovered reflections.
-- [ ] Phase 2: harden workflow infrastructure with serialized artifact writes and preflight environment checks because those failures waste time before feature-level learning begins.
+- [x] Phase 2: hardened workflow infrastructure with serialized artifact writes and preflight environment checks because those failures waste time before feature-level learning begins.
 - [ ] Phase 3: convert visual-evidence and input-routing lessons into scored gates for TUI-facing work because those failures are user-visible and expensive to rediscover.
 - [ ] Phase 4: add the pending-approval queue so post-publish self-reflection becomes a reviewable backlog instead of scattered report text.
 - [ ] Phase 5: measure whether the first four phases reduce retry count, skipped gates, and manual clarification load before expanding into challenger worktrees or autonomous self-editing.
@@ -47,6 +47,6 @@ This section sequences the backlog into a practical rollout. The idea is to stab
 This section converts the plan into direct asks that future sessions can execute without extra archaeology. Each prompt is meant to be approved or deferred explicitly so GEPA remains visible and user-controlled.
 
 - [ ] Approve a verification-template pass focused on `focused-tests` and `app-tests`.
-- [ ] Approve a workflow-safety pass focused on serialized writes and preflight checks.
+- [x] Approved and completed a workflow-safety pass focused on serialized writes and preflight checks.
 - [ ] Approve a visibility pass that adds a pending-approval queue for post-publish reflection suggestions.
 - [ ] Approve a measurement pass that compares retry counts and follow-up load before and after the first three improvements.

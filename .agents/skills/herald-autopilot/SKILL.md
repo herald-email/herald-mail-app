@@ -39,10 +39,11 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 1. Treat one invocation as one task.
 2. Ask only critical questions that change implementation or safety.
 3. Show a concise plan summary, then proceed unless a risky or non-obvious tradeoff needs the user's decision.
-4. Verify baseline, then create a dedicated worktree under `.worktrees/`.
-5. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
-6. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
-7. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
+4. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
+5. Verify baseline, then create a dedicated worktree under `.worktrees/`.
+6. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
+7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
+8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
 
 ## GitHub Issue Association
 
@@ -103,6 +104,19 @@ This creates:
 - `.superpowers/autopilot/runs/<run-id>/evidence/manifest.json`
 - `.superpowers/autopilot/runs/<run-id>/reflections/`
 
+Run preflight immediately after bootstrap whenever the task touches docs, SSH, or long-running media work:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/preflight_run.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>"
+```
+
+This records:
+
+- docs dependency readiness such as `docs/node_modules/.bin/astro`
+- a run-local SSH host-key path for smoke checks
+- a resumable media-batch state file for long-running screenshot or VHS work
+
 ## Worktree And Branch Policy
 
 Use the run metadata to create:
@@ -111,6 +125,8 @@ Use the run metadata to create:
 - Worktree: `.worktrees/<run-id>-<slug>`
 
 Baseline verification happens before implementation. If the baseline is already failing, record that in the run, summarize it clearly, and ask whether to proceed on top of the dirty baseline only if it materially obscures the requested task.
+
+If preflight fails, stop and surface that environment blocker before feature-level verification starts.
 
 ## Impact-Based Verification
 

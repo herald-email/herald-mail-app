@@ -25,6 +25,8 @@ This section describes the current behavior that future sessions should treat as
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
 - [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, and `diff-check`.
+- [x] Docs, SSH, and media-heavy runs can now execute a first-class preflight step that records prerequisites and prepared resources before baseline verification starts.
+- [x] Run metadata and evidence manifests now use serialized helper writes so nearby workflow steps do not clobber each other.
 
 ## What Changed In This Version
 
@@ -41,6 +43,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a GitHub issue association rule after issue #7 was completed locally without a closing keyword in the squash commit.
 - [x] Added publish-action tracking plus self-reflection artifacts so normal feature runs can surface suggested GEPA changes without silently changing the workflow.
 - [x] Added an initial remediation-template layer so repeated verification failures can reuse checklists instead of rediscovering the same retry strategy in each run.
+- [x] Added workflow-safety infrastructure with explicit preflight checks and locked artifact writes for `run.json` and `evidence/manifest.json`.
 
 ## Run Patterns Observed
 
@@ -57,10 +60,10 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-01T17:04:46+00:00.
+- [x] Auto snapshot generated at 2026-05-01T17:21:43+00:00.
 - [x] Recent runs analyzed: 30.
 - [x] Frontier members available: 2.
-- [x] Most repeated failing evidence: `focused-tests` (4 occurrences).
+- [x] Most repeated failing evidence: `focused-tests` (3 occurrences).
 - [x] Current top recommended experiment: `template-red-compose-comma-alias-feedback` (medium value, low risk).
 <!-- AUTOGEN:END -->
 
@@ -76,6 +79,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] If another agent is actively using `herald-autopilot`, breaking changes to the core execution helpers are still risky and should be staged additively first.
 - [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
 - [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
+- [ ] Preflight exists now, but the workflow has not yet converted visual-evidence or input-routing lessons into comparable scored gates for TUI-facing work.
 
 ## Candidate Next Experiments
 
@@ -87,6 +91,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
 - [ ] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
 - [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
+- [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 - [ ] Add a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.

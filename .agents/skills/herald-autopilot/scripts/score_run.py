@@ -6,17 +6,19 @@ import datetime as dt
 import json
 from pathlib import Path
 
+from artifact_io import load_json, save_json
+
 
 def now_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 
-
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_json(path: Path, payload) -> None:
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+def latest_results_by_gate(items: list[dict], key_name: str) -> dict[str, dict]:
+    latest: dict[str, dict] = {}
+    for item in items:
+        key = item.get(key_name)
+        if key:
+            latest[key] = item
+    return latest
 
 
 def main() -> int:
@@ -30,6 +32,16 @@ def main() -> int:
     results = run["verification"].get("results", [])
     failed_required = [item for item in results if item["gate"] in required and item["status"] == "fail"]
     passed_required = [item for item in results if item["gate"] in required and item["status"] == "pass"]
+    preflight = run.get("preflight", {})
+    required_preflight = set(preflight.get("required_checks", []))
+    latest_preflight = latest_results_by_gate(preflight.get("results", []), "check")
+    failed_required_preflight = [
+        latest_preflight[check]
+        for check in required_preflight
+        if latest_preflight.get(check, {}).get("status") == "fail"
+    ]
+    missing_required_preflight = [check for check in required_preflight if check not in latest_preflight]
+    preflight_ready = not required_preflight or (not failed_required_preflight and not missing_required_preflight)
     retry_count = int(run["metrics"].get("retry_count", 0))
     human_followup = bool(run["metrics"].get("human_followup_needed", False))
     baseline_pass = run["baseline"].get("status") == "pass"
@@ -42,6 +54,8 @@ def main() -> int:
     if not baseline_pass:
         overall -= 20
     overall -= min(len(failed_required) * 25, 50)
+    overall -= min(len(failed_required_preflight) * 15, 30)
+    overall -= min(len(missing_required_preflight) * 8, 16)
     overall -= min(retry_count * 8, 24)
     overall -= 10 if human_followup else 0
     overall -= 5 if files_changed > 25 else 0
@@ -50,9 +64,11 @@ def main() -> int:
 
     feedback = list(run.get("latest_feedback", []))
     feedback.extend(item["summary"] for item in failed_required)
+    feedback.extend(item["summary"] for item in failed_required_preflight)
+    feedback.extend(f"Required preflight `{check}` did not run before implementation." for check in missing_required_preflight)
 
     status = "pass"
-    if failed_required:
+    if failed_required or failed_required_preflight or missing_required_preflight:
         status = "fail"
     elif human_followup:
         status = "needs_followup"
@@ -64,6 +80,7 @@ def main() -> int:
         "overall_score": overall,
         "axes": {
             "baseline_cleanliness": 1 if baseline_pass else 0,
+            "preflight_readiness": 1 if preflight_ready else 0,
             "verification_completeness": len(passed_required) / len(required) if required else 1.0,
             "retry_efficiency": max(0, 1 - (retry_count / max(run["policy"].get("retry_limit", 1), 1))),
             "handoff_readiness": 0 if human_followup else 1,
@@ -73,6 +90,9 @@ def main() -> int:
             "required_gates": len(required),
             "required_passed": len(passed_required),
             "required_failed": len(failed_required),
+            "preflight_required": len(required_preflight),
+            "preflight_failed": len(failed_required_preflight),
+            "preflight_missing": len(missing_required_preflight),
             "retry_count": retry_count,
             "files_changed": files_changed,
             "product_truth_required": 1 if product_truth_required else 0,
@@ -83,6 +103,7 @@ def main() -> int:
             "verification": len(passed_required),
             "retries": retry_count,
             "followup_needed": 1 if human_followup else 0,
+            "preflight_gap": 0 if preflight_ready else 1,
             "grounding_gap": 0 if product_truth_grounded else 1,
         },
     }

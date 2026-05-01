@@ -10,6 +10,7 @@ from optimizer_common import load_json, now_utc, save_json, state_dir
 
 def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
     product_truth = summary.get("product_truth", {})
+    preflight = summary.get("preflight", {})
     return {
         "recent_run_count": int(summary.get("total_runs", 0)),
         "average_score": summary.get("average_score"),
@@ -19,6 +20,9 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
         "product_truth_required_runs": int(product_truth.get("required_runs", 0)),
         "product_truth_grounding_rate": product_truth.get("grounding_rate"),
         "product_truth_updated_first_runs": int(product_truth.get("updated_first_runs", 0)),
+        "preflight_required_runs": int(preflight.get("required_runs", 0)),
+        "preflight_ready_runs": int(preflight.get("ready_runs", 0)),
+        "preflight_readiness_rate": preflight.get("readiness_rate"),
         "top_recommendation": brief.get("recommended_experiment", {}).get("name", ""),
     }
 
@@ -36,6 +40,9 @@ def metric_delta(previous: dict | None, current: dict) -> dict:
         "product_truth_required_runs",
         "product_truth_grounding_rate",
         "product_truth_updated_first_runs",
+        "preflight_required_runs",
+        "preflight_ready_runs",
+        "preflight_readiness_rate",
     ):
         prev_value = previous.get(key)
         curr_value = current.get(key)

@@ -75,6 +75,9 @@ def main() -> int:
                     f"- Product-truth required runs: {metrics.get('product_truth_required_runs', 'n/a')}",
                     f"- Product-truth grounding rate: {metrics.get('product_truth_grounding_rate', 'n/a')}",
                     f"- Product-truth updated-first runs: {metrics.get('product_truth_updated_first_runs', 'n/a')}",
+                    f"- Preflight required runs: {metrics.get('preflight_required_runs', 'n/a')}",
+                    f"- Preflight ready runs: {metrics.get('preflight_ready_runs', 'n/a')}",
+                    f"- Preflight readiness rate: {metrics.get('preflight_readiness_rate', 'n/a')}",
                 ]
             )
             if delta:

@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import re
 from pathlib import Path
+
+from artifact_io import save_json, save_text
 
 
 def slugify(value: str) -> str:
@@ -104,6 +105,12 @@ def main() -> int:
             "status": "unknown",
             "summary": "",
         },
+        "preflight": {
+            "status": "pending",
+            "required_checks": [],
+            "results": [],
+            "resources": {},
+        },
         "plan": {
             "summary": args.plan_summary,
             "questions_asked": [],
@@ -136,8 +143,9 @@ def main() -> int:
         "latest_feedback": [],
     }
 
-    (run_dir / "run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
-    (run_dir / "intake.md").write_text(
+    save_json(run_dir / "run.json", run)
+    save_text(
+        run_dir / "intake.md",
         "\n".join(
             [
                 f"# Intake — {run_id}",
@@ -152,9 +160,9 @@ def main() -> int:
             ]
         )
         + "\n",
-        encoding="utf-8",
     )
-    (run_dir / "plan.md").write_text(
+    save_text(
+        run_dir / "plan.md",
         "\n".join(
             [
                 f"# Plan — {run_id}",
@@ -171,9 +179,8 @@ def main() -> int:
             ]
         )
         + "\n",
-        encoding="utf-8",
     )
-    (evidence_dir / "manifest.json").write_text("[]\n", encoding="utf-8")
+    save_text(evidence_dir / "manifest.json", "[]\n")
 
     print(str(run_dir))
     return 0

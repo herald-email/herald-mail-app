@@ -3,20 +3,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 from pathlib import Path
+
+from artifact_io import load_json, locked_paths, save_json
 
 
 def now_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
-
-
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_json(path: Path, payload) -> None:
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def ensure_product_truth(run: dict) -> dict:
@@ -34,6 +27,15 @@ def ensure_publication(run: dict) -> dict:
     publication.setdefault("actions", [])
     publication.setdefault("summary", "")
     return publication
+
+
+def ensure_preflight(run: dict) -> dict:
+    preflight = run.setdefault("preflight", {})
+    preflight.setdefault("status", "pending")
+    preflight.setdefault("required_checks", [])
+    preflight.setdefault("results", [])
+    preflight.setdefault("resources", {})
+    return preflight
 
 
 def main() -> int:
@@ -62,53 +64,56 @@ def main() -> int:
     args = parser.parse_args()
 
     run_path = Path(args.run_dir).resolve() / "run.json"
-    run = load_json(run_path)
-    product_truth = ensure_product_truth(run)
-    publication = ensure_publication(run)
 
-    if args.status:
-        run["status"] = args.status
-    if args.plan_summary:
-        run["plan"]["summary"] = args.plan_summary
-    if args.decision:
-        run["plan"]["decisions"].extend(args.decision)
-    if args.outcome_summary:
-        run["outcome"]["summary"] = args.outcome_summary
-    if args.clear_risks:
-        run["outcome"]["remaining_risks"] = []
-    if args.risk:
-        run["outcome"]["remaining_risks"].extend(args.risk)
-    if args.files_changed is not None:
-        run["metrics"]["files_changed"] = args.files_changed
-    if args.human_followup:
-        run["metrics"]["human_followup_needed"] = True
-    if args.no_human_followup:
-        run["metrics"]["human_followup_needed"] = False
-    if args.requires_product_truth:
-        product_truth["required"] = True
-    if args.no_requires_product_truth:
-        product_truth["required"] = False
-    if args.product_truth_status:
-        product_truth["status"] = args.product_truth_status
-    if args.product_truth_summary:
-        product_truth["summary"] = args.product_truth_summary
-    if args.clear_truth_sources:
-        product_truth["sources"] = []
-    if args.truth_source:
-        product_truth["sources"].extend(args.truth_source)
-    if args.clear_docs_updated:
-        product_truth["docs_updated"] = []
-    if args.doc_updated:
-        product_truth["docs_updated"].extend(args.doc_updated)
-    if args.clear_publish_actions:
-        publication["actions"] = []
-    if args.publish_action:
-        publication["actions"].extend(args.publish_action)
-    if args.publication_summary:
-        publication["summary"] = args.publication_summary
+    with locked_paths(run_path):
+        run = load_json(run_path)
+        product_truth = ensure_product_truth(run)
+        publication = ensure_publication(run)
+        ensure_preflight(run)
 
-    run["updated_at"] = now_utc()
-    save_json(run_path, run)
+        if args.status:
+            run["status"] = args.status
+        if args.plan_summary:
+            run["plan"]["summary"] = args.plan_summary
+        if args.decision:
+            run["plan"]["decisions"].extend(args.decision)
+        if args.outcome_summary:
+            run["outcome"]["summary"] = args.outcome_summary
+        if args.clear_risks:
+            run["outcome"]["remaining_risks"] = []
+        if args.risk:
+            run["outcome"]["remaining_risks"].extend(args.risk)
+        if args.files_changed is not None:
+            run["metrics"]["files_changed"] = args.files_changed
+        if args.human_followup:
+            run["metrics"]["human_followup_needed"] = True
+        if args.no_human_followup:
+            run["metrics"]["human_followup_needed"] = False
+        if args.requires_product_truth:
+            product_truth["required"] = True
+        if args.no_requires_product_truth:
+            product_truth["required"] = False
+        if args.product_truth_status:
+            product_truth["status"] = args.product_truth_status
+        if args.product_truth_summary:
+            product_truth["summary"] = args.product_truth_summary
+        if args.clear_truth_sources:
+            product_truth["sources"] = []
+        if args.truth_source:
+            product_truth["sources"].extend(args.truth_source)
+        if args.clear_docs_updated:
+            product_truth["docs_updated"] = []
+        if args.doc_updated:
+            product_truth["docs_updated"].extend(args.doc_updated)
+        if args.clear_publish_actions:
+            publication["actions"] = []
+        if args.publish_action:
+            publication["actions"].extend(args.publish_action)
+        if args.publication_summary:
+            publication["summary"] = args.publication_summary
+
+        run["updated_at"] = now_utc()
+        save_json(run_path, run)
     print(str(run_path))
     return 0
 

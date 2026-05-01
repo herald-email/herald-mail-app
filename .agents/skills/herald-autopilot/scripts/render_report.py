@@ -2,14 +2,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
+from artifact_io import load_json, save_json, save_text
 from remediation_templates import load_remediation_templates, match_remediation_template
-
-
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_optional_json(path: Path):
@@ -69,10 +65,22 @@ def unique(items: list[str]) -> list[str]:
     return ordered
 
 
+def latest_preflight_results(preflight: dict) -> list[dict]:
+    latest: dict[str, dict] = {}
+    for item in preflight.get("results", []):
+        name = item.get("check")
+        if name:
+            latest[name] = item
+    return [latest[name] for name in sorted(latest)]
+
+
 def build_self_reflection(run: dict, score: dict | None, reflections: list[Path], results: list[dict]) -> dict:
     publication = run.get("publication", {})
     actions = unique(publication.get("actions", []))
     product_truth = run.get("product_truth", {})
+    preflight = run.get("preflight", {})
+    preflight_results = latest_preflight_results(preflight)
+    failed_preflight = [item for item in preflight_results if item.get("status") == "fail"]
     required = set(run.get("verification", {}).get("required_gates", []))
     required_results = [item for item in results if item.get("gate") in required]
     skipped = [item for item in results if item.get("status") == "skip"]
@@ -93,6 +101,9 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         strengths.append(f"Completed the requested publish action(s): {', '.join(actions)}.")
     if publication.get("summary"):
         strengths.append(publication["summary"])
+    required_preflight = preflight.get("required_checks", [])
+    if required_preflight and len(preflight_results) >= len(required_preflight) and not failed_preflight:
+        strengths.append(f"All required preflight checks passed ({len(required_preflight)}/{len(required_preflight)}).")
     if required_results and not failed_required:
         strengths.append(f"All required verification gates passed ({len(required_results)}/{len(required_results)}).")
     if product_truth.get("required") and product_truth.get("status") in {"consulted", "updated-first"}:
@@ -102,6 +113,8 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
 
     if failed_required:
         drag.extend([f"Required gate `{item.get('gate', 'ungated')}` failed: {item.get('summary', '')}" for item in failed_required])
+    if failed_preflight:
+        drag.extend([f"Required preflight `{item.get('check', 'unknown')}` failed: {item.get('summary', '')}" for item in failed_preflight])
     if skipped:
         drag.extend([f"Gate `{item.get('gate') or 'ungated'}` was skipped: {item.get('summary', '')}" for item in skipped[:3]])
     if retry_count > 0:
@@ -228,6 +241,9 @@ def main() -> int:
     truth_sources = product_truth.get("sources", [])
     docs_updated = product_truth.get("docs_updated", [])
     publication = run.get("publication", {})
+    preflight = run.get("preflight", {})
+    preflight_results = latest_preflight_results(preflight)
+    preflight_resources = preflight.get("resources", {})
     self_reflection = build_self_reflection(run, score, reflections, results)
     self_reflection_json_path = run_dir / "self_reflection.json"
     self_reflection_md_path = run_dir / "self_reflection.md"
@@ -247,6 +263,22 @@ def main() -> int:
         "## Plan Summary",
         run["plan"].get("summary") or "No plan summary recorded.",
         "",
+        "## Preflight",
+        f"- Status: {preflight.get('status', 'not recorded')}",
+        f"- Required checks: {', '.join(preflight.get('required_checks', [])) if preflight.get('required_checks') else 'none recorded'}",
+    ]
+    if preflight_results:
+        lines.extend([f"- [{item.get('status', 'unknown')}] `{item.get('check', 'unknown')}` — {item.get('summary', '')}" for item in preflight_results])
+    else:
+        lines.append("- No preflight results recorded.")
+    if preflight_resources:
+        lines.append("- Prepared resources:")
+        for key, value in sorted(preflight_resources.items()):
+            lines.append(f"- `{key}`: `{value}`")
+
+    lines.extend(
+        [
+            "",
         "## Product Truth",
         f"- Required: {'yes' if product_truth.get('required') else 'no'}",
         f"- Status: {product_truth.get('status', 'not recorded')}",
@@ -260,7 +292,8 @@ def main() -> int:
         "",
         "## Outcome",
         run["outcome"].get("summary") or "No outcome summary recorded.",
-    ]
+        ]
+    )
 
     lines.extend(visual_screenshot_sections(run, evidence_items))
     lines.extend(["", "## Verification"])
@@ -338,13 +371,15 @@ def main() -> int:
                 "## Score",
                 f"- Overall score: {score['overall_score']}",
                 f"- Status: {score['status']}",
+                f"- Preflight readiness: {score['axes'].get('preflight_readiness', 'n/a')}",
                 f"- Required gates passed: {score['counts']['required_passed']}/{score['counts']['required_gates']}",
+                f"- Required preflight checks passed: {score['counts'].get('preflight_required', 0) - score['counts'].get('preflight_failed', 0) - score['counts'].get('preflight_missing', 0)}/{score['counts'].get('preflight_required', 0)}",
                 f"- Retry count: {score['counts']['retry_count']}",
             ]
         )
 
     markdown = "\n".join(lines) + "\n"
-    self_reflection_json_path.write_text(json.dumps(self_reflection, indent=2) + "\n", encoding="utf-8")
+    save_json(self_reflection_json_path, self_reflection)
     self_reflection_md_lines = [
         f"# Herald Autopilot Self-Reflection — {run['run_id']}",
         "",
@@ -377,9 +412,9 @@ def main() -> int:
             self_reflection_md_lines.append(f"Approval required: {item['approval_prompt']}")
     else:
         self_reflection_md_lines.append("- No approval-ready workflow changes were suggested by this run.")
-    self_reflection_md_path.write_text("\n".join(self_reflection_md_lines) + "\n", encoding="utf-8")
-    report_path.write_text(markdown, encoding="utf-8")
-    (run_dir / "summary.md").write_text(markdown, encoding="utf-8")
+    save_text(self_reflection_md_path, "\n".join(self_reflection_md_lines) + "\n")
+    save_text(report_path, markdown)
+    save_text(run_dir / "summary.md", markdown)
     print(str(report_path))
     return 0
 
