@@ -42,6 +42,17 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 5. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 6. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
 
+## GitHub Issue Association
+
+When the intake includes a GitHub issue URL or issue number, preserve that issue link throughout the run:
+
+- Record the issue reference in the run intake, plan, and final report.
+- Use `Refs #<issue>` in local branch commits when the run stops at branch + worktree + report, so pushing the branch later creates a GitHub cross-reference without prematurely implying completion.
+- If the user asks to create a PR, include `Closes #<issue>` or `Fixes #<issue>` in the PR body unless the user explicitly says the PR is partial.
+- If the user asks to merge or squash locally into the default branch, include `Closes #<issue>` or `Fixes #<issue>` in the default-branch commit body.
+- Do not manually close the issue unless the user asks, or unless the workflow has already pushed/merged the closing reference and verified GitHub sees the completed state.
+- If a commit or PR was created without the issue notation, call that out in the handoff and offer to amend before pushing.
+
 ## Product-Definition Grounding
 
 For product or behavior changes, do not infer intent from screenshots or current code alone when the repo already has product docs.

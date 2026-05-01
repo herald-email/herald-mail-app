@@ -28,6 +28,14 @@ Each run should move through these states in order unless it is blocked:
 - Proceed after the summary unless a non-obvious decision still needs the user.
 - Never silently push, merge, or open a PR in v1.
 
+## GitHub Issue Linking Convention
+
+- If intake references a GitHub issue, carry that issue number through the run artifacts and report.
+- Use `Refs #<issue>` in local feature-branch commits when the work is not being pushed or merged yet.
+- Use `Closes #<issue>` or `Fixes #<issue>` in PR bodies and default-branch commits when the user asks to publish, merge, or squash completed issue work.
+- Do not manually close an issue unless explicitly asked or unless the pushed/merged closing reference has already landed and GitHub confirms the completed state.
+- If a merge or commit misses the expected issue notation, surface that miss before push so it can be amended.
+
 ## Product Truth Convention
 
 - For feature work and any visible behavior change, decide whether product-truth grounding is required.

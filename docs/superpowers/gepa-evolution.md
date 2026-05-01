@@ -21,6 +21,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] Improvement work can now append a structured history entry and render a publication-friendly change log.
 - [x] Product behavior changes are now meant to ground themselves in `VISION.md`, `ARCHITECTURE.md`, and real specs before implementation.
 - [x] Run artifacts and optimizer summaries can now record whether product-truth grounding was required, whether docs were updated first, and how often grounded runs occur.
+- [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 
 ## What Changed In This Version
 
@@ -34,6 +35,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added an optimizer state layer under `.superpowers/autopilot/state/` plus helper scripts for recent-run analysis, frontier building, feedback-pattern extraction, improvement-brief generation, and auto-synced ledger snapshots.
 - [x] Added a dedicated improvement-history log so GEPA changes can be tracked over time with metrics, deltas, article notes, and follow-ups.
 - [x] Added a product-truth grounding layer so GEPA can treat `VISION.md`, `ARCHITECTURE.md`, and spec docs as the product-definition source of truth.
+- [x] Added a GitHub issue association rule after issue #7 was completed locally without a closing keyword in the squash commit.
 
 ## Run Patterns Observed
 
@@ -50,11 +52,11 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-04-24T02:01:12+00:00.
-- [x] Recent runs analyzed: 20.
-- [x] Frontier members available: 8.
-- [x] Most repeated failing evidence: `focused-tests` (2 occurrences).
-- [x] Current top recommended experiment: `template-focused-tests-feedback` (medium value, low risk).
+- [x] Auto snapshot generated at 2026-05-01T16:31:54+00:00.
+- [x] Recent runs analyzed: 25.
+- [x] Frontier members available: 2.
+- [x] Most repeated failing evidence: `app-tests` (2 occurrences).
+- [x] Current top recommended experiment: `template-app-tests-feedback` (medium value, low risk).
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points
@@ -68,6 +70,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] The helper scripts produce durable artifacts, but they do not yet enforce every status transition automatically.
 - [ ] If another agent is actively using `herald-autopilot`, breaking changes to the core execution helpers are still risky and should be staged additively first.
 - [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
+- [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
 
 ## Candidate Next Experiments
 
@@ -79,6 +82,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
 - [ ] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
+- [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 
 ## Ask Me Next
 
@@ -88,3 +92,4 @@ This section is the handoff bridge for future sessions. Each prompt should be ph
 - [ ] "Improve GEPA by adding challenger worktrees for tasks with repeated reflection failures."
 - [ ] "Improve GEPA by summarizing the last three runs and updating the ranked experiment list."
 - [ ] "Improve GEPA by tightening the run schema and removing fields we never actually use."
+- [ ] "Improve GEPA by adding an issue-reference validator before commit, PR, or merge handoff."

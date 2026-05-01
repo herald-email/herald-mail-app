@@ -9,12 +9,50 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T16:32:02 | Preserve GitHub issue references in autopilot handoffs | applied | 25 | 87.33333333333333 | 100% | 0 | 2 |
 | 2026-04-24T02:01:12 | Show before/after screenshots for visual TUI runs | applied | 20 | 83.0 | 93% | 1 | 8 |
 | 2026-04-23T19:00:19 | Product-definition grounding for GEPA | validated | 5 | 83.4 | 100% | 1 | 3 |
 | 2026-04-23T18:42:12 | Improvement-history logging for GEPA | applied | 4 | 85.66666666666667 | n/a | 1 | 2 |
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Preserve GitHub issue references in autopilot handoffs
+
+- Logged at: 2026-05-01T16:32:02+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: Issue #7 was completed and squash-merged locally, but the default-branch commit did not include a closing keyword, so GitHub could not automatically associate or close it from the commit history.
+- Summary: Added a workflow rule so issue-backed Herald autopilot runs carry the GitHub issue reference into reports, branch commits, PR bodies, and default-branch squash commits; this prevents completed issue work from being detached from GitHub automation.
+
+Metrics at log time:
+- Recent runs: 25
+- Average score: 87.33333333333333
+- Average retries: 0.76
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 23
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 16
+Delta from previous entry:
+- recent_run_count: +5
+- average_score: +4.333333333333329
+- average_retry_count: +0.56
+- failed_run_count: -1
+- frontier_count: -6
+- product_truth_required_runs: +9
+- product_truth_grounding_rate: +0.0714285714285714
+- product_truth_updated_first_runs: +13
+Changes:
+- Added GitHub issue association guidance to the herald-autopilot skill.
+- Added the same convention to the workflow contract reference.
+- Updated the GEPA evolution ledger with the lesson and a future issue-linking validator experiment.
+Recommended experiment at log time:
+- `template-app-tests-feedback` (medium value, low risk)
+Article notes:
+- The best workflow memory is often a missing automation edge: one manual issue close exposed a policy that should live in the agent contract.
+Follow-ups:
+- Add a scored gate or helper that validates Refs/Closes/Fixes notation against the intake issue before commit, PR, or merge handoff.
 
 ### Show before/after screenshots for visual TUI runs
 
