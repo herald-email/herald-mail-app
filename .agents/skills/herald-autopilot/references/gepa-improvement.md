@@ -31,7 +31,7 @@ Read these before making workflow changes:
 5. Produce one improvement brief that identifies the top bottleneck and ranked experiments.
 6. Implement only one workflow improvement at a time.
 7. Append an improvement-history entry.
-8. Re-run the optimizer helpers and sync the ledger.
+8. Re-run the optimizer helpers, refresh the phase-impact report when relevant, and sync the ledger.
 
 ## Optimizer Helpers
 
@@ -44,6 +44,7 @@ These scripts are additive and safe to run repeatedly:
 - `prepare_gepa_improvement.py`
 - `append_improvement_log.py`
 - `render_improvement_log.py`
+- `measure_phase_impact.py`
 - `sync_evolution_ledger.py`
 
 ## v2 Scope

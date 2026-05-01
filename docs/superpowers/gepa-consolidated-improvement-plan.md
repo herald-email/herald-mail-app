@@ -40,7 +40,7 @@ This section sequences the backlog into a practical rollout. The idea is to stab
 - [x] Phase 2: hardened workflow infrastructure with serialized artifact writes and preflight environment checks because those failures waste time before feature-level learning begins.
 - [x] Phase 3: finished the scored TUI-safety gate set by pairing the completed visual-evidence gate with the input-routing safety gate.
 - [x] Phase 4: added the pending-approval queue so post-publish self-reflection becomes a reviewable backlog instead of scattered report text.
-- [ ] Phase 5: measure whether the first four phases reduce retry count, skipped gates, and manual clarification load before expanding into challenger worktrees or autonomous self-editing.
+- [x] Phase 5: measured the current effect of the first four phases on retry count, skipped gates, and clarification load, while explicitly recording that the post-improvement sample is still validation-heavy and lacks post-Phase 1 bug/feature runs.
 
 ## Approval Prompts
 
@@ -51,4 +51,4 @@ This section converts the plan into direct asks that future sessions can execute
 - [x] Approved and completed a visual-evidence gate pass focused on canonical TUI before/after capture at `220x50`, `80x24`, and `50x15`.
 - [x] Approved and completed an input-routing safety gate pass focused on compose, prompt, and editor text-entry proof for shortcut-sensitive TUI work.
 - [x] Approved and completed a visibility pass that adds a pending-approval queue for post-publish reflection suggestions.
-- [ ] Approve a measurement pass that compares retry counts and follow-up load before and after the first four improvements.
+- [x] Approved and completed a measurement pass that compares retry counts and follow-up load before and after the first four improvements.

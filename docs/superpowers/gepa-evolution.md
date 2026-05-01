@@ -7,6 +7,7 @@ Related docs:
 - Improvement history: [gepa-improvement-log.md](gepa-improvement-log.md)
 - Consolidated improvement plan: [gepa-consolidated-improvement-plan.md](gepa-consolidated-improvement-plan.md)
 - Pending approvals: [gepa-pending-approvals.md](gepa-pending-approvals.md)
+- Phase impact: [gepa-phase-impact.md](gepa-phase-impact.md)
 - Product truth snapshot: `.superpowers/autopilot/state/product-truth.md`
 
 ## Current Workflow
@@ -31,6 +32,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] Run metadata and evidence manifests now use serialized helper writes so nearby workflow steps do not clobber each other.
 - [x] TUI-facing runs can now close a first-class visual-evidence gate that requires matched before/after PNG plus ANSI captures at `220x50`, `80x24`, and `50x15`.
 - [x] Shortcut-sensitive TUI runs can now close a first-class input-routing safety gate that proves text entry still works on `compose`, `prompt`, and `editor` surfaces.
+- [x] A dedicated phase-impact report can now compare baseline runs with post-improvement cohorts, while separating workflow-validation evidence from real bug/feature evidence.
 
 ## What Changed In This Version
 
@@ -51,6 +53,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added workflow-safety infrastructure with explicit preflight checks and locked artifact writes for `run.json` and `evidence/manifest.json`.
 - [x] Added a scored visual-evidence gate so TUI runs must record canonical terminal captures and repro paths instead of treating screenshots as optional.
 - [x] Added a scored input-routing safety gate plus a reusable template for `red-compose-comma-alias` so shortcut-sensitive TUI work has explicit text-entry proof and reusable recovery guidance.
+- [x] Added a phase-impact measurement layer that renders a durable report comparing retries, skipped gates, and clarification load before and after the first four workflow improvements.
 
 ## Run Patterns Observed
 
@@ -59,20 +62,21 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 - [x] Initial bootstrap indicates the repo already supports the required storage layout because `.worktrees/`, `.superpowers/`, and `reports/` are available and ignored.
 - [x] The repo has strong surface-specific verification docs already, especially for TUI, SSH, and MCP checks.
 - [x] Validation history now includes one successful code-oriented run, one failed TUI-path reflection run, and one workflow-tuning ledger run.
-- [ ] No meaningful production bug or feature history has been recorded yet beyond bootstrap validation.
-- [ ] No empirical comparison of retry patterns or verification cost has been recorded yet across real tasks.
+- [x] The first phase-impact report shows lower retries, skipped gates, and clarification touches in the post-Phase 1 cohort, but every post-Phase 1 run so far is still a workflow-improvement validation run.
+- [ ] We still do not have post-Phase 1 bug or feature runs, so the current measurement pass is directional rather than strong real-task evidence.
 
 ## Auto Snapshot
 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-01T20:36:49+00:00.
+- [x] Auto snapshot generated at 2026-05-01T22:30:48+00:00.
 - [x] Recent runs analyzed: 30.
 - [x] Frontier members available: 2.
 - [x] Most repeated failing evidence: `focused-tests` (3 occurrences).
 - [x] Current top recommended experiment: `template-user-repro-after-ed02a1d-feedback` (medium value, low risk).
 - [x] Pending-approval queue: 3 pending, 0 approved, 0 implemented.
+- [x] Phase-impact report: 0 post-Phase 1 real bug/feature run(s) measured so far.
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points
@@ -88,6 +92,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
 - [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
 - [ ] The queue is visible now, but approvals are still user-driven decisions rather than automatically turning into measured workflow changes.
+- [ ] The current phase-impact report is honest but sample-starved: it has no post-Phase 1 bug or feature runs yet, so it cannot prove real-task gains from the recent workflow changes.
 
 ## Candidate Next Experiments
 
@@ -101,9 +106,11 @@ This section ranks the most valuable next improvements so a future session can s
 - [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
 - [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
 - [x] Added a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
+- [x] Added a first phase-impact report so retry, skip, and clarification trends are at least measured before more autonomy is added.
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 - [ ] Measure whether the visual and input-routing gates reduce TUI retry count and post-handoff clarification load enough to justify stricter automatic enforcement.
+- [ ] Collect and measure the next 3 to 5 real bug or feature autopilot runs so the phase-impact report stops relying on workflow-validation-only evidence.
 
 ## Ask Me Next
 
@@ -116,3 +123,4 @@ This section is the handoff bridge for future sessions. Each prompt should be ph
 - [ ] "Improve GEPA by adding an issue-reference validator before commit, PR, or merge handoff."
 - [ ] "Improve GEPA by reviewing the pending-approval queue and turning the approved items into tracked workflow changes."
 - [ ] "Improve GEPA by measuring whether the pending-approval queue reduced follow-up questions and hidden process drift."
+- [ ] "Improve GEPA by collecting enough real bug and feature runs to turn the current phase-impact report into stronger evidence."

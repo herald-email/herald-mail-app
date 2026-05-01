@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-01T22:30:21 | Phase-impact measurement for the first four GEPA improvements | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T20:37:11 | Pending-approval queue for post-publish GEPA suggestions | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T19:36:56 | Input-routing safety gate for shortcut-sensitive TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T18:35:30 | Canonical visual-evidence gate for TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
@@ -22,6 +23,70 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Phase-impact measurement for the first four GEPA improvements
+
+- Logged at: 2026-05-01T22:30:21+00:00
+- Status: validated
+- Kind: workflow-improvement
+- Bottleneck: We had implemented four workflow improvements in a row, but we still lacked one place that measured whether they were actually reducing retries, skipped gates, or follow-up burden before adding more autonomy.
+- Summary: Added a durable phase-impact report that compares baseline runs with the post-improvement cohort on retries, skipped gates, and clarification load, and explicitly separates workflow-validation evidence from real bug/feature evidence so the measurements stay honest.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.42857142857143
+- Average retries: 0.7
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 24
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 17
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+- Visual-required runs: 2
+- Visual-ready runs: 2
+- Visual readiness rate: 1.0
+- Input-routing required runs: 1
+- Input-routing ready runs: 1
+- Input-routing readiness rate: 1.0
+- Pending approval items: 3
+- Approved approval items: 0
+- Implemented approval items: 0
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +0.0
+- average_retry_count: +0.0
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: +0
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +0
+- preflight_required_runs: +0
+- preflight_ready_runs: +0
+- preflight_readiness_rate: +0.0
+- visual_required_runs: +0
+- visual_ready_runs: +0
+- visual_readiness_rate: +0.0
+- input_routing_required_runs: +0
+- input_routing_ready_runs: +0
+- input_routing_readiness_rate: +0.0
+- pending_approval_items: +0
+- approved_approval_items: +0
+- implemented_approval_items: +0
+Changes:
+- Added phase_impact.py plus measure_phase_impact.py to compute baseline-vs-current cohort metrics and render docs/superpowers/gepa-phase-impact.md.
+- Measured retry, skipped-gate, and clarification-touch deltas while also reporting the current pending-approval backlog.
+- Explicitly surfaced that the current post-Phase 1 cohort is still workflow-validation-only and contains no post-improvement bug/feature runs yet.
+- Updated the ledger and consolidated plan so Phase 5 is tracked as completed with sample-size caveats instead of left as an unmeasured todo.
+Recommended experiment at log time:
+- `template-user-repro-after-ed02a1d-feedback` (medium value, low risk)
+Article notes:
+- This phase improves the methodology story because we now distinguish between implementing workflow ideas and measuring their effect.
+- The report also models an important research habit for the eventual article: separate optimistic trend lines from strong real-task evidence.
+Follow-ups:
+- Collect and measure the next 3 to 5 real bug or feature autopilot runs so the phase-impact report gains stronger post-improvement evidence.
+- Review whether the next queue approvals or remediation templates change the measured retry and clarification trends.
 
 ### Pending-approval queue for post-publish GEPA suggestions
 

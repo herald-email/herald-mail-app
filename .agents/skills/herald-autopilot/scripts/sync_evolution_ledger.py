@@ -34,6 +34,8 @@ def main() -> int:
     brief = load_json(out_dir / "improvement-brief.json")
     queue_path = out_dir / "pending-approvals.json"
     queue = load_json(queue_path) if queue_path.exists() else None
+    phase_impact_path = out_dir / "phase-impact.json"
+    phase_impact = load_json(phase_impact_path) if phase_impact_path.exists() else None
     ledger_path = repo_root / "docs" / "superpowers" / "gepa-evolution.md"
     content = ledger_path.read_text(encoding="utf-8")
 
@@ -55,6 +57,11 @@ def main() -> int:
         queue_summary = queue.get("summary", {})
         lines.append(
             f"- [x] Pending-approval queue: {queue_summary.get('pending', 0)} pending, {queue_summary.get('approved', 0)} approved, {queue_summary.get('implemented', 0)} implemented."
+        )
+    if phase_impact:
+        current_real = phase_impact.get("real_task_current_vs_baseline", {}).get("current_metrics", {})
+        lines.append(
+            f"- [x] Phase-impact report: {current_real.get('run_count', 0)} post-Phase 1 real bug/feature run(s) measured so far."
         )
 
     updated = replace_block(content, "\n".join(lines))
