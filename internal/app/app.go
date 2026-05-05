@@ -1216,6 +1216,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateDetailsTable()
 		}
 		if msg.Emails != nil {
+			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
 			m.updateTimelineTable()
 		}
@@ -1377,6 +1378,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateDetailsTable()
 		}
 		if msg.Emails != nil {
+			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
 			m.updateTimelineTable()
 		}
@@ -1856,6 +1858,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "D":
+		if m.activeTab == tabTimeline {
+			m.finishTimelineRangeSelection()
+		}
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
 		}
@@ -1970,6 +1975,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "e":
+		if m.activeTab == tabTimeline {
+			m.finishTimelineRangeSelection()
+		}
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
 		}

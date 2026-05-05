@@ -36,6 +36,9 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `enter` | Search results | Search result focus is active. | Opens the selected result. If preview focus is active, returns focus to results. |
 | `j` / `down` | Timeline list | Timeline list is focused. | Moves down and updates preview if one is open. |
 | `k` / `up` | Timeline list | Timeline list is focused. | Moves up and updates preview if one is open. |
+| `space` | Timeline list | Timeline list is focused and the view is not read-only. | Toggles selection for the current message or collapsed thread. |
+| `shift+down` / `shift+up` | Timeline list | Timeline list is focused, the view is not read-only, and the terminal reports shifted arrows. | Extends or shrinks message selection across visible rows. Plain movement ends the range and keeps the selected messages. |
+| `V`, then `j` / `k` | Timeline list | Timeline list is focused and the view is not read-only. | Enters fallback range selection mode and extends the selected range without requiring shifted arrows. Press `V` or `esc` to finish. |
 | `j` / `down` | Preview/full-screen | Preview or full-screen is focused. | Scrolls body down, or extends visual selection. |
 | `k` / `up` | Preview/full-screen | Preview or full-screen is focused. | Scrolls body up, or shrinks visual selection. |
 | `/` | Timeline | Not loading and search is closed. | Opens Timeline search. |

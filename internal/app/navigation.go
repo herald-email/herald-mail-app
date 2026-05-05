@@ -75,6 +75,7 @@ func (m *Model) switchToCompose() tea.Cmd {
 func (m *Model) switchToCleanup() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.clearContactsStatus()
+	m.finishTimelineRangeSelection()
 	m.activeTab = tabCleanup
 	m.clearComposeReturn()
 	m.setFocusedPanel(panelSummary)
@@ -83,6 +84,7 @@ func (m *Model) switchToCleanup() tea.Cmd {
 
 func (m *Model) switchToContacts() tea.Cmd {
 	cmds := m.composeExitCmds()
+	m.finishTimelineRangeSelection()
 	if m.activeTab == tabCleanup {
 		m.closeCleanupPreviewForTabSwitch()
 	}

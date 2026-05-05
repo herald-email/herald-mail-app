@@ -376,16 +376,20 @@ Check these states during every applicable lane:
 1. Open Timeline.
 2. Press `space` on a single-message row.
 3. Move to a collapsed thread row and press `space`.
-4. Press `D`, confirm the prompt copy references selected messages, then cancel with `Esc`.
-5. Press `e`, confirm archive prompt copy references selected non-draft messages, then cancel with `Esc`.
-6. Expand a thread with `Enter`, select one child row with `space`, resize through the required sizes, and capture.
-7. Select a virtual read-only Timeline view such as `All Mail only` and try `space`, `D`, and `e`.
+4. Where the terminal reports shifted arrows, press `Shift+Down` and `Shift+Up` from the Timeline list to extend and shrink a selected range.
+5. Press `V`, then `j` / `k`, then `Esc` to verify fallback range selection keeps the selected messages.
+6. Press `D`, confirm the prompt copy references selected messages, then cancel with `Esc`.
+7. Press `e`, confirm archive prompt copy references selected non-draft messages, then cancel with `Esc`.
+8. Expand a thread with `Enter`, select one child row with `space`, resize through the required sizes, and capture.
+9. Select a virtual read-only Timeline view such as `All Mail only` and try `space`, `Shift+Down`, `V`, `D`, and `e`.
 
 **Expect:**
 - Timeline rows include a leading `✓` selection column.
 - Selected individual rows show `✓`; collapsed thread rows show checked or partial state based on represented messages.
 - Status text shows `N messages selected` only on Timeline and does not leak into Cleanup or Contacts.
-- Hints advertise `space: select`, and selected-state hints advertise `D: delete selected` and `e: archive selected`.
+- Hints advertise `space: select`, `V: range`, and shifted-arrow range selection where space allows.
+- Shifted-arrow range selection stops when plain `j/k` or arrows are used; the selected set remains selected and normal navigation resumes.
+- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `D: delete selected`, and `e: archive selected`.
 - `D` and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected.
 - Read-only diagnostic views do not allow selection or destructive actions.
 - At `50x15`, the minimum-size guard appears instead of clipped selection UI.

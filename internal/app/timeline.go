@@ -325,6 +325,145 @@ func (m *Model) pruneTimelineSelection(displayEmails []*models.EmailData) {
 
 func (m *Model) clearTimelineSelection() {
 	m.timeline.selectedMessageIDs = make(map[string]bool)
+	m.finishTimelineRangeSelection()
+}
+
+func cloneTimelineSelectedMessageIDs(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool, len(src))
+	for id, selected := range src {
+		if selected {
+			dst[id] = true
+		}
+	}
+	return dst
+}
+
+func (m *Model) finishTimelineRangeSelection() {
+	m.timeline.rangeMode = false
+	m.timeline.rangeShiftMode = false
+	m.timeline.rangeAnchorRow = -1
+	m.timeline.rangeCursorRow = -1
+	m.timeline.rangeBaseSelection = nil
+}
+
+func (m *Model) timelineRowEmails(ref timelineRowRef) []*models.EmailData {
+	if ref.group == nil {
+		return nil
+	}
+	if ref.kind == rowKindThread {
+		return ref.group.emails
+	}
+	if ref.emailIdx < 0 || ref.emailIdx >= len(ref.group.emails) {
+		return nil
+	}
+	return []*models.EmailData{ref.group.emails[ref.emailIdx]}
+}
+
+func (m *Model) currentTimelineRowInRange() bool {
+	cursor := m.timelineTable.Cursor()
+	return cursor >= 0 && cursor < len(m.timeline.threadRowMap)
+}
+
+func (m *Model) beginTimelineRangeSelection(shiftMode bool) bool {
+	if m.activeTab != tabTimeline || m.timelineIsReadOnlyDiagnostic() || m.focusedPanel != panelTimeline || !m.currentTimelineRowInRange() {
+		return false
+	}
+	m.ensureTimelineSelection()
+	cursor := m.timelineTable.Cursor()
+	m.timeline.rangeMode = true
+	m.timeline.rangeShiftMode = shiftMode
+	m.timeline.rangeAnchorRow = cursor
+	m.timeline.rangeCursorRow = cursor
+	m.timeline.rangeBaseSelection = cloneTimelineSelectedMessageIDs(m.timeline.selectedMessageIDs)
+	m.applyTimelineRangeSelection()
+	return true
+}
+
+func (m *Model) applyTimelineRangeSelection() {
+	if !m.timeline.rangeMode {
+		return
+	}
+	if len(m.timeline.threadRowMap) == 0 {
+		m.finishTimelineRangeSelection()
+		return
+	}
+	anchor := m.timeline.rangeAnchorRow
+	cursor := m.timeline.rangeCursorRow
+	if anchor < 0 {
+		anchor = 0
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	last := len(m.timeline.threadRowMap) - 1
+	if anchor > last {
+		anchor = last
+	}
+	if cursor > last {
+		cursor = last
+	}
+	m.timeline.rangeAnchorRow = anchor
+	m.timeline.rangeCursorRow = cursor
+
+	lo, hi := anchor, cursor
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+
+	selected := cloneTimelineSelectedMessageIDs(m.timeline.rangeBaseSelection)
+	for row := lo; row <= hi; row++ {
+		for _, email := range m.timelineRowEmails(m.timeline.threadRowMap[row]) {
+			if email != nil && strings.TrimSpace(email.MessageID) != "" {
+				selected[email.MessageID] = true
+			}
+		}
+	}
+	m.timeline.selectedMessageIDs = selected
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(cursor)
+}
+
+func (m *Model) extendTimelineRangeSelection(delta int, shiftMode bool) tea.Cmd {
+	if m.activeTab != tabTimeline || m.timelineIsReadOnlyDiagnostic() || m.focusedPanel != panelTimeline {
+		return nil
+	}
+	if len(m.timeline.threadRowMap) == 0 {
+		return nil
+	}
+	if !m.timeline.rangeMode && !m.beginTimelineRangeSelection(shiftMode) {
+		return nil
+	}
+	cursor := m.timeline.rangeCursorRow + delta
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(m.timeline.threadRowMap) {
+		cursor = len(m.timeline.threadRowMap) - 1
+	}
+	m.timeline.rangeCursorRow = cursor
+	m.timelineTable.SetCursor(cursor)
+	m.applyTimelineRangeSelection()
+	return m.maybeUpdatePreview()
+}
+
+func timelineShiftRangeDelta(msg tea.KeyPressMsg, key string) (int, bool) {
+	switch key {
+	case "shift+up":
+		return -1, true
+	case "shift+down":
+		return 1, true
+	}
+	k := msg.Key()
+	if !k.Mod.Contains(tea.ModShift) {
+		return 0, false
+	}
+	switch k.Code {
+	case tea.KeyUp:
+		return -1, true
+	case tea.KeyDown:
+		return 1, true
+	}
+	return 0, false
 }
 
 func (m *Model) timelineSelectionMark(emails []*models.EmailData) string {
@@ -353,16 +492,10 @@ func (m *Model) timelineSelectionMark(emails []*models.EmailData) string {
 
 func (m *Model) currentTimelineRowEmails() []*models.EmailData {
 	ref, ok := m.currentTimelineRowRef()
-	if !ok || ref.group == nil {
+	if !ok {
 		return nil
 	}
-	if ref.kind == rowKindThread {
-		return ref.group.emails
-	}
-	if ref.emailIdx < 0 || ref.emailIdx >= len(ref.group.emails) {
-		return nil
-	}
-	return []*models.EmailData{ref.group.emails[ref.emailIdx]}
+	return m.timelineRowEmails(ref)
 }
 
 func (m *Model) currentTimelineFocusedDraftEmail() *models.EmailData {
@@ -630,6 +763,7 @@ func (m *Model) renderTimelineView() string {
 }
 
 func (m *Model) clearTimelineSearch() {
+	m.finishTimelineRangeSelection()
 	m.timeline.searchToken++
 	m.timeline.searchMode = false
 	m.timeline.searchFocus = timelineSearchFocusInput
@@ -712,6 +846,7 @@ func (m *Model) clearTimelinePreview() {
 }
 
 func (m *Model) clearTimelineChatFilter() {
+	m.finishTimelineRangeSelection()
 	m.timeline.chatFilterMode = false
 	m.timeline.chatFilteredEmails = nil
 	m.timeline.chatFilterLabel = ""
@@ -719,6 +854,7 @@ func (m *Model) clearTimelineChatFilter() {
 }
 
 func (m *Model) openTimelineSearch() {
+	m.finishTimelineRangeSelection()
 	if m.timeline.searchOrigin == nil {
 		m.timeline.searchOrigin = &timelineSearchOrigin{
 			cursor:           m.timelineTable.Cursor(),
@@ -977,6 +1113,7 @@ func (m *Model) removeTimelineEmail(messageID string) {
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
+	m.finishTimelineRangeSelection()
 	remove := func(emails []*models.EmailData) []*models.EmailData {
 		out := emails[:0]
 		for _, email := range emails {
@@ -1454,8 +1591,11 @@ func (m *Model) appendTimelineStatusParts(parts []string) []string {
 		} else if _, ok := m.folderStatus[m.currentFolder]; !ok {
 			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 		}
+		if m.timeline.rangeMode {
+			parts = append(parts, "range select")
+		}
 		if selected := m.timelineSelectedCount(); selected > 0 {
-			parts = append(parts, fmt.Sprintf("%d messages selected", selected))
+			parts = append(parts, countLabel(selected, "message selected", "messages selected"))
 		}
 	}
 	if m.timeline.searchMode {
@@ -1526,6 +1666,14 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timelineIsReadOnlyDiagnostic() {
 		return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  f: sidebar  │  q: quit  │  read-only", true
 	}
+	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
+		segments := []string{"j/k: extend range", "V/Esc: done"}
+		if m.timeline.rangeShiftMode {
+			segments = []string{"shift+↑/↓: extend range", "plain ↑/↓: done"}
+		}
+		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
+		return joinHintSegments(segments...), true
+	}
 	if chrome.FocusedPanel == panelPreview {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
 		hasMultipleAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 1
@@ -1547,15 +1695,15 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: focus preview", "left/[: fold/folders", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "U: unread", "q: quit")...)...), true
+		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "V: range", "shift+↑/↓: range", "right/]: focus preview", "left/[: fold/folders", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "U: unread", "q: quit")...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{primaryTabShortcutHint, "S: settings", "↑/k ↓/j: navigate", "space: select"}
+		segments := []string{primaryTabShortcutHint, "S: settings", "↑/k ↓/j: navigate", "space: select", "V: range"}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, "right/]: preview", "left/[: folders", "enter: open", "q: quit")
+		segments = append(segments, "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "q: quit")
 		return joinHintSegments(segments...), true
 	}
-	segments := []string{primaryTabShortcutHint, "S: settings", "tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: preview", "left/[: folders", "space: select", "enter: open", "U: unread"}
+	segments := []string{primaryTabShortcutHint, "S: settings", "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "V: range", "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "U: unread"}
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, "C: compose")
 	}
@@ -1607,6 +1755,7 @@ func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case TimelineLoadedMsg:
+		m.finishTimelineRangeSelection()
 		m.timeline.emails = msg.Emails
 		m.timeline.virtualNotice = msg.Notice
 		if msg.ReadOnly {
@@ -1749,6 +1898,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 
 	case ChatFilterActivatedMsg:
+		m.finishTimelineRangeSelection()
 		m.timeline.chatFilterMode = true
 		m.timeline.chatFilteredEmails = msg.Emails
 		m.timeline.chatFilterLabel = msg.Label
@@ -1815,6 +1965,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 			if len(fresh) > 0 {
+				m.finishTimelineRangeSelection()
 				m.timeline.emails = append(fresh, m.timeline.emails...)
 				if m.timeline.emailsCache != nil {
 					m.timeline.emailsCache = append(fresh, m.timeline.emailsCache...)
@@ -1841,6 +1992,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case EmailExpungedMsg:
 		if msg.Folder == m.currentFolder {
+			m.finishTimelineRangeSelection()
 			filtered := m.timeline.emails[:0]
 			for _, e := range m.timeline.emails {
 				if e.MessageID != msg.MessageID {
@@ -1966,7 +2118,20 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 	if m.activeTab != tabTimeline {
 		return m, nil, false
 	}
-	switch shortcutKey(msg) {
+	key := shortcutKey(msg)
+	if delta, ok := timelineShiftRangeDelta(msg, key); ok {
+		if m.focusedPanel != panelTimeline {
+			return m, nil, false
+		}
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.extendTimelineRangeSelection(delta, true), true
+		}
+		return m, nil, true
+	}
+	switch key {
 	case " ", "space":
 		if m.focusedPanel != panelTimeline {
 			return m, nil, false
@@ -1975,9 +2140,30 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, nil, true
 		}
 		if m.canInteractWithVisibleData() {
+			m.finishTimelineRangeSelection()
 			m.toggleTimelineSelection()
 		}
 		return m, nil, true
+	case "V":
+		if m.focusedPanel != panelTimeline {
+			return m, nil, false
+		}
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			if m.timeline.rangeMode {
+				m.finishTimelineRangeSelection()
+			} else {
+				m.beginTimelineRangeSelection(false)
+			}
+		}
+		return m, nil, true
+	case "esc":
+		if m.timeline.rangeMode {
+			m.finishTimelineRangeSelection()
+			return m, nil, true
+		}
 	case "*":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
@@ -2166,6 +2352,12 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 	case "up", "k":
 		if m.canInteractWithVisibleData() {
+			if m.timeline.rangeMode && m.focusedPanel == panelTimeline {
+				if !m.timeline.rangeShiftMode {
+					return m, m.extendTimelineRangeSelection(-1, false), true
+				}
+				m.finishTimelineRangeSelection()
+			}
 			if m.timeline.quickReplyOpen {
 				if m.timeline.quickReplyIdx > 0 {
 					m.timeline.quickReplyIdx--
@@ -2202,6 +2394,12 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 	case "down", "j":
 		if m.canInteractWithVisibleData() {
+			if m.timeline.rangeMode && m.focusedPanel == panelTimeline {
+				if !m.timeline.rangeShiftMode {
+					return m, m.extendTimelineRangeSelection(1, false), true
+				}
+				m.finishTimelineRangeSelection()
+			}
 			if m.timeline.quickReplyOpen {
 				if m.timeline.quickReplyIdx < len(m.timeline.quickReplies)-1 {
 					m.timeline.quickReplyIdx++

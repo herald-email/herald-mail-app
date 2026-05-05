@@ -46,6 +46,7 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 
 func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
 	m.clearContactsStatus()
+	m.finishTimelineRangeSelection()
 	if m.activeTab == tabCleanup {
 		m.closeCleanupPreviewForTabSwitch()
 	}

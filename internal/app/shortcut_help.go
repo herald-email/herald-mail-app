@@ -574,6 +574,8 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		{"Left / [", "fold an expanded thread, or close preview and focus folders"},
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
+		{"Shift+Up / Shift+Down", "extend Timeline selection when supported"},
+		{"V then j/k", "fallback range selection without shifted arrows"},
 		{"U", "mark unread"},
 		{"C", "open a blank Compose screen"},
 		{"E / Ctrl+S", "edit or send highlighted draft"},

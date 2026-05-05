@@ -60,6 +60,9 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `enter` | Open selected email, expand a collapsed thread, or open selected search result. |
 | `j` / `down` | Move down list, scroll preview, or move quick reply selection depending on focus. |
 | `k` / `up` | Move up list, scroll preview, or move quick reply selection depending on focus. |
+| `space` | Toggle Timeline message or thread selection. |
+| `shift+up` / `shift+down` | Extend Timeline selection range when supported by the terminal; plain movement finishes the range and keeps selection. |
+| `V`, then `j` / `k` | Use fallback Timeline range selection without shifted-arrow support; press `V` or `esc` when done. |
 | `/` | Open Timeline search. |
 | `C` | Open a blank Compose screen for a new message. |
 | `*` | Toggle star on current email. |

@@ -215,6 +215,7 @@ func (m *Model) toggleLogs() tea.Cmd {
 
 func (m *Model) refreshCurrentFolder() tea.Cmd {
 	if !m.loading {
+		m.finishTimelineRangeSelection()
 		m.loading = true
 		m.startTime = time.Now()
 		m.clearTimelineChatFilter()
@@ -324,6 +325,10 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 	}
 	if m.timeline.fullScreen {
 		m.clearTimelineFullScreen()
+		return m, nil
+	}
+	if m.activeTab == tabTimeline && m.timeline.rangeMode {
+		m.finishTimelineRangeSelection()
 		return m, nil
 	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {

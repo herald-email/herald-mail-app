@@ -507,6 +507,83 @@ func TestTimelineSearchPlainQIsTextAndCtrlCQuits(t *testing.T) {
 	}
 }
 
+func TestRangeFallbackKeysStayInsideTextEntrySurfaces(t *testing.T) {
+	t.Run("compose body", func(t *testing.T) {
+		m := makeSizedModel(t, 120, 40)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		for _, key := range []string{"V", "j", "k"} {
+			model, cmd := m.handleKeyMsg(keyRunes(key))
+			if commandIsQuit(cmd) {
+				t.Fatalf("plain %q from compose returned quit command", key)
+			}
+			m = model.(*Model)
+		}
+
+		if got := m.composeBody.Value(); got != "Vjk" {
+			t.Fatalf("compose body value=%q, want Vjk", got)
+		}
+	})
+
+	t.Run("timeline search", func(t *testing.T) {
+		m := makeSizedModel(t, 120, 40)
+		m.activeTab = tabTimeline
+		m.openTimelineSearch()
+
+		for _, key := range []string{"V", "j", "k"} {
+			model, cmd := m.handleKeyMsg(keyRunes(key))
+			if commandIsQuit(cmd) {
+				t.Fatalf("plain %q from timeline search returned quit command", key)
+			}
+			m = model.(*Model)
+		}
+
+		if got := m.timeline.searchInput.Value(); got != "Vjk" {
+			t.Fatalf("timeline search value=%q, want Vjk", got)
+		}
+		if m.timeline.rangeMode {
+			t.Fatal("timeline search keys should not enter Timeline range mode")
+		}
+	})
+
+	t.Run("prompt editor overlay", func(t *testing.T) {
+		m := makeSizedModel(t, 120, 40)
+		m.activeTab = tabTimeline
+		m.timeline.emails = timelineRangeEmails()
+		m.updateTimelineTable()
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+
+		for _, key := range []string{"V", "j", "k"} {
+			model, _ := m.Update(keyRunes(key))
+			m = model.(*Model)
+			if m.timeline.rangeMode {
+				t.Fatalf("plain %q from prompt editor entered Timeline range mode", key)
+			}
+		}
+	})
+
+	t.Run("rule editor overlay", func(t *testing.T) {
+		m := makeSizedModel(t, 120, 40)
+		m.activeTab = tabTimeline
+		m.timeline.emails = timelineRangeEmails()
+		m.updateTimelineTable()
+		m.showRuleEditor = true
+		m.ruleEditor = NewRuleEditor("alice@example.com", "", m.windowWidth, m.windowHeight)
+
+		for _, key := range []string{"V", "j", "k"} {
+			model, _ := m.Update(keyRunes(key))
+			m = model.(*Model)
+			if m.timeline.rangeMode {
+				t.Fatalf("plain %q from rule editor entered Timeline range mode", key)
+			}
+		}
+	})
+}
+
 func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabCleanup

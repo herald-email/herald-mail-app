@@ -122,6 +122,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
+- [x] Mail-style range selection with `Shift+Up` / `Shift+Down` where terminals support it, plus `V` then `j`/`k` fallback range mode
 - [x] Star / pin important threads to top
 - [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, including reply drafts, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
@@ -668,6 +669,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] `D` in Timeline deletes the highlighted email (single message)
 - [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
 - [x] `Space` in Timeline selects messages for bulk delete/archive; collapsed thread rows select the represented thread
+- [x] `Shift+Up` / `Shift+Down` and `V` range mode extend Timeline bulk selection across visible rows
 - [x] `D` / `e` in Timeline act on selected messages when selection exists, with confirmation copy showing selected counts
 - [x] `D` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command and `Ctrl+S` as the explicit send-draft command
 - [x] `e` archives the highlighted email or sender
