@@ -1209,9 +1209,9 @@ Check these states during every applicable lane:
 **Expect:**
 - The sender summary remains keyboard-navigable after selecting a folder from the sidebar.
 - The narrow Cleanup hint bar still exposes navigation plus `W`, `C`, and `P`.
-- Rule and prompt overlays stay fully inside the viewport instead of clipping off the top or bottom.
+- Rule and prompt overlays appear as compact centered modals over the Cleanup view and stay fully inside the viewport instead of clipping off the top or bottom.
 - Rule, cleanup, and prompt overlays explain what they do, what saving or running them changes, and where the user can come back to review saved items or results.
-- Dry-run preview overlays stay fully inside the viewport, show `[DRY RUN]`, and keep planned action/message rows readable.
+- Dry-run preview overlays appear as compact centered modals, stay fully inside the viewport, show `[DRY RUN]`, and keep planned action/message rows readable.
 
 ### TC-37 — Cleanup overlays explain saved-item discovery
 
@@ -1227,13 +1227,16 @@ Check these states during every applicable lane:
 
 **Expect:**
 - `W` explains that it creates future-mail automations rather than immediate cleanup.
+- `W` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
 - `W` shows a visible inventory or summary of saved automation rules in the same screen.
 - `P` explains that prompts are reusable AI instructions and do nothing until used.
+- `P` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
 - `P` uses otherwise empty space for practical guidance: example prompt ideas, supported template variables, and a clear next step.
 - `P` tells users to attach a prompt with `W` for automation or run one manually through MCP `classify_email_custom`.
 - `P` tells users that prompt results are stored per email in custom category storage/MCP results.
 - `P` shows a visible inventory or summary of saved prompts in the same screen.
 - `C` explains that cleanup rules run on demand or on schedule and that saved cleanup rules live in that manager.
+- `C` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
 
 ### TC-37A — Rules dry-run previews gate live actions
 
@@ -1251,6 +1254,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Automation and cleanup dry-run previews show matched messages, count, sender/domain/category, folder, and planned action.
+- Automation and cleanup dry-run previews use the same compact centered modal treatment as Settings and Help, with the current Cleanup screen visible behind them at supported sizes.
 - Dry-run previews never mutate mail, update `last_run`, write rule action logs, or call external actions.
 - Cleanup archive/delete/move execution is unavailable until a preview is visible and the user explicitly confirms.
 - In global `--dry-run` mode, the preview remains available but live cleanup run is blocked with relaunch guidance.

@@ -28,17 +28,19 @@ The Cleanup-adjacent overlays must explain three things in the viewport itself b
 2. What saving or running it will do.
 3. Where the user can come back to review saved items or see results.
 
+The `W`, `P`, `C`, and dry-run preview surfaces render as compact centered overlays over the current Cleanup view, matching Settings `S` and shortcut help `?`. At `80x24`, each overlay must fit inside the viewport with internal truncation or scrolling where needed; at `50x15`, Herald's standard minimum-size guard remains in charge.
+
 ### `W` — automation rule editor
 
-The rule overlay must explain that it creates a real-time automation rule for future matching mail. It must also show a compact inventory of existing saved automation rules in the same overlay so reopening `W` answers "where did my rule go?"
+The rule overlay must explain that it creates a real-time automation rule for future matching mail. It must also show a compact inventory of existing saved automation rules in the same compact centered overlay so reopening `W` answers "where did my rule go?"
 
 ### `P` — custom prompt editor
 
-The prompt overlay must explain that prompts are reusable AI instructions, not actions by themselves. It must show a compact inventory of saved prompts in the same overlay so reopening `P` answers "where did my prompt go?"
+The prompt overlay must explain that prompts are reusable AI instructions, not actions by themselves. It must show a compact inventory of saved prompts in the same compact centered overlay so reopening `P` answers "where did my prompt go?"
 
 ### `C` — cleanup rules manager
 
-The cleanup rules overlay must explain that cleanup rules operate on older sender/domain mail and can be run manually or on the configured schedule. The list view must tell the user that saved cleanup rules live in this manager and that manual run results surface through the status message plus visible archive/delete effects.
+The cleanup rules overlay must explain that cleanup rules operate on older sender/domain mail and can be run manually or on the configured schedule. The list view must tell the user that saved cleanup rules live in this compact centered manager and that manual run results surface through the status message plus visible archive/delete effects.
 
 ## Cleanup Date Range Presentation
 

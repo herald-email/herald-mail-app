@@ -204,6 +204,24 @@ func (m *Model) renderSettingsOverlayView() string {
 	return overlayCentered(backdrop, panel, w, h)
 }
 
+func (m *Model) renderCompactOverlayView(panel string) string {
+	w, h := m.compactOverlayViewportSize()
+	backdrop := m.renderShortcutHelpBackdropView()
+	return overlayCentered(backdrop, panel, w, h)
+}
+
+func (m *Model) compactOverlayViewportSize() (int, int) {
+	w := m.windowWidth
+	if w <= 0 {
+		w = 120
+	}
+	h := m.windowHeight
+	if h <= 0 {
+		h = 40
+	}
+	return w, h
+}
+
 func (m *Model) renderShortcutHelpBackdropView() string {
 	if m.loading && !m.hasVisibleStartupData() {
 		return m.renderLoadingView()

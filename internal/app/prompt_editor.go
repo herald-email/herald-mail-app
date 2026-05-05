@@ -115,25 +115,19 @@ func (p *PromptEditor) buildForm() {
 
 // formWidth returns the width the form should use (80% of terminal, min 40).
 func (p *PromptEditor) formWidth() int {
-	w := int(float64(p.width) * 0.8)
-	if w < 40 {
-		w = 40
-	}
-	if w > p.width {
-		w = p.width
-	}
-	return w
+	return p.panelLayout().contentWidth
 }
 
 func (p *PromptEditor) formHeight() int {
-	h := p.height - 9 - p.guideHeight()
-	if h < 6 {
-		h = 6
-	}
-	if p.height > 0 && h > p.height {
-		h = p.height
+	h := p.panelLayout().contentHeight - p.guideHeight() - 3
+	if h < 4 {
+		h = 4
 	}
 	return h
+}
+
+func (p *PromptEditor) panelLayout() compactOverlayLayout {
+	return newCompactOverlayLayout(p.width, p.height)
 }
 
 // Init implements tea.Model.
@@ -200,31 +194,24 @@ func (p *PromptEditor) View() tea.View {
 		return newHeraldView(renderMinSizeMessage(p.width, p.height))
 	}
 
-	formView := p.form.View()
+	rendered := p.renderPanel()
+	return newHeraldView(lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered))
+}
 
+func (p *PromptEditor) renderPanel() string {
+	formView := strings.TrimRight(p.form.View(), "\n")
 	title := "New Custom Prompt"
 	if p.editingID != 0 {
 		title = "Edit Custom Prompt"
 	}
-
-	w := p.formWidth()
-	innerW := w - 4
-	if innerW < 20 {
-		innerW = w
-	}
-	box := lipgloss.NewStyle().
-		Width(w).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1, 2)
-
+	layout := p.panelLayout()
 	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render(title)
-	rendered := box.Render(
-		header + "\n\n" +
-			p.guideView(innerW) + "\n\n" +
+	return renderCompactOverlayBox(
+		header+"\n\n"+
+			p.guideView(layout.contentWidth)+"\n\n"+
 			formView,
+		layout,
 	)
-	return newHeraldView(lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, rendered))
 }
 
 // buildPrompt constructs a models.CustomPrompt from the current form field values.
