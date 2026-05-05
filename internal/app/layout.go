@@ -373,7 +373,7 @@ func (m *Model) contentHeightForLayout(width, height int, plan LayoutPlan) int {
 	if height <= 0 {
 		return 5
 	}
-	chromeRows := 3 // title, tab bar, status bar
+	chromeRows := 4 // title, tab bar, status bar, status/key-hint divider
 	if m.hasTopSyncStrip() {
 		chromeRows++
 	}

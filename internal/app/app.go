@@ -2292,6 +2292,7 @@ func (m *Model) renderMainView() string {
 
 	// Status bar + key hints (persistent bottom bar)
 	content.WriteString(m.renderStatusBar() + "\n")
+	content.WriteString(m.renderStatusHintDivider() + "\n")
 	content.WriteString(m.renderKeyHints())
 
 	return content.String()

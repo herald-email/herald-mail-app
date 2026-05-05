@@ -46,9 +46,9 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: h})
 		m = updated.(*Model)
 
-		// chrome = header(1) + tabbar(1) + blank(1) + statusbar(1) + keyhints(1) = 5
-		// + panel border (2) = 7 total deduction
-		tableHeight := h - 7
+		// chrome = header(1) + tabbar(1) + statusbar(1) + divider(1) + wrapped keyhints(2) = 6
+		// + panel border (2) = 8 total deduction
+		tableHeight := h - 8
 
 		// Fixed compose rows (excluding body content):
 		//   To(3) + CC(3) + BCC(3) + Subject(3) = 12 field rows
