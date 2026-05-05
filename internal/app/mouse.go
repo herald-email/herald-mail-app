@@ -104,14 +104,8 @@ func (m *Model) mouseContentTop() int {
 }
 
 func (m *Model) mousePanelHeight() int {
-	h := m.windowHeight - 7
-	if m.hasTopSyncStrip() {
-		h--
-	}
-	if h < 5 {
-		return 5
-	}
-	return h + 2
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	return plan.ContentHeight + 2
 }
 
 func tableVisibleStart(t *table.Model) int {

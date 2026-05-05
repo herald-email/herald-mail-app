@@ -2248,17 +2248,17 @@ func (m *Model) renderLoadingView() string {
 func (m *Model) renderMainView() string {
 	var content strings.Builder
 
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	chrome := m.chromeState(plan)
+
 	// Header
-	content.WriteString(m.headerStyle.Render("Herald") + "\n")
+	content.WriteString(m.renderTitleBar(m.windowWidth) + "\n")
 
 	// Tab bar
 	content.WriteString(m.renderTabBar() + "\n")
 	if syncStrip := m.renderTopSyncStrip(); syncStrip != "" {
 		content.WriteString(syncStrip + "\n")
 	}
-
-	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
-	chrome := m.chromeState(plan)
 
 	// Content area
 	var mainContent string

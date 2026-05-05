@@ -667,20 +667,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.windowWidth = width
 	m.windowHeight = height
 
-	extraChromeRows := 0
-	if m.hasTopSyncStrip() {
-		extraChromeRows = 1
-	}
-
-	// renderMainView chrome: header(1) + tab bar(1) + optional sync strip(1) +
-	// status bar(1) + key hints(1). Each table panel adds 2 border lines
-	// (top + bottom), so total deduction = 7 plus any extra sync chrome.
-	tableHeight := height - 7 - extraChromeRows
-	if tableHeight < 5 {
-		tableHeight = 5
-	}
 	plan := m.buildLayoutPlan(width, height)
 	m.normalizeFocusForLayout(plan)
+	tableHeight := plan.ContentHeight
 	m.sidebarTooWide = m.showSidebar &&
 		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
 		!m.showCleanupPreview &&
@@ -814,12 +803,12 @@ func (m *Model) updateTableDimensions(width, height int) {
 		m.detailsTable.SetWidth(detFixed + subjectWidth + detNCols*2)
 	}
 
-	// SetHeight controls visible data rows (excludes header row).
-	// renderStyledTableView renders height+1 lines (header + data); baseStyle adds 2
-	// border lines → total = height+3. Other panels have Height(tableHeight)+2 border = tableHeight+2.
-	// Subtract 1 so table total (height+2) matches panel total (tableHeight+2).
-	m.summaryTable.SetHeight(tableHeight - 1)
-	m.detailsTable.SetHeight(tableHeight - 1)
+	// bubbles/table v2 treats SetHeight as the viewport height including its
+	// internal chrome. Height() then returns visible data rows. Add one here so
+	// our custom table renderer plus the outer panel border fills the shared
+	// content budget exactly.
+	m.summaryTable.SetHeight(tableHeight + 1)
+	m.detailsTable.SetHeight(tableHeight + 1)
 
 	const timelineFixedCols = 31
 	const timelineNumCols = 7
@@ -900,7 +889,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		{Title: "Tag", Width: tTagW},
 	})
 	m.timelineTable.SetWidth(tFixed + tSenderWidth + tSubjectWidth + tNCols*2)
-	m.timelineTable.SetHeight(tableHeight - 1)
+	m.timelineTable.SetHeight(tableHeight + 1)
 
 	logWidth := width - 4
 	if logWidth < 20 {

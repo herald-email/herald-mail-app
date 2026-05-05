@@ -10,8 +10,8 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
-const panelGap = "  "
-const panelGapWidth = 2
+const panelGap = " "
+const panelGapWidth = 1
 
 type ChromeState struct {
 	ActiveTab     int
@@ -190,7 +190,7 @@ func (m *Model) chromeState(plan LayoutPlan) ChromeState {
 		}
 	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview {
-		focused = panelDetails
+		focused = panelPreview
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && focused == panelPreview {
 		focused = panelTimeline
@@ -327,6 +327,9 @@ func (m *Model) normalizeFocusForLayout(plan LayoutPlan) {
 	if m.focusedPanel == panelChat && !plan.ChatVisible {
 		m.setFocusedPanel(m.defaultFocusPanel())
 	}
+	if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel != panelDetails {
+		m.setFocusedPanel(panelDetails)
+	}
 	if m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0 && m.focusedPanel == panelSummary {
 		m.setFocusedPanel(panelDetails)
 	}
@@ -366,6 +369,18 @@ func (m *Model) hasTopSyncStrip() bool {
 	return m.loading && !m.syncCountsSettled && m.hasVisibleStartupData()
 }
 
+func (m *Model) contentHeightForLayout(width, height int, plan LayoutPlan) int {
+	if height <= 0 {
+		return 5
+	}
+	chromeRows := 3 // title, tab bar, status bar
+	if m.hasTopSyncStrip() {
+		chromeRows++
+	}
+	chromeRows += len(m.keyHintRows(width, m.chromeState(plan)))
+	return clamp(height-chromeRows-2, 5)
+}
+
 func (m *Model) normalizeTimelineFocus() {
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && m.focusedPanel == panelPreview {
 		m.setFocusedPanel(panelTimeline)
@@ -373,14 +388,9 @@ func (m *Model) normalizeTimelineFocus() {
 }
 
 func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
-	extraChromeRows := 0
-	if m.hasTopSyncStrip() {
-		extraChromeRows = 1
-	}
 	plan := LayoutPlan{
 		Width:          width,
 		Height:         height,
-		ContentHeight:  clamp(height-(9+extraChromeRows), 5),
 		SidebarVisible: false,
 		ChatVisible:    m.showChat,
 	}
@@ -425,7 +435,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	if plan.ChatVisible {
 		contactsWidth -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contactsAvailable := clamp(contactsWidth-6, 20)
+	contactsAvailable := clamp(contactsWidth-panelGapWidth, 20)
 	leftPreferred := contactsAvailable * 35 / 100
 	left, right := splitWidth(contactsAvailable, 0, 20, 20, leftPreferred)
 	plan.Contacts = ContactsLayoutPlan{ListWidth: left, DetailWidth: right}
@@ -464,11 +474,11 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 			}
 			plan.Cleanup = CleanupLayoutPlan{
 				SummaryWidth: 0,
-				DetailsWidth: clamp(cleanupWidth-previewWidth-6, 24),
+				DetailsWidth: clamp(cleanupWidth-previewWidth-(4+panelGapWidth), 24),
 				PreviewWidth: previewWidth,
 			}
 		} else {
-			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-10, 30), 18, 24, 24, 24)
+			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-(6+2*panelGapWidth), 30), 18, 24, 24, 24)
 			plan.Cleanup = CleanupLayoutPlan{
 				SummaryWidth: leftW,
 				DetailsWidth: midW,
@@ -476,12 +486,15 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 			}
 		}
 	} else {
-		leftW, rightW := splitWidth(clamp(cleanupWidth-6, 24), 0, 20, 24, (cleanupWidth-6)*42/100)
+		available := clamp(cleanupWidth-(4+panelGapWidth), 24)
+		leftW, rightW := splitWidth(available, 0, 20, 24, available*42/100)
 		plan.Cleanup = CleanupLayoutPlan{
 			SummaryWidth: leftW,
 			DetailsWidth: rightW,
 		}
 	}
+
+	plan.ContentHeight = m.contentHeightForLayout(width, height, plan)
 
 	return plan
 }

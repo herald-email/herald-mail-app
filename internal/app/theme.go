@@ -14,6 +14,7 @@ type Theme struct {
 	BorderInactive color.Color
 	StatusBg       color.Color
 	StatusFg       color.Color
+	HintBg         color.Color
 	HintFg         color.Color
 	HeaderFg       color.Color
 	HeaderBg       color.Color
@@ -42,6 +43,7 @@ var defaultTheme = Theme{
 	BorderInactive: lipgloss.Color("240"),
 	StatusBg:       lipgloss.Color("0"),
 	StatusFg:       lipgloss.Color("252"),
+	HintBg:         lipgloss.Color("235"),
 	HintFg:         lipgloss.Color("243"),
 	HeaderFg:       lipgloss.Color("205"),
 	HeaderBg:       lipgloss.Color("235"),

@@ -133,6 +133,15 @@ func (m *Model) renderAIStatusChip() string {
 	return style.Render(chip)
 }
 
+func (m *Model) renderTitleBar(width int) string {
+	if width <= 0 {
+		width = 80
+	}
+	return m.headerStyle.
+		Width(width).
+		Render(safeChromeLine("Herald", width-2))
+}
+
 func (m *Model) renderTabBar() string {
 	inactive := lipgloss.NewStyle().
 		Padding(0, 2).
@@ -416,13 +425,13 @@ func wrapChromeSegments(text string, width, maxLines int) []string {
 	return lines
 }
 
-func renderChromeLines(lines []string, width int, fg color.Color) string {
+func renderChromeLines(lines []string, width int, fg, bg color.Color) string {
 	if width <= 0 {
 		width = 80
 	}
 	style := lipgloss.NewStyle().
 		Foreground(fg).
-		Background(defaultTheme.StatusBg).
+		Background(bg).
 		Width(width).
 		Padding(0, 1)
 	rendered := make([]string, 0, len(lines))
@@ -444,6 +453,28 @@ func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	chrome := m.chromeState(plan)
 	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	return renderChromeLines(m.keyHintRows(w, chrome), w, defaultTheme.HintFg, defaultTheme.HintBg)
+}
+
+func (m *Model) rawKeyHints(chrome ChromeState) string {
+	return m.rawKeyHintsForWidth(m.windowWidth, chrome)
+}
+
+func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
+	if width <= 0 {
+		width = 80
+	}
+	hints := m.rawKeyHintsForWidth(width, chrome)
+	if m.shouldAdvertiseShortcutHelp() {
+		hints = joinHintSegments("?: help", hints)
+	}
+	return wrapChromeSegments(hints, width-2, 2)
+}
+
+func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	if w <= 0 {
 		w = 80
 	}
@@ -483,16 +514,14 @@ func (m *Model) renderKeyHints() string {
 		} else {
 			hints = primaryTabShortcutHint + "  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
+	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
+		hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
 			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
 		case panelDetails:
-			if m.showCleanupPreview {
-				hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
-			} else {
-				hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
-			}
+			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
 				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: nav  │  enter: details  │  h: hide  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
@@ -501,10 +530,7 @@ func (m *Model) renderKeyHints() string {
 			}
 		}
 	}
-	if m.shouldAdvertiseShortcutHelp() {
-		hints = joinHintSegments("?: help", hints)
-	}
-	return renderChromeLines(wrapChromeSegments(hints, w-2, 2), w, defaultTheme.HintFg)
+	return hints
 }
 
 func previewActionHintText(hasUnsubscribe bool) string {
@@ -573,6 +599,11 @@ func (m *Model) cyclePanel(forward bool) {
 		if m.timeline.selectedEmail != nil {
 			panels = append(panels, panelPreview)
 		}
+		if plan.ChatVisible {
+			panels = append(panels, panelChat)
+		}
+	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
+		panels = append(panels, panelDetails)
 		if plan.ChatVisible {
 			panels = append(panels, panelChat)
 		}

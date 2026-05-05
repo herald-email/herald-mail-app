@@ -1015,7 +1015,7 @@ func (m *Model) renderCleanupPreview() string {
 	borderColor := defaultTheme.BorderInactive
 	headerColor := defaultTheme.TabInactiveFg
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
-	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelDetails)
+	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelPreview)
 	if headerActive {
 		borderColor = defaultTheme.BorderActive
 		headerColor = defaultTheme.ConfirmFg

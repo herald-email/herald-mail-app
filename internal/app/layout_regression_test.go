@@ -174,6 +174,40 @@ func TestMinimumSizeMessage_FitsWidthAndIncludesTarget(t *testing.T) {
 	}
 }
 
+func TestMainView_TitleBarSpansTerminalWidth(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	lines := strings.Split(m.renderMainView(), "\n")
+	if len(lines) == 0 {
+		t.Fatal("expected rendered chrome")
+	}
+	title := lines[0]
+	if got := visibleWidth(title); got != 80 {
+		t.Fatalf("expected title bar to span 80 columns, got %d: %q", got, stripANSI(title))
+	}
+	if !strings.Contains(stripANSI(title), "Herald") {
+		t.Fatalf("expected title bar to contain Herald, got %q", stripANSI(title))
+	}
+}
+
+func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.updateTableDimensions(80, 24)
+
+	rendered := m.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected main view to fill 80x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	assertFitsWidth(t, 80, rendered)
+}
+
 func TestComposeView_Fits80x24(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabCompose
@@ -782,8 +816,31 @@ func TestCleanupPreview_UsesConsistentPanelGaps(t *testing.T) {
 	m = updated.(*Model)
 
 	top := strings.Split(stripANSI(m.renderMainView()), "\n")[2]
-	if count := strings.Count(top, "┐  ┌"); count != 2 {
+	if count := strings.Count(top, "┐ ┌"); count != 2 {
 		t.Fatalf("expected a single gap between each cleanup panel, got top line %q", top)
+	}
+}
+
+func TestCleanupPreview_OnlyPreviewBorderIsActive(t *testing.T) {
+	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
+	m := New(b, nil, "", nil, false)
+	m.activeTab = tabCleanup
+	m.loading = false
+	m.currentFolder = "INBOX"
+	m.stats = makeCleanupStats()
+	m.updateSummaryTable()
+	m.updateDetailsTable()
+	m.showCleanupPreview = true
+	m.cleanupPreviewEmail = m.detailsEmails[0]
+	m.cleanupEmailBody = &models.EmailBody{TextPlain: strings.Repeat("Hello world ", 20)}
+	m.focusedPanel = panelDetails
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+
+	top := strings.Split(m.renderMainView(), "\n")[2]
+	if count := strings.Count(top, "38;5;39"); count != 1 {
+		t.Fatalf("expected only one active border in cleanup preview top line, got %d in %q", count, top)
 	}
 }
 
@@ -825,7 +882,7 @@ func TestTimelineView_UsesConsistentPanelGaps(t *testing.T) {
 		t.Fatal("expected timeline view output")
 	}
 	top := rendered[0]
-	if count := strings.Count(top, "┐  ┌"); count != 1 {
+	if count := strings.Count(top, "┐ ┌"); count != 1 {
 		t.Fatalf("expected a single gap between timeline and preview when preview auto-hides sidebar, got top line %q", top)
 	}
 }
