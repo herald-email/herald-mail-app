@@ -500,18 +500,15 @@ func (m *Model) renderSuggestionDropdown() string {
 		return ""
 	}
 
-	selectedStyle := lipgloss.NewStyle().
-		Background(defaultTheme.TabActiveBg).
-		Foreground(defaultTheme.ConfirmFg)
-	normalStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.TabInactiveFg)
+	selectedStyle := defaultTheme.Focus.SelectionActive.Style()
+	normalStyle := defaultTheme.Chrome.TabInactive.Style()
 	maxW := m.windowWidth - 6
 	if maxW < 20 {
 		maxW = 20
 	}
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.TabActiveBg).
+		BorderForeground(defaultTheme.PanelBorderColor(true)).
 		Padding(0, 1).
 		MaxWidth(maxW)
 
@@ -532,7 +529,7 @@ func (m *Model) renderSuggestionDropdown() string {
 			label = fmt.Sprintf("%s  (+%d more)", label, more)
 		}
 		return lipgloss.NewStyle().
-			Foreground(defaultTheme.InfoFg).
+			Foreground(defaultTheme.Severity.Info.ForegroundColor()).
 			Render(truncateVisual("↓ "+label, maxW))
 	}
 
@@ -577,11 +574,8 @@ func (m *Model) renderAttachmentCompletionDropdown() string {
 	if maxW < 20 {
 		maxW = 20
 	}
-	selectedStyle := lipgloss.NewStyle().
-		Background(defaultTheme.TabActiveBg).
-		Foreground(defaultTheme.ConfirmFg)
-	normalStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.TabInactiveFg)
+	selectedStyle := defaultTheme.Focus.SelectionActive.Style()
+	normalStyle := defaultTheme.Chrome.TabInactive.Style()
 
 	rendered := make([]string, 0, rows)
 	for i := start; i < start+rows && i < len(m.attachmentCompletions); i++ {
@@ -783,14 +777,14 @@ func (m *Model) renderComposeView() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.TabInactiveFg).
+		Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor()).
 		Width(plan.Compose.LabelWidth)
 	activeFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.TabActiveBg)
+		BorderForeground(defaultTheme.Chrome.TabActive.BackgroundColor())
 	inactiveFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.BorderInactive)
+		BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 
 	renderField := func(style lipgloss.Style, view string) string {
 		return style.Width(plan.Compose.FieldInnerWidth).Render(view)
@@ -855,7 +849,7 @@ func (m *Model) renderComposeView() string {
 	// Subject hint (shown below divider when a suggestion is pending)
 	if m.composeAISubjectHint != "" {
 		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
-		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 		hintText := m.composeAISubjectHint
 		if len(hintText) > divWidth-30 && divWidth > 35 {
 			hintText = hintText[:divWidth-30] + "…"
@@ -973,7 +967,7 @@ func (m *Model) renderComposeView() string {
 		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
 		attachColor := lipgloss.Color("111")
 		if att.Data == nil {
-			attachColor = defaultTheme.ErrorFg
+			attachColor = defaultTheme.Severity.Error.ForegroundColor()
 		}
 		sb.WriteString(lipgloss.NewStyle().Foreground(attachColor).Render(label) + "\n")
 	}
@@ -1030,9 +1024,9 @@ func (m *Model) renderCompactPreservedResponse(width int) string {
 	}
 	value = strings.ReplaceAll(value, "\n", " ")
 	line := truncateVisual("Response: "+value, width)
-	style := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
+	style := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor())
 	if m.composeField == composeFieldBody {
-		style = style.Foreground(defaultTheme.TabActiveFg).Background(defaultTheme.TabActiveBg)
+		style = style.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(defaultTheme.Chrome.TabActive.BackgroundColor())
 	}
 	return style.Render(line)
 }
@@ -1061,13 +1055,13 @@ func (m *Model) renderComposeOriginalMessagePreview(width int) string {
 		outerRows = 1
 	}
 
-	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg)
-	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
-	borderColor := defaultTheme.BorderInactive
+	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor())
+	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor())
+	borderColor := defaultTheme.Focus.PanelBorder.ForegroundColor()
 	if m.composeField == composeFieldOriginalMessage {
-		dimStyle = dimStyle.Foreground(defaultTheme.TabActiveFg)
-		labelStyle = labelStyle.Foreground(defaultTheme.TabActiveFg).Background(defaultTheme.TabActiveBg)
-		borderColor = defaultTheme.BorderActive
+		dimStyle = dimStyle.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor())
+		labelStyle = labelStyle.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(defaultTheme.Chrome.TabActive.BackgroundColor())
+		borderColor = defaultTheme.Focus.PanelBorderFocused.ForegroundColor()
 	}
 	if outerRows == 1 {
 		parts := m.composeOriginalMessageCompactParts(width)
@@ -1248,11 +1242,9 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 	)
 	rows := []string{truncateVisual(summary, width)}
 	if len(ctx.forwardedAttachments) > 0 {
-		selectedStyle := lipgloss.NewStyle().
-			Foreground(defaultTheme.TabActiveFg).
-			Background(defaultTheme.TabActiveBg)
-		normalStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
-		removedStyle := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+		selectedStyle := defaultTheme.Focus.SelectionActive.Style()
+		normalStyle := defaultTheme.Severity.Info.Style()
+		removedStyle := defaultTheme.Focus.PanelBorder.Style()
 		for i, item := range ctx.forwardedAttachments {
 			status := "include"
 			action := "x remove"

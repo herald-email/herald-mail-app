@@ -110,18 +110,17 @@ type previewHeaderStyles struct {
 }
 
 func newPreviewHeaderStyles(active bool) previewHeaderStyles {
-	label := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
+	label := defaultTheme.Metadata.Label.Style()
 	if active {
 		label = label.Bold(true)
 	}
-	valueBold := lipgloss.NewStyle().Bold(true)
 	return previewHeaderStyles{
 		label:  label,
-		from:   valueBold.Foreground(defaultTheme.InfoFg),
-		date:   lipgloss.NewStyle().Foreground(defaultTheme.TabInactiveFg),
-		subj:   valueBold.Foreground(defaultTheme.WarningFg),
-		tag:    valueBold.Foreground(defaultTheme.DemoFg),
-		action: valueBold.Foreground(defaultTheme.ConfirmFg),
+		from:   defaultTheme.Metadata.Sender.Style(),
+		date:   defaultTheme.Metadata.Date.Style(),
+		subj:   defaultTheme.Metadata.Subject.Style(),
+		tag:    defaultTheme.Metadata.Tag.Style(),
+		action: defaultTheme.Metadata.Action.Style(),
 	}
 }
 
@@ -275,21 +274,15 @@ func (m *Model) renderEmailPreview() string {
 
 	var sb strings.Builder
 
-	// Focus-aware colors: brighter when preview panel has focus
-	borderColor := lipgloss.Color("238")
-	headerColor := lipgloss.Color("245")
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := chrome.FocusedPanel == panelPreview
+	borderColor := defaultTheme.PanelBorderColor(headerActive)
+	headerStyle := defaultTheme.Text.Muted.Style()
 	if headerActive {
-		borderColor = defaultTheme.BorderActive
-		headerColor = defaultTheme.ConfirmFg
-	} else {
-		borderColor = defaultTheme.BorderInactive
-		headerColor = defaultTheme.TabInactiveFg
+		headerStyle = defaultTheme.Severity.Info.Style()
 	}
 
 	// Header block
-	headerStyle := lipgloss.NewStyle().Foreground(headerColor)
 	email := m.timeline.selectedEmail
 	bodyMatchesSelected := email != nil && m.timeline.bodyMessageID == email.MessageID
 	category := ""
@@ -342,12 +335,8 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Show downloadable attachments
-		attachStyle := lipgloss.NewStyle().
-			Foreground(defaultTheme.TextFg).
-			Background(defaultTheme.StatusBg)
-		selectedAttachStyle := lipgloss.NewStyle().
-			Foreground(defaultTheme.TabActiveFg).
-			Background(defaultTheme.TabActiveBg)
+		attachStyle := defaultTheme.Text.Primary.Style()
+		selectedAttachStyle := defaultTheme.Focus.SelectionActive.Style()
 		for i, att := range m.timeline.body.Attachments {
 			sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)
 			if att.Size >= 1024*1024 {
@@ -365,7 +354,7 @@ func (m *Model) renderEmailPreview() string {
 
 		// Save-path prompt
 		if m.timeline.attachmentSavePrompt {
-			promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+			promptStyle := defaultTheme.Severity.Info.Style()
 			if m.timeline.attachmentSaveWarning != "" {
 				sb.WriteString(promptStyle.Render(truncate(m.timeline.attachmentSaveWarning, innerW)) + "\n")
 				imageLines++
@@ -443,13 +432,13 @@ func (m *Model) renderEmailPreview() string {
 	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
 }
 
-// renderBodyLines joins lines[start:end] into a string, applying a purple
+// renderBodyLines joins lines[start:end] into a string, applying the active
 // highlight to lines within [visualStart, visualEnd] when visualMode is true.
 func renderBodyLines(lines []string, start, end int, visualMode bool, visualStart, visualEnd int) string {
 	if !visualMode {
 		return strings.Join(lines[start:end], "\n")
 	}
-	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	highlightStyle := defaultTheme.Focus.VisualSelection.Style()
 	lo, hi := visualStart, visualEnd
 	if lo > hi {
 		lo, hi = hi, lo
@@ -486,7 +475,7 @@ func (m *Model) renderFullScreenEmail() string {
 		sb.WriteString(line + "\n")
 	}
 
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	dimStyle := defaultTheme.Text.Muted.Style()
 	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 6)
 	if len(threadContextLines) > 0 {
 		maxBodyLines -= len(threadContextLines)
@@ -715,7 +704,7 @@ func (m *Model) emptyStateView(msg string) string {
 	if h < 5 {
 		h = 5
 	}
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	dim := defaultTheme.Text.Dim.Style()
 	mid := h / 2
 	var sb strings.Builder
 	for i := 0; i < mid; i++ {
@@ -953,16 +942,10 @@ func (m *Model) renderQuickReplyPicker(width, maxLines int) string {
 	if width < 20 {
 		width = 20
 	}
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.TabActiveFg).
-		Background(defaultTheme.TabActiveBg).
-		Bold(true).
-		Width(width)
-	normalStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.TextFg).
-		Width(width)
-	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
+	headerStyle := defaultTheme.Text.Muted.Style()
+	selectedStyle := defaultTheme.Focus.SelectionActive.Style().Width(width)
+	normalStyle := defaultTheme.Text.Primary.Style().Width(width)
+	dimStyle := defaultTheme.Text.Dim.Style()
 
 	lines := m.quickReplyPickerLines(width, maxLines)
 	selected := clampInt(m.timeline.quickReplyIdx, 0, max(0, len(m.timeline.quickReplies)-1))
@@ -1012,16 +995,14 @@ func (m *Model) renderCleanupPreview() string {
 
 	var sb strings.Builder
 
-	borderColor := defaultTheme.BorderInactive
-	headerColor := defaultTheme.TabInactiveFg
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelPreview)
+	borderColor := defaultTheme.PanelBorderColor(headerActive)
+	headerStyle := defaultTheme.Text.Muted.Style()
 	if headerActive {
-		borderColor = defaultTheme.BorderActive
-		headerColor = defaultTheme.ConfirmFg
+		headerStyle = defaultTheme.Severity.Info.Style()
 	}
 
-	headerStyle := lipgloss.NewStyle().Foreground(headerColor)
 	dimStyle := headerStyle
 
 	headerLines := 0

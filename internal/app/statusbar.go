@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -100,7 +99,7 @@ func (m *Model) renderAIStatusChip() string {
 		if m.demoMode {
 			return ""
 		}
-		return lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("AI: off")
+		return defaultTheme.Text.Dim.Style().Render("AI: off")
 	}
 	status := m.schedulerStatus()
 	label := "idle"
@@ -121,14 +120,14 @@ func (m *Model) renderAIStatusChip() string {
 		label = "down"
 	}
 	chip := fmt.Sprintf("%-10s", "AI "+label)
-	style := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg)
+	style := defaultTheme.Severity.Info.Style()
 	switch label {
 	case "idle":
-		style = style.Foreground(defaultTheme.DimFg).Faint(true)
+		style = defaultTheme.Text.Dim.Style()
 	case "defer":
-		style = style.Foreground(defaultTheme.DemoFg)
+		style = defaultTheme.Badges.Demo.Style()
 	case "down":
-		style = style.Foreground(defaultTheme.ConfirmFg)
+		style = defaultTheme.Severity.Error.Style()
 	}
 	return style.Render(chip)
 }
@@ -143,14 +142,8 @@ func (m *Model) renderTitleBar(width int) string {
 }
 
 func (m *Model) renderTabBar() string {
-	inactive := lipgloss.NewStyle().
-		Padding(0, 2).
-		Foreground(defaultTheme.TabInactiveFg)
-	active := lipgloss.NewStyle().
-		Padding(0, 2).
-		Foreground(defaultTheme.TabActiveFg).
-		Background(defaultTheme.TabActiveBg).
-		Bold(true)
+	inactive := defaultTheme.Chrome.TabInactive.Style().Padding(0, 2)
+	active := defaultTheme.Chrome.TabActive.Style().Padding(0, 2)
 
 	tab := func(item tabNavigationItem) string {
 		label := tabBarLabel(item)
@@ -179,9 +172,7 @@ func (m *Model) renderTopSyncStrip() string {
 	title, detail := m.topSyncStripSegments()
 	line := fmt.Sprintf(" %s  │  %s", title, detail)
 
-	return lipgloss.NewStyle().
-		Foreground(defaultTheme.WarningFg).
-		Background(defaultTheme.StatusBg).
+	return defaultTheme.Chrome.TopSyncStrip.Style().
 		Width(w).
 		Padding(0, 1).
 		Render(safeChromeLine(line, w-2))
@@ -196,9 +187,7 @@ func (m *Model) renderStatusBar() string {
 			w = 80
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingDeleteDesc)
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.ConfirmFg).
-			Background(defaultTheme.ConfirmBg).
+		return defaultTheme.Severity.Destructive.Style().
 			Width(w).
 			Padding(0, 1).
 			Render(safeChromeLine(line, w-2))
@@ -210,9 +199,7 @@ func (m *Model) renderStatusBar() string {
 			w = 80
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingUnsubscribeDesc)
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.ConfirmFg).
-			Background(defaultTheme.UnsubBg).
+		return defaultTheme.Severity.Caution.Style().
 			Width(w).
 			Padding(0, 1).
 			Render(safeChromeLine(line, w-2))
@@ -228,14 +215,15 @@ func (m *Model) renderStatusBar() string {
 	// Folder breadcrumb
 	folderParts := strings.Split(displayFolderName(m.currentFolder), "/")
 	breadcrumb := strings.Join(folderParts, " › ")
+	statusRole := defaultTheme.Chrome.StatusBar
 
 	var parts []string
 	if msg := strings.TrimSpace(m.statusMessageForActiveTab()); msg != "" {
-		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Render(msg))
+		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Severity.Info.Style().Render(msg)))
 	}
 	parts = append(parts, breadcrumb)
 	if chip := m.renderAIStatusChip(); chip != "" {
-		parts = append(parts, chip)
+		parts = append(parts, chromeBarPart(statusRole, chip))
 	}
 	if m.classifying {
 		parts = append(parts, fmt.Sprintf("tag %d/%d", m.classifyDone, m.classifyTotal))
@@ -329,12 +317,12 @@ func (m *Model) renderStatusBar() string {
 
 	// Demo mode indicator
 	if m.demoMode {
-		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DemoFg).Bold(true).Render("[DEMO]"))
+		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Badges.Demo.Style().Render("[DEMO]")))
 	}
 
 	// Dry-run mode indicator
 	if m.dryRun {
-		parts = append(parts, lipgloss.NewStyle().Foreground(defaultTheme.DryRunFg).Bold(true).Render("[DRY RUN]"))
+		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Badges.DryRun.Style().Render("[DRY RUN]")))
 	}
 
 	// Logs indicator
@@ -348,12 +336,17 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	line := filterPrefix + strings.Join(parts, "  │  ")
-	return lipgloss.NewStyle().
-		Foreground(defaultTheme.StatusFg).
-		Background(defaultTheme.StatusBg).
+	return defaultTheme.Chrome.StatusBar.Style().
 		Width(w).
 		Padding(0, 1).
 		Render(truncateVisual(line, w-2))
+}
+
+func chromeBarPart(barRole ThemeStyle, rendered string) string {
+	if barRole.Reverse || barRole.Background != nil {
+		return ansi.Strip(rendered)
+	}
+	return rendered
 }
 
 func formatFolderCountsStatus(unseen, total int, unsettled, compact bool) string {
@@ -425,13 +418,11 @@ func wrapChromeSegments(text string, width, maxLines int) []string {
 	return lines
 }
 
-func renderChromeLines(lines []string, width int, fg, bg color.Color) string {
+func renderChromeLines(lines []string, width int, role ThemeStyle) string {
 	if width <= 0 {
 		width = 80
 	}
-	style := lipgloss.NewStyle().
-		Foreground(fg).
-		Background(bg).
+	style := role.Style().
 		Width(width).
 		Padding(0, 1)
 	rendered := make([]string, 0, len(lines))
@@ -456,7 +447,7 @@ func (m *Model) renderKeyHints() string {
 	if w <= 0 {
 		w = 80
 	}
-	return renderChromeLines(m.keyHintRows(w, chrome), w, defaultTheme.HintFg, defaultTheme.HintBg)
+	return renderChromeLines(m.keyHintRows(w, chrome), w, defaultTheme.Chrome.HintBar)
 }
 
 func (m *Model) rawKeyHints(chrome ChromeState) string {

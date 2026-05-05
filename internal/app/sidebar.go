@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
@@ -244,16 +243,9 @@ func (m *Model) renderSidebar() string {
 
 		if i == m.sidebarCursor {
 			if m.focusedPanel == panelSidebar {
-				line = lipgloss.NewStyle().
-					Foreground(defaultTheme.TabActiveFg).
-					Background(defaultTheme.TabActiveBg).
-					Render(line)
+				line = defaultTheme.Focus.SelectionActive.Style().Render(line)
 			} else {
-				line = lipgloss.NewStyle().
-					Foreground(defaultTheme.TextFg).
-					Background(defaultTheme.BorderInactive).
-					Underline(true).
-					Render(line)
+				line = defaultTheme.Focus.SelectionInactive.Style().Render(line)
 			}
 		}
 		sb.WriteString(line + "\n")

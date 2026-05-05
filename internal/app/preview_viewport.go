@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/herald-email/herald-mail-app/internal/kittyimg"
@@ -167,7 +166,7 @@ func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offse
 	if lo > hi {
 		lo, hi = hi, lo
 	}
-	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	highlightStyle := defaultTheme.Focus.VisualSelection.Style()
 	hasTerminalConsumedRows := false
 	for i := offset; i < end && i < len(layout.Rows); i++ {
 		row := layout.Rows[i]

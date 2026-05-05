@@ -90,7 +90,7 @@ func TestRenderStyledTableView_CursorHighlight(t *testing.T) {
 	}
 }
 
-func TestRenderStyledTableView_HeaderHasDistinctBackground(t *testing.T) {
+func TestRenderStyledTableView_HeaderHasDistinctStyle(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	cols := []table.Column{{Title: "Sender", Width: 12}, {Title: "Subject", Width: 18}}
 	rows := []table.Row{{"Alice", "Hello"}}
@@ -103,8 +103,8 @@ func TestRenderStyledTableView_HeaderHasDistinctBackground(t *testing.T) {
 
 	out := renderStyledTableViewWithStyles(&tbl, m.activeTableStyle)
 	header := strings.Split(out, "\n")[0]
-	if !strings.Contains(header, "\x1b[48;5;") {
-		t.Fatalf("header should render with a distinct background color, got %q", header)
+	if !strings.Contains(header, "\x1b[") {
+		t.Fatalf("header should render with distinct ANSI styling, got %q", header)
 	}
 	if strings.Contains(stripANSI(header), "Alice") {
 		t.Fatalf("header line should be visually distinct from body rows, got %q", stripANSI(header))

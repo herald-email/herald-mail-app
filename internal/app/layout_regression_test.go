@@ -896,7 +896,9 @@ func TestCleanupPreview_OnlyPreviewBorderIsActive(t *testing.T) {
 	m = updated.(*Model)
 
 	top := strings.Split(m.renderMainView(), "\n")[2]
-	if count := strings.Count(top, "38;5;39"); count != 1 {
+	focusedBorderProbe := defaultTheme.Focus.PanelBorderFocused.Style().Render("x")
+	activePrefix := focusedBorderProbe[:strings.Index(focusedBorderProbe, "x")]
+	if count := strings.Count(top, activePrefix); count != 1 {
 		t.Fatalf("expected only one active border in cleanup preview top line, got %d in %q", count, top)
 	}
 }

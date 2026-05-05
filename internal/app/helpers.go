@@ -624,8 +624,8 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
 
 	progressBarStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.InfoFg).
-		Background(defaultTheme.HeaderBg).
+		Foreground(defaultTheme.Severity.Info.ForegroundColor()).
+		Background(defaultTheme.Chrome.TitleBar.BackgroundColor()).
 		Padding(0, 1).
 		Margin(0, 2)
 
@@ -640,8 +640,8 @@ func sanitizeText(text string) string {
 // styledSender renders a sender string with the display name in bright white and
 // the <email> part in dim gray, making the two visually distinct in table columns.
 func styledSender(raw string, maxWidth int) string {
-	nameStyle := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
-	emailStyle := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
+	nameStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
+	emailStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Muted.ForegroundColor())
 
 	name := senderDisplayLabel(raw)
 	email := senderAddress(raw)

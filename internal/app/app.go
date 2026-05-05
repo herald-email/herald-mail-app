@@ -561,29 +561,10 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	logger.Info("Creating new application model")
 
 	// Setup styles
-	baseStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.BorderInactive)
-
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(defaultTheme.HeaderFg).
-		Background(defaultTheme.HeaderBg).
-		Padding(0, 1)
-
-	loadingStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(defaultTheme.InfoFg).
-		Background(defaultTheme.HeaderBg).
-		Padding(1, 3).
-		Margin(1, 0).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(defaultTheme.InfoFg).
-		Align(lipgloss.Center)
-
-	progressStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.DimFg).
-		Margin(0, 2)
+	baseStyle := defaultTheme.BasePanelStyle()
+	headerStyle := defaultTheme.TitleBarStyle()
+	loadingStyle := defaultTheme.LoadingStyle()
+	progressStyle := defaultTheme.ProgressStyle()
 
 	// Create tables optimized for side-by-side display
 	// Summary table: ~82 chars total (left side) - added selection column
@@ -610,34 +591,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		table.WithHeight(11),
 	)
 
-	// Create active table style (purple highlight, matching sidebar selection)
-	activeStyle := table.DefaultStyles()
-	activeStyle.Header = activeStyle.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.BorderInactive).
-		BorderBottom(true).
-		Foreground(defaultTheme.HeaderFg).
-		Background(defaultTheme.HeaderBg).
-		Bold(true)
-	activeStyle.Selected = activeStyle.Selected.
-		Foreground(defaultTheme.ConfirmFg).
-		Background(defaultTheme.TabActiveBg).
-		Bold(true)
-
-	// Create inactive table style (gray highlight)
-	inactiveStyle := table.DefaultStyles()
-	inactiveStyle.Header = inactiveStyle.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.BorderInactive).
-		BorderBottom(true).
-		Foreground(defaultTheme.TabInactiveFg).
-		Background(defaultTheme.HeaderBg).
-		Bold(true)
-	inactiveStyle.Selected = inactiveStyle.Selected.
-		Foreground(defaultTheme.TextFg).
-		Background(defaultTheme.BorderInactive).
-		Underline(true).
-		Bold(false)
+	// Create role-driven table styles shared by list-like panes.
+	activeStyle := defaultTheme.TableStyles(true)
+	inactiveStyle := defaultTheme.TableStyles(false)
 
 	summaryTable.SetStyles(inactiveStyle)
 	detailsTable.SetStyles(inactiveStyle)
@@ -2284,9 +2240,9 @@ func (m *Model) renderMainView() string {
 			} else {
 				summaryPanelStyle := m.baseStyle.
 					Width(plan.Cleanup.SummaryWidth + 2).
-					BorderForeground(defaultTheme.BorderInactive)
+					BorderForeground(defaultTheme.PanelBorderColor(false))
 				if chrome.FocusedPanel == panelSummary {
-					summaryPanelStyle = summaryPanelStyle.BorderForeground(defaultTheme.BorderActive)
+					summaryPanelStyle = summaryPanelStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
 				}
 				summaryStyles := m.inactiveTableStyle
 				if chrome.FocusedPanel == panelSummary {
@@ -2296,9 +2252,9 @@ func (m *Model) renderMainView() string {
 			}
 			detailsPanelStyle := m.baseStyle.
 				Width(plan.Cleanup.DetailsWidth + 2).
-				BorderForeground(defaultTheme.BorderInactive)
+				BorderForeground(defaultTheme.PanelBorderColor(false))
 			if chrome.FocusedPanel == panelDetails {
-				detailsPanelStyle = detailsPanelStyle.BorderForeground(defaultTheme.BorderActive)
+				detailsPanelStyle = detailsPanelStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
 			}
 			detailsStyles := m.inactiveTableStyle
 			if chrome.FocusedPanel == panelDetails {
@@ -2316,9 +2272,9 @@ func (m *Model) renderMainView() string {
 			} else if plan.SidebarVisible && !m.sidebarTooWide {
 				sidebarStyle := m.baseStyle.
 					Width(sidebarContentWidth + 2).
-					BorderForeground(defaultTheme.BorderInactive)
+					BorderForeground(defaultTheme.PanelBorderColor(false))
 				if chrome.FocusedPanel == panelSidebar {
-					sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
+					sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
 				}
 				sidebarView := sidebarStyle.Render(m.renderSidebar())
 				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, summaryView, panelGap, detailsView)

@@ -217,7 +217,7 @@ func styledThreadParticipants(labels []string, maxWidth int) string {
 		labels = []string{"(unknown)"}
 	}
 	joined := truncate(strings.Join(labels, ", "), maxWidth)
-	return lipgloss.NewStyle().Foreground(defaultTheme.TextFg).Render(joined)
+	return lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor()).Render(joined)
 }
 
 func formatTimelineListDate(date time.Time) string {
@@ -599,10 +599,10 @@ func (m *Model) renderTimelineView() string {
 	} else {
 		style := m.baseStyle.
 			Width(plan.Timeline.TableWidth + 2).
-			BorderForeground(defaultTheme.BorderInactive)
+			BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 		tableStyles := m.inactiveTableStyle
 		if chrome.FocusedPanel == panelTimeline {
-			style = style.BorderForeground(defaultTheme.BorderActive)
+			style = style.BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor())
 			tableStyles = m.activeTableStyle
 		}
 		tableView = style.Render(renderStyledTableViewWithStyles(&m.timelineTable, tableStyles))
@@ -619,9 +619,9 @@ func (m *Model) renderTimelineView() string {
 	if plan.SidebarVisible {
 		sidebarStyle := m.baseStyle.Width(sidebarContentWidth + 2)
 		if chrome.FocusedPanel == panelSidebar {
-			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderActive)
+			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor())
 		} else {
-			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.BorderInactive)
+			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
@@ -1441,7 +1441,7 @@ func (m *Model) timelineFilterPrefix() string {
 		filterLabel = "filtered"
 	}
 	return lipgloss.NewStyle().
-		Foreground(defaultTheme.InfoFg).
+		Foreground(defaultTheme.Severity.Info.ForegroundColor()).
 		Bold(true).
 		Render(fmt.Sprintf("⬡ filter: %s (%d emails)  ", filterLabel, len(m.timeline.chatFilteredEmails)))
 }

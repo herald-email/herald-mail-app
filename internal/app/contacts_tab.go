@@ -267,8 +267,8 @@ func (m *Model) renderContactsTab(width, height int) string {
 	// Each panel also adds 2 border lines (top + bottom), so total deduction = 8.
 	contentH := plan.ContentHeight
 
-	activeColor := defaultTheme.TabActiveBg
-	inactiveColor := defaultTheme.BorderInactive
+	activeColor := defaultTheme.Chrome.TabActive.BackgroundColor()
+	inactiveColor := defaultTheme.Focus.PanelBorder.ForegroundColor()
 
 	leftBorderColor := inactiveColor
 	if m.contactFocusPanel == 0 {
@@ -294,14 +294,14 @@ func (m *Model) renderContactsTab(width, height int) string {
 	if m.contactSearchMode == "keyword" {
 		leftSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("33")).Render(fmt.Sprintf("/ %s_", m.contactSearch)) + "\n")
 	} else if m.contactSearchMode == "semantic" {
-		leftSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.HeaderFg).Render(fmt.Sprintf("? %s_", m.contactSearch)) + "\n")
+		leftSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor()).Render(fmt.Sprintf("? %s_", m.contactSearch)) + "\n")
 	} else {
-		leftSb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.HeaderFg).Render(
+		leftSb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor()).Render(
 			fmt.Sprintf("Contacts (%d)", len(m.contactsFiltered))) + "\n")
 	}
 
 	if len(m.contactsFiltered) == 0 {
-		leftSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.DimFg).Render("  No contacts"))
+		leftSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor()).Render("  No contacts"))
 	} else {
 		maxRows := contentH - 3
 		if maxRows < 1 {
@@ -362,17 +362,17 @@ func (m *Model) renderContactsTab(width, height int) string {
 				coPad := strings.Repeat(" ", companyW-ansi.StringWidth(co))
 				if i == m.contactsIdx {
 					bg := activeColor
-					ns := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
+					ns := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
 					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(bg)
-					ks := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
+					ks := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					bs := lipgloss.NewStyle().Background(bg)
 					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + cs.Render(co) + bs.Render(coPad+"  ") + ks.Render(countStr)
 				} else {
-					ns := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
-					es := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
+					ns := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
+					es := lipgloss.NewStyle().Foreground(defaultTheme.Text.Muted.ForegroundColor())
 					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("249"))
-					ks := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+					ks := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 					line = ns.Render(dn) + dnPad + "  " + es.Render(em) + emPad + "  " + cs.Render(co) + coPad + "  " + ks.Render(countStr)
 				}
 			} else if showEmail {
@@ -391,15 +391,15 @@ func (m *Model) renderContactsTab(width, height int) string {
 				emPad := strings.Repeat(" ", emailW-ansi.StringWidth(em))
 				if i == m.contactsIdx {
 					bg := activeColor
-					ns := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
+					ns := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
-					ks := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
+					ks := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					bs := lipgloss.NewStyle().Background(bg)
 					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + ks.Render(countStr)
 				} else {
-					ns := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
-					es := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
-					ks := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+					ns := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
+					es := lipgloss.NewStyle().Foreground(defaultTheme.Text.Muted.ForegroundColor())
+					ks := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 					line = ns.Render(dn) + dnPad + "  " + es.Render(em) + emPad + "  " + ks.Render(countStr)
 				}
 			} else {
@@ -412,11 +412,11 @@ func (m *Model) renderContactsTab(width, height int) string {
 				dnPad := strings.Repeat(" ", nameW-ansi.StringWidth(dn))
 				if i == m.contactsIdx {
 					bg := activeColor
-					s := lipgloss.NewStyle().Foreground(defaultTheme.TabActiveFg).Background(bg).Bold(true)
+					s := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					line = s.Render(dn + dnPad + "  " + countStr)
 				} else {
-					ns := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
-					ks := lipgloss.NewStyle().Foreground(defaultTheme.BorderInactive)
+					ns := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
+					ks := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 					line = ns.Render(dn) + dnPad + "  " + ks.Render(countStr)
 				}
 			}
@@ -436,8 +436,8 @@ func (m *Model) renderContactsTab(width, height int) string {
 		if rightInnerW < 10 {
 			rightInnerW = 10
 		}
-		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
-		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.HeaderFg)
+		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor())
+		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor())
 		rightSb.WriteString(boldStyle.Render(truncate("From: "+sanitizeText(email.Sender), rightInnerW)) + "\n")
 		rightSb.WriteString(dimStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), rightInnerW)) + "\n")
 		rightSb.WriteString(boldStyle.Render(truncate("Subj: "+sanitizeText(email.Subject), rightInnerW)) + "\n")
@@ -465,13 +465,13 @@ func (m *Model) renderContactsTab(width, height int) string {
 		}
 		rightSb.WriteString("\n" + dimStyle.Render(" Esc: back to contact"))
 	} else if m.contactDetail == nil {
-		rightSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.DimFg).
+		rightSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor()).
 			Render("  Select a contact and press Enter"))
 	} else {
 		c := m.contactDetail
-		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.HeaderFg)
-		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
-		normalStyle := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
+		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor())
+		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor())
+		normalStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
 
 		displayName := c.DisplayName
 		if displayName == "" {
@@ -524,7 +524,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 				rowStyle := normalStyle
 				if m.contactFocusPanel == 1 && i == m.contactDetailIdx {
 					rowStyle = lipgloss.NewStyle().
-						Foreground(defaultTheme.TabActiveFg).
+						Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).
 						Background(activeColor).
 						Bold(true)
 				}

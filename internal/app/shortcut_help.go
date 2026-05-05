@@ -231,8 +231,8 @@ func (m *Model) renderShortcutHelpPanel() string {
 		scroll = fmt.Sprintf("j/k scroll  %d/%d  Esc/?/q close", m.helpScrollOffset+1, len(lines))
 	}
 
-	headerStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Bold(true)
-	footerStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
+	headerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor()).Bold(true)
+	footerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor())
 	content := []string{
 		headerStyle.Render(ansi.Truncate(title, layout.contentW, "")),
 		strings.Repeat("─", layout.contentW),
@@ -243,7 +243,7 @@ func (m *Model) renderShortcutHelpPanel() string {
 	return lipgloss.NewStyle().
 		Width(layout.styleWidth).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(defaultTheme.BorderActive).
+		BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor()).
 		Padding(0, 1).
 		Render(strings.Join(content, "\n"))
 }
@@ -377,7 +377,7 @@ func (m *Model) shortcutHelpLines(width int) []string {
 		if si > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, lipgloss.NewStyle().Foreground(defaultTheme.HeaderFg).Bold(true).Render(section.Title))
+		lines = append(lines, lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor()).Bold(true).Render(section.Title))
 		for _, entry := range section.Entries {
 			key := ansi.Truncate(entry.Key, 16, "")
 			descWidth := width - 20

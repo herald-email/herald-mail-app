@@ -235,8 +235,9 @@ func TestRenderForwardComposeSelectedAttachmentUsesActiveFocusStyle(t *testing.T
 	m.composePreserved.selectedAttachment = 1
 
 	rendered := m.renderComposePreservedSummary(80)
-	if !strings.Contains(rendered, "\x1b[38;5;229") || !strings.Contains(rendered, "48;5;57") {
-		t.Fatalf("selected forwarded attachment should use active foreground/background styling, got:\n%q", rendered)
+	expected := defaultTheme.Focus.SelectionActive.Style().Render("> [include] secret.pdf  (x remove)")
+	if !strings.Contains(rendered, expected) {
+		t.Fatalf("selected forwarded attachment should use active selection styling, got:\n%q\nwant fragment:\n%q", rendered, expected)
 	}
 }
 

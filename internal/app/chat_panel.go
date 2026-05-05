@@ -114,7 +114,7 @@ func (m *Model) renderChatPanel() string {
 
 	// Title
 	titleStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.InfoFg).
+		Foreground(defaultTheme.Severity.Info.ForegroundColor()).
 		Bold(true).
 		Width(w)
 	sb.WriteString(titleStyle.Render("Chat") + "\n")
@@ -122,8 +122,8 @@ func (m *Model) renderChatPanel() string {
 
 	// Message history — show last messages that fit in height
 	msgStyle := lipgloss.NewStyle().Width(w)
-	userStyle := lipgloss.NewStyle().Foreground(defaultTheme.TextFg).Width(w)
-	aiStyle := lipgloss.NewStyle().Foreground(defaultTheme.InfoFg).Width(w)
+	userStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor()).Width(w)
+	aiStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor()).Width(w)
 
 	// Calculate how many lines we have for history
 	// Total height = tableHeight; minus title(1) + divider(1) + divider2(1) + input(1) = 4
@@ -173,7 +173,7 @@ func (m *Model) renderChatPanel() string {
 
 	// Input field
 	if m.chatWaiting {
-		waitStyle := lipgloss.NewStyle().Foreground(defaultTheme.DimFg)
+		waitStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor())
 		sb.WriteString(waitStyle.Render("Thinking..."))
 	} else {
 		sb.WriteString(m.chatInput.View())
