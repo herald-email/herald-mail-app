@@ -923,8 +923,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward all messages to the settings panel when it is active (intercepts
 	// key presses and window-size events so the panel handles them exclusively).
 	if m.showSettings && m.settingsPanel != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+		}
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			return m, tea.Batch(cmd, tea.ClearScreen)
+		}
 		return m, cmd
 	}
 
@@ -1733,9 +1740,14 @@ func (m *Model) View() tea.View {
 	if m.oauthWait != nil {
 		return m.oauthWait.View()
 	}
-	// Settings overlay takes over the entire screen when active.
+	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
+		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
+	}
+	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
+		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
+	}
 	if m.showSettings && m.settingsPanel != nil {
-		return m.settingsPanel.View()
+		return m.buildView(m.renderSettingsOverlayView())
 	}
 	// Rule editor overlay takes over the entire screen when active.
 	if m.showRuleEditor && m.ruleEditor != nil {
@@ -1748,12 +1760,6 @@ func (m *Model) View() tea.View {
 	// Cleanup manager overlay takes over the entire screen when active.
 	if m.showCleanupMgr && m.cleanupManager != nil {
 		return m.cleanupManager.View()
-	}
-	if m.windowWidth > 0 && m.windowWidth < minTermWidth {
-		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
-	}
-	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
-		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
 	}
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())
@@ -1965,6 +1971,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !m.showSettings {
 			m.showSettings = true
 			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
+			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
 			return m, m.settingsPanel.Init()
 		}
 		return m, nil

@@ -287,6 +287,7 @@ Check these states during every applicable lane:
 ### TC-04 — Row highlight consistency
 
 **Lane:** A, B
+
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -339,6 +340,7 @@ Check these states during every applicable lane:
 ### TC-05B — Timeline horizontal reading movement
 
 **Lane:** A, B
+
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
@@ -761,7 +763,7 @@ Check these states during every applicable lane:
 
 ### TC-18A — Context-sensitive shortcut help overlay
 
-**Lane:** A, B  
+**Lane:** A, B
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -779,6 +781,25 @@ Check these states during every applicable lane:
 - Compose help explains what preservation mode means and lists `Ctrl+O` only when reply/forward context exists.
 - Overlay scroll state is bounded and resets when reopened from a different context.
 - Closing help returns to the same tab/pane/overlay state without triggering the underlying key action.
+
+### TC-18B — Settings compact overlay
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. From Timeline, press `S` to open settings.
+2. Repeat from Compose, Cleanup, and Contacts to confirm the current screen remains visible behind the panel.
+3. At `220x50`, capture the settings panel and close it with `Esc`.
+4. At `80x24`, reopen settings, navigate the first form group with `j/k` or arrow keys, and confirm the panel scrolls internally.
+5. Resize to `50x15` while settings is open, then resize back to `80x24`.
+
+**Expect:**
+- At `220x50`, settings appears as a compact centered modal over the current view, not a full-screen replacement.
+- At `80x24`, settings leaves a margin, fits without horizontal or vertical overflow, and the form scrolls inside the modal.
+- At `50x15`, Herald shows the standard minimum-size guard instead of a clipped settings form.
+- Returning from `50x15` to `80x24` restores the settings modal over the current screen without stale or clipped content.
+- `Esc` cancels settings and returns to the same tab/pane state; `Ctrl+S` keeps the existing save behavior.
 
 ### TC-19 — Multi-attachment navigation and save
 

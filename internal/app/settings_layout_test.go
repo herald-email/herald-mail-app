@@ -128,6 +128,125 @@ func TestSettingsPanel_StillShowsGmailOAuth(t *testing.T) {
 	}
 }
 
+func pressSettingsPanelForTest(t *testing.T, m *Model) *Model {
+	t.Helper()
+	model, _ := m.handleKeyMsg(keyRunes("S"))
+	updated := model.(*Model)
+	if !updated.showSettings || updated.settingsPanel == nil {
+		t.Fatalf("expected S to open settings panel")
+	}
+	return updated
+}
+
+func findRenderedText(lines []string, needle string) (int, int) {
+	for row, line := range lines {
+		if col := strings.Index(line, needle); col >= 0 {
+			return row, col
+		}
+	}
+	return -1, -1
+}
+
+func TestSettingsPanelRendersCompactCenteredModalOverCurrentView(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressSettingsPanelForTest(t, m)
+
+	rendered := updated.View().Content
+	assertFitsWidth(t, 220, rendered)
+	assertFitsHeight(t, 50, rendered)
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) < 40 {
+		t.Fatalf("expected settings overlay to preserve full terminal view, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(lines[0], "Herald") {
+		t.Fatalf("expected current view to remain visible behind settings, got first line %q", lines[0])
+	}
+	titleRow, titleCol := findRenderedText(lines, "Account Type")
+	if titleRow < 8 {
+		t.Fatalf("expected settings content to be vertically centered in a compact modal, row=%d:\n%s", titleRow, stripANSI(rendered))
+	}
+	if titleCol < 40 || titleCol > 100 {
+		t.Fatalf("expected settings content to be horizontally centered in a compact modal, col=%d:\n%s", titleCol, stripANSI(rendered))
+	}
+}
+
+func TestSettingsPanelFitsAt80ColsAsModal(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressSettingsPanelForTest(t, m)
+
+	rendered := updated.View().Content
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+	lines := strings.Split(strings.TrimRight(stripANSI(rendered), "\n"), "\n")
+	if len(lines) > 24 {
+		t.Fatalf("expected settings modal to fit 80x24 height, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(lines[0], "Herald") {
+		t.Fatalf("expected settings modal to keep the current view visible at 80x24, got first line %q", lines[0])
+	}
+	titleRow, _ := findRenderedText(lines, "Account Type")
+	if titleRow < 2 {
+		t.Fatalf("expected settings modal to leave a vertical margin at 80x24, row=%d:\n%s", titleRow, stripANSI(rendered))
+	}
+}
+
+func TestSettingsPanelUsesMinimumSizeGuardWhenTooSmall(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	opened := pressSettingsPanelForTest(t, m)
+
+	model, _ := opened.Update(tea.WindowSizeMsg{Width: 50, Height: 15})
+	resized := model.(*Model)
+
+	if resized.windowWidth != 50 || resized.windowHeight != 15 {
+		t.Fatalf("expected parent model to track settings resize, got %dx%d", resized.windowWidth, resized.windowHeight)
+	}
+	rendered := resized.View().Content
+	assertFitsWidth(t, 50, rendered)
+	assertFitsHeight(t, 15, rendered)
+	if !strings.Contains(stripANSI(rendered), "Terminal too narrow") {
+		t.Fatalf("expected minimum-size guard instead of clipped settings form, got:\n%s", stripANSI(rendered))
+	}
+}
+
+func TestSettingsPanelResizeKeepsBackdropAndModalInSync(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	opened := pressSettingsPanelForTest(t, m)
+
+	model, _ := opened.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	resized := model.(*Model)
+
+	if resized.windowWidth != 80 || resized.windowHeight != 24 {
+		t.Fatalf("expected parent model to track resize while settings is open, got %dx%d", resized.windowWidth, resized.windowHeight)
+	}
+	if resized.settingsPanel == nil || resized.settingsPanel.width != 80 || resized.settingsPanel.height != 24 {
+		t.Fatalf("expected settings panel to receive resize, got %#v", resized.settingsPanel)
+	}
+	rendered := resized.View().Content
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if !strings.Contains(lines[0], "Herald") {
+		t.Fatalf("expected resized settings modal to keep backdrop aligned, got first line %q", lines[0])
+	}
+	if !strings.Contains(stripANSI(rendered), "Account Type") {
+		t.Fatalf("expected settings content after resize, got:\n%s", stripANSI(rendered))
+	}
+}
+
 func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
