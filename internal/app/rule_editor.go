@@ -132,25 +132,19 @@ func (r *RuleEditor) buildForm() {
 
 // formWidth returns the width the form should use (80% of terminal, min 40).
 func (r *RuleEditor) formWidth() int {
-	w := int(float64(r.width) * 0.8)
-	if w < 40 {
-		w = 40
-	}
-	if w > r.width {
-		w = r.width
-	}
-	return w
+	return r.panelLayout().contentWidth
 }
 
 func (r *RuleEditor) formHeight() int {
-	h := r.height - 11
-	if h < 6 {
-		h = 6
-	}
-	if r.height > 0 && h > r.height {
-		h = r.height
+	h := r.panelLayout().contentHeight - 6
+	if h < 4 {
+		h = 4
 	}
 	return h
+}
+
+func (r *RuleEditor) panelLayout() compactOverlayLayout {
+	return newCompactOverlayLayout(r.width, r.height)
 }
 
 // Init implements tea.Model.
@@ -206,29 +200,27 @@ func (r *RuleEditor) Update(msg tea.Msg) (*RuleEditor, tea.Cmd) {
 
 // View implements tea.Model.
 func (r *RuleEditor) View() tea.View {
-	formView := r.form.View()
-
-	w := r.formWidth()
-	innerW := w - 4
-	if innerW < 20 {
-		innerW = w
+	if r.width > 0 && (r.width < minTermWidth || r.height < minTermHeight) {
+		return newHeraldView(renderMinSizeMessage(r.width, r.height))
 	}
-	box := lipgloss.NewStyle().
-		Width(w).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1, 2)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render("Automation Rule")
-	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
-	rendered := box.Render(
-		title + "\n\n" +
-			noteStyle.Render("Purpose: future matching mail automation.") + "\n" +
-			noteStyle.Render("Results: matching mail is acted on immediately.") + "\n" +
-			noteStyle.Render(r.savedRulesSummary()) + "\n\n" +
-			formView,
-	)
+	rendered := r.renderPanel()
 	return newHeraldView(lipgloss.Place(r.width, r.height, lipgloss.Center, lipgloss.Center, rendered))
+}
+
+func (r *RuleEditor) renderPanel() string {
+	formView := strings.TrimRight(r.form.View(), "\n")
+	layout := r.panelLayout()
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render("Automation Rule")
+	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
+	return renderCompactOverlayBox(
+		title+"\n\n"+
+			noteStyle.Render("Purpose: future matching mail automation.")+"\n"+
+			noteStyle.Render("Results: matching mail is acted on immediately.")+"\n"+
+			noteStyle.Render(r.savedRulesSummary())+"\n\n"+
+			formView,
+		layout,
+	)
 }
 
 // buildRule constructs a models.Rule from the current form field values.

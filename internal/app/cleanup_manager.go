@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -111,11 +112,16 @@ func (m *CleanupManager) buildForm() {
 				Title("Enabled?").
 				Value(&m.formEnabled),
 		),
-	).WithWidth(m.width - 4)
+	).WithWidth(m.formWidth()).WithHeight(m.formHeight())
 }
 
 // Update handles keys and form events.
 func (m *CleanupManager) Update(msg tea.Msg) (*CleanupManager, tea.Cmd) {
+	if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.setSize(sizeMsg.Width, sizeMsg.Height)
+		return m, nil
+	}
+
 	switch m.state {
 	case cleanupManagerList:
 		return m.updateList(msg)
@@ -123,6 +129,30 @@ func (m *CleanupManager) Update(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 		return m.updateEdit(msg)
 	}
 	return m, nil
+}
+
+func (m *CleanupManager) setSize(width, height int) {
+	m.width = width
+	m.height = height
+	if m.form != nil {
+		m.form = m.form.WithWidth(m.formWidth()).WithHeight(m.formHeight())
+	}
+}
+
+func (m *CleanupManager) panelLayout() compactOverlayLayout {
+	return newCompactOverlayLayout(m.width, m.height)
+}
+
+func (m *CleanupManager) formWidth() int {
+	return m.panelLayout().contentWidth
+}
+
+func (m *CleanupManager) formHeight() int {
+	h := m.panelLayout().contentHeight - 5
+	if h < 4 {
+		h = 4
+	}
+	return h
 }
 
 func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
@@ -258,94 +288,112 @@ func (m *CleanupManager) updateEdit(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 
 // View renders the overlay.
 func (m *CleanupManager) View() tea.View {
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1, 2).
-		Width(m.width - 4)
-
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205"))
-
-	switch m.state {
-	case cleanupManagerList:
-		return newHeraldView(m.viewList(borderStyle, titleStyle))
-	case cleanupManagerEdit:
-		return newHeraldView(m.viewEdit(borderStyle, titleStyle))
+	if m.width > 0 && (m.width < minTermWidth || m.height < minTermHeight) {
+		return newHeraldView(renderMinSizeMessage(m.width, m.height))
 	}
-	return newHeraldView("")
+	return newHeraldView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderPanel()))
 }
 
-func (m *CleanupManager) viewList(borderStyle, titleStyle lipgloss.Style) string {
-	var content string
-	content += titleStyle.Render("Auto-Cleanup Rules") + "\n\n"
-	innerW := m.width - 10
-	if innerW < 20 {
-		innerW = m.width
+func (m *CleanupManager) renderPanel() string {
+	switch m.state {
+	case cleanupManagerEdit:
+		return m.renderEditPanel()
+	default:
+		return m.renderListPanel()
 	}
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
-	content += infoStyle.Render("Runs on demand or on schedule. Saved cleanup rules live here.") + "\n"
-	content += infoStyle.Render("Results show up in the status bar and by mail being archived or deleted after a run.") + "\n\n"
+}
+
+func (m *CleanupManager) renderListPanel() string {
+	layout := m.panelLayout()
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
+	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+
+	lines := []string{
+		titleStyle.Render("Auto-Cleanup Rules"),
+		"",
+		infoStyle.Render("Runs on demand or on schedule. Saved cleanup rules live here."),
+		infoStyle.Render("Run results appear in the status bar and as archive/delete changes."),
+		"",
+	}
 
 	if len(m.rules) == 0 {
-		content += lipgloss.NewStyle().Foreground(lipgloss.Color("243")).
-			Render("No rules yet. Press n to create one. Reopen C any time to review saved cleanup rules.") + "\n"
+		lines = append(lines, dimStyle.Render("No rules yet. Press n to create one. Reopen C any time to review saved cleanup rules."))
 	} else {
-		for i, rule := range m.rules {
-			line := fmt.Sprintf("%-20s  %-8s  %-30s  %-7s  %d days",
-				cleanupTruncate(rule.Name, 20),
-				rule.MatchType,
-				cleanupTruncate(rule.MatchValue, 30),
-				rule.Action,
-				rule.OlderThanDays,
-			)
-			if !rule.Enabled {
-				line += "  [disabled]"
-			}
-			if rule.LastRun != nil {
-				line += fmt.Sprintf("  last: %s", rule.LastRun.Format("2006-01-02"))
-			}
-
+		rowsAvailable := layout.contentHeight - len(lines) - 2
+		if rowsAvailable < 1 {
+			rowsAvailable = 1
+		}
+		start := m.cursor - rowsAvailable + 1
+		if start < 0 {
+			start = 0
+		}
+		end := start + rowsAvailable
+		if end > len(m.rules) {
+			end = len(m.rules)
+		}
+		for i := start; i < end; i++ {
+			line := m.formatRuleLine(m.rules[i], layout.contentWidth)
 			if i == m.cursor {
-				line = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("229")).
-					Background(lipgloss.Color("57")).
-					Render(line)
+				line = selectedStyle.Render(line)
 			}
-			content += line + "\n"
+			lines = append(lines, line)
 		}
 	}
 
-	content += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("243")).
-		Render("n: new  enter: edit  d: delete  p: preview  r: preview all  esc: close")
-
-	return lipgloss.Place(m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		borderStyle.Render(content))
+	lines = append(lines, "", dimStyle.Render(truncateVisual("n: new  enter: edit  d: delete  p: preview  r: preview all  esc: close", layout.contentWidth)))
+	return renderCompactOverlayBox(strings.Join(lines, "\n"), layout)
 }
 
-func (m *CleanupManager) viewEdit(borderStyle, titleStyle lipgloss.Style) string {
+func (m *CleanupManager) formatRuleLine(rule *models.CleanupRule, width int) string {
+	if rule == nil {
+		return truncateVisual("(unknown cleanup rule)", width)
+	}
+	if width < 74 {
+		line := fmt.Sprintf("%s  %s  %s  %dd",
+			cleanupTruncate(rule.Name, 18),
+			rule.Action,
+			cleanupTruncate(rule.MatchValue, 24),
+			rule.OlderThanDays,
+		)
+		if !rule.Enabled {
+			line += "  [off]"
+		}
+		return truncateVisual(line, width)
+	}
+	line := fmt.Sprintf("%-20s  %-8s  %-30s  %-7s  %d days",
+		cleanupTruncate(rule.Name, 20),
+		rule.MatchType,
+		cleanupTruncate(rule.MatchValue, 30),
+		rule.Action,
+		rule.OlderThanDays,
+	)
+	if !rule.Enabled {
+		line += "  [disabled]"
+	}
+	if rule.LastRun != nil {
+		line += fmt.Sprintf("  last: %s", rule.LastRun.Format("2006-01-02"))
+	}
+	return truncateVisual(line, width)
+}
+
+func (m *CleanupManager) renderEditPanel() string {
+	layout := m.panelLayout()
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	title := "New Cleanup Rule"
 	if m.editing != nil && m.editing.ID != 0 {
 		title = "Edit Cleanup Rule"
 	}
-	var content string
-	content += titleStyle.Render(title) + "\n\n"
-	innerW := m.width - 10
-	if innerW < 20 {
-		innerW = m.width
-	}
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
-	content += infoStyle.Render("This rule targets older sender/domain mail. Save it here, then run it from the manager or let the configured schedule pick it up.") + "\n\n"
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
+	var content strings.Builder
+	content.WriteString(titleStyle.Render(title) + "\n\n")
+	content.WriteString(infoStyle.Render("This rule targets older sender/domain mail. Save it here, then run it from the manager or let the configured schedule pick it up.") + "\n\n")
 	if m.form != nil {
-		content += m.form.View()
+		content.WriteString(strings.TrimRight(m.form.View(), "\n"))
 	}
-	content += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("243")).
-		Render("esc: cancel")
-	return lipgloss.Place(m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		borderStyle.Render(content))
+	content.WriteString("\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Render("esc: cancel"))
+	return renderCompactOverlayBox(content.String(), layout)
 }
 
 // cleanupTruncate shortens s to max n runes, adding "..." if truncated.

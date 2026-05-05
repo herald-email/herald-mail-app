@@ -222,21 +222,17 @@ func (p *ruleDryRunPreview) View(width, height int) tea.View {
 	if width > 0 && (width < minTermWidth || height < minTermHeight) {
 		return newHeraldView(renderMinSizeMessage(width, height))
 	}
-	outerW := width - 4
-	if outerW > 118 {
-		outerW = 118
-	}
-	if outerW < 56 {
-		outerW = width
-	}
-	innerW := dryRunPreviewContentWidth(outerW)
-	outerH := height - 4
-	if outerH < 10 {
-		outerH = height
-	}
+	return newHeraldView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, p.renderPanel(width, height)))
+}
+
+func (p *ruleDryRunPreview) renderPanel(width, height int) string {
+	layout := newCompactOverlayLayoutWithMax(width, height, 118, shortcutHelpMaxHeight)
+	innerW := layout.contentWidth
+	tableW := dryRunPreviewTableWidth(innerW)
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
+	tableStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
 	warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
 	rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
@@ -248,14 +244,20 @@ func (p *ruleDryRunPreview) View(width, height int) tea.View {
 	}
 	content = append(content, titleStyle.Render(kind+" Preview")+" "+warnStyle.Render("[DRY RUN]"))
 	content = append(content, noteStyle.Render(fmt.Sprintf("%s  rules:%d  matches:%d  actions:%d", p.report.Scope, p.report.RuleCount, p.report.MatchCount, p.report.ActionCount)))
+	if p.pendingRule != nil && strings.TrimSpace(p.pendingRule.Name) != "" {
+		content = append(content, noteStyle.Render(truncateVisual("Pending rule: "+p.pendingRule.Name, innerW)))
+	}
+	if p.pendingCleanupRule != nil && strings.TrimSpace(p.pendingCleanupRule.Name) != "" {
+		content = append(content, noteStyle.Render(truncateVisual("Pending cleanup rule: "+p.pendingCleanupRule.Name, innerW)))
+	}
 	if p.err != "" {
 		content = append(content, lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(truncateVisual("Error: "+p.err, innerW)))
 	}
 	content = append(content, "")
 
-	header := p.formatHeader(innerW)
-	content = append(content, noteStyle.Render(header))
-	rowsAvailable := outerH - len(content) - 4
+	header := p.formatHeader(tableW)
+	content = append(content, tableStyle.Render(header))
+	rowsAvailable := layout.contentHeight - len(content) - 2
 	if rowsAvailable < 1 {
 		rowsAvailable = 1
 	}
@@ -271,7 +273,7 @@ func (p *ruleDryRunPreview) View(width, height int) tea.View {
 		content = append(content, noteStyle.Render("No cached messages match this preview scope."))
 	} else {
 		for i := start; i < end; i++ {
-			line := p.formatRow(p.report.Rows[i], innerW)
+			line := p.formatRow(p.report.Rows[i], tableW)
 			if i == p.cursor {
 				content = append(content, selectedStyle.Render(line))
 			} else {
@@ -289,12 +291,14 @@ func (p *ruleDryRunPreview) View(width, height int) tea.View {
 	}
 	content = append(content, noteStyle.Render(truncateVisual(footer, innerW)))
 
-	box := lipgloss.NewStyle().
-		Width(outerW).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1, 2)
-	return newHeraldView(lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box.Render(strings.Join(content, "\n"))))
+	return renderCompactOverlayBox(strings.Join(content, "\n"), layout)
+}
+
+func dryRunPreviewTableWidth(innerW int) int {
+	if innerW <= 4 {
+		return innerW
+	}
+	return innerW - 2
 }
 
 func dryRunPreviewContentWidth(outerW int) int {

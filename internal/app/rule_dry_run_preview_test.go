@@ -129,6 +129,58 @@ func TestDryRunPreviewFormatsRowsToBoxContentWidth(t *testing.T) {
 	}
 }
 
+func TestDryRunPreviewRenderedRowsDoNotWrap(t *testing.T) {
+	report := sampleDryRunReport(models.RuleDryRunKindCleanup)
+	report.Rows = append(report.Rows, models.RuleDryRunRow{
+		RuleID:    4,
+		RuleName:  "Archive old Packet Press",
+		MessageID: "msg-2",
+		Sender:    "Packet Press <newsletter@packetpress.example>",
+		Domain:    "packetpress.example",
+		Folder:    "INBOX",
+		Subject:   "Containers without the churn",
+		Date:      time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC),
+		Action:    "archive",
+		Target:    "Archive",
+	})
+	report.Rows[0].Subject = "Weekly systems digest: queues, caches, latency, and more"
+	preview := newCleanupDryRunPreview(report, models.RuleDryRunRequest{}, nil)
+
+	rendered := stripANSI(preview.renderPanel(220, 50))
+	rowLines := dryRunRenderedRowLines(rendered)
+	if got, want := len(rowLines), len(report.Rows); got != want {
+		t.Fatalf("rendered dry-run rows should not wrap, got %d row lines want %d:\n%s", got, want, rendered)
+	}
+	for _, line := range rowLines {
+		if !strings.Contains(line, "archive") || !strings.Contains(line, "INBOX") {
+			t.Fatalf("expected each rendered row line to contain row columns, got %q in:\n%s", line, rendered)
+		}
+	}
+}
+
+func dryRunRenderedRowLines(rendered string) []string {
+	lines := strings.Split(rendered, "\n")
+	headerIdx := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Rule") && strings.Contains(line, "Action") && strings.Contains(line, "Subject") {
+			headerIdx = i
+			break
+		}
+	}
+	if headerIdx < 0 {
+		return nil
+	}
+	var rows []string
+	for _, line := range lines[headerIdx+1:] {
+		trimmed := strings.Trim(line, " │")
+		if trimmed == "" {
+			break
+		}
+		rows = append(rows, trimmed)
+	}
+	return rows
+}
+
 func visualIndex(s, sub string) int {
 	index := strings.Index(s, sub)
 	if index < 0 {

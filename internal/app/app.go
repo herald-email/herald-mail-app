@@ -929,9 +929,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Forward all messages to the settings panel when it is active (intercepts
-	// key presses and window-size events so the panel handles them exclusively).
 	if m.ruleDryRunPreview != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+			if m.cleanupManager != nil {
+				m.cleanupManager.setSize(sizeMsg.Width, sizeMsg.Height)
+			}
+			return m, tea.ClearScreen
+		}
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			model, cmd, handled := m.handleDryRunPreviewKey(key)
 			if handled {
@@ -957,15 +963,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward all messages to the rule editor when it is active.
 	if m.showRuleEditor && m.ruleEditor != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+		}
 		var ruleCmd tea.Cmd
 		m.ruleEditor, ruleCmd = m.ruleEditor.Update(msg)
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			return m, tea.Batch(ruleCmd, tea.ClearScreen)
+		}
 		return m, ruleCmd
 	}
 
 	// Forward all messages to the prompt editor when it is active.
 	if m.showPromptEditor && m.promptEditor != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+		}
 		var promptCmd tea.Cmd
 		m.promptEditor, promptCmd = m.promptEditor.Update(msg)
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			return m, tea.Batch(promptCmd, tea.ClearScreen)
+		}
 		return m, promptCmd
 	}
 
@@ -1012,8 +1032,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward all messages to the cleanup manager when it is active.
 	if m.showCleanupMgr && m.cleanupManager != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+		}
 		var cleanupCmd tea.Cmd
 		m.cleanupManager, cleanupCmd = m.cleanupManager.Update(msg)
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			return m, tea.Batch(cleanupCmd, tea.ClearScreen)
+		}
 		return m, cleanupCmd
 	}
 
@@ -1781,21 +1808,18 @@ func (m *Model) View() tea.View {
 	if m.showSettings && m.settingsPanel != nil {
 		return m.buildView(m.renderSettingsOverlayView())
 	}
-	// Rule editor overlay takes over the entire screen when active.
 	if m.ruleDryRunPreview != nil {
-		return m.ruleDryRunPreview.View(m.windowWidth, m.windowHeight)
+		w, h := m.compactOverlayViewportSize()
+		return m.buildView(m.renderCompactOverlayView(m.ruleDryRunPreview.renderPanel(w, h)))
 	}
-	// Rule editor overlay takes over the entire screen when active.
 	if m.showRuleEditor && m.ruleEditor != nil {
-		return m.ruleEditor.View()
+		return m.buildView(m.renderCompactOverlayView(m.ruleEditor.renderPanel()))
 	}
-	// Prompt editor overlay takes over the entire screen when active.
 	if m.showPromptEditor && m.promptEditor != nil {
-		return m.promptEditor.View()
+		return m.buildView(m.renderCompactOverlayView(m.promptEditor.renderPanel()))
 	}
-	// Cleanup manager overlay takes over the entire screen when active.
 	if m.showCleanupMgr && m.cleanupManager != nil {
-		return m.cleanupManager.View()
+		return m.buildView(m.renderCompactOverlayView(m.cleanupManager.renderPanel()))
 	}
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())
