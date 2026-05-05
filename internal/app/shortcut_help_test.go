@@ -249,6 +249,19 @@ func TestRenderKeyHintsAdvertisesShortcutHelpAt80Cols(t *testing.T) {
 	}
 }
 
+func TestRenderKeyHintsAdvertisesSettingsAt80Cols(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	hints := m.renderKeyHints()
+	assertFitsWidth(t, 80, hints)
+	if !strings.Contains(stripANSI(hints), "S: settings") {
+		t.Fatalf("expected key hints to advertise S settings, got:\n%s", stripANSI(hints))
+	}
+}
+
 func TestTimelinePlainQuestionMarkDoesNotOpenSemanticSearch(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

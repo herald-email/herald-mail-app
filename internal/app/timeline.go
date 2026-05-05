@@ -1550,12 +1550,12 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: focus preview", "left/[: fold/folders", "space: select", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "U: unread", "q: quit")...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{primaryTabShortcutHint, "↑/k ↓/j: navigate", "space: select"}
+		segments := []string{primaryTabShortcutHint, "S: settings", "↑/k ↓/j: navigate", "space: select"}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
 		segments = append(segments, "right/]: preview", "left/[: folders", "enter: open", "q: quit")
 		return joinHintSegments(segments...), true
 	}
-	segments := []string{primaryTabShortcutHint, "tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: preview", "left/[: folders", "space: select", "enter: open", "U: unread"}
+	segments := []string{primaryTabShortcutHint, "S: settings", "tab/shift+tab: panels", "↑/k ↓/j: navigate", "right/]: preview", "left/[: folders", "space: select", "enter: open", "U: unread"}
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, "C: compose")
 	}
