@@ -10,6 +10,11 @@ import (
 
 func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T) {
 	loc := time.FixedZone("PDT", -7*60*60)
+	originalLocal := time.Local
+	time.Local = loc
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
 	email := &models.EmailData{
 		Sender:  "Tech Weekly <newsletter@techweekly.example>",
 		Subject: "This Week in Tech",
