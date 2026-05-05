@@ -17,6 +17,16 @@ readable labels like `Display in your browser` still open the real URL.
 
 ---
 
+## Terminal Theme Inheritance
+
+Herald now inherits your terminal palette instead of forcing one fixed look.
+Switch your terminal theme and the TUI follows along, from low-light dark
+palettes to bright paper-like setups.
+
+![Herald inheriting terminal themes](assets/examples/themes-sliced-dark-to-light-reordered-drop-2-3-8-0.2.0.png)
+
+---
+
 ## Try The Demo First
 
 Curious, but not ready to connect your inbox? Run Herald with a fictional mailbox, seeded contacts, attachments, threads, and deterministic demo AI:
