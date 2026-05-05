@@ -209,6 +209,41 @@ func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
 	assertFitsWidth(t, 80, rendered)
 }
 
+func TestBottomChromeDividerSeparatesStatusAndKeyHints(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.statusMessage = "Settings saved."
+
+	rendered := m.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected main view to fill 80x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+
+	dividerRow := -1
+	for i, line := range lines {
+		if line == strings.Repeat("─", 80) {
+			dividerRow = i
+			break
+		}
+	}
+	if dividerRow < 0 {
+		t.Fatalf("expected full-width line divider between status and key hints, got:\n%s", stripANSI(rendered))
+	}
+	if dividerRow == 0 || dividerRow >= len(lines)-1 {
+		t.Fatalf("divider row should sit between status and key hints, row=%d total=%d:\n%s", dividerRow, len(lines), stripANSI(rendered))
+	}
+	if !strings.Contains(lines[dividerRow-1], "Settings saved.") {
+		t.Fatalf("expected status row immediately above divider, got %q", lines[dividerRow-1])
+	}
+	if !strings.Contains(lines[dividerRow+1], "?: help") {
+		t.Fatalf("expected key hints immediately below divider, got %q", lines[dividerRow+1])
+	}
+	assertFitsWidth(t, 80, rendered)
+}
+
 func TestComposeView_Fits80x24(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabCompose

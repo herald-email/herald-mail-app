@@ -221,7 +221,7 @@ func TestReplyComposeOriginalMessagePaneScrollsWithoutEditingResponse(t *testing
 		t.Fatalf("scrolling original pane edited response body: %q", updated.composeBody.Value())
 	}
 	rendered := stripANSI(updated.renderComposeView())
-	if !strings.Contains(rendered, "Line 07 original context") {
+	if !strings.Contains(rendered, "Line 09 original context") {
 		t.Fatalf("expected scrolled original context to show later lines, got:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "Line 01 original context") {

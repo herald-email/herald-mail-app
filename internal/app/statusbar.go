@@ -439,6 +439,16 @@ func (m *Model) statusMessageForActiveTab() string {
 	return m.statusMessage
 }
 
+func (m *Model) renderStatusHintDivider() string {
+	w := m.windowWidth
+	if w <= 0 {
+		w = 80
+	}
+	return defaultTheme.Chrome.HintBar.Style().
+		Width(w).
+		Render(safeChromeLine(strings.Repeat("─", w), w))
+}
+
 // renderKeyHints renders the context-sensitive key hint line
 func (m *Model) renderKeyHints() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)

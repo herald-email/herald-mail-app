@@ -220,6 +220,7 @@ Check these states during every applicable lane:
 - Header and tab bar visible.
 - No raw panic output.
 - Status bar present.
+- Status bar and key hint bar are separated by a full-width horizontal line divider.
 - Key hint bar present.
 - Active tab and active panel are visually obvious.
 - If cached data is already visible while live sync continues, the UI explains that clearly and shows active sync progress in a human-readable way.
