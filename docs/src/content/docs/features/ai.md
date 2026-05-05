@@ -75,7 +75,7 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 
 ### Enrich Contacts
 
-1. Press `4`.
+1. Press `3`.
 2. Select a contact.
 3. Press `e`.
 4. Review enriched company/topics in the detail panel when complete.

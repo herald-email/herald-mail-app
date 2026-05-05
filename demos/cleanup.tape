@@ -11,7 +11,7 @@ Enter
 Sleep 3s
 
 # Switch to Cleanup tab
-Type "3"
+Type "2"
 Sleep 1s
 
 # Navigate senders

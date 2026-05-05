@@ -23,7 +23,7 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 | Dry-run preview | Compact centered modal showing matched messages, folders, categories, and planned actions before save, enable, or live run. |
 | Status bar | Run results, dry-run marker, deletion/archive progress, and error messages. |
 
-<!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Cleanup tab, W overlay open" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press W" -->
+<!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Cleanup tab, W overlay open" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press W" -->
 
 ![Automation rule editor form](/screenshots/automation-rule-editor.png)
 
@@ -52,7 +52,7 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 
 ### Create a Future-Mail Automation Rule
 
-1. Open Cleanup with `3`.
+1. Open Cleanup with `2`.
 2. Focus a sender/domain row when you want prefilled context.
 3. Press `W`.
 4. Choose trigger type.
@@ -75,7 +75,7 @@ Custom prompts are reusable instructions. A rule or MCP tool must invoke a saved
 
 ### Create a Cleanup Rule
 
-1. Open Cleanup with `3`.
+1. Open Cleanup with `2`.
 2. Press `C`.
 3. Press `n`.
 4. Fill rule name, match type, match value, action, older-than days, and intended enabled state.
@@ -126,11 +126,11 @@ If experimenting with delete rules, use the dry-run preview first. In global `--
 
 ![Custom prompt editor form](/screenshots/automation-prompt-editor.png)
 
-<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-list" page="rules-automation" alt="Cleanup manager rule list" state="demo mode, 120x40, Cleanup manager list" desc="Shows saved cleanup rule rows or empty state, n/enter/d/r/esc controls, and last run details when present." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press C" -->
+<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-list" page="rules-automation" alt="Cleanup manager rule list" state="demo mode, 120x40, Cleanup manager list" desc="Shows saved cleanup rule rows or empty state, n/enter/d/r/esc controls, and last run details when present." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press C" -->
 
 ![Cleanup manager rule list](/screenshots/automation-cleanup-manager-list.png)
 
-<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-edit" page="rules-automation" alt="Cleanup manager edit form" state="demo mode, 120x40, new cleanup rule form" desc="Shows cleanup rule name, match type, match value, action, older-than days, enabled field, and cancel hint." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press C; press n" -->
+<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-edit" page="rules-automation" alt="Cleanup manager edit form" state="demo mode, 120x40, new cleanup rule form" desc="Shows cleanup rule name, match type, match value, action, older-than days, enabled field, and cancel hint." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press C; press n" -->
 
 ![Cleanup manager edit form](/screenshots/automation-cleanup-manager-edit.png)
 

@@ -27,6 +27,15 @@ DOC_DEMO_DIR="docs/public/demo"
 ATTACHMENT_FIXTURE="$TMP_DIR/demo-attachment.txt"
 ONLY_LIST=",${HERALD_DOC_MEDIA_ONLY:-},"
 INCLUDE_RASTER="${HERALD_DOC_MEDIA_INCLUDE_RASTER:-0}"
+DEFAULT_THEME="${HERALD_DOC_MEDIA_THEME:-Builtin Solarized Dark}"
+DEFAULT_FONT_SIZE="${HERALD_DOC_MEDIA_FONT_SIZE:-13}"
+DEFAULT_PADDING="${HERALD_DOC_MEDIA_PADDING:-8}"
+DEFAULT_FRAMERATE="${HERALD_DOC_MEDIA_FRAMERATE:-24}"
+SHOWCASE_WIDTH="${HERALD_DOC_MEDIA_SHOWCASE_WIDTH:-1920}"
+SHOWCASE_HEIGHT="${HERALD_DOC_MEDIA_SHOWCASE_HEIGHT:-1080}"
+SHOWCASE_FONT_SIZE="${HERALD_DOC_MEDIA_SHOWCASE_FONT_SIZE:-18}"
+SHOWCASE_PADDING="${HERALD_DOC_MEDIA_SHOWCASE_PADDING:-14}"
+SHOWCASE_FRAMERATE="${HERALD_DOC_MEDIA_SHOWCASE_FRAMERATE:-18}"
 
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR" "$SCREENSHOT_DIR" "$DOC_DEMO_DIR" assets/demo
@@ -55,14 +64,19 @@ write_tape_header() {
 	local out="$1"
 	local width="$2"
 	local height="$3"
+	local theme="${4:-$DEFAULT_THEME}"
+	local font_size="${5:-$DEFAULT_FONT_SIZE}"
+	local padding="${6:-$DEFAULT_PADDING}"
+	local framerate="${7:-$DEFAULT_FRAMERATE}"
 
 	{
 		printf 'Output %s\n\n' "$out"
-		printf 'Set Theme "Builtin Solarized Dark"\n'
-		printf 'Set FontSize 13\n'
+		printf 'Set Theme "%s"\n' "$theme"
+		printf 'Set FontSize %s\n' "$font_size"
 		printf 'Set Width %s\n' "$width"
 		printf 'Set Height %s\n' "$height"
-		printf 'Set Padding 8\n\n'
+		printf 'Set Padding %s\n' "$padding"
+		printf 'Set Framerate %s\n\n' "$framerate"
 	} >"$CURRENT_TAPE"
 }
 
@@ -96,6 +110,8 @@ capture_tui() {
 	local width="${3:-1400}"
 	local height="${4:-700}"
 	local start_cmd="${5:-./bin/herald --demo}"
+	local theme="${6:-$DEFAULT_THEME}"
+	local font_size="${7:-$DEFAULT_FONT_SIZE}"
 	local gif="$TMP_DIR/$id.gif"
 	local png="$SCREENSHOT_DIR/$id.png"
 	CURRENT_TAPE="$TMP_DIR/$id.tape"
@@ -105,7 +121,7 @@ capture_tui() {
 	fi
 
 	echo "==> screenshot $id"
-	write_tape_header "$gif" "$width" "$height"
+	write_tape_header "$gif" "$width" "$height" "$theme" "$font_size"
 	{
 		printf 'Type "%s"\n' "$start_cmd"
 		printf 'Enter\n'
@@ -118,6 +134,40 @@ capture_tui() {
 
 	vhs "$CURRENT_TAPE"
 	extract_final_frame "$gif" "$png"
+}
+
+capture_tui_showcase_shot() {
+	local id="$1"
+	local actions="${2:-}"
+	local theme="$3"
+	local width="${4:-$SHOWCASE_WIDTH}"
+	local height="${5:-$SHOWCASE_HEIGHT}"
+	local start_cmd="${6:-./bin/herald --demo --demo-keys}"
+	local gif="$TMP_DIR/$id.gif"
+	local png="$SCREENSHOT_DIR/$id.png"
+	CURRENT_TAPE="$TMP_DIR/$id.tape"
+
+	if ! should_capture "$id"; then
+		return 0
+	fi
+
+	echo "==> themed screenshot $id ($theme)"
+	write_tape_header "$gif" "$width" "$height" "$theme" "$SHOWCASE_FONT_SIZE" "$SHOWCASE_PADDING" "$SHOWCASE_FRAMERATE"
+	{
+		printf 'Type "%s"\n' "$start_cmd"
+		printf 'Enter\n'
+		printf 'Sleep 3s\n\n'
+		if [[ -n "$actions" ]]; then
+			printf '%s\n\n' "$actions"
+		fi
+		printf 'Sleep 0.6s\n'
+		printf 'Screenshot %s\n' "$png"
+	} >>"$CURRENT_TAPE"
+
+	vhs "$CURRENT_TAPE"
+	if [[ ! -s "$png" ]]; then
+		extract_final_frame "$gif" "$png"
+	fi
 }
 
 capture_shell() {
@@ -192,7 +242,7 @@ fi
 capture_tui "search-timeline-input" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.6s'
 capture_tui "search-timeline-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.2s\nEnter\nSleep 0.8s'
 capture_tui "search-body-query" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "/b invoice"\nSleep 0.6s'
-capture_tui "search-contacts-semantic" $'Type "4"\nSleep 0.6s\nType "?"\nSleep 0.2s\nType "investors"\nSleep 0.6s'
+capture_tui "search-contacts-semantic" $'Type "3"\nSleep 0.6s\nType "/"\nSleep 0.2s\nType "? investors"\nSleep 0.6s'
 
 capture_tui "text-selection-visual-mode" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "v"\nSleep 0.2s\nDown\nSleep 0.5s'
 capture_tui "text-selection-full-screen" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.4s\nType "v"\nSleep 0.2s\nDown 2\nSleep 0.5s'
@@ -200,19 +250,19 @@ capture_tui "text-selection-mouse-mode" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\
 
 capture_tui "attachments-save-prompt" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "s"\nSleep 0.6s'
 
-capture_tui "cleanup-main-summary" $'Type "3"\nSleep 0.8s'
-capture_tui "cleanup-domain-mode" $'Type "3"\nSleep 0.8s\nType "d"\nSleep 0.6s'
-capture_tui "cleanup-preview" $'Type "3"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 1s'
-capture_tui "cleanup-delete-confirmation" $'Type "3"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.6s'
+capture_tui "cleanup-main-summary" $'Type "2"\nSleep 0.8s'
+capture_tui "cleanup-domain-mode" $'Type "2"\nSleep 0.8s\nType "d"\nSleep 0.6s'
+capture_tui "cleanup-preview" $'Type "2"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 1s'
+capture_tui "cleanup-delete-confirmation" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.6s'
 copy_shot "cleanup-delete-confirmation" "destructive-delete-confirm"
-capture_tui "destructive-archive-confirm" $'Type "3"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "e"\nSleep 0.6s'
+capture_tui "destructive-archive-confirm" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "e"\nSleep 0.6s'
 capture_tui "destructive-unsubscribe-confirm" $'Type "1"\nSleep 0.5s\nDown 3\nSleep 0.2s\nEnter\nSleep 1s\nType "u"\nSleep 0.6s'
-capture_tui "destructive-progress" $'Type "3"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.2s\nType "y"\nSleep 0.5s'
-capture_tui "cleanup-rule-editor" $'Type "3"\nSleep 0.8s\nType "W"\nSleep 0.8s'
+capture_tui "destructive-progress" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.2s\nType "y"\nSleep 0.5s'
+capture_tui "cleanup-rule-editor" $'Type "2"\nSleep 0.8s\nType "W"\nSleep 0.8s'
 copy_shot "cleanup-rule-editor" "automation-rule-editor"
-capture_tui "cleanup-manager" $'Type "3"\nSleep 0.8s\nType "C"\nSleep 0.8s'
+capture_tui "cleanup-manager" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.8s'
 copy_shot "cleanup-manager" "automation-cleanup-manager-list"
-capture_tui "automation-cleanup-manager-edit" $'Type "3"\nSleep 0.8s\nType "C"\nSleep 0.4s\nType "n"\nSleep 0.8s'
+capture_tui "automation-cleanup-manager-edit" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.4s\nType "n"\nSleep 0.8s'
 
 capture_tui "automation-prompt-editor" $'Type "P"\nSleep 0.8s'
 copy_shot "automation-prompt-editor" "ai-prompt-editor"
@@ -225,18 +275,25 @@ capture_tui "chat-filtered-timeline" $'Type "1"\nSleep 0.5s\nType "c"\nSleep 0.4
 capture_tui "settings-main-panel" $'Type "S"\nSleep 0.8s'
 capture_tui "settings-ai-provider" $'Type "S"\nSleep 0.8s\nTab 8\nSleep 0.5s'
 
-capture_tui "compose-main-fields" $'Type "2"\nSleep 0.8s'
-capture_tui "compose-autocomplete" $'Type "2"\nSleep 0.8s\nType "ma"\nSleep 0.8s'
-capture_tui "compose-attachment-input" $'Type "2"\nSleep 0.8s\nCtrl+A\nSleep 0.6s'
-capture_tui "attachments-compose-added" $'Type "2"\nSleep 0.8s\nCtrl+A\nSleep 0.2s\nType "'"$ATTACHMENT_FIXTURE"$'"\nEnter\nSleep 0.8s'
-capture_tui "compose-markdown-preview" $'Type "2"\nSleep 0.8s\nTab 4\nType "# Follow-up notes"\nEnter\nEnter\nType "- Review the invoice risk."\nEnter\nType "- Reply before Friday."\nSleep 0.2s\nCtrl+P\nSleep 0.8s'
-capture_tui "compose-ai-assistant" $'Type "2"\nSleep 0.8s\nTab 4\nType "Please make this reply more concise and helpful."\nSleep 0.2s\nCtrl+G\nSleep 1s'
+capture_tui_showcase_shot "showcase-settings-dark-pastel" $'Type "S"\nSleep 0.8s' "Dark Pastel"
+capture_tui_showcase_shot "showcase-help-dark-pastel" $'Type "?"\nSleep 0.8s' "Dark Pastel"
+capture_tui_showcase_shot "showcase-cleanup-manager-red-alert" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.8s' "Red Alert"
+capture_tui_showcase_shot "showcase-cleanup-rule-editor-red-alert" $'Type "2"\nSleep 0.8s\nType "W"\nSleep 0.8s' "Red Alert"
+capture_tui_showcase_shot "showcase-range-selection-pastel-dark" $'Type "1"\nSleep 0.5s\nType "V"\nSleep 0.2s\nDown\nSleep 0.3s\nDown\nSleep 0.6s' "Builtin Pastel Dark"
+capture_tui_showcase_shot "showcase-large-preview-pastel-dark" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.8s' "Builtin Pastel Dark"
+
+capture_tui "compose-main-fields" $'Type "C"\nSleep 0.8s'
+capture_tui "compose-autocomplete" $'Type "C"\nSleep 0.8s\nType "ma"\nSleep 0.8s'
+capture_tui "compose-attachment-input" $'Type "C"\nSleep 0.8s\nCtrl+A\nSleep 0.6s'
+capture_tui "attachments-compose-added" $'Type "C"\nSleep 0.8s\nCtrl+A\nSleep 0.2s\nType "'"$ATTACHMENT_FIXTURE"$'"\nEnter\nSleep 0.8s'
+capture_tui "compose-markdown-preview" $'Type "C"\nSleep 0.8s\nTab 4\nType "# Follow-up notes"\nEnter\nEnter\nType "- Review the invoice risk."\nEnter\nType "- Reply before Friday."\nSleep 0.2s\nCtrl+P\nSleep 0.8s'
+capture_tui "compose-ai-assistant" $'Type "C"\nSleep 0.8s\nTab 4\nType "Please make this reply more concise and helpful."\nSleep 0.2s\nCtrl+G\nSleep 1s'
 copy_shot "compose-ai-assistant" "ai-compose-assist"
 
-capture_tui "contacts-main-list" $'Type "4"\nSleep 0.8s'
-capture_tui "contacts-detail" $'Type "4"\nSleep 0.8s\nEnter\nSleep 0.8s'
-capture_tui "contacts-keyword-search" $'Type "4"\nSleep 0.8s\nType "/"\nSleep 0.2s\nType "demo"\nSleep 0.6s'
-capture_tui "contacts-inline-preview" $'Type "4"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 0.8s'
+capture_tui "contacts-main-list" $'Type "3"\nSleep 0.8s'
+capture_tui "contacts-detail" $'Type "3"\nSleep 0.8s\nEnter\nSleep 0.8s'
+capture_tui "contacts-keyword-search" $'Type "3"\nSleep 0.8s\nType "/"\nSleep 0.2s\nType "demo"\nSleep 0.6s'
+capture_tui "contacts-inline-preview" $'Type "3"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 0.8s'
 
 capture_shell "mcp-tools-list-terminal" $'Type "sh demos/mcp-demo.sh tools"\nEnter\nSleep 1.5s'
 capture_shell "demo-gif-vhs-run" $'Type "make docs-media"\nSleep 0.8s'
