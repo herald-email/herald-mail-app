@@ -490,7 +490,9 @@ type Model struct {
 	contactEnrichmentActive bool
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
-	demoMode bool
+	demoMode           bool
+	demoKeyOverlay     bool
+	demoKeyOverlayKeys []string
 
 	// Dry-run mode — log rule/cleanup actions without executing destructive ones
 	dryRun bool
@@ -781,6 +783,15 @@ func (m *Model) SetPreviewImageMode(mode PreviewImageMode) {
 	m.previewImageMode = previewImageMode(mode)
 	m.clearTimelinePreviewDocumentCache()
 	m.clearCleanupPreviewDocumentCache()
+}
+
+// SetDemoKeyOverlay toggles the small demo-media keypress overlay. It is only
+// wired from demo CLI mode so normal mailbox sessions never expose it.
+func (m *Model) SetDemoKeyOverlay(enabled bool) {
+	m.demoKeyOverlay = enabled
+	if !enabled {
+		m.demoKeyOverlayKeys = nil
+	}
 }
 
 // Init implements tea.Model
@@ -1837,6 +1848,7 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) buildView(content string) tea.View {
+	content = m.renderDemoKeyOverlay(content)
 	v := newHeraldView(content)
 	if !m.timeline.mouseMode {
 		v.MouseMode = tea.MouseModeCellMotion
@@ -1846,6 +1858,8 @@ func (m *Model) buildView(content string) tea.View {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.recordDemoKeyOverlayPress(msg)
+
 	if model, cmd, handled := m.handleShortcutHelpKey(msg); handled {
 		return model, cmd
 	}

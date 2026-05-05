@@ -83,7 +83,7 @@ Semantic search uses embeddings and AI availability. If semantic features are un
 
 ### Search Contacts
 
-1. Press `4`.
+1. Press `3`.
 2. Press `/`.
 3. Type a plain query for keyword search, or begin with `?` for semantic search.
 4. Press `enter` to keep results or `esc` to clear.
@@ -125,7 +125,7 @@ If you feel trapped in search, press `esc` repeatedly until the original Timelin
 
 ![Timeline body search query](/screenshots/search-body-query.png)
 
-<!-- HERALD_SCREENSHOT id="search-contacts-semantic" page="search" alt="Contacts semantic search active" state="demo mode, 120x40, Contacts search input with semantic query prefix" desc="Shows slash search with a question-mark semantic query prefix and filtered contacts state." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press /; type ? investors" -->
+<!-- HERALD_SCREENSHOT id="search-contacts-semantic" page="search" alt="Contacts semantic search active" state="demo mode, 120x40, Contacts search input with semantic query prefix" desc="Shows slash search with a question-mark semantic query prefix and filtered contacts state." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press /; type ? investors" -->
 
 ![Contacts semantic search active](/screenshots/search-contacts-semantic.png)
 

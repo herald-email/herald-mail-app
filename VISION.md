@@ -641,7 +641,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Name, email, company, topics, first/last-seen, email/sent counts per contact
 - [x] LLM enrichment via Ollama: extracts company name and discussed topics from email subjects (`e` key)
 - [x] Semantic contact embeddings for natural-language search
-- [x] Tab 4 — Contacts TUI: two-panel list+detail, `/` keyword search, `/` then `? query` semantic search
+- [x] Tab 3 — Contacts TUI: two-panel list+detail, `/` keyword search, `/` then `? query` semantic search
 - [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
 - [x] Common AI/model-related contact enrichment failures are deduplicated per batch and surfaced in the Contacts status area
@@ -799,6 +799,8 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] Deterministic demo AI powers classification, semantic search, chat, quick replies, and contact enrichment without Ollama
 - [x] `herald mcp --demo` exposes the same synthetic mailbox without loading private config or cache files
 - [x] Canonical demo tapes generate 5-30 second GIFs in `assets/demo/`
+- [x] High-resolution themed showcase tapes cover Dark Pastel, Red Alert, and softer dark terminal profiles without multiplying every docs capture
+- [x] Demo media can opt into a compact keypress overlay with `--demo-keys` so presentation GIFs show the shortcuts being pressed
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
 - [x] Creative Commons image sampler email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode
 - [x] Rich HTML rendering showcase email lets users verify headings, lists, links, remote image labels, and shared preview behavior in demo mode

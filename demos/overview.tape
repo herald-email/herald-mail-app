@@ -25,7 +25,7 @@ Escape
 Sleep 0.5s
 
 # Switch to Cleanup tab
-Type "3"
+Type "2"
 Sleep 1s
 
 # Navigate senders
@@ -35,7 +35,7 @@ Down
 Sleep 0.4s
 
 # Switch to Contacts tab
-Type "4"
+Type "3"
 Sleep 1s
 
 Down

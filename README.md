@@ -4,6 +4,8 @@
 
 ![Herald overview](assets/demo/overview.gif)
 
+![Herald themed guided tour with keypress overlay](assets/demo/guided-tour-dark-pastel.gif)
+
 Herald is keyboard-first, but it is not keyboard-only. Press `?` anywhere
 Herald owns keyboard input to open context-sensitive shortcut help. In modern
 terminals you can click the top tabs, folder/sidebar rows, Timeline and Cleanup
@@ -26,6 +28,7 @@ herald --demo
 ```
 
 Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not send anything to Ollama. Your real email is never loaded or shared.
+For presentation captures, add `--demo-keys` to show a compact overlay of the keys being pressed.
 
 To test terminal image rendering, run demo mode in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself, then open the Creative Commons image sampler email:
 

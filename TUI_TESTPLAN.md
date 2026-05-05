@@ -72,6 +72,10 @@ Demo mode must not require IMAP credentials, SMTP credentials, Ollama, or a
 private cache database. Its synthetic mailbox and AI responses should be stable
 enough that demo tapes can double as lightweight smoke tests.
 
+Use `--demo --demo-keys` only for media captures that need a visible keypress
+overlay. Normal demo sessions must keep the overlay hidden and must preserve
+text entry in Compose, search prompts, and rule/prompt editors.
+
 ### Lane B — Live IMAP UX
 
 Use the real config to validate:
@@ -1442,6 +1446,25 @@ Check these states during every applicable lane:
 - List wheel events move the focused list cursor and refresh an open preview when applicable.
 - The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.
 - The minimum-size guard still appears at `50x15` and recovery restores normal mouse-capable layouts.
+
+### TC-51 — Themed VHS demo media and keypress overlay
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`, plus VHS `1920x1080`
+
+**Steps:**
+1. Build Herald and launch `./bin/herald --demo`; confirm no `Keys:` overlay is visible.
+2. Launch `./bin/herald --demo --demo-keys`, then press `S`, `?`, `2`, `C`, `V`, down-arrow range extension, real shifted down-arrow when the terminal can send it, right arrow, left arrow, and `z` across the Timeline and Cleanup flows.
+3. Confirm Compose text, Timeline search text, and rule/prompt editor text do not appear in the key overlay.
+4. Run the focused media set with `HERALD_DOC_MEDIA_ONLY=showcase-settings-dark-pastel,showcase-help-dark-pastel,showcase-cleanup-manager-red-alert,showcase-cleanup-rule-editor-red-alert,showcase-range-selection-pastel-dark,showcase-large-preview-pastel-dark demos/generate-doc-media.sh`.
+5. Run `vhs demos/guided-tour-dark-pastel.tape` and `vhs demos/cleanup-rules-red-alert.tape`.
+
+**Expect:**
+- The overlay is opt-in and appears only when demo media explicitly requests `--demo-keys`.
+- Key labels are compact and normalized, including `S`, `?`, `2`, `C`, `Shift+Down`, `Right`, `Left`, and `z`.
+- Text-entry surfaces preserve literal text and do not leak draft/search/editor contents into the overlay.
+- The selected screenshots render with `Dark Pastel`, `Red Alert`, and `Builtin Pastel Dark`; the two GIFs render at high resolution without replacing every existing docs asset.
+- Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `C` to open Compose.
 
 ---
 

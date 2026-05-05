@@ -22,7 +22,7 @@ Sleep 0.3s
 Down
 Sleep 0.3s
 
-Type "3"
+Type "2"
 Sleep 1s
 
 Type "q"

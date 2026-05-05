@@ -7,7 +7,7 @@ Contacts turns the senders and imported address book data Herald knows about int
 
 ## Overview
 
-Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
+Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
 
 ## Screen Anatomy
 
@@ -21,7 +21,7 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 | Semantic search | `/` search input with a `? query` prefix and AI/embedding-backed contact results. |
 | Status and hints | Contact load/enrichment messages and contact-specific key hints. |
 
-<!-- HERALD_SCREENSHOT id="contacts-main-list" page="contacts" alt="Contacts tab list and detail panels" state="demo mode, 120x40, Contacts tab active" desc="Shows contact list columns, empty or selected detail panel, contact count, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 4" -->
+<!-- HERALD_SCREENSHOT id="contacts-main-list" page="contacts" alt="Contacts tab list and detail panels" state="demo mode, 120x40, Contacts tab active" desc="Shows contact list columns, empty or selected detail panel, contact count, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 3" -->
 
 ![Contacts tab list and detail panels](/screenshots/contacts-main-list.png)
 
@@ -50,7 +50,7 @@ Press `4` to open Contacts. Herald loads contacts from the backend and, on macOS
 
 ### Open a Contact Detail
 
-1. Press `4`.
+1. Press `3`.
 2. Move through contacts with `j`/`k`.
 3. Press `enter`.
 4. Review contact metadata and recent messages.
@@ -104,15 +104,15 @@ If inline preview seems stale, close with `esc`, move to the message again, and 
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="contacts-detail" page="contacts" alt="Contact detail with recent emails" state="demo mode, 120x40, contact detail open" desc="Shows selected contact metadata, recent emails, detail focus behavior, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press enter" -->
+<!-- HERALD_SCREENSHOT id="contacts-detail" page="contacts" alt="Contact detail with recent emails" state="demo mode, 120x40, contact detail open" desc="Shows selected contact metadata, recent emails, detail focus behavior, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press enter" -->
 
 ![Contact detail with recent emails](/screenshots/contacts-detail.png)
 
-<!-- HERALD_SCREENSHOT id="contacts-keyword-search" page="contacts" alt="Contacts keyword search mode" state="demo mode, 120x40, keyword search active" desc="Shows slash search prompt, filtered contact list, search text in hints, and clear behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press /; type demo" -->
+<!-- HERALD_SCREENSHOT id="contacts-keyword-search" page="contacts" alt="Contacts keyword search mode" state="demo mode, 120x40, keyword search active" desc="Shows slash search prompt, filtered contact list, search text in hints, and clear behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press /; type demo" -->
 
 ![Contacts keyword search mode](/screenshots/contacts-keyword-search.png)
 
-<!-- HERALD_SCREENSHOT id="contacts-inline-preview" page="contacts" alt="Contact recent email inline preview" state="demo mode, 120x40, contact detail email preview" desc="Shows recent email preview loading or body text inside the detail panel and Esc return behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 4; press enter; press tab; press enter" -->
+<!-- HERALD_SCREENSHOT id="contacts-inline-preview" page="contacts" alt="Contact recent email inline preview" state="demo mode, 120x40, contact detail email preview" desc="Shows recent email preview loading or body text inside the detail panel and Esc return behavior." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press enter; press tab; press enter" -->
 
 ![Contact recent email inline preview](/screenshots/contacts-inline-preview.png)
 

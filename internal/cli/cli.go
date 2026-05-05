@@ -133,7 +133,7 @@ func runWizard(configPath string, experimental bool) error {
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool) {
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -157,6 +157,7 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool) {
 	// Build the TUI model
 	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, dryRun)
 	model.SetPreviewImageMode(imageMode)
+	model.SetDemoKeyOverlay(demoKeys)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
 
@@ -186,6 +187,35 @@ const (
 	rootCommandMCP
 	rootCommandSSH
 )
+
+type tuiFlagOptions struct {
+	debug         *bool
+	verbose       *bool
+	demo          *bool
+	demoKeys      *bool
+	dryRun        *bool
+	experimental  *bool
+	imageProtocol *string
+	configPath    *string
+	showHelp      *bool
+	showVersion   *bool
+}
+
+func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
+	const defaultConfig = "~/.herald/conf.yaml"
+	return tuiFlagOptions{
+		debug:         fs.Bool("debug", false, "Enable debug logging in the Herald user log directory"),
+		verbose:       fs.Bool("verbose", false, "Alias for -debug (same behavior today)"),
+		demo:          fs.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)"),
+		demoKeys:      fs.Bool("demo-keys", false, "Show a demo keypress overlay while running with --demo"),
+		dryRun:        fs.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)"),
+		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
+		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
+		configPath:    fs.String("config", defaultConfig, "Path to configuration file"),
+		showHelp:      fs.Bool("help", false, "Show help message"),
+		showVersion:   fs.Bool("version", false, "Show version information"),
+	}
+}
 
 func rootCommandFromArgs(args []string) (rootCommand, []string) {
 	if len(args) < 2 {
@@ -484,43 +514,35 @@ func buildRuleAction(actionType, actionValue string) models.RuleAction {
 
 func runTUI() {
 	// Parse command line flags
-	var debug = flag.Bool("debug", false, "Enable debug logging in the Herald user log directory")
-	var verbose = flag.Bool("verbose", false, "Alias for -debug (same behavior today)")
-	var demo = flag.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)")
-	var dryRun = flag.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)")
-	var experimental = flag.Bool("experimental", false, "Show experimental email service onboarding options")
-	var imageProtocol = flag.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
 	const defaultConfig = "~/.herald/conf.yaml"
-	var configPath = flag.String("config", defaultConfig, "Path to configuration file")
-	var showHelp = flag.Bool("help", false, "Show help message")
-	var showVersion = flag.Bool("version", false, "Show version information")
+	opts := registerTUIFlags(flag.CommandLine)
 	flag.Parse()
 
-	if *showVersion {
+	if *opts.showVersion {
 		fmt.Println(buildversion.String("herald"))
 		return
 	}
 
-	imageMode, err := parseImageProtocolFlag(*imageProtocol)
+	imageMode, err := parseImageProtocolFlag(*opts.imageProtocol)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
 	// Demo mode: skip all real IMAP setup
-	if *demo {
-		runDemo(imageMode, *dryRun)
+	if *opts.demo {
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys)
 		return
 	}
 
-	usingDefault := (*configPath == defaultConfig)
+	usingDefault := (*opts.configPath == defaultConfig)
 
-	if *showHelp {
+	if *opts.showHelp {
 		printRootHelp(os.Stdout, os.Args[0], flag.CommandLine)
 		os.Exit(0)
 	}
 
 	// Expand ~ in config path
-	resolvedConfig, err := config.ExpandPath(*configPath)
+	resolvedConfig, err := config.ExpandPath(*opts.configPath)
 	if err != nil {
 		log.Fatalf("Failed to resolve config path: %v", err)
 	}
@@ -550,7 +572,7 @@ func runTUI() {
 
 	// First-run: if config doesn't exist or is empty, launch the setup wizard.
 	if needsOnboarding {
-		if err := runWizard(resolvedConfig, *experimental); err != nil {
+		if err := runWizard(resolvedConfig, *opts.experimental); err != nil {
 			log.Fatalf("setup wizard failed: %v", err)
 		}
 		// Wizard exited — verify config was actually written (user may have cancelled).
@@ -565,7 +587,7 @@ func runTUI() {
 	}
 
 	// Initialize logging
-	if err := logger.Init(*debug || *verbose); err != nil {
+	if err := logger.Init(*opts.debug || *opts.verbose); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
 	defer logger.Close()
@@ -668,14 +690,14 @@ func runTUI() {
 	mailer := appsmtp.New(cfg)
 
 	// Create the TUI application
-	app := app.New(b, mailer, cfg.Credentials.Username, classifier, *dryRun)
+	app := app.New(b, mailer, cfg.Credentials.Username, classifier, *opts.dryRun)
 	app.SetPreviewImageMode(imageMode)
 	app.SetConfigPath(resolvedConfig)
 	app.SetConfig(cfg)
 
 	// Wire cleanup scheduler if using a local backend and schedule is configured.
 	if lb, ok := b.(*backend.LocalBackend); ok && cfg.Cleanup.ScheduleHours > 0 {
-		engine := cleanup.NewEngineWithDryRun(lb.Cache(), b, logger.New(), *dryRun)
+		engine := cleanup.NewEngineWithDryRun(lb.Cache(), b, logger.New(), *opts.dryRun)
 		sched := cleanup.NewScheduler(engine, cfg.Cleanup.ScheduleHours)
 		sched.Start(context.Background())
 		app.SetCleanupScheduler(sched)

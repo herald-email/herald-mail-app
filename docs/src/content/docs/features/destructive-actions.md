@@ -20,7 +20,7 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 | Read-only status | Diagnostic mode that blocks mutations. |
 | Dry-run flag | `[DRY RUN]` when runtime mode avoids live mutation for supported cleanup paths. |
 
-<!-- HERALD_SCREENSHOT id="destructive-delete-confirm" page="destructive-actions" alt="Delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows confirmation description, y confirm, n or Esc cancel, selected rows, and status override." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press space; press D" -->
+<!-- HERALD_SCREENSHOT id="destructive-delete-confirm" page="destructive-actions" alt="Delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows confirmation description, y confirm, n or Esc cancel, selected rows, and status override." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press D" -->
 
 ![Delete confirmation status bar](/screenshots/destructive-delete-confirm.png)
 
@@ -41,7 +41,7 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 
 ### Delete Selected Cleanup Rows
 
-1. Open Cleanup with `3`.
+1. Open Cleanup with `2`.
 2. Use `space` to select sender/domain rows or individual messages.
 3. Press `D`.
 4. Read the confirmation text.
@@ -98,7 +98,7 @@ If mail reappears after delete/archive, refresh with `r` and verify provider Tra
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="destructive-archive-confirm" page="destructive-actions" alt="Archive confirmation status bar" state="demo mode, 120x40, archive confirmation active" desc="Shows archive target description, confirmation controls, and selection context." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press space; press e" -->
+<!-- HERALD_SCREENSHOT id="destructive-archive-confirm" page="destructive-actions" alt="Archive confirmation status bar" state="demo mode, 120x40, archive confirmation active" desc="Shows archive target description, confirmation controls, and selection context." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press e" -->
 
 ![Archive confirmation status bar](/screenshots/destructive-archive-confirm.png)
 
@@ -106,7 +106,7 @@ If mail reappears after delete/archive, refresh with `r` and verify provider Tra
 
 ![Unsubscribe confirmation status bar](/screenshots/destructive-unsubscribe-confirm.png)
 
-<!-- HERALD_SCREENSHOT id="destructive-progress" page="destructive-actions" alt="Delete or archive progress in status bar" state="demo mode, 120x40, deletion worker active" desc="Shows serialized worker progress, completed/total count, sender label, and reconnecting state if applicable." capture="tmux demo 120x40; ./bin/herald --demo; press 3; select rows; press D; press y; capture during progress" -->
+<!-- HERALD_SCREENSHOT id="destructive-progress" page="destructive-actions" alt="Delete or archive progress in status bar" state="demo mode, 120x40, deletion worker active" desc="Shows serialized worker progress, completed/total count, sender label, and reconnecting state if applicable." capture="tmux demo 120x40; ./bin/herald --demo; press 2; select rows; press D; press y; capture during progress" -->
 
 ![Delete or archive progress in status bar](/screenshots/destructive-progress.png)
 
