@@ -484,17 +484,7 @@ func (m *Model) renderSuggestionDropdown() string {
 	if len(m.suggestions) == 0 {
 		return ""
 	}
-	tableHeight := 5
-	if m.windowHeight > 0 {
-		extraChromeRows := 0
-		if m.hasTopSyncStrip() {
-			extraChromeRows = 1
-		}
-		tableHeight = m.windowHeight - 6 - extraChromeRows
-		if tableHeight < 5 {
-			tableHeight = 5
-		}
-	}
+	tableHeight := m.composeContentHeight()
 	layout := m.composeSuggestionLayout(tableHeight)
 	if layout.visibleCount == 0 {
 		return ""
@@ -983,7 +973,7 @@ func (m *Model) renderComposeView() string {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(m.composeStatus) + "\n")
 	}
 
-	return sb.String()
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 func (m *Model) isForwardCompose() bool {
@@ -1192,11 +1182,7 @@ func composeOriginalMessageBodyLines(ctx *composePreservedContext, width int) []
 }
 
 func (m *Model) composeContentHeight() int {
-	extraChromeRows := 0
-	if m.hasTopSyncStrip() {
-		extraChromeRows = 1
-	}
-	tableHeight := m.windowHeight - 6 - extraChromeRows
+	tableHeight := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
 	if tableHeight < 5 {
 		tableHeight = 5
 	}

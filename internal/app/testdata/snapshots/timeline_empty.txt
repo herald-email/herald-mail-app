@@ -4,5 +4,6 @@
 [90m│[m   All Mail only          [90m│[m [36m└────────────────────────────────────────────────────────────────────────────────────────┘[m
 [90m└──────────────────────────┘[m
 [7m [m[7mINBOX  │  AI: off  │  0 emails[m[7m [m[7m                                                                                        [m
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ?: help  │  F1-F3: tabs  │  S: settings  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  space: select  │  V: range
  shift+↑/↓: range  │  right/]: preview  │  left/[: folders  │  enter: open  │  U: unread  │  C: compose  │  *: star

@@ -259,10 +259,7 @@ func TestContactsTab_HeightFits(t *testing.T) {
 
 		rendered := m.renderContactsTab(220, h)
 		lines := strings.Split(rendered, "\n")
-		// renderMainView adds 5 lines of chrome around this content:
-		// title/tabs(1) + blank(1) + trailing newline(1) + status bar(1) + key hints(1).
-		// So renderContactsTab output must fit in h - 5 lines.
-		maxLines := h - 5
+		maxLines := m.buildLayoutPlan(220, h).ContentHeight + 2
 		if len(lines) > maxLines {
 			t.Errorf("h=%d: renderContactsTab produced %d lines, max allowed %d (would push header off-screen)",
 				h, len(lines), maxLines)

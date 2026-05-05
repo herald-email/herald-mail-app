@@ -738,7 +738,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Writes `~/.herald/conf.yaml` on finish
 
 ### In-app settings panel
-- [x] Accessible from the TUI with `S` key
+- [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Changes saved on `Ctrl+S`; no restart required for most settings

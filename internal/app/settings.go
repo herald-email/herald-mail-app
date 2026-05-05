@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/render"
 )
@@ -91,6 +92,13 @@ type Settings struct {
 	syncPollStr        string
 	syncIDLE           bool
 	cleanupScheduleStr string
+}
+
+type settingsPanelLayout struct {
+	panelWidth  int
+	panelHeight int
+	formWidth   int
+	formHeight  int
 }
 
 // NewSettings creates a Settings component, pre-filling fields from an existing config.
@@ -430,17 +438,67 @@ func (s *Settings) buildForm() {
 	}
 }
 
+func (s *Settings) setSize(width, height int) {
+	s.width = width
+	s.height = height
+	if s.form != nil {
+		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
+	}
+}
+
+func (s *Settings) panelLayout() settingsPanelLayout {
+	w := s.width
+	if w <= 0 {
+		w = 80
+	}
+	h := s.height
+	if h <= 0 {
+		h = 24
+	}
+
+	panelW := shortcutHelpMaxWidth
+	if maxW := w - 4; maxW < panelW {
+		panelW = maxW
+	}
+	if panelW < 40 {
+		panelW = w
+	}
+	if panelW < 32 {
+		panelW = 32
+	}
+
+	panelH := shortcutHelpMaxHeight
+	if maxH := h - 4; maxH < panelH {
+		panelH = maxH
+	}
+	if panelH < 10 {
+		panelH = h
+	}
+	if panelH < 6 {
+		panelH = 6
+	}
+
+	formW := panelW - 6
+	if formW < 20 {
+		formW = 20
+	}
+	formH := panelH - 4
+	if formH < 4 {
+		formH = 4
+	}
+
+	return settingsPanelLayout{
+		panelWidth:  panelW,
+		panelHeight: panelH,
+		formWidth:   formW,
+		formHeight:  formH,
+	}
+}
+
 // formWidth returns the width the form should use.
 func (s *Settings) formWidth() int {
 	if s.mode == SettingsModePanel {
-		w := int(float64(s.width) * 0.8)
-		if w < 40 {
-			w = 40
-		}
-		if w > s.width {
-			w = s.width
-		}
-		return w
+		return s.panelLayout().formWidth
 	}
 	w := s.wizardBoxWidth() - 6
 	if w < 52 {
@@ -451,7 +509,7 @@ func (s *Settings) formWidth() int {
 
 func (s *Settings) formHeight() int {
 	if s.mode == SettingsModePanel {
-		return s.height
+		return s.panelLayout().formHeight
 	}
 	h := s.height - 12
 	if h < 8 {
@@ -487,9 +545,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.width = msg.Width
-		s.height = msg.Height
-		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
+		s.setSize(msg.Width, msg.Height)
 		return s, nil
 
 	case tea.KeyPressMsg:
@@ -548,14 +604,7 @@ func (s *Settings) View() tea.View {
 	formView := strings.TrimRight(s.form.View(), "\n")
 
 	if s.mode == SettingsModePanel {
-		w := s.formWidth()
-		box := lipgloss.NewStyle().
-			Width(w).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2)
-
-		rendered := strings.TrimRight(box.Render(formView), "\n")
+		rendered := s.renderPanel()
 		return newHeraldView(strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n"))
 	}
 
@@ -588,6 +637,26 @@ func (s *Settings) View() tea.View {
 		return newHeraldView(strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n"))
 	}
 	return newHeraldView(rendered)
+}
+
+func (s *Settings) renderPanel() string {
+	formView := strings.TrimRight(s.form.View(), "\n")
+	layout := s.panelLayout()
+	box := lipgloss.NewStyle().
+		Width(layout.formWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2)
+
+	rendered := strings.TrimRight(box.Render(formView), "\n")
+	lines := strings.Split(rendered, "\n")
+	if len(lines) > layout.panelHeight {
+		lines = lines[:layout.panelHeight]
+	}
+	for i, line := range lines {
+		lines[i] = ansi.Cut(line, 0, layout.panelWidth)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // buildConfig constructs a config.Config from the current form field values.
