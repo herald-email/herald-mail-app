@@ -1,5 +1,8 @@
 # Herald
 
+> [!NOTE]
+> Herald 0.2.0-beta is a UI maturity and automation-safety milestone: cleaner adaptive terminal chrome, a reading-first Timeline, mail-style range selection, compact overlays, and dry-run previews before rule-driven mail mutation.
+
 **Fast terminal email for power users.** AI classification, semantic search, bulk cleanup, quick replies, and an MCP server for AI agents — all from your terminal.
 
 ![Herald overview](assets/demo/overview.gif)
@@ -50,25 +53,25 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 
 ## Features
 
-| Feature | Status |
-|---------|--------|
-| macOS Homebrew install + IMAP-first onboarding | ✅ |
-| Standard IMAP + Gmail IMAP App Password setup | ✅ |
-| IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook | ✅ |
-| Experimental Gmail OAuth onboarding (`-experimental`) | ⚠️ |
-| Reading-first Timeline with split/full previews and range selection | ✅ |
-| Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews | ✅ |
-| Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅ |
-| Bulk cleanup — delete/archive by sender or domain, plus dry-run cleanup rule previews | ✅ |
-| Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews | ✅ |
-| AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
-| Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings | ✅ |
-| Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q) | ✅ |
-| Contact book with LLM enrichment and Apple Contacts import | ✅ |
-| Compose + reply + forward with Markdown preview | ✅ |
-| MCP server — AI agents read and manage email over stdio | ✅ |
-| SSH server — run the full TUI over SSH | ✅ |
-| IMAP IDLE push sync — new mail appears instantly | ✅ |
+| Feature                                                                                   | Status |
+| ----------------------------------------------------------------------------------------- | ------ |
+| macOS Homebrew install + IMAP-first onboarding                                            | ✅     |
+| Standard IMAP + Gmail IMAP App Password setup                                             | ✅     |
+| IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook                                | ✅     |
+| Experimental Gmail OAuth onboarding (`-experimental`)                                     | ⚠️     |
+| Reading-first Timeline with split/full previews and range selection                       | ✅     |
+| Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews                  | ✅     |
+| Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
+| Bulk cleanup — delete/archive by sender or domain, plus dry-run cleanup rule previews     | ✅     |
+| Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
+| AI classification via Ollama (gemma3, llama3, etc.)                                       | ✅     |
+| Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings                  | ✅     |
+| Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
+| Contact book with LLM enrichment and Apple Contacts import                                | ✅     |
+| Compose + reply + forward with Markdown preview                                           | ✅     |
+| MCP server — AI agents read and manage email over stdio                                   | ✅     |
+| SSH server — run the full TUI over SSH                                                    | ✅     |
+| IMAP IDLE push sync — new mail appears instantly                                          | ✅     |
 
 ![Herald semantic search demo](assets/demo/semantic-search.gif)
 
@@ -184,18 +187,18 @@ Config file: `~/.herald/conf.yaml`
 
 ```yaml
 credentials:
-  username: "your@email.com"
-  password: "your-password-or-app-password"
+    username: "your@email.com"
+    password: "your-password-or-app-password"
 server:
-  host: "imap.fastmail.com"
-  port: 993
+    host: "imap.fastmail.com"
+    port: 993
 smtp:
-  host: "smtp.fastmail.com"
-  port: 587
+    host: "smtp.fastmail.com"
+    port: 587
 ollama:
-  host: "http://localhost:11434"
-  model: "gemma3:4b"             # for classification, chat, quick replies
-  embedding_model: "nomic-embed-text-v2-moe"  # for semantic search
+    host: "http://localhost:11434"
+    model: "gemma3:4b" # for classification, chat, quick replies
+    embedding_model: "nomic-embed-text-v2-moe" # for semantic search
 ```
 
 Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`
@@ -206,14 +209,14 @@ Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `
 
 Keyboard controls remain complete, but mouse users get the comfortable path too:
 
-| Mouse action | Result |
-|--------------|--------|
-| Click a top tab | Switches to Timeline, Cleanup, or Contacts |
-| Click a folder/sidebar row | Selects and opens that folder |
-| Click a Timeline row | Opens the email preview for that message or thread |
-| Scroll over Timeline or Cleanup rows | Moves through the list in small steps |
-| Scroll over an email preview | Scrolls the message body |
-| Click an OSC 8 email link | Opens the target URL through your terminal |
+| Mouse action                         | Result                                             |
+| ------------------------------------ | -------------------------------------------------- |
+| Click a top tab                      | Switches to Timeline, Cleanup, or Contacts         |
+| Click a folder/sidebar row           | Selects and opens that folder                      |
+| Click a Timeline row                 | Opens the email preview for that message or thread |
+| Scroll over Timeline or Cleanup rows | Moves through the list in small steps              |
+| Scroll over an email preview         | Scrolls the message body                           |
+| Click an OSC 8 email link            | Opens the target URL through your terminal         |
 
 Press `m` in Timeline when you want terminal-native mouse text selection, then
 press `m` again to restore Herald's mouse capture.
@@ -244,6 +247,7 @@ herald mcp -config ~/.herald/conf.yaml
 ```
 
 Or run this from a source checkout:
+
 ```bash
 claude mcp add herald -- "$(pwd)/bin/herald" mcp -config ~/.herald/conf.yaml
 ```
@@ -254,12 +258,12 @@ Add to `.cursor/mcp.json`:
 
 ```json
 {
-  "mcpServers": {
-    "herald": {
-      "command": "herald",
-      "args": ["mcp", "-config", "~/.herald/conf.yaml"]
+    "mcpServers": {
+        "herald": {
+            "command": "herald",
+            "args": ["mcp", "-config", "~/.herald/conf.yaml"]
+        }
     }
-  }
 }
 ```
 
@@ -269,12 +273,12 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "herald": {
-      "command": "herald",
-      "args": ["mcp", "-config", "~/.herald/conf.yaml"]
+    "mcpServers": {
+        "herald": {
+            "command": "herald",
+            "args": ["mcp", "-config", "~/.herald/conf.yaml"]
+        }
     }
-  }
 }
 ```
 
@@ -299,12 +303,12 @@ herald serve -config ~/.herald/conf.yaml
 herald status
 ```
 
-| Capability | Requirement |
-|------------|-------------|
-| Recent/unread/search/sender stats/classification reads and cleanup dry-run previews | Open the TUI or run the daemon so the SQLite cache has synced mail. |
-| Email body, summaries, action items, and draft replies | Open the email in the TUI first so its body text is cached. |
-| Semantic search, summaries, classification, and action-item extraction | Configure an AI provider, such as Ollama, Claude, or OpenAI-compatible settings. |
-| Sync, drafts, attachments, send/reply/forward, folder changes, and mail mutations | Start `herald serve` with the same `-config` used by the MCP server. |
+| Capability                                                                          | Requirement                                                                      |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Recent/unread/search/sender stats/classification reads and cleanup dry-run previews | Open the TUI or run the daemon so the SQLite cache has synced mail.              |
+| Email body, summaries, action items, and draft replies                              | Open the email in the TUI first so its body text is cached.                      |
+| Semantic search, summaries, classification, and action-item extraction              | Configure an AI provider, such as Ollama, Claude, or OpenAI-compatible settings. |
+| Sync, drafts, attachments, send/reply/forward, folder changes, and mail mutations   | Start `herald serve` with the same `-config` used by the MCP server.             |
 
 If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binaries had an invalid daemon route pattern for folder rename.
 
@@ -312,62 +316,62 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 
 The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md). Common cache-backed tools work after sync; live mutation tools need `herald serve`.
 
-| Tool | Description |
-|------|-------------|
-| `list_recent_emails` | Most recent emails in a folder |
-| `list_unread_emails` | Unread emails only |
-| `search_emails` | Keyword search on sender + subject |
-| `search_by_sender` | All emails from a sender or domain |
-| `search_by_date` | Filter by date range |
-| `semantic_search_emails` | Natural-language search via chunked body embeddings |
-| `get_email_body` | Cached plain-text body |
-| `get_sender_stats` | Senders ranked by email volume |
-| `get_email_classifications` | AI category counts for a folder |
-| `classify_email` | Run AI classification on one email |
-| `summarise_email` | Generate a summary via Ollama |
-| `dry_run_cleanup_rules` | Preview cleanup rule matches without mutating mail |
-| `run_cleanup_rules` | Run enabled cleanup rules through the daemon |
-| `list_contacts` | Paginated contact list |
-| `search_contacts` | Keyword search on name/email/company/topics |
-| `semantic_search_contacts` | Natural-language contact search |
-| `get_contact` | Full profile + recent emails |
+| Tool                        | Description                                         |
+| --------------------------- | --------------------------------------------------- |
+| `list_recent_emails`        | Most recent emails in a folder                      |
+| `list_unread_emails`        | Unread emails only                                  |
+| `search_emails`             | Keyword search on sender + subject                  |
+| `search_by_sender`          | All emails from a sender or domain                  |
+| `search_by_date`            | Filter by date range                                |
+| `semantic_search_emails`    | Natural-language search via chunked body embeddings |
+| `get_email_body`            | Cached plain-text body                              |
+| `get_sender_stats`          | Senders ranked by email volume                      |
+| `get_email_classifications` | AI category counts for a folder                     |
+| `classify_email`            | Run AI classification on one email                  |
+| `summarise_email`           | Generate a summary via Ollama                       |
+| `dry_run_cleanup_rules`     | Preview cleanup rule matches without mutating mail  |
+| `run_cleanup_rules`         | Run enabled cleanup rules through the daemon        |
+| `list_contacts`             | Paginated contact list                              |
+| `search_contacts`           | Keyword search on name/email/company/topics         |
+| `semantic_search_contacts`  | Natural-language contact search                     |
+| `get_contact`               | Full profile + recent emails                        |
 
 ---
 
 ## Key Bindings
 
-| Key | Action |
-|-----|--------|
-| `1` / `2` / `3` | Timeline / Cleanup / Contacts tab in browse contexts |
-| `F1` / `F2` / `F3` | Timeline / Cleanup / Contacts tab from anywhere in the main TUI, including Compose |
-| `Alt+1` / `Alt+2` / `Alt+3` | Secondary Timeline / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
-| `C` | Open a new Compose screen from Timeline |
-| `j` / `k` | Navigate down / up |
-| `Enter` | Open email preview |
-| `Space` | Select Timeline messages or Cleanup rows, depending on focus |
-| `Shift+Up` / `Shift+Down` | Extend Timeline range selection when supported by the terminal |
-| `V`, then `j` / `k` | Fallback Timeline range selection without shifted-arrow support |
-| `Escape` | Close preview / picker, or return from Compose to its originating Timeline screen |
-| `D` | Delete selected email or sender |
-| `e` | Archive |
-| `R` | Reply |
-| `F` | Forward |
-| `Ctrl+Q` | Quick reply picker (in preview) |
-| `u` | Unsubscribe |
-| `z` | Full-screen preview |
-| `S` | Open settings as a compact overlay |
-| `W` / `P` / `C` | Open Cleanup automation rules, custom prompts, or cleanup rule manager overlays |
-| `p` / `r` in Cleanup manager | Preview selected cleanup rule or all enabled cleanup rules |
-| `s` / `E` / `R` in dry-run preview | Save disabled, enable after confirmation, or run previewed cleanup live |
-| `c` / `Alt+C` | Toggle AI chat panel (`Alt+C` also works while composing) |
-| `a` | Run AI classification on current folder |
-| `f` / `Alt+F` | Toggle folder sidebar (`Alt+F` also works while composing) |
-| `l` / `Alt+L` | Toggle logs (`Alt+L` also works while composing) |
-| `r` / `Alt+R` | Refresh current folder (`Alt+R` also works while composing) |
-| `/` | Search; type `? query` inside search for semantic search when AI/embeddings are available |
-| `?` | Open context-sensitive shortcut help |
-| `q` | Quit in browse contexts only |
-| `Ctrl+C` | Quit from any state, including text inputs |
+| Key                                | Action                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| `1` / `2` / `3`                    | Timeline / Cleanup / Contacts tab in browse contexts                                        |
+| `F1` / `F2` / `F3`                 | Timeline / Cleanup / Contacts tab from anywhere in the main TUI, including Compose          |
+| `Alt+1` / `Alt+2` / `Alt+3`        | Secondary Timeline / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
+| `C`                                | Open a new Compose screen from Timeline                                                     |
+| `j` / `k`                          | Navigate down / up                                                                          |
+| `Enter`                            | Open email preview                                                                          |
+| `Space`                            | Select Timeline messages or Cleanup rows, depending on focus                                |
+| `Shift+Up` / `Shift+Down`          | Extend Timeline range selection when supported by the terminal                              |
+| `V`, then `j` / `k`                | Fallback Timeline range selection without shifted-arrow support                             |
+| `Escape`                           | Close preview / picker, or return from Compose to its originating Timeline screen           |
+| `D`                                | Delete selected email or sender                                                             |
+| `e`                                | Archive                                                                                     |
+| `R`                                | Reply                                                                                       |
+| `F`                                | Forward                                                                                     |
+| `Ctrl+Q`                           | Quick reply picker (in preview)                                                             |
+| `u`                                | Unsubscribe                                                                                 |
+| `z`                                | Full-screen preview                                                                         |
+| `S`                                | Open settings as a compact overlay                                                          |
+| `W` / `P` / `C`                    | Open Cleanup automation rules, custom prompts, or cleanup rule manager overlays             |
+| `p` / `r` in Cleanup manager       | Preview selected cleanup rule or all enabled cleanup rules                                  |
+| `s` / `E` / `R` in dry-run preview | Save disabled, enable after confirmation, or run previewed cleanup live                     |
+| `c` / `Alt+C`                      | Toggle AI chat panel (`Alt+C` also works while composing)                                   |
+| `a`                                | Run AI classification on current folder                                                     |
+| `f` / `Alt+F`                      | Toggle folder sidebar (`Alt+F` also works while composing)                                  |
+| `l` / `Alt+L`                      | Toggle logs (`Alt+L` also works while composing)                                            |
+| `r` / `Alt+R`                      | Refresh current folder (`Alt+R` also works while composing)                                 |
+| `/`                                | Search; type `? query` inside search for semantic search when AI/embeddings are available   |
+| `?`                                | Open context-sensitive shortcut help                                                        |
+| `q`                                | Quit in browse contexts only                                                                |
+| `Ctrl+C`                           | Quit from any state, including text inputs                                                  |
 
 ---
 
