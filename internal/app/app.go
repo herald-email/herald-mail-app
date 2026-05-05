@@ -616,7 +616,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(defaultTheme.BorderInactive).
 		BorderBottom(true).
-		Bold(false)
+		Foreground(defaultTheme.HeaderFg).
+		Background(defaultTheme.HeaderBg).
+		Bold(true)
 	activeStyle.Selected = activeStyle.Selected.
 		Foreground(defaultTheme.ConfirmFg).
 		Background(defaultTheme.TabActiveBg).
@@ -628,7 +630,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(defaultTheme.BorderInactive).
 		BorderBottom(true).
-		Bold(false)
+		Foreground(defaultTheme.TabInactiveFg).
+		Background(defaultTheme.HeaderBg).
+		Bold(true)
 	inactiveStyle.Selected = inactiveStyle.Selected.
 		Foreground(defaultTheme.TextFg).
 		Background(defaultTheme.BorderInactive).
@@ -644,10 +648,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 			{Title: "✓", Width: 1},
 			{Title: "Sender", Width: 20},
 			{Title: "Subject", Width: 40},
-			{Title: "Date", Width: 16},
-			{Title: "Size KB", Width: 7},
-			{Title: "Att", Width: 3},
-			{Title: "Tag", Width: 4},
+			{Title: "When", Width: 12},
+			{Title: "Tag", Width: 8},
 		}),
 		table.WithHeight(11),
 	)

@@ -125,6 +125,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Star / pin important threads to top
 - [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, including reply drafts, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
+- [x] Reading-first Timeline rows hide spreadsheet-only size/attachment columns, show attachments in the subject cell, use local human dates, and keep Sender/Subject dominant at `80x24`, `120x40`, and `220x50`
 - [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)

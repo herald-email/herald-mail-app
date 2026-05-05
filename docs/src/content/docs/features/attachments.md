@@ -13,16 +13,16 @@ Use Timeline preview attachment controls when receiving files. Use Compose `ctrl
 
 | Area | What it shows |
 | --- | --- |
-| Timeline Att column | Attachment indicator for messages whose structure includes attachments. |
+| Timeline subject marker | Attachment marker beside the subject for messages or collapsed threads whose structure includes attachments. |
 | Preview attachment area | Attachment list, selected attachment, filename, and save affordance. |
 | Attachment save prompt | Destination path input, defaulting to `~/Downloads/<filename>`. |
 | Compose attachment prompt | File path input opened with `ctrl+a`. |
 | Compose attachment lines | Files attached to the outgoing draft. |
 | Compose status | Attachment add errors, large-file warnings, and send errors. |
 
-<!-- HERALD_SCREENSHOT id="attachments-timeline-list" page="attachments" alt="Timeline attachment indicator column" state="demo mode, 120x40, Timeline tab with attachment rows" desc="Shows the Att column in Timeline and messages that can expose attachments in preview." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
+<!-- HERALD_SCREENSHOT id="attachments-timeline-list" page="attachments" alt="Timeline attachment marker in subject" state="demo mode, 120x40, Timeline tab with attachment rows" desc="Shows the subject attachment marker in Timeline and messages that can expose attachments in preview." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
-![Timeline attachment indicator column](/screenshots/attachments-timeline-list.png)
+![Timeline attachment marker in subject](/screenshots/attachments-timeline-list.png)
 
 ## Controls
 
@@ -43,7 +43,7 @@ Use Timeline preview attachment controls when receiving files. Use Compose `ctrl
 ### Save a Received Attachment
 
 1. Open Timeline.
-2. Select a message with the Att indicator.
+2. Select a message with the attachment marker beside the subject.
 3. Press `enter` to open preview.
 4. Use `[`/`]` if multiple attachments are present.
 5. Press `s`.
@@ -77,7 +77,7 @@ Saving an attachment writes a file to the local destination path. Adding an outg
 
 ## Troubleshooting
 
-If the Att column is blank but you expected attachments, the provider may not expose attachment disposition in the fetched structure.
+If the subject marker is absent but you expected attachments, the provider may not expose attachment disposition in the fetched structure.
 
 If saving fails, check path permissions and whether the filename already exists with restrictive permissions.
 

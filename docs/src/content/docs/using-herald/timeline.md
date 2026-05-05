@@ -14,18 +14,17 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | Area | What it shows |
 | --- | --- |
 | Folder sidebar | Folder tree, unread counts, total counts, expandable parents, and virtual `All Mail only` when available. |
-| Timeline table | One row per visible thread or email. Columns are Sender, Subject, Date, Size KB, Att, and Tag. |
-| Sender cell | Sender name plus unread indicator, star indicator, thread count, and child-row prefix for expanded threads. |
-| Subject cell | Subject for the newest thread message or the individual email row. |
-| Date and size | Message date and approximate message size in KB. |
-| Att column | Attachment indicator when Herald detected attachments. |
-| Tag column | AI classification/category when present. |
+| Timeline table | One row per visible thread or email. Columns prioritize Sender, Subject, When, and Tag when width allows. |
+| Sender cell | Sender display name plus unread indicator, star indicator, thread count, and child-row prefix for expanded threads. Wider terminals may also show the muted email address. |
+| Subject cell | Subject for the newest thread message or the individual email row, with an attachment marker when Herald detected attachments. |
+| When column | Local, human-readable message date such as a time, yesterday label, weekday, or calendar date depending on age. |
+| Tag column | AI classification/category when present and when width allows. |
 | Preview panel | Message header, body text, tags, unsubscribe/hide actions, attachments, inline image notes, loading/error state, and scroll position. |
 | Full-screen preview | Same message content expanded across the terminal, with bounded inline images in Kitty-protocol terminals such as Ghostty or Kitty, iTerm2-compatible terminals, and safe OSC 8 fallback links in local TUI sessions. |
 | Search input/results | Search prompt, search mode, result count, and focused result rows. |
 | Quick reply picker | A small choice list of canned and optional AI-generated replies. |
 
-<!-- HERALD_SCREENSHOT id="timeline-main-list" page="timeline" alt="Timeline tab with inbox rows" state="demo mode, 120x40, sidebar visible" desc="Shows the main Timeline list, unread/star indicators, tag column, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
+<!-- HERALD_SCREENSHOT id="timeline-main-list" page="timeline" alt="Timeline tab with inbox rows" state="demo mode, 120x40, sidebar visible" desc="Shows the main Timeline list, unread/star indicators, subject attachment marker, optional tag column, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
 ![Timeline tab with inbox rows](/screenshots/timeline-main-list.png)
 

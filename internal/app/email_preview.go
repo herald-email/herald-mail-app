@@ -157,7 +157,7 @@ func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsub
 	styles := newPreviewHeaderStyles(active)
 	lines := []string{
 		renderPreviewHeaderLine("From:", email.Sender, innerW, styles, styles.from),
-		renderPreviewHeaderLine("Date:", email.Date.Format("Mon, 02 Jan 2006 15:04"), innerW, styles, styles.date),
+		renderPreviewHeaderLine("Date:", formatPreviewHeaderDate(email.Date), innerW, styles, styles.date),
 		renderPreviewHeaderLine("Subj:", email.Subject, innerW, styles, styles.subj),
 	}
 	if email.IsDraft {

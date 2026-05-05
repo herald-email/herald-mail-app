@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"sort"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
@@ -31,10 +32,11 @@ const (
 )
 
 const (
-	threadCollapsedPrefix = "▸ "
-	threadExpandedPrefix  = "▾ "
-	threadReplyPrefix     = "↩ "
-	threadNestedPrefix    = "  ↳ "
+	threadCollapsedPrefix  = "▸ "
+	threadExpandedPrefix   = "▾ "
+	threadReplyPrefix      = "↩ "
+	threadNestedPrefix     = "  ↳ "
+	timelineAttachmentMark = "📎 "
 )
 
 func draftLabel(count int) string {
@@ -218,6 +220,56 @@ func styledThreadParticipants(labels []string, maxWidth int) string {
 	return lipgloss.NewStyle().Foreground(defaultTheme.TextFg).Render(joined)
 }
 
+func formatTimelineListDate(date time.Time) string {
+	if date.IsZero() {
+		return "N/A"
+	}
+	return formatTimelineListDateAt(date.Local(), time.Now().Local())
+}
+
+func formatTimelineListDateAt(date, now time.Time) string {
+	if date.IsZero() {
+		return "N/A"
+	}
+	loc := now.Location()
+	localDate := date.In(loc)
+	localNow := now.In(loc)
+	today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, loc)
+	day := time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, loc)
+	daysAgo := int(today.Sub(day).Hours() / 24)
+
+	switch {
+	case daysAgo == 0:
+		return localDate.Format("3:04 PM")
+	case daysAgo == 1:
+		return "Yesterday"
+	case daysAgo > 1 && daysAgo < 7:
+		return localDate.Format("Mon 3:04 PM")
+	case localDate.Year() == localNow.Year():
+		return localDate.Format("Jan 2")
+	default:
+		return localDate.Format("Jan 2 2006")
+	}
+}
+
+func formatPreviewHeaderDate(date time.Time) string {
+	if date.IsZero() {
+		return "N/A"
+	}
+	return date.Local().Format("Mon, Jan 2, 2006 at 3:04 PM")
+}
+
+func timelineSubjectText(subject string, hasAttachments bool) string {
+	subject = sanitizeText(subject)
+	if subject == "" {
+		subject = "(no subject)"
+	}
+	if hasAttachments {
+		return timelineAttachmentMark + subject
+	}
+	return subject
+}
+
 // buildThreadGroups groups emails by normalised subject.
 // emails must already be sorted newest-first; group order is determined by each
 // group's most-recent email, so groups are also implicitly newest-first.
@@ -377,14 +429,8 @@ func (m *Model) updateTimelineTable() {
 	}
 
 	emailRow := func(email *models.EmailData, senderPrefix string) table.Row {
-		dateStr := "N/A"
-		if !email.Date.IsZero() {
-			dateStr = email.Date.Format("06-01-02 15:04")
-		}
-		subject := sanitizeText(email.Subject)
-		if subject == "" {
-			subject = "(no subject)"
-		}
+		dateStr := formatTimelineListDate(email.Date)
+		subject := timelineSubjectText(email.Subject, email.HasAttachments)
 		if email.IsDraft {
 			subject = draftKindLabel(email) + ": " + subject
 			senderPrefix += draftLabel(1) + " "
@@ -410,10 +456,6 @@ func (m *Model) updateTimelineTable() {
 			senderAvail = 1
 		}
 		sender := unreadDot + starDot + senderPrefix + styledSender(email.Sender, senderAvail)
-		att := "N"
-		if email.HasAttachments {
-			att = "Y"
-		}
 		tag := ""
 		if m.classifications != nil {
 			tag = m.classifications[email.MessageID]
@@ -423,8 +465,6 @@ func (m *Model) updateTimelineTable() {
 			sender,
 			trunc(subject, maxSubj),
 			dateStr,
-			fmt.Sprintf("%.1f", float64(email.Size)/1024),
-			att,
 			tag,
 		}
 	}
@@ -460,31 +500,18 @@ func (m *Model) updateTimelineTable() {
 		if !expanded {
 			// Collapsed thread header: newest email's sender, subject with [N] prefix
 			newest := g.emails[0]
-			dateStr := "N/A"
-			if !newest.Date.IsZero() {
-				dateStr = newest.Date.Format("06-01-02 15:04")
-			}
-			subject := sanitizeText(newest.Subject)
-			if subject == "" {
-				subject = "(no subject)"
-			}
-			totalSize := 0
+			dateStr := formatTimelineListDate(newest.Date)
 			anyAtt := false
 			for _, e := range g.emails {
-				totalSize += e.Size
 				if e.HasAttachments {
 					anyAtt = true
 				}
-			}
-			att := "N"
-			if anyAtt {
-				att = "Y"
 			}
 			tag := ""
 			if m.classifications != nil {
 				tag = m.classifications[newest.MessageID]
 			}
-			threadSubj := fmt.Sprintf("[%d] %s", len(g.emails), subject)
+			threadSubj := timelineSubjectText(fmt.Sprintf("[%d] %s", len(g.emails), sanitizeText(newest.Subject)), anyAtt)
 			if drafts := threadDraftCount(g.emails); drafts > 0 {
 				threadSubj = draftLabel(drafts) + " " + threadSubj
 			}
@@ -509,8 +536,6 @@ func (m *Model) updateTimelineTable() {
 				threadSender,
 				trunc(threadSubj, maxSubj),
 				dateStr,
-				fmt.Sprintf("%.1f", float64(totalSize)/1024),
-				att,
 				tag,
 			})
 			m.timeline.threadRowMap = append(m.timeline.threadRowMap, timelineRowRef{

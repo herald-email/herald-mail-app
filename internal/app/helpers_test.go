@@ -394,6 +394,90 @@ func TestUpdateTimelineTable_SingleEmailThreadRowsDoNotShowDisclosureMarker(t *t
 	}
 }
 
+func TestUpdateTimelineTable_AttachmentMarkerLivesInSubject(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.timeline.senderWidth = 28
+	m.timeline.subjectWidth = 48
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID:      "with-attachment",
+			Sender:         "Mina Park <mina@example.com>",
+			Subject:        "Signed statement",
+			Date:           now,
+			HasAttachments: true,
+			Folder:         "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+	row := m.timelineTable.Rows()[0]
+	subject := stripANSI(row[2])
+	if !strings.Contains(subject, "📎 Signed statement") {
+		t.Fatalf("attachment marker should be beside the subject, got %q", subject)
+	}
+	if strings.Contains(strings.Join(row, " "), " Y ") || strings.Contains(strings.Join(row, " "), " N ") {
+		t.Fatalf("Timeline row should not expose standalone attachment Y/N column: %#v", row)
+	}
+}
+
+func TestUpdateTimelineTable_CollapsedThreadMarksSubjectWhenAnyEmailHasAttachment(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.timeline.senderWidth = 30
+	m.timeline.subjectWidth = 56
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "newest",
+			Sender:    "Mina Park <mina@example.com>",
+			Subject:   "Project plan",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID:      "older",
+			Sender:         "Rowan Finch <rowan@example.com>",
+			Subject:        "Re: Project plan",
+			Date:           now.Add(-time.Hour),
+			HasAttachments: true,
+			Folder:         "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected collapsed thread row, got %d rows", len(rows))
+	}
+	subject := stripANSI(rows[0][2])
+	if !strings.Contains(subject, "📎 [2] Project plan") {
+		t.Fatalf("collapsed thread subject should show attachment marker before thread count, got %q", subject)
+	}
+}
+
+func TestFormatTimelineListDateAtUsesLocalHumanLabels(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
+	now := time.Date(2026, 5, 5, 15, 4, 0, 0, loc)
+	cases := []struct {
+		name string
+		date time.Time
+		want string
+	}{
+		{name: "same day", date: time.Date(2026, 5, 5, 13, 4, 0, 0, loc), want: "1:04 PM"},
+		{name: "yesterday", date: time.Date(2026, 5, 4, 9, 30, 0, 0, loc), want: "Yesterday"},
+		{name: "same week", date: time.Date(2026, 5, 2, 9, 30, 0, 0, loc), want: "Sat 9:30 AM"},
+		{name: "same year", date: time.Date(2026, 4, 22, 9, 30, 0, 0, loc), want: "Apr 22"},
+		{name: "older year", date: time.Date(2025, 12, 31, 9, 30, 0, 0, loc), want: "Dec 31 2025"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatTimelineListDateAt(tc.date, now); got != tc.want {
+				t.Fatalf("formatTimelineListDateAt() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // --- linkifyURLs and wrapText ---
 
 func TestShortenURL(t *testing.T) {

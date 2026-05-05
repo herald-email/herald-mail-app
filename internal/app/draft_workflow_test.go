@@ -73,13 +73,13 @@ func TestUpdateTimelineTable_MarksDraftRowsAndCollapsedThreads(t *testing.T) {
 	if got := rows[0][2]; !strings.Contains(got, "Draft") || !strings.Contains(got, "[2]") {
 		t.Fatalf("expected collapsed thread subject to show draft marker and count, got %q", got)
 	}
-	if got := rows[0][6]; got != "" {
+	if got := rows[0][4]; got != "" {
 		t.Fatalf("draft marker must not use Tag column, got tag %q", got)
 	}
 	if got := rows[1][2]; !strings.Contains(got, "Draft") || !strings.Contains(got, "Follow-up note") {
 		t.Fatalf("expected single draft subject to show draft marker, got %q", got)
 	}
-	if got := rows[1][6]; got != "" {
+	if got := rows[1][4]; got != "" {
 		t.Fatalf("single draft marker must not use Tag column, got tag %q", got)
 	}
 }
@@ -126,7 +126,7 @@ func TestUpdateTimelineTable_ExpandedReplyDraftShowsReplyAndDraftMarkers(t *test
 	if !strings.Contains(subjectCell, "Interview with Cobalt Works") {
 		t.Fatalf("reply draft subject should still show the thread subject, got %q", subjectCell)
 	}
-	if got := rows[1][6]; got != "" {
+	if got := rows[1][4]; got != "" {
 		t.Fatalf("draft marker must not use Tag column, got tag %q", got)
 	}
 }

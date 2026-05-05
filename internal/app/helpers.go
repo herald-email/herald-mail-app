@@ -643,20 +643,22 @@ func styledSender(raw string, maxWidth int) string {
 	nameStyle := lipgloss.NewStyle().Foreground(defaultTheme.TextFg)
 	emailStyle := lipgloss.NewStyle().Foreground(defaultTheme.MutedFg)
 
-	if lt := strings.Index(raw, " <"); lt > 0 && strings.HasSuffix(raw, ">") {
-		name := sanitizeText(raw[:lt])
-		email := raw[lt+1:]
-		combined := name + " " + email
-		combined = ansi.Truncate(combined, maxWidth, "…")
-		if lt2 := strings.Index(combined, " <"); lt2 > 0 {
-			return nameStyle.Render(combined[:lt2]) + " " + emailStyle.Render(combined[lt2+1:])
-		}
-		return nameStyle.Render(combined)
+	name := senderDisplayLabel(raw)
+	email := senderAddress(raw)
+	if name == "" {
+		name = sanitizeText(raw)
+	}
+	if email == "" || strings.EqualFold(name, email) || maxWidth < 34 {
+		return nameStyle.Render(ansi.Truncate(name, maxWidth, "…"))
 	}
 
-	plain := sanitizeText(raw)
-	plain = ansi.Truncate(plain, maxWidth, "…")
-	return nameStyle.Render(plain)
+	combined := name + " <" + email + ">"
+	combined = ansi.Truncate(combined, maxWidth, "…")
+	if lt := strings.Index(combined, " <"); lt > 0 {
+		return nameStyle.Render(combined[:lt]) + " " + emailStyle.Render(combined[lt+1:])
+	}
+
+	return nameStyle.Render(combined)
 }
 
 // updateTableDimensions recalculates table and column sizes based on terminal dimensions
@@ -810,10 +812,6 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.summaryTable.SetHeight(tableHeight + 1)
 	m.detailsTable.SetHeight(tableHeight + 1)
 
-	const timelineFixedCols = 31
-	const timelineNumCols = 7
-
-	const timelineTableFixedOverhead = timelineFixedCols + timelineNumCols*2 + 2
 	const minPreviewWidth = 25
 	previewWidth := 0
 	if m.timeline.selectedEmail != nil {
@@ -824,15 +822,13 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.timeline.previewWidth = previewWidth
 
-	// Progressive timeline column hiding: when preview is open and space is tight,
-	// drop low-priority fixed columns to preserve Sender + Subject visibility.
-	tTagW := 4
-	tAttW := 3
-	tSizeW := 7
-	tDateW := 16
-	tFixed := timelineFixedCols    // 31 = Select(1) + Date(16) + Size(7) + Att(3) + Tag(4)
-	tNCols := timelineNumCols      // 7
-	const minTimelineVariable = 15 // minimum for usable Sender + Subject
+	// Progressive timeline column hiding: drop optional metadata before letting
+	// the sender and subject stop feeling like the primary reading surface.
+	tWhenW := 12
+	tTagW := 8
+	tFixed := 1 + tWhenW + tTagW // Select + When + Tag
+	tNCols := 5                  // Select, Sender, Subject, When, Tag
+	const minTimelineVariable = 30
 
 	timelineAvailable := plan.Timeline.TableWidth
 	calcTimelineVar := func() int {
@@ -843,38 +839,37 @@ func (m *Model) updateTableDimensions(width, height int) {
 		return v
 	}
 
-	if previewWidth > 0 {
-		if calcTimelineVar() < minTimelineVariable && tTagW > 0 {
-			tFixed -= tTagW
-			tNCols--
-			tTagW = 0
-		}
-		if calcTimelineVar() < minTimelineVariable && tAttW > 0 {
-			tFixed -= tAttW
-			tNCols--
-			tAttW = 0
-		}
-		if calcTimelineVar() < minTimelineVariable && tSizeW > 0 {
-			tFixed -= tSizeW
-			tNCols--
-			tSizeW = 0
-		}
-		if calcTimelineVar() < minTimelineVariable && tDateW > 0 {
-			tFixed -= tDateW
-			tNCols--
-			tDateW = 0
-		}
+	if calcTimelineVar() < minTimelineVariable && tTagW > 0 {
+		tFixed -= tTagW
+		tNCols--
+		tTagW = 0
+	}
+	if calcTimelineVar() < minTimelineVariable && tWhenW > 0 {
+		tFixed -= tWhenW
+		tNCols--
+		tWhenW = 0
 	}
 
 	timelineVariable := calcTimelineVar()
-	tSenderWidth := timelineVariable * 30 / 100
+	tSenderWidth := timelineVariable * 32 / 100
+	if timelineVariable >= 24 && tSenderWidth < 10 {
+		tSenderWidth = 10
+	}
+	if tSenderWidth > 36 {
+		tSenderWidth = 36
+	}
 	tSubjectWidth := timelineVariable - tSenderWidth
-	if timelineVariable >= 24 {
-		if tSenderWidth < 10 {
-			tSenderWidth = 10
-		}
-		if tSubjectWidth < 14 {
-			tSubjectWidth = 14
+	if timelineVariable >= 24 && tSubjectWidth < 14 {
+		tSubjectWidth = 14
+		tSenderWidth = timelineVariable - tSubjectWidth
+	}
+	if tSenderWidth < 1 {
+		tSenderWidth = 1
+	}
+	if tSubjectWidth < 1 {
+		tSubjectWidth = 1
+		if timelineVariable > 1 {
+			tSenderWidth = timelineVariable - 1
 		}
 	}
 	m.timeline.senderWidth = tSenderWidth
@@ -883,9 +878,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 		{Title: "✓", Width: 1},
 		{Title: "Sender", Width: tSenderWidth},
 		{Title: "Subject", Width: tSubjectWidth},
-		{Title: "Date", Width: tDateW},
-		{Title: "Size KB", Width: tSizeW},
-		{Title: "Att", Width: tAttW},
+		{Title: "When", Width: tWhenW},
 		{Title: "Tag", Width: tTagW},
 	})
 	m.timelineTable.SetWidth(tFixed + tSenderWidth + tSubjectWidth + tNCols*2)

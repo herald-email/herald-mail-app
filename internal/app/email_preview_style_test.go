@@ -9,10 +9,11 @@ import (
 )
 
 func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
 	email := &models.EmailData{
 		Sender:  "Tech Weekly <newsletter@techweekly.example>",
 		Subject: "This Week in Tech",
-		Date:    time.Date(2026, 4, 22, 18, 39, 0, 0, time.UTC),
+		Date:    time.Date(2026, 4, 22, 11, 39, 0, 0, loc),
 	}
 
 	lines := renderPreviewHeaderLines(email, "news", true, 80, true)
@@ -21,7 +22,7 @@ func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T
 
 	for _, want := range []string{
 		"From: Tech Weekly <newsletter@techweekly.example>",
-		"Date: Wed, 22 Apr 2026 18:39",
+		"Date: Wed, Apr 22, 2026 at 11:39 AM",
 		"Subj: This Week in Tech",
 		"Tags: news",
 		"Actions: u unsubscribe  h hide future mail",

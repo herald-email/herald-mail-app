@@ -90,6 +90,27 @@ func TestRenderStyledTableView_CursorHighlight(t *testing.T) {
 	}
 }
 
+func TestRenderStyledTableView_HeaderHasDistinctBackground(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	cols := []table.Column{{Title: "Sender", Width: 12}, {Title: "Subject", Width: 18}}
+	rows := []table.Row{{"Alice", "Hello"}}
+	tbl := table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithHeight(3),
+	)
+	tbl.SetWidth(34)
+
+	out := renderStyledTableViewWithStyles(&tbl, m.activeTableStyle)
+	header := strings.Split(out, "\n")[0]
+	if !strings.Contains(header, "\x1b[48;5;") {
+		t.Fatalf("header should render with a distinct background color, got %q", header)
+	}
+	if strings.Contains(stripANSI(header), "Alice") {
+		t.Fatalf("header line should be visually distinct from body rows, got %q", stripANSI(header))
+	}
+}
+
 // TestRenderStyledTableView_ScrollOffset verifies that when the cursor is below
 // the visible height, earlier rows are not shown (the table has scrolled).
 func TestRenderStyledTableView_ScrollOffset(t *testing.T) {

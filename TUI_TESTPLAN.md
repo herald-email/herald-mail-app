@@ -316,6 +316,26 @@ Check these states during every applicable lane:
 - Key hints reflect list mode vs preview mode correctly.
 - When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `R: reply`, `F: forward`, `D: delete`, and `e: archive`.
 
+### TC-05C — Timeline reading-first row layout
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline with demo data and capture the list.
+2. Confirm the focused row includes a sender, subject, local human date, and tag when width allows.
+3. Select an email with an attachment and confirm the subject cell carries the attachment marker.
+4. Open the split preview, then repeat the captures at `220x50` and `80x24`.
+5. Resize to `50x15`, then back to `80x24`.
+
+**Expect:**
+- Timeline headers do not include `Size KB` or standalone `Att`.
+- Attachment state appears next to the subject for single rows and collapsed threads that contain attachments.
+- Sender and Subject remain the dominant columns; at `80x24` with preview open, optional `Tag` and then `When` may hide before Sender/Subject collapse.
+- Dates use local human labels in the list and a full local human timestamp in the preview header.
+- Header rows are visually distinct from body rows without breaking row selection styling.
+- At `50x15`, the minimum-size guard appears instead of clipped row chrome, and resizing back restores a clean Timeline.
+
 ### TC-05B — Timeline horizontal reading movement
 
 **Lane:** A, B

@@ -43,7 +43,7 @@ func renderStyledTableViewWithStylesAndOptions(t *table.Model, styles table.Styl
 
 	nrows := len(rows)
 	if nrows == 0 {
-		return fitTableLine(renderTableHeader(cols, styles, opts), targetWidth)
+		return fitTableHeaderLine(renderTableHeader(cols, styles, opts), targetWidth, styles)
 	}
 
 	// Compute the visible row window. We keep cursor at the bottom of the
@@ -63,7 +63,7 @@ func renderStyledTableViewWithStylesAndOptions(t *table.Model, styles table.Styl
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fitTableLine(renderTableHeader(cols, styles, opts), targetWidth))
+	sb.WriteString(fitTableHeaderLine(renderTableHeader(cols, styles, opts), targetWidth, styles))
 
 	for i := start; i < end; i++ {
 		row := rows[i]
@@ -97,6 +97,21 @@ func fitTableLine(line string, width int) string {
 	return line
 }
 
+func fitTableHeaderLine(line string, width int, styles table.Styles) string {
+	if width <= 0 {
+		return line
+	}
+	line = ansi.Truncate(line, width, "")
+	if missing := width - ansi.StringWidth(line); missing > 0 {
+		padStyle := lipgloss.NewStyle().
+			Foreground(styles.Header.GetForeground()).
+			Background(styles.Header.GetBackground()).
+			Bold(styles.Header.GetBold())
+		line += padStyle.Render(strings.Repeat(" ", missing))
+	}
+	return line
+}
+
 // renderTableHeader renders the header row using the bubbles table header style.
 func renderTableHeader(cols []table.Column, styles table.Styles, opts tableRenderOptions) string {
 	parts := make([]string, 0, len(cols))
@@ -117,6 +132,7 @@ func renderTableHeader(cols []table.Column, styles table.Styles, opts tableRende
 		if opts.compactLeadingCell && visibleCol == 0 {
 			cellWrapper = cellWrapper.PaddingLeft(0).PaddingRight(0)
 		}
+		cellWrapper = cellWrapper.Background(styles.Header.GetBackground())
 		parts = append(parts, cellWrapper.Render(rendered))
 		visibleCol++
 	}

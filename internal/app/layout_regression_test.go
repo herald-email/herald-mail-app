@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -377,6 +378,62 @@ func TestTimelinePreview_PanelHeightsStayAligned(t *testing.T) {
 	previewLines := strings.Split(previewView, "\n")
 	if len(tableLines) != len(previewLines) {
 		t.Fatalf("expected aligned panel heights, table=%d preview=%d", len(tableLines), len(previewLines))
+	}
+}
+
+func tableColumnTitles(cols []table.Column) []string {
+	titles := make([]string, 0, len(cols))
+	for _, col := range cols {
+		if col.Width > 0 {
+			titles = append(titles, col.Title)
+		}
+	}
+	return titles
+}
+
+func hasColumnTitle(cols []table.Column, title string) bool {
+	for _, col := range cols {
+		if col.Width > 0 && col.Title == title {
+			return true
+		}
+	}
+	return false
+}
+
+func TestTimelineReadingFirstColumnsPrioritizeSenderAndSubject(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTableDimensions(220, 50)
+	m.updateTimelineTable()
+
+	for _, removed := range []string{"Size KB", "Att"} {
+		if hasColumnTitle(m.timelineTable.Columns(), removed) {
+			t.Fatalf("Timeline columns should not include %q: %#v", removed, tableColumnTitles(m.timelineTable.Columns()))
+		}
+	}
+	for _, want := range []string{"✓", "Sender", "Subject", "When", "Tag"} {
+		if !hasColumnTitle(m.timelineTable.Columns(), want) {
+			t.Fatalf("wide Timeline columns should include %q: %#v", want, tableColumnTitles(m.timelineTable.Columns()))
+		}
+	}
+	if m.timeline.senderWidth > 36 {
+		t.Fatalf("wide sender column should be capped so subject stays dominant, senderWidth=%d", m.timeline.senderWidth)
+	}
+	if m.timeline.subjectWidth <= m.timeline.senderWidth {
+		t.Fatalf("subject should be wider than sender, sender=%d subject=%d", m.timeline.senderWidth, m.timeline.subjectWidth)
+	}
+
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.updateTableDimensions(80, 24)
+	m.updateTimelineTable()
+	for _, removed := range []string{"Size KB", "Att", "Tag"} {
+		if hasColumnTitle(m.timelineTable.Columns(), removed) {
+			t.Fatalf("80x24 split Timeline should hide %q before shrinking sender/subject: %#v", removed, tableColumnTitles(m.timelineTable.Columns()))
+		}
+	}
+	if m.timeline.senderWidth < 10 || m.timeline.subjectWidth < 14 {
+		t.Fatalf("80x24 split Timeline should preserve usable sender/subject widths, sender=%d subject=%d", m.timeline.senderWidth, m.timeline.subjectWidth)
 	}
 }
 

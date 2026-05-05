@@ -158,6 +158,24 @@ func TestStyledSender_TruncatesAtMaxWidth(t *testing.T) {
 	}
 }
 
+func TestStyledSender_ReadingFirstShowsNameOnlyWhenNarrow(t *testing.T) {
+	raw := "NerdWallet <nerdwallet@mail.nerdwallet.com>"
+	result := styledSender(raw, 24)
+	stripped := stripANSI(result)
+	if stripped != "NerdWallet" {
+		t.Fatalf("narrow sender cell should show the display name without email noise, got %q", stripped)
+	}
+}
+
+func TestStyledSender_ReadingFirstIncludesEmailWhenWide(t *testing.T) {
+	raw := "NerdWallet <nerdwallet@mail.nerdwallet.com>"
+	result := styledSender(raw, 48)
+	stripped := stripANSI(result)
+	if !strings.Contains(stripped, "NerdWallet") || !strings.Contains(stripped, "nerdwallet@mail.nerdwallet.com") {
+		t.Fatalf("wide sender cell should include name and email, got %q", stripped)
+	}
+}
+
 func TestStyledSender_NoAngleBrackets_PlainFallback(t *testing.T) {
 	raw := "noreply@example.com"
 	result := styledSender(raw, 30)
