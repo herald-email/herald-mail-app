@@ -133,7 +133,7 @@ func TestCleanupManager_ExplainsManualVsScheduledResults(t *testing.T) {
 func TestRuleSavedStatus_ExplainsWhereToFindItAgain(t *testing.T) {
 	m := New(&cleanupDiscoverabilityBackend{}, nil, "", nil, false)
 
-	updated, _ := m.Update(RuleEditorDoneMsg{
+	updated, cmd := m.Update(RuleEditorDoneMsg{
 		Rule: &models.Rule{
 			Name:         "Archive billing mail",
 			TriggerType:  models.TriggerSender,
@@ -142,6 +142,12 @@ func TestRuleSavedStatus_ExplainsWhereToFindItAgain(t *testing.T) {
 		},
 	})
 	m = updated.(*Model)
+	if cmd == nil {
+		t.Fatal("expected dry-run preview command before saving")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(*Model)
+	m = pressKey(t, m, "s")
 
 	if !strings.Contains(m.statusMessage, "Reopen W") {
 		t.Fatalf("expected rule save status to explain where to find it again, got %q", m.statusMessage)

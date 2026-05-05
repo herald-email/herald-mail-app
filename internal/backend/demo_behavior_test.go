@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestDemoBackendFetchesRichFixtureBodies(t *testing.T) {
@@ -119,5 +120,31 @@ func TestDemoBackendContactDetailsUseSameFixtures(t *testing.T) {
 	}
 	if len(emails) == 0 {
 		t.Fatalf("expected recent emails for contact %s", contacts[0].Email)
+	}
+}
+
+func TestDemoBackendSeedsRuleDryRunPreviews(t *testing.T) {
+	b := NewDemoBackend()
+
+	automation, err := b.PreviewRulesDryRun(models.RuleDryRunRequest{
+		Kind:   models.RuleDryRunKindAutomation,
+		Folder: "INBOX",
+	})
+	if err != nil {
+		t.Fatalf("PreviewRulesDryRun: %v", err)
+	}
+	if automation.RuleCount == 0 || automation.ActionCount == 0 || len(automation.Rows) == 0 {
+		t.Fatalf("expected non-empty automation dry-run report, got %+v", automation)
+	}
+
+	cleanup, err := b.PreviewCleanupRulesDryRun(models.RuleDryRunRequest{
+		Kind:       models.RuleDryRunKindCleanup,
+		AllFolders: true,
+	})
+	if err != nil {
+		t.Fatalf("PreviewCleanupRulesDryRun: %v", err)
+	}
+	if cleanup.RuleCount == 0 || cleanup.ActionCount == 0 || len(cleanup.Rows) == 0 {
+		t.Fatalf("expected non-empty cleanup dry-run report, got %+v", cleanup)
 	}
 }

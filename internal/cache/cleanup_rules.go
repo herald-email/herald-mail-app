@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -97,29 +98,40 @@ func (c *Cache) UpdateCleanupRuleLastRun(id int64, t time.Time) error {
 // FindEmailsMatchingCleanupRule returns emails that match the rule's criteria.
 // It filters by sender or domain and restricts to emails older than OlderThanDays.
 func (c *Cache) FindEmailsMatchingCleanupRule(rule *models.CleanupRule) ([]*models.EmailData, error) {
-	var rows *sql.Rows
-	var err error
-
 	baseSelect := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
 		FROM emails
 		WHERE date < datetime('now', ? || ' days')`
 
 	olderThan := fmt.Sprintf("-%d", rule.OlderThanDays)
-
-	switch rule.MatchType {
-	case "sender":
-		rows, err = c.db.Query(baseSelect+` AND sender = ? ORDER BY date DESC`, olderThan, rule.MatchValue)
-	case "domain":
-		domainPattern := "%@" + rule.MatchValue
-		rows, err = c.db.Query(baseSelect+` AND sender LIKE ? ORDER BY date DESC`, olderThan, domainPattern)
-	default:
+	if rule.MatchType != "sender" && rule.MatchType != "domain" {
 		return nil, fmt.Errorf("unknown match_type: %s", rule.MatchType)
 	}
+
+	rows, err := c.db.Query(baseSelect+` ORDER BY date DESC`, olderThan)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return scanEmailRows(rows)
+	emails, err := scanEmailRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []*models.EmailData
+	for _, email := range emails {
+		switch rule.MatchType {
+		case "sender":
+			if strings.EqualFold(email.Sender, rule.MatchValue) ||
+				strings.EqualFold(extractEmailAddress(email.Sender), extractEmailAddress(rule.MatchValue)) {
+				filtered = append(filtered, email)
+			}
+		case "domain":
+			if strings.EqualFold(extractEmailDomain(email.Sender), rule.MatchValue) {
+				filtered = append(filtered, email)
+			}
+		}
+	}
+	return filtered, nil
 }
 
 // --- helpers ---
@@ -129,6 +141,25 @@ func timeToNullable(t *time.Time) interface{} {
 		return nil
 	}
 	return t.Format(time.RFC3339)
+}
+
+func extractEmailAddress(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			return strings.ToLower(strings.TrimSpace(sender[lt+1 : lt+gt]))
+		}
+	}
+	return strings.ToLower(sender)
+}
+
+func extractEmailDomain(sender string) string {
+	addr := extractEmailAddress(sender)
+	at := strings.LastIndex(addr, "@")
+	if at < 0 {
+		return ""
+	}
+	return strings.ToLower(addr[at+1:])
 }
 
 // scanCleanupRule scans a single *sql.Row into a CleanupRule.

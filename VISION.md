@@ -245,6 +245,7 @@ When an email matches a category, the system can trigger an action automatically
 - [x] Auto-classify new emails as they arrive to trigger rules in real time
 - [x] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
 - [ ] Rule overlay explains that `W` creates future-mail automations, shows saved rules in the same screen, and tells the user where the action results surface
+- [x] Rule editor dry-run preview shows matched cached messages and planned actions before users save or enable move/archive/delete automation
 
 #### Example configuration
 
@@ -355,8 +356,9 @@ Rules let the app automatically act on email from known senders — delete newsl
 - [x] Manual rule execution (`run_cleanup_rules` trigger)
 - [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`; TUI-only — daemon runs rules on-demand via `/v1/cleanup-rules/run`)
 - [x] TUI rule manager (list, add, remove)
-- [x] MCP tools: `list_cleanup_rules`, `create_cleanup_rule`, `run_cleanup_rules`
+- [x] MCP tools: `list_cleanup_rules`, `create_cleanup_rule`, `dry_run_cleanup_rules`, `run_cleanup_rules`
 - [ ] Cleanup rule manager explains what manual vs scheduled cleanup does, where saved rules live, and how run results become visible
+- [x] Cleanup rule dry-run preview shows selected/all rule matches and requires confirmation before live archive/delete execution
 
 ---
 

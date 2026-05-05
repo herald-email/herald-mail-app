@@ -37,8 +37,12 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 | `C` | Cleanup | Cleanup manager closed. | Opens cleanup manager. |
 | `n` | Cleanup manager list | Manager open. | Creates a new cleanup rule. |
 | `enter` | Cleanup manager list | A rule exists. | Edits selected cleanup rule. |
+| `p` | Cleanup manager list | A rule exists. | Opens dry-run preview for the selected cleanup rule. |
 | `d` / `D` | Cleanup manager list | A rule exists. | Deletes selected cleanup rule. |
-| `r` | Cleanup manager list | Manager open. | Runs all cleanup rules immediately. |
+| `r` | Cleanup manager list | Manager open. | Opens dry-run preview for all enabled cleanup rules. |
+| `s` | Automation or cleanup dry-run preview | Preview was opened from a new or edited rule. | Saves the staged rule disabled. |
+| `E` | Automation or cleanup dry-run preview | Preview was opened from a new or edited rule. | Enables the staged rule after confirmation for move/archive/delete or external actions. |
+| `R` | Cleanup dry-run preview | Preview is visible and Herald is not launched with `--dry-run`. | Prompts for confirmation before live archive/delete execution. |
 | `j` / `down` | Cleanup manager list | Manager open. | Moves down. |
 | `k` / `up` | Cleanup manager list | Manager open. | Moves up. |
 | `esc` | Cleanup manager | Manager open. | Closes list or cancels edit form back to list. |
@@ -54,7 +58,8 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 5. Enter trigger value.
 6. Select one or more actions.
 7. Fill details for move, webhook, command, or notification actions.
-8. Complete the form to save.
+8. Complete the form to open the dry-run preview.
+9. Review the matched messages and planned actions before saving disabled or enabling the rule.
 
 ### Create a Custom AI Prompt
 
@@ -72,9 +77,11 @@ Custom prompts are reusable instructions. A rule or MCP tool must invoke a saved
 1. Open Cleanup with `3`.
 2. Press `C`.
 3. Press `n`.
-4. Fill rule name, match type, match value, action, older-than days, and enabled state.
-5. Save the form.
-6. Press `r` in the manager list to run all rules immediately, or rely on configured scheduling.
+4. Fill rule name, match type, match value, action, older-than days, and intended enabled state.
+5. Complete the form to open the dry-run preview.
+6. Save disabled with `s`, or enable with `E` after confirmation for archive/delete rules.
+7. Later, press `p` to preview the selected saved rule or `r` to preview all enabled rules.
+8. From the dry-run preview, press `R` and confirm before running archive/delete live, or rely on configured scheduling.
 
 ### Configure Scheduled Cleanup
 
@@ -92,8 +99,9 @@ Custom prompts are reusable instructions. A rule or MCP tool must invoke a saved
 | Prompt validation | Prompt name is required. |
 | No cleanup rules | Cleanup manager explains that `n` creates one. |
 | Disabled cleanup rule | Manager list marks the rule disabled and scheduled runs skip it. |
-| Run all | Cleanup manager emits an immediate run request for all rules. |
-| Dry-run mode | Status shows `[DRY RUN]` so rule effects can be inspected without live mutation when launched in that mode. |
+| Dry-run preview | Preview shows matched messages, sender/domain/category, folder, and planned action without mutating mail. |
+| Run all | Cleanup manager opens a dry-run preview for enabled rules before live execution is available. |
+| Dry-run mode | Status shows `[DRY RUN]`; live cleanup execution from preview is blocked until Herald is relaunched without dry-run mode. |
 | AI unavailable | AI-category triggers and custom prompt execution cannot classify new content. |
 | Dangerous actions | Delete, shell command, and webhook actions can affect mail or external systems. |
 
@@ -109,7 +117,7 @@ If a custom prompt saves but appears to do nothing, remember that saved prompts 
 
 If cleanup rules do not run on schedule, check `cleanup.schedule_hours` and confirm the app or daemon surface responsible for scheduled work is active.
 
-If experimenting with delete rules, use dry-run mode when available and verify the status bar before enabling live cleanup.
+If experimenting with delete rules, use the dry-run preview first. In global `--dry-run` mode, preview remains available but live archive/delete execution is intentionally blocked.
 
 ## Screenshot Placeholders
 

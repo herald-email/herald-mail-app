@@ -83,3 +83,50 @@ type RuleActionLogEntry struct {
 	Detail     string
 	ExecutedAt time.Time
 }
+
+type RuleDryRunKind string
+
+const (
+	RuleDryRunKindAutomation RuleDryRunKind = "automation"
+	RuleDryRunKindCleanup    RuleDryRunKind = "cleanup"
+)
+
+// RuleDryRunRequest describes the preview scope for rule planning. RuleID==0
+// means all supplied rules. AllFolders=true means Folder is only descriptive.
+type RuleDryRunRequest struct {
+	Kind            RuleDryRunKind `json:"kind"`
+	RuleID          int64          `json:"rule_id,omitempty"`
+	Folder          string         `json:"folder,omitempty"`
+	AllFolders      bool           `json:"all_folders,omitempty"`
+	IncludeDisabled bool           `json:"include_disabled,omitempty"`
+	Rule            *Rule          `json:"rule,omitempty"`
+	CleanupRule     *CleanupRule   `json:"cleanup_rule,omitempty"`
+}
+
+// RuleDryRunReport is the structured, side-effect-free preview returned to UI,
+// daemon, and MCP callers before live rule actions are allowed.
+type RuleDryRunReport struct {
+	Kind        RuleDryRunKind  `json:"kind"`
+	Scope       string          `json:"scope"`
+	Folder      string          `json:"folder,omitempty"`
+	RuleCount   int             `json:"rule_count"`
+	MatchCount  int             `json:"match_count"`
+	ActionCount int             `json:"action_count"`
+	DryRun      bool            `json:"dry_run"`
+	GeneratedAt time.Time       `json:"generated_at"`
+	Rows        []RuleDryRunRow `json:"rows"`
+}
+
+type RuleDryRunRow struct {
+	RuleID    int64     `json:"rule_id"`
+	RuleName  string    `json:"rule_name"`
+	MessageID string    `json:"message_id"`
+	Sender    string    `json:"sender"`
+	Domain    string    `json:"domain"`
+	Category  string    `json:"category,omitempty"`
+	Folder    string    `json:"folder"`
+	Subject   string    `json:"subject"`
+	Date      time.Time `json:"date"`
+	Action    string    `json:"action"`
+	Target    string    `json:"target,omitempty"`
+}

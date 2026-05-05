@@ -556,6 +556,11 @@ func (b *RemoteBackend) GetEnabledRules() ([]*models.Rule, error) {
 	return rules, b.get("/v1/rules", &rules)
 }
 
+func (b *RemoteBackend) GetAllRules() ([]*models.Rule, error) {
+	var rules []*models.Rule
+	return rules, b.get("/v1/rules/all", &rules)
+}
+
 func (b *RemoteBackend) SaveRule(r *models.Rule) error {
 	return b.post("/v1/rules", r)
 }
@@ -582,6 +587,14 @@ func (b *RemoteBackend) TouchRuleLastTriggered(ruleID int64) error {
 // SaveCustomCategory is not exposed by the daemon API; returns nil (silently dropped).
 func (b *RemoteBackend) SaveCustomCategory(messageID string, promptID int64, result string) error {
 	return nil
+}
+
+func (b *RemoteBackend) PreviewRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	var report models.RuleDryRunReport
+	if err := b.postOut("/v1/rules/dry-run", req, &report); err != nil {
+		return nil, err
+	}
+	return &report, nil
 }
 
 // ── Custom prompts ────────────────────────────────────────────────────────────
@@ -666,15 +679,24 @@ func (b *RemoteBackend) GetSyncStatus() (map[string]models.FolderStatus, error) 
 // --- Cleanup rules ---
 
 func (b *RemoteBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {
-	return nil, fmt.Errorf("not supported via remote backend")
+	var rules []*models.CleanupRule
+	return rules, b.get("/v1/cleanup-rules", &rules)
 }
 
 func (b *RemoteBackend) SaveCleanupRule(rule *models.CleanupRule) error {
-	return fmt.Errorf("not supported via remote backend")
+	return b.post("/v1/cleanup-rules", rule)
 }
 
 func (b *RemoteBackend) DeleteCleanupRule(id int64) error {
-	return fmt.Errorf("not supported via remote backend")
+	return b.delete(fmt.Sprintf("/v1/cleanup-rules/%d", id))
+}
+
+func (b *RemoteBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	var report models.RuleDryRunReport
+	if err := b.postOut("/v1/cleanup-rules/dry-run", req, &report); err != nil {
+		return nil, err
+	}
+	return &report, nil
 }
 
 // --- Reply / Forward / Attachments ---

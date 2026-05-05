@@ -1179,13 +1179,15 @@ Check these states during every applicable lane:
 1. Open Cleanup with the sender summary focused.
 2. Verify the hint bar, then move focus to the sidebar, select another folder, and return to the sender summary.
 3. Open the rule editor (`W`) and the prompt editor (`P`) from Cleanup.
-4. Capture each state.
+4. From the rule editor, complete a rule far enough to open dry-run preview; from Cleanup manager, open dry-run preview for cleanup rules.
+5. Capture each state.
 
 **Expect:**
 - The sender summary remains keyboard-navigable after selecting a folder from the sidebar.
 - The narrow Cleanup hint bar still exposes navigation plus `W`, `C`, and `P`.
 - Rule and prompt overlays stay fully inside the viewport instead of clipping off the top or bottom.
 - Rule, cleanup, and prompt overlays explain what they do, what saving or running them changes, and where the user can come back to review saved items or results.
+- Dry-run preview overlays stay fully inside the viewport, show `[DRY RUN]`, and keep planned action/message rows readable.
 
 ### TC-37 — Cleanup overlays explain saved-item discovery
 
@@ -1208,6 +1210,27 @@ Check these states during every applicable lane:
 - `P` tells users that prompt results are stored per email in custom category storage/MCP results.
 - `P` shows a visible inventory or summary of saved prompts in the same screen.
 - `C` explains that cleanup rules run on demand or on schedule and that saved cleanup rules live in that manager.
+
+### TC-37A — Rules dry-run previews gate live actions
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start Herald in demo mode and open Cleanup.
+2. Open the automation rule overlay with `W`, create or use a prefilled rule, and open the dry-run preview.
+3. Verify the preview rows, then save disabled with `s` or enable with `E` only after reading the confirmation.
+4. Open the cleanup rules manager with `C`.
+5. Press `p` to preview the selected cleanup rule and `r` to preview all enabled cleanup rules.
+6. In normal mode, press `R` from the cleanup dry-run preview and stop at the live-run confirmation.
+7. Repeat with `--dry-run`; press `R` and confirm the UI refuses live execution.
+
+**Expect:**
+- Automation and cleanup dry-run previews show matched messages, count, sender/domain/category, folder, and planned action.
+- Dry-run previews never mutate mail, update `last_run`, write rule action logs, or call external actions.
+- Cleanup archive/delete/move execution is unavailable until a preview is visible and the user explicitly confirms.
+- In global `--dry-run` mode, the preview remains available but live cleanup run is blocked with relaunch guidance.
+- At `50x15`, the minimum-size guard appears and resizing larger restores the dry-run preview cleanly.
 
 ### TC-38 — All Mail only stays folder-unassigned
 

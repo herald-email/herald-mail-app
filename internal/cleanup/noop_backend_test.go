@@ -88,6 +88,7 @@ func (noopBackend) StopPolling()                                                
 func (noopBackend) ValidIDsCh() <-chan map[string]bool                            { return nil }
 func (noopBackend) MoveEmail(messageID, fromFolder, toFolder string) error        { return nil }
 func (noopBackend) SaveRule(r *models.Rule) error                                 { return nil }
+func (noopBackend) GetAllRules() ([]*models.Rule, error)                          { return nil, nil }
 func (noopBackend) GetEnabledRules() ([]*models.Rule, error)                      { return nil, nil }
 func (noopBackend) DeleteRule(id int64) error                                     { return nil }
 func (noopBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error)          { return nil, nil }
@@ -97,6 +98,9 @@ func (noopBackend) AppendActionLog(entry *models.RuleActionLogEntry) error      
 func (noopBackend) TouchRuleLastTriggered(ruleID int64) error                     { return nil }
 func (noopBackend) SaveCustomCategory(messageID string, promptID int64, result string) error {
 	return nil
+}
+func (noopBackend) PreviewRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	return nil, nil
 }
 func (noopBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
 	return nil, nil
@@ -120,15 +124,18 @@ func (noopBackend) UpsertContacts(addrs []models.ContactAddr, direction string) 
 func (noopBackend) GetAllCleanupRules() ([]*models.CleanupRule, error)                { return nil, nil }
 func (noopBackend) SaveCleanupRule(rule *models.CleanupRule) error                    { return nil }
 func (noopBackend) DeleteCleanupRule(id int64) error                                  { return nil }
-func (noopBackend) RecordUnsubscribe(_, _, _ string) error                            { return nil }
-func (noopBackend) IsUnsubscribedSender(_ string) (bool, error)                       { return false, nil }
-func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error)            { return 0, "", nil }
-func (noopBackend) SaveRawDraft(_ []byte) (uint32, string, error)                     { return 0, "", nil }
-func (noopBackend) ListDrafts() ([]*models.Draft, error)                              { return nil, nil }
-func (noopBackend) DeleteDraft(_ uint32, _ string) error                              { return nil }
-func (noopBackend) SendDraft(_ uint32, _ string) error                                { return nil }
-func (noopBackend) ReplyToEmail(_, _ string) error                                    { return nil }
-func (noopBackend) ForwardEmail(_, _, _ string) error                                 { return nil }
+func (noopBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	return nil, nil
+}
+func (noopBackend) RecordUnsubscribe(_, _, _ string) error                 { return nil }
+func (noopBackend) IsUnsubscribedSender(_ string) (bool, error)            { return false, nil }
+func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) { return 0, "", nil }
+func (noopBackend) SaveRawDraft(_ []byte) (uint32, string, error)          { return 0, "", nil }
+func (noopBackend) ListDrafts() ([]*models.Draft, error)                   { return nil, nil }
+func (noopBackend) DeleteDraft(_ uint32, _ string) error                   { return nil }
+func (noopBackend) SendDraft(_ uint32, _ string) error                     { return nil }
+func (noopBackend) ReplyToEmail(_, _ string) error                         { return nil }
+func (noopBackend) ForwardEmail(_, _, _ string) error                      { return nil }
 func (noopBackend) ReplyToEmailWithOptions(_ string, _ models.ReplyEmailOptions) error {
 	return nil
 }

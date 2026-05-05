@@ -22,6 +22,13 @@ type CleanupManagerCloseMsg struct{}
 // RuleID == 0 means run all rules.
 type CleanupRunNowMsg struct{ RuleID int64 }
 
+// CleanupDryRunMsg opens a structured dry-run preview for cleanup rules.
+// RuleID == 0 means preview all enabled rules.
+type CleanupDryRunMsg struct {
+	RuleID      int64
+	CleanupRule *models.CleanupRule
+}
+
 // cleanupManagerState tracks the sub-state of the cleanup manager overlay.
 type cleanupManagerState int
 
@@ -131,7 +138,7 @@ func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 				MatchType:     "sender",
 				Action:        "delete",
 				OlderThanDays: 30,
-				Enabled:       true,
+				Enabled:       false,
 				CreatedAt:     time.Now(),
 			}
 			m.formName = ""
@@ -139,7 +146,7 @@ func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 			m.formMatchValue = ""
 			m.formAction = "delete"
 			m.formOlderThanDays = "30"
-			m.formEnabled = true
+			m.formEnabled = false
 			m.buildForm()
 			m.state = cleanupManagerEdit
 			return m, m.form.Init()
@@ -151,8 +158,8 @@ func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 			if m.cursor >= len(m.rules) {
 				m.cursor = len(m.rules) - 1
 			}
-			rule := m.rules[m.cursor]
-			m.editing = rule
+			rule := *m.rules[m.cursor]
+			m.editing = &rule
 			m.formName = rule.Name
 			m.formMatchType = rule.MatchType
 			m.formMatchValue = rule.MatchValue
@@ -180,7 +187,16 @@ func (m *CleanupManager) updateList(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 			return m, nil
 
 		case "r":
-			return m, func() tea.Msg { return CleanupRunNowMsg{RuleID: 0} }
+			return m, func() tea.Msg { return CleanupDryRunMsg{RuleID: 0} }
+
+		case "p":
+			if len(m.rules) == 0 {
+				return m, nil
+			}
+			if m.cursor >= len(m.rules) {
+				m.cursor = len(m.rules) - 1
+			}
+			return m, func() tea.Msg { return CleanupDryRunMsg{RuleID: m.rules[m.cursor].ID} }
 
 		case "j", "down":
 			if m.cursor < len(m.rules)-1 {
@@ -216,7 +232,6 @@ func (m *CleanupManager) updateEdit(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 	}
 
 	if m.form.State == huh.StateCompleted {
-		// Save the rule
 		rule := m.editing
 		rule.Name = m.formName
 		rule.MatchType = m.formMatchType
@@ -231,14 +246,11 @@ func (m *CleanupManager) updateEdit(msg tea.Msg) (*CleanupManager, tea.Cmd) {
 		if rule.CreatedAt.IsZero() {
 			rule.CreatedAt = time.Now()
 		}
-		_ = m.backend.SaveCleanupRule(rule)
-
-		// Reload rules
-		rules, _ := m.backend.GetAllCleanupRules()
-		m.rules = rules
+		rule.Enabled = false
 		m.state = cleanupManagerList
 		m.form = nil
 		m.editing = nil
+		return m, func() tea.Msg { return CleanupDryRunMsg{CleanupRule: rule} }
 	}
 
 	return m, cmd
@@ -306,7 +318,7 @@ func (m *CleanupManager) viewList(borderStyle, titleStyle lipgloss.Style) string
 	}
 
 	content += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("243")).
-		Render("n: new  enter: edit  d: delete  r: run all  esc: close")
+		Render("n: new  enter: edit  d: delete  p: preview  r: preview all  esc: close")
 
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,

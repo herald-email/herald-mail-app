@@ -17,6 +17,7 @@ type mockStore struct {
 	rules           []*models.Rule
 	prompts         map[int64]*models.CustomPrompt
 	log             []*models.RuleActionLogEntry
+	touched         []int64
 	savedCategories map[string]string // "messageID:promptID" -> result
 }
 
@@ -45,7 +46,10 @@ func (m *mockStore) AppendActionLog(e *models.RuleActionLogEntry) error {
 	return nil
 }
 
-func (m *mockStore) TouchRuleLastTriggered(int64) error { return nil }
+func (m *mockStore) TouchRuleLastTriggered(ruleID int64) error {
+	m.touched = append(m.touched, ruleID)
+	return nil
+}
 
 // --- mock Executor ---
 
@@ -116,6 +120,15 @@ func TestMatchRule_Sender(t *testing.T) {
 	rule.TriggerValue = "bob@example.com"
 	if MatchRule(rule, email, "") {
 		t.Error("expected different sender to return false")
+	}
+}
+
+func TestMatchRule_SenderAddressMatchesDisplayNameSender(t *testing.T) {
+	email := makeEmail("Alice Example <alice@example.com>", "Hi", "INBOX", "msg1")
+	rule := makeRule(1, models.TriggerSender, "alice@example.com")
+
+	if !MatchRule(rule, email, "") {
+		t.Error("expected bare sender address to match display-name sender")
 	}
 }
 
@@ -408,12 +421,66 @@ func TestDryRunRulesEngine(t *testing.T) {
 	if len(exec.deleted) != 0 {
 		t.Errorf("dry-run: DeleteEmail should not be called, got %v", exec.deleted)
 	}
-	// Action log entry should record status "ok" (dry-run returns nil error)
-	if len(store.log) != 1 {
-		t.Fatalf("expected 1 action log entry, got %d", len(store.log))
+	// Dry-run should not write action log entries or last-triggered metadata.
+	if len(store.log) != 0 {
+		t.Fatalf("expected no action log entries in dry-run, got %d", len(store.log))
 	}
-	if store.log[0].Status != "ok" {
-		t.Errorf("expected log status ok in dry-run, got %s", store.log[0].Status)
+	if len(store.touched) != 0 {
+		t.Fatalf("expected dry-run not to touch last_triggered, got %v", store.touched)
+	}
+}
+
+func TestPlanDryRunBuildsStructuredAutomationRows(t *testing.T) {
+	email := makeEmail("Packet Press <newsletter@packetpress.example>", "Weekly systems digest", "INBOX", "msg-newsletter")
+	email.Date = time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+
+	rules := []*models.Rule{
+		makeRule(7, models.TriggerSender, "newsletter@packetpress.example", models.RuleAction{Type: models.ActionArchive}),
+		makeRule(8, models.TriggerDomain, "packetpress.example", models.RuleAction{Type: models.ActionMove, DestFolder: "Newsletters"}),
+		makeRule(9, models.TriggerCategory, "Newsletter", models.RuleAction{Type: models.ActionNotify}),
+	}
+
+	report, err := PlanDryRun(models.RuleDryRunRequest{
+		Kind:   models.RuleDryRunKindAutomation,
+		Folder: "INBOX",
+	}, rules, []*models.EmailData{email}, map[string]string{
+		"msg-newsletter": "Newsletter",
+	})
+	if err != nil {
+		t.Fatalf("PlanDryRun: %v", err)
+	}
+
+	if report.RuleCount != 3 {
+		t.Fatalf("RuleCount = %d, want 3", report.RuleCount)
+	}
+	if report.MatchCount != 1 {
+		t.Fatalf("MatchCount = %d, want 1", report.MatchCount)
+	}
+	if report.ActionCount != 3 {
+		t.Fatalf("ActionCount = %d, want 3", report.ActionCount)
+	}
+	if len(report.Rows) != 3 {
+		t.Fatalf("len(Rows) = %d, want 3", len(report.Rows))
+	}
+	for _, row := range report.Rows {
+		if row.MessageID != "msg-newsletter" {
+			t.Errorf("row MessageID = %q, want msg-newsletter", row.MessageID)
+		}
+		if row.Sender != email.Sender {
+			t.Errorf("row Sender = %q, want %q", row.Sender, email.Sender)
+		}
+		if row.Domain != "packetpress.example" {
+			t.Errorf("row Domain = %q, want packetpress.example", row.Domain)
+		}
+		if row.Category != "Newsletter" {
+			t.Errorf("row Category = %q, want Newsletter", row.Category)
+		}
+		if row.Folder != "INBOX" {
+			t.Errorf("row Folder = %q, want INBOX", row.Folder)
+		}
+		if row.Subject != email.Subject {
+			t.Errorf("row Subject = %q, want %q", row.Subject, email.Subject)
+		}
 	}
 }
 

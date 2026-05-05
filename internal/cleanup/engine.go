@@ -2,6 +2,9 @@ package cleanup
 
 import (
 	"context"
+	"fmt"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -30,61 +33,226 @@ func NewEngineWithDryRun(c *cache.Cache, b backend.Backend, l *logger.Logger, dr
 
 // RunRule executes one cleanup rule. Returns count of emails processed.
 func (e *Engine) RunRule(ctx context.Context, rule *models.CleanupRule) (int, error) {
-	emails, err := e.cache.FindEmailsMatchingCleanupRule(rule)
+	results, err := e.runPlanned(ctx, models.RuleDryRunRequest{
+		Kind:            models.RuleDryRunKindCleanup,
+		RuleID:          rule.ID,
+		AllFolders:      true,
+		IncludeDisabled: true,
+	}, []*models.CleanupRule{rule})
 	if err != nil {
 		return 0, err
 	}
+	return results[rule.ID], nil
+}
 
-	count := 0
-	for _, email := range emails {
+func (e *Engine) runPlanned(ctx context.Context, req models.RuleDryRunRequest, rules []*models.CleanupRule) (map[int64]int, error) {
+	report, err := PlanDryRun(e.cache, req, rules)
+	if err != nil {
+		return nil, err
+	}
+
+	rulesByID := make(map[int64]*models.CleanupRule, len(rules))
+	results := make(map[int64]int, len(rules))
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		rulesByID[rule.ID] = rule
+		results[rule.ID] = 0
+	}
+
+	processedMessages := make(map[string]bool)
+	for _, row := range report.Rows {
 		select {
 		case <-ctx.Done():
-			return count, ctx.Err()
+			return results, ctx.Err()
 		default:
 		}
 
+		rule := rulesByID[row.RuleID]
+		if rule == nil {
+			continue
+		}
+		if processedMessages[row.MessageID] {
+			e.log.Info("cleanup rule %d: skipped email %s because an earlier previewed action already handled it", rule.ID, row.MessageID)
+			continue
+		}
 		if e.dryRun {
-			e.log.Info("[DRY RUN] Would %s email %s (rule: %s)", rule.Action, email.MessageID, rule.Name)
-			count++
+			e.log.Info("[DRY RUN] Would %s email %s (rule: %s)", rule.Action, row.MessageID, rule.Name)
+			results[rule.ID]++
 			continue
 		}
 		var actionErr error
 		if rule.Action == "delete" {
-			actionErr = e.backend.DeleteEmail(email.MessageID, email.Folder)
+			actionErr = e.backend.DeleteEmail(row.MessageID, row.Folder)
 		} else {
-			actionErr = e.backend.MoveEmail(email.MessageID, email.Folder, "Archive")
+			actionErr = e.backend.MoveEmail(row.MessageID, row.Folder, "Archive")
 		}
 		if actionErr != nil {
-			e.log.Debug("cleanup rule %d: failed to %s email %s: %v", rule.ID, rule.Action, email.MessageID, actionErr)
+			e.log.Debug("cleanup rule %d: failed to %s email %s: %v", rule.ID, rule.Action, row.MessageID, actionErr)
 			continue
 		}
-		count++
+		processedMessages[row.MessageID] = true
+		results[rule.ID]++
+	}
+
+	if e.dryRun {
+		return results, nil
 	}
 
 	now := time.Now()
-	if err := e.cache.UpdateCleanupRuleLastRun(rule.ID, now); err != nil {
-		e.log.Debug("cleanup: failed to update last_run for rule %d: %v", rule.ID, err)
+	for _, rule := range rules {
+		if rule == nil || rule.ID == 0 {
+			continue
+		}
+		if err := e.cache.UpdateCleanupRuleLastRun(rule.ID, now); err != nil {
+			e.log.Debug("cleanup: failed to update last_run for rule %d: %v", rule.ID, err)
+		}
 	}
-	return count, nil
+	return results, nil
+}
+
+type cleanupPlannerCache interface {
+	FindEmailsMatchingCleanupRule(*models.CleanupRule) ([]*models.EmailData, error)
+}
+
+// PlanDryRun builds a structured cleanup-rule preview without mutating IMAP
+// mail, cache rows, or cleanup rule last_run metadata.
+func PlanDryRun(c cleanupPlannerCache, req models.RuleDryRunRequest, rules []*models.CleanupRule) (*models.RuleDryRunReport, error) {
+	if req.Kind == "" {
+		req.Kind = models.RuleDryRunKindCleanup
+	}
+	report := &models.RuleDryRunReport{
+		Kind:        req.Kind,
+		Scope:       cleanupDryRunScope(req),
+		Folder:      req.Folder,
+		DryRun:      true,
+		GeneratedAt: time.Now(),
+	}
+
+	selected := make([]*models.CleanupRule, 0, len(rules))
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		if req.RuleID != 0 && rule.ID != req.RuleID {
+			continue
+		}
+		if !req.IncludeDisabled && !rule.Enabled {
+			continue
+		}
+		selected = append(selected, rule)
+	}
+	report.RuleCount = len(selected)
+
+	matches := make(map[string]bool)
+	for _, rule := range selected {
+		emails, err := c.FindEmailsMatchingCleanupRule(rule)
+		if err != nil {
+			return nil, err
+		}
+		for _, email := range emails {
+			if email == nil {
+				continue
+			}
+			if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
+				continue
+			}
+			matches[email.MessageID] = true
+			report.Rows = append(report.Rows, models.RuleDryRunRow{
+				RuleID:    rule.ID,
+				RuleName:  cleanupRuleName(rule),
+				MessageID: email.MessageID,
+				Sender:    email.Sender,
+				Domain:    senderDomain(email.Sender),
+				Folder:    email.Folder,
+				Subject:   email.Subject,
+				Date:      email.Date,
+				Action:    rule.Action,
+				Target:    cleanupActionTarget(rule.Action),
+			})
+		}
+	}
+	report.MatchCount = len(matches)
+	report.ActionCount = len(report.Rows)
+	return report, nil
+}
+
+func cleanupDryRunScope(req models.RuleDryRunRequest) string {
+	scope := "selected"
+	if req.RuleID == 0 {
+		scope = "all"
+	}
+	if req.AllFolders {
+		return scope + " cleanup rules / all folders"
+	}
+	if req.Folder != "" {
+		return scope + " cleanup rules / " + req.Folder
+	}
+	return scope + " cleanup rules"
+}
+
+func cleanupRuleName(rule *models.CleanupRule) string {
+	if strings.TrimSpace(rule.Name) != "" {
+		return rule.Name
+	}
+	return fmt.Sprintf("%s:%s", rule.MatchType, rule.MatchValue)
+}
+
+func cleanupActionTarget(action string) string {
+	if action == "delete" {
+		return "Trash"
+	}
+	return "Archive"
+}
+
+func senderAddress(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if sender == "" {
+		return ""
+	}
+	if addr, err := mail.ParseAddress(sender); err == nil && addr.Address != "" {
+		return strings.ToLower(strings.TrimSpace(addr.Address))
+	}
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			return strings.ToLower(strings.TrimSpace(sender[lt+1 : lt+gt]))
+		}
+	}
+	return strings.ToLower(sender)
+}
+
+func senderDomain(sender string) string {
+	sender = senderAddress(sender)
+	at := strings.LastIndex(sender, "@")
+	if at < 0 {
+		return ""
+	}
+	return strings.ToLower(sender[at+1:])
 }
 
 // RunAll runs all enabled rules and returns a map of ruleID -> count.
 func (e *Engine) RunAll(ctx context.Context) (map[int64]int, error) {
+	return e.Run(ctx, models.RuleDryRunRequest{Kind: models.RuleDryRunKindCleanup, AllFolders: true})
+}
+
+// Run executes cleanup rules in the same rule scope used by dry-run preview.
+func (e *Engine) Run(ctx context.Context, req models.RuleDryRunRequest) (map[int64]int, error) {
 	rules, err := e.cache.GetAllCleanupRules()
 	if err != nil {
 		return nil, err
 	}
 
-	results := make(map[int64]int)
+	selected := make([]*models.CleanupRule, 0, len(rules))
 	for _, rule := range rules {
+		if req.RuleID != 0 && rule.ID != req.RuleID {
+			continue
+		}
 		if !rule.Enabled {
 			continue
 		}
-		n, err := e.RunRule(ctx, rule)
-		if err != nil {
-			e.log.Debug("cleanup rule %d failed: %v", rule.ID, err)
-		}
-		results[rule.ID] = n
+		selected = append(selected, rule)
 	}
-	return results, nil
+	req.IncludeDisabled = false
+	return e.runPlanned(ctx, req, selected)
 }

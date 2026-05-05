@@ -98,7 +98,6 @@ func TestDryRunCleanupEngine(t *testing.T) {
 	seedEmail(t, c, "dry-old", "spam@example.com", "INBOX", old)
 
 	rule := &models.CleanupRule{
-		ID:            1,
 		Name:          "dry-run-rule",
 		MatchType:     "sender",
 		MatchValue:    "spam@example.com",
@@ -125,6 +124,68 @@ func TestDryRunCleanupEngine(t *testing.T) {
 	}
 	if len(mb.moved) != 0 {
 		t.Errorf("dry-run: MoveEmail should not be called, got %v", mb.moved)
+	}
+	got, err := c.GetCleanupRule(rule.ID)
+	if err != nil {
+		t.Fatalf("GetCleanupRule: %v", err)
+	}
+	if got.LastRun != nil {
+		t.Fatalf("dry-run should not update last_run, got %v", got.LastRun)
+	}
+}
+
+func TestPlanDryRunBuildsStructuredCleanupRows(t *testing.T) {
+	c := newTestCache(t)
+	old := time.Now().AddDate(0, 0, -45)
+	recent := time.Now().AddDate(0, 0, -2)
+	seedEmail(t, c, "match-old", "Packet Press <newsletter@packetpress.example>", "INBOX", old)
+	seedEmail(t, c, "match-recent", "Packet Press <newsletter@packetpress.example>", "INBOX", recent)
+	seedEmail(t, c, "other-old", "Other <other@example.com>", "INBOX", old)
+
+	rule := &models.CleanupRule{
+		ID:            4,
+		Name:          "Archive old Packet Press",
+		MatchType:     "sender",
+		MatchValue:    "newsletter@packetpress.example",
+		Action:        "archive",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+
+	report, err := PlanDryRun(c, models.RuleDryRunRequest{
+		Kind:   models.RuleDryRunKindCleanup,
+		RuleID: rule.ID,
+		Folder: "INBOX",
+	}, []*models.CleanupRule{rule})
+	if err != nil {
+		t.Fatalf("PlanDryRun: %v", err)
+	}
+
+	if report.RuleCount != 1 {
+		t.Fatalf("RuleCount = %d, want 1", report.RuleCount)
+	}
+	if report.MatchCount != 1 {
+		t.Fatalf("MatchCount = %d, want 1", report.MatchCount)
+	}
+	if report.ActionCount != 1 {
+		t.Fatalf("ActionCount = %d, want 1", report.ActionCount)
+	}
+	if len(report.Rows) != 1 {
+		t.Fatalf("len(Rows) = %d, want 1", len(report.Rows))
+	}
+	row := report.Rows[0]
+	if row.MessageID != "match-old" {
+		t.Fatalf("MessageID = %q, want match-old", row.MessageID)
+	}
+	if row.Action != "archive" {
+		t.Fatalf("Action = %q, want archive", row.Action)
+	}
+	if row.Domain != "packetpress.example" {
+		t.Fatalf("Domain = %q, want packetpress.example", row.Domain)
+	}
+	if row.Folder != "INBOX" {
+		t.Fatalf("Folder = %q, want INBOX", row.Folder)
 	}
 }
 
@@ -173,5 +234,57 @@ func TestRunAll_SkipsDisabled(t *testing.T) {
 	// Disabled rule should not appear in results
 	if _, ok := results[disabled.ID]; ok {
 		t.Error("disabled rule should not appear in results")
+	}
+}
+
+func TestRunAll_SkipsOverlappingRowsAfterFirstAction(t *testing.T) {
+	c := newTestCache(t)
+	mb := &mockBackend{}
+	engine := NewEngine(c, mb, nil)
+
+	old := time.Now().AddDate(0, 0, -40)
+	seedEmail(t, c, "overlap", "Spam Team <spam@example.com>", "INBOX", old)
+
+	first := &models.CleanupRule{
+		Name:          "Delete sender",
+		MatchType:     "sender",
+		MatchValue:    "spam@example.com",
+		Action:        "delete",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+	second := &models.CleanupRule{
+		Name:          "Archive domain",
+		MatchType:     "domain",
+		MatchValue:    "example.com",
+		Action:        "archive",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+	if err := c.SaveCleanupRule(first); err != nil {
+		t.Fatalf("SaveCleanupRule first: %v", err)
+	}
+	if err := c.SaveCleanupRule(second); err != nil {
+		t.Fatalf("SaveCleanupRule second: %v", err)
+	}
+
+	results, err := engine.RunAll(context.Background())
+	if err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+
+	if results[first.ID] != 1 {
+		t.Fatalf("first rule count = %d, want 1", results[first.ID])
+	}
+	if results[second.ID] != 0 {
+		t.Fatalf("second overlapping rule count = %d, want 0 skipped", results[second.ID])
+	}
+	if len(mb.deleted) != 1 || mb.deleted[0] != "overlap" {
+		t.Fatalf("deleted = %v, want [overlap]", mb.deleted)
+	}
+	if len(mb.moved) != 0 {
+		t.Fatalf("overlapping skipped row should not move mail, moved = %v", mb.moved)
 	}
 }

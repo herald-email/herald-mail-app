@@ -22,6 +22,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/cleanup"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
@@ -1606,6 +1607,41 @@ func Run(commandName string, args []string) error {
 				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
 			}
 			return mcp.NewToolResultText(fmt.Sprintf("Created cleanup rule: %s", string(respBody))), nil
+		},
+	)
+
+	// Tool: run_cleanup_rules
+	s.AddTool(
+		mcp.NewTool("dry_run_cleanup_rules",
+			mcp.WithDescription("Preview cleanup rule matches without mutating mail or updating rule metadata"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithNumber("rule_id",
+				mcp.Description("Optional cleanup rule ID to preview; omitted means all enabled rules"),
+			),
+			mcp.WithString("folder",
+				mcp.Description("Optional folder filter; omitted means all cached folders"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			folder := req.GetString("folder", "")
+			ruleID := int64(req.GetInt("rule_id", 0))
+			rules, err := c.GetAllCleanupRules()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			report, err := cleanup.PlanDryRun(c, models.RuleDryRunRequest{
+				Kind:            models.RuleDryRunKindCleanup,
+				RuleID:          ruleID,
+				Folder:          folder,
+				AllFolders:      folder == "",
+				IncludeDisabled: ruleID != 0,
+			}, rules)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
+			}
+			data, _ := json.Marshal(report)
+			return mcp.NewToolResultText(string(data)), nil
 		},
 	)
 

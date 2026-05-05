@@ -519,8 +519,9 @@ type Model struct {
 	settingsPanel *Settings
 
 	// Rule editor overlay
-	showRuleEditor bool
-	ruleEditor     *RuleEditor
+	showRuleEditor    bool
+	ruleEditor        *RuleEditor
+	ruleDryRunPreview *ruleDryRunPreview
 
 	// Cleanup manager overlay
 	showCleanupMgr   bool
@@ -815,17 +816,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMessage = "Rule not saved: no actions selected"
 				return m, nil
 			}
-			if err := m.backend.SaveRule(msg.Rule); err != nil {
-				m.statusMessage = "Error saving rule: " + err.Error()
-			} else {
-				m.statusMessage = "Rule saved: " + msg.Rule.Name + ". Reopen W to review saved automation rules."
-			}
+			m.statusMessage = "Preparing rule dry-run preview..."
+			return m, m.previewAutomationRuleCmd(msg.Rule)
 		}
 		return m, nil
 
 	case RuleEditorCancelledMsg:
 		m.showRuleEditor = false
 		m.ruleEditor = nil
+		return m, nil
+
+	case RuleDryRunPreviewMsg:
+		if msg.Rule != nil || (msg.Report != nil && msg.Report.Kind == models.RuleDryRunKindAutomation) {
+			m.ruleDryRunPreview = newAutomationDryRunPreview(msg.Report, msg.Rule, msg.Err)
+		} else {
+			m.ruleDryRunPreview = newCleanupDryRunPreview(msg.Report, msg.CleanupRequest, msg.Err)
+			if m.dryRun && m.ruleDryRunPreview.pendingCleanupRule == nil {
+				m.ruleDryRunPreview.liveRunDisabled = true
+			}
+		}
 		return m, nil
 
 	case PromptEditorDoneMsg:
@@ -922,6 +931,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward all messages to the settings panel when it is active (intercepts
 	// key presses and window-size events so the panel handles them exclusively).
+	if m.ruleDryRunPreview != nil {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			model, cmd, handled := m.handleDryRunPreviewKey(key)
+			if handled {
+				return model, cmd
+			}
+		}
+	}
+
+	// Forward all messages to the settings panel when it is active (intercepts
+	// key presses and window-size events so the panel handles them exclusively).
 	if m.showSettings && m.settingsPanel != nil {
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
@@ -943,7 +963,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle cleanup manager messages
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case CleanupManagerOpenMsg:
 		m.cleanupManager = NewCleanupManager(m.backend, m.windowWidth, m.windowHeight)
 		m.showCleanupMgr = true
@@ -964,13 +984,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cleanup.CleanupDoneMsg:
-		doneMsg := msg.(cleanup.CleanupDoneMsg)
 		total := 0
-		for _, n := range doneMsg.Results {
+		for _, n := range msg.Results {
 			total += n
 		}
 		m.statusMessage = fmt.Sprintf("Cleanup complete: %d email(s) processed", total)
 		return m, nil
+
+	case CleanupDryRunMsg:
+		req := models.RuleDryRunRequest{
+			Kind:            models.RuleDryRunKindCleanup,
+			RuleID:          msg.RuleID,
+			CleanupRule:     msg.CleanupRule,
+			AllFolders:      true,
+			IncludeDisabled: msg.RuleID != 0 || msg.CleanupRule != nil,
+		}
+		m.statusMessage = "Preparing cleanup dry-run preview..."
+		return m, m.previewCleanupRulesCmd(req)
 	}
 
 	// Forward all messages to the cleanup manager when it is active.
@@ -1738,6 +1768,10 @@ func (m *Model) View() tea.View {
 	// Settings overlay takes over the entire screen when active.
 	if m.showSettings && m.settingsPanel != nil {
 		return m.settingsPanel.View()
+	}
+	// Rule editor overlay takes over the entire screen when active.
+	if m.ruleDryRunPreview != nil {
+		return m.ruleDryRunPreview.View(m.windowWidth, m.windowHeight)
 	}
 	// Rule editor overlay takes over the entire screen when active.
 	if m.showRuleEditor && m.ruleEditor != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/filesafe"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 )
 
 // Server is the HTTP daemon that exposes the email backend over a REST+SSE API.
@@ -32,6 +34,49 @@ type Server struct {
 	httpSrv     *http.Server
 	startTime   time.Time
 	log         *logger.Logger
+}
+
+func decodeDryRunRequest(r *http.Request) (models.RuleDryRunRequest, error) {
+	var req models.RuleDryRunRequest
+	if r.Body == nil {
+		return req, nil
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		return req, err
+	}
+	return req, nil
+}
+
+func (s *Server) dryRunEmailsAndClassifications(req models.RuleDryRunRequest) ([]*models.EmailData, map[string]string, error) {
+	folders := []string{req.Folder}
+	if req.AllFolders {
+		cachedFolders, err := s.cache.GetCachedFolders()
+		if err != nil {
+			return nil, nil, err
+		}
+		folders = cachedFolders
+	}
+	if len(folders) == 0 || folders[0] == "" {
+		folders = []string{"INBOX"}
+	}
+
+	var emails []*models.EmailData
+	classifications := make(map[string]string)
+	for _, folder := range folders {
+		folderEmails, err := s.cache.GetEmailsSortedByDate(folder)
+		if err != nil {
+			return nil, nil, err
+		}
+		emails = append(emails, folderEmails...)
+		folderClassifications, err := s.cache.GetClassifications(folder)
+		if err != nil {
+			return nil, nil, err
+		}
+		for id, category := range folderClassifications {
+			classifications[id] = category
+		}
+	}
+	return emails, classifications, nil
 }
 
 // New creates a Server from the given config. It initialises the LocalBackend
@@ -433,6 +478,51 @@ func (s *Server) handleGetRules(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, rules)
 }
 
+// handleGetAllRules returns all automation rules, including disabled ones.
+func (s *Server) handleGetAllRules(w http.ResponseWriter, _ *http.Request) {
+	rules, err := s.backend.GetAllRules()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rules)
+}
+
+func (s *Server) handleDryRunRules(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeDryRunRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.Kind = models.RuleDryRunKindAutomation
+	rules := []*models.Rule{}
+	if req.Rule != nil {
+		rules = []*models.Rule{req.Rule}
+		req.IncludeDisabled = true
+	} else {
+		rules, err = s.backend.GetAllRules()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if req.RuleID != 0 {
+			req.IncludeDisabled = true
+		}
+	}
+
+	emails, classifications, err := s.dryRunEmailsAndClassifications(req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	report, err := rulesengine.PlanDryRun(req, rules, emails, classifications)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 // handleSaveRule creates or updates a rule.
 func (s *Server) handleSaveRule(w http.ResponseWriter, r *http.Request) {
 	var rule models.Rule
@@ -629,6 +719,35 @@ func (s *Server) handleDeleteCleanupRule(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleDryRunCleanupRules(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeDryRunRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.Kind = models.RuleDryRunKindCleanup
+	rules := []*models.CleanupRule{}
+	if req.CleanupRule != nil {
+		rules = []*models.CleanupRule{req.CleanupRule}
+		req.IncludeDisabled = true
+	} else {
+		rules, err = s.backend.GetAllCleanupRules()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if req.RuleID != 0 {
+			req.IncludeDisabled = true
+		}
+	}
+	report, err := cleanup.PlanDryRun(s.cache, req, rules)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 // handleClassifyFolder classifies all unclassified emails in a folder.

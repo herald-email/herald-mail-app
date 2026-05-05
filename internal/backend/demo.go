@@ -8,6 +8,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 )
 
 // DemoBackendMarker is detected by the app to show [DEMO] in the status bar.
@@ -21,6 +22,7 @@ type DemoBackend struct {
 	mu                  sync.Mutex
 	emails              []*models.EmailData
 	rules               []*models.Rule
+	cleanupRules        []*models.CleanupRule
 	prompts             []*models.CustomPrompt
 	classifications     map[string]string
 	savedSearches       []*models.SavedSearch
@@ -33,6 +35,7 @@ type DemoBackend struct {
 	bodyCache           map[string]string // messageID → cached body text
 	nextSearchID        int
 	nextRuleID          int64
+	nextCleanupRuleID   int64
 	nextPromptID        int64
 	unsubscribedSenders map[string]bool
 	drafts              []*models.Draft
@@ -46,7 +49,9 @@ var _ Backend = (*DemoBackend)(nil)
 func NewDemoBackend() *DemoBackend {
 	d := &DemoBackend{
 		emails:              seedDemoEmails(),
-		classifications:     make(map[string]string),
+		rules:               seedDemoRules(),
+		cleanupRules:        seedDemoCleanupRules(),
+		classifications:     demo.Classifications(),
 		deletedIDs:          make(map[string]bool),
 		bodyCache:           make(map[string]string),
 		unsubscribedSenders: make(map[string]bool),
@@ -55,10 +60,65 @@ func NewDemoBackend() *DemoBackend {
 		newEmailsCh:         make(chan models.NewEmailsNotification, 10),
 		validIDsCh:          make(chan map[string]bool, 1),
 		nextSearchID:        1,
-		nextRuleID:          1,
+		nextRuleID:          100,
+		nextCleanupRuleID:   100,
 		nextPromptID:        1,
 	}
 	return d
+}
+
+func seedDemoRules() []*models.Rule {
+	return []*models.Rule{
+		{
+			ID:           1,
+			Name:         "Archive Packet Press newsletters",
+			Enabled:      true,
+			TriggerType:  models.TriggerSender,
+			TriggerValue: "newsletter@packetpress.example",
+			Actions: []models.RuleAction{{
+				Type:       models.ActionMove,
+				DestFolder: "Newsletters",
+			}},
+			CreatedAt: time.Now().AddDate(0, 0, -14),
+		},
+		{
+			ID:           2,
+			Name:         "Notify important cloud billing",
+			Enabled:      true,
+			TriggerType:  models.TriggerCategory,
+			TriggerValue: "Important",
+			Actions: []models.RuleAction{{
+				Type:        models.ActionNotify,
+				NotifyTitle: "Important mail",
+			}},
+			CreatedAt: time.Now().AddDate(0, 0, -7),
+		},
+	}
+}
+
+func seedDemoCleanupRules() []*models.CleanupRule {
+	return []*models.CleanupRule{
+		{
+			ID:            1,
+			Name:          "Archive old Packet Press",
+			MatchType:     "sender",
+			MatchValue:    "newsletter@packetpress.example",
+			Action:        "archive",
+			OlderThanDays: 10,
+			Enabled:       true,
+			CreatedAt:     time.Now().AddDate(0, 0, -10),
+		},
+		{
+			ID:            2,
+			Name:          "Delete old travel offers",
+			MatchType:     "domain",
+			MatchValue:    "trailpost.example",
+			Action:        "delete",
+			OlderThanDays: 7,
+			Enabled:       true,
+			CreatedAt:     time.Now().AddDate(0, 0, -10),
+		},
+	}
 }
 
 // IsDemo satisfies DemoBackendMarker.
@@ -662,6 +722,32 @@ func (d *DemoBackend) GetEnabledRules() ([]*models.Rule, error) {
 	return out, nil
 }
 
+func (d *DemoBackend) PreviewRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	rules := d.rules
+	if req.Rule != nil {
+		rules = []*models.Rule{req.Rule}
+		req.IncludeDisabled = true
+	} else if req.RuleID != 0 {
+		req.IncludeDisabled = true
+	}
+
+	emails := make([]*models.EmailData, 0, len(d.emails))
+	for _, email := range d.emails {
+		if email == nil || d.deletedIDs[email.MessageID] {
+			continue
+		}
+		emailCopy := *email
+		emails = append(emails, &emailCopy)
+	}
+	classifications := make(map[string]string, len(d.classifications))
+	for id, category := range d.classifications {
+		classifications[id] = category
+	}
+	return rulesengine.PlanDryRun(req, rules, emails, classifications)
+}
+
 func (d *DemoBackend) DeleteRule(id int64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -785,15 +871,107 @@ func (d *DemoBackend) UpsertContacts(addrs []models.ContactAddr, direction strin
 // --- Cleanup rules ---
 
 func (d *DemoBackend) GetAllCleanupRules() ([]*models.CleanupRule, error) {
-	return nil, nil
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]*models.CleanupRule, len(d.cleanupRules))
+	copy(out, d.cleanupRules)
+	return out, nil
 }
 
 func (d *DemoBackend) SaveCleanupRule(rule *models.CleanupRule) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if rule.ID == 0 {
+		rule.ID = d.nextCleanupRuleID
+		d.nextCleanupRuleID++
+		if rule.CreatedAt.IsZero() {
+			rule.CreatedAt = time.Now()
+		}
+		d.cleanupRules = append(d.cleanupRules, rule)
+		return nil
+	}
+	for i, existing := range d.cleanupRules {
+		if existing.ID == rule.ID {
+			d.cleanupRules[i] = rule
+			return nil
+		}
+	}
+	d.cleanupRules = append(d.cleanupRules, rule)
 	return nil
 }
 
 func (d *DemoBackend) DeleteCleanupRule(id int64) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for i, rule := range d.cleanupRules {
+		if rule.ID == id {
+			d.cleanupRules = append(d.cleanupRules[:i], d.cleanupRules[i+1:]...)
+			return nil
+		}
+	}
 	return nil
+}
+
+func (d *DemoBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	rules := d.cleanupRules
+	if req.CleanupRule != nil {
+		rules = []*models.CleanupRule{req.CleanupRule}
+		req.IncludeDisabled = true
+	} else if req.RuleID != 0 {
+		req.IncludeDisabled = true
+	}
+
+	report := &models.RuleDryRunReport{
+		Kind:        models.RuleDryRunKindCleanup,
+		Scope:       backendDryRunScope(req, "cleanup rules"),
+		Folder:      req.Folder,
+		DryRun:      true,
+		GeneratedAt: time.Now(),
+	}
+	matches := make(map[string]bool)
+	cutoff := time.Now()
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		if req.RuleID != 0 && rule.ID != req.RuleID {
+			continue
+		}
+		if !req.IncludeDisabled && !rule.Enabled {
+			continue
+		}
+		report.RuleCount++
+		olderThan := cutoff.AddDate(0, 0, -rule.OlderThanDays)
+		for _, email := range d.emails {
+			if email == nil || d.deletedIDs[email.MessageID] {
+				continue
+			}
+			if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
+				continue
+			}
+			if !email.Date.Before(olderThan) || !demoCleanupRuleMatches(rule, email) {
+				continue
+			}
+			matches[email.MessageID] = true
+			report.Rows = append(report.Rows, models.RuleDryRunRow{
+				RuleID:    rule.ID,
+				RuleName:  cleanupRuleName(rule),
+				MessageID: email.MessageID,
+				Sender:    email.Sender,
+				Domain:    extractDemoEmailDomain(email.Sender),
+				Folder:    email.Folder,
+				Subject:   email.Subject,
+				Date:      email.Date,
+				Action:    rule.Action,
+				Target:    cleanupActionTarget(rule.Action),
+			})
+		}
+	}
+	report.MatchCount = len(matches)
+	report.ActionCount = len(report.Rows)
+	return report, nil
 }
 
 func (d *DemoBackend) GetContactEmails(contactEmail string, limit int) ([]*models.EmailData, error) {
@@ -953,4 +1131,26 @@ func extractDemoEmailDomain(sender string) string {
 		return addr[at+1:]
 	}
 	return addr
+}
+
+func demoCleanupRuleMatches(rule *models.CleanupRule, email *models.EmailData) bool {
+	switch rule.MatchType {
+	case "sender":
+		return strings.EqualFold(email.Sender, rule.MatchValue) ||
+			strings.EqualFold(extractDemoEmailAddress(email.Sender), extractDemoEmailAddress(rule.MatchValue))
+	case "domain":
+		return strings.EqualFold(extractDemoEmailDomain(email.Sender), rule.MatchValue)
+	default:
+		return false
+	}
+}
+
+func extractDemoEmailAddress(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			return strings.ToLower(strings.TrimSpace(sender[lt+1 : lt+gt]))
+		}
+	}
+	return strings.ToLower(sender)
 }

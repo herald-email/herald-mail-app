@@ -67,6 +67,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Rules
 	mux.HandleFunc("GET /v1/rules", s.handleGetRules)
+	mux.HandleFunc("GET /v1/rules/all", s.handleGetAllRules)
+	mux.HandleFunc("POST /v1/rules/dry-run", s.handleDryRunRules)
 	mux.HandleFunc("POST /v1/rules", s.handleSaveRule)
 	mux.HandleFunc("DELETE /v1/rules/{id}", s.handleDeleteRule)
 
@@ -76,6 +78,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Cleanup rules — literal "run" segment must be registered before the {id} wildcard
 	mux.HandleFunc("POST /v1/cleanup-rules/run", s.handleRunCleanupRules)
+	mux.HandleFunc("POST /v1/cleanup-rules/dry-run", s.handleDryRunCleanupRules)
 	mux.HandleFunc("GET /v1/cleanup-rules", s.handleListCleanupRules)
 	mux.HandleFunc("POST /v1/cleanup-rules", s.handleCreateCleanupRule)
 	mux.HandleFunc("DELETE /v1/cleanup-rules/{id}", s.handleDeleteCleanupRule)

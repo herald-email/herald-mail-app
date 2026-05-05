@@ -195,6 +195,9 @@ type Backend interface {
 	// SaveRule persists a rule (insert or update by ID).
 	SaveRule(r *models.Rule) error
 
+	// GetAllRules returns all stored automation rules, including disabled ones.
+	GetAllRules() ([]*models.Rule, error)
+
 	// GetEnabledRules returns all rules that are currently enabled.
 	GetEnabledRules() ([]*models.Rule, error)
 
@@ -218,6 +221,10 @@ type Backend interface {
 
 	// SaveCustomCategory persists a custom prompt result for a message.
 	SaveCustomCategory(messageID string, promptID int64, result string) error
+
+	// PreviewRulesDryRun returns structured automation-rule matches without
+	// executing actions or writing rule metadata.
+	PreviewRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error)
 
 	// --- Contacts ---
 
@@ -349,4 +356,8 @@ type Backend interface {
 
 	// DeleteCleanupRule removes a cleanup rule by ID.
 	DeleteCleanupRule(id int64) error
+
+	// PreviewCleanupRulesDryRun returns structured cleanup-rule matches without
+	// mutating IMAP mail or cleanup rule metadata.
+	PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error)
 }

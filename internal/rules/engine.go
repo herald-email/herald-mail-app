@@ -3,6 +3,7 @@ package rules
 import (
 	"bytes"
 	"fmt"
+	"net/mail"
 	"strings"
 	"text/template"
 	"time"
@@ -53,6 +54,14 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 	var firstErr error
 	for _, rule := range rules {
 		if !MatchRule(rule, email, category) {
+			continue
+		}
+		if e.DryRun {
+			for _, action := range rule.Actions {
+				logger.Info("[DRY RUN] Would execute action type=%s email=%s subject=%q",
+					action.Type, email.MessageID, email.Subject)
+			}
+			fired++
 			continue
 		}
 
@@ -106,11 +115,6 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 }
 
 func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData, ctx models.RuleContext) error {
-	if e.DryRun {
-		logger.Info("[DRY RUN] Would execute action type=%s email=%s subject=%q",
-			action.Type, email.MessageID, email.Subject)
-		return nil
-	}
 	switch action.Type {
 	case models.ActionMove:
 		return e.executor.MoveEmail(email.MessageID, email.Folder, action.DestFolder)
@@ -135,7 +139,8 @@ func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData
 func MatchRule(r *models.Rule, email *models.EmailData, category string) bool {
 	switch r.TriggerType {
 	case models.TriggerSender:
-		return strings.EqualFold(email.Sender, r.TriggerValue)
+		return strings.EqualFold(email.Sender, r.TriggerValue) ||
+			strings.EqualFold(senderAddress(email.Sender), senderAddress(r.TriggerValue))
 	case models.TriggerDomain:
 		return strings.EqualFold(extractDomain(email.Sender), r.TriggerValue)
 	case models.TriggerCategory:
@@ -145,20 +150,139 @@ func MatchRule(r *models.Rule, email *models.EmailData, category string) bool {
 	}
 }
 
+// PlanDryRun builds a structured preview for automation rules without touching
+// IMAP, external actions, rule action logs, or last-triggered metadata.
+func PlanDryRun(req models.RuleDryRunRequest, rules []*models.Rule, emails []*models.EmailData, classifications map[string]string) (*models.RuleDryRunReport, error) {
+	if req.Kind == "" {
+		req.Kind = models.RuleDryRunKindAutomation
+	}
+	report := &models.RuleDryRunReport{
+		Kind:        req.Kind,
+		Scope:       dryRunScope(req),
+		Folder:      req.Folder,
+		DryRun:      true,
+		GeneratedAt: time.Now(),
+	}
+
+	selected := make([]*models.Rule, 0, len(rules))
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		if req.RuleID != 0 && rule.ID != req.RuleID {
+			continue
+		}
+		if !req.IncludeDisabled && !rule.Enabled {
+			continue
+		}
+		selected = append(selected, rule)
+	}
+	report.RuleCount = len(selected)
+
+	matches := make(map[string]bool)
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
+			continue
+		}
+		category := classifications[email.MessageID]
+		for _, rule := range selected {
+			if !MatchRule(rule, email, category) {
+				continue
+			}
+			matches[email.MessageID] = true
+			for _, action := range rule.Actions {
+				report.Rows = append(report.Rows, models.RuleDryRunRow{
+					RuleID:    rule.ID,
+					RuleName:  ruleName(rule),
+					MessageID: email.MessageID,
+					Sender:    email.Sender,
+					Domain:    extractDomain(email.Sender),
+					Category:  category,
+					Folder:    email.Folder,
+					Subject:   email.Subject,
+					Date:      email.Date,
+					Action:    string(action.Type),
+					Target:    actionTarget(action),
+				})
+			}
+		}
+	}
+	report.MatchCount = len(matches)
+	report.ActionCount = len(report.Rows)
+	return report, nil
+}
+
+func senderAddress(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if sender == "" {
+		return ""
+	}
+	if addr, err := mail.ParseAddress(sender); err == nil && addr.Address != "" {
+		return strings.ToLower(strings.TrimSpace(addr.Address))
+	}
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			return strings.ToLower(strings.TrimSpace(sender[lt+1 : lt+gt]))
+		}
+	}
+	return strings.ToLower(sender)
+}
+
 // extractDomain extracts the domain part from an email address (e.g. "foo@example.com" → "example.com").
 // Handles display names like "Name <addr@domain.com>". Returns empty string if no @ is found.
 func extractDomain(sender string) string {
-	// Strip display name: "Name <addr@domain.com>" → "addr@domain.com"
-	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
-		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
-			sender = sender[lt+1 : lt+gt]
-		}
-	}
+	sender = senderAddress(sender)
 	at := strings.LastIndex(sender, "@")
 	if at < 0 {
 		return ""
 	}
 	return strings.ToLower(sender[at+1:])
+}
+
+func dryRunScope(req models.RuleDryRunRequest) string {
+	scope := "selected"
+	if req.RuleID == 0 {
+		scope = "all"
+	}
+	if req.AllFolders {
+		return scope + " rules / all folders"
+	}
+	if req.Folder != "" {
+		return scope + " rules / " + req.Folder
+	}
+	return scope + " rules"
+}
+
+func ruleName(rule *models.Rule) string {
+	if strings.TrimSpace(rule.Name) != "" {
+		return rule.Name
+	}
+	return fmt.Sprintf("%s:%s", rule.TriggerType, rule.TriggerValue)
+}
+
+func actionTarget(action models.RuleAction) string {
+	switch action.Type {
+	case models.ActionMove:
+		return action.DestFolder
+	case models.ActionArchive:
+		return "Archive"
+	case models.ActionDelete:
+		return "Trash"
+	case models.ActionWebhook:
+		return action.WebhookURL
+	case models.ActionCommand:
+		return action.Command
+	case models.ActionNotify:
+		if strings.TrimSpace(action.NotifyTitle) != "" {
+			return action.NotifyTitle
+		}
+		return "desktop notification"
+	default:
+		return ""
+	}
 }
 
 // renderTemplate executes a Go text/template with the given context.

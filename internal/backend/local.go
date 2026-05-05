@@ -17,6 +17,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/imap"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
@@ -982,6 +983,61 @@ func (b *LocalBackend) SaveCustomCategory(messageID string, promptID int64, resu
 	return b.cache.SaveCustomCategory(messageID, promptID, result)
 }
 
+func (b *LocalBackend) PreviewRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	rules := []*models.Rule{}
+	if req.Rule != nil {
+		rules = []*models.Rule{req.Rule}
+		req.IncludeDisabled = true
+	} else {
+		var err error
+		rules, err = b.cache.GetAllRules()
+		if err != nil {
+			return nil, err
+		}
+		if req.RuleID != 0 {
+			req.IncludeDisabled = true
+		}
+	}
+
+	emails, classifications, err := b.dryRunEmailsAndClassifications(req)
+	if err != nil {
+		return nil, err
+	}
+	return rulesengine.PlanDryRun(req, rules, emails, classifications)
+}
+
+func (b *LocalBackend) dryRunEmailsAndClassifications(req models.RuleDryRunRequest) ([]*models.EmailData, map[string]string, error) {
+	folders := []string{req.Folder}
+	if req.AllFolders {
+		cachedFolders, err := b.cache.GetCachedFolders()
+		if err != nil {
+			return nil, nil, err
+		}
+		folders = cachedFolders
+	}
+	if len(folders) == 0 || strings.TrimSpace(folders[0]) == "" {
+		folders = []string{"INBOX"}
+	}
+
+	var emails []*models.EmailData
+	classifications := make(map[string]string)
+	for _, folder := range folders {
+		folderEmails, err := b.cache.GetEmailsSortedByDate(folder)
+		if err != nil {
+			return nil, nil, err
+		}
+		emails = append(emails, b.filterByValidIDs(folderEmails)...)
+		folderClassifications, err := b.cache.GetClassifications(folder)
+		if err != nil {
+			return nil, nil, err
+		}
+		for id, category := range folderClassifications {
+			classifications[id] = category
+		}
+	}
+	return emails, classifications, nil
+}
+
 // --- Contacts ---
 
 func (b *LocalBackend) GetContactsToEnrich(minCount, limit int) ([]models.ContactData, error) {
@@ -1462,4 +1518,109 @@ func (b *LocalBackend) SaveCleanupRule(rule *models.CleanupRule) error {
 
 func (b *LocalBackend) DeleteCleanupRule(id int64) error {
 	return b.cache.DeleteCleanupRule(id)
+}
+
+func (b *LocalBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	rules := []*models.CleanupRule{}
+	if req.CleanupRule != nil {
+		rules = []*models.CleanupRule{req.CleanupRule}
+		req.IncludeDisabled = true
+	} else {
+		var err error
+		rules, err = b.cache.GetAllCleanupRules()
+		if err != nil {
+			return nil, err
+		}
+		if req.RuleID != 0 {
+			req.IncludeDisabled = true
+		}
+	}
+
+	report := &models.RuleDryRunReport{
+		Kind:        models.RuleDryRunKindCleanup,
+		Scope:       backendDryRunScope(req, "cleanup rules"),
+		Folder:      req.Folder,
+		DryRun:      true,
+		GeneratedAt: time.Now(),
+	}
+	matches := make(map[string]bool)
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		if req.RuleID != 0 && rule.ID != req.RuleID {
+			continue
+		}
+		if !req.IncludeDisabled && !rule.Enabled {
+			continue
+		}
+		report.RuleCount++
+		emails, err := b.cache.FindEmailsMatchingCleanupRule(rule)
+		if err != nil {
+			return nil, err
+		}
+		for _, email := range b.filterByValidIDs(emails) {
+			if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
+				continue
+			}
+			matches[email.MessageID] = true
+			report.Rows = append(report.Rows, models.RuleDryRunRow{
+				RuleID:    rule.ID,
+				RuleName:  cleanupRuleName(rule),
+				MessageID: email.MessageID,
+				Sender:    email.Sender,
+				Domain:    backendSenderDomain(email.Sender),
+				Folder:    email.Folder,
+				Subject:   email.Subject,
+				Date:      email.Date,
+				Action:    rule.Action,
+				Target:    cleanupActionTarget(rule.Action),
+			})
+		}
+	}
+	report.MatchCount = len(matches)
+	report.ActionCount = len(report.Rows)
+	return report, nil
+}
+
+func backendDryRunScope(req models.RuleDryRunRequest, noun string) string {
+	scope := "selected"
+	if req.RuleID == 0 && req.Rule == nil && req.CleanupRule == nil {
+		scope = "all"
+	}
+	if req.AllFolders {
+		return scope + " " + noun + " / all folders"
+	}
+	if req.Folder != "" {
+		return scope + " " + noun + " / " + req.Folder
+	}
+	return scope + " " + noun
+}
+
+func cleanupRuleName(rule *models.CleanupRule) string {
+	if strings.TrimSpace(rule.Name) != "" {
+		return rule.Name
+	}
+	return rule.MatchType + ":" + rule.MatchValue
+}
+
+func cleanupActionTarget(action string) string {
+	if action == "delete" {
+		return "Trash"
+	}
+	return "Archive"
+}
+
+func backendSenderDomain(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if lt := strings.LastIndex(sender, "<"); lt >= 0 {
+		if gt := strings.Index(sender[lt:], ">"); gt >= 0 {
+			sender = sender[lt+1 : lt+gt]
+		}
+	}
+	at := strings.LastIndex(sender, "@")
+	if at < 0 {
+		return ""
+	}
+	return strings.ToLower(sender[at+1:])
 }

@@ -48,6 +48,11 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 | `W` | Cleanup | Rule editor closed. | Opens automation rule editor, prefilled with focused sender or domain. |
 | `P` | Main UI | Rule/prompt/settings overlays are closed. | Opens custom AI prompt editor. |
 | `C` | Cleanup | Cleanup manager closed. | Opens saved cleanup rules manager. |
+| `p` | Cleanup manager list | A cleanup rule exists. | Opens dry-run preview for the selected rule. |
+| `r` | Cleanup manager list | Manager open. | Opens dry-run preview for all enabled cleanup rules. |
+| `s` | Cleanup dry-run preview | Preview was opened from a new or edited cleanup rule. | Saves the staged cleanup rule disabled. |
+| `E` | Cleanup dry-run preview | Preview was opened from a new or edited cleanup rule. | Enables the staged cleanup rule after confirmation for archive/delete rules. |
+| `R` | Cleanup dry-run preview | Preview is visible and Herald is not launched with `--dry-run`. | Prompts before running the previewed archive/delete plan live. |
 | `z` | Cleanup preview | Preview open. | Toggles full-screen cleanup reader. |
 | `esc` | Cleanup preview/overlays | Preview, full-screen, or overlay active. | Closes the active state. |
 | `tab` / `shift+tab` | Cleanup | Visible panels available. | Cycles between sidebar, summary, details, and chat when present. |
@@ -99,14 +104,18 @@ Mouse path: click a summary row to refresh details, click a detail row to open i
 4. Enter trigger value.
 5. Select actions: desktop notification, move, archive, delete, webhook, or shell command.
 6. Fill action details such as destination folder, webhook URL/body, shell command, or notification text.
-7. Complete the form to save.
+7. Complete the form to open dry-run preview.
+8. Review matched cached messages, folders, categories, and planned actions.
+9. Save disabled, or enable only after confirming the preview.
 
 ### Manage Cleanup Rules
 
 1. Press `C`.
-2. Press `n` to create a cleanup rule, `enter` to edit selected, `d` to delete, or `r` to run all.
-3. In the edit form, set rule name, match type, match value, action, older-than days, and enabled state.
-4. Press `esc` to leave edit mode or close the manager.
+2. Press `n` to create a cleanup rule, `enter` to edit selected, `d` to delete, `p` to preview selected, or `r` to preview all enabled.
+3. In the edit form, set rule name, match type, match value, action, older-than days, and intended enabled state.
+4. Complete the form to open dry-run preview, then press `s` to save disabled or `E` to enable after confirmation.
+5. From a saved-rule dry-run preview, press `R` and confirm before running archive/delete live.
+6. Press `esc` to leave edit mode, close preview, or close the manager.
 
 ## States
 
@@ -119,10 +128,11 @@ Mouse path: click a summary row to refresh details, click a detail row to open i
 | Selected detail rows | Status reports selected message count and sender/domain spread. |
 | Delete/archive confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. |
 | Deleting/archive in progress | Requests are queued serially; status shows progress and reconnect messages when needed. |
+| Rules dry-run preview | Overlay lists matched messages with sender/domain/category, folder, subject/date, and planned action without mutating IMAP or SQLite run metadata. |
 | Cleanup preview | Sidebar hides to make room; details panel can scroll the body. |
 | Full-screen preview | Cleanup preview expands and rewraps body lines. |
 | AI unavailable | `A` and category-trigger workflows cannot classify new content. |
-| Dry-run mode | Status shows `[DRY RUN]`; destructive rules can be exercised without live mutation when that runtime mode is active. |
+| Dry-run mode | Status shows `[DRY RUN]`; rule previews are available, but live cleanup execution from preview is blocked. |
 | Narrow terminal | Cleanup collapses columns and can hide the sidebar or summary panel while preview is open. |
 
 ## Data And Privacy

@@ -111,23 +111,27 @@ func (s *stubBackend) GetBodyText(messageID string) (string, error) {
 	}
 	return s.bodyTextByID[messageID], nil
 }
-func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error)        { return nil, nil }
-func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification             { return nil }
-func (s *stubBackend) StartIDLE(_ string) error                                     { return nil }
-func (s *stubBackend) StopIDLE()                                                    {}
-func (s *stubBackend) StartPolling(_ string, _ int)                                 {}
-func (s *stubBackend) StopPolling()                                                 {}
-func (s *stubBackend) ValidIDsCh() <-chan map[string]bool                           { return nil }
-func (s *stubBackend) MoveEmail(_, _, _ string) error                               { return nil }
-func (s *stubBackend) SaveRule(_ *models.Rule) error                                { return nil }
-func (s *stubBackend) GetEnabledRules() ([]*models.Rule, error)                     { return nil, nil }
-func (s *stubBackend) DeleteRule(_ int64) error                                     { return nil }
-func (s *stubBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error)         { return nil, nil }
-func (s *stubBackend) SaveCustomPrompt(_ *models.CustomPrompt) error                { return nil }
-func (s *stubBackend) GetCustomPrompt(_ int64) (*models.CustomPrompt, error)        { return nil, nil }
-func (s *stubBackend) AppendActionLog(_ *models.RuleActionLogEntry) error           { return nil }
-func (s *stubBackend) TouchRuleLastTriggered(_ int64) error                         { return nil }
-func (s *stubBackend) SaveCustomCategory(_ string, _ int64, _ string) error         { return nil }
+func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error) { return nil, nil }
+func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification      { return nil }
+func (s *stubBackend) StartIDLE(_ string) error                              { return nil }
+func (s *stubBackend) StopIDLE()                                             {}
+func (s *stubBackend) StartPolling(_ string, _ int)                          {}
+func (s *stubBackend) StopPolling()                                          {}
+func (s *stubBackend) ValidIDsCh() <-chan map[string]bool                    { return nil }
+func (s *stubBackend) MoveEmail(_, _, _ string) error                        { return nil }
+func (s *stubBackend) SaveRule(_ *models.Rule) error                         { return nil }
+func (s *stubBackend) GetAllRules() ([]*models.Rule, error)                  { return nil, nil }
+func (s *stubBackend) GetEnabledRules() ([]*models.Rule, error)              { return nil, nil }
+func (s *stubBackend) DeleteRule(_ int64) error                              { return nil }
+func (s *stubBackend) GetAllCustomPrompts() ([]*models.CustomPrompt, error)  { return nil, nil }
+func (s *stubBackend) SaveCustomPrompt(_ *models.CustomPrompt) error         { return nil }
+func (s *stubBackend) GetCustomPrompt(_ int64) (*models.CustomPrompt, error) { return nil, nil }
+func (s *stubBackend) AppendActionLog(_ *models.RuleActionLogEntry) error    { return nil }
+func (s *stubBackend) TouchRuleLastTriggered(_ int64) error                  { return nil }
+func (s *stubBackend) SaveCustomCategory(_ string, _ int64, _ string) error  { return nil }
+func (s *stubBackend) PreviewRulesDryRun(_ models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	return nil, nil
+}
 func (s *stubBackend) GetContactsToEnrich(_, _ int) ([]models.ContactData, error)   { return nil, nil }
 func (s *stubBackend) GetRecentSubjectsByContact(_ string, _ int) ([]string, error) { return nil, nil }
 func (s *stubBackend) UpdateContactEnrichment(_, _ string, _ []string) error        { return nil }
@@ -140,10 +144,13 @@ func (s *stubBackend) SearchContacts(_ string) ([]models.ContactData, error)    
 func (s *stubBackend) GetContactEmails(_ string, _ int) ([]*models.EmailData, error) {
 	return nil, nil
 }
-func (s *stubBackend) UpsertContacts(_ []models.ContactAddr, _ string) error  { return nil }
-func (s *stubBackend) GetAllCleanupRules() ([]*models.CleanupRule, error)     { return nil, nil }
-func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error            { return nil }
-func (s *stubBackend) DeleteCleanupRule(_ int64) error                        { return nil }
+func (s *stubBackend) UpsertContacts(_ []models.ContactAddr, _ string) error { return nil }
+func (s *stubBackend) GetAllCleanupRules() ([]*models.CleanupRule, error)    { return nil, nil }
+func (s *stubBackend) SaveCleanupRule(_ *models.CleanupRule) error           { return nil }
+func (s *stubBackend) DeleteCleanupRule(_ int64) error                       { return nil }
+func (s *stubBackend) PreviewCleanupRulesDryRun(_ models.RuleDryRunRequest) (*models.RuleDryRunReport, error) {
+	return nil, nil
+}
 func (s *stubBackend) RecordUnsubscribe(_, _, _ string) error                 { return nil }
 func (s *stubBackend) IsUnsubscribedSender(_ string) (bool, error)            { return false, nil }
 func (s *stubBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) { return 0, "", nil }

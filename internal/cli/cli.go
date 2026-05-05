@@ -133,7 +133,7 @@ func runWizard(configPath string, experimental bool) error {
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool) {
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -155,7 +155,7 @@ func runDemo(imageMode app.PreviewImageMode) {
 	mailer := appsmtp.New(cfg)
 
 	// Build the TUI model
-	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, false)
+	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, dryRun)
 	model.SetPreviewImageMode(imageMode)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
@@ -508,7 +508,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if *demo {
-		runDemo(imageMode)
+		runDemo(imageMode, *dryRun)
 		return
 	}
 

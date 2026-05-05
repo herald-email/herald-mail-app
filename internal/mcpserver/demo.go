@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -193,6 +194,27 @@ func newDemoMCPServer() *server.MCPServer {
 		},
 	)
 
+	s.AddTool(
+		mcp.NewTool("dry_run_cleanup_rules",
+			mcp.WithDescription("Preview deterministic demo cleanup rule matches without mutating mail"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithNumber("rule_id",
+				mcp.Description("Optional cleanup rule ID to preview; omitted means all enabled demo cleanup rules"),
+			),
+			mcp.WithString("folder",
+				mcp.Description("Optional folder filter; omitted means all demo folders"),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ruleID := int64(req.GetInt("rule_id", 0))
+			folder := req.GetString("folder", "")
+			report := demoCleanupDryRunReport(ruleID, folder)
+			out, _ := json.Marshal(report)
+			return mcp.NewToolResultText(string(out)), nil
+		},
+	)
+
 	return s
 }
 
@@ -209,4 +231,117 @@ func demoMCPEmails(folder string) []*models.EmailData {
 		return emails[i].Date.After(emails[j].Date)
 	})
 	return emails
+}
+
+func demoMCPCleanupRules() []*models.CleanupRule {
+	return []*models.CleanupRule{
+		{
+			ID:            1,
+			Name:          "Archive old Packet Press",
+			MatchType:     "sender",
+			MatchValue:    "newsletter@packetpress.example",
+			Action:        "archive",
+			OlderThanDays: 10,
+			Enabled:       true,
+			CreatedAt:     time.Now().AddDate(0, 0, -10),
+		},
+		{
+			ID:            2,
+			Name:          "Delete old travel offers",
+			MatchType:     "domain",
+			MatchValue:    "trailpost.example",
+			Action:        "delete",
+			OlderThanDays: 7,
+			Enabled:       true,
+			CreatedAt:     time.Now().AddDate(0, 0, -10),
+		},
+	}
+}
+
+func demoCleanupDryRunReport(ruleID int64, folder string) *models.RuleDryRunReport {
+	report := &models.RuleDryRunReport{
+		Kind:        models.RuleDryRunKindCleanup,
+		Scope:       "enabled demo cleanup rules / all folders",
+		Folder:      folder,
+		DryRun:      true,
+		GeneratedAt: time.Now(),
+	}
+	if ruleID != 0 {
+		report.Scope = "selected demo cleanup rules / all folders"
+	}
+	if folder != "" {
+		report.Scope = strings.Replace(report.Scope, "all folders", folder, 1)
+	}
+	matches := map[string]bool{}
+	for _, rule := range demoMCPCleanupRules() {
+		if ruleID != 0 && rule.ID != ruleID {
+			continue
+		}
+		if !rule.Enabled && ruleID == 0 {
+			continue
+		}
+		report.RuleCount++
+		cutoff := time.Now().AddDate(0, 0, -rule.OlderThanDays)
+		for _, email := range demoMCPEmails(folder) {
+			if !email.Date.Before(cutoff) || !demoCleanupRuleMatches(rule, email) {
+				continue
+			}
+			matches[email.MessageID] = true
+			report.Rows = append(report.Rows, models.RuleDryRunRow{
+				RuleID:    rule.ID,
+				RuleName:  rule.Name,
+				MessageID: email.MessageID,
+				Sender:    email.Sender,
+				Domain:    demoEmailDomain(email.Sender),
+				Folder:    email.Folder,
+				Subject:   email.Subject,
+				Date:      email.Date,
+				Action:    rule.Action,
+				Target:    demoCleanupActionTarget(rule.Action),
+			})
+		}
+	}
+	report.MatchCount = len(matches)
+	report.ActionCount = len(report.Rows)
+	return report
+}
+
+func demoCleanupRuleMatches(rule *models.CleanupRule, email *models.EmailData) bool {
+	switch rule.MatchType {
+	case "sender":
+		return strings.EqualFold(demoEmailAddress(email.Sender), strings.TrimSpace(rule.MatchValue))
+	case "domain":
+		return strings.EqualFold(demoEmailDomain(email.Sender), strings.TrimSpace(rule.MatchValue))
+	default:
+		return false
+	}
+}
+
+func demoEmailAddress(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if start := strings.LastIndex(sender, "<"); start >= 0 {
+		if end := strings.LastIndex(sender, ">"); end > start {
+			return strings.ToLower(strings.TrimSpace(sender[start+1 : end]))
+		}
+	}
+	return strings.ToLower(sender)
+}
+
+func demoEmailDomain(sender string) string {
+	address := demoEmailAddress(sender)
+	if at := strings.LastIndex(address, "@"); at >= 0 && at < len(address)-1 {
+		return address[at+1:]
+	}
+	return ""
+}
+
+func demoCleanupActionTarget(action string) string {
+	switch action {
+	case "archive":
+		return "Archive"
+	case "delete":
+		return "Trash"
+	default:
+		return ""
+	}
 }

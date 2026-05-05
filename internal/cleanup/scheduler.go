@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // CleanupDoneMsg is sent when a cleanup run completes.
@@ -58,6 +59,13 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) RunNow(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		results, _ := s.engine.RunAll(ctx)
+		return CleanupDoneMsg{Results: results}
+	}
+}
+
+func (s *Scheduler) RunNowRequest(req models.RuleDryRunRequest) tea.Cmd {
+	return func() tea.Msg {
+		results, _ := s.engine.Run(context.Background(), req)
 		return CleanupDoneMsg{Results: results}
 	}
 }
