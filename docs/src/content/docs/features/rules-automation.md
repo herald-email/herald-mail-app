@@ -20,6 +20,7 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 | Prompt editor | Name, output variable, system prompt, user template, and saved-prompt summary. |
 | Cleanup manager list | Saved cleanup rules with name, match type, match value, action, older-than days, enabled state, and last run. |
 | Cleanup manager edit form | Rule name, match type, match value, action, older-than days, and enabled toggle. |
+| Dry-run preview | Compact centered modal showing matched messages, folders, categories, and planned actions before save, enable, or live run. |
 | Status bar | Run results, dry-run marker, deletion/archive progress, and error messages. |
 
 <!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Cleanup tab, W overlay open" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press 3; press W" -->
@@ -99,7 +100,7 @@ Custom prompts are reusable instructions. A rule or MCP tool must invoke a saved
 | Prompt validation | Prompt name is required. |
 | No cleanup rules | Cleanup manager explains that `n` creates one. |
 | Disabled cleanup rule | Manager list marks the rule disabled and scheduled runs skip it. |
-| Dry-run preview | Preview shows matched messages, sender/domain/category, folder, and planned action without mutating mail. |
+| Dry-run preview | Compact preview shows matched messages, sender/domain/category, folder, and planned action without mutating mail. It fits at `80x24`; at `50x15`, Herald shows the standard minimum-size guard. |
 | Run all | Cleanup manager opens a dry-run preview for enabled rules before live execution is available. |
 | Dry-run mode | Status shows `[DRY RUN]`; live cleanup execution from preview is blocked until Herald is relaunched without dry-run mode. |
 | AI unavailable | AI-category triggers and custom prompt execution cannot classify new content. |

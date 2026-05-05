@@ -7,21 +7,20 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and a `?` shortcut help overlay. Most browsing work happens in three tabs: Timeline, Cleanup, or Contacts. Compose is a transient writing screen launched from Timeline, and the common navigation surfaces work with both keys and mouse input.
+Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Most browsing work happens in three tabs: Timeline, Cleanup, or Contacts. Compose is a transient writing screen launched from Timeline, and the common navigation surfaces work with both keys and mouse input.
 
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
 | --- | --- | --- |
-| Header | `Herald` while the main TUI is active. | The loading view shows a larger startup banner before cached data is visible. |
-| Tab bar | `F1 Timeline`, `F2 Cleanup`, `F3 Contacts`. | The active tab is highlighted. `F1-F3` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
+| Title row | `Herald` plus `F1 Timeline`, `F2 Cleanup`, and `F3 Contacts`. | The active tab is highlighted. `F1-F3` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
 | Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
 | Chat panel | Right-side AI chat input and transcript. | Opens with `c` when AI is configured and the terminal is wide enough. |
 | Status bar | Folder breadcrumb, AI chip, search or cleanup state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
 | Key hints | The currently valid keys for the focused tab, panel, or overlay. | Hints wrap to at most two lines. |
-| Shortcut help | A scrollable overlay opened with `?`. | Lists the fuller shortcut catalog for the current tab, pane, overlay, or Compose mode. |
+| Compact overlays | Scrollable or form-based modals opened with `?`, `S`, `W`, `P`, `C`, or rule preview actions. | They stay centered over the current screen at supported sizes; at very small sizes Herald shows the minimum-size guard. |
 
 <!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press F1" -->
 
@@ -42,7 +41,7 @@ Herald is a Bubble Tea terminal app with a persistent header, tab bar, optional 
 | `c` / `alt+c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input; use `alt+c` while composing. |
 | `l` / `L` / `alt+l` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay; use `alt+l` while composing. |
 | `r` / `alt+r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters; use `alt+r` while composing. |
-| `S` | Main UI | Settings overlay is not already open. | Opens settings as a full-screen panel. |
+| `S` | Main UI | Settings overlay is not already open. | Opens settings as a compact centered overlay over the current screen. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `?` | Main UI and Herald-owned overlays | Visible data can be interacted with. | Opens context-sensitive shortcut help; pressing `?`, `esc`, or `q` closes it. |
 | `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, Compose status message, or the Compose screen itself. |
@@ -96,11 +95,11 @@ Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a t
 2. Scroll with `j`/`k` or arrow keys.
 3. Press `l` again to close.
 
-### Open Shortcut Help
+### Open Compact Overlays
 
-1. Press `?`.
-2. Scroll with `j`/`k`, arrow keys, page keys, or the mouse wheel when the overlay is taller than the terminal.
-3. Press `?`, `esc`, or `q` to return to the same tab, panel, or overlay.
+1. Press `?` for shortcut help, `S` for settings, or open Cleanup and press `W`, `P`, or `C` for cleanup configuration.
+2. Scroll or move through the overlay with its local controls when its content is taller than the modal.
+3. Press `esc` or the documented close key to return to the same tab, panel, or underlying overlay state.
 
 ## States
 
@@ -113,7 +112,7 @@ Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a t
 | Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `c` again. |
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
 | Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
-| Shortcut help | A scrollable command reference is on top of the current tab or overlay. | Press `?`, `esc`, or `q` to close it. |
+| Compact modal | Help, settings, cleanup rule editors, prompt editors, cleanup manager, or dry-run previews are centered over the current screen. | Use the overlay's local keys; at `50x15`, resize until the minimum-size guard clears. |
 | Confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. | Confirm only if the described action matches your intent. |
 
 ## Data And Privacy

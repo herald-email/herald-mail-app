@@ -3,11 +3,11 @@ title: Settings
 description: Edit Herald account, server, AI, sync, cleanup, and OAuth settings from the TUI.
 ---
 
-Settings is a full-screen panel opened from the main TUI. It lets you adjust configuration without manually editing YAML for common account, AI, sync, and cleanup fields.
+Settings is a compact centered overlay opened from the main TUI. It lets you adjust configuration without manually editing YAML for common account, AI, sync, and cleanup fields while keeping the current Herald screen visible behind it.
 
 ## Overview
 
-Press `S` from the main UI to open settings. The panel reads the current config, lets you edit supported fields, writes the config path, updates AI provider details, and can trigger OAuth wait behavior for supported OAuth flows.
+Press `S` from the main UI to open settings. The overlay reads the current config, lets you edit supported fields, writes the config path, updates AI provider details, and can trigger OAuth wait behavior for supported OAuth flows.
 
 ## Screen Anatomy
 
@@ -20,18 +20,18 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 | AI model fields | Chat/classification model and embedding model. |
 | Sync fields | Poll interval minutes and IMAP IDLE setting. |
 | Cleanup fields | Cleanup schedule hours and related automation timing. |
-| Save/cancel controls | Form-level completion or cancellation behavior. |
+| Save/cancel controls | Form-level completion or cancellation behavior inside the modal. |
 | OAuth wait overlay | URL/open-browser state while waiting for OAuth callback and token storage. |
 
-<!-- HERALD_SCREENSHOT id="settings-main-panel" page="settings" alt="Settings panel open" state="demo mode, 120x40, settings panel active" desc="Shows settings form fields for provider, server, SMTP, AI, sync, cleanup, and save/cancel affordances." capture="tmux demo 120x40; ./bin/herald --demo; press S" -->
+<!-- HERALD_SCREENSHOT id="settings-main-panel" page="settings" alt="Settings overlay open" state="demo mode, 120x40, settings overlay active" desc="Shows compact centered settings form fields for provider, server, SMTP, AI, sync, cleanup, and save/cancel affordances over the current Herald view." capture="tmux demo 120x40; ./bin/herald --demo; press S" -->
 
-![Settings panel open](/screenshots/settings-main-panel.png)
+![Settings overlay open](/screenshots/settings-main-panel.png)
 
 ## Controls
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `S` | Main UI | Settings closed. | Opens settings panel. |
+| `S` | Main UI | Settings closed. | Opens settings as a compact centered overlay. |
 | `tab` | Settings form | A form field is active. | Moves through form controls according to the form component. |
 | `enter` | Settings form | Current field or form action is valid. | Accepts selection, advances, or saves when on final action. |
 | `esc` | Settings form | Settings active. | Cancels/closes panel when supported by current form state. |
@@ -59,7 +59,7 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 ### Start OAuth
 
 1. Choose an OAuth-capable provider path.
-2. In first-run onboarding, launch Herald with `-experimental` first; in the in-app settings panel, choose the OAuth path directly.
+2. In first-run onboarding, launch Herald with `-experimental` first; in the in-app settings overlay, choose the OAuth path directly.
 3. Confirm you are using Homebrew/a release binary with OAuth defaults, or that your shell has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported.
 4. In the OAuth wait overlay, press `enter` to open the browser.
 5. Complete provider consent.
@@ -69,7 +69,7 @@ Press `S` from the main UI to open settings. The panel reads the current config,
 
 | State | What happens |
 | --- | --- |
-| Panel mode | Settings replaces the normal tabs until saved or cancelled. |
+| Overlay mode | Settings appears over the current screen at supported sizes; at `80x24` it fits inside the viewport, and at `50x15` the standard minimum-size guard appears instead of a clipped form. |
 | First-run mode | Settings/wizard completion is required before the main mailbox opens. |
 | OAuth waiting | Herald shows authorization URL state and waits for callback. |
 | OAuth saved | Token data is written to config. |

@@ -43,10 +43,11 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Standard IMAP + Gmail IMAP App Password setup | ✅ |
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook | ✅ |
 | Experimental Gmail OAuth onboarding (`-experimental`) | ⚠️ |
-| Chronological timeline with split-view email preview | ✅ |
+| Reading-first Timeline with split/full previews and range selection | ✅ |
 | Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews | ✅ |
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅ |
-| Bulk cleanup — delete by sender or domain in one keystroke | ✅ |
+| Bulk cleanup — delete/archive by sender or domain, plus dry-run cleanup rule previews | ✅ |
+| Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews | ✅ |
 | AI classification via Ollama (gemma3, llama3, etc.) | ✅ |
 | Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings | ✅ |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q) | ✅ |
@@ -287,14 +288,16 @@ herald status
 
 | Capability | Requirement |
 |------------|-------------|
-| Recent/unread/search/sender stats/classification reads | Open the TUI or run the daemon so the SQLite cache has synced mail. |
+| Recent/unread/search/sender stats/classification reads and cleanup dry-run previews | Open the TUI or run the daemon so the SQLite cache has synced mail. |
 | Email body, summaries, action items, and draft replies | Open the email in the TUI first so its body text is cached. |
 | Semantic search, summaries, classification, and action-item extraction | Configure an AI provider, such as Ollama, Claude, or OpenAI-compatible settings. |
 | Sync, drafts, attachments, send/reply/forward, folder changes, and mail mutations | Start `herald serve` with the same `-config` used by the MCP server. |
 
 If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binaries had an invalid daemon route pattern for folder rename.
 
-### Available MCP Tools
+### Selected MCP Tools
+
+The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md). Common cache-backed tools work after sync; live mutation tools need `herald serve`.
 
 | Tool | Description |
 |------|-------------|
@@ -309,6 +312,8 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 | `get_email_classifications` | AI category counts for a folder |
 | `classify_email` | Run AI classification on one email |
 | `summarise_email` | Generate a summary via Ollama |
+| `dry_run_cleanup_rules` | Preview cleanup rule matches without mutating mail |
+| `run_cleanup_rules` | Run enabled cleanup rules through the daemon |
 | `list_contacts` | Paginated contact list |
 | `search_contacts` | Keyword search on name/email/company/topics |
 | `semantic_search_contacts` | Natural-language contact search |
@@ -326,6 +331,9 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 | `C` | Open a new Compose screen from Timeline |
 | `j` / `k` | Navigate down / up |
 | `Enter` | Open email preview |
+| `Space` | Select Timeline messages or Cleanup rows, depending on focus |
+| `Shift+Up` / `Shift+Down` | Extend Timeline range selection when supported by the terminal |
+| `V`, then `j` / `k` | Fallback Timeline range selection without shifted-arrow support |
 | `Escape` | Close preview / picker, or return from Compose to its originating Timeline screen |
 | `D` | Delete selected email or sender |
 | `e` | Archive |
@@ -334,7 +342,10 @@ If `herald serve` exits with `wildcard not at end`, upgrade Herald; older binari
 | `Ctrl+Q` | Quick reply picker (in preview) |
 | `u` | Unsubscribe |
 | `z` | Full-screen preview |
-| `S` | Open settings |
+| `S` | Open settings as a compact overlay |
+| `W` / `P` / `C` | Open Cleanup automation rules, custom prompts, or cleanup rule manager overlays |
+| `p` / `r` in Cleanup manager | Preview selected cleanup rule or all enabled cleanup rules |
+| `s` / `E` / `R` in dry-run preview | Save disabled, enable after confirmation, or run previewed cleanup live |
 | `c` / `Alt+C` | Toggle AI chat panel (`Alt+C` also works while composing) |
 | `a` | Run AI classification on current folder |
 | `f` / `Alt+F` | Toggle folder sidebar (`Alt+F` also works while composing) |

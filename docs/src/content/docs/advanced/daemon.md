@@ -31,7 +31,9 @@ The daemon exposes local endpoints for:
 - Status, sync, SSE events, and folders.
 - Email list, body, read/unread, star/unstar, delete, archive, move, classify, reply, forward, attachments, and unsubscribe.
 - Threads, bulk delete/move, sender archive/delete/soft-unsubscribe.
-- Stats, search, semantic search, classifications, rules, prompts, cleanup rules, and drafts.
+- Stats, search, semantic search, classifications, rules, prompts, cleanup rules, dry-run previews, and drafts.
+
+Dry-run planning is available through `POST /v1/rules/dry-run` for automation rules and `POST /v1/cleanup-rules/dry-run` for cleanup rules. These endpoints return matched messages and planned actions without mutating IMAP mail or updating rule metadata; live cleanup execution still goes through `POST /v1/cleanup-rules/run`.
 
 The default bind address is `127.0.0.1` and the default port is `7272`.
 

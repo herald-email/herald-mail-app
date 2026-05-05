@@ -40,7 +40,7 @@ Use the same `-config` path for the TUI, daemon, and MCP server. Cache-only tool
 
 | Capability | Requirement |
 | --- | --- |
-| Recent/unread mail, keyword search, sender stats, contacts, rules, and stored classifications | Run the TUI or daemon long enough to populate the SQLite cache. |
+| Recent/unread mail, keyword search, sender stats, contacts, rules, dry-run cleanup previews, and stored classifications | Run the TUI or daemon long enough to populate the SQLite cache. |
 | Body lookup, summaries, action items, and draft replies | Open the email in the TUI first so body text is cached. Listing outputs include `message_id=...` for follow-up calls. |
 | Semantic search, summaries, classification, and action-item extraction | Configure an AI provider such as Ollama, Claude, or OpenAI-compatible settings. |
 | Sync, drafts, attachments, sending, folder changes, and mail mutations | Start `herald serve -config ~/.herald/conf.yaml`; `herald status` should report a running daemon. |
@@ -89,6 +89,6 @@ CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.her
 
 ## Available tool categories
 
-Herald includes tools for recent mail, unread mail, sender search, date search, semantic search, body lookup, classification, summaries, contacts, draft replies, and rule inspection. AI-powered tools require an AI backend, and body-based tools require cached body text.
+Herald includes tools for recent mail, unread mail, sender search, date search, semantic search, body lookup, classification, summaries, contacts, draft replies, rule inspection, and `dry_run_cleanup_rules` previews. AI-powered tools require an AI backend, body-based tools require cached body text, and live mail mutation still requires the daemon.
 
 If `herald serve` crashes with `wildcard not at end`, upgrade Herald. Older binaries had an invalid daemon route pattern and cannot unlock daemon-backed MCP tools.

@@ -3,7 +3,7 @@ title: Config Reference
 description: Reference for Herald YAML config fields, defaults, provider presets, and file locations.
 ---
 
-Herald reads YAML config from `~/.herald/conf.yaml` by default or from the path passed with `-config`. The first-run wizard and settings panel write the same config shape.
+Herald reads YAML config from `~/.herald/conf.yaml` by default or from the path passed with `-config`. The first-run wizard and settings overlay write the same config shape.
 
 ## Core Example
 

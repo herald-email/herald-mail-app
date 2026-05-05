@@ -18,9 +18,10 @@ Press `3` to open Cleanup. Use it when you want to answer questions like "which 
 | Detail table | Emails for the focused summary row with columns for selection, Date, Subject, Size, and Att. |
 | Preview panel | Current cleanup email body, header metadata, action hints, unsubscribe visibility, scroll state, delete/archive progress. |
 | Full-screen preview | Cleanup preview expanded across the terminal, including bounded Kitty/Ghostty or iTerm2 inline-image display, or safe fallback links when graphics are unavailable. |
-| Rule editor overlay | Full-screen `Automation Rule` form opened by `W`. |
-| Custom prompt overlay | Full-screen prompt editor opened by `P`. |
-| Cleanup manager overlay | Full-screen saved cleanup rules manager opened by `C`. |
+| Rule editor overlay | Compact centered `Automation Rule` form opened by `W`, with saved-rule context visible in the same modal. |
+| Custom prompt overlay | Compact centered prompt editor opened by `P`, with saved-prompt context visible in the same modal. |
+| Cleanup manager overlay | Compact centered saved cleanup rules manager opened by `C`, with preview and edit entry points. |
+| Dry-run preview overlay | Compact centered preview of matched messages, folders, categories, and planned actions before a rule can be saved, enabled, or run live. |
 | Status bar | Sender/domain mode, selection counts, deletion/archive progress, dry-run mode, folder counts, and confirmations. |
 
 <!-- HERALD_SCREENSHOT id="cleanup-main-summary" page="cleanup" alt="Cleanup tab sender summary and details" state="demo mode, 120x40, Cleanup tab, sender mode" desc="Shows sender summary rows, detail rows, selection column, sender mode status, and cleanup key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 3" -->
@@ -128,12 +129,12 @@ Mouse path: click a summary row to refresh details, click a detail row to open i
 | Selected detail rows | Status reports selected message count and sender/domain spread. |
 | Delete/archive confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. |
 | Deleting/archive in progress | Requests are queued serially; status shows progress and reconnect messages when needed. |
-| Rules dry-run preview | Overlay lists matched messages with sender/domain/category, folder, subject/date, and planned action without mutating IMAP or SQLite run metadata. |
+| Rules dry-run preview | Compact overlay lists matched messages with sender/domain/category, folder, subject/date, and planned action without mutating IMAP or SQLite run metadata. |
 | Cleanup preview | Sidebar hides to make room; details panel can scroll the body. |
 | Full-screen preview | Cleanup preview expands and rewraps body lines. |
 | AI unavailable | `A` and category-trigger workflows cannot classify new content. |
 | Dry-run mode | Status shows `[DRY RUN]`; rule previews are available, but live cleanup execution from preview is blocked. |
-| Narrow terminal | Cleanup collapses columns and can hide the sidebar or summary panel while preview is open. |
+| Narrow terminal | Cleanup collapses columns and can hide the sidebar or summary panel while preview is open. Compact overlays fit at `80x24`; at `50x15`, Herald shows the standard minimum-size guard. |
 
 ## Data And Privacy
 

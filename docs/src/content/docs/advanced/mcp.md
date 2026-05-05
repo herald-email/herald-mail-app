@@ -38,7 +38,7 @@ MCP has a few capability levels because some tools read the SQLite cache while o
 
 | Capability | Requirement |
 | --- | --- |
-| Cache-only read tools such as recent mail, unread mail, keyword search, sender stats, contacts, rules, and stored classifications | Run the TUI or daemon long enough to sync the SQLite cache. |
+| Cache-only read tools such as recent mail, unread mail, keyword search, sender stats, contacts, rules, dry-run cleanup previews, and stored classifications | Run the TUI or daemon long enough to sync the SQLite cache. |
 | Body lookup, email summaries, action-item extraction, and draft-reply generation | Cache the message body first, usually by opening the email in the TUI. MCP listing outputs include `message_id=...` for these follow-up tools. |
 | Semantic search, summarization, classification, action items, and AI draft replies | Configure an AI provider in settings or YAML. Ollama can also provide embeddings for semantic search. |
 | Sync, drafts, attachments, send/reply/forward, folder mutation, cleanup execution, unsubscribe, and mail mutation tools | Start `herald serve -config ~/.herald/conf.yaml` before or during the MCP client session. The MCP server re-checks the daemon when a daemon-backed tool runs. |
@@ -84,14 +84,14 @@ CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.her
 | --- | --- |
 | Read/search | `list_recent_emails`, `search_emails`, `get_sender_stats`, `get_email_classifications`, `get_email_body`, `list_unread_emails`, `search_by_date`, `search_by_sender`, `semantic_search_emails` |
 | AI/classification | `classify_email`, `classify_folder`, `summarise_email`, `summarise_thread`, `extract_action_items`, `draft_reply`, `list_classification_prompts`, `classify_email_custom`, `get_custom_category` |
-| Rules and cleanup | `list_rules`, `add_rule`, `run_rules`, `list_cleanup_rules`, `create_cleanup_rule`, `run_cleanup_rules` |
+| Rules and cleanup | `list_rules`, `add_rule`, `run_rules`, `list_cleanup_rules`, `create_cleanup_rule`, `dry_run_cleanup_rules`, `run_cleanup_rules` |
 | Contacts | `list_contacts`, `search_contacts`, `semantic_search_contacts`, `get_contact` |
 | Folder/sync | `list_folders`, `get_server_info`, `sync_folder`, `sync_all_folders`, `get_sync_status`, `create_folder`, `rename_folder`, `delete_folder` |
 | Message mutation | `mark_read`, `mark_unread`, `delete_email`, `archive_email`, `move_email`, `delete_thread`, `archive_thread`, `bulk_delete`, `archive_sender`, `bulk_move`, `unsubscribe_sender`, `soft_unsubscribe_sender` |
 | Compose/drafts | `send_email`, `save_draft`, `list_drafts`, `send_draft`, `reply_to_email`, `forward_email` |
 | Attachments | `list_attachments`, `get_attachment` |
 
-Read-only cache tools can work without the daemon after the TUI has populated the cache. Write, sync, send, draft, attachment, unsubscribe, folder mutation, and many live classification tools require the daemon.
+Read-only cache tools can work without the daemon after the TUI has populated the cache. `dry_run_cleanup_rules` is read-only: it previews selected or enabled cleanup-rule matches without mutating mail or updating rule metadata. Write, sync, send, draft, attachment, unsubscribe, folder mutation, live cleanup execution, and many live classification tools require the daemon.
 
 ## Daemon Interaction
 
