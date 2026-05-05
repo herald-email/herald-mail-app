@@ -4,10 +4,10 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-01T22:30:48+00:00
-- Published runs analyzed: 2
-- Total queue items: 3
-- Pending: 3
+- Updated at: 2026-05-05T04:59:32+00:00
+- Published runs analyzed: 3
+- Total queue items: 4
+- Pending: 4
 - Approved: 0
 - Rejected: 0
 - Implemented: 0
@@ -59,6 +59,19 @@ This document is the visible approval backlog for workflow suggestions recovered
 - Approval prompt: Approve a stricter doc-first gate for non-trivial feature runs.
 - Source runs:
 - `20260501-self-reflection-validation` at 2026-05-01T16:45:45+00:00 via commit
+
+### template-user-repro-after-ed02a1d-feedback
+
+- Queue key: `template-user-repro-after-ed02a1d-feedback-7fde7140ee`
+- Status: pending
+- Seen in runs: 1
+- First seen: 2026-05-05T04:22:03+00:00
+- Last seen: 2026-05-05T04:22:03+00:00
+- Publish actions: commit, merge, worktree-delete
+- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
+- Approval prompt: Approve exploring `template-user-repro-after-ed02a1d-feedback` as the next explicit GEPA improvement pass.
+- Source runs:
+- `20260504-212203-implement-timeline-reading-first-redesign-remove-size-kb-and-att-columns-add-subject-attachment-marker-human-local-dates-improved-sender-subject-allocation-and-distinct-table-headers` at 2026-05-05T04:22:03+00:00 via commit, merge, worktree-delete
 
 ## Approved Items
 
