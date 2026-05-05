@@ -9,6 +9,8 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/ai"
 )
 
+const titleTabGap = " "
+
 func (m *Model) topSyncStripSegments() (string, string) {
 	message := strings.TrimSpace(m.progressInfo.Message)
 	if message == "" {
@@ -136,9 +138,16 @@ func (m *Model) renderTitleBar(width int) string {
 	if width <= 0 {
 		width = 80
 	}
-	return m.headerStyle.
-		Width(width).
-		Render(safeChromeLine("Herald", width-2))
+	title := m.headerStyle.Render("Herald")
+	line := truncateVisual(title+titleTabGap+m.renderTabBar(), width)
+	if missing := width - ansi.StringWidth(line); missing > 0 {
+		line += strings.Repeat(" ", missing)
+	}
+	return line
+}
+
+func (m *Model) titleTabStartX() int {
+	return ansi.StringWidth(m.headerStyle.Render("Herald")) + ansi.StringWidth(titleTabGap)
 }
 
 func (m *Model) renderTabBar() string {

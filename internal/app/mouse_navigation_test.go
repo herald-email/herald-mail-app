@@ -81,11 +81,12 @@ func makeMouseCleanupModel(t *testing.T) *Model {
 func TestMouseClickTabSwitchesWithoutTypingIntoCompose(t *testing.T) {
 	m := makeMouseTimelineModel(t)
 
-	model, _ := m.Update(mousePress(20, 1))
+	cleanupTabX := visibleWidth(" Herald  ") + tabMouseWidth(topLevelTabNavigation[0]) + 1
+	model, _ := m.Update(mousePress(cleanupTabX, 0))
 	updated := model.(*Model)
 
 	if updated.activeTab != tabCleanup {
-		t.Fatalf("expected mouse click on tab bar to switch to Cleanup, got tab %d", updated.activeTab)
+		t.Fatalf("expected mouse click on title-row tab to switch to Cleanup, got tab %d", updated.activeTab)
 	}
 	if got := updated.composeTo.Value(); got != "" {
 		t.Fatalf("expected tab mouse click not to type into compose field, got %q", got)
@@ -95,7 +96,7 @@ func TestMouseClickTabSwitchesWithoutTypingIntoCompose(t *testing.T) {
 func TestMouseClickTimelineRowOpensPreview(t *testing.T) {
 	m := makeMouseTimelineModel(t)
 
-	model, cmd := m.Update(mousePress(5, 4))
+	model, cmd := m.Update(mousePress(5, 3))
 	updated := model.(*Model)
 
 	if updated.timeline.selectedEmail == nil {
@@ -112,7 +113,7 @@ func TestMouseClickTimelineRowOpensPreview(t *testing.T) {
 func TestMouseClickCollapsedThreadRootFirstSelectsPreviewWithoutExpanding(t *testing.T) {
 	m, root, _ := makeMouseThreadTimelineModel(t)
 
-	model, cmd := m.Update(mousePress(5, 4))
+	model, cmd := m.Update(mousePress(5, 3))
 	updated := model.(*Model)
 
 	if updated.timeline.selectedEmail == nil {
@@ -136,7 +137,7 @@ func TestMouseClickSelectedCollapsedThreadRootExpandsWithoutRefetch(t *testing.T
 	m, root, _ := makeMouseThreadTimelineModel(t)
 	m.timeline.selectedEmail = root
 
-	model, cmd := m.Update(mousePress(5, 4))
+	model, cmd := m.Update(mousePress(5, 3))
 	updated := model.(*Model)
 
 	if !updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
@@ -158,7 +159,7 @@ func TestMouseClickExpandedThreadRootFirstSelectsPreviewWithoutFolding(t *testin
 	m.timeline.expandedThreads[normalizeSubject(root.Subject)] = true
 	m.updateTimelineTable()
 
-	model, cmd := m.Update(mousePress(5, 4))
+	model, cmd := m.Update(mousePress(5, 3))
 	updated := model.(*Model)
 
 	if updated.timeline.selectedEmail == nil {
@@ -184,7 +185,7 @@ func TestMouseClickSelectedExpandedThreadRootFoldsWithoutClearingPreview(t *test
 	m.timeline.selectedEmail = root
 	m.updateTimelineTable()
 
-	model, cmd := m.Update(mousePress(5, 4))
+	model, cmd := m.Update(mousePress(5, 3))
 	updated := model.(*Model)
 
 	if updated.timeline.expandedThreads[normalizeSubject(root.Subject)] {
@@ -233,7 +234,7 @@ func TestMouseClickCleanupSummaryUpdatesDetails(t *testing.T) {
 		t.Fatal("expected initial cleanup summary row")
 	}
 
-	model, _ := m.Update(mousePress(5, 5))
+	model, _ := m.Update(mousePress(5, 4))
 	updated := model.(*Model)
 	after, ok := updated.summaryKeyAtCursor()
 	if !ok {
@@ -256,7 +257,7 @@ func TestMouseClickCleanupDetailsOpensPreview(t *testing.T) {
 	m.setFocusedPanel(panelDetails)
 
 	detailsX := m.summaryTable.Width() + panelGapWidth + 3
-	model, cmd := m.Update(mousePress(detailsX, 4))
+	model, cmd := m.Update(mousePress(detailsX, 3))
 	updated := model.(*Model)
 
 	if !updated.showCleanupPreview || updated.cleanupPreviewEmail == nil {

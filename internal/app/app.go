@@ -2254,8 +2254,6 @@ func (m *Model) renderMainView() string {
 	// Header
 	content.WriteString(m.renderTitleBar(m.windowWidth) + "\n")
 
-	// Tab bar
-	content.WriteString(m.renderTabBar() + "\n")
 	if syncStrip := m.renderTopSyncStrip(); syncStrip != "" {
 		content.WriteString(syncStrip + "\n")
 	}

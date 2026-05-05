@@ -132,9 +132,9 @@ var adaptiveTheme = Theme{
 	Chrome: ThemeChromeRoles{
 		TitleBar:     ThemeStyle{Bold: true, Reverse: true},
 		TabActive:    ThemeStyle{Bold: true, Reverse: true},
-		TabInactive:  ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
+		TabInactive:  ThemeStyle{},
 		StatusBar:    ThemeStyle{Reverse: true},
-		HintBar:      ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
+		HintBar:      ThemeStyle{},
 		TopSyncStrip: ThemeStyle{Foreground: lipgloss.Color("3"), Bold: true},
 		TableHeader:  ThemeStyle{Bold: true, Reverse: true},
 		Loading:      ThemeStyle{Foreground: lipgloss.Color("6"), Bold: true, Reverse: true},

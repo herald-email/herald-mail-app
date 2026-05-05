@@ -65,13 +65,13 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 }
 
 func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
-	if msg.Button != tea.MouseLeft || msg.Y != 1 {
+	if msg.Button != tea.MouseLeft || msg.Y != 0 {
 		return nil, false
 	}
 	if !m.canInteractWithVisibleData() {
 		return nil, true
 	}
-	x := 0
+	x := m.titleTabStartX()
 	for _, item := range topLevelTabNavigation {
 		w := tabMouseWidth(item)
 		if msg.X >= x && msg.X < x+w {
@@ -98,9 +98,9 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 
 func (m *Model) mouseContentTop() int {
 	if m.hasTopSyncStrip() {
-		return 3
+		return 2
 	}
-	return 2
+	return 1
 }
 
 func (m *Model) mousePanelHeight() int {

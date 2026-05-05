@@ -217,10 +217,11 @@ Check these states during every applicable lane:
 3. Capture text and PNG.
 
 **Expect:**
-- Header and tab bar visible.
+- `Herald` and the `F1`-`F3` tab labels share one title row.
+- Inactive tab labels inherit the terminal default foreground; the selected tab remains visually distinct.
 - No raw panic output.
 - Status bar present.
-- Key hint bar present.
+- Key hint bar present and readable in the terminal default foreground.
 - Active tab and active panel are visually obvious.
 - If cached data is already visible while live sync continues, the UI explains that clearly and shows active sync progress in a human-readable way.
 - The top sync strip uses stream language (`opening`, `syncing`, `reconciled`) rather than vague spinner-only wording.
@@ -238,6 +239,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Correct tab highlight.
+- `Herald` and tabs remain on one title row; no separate tab-bar row appears.
 - Tab-specific layout appears.
 - Key hints change with the tab and consistently advertise `F1-F3: tabs`.
 - Key hints consistently include `?: help` when there is room or wrapped hint space.

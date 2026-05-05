@@ -194,6 +194,30 @@ func TestMainView_TitleBarSpansTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestMainView_TitleRowIncludesTabsWithoutSeparateTabLine(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	lines := strings.Split(stripANSI(m.renderMainView()), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("expected rendered chrome and content, got %d lines", len(lines))
+	}
+	title := lines[0]
+	for _, want := range []string{"Herald", "F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
+		if !strings.Contains(title, want) {
+			t.Fatalf("expected title row to contain %q, got %q", want, title)
+		}
+	}
+	if strings.Contains(lines[1], "F1  Timeline") || strings.Contains(lines[1], "F2  Cleanup") || strings.Contains(lines[1], "F3  Contacts") {
+		t.Fatalf("expected no separate tab line below title row, got %q", lines[1])
+	}
+	if strings.TrimSpace(lines[1]) == "" {
+		t.Fatalf("expected content to start immediately after title row, got blank line: %#v", lines[:3])
+	}
+}
+
 func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline
@@ -480,7 +504,7 @@ func TestMainView_ShowsIncrementalFetchProgressInSyncStrip(t *testing.T) {
 	}
 }
 
-func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
+func TestRenderMainView_DoesNotInsertBlankLineAfterTitleTabs(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = mockEmails()
@@ -490,8 +514,8 @@ func TestRenderMainView_DoesNotInsertBlankLineAfterTabs(t *testing.T) {
 	if len(rendered) < 3 {
 		t.Fatalf("expected at least 3 lines, got %d", len(rendered))
 	}
-	if strings.TrimSpace(rendered[2]) == "" {
-		t.Fatalf("expected content to start immediately after tab bar, got blank line: %#v", rendered[:4])
+	if strings.TrimSpace(rendered[1]) == "" {
+		t.Fatalf("expected content to start immediately after title/tab row, got blank line: %#v", rendered[:4])
 	}
 }
 
@@ -820,14 +844,14 @@ func TestCleanupView_UsesCompactLeadingSelectionCell(t *testing.T) {
 	if len(lines) < 5 {
 		t.Fatalf("expected cleanup view output, got %d lines", len(lines))
 	}
-	if !strings.Contains(lines[2], "┌") {
-		t.Fatalf("expected cleanup border line, got %q", lines[2])
+	if !strings.Contains(lines[1], "┌") {
+		t.Fatalf("expected cleanup border line, got %q", lines[1])
 	}
-	if !strings.Contains(lines[3], "│✓") {
-		t.Fatalf("expected cleanup summary header to start without extra left padding, got %q", lines[3])
+	if !strings.Contains(lines[2], "│✓") {
+		t.Fatalf("expected cleanup summary header to start without extra left padding, got %q", lines[2])
 	}
-	if !strings.Contains(lines[4], "│ ") {
-		t.Fatalf("expected cleanup data row to render flush to the border, got %q", lines[4])
+	if !strings.Contains(lines[3], "│ ") {
+		t.Fatalf("expected cleanup data row to render flush to the border, got %q", lines[3])
 	}
 }
 
@@ -845,10 +869,10 @@ func TestCleanupView_TopBorderReflectsFocusedPanel(t *testing.T) {
 	m = updated.(*Model)
 
 	m.focusedPanel = panelSummary
-	summaryBorder := strings.Split(m.renderMainView(), "\n")[2]
+	summaryBorder := strings.Split(m.renderMainView(), "\n")[1]
 
 	m.focusedPanel = panelDetails
-	detailsBorder := strings.Split(m.renderMainView(), "\n")[2]
+	detailsBorder := strings.Split(m.renderMainView(), "\n")[1]
 
 	if summaryBorder == detailsBorder {
 		t.Fatalf("expected cleanup top border to reflect focused panel")
@@ -872,7 +896,7 @@ func TestCleanupPreview_UsesConsistentPanelGaps(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
 	m = updated.(*Model)
 
-	top := strings.Split(stripANSI(m.renderMainView()), "\n")[2]
+	top := strings.Split(stripANSI(m.renderMainView()), "\n")[1]
 	if count := strings.Count(top, "┐ ┌"); count != 2 {
 		t.Fatalf("expected a single gap between each cleanup panel, got top line %q", top)
 	}
@@ -895,7 +919,7 @@ func TestCleanupPreview_OnlyPreviewBorderIsActive(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
 	m = updated.(*Model)
 
-	top := strings.Split(m.renderMainView(), "\n")[2]
+	top := strings.Split(m.renderMainView(), "\n")[1]
 	focusedBorderProbe := defaultTheme.Focus.PanelBorderFocused.Style().Render("x")
 	activePrefix := focusedBorderProbe[:strings.Index(focusedBorderProbe, "x")]
 	if count := strings.Count(top, activePrefix); count != 1 {

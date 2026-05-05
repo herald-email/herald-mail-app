@@ -97,13 +97,13 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 
 ## UI Layout
 
-The TUI uses a fixed tab bar at the top, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
+The TUI uses a title-row tab strip beside the `Herald` title, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
 
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
 - [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
 
 ### Tabs (top-level navigation)
-Keyboard (`F1`-`F3` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable. Compose is a transient writing screen launched from Timeline, not a top-level tab.
+Keyboard (`F1`-`F3` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
 - [x] `F1` — Timeline: chronological email list with body preview split
 - [x] `F2` — Cleanup: sender/domain grouping for bulk deletion

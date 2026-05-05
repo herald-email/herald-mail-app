@@ -490,7 +490,7 @@ func (m *Model) renderSuggestionDropdown() string {
 		if m.hasTopSyncStrip() {
 			extraChromeRows = 1
 		}
-		tableHeight = m.windowHeight - 7 - extraChromeRows
+		tableHeight = m.windowHeight - 6 - extraChromeRows
 		if tableHeight < 5 {
 			tableHeight = 5
 		}
@@ -1196,7 +1196,7 @@ func (m *Model) composeContentHeight() int {
 	if m.hasTopSyncStrip() {
 		extraChromeRows = 1
 	}
-	tableHeight := m.windowHeight - 7 - extraChromeRows
+	tableHeight := m.windowHeight - 6 - extraChromeRows
 	if tableHeight < 5 {
 		tableHeight = 5
 	}

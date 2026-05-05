@@ -38,6 +38,27 @@ func TestDefaultThemeUsesAdaptiveTerminalRoles(t *testing.T) {
 	}
 }
 
+func TestAdaptiveChromeInactiveTabsAndHintsUseDefaultForeground(t *testing.T) {
+	if defaultTheme.Chrome.TabInactive.Foreground != nil {
+		t.Fatalf("inactive tabs should inherit terminal foreground, got %#v", defaultTheme.Chrome.TabInactive.Foreground)
+	}
+	if defaultTheme.Chrome.TabInactive.Background != nil {
+		t.Fatalf("inactive tabs should not force a background, got %#v", defaultTheme.Chrome.TabInactive.Background)
+	}
+	if defaultTheme.Chrome.TabInactive.Faint {
+		t.Fatalf("inactive tabs should not use faint styling")
+	}
+	if defaultTheme.Chrome.HintBar.Foreground != nil {
+		t.Fatalf("key hints should inherit terminal foreground, got %#v", defaultTheme.Chrome.HintBar.Foreground)
+	}
+	if defaultTheme.Chrome.HintBar.Background != nil {
+		t.Fatalf("key hints should not force a background, got %#v", defaultTheme.Chrome.HintBar.Background)
+	}
+	if defaultTheme.Chrome.HintBar.Faint {
+		t.Fatalf("key hints should not use faint styling")
+	}
+}
+
 func TestLegacyDarkThemeKeepsCurrentXtermPalette(t *testing.T) {
 	theme := ThemeByName("legacy-dark")
 	if theme.Name != "legacy-dark" {

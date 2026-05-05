@@ -1,5 +1,4 @@
-[7m [m[1;7mHerald[m[7m [m[7m                                                                                                                [m
-[7m  [m[1;7mF1  Timeline[m[7m  [m  [2;90mF2  Cleanup[m    [2;90mF3  Contacts[m
+[7m [m[1;7mHerald[m[7m [m [7m  [m[1;7mF1  Timeline[m[7m  [m  F2  Cleanup    F3  Contacts
 [90m┌──────────────────────────┐[m [36m┌────────────────────────────────────────────────────────────────────────────────────────┐[m
 [90m│[m[4;4m›[m[4m [m[4m [m[4;4mI[m[4;4mN[m[4;4mB[m[4;4mO[m[4;4mX[m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[90m│[m [36m│[m [1m✓[m  [1mSender[m              [1mSubject[m                                  [1mWhen[m          [1mTag[m      [36m│[m
 [90m│[m   All Mail only          [90m│[m [36m│[m [1m[m   [1m● alice@example.c…[m  [1mMeeting tomorrow[m                         [1mApr 1[m         [1m[m         [36m│[m
@@ -34,7 +33,8 @@
                              [36m│[m                                                                                        [36m│[m
                              [36m│[m                                                                                        [36m│[m
                              [36m│[m                                                                                        [36m│[m
+                             [36m│[m                                                                                        [36m│[m
                              [36m└────────────────────────────────────────────────────────────────────────────────────────┘[m
 [7m [m[7mINBOX  │  AI: off  │  3 emails[m[7m [m[7m                                                                                        [m
- [2;90m?: help  │  F1-F3: tabs  │  S: settings  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  space: select  │  V: range[m
- [2;90mshift+↑/↓: range  │  right/]: preview  │  left/[: folders  │  enter: open  │  U: unread  │  C: compose  │  *: star[m
+ ?: help  │  F1-F3: tabs  │  S: settings  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  space: select  │  V: range
+ shift+↑/↓: range  │  right/]: preview  │  left/[: folders  │  enter: open  │  U: unread  │  C: compose  │  *: star

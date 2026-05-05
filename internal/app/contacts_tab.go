@@ -263,8 +263,8 @@ func (m *Model) renderContactsTab(width, height int) string {
 	rightW := plan.Contacts.DetailWidth
 
 	// height is the full terminal height. renderMainView adds chrome around us:
-	// header(1) + tab bar(1) + blank(1) + "\n" after content(1) + status bar(1) + key hints(1) = 6.
-	// Each panel also adds 2 border lines (top + bottom), so total deduction = 8.
+	// title/tabs(1) + "\n" after content(1) + status bar(1) + key hints(1) = 4.
+	// Each panel also adds 2 border lines (top + bottom), so total deduction = 6.
 	contentH := plan.ContentHeight
 
 	activeColor := defaultTheme.Chrome.TabActive.BackgroundColor()
