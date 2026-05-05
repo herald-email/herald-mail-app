@@ -17,6 +17,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] `herald-autopilot` is a repo-local skill under `.agents/skills/` for one Herald task per invocation.
 - [x] The workflow bootstraps a durable run folder under `.superpowers/autopilot/runs/<run-id>/` before doing significant work.
 - [x] The workflow uses a single worktree and a single candidate branch in v1.
+- [x] The workflow treats a branch in the main checkout as insufficient isolation for implementation work; tracked-file edits belong in `.worktrees/...` unless the user explicitly opts out.
 - [x] The workflow records evidence, reflections, scores, and a human-readable report.
 - [x] The default finish line is branch + worktree + report, not push, PR, or merge.
 - [x] Verification is impact-based: code-only tasks stay focused, while TUI, SSH, and MCP checks are added only when the task touches those surfaces.
@@ -54,6 +55,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a scored visual-evidence gate so TUI runs must record canonical terminal captures and repro paths instead of treating screenshots as optional.
 - [x] Added a scored input-routing safety gate plus a reusable template for `red-compose-comma-alias` so shortcut-sensitive TUI work has explicit text-entry proof and reusable recovery guidance.
 - [x] Added a phase-impact measurement layer that renders a durable report comparing retries, skipped gates, and clarification load before and after the first four workflow improvements.
+- [x] Tightened the worktree policy after the adaptive terminal-theme implementation used a branch in the main checkout and blocked parallel task setup.
 
 ## Run Patterns Observed
 
@@ -93,6 +95,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
 - [ ] The queue is visible now, but approvals are still user-driven decisions rather than automatically turning into measured workflow changes.
 - [ ] The current phase-impact report is honest but sample-starved: it has no post-Phase 1 bug or feature runs yet, so it cannot prove real-task gains from the recent workflow changes.
+- [ ] Non-autopilot implementation requests can still bypass this repo-local skill unless future sessions load the worktree policy before editing; a lightweight repo-level reminder may be needed outside GEPA.
 
 ## Candidate Next Experiments
 
@@ -111,6 +114,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 - [ ] Measure whether the visual and input-routing gates reduce TUI retry count and post-handoff clarification load enough to justify stricter automatic enforcement.
 - [ ] Collect and measure the next 3 to 5 real bug or feature autopilot runs so the phase-impact report stops relying on workflow-validation-only evidence.
+- [ ] Add a pre-edit worktree gate that checks `pwd` and `git worktree list` before tracked-file edits, and records an explicit opt-out when working in the main checkout.
 
 ## Ask Me Next
 

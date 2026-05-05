@@ -40,13 +40,19 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 2. Ask only critical questions that change implementation or safety.
 3. Show a concise plan summary, then proceed unless a risky or non-obvious tradeoff needs the user's decision.
 4. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
-5. Verify baseline, then create a dedicated worktree under `.worktrees/`.
+5. Verify baseline, then create and switch into a dedicated worktree under `.worktrees/` before any tracked-file edits. Creating only a branch in the current checkout does not satisfy this.
 6. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
 7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
 8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
 9. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
 10. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
 11. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+
+## Worktree Safety Correction
+
+If a Herald task moves from research or planning into implementation, create or switch into a dedicated `.worktrees/...` checkout before editing tracked files, even when the user did not explicitly request a full autopilot run. A normal branch in the main checkout is not enough because it blocks the user from running parallel tasks in the repo.
+
+If a prior research-only turn stayed in the main checkout, pause at the first implementation request, create the worktree, and continue there. Only skip this when the user explicitly asks to work in the current checkout.
 
 ## GitHub Issue Association
 
@@ -126,6 +132,8 @@ Use the run metadata to create:
 
 - Branch: `codex/autopilot-<slug>-<timestamp>`
 - Worktree: `.worktrees/<run-id>-<slug>`
+
+Do not use `git switch -c` in the main checkout as a substitute for a worktree. The branch should be checked out inside the worktree path before implementation begins.
 
 Baseline verification happens before implementation. If the baseline is already failing, record that in the run, summarize it clearly, and ask whether to proceed on top of the dirty baseline only if it materially obscures the requested task.
 
