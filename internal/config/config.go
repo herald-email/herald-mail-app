@@ -31,6 +31,11 @@ type Config struct {
 	Cache  struct {
 		DatabasePath string `yaml:"database_path,omitempty"`
 	} `yaml:"cache,omitempty"`
+	Compose struct {
+		Signature struct {
+			Text string `yaml:"text,omitempty"`
+		} `yaml:"signature,omitempty"`
+	} `yaml:"compose,omitempty"`
 	Credentials struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`

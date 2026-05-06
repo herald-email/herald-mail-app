@@ -110,6 +110,27 @@ func TestSaveRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSaveRoundTrip_ComposeSignature(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	original := minimalOAuthConfig()
+	original.Compose.Signature.Text = "-- \nRowan\nHerald Labs"
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if got := loaded.Compose.Signature.Text; got != original.Compose.Signature.Text {
+		t.Fatalf("Compose.Signature.Text = %q, want %q", got, original.Compose.Signature.Text)
+	}
+}
+
 func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "work.yaml")

@@ -847,6 +847,7 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	}
 	m.composeSubject.SetValue(subject)
 	m.composeBody.SetValue(template)
+	m.applyConfiguredSignatureToComposeBody()
 	m.composeField = 4
 	m.composeTo.Blur()
 	m.composeCC.Blur()

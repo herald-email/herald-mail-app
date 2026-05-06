@@ -54,6 +54,7 @@ func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
 	m.activeTab = tabCompose
 	m.clearComposeFieldsForBlankMessage()
 	m.resetComposeMode()
+	m.applyConfiguredSignatureToComposeBody()
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	}
