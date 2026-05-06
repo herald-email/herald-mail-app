@@ -1156,23 +1156,23 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 - stock ttyd: quick smoke that iTerm2 OSC 1337 bytes can paint in xterm.js; placement may drift because xterm's image addon treats images as buffer content.
 - repo custom ttyd harness: preferred browser proof; loads `@xterm/addon-image` directly and uses the ttyd websocket handshake expected by ttyd 1.7.x.
 
-Run the automated stock-ttyd smoke from the repo root. This intentionally mirrors the manual command shape used during image-preview debugging:
+Run the automated custom-harness probe from the repo root. This is the default because it is the reliable browser-raster regression lane:
 
 ```bash
 make build
-PORT=7682 EVIDENCE_DIR=reports/ttyd-stock-image-preview \
+PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
-Then run the stricter repo custom-harness probe:
+Run the stock-ttyd smoke only when you need to compare against the manual ttyd frontend. This intentionally mirrors the manual command shape used during image-preview debugging:
 
 ```bash
 make build
-TTYD_MODE=custom PORT=7683 EVIDENCE_DIR=reports/ttyd-custom-image-preview \
+TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
-Both probe modes drive the demo to `Creative Commons image sampler for terminal previews`, capture a browser screenshot, and write pixel-component metrics. Stock mode launches normal ttyd with `-W -t enableSixel=true -t rendererType=canvas` and passes when it detects the color-chart cells plus at least one large photo region. Custom mode launches ttyd with `tools/ttyd-image-harness/index.html` and passes when it detects the color-chart cells plus at least two large photo regions. These probes prove browser-visible raster rendering, not exact native-terminal placement.
+Both probe modes drive the demo to `Creative Commons image sampler for terminal previews`, capture a browser screenshot, and write pixel-component metrics. Custom mode launches ttyd with `tools/ttyd-image-harness/index.html` and passes when it detects the color-chart cells plus at least two large photo regions. Stock mode launches normal ttyd with `-W -t enableSixel=true -t rendererType=canvas` and passes when it detects the color-chart cells plus at least one large photo region. These probes prove browser-visible raster rendering, not exact native-terminal placement.
 
 For an interactive custom-harness run:
 
@@ -1205,7 +1205,7 @@ ttyd -i 127.0.0.1 -p 7681 -W \
   ./bin/herald -debug -demo -image-protocol=iterm2
 ```
 
-Stock ttyd 1.7.7 can paint iTerm2 inline images, but it may miss or relocate images compared with the custom harness and native terminals. The scripted default is stock mode so agent runs match the quick manual repro; do not use stock ttyd alone as the acceptance test for inline-image placement.
+Stock ttyd 1.7.7 can paint iTerm2 inline images, but it may miss or relocate images compared with the custom harness and native terminals. The scripted default is custom mode so the one-command probe avoids stock ttyd's known gaps; do not use stock ttyd alone as the acceptance test for inline-image placement.
 
 **Trailing whitespace varies.** `capture-pane -p` strips trailing spaces per line but preserves blank lines up to the terminal height. For golden file comparison, decide whether to normalize this:
 

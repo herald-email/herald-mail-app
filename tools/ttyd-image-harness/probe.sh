@@ -14,7 +14,7 @@ Usage: tools/ttyd-image-harness/probe.sh
 Environment:
   PORT             ttyd port (default: 7682)
   HOST             ttyd bind host (default: 127.0.0.1)
-  TTYD_MODE        stock or custom (default: stock)
+  TTYD_MODE        custom or stock (default: custom)
   RENDERER_TYPE    ttyd renderer for stock mode (default: canvas)
   IMAGE_PROTOCOL   Herald image protocol (default: iterm2)
   EVIDENCE_DIR     output directory under reports/
@@ -40,7 +40,7 @@ esac
 
 PORT="${PORT:-7682}"
 HOST="${HOST:-127.0.0.1}"
-TTYD_MODE="${TTYD_MODE:-stock}"
+TTYD_MODE="${TTYD_MODE:-custom}"
 RENDERER_TYPE="${RENDERER_TYPE:-canvas}"
 IMAGE_PROTOCOL="${IMAGE_PROTOCOL:-iterm2}"
 HERALD_BIN="${HERALD_BIN:-./bin/herald}"
