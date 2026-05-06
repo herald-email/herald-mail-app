@@ -192,11 +192,11 @@ func TestIterm2PreviewRendererMarksTerminalConsumedRows(t *testing.T) {
 	if rendered.Rows != 18 {
 		t.Fatalf("iTerm2 rows = %d, want 18", rendered.Rows)
 	}
-	if strings.Count(rendered.Content, "\n") != rendered.Rows-1 {
-		t.Fatalf("iTerm2 content should reserve exactly %d rows before drawing, got %q", rendered.Rows, rendered.Content)
+	if strings.Contains(rendered.Content, "\n") || strings.Contains(rendered.Content, "\x1b[2K") {
+		t.Fatalf("iTerm2 content should be a control-only image escape for v2 overlay rendering, got %q", rendered.Content)
 	}
-	if !strings.Contains(rendered.Content, "\x1b[17A\x1b]1337;File=") {
-		t.Fatalf("iTerm2 content should move back to the reserved box top before drawing, got %q", rendered.Content)
+	if !strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("iTerm2 content should include image escape, got %q", rendered.Content)
 	}
 }
 

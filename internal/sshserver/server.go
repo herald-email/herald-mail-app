@@ -106,7 +106,7 @@ func Run(commandName string, args []string) error {
 				m.SetPreviewImageMode(imageMode)
 				m.SetConfigPath(resolvedConfig)
 				m.SetConfig(cfg)
-				return m, nil
+				return m, app.ProgramOptions()
 			}),
 		),
 	)

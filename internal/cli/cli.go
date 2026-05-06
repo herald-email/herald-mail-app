@@ -121,7 +121,7 @@ func runWizard(configPath string, experimental bool) error {
 		ShowExperimentalEmailServices: experimental,
 	})
 	wm := wizardModel{settings: s, configPath: configPath}
-	p := tea.NewProgram(wm)
+	p := tea.NewProgram(wm, app.ProgramOptions()...)
 	finalModel, err := p.Run()
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool) {
 	model.SetConfig(cfg)
 
 	logger.Info("Starting demo TUI application...")
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, app.ProgramOptions()...)
 	if _, err := p.Run(); err != nil {
 		logger.Error("Demo application error: %v", err)
 		fmt.Printf("Error running demo: %v\n", err)
@@ -697,23 +697,23 @@ func runTUI() {
 	mailer := appsmtp.New(cfg)
 
 	// Create the TUI application
-	app := app.New(b, mailer, cfg.Credentials.Username, classifier, *opts.dryRun)
-	app.SetPreviewImageMode(imageMode)
-	app.SetConfigPath(resolvedConfig)
-	app.SetConfig(cfg)
+	model := app.New(b, mailer, cfg.Credentials.Username, classifier, *opts.dryRun)
+	model.SetPreviewImageMode(imageMode)
+	model.SetConfigPath(resolvedConfig)
+	model.SetConfig(cfg)
 
 	// Wire cleanup scheduler if using a local backend and schedule is configured.
 	if lb, ok := b.(*backend.LocalBackend); ok && cfg.Cleanup.ScheduleHours > 0 {
 		engine := cleanup.NewEngineWithDryRun(lb.Cache(), b, logger.New(), *opts.dryRun)
 		sched := cleanup.NewScheduler(engine, cfg.Cleanup.ScheduleHours)
 		sched.Start(context.Background())
-		app.SetCleanupScheduler(sched)
+		model.SetCleanupScheduler(sched)
 	}
 
 	logger.Info("Starting TUI application...")
 
 	// Run the application
-	p := tea.NewProgram(app)
+	p := tea.NewProgram(model, app.ProgramOptions()...)
 	if _, err := p.Run(); err != nil {
 		logger.Error("Application error: %v", err)
 		fmt.Printf("Error running application: %v", err)

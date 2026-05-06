@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
-	"github.com/herald-email/herald-mail-app/internal/iterm2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	emailrender "github.com/herald-email/herald-mail-app/internal/render"
@@ -461,9 +460,7 @@ func (m *Model) renderFullScreenEmail() string {
 	innerW, maxBodyLines := m.timelineFullScreenDocumentBudget()
 
 	var sb strings.Builder
-	if m.currentPreviewImageMode() == previewImageModeIterm2 {
-		sb.WriteString(iterm2.ClearNativeRasterScreen())
-	}
+	var nativeImageTail string
 
 	email := m.timeline.selectedEmail
 	category := ""
@@ -474,6 +471,7 @@ func (m *Model) renderFullScreenEmail() string {
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
+	bodyStartRow := len(headerLines) + 1
 
 	dimStyle := defaultTheme.Text.Muted.Style()
 	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 6)
@@ -485,6 +483,7 @@ func (m *Model) renderFullScreenEmail() string {
 		for _, line := range threadContextLines {
 			sb.WriteString(dimStyle.Render(line) + "\n")
 		}
+		bodyStartRow += len(threadContextLines)
 	}
 
 	if m.timeline.bodyLoading {
@@ -495,6 +494,7 @@ func (m *Model) renderFullScreenEmail() string {
 		viewport := renderPreviewDocumentViewportWithVisual(layout, m.timeline.bodyScrollOffset, maxBodyLines,
 			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
 		sb.WriteString(viewport.Content)
+		nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, bodyStartRow, 1)
 
 		if layout.TotalRows > maxBodyLines {
 			maxOffset := layout.TotalRows - maxBodyLines
@@ -518,10 +518,11 @@ func (m *Model) renderFullScreenEmail() string {
 		sb.WriteString(m.renderQuickReplyPicker(innerW, pickerLines))
 	}
 
-	return lipgloss.NewStyle().
+	rendered := lipgloss.NewStyle().
 		Width(m.windowWidth).
 		Height(m.windowHeight).
 		Render(sb.String())
+	return appendNativeImageOverlayTailWithinRows(rendered, nativeImageTail, m.windowHeight)
 }
 
 func (m *Model) currentPreviewImageMode() previewImageMode {
@@ -995,6 +996,7 @@ func (m *Model) renderCleanupPreview() string {
 	innerW := w - 4 // left border + padding
 
 	var sb strings.Builder
+	var nativeImageTail string
 
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelPreview)
@@ -1037,6 +1039,7 @@ func (m *Model) renderCleanupPreview() string {
 			m.cleanupBodyScrollOffset = clampPreviewScrollOffset(m.cleanupBodyScrollOffset, layout.TotalRows, maxBodyLines)
 			viewport := renderPreviewDocumentViewport(layout, m.cleanupBodyScrollOffset, maxBodyLines)
 			sb.WriteString(viewport.Content)
+			nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, 2+headerLines, 3)
 
 			escHint := "Esc: close preview"
 			zHint := "z: exit full-screen"
@@ -1124,5 +1127,6 @@ func (m *Model) renderCleanupPreview() string {
 		BorderForeground(borderColor).
 		PaddingLeft(1)
 
-	return panelStyle.Render(fitPanelContentHeight(sb.String(), contentHeight))
+	rendered := panelStyle.Render(fitPanelContentHeight(sb.String(), contentHeight))
+	return appendNativeImageOverlayTailWithinRows(rendered, nativeImageTail, contentHeight+2)
 }

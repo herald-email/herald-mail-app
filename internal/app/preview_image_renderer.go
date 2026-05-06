@@ -212,7 +212,7 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
 		size := previewImageCellSizeForMode(mode, req.Image, req.InnerWidth, req.AvailableRows)
-		rendered := strings.TrimRight(iterm2.RenderInlineInCellBox(req.Image.Data, size.Width, size.Rows, req.InnerWidth), "\n")
+		rendered := strings.TrimRight(iterm2.RenderInlineImageOnly(req.Image.Data, size.Width, size.Rows), "\n")
 		if rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}

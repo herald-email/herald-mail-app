@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -27,9 +28,16 @@ type previewDocumentLayout struct {
 	TotalRows int
 }
 
-type previewViewportRender struct {
+type previewNativeOverlay struct {
+	Row     int
+	Mode    previewImageMode
 	Content string
-	Rows    int
+}
+
+type previewViewportRender struct {
+	Content        string
+	Rows           int
+	NativeOverlays []previewNativeOverlay
 }
 
 func layoutPreviewDocument(doc previewDocument, opts previewLayoutOptions) previewDocumentLayout {
@@ -162,32 +170,104 @@ func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offse
 	}
 
 	lines := make([]string, 0, visibleRows)
+	nativeOverlays := make([]previewNativeOverlay, 0)
 	lo, hi := visualStart, visualEnd
 	if lo > hi {
 		lo, hi = hi, lo
 	}
 	highlightStyle := defaultTheme.Focus.VisualSelection.Style()
-	hasTerminalConsumedRows := false
 	for i := offset; i < end && i < len(layout.Rows); i++ {
 		row := layout.Rows[i]
+		viewportRow := len(lines)
 		if row.TerminalConsumed {
-			hasTerminalConsumedRows = true
+			lines = append(lines, "")
 			continue
 		}
 		content := row.Content
-		if visualMode && i >= lo && i <= hi {
+		if isNativePreviewImageContent(layout.ImageMode, content) {
+			nativeOverlays = append(nativeOverlays, previewNativeOverlay{
+				Row:     viewportRow,
+				Mode:    layout.ImageMode,
+				Content: content,
+			})
+			content = ""
+		} else if visualMode && i >= lo && i <= hi {
 			content = highlightStyle.Render(content)
 		}
 		lines = append(lines, content)
 	}
-	if !hasTerminalConsumedRows {
-		for len(lines) < visibleRows {
-			lines = append(lines, "")
-		}
+	for len(lines) < visibleRows {
+		lines = append(lines, "")
 	}
 	content := strings.Join(lines, "\n")
-	if layout.ImageMode == previewImageModeKitty {
-		content = kittyimg.DeleteVisiblePlacements() + content
+	return previewViewportRender{Content: content, Rows: visibleRows, NativeOverlays: nativeOverlays}
+}
+
+func isNativePreviewImageContent(mode previewImageMode, content string) bool {
+	switch mode {
+	case previewImageModeIterm2:
+		return strings.Contains(content, "\x1b]1337;File=")
+	case previewImageModeKitty:
+		return strings.Contains(content, "\x1b_G")
+	default:
+		return false
 	}
-	return previewViewportRender{Content: content, Rows: visibleRows}
+}
+
+func renderNativeImageOverlayTail(overlays []previewNativeOverlay, originRow, originCol int) string {
+	if len(overlays) == 0 {
+		return ""
+	}
+	if originRow < 1 {
+		originRow = 1
+	}
+	if originCol < 1 {
+		originCol = 1
+	}
+
+	var b strings.Builder
+	clearKitty := false
+	for _, overlay := range overlays {
+		if overlay.Mode == previewImageModeKitty {
+			clearKitty = true
+			break
+		}
+	}
+	if clearKitty {
+		b.WriteString(kittyimg.DeleteVisiblePlacements())
+	}
+
+	for _, overlay := range overlays {
+		if overlay.Content == "" {
+			continue
+		}
+		b.WriteString("\x1b7")
+		b.WriteString(fmt.Sprintf("\x1b[%d;%dH", originRow+overlay.Row, originCol))
+		b.WriteString(overlay.Content)
+		b.WriteString("\x1b8")
+	}
+	return b.String()
+}
+
+func appendNativeImageOverlayTail(content, tail string) string {
+	if tail == "" {
+		return content
+	}
+	content = strings.TrimRight(content, "\n")
+	return content + "\n" + tail
+}
+
+func appendNativeImageOverlayTailWithinRows(content, tail string, rows int) string {
+	if tail == "" {
+		return content
+	}
+	if rows < 1 {
+		return appendNativeImageOverlayTail(content, tail)
+	}
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	if len(lines) >= rows {
+		lines[rows-1] = tail
+		return strings.Join(lines[:rows], "\n")
+	}
+	return strings.Join(append(lines, tail), "\n")
 }
