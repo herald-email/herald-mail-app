@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 
 from artifact_io import load_json, save_json, save_text
@@ -83,6 +84,108 @@ def unique(items: list[str]) -> list[str]:
         seen.add(text)
         ordered.append(text)
     return ordered
+
+
+def report_command_cwd(run: dict) -> Path:
+    worktree_raw = run["paths"].get("worktree", "")
+    worktree = Path(worktree_raw) if worktree_raw else None
+    if worktree is not None and worktree.exists():
+        return worktree
+    return Path(run["paths"]["repo_root"])
+
+
+def shell_path(path: Path) -> str:
+    return shlex.quote(str(path))
+
+
+def fenced_bash(commands: list[str]) -> list[str]:
+    return ["```bash", *commands, "```"]
+
+
+def test_instructions_section(run: dict) -> list[str]:
+    cwd = report_command_cwd(run)
+    binary = cwd / "bin" / "herald"
+    surfaces = {surface.lower() for surface in run.get("task", {}).get("surfaces", [])}
+    lines = [
+        "",
+        "## How To Test This Change",
+        "Build the candidate:",
+        *fenced_bash(
+            [
+                f"cd {shell_path(cwd)}",
+                "make build",
+            ]
+        ),
+        "",
+        "Candidate binary:",
+        *fenced_bash([f"{shell_path(binary)} --demo"]),
+        "",
+        "Focused verification:",
+        *fenced_bash(
+            [
+                f"cd {shell_path(cwd)}",
+                "go test ./...",
+                "make build",
+            ]
+        ),
+    ]
+
+    if "tui" in surfaces:
+        lines.extend(
+            [
+                "",
+                "TUI smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o /tmp/herald-test .",
+                        "tmux kill-session -t herald-test 2>/dev/null || true",
+                        "tmux new-session -d -s herald-test -x 220 -y 50 '/tmp/herald-test --demo'",
+                        "sleep 3",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-220x50.txt",
+                        "tmux resize-window -t herald-test -x 80 -y 24",
+                        "sleep 1",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-80x24.txt",
+                        "tmux resize-window -t herald-test -x 50 -y 15",
+                        "sleep 1",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-50x15.txt",
+                        "tmux kill-session -t herald-test",
+                    ]
+                ),
+            ]
+        )
+
+    if "mcp" in surfaces:
+        lines.extend(
+            [
+                "",
+                "MCP smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o ./bin/herald-mcp-server ./cmd/herald-mcp-server",
+                        "printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | ./bin/herald-mcp-server --demo",
+                    ]
+                ),
+            ]
+        )
+
+    if "ssh" in surfaces:
+        lines.extend(
+            [
+                "",
+                "SSH smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server",
+                        "./bin/herald-ssh-server -version",
+                    ]
+                ),
+            ]
+        )
+
+    return lines
 
 
 def latest_preflight_results(preflight: dict) -> list[dict]:
@@ -416,6 +519,7 @@ def main() -> int:
         f"- Status: {run['status']}",
         f"- Branch: `{run['paths']['branch']}`",
         f"- Worktree: `{run['paths']['worktree']}`",
+        *test_instructions_section(run),
         "",
         "## Plan Summary",
         run["plan"].get("summary") or "No plan summary recorded.",

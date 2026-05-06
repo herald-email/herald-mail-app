@@ -68,6 +68,7 @@ Use that run folder for:
 - run-local summary
 
 Keep the human report in `reports/`.
+Every human report must include a "How To Test This Change" section with copy-paste commands for building, launching the candidate binary, running focused verification, and exercising affected smoke paths.
 
 Use `docs/superpowers/gepa-evolution.md` as the curated cross-run ledger for improving the workflow itself.
 Use `docs/superpowers/gepa-pending-approvals.md` as the curated approval backlog for suggested workflow changes recovered from published runs.
@@ -97,6 +98,7 @@ Success means:
 - required input-routing evidence is recorded when the task changes shortcut, alias, IME, or key-routing behavior on the TUI
 - required verification is recorded
 - the report is rendered
+- copy-paste test instructions are present in the report
 - requested publish actions are recorded when the user asked for them
 - a self-reflection report is rendered after requested publish actions
 - the pending-approval queue is synced after requested publish actions so suggested changes stay visible across runs

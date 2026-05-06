@@ -49,6 +49,7 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 11. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
 12. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
 13. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+14. Every final handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for building, launching the candidate binary, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path.
 
 ## Worktree Safety Correction
 
@@ -291,9 +292,27 @@ The report should make it easy for the user to answer:
 
 - What was requested?
 - What changed?
+- How do I run the candidate binary or demo build locally?
+- Which exact commands should I paste to verify the changed behavior?
 - Which gates passed, failed, or were skipped?
 - What remains risky?
 - Where is the worktree and branch?
+
+Use this handoff shape when possible:
+
+````markdown
+## How To Test This Change
+Candidate binary:
+```bash
+/absolute/path/to/bin/herald --demo
+```
+Focused verification:
+```bash
+cd /absolute/path/to/worktree
+go test ./...
+make build
+```
+````
 
 After a requested publish action, the rendered report should also make it easy to answer:
 
