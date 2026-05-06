@@ -94,7 +94,7 @@ func TestComposeBlankView_FillsTerminalHeight(t *testing.T) {
 					len(lines), tc.width, tc.height, tc.height, stripANSI(rendered))
 			}
 			bottomRows := strings.Join(lines[len(lines)-4:], "\n")
-			if !strings.Contains(bottomRows, "?: help") || strings.TrimSpace(lines[len(lines)-1]) == "" {
+			if !strings.Contains(bottomRows, primaryTabShortcutHint) || strings.TrimSpace(lines[len(lines)-1]) == "" {
 				t.Fatalf("expected bottom rows to contain key hints at %dx%d, got:\n%s",
 					tc.width, tc.height, bottomRows)
 			}
