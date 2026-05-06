@@ -263,9 +263,10 @@ func TestSettingsSignatureFieldShowsMultilineSaveHelp(t *testing.T) {
 	focusSignatureSettingsGroup(t, s)
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	normalized := strings.Join(strings.Fields(rendered), " ")
 
 	for _, want := range []string{"Enter adds a line", "moves to Save Settings", "Save Settings", "enter new line", "tab next"} {
-		if !strings.Contains(rendered, want) {
+		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected signature settings help to include %q, got:\n%s", want, rendered)
 		}
 	}
