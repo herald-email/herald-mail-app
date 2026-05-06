@@ -562,6 +562,7 @@ func isConnectionErrorStr(s string) bool {
 
 // cleanup cleans up resources
 func (m *Model) cleanup() {
+	m.cancelBackgroundWork()
 	if m.imagePreviewLinks != nil {
 		m.imagePreviewLinks.Close()
 	}

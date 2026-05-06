@@ -29,6 +29,11 @@ type stubBackend struct {
 	bodyTextByID         map[string]string
 	fetchBodyCalls       int
 	virtualFolderResult  *models.VirtualFolderResult
+	startPollingCalls    int
+	lastPollingInterval  int
+	stopPollingCalls     int
+	startIDLECalls       int
+	stopIDLECalls        int
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -113,10 +118,16 @@ func (s *stubBackend) GetBodyText(messageID string) (string, error) {
 }
 func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error) { return nil, nil }
 func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification      { return nil }
-func (s *stubBackend) StartIDLE(_ string) error                              { return nil }
-func (s *stubBackend) StopIDLE()                                             {}
-func (s *stubBackend) StartPolling(_ string, _ int)                          {}
-func (s *stubBackend) StopPolling()                                          {}
+func (s *stubBackend) StartIDLE(_ string) error {
+	s.startIDLECalls++
+	return nil
+}
+func (s *stubBackend) StopIDLE() { s.stopIDLECalls++ }
+func (s *stubBackend) StartPolling(_ string, interval int) {
+	s.startPollingCalls++
+	s.lastPollingInterval = interval
+}
+func (s *stubBackend) StopPolling()                                          { s.stopPollingCalls++ }
 func (s *stubBackend) ValidIDsCh() <-chan map[string]bool                    { return nil }
 func (s *stubBackend) MoveEmail(_, _, _ string) error                        { return nil }
 func (s *stubBackend) SaveRule(_ *models.Rule) error                         { return nil }

@@ -206,13 +206,18 @@ type SyncTickMsg struct{}
 
 // EmbeddingProgressMsg reports background embedding progress
 type EmbeddingProgressMsg struct {
-	Done   int
-	Total  int
-	Notice string
+	Folder     string
+	Generation int64
+	Done       int
+	Total      int
+	Notice     string
 }
 
 // EmbeddingDoneMsg signals background embedding finished
-type EmbeddingDoneMsg struct{}
+type EmbeddingDoneMsg struct {
+	Folder     string
+	Generation int64
+}
 
 // AttachmentSavedMsg signals an attachment save completed
 type AttachmentSavedMsg struct {
@@ -262,6 +267,7 @@ type ContactEnrichedMsg struct {
 	Count      int
 	Notice     string
 	Background bool
+	Generation int64
 }
 
 // ContactsLoadedMsg carries the full contact list for the Contacts tab.
@@ -484,10 +490,11 @@ type Model struct {
 	syncCountdown  int    // seconds until next poll
 
 	// Background embedding
-	embeddingDone           int
-	embeddingTotal          int
-	embeddingBatchActive    bool
-	contactEnrichmentActive bool
+	embeddingDone            int
+	embeddingTotal           int
+	embeddingBatchActive     bool
+	contactEnrichmentActive  bool
+	backgroundWorkGeneration int64
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode           bool
@@ -1691,24 +1698,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickSyncCountdown()
 
 	case EmbeddingProgressMsg:
+		if msg.Generation != m.backgroundWorkGeneration || (msg.Folder != "" && msg.Folder != m.currentFolder) {
+			logger.Debug("EmbeddingProgressMsg: ignoring stale background batch folder=%s generation=%d currentFolder=%s currentGeneration=%d", msg.Folder, msg.Generation, m.currentFolder, m.backgroundWorkGeneration)
+			return m, nil
+		}
 		m.embeddingDone = msg.Done
 		m.embeddingTotal = msg.Total
 		if msg.Notice != "" {
 			m.statusMessage = msg.Notice
 		}
 		if msg.Done < msg.Total {
-			return m, m.runEmbeddingBatch()
+			return m, m.runEmbeddingBatch(msg.Folder, msg.Generation)
 		}
 		m.embeddingBatchActive = false
 		return m, nil
 
 	case EmbeddingDoneMsg:
+		if msg.Generation != m.backgroundWorkGeneration || (msg.Folder != "" && msg.Folder != m.currentFolder) {
+			logger.Debug("EmbeddingDoneMsg: ignoring stale background batch folder=%s generation=%d currentFolder=%s currentGeneration=%d", msg.Folder, msg.Generation, m.currentFolder, m.backgroundWorkGeneration)
+			return m, nil
+		}
 		m.embeddingDone = 0
 		m.embeddingTotal = 0
 		m.embeddingBatchActive = false
 		return m, nil
 
 	case ContactEnrichedMsg:
+		if msg.Background && msg.Generation != m.backgroundWorkGeneration {
+			logger.Debug("ContactEnrichedMsg: ignoring stale background enrichment generation=%d currentGeneration=%d", msg.Generation, m.backgroundWorkGeneration)
+			return m, nil
+		}
 		if msg.Notice != "" {
 			m.contactStatusMessage = msg.Notice
 		}
@@ -1716,7 +1735,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Notice == "" {
 				m.contactStatusMessage = fmt.Sprintf("Enriched %d contacts", msg.Count)
 			}
-			return m, m.runContactEnrichment()
+			return m, m.runContactEnrichment(msg.Generation)
 		}
 		if msg.Background {
 			m.contactEnrichmentActive = false

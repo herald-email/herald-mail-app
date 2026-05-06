@@ -43,7 +43,9 @@ func (c *Client) fetchEmailBodyLocked(uid uint32, folder string) (*models.EmailB
 	}
 
 	// Select folder read-only; subsequent write ops will re-select read-write.
-	if _, err := c.client.Select(folder, true); err != nil {
+	if _, err := retryAfterReconnect(func() (*imap.MailboxStatus, error) {
+		return c.client.Select(folder, true)
+	}, c.Reconnect); err != nil {
 		return nil, fmt.Errorf("select folder %s: %w", folder, err)
 	}
 
@@ -53,14 +55,21 @@ func (c *Client) fetchEmailBodyLocked(uid uint32, folder string) (*models.EmailB
 	section := &imap.BodySectionName{} // BODY[] — entire RFC 2822 message
 	items := []imap.FetchItem{section.FetchItem()}
 
-	messages := make(chan *imap.Message, 1)
-	done := make(chan error, 1)
-	go func() {
-		done <- c.client.UidFetch(seqset, items, messages)
-	}()
-
-	msg := <-messages
-	if err := <-done; err != nil {
+	var msg *imap.Message
+	if err := c.runFetchStreamLocked(imapStreamCommandOptions{
+		Name:          "uid fetch body",
+		Folder:        folder,
+		Phase:         "body",
+		RangeLabel:    fmt.Sprintf("uid=%d", uid),
+		MessageBuffer: 1,
+	}, func(messages chan *imap.Message) error {
+		return c.client.UidFetch(seqset, items, messages)
+	}, func(fetched *imap.Message) error {
+		if msg == nil {
+			msg = fetched
+		}
+		return nil
+	}); err != nil {
 		return nil, fmt.Errorf("uid fetch: %w", err)
 	}
 	if msg == nil {

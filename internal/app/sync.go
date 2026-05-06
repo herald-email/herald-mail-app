@@ -39,6 +39,10 @@ func (m *Model) startPolling(interval int) tea.Cmd {
 		m.syncCountdown = 0
 		return nil
 	}
+	if interval <= 0 {
+		logger.Warn("startPolling called with non-positive interval %d; using 60s fallback", interval)
+		interval = 60
+	}
 	m.syncStatusMode = "polling"
 	m.syncCountdown = interval
 	m.backend.StartPolling(m.currentFolder, interval)
@@ -53,6 +57,12 @@ func (m *Model) startSync(folder string) tea.Cmd {
 	if isVirtualAllMailOnlyFolder(folder) {
 		m.syncStatusMode = ""
 		m.syncCountdown = 0
+		return nil
+	}
+	if m.demoMode {
+		m.syncStatusMode = "off"
+		m.syncCountdown = 0
+		logger.Info("Demo mode sync listeners disabled; demo data is served from in-memory fixtures")
 		return nil
 	}
 

@@ -144,6 +144,13 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool) {
 	// Fake config — no real credentials needed
 	cfg := &config.Config{}
 	cfg.Credentials.Username = "demo@demo.local"
+	cfg.Sync.Interval = 60
+	cfg.Sync.Idle = false
+	cfg.Sync.Background = false
+	cfg.Semantic.Enabled = false
+	cfg.AI.Provider = "disabled"
+	logger.Info("Demo resource policy: offline fixtures only; no IMAP, SMTP, Ollama, or external HTTP connections are opened on startup")
+	logger.Info("Demo resource policy: sync listeners and background semantic indexing disabled; localhost image links start only while previewing embedded MIME images")
 
 	// Build demo backend
 	demoBackend := backend.NewDemoBackend()
