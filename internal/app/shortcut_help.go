@@ -102,10 +102,31 @@ func (m *Model) shortcutAliasBelongsToTextInput() bool {
 }
 
 func (m *Model) questionMarkBelongsToTextInput() bool {
-	return (m.activeTab == tabTimeline &&
+	if (m.activeTab == tabTimeline &&
 		m.timeline.searchMode &&
 		m.timeline.searchFocus == timelineSearchFocusInput) ||
-		(m.activeTab == tabContacts && m.contactSearchMode != "")
+		(m.activeTab == tabContacts && m.contactSearchMode != "") {
+		return true
+	}
+	if m.activeTab == tabCompose {
+		return m.composeQuestionMarkBelongsToTextInput()
+	}
+	return false
+}
+
+func (m *Model) composeQuestionMarkBelongsToTextInput() bool {
+	if m.attachmentInputActive {
+		return true
+	}
+	if m.composeAIPanel && (m.composeAIInput.Focused() || m.composeAIResponse.Focused()) {
+		return true
+	}
+	switch m.composeField {
+	case composeFieldTo, composeFieldCC, composeFieldBCC, composeFieldSubject, composeFieldBody:
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Model) shouldAdvertiseShortcutHelp() bool {

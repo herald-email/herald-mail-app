@@ -86,6 +86,19 @@ func TestDemoKeyOverlayDoesNotRecordComposeText(t *testing.T) {
 	if strings.Contains(stripANSI(updated.View().Content), "Keys:") {
 		t.Fatalf("compose text should not be recorded in demo key overlay, got:\n%s", stripANSI(updated.View().Content))
 	}
+
+	model, _ = updated.Update(keyRunes("?"))
+	updated = model.(*Model)
+
+	if got := updated.composeBody.Value(); !strings.Contains(got, "plain text?") {
+		t.Fatalf("expected literal compose ? to be preserved, got %q", got)
+	}
+	if updated.showHelp {
+		t.Fatal("compose ? should not open shortcut help")
+	}
+	if strings.Contains(stripANSI(updated.View().Content), "Keys: ?") {
+		t.Fatalf("compose ? text should not be recorded as a help shortcut, got:\n%s", stripANSI(updated.View().Content))
+	}
 }
 
 func TestDemoKeyOverlayDoesNotRecordSearchPromptText(t *testing.T) {

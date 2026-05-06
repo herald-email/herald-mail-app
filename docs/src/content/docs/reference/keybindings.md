@@ -24,7 +24,7 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `r` / `alt+r` | Refresh the current folder; use `alt+r` while composing. |
 | `S` | Open settings. |
 | `a` | Start AI classification for the current folder. |
-| `?` | Open context-sensitive shortcut help. When help is open, `?`, `esc`, or `q` closes it. |
+| `?` | Open context-sensitive shortcut help in browse and non-text contexts. When help is open, `?`, `esc`, or `q` closes it. |
 | `esc` | Close or unwind the active transient state. |
 
 ## Mouse
@@ -109,7 +109,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Key | Result |
 | --- | --- |
-| Plain letters and digits | Insert text into the focused Compose field; use Alt chords for global commands while composing. |
+| Plain text and punctuation | Insert text into the focused Compose field, including literal `?`; use Alt chords for global commands while composing. |
 | `alt+1` / `alt+2` / `alt+3` | Switch to Timeline / Cleanup / Contacts without inserting text. |
 | `alt+l` / `alt+c` / `alt+f` / `alt+r` | Toggle logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
