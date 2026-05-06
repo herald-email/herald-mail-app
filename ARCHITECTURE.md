@@ -75,6 +75,9 @@ IMAP `\Draft` flags, Gmail `X-GM-LABELS` `\Draft` labels, and canonical draft fo
 **Transient Compose origin**
 Compose is an internal full-screen writing state rather than a top-level tab. Timeline `C`, reply, forward, draft edit, and quick reply paths record the originating Timeline state before entering Compose so `Esc` can restore the initiating list, preview, or search context after Compose-local prompts, AI panels, suggestions, and status messages have been dismissed. Leaving a non-empty Compose screen still routes through the existing draft persistence path.
 
+**Compose signatures**
+The account config owns one optional default signature at `compose.signature.text`, and the Settings panel edits that same value. The Bubble Tea Compose entrypoints append the configured signature to the editable textarea when opening blank messages, replies, forwards, and quick replies; draft editing restores saved body text exactly. Signatures are never appended at send time, and a signature-only blank Compose body does not count as content for draft autosave.
+
 **Shortcut help catalog**
 The TUI owns a structured, context-sensitive shortcut catalog in `internal/app` because key routing, visible focus normalization, and overlay state all live there. The bottom hint bar stays abbreviated, while the `?` help overlay renders the full catalog for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view; semantic search is reached through the Timeline/Contacts search input with a `? query` prefix so plain `?` can remain globally reserved for help. Cleanup configuration surfaces follow the same compact modal pattern: `W` automation rules, `C` cleanup rules, `P` prompts, and dry-run previews compose over the current Herald view instead of replacing the app chrome.
 

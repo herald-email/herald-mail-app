@@ -14,6 +14,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Status bar (folder, counts, selection state, mode, key hints)
 - [x] Timeline / thread view + tab navigation
 - [x] Compose, reply, forward
+- [x] Account-scoped default Compose signature configured in YAML and editable from Settings
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
 - [x] Archive (`e` key — moves to an explicit archive folder; provider-aware fallback only)
 - [x] Deletion confirmation prompt

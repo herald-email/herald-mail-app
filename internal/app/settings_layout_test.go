@@ -198,6 +198,25 @@ func TestSettingsPanelFitsAt80ColsAsModal(t *testing.T) {
 	}
 }
 
+func TestSettingsPanelSignatureFieldKeepsFooterAt80x24(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	focusSignatureSettingsGroup(t, s)
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{"Email Signature", "enter new line", "tab next"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected settings signature panel to include %q at 80x24, got:\n%s", want, rendered)
+		}
+	}
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "╰") && strings.Contains(line, "╯") {
+			return
+		}
+	}
+	t.Fatalf("expected settings signature panel to keep the bottom border at 80x24, got:\n%s", rendered)
+}
+
 func TestSettingsPanelUsesMinimumSizeGuardWhenTooSmall(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline
