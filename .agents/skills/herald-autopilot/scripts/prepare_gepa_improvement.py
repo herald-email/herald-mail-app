@@ -28,6 +28,10 @@ def main() -> int:
     grounded_runs = int(product_truth.get("grounded_runs", 0))
     required_grounding_runs = int(product_truth.get("required_runs", 0))
     grounding_rate = product_truth.get("grounding_rate")
+    degradation = summary.get("degradation_review", {})
+    degradation_required_runs = int(degradation.get("required_runs", 0))
+    degradation_ready_runs = int(degradation.get("ready_runs", 0))
+    degradation_readiness_rate = degradation.get("readiness_rate")
     visual = summary.get("visual_evidence", {})
     visual_required_runs = int(visual.get("required_runs", 0))
     visual_ready_runs = int(visual.get("ready_runs", 0))
@@ -56,6 +60,14 @@ def main() -> int:
         recommendation = {
             "name": "enforce-product-truth-gating",
             "why": "Improving doc-first grounding is a safer and more leveraged next step than expanding search while specs and vision handoff are still inconsistent.",
+            "risk": "low",
+            "value": "high",
+        }
+    elif degradation_required_runs >= 3 and degradation_readiness_rate is not None and degradation_readiness_rate < 0.8:
+        bottleneck = "Autopilot runs are not yet consistently recording whether degradation is approved and which regression checks protect preserved behavior."
+        recommendation = {
+            "name": "enforce-degradation-review-adoption",
+            "why": "The degradation guardrail only prevents release drift when every run closes the explicit review before implementation.",
             "risk": "low",
             "value": "high",
         }
@@ -135,6 +147,9 @@ def main() -> int:
             "product_truth_required_runs": required_grounding_runs,
             "product_truth_grounded_runs": grounded_runs,
             "product_truth_grounding_rate": grounding_rate,
+            "degradation_review_required_runs": degradation_required_runs,
+            "degradation_review_ready_runs": degradation_ready_runs,
+            "degradation_review_readiness_rate": degradation_readiness_rate,
             "visual_required_runs": visual_required_runs,
             "visual_ready_runs": visual_ready_runs,
             "visual_readiness_rate": visual_readiness_rate,
@@ -189,6 +204,9 @@ def main() -> int:
             f"- Product-truth required runs: {brief['evidence']['product_truth_required_runs']}",
             f"- Product-truth grounded runs: {brief['evidence']['product_truth_grounded_runs']}",
             f"- Product-truth grounding rate: {brief['evidence']['product_truth_grounding_rate'] if brief['evidence']['product_truth_grounding_rate'] is not None else 'n/a'}",
+            f"- Degradation-review required runs: {brief['evidence']['degradation_review_required_runs']}",
+            f"- Degradation-review ready runs: {brief['evidence']['degradation_review_ready_runs']}",
+            f"- Degradation-review readiness rate: {brief['evidence']['degradation_review_readiness_rate'] if brief['evidence']['degradation_review_readiness_rate'] is not None else 'n/a'}",
             f"- Visual-required runs: {brief['evidence']['visual_required_runs']}",
             f"- Visual-ready runs: {brief['evidence']['visual_ready_runs']}",
             f"- Visual readiness rate: {brief['evidence']['visual_readiness_rate'] if brief['evidence']['visual_readiness_rate'] is not None else 'n/a'}",

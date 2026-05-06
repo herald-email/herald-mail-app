@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from artifact_io import save_json, save_text
+from degradation_review import DEGRADATION_GATE, default_degradation_review
 from input_routing import INPUT_ROUTING_GATE, default_input_routing, infer_input_routing_required
 from visual_evidence import VISUAL_GATE, default_visual_evidence
 
@@ -74,7 +75,7 @@ def main() -> int:
     product_truth_status = infer_product_truth_status(args, product_truth_required)
     visual_required = "tui" in surfaces
     input_routing_required = infer_input_routing_required(args.task, slug, surfaces)
-    required_gates = []
+    required_gates = [DEGRADATION_GATE]
     if visual_required:
         required_gates.append(VISUAL_GATE)
     if input_routing_required:
@@ -136,6 +137,7 @@ def main() -> int:
             "actions": [],
             "summary": "",
         },
+        "degradation_review": default_degradation_review(required=True),
         "visual_evidence": default_visual_evidence(required=visual_required),
         "input_routing": default_input_routing(required=input_routing_required),
         "verification": {
@@ -168,6 +170,7 @@ def main() -> int:
                 f"- Surfaces: {', '.join(surfaces) if surfaces else 'none yet'}",
                 f"- Product truth required: {'yes' if product_truth_required else 'no'}",
                 f"- Product truth status: {product_truth_status}",
+                "- Degradation review required: yes",
             ]
         )
         + "\n",
@@ -187,6 +190,11 @@ def main() -> int:
                 f"- Status: {product_truth_status}",
                 f"- Sources: {', '.join(args.truth_source) if args.truth_source else 'none recorded'}",
                 f"- Docs updated first: {', '.join(args.doc_updated) if args.doc_updated else 'none recorded'}",
+                "",
+                "## Degradation Review",
+                "Ask before implementation: Does this plan intentionally degrade, remove, or weaken any existing behavior, compatibility, UI affordance, preview/media behavior, docs/demo output, or surface contract?",
+                "",
+                "- Status: pending",
             ]
         )
         + "\n",

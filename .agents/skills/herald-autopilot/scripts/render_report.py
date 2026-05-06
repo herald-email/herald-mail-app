@@ -5,6 +5,11 @@ import argparse
 from pathlib import Path
 
 from artifact_io import load_json, save_json, save_text
+from degradation_review import (
+    degradation_feedback_messages,
+    ensure_degradation_review,
+    summarize_degradation_review,
+)
 from input_routing import (
     covered_surfaces,
     ensure_input_routing,
@@ -130,6 +135,41 @@ def visual_gate_section(run: dict) -> list[str]:
     return lines
 
 
+def degradation_review_section(run: dict) -> list[str]:
+    review = ensure_degradation_review(run)
+    lines = [
+        "",
+        "## Degradation Review Gate",
+        f"- Required: {'yes' if review.get('required', True) else 'no'}",
+        f"- Status: {review.get('status', 'not recorded')}",
+        f"- Answer: {review.get('answer', 'unanswered')}",
+        f"- Question: {review.get('question', '')}",
+        f"- User response: {review.get('user_response') or 'none recorded'}",
+        f"- Summary: {summarize_degradation_review(review)}",
+    ]
+    if review.get("allowed_degradations"):
+        lines.append("- Allowed degradations:")
+        lines.extend([f"- {item}" for item in review["allowed_degradations"]])
+    else:
+        lines.append("- Allowed degradations: none recorded")
+    if review.get("preserved_behaviors"):
+        lines.append("- Preserved behaviors:")
+        lines.extend([f"- {item}" for item in review["preserved_behaviors"]])
+    else:
+        lines.append("- Preserved behaviors: none recorded")
+    if review.get("regression_checks"):
+        lines.append("- Regression checks:")
+        lines.extend([f"- {item}" for item in review["regression_checks"]])
+    else:
+        lines.append("- Regression checks: none recorded")
+    if review.get("issues"):
+        lines.append(f"- Needs: {', '.join(review['issues'])}")
+    if review.get("notes"):
+        lines.append("- Notes:")
+        lines.extend([f"- {item}" for item in review["notes"]])
+    return lines
+
+
 def input_routing_section(run: dict) -> list[str]:
     gate = ensure_input_routing(run)
     lines = [
@@ -183,6 +223,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     templates = load_remediation_templates(repo_root)
     visual = ensure_visual_evidence(run)
     input_routing = ensure_input_routing(run)
+    degradation = ensure_degradation_review(run)
 
     strengths: list[str] = []
     drag: list[str] = []
@@ -201,6 +242,13 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         strengths.append(f"All required verification gates passed ({len(required_results)}/{len(required_results)}).")
     if product_truth.get("required") and product_truth.get("status") in {"consulted", "updated-first"}:
         strengths.append(f"Product intent was grounded through `{product_truth.get('status')}` doc usage.")
+    if degradation.get("required", True) and degradation.get("status") == "passed":
+        if degradation.get("answer") == "yes":
+            strengths.append(
+                f"Degradation review recorded {len(degradation.get('allowed_degradations', []))} approved degradation(s) and the regression checks that still protect preserved behavior."
+            )
+        else:
+            strengths.append("Degradation review confirmed no intended degradations and recorded preserved behaviors plus regression checks.")
     if visual.get("required") and visual.get("status") == "passed":
         strengths.append(
             f"Canonical visual evidence was captured across {len(covered_sizes(visual))}/{len(visual.get('required_sizes', []))} required terminal sizes."
@@ -226,6 +274,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         drag.append("Product docs informed the run, but the workflow did not update them first before implementation.")
     if score and score.get("status") == "needs_followup":
         drag.append("The scored handoff still flagged human follow-up as needed.")
+    drag.extend(degradation_feedback_messages(degradation)[:3])
     drag.extend(visual_feedback_messages(visual)[:3])
     drag.extend(input_routing_feedback_messages(input_routing)[:3])
 
@@ -351,6 +400,7 @@ def main() -> int:
     preflight_resources = preflight.get("resources", {})
     ensure_visual_evidence(run)
     ensure_input_routing(run)
+    ensure_degradation_review(run)
     self_reflection = build_self_reflection(run, score, reflections, results)
     self_reflection_json_path = run_dir / "self_reflection.json"
     self_reflection_md_path = run_dir / "self_reflection.md"
@@ -401,6 +451,7 @@ def main() -> int:
         run["outcome"].get("summary") or "No outcome summary recorded.",
         ]
     )
+    lines.extend(degradation_review_section(run))
     lines.extend(visual_gate_section(run))
     lines.extend(input_routing_section(run))
 
@@ -482,6 +533,7 @@ def main() -> int:
                 f"- Overall score: {score['overall_score']}",
                 f"- Status: {score['status']}",
                 f"- Preflight readiness: {score['axes'].get('preflight_readiness', 'n/a')}",
+                f"- Degradation review readiness: {score['axes'].get('degradation_review_readiness', 'n/a')}",
                 f"- Visual evidence readiness: {score['axes'].get('visual_evidence_readiness', 'n/a')}",
                 f"- Input routing readiness: {score['axes'].get('input_routing_readiness', 'n/a')}",
                 f"- Required gates passed: {score['counts']['required_passed']}/{score['counts']['required_gates']}",

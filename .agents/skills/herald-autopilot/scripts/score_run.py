@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from artifact_io import load_json, save_json
+from degradation_review import degradation_feedback_messages, ensure_degradation_review
 from input_routing import ensure_input_routing, input_routing_feedback_messages
 from visual_evidence import ensure_visual_evidence, unique_strings, visual_feedback_messages
 
@@ -53,6 +54,9 @@ def main() -> int:
     product_truth = run.get("product_truth", {})
     product_truth_required = bool(product_truth.get("required", False))
     product_truth_grounded = (not product_truth_required) or product_truth.get("status") in {"consulted", "updated-first"}
+    degradation = ensure_degradation_review(run)
+    degradation_required = bool(degradation.get("required", True))
+    degradation_ready = (not degradation_required) or degradation.get("status") == "passed"
     visual = ensure_visual_evidence(run)
     visual_required = bool(visual.get("required", False))
     visual_ready = (not visual_required) or visual.get("status") == "passed"
@@ -71,6 +75,7 @@ def main() -> int:
     overall -= 10 if human_followup else 0
     overall -= 5 if files_changed > 25 else 0
     overall -= 10 if product_truth_required and not product_truth_grounded else 0
+    overall -= 15 if degradation_required and not degradation_ready else 0
     overall -= 12 if visual_required and not visual_ready else 0
     overall -= 12 if input_routing_required and not input_routing_ready else 0
     overall = max(overall, 0)
@@ -80,6 +85,7 @@ def main() -> int:
     feedback.extend(f"Required gate `{gate}` did not run before handoff." for gate in missing_required)
     feedback.extend(item["summary"] for item in failed_required_preflight)
     feedback.extend(f"Required preflight `{check}` did not run before implementation." for check in missing_required_preflight)
+    feedback.extend(degradation_feedback_messages(degradation))
     feedback.extend(visual_feedback_messages(visual))
     feedback.extend(input_routing_feedback_messages(input_routing))
     feedback = unique_strings(feedback)
@@ -90,6 +96,7 @@ def main() -> int:
         or missing_required
         or failed_required_preflight
         or missing_required_preflight
+        or (degradation_required and not degradation_ready)
         or (visual_required and not visual_ready)
         or (input_routing_required and not input_routing_ready)
     ):
@@ -109,6 +116,7 @@ def main() -> int:
             "retry_efficiency": max(0, 1 - (retry_count / max(run["policy"].get("retry_limit", 1), 1))),
             "handoff_readiness": 0 if human_followup else 1,
             "product_truth_grounding": 1 if product_truth_grounded else 0,
+            "degradation_review_readiness": 1 if degradation_ready else 0,
             "visual_evidence_readiness": 1 if visual_ready else 0,
             "input_routing_readiness": 1 if input_routing_ready else 0,
         },
@@ -124,6 +132,8 @@ def main() -> int:
             "files_changed": files_changed,
             "product_truth_required": 1 if product_truth_required else 0,
             "product_truth_grounded": 1 if product_truth_required and product_truth_grounded else 0,
+            "degradation_review_required": 1 if degradation_required else 0,
+            "degradation_review_complete": 1 if degradation_required and degradation_ready else 0,
             "visual_required": 1 if visual_required else 0,
             "visual_complete": 1 if visual_required and visual_ready else 0,
             "input_routing_required": 1 if input_routing_required else 0,
@@ -136,6 +146,7 @@ def main() -> int:
             "followup_needed": 1 if human_followup else 0,
             "preflight_gap": 0 if preflight_ready else 1,
             "grounding_gap": 0 if product_truth_grounded else 1,
+            "degradation_gap": 0 if degradation_ready else 1,
             "visual_gap": 0 if visual_ready else 1,
             "input_routing_gap": 0 if input_routing_ready else 1,
         },

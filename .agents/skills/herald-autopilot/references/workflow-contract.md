@@ -26,6 +26,8 @@ Each run should move through these states in order unless it is blocked:
 
 - Ask questions only when the missing answer materially changes implementation or safety.
 - A concise plan summary is required before implementation.
+- Every run must explicitly ask whether the plan intentionally degrades, removes, or weakens existing behavior before tracked-file edits begin.
+- No degradation is allowed unless the user explicitly approves it; otherwise the run must record preserved behaviors and regression checks.
 - Proceed after the summary unless a non-obvious decision still needs the user.
 - Never silently push, merge, or open a PR in v1.
 - If the user explicitly asks for a commit, merge, push, or PR, perform that publish step, produce a visible self-reflection report with approval-ready workflow suggestions, and sync those suggestions into the cross-run pending-approval queue.
@@ -54,6 +56,7 @@ Use that run folder for:
 - plan summary
 - preflight results and prepared environment resources
 - product-truth grounding notes
+- degradation-review answer, approved degradations, preserved behaviors, and regression checks
 - publication metadata when commit, merge, push, or PR actions happen
 - canonical visual-evidence gate state, repro-path notes, and before/after image-plus-text pairs for TUI-facing work
 - canonical input-routing gate state, text-preservation checks, and per-surface routing transcripts for shortcut-sensitive TUI work
@@ -74,6 +77,7 @@ Use `docs/superpowers/gepa-pending-approvals.md` as the curated approval backlog
 - One active candidate per run
 - Same-worktree retries only
 - Run environment preflight before implementation whenever the task touches docs, SSH, or long-running media workflows
+- Every run should close the degradation-review gate before implementation so release drift is explicit instead of accidental
 - Required failures generate explicit natural-language feedback
 - Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time
 - TUI-facing runs should record canonical visual evidence at `220x50`, `80x24`, and `50x15` before they can claim handoff readiness
@@ -88,6 +92,7 @@ Success means:
 - the task has a branch
 - the task has a worktree
 - required preflight is recorded when the task touches docs, SSH, or media-heavy work
+- required degradation review is recorded for every run
 - required visual evidence is recorded when the task touches the TUI
 - required input-routing evidence is recorded when the task changes shortcut, alias, IME, or key-routing behavior on the TUI
 - required verification is recorded

@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-06T15:18:30 | Degradation review gate for explicit regression guardrails | applied | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T22:30:21 | Phase-impact measurement for the first four GEPA improvements | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T20:37:11 | Pending-approval queue for post-publish GEPA suggestions | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T19:36:56 | Input-routing safety gate for shortcut-sensitive TUI runs | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
@@ -23,6 +24,49 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Degradation review gate for explicit regression guardrails
+
+- Logged at: 2026-05-06T15:18:30+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: Recent release degradations showed that runs could pass focused visual and code gates while never explicitly deciding whether existing affordances, preview/media behavior, or compatibility paths were allowed to weaken.
+- Summary: Added a required degradation-review gate to Herald Autopilot so every new run asks whether degradation is part of the plan, records explicit user approval for any accepted degradation, and converts preserved behavior into regression checks before implementation.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 87.42857142857143
+- Average retries: 0.7
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 24
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 17
+- Preflight required runs: 1
+- Preflight ready runs: 1
+- Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
+- Visual-required runs: 2
+- Visual-ready runs: 2
+- Visual readiness rate: 1.0
+- Input-routing required runs: 1
+- Input-routing ready runs: 1
+- Input-routing readiness rate: 1.0
+- Pending approval items: 3
+- Approved approval items: 0
+- Implemented approval items: 0
+Changes:
+- Added `degradation_review.py` and `record_degradation_review.py` to make the regression budget explicit in run artifacts.
+- Wired `bootstrap_run.py`, `score_run.py`, `render_report.py`, optimizer summaries, and `update_run.py` to treat `degradation-review` as a first-class gate.
+- Updated the Herald Autopilot skill, workflow contract, run schema, verification routing, and remediation templates with the new no-silent-degradation rule.
+Article notes:
+- A passing screenshot gate is not enough unless the workflow names which familiar behaviors are not allowed to disappear.
+- The user's degradation approval becomes part of the test plan instead of an assumption buried in prose.
+Follow-ups:
+- Measure whether future bug and feature runs close the degradation gate before implementation.
+- Track whether later release-drift reports mention behaviors that were missing from preserved-behavior lists.
 
 ### Phase-impact measurement for the first four GEPA improvements
 
@@ -644,4 +688,3 @@ Article notes:
 - The first milestone was not autonomy for its own sake; it was making every run legible enough to learn from.
 Follow-ups:
 - Measure real-task behavior now that the workflow has durable state.
-

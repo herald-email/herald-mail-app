@@ -18,6 +18,7 @@ Top-level fields:
 - `baseline`: Result of pre-implementation baseline checks
 - `plan`: Short summary, whether user questions were needed, and key decisions
 - `product_truth`: Whether grounding was required, consulted sources, docs updated before code, and a short grounding summary
+- `degradation_review`: Whether the plan intentionally degrades existing behavior, the user's answer, approved degradations, preserved behaviors, and regression checks
 - `publication`: Requested publish actions that were actually performed plus a short summary
 - `visual_evidence`: Whether the canonical visual gate is required, its current status, required terminal sizes, and the recorded before/after pairs
 - `input_routing`: Whether the input-routing safety gate is required, its current status, required text-entry surfaces, and the recorded per-surface routing checks
@@ -25,6 +26,20 @@ Top-level fields:
 - `metrics`: Retry count, diff stats, human follow-up flag
 - `outcome`: Final outcome summary and remaining risks
 - `latest_feedback`: Most recent reflection feedback strings
+
+## `run.json.degradation_review`
+
+Use this block to make regression risk explicit before implementation. New runs require it, while older run folders may omit it for backward compatibility.
+
+- `required`: Whether the run must close the degradation-review gate
+- `status`: `pending`, `passed`, or `not-needed`
+- `question`: The exact degradation question asked before tracked-file edits
+- `answer`: `unanswered`, `no`, or `yes`
+- `user_response`: The user's explicit answer or approval text
+- `allowed_degradations`: Explicitly approved degradations when `answer` is `yes`
+- `preserved_behaviors`: Existing behaviors, affordances, compatibility paths, or surface contracts the plan must preserve
+- `regression_checks`: Tests, captures, or verification steps that protect the preserved behaviors
+- `notes`: Optional context about the degradation decision
 
 ## `run.json.visual_evidence`
 
@@ -83,6 +98,7 @@ Scoring is intentionally simple in v1:
 
 - gate completeness
 - preflight readiness
+- degradation-review readiness
 - visual-evidence readiness
 - input-routing readiness
 - baseline cleanliness

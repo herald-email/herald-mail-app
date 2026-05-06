@@ -72,5 +72,23 @@
       "Keep alias expansion scoped away from text-entry contexts unless the product truth explicitly says the field should intercept that input."
     ],
     "approval_prompt": "Approve keeping the input-routing safety remediation template as a default GEPA retry aid."
+  },
+  "degradation-review": {
+    "title": "Degradation-review remediation template",
+    "aliases": [
+      "degradation",
+      "regression-budget",
+      "regression-guardrail",
+      "missing-degradation-review",
+      "degradation-review-gate"
+    ],
+    "why": "Recent release degradations showed that passing focused visual or code gates is not enough when the plan never named which existing behaviors must stay intact.",
+    "checklist": [
+      "Ask the degradation question before tracked-file edits instead of inferring intent from the requested change.",
+      "If the answer is no, record at least one preserved behavior and one regression check that protects it.",
+      "If the answer is yes, record the approved degradation list and the remaining preserved behavior checks.",
+      "Include known fragile affordances such as chrome buttons, preview/media behavior, browser/demo output, and surface contracts in the preserved-behavior list when they are nearby."
+    ],
+    "approval_prompt": "Approve keeping the degradation-review remediation template as a default GEPA retry aid."
   }
 }
