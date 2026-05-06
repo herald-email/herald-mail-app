@@ -1025,7 +1025,10 @@ func (m *Model) composeOriginalPreviewRows(tableHeight int) int {
 	if m.compactPreservedCompose() || tableHeight <= 22 {
 		return 1
 	}
-	rows := (tableHeight - 15) / 2
+	// Match Compose's full-viewport height budget so preserved replies keep the
+	// read-only original pane balanced with the editable response pane.
+	composeViewportRows := tableHeight + 2
+	rows := (composeViewportRows - 14) / 2
 	if rows < 3 {
 		return 3
 	}

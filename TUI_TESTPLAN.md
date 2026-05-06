@@ -552,6 +552,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Exactly one focused region looks active.
 - List and detail borders are closed.
+- Blank Compose fills the terminal height with no empty rows below the bottom key hints.
 - Key hints match the focused region.
 
 ### TC-14A — Compose-safe command layer
