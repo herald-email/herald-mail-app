@@ -21,6 +21,8 @@ ollama:
   host: "http://localhost:11434"
   model: "gemma3:4b"
   embedding_model: "nomic-embed-text-v2-moe"
+semantic:
+  enabled: false
 ```
 
 ## Fields
@@ -43,7 +45,7 @@ ollama:
 | `sync.idle_enabled` | Enables IMAP IDLE when supported. |
 | `sync.background` | Enables background sync of other folders. |
 | `sync.notify` | Enables status notification behavior. |
-| `semantic.enabled` | Enables semantic features when AI is configured. |
+| `semantic.enabled` | Enables semantic search indexing and automatic background embedding/contact enrichment when AI is configured. Keep `false` to avoid background body fetches and embedding work. |
 | `semantic.model` | Embedding model name. Defaults to Ollama embedding model. |
 | `semantic.batch_size` | Embedding batch size. Default `20`. |
 | `semantic.min_score` | Minimum semantic result score. Default `0.30`. |

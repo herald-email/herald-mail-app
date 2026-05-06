@@ -16,20 +16,36 @@ import (
 
 var backgroundAIWarnings sync.Map
 
+func (m *Model) backgroundSemanticEnabled() bool {
+	return m != nil &&
+		!m.demoMode &&
+		m.classifier != nil &&
+		m.cfg != nil &&
+		m.cfg.Semantic.Enabled
+}
+
+func (m *Model) cancelBackgroundWork() {
+	m.backgroundWorkGeneration++
+	m.embeddingBatchActive = false
+	m.contactEnrichmentActive = false
+	m.embeddingDone = 0
+	m.embeddingTotal = 0
+}
+
 func (m *Model) startEmbeddingBatchIfNeeded() tea.Cmd {
-	if m.classifier == nil || m.embeddingBatchActive {
+	if !m.backgroundSemanticEnabled() || m.embeddingBatchActive {
 		return nil
 	}
 	m.embeddingBatchActive = true
-	return m.runEmbeddingBatch()
+	return m.runEmbeddingBatch(m.currentFolder, m.backgroundWorkGeneration)
 }
 
 func (m *Model) startContactEnrichmentIfNeeded() tea.Cmd {
-	if m.classifier == nil || m.contactEnrichmentActive {
+	if !m.backgroundSemanticEnabled() || m.contactEnrichmentActive {
 		return nil
 	}
 	m.contactEnrichmentActive = true
-	return m.runContactEnrichment()
+	return m.runContactEnrichment(m.backgroundWorkGeneration)
 }
 
 // embedChunksForEmail strips, chunks, and embeds an email body for semantic search.
@@ -124,12 +140,14 @@ func warnBackgroundAIOnce(format string, args ...any) {
 // runEmbeddingBatch processes one batch of emails for semantic search embedding.
 // Pass 1 embeds emails with cached body text.
 // Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
-func (m *Model) runEmbeddingBatch() tea.Cmd {
-	folder := m.currentFolder
+func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
+	if !m.backgroundSemanticEnabled() {
+		return nil
+	}
 	backgroundAI := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindEmbedding)
 	return func() tea.Msg {
 		if backgroundAI == nil {
-			return EmbeddingDoneMsg{}
+			return EmbeddingDoneMsg{Folder: folder, Generation: generation}
 		}
 		notice := ""
 		// Pass 1: embed emails that already have body_text in cache
@@ -193,9 +211,9 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 
 		done, total, _ := m.backend.GetEmbeddingProgress(folder)
 		if total == 0 || done >= total {
-			return EmbeddingDoneMsg{}
+			return EmbeddingDoneMsg{Folder: folder, Generation: generation}
 		}
-		return EmbeddingProgressMsg{Done: done, Total: total, Notice: notice}
+		return EmbeddingProgressMsg{Folder: folder, Generation: generation, Done: done, Total: total, Notice: notice}
 	}
 }
 
@@ -203,19 +221,22 @@ func (m *Model) runEmbeddingBatch() tea.Cmd {
 // calls Ollama to extract company + topics, stores the results, then embeds each
 // enriched contact and stores the embedding. Returns ContactEnrichedMsg.
 // This is a no-op (returns Count: 0) when no contacts need enrichment.
-func (m *Model) runContactEnrichment() tea.Cmd {
+func (m *Model) runContactEnrichment(generation int64) tea.Cmd {
+	if !m.backgroundSemanticEnabled() {
+		return nil
+	}
 	return func() tea.Msg {
 		backgroundAI := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindContactEnrich)
 		if backgroundAI == nil {
-			return ContactEnrichedMsg{Count: 0, Background: true}
+			return ContactEnrichedMsg{Count: 0, Background: true, Generation: generation}
 		}
 		contacts, err := m.backend.GetContactsToEnrich(3, 1)
 		if err != nil {
 			logger.Warn("runContactEnrichment: GetContactsToEnrich: %v", err)
-			return ContactEnrichedMsg{Count: 0, Background: true}
+			return ContactEnrichedMsg{Count: 0, Background: true, Generation: generation}
 		}
 		if len(contacts) == 0 {
-			return ContactEnrichedMsg{Count: 0, Background: true}
+			return ContactEnrichedMsg{Count: 0, Background: true, Generation: generation}
 		}
 
 		enriched := 0
@@ -283,6 +304,6 @@ func (m *Model) runContactEnrichment() tea.Cmd {
 			enriched++
 		}
 
-		return ContactEnrichedMsg{Count: enriched, Notice: notice, Background: true}
+		return ContactEnrichedMsg{Count: enriched, Notice: notice, Background: true, Generation: generation}
 	}
 }
