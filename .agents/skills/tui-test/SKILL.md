@@ -1,6 +1,6 @@
 ---
 name: tui-test
-description: "Battle-test terminal UIs such as Herald via tmux: reset to known states, compare visible hotkeys with actual behavior, capture ANSI and PNG evidence, and run resize soak and thrash loops to catch stale layout, focus, and overlay bugs."
+description: "Battle-test terminal UIs such as Herald via tmux and ttyd: reset states, compare visible hotkeys with actual behavior, capture ANSI/PNG evidence, run resize soaks, and verify terminal raster image previews."
 disable-model-invocation: true
 allowed-tools: Bash Read Write Glob Grep Edit Agent TodoWrite
 argument-hint: "[app: herald | generic] [focus: full | hotkeys | resize | timeline | compose | cleanup | contacts | ai]"
@@ -22,6 +22,7 @@ Use this skill to audit terminal UIs through tmux. It is generic by default, wit
 - Before every scenario: reset, confirm reset, then capture the baseline.
 - Build the action inventory from the visible hint bar first. Use docs or code only to supplement missing or suspicious actions.
 - Use both text and PNG evidence. Text is for grep and diffs; PNG is for real visual judgment.
+- For terminal raster images, use tmux for layout/escape evidence, the ttyd custom harness for browser-visible pixels, and native iTerm2/Ghostty/Kitty when exact terminal placement matters. Stock ttyd alone is not authoritative for placement.
 - Treat these as first-class bugs:
   - missing header or tab bar
   - stale or incorrect hint bar
@@ -124,6 +125,20 @@ cap_ansi() {
 }
 ```
 
+For Herald inline image previews, run the ttyd browser-raster probe from the repo root:
+
+```bash
+make build
+PORT=7682 EVIDENCE_DIR="$ROOT/reports/ttyd-image-preview_$(date +%F_%H%M%S)" \
+  tools/ttyd-image-harness/probe.sh
+```
+
+Interpretation:
+
+- Pass: the custom xterm.js image harness painted the color chart plus large photo regions in the browser screenshot.
+- Failure: inspect the screenshot, `ttyd.log`, and metrics JSON before blaming Herald; missing Playwright/Chrome, a broken ttyd websocket handshake, or CDN failure can make the browser page blank.
+- Limitation: ttyd proves browser-visible iTerm2 OSC 1337 pixels. It does not replace native iTerm2/Ghostty/Kitty for exact placement, scrollback, or stale-raster cleanup.
+
 Use the bundled resize helper for soak and thrash loops:
 
 ```bash
@@ -195,6 +210,7 @@ Prioritize these in this repo:
 - Timeline:
   - baseline
   - `Enter` preview open and `Esc` close
+  - full-screen `Creative Commons image sampler for terminal previews` with inline images
   - `/` search open and `Esc` close
   - `l` logs
   - `c` chat

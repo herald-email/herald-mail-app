@@ -5,6 +5,7 @@ import argparse
 from collections import Counter
 from pathlib import Path
 
+from degradation_review import ensure_degradation_review
 from input_routing import ensure_input_routing
 from optimizer_common import list_runs, now_utc, save_json, save_text, state_dir
 from visual_evidence import ensure_visual_evidence
@@ -26,6 +27,7 @@ def main() -> int:
     product_truth_status_counts: Counter[str] = Counter()
     preflight_status_counts: Counter[str] = Counter()
     preflight_failed_check_counts: Counter[str] = Counter()
+    degradation_status_counts: Counter[str] = Counter()
     visual_status_counts: Counter[str] = Counter()
     input_routing_status_counts: Counter[str] = Counter()
     score_values: list[int] = []
@@ -35,6 +37,8 @@ def main() -> int:
     product_truth_updated_first_runs = 0
     preflight_required_runs = 0
     preflight_ready_runs = 0
+    degradation_required_runs = 0
+    degradation_ready_runs = 0
     visual_required_runs = 0
     visual_ready_runs = 0
     input_routing_required_runs = 0
@@ -59,6 +63,9 @@ def main() -> int:
         preflight = run.get("preflight", {})
         preflight_status = preflight.get("status", "not-recorded")
         preflight_status_counts[preflight_status] += 1
+        degradation = ensure_degradation_review(run)
+        degradation_status = degradation.get("status", "not-recorded")
+        degradation_status_counts[degradation_status] += 1
         visual = ensure_visual_evidence(run)
         visual_status = visual.get("status", "not-recorded")
         visual_status_counts[visual_status] += 1
@@ -78,6 +85,10 @@ def main() -> int:
             for name in required_preflight:
                 if latest_preflight.get(name, {}).get("status") == "fail":
                     preflight_failed_check_counts[name] += 1
+        if degradation.get("required", True):
+            degradation_required_runs += 1
+            if degradation_status == "passed":
+                degradation_ready_runs += 1
         if visual.get("required", False):
             visual_required_runs += 1
             if visual_status == "passed":
@@ -106,6 +117,8 @@ def main() -> int:
                 "retry_count": run.get("metrics", {}).get("retry_count", 0),
                 "preflight_status": preflight_status,
                 "preflight_required": sorted(required_preflight),
+                "degradation_review_status": degradation_status,
+                "degradation_review_required": bool(degradation.get("required", True)),
                 "visual_status": visual_status,
                 "visual_required": bool(visual.get("required", False)),
                 "input_routing_status": input_routing_status,
@@ -139,6 +152,12 @@ def main() -> int:
             "readiness_rate": (preflight_ready_runs / preflight_required_runs) if preflight_required_runs else None,
             "status_counts": dict(preflight_status_counts),
             "failed_checks": [{"name": name, "count": count} for name, count in preflight_failed_check_counts.most_common(5)],
+        },
+        "degradation_review": {
+            "required_runs": degradation_required_runs,
+            "ready_runs": degradation_ready_runs,
+            "readiness_rate": (degradation_ready_runs / degradation_required_runs) if degradation_required_runs else None,
+            "status_counts": dict(degradation_status_counts),
         },
         "visual_evidence": {
             "required_runs": visual_required_runs,
@@ -191,6 +210,15 @@ def main() -> int:
         lines.extend([f"- Status {name}: {count}" for name, count in preflight_status_counts.most_common()])
     if preflight_failed_check_counts:
         lines.extend([f"- Failed check {name}: {count}" for name, count in preflight_failed_check_counts.most_common(5)])
+
+    lines.extend(["", "## Degradation Review"])
+    lines.append(f"- Required runs: {degradation_required_runs}")
+    lines.append(f"- Ready runs: {degradation_ready_runs}")
+    lines.append(
+        f"- Readiness rate: {summary['degradation_review']['readiness_rate'] if summary['degradation_review']['readiness_rate'] is not None else 'n/a'}"
+    )
+    if degradation_status_counts:
+        lines.extend([f"- Status {name}: {count}" for name, count in degradation_status_counts.most_common()])
 
     lines.extend(["", "## Visual Evidence"])
     lines.append(f"- Required runs: {visual_required_runs}")

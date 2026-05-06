@@ -247,7 +247,9 @@ func (c *Client) Connect() error {
 // Close closes the IMAP connection
 func (c *Client) Close() error {
 	if c.client != nil {
-		return c.client.Logout()
+		err := c.client.Logout()
+		c.client = nil
+		return err
 	}
 	return nil
 }
@@ -596,11 +598,6 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 	logger.Debug("fetchAndCacheRange: folder=%s seq=%d:%d serverTotal=%d", folder, start, end, total)
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(start, end)
-	messages := make(chan *imap.Message, 10)
-	done := make(chan error, 1)
-	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
-	}()
 	processed := 0
 	var newSeqNums []uint32
 	cachedIDs, err := c.cache.GetCachedIDs(folder)
@@ -608,7 +605,15 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 		return fmt.Errorf("fetch envelopes cached IDs: %w", err)
 	}
 	logger.Debug("fetchAndCacheRange: folder=%s cachedIDs=%d", folder, len(cachedIDs))
-	for msg := range messages {
+	if err := c.runFetchStreamLocked(imapStreamCommandOptions{
+		Name:          "fetch envelopes",
+		Folder:        folder,
+		Phase:         "scanning",
+		RangeLabel:    fmt.Sprintf("%d:%d", start, end),
+		MessageBuffer: 10,
+	}, func(messages chan *imap.Message) error {
+		return c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
+	}, func(msg *imap.Message) error {
 		processed++
 		if processed%100 == 0 {
 			c.sendProgress(models.ProgressInfo{
@@ -622,8 +627,8 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 		if messageID != "" && !cachedIDs[messageID] {
 			newSeqNums = append(newSeqNums, msg.SeqNum)
 		}
-	}
-	if err := <-done; err != nil {
+		return nil
+	}); err != nil {
 		return fmt.Errorf("fetch envelopes: %w", err)
 	}
 	logger.Debug("fetchAndCacheRange: discovered %d uncached messages in %s", len(newSeqNums), folder)
@@ -663,24 +668,27 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 	seqset := new(imap.SeqSet)
 	// AddRange(start, 0) means start:* in go-imap (0 = *)
 	seqset.AddRange(startUID, 0)
-	messages := make(chan *imap.Message, 10)
-	done := make(chan error, 1)
-	go func() {
-		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid}, messages)
-	}()
 	var newSeqNums []uint32
 	cachedIDs, err := c.cache.GetCachedIDs(folder)
 	if err != nil {
 		return fmt.Errorf("uid fetch cached IDs: %w", err)
 	}
 	logger.Debug("fetchAndCacheUIDRange: folder=%s cachedIDs=%d", folder, len(cachedIDs))
-	for msg := range messages {
+	if err := c.runFetchStreamLocked(imapStreamCommandOptions{
+		Name:          "uid fetch new range",
+		Folder:        folder,
+		Phase:         "scanning",
+		RangeLabel:    fmt.Sprintf("%d:*", startUID),
+		MessageBuffer: 10,
+	}, func(messages chan *imap.Message) error {
+		return c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid}, messages)
+	}, func(msg *imap.Message) error {
 		messageID := extractMessageID(msg)
 		if messageID != "" && !cachedIDs[messageID] {
 			newSeqNums = append(newSeqNums, msg.SeqNum)
 		}
-	}
-	if err := <-done; err != nil {
+		return nil
+	}); err != nil {
 		return fmt.Errorf("uid fetch new range: %w", err)
 	}
 	logger.Debug("fetchAndCacheUIDRange: discovered %d uncached messages in %s", len(newSeqNums), folder)
@@ -719,20 +727,27 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 func (c *Client) fetchAllServerUIDFlagStates(folder string) (map[uint32]bool, []cache.EmailFlagState, error) {
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(1, 0) // 1:*
-	messages := make(chan *imap.Message, 50)
-	done := make(chan error, 1)
-	go func() {
-		done <- c.client.UidFetch(seqset, c.fetchItemsWithGmailLabels([]imap.FetchItem{imap.FetchUid, imap.FetchFlags}), messages)
-	}()
 	serverUIDs := make(map[uint32]bool)
 	flagStates := make([]cache.EmailFlagState, 0)
-	for msg := range messages {
+	labelFolder := folder
+	if labelFolder == "" {
+		labelFolder = "<selected>"
+	}
+	if err := c.runFetchStreamLocked(imapStreamCommandOptions{
+		Name:          "uid fetch all flags",
+		Folder:        labelFolder,
+		Phase:         "refresh-flags",
+		RangeLabel:    "1:*",
+		MessageBuffer: 50,
+	}, func(messages chan *imap.Message) error {
+		return c.client.UidFetch(seqset, c.fetchItemsWithGmailLabels([]imap.FetchItem{imap.FetchUid, imap.FetchFlags}), messages)
+	}, func(msg *imap.Message) error {
 		if msg.Uid > 0 {
 			serverUIDs[msg.Uid] = true
 			flagStates = append(flagStates, messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...))
 		}
-	}
-	if err := <-done; err != nil {
+		return nil
+	}); err != nil {
 		return nil, nil, fmt.Errorf("uid fetch all: %w", err)
 	}
 	return serverUIDs, flagStates, nil
@@ -962,23 +977,25 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 		imap.FetchBodyStructure,
 		imap.FetchFlags,
 	})
-	messages := make(chan *imap.Message, len(seqNums))
-	done := make(chan error, 1)
-	go func() {
-		done <- c.client.Fetch(seqset, items, messages)
-	}()
-
 	var emails []*models.EmailData
 	var allFrom []models.ContactAddr
 	var allTo []models.ContactAddr
 
-	for msg := range messages {
+	if err := c.runFetchStreamLocked(imapStreamCommandOptions{
+		Name:          "fetch message details",
+		Folder:        folder,
+		Phase:         "fetching",
+		RangeLabel:    fmt.Sprintf("%d..%d", seqNums[0], seqNums[len(seqNums)-1]),
+		MessageBuffer: len(seqNums),
+	}, func(messages chan *imap.Message) error {
+		return c.client.Fetch(seqset, items, messages)
+	}, func(msg *imap.Message) error {
 		if msg == nil {
-			continue
+			return nil
 		}
 		if msg.Envelope == nil {
 			logger.Warn("batchFetchDetails: no envelope for seq %d, skipping", msg.SeqNum)
-			continue
+			return nil
 		}
 
 		sender := ""
@@ -990,7 +1007,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 		}
 		if sender == "" {
 			logger.Warn("batchFetchDetails: empty sender for seq %d, skipping", msg.SeqNum)
-			continue
+			return nil
 		}
 
 		messageID := msg.Envelope.MessageId
@@ -1025,9 +1042,8 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 		toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Cc)...)
 		toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Bcc)...)
 		allTo = append(allTo, toAddrs...)
-	}
-
-	if err := <-done; err != nil {
+		return nil
+	}); err != nil {
 		return fmt.Errorf("batchFetchDetails: fetch: %w", err)
 	}
 	logger.Debug("batchFetchDetails: fetched folder=%s rawMessages=%d cachedEmails=%d", folder, len(seqNums), len(emails))

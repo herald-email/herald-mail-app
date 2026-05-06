@@ -43,6 +43,18 @@ Use debug logging for more detail:
 ./bin/herald -debug
 ```
 
+## Large import stalls or network pressure
+
+Large mailbox imports can expose provider, bridge, or local network stalls. Herald records each long IMAP fetch phase with folder, range, attempt, duration, retryability, and error details when debug logging is enabled.
+
+Use debug logging while reproducing the issue:
+
+```sh
+./bin/herald -debug -config ~/.herald/conf.yaml
+```
+
+If import progress stops, include the latest log lines containing `IMAP command failed`, `imap command timed out`, `fetch envelopes`, `uid fetch new range`, `fetch message details`, or `uid fetch all flags` in the bug report. Demo mode should log that it uses offline fixtures, does not open IMAP/Ollama/external HTTP connections on startup, and disables background semantic indexing.
+
 ## SMTP send fails
 
 Verify `smtp.host`, `smtp.port`, username, and password. Herald tries TLS-first behavior and can fall back to STARTTLS for providers that expect it.

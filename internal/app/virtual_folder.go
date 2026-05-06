@@ -55,6 +55,7 @@ func (m *Model) selectedSidebarFolderPath() string {
 
 func (m *Model) activateCurrentFolder() tea.Cmd {
 	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+		m.cancelBackgroundWork()
 		m.loading = true
 		m.startTime = time.Now()
 		m.backend.StopIDLE()

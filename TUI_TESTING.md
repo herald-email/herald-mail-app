@@ -1150,25 +1150,54 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 
 **Terminal raster image protocols.** tmux captures are still required for layout, key routing, fallback links, and escape-sequence checks, but tmux cannot prove actual raster placement for protocols such as iTerm2 OSC 1337, Kitty graphics, or Sixel. For changes that affect inline raster images, run the demo in a real compatible terminal as well, capture screenshots, record the terminal app/version and selected graphics mode, and verify native scrollback does not show images displacing pinned preview chrome.
 
-**Browser raster image repro with ttyd + xterm.js.** Stock ttyd is useful for proving the Herald key flow, but its bundled frontend may not render iTerm2 OSC 1337 inline images. For browser proof, serve a custom ttyd index that loads `@xterm/addon-image`, then run Herald with `TERM_PROGRAM=iTerm.app` so Herald emits the iTerm2 inline image protocol:
+**Browser raster image repro with ttyd + xterm.js.** ttyd is the agent-friendly raster lane for Herald image previews. It is not an exact substitute for iTerm2, Kitty, or Ghostty, but it can prove that terminal image bytes survive Bubble Tea, reach a browser terminal, and paint visible raster regions. Use three tiers:
+
+- tmux: layout, resize, key routing, ANSI/escape presence; cannot prove raster pixels.
+- stock ttyd: quick smoke that iTerm2 OSC 1337 bytes can paint in xterm.js; placement may drift because xterm's image addon treats images as buffer content.
+- repo custom ttyd harness: preferred browser proof; loads `@xterm/addon-image` directly and uses the ttyd websocket handshake expected by ttyd 1.7.x.
+
+Run the automated custom-harness probe from the repo root:
 
 ```bash
 make build
-TERM_PROGRAM=iTerm.app ttyd -W -p 7682 \
-  -I tools/ttyd-image-harness/index.html \
-  -t rendererType=canvas \
-  -t disableLeaveAlert=true \
-  -t disableResizeOverlay=true \
-  ./bin/herald --demo
+PORT=7682 EVIDENCE_DIR=reports/ttyd-image-preview \
+  tools/ttyd-image-harness/probe.sh
 ```
 
-The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image`, with image addon options such as `iipSupport: true` and `sixelSupport: true`. ttyd also requires a specific websocket handshake: fetch `/token`, connect to `/ws` with the `tty` subprotocol, and send the first websocket frame as raw JSON:
+The probe launches ttyd with `tools/ttyd-image-harness/index.html`, drives the demo to `Creative Commons image sampler for terminal previews`, captures a browser screenshot, and writes pixel-component metrics. A passing run should detect the color-chart cells plus at least two large photo regions. This proves browser-visible raster rendering, not exact native-terminal placement.
+
+For an interactive custom-harness run:
+
+```bash
+make build
+ttyd -W -p 7682 \
+  -I tools/ttyd-image-harness/index.html \
+  -t disableLeaveAlert=true \
+  -t disableResizeOverlay=true \
+  ./bin/herald -debug -demo -image-protocol=iterm2
+```
+
+The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image` from CDN, with image addon options such as `iipSupport: true` and `sixelSupport: true`. It fetches `/token`, connects to `/ws` with the `tty` subprotocol, and sends the first websocket frame as raw JSON:
 
 ```json
 {"AuthToken":"","columns":120,"rows":40}
 ```
 
-After that initial frame, send terminal input as `0` + input bytes and resize messages as `1` + `{"columns":120,"rows":40}`. If the browser page is blank and ttyd logs a websocket connection but no `started process`, the initial JSON handshake is probably missing. Once the custom client renders, open the demo email `Creative Commons image sampler for terminal previews`, press `z`, save a browser screenshot under `reports/`, and record the ttyd command, browser, addon status, and whether raster output displaced preview chrome.
+After that initial frame, send terminal input as `0` + input bytes and resize messages as `1` + `{"columns":120,"rows":40}`. If the browser page is blank and ttyd logs a websocket connection but no Herald process, the initial JSON handshake is probably missing. Once the custom client renders, open the demo email, press `z`, save a browser screenshot under `reports/`, and record the ttyd command, browser, addon status, selected image protocol, and whether raster output displaced preview chrome. Keep a native iTerm2/Ghostty check for any release-blocking claim about exact placement.
+
+For a quick stock ttyd smoke:
+
+```bash
+make build
+ttyd -i 127.0.0.1 -p 7681 -W \
+  -t enableSixel=true \
+  -t rendererType=webgl \
+  -t disableLeaveAlert=true \
+  -t disableResizeOverlay=true \
+  ./bin/herald -debug -demo -image-protocol=iterm2
+```
+
+Stock ttyd 1.7.7 can paint iTerm2 inline images, but it may miss or relocate images compared with the custom harness and native terminals. Do not use stock ttyd alone as the acceptance test for inline-image placement.
 
 **Trailing whitespace varies.** `capture-pane -p` strips trailing spaces per line but preserves blank lines up to the terminal height. For golden file comparison, decide whether to normalize this:
 

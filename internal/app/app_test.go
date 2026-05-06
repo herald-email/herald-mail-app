@@ -205,6 +205,8 @@ func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
 func TestHandleTimelineMsg_DedupesBackgroundEmbeddingBatchStart(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.classifier = &stubClassifier{}
+	m.cfg = &config.Config{}
+	m.cfg.Semantic.Enabled = true
 
 	model, cmd, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
 	if !handled {
@@ -224,6 +226,48 @@ func TestHandleTimelineMsg_DedupesBackgroundEmbeddingBatchStart(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected duplicate timeline load to skip scheduling another embedding batch")
+	}
+}
+
+func TestHandleTimelineMsg_SkipsAutomaticSemanticWorkWhenDisabled(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.classifier = &stubClassifier{}
+	m.cfg = &config.Config{}
+	m.cfg.Semantic.Enabled = false
+
+	model, _, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
+	if !handled {
+		t.Fatal("expected TimelineLoadedMsg to be handled")
+	}
+	updated := model.(*Model)
+	if updated.embeddingBatchActive {
+		t.Fatal("expected semantic-disabled config to skip background embedding")
+	}
+	if updated.contactEnrichmentActive {
+		t.Fatal("expected semantic-disabled config to skip background contact enrichment")
+	}
+}
+
+func TestHandleTimelineMsg_SkipsAutomaticSemanticWorkInDemoMode(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.classifier = &stubClassifier{}
+	m.demoMode = true
+	m.cfg = &config.Config{}
+	m.cfg.Semantic.Enabled = true
+
+	model, cmd, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
+	if !handled {
+		t.Fatal("expected TimelineLoadedMsg to be handled")
+	}
+	updated := model.(*Model)
+	if cmd != nil {
+		t.Fatal("expected demo timeline load to avoid background semantic and classification commands")
+	}
+	if updated.embeddingBatchActive {
+		t.Fatal("expected demo mode to skip background embedding")
+	}
+	if updated.contactEnrichmentActive {
+		t.Fatal("expected demo mode to skip background contact enrichment")
 	}
 }
 

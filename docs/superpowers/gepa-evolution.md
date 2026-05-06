@@ -25,6 +25,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] Improvement work can now append a structured history entry and render a publication-friendly change log.
 - [x] Product behavior changes are now meant to ground themselves in `VISION.md`, `ARCHITECTURE.md`, and real specs before implementation.
 - [x] Run artifacts and optimizer summaries can now record whether product-truth grounding was required, whether docs were updated first, and how often grounded runs occur.
+- [x] Every new autopilot run now requires an explicit degradation review before tracked-file edits, including preserved behaviors and regression checks unless the user approves specific degradations.
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
 - [x] Post-publish self-reflection suggestions can now sync into a visible pending-approval queue with stable queue keys and batch-approval commands.
@@ -56,6 +57,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a scored input-routing safety gate plus a reusable template for `red-compose-comma-alias` so shortcut-sensitive TUI work has explicit text-entry proof and reusable recovery guidance.
 - [x] Added a phase-impact measurement layer that renders a durable report comparing retries, skipped gates, and clarification load before and after the first four workflow improvements.
 - [x] Tightened the worktree policy after the adaptive terminal-theme implementation used a branch in the main checkout and blocked parallel task setup.
+- [x] Added a scored degradation-review gate so future runs must ask whether degradation is part of the plan and convert preserved behavior into regression checks.
 
 ## Run Patterns Observed
 
@@ -96,6 +98,7 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] The queue is visible now, but approvals are still user-driven decisions rather than automatically turning into measured workflow changes.
 - [ ] The current phase-impact report is honest but sample-starved: it has no post-Phase 1 bug or feature runs yet, so it cannot prove real-task gains from the recent workflow changes.
 - [ ] Non-autopilot implementation requests can still bypass this repo-local skill unless future sessions load the worktree policy before editing; a lightweight repo-level reminder may be needed outside GEPA.
+- [ ] The degradation-review gate is new, so we still need real bug and feature runs to measure whether it catches release-drift risks before handoff.
 
 ## Candidate Next Experiments
 
@@ -115,6 +118,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Measure whether the visual and input-routing gates reduce TUI retry count and post-handoff clarification load enough to justify stricter automatic enforcement.
 - [ ] Collect and measure the next 3 to 5 real bug or feature autopilot runs so the phase-impact report stops relying on workflow-validation-only evidence.
 - [ ] Add a pre-edit worktree gate that checks `pwd` and `git worktree list` before tracked-file edits, and records an explicit opt-out when working in the main checkout.
+- [ ] Measure whether the degradation-review gate reduces later reports of removed affordances, broken previews, or accidental compatibility loss.
 
 ## Ask Me Next
 
@@ -128,3 +132,4 @@ This section is the handoff bridge for future sessions. Each prompt should be ph
 - [ ] "Improve GEPA by reviewing the pending-approval queue and turning the approved items into tracked workflow changes."
 - [ ] "Improve GEPA by measuring whether the pending-approval queue reduced follow-up questions and hidden process drift."
 - [ ] "Improve GEPA by collecting enough real bug and feature runs to turn the current phase-impact report into stronger evidence."
+- [ ] "Improve GEPA by measuring whether degradation-review evidence catches accidental release drift before handoff."

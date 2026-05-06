@@ -141,6 +141,7 @@ func (m *Model) listenForRuleResult() tea.Cmd {
 
 // startLoading kicks off the backend's load sequence for the current folder.
 func (m *Model) startLoading() tea.Cmd {
+	m.cancelBackgroundWork()
 	m.loading = true
 	m.startTime = time.Now()
 	m.syncCountsSettled = false

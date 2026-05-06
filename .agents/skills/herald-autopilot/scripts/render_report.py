@@ -2,9 +2,15 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 
 from artifact_io import load_json, save_json, save_text
+from degradation_review import (
+    degradation_feedback_messages,
+    ensure_degradation_review,
+    summarize_degradation_review,
+)
 from input_routing import (
     covered_surfaces,
     ensure_input_routing,
@@ -80,6 +86,108 @@ def unique(items: list[str]) -> list[str]:
     return ordered
 
 
+def report_command_cwd(run: dict) -> Path:
+    worktree_raw = run["paths"].get("worktree", "")
+    worktree = Path(worktree_raw) if worktree_raw else None
+    if worktree is not None and worktree.exists():
+        return worktree
+    return Path(run["paths"]["repo_root"])
+
+
+def shell_path(path: Path) -> str:
+    return shlex.quote(str(path))
+
+
+def fenced_bash(commands: list[str]) -> list[str]:
+    return ["```bash", *commands, "```"]
+
+
+def test_instructions_section(run: dict) -> list[str]:
+    cwd = report_command_cwd(run)
+    binary = cwd / "bin" / "herald"
+    surfaces = {surface.lower() for surface in run.get("task", {}).get("surfaces", [])}
+    lines = [
+        "",
+        "## How To Test This Change",
+        "Build the candidate:",
+        *fenced_bash(
+            [
+                f"cd {shell_path(cwd)}",
+                "make build",
+            ]
+        ),
+        "",
+        "Candidate binary:",
+        *fenced_bash([f"{shell_path(binary)} --demo"]),
+        "",
+        "Focused verification:",
+        *fenced_bash(
+            [
+                f"cd {shell_path(cwd)}",
+                "go test ./...",
+                "make build",
+            ]
+        ),
+    ]
+
+    if "tui" in surfaces:
+        lines.extend(
+            [
+                "",
+                "TUI smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o /tmp/herald-test .",
+                        "tmux kill-session -t herald-test 2>/dev/null || true",
+                        "tmux new-session -d -s herald-test -x 220 -y 50 '/tmp/herald-test --demo'",
+                        "sleep 3",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-220x50.txt",
+                        "tmux resize-window -t herald-test -x 80 -y 24",
+                        "sleep 1",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-80x24.txt",
+                        "tmux resize-window -t herald-test -x 50 -y 15",
+                        "sleep 1",
+                        "tmux capture-pane -t herald-test -p > /tmp/herald-test-50x15.txt",
+                        "tmux kill-session -t herald-test",
+                    ]
+                ),
+            ]
+        )
+
+    if "mcp" in surfaces:
+        lines.extend(
+            [
+                "",
+                "MCP smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o ./bin/herald-mcp-server ./cmd/herald-mcp-server",
+                        "printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | ./bin/herald-mcp-server --demo",
+                    ]
+                ),
+            ]
+        )
+
+    if "ssh" in surfaces:
+        lines.extend(
+            [
+                "",
+                "SSH smoke:",
+                *fenced_bash(
+                    [
+                        f"cd {shell_path(cwd)}",
+                        "go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server",
+                        "./bin/herald-ssh-server -version",
+                    ]
+                ),
+            ]
+        )
+
+    return lines
+
+
 def latest_preflight_results(preflight: dict) -> list[dict]:
     latest: dict[str, dict] = {}
     for item in preflight.get("results", []):
@@ -127,6 +235,41 @@ def visual_gate_section(run: dict) -> list[str]:
                 lines.append(f"- Note: {pair['note']}")
     else:
         lines.append("- No visual evidence pairs recorded.")
+    return lines
+
+
+def degradation_review_section(run: dict) -> list[str]:
+    review = ensure_degradation_review(run)
+    lines = [
+        "",
+        "## Degradation Review Gate",
+        f"- Required: {'yes' if review.get('required', True) else 'no'}",
+        f"- Status: {review.get('status', 'not recorded')}",
+        f"- Answer: {review.get('answer', 'unanswered')}",
+        f"- Question: {review.get('question', '')}",
+        f"- User response: {review.get('user_response') or 'none recorded'}",
+        f"- Summary: {summarize_degradation_review(review)}",
+    ]
+    if review.get("allowed_degradations"):
+        lines.append("- Allowed degradations:")
+        lines.extend([f"- {item}" for item in review["allowed_degradations"]])
+    else:
+        lines.append("- Allowed degradations: none recorded")
+    if review.get("preserved_behaviors"):
+        lines.append("- Preserved behaviors:")
+        lines.extend([f"- {item}" for item in review["preserved_behaviors"]])
+    else:
+        lines.append("- Preserved behaviors: none recorded")
+    if review.get("regression_checks"):
+        lines.append("- Regression checks:")
+        lines.extend([f"- {item}" for item in review["regression_checks"]])
+    else:
+        lines.append("- Regression checks: none recorded")
+    if review.get("issues"):
+        lines.append(f"- Needs: {', '.join(review['issues'])}")
+    if review.get("notes"):
+        lines.append("- Notes:")
+        lines.extend([f"- {item}" for item in review["notes"]])
     return lines
 
 
@@ -183,6 +326,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
     templates = load_remediation_templates(repo_root)
     visual = ensure_visual_evidence(run)
     input_routing = ensure_input_routing(run)
+    degradation = ensure_degradation_review(run)
 
     strengths: list[str] = []
     drag: list[str] = []
@@ -201,6 +345,13 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         strengths.append(f"All required verification gates passed ({len(required_results)}/{len(required_results)}).")
     if product_truth.get("required") and product_truth.get("status") in {"consulted", "updated-first"}:
         strengths.append(f"Product intent was grounded through `{product_truth.get('status')}` doc usage.")
+    if degradation.get("required", True) and degradation.get("status") == "passed":
+        if degradation.get("answer") == "yes":
+            strengths.append(
+                f"Degradation review recorded {len(degradation.get('allowed_degradations', []))} approved degradation(s) and the regression checks that still protect preserved behavior."
+            )
+        else:
+            strengths.append("Degradation review confirmed no intended degradations and recorded preserved behaviors plus regression checks.")
     if visual.get("required") and visual.get("status") == "passed":
         strengths.append(
             f"Canonical visual evidence was captured across {len(covered_sizes(visual))}/{len(visual.get('required_sizes', []))} required terminal sizes."
@@ -226,6 +377,7 @@ def build_self_reflection(run: dict, score: dict | None, reflections: list[Path]
         drag.append("Product docs informed the run, but the workflow did not update them first before implementation.")
     if score and score.get("status") == "needs_followup":
         drag.append("The scored handoff still flagged human follow-up as needed.")
+    drag.extend(degradation_feedback_messages(degradation)[:3])
     drag.extend(visual_feedback_messages(visual)[:3])
     drag.extend(input_routing_feedback_messages(input_routing)[:3])
 
@@ -351,6 +503,7 @@ def main() -> int:
     preflight_resources = preflight.get("resources", {})
     ensure_visual_evidence(run)
     ensure_input_routing(run)
+    ensure_degradation_review(run)
     self_reflection = build_self_reflection(run, score, reflections, results)
     self_reflection_json_path = run_dir / "self_reflection.json"
     self_reflection_md_path = run_dir / "self_reflection.md"
@@ -366,6 +519,7 @@ def main() -> int:
         f"- Status: {run['status']}",
         f"- Branch: `{run['paths']['branch']}`",
         f"- Worktree: `{run['paths']['worktree']}`",
+        *test_instructions_section(run),
         "",
         "## Plan Summary",
         run["plan"].get("summary") or "No plan summary recorded.",
@@ -401,6 +555,7 @@ def main() -> int:
         run["outcome"].get("summary") or "No outcome summary recorded.",
         ]
     )
+    lines.extend(degradation_review_section(run))
     lines.extend(visual_gate_section(run))
     lines.extend(input_routing_section(run))
 
@@ -482,6 +637,7 @@ def main() -> int:
                 f"- Overall score: {score['overall_score']}",
                 f"- Status: {score['status']}",
                 f"- Preflight readiness: {score['axes'].get('preflight_readiness', 'n/a')}",
+                f"- Degradation review readiness: {score['axes'].get('degradation_review_readiness', 'n/a')}",
                 f"- Visual evidence readiness: {score['axes'].get('visual_evidence_readiness', 'n/a')}",
                 f"- Input routing readiness: {score['axes'].get('input_routing_readiness', 'n/a')}",
                 f"- Required gates passed: {score['counts']['required_passed']}/{score['counts']['required_gates']}",

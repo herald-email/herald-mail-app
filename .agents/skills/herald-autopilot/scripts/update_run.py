@@ -6,6 +6,7 @@ import datetime as dt
 from pathlib import Path
 
 from artifact_io import load_json, locked_paths, save_json
+from degradation_review import DEGRADATION_GATE, ensure_degradation_review, require_degradation_review
 from input_routing import INPUT_ROUTING_GATE, ensure_input_routing, require_input_routing
 from visual_evidence import VISUAL_GATE, ensure_visual_evidence, require_visual_evidence
 
@@ -56,6 +57,16 @@ def configure_visual_requirement(run: dict, required: bool) -> dict:
     return visual
 
 
+def configure_degradation_requirement(run: dict, required: bool) -> dict:
+    if required:
+        return require_degradation_review(run)
+    review = ensure_degradation_review(run)
+    review["required"] = False
+    review["status"] = "not-needed"
+    remove_required_gate(run, DEGRADATION_GATE)
+    return review
+
+
 def configure_input_routing_requirement(run: dict, required: bool) -> dict:
     gate = ensure_input_routing(run)
     if required:
@@ -90,6 +101,9 @@ def main() -> int:
     parser.add_argument("--publish-action", action="append", default=[], help="Append a publish action such as commit, merge, push, or pr")
     parser.add_argument("--clear-publish-actions", action="store_true", help="Clear recorded publish actions")
     parser.add_argument("--publication-summary", default="", help="Set the publication summary")
+    parser.add_argument("--require-degradation-review", action="store_true", help="Require the degradation review gate for this run")
+    parser.add_argument("--no-require-degradation-review", action="store_true", help="Mark the degradation review gate as not required")
+    parser.add_argument("--degradation-status", default="", choices=["pending", "passed", "not-needed"], help="Override the degradation review status")
     parser.add_argument("--require-visual-evidence", action="store_true", help="Require the canonical visual-evidence gate for this run")
     parser.add_argument("--no-require-visual-evidence", action="store_true", help="Mark the visual-evidence gate as not required")
     parser.add_argument("--visual-status", default="", choices=["pending", "passed", "not-needed"], help="Override the visual-evidence status")
@@ -105,6 +119,7 @@ def main() -> int:
         product_truth = ensure_product_truth(run)
         publication = ensure_publication(run)
         ensure_preflight(run)
+        degradation = ensure_degradation_review(run)
         visual = ensure_visual_evidence(run)
         input_routing = ensure_input_routing(run)
 
@@ -148,6 +163,12 @@ def main() -> int:
             publication["actions"].extend(args.publish_action)
         if args.publication_summary:
             publication["summary"] = args.publication_summary
+        if args.require_degradation_review:
+            degradation = configure_degradation_requirement(run, required=True)
+        if args.no_require_degradation_review:
+            degradation = configure_degradation_requirement(run, required=False)
+        if args.degradation_status:
+            degradation["status"] = args.degradation_status
         if args.require_visual_evidence:
             visual = configure_visual_requirement(run, required=True)
         if args.no_require_visual_evidence:

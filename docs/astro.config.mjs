@@ -98,6 +98,7 @@ export default defineConfig({
           items: [
             { label: 'All Keybindings', slug: 'reference/keybindings' },
             { label: 'Config Reference', slug: 'reference/config' },
+            { label: 'FAQ', slug: 'faq' },
             { label: 'Troubleshooting', slug: 'troubleshooting' },
             { label: 'Uninstall', slug: 'uninstall' },
           ],

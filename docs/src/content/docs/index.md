@@ -54,6 +54,7 @@ Herald's keyboard model stays complete, but you can also click and scroll the ma
 - [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, `?` shortcut help, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
 - [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, and sync status.
 - [Advanced guides](/advanced/mcp/) cover MCP, SSH mode, daemon commands, demo GIF generation, and privacy/security expectations.
+- [FAQ](/faq/) answers common questions about terminal image previews, multiple accounts, and other sharp edges.
 
 ## Local docs commands
 

@@ -53,6 +53,13 @@ def main() -> int:
     lines.append(
         f"- [x] Current top recommended experiment: `{recommendation['name']}` ({recommendation['value']} value, {recommendation['risk']} risk)."
     )
+    degradation = summary.get("degradation_review", {})
+    if degradation.get("required_runs", 0):
+        readiness = degradation.get("readiness_rate")
+        readiness_display = f"{readiness:.0%}" if isinstance(readiness, (int, float)) else "n/a"
+        lines.append(
+            f"- [x] Degradation-review gate: {degradation.get('ready_runs', 0)}/{degradation.get('required_runs', 0)} required run(s) ready ({readiness_display})."
+        )
     if queue:
         queue_summary = queue.get("summary", {})
         lines.append(

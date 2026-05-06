@@ -42,10 +42,11 @@ func RenderInline(imageData []byte, width, height int) string {
 	return RenderInlineInCellBox(imageData, width, height, width)
 }
 
-// RenderInlineInCellBox renders an image with explicit image dimensions while
-// reserving and clearing a wider cell box. The wider clear box prevents stale
-// split-view text from leaking beside iTerm2 raster output during full redraws.
-func RenderInlineInCellBox(imageData []byte, width, height, clearWidth int) string {
+// RenderInlineImageOnly encodes imageData as a single iTerm2 inline image
+// escape without emitting printable reservation cells. Bubble Tea v2's cell
+// renderer only preserves native graphics escapes when they are emitted as a
+// final control-only overlay tail.
+func RenderInlineImageOnly(imageData []byte, width, height int) string {
 	if len(imageData) == 0 {
 		return ""
 	}
@@ -56,6 +57,16 @@ func RenderInlineInCellBox(imageData []byte, width, height, clearWidth int) stri
 	}
 	if height > 0 {
 		args += fmt.Sprintf(";height=%d", height)
+	}
+	return fmt.Sprintf("\033]1337;File=%s:%s\a", args, b64)
+}
+
+// RenderInlineInCellBox renders an image with explicit image dimensions while
+// reserving and clearing a wider cell box. The wider clear box prevents stale
+// split-view text from leaking beside iTerm2 raster output during full redraws.
+func RenderInlineInCellBox(imageData []byte, width, height, clearWidth int) string {
+	if len(imageData) == 0 {
+		return ""
 	}
 	var placement strings.Builder
 	if width > 0 && height > 1 {
@@ -79,6 +90,6 @@ func RenderInlineInCellBox(imageData []byte, width, height, clearWidth int) stri
 		placement.WriteString(fmt.Sprintf("\033[%dA", height-1))
 	}
 	// OSC 1337 ; File=<args> : <base64data> BEL
-	placement.WriteString(fmt.Sprintf("\033]1337;File=%s:%s\a", args, b64))
+	placement.WriteString(RenderInlineImageOnly(imageData, width, height))
 	return placement.String()
 }

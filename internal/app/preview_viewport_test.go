@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/herald-email/herald-mail-app/internal/kittyimg"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -65,8 +67,9 @@ func TestRenderPreviewDocumentViewportClearsKittyPlacements(t *testing.T) {
 	}
 
 	rendered := renderPreviewDocumentViewport(layout, 0, 3)
-	if !strings.HasPrefix(rendered.Content, kittyimg.DeleteVisiblePlacements()) {
-		t.Fatalf("Kitty viewport should clear previous placements before redraw, got %q", rendered.Content[:min(len(rendered.Content), 80)])
+	tail := renderNativeImageOverlayTail(rendered.NativeOverlays, 1, 1)
+	if !strings.HasPrefix(tail, kittyimg.DeleteVisiblePlacements()) {
+		t.Fatalf("Kitty overlay tail should clear previous placements before redraw, got %q", tail[:min(len(tail), 80)])
 	}
 	if rendered.Rows != 3 {
 		t.Fatalf("rendered rows = %d, want 3", rendered.Rows)
@@ -147,7 +150,7 @@ func TestPreviewRowsFromIterm2ControlBlockKeepsProtocolAtomic(t *testing.T) {
 	}
 }
 
-func TestRenderPreviewDocumentViewportSkipsIterm2ConsumedPhysicalRows(t *testing.T) {
+func TestRenderPreviewDocumentViewportReservesIterm2ConsumedPhysicalRows(t *testing.T) {
 	layout := previewDocumentLayout{
 		ImageMode: previewImageModeIterm2,
 		Rows: []previewRenderedRow{
@@ -165,12 +168,75 @@ func TestRenderPreviewDocumentViewportSkipsIterm2ConsumedPhysicalRows(t *testing
 	if rendered.Rows != 5 {
 		t.Fatalf("rendered rows = %d, want logical viewport rows 5", rendered.Rows)
 	}
-	if strings.Count(rendered.Content, "\n") != 2 {
-		t.Fatalf("iTerm2 terminal-consumed rows should not print duplicate blank lines, got %q", rendered.Content)
+	if strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("iTerm2 native escape should not be embedded inline, got %q", rendered.Content)
+	}
+	if strings.Count(rendered.Content, "\n") != 4 {
+		t.Fatalf("iTerm2 terminal-consumed rows should be blank reserved rows, got %q", rendered.Content)
 	}
 	if !strings.Contains(rendered.Content, "before") || !strings.Contains(rendered.Content, "after") {
 		t.Fatalf("viewport lost surrounding text: %q", rendered.Content)
 	}
+	if len(rendered.NativeOverlays) != 1 {
+		t.Fatalf("native overlays = %d, want 1", len(rendered.NativeOverlays))
+	}
+}
+
+func TestRenderPreviewDocumentViewportPreservesNativeImageEscapesThroughV2Renderer(t *testing.T) {
+	layout := previewDocumentLayout{
+		ImageMode: previewImageModeIterm2,
+		Rows: []previewRenderedRow{
+			{Content: "before"},
+			{Content: "\x1b]1337;File=inline=1;width=12;height=2:payload\a"},
+			{TerminalConsumed: true},
+			{Content: "after"},
+		},
+		TotalRows: 4,
+	}
+
+	rendered := renderPreviewDocumentViewport(layout, 0, 4)
+	if strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("native image escape should be carried by overlay tail, not inline content: %q", rendered.Content)
+	}
+	if len(rendered.NativeOverlays) != 1 {
+		t.Fatalf("native overlays = %d, want 1", len(rendered.NativeOverlays))
+	}
+	if rendered.NativeOverlays[0].Row != 1 {
+		t.Fatalf("native overlay row = %d, want 1", rendered.NativeOverlays[0].Row)
+	}
+
+	terminalBytes := renderStyledStringThroughV2TestRenderer(rendered.Content + renderNativeImageOverlayTail(rendered.NativeOverlays, 1, 1))
+	if !strings.Contains(terminalBytes, "\x1b]1337;File=") {
+		t.Fatalf("v2 renderer output lost native image escape:\n%q", terminalBytes)
+	}
+}
+
+func TestAppendNativeImageOverlayTailKeepsTailInsideFullHeightView(t *testing.T) {
+	fullHeightContent := strings.TrimSuffix(strings.Repeat("x\n", 20), "\n")
+	tail := renderNativeImageOverlayTail([]previewNativeOverlay{{
+		Row:     1,
+		Mode:    previewImageModeIterm2,
+		Content: "\x1b]1337;File=inline=1;width=12;height=2:payload\a",
+	}}, 1, 1)
+
+	terminalBytes := renderStyledStringThroughV2TestRenderer(appendNativeImageOverlayTailWithinRows(fullHeightContent+"\n", tail, 20))
+	if !strings.Contains(terminalBytes, "\x1b]1337;File=") {
+		t.Fatalf("v2 renderer clipped native image tail after full-height content:\n%q", terminalBytes)
+	}
+}
+
+func renderStyledStringThroughV2TestRenderer(content string) string {
+	return renderStyledStringThroughSizedV2TestRenderer(content, 120, 20)
+}
+
+func renderStyledStringThroughSizedV2TestRenderer(content string, width, height int) string {
+	var out bytes.Buffer
+	renderer := uv.NewTerminalRenderer(&out, nil)
+	screen := uv.NewScreenBuffer(width, height)
+	uv.NewStyledString(content).Draw(screen, screen.Bounds())
+	renderer.Render(screen.RenderBuffer)
+	_ = renderer.Flush()
+	return out.String()
 }
 
 func TestPreviewRowsFromRenderedImageCapsPhysicalLinesToReportedRows(t *testing.T) {

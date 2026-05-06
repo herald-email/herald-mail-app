@@ -6,6 +6,8 @@ This skill uses impact-based gates. The goal is to verify enough to trust the ha
 
 Always run the smallest set of commands that can honestly prove the requested change. Add broader surfaces only when the task touches them.
 
+Every run also closes `degradation-review` before implementation. Ask whether the plan intentionally degrades, removes, or weakens existing behavior. If no degradation is intended, name preserved behaviors and regression checks. If degradation is approved, record the approved degradation list plus the remaining preserved behaviors and checks.
+
 ## Surface Map
 
 ### Code-only tasks
@@ -82,5 +84,6 @@ The skill must also handle:
 - dirty or failing baseline
 - missing tool prerequisite for a requested surface
 - ambiguous intake that should force a question instead of guessing
+- missing degradation answer, preserved-behavior list, or regression checks
 
 Record these cases in the run folder even when the task cannot continue.

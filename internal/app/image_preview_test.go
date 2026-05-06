@@ -177,7 +177,7 @@ func TestTimelineFullScreen_ItermRendersBoundedInlineImage(t *testing.T) {
 	}
 }
 
-func TestTimelineFullScreen_ItermClearsNativeRasterBeforeDrawing(t *testing.T) {
+func TestTimelineFullScreen_ItermAppendsNativeOverlayTail(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	m := makeSizedModel(t, 80, 24)
 	defer m.cleanup()
@@ -196,11 +196,15 @@ func TestTimelineFullScreen_ItermClearsNativeRasterBeforeDrawing(t *testing.T) {
 
 	rendered := m.renderFullScreenEmail()
 
-	if !strings.HasPrefix(rendered, "\x1b[2J\x1b[H") {
-		t.Fatalf("iTerm2 full-screen preview should clear stale native raster before drawing, got prefix %q", rendered[:min(len(rendered), 20)])
+	if !strings.Contains(rendered, "\x1b7\x1b[") {
+		t.Fatalf("iTerm2 full-screen preview should append a cursor-positioned native overlay tail, got raw:\n%q", rendered)
 	}
 	if !strings.Contains(rendered, "\x1b]1337;File=") {
-		t.Fatalf("expected iTerm2 raster escape after clear, got raw:\n%q", rendered)
+		t.Fatalf("expected iTerm2 raster escape in overlay tail, got raw:\n%q", rendered)
+	}
+	terminalBytes := renderStyledStringThroughSizedV2TestRenderer(rendered, m.windowWidth, m.windowHeight)
+	if !strings.Contains(terminalBytes, "\x1b]1337;File=") {
+		t.Fatalf("Bubble Tea v2 renderer lost iTerm2 raster escape from full-screen preview:\n%q", terminalBytes)
 	}
 }
 
@@ -406,14 +410,16 @@ func TestTimelinePreviewDocumentLayout_CacheIncludesAvailableRowsForItermImages(
 	m.timeline.fullScreen = true
 
 	tall := m.timelinePreviewDocumentLayout(98, 20)
-	tallRendered := renderPreviewDocumentViewport(tall, 0, tall.TotalRows).Content
+	tallViewport := renderPreviewDocumentViewport(tall, 0, tall.TotalRows)
+	tallRendered := renderNativeImageOverlayTail(tallViewport.NativeOverlays, 1, 1)
 	tallHeight := itermImageDimension(t, tallRendered, "height")
 	if tallHeight <= 2 {
 		t.Fatalf("expected tall layout image height > 2, got %d raw=%q", tallHeight, tallRendered)
 	}
 
 	short := m.timelinePreviewDocumentLayout(98, 2)
-	shortRendered := renderPreviewDocumentViewport(short, 0, short.TotalRows).Content
+	shortViewport := renderPreviewDocumentViewport(short, 0, short.TotalRows)
+	shortRendered := renderNativeImageOverlayTail(shortViewport.NativeOverlays, 1, 1)
 	shortHeight := itermImageDimension(t, shortRendered, "height")
 	if shortHeight > 2 {
 		t.Fatalf("expected short layout image height <= 2, got %d raw=%q", shortHeight, shortRendered)

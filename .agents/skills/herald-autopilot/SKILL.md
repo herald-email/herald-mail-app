@@ -39,14 +39,17 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 1. Treat one invocation as one task.
 2. Ask only critical questions that change implementation or safety.
 3. Show a concise plan summary, then proceed unless a risky or non-obvious tradeoff needs the user's decision.
-4. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
-5. Verify baseline, then create and switch into a dedicated worktree under `.worktrees/` before any tracked-file edits. Creating only a branch in the current checkout does not satisfy this.
-6. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
-7. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
-8. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
-9. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
-10. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
-11. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+4. Before tracked-file edits, explicitly ask whether the plan intentionally degrades, removes, or weakens existing behavior. No degradation is allowed unless the user explicitly approves it.
+5. Record the degradation review gate with preserved behaviors and regression checks. If degradation is approved, record the approved degradation list and the remaining behaviors still protected by regression checks.
+6. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
+7. Verify baseline, then create and switch into a dedicated worktree under `.worktrees/` before any tracked-file edits. Creating only a branch in the current checkout does not satisfy this.
+8. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
+9. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
+10. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
+11. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
+12. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
+13. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+14. Every final handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for building, launching the candidate binary, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path.
 
 ## Worktree Safety Correction
 
@@ -113,6 +116,35 @@ This creates:
 - `.superpowers/autopilot/runs/<run-id>/evidence/manifest.json`
 - `.superpowers/autopilot/runs/<run-id>/reflections/`
 
+Before implementation, close the degradation review gate. Ask the user:
+
+> Does this plan intentionally degrade, remove, or weaken any existing behavior, compatibility, UI affordance, preview/media behavior, docs/demo output, or surface contract?
+
+If the answer is no, record preserved behavior plus the regression checks that will protect it:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/record_degradation_review.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>" \
+  --answer no \
+  --user-response "No degradations are planned." \
+  --preserved-behavior "Chrome buttons remain visible in supported terminal and browser surfaces." \
+  --preserved-behavior "Image preview still renders inline or exposes open-image links in supported terminals." \
+  --regression-check "Capture the affected TUI state at 220x50, 80x24, and 50x15." \
+  --regression-check "Run the focused image preview tests when preview or media paths are touched."
+```
+
+If the user approves a degradation, record the approved degradation and the behavior that still must not regress:
+
+```bash
+python3 .agents/skills/herald-autopilot/scripts/record_degradation_review.py \
+  --run-dir ".superpowers/autopilot/runs/<run-id>" \
+  --answer yes \
+  --user-response "Approved removing the legacy label from the compact title row." \
+  --allowed-degradation "Legacy compact title-row label is removed." \
+  --preserved-behavior "Remaining title-row controls stay visible and reachable." \
+  --regression-check "Compare before/after title-row captures for visible button affordances."
+```
+
 Run preflight immediately after bootstrap whenever the task touches docs, SSH, or long-running media work:
 
 ```bash
@@ -147,6 +179,8 @@ Route verification by affected surface instead of running every surface every ti
 - `tui`: tmux-driven checks and visual inspection using `tui-test`
 - `ssh`: build `cmd/herald-ssh-server`, exercise the affected flow over SSH if the change touches the SSH surface
 - `mcp`: build or run `cmd/mcp-server`, invoke the relevant tool path if the change touches MCP behavior
+
+Every run also requires `degradation-review`. Treat the user's answer as part of the verification plan: preserved behaviors must have regression checks, and approved degradations must be explicitly listed.
 
 For visual TUI changes, always capture a matched before/after pair:
 
@@ -215,7 +249,7 @@ python3 .agents/skills/herald-autopilot/scripts/record_reflection.py \
 
 Stay in the same worktree for v1. Keep retries bounded by the run's retry limit.
 
-When the failing evidence matches a reusable remediation template such as `focused-tests`, `app-tests`, `app-package-tests`, or `diff-check`, use that checklist before inventing a new retry plan from scratch.
+When the failing evidence matches a reusable remediation template such as `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, or `degradation-review`, use that checklist before inventing a new retry plan from scratch.
 
 ## Update Run State
 
@@ -258,9 +292,27 @@ The report should make it easy for the user to answer:
 
 - What was requested?
 - What changed?
+- How do I run the candidate binary or demo build locally?
+- Which exact commands should I paste to verify the changed behavior?
 - Which gates passed, failed, or were skipped?
 - What remains risky?
 - Where is the worktree and branch?
+
+Use this handoff shape when possible:
+
+````markdown
+## How To Test This Change
+Candidate binary:
+```bash
+/absolute/path/to/bin/herald --demo
+```
+Focused verification:
+```bash
+cd /absolute/path/to/worktree
+go test ./...
+make build
+```
+````
 
 After a requested publish action, the rendered report should also make it easy to answer:
 
