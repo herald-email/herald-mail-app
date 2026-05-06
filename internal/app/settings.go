@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
@@ -63,6 +64,7 @@ type Settings struct {
 	width      int
 	height     int
 	done       bool // set once we've emitted the completion message
+	saveButton bool
 
 	showExperimentalEmailServices bool
 
@@ -92,6 +94,9 @@ type Settings struct {
 	syncPollStr        string
 	syncIDLE           bool
 	cleanupScheduleStr string
+
+	// form field backing variables — compose
+	signatureText string
 }
 
 type settingsPanelLayout struct {
@@ -125,6 +130,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		cfg:                           &config.Config{},
 		configPath:                    configPath,
 		syncIDLE:                      true, // sensible default
+		saveButton:                    true,
 		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
 	}
 
@@ -154,6 +160,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.syncPollStr = strconv.Itoa(existing.Sync.PollIntervalMinutes)
 		s.syncIDLE = existing.Sync.IDLEEnabled
 		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
+		s.signatureText = existing.Compose.Signature.Text
 
 		if existing.IsGmailOAuth() {
 			s.provider = "gmail-oauth"
@@ -414,6 +421,20 @@ func (s *Settings) buildForm() {
 			}),
 	).Title("Sync & Cleanup")
 
+	composeGroup := huh.NewGroup(
+		huh.NewText().
+			Title("Email Signature").
+			Description("Optional default inserted into new Compose screens. Enter adds a line; Tab moves to Save Settings. Leave empty to disable.").
+			Placeholder("-- \nYour Name").
+			Lines(5).
+			Value(&s.signatureText),
+		huh.NewConfirm().
+			Title("Save Settings").
+			Affirmative("Save Settings").
+			Negative("").
+			Value(&s.saveButton),
+	).Title("Compose")
+
 	s.form = huh.NewForm(
 		accountGroup,
 		credentialsGroup,
@@ -426,9 +447,11 @@ func (s *Settings) buildForm() {
 		claudeGroup,
 		openAIGroup,
 		syncGroup,
+		composeGroup,
 	).
 		WithShowHelp(true).
-		WithShowErrors(true)
+		WithShowErrors(true).
+		WithKeyMap(settingsFormKeyMap())
 
 	if s.width > 0 {
 		s.form = s.form.WithWidth(s.formWidth())
@@ -444,6 +467,14 @@ func (s *Settings) setSize(width, height int) {
 	if s.form != nil {
 		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
 	}
+}
+
+func settingsFormKeyMap() *huh.KeyMap {
+	keymap := huh.NewDefaultKeyMap()
+	keymap.Text.NewLine = key.NewBinding(key.WithKeys("enter", "alt+enter", "ctrl+j"), key.WithHelp("enter", "new line"))
+	keymap.Text.Next = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next"))
+	keymap.Text.Submit = key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save"))
+	return keymap
 }
 
 func (s *Settings) panelLayout() settingsPanelLayout {
@@ -723,6 +754,7 @@ func (s *Settings) buildConfig() *config.Config {
 	if n, err := strconv.Atoi(s.cleanupScheduleStr); err == nil {
 		cfg.Cleanup.ScheduleHours = n
 	}
+	cfg.Compose.Signature.Text = s.signatureText
 
 	applyVendorPreset(&cfg)
 	return &cfg

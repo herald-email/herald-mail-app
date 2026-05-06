@@ -1,8 +1,11 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
@@ -18,6 +21,7 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	existing.Ollama.Host = "http://myhost:11434"
 	existing.Ollama.Model = "llama3"
 	existing.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+	existing.Compose.Signature.Text = "-- \nRowan"
 
 	s := NewSettings(SettingsModeWizard, existing)
 
@@ -50,6 +54,9 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	}
 	if s.embedModel != "nomic-embed-text-v2-moe" {
 		t.Errorf("embedModel = %q, want %q", s.embedModel, "nomic-embed-text-v2-moe")
+	}
+	if s.signatureText != "-- \nRowan" {
+		t.Errorf("signatureText = %q, want configured signature", s.signatureText)
 	}
 }
 
@@ -174,6 +181,7 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	s.imapPort = "993"
 	s.smtpHost = "smtp.example.com"
 	s.smtpPort = "587"
+	s.signatureText = "-- \nRowan"
 
 	cfg := s.buildConfig()
 
@@ -189,6 +197,167 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	if cfg.Server.Port != 993 {
 		t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, 993)
 	}
+	if got := cfg.Compose.Signature.Text; got != "-- \nRowan" {
+		t.Errorf("Compose.Signature.Text = %q, want configured signature", got)
+	}
+}
+
+func TestBuildConfig_PreservesUnmanagedConfigFields(t *testing.T) {
+	existing := &config.Config{}
+	existing.Vendor = "imap"
+	existing.Cache.DatabasePath = "/tmp/herald-cache.db"
+	existing.Daemon.Port = 7272
+	existing.AI.BackgroundQueueLimit = 128
+	existing.Classification.Prompts = append(existing.Classification.Prompts, struct {
+		Name         string `yaml:"name"`
+		SystemText   string `yaml:"system_text"`
+		UserTemplate string `yaml:"user_template"`
+		OutputVar    string `yaml:"output_var"`
+	}{
+		Name:         "Priority",
+		SystemText:   "Classify priority",
+		UserTemplate: "{{.Subject}}",
+		OutputVar:    "priority",
+	})
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.signatureText = "-- \nRowan"
+
+	cfg := s.buildConfig()
+
+	if cfg.Cache.DatabasePath != "/tmp/herald-cache.db" {
+		t.Errorf("Cache.DatabasePath = %q, want preserved path", cfg.Cache.DatabasePath)
+	}
+	if cfg.Daemon.Port != 7272 {
+		t.Errorf("Daemon.Port = %d, want preserved port", cfg.Daemon.Port)
+	}
+	if cfg.AI.BackgroundQueueLimit != 128 {
+		t.Errorf("AI.BackgroundQueueLimit = %d, want preserved limit", cfg.AI.BackgroundQueueLimit)
+	}
+	if len(cfg.Classification.Prompts) != 1 || cfg.Classification.Prompts[0].Name != "Priority" {
+		t.Errorf("Classification.Prompts = %#v, want preserved prompt", cfg.Classification.Prompts)
+	}
+	if cfg.Compose.Signature.Text != "-- \nRowan" {
+		t.Errorf("Compose.Signature.Text = %q, want saved signature", cfg.Compose.Signature.Text)
+	}
+}
+
+func TestSettingsSignatureFieldEnterAddsLineInsteadOfSubmitting(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	focusSignatureSettingsGroup(t, s)
+
+	s = updateSettingsForTest(t, s, keyRunes("Line one"))
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	s = updateSettingsForTest(t, s, keyRunes("Line two"))
+
+	if got := s.signatureText; got != "Line one\nLine two" {
+		t.Fatalf("signatureText = %q, want multiline value", got)
+	}
+	if s.form.State == huh.StateCompleted || s.done {
+		t.Fatal("plain Enter in signature field should insert a newline, not save and close settings")
+	}
+}
+
+func TestSettingsSignatureFieldShowsMultilineSaveHelp(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	focusSignatureSettingsGroup(t, s)
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+
+	for _, want := range []string{"Enter adds a line", "moves to Save Settings", "Save Settings", "enter new line", "tab next"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected signature settings help to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsSignatureFieldTabMovesToSaveButtonAndEnterSaves(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	focusSignatureSettingsGroup(t, s)
+	s = updateSettingsForTest(t, s, keyRunes("Line one"))
+
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyTab})
+
+	if s.form.State == huh.StateCompleted || s.done {
+		t.Fatal("Tab from signature field should focus the Save Settings button, not submit immediately")
+	}
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"Save Settings", "enter submit"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected focused Save Settings button help to include %q, got:\n%s", want, rendered)
+		}
+	}
+
+	s, messages := updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if s.form.State != huh.StateCompleted || !s.done {
+		t.Fatalf("expected Enter on Save Settings to complete settings, state=%v done=%v", s.form.State, s.done)
+	}
+	var saved SettingsSavedMsg
+	for _, msg := range messages {
+		if m, ok := msg.(SettingsSavedMsg); ok {
+			saved = m
+			break
+		}
+	}
+	if saved.Config == nil {
+		t.Fatalf("expected SettingsSavedMsg from Save Settings, got messages %#v", messages)
+	}
+	if saved.Config.Compose.Signature.Text != "Line one" {
+		t.Fatalf("saved signature = %q, want field value", saved.Config.Compose.Signature.Text)
+	}
+}
+
+func focusSignatureSettingsGroup(t *testing.T, s *Settings) {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		if strings.Contains(s.form.View(), "Email Signature") {
+			return
+		}
+		s.form.NextGroup()
+	}
+	t.Fatalf("signature settings group not reached; current form:\n%s", s.form.View())
+}
+
+func updateSettingsForTest(t *testing.T, s *Settings, msg tea.Msg) *Settings {
+	t.Helper()
+	updated, _ := s.Update(msg)
+	return updated.(*Settings)
+}
+
+func updateAndPumpSettingsForTest(t *testing.T, s *Settings, msg tea.Msg) (*Settings, []tea.Msg) {
+	t.Helper()
+	updated, cmd := s.Update(msg)
+	s = updated.(*Settings)
+	messages := pumpSettingsCommandForTest(t, s, cmd, 0)
+	return s, messages
+}
+
+func pumpSettingsCommandForTest(t *testing.T, s *Settings, cmd tea.Cmd, depth int) []tea.Msg {
+	t.Helper()
+	if depth > 10 {
+		t.Fatal("settings command pump exceeded depth limit")
+	}
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var messages []tea.Msg
+		for _, child := range batch {
+			messages = append(messages, pumpSettingsCommandForTest(t, s, child, depth+1)...)
+		}
+		return messages
+	}
+	if msg == nil {
+		return nil
+	}
+	updated, nextCmd := s.Update(msg)
+	if nextSettings, ok := updated.(*Settings); ok {
+		*s = *nextSettings
+	}
+	messages := []tea.Msg{msg}
+	messages = append(messages, pumpSettingsCommandForTest(t, s, nextCmd, depth+1)...)
+	return messages
 }
 
 func TestBuildConfig_OllamaDefaultWritesPreconfiguredValues(t *testing.T) {

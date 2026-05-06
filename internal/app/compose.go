@@ -1323,7 +1323,12 @@ func (m *Model) searchContactsCmd(token string) tea.Cmd {
 
 // composeHasContent returns true if any compose field is non-empty.
 func composeHasContent(m *Model) bool {
-	return m.composeTo.Value() != "" || m.composeSubject.Value() != "" || m.composeBody.Value() != "" || m.composePreserved != nil
+	return strings.TrimSpace(m.composeTo.Value()) != "" ||
+		strings.TrimSpace(m.composeCC.Value()) != "" ||
+		strings.TrimSpace(m.composeBCC.Value()) != "" ||
+		strings.TrimSpace(m.composeSubject.Value()) != "" ||
+		m.composeBodyHasUserContent() ||
+		m.composePreserved != nil
 }
 
 func draftFolderIsReplaceable(folder string) bool {
