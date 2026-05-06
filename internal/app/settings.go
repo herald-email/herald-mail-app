@@ -424,7 +424,7 @@ func (s *Settings) buildForm() {
 	composeGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
-			Description("Optional default inserted into new Compose screens. Enter adds a line; Tab moves to Save Settings. Leave empty to disable.").
+			Description("Enter adds a line. Tab moves to Save Settings. Empty disables.").
 			Placeholder("-- \nYour Name").
 			Lines(5).
 			Value(&s.signatureText),
