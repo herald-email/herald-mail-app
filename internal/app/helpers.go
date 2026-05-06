@@ -898,7 +898,12 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.attachmentPathInput.SetWidth(plan.Compose.FieldInnerWidth)
 	composeBodyWidth := plan.Compose.BodyInnerWidth
 	composeExtraRows := m.composeAdditionalRows(tableHeight)
-	composeBodyHeight := tableHeight - 16 - composeExtraRows
+	// Compose renders directly in the main viewport, while tableHeight is the
+	// bordered-panel inner budget used by table surfaces. Give Compose back
+	// those two rows so the body editor absorbs spare vertical space.
+	const composeFixedRows = 15 // 4 bordered fields + divider + body borders.
+	composeViewportRows := tableHeight + 2
+	composeBodyHeight := composeViewportRows - composeFixedRows - composeExtraRows
 	minComposeBodyHeight := 3
 	if composeExtraRows > 0 {
 		minComposeBodyHeight = 1

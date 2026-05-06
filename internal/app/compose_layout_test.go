@@ -48,12 +48,16 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 
 		tableHeight := m.buildLayoutPlan(120, h).ContentHeight
 
+		// Compose renders directly in the main viewport, so it gets the two rows
+		// that table panels spend on their own outer border.
+		composeViewportRows := tableHeight + 2
+
 		// Fixed compose rows (excluding body content):
 		//   To(3) + CC(3) + BCC(3) + Subject(3) = 12 field rows
-		//   divider(1) + status(1) + body borders(2) = 4 overhead rows
-		//   total fixed = 16
-		const fixedRows = 16
-		expectedBodyHeight := tableHeight - fixedRows
+		//   divider(1) + body borders(2) = 3 overhead rows
+		//   total fixed = 15
+		const fixedRows = 15
+		expectedBodyHeight := composeViewportRows - fixedRows
 		if expectedBodyHeight < 3 {
 			expectedBodyHeight = 3
 		}
@@ -63,6 +67,49 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 			t.Errorf("h=%d: composeBody.Height()=%d, want %d (would overflow terminal by %d rows)",
 				h, got, expectedBodyHeight, got-expectedBodyHeight)
 		}
+	}
+}
+
+func TestComposeBlankView_FillsTerminalHeight(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{name: "wide", width: 220, height: 50},
+		{name: "snapshot", width: 120, height: 40},
+		{name: "standard", width: 80, height: 24},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, tc.width, tc.height)
+			m.activeTab = tabCompose
+			m.composeField = composeFieldTo
+			m.updateTableDimensions(tc.width, tc.height)
+			freezeComposeCursors(m)
+
+			rendered := m.renderMainView()
+			lines := strings.Split(stripANSI(rendered), "\n")
+			if len(lines) != tc.height {
+				t.Fatalf("blank Compose rendered %d lines at %dx%d, want exactly %d lines:\n%s",
+					len(lines), tc.width, tc.height, tc.height, stripANSI(rendered))
+			}
+			bottomRows := strings.Join(lines[len(lines)-4:], "\n")
+			if !strings.Contains(bottomRows, "?: help") || strings.TrimSpace(lines[len(lines)-1]) == "" {
+				t.Fatalf("expected bottom rows to contain key hints at %dx%d, got:\n%s",
+					tc.width, tc.height, bottomRows)
+			}
+			dividerSeen := false
+			for _, line := range lines[len(lines)-4:] {
+				if line == strings.Repeat("─", tc.width) {
+					dividerSeen = true
+					break
+				}
+			}
+			if !dividerSeen {
+				t.Fatalf("expected status/key-hint divider near the bottom at %dx%d, got:\n%s",
+					tc.width, tc.height, strings.Join(lines[len(lines)-4:], "\n"))
+			}
+		})
 	}
 }
 
