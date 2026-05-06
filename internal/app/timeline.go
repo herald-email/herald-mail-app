@@ -1637,12 +1637,16 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
 				}
 				return joinHintSegments(append(
-					[]string{"tab: back to results", "↑/k ↓/j: scroll"},
+					[]string{"tab: back to results", "C: compose"},
 					append(m.timelineMessageActionHintSegments(),
-						"z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
+						"↑/k ↓/j: scroll", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
 				)...), true
 			}
-			return fmt.Sprintf("/ %s  │  %d results  │  ↑/k ↓/j: results  │  space: select  │  enter: open  │  esc: back to search", q, len(m.timeline.threadRowMap)), true
+			return joinHintSegments(append(
+				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), "C: compose"},
+				append(m.timelineMessageActionHintSegments(),
+					fmt.Sprintf("/ %s", q), "↑/k ↓/j: results", "space: select", "enter: open", "esc: back to search")...,
+			)...), true
 		}
 		if m.timeline.searchError != "" {
 			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: back", q, m.timeline.searchError), true
@@ -1657,7 +1661,11 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
 	}
 	if m.timeline.chatFilterMode {
-		return "esc: clear filter  │  " + primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  space: select  │  enter: open  │  q: quit", true
+		return joinHintSegments(append(
+			[]string{primaryTabShortcutHint, "C: compose"},
+			append(m.timelinePrimaryMessageActionHintSegments(),
+				"esc: clear filter", "↑/k ↓/j: navigate", "space: select", "enter: open", "q: quit")...,
+		)...), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
 		return timelineReadOnlyPreviewHintText("tab/shift+tab: panels", "esc: close"), true
@@ -1683,9 +1691,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		segments := []string{"tab/shift+tab: panels", "left: Timeline", "↑/k ↓/j: scroll"}
+		segments := []string{m.timelinePanelSwitchHint(), "C: compose"}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
-		segments = append(segments, "U: unread")
+		segments = append(segments, "U: unread", "left: Timeline", "↑/k ↓/j: scroll")
 		segments = append(segments, previewActionHintText(hasUnsub))
 		if hasAttachments {
 			if hasMultipleAttachments {
@@ -1697,19 +1705,39 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{"tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "V: range", "shift+↑/↓: range", "right/]: focus preview", "left/[: fold/folders", "enter: open", "esc: close"}, append(m.timelineMessageActionHintSegments(), "U: unread", "q: quit")...)...), true
+		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), "C: compose"}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", "right/]: focus preview", "left/[: fold/folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open", "esc: close", "q: quit")...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{primaryTabShortcutHint, "S: settings", "↑/k ↓/j: navigate", "space: select", "V: range"}
+		segments := []string{primaryTabShortcutHint, "C: compose"}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "q: quit")
+		segments = append(segments, "V: range", "space: select", "S: settings", "↑/k ↓/j: navigate", "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "q: quit")
 		return joinHintSegments(segments...), true
 	}
-	segments := []string{primaryTabShortcutHint, "S: settings", "tab/shift+tab: panels", "↑/k ↓/j: navigate", "space: select", "V: range", "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "U: unread"}
-	if m.timelineSelectedCount() == 0 {
-		segments = append(segments, "C: compose")
+	segments := []string{primaryTabShortcutHint, m.timelinePanelSwitchHint(), "C: compose"}
+	if m.currentTimelineRowEmail() != nil {
+		segments = append(segments, "U: unread")
+		if m.currentTimelineDraftEmail() != nil {
+			segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
+			segments = append(segments, "S: settings")
+		} else {
+			segments = append(segments, "R: reply", "F: forward", "D: delete", "e: archive", "S: settings", "V: range", "*: star")
+		}
+	} else {
+		segments = append(segments, "S: settings")
 	}
-	return joinHintSegments(append(segments, append(m.timelinePrimaryMessageActionHintSegments(), "/: hybrid search", "A: re-classify", "f: sidebar", "q: quit")...)...), true
+	segments = append(segments, "right/]: preview", "left/[: folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open")
+	if m.timelineSelectedCount() == 0 {
+		segments = append(segments, "/: hybrid search", "A: re-classify")
+	}
+	segments = append(segments, "f: sidebar", "q: quit")
+	return joinHintSegments(segments...), true
+}
+
+func (m *Model) timelinePanelSwitchHint() string {
+	if m.windowWidth > 0 && m.windowWidth <= 80 {
+		return "tab: panels"
+	}
+	return "tab/shift+tab: panels"
 }
 
 func joinHintSegments(segments ...string) string {

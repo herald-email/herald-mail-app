@@ -168,6 +168,9 @@ Check these states during every applicable lane:
   - cleanup summary/details
   - contacts list/detail email list
 - Key hints always match the normalized visible focus.
+- Key hints must not silently drop primary actions at `80x24`; if a primary action cannot fit in the bottom chrome, it must remain discoverable in `?` help and the bottom chrome must still advertise `?: help`.
+- Visible bottom chrome must be compared against the actual shortcuts available for the active pane. Missing primary actions are first-class bugs, not harmless copy drift.
+- Timeline protected hints must stay visible whenever contextually valid: `C: compose`, `R: reply`, `F: forward`, `D: delete`, `e: archive`, panel `Tab`, and `?: help`.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
 - Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
 - Status bar never leaks stale mode or selection from another tab.

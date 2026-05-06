@@ -380,6 +380,84 @@ func TestRenderKeyHints_TimelinePreviewActionsStayVisibleAt80Cols(t *testing.T) 
 	requireHintSegments(t, stripANSI(hints), "R: reply", "F: forward", "D: delete", "e: archive")
 }
 
+func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*Model)
+		want  []string
+	}{
+		{
+			name: "list",
+			want: []string{"?: help", "tab: panels", "C: compose", "R: reply", "F: forward", "D: delete", "e: archive"},
+		},
+		{
+			name: "list with preview open",
+			setup: func(m *Model) {
+				m.timeline.selectedEmail = m.timeline.emails[0]
+				m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+				m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
+				m.setFocusedPanel(panelTimeline)
+			},
+			want: []string{"?: help", "tab: panels", "C: compose", "R: reply", "F: forward", "D: delete", "e: archive"},
+		},
+		{
+			name: "preview focus",
+			setup: func(m *Model) {
+				m.timeline.selectedEmail = m.timeline.emails[0]
+				m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+				m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
+				m.setFocusedPanel(panelPreview)
+			},
+			want: []string{"?: help", "tab: panels", "C: compose", "R: reply", "F: forward", "D: delete", "e: archive"},
+		},
+		{
+			name: "search results",
+			setup: func(m *Model) {
+				m.openTimelineSearch()
+				m.timeline.searchInput.SetValue("invoice")
+				m.timeline.searchResults = []*models.EmailData{m.timeline.emails[0]}
+				m.timeline.searchResultsQuery = "invoice"
+				m.timeline.searchFocus = timelineSearchFocusResults
+				m.timeline.searchInput.Blur()
+				m.setFocusedPanel(panelTimeline)
+				m.updateTimelineTable()
+			},
+			want: []string{"?: help", "C: compose", "R: reply", "F: forward", "D: delete", "e: archive"},
+		},
+		{
+			name: "selected messages",
+			setup: func(m *Model) {
+				m.toggleTimelineSelection()
+			},
+			want: []string{"?: help", "C: compose", "D: delete selected", "e: archive selected"},
+		},
+		{
+			name: "chat filter",
+			setup: func(m *Model) {
+				m.timeline.chatFilterMode = true
+			},
+			want: []string{"?: help", "C: compose", "R: reply", "F: forward", "D: delete", "e: archive"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 80, 24)
+			m.activeTab = tabTimeline
+			m.timeline.emails = mockEmails()
+			m.updateTimelineTable()
+			m.setFocusedPanel(panelTimeline)
+			if tc.setup != nil {
+				tc.setup(m)
+			}
+
+			hints := m.renderKeyHints()
+			assertFitsWidth(t, 80, hints)
+			requireHintSegments(t, stripANSI(hints), tc.want...)
+		})
+	}
+}
+
 func TestRenderKeyHints_ReadOnlyTimelinePreviewStillHidesMessageActions(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

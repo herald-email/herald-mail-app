@@ -5,5 +5,5 @@
 [90m└──────────────────────────┘[m
 [7m [m[7mINBOX  │  AI: off  │  0 emails[m[7m [m[7m                                                                                        [m
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ?: help  │  F1-F3: tabs  │  S: settings  │  tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  space: select  │  V: range
- shift+↑/↓: range  │  right/]: preview  │  left/[: folders  │  enter: open  │  U: unread  │  C: compose  │  *: star
+ ?: help  │  F1-F3: tabs  │  tab/shift+tab: panels  │  C: compose  │  S: settings  │  right/]: preview
+ left/[: folders  │  ↑/k ↓/j: navigate  │  space: select  │  shift+↑/↓: range  │  enter: open  │  /: hybrid search

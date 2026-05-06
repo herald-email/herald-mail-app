@@ -280,13 +280,33 @@ func TestShortcutHelpTimelineDraftPreviewIncludesDraftActions(t *testing.T) {
 	updated := pressQuestion(m)
 
 	rendered := stripANSI(updated.View().Content)
-	for _, want := range []string{"Timeline Draft", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
+	for _, want := range []string{"Timeline Draft", "C", "open a blank Compose", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected draft preview help to include %q, got:\n%s", want, rendered)
 		}
 	}
 	if strings.Contains(rendered, "reply or forward") {
 		t.Fatalf("draft preview help should not advertise normal reply/forward actions, got:\n%s", rendered)
+	}
+}
+
+func TestShortcutHelpTimelinePreviewIncludesBlankCompose(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = m.timeline.emails[0]
+	m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
+	m.focusedPanel = panelPreview
+
+	updated := pressQuestion(m)
+
+	rendered := stripANSI(updated.View().Content)
+	for _, want := range []string{"Timeline Preview", "C", "open a blank Compose"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Timeline preview help to include %q, got:\n%s", want, rendered)
+		}
 	}
 }
 
