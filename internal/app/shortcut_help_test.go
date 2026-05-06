@@ -120,27 +120,141 @@ func TestShortcutHelpQuestionMarkClosesOverlay(t *testing.T) {
 	}
 }
 
-func TestShortcutHelpIncludesComposePreservationMode(t *testing.T) {
+func TestComposeQuestionMarkTypesIntoEditableFieldsAndDoesNotOpenHelp(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*Model)
+		value func(*Model) string
+	}{
+		{
+			name: "to",
+			setup: func(m *Model) {
+				focusComposeTextField(m, composeFieldTo)
+			},
+			value: func(m *Model) string { return m.composeTo.Value() },
+		},
+		{
+			name: "cc",
+			setup: func(m *Model) {
+				focusComposeTextField(m, composeFieldCC)
+			},
+			value: func(m *Model) string { return m.composeCC.Value() },
+		},
+		{
+			name: "bcc",
+			setup: func(m *Model) {
+				focusComposeTextField(m, composeFieldBCC)
+			},
+			value: func(m *Model) string { return m.composeBCC.Value() },
+		},
+		{
+			name: "subject",
+			setup: func(m *Model) {
+				focusComposeTextField(m, composeFieldSubject)
+			},
+			value: func(m *Model) string { return m.composeSubject.Value() },
+		},
+		{
+			name: "body",
+			setup: func(m *Model) {
+				focusComposeTextField(m, composeFieldBody)
+			},
+			value: func(m *Model) string { return m.composeBody.Value() },
+		},
+		{
+			name: "attachment path",
+			setup: func(m *Model) {
+				m.attachmentInputActive = true
+				m.attachmentPathInput.Focus()
+			},
+			value: func(m *Model) string { return m.attachmentPathInput.Value() },
+		},
+		{
+			name: "AI prompt",
+			setup: func(m *Model) {
+				m.composeAIPanel = true
+				m.composeAIInput.Focus()
+			},
+			value: func(m *Model) string { return m.composeAIInput.Value() },
+		},
+		{
+			name: "AI response",
+			setup: func(m *Model) {
+				m.composeAIPanel = true
+				m.composeAIResponse.Focus()
+			},
+			value: func(m *Model) string { return m.composeAIResponse.Value() },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 120, 40)
+			m.activeTab = tabCompose
+			tc.setup(m)
+
+			model, _ := m.handleKeyMsg(keyRunes("?"))
+			updated := model.(*Model)
+
+			if updated.showHelp {
+				t.Fatal("expected plain ? to stay in the editable Compose field, not open shortcut help")
+			}
+			if got := tc.value(updated); got != "?" {
+				t.Fatalf("compose editable value=%q, want literal ?", got)
+			}
+		})
+	}
+}
+
+func TestComposeQuestionMarkNotAdvertisedAsHelp(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabCompose
-	m.composePreserved = &composePreservedContext{
-		kind: models.PreservedMessageKindReply,
-		mode: models.PreservationModeSafe,
-	}
+	focusComposeTextField(m, composeFieldBody)
 
-	updated := pressQuestion(m)
+	hints := stripANSI(m.renderKeyHints())
+	if strings.Contains(hints, "?: help") {
+		t.Fatalf("expected Compose editable hints not to advertise ? help, got:\n%s", hints)
+	}
+}
 
-	rendered := stripANSI(updated.View().Content)
-	if !strings.Contains(rendered, "Shortcut Help") {
-		t.Fatalf("expected ? to open shortcut help from Compose, got:\n%s", rendered)
+func TestPromptEditorQuestionMarkTypesIntoNameAndDoesNotOpenHelp(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCleanup
+	m.showPromptEditor = true
+	m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+	_ = m.promptEditor.Init()
+
+	model, _ := m.Update(keyRunes("?"))
+	updated := model.(*Model)
+
+	if updated.showHelp {
+		t.Fatal("expected prompt editor ? to stay in the form, not open shortcut help")
 	}
-	for _, want := range []string{"Compose", "Ctrl+O", "preservation mode"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected Compose help to include %q, got:\n%s", want, rendered)
-		}
+	if got := updated.promptEditor.name; got != "?" {
+		t.Fatalf("prompt editor name=%q, want literal ?", got)
 	}
-	if strings.Contains(updated.composeTo.Value(), "?") {
-		t.Fatal("expected plain ? not to be typed into Compose fields")
+}
+
+func focusComposeTextField(m *Model, field int) {
+	m.composeTo.Blur()
+	m.composeCC.Blur()
+	m.composeBCC.Blur()
+	m.composeSubject.Blur()
+	m.composeBody.Blur()
+	m.composeAIInput.Blur()
+	m.composeAIResponse.Blur()
+	m.composeField = field
+	switch field {
+	case composeFieldTo:
+		m.composeTo.Focus()
+	case composeFieldCC:
+		m.composeCC.Focus()
+	case composeFieldBCC:
+		m.composeBCC.Focus()
+	case composeFieldSubject:
+		m.composeSubject.Focus()
+	case composeFieldBody:
+		m.composeBody.Focus()
 	}
 }
 

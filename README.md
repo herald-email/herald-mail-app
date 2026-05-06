@@ -9,8 +9,9 @@
 
 ![Herald themed guided tour with keypress overlay](assets/demo/guided-tour-dark-pastel.gif)
 
-Herald is keyboard-first, but it is not keyboard-only. Press `?` anywhere
-Herald owns keyboard input to open context-sensitive shortcut help. In modern
+Herald is keyboard-first, but it is not keyboard-only. Press `?` in browse and
+non-text contexts to open context-sensitive shortcut help; editable Compose
+fields keep literal `?` for writing. In modern
 terminals you can click the top tabs, folder/sidebar rows, Timeline and Cleanup
 rows, and use the mouse wheel or trackpad to scroll lists and email previews.
 Email links render as OSC 8 hyperlinks when your terminal supports them, so
@@ -369,7 +370,7 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `l` / `Alt+L`                      | Toggle logs (`Alt+L` also works while composing)                                            |
 | `r` / `Alt+R`                      | Refresh current folder (`Alt+R` also works while composing)                                 |
 | `/`                                | Search; type `? query` inside search for semantic search when AI/embeddings are available   |
-| `?`                                | Open context-sensitive shortcut help                                                        |
+| `?`                                | Open context-sensitive shortcut help outside editable text fields                            |
 | `q`                                | Quit in browse contexts only                                                                |
 | `Ctrl+C`                           | Quit from any state, including text inputs                                                  |
 

@@ -778,18 +778,19 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Press `?` from Timeline list, Timeline preview, Compose, Cleanup summary, Cleanup preview, Contacts list, chat, logs, and a confirmation prompt.
+1. Press `?` from Timeline list, Timeline preview, Cleanup summary, Cleanup preview, Contacts list, chat, logs, and a confirmation prompt.
 2. Scroll the help overlay with `j/k` or arrow keys when content is taller than the viewport.
 3. Close the overlay with `Esc`, `?`, and `q` in separate passes.
-4. In Compose reply or forward mode, press `?` after `Ctrl+O` is available.
+4. In editable Compose fields, type `?` in To, Subject, Body, attachment path, and AI prompt inputs.
 5. In Contacts, press `/`, type `? budget risk`, and confirm semantic results still work through the search input.
 
 **Expect:**
-- Plain `?` opens shortcut help, not semantic search, in Herald-owned contexts.
+- Plain `?` opens shortcut help, not semantic search, in Herald-owned browse and non-text contexts.
+- Editable Compose fields preserve literal `?` as message text or path/prompt text and do not open shortcut help.
 - At `220x50`, shortcut help appears as a compact centered modal over the current view, not a full-screen replacement.
 - At `80x24`, shortcut help shrinks to fit without horizontal overflow.
 - The overlay title names the current context and the body lists global, tab, pane, overlay, and mode-specific shortcuts.
-- Compose help explains what preservation mode means and lists `Ctrl+O` only when reply/forward context exists.
+- Compose key hints do not advertise `?: help` while editing text, and preservation mode still lists `Ctrl+O` only when reply/forward context exists.
 - Overlay scroll state is bounded and resets when reopened from a different context.
 - Closing help returns to the same tab/pane/overlay state without triggering the underlying key action.
 
