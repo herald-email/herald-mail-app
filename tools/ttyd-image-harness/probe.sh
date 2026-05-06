@@ -14,6 +14,8 @@ Usage: tools/ttyd-image-harness/probe.sh
 Environment:
   PORT             ttyd port (default: 7682)
   HOST             ttyd bind host (default: 127.0.0.1)
+  TTYD_MODE        stock or custom (default: stock)
+  RENDERER_TYPE    ttyd renderer for stock mode (default: canvas)
   IMAGE_PROTOCOL   Herald image protocol (default: iterm2)
   EVIDENCE_DIR     output directory under reports/
   HERALD_BIN       Herald binary path (default: ./bin/herald)
@@ -38,6 +40,8 @@ esac
 
 PORT="${PORT:-7682}"
 HOST="${HOST:-127.0.0.1}"
+TTYD_MODE="${TTYD_MODE:-stock}"
+RENDERER_TYPE="${RENDERER_TYPE:-canvas}"
 IMAGE_PROTOCOL="${IMAGE_PROTOCOL:-iterm2}"
 HERALD_BIN="${HERALD_BIN:-./bin/herald}"
 TTYD_BIN="${TTYD_BIN:-ttyd}"
@@ -46,7 +50,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 EVIDENCE_DIR="${EVIDENCE_DIR:-reports/ttyd-image-preview_$(date +%F_%H%M%S)}"
 SCREENSHOT_PATH="$EVIDENCE_DIR/ttyd-image-preview.png"
 METRICS_PATH="$EVIDENCE_DIR/ttyd-image-preview-metrics.json"
-TTyD_LOG="$EVIDENCE_DIR/ttyd.log"
+TTYD_LOG="$EVIDENCE_DIR/ttyd.log"
 
 mkdir -p "$EVIDENCE_DIR"
 
@@ -93,20 +97,43 @@ fi
 from PIL import Image  # noqa: F401
 PY
 
+case "$TTYD_MODE" in
+  stock)
+    ttyd_args=(
+      -i "$HOST"
+      -p "$PORT"
+      -W
+      -t enableSixel=true
+      -t rendererType="$RENDERER_TYPE"
+      -t disableLeaveAlert=true
+      -t disableResizeOverlay=true
+    )
+    ;;
+  custom)
+    ttyd_args=(
+      -I tools/ttyd-image-harness/index.html
+      -i "$HOST"
+      -p "$PORT"
+      -W
+      -t disableLeaveAlert=true
+      -t disableResizeOverlay=true
+    )
+    ;;
+  *)
+    echo "TTYD_MODE must be 'stock' or 'custom'." >&2
+    exit 2
+    ;;
+esac
+
 "$TTYD_BIN" \
-  -I tools/ttyd-image-harness/index.html \
-  -i "$HOST" \
-  -p "$PORT" \
-  -W \
-  -t disableLeaveAlert=true \
-  -t disableResizeOverlay=true \
+  "${ttyd_args[@]}" \
   "$HERALD_BIN" -debug -demo -image-protocol="$IMAGE_PROTOCOL" \
-  >"$TTyD_LOG" 2>&1 &
-TTyD_PID=$!
+  >"$TTYD_LOG" 2>&1 &
+TTYD_PID=$!
 
 cleanup() {
-  kill "$TTyD_PID" 2>/dev/null || true
-  wait "$TTyD_PID" 2>/dev/null || true
+  kill "$TTYD_PID" 2>/dev/null || true
+  wait "$TTYD_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -119,7 +146,7 @@ done
 
 if ! nc -z "$HOST" "$PORT" 2>/dev/null; then
   echo "ttyd did not start on $HOST:$PORT" >&2
-  cat "$TTyD_LOG" >&2
+  cat "$TTYD_LOG" >&2
   exit 1
 fi
 
@@ -163,7 +190,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 })();
 NODE
 
-SCREENSHOT_PATH="$SCREENSHOT_PATH" METRICS_PATH="$METRICS_PATH" "$PYTHON_BIN" <<'PY'
+SCREENSHOT_PATH="$SCREENSHOT_PATH" METRICS_PATH="$METRICS_PATH" TTYD_MODE="$TTYD_MODE" "$PYTHON_BIN" <<'PY'
 from __future__ import annotations
 
 import json
@@ -175,6 +202,7 @@ from PIL import Image
 
 screenshot = Path(os.environ["SCREENSHOT_PATH"])
 metrics_path = Path(os.environ["METRICS_PATH"])
+ttyd_mode = os.environ["TTYD_MODE"]
 image = Image.open(screenshot).convert("RGB")
 width, height = image.size
 pixels = image.load()
@@ -236,8 +264,17 @@ chart_cells = [
     and comp["y0"] < int(height * 0.55)
 ]
 
-ok = len(large_images) >= 2 and len(chart_cells) >= 8
+if ttyd_mode == "custom":
+    # The custom harness loads @xterm/addon-image directly and currently paints
+    # the color chart plus both large demo photos in document order.
+    ok = len(large_images) >= 2 and len(chart_cells) >= 8
+else:
+    # Stock ttyd is intentionally a smoke test for the exact manual command.
+    # xterm.js may relocate or omit later overlays, so require only that browser
+    # raster bytes visibly paint at least the color chart plus one large image.
+    ok = len(large_images) >= 1 and len(chart_cells) >= 8
 metrics = {
+    "mode": ttyd_mode,
     "screenshot": str(screenshot),
     "image_size": {"width": width, "height": height},
     "large_image_components": large_images[:10],

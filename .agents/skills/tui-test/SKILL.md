@@ -125,19 +125,23 @@ cap_ansi() {
 }
 ```
 
-For Herald inline image previews, run the ttyd browser-raster probe from the repo root:
+For Herald inline image previews, run both ttyd browser-raster probe modes from the repo root:
 
 ```bash
 make build
-PORT=7682 EVIDENCE_DIR="$ROOT/reports/ttyd-image-preview_$(date +%F_%H%M%S)" \
+PORT=7682 EVIDENCE_DIR="$ROOT/reports/ttyd-stock-image-preview_$(date +%F_%H%M%S)" \
+  tools/ttyd-image-harness/probe.sh
+
+TTYD_MODE=custom PORT=7683 EVIDENCE_DIR="$ROOT/reports/ttyd-custom-image-preview_$(date +%F_%H%M%S)" \
   tools/ttyd-image-harness/probe.sh
 ```
 
 Interpretation:
 
-- Pass: the custom xterm.js image harness painted the color chart plus large photo regions in the browser screenshot.
+- Stock pass: stock ttyd, using the same `-W -t enableSixel=true -t rendererType=canvas` shape as the manual repro, painted the color chart plus at least one large photo region.
+- Custom pass: the repo xterm.js image harness painted the color chart plus at least two large photo regions in the browser screenshot.
 - Failure: inspect the screenshot, `ttyd.log`, and metrics JSON before blaming Herald; missing Playwright/Chrome, a broken ttyd websocket handshake, or CDN failure can make the browser page blank.
-- Limitation: ttyd proves browser-visible iTerm2 OSC 1337 pixels. It does not replace native iTerm2/Ghostty/Kitty for exact placement, scrollback, or stale-raster cleanup.
+- Limitation: ttyd proves browser-visible iTerm2 OSC 1337 pixels. Stock ttyd is a smoke lane and can relocate or omit later images; custom ttyd is the repeatable browser-raster regression lane. Neither replaces native iTerm2/Ghostty/Kitty for exact placement, scrollback, or stale-raster cleanup.
 
 Use the bundled resize helper for soak and thrash loops:
 
