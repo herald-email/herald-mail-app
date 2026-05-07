@@ -4,8 +4,8 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-07T21:14:20+00:00
-- Published runs analyzed: 8
+- Updated at: 2026-05-07T22:25:00+00:00
+- Published runs analyzed: 9
 - Total queue items: 6
 - Pending: 1
 - Approved: 0
@@ -24,13 +24,14 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `template-green-demo-key-overlay-app-attempt1-feedback-b19c0ba4a6`
 - Status: pending
-- Seen in runs: 2
+- Seen in runs: 3
 - First seen: 2026-05-07T19:30:58+00:00
-- Last seen: 2026-05-07T20:47:20+00:00
+- Last seen: 2026-05-07T21:51:36+00:00
 - Publish actions: commit, merge, worktree-delete
 - Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
 - Approval prompt: Approve exploring `template-green-demo-key-overlay-app-attempt1-feedback` as the next explicit GEPA improvement pass.
 - Source runs:
+- `20260507-145108` at 2026-05-07T21:51:36+00:00 via commit, merge
 - `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
 - `20260507-123058-demo-onboarding-emails` at 2026-05-07T19:30:58+00:00 via commit
 
