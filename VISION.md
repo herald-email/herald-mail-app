@@ -740,9 +740,10 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
+- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [ ] Account list for multi-account (add / remove / reorder)
-- [x] Changes saved on `Ctrl+S`; no restart required for most settings
+- [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Passwords always hidden; "reveal" button toggles visibility
 
 ---

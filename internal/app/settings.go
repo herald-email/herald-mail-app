@@ -31,6 +31,8 @@ type SettingsOptions struct {
 	ShowExperimentalEmailServices bool
 }
 
+type settingsPanelSection string
+
 const (
 	aiProviderOllamaDefault = "ollama-default"
 	aiProviderOllamaCustom  = "ollama-custom"
@@ -39,11 +41,18 @@ const (
 	defaultOllamaHost     = "http://localhost:11434"
 	defaultOllamaModel    = "gemma3:4b"
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
+
+	settingsPanelSectionMenu    settingsPanelSection = ""
+	settingsPanelSectionAccount settingsPanelSection = "account"
+	settingsPanelSectionAI      settingsPanelSection = "ai"
+	settingsPanelSectionSync    settingsPanelSection = "sync-cleanup"
+	settingsPanelSectionSign    settingsPanelSection = "signature"
 )
 
 // SettingsSavedMsg is sent when the user completes the form and saves.
 type SettingsSavedMsg struct {
-	Config *config.Config
+	Config       *config.Config
+	ReturnToMenu bool
 }
 
 // SettingsCancelledMsg is sent when the user presses esc in panel mode.
@@ -67,6 +76,9 @@ type Settings struct {
 	saveButton bool
 
 	showExperimentalEmailServices bool
+	panelSection                  settingsPanelSection
+	panelMenuChoice               string
+	panelStatus                   string
 
 	// form field backing variables — account
 	provider string
@@ -131,6 +143,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		configPath:                    configPath,
 		syncIDLE:                      true, // sensible default
 		saveButton:                    true,
+		panelMenuChoice:               string(settingsPanelSectionAccount),
 		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
 	}
 
@@ -240,6 +253,11 @@ func (s *Settings) providerPresetDescription(base string) string {
 
 // buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
 func (s *Settings) buildForm() {
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
+		s.buildPanelMenuForm()
+		return
+	}
+
 	// Group 1 — Account type selection
 	accountGroup := huh.NewGroup(
 		huh.NewSelect[string]().
@@ -435,7 +453,29 @@ func (s *Settings) buildForm() {
 			Value(&s.saveButton),
 	).Title("Compose")
 
-	s.form = huh.NewForm(
+	panelSignatureGroup := huh.NewGroup(
+		huh.NewText().
+			Title("Email Signature").
+			Description("Enter adds a line. Tab moves to Save. Empty disables.").
+			Placeholder("-- \nYour Name").
+			Lines(5).
+			Value(&s.signatureText),
+		huh.NewConfirm().
+			Title("Save changes").
+			Affirmative("Save").
+			Negative("Cancel").
+			Value(&s.saveButton),
+	).Title("Signature")
+
+	saveGroup := huh.NewGroup(
+		huh.NewConfirm().
+			Title("Save changes").
+			Affirmative("Save").
+			Negative("Cancel").
+			Value(&s.saveButton),
+	)
+
+	groups := []*huh.Group{
 		accountGroup,
 		credentialsGroup,
 		gmailGroup,
@@ -448,7 +488,39 @@ func (s *Settings) buildForm() {
 		openAIGroup,
 		syncGroup,
 		composeGroup,
-	).
+	}
+
+	if s.mode == SettingsModePanel {
+		switch s.panelSection {
+		case settingsPanelSectionAccount:
+			groups = []*huh.Group{
+				accountGroup,
+				credentialsGroup,
+				gmailGroup,
+				gmailAdvancedGroup,
+				gmailOAuthGroup,
+				saveGroup.Title("Account setup"),
+			}
+		case settingsPanelSectionAI:
+			groups = []*huh.Group{
+				aiProviderGroup,
+				ollamaDefaultGroup,
+				ollamaGroup,
+				claudeGroup,
+				openAIGroup,
+				saveGroup.Title("AI"),
+			}
+		case settingsPanelSectionSync:
+			groups = []*huh.Group{
+				syncGroup,
+				saveGroup.Title("Sync & Cleanup"),
+			}
+		case settingsPanelSectionSign:
+			groups = []*huh.Group{panelSignatureGroup}
+		}
+	}
+
+	s.form = huh.NewForm(groups...).
 		WithShowHelp(true).
 		WithShowErrors(true).
 		WithKeyMap(settingsFormKeyMap())
@@ -459,6 +531,38 @@ func (s *Settings) buildForm() {
 	if s.height > 0 {
 		s.form = s.form.WithHeight(s.formHeight())
 	}
+	s.prepareFormForView()
+}
+
+func (s *Settings) buildPanelMenuForm() {
+	fields := []huh.Field{}
+	if strings.TrimSpace(s.panelStatus) != "" {
+		fields = append(fields, huh.NewNote().Title(s.panelStatus))
+	}
+	fields = append(fields,
+		huh.NewSelect[string]().
+			Title("Settings").
+			Description("Choose one area to edit. Save returns here; Esc closes without saving.").
+			Options(
+				huh.NewOption("Account setup", string(settingsPanelSectionAccount)),
+				huh.NewOption("AI", string(settingsPanelSectionAI)),
+				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
+				huh.NewOption("Signature", string(settingsPanelSectionSign)),
+			).
+			Value(&s.panelMenuChoice),
+	)
+	s.form = huh.NewForm(huh.NewGroup(fields...).Title("Settings")).
+		WithShowHelp(true).
+		WithShowErrors(true).
+		WithKeyMap(settingsPanelMenuKeyMap())
+
+	if s.width > 0 {
+		s.form = s.form.WithWidth(s.formWidth())
+	}
+	if s.height > 0 {
+		s.form = s.form.WithHeight(s.formHeight())
+	}
+	s.prepareFormForView()
 }
 
 func (s *Settings) setSize(width, height int) {
@@ -466,15 +570,97 @@ func (s *Settings) setSize(width, height int) {
 	s.height = height
 	if s.form != nil {
 		s.form = s.form.WithWidth(s.formWidth()).WithHeight(s.formHeight())
+		s.prepareFormForView()
+	}
+}
+
+func (s *Settings) prepareFormForView() {
+	if s.form != nil {
+		_ = s.form.Init()
 	}
 }
 
 func settingsFormKeyMap() *huh.KeyMap {
 	keymap := huh.NewDefaultKeyMap()
+	keymap.Select.SetFilter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "exit filter"), key.WithDisabled())
+	keymap.MultiSelect.SetFilter = key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("esc", "exit filter"), key.WithDisabled())
 	keymap.Text.NewLine = key.NewBinding(key.WithKeys("enter", "alt+enter", "ctrl+j"), key.WithHelp("enter", "new line"))
 	keymap.Text.Next = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next"))
 	keymap.Text.Submit = key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save"))
 	return keymap
+}
+
+func settingsPanelMenuKeyMap() *huh.KeyMap {
+	keymap := settingsFormKeyMap()
+	keymap.Select.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open • esc exit"))
+	return keymap
+}
+
+func (s *Settings) focusedFieldHandlesKey(msg tea.KeyPressMsg) bool {
+	if s == nil || s.form == nil {
+		return false
+	}
+	field := s.form.GetFocusedField()
+	for _, binding := range field.KeyBinds() {
+		if key.Matches(msg, binding) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Settings) focusedFieldEscHelp() string {
+	if s == nil || s.form == nil {
+		return ""
+	}
+	msg := tea.KeyPressMsg{Code: tea.KeyEscape}
+	for _, binding := range s.form.GetFocusedField().KeyBinds() {
+		if key.Matches(msg, binding) {
+			return binding.Help().Desc
+		}
+	}
+	return ""
+}
+
+func (s *Settings) keyHints() string {
+	escHelp := s.focusedFieldEscHelp()
+	if s.panelSection == settingsPanelSectionMenu {
+		switch escHelp {
+		case "exit filter":
+			return "type: filter  │  esc: exit filter  │  enter: open category"
+		case "clear filter":
+			return "↑/↓: move  │  enter: open category  │  /: filter  │  esc: clear filter"
+		default:
+			return "↑/↓: move  │  enter: open category  │  /: filter  │  esc: exit settings"
+		}
+	}
+	if escHelp == "exit filter" {
+		return "type: filter  │  esc: exit filter  │  enter: select"
+	}
+	if escHelp == "clear filter" {
+		return "↑/↓: move  │  enter: select  │  /: filter  │  esc: clear filter"
+	}
+	return "tab: fields  │  enter: edit/select  │  esc: back to settings menu"
+}
+
+func (s *Settings) returnToPanelMenu() tea.Cmd {
+	choice := string(s.panelSection)
+	if choice == "" {
+		choice = s.panelMenuChoice
+	}
+	next := NewSettingsWithPathAndOptions(
+		SettingsModePanel,
+		s.cfg,
+		s.configPath,
+		SettingsOptions{ShowExperimentalEmailServices: s.showExperimentalEmailServices},
+	)
+	next.width = s.width
+	next.height = s.height
+	next.panelMenuChoice = choice
+	next.panelStatus = ""
+	next.buildForm()
+	*s = *next
+	return s.form.Init()
 }
 
 func (s *Settings) panelLayout() settingsPanelLayout {
@@ -582,9 +768,12 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
-		// In panel mode, esc cancels if the form isn't yet complete.
+		// In panel mode, esc cancels if the active field has no local esc action.
 		if s.mode == SettingsModePanel && msg.Code == tea.KeyEscape {
-			if s.form.State != huh.StateCompleted {
+			if s.form.State != huh.StateCompleted && !s.focusedFieldHandlesKey(msg) {
+				if s.panelSection != settingsPanelSectionMenu {
+					return s, s.returnToPanelMenu()
+				}
 				s.done = true
 				return s, func() tea.Msg { return SettingsCancelledMsg{} }
 			}
@@ -604,7 +793,19 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Check if the form just completed.
 	if s.form.State == huh.StateCompleted && !s.done {
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
+			s.panelSection = settingsPanelSection(s.panelMenuChoice)
+			s.panelStatus = ""
+			s.saveButton = true
+			s.buildForm()
+			return s, tea.Batch(cmd, s.form.Init())
+		}
+
 		s.done = true
+		if s.mode == SettingsModePanel && !s.saveButton {
+			return s, tea.Batch(cmd, func() tea.Msg { return SettingsCancelledMsg{} })
+		}
+
 		cfg := s.buildConfig()
 		if s.provider == "gmail-oauth" {
 			// OAuth flow will handle saving after tokens received.
@@ -615,7 +816,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Non-Gmail: signal done; the caller is responsible for saving.
 		return s, tea.Batch(cmd, func() tea.Msg {
-			return SettingsSavedMsg{Config: cfg}
+			return SettingsSavedMsg{Config: cfg, ReturnToMenu: s.mode == SettingsModePanel}
 		})
 	}
 
@@ -673,7 +874,7 @@ func (s *Settings) View() tea.View {
 }
 
 func (s *Settings) renderPanel() string {
-	formView := strings.TrimRight(s.form.View(), "\n")
+	formView := s.panelFormView()
 	layout := s.panelLayout()
 	box := lipgloss.NewStyle().
 		Width(layout.formWidth).
@@ -690,6 +891,14 @@ func (s *Settings) renderPanel() string {
 		lines[i] = ansi.Cut(line, 0, layout.panelWidth)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (s *Settings) panelFormView() string {
+	formView := strings.TrimRight(s.form.View(), "\n")
+	if s.panelSection == settingsPanelSectionMenu {
+		formView = strings.Replace(formView, "enter submit", "enter open • esc exit", 1)
+	}
+	return formView
 }
 
 // buildConfig constructs a config.Config from the current form field values.

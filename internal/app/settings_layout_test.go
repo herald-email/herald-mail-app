@@ -128,6 +128,111 @@ func TestSettingsPanel_StillShowsGmailOAuth(t *testing.T) {
 	}
 }
 
+func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Signature"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Account Type", "Email address", "AI Provider", "Email Signature"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected settings menu not to show category form field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelSignatureCategorySkipsUnrelatedFields(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Signature")
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if !strings.Contains(rendered, "Email Signature") {
+		t.Fatalf("expected Signature category to show signature field, got:\n%s", rendered)
+	}
+	for _, notWant := range []string{"Account Type", "AI Provider", "Poll Interval"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected Signature category to skip unrelated field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelAICategorySkipsAccountValidation(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "AI")
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if !strings.Contains(rendered, "AI Provider") {
+		t.Fatalf("expected AI category to show AI provider without account fields, got:\n%s", rendered)
+	}
+	for _, notWant := range []string{"Email address", "Password", "IMAP Host", "Email Signature"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected AI category to skip unrelated field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardDoesNotShowPanelCategoryMenu(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if strings.Contains(rendered, "Account setup") || strings.Contains(rendered, "Sync & Cleanup") {
+		t.Fatalf("expected first-run wizard to remain linear without panel category menu, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Account Type") {
+		t.Fatalf("expected first-run wizard to still start at account type, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsPanelMenuHintsExplainOpenFilterAndExit(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+
+	for _, want := range []string{"enter open", "/ filter", "esc exit"} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected settings menu hints to include %q, got:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(normalized, "enter submit") {
+		t.Fatalf("expected settings menu hints to avoid submit wording, got:\n%s", rendered)
+	}
+}
+
+func TestModelSettingsBottomHintsReflectSettingsMenuAndCategory(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressSettingsPanelForTest(t, m)
+	menuHints := stripANSI(updated.renderKeyHints())
+	for _, want := range []string{"enter: open category", "/: filter", "esc: exit settings"} {
+		if !strings.Contains(menuHints, want) {
+			t.Fatalf("expected settings menu bottom hints to include %q, got:\n%s", want, menuHints)
+		}
+	}
+	if strings.Contains(menuHints, "S: settings") {
+		t.Fatalf("expected settings menu bottom hints to replace the underlying tab hints, got:\n%s", menuHints)
+	}
+
+	opened := openSettingsPanelCategoryForTest(t, updated.settingsPanel, "Signature")
+	updated.settingsPanel = opened
+	categoryHints := stripANSI(updated.renderKeyHints())
+	for _, want := range []string{"tab: fields", "enter: edit/select", "esc: back to settings menu"} {
+		if !strings.Contains(categoryHints, want) {
+			t.Fatalf("expected settings category bottom hints to include %q, got:\n%s", want, categoryHints)
+		}
+	}
+}
+
 func pressSettingsPanelForTest(t *testing.T, m *Model) *Model {
 	t.Helper()
 	model, _ := m.handleKeyMsg(keyRunes("S"))
@@ -165,7 +270,7 @@ func TestSettingsPanelRendersCompactCenteredModalOverCurrentView(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected current view to remain visible behind settings, got first line %q", lines[0])
 	}
-	titleRow, titleCol := findRenderedText(lines, "Account Type")
+	titleRow, titleCol := findRenderedText(lines, "Account setup")
 	if titleRow < 8 {
 		t.Fatalf("expected settings content to be vertically centered in a compact modal, row=%d:\n%s", titleRow, stripANSI(rendered))
 	}
@@ -192,7 +297,7 @@ func TestSettingsPanelFitsAt80ColsAsModal(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected settings modal to keep the current view visible at 80x24, got first line %q", lines[0])
 	}
-	titleRow, _ := findRenderedText(lines, "Account Type")
+	titleRow, _ := findRenderedText(lines, "Account setup")
 	if titleRow < 2 {
 		t.Fatalf("expected settings modal to leave a vertical margin at 80x24, row=%d:\n%s", titleRow, stripANSI(rendered))
 	}
@@ -261,7 +366,7 @@ func TestSettingsPanelResizeKeepsBackdropAndModalInSync(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected resized settings modal to keep backdrop aligned, got first line %q", lines[0])
 	}
-	if !strings.Contains(stripANSI(rendered), "Account Type") {
+	if !strings.Contains(stripANSI(rendered), "Account setup") {
 		t.Fatalf("expected settings content after resize, got:\n%s", stripANSI(rendered))
 	}
 }
