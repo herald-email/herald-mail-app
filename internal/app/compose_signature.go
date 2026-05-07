@@ -25,12 +25,12 @@ func appendSignature(body, signature string) string {
 		return body
 	}
 	if strings.TrimSpace(body) == "" {
-		return signature
+		return "\n\n" + signature
 	}
 	if strings.HasSuffix(strings.TrimRight(body, " \t\r\n"), signature) {
 		return body
 	}
-	return strings.TrimRight(body, "\r\n") + "\n\n" + signature
+	return strings.TrimRight(body, "\r\n") + "\n\n\n" + signature
 }
 
 func (m *Model) applyConfiguredSignatureToComposeBody() {
@@ -38,7 +38,13 @@ func (m *Model) applyConfiguredSignatureToComposeBody() {
 	if signature == "" {
 		return
 	}
-	m.composeBody.SetValue(appendSignature(m.composeBody.Value(), signature))
+	body := m.composeBody.Value()
+	next := appendSignature(body, signature)
+	if next == body {
+		return
+	}
+	m.composeBody.SetValue(next)
+	m.composeBody.MoveToBegin()
 }
 
 func (m *Model) composeBodyHasUserContent() bool {

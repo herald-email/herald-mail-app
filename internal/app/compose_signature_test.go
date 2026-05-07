@@ -27,9 +27,10 @@ func TestBlankComposeInsertsConfiguredSignature(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected blank compose open to be synchronous, got %T", cmd)
 	}
-	if got := m.composeBody.Value(); got != testSignature {
+	if got := m.composeBody.Value(); got != "\n\n"+testSignature {
 		t.Fatalf("compose body = %q, want signature", got)
 	}
+	assertComposeBodyCursorAtStart(t, m)
 }
 
 func TestReplyAndForwardComposeAppendConfiguredSignature(t *testing.T) {
@@ -38,17 +39,19 @@ func TestReplyAndForwardComposeAppendConfiguredSignature(t *testing.T) {
 	withComposeSignature(m)
 
 	m.openTimelineReplyCompose(email, backend.body, "")
-	if got := m.composeBody.Value(); got != testSignature {
+	if got := m.composeBody.Value(); got != "\n\n"+testSignature {
 		t.Fatalf("reply body = %q, want signature", got)
 	}
+	assertComposeBodyCursorAtStart(t, m)
 	if m.composePreserved == nil || m.composePreserved.kind != models.PreservedMessageKindReply {
 		t.Fatal("expected preserved reply context")
 	}
 
 	m.openTimelineForwardCompose(email, backend.body, "")
-	if got := m.composeBody.Value(); got != testSignature {
+	if got := m.composeBody.Value(); got != "\n\n"+testSignature {
 		t.Fatalf("forward body = %q, want signature", got)
 	}
+	assertComposeBodyCursorAtStart(t, m)
 	if m.composePreserved == nil || m.composePreserved.kind != models.PreservedMessageKindForward {
 		t.Fatal("expected preserved forward context")
 	}
@@ -69,9 +72,10 @@ func TestQuickReplyAppendsConfiguredSignature(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected quick reply open to be synchronous, got %T", cmd)
 	}
-	if got := updated.composeBody.Value(); got != "Sounds good.\n\n"+testSignature {
+	if got := updated.composeBody.Value(); got != "Sounds good.\n\n\n"+testSignature {
 		t.Fatalf("quick reply body = %q", got)
 	}
+	assertComposeBodyCursorAtStart(t, updated)
 }
 
 func TestConfiguredSignatureIsNotDuplicated(t *testing.T) {
@@ -114,5 +118,15 @@ func TestSignatureOnlyBlankComposeDoesNotAutosave(t *testing.T) {
 
 	if updated.draftSaving {
 		t.Fatal("signature-only blank compose should not start draft autosave")
+	}
+}
+
+func assertComposeBodyCursorAtStart(t *testing.T, m *Model) {
+	t.Helper()
+	if got := m.composeBody.Line(); got != 0 {
+		t.Fatalf("compose body cursor line = %d, want 0", got)
+	}
+	if got := m.composeBody.LineInfo().ColumnOffset; got != 0 {
+		t.Fatalf("compose body cursor column = %d, want 0", got)
 	}
 }

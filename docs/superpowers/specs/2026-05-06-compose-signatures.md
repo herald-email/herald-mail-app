@@ -12,9 +12,9 @@ This spec defines v1 account-scoped signatures for Herald Compose. The goal is t
 
 This section defines when Herald mutates the editable Compose body. Signatures are inserted only when Compose opens, so users can revise or delete them before send, draft save, or AI rewrite.
 
-- [x] Blank Compose opens with the configured signature in the body textarea.
-- [x] Reply and forward Compose append the configured signature to the editable top-note body, not to the preserved original message context.
-- [x] Quick replies append the configured signature below the selected reply text.
+- [x] Blank Compose opens with two empty editable lines before the configured signature, and the cursor starts on the first line so the user can type above it.
+- [x] Reply and forward Compose append the configured signature to the editable top-note body, not to the preserved original message context, with the cursor starting above the signature.
+- [x] Quick replies append the configured signature below the selected reply text with two empty lines between the reply and signature, and leave the cursor at the start of the editable note.
 - [x] Existing draft edits restore the saved draft body exactly and do not append the configured signature.
 - [x] Herald does not append a duplicate when the body already ends with the configured signature.
 - [x] Herald does not append signatures invisibly at send time.
@@ -31,6 +31,6 @@ This section keeps automatic signatures from creating noisy or surprising draft 
 
 This section identifies the acceptance evidence needed because the feature changes config parsing, settings UI, Compose state, and terminal rendering.
 
-- [x] Focused Go tests cover config parsing, settings prefill/save, Compose insertion, duplicate prevention, draft edit opt-out, and signature-only autosave suppression.
+- [x] Focused Go tests cover config parsing, settings prefill/save, Compose insertion, cursor placement, duplicate prevention, draft edit opt-out, and signature-only autosave suppression.
 - [x] TUI captures cover Compose and settings at `220x50`, `80x24`, and `50x15`.
 - [x] Large-feature handoff includes focused tests, full tests, build, SSH smoke, and MCP smoke evidence.

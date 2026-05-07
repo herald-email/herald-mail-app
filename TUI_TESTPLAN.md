@@ -691,7 +691,8 @@ Check these states during every applicable lane:
 7. Repeat the Compose and Settings captures at `80x24`; at `50x15`, confirm the minimum-size guard or compact recovery behavior.
 
 **Expect:**
-- Blank Compose, reply Compose, forward Compose, and quick replies visibly include the configured signature in the editable body.
+- Blank Compose, reply Compose, forward Compose, and quick replies visibly include the configured signature in the editable body with two empty lines before the signature.
+- Blank Compose, reply Compose, forward Compose, and quick replies start the body cursor at the first editable line above the inserted signature so typing begins above it.
 - Reply and forward signatures stay in the editable top-note body and do not alter the read-only original-message pane.
 - Existing draft edits restore the saved body exactly and do not append another configured signature.
 - Opening and leaving a blank Compose screen containing only the automatic signature does not create a draft.
