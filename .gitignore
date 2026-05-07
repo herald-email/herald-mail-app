@@ -63,3 +63,9 @@ reports/
 
 # Brainstorming companion
 .superpowers/
+
+# Codex local workspace settings
+.codex/
+
+# Local static assets
+static/
