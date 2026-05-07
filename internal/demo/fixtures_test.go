@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"net/mail"
 	"sort"
 	"strings"
 	"testing"
@@ -182,6 +183,41 @@ func TestSupportingDemoMessagesAreExamplesAndNotTooMany(t *testing.T) {
 			t.Fatalf("supporting demo subject %q should start with Example:", subject)
 		}
 	}
+}
+
+func TestMailboxIncludesCobaltWorksMultiRecipientHeaders(t *testing.T) {
+	var foundMultiTo, foundCC bool
+	for _, msg := range Mailbox().Messages {
+		normalized := strings.TrimPrefix(strings.ToLower(msg.Email.Subject), "re: ")
+		if normalized != "example: thread with cobalt works" {
+			continue
+		}
+		if addrs := mustParseDemoAddresses(t, msg.Body.To); len(addrs) > 1 {
+			foundMultiTo = true
+		}
+		if addrs := mustParseDemoAddresses(t, msg.Body.CC); len(addrs) > 0 {
+			foundCC = true
+		}
+	}
+	if !foundMultiTo {
+		t.Fatal("expected Cobalt Works demo thread to include a message with multiple To recipients")
+	}
+	if !foundCC {
+		t.Fatal("expected Cobalt Works demo thread to include a visible Cc recipient")
+	}
+}
+
+func mustParseDemoAddresses(t *testing.T, value string) []*mail.Address {
+	t.Helper()
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	addrs, err := mail.ParseAddressList(value)
+	if err != nil {
+		t.Fatalf("invalid demo address list %q: %v", value, err)
+	}
+	return addrs
 }
 
 func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {

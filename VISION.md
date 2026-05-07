@@ -374,6 +374,7 @@ Write in Markdown, deliver as properly formatted HTML email. Compose is a transi
 - [x] Live Markdown preview (`Ctrl+P`)
 - [x] Send as multipart HTML + plain-text via SMTP
 - [x] Reply (`r` reply-all and `R` sender-only keys — pre-fill To, Re: subject, quotes original)
+- [x] Loaded preview headers show visible `To` and `Cc` recipients when a message body includes them, so reply-all participants can be checked before composing
 - [x] Forward (`f` key — pre-fills Fwd: subject, forwarding header, body quote)
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
