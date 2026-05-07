@@ -125,18 +125,19 @@ func TestMailboxIncludesOrderedHeraldOnboardingExamples(t *testing.T) {
 	})
 
 	want := []struct {
-		subject string
-		sender  string
+		subject   string
+		sender    string
+		messageID string
 	}{
-		{":sparkles: :mailbox: Welcome to Herald", "Herald Welcome <welcome@herald.demo>"},
-		{"Example 1: Move around your inbox", "Herald Guide <guide@herald.demo>"},
-		{"Example 2: Reply, write, and preview Markdown", "Herald Compose Coach <compose@herald.demo>"},
-		{"Example 3: Open and save attachments", "Herald Attachments <attachments@herald.demo>"},
-		{"Example 4: View inline images in full screen", "Herald Image Lab <images@herald.demo>"},
-		{"Example 5: Clean up senders and domains safely", "Herald Cleanup Coach <cleanup@herald.demo>"},
-		{"Example 6: Classify mail and dry-run rules", "Herald AI Rules <rules@herald.demo>"},
-		{"Example 7: Configure accounts, AI, and signatures", "Herald Settings <settings@herald.demo>"},
-		{"Example 8: Explore contacts, chat, SSH, and MCP", "Herald Next Steps <next@herald.demo>"},
+		{subject: "✉ Welcome to Herald", sender: "Herald Welcome <welcome@herald.demo>", messageID: "demo-welcome-to-herald@demo.local"},
+		{subject: "Example 1: Move around your inbox", sender: "Herald Guide <guide@herald.demo>"},
+		{subject: "Example 2: Reply, write, and preview Markdown", sender: "Herald Compose Coach <compose@herald.demo>"},
+		{subject: "Example 3: Open and save attachments", sender: "Herald Attachments <attachments@herald.demo>"},
+		{subject: "Example 4: View inline images in full screen", sender: "Herald Image Lab <images@herald.demo>"},
+		{subject: "Example 5: Clean up senders and domains safely", sender: "Herald Cleanup Coach <cleanup@herald.demo>"},
+		{subject: "Example 6: Classify mail and dry-run rules", sender: "Herald AI Rules <rules@herald.demo>"},
+		{subject: "Example 7: Configure accounts, AI, and signatures", sender: "Herald Settings <settings@herald.demo>"},
+		{subject: "Example 8: Explore contacts, chat, SSH, and MCP", sender: "Herald Next Steps <next@herald.demo>"},
 	}
 
 	if len(messages) < len(want) {
@@ -152,6 +153,9 @@ func TestMailboxIncludesOrderedHeraldOnboardingExamples(t *testing.T) {
 		}
 		if got.Folder != "INBOX" {
 			t.Fatalf("message %d folder = %q, want INBOX", i+1, got.Folder)
+		}
+		if w.messageID != "" && got.MessageID != w.messageID {
+			t.Fatalf("message %d message ID = %q, want %q", i+1, got.MessageID, w.messageID)
 		}
 	}
 	for i := 1; i < len(want); i++ {
@@ -170,7 +174,7 @@ func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {
 		htmlCIDSnippet string
 	}{
 		{
-			subject: ":sparkles: :mailbox: Welcome to Herald",
+			subject: "✉ Welcome to Herald",
 			wants:   []string{"terminal email client", "inbox cleanup", "ai", "demo mode", "synthetic", "timeline", "compose", "cleanup", "contacts"},
 		},
 		{

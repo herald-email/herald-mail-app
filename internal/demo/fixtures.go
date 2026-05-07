@@ -301,6 +301,11 @@ func buildMailbox() MailboxFixture {
 			msg.Email.Date = date
 		}
 	}
+	withMessageID := func(messageID string) func(*Message) {
+		return func(msg *Message) {
+			msg.Email.MessageID = messageID
+		}
+	}
 	withDraft := func(to, cc, bcc string) func(*Message) {
 		return func(msg *Message) {
 			msg.Email.IsDraft = true
@@ -313,7 +318,7 @@ func buildMailbox() MailboxFixture {
 		}
 	}
 
-	add(39, "Herald Welcome <welcome@herald.demo>", ":sparkles: :mailbox: Welcome to Herald", "INBOX", 0, 10240, false, true, ai.CategoryImportant, []string{"onboarding", "welcome", "terminal email client", "inbox cleanup", "ai"},
+	add(39, "Herald Welcome <welcome@herald.demo>", "✉ Welcome to Herald", "INBOX", 0, 10240, false, true, ai.CategoryImportant, []string{"onboarding", "welcome", "terminal email client", "inbox cleanup", "ai"},
 		`Welcome to Herald.
 
 Herald is a terminal email client for people who want fast keyboard navigation, inbox cleanup, rich previews, and AI-assisted triage without leaving the command line.
@@ -325,6 +330,7 @@ What you can try in demo mode
 - Contacts, chat, rules, MCP, and SSH surfaces all use the same synthetic demo mailbox.
 
 Demo mode is offline and deterministic. These messages are synthetic, attachments are safe fixtures, and no IMAP or SMTP account is touched.`,
+		withMessageID("demo-welcome-to-herald@demo.local"),
 		withDate(baseTime.Add(9*time.Hour)))
 	add(31, "Herald Guide <guide@herald.demo>", "Example 1: Move around your inbox", "INBOX", 0, 11264, false, true, ai.CategoryImportant, []string{"onboarding", "navigation", "timeline", "search"},
 		`Example 1 is a quick lap around Herald's Timeline.

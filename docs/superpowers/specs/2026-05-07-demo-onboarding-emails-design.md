@@ -20,9 +20,9 @@ This design covers the original demo email list and body content strategy only. 
 
 ## Onboarding Sequence
 
-The sequence should be explicit and numbered after a short welcome message. The welcome subject should be `:sparkles: :mailbox: Welcome to Herald`, because Herald strips literal emoji from Timeline table subjects today. Each example email should have a subject that starts with `Example N:` and a sender in the form `Herald <role> <local-part@herald.demo>`.
+The sequence should be explicit and numbered after a short welcome message. The welcome subject should be `✉ Welcome to Herald`; Herald keeps that stable envelope glyph while still stripping arbitrary emoji from Timeline table subjects. Each example email should have a subject that starts with `Example N:` and a sender in the form `Herald <role> <local-part@herald.demo>`.
 
-- [ ] `Herald Welcome <welcome@herald.demo>` sends `:sparkles: :mailbox: Welcome to Herald`.
+- [ ] `Herald Welcome <welcome@herald.demo>` sends `✉ Welcome to Herald`.
 - [ ] The welcome email explains Herald as a terminal email client for keyboard navigation, inbox cleanup, rich previews, and AI-assisted triage, and it states that demo mode is synthetic and safe.
 - [ ] `Herald Guide <guide@herald.demo>` sends `Example 1: Move around your inbox`.
 - [ ] Example 1 covers Timeline navigation with `j/k`, arrow keys, `Enter` or right-arrow preview, `Esc`, `1/2/3` tabs, `f` folders, `/` search, and `?` shortcut help.

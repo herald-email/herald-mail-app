@@ -22,7 +22,7 @@ func TestDemoTimelineRendersWelcomeThenOnboardingExamplesAsTopRows(t *testing.T)
 
 	rows := m.timelineTable.Rows()
 	wantSubjects := []string{
-		":sparkles: :mailbox: Welcome to Herald",
+		"✉ Welcome to Herald",
 		"Example 1:",
 		"Example 2:",
 		"Example 3:",

@@ -20,17 +20,22 @@ func Truncate(s string, n int) string {
 	return string(runes[:n-1]) + "…"
 }
 
-// SanitizeText removes emoji and symbols while preserving all language text.
+// SanitizeText removes emoji and most symbols while preserving all language text
+// plus a tiny allowlist of stable UI glyphs used in Herald-authored demo mail.
 func SanitizeText(text string) string {
 	var result strings.Builder
 	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsPunct(r) || unicode.IsSpace(r) {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsPunct(r) || unicode.IsSpace(r) || isAllowedUISymbol(r) {
 			result.WriteRune(r)
 		} else {
 			result.WriteRune(' ')
 		}
 	}
 	return strings.Join(strings.Fields(result.String()), " ")
+}
+
+func isAllowedUISymbol(r rune) bool {
+	return r == '✉'
 }
 
 // StripInvisibleChars removes zero-width and formatting Unicode characters

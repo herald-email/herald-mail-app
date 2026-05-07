@@ -1023,7 +1023,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
-2. Confirm the top Timeline messages are `:sparkles: :mailbox: Welcome to Herald` followed by `Example 1:` through `Example 8:` from Herald senders.
+2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Example 1:` through `Example 8:` from Herald senders.
 3. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
 4. Open Example 1 and confirm the body teaches navigation keys.
 5. Open Example 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.

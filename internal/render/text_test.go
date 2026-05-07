@@ -32,6 +32,7 @@ func TestSanitizeText(t *testing.T) {
 	}{
 		{"Hello World", "Hello World"},
 		{"café", "café"},
+		{"✉ Welcome", "✉ Welcome"},
 		{"emoji 🎉 here", "emoji here"},
 		{"🚀launch", "launch"},
 		{"", ""},
