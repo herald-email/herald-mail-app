@@ -10,10 +10,10 @@ Type "./bin/herald --demo -image-protocol=kitty"
 Enter
 Sleep 3s
 
-# Open the Creative Commons sampler without relying on row position.
+# Open the Step 4 image lab message without relying on row position.
 Type "/"
 Sleep 0.2s
-Type "Creative Commons image sampler"
+Type "Step 4"
 Sleep 0.2s
 Enter
 Sleep 0.8s

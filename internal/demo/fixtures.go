@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -281,7 +282,7 @@ func buildMailbox() MailboxFixture {
 				Filename: filename,
 				MIMEType: mime,
 				Size:     size,
-				PartPath: "2",
+				PartPath: strconv.Itoa(2 + len(msg.Body.Attachments)),
 				Data:     []byte("demo attachment: " + filename),
 			})
 		}
@@ -295,6 +296,11 @@ func buildMailbox() MailboxFixture {
 			})
 		}
 	}
+	withDate := func(date time.Time) func(*Message) {
+		return func(msg *Message) {
+			msg.Email.Date = date
+		}
+	}
 	withDraft := func(to, cc, bcc string) func(*Message) {
 		return func(msg *Message) {
 			msg.Email.IsDraft = true
@@ -306,6 +312,153 @@ func buildMailbox() MailboxFixture {
 			msg.Body.Subject = msg.Email.Subject
 		}
 	}
+
+	add(31, "Herald Guide <guide@herald.demo>", "Step 1: Try this - move around your inbox", "INBOX", 0, 11264, false, true, ai.CategoryImportant, []string{"onboarding", "navigation", "timeline", "search"},
+		`Step 1 is a quick lap around Herald's Timeline.
+
+Try now
+- Move through the list with j/k or the arrow keys.
+- Press Enter or the right arrow to preview the selected email.
+- Press Esc to close a preview.
+- Press 1/2/3 to jump between Timeline, Compose, and Cleanup.
+- Press f to open the folder sidebar.
+- Press / to search.
+- Press ? when you want the current shortcut map.
+
+What Herald is doing
+Herald keeps the Timeline keyboard-first, but the same rows can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
+		withDate(baseTime.Add(8*time.Hour)))
+	add(32, "Herald Compose Coach <compose@herald.demo>", "Step 2: Reply, write, and preview Markdown", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"onboarding", "compose", "reply", "markdown", "html"},
+		`Step 2 shows how Herald turns a terminal compose screen into a real email workflow.
+
+Try now
+- Highlight this message and press R to start a reply.
+- Write a few Markdown lines in the body.
+- Press ctrl+p to preview the rendered message.
+- Press ctrl+s to send. In demo mode, sending is simulated and does not contact SMTP.
+
+What Herald is doing
+Replies and forwards preserve original formatting, inline images, and attachments where possible. New Markdown you write is rendered HTML for email clients that support rich mail, and Herald also keeps a plain-text alternative so the message stays readable everywhere.`,
+		withDate(baseTime.Add(7*time.Hour)),
+		withHTMLBody(`<html><body>
+<h1>Step 2: Reply, write, and preview Markdown</h1>
+<p>Use this message to practice replies, Markdown preview, and safe demo sending.</p>
+<ul>
+<li>Replies preserve original formatting where possible.</li>
+<li>Markdown sends as rendered HTML with a plain-text alternative.</li>
+</ul>
+</body></html>`))
+	add(33, "Herald Attachments <attachments@herald.demo>", "Step 3: Open and save attachments", "INBOX", 0, 28672, false, false, ai.CategoryTransactional, []string{"onboarding", "attachments", "download", "files"},
+		`Step 3 gives you a safe attachment message to practice with.
+
+Try now
+- Open this preview and look for the attachment list below the message body.
+- Use [ and ] to move between attachments.
+- Press s to save the selected attachment.
+- In the Save to prompt, choose a path such as /tmp/herald-demo-attachment.txt.
+
+What Herald is doing
+The subject row shows an attachment marker when a message has files. Save actions use the selected attachment, not just the first one, so multi-file messages can be handled deliberately.`,
+		withDate(baseTime.Add(6*time.Hour)),
+		withAttachment("herald-demo-checklist.txt", "text/plain", 2048),
+		withAttachment("herald-demo-routing.csv", "text/csv", 4096))
+	add(34, "Herald Image Lab <images@herald.demo>", "Step 4: View inline images in full screen", "INBOX", 0, 270336, true, false, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
+		`Step 4 is the image rendering tour.
+
+Try now
+- Open this message and press z for full-screen reading.
+- In Kitty or Ghostty, try ./bin/herald --demo -image-protocol=kitty.
+- In iTerm2, try ./bin/herald --demo -image-protocol=iterm2.
+- Scroll through the image section and watch for safe fallback links or text when raster graphics are unavailable.
+
+What Herald is doing
+This email includes embedded inline images, so Herald can render the local MIME bytes without downloading anything. Remote images are shown as links and are intentionally not fetched.
+
+Embedded Creative Commons images:
+- CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png
+- Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: https://commons.wikimedia.org/wiki/File:ColorChart.svg
+- Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg
+- Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg
+
+Remote image link, intentionally not fetched by Herald:
+![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)`,
+		withDate(baseTime.Add(5*time.Hour)),
+		withHTMLBody(`<html><body>
+<h1>Step 4: View inline images in full screen</h1>
+<p>Open this message and press <strong>z</strong> for full-screen reading.</p>
+<p><img alt="CC BY-SA badge" src="cid:cc-by-sa-badge"></p>
+<p><img alt="Color chart" src="cid:color-chart-330px"></p>
+<p><img alt="Bee on sunflower" src="cid:bee-on-sunflower-330px"></p>
+<p><img alt="Changing landscape" src="cid:changing-landscape-960px"></p>
+<h2>Embedded Creative Commons images</h2>
+<ul>
+<li>CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: <a href="https://commons.wikimedia.org/wiki/File:CC-BY-SA.png">CC-BY-SA.png</a></li>
+<li>Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: <a href="https://commons.wikimedia.org/wiki/File:ColorChart.svg">ColorChart.svg</a></li>
+<li>Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: <a href="https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg">Bee on Sunflower</a></li>
+<li>Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: <a href="https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg">Changing Landscape</a></li>
+</ul>
+<p>Remote image link, intentionally not fetched by Herald:</p>
+<p><img alt="Remote Commons thumbnail" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png"></p>
+</body></html>`),
+		withInlineImage("cc-by-sa-badge", "image/png", demoCCBySABadgePNG),
+		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
+		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),
+		withInlineImage("changing-landscape-960px", "image/jpeg", demoChangingLandscapeJPG))
+	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, false, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
+		`Step 5 points you at Herald's bulk cleanup workflow.
+
+Try now
+- Press 3 to open Cleanup.
+- Use j/k to move between senders.
+- Press d to switch between sender and domain grouping.
+- Press space to select a sender or domain.
+- Preview before taking action, then use delete, archive, or unsubscribe when the hints show those actions.
+
+What Herald is doing
+Cleanup groups messages by sender or domain so repeated mail can be handled in batches. Herald keeps destructive actions deliberate: preview first, select what you mean, and use unsubscribe only when the message exposes a safe unsubscribe header.`,
+		withDate(baseTime.Add(4*time.Hour)),
+		withHTML,
+		withUnsub("https://herald.demo/unsubscribe/cleanup-coach"))
+	add(36, "Herald AI Rules <rules@herald.demo>", "Step 6: Classify mail and dry-run rules", "INBOX", 0, 13568, false, true, ai.CategoryImportant, []string{"onboarding", "ai", "rules", "dry-run", "infrastructure", "budget", "risk"},
+		`Step 6 introduces the offline demo AI and rule previews.
+
+Try now
+- Press a to classify the current folder.
+- Press /, type ? infrastructure budget risk, and press Enter for semantic search.
+- Press C to open cleanup rules.
+- Press W to open automation rules.
+- Press P to open custom prompts.
+- Use dry-run previews before running rules.
+
+What Herald is doing
+Demo AI is deterministic and offline, so classification, semantic search, quick replies, and rule previews work without Ollama. Dry-runs show the matching messages and planned actions before mail is changed.`,
+		withDate(baseTime.Add(3*time.Hour)))
+	add(37, "Herald Settings <settings@herald.demo>", "Step 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, false, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
+		`Step 7 shows where Herald configuration lives.
+
+Try now
+- Press S to open Settings.
+- Review the account provider fields.
+- Review the AI provider fields, including local Ollama and OpenAI-compatible options.
+- Find the embedding model field used by semantic search.
+- Add or review an email signature, then close Settings with Esc if you are only exploring.
+
+What Herald is doing
+The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
+		withDate(baseTime.Add(2*time.Hour)))
+	add(38, "Herald Next Steps <next@herald.demo>", "Step 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, false, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
+		`Step 8 gives you a few extra paths to try after the core tour.
+
+Try now
+- Open Contacts and inspect a recent email from a contact.
+- Press c to open the chat panel.
+- Open a preview and try quick replies.
+- Run herald mcp --demo to expose the same synthetic mailbox to an agent.
+- Run herald ssh when you want the TUI served over SSH.
+
+What Herald is doing
+The demo mailbox is shared across the TUI and MCP demo surfaces, so search, stats, classifications, and previews all point at the same fictional data. Good practice searches include ? infrastructure budget risk, images, attachments, and cleanup.`,
+		withDate(baseTime.Add(1*time.Hour)))
 
 	add(1, "Northstar Cloud <billing@northstar-cloud.example>", "Invoice and usage alert for Project Orion", "INBOX", 0, 18432, false, true, ai.CategoryImportant, []string{"infrastructure", "budget", "risk", "cloud"},
 		"Northstar Cloud detected a usage change on Project Orion.\n\nThe compute cluster is 18 percent above forecast and the attached invoice highlights the services driving the budget risk.\n\nReview before Friday so the infrastructure owner can right-size the workload.",
@@ -393,31 +546,6 @@ func buildMailbox() MailboxFixture {
 <p><img alt="Remote status chart" src="https://reports.example.test/chart.png"></p>
 <p>The same body should look good in Timeline, Cleanup, Contacts, and full-screen readers.</p>
 </body></html>`))
-	add(29, "Open Commons Gallery <images@opencommons.example>", "Creative Commons image sampler for terminal previews", "INBOX", 0, 270336, true, false, ai.CategoryNewsletter, []string{"newsletter", "images", "creative commons", "rendering", "terminal"},
-		"# Creative Commons image sampler for terminal previews\n\nThis demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime.\n\nEmbedded inline images:\n- CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png\n- Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: https://commons.wikimedia.org/wiki/File:ColorChart.svg\n- Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg\n- Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg\n\nRemote image link, intentionally not fetched by Herald:\n![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)\n\nPress z from the preview to open full-screen mode. In iTerm2, embedded images should render inline; in other local terminals, Herald should expose safe local open-image links for the embedded MIME bytes.",
-		withHTMLBody(`<html><body>
-<h1>Creative Commons image sampler for terminal previews</h1>
-<p>This demo email includes four embedded inline images with different dimensions so you can test Herald's split preview hint, full-screen image rendering, and non-iTerm local image fallback links without fetching media at runtime.</p>
-<p><img alt="CC BY-SA badge" src="cid:cc-by-sa-badge"></p>
-<p><img alt="Color chart" src="cid:color-chart-330px"></p>
-<p><img alt="Bee on sunflower" src="cid:bee-on-sunflower-330px"></p>
-<p><img alt="Changing landscape" src="cid:changing-landscape-960px"></p>
-<h2>Embedded inline images</h2>
-<ul>
-<li>CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: <a href="https://commons.wikimedia.org/wiki/File:CC-BY-SA.png">CC-BY-SA.png</a></li>
-<li>Color chart: 330px PNG thumbnail, CC0 1.0, by Ccompagnon with a simplified revision by Iketsi. Source: <a href="https://commons.wikimedia.org/wiki/File:ColorChart.svg">ColorChart.svg</a></li>
-<li>Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: <a href="https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg">Bee on Sunflower</a></li>
-<li>Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: <a href="https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg">Changing Landscape</a></li>
-</ul>
-<p>Remote image link, intentionally not fetched by Herald:</p>
-<p><img alt="Remote Commons thumbnail" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png"></p>
-<p>Press z from the preview to open full-screen mode. In iTerm2, embedded images should render inline; in other local terminals, Herald should expose safe local open-image links for the embedded MIME bytes.</p>
-</body></html>`),
-		withInlineImage("cc-by-sa-badge", "image/png", demoCCBySABadgePNG),
-		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
-		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),
-		withInlineImage("changing-landscape-960px", "image/jpeg", demoChangingLandscapeJPG))
-
 	return MailboxFixture{
 		Messages: messages,
 		Contacts: []models.ContactData{
