@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-07T18:43:05 | Approved pending-approval batch incorporation | applied | 30 | 88.44827586206897 | 100% | 0 | 2 |
 | 2026-05-06T15:18:30 | Degradation review gate for explicit regression guardrails | applied | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T22:30:21 | Phase-impact measurement for the first four GEPA improvements | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T20:37:11 | Pending-approval queue for post-publish GEPA suggestions | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
@@ -24,6 +25,72 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Approved pending-approval batch incorporation
+
+- Logged at: 2026-05-07T18:43:05+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: Approved queue items were visible but not yet represented as implemented workflow policy, and user-reproduced post-handoff failures still lacked reusable retry guidance.
+- Summary: Promoted the first approved GEPA pending-approval batch into tracked workflow policy by marking the queue items implemented, keeping existing doc-first and remediation-template approvals in force, and adding a reusable post-handoff user-repro template for exact user reproduction paths missed by automated gates.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 88.44827586206897
+- Average retries: 0.36666666666666664
+- Failed runs: 0
+- Frontier members: 2
+- Product-truth required runs: 24
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 19
+- Preflight required runs: 12
+- Preflight ready runs: 12
+- Preflight readiness rate: 1.0
+- Degradation-review required runs: 2
+- Degradation-review ready runs: 2
+- Degradation-review readiness rate: 1.0
+- Visual-required runs: 17
+- Visual-ready runs: 17
+- Visual readiness rate: 1.0
+- Input-routing required runs: 4
+- Input-routing ready runs: 4
+- Input-routing readiness rate: 1.0
+- Pending approval items: 0
+- Approved approval items: 0
+- Implemented approval items: 5
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +1.0197044334975374
+- average_retry_count: -0.3333333333333333
+- failed_run_count: +0
+- frontier_count: +0
+- product_truth_required_runs: +0
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: +2
+- preflight_required_runs: +11
+- preflight_ready_runs: +11
+- preflight_readiness_rate: +0.0
+- visual_required_runs: +15
+- visual_ready_runs: +15
+- visual_readiness_rate: +0.0
+- input_routing_required_runs: +3
+- input_routing_ready_runs: +3
+- input_routing_readiness_rate: +0.0
+- pending_approval_items: -3
+- approved_approval_items: +0
+- implemented_approval_items: +5
+Changes:
+- Marked all approved pending-approval queue items as implemented with the queue helper.
+- Added a user-reproduced post-handoff remediation template with aliases for user-repro-after-ed02a1d and related manual repro failures.
+- Updated the Herald Autopilot skill, workflow contract, and GEPA ledger to treat the approved items as incorporated workflow behavior.
+Recommended experiment at log time:
+- `template-green-demo-key-overlay-app-attempt1-feedback` (medium value, low risk)
+Article notes:
+- The approval queue now has a full loop: reflected suggestion, visible approval, incorporated template, and measured implemented count.
+- A user's exact repro command becomes a first-class gate when reality beats automated confidence.
+Follow-ups:
+- Measure whether remediation-template adoption reduces retries on the next real bug and feature runs.
+- Consider the new green-demo-key-overlay-app-attempt1 recommendation after this incorporated batch lands.
 
 ### Degradation review gate for explicit regression guardrails
 
@@ -45,9 +112,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
-- Degradation-review required runs: n/a
-- Degradation-review ready runs: n/a
-- Degradation-review readiness rate: n/a
+- Degradation-review required runs: None
+- Degradation-review ready runs: None
+- Degradation-review readiness rate: None
 - Visual-required runs: 2
 - Visual-ready runs: 2
 - Visual readiness rate: 1.0
@@ -88,6 +155,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: 2
 - Visual-ready runs: 2
 - Visual readiness rate: 1.0
@@ -152,6 +222,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: 2
 - Visual-ready runs: 2
 - Visual readiness rate: 1.0
@@ -213,6 +286,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: 2
 - Visual-ready runs: 2
 - Visual readiness rate: 1.0
@@ -271,6 +347,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: 1
 - Visual-ready runs: 1
 - Visual readiness rate: 1.0
@@ -325,6 +404,9 @@ Metrics at log time:
 - Preflight required runs: 1
 - Preflight ready runs: 1
 - Preflight readiness rate: 1.0
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -376,6 +458,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -427,6 +512,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -478,6 +566,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -527,6 +618,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -575,6 +669,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -623,6 +720,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a
@@ -670,6 +770,9 @@ Metrics at log time:
 - Preflight required runs: n/a
 - Preflight ready runs: n/a
 - Preflight readiness rate: n/a
+- Degradation-review required runs: n/a
+- Degradation-review ready runs: n/a
+- Degradation-review readiness rate: n/a
 - Visual-required runs: n/a
 - Visual-ready runs: n/a
 - Visual readiness rate: n/a

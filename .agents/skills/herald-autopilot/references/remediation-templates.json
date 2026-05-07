@@ -73,6 +73,24 @@
     ],
     "approval_prompt": "Approve keeping the input-routing safety remediation template as a default GEPA retry aid."
   },
+  "user-repro-after-commit": {
+    "title": "User-reproduced post-handoff failure template",
+    "aliases": [
+      "user-repro-after-ed02a1d",
+      "user-repro",
+      "user-reported-repro",
+      "manual-user-repro",
+      "post-handoff-repro"
+    ],
+    "why": "A user-reproduced failure after a green automated handoff means the workflow missed a real execution path, environment, or command sequence that must become first-class evidence before another fix is trusted.",
+    "checklist": [
+      "Treat the user's repro command and environment as the primary failing gate until it has been reproduced or explained.",
+      "Record the exact commit, command, config flags, terminal path, and observed symptom so the retry targets the shipped behavior, not an inferred variant.",
+      "Add or adjust the smallest regression test or scripted repro that covers the missed path before widening verification.",
+      "Before handoff, rerun the exact user repro command plus the original automated gates that passed previously."
+    ],
+    "approval_prompt": "Approve keeping the user-reproduced post-handoff failure template as a default GEPA retry aid."
+  },
   "degradation-review": {
     "title": "Degradation-review remediation template",
     "aliases": [
