@@ -292,7 +292,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 	var leftSb strings.Builder
 
 	if m.contactSearchMode == "keyword" {
-		leftSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("33")).Render(fmt.Sprintf("/ %s_", m.contactSearch)) + "\n")
+		leftSb.WriteString(defaultTheme.Contacts.KeywordSearch.Style().Render(fmt.Sprintf("/ %s_", m.contactSearch)) + "\n")
 	} else if m.contactSearchMode == "semantic" {
 		leftSb.WriteString(lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TitleBar.ForegroundColor()).Render(fmt.Sprintf("? %s_", m.contactSearch)) + "\n")
 	} else {
@@ -363,15 +363,15 @@ func (m *Model) renderContactsTab(width, height int) string {
 				if i == m.contactsIdx {
 					bg := activeColor
 					ns := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
-					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
-					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(bg)
+					es := defaultTheme.Contacts.SelectedEmail.Style().Background(bg)
+					cs := defaultTheme.Contacts.SelectedCompany.Style().Background(bg)
 					ks := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					bs := lipgloss.NewStyle().Background(bg)
 					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + cs.Render(co) + bs.Render(coPad+"  ") + ks.Render(countStr)
 				} else {
 					ns := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
 					es := lipgloss.NewStyle().Foreground(defaultTheme.Text.Muted.ForegroundColor())
-					cs := lipgloss.NewStyle().Foreground(lipgloss.Color("249"))
+					cs := defaultTheme.Contacts.Company.Style()
 					ks := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 					line = ns.Render(dn) + dnPad + "  " + es.Render(em) + emPad + "  " + cs.Render(co) + coPad + "  " + ks.Render(countStr)
 				}
@@ -392,7 +392,7 @@ func (m *Model) renderContactsTab(width, height int) string {
 				if i == m.contactsIdx {
 					bg := activeColor
 					ns := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
-					es := lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Background(bg)
+					es := defaultTheme.Contacts.SelectedEmail.Style().Background(bg)
 					ks := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(bg).Bold(true)
 					bs := lipgloss.NewStyle().Background(bg)
 					line = ns.Render(dn) + bs.Render(dnPad+"  ") + es.Render(em) + bs.Render(emPad+"  ") + ks.Render(countStr)

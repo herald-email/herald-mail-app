@@ -137,6 +137,33 @@ func TestThemeBuildersExposeSemanticStyles(t *testing.T) {
 	}
 }
 
+func TestCentralizedSurfaceRolesPreserveExistingHues(t *testing.T) {
+	roleChecks := map[string]struct {
+		got  color.Color
+		want color.Color
+	}{
+		"compact overlay border": {got: defaultTheme.Overlay.CompactBorder.Foreground, want: lipgloss.Color("62")},
+		"demo key foreground":    {got: defaultTheme.Overlay.DemoKeyBadge.Foreground, want: lipgloss.Color("230")},
+		"demo key background":    {got: defaultTheme.Overlay.DemoKeyBadge.Background, want: lipgloss.Color("238")},
+		"setup title":            {got: defaultTheme.Setup.Title.Foreground, want: lipgloss.Color("205")},
+		"setup spinner":          {got: defaultTheme.Setup.Spinner.Foreground, want: lipgloss.Color("205")},
+		"compose accent":         {got: defaultTheme.Compose.Accent.Foreground, want: lipgloss.Color("86")},
+		"compose attachment":     {got: defaultTheme.Compose.Attachment.Foreground, want: lipgloss.Color("111")},
+		"diff delete foreground": {got: defaultTheme.Diff.Delete.Foreground, want: lipgloss.Color("196")},
+		"diff delete background": {got: defaultTheme.Diff.Delete.Background, want: lipgloss.Color("52")},
+		"contacts keyword":       {got: defaultTheme.Contacts.KeywordSearch.Foreground, want: lipgloss.Color("33")},
+		"rules selected bg":      {got: defaultTheme.Rules.Selected.Background, want: lipgloss.Color("57")},
+	}
+	for name, check := range roleChecks {
+		if !reflect.DeepEqual(check.got, check.want) {
+			t.Fatalf("%s role should preserve existing hue %#v, got %#v", name, check.want, check.got)
+		}
+	}
+	if !defaultTheme.Diff.Delete.Strikethrough {
+		t.Fatalf("diff delete role should preserve strikethrough styling")
+	}
+}
+
 func TestRenderStatusBarAdaptiveEnvelopeOwnsNestedFragments(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.statusMessage = "Demo data loaded"

@@ -305,10 +305,10 @@ func (m *CleanupManager) renderPanel() string {
 
 func (m *CleanupManager) renderListPanel() string {
 	layout := m.panelLayout()
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+	titleStyle := defaultTheme.Rules.Title.Style()
+	infoStyle := defaultTheme.Rules.Note.Style().MaxWidth(layout.contentWidth)
+	selectedStyle := defaultTheme.Rules.Selected.Style()
+	dimStyle := defaultTheme.Rules.Note.Style()
 
 	lines := []string{
 		titleStyle.Render("Auto-Cleanup Rules"),
@@ -380,19 +380,19 @@ func (m *CleanupManager) formatRuleLine(rule *models.CleanupRule, width int) str
 
 func (m *CleanupManager) renderEditPanel() string {
 	layout := m.panelLayout()
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	titleStyle := defaultTheme.Rules.Title.Style()
 	title := "New Cleanup Rule"
 	if m.editing != nil && m.editing.ID != 0 {
 		title = "Edit Cleanup Rule"
 	}
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
+	infoStyle := defaultTheme.Rules.Note.Style().MaxWidth(layout.contentWidth)
 	var content strings.Builder
 	content.WriteString(titleStyle.Render(title) + "\n\n")
 	content.WriteString(infoStyle.Render("This rule targets older sender/domain mail. Save it here, then run it from the manager or let the configured schedule pick it up.") + "\n\n")
 	if m.form != nil {
 		content.WriteString(strings.TrimRight(m.form.View(), "\n"))
 	}
-	content.WriteString("\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Render("esc: cancel"))
+	content.WriteString("\n" + defaultTheme.Rules.Note.Style().Render("esc: cancel"))
 	return renderCompactOverlayBox(content.String(), layout)
 }
 

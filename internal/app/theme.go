@@ -9,12 +9,13 @@ import (
 )
 
 type ThemeStyle struct {
-	Foreground color.Color
-	Background color.Color
-	Bold       bool
-	Faint      bool
-	Underline  bool
-	Reverse    bool
+	Foreground    color.Color
+	Background    color.Color
+	Bold          bool
+	Faint         bool
+	Underline     bool
+	Reverse       bool
+	Strikethrough bool
 }
 
 func (s ThemeStyle) Apply(style lipgloss.Style) lipgloss.Style {
@@ -32,7 +33,8 @@ func (s ThemeStyle) Apply(style lipgloss.Style) lipgloss.Style {
 		Bold(s.Bold).
 		Faint(s.Faint).
 		Underline(s.Underline).
-		Reverse(s.Reverse)
+		Reverse(s.Reverse).
+		Strikethrough(s.Strikethrough)
 }
 
 func (s ThemeStyle) Style() lipgloss.Style {
@@ -110,6 +112,59 @@ type ThemeLogRoles struct {
 	Debug ThemeStyle
 }
 
+type ThemeOverlayRoles struct {
+	CompactBorder ThemeStyle
+	DemoKeyBadge  ThemeStyle
+}
+
+type ThemeSetupRoles struct {
+	Title        ThemeStyle
+	Spinner      ThemeStyle
+	Border       ThemeStyle
+	SummaryLabel ThemeStyle
+	SummaryBody  ThemeStyle
+	Link         ThemeStyle
+}
+
+type ThemeComposeRoles struct {
+	Accent           ThemeStyle
+	Attachment       ThemeStyle
+	StatusInfo       ThemeStyle
+	StatusWarning    ThemeStyle
+	StatusError      ThemeStyle
+	AITitle          ThemeStyle
+	AILabel          ThemeStyle
+	AIToggleActive   ThemeStyle
+	AIToggleInactive ThemeStyle
+	AIAction         ThemeStyle
+	AIAccept         ThemeStyle
+	AIDiscard        ThemeStyle
+	AIDim            ThemeStyle
+	AIBorder         ThemeStyle
+}
+
+type ThemeDiffRoles struct {
+	Delete ThemeStyle
+	Add    ThemeStyle
+}
+
+type ThemeContactsRoles struct {
+	KeywordSearch   ThemeStyle
+	SelectedEmail   ThemeStyle
+	SelectedCompany ThemeStyle
+	Company         ThemeStyle
+}
+
+type ThemeRuleRoles struct {
+	Title      ThemeStyle
+	Note       ThemeStyle
+	Selected   ThemeStyle
+	DryRun     ThemeStyle
+	Row        ThemeStyle
+	Error      ThemeStyle
+	GuideLabel ThemeStyle
+}
+
 type Theme struct {
 	Name     string
 	Text     ThemeTextRoles
@@ -119,6 +174,12 @@ type Theme struct {
 	Severity ThemeSeverityRoles
 	Badges   ThemeBadgeRoles
 	Logs     ThemeLogRoles
+	Overlay  ThemeOverlayRoles
+	Setup    ThemeSetupRoles
+	Compose  ThemeComposeRoles
+	Diff     ThemeDiffRoles
+	Contacts ThemeContactsRoles
+	Rules    ThemeRuleRoles
 }
 
 var adaptiveTheme = Theme{
@@ -173,6 +234,53 @@ var adaptiveTheme = Theme{
 		Error: ThemeStyle{Foreground: lipgloss.Color("1")},
 		Debug: ThemeStyle{Foreground: lipgloss.Color("8")},
 	},
+	Overlay: ThemeOverlayRoles{
+		CompactBorder: ThemeStyle{Foreground: lipgloss.Color("62")},
+		DemoKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+	},
+	Setup: ThemeSetupRoles{
+		Title:        ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
+		Spinner:      ThemeStyle{Foreground: lipgloss.Color("205")},
+		Border:       ThemeStyle{Foreground: lipgloss.Color("62")},
+		SummaryLabel: ThemeStyle{Foreground: lipgloss.Color("252"), Bold: true},
+		SummaryBody:  ThemeStyle{Foreground: lipgloss.Color("250")},
+		Link:         ThemeStyle{Foreground: lipgloss.Color("75"), Bold: true},
+	},
+	Compose: ThemeComposeRoles{
+		Accent:           ThemeStyle{Foreground: lipgloss.Color("86")},
+		Attachment:       ThemeStyle{Foreground: lipgloss.Color("111")},
+		StatusInfo:       ThemeStyle{Foreground: lipgloss.Color("86")},
+		StatusWarning:    ThemeStyle{Foreground: lipgloss.Color("214")},
+		StatusError:      ThemeStyle{Foreground: lipgloss.Color("196")},
+		AITitle:          ThemeStyle{Foreground: lipgloss.Color("86"), Bold: true},
+		AILabel:          ThemeStyle{Foreground: lipgloss.Color("245")},
+		AIToggleActive:   ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("25")},
+		AIToggleInactive: ThemeStyle{Foreground: lipgloss.Color("240")},
+		AIAction:         ThemeStyle{Foreground: lipgloss.Color("252"), Background: lipgloss.Color("236")},
+		AIAccept:         ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("28")},
+		AIDiscard:        ThemeStyle{Foreground: lipgloss.Color("245"), Background: lipgloss.Color("236")},
+		AIDim:            ThemeStyle{Foreground: lipgloss.Color("240")},
+		AIBorder:         ThemeStyle{Foreground: lipgloss.Color("86")},
+	},
+	Diff: ThemeDiffRoles{
+		Delete: ThemeStyle{Foreground: lipgloss.Color("196"), Background: lipgloss.Color("52"), Strikethrough: true},
+		Add:    ThemeStyle{Foreground: lipgloss.Color("46"), Background: lipgloss.Color("22")},
+	},
+	Contacts: ThemeContactsRoles{
+		KeywordSearch:   ThemeStyle{Foreground: lipgloss.Color("33")},
+		SelectedEmail:   ThemeStyle{Foreground: lipgloss.Color("183")},
+		SelectedCompany: ThemeStyle{Foreground: lipgloss.Color("223")},
+		Company:         ThemeStyle{Foreground: lipgloss.Color("249")},
+	},
+	Rules: ThemeRuleRoles{
+		Title:      ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
+		Note:       ThemeStyle{Foreground: lipgloss.Color("243")},
+		Selected:   ThemeStyle{Foreground: lipgloss.Color("229"), Background: lipgloss.Color("57")},
+		DryRun:     ThemeStyle{Foreground: lipgloss.Color("229"), Background: lipgloss.Color("57")},
+		Row:        ThemeStyle{Foreground: lipgloss.Color("252")},
+		Error:      ThemeStyle{Foreground: lipgloss.Color("196")},
+		GuideLabel: ThemeStyle{Foreground: lipgloss.Color("99"), Bold: true},
+	},
 }
 
 var legacyDarkTheme = Theme{
@@ -226,6 +334,53 @@ var legacyDarkTheme = Theme{
 		Warn:  ThemeStyle{Foreground: lipgloss.Color("214")},
 		Error: ThemeStyle{Foreground: lipgloss.Color("196")},
 		Debug: ThemeStyle{Foreground: lipgloss.Color("241")},
+	},
+	Overlay: ThemeOverlayRoles{
+		CompactBorder: ThemeStyle{Foreground: lipgloss.Color("62")},
+		DemoKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+	},
+	Setup: ThemeSetupRoles{
+		Title:        ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
+		Spinner:      ThemeStyle{Foreground: lipgloss.Color("205")},
+		Border:       ThemeStyle{Foreground: lipgloss.Color("62")},
+		SummaryLabel: ThemeStyle{Foreground: lipgloss.Color("252"), Bold: true},
+		SummaryBody:  ThemeStyle{Foreground: lipgloss.Color("250")},
+		Link:         ThemeStyle{Foreground: lipgloss.Color("75"), Bold: true},
+	},
+	Compose: ThemeComposeRoles{
+		Accent:           ThemeStyle{Foreground: lipgloss.Color("86")},
+		Attachment:       ThemeStyle{Foreground: lipgloss.Color("111")},
+		StatusInfo:       ThemeStyle{Foreground: lipgloss.Color("86")},
+		StatusWarning:    ThemeStyle{Foreground: lipgloss.Color("214")},
+		StatusError:      ThemeStyle{Foreground: lipgloss.Color("196")},
+		AITitle:          ThemeStyle{Foreground: lipgloss.Color("86"), Bold: true},
+		AILabel:          ThemeStyle{Foreground: lipgloss.Color("245")},
+		AIToggleActive:   ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("25")},
+		AIToggleInactive: ThemeStyle{Foreground: lipgloss.Color("240")},
+		AIAction:         ThemeStyle{Foreground: lipgloss.Color("252"), Background: lipgloss.Color("236")},
+		AIAccept:         ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("28")},
+		AIDiscard:        ThemeStyle{Foreground: lipgloss.Color("245"), Background: lipgloss.Color("236")},
+		AIDim:            ThemeStyle{Foreground: lipgloss.Color("240")},
+		AIBorder:         ThemeStyle{Foreground: lipgloss.Color("86")},
+	},
+	Diff: ThemeDiffRoles{
+		Delete: ThemeStyle{Foreground: lipgloss.Color("196"), Background: lipgloss.Color("52"), Strikethrough: true},
+		Add:    ThemeStyle{Foreground: lipgloss.Color("46"), Background: lipgloss.Color("22")},
+	},
+	Contacts: ThemeContactsRoles{
+		KeywordSearch:   ThemeStyle{Foreground: lipgloss.Color("33")},
+		SelectedEmail:   ThemeStyle{Foreground: lipgloss.Color("183")},
+		SelectedCompany: ThemeStyle{Foreground: lipgloss.Color("223")},
+		Company:         ThemeStyle{Foreground: lipgloss.Color("249")},
+	},
+	Rules: ThemeRuleRoles{
+		Title:      ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
+		Note:       ThemeStyle{Foreground: lipgloss.Color("243")},
+		Selected:   ThemeStyle{Foreground: lipgloss.Color("229"), Background: lipgloss.Color("57")},
+		DryRun:     ThemeStyle{Foreground: lipgloss.Color("229"), Background: lipgloss.Color("57")},
+		Row:        ThemeStyle{Foreground: lipgloss.Color("252")},
+		Error:      ThemeStyle{Foreground: lipgloss.Color("196")},
+		GuideLabel: ThemeStyle{Foreground: lipgloss.Color("99"), Bold: true},
 	},
 }
 

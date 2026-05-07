@@ -69,7 +69,7 @@ func renderCompactOverlayBox(content string, layout compactOverlayLayout) string
 	box := lipgloss.NewStyle().
 		Width(layout.panelWidth-2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(defaultTheme.Overlay.CompactBorder.ForegroundColor()).
 		Padding(1, 2)
 
 	rendered := strings.TrimRight(box.Render(strings.TrimRight(content, "\n")), "\n")

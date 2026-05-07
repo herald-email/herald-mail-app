@@ -920,7 +920,7 @@ func (m *Model) renderComposeView() string {
 
 	// Subject hint (shown below divider when a suggestion is pending)
 	if m.composeAISubjectHint != "" {
-		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+		hintStyle := defaultTheme.Compose.Accent.Style()
 		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
 		hintText := m.composeAISubjectHint
 		if len(hintText) > divWidth-30 && divWidth > 35 {
@@ -962,9 +962,7 @@ func (m *Model) renderComposeView() string {
 
 		var bodyPane string
 		if m.composePreview {
-			previewLabel := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
-				Render("  Preview (Ctrl+P to edit)  ")
+			previewLabel := defaultTheme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
 			body := m.composeBody.Value()
 			if body == "" {
 				body = "_empty body_"
@@ -987,9 +985,7 @@ func (m *Model) renderComposeView() string {
 	} else {
 		// Normal full-width body / preview
 		if m.composePreview {
-			previewLabel := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
-				Render("  Preview (Ctrl+P to edit)  ")
+			previewLabel := defaultTheme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
 			sb.WriteString(previewLabel + "\n")
 			body := m.composeBody.Value()
 			if body == "" {
@@ -1019,7 +1015,7 @@ func (m *Model) renderComposeView() string {
 
 	// Attachment path input prompt
 	if m.attachmentInputActive {
-		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+		promptStyle := defaultTheme.Compose.Accent.Style()
 		sb.WriteString(promptStyle.Render("Attach file: ") + m.attachmentPathInput.View() + "\n")
 		if drop := m.renderAttachmentCompletionDropdown(); drop != "" {
 			sb.WriteString(drop + "\n")
@@ -1037,22 +1033,22 @@ func (m *Model) renderComposeView() string {
 			warnIcon = " ⚠ (>10 MB)"
 		}
 		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
-		attachColor := lipgloss.Color("111")
+		attachStyle := defaultTheme.Compose.Attachment.Style()
 		if att.Data == nil {
-			attachColor = defaultTheme.Severity.Error.ForegroundColor()
+			attachStyle = defaultTheme.Severity.Error.Style()
 		}
-		sb.WriteString(lipgloss.NewStyle().Foreground(attachColor).Render(label) + "\n")
+		sb.WriteString(attachStyle.Render(label) + "\n")
 	}
 
 	// Status message
 	if m.composeStatus != "" {
-		color := "86"
+		statusStyle := defaultTheme.Compose.StatusInfo.Style()
 		if strings.HasPrefix(m.composeStatus, "Error") || strings.HasPrefix(m.composeStatus, "Send failed") || strings.HasPrefix(m.composeStatus, "Attach error") {
-			color = "196"
+			statusStyle = defaultTheme.Compose.StatusError.Style()
 		} else if strings.HasPrefix(m.composeStatus, "Warning") {
-			color = "214"
+			statusStyle = defaultTheme.Compose.StatusWarning.Style()
 		}
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(m.composeStatus) + "\n")
+		sb.WriteString(statusStyle.Render(m.composeStatus) + "\n")
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
@@ -1548,13 +1544,8 @@ func lcsTokens(a, b []string) []string {
 // a lipgloss-styled string. Deleted tokens appear red with strikethrough,
 // added tokens appear green, unchanged tokens are unstyled.
 func wordDiff(original, revised string) string {
-	delStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196")).
-		Strikethrough(true).
-		Background(lipgloss.Color("52"))
-	addStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("46")).
-		Background(lipgloss.Color("22"))
+	delStyle := defaultTheme.Diff.Delete.Style()
+	addStyle := defaultTheme.Diff.Add.Style()
 
 	origTokens := tokenizeWords(original)
 	revTokens := tokenizeWords(revised)
@@ -1692,34 +1683,16 @@ func (m *Model) renderAIPanel(width int) string {
 
 	var sb strings.Builder
 
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("86")).
-		Bold(true).
-		Width(width)
-	labelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Width(width)
-	activeToggleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("25")).
-		Padding(0, 1)
-	inactiveToggleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Padding(0, 1)
-	actionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
-		Background(lipgloss.Color("236")).
+	titleStyle := defaultTheme.Compose.AITitle.Style().Width(width)
+	labelStyle := defaultTheme.Compose.AILabel.Style().Width(width)
+	activeToggleStyle := defaultTheme.Compose.AIToggleActive.Style().Padding(0, 1)
+	inactiveToggleStyle := defaultTheme.Compose.AIToggleInactive.Style().Padding(0, 1)
+	actionStyle := defaultTheme.Compose.AIAction.Style().
 		Padding(0, 1).
 		Margin(0, 1, 0, 0)
-	acceptStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("28")).
-		Padding(0, 1)
-	discardStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Background(lipgloss.Color("236")).
-		Padding(0, 1)
-	spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+	acceptStyle := defaultTheme.Compose.AIAccept.Style().Padding(0, 1)
+	discardStyle := defaultTheme.Compose.AIDiscard.Style().Padding(0, 1)
+	spinnerStyle := defaultTheme.Compose.Accent.Style()
 
 	// Title
 	sb.WriteString(titleStyle.Render("🤖 AI Assistant") + "\n")
@@ -1756,7 +1729,7 @@ func (m *Model) renderAIPanel(width int) string {
 		sb.WriteString(spinnerStyle.Render("⠋ Thinking…") + "\n")
 		return lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("86")).
+			BorderForeground(defaultTheme.Compose.AIBorder.ForegroundColor()).
 			Width(width).
 			Render(sb.String())
 	}
@@ -1779,13 +1752,13 @@ func (m *Model) renderAIPanel(width int) string {
 
 		// Accept / Discard
 		sb.WriteString(acceptStyle.Render("✓ Accept") + "  " + discardStyle.Render("Discard") + "\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(
+		sb.WriteString(defaultTheme.Compose.AIDim.Style().Render(
 			"Ctrl+Enter: accept  Esc: discard") + "\n")
 	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("86")).
+		BorderForeground(defaultTheme.Compose.AIBorder.ForegroundColor()).
 		Width(width).
 		Render(sb.String())
 }

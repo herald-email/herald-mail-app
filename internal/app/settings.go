@@ -886,15 +886,12 @@ func (s *Settings) View() tea.View {
 	}
 
 	boxWidth := s.wizardBoxWidth()
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Render("Herald Setup")
+	title := defaultTheme.Setup.Title.Style().Render("Herald Setup")
 	summary := s.renderWizardSummary(boxWidth)
 	box := lipgloss.NewStyle().
 		Width(boxWidth).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(defaultTheme.Setup.Border.ForegroundColor()).
 		Padding(1, 2)
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left,
@@ -915,7 +912,7 @@ func (s *Settings) renderPanel() string {
 	box := lipgloss.NewStyle().
 		Width(layout.formWidth).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(defaultTheme.Setup.Border.ForegroundColor()).
 		Padding(1, 2)
 
 	rendered := strings.TrimRight(box.Render(formView), "\n")
@@ -1192,14 +1189,14 @@ func (s *Settings) wizardSummaryLines() []string {
 }
 
 func wizardSummaryLine(label, body string) string {
-	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252"))
-	bodyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	labelStyle := defaultTheme.Setup.SummaryLabel.Style()
+	bodyStyle := defaultTheme.Setup.SummaryBody.Style()
 	return labelStyle.Render(label) + " " + bodyStyle.Render(body)
 }
 
 func wizardSummaryDoc(label, rawURL string) string {
-	linkStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
-	textStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	linkStyle := defaultTheme.Setup.Link.Style()
+	textStyle := defaultTheme.Setup.SummaryBody.Style()
 	return wizardHyperlink(linkStyle.Render("[click]"), rawURL) + " " + textStyle.Render(label)
 }
 

@@ -57,7 +57,7 @@ func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OA
 	}
 
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	sp.Style = defaultTheme.Setup.Spinner.Style()
 
 	return &OAuthWaitModel{
 		email:       email,
@@ -160,7 +160,7 @@ func (m *OAuthWaitModel) View() tea.View {
 
 	copyURL := m.authorizeURL()
 	urlLines := wrapString(copyURL, contentWidth)
-	linkLabel := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75")).Render("[here]")
+	linkLabel := defaultTheme.Setup.Link.Style().Render("[here]")
 	authPrompt := "  Click: " + wizardHyperlink(linkLabel, copyURL) + " or copy this link to the browser:"
 
 	browserLine := "  Press Enter to open browser automatically"
@@ -182,7 +182,7 @@ func (m *OAuthWaitModel) View() tea.View {
 
 	title := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("205")).
+		Foreground(defaultTheme.Setup.Title.ForegroundColor()).
 		Render("Herald Setup — Gmail OAuth")
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left,
