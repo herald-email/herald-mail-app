@@ -4,10 +4,10 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-07T18:42:31+00:00
-- Published runs analyzed: 6
-- Total queue items: 5
-- Pending: 0
+- Updated at: 2026-05-07T21:14:20+00:00
+- Published runs analyzed: 8
+- Total queue items: 6
+- Pending: 1
 - Approved: 0
 - Rejected: 0
 - Implemented: 5
@@ -20,7 +20,19 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Pending Items
 
-- No pending items.
+### template-green-demo-key-overlay-app-attempt1-feedback
+
+- Queue key: `template-green-demo-key-overlay-app-attempt1-feedback-b19c0ba4a6`
+- Status: pending
+- Seen in runs: 2
+- First seen: 2026-05-07T19:30:58+00:00
+- Last seen: 2026-05-07T20:47:20+00:00
+- Publish actions: commit, merge, worktree-delete
+- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
+- Approval prompt: Approve exploring `template-green-demo-key-overlay-app-attempt1-feedback` as the next explicit GEPA improvement pass.
+- Source runs:
+- `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
+- `20260507-123058-demo-onboarding-emails` at 2026-05-07T19:30:58+00:00 via commit
 
 ## Approved Items
 
@@ -50,6 +62,23 @@ This document is the visible approval backlog for workflow suggestions recovered
 - `20260505-111520-make-cleanup-rules-configuration-windows-compact-centered-overlays-like-settings-and-help` at 2026-05-05T18:15:20+00:00 via commit, merge, worktree-delete, branch-delete
 - `20260504-212203-implement-timeline-reading-first-redesign-remove-size-kb-and-att-columns-add-subject-attachment-marker-human-local-dates-improved-sender-subject-allocation-and-distinct-table-headers` at 2026-05-05T04:22:03+00:00 via commit, merge, worktree-delete
 
+### Require doc-first feature grounding
+
+- Queue key: `require-doc-first-feature-grounding-ef7c7bc4af`
+- Status: implemented
+- Seen in runs: 3
+- First seen: 2026-05-01T16:45:45+00:00
+- Last seen: 2026-05-07T20:47:20+00:00
+- Publish actions: commit, merge, worktree-delete
+- Why: Feature work is safer when VISION, ARCHITECTURE, and specs are updated before code rather than only consulted during implementation.
+- Approval prompt: Approve a stricter doc-first gate for non-trivial feature runs.
+- Decision: implemented at 2026-05-07T18:42:31+00:00
+- Note: Approved by user on 2026-05-07 and incorporated into Herald GEPA workflow guidance/templates.
+- Source runs:
+- `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
+- `20260507-123058-demo-onboarding-emails` at 2026-05-07T19:30:58+00:00 via commit
+- `20260501-self-reflection-validation` at 2026-05-01T16:45:45+00:00 via commit
+
 ### template-red-compose-comma-alias-feedback
 
 - Queue key: `template-red-compose-comma-alias-feedback-f72a614404`
@@ -70,30 +99,16 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `focused-test-remediation-template-f643092950`
 - Status: implemented
-- Seen in runs: 1
+- Seen in runs: 2
 - First seen: 2026-05-01T16:45:45+00:00
-- Last seen: 2026-05-01T16:45:45+00:00
-- Publish actions: commit
+- Last seen: 2026-05-07T20:47:20+00:00
+- Publish actions: commit, merge, worktree-delete
 - Why: Repeated run history shows focused test failures usually come from stale expectations, overspecified assertions, or missing adjacent regression coverage rather than the core feature direction being wrong.
 - Approval prompt: Approve keeping the focused-tests remediation template as a default GEPA retry aid.
 - Decision: implemented at 2026-05-07T18:42:31+00:00
 - Note: Approved by user on 2026-05-07 and incorporated into Herald GEPA workflow guidance/templates.
 - Source runs:
-- `20260501-self-reflection-validation` at 2026-05-01T16:45:45+00:00 via commit
-
-### Require doc-first feature grounding
-
-- Queue key: `require-doc-first-feature-grounding-ef7c7bc4af`
-- Status: implemented
-- Seen in runs: 1
-- First seen: 2026-05-01T16:45:45+00:00
-- Last seen: 2026-05-01T16:45:45+00:00
-- Publish actions: commit
-- Why: Feature work is safer when VISION, ARCHITECTURE, and specs are updated before code rather than only consulted during implementation.
-- Approval prompt: Approve a stricter doc-first gate for non-trivial feature runs.
-- Decision: implemented at 2026-05-07T18:42:31+00:00
-- Note: Approved by user on 2026-05-07 and incorporated into Herald GEPA workflow guidance/templates.
-- Source runs:
+- `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
 - `20260501-self-reflection-validation` at 2026-05-01T16:45:45+00:00 via commit
 
 ### Package-level test remediation template
