@@ -167,6 +167,33 @@ func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsub
 	return lines
 }
 
+func previewAttachmentDivider(innerW int) string {
+	if innerW <= 0 {
+		return ""
+	}
+	labels := []string{
+		"Attachments ( [ and ] for selection, s for save )",
+		"Attachments ([/]: select, s: save)",
+		"Attachments ([/]: sel, s: save)",
+	}
+	label := labels[len(labels)-1]
+	for _, candidate := range labels {
+		if ansi.StringWidth(" "+candidate+" ") < innerW {
+			label = candidate
+			break
+		}
+	}
+	title := " " + label + " "
+	titleW := ansi.StringWidth(title)
+	if titleW >= innerW {
+		return truncateVisual(label, innerW)
+	}
+	fill := innerW - titleW
+	left := fill / 2
+	right := fill - left
+	return strings.Repeat("─", left) + title + strings.Repeat("─", right)
+}
+
 func sameTimelineMessage(a, b *models.EmailData) bool {
 	if a == nil || b == nil {
 		return false
@@ -360,6 +387,11 @@ func (m *Model) renderEmailPreview() string {
 			}
 			sb.WriteString(promptStyle.Render("Save to: ") + m.timeline.attachmentSaveInput.View() + "\n")
 			imageLines++
+		}
+		if len(m.timeline.body.Attachments) > 0 {
+			sb.WriteString(previewAttachmentDivider(innerW) + "\n")
+			sb.WriteString("\n")
+			imageLines += 2
 		}
 
 		// Body — wrap/render once and cache; re-render only if panel width changed
