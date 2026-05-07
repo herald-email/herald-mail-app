@@ -196,7 +196,7 @@ fields:
 | Rule editor | Form navigation, `esc` cancel. |
 | Prompt editor | Form navigation, `esc` cancel. |
 | Cleanup manager | `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |
-| Settings | Form navigation, `enter` accept/save, `esc` cancel where supported. |
+| Settings | `enter` opens categories or accepts form controls, `/` filters the menu, `tab` moves fields, and `esc` unwinds filter/category state before closing. |
 | OAuth wait | `enter` opens browser to authorization URL. |
 
 ## Related Pages

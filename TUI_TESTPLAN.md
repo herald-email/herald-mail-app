@@ -496,7 +496,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Timeline and press `C` to open Compose with a non-empty draft body.
+1. Open Timeline and press `c` to open Compose with a non-empty draft body.
 2. Press `Ctrl+G` to open the AI assistant.
 3. Trigger one quick action (`1`-`5`) or enter a custom prompt and press `Enter`.
 4. Wait for a suggestion or bounded failure.
@@ -549,7 +549,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Timeline, press `C` to open Compose, and cycle focus through fields and preview.
+1. Open Timeline, press `c` to open Compose, and cycle focus through fields and preview.
 2. Open Contacts and cycle list/detail/preview focus.
 3. Capture each state.
 
@@ -627,7 +627,7 @@ Check these states during every applicable lane:
 1. Open a Timeline message that has an HTML body, inline image, and attachment.
 2. Press `R` and confirm Compose opens as a top-note editor with a read-only `Original message` pane rather than pasting the original body into the textarea.
 3. Press `Ctrl+O` repeatedly and confirm the preservation mode cycles through Safe, Fidelity, and Privacy.
-4. Press `Esc` to return to Timeline, press `F`, and confirm Compose shows separate `Response` and `Original message` regions.
+4. Press `Esc` to return to Timeline, press `f`, and confirm Compose shows separate `Response` and `Original message` regions.
 5. Confirm forwarded attachments appear below Compose as included original attachments.
 6. Focus the forwarded attachment list, move with `j`/`k`, press `x` to mark one attachment removed, then press `x` again to include it.
 7. Repeat at `80x24` and confirm the response/original split and summary remain readable without overflow.
@@ -650,7 +650,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Create a temp directory with two files that share a prefix, one subdirectory, one filename containing a space, and one dotfile.
-2. Open Timeline, press `C` to open Compose, press `Ctrl+A`, type the temp path plus the shared file prefix, and press `Tab`.
+2. Open Timeline, press `c` to open Compose, press `Ctrl+A`, type the temp path plus the shared file prefix, and press `Tab`.
 3. Press `Tab` again when the common prefix is exhausted.
 4. Cycle suggestions with `Tab`, `Shift+Tab`, `up`, and `down`.
 5. Select a directory and press `Enter`, then select a file and press `Enter`.
@@ -700,8 +700,8 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Configure `compose.signature.text` with a multiline signature and start Herald.
-2. Open Timeline and press `C` to open blank Compose.
-3. Return to Timeline, open a reply with `R`, and open a forward with `F`.
+2. Open Timeline and press `c` to open blank Compose.
+3. Return to Timeline, open a reply with `r`, and open a forward with `f`.
 4. Open the quick-reply picker from a preview, choose a reply, and inspect the Compose body.
 5. Open an existing draft with `E`.
 6. Open Settings with `S`, find `Email Signature`, edit it, save, and open a new Compose screen.
@@ -828,8 +828,8 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Toggle chat with `c`.
-2. Toggle logs with `l`.
+1. Toggle chat with `g`.
+2. Toggle logs with `L`.
 3. Cycle focus while both are present where allowed.
 
 **Expect:**
@@ -868,7 +868,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. From Timeline, press `S` to open settings.
 2. Repeat from Compose, Cleanup, and Contacts to confirm the current screen remains visible behind the panel.
-3. At `220x50`, capture the settings menu, confirm it lists `Account setup`, `AI`, `Sync & Cleanup`, and `Signature`, then close it with `Esc`.
+3. At `220x50`, capture the settings menu, confirm it lists `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature`, then close it with `Esc`.
 4. At `80x24`, reopen settings and confirm the modal footer says `enter open` and `esc exit`, while the bottom hint bar says `enter: open category`, `/: filter`, and `esc: exit settings`.
 5. Reopen settings, enter `Signature`, edit the multiline field, save, and confirm the menu returns without requiring account or AI fields.
 6. Reopen settings, enter `Signature`, press `Esc`, and confirm Settings returns to the top-level menu before a second `Esc` exits.
@@ -1165,7 +1165,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Select `All Mail only`.
-2. Try `D`, `e`, `R`, `F`, `A`, `u`, `ctrl+q`, and star toggle.
+2. Try `D`, `a`/`e`, `r`/`R`, `f`/`F`, `T`/`A`, `u`, `ctrl+q`, and star toggle.
 3. Use `/` search inside the view.
 
 **Expect:**

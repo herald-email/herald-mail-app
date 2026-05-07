@@ -17,6 +17,12 @@ server:
 smtp:
   host: "smtp.example.com"
   port: 587
+compose:
+  signature:
+    text: "Best,\nYour Name"
+keyboard:
+  profile: default
+  custom_keymap: ""
 ollama:
   host: "http://localhost:11434"
   model: "gemma3:4b"
@@ -31,6 +37,9 @@ semantic:
 | --- | --- |
 | `vendor` | Optional provider shortcut: `gmail`, `protonmail`, `fastmail`, `outlook`, or `icloud`. |
 | `cache.database_path` | SQLite cache file path. Generated as an absolute `<home>/.herald/cached/<config-name>.db` path when missing. |
+| `compose.signature.text` | Optional default signature inserted into new Compose messages, replies, forwards, and quick replies. |
+| `keyboard.profile` | Keyboard profile: `default`, `vim`, `emacs`, or `custom`. Default `default`. |
+| `keyboard.custom_keymap` | Optional path to a YAML custom keymap file when `keyboard.profile` is `custom`. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
 | `credentials.password` | Password, app password, or bridge password. |
 | `server.host` | IMAP host. Required for non-demo mode. |

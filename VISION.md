@@ -149,7 +149,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
-- [ ] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
+- [x] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
@@ -329,21 +329,21 @@ This gives enough room to read the email while keeping both panels visible as co
 - [x] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
 - [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
 - [x] `u` — unsubscribe from within an open email preview when the message exposes `List-Unsubscribe`
-- [x] `h` — hide future mail from the open email's sender
+- [x] `H` — hide future mail from the open email's sender
 - [x] `D` — delete the open email from within the preview
-- [x] `e` — archive the open email from within the preview
+- [x] `a` — archive the open email from within the preview (`e` remains a legacy alias)
 - [x] `z` — expand to full-screen (same as Timeline full-screen mode)
 - [x] `Esc` — close preview, restore two-panel Cleanup layout
 
 ### Unsubscribe
 
-Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers, while `h` acts on the sender and keeps future mail out of the inbox without pretending to be a real unsubscribe.
+Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers, while `H` acts on the sender and keeps future mail out of the inbox without pretending to be a real unsubscribe.
 
 - [x] Preview metadata shows explicit `Tags:` and `Actions:` rows so list/sender actions are visible in context
 - [x] `u` unsubscribes the currently open Timeline or Cleanup preview email when it exposes `List-Unsubscribe`
-- [x] `h` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions`
-- [x] Cleanup sender summary exposes `h` but not `u`, because true unsubscribe depends on message-level headers
-- [x] Timeline preview and Cleanup preview share the same `u` / `h` semantics and user-facing copy
+- [x] `H` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions`
+- [x] Cleanup sender summary exposes `H` but not `u`, because true unsubscribe depends on message-level headers
+- [x] Timeline preview and Cleanup preview share the same `u` / `H` semantics and user-facing copy
 - [x] `u` performs RFC 8058 one-click POST when `List-Unsubscribe-Post` is available
 - [x] `u` falls back to `List-Unsubscribe` mailto handling when the message only exposes an email-action target
 - [x] `u` falls back to opening a `List-Unsubscribe` browser URL for HTTP links
@@ -668,8 +668,8 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 
 ## Forward and Deletion UX
 
-- [x] `F` key in Timeline opens Compose pre-filled for forward (Fwd: subject, quoted body)
-- [x] `R` key in Timeline opens Compose pre-filled for reply (Re: subject, quoted body, To pre-filled)
+- [x] `f` key in Timeline opens Compose pre-filled for forward (Fwd: subject, quoted body; `F` remains a legacy alias)
+- [x] `r` / `R` keys in Timeline open Compose pre-filled for reply-all or sender-only reply (Re: subject, quoted body, To pre-filled)
 - [x] Reply/forward Compose shows a preserved-content summary with HTML, inline image, attachment, and preservation-mode status
 - [x] Reply/forward Compose separates the editable response from a read-only original-message preview so users can keep source context visible while writing
 - [x] `D` in Timeline deletes the highlighted email (single message)
@@ -743,7 +743,7 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
-- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, and `Signature` so users can change one settings area without stepping through unrelated fields
+- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
