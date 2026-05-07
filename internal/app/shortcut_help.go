@@ -36,12 +36,46 @@ func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, 
 	rawKey := msg.String()
 	key := shortcutKey(msg)
 	if m.showHelp {
+		if m.helpSearchActive {
+			switch key {
+			case "ctrl+c":
+				m.cleanup()
+				return m, tea.Quit, true
+			case "esc":
+				m.helpSearchActive = false
+				m.helpSearch = ""
+				m.helpScrollOffset = 0
+				return m, nil, true
+			case "enter":
+				m.helpSearchActive = false
+				return m, nil, true
+			case "backspace", "ctrl+h":
+				if len(m.helpSearch) > 0 {
+					runes := []rune(m.helpSearch)
+					m.helpSearch = string(runes[:len(runes)-1])
+					m.helpScrollOffset = 0
+				}
+				return m, nil, true
+			}
+			if msg.Text != "" && msg.Mod == 0 {
+				m.helpSearch += msg.Text
+				m.helpScrollOffset = 0
+			}
+			return m, nil, true
+		}
 		switch key {
 		case "ctrl+c":
 			m.cleanup()
 			return m, tea.Quit, true
 		case "?", "esc", "q":
 			m.showHelp = false
+			m.helpScrollOffset = 0
+			m.helpSearchActive = false
+			m.helpSearch = ""
+			return m, nil, true
+		case "/":
+			m.helpSearchActive = true
+			m.helpSearch = ""
 			m.helpScrollOffset = 0
 			return m, nil, true
 		case "up", "k":
@@ -77,6 +111,8 @@ func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, 
 	if key == "?" && !m.questionMarkBelongsToTextInput() {
 		m.showHelp = true
 		m.helpScrollOffset = 0
+		m.helpSearchActive = false
+		m.helpSearch = ""
 		return m, nil, true
 	}
 	return m, nil, false
@@ -258,7 +294,7 @@ func (m *Model) renderShortcutHelpBackdropView() string {
 
 func (m *Model) renderShortcutHelpPanel() string {
 	layout := m.shortcutHelpLayout()
-	title := "Shortcut Help - " + m.shortcutHelpContextTitle()
+	title := fmt.Sprintf("Shortcut Help - %s (Profile: %s)", m.shortcutHelpContextTitle(), m.keyboardProfileLabel())
 	lines := m.shortcutHelpLines(layout.contentW)
 	maxOffset := len(lines) - layout.visibleRows
 	if maxOffset < 0 {
@@ -280,9 +316,14 @@ func (m *Model) renderShortcutHelpPanel() string {
 		bodyLines = append(bodyLines, "")
 	}
 
-	scroll := "Esc/?/q close"
+	scroll := "/ search  Esc/?/q close"
+	if m.helpSearchActive || strings.TrimSpace(m.helpSearch) != "" {
+		scroll = fmt.Sprintf("/%s  Enter: done  Esc: clear", m.helpSearch)
+	} else if strings.TrimSpace(m.helpSearch) != "" {
+		scroll = fmt.Sprintf("filter: %s  / edit  Esc/?/q close", m.helpSearch)
+	}
 	if len(lines) > layout.visibleRows {
-		scroll = fmt.Sprintf("j/k scroll  %d/%d  Esc/?/q close", m.helpScrollOffset+1, len(lines))
+		scroll = fmt.Sprintf("j/k scroll  %d/%d  %s", m.helpScrollOffset+1, len(lines), scroll)
 	}
 
 	headerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor()).Bold(true)
@@ -425,7 +466,7 @@ func (m *Model) shortcutHelpContextTitle() string {
 }
 
 func (m *Model) shortcutHelpLines(width int) []string {
-	sections := m.shortcutHelpSections()
+	sections := m.shortcutHelpFilteredSections()
 	lines := make([]string, 0, 40)
 	for si, section := range sections {
 		if si > 0 {
@@ -456,14 +497,60 @@ func (m *Model) shortcutHelpLines(width int) []string {
 	return lines
 }
 
+func (m *Model) shortcutHelpFilteredSections() []shortcutHelpSection {
+	sections := m.shortcutHelpSections()
+	query := strings.ToLower(strings.TrimSpace(m.helpSearch))
+	if query == "" {
+		return sections
+	}
+	filtered := make([]shortcutHelpSection, 0, len(sections))
+	for _, section := range sections {
+		entries := make([]shortcutHelpEntry, 0, len(section.Entries))
+		for _, entry := range section.Entries {
+			haystack := strings.ToLower(section.Title + " " + entry.Key + " " + entry.Desc)
+			if strings.Contains(haystack, query) {
+				entries = append(entries, entry)
+			}
+		}
+		if len(entries) > 0 {
+			section.Entries = entries
+			filtered = append(filtered, section)
+		}
+	}
+	if len(filtered) == 0 {
+		return []shortcutHelpSection{{Title: "No Matches", Entries: []shortcutHelpEntry{{Key: query, Desc: "No shortcut entries match this search."}}}}
+	}
+	return filtered
+}
+
+func (m *Model) keyboardProfileLabel() string {
+	profile := keyboardProfileDefault
+	if m != nil && m.keyboard != nil {
+		profile = m.keyboard.Profile()
+	} else if m != nil && m.cfg != nil && strings.TrimSpace(m.cfg.Keyboard.Profile) != "" {
+		profile = strings.TrimSpace(m.cfg.Keyboard.Profile)
+	}
+	switch strings.ToLower(profile) {
+	case keyboardProfileVim:
+		return "Vim"
+	case keyboardProfileEmacs:
+		return "Emacs"
+	case keyboardProfileCustom:
+		return "Custom"
+	default:
+		return "Default"
+	}
+}
+
 func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	sections := []shortcutHelpSection{{
 		Title: "Global",
 		Entries: []shortcutHelpEntry{
 			{"?", "open or close this shortcut help"},
-			{"F1-F3", "switch tabs"},
-			{"Alt+L / Alt+C", "open logs or chat from text-entry contexts"},
-			{"Alt+F / Alt+R", "toggle sidebar or refresh from text-entry contexts"},
+			{"/", "search this help overlay while it is open"},
+			{"1-3", "switch tabs; F1-F3 remain legacy aliases"},
+			{"B / L", "toggle sidebar or logs"},
+			{"Ctrl+R", "refresh the current folder outside text-entry fields"},
 			{"Ctrl+C", "quit Herald"},
 		},
 	}}
@@ -482,7 +569,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	case m.showLogs:
 		sections = append(sections, shortcutHelpSection{"Logs", []shortcutHelpEntry{
 			{"j/k or arrows", "scroll log output"},
-			{"l / Alt+L / Esc", "close logs"},
+			{"L / Esc", "close logs"},
 			{"q", "quit when help is closed"},
 		}})
 	case m.focusedPanel == panelChat && m.showChat:
@@ -530,7 +617,7 @@ func (m *Model) contactsShortcutHelpSection() shortcutHelpSection {
 		}}
 	}
 	return shortcutHelpSection{"Contacts", []shortcutHelpEntry{
-		{"j/k or arrows", "navigate contacts or contact emails"},
+		{"h/j/k/l or arrows", "navigate contacts or contact emails"},
 		{"Enter", "open contact detail or selected email preview"},
 		{"Tab", "switch between list and detail panes"},
 		{"/", "start contact search; type ? query for semantic search"},
@@ -546,9 +633,9 @@ func (m *Model) cleanupShortcutHelpSection() shortcutHelpSection {
 			{"Enter", "scroll down"},
 			{"z", "toggle full-screen preview"},
 			{"u", "unsubscribe when mailing-list headers are available"},
-			{"h", "hide future mail from this sender"},
-			{"D / e", "delete or archive this email"},
-			{"A", "re-classify this email"},
+			{"H", "hide future mail from this sender"},
+			{"D / a", "delete or archive this email"},
+			{"T / A", "re-classify this email"},
 			{"Esc", "close preview"},
 		}}
 	}
@@ -557,7 +644,7 @@ func (m *Model) cleanupShortcutHelpSection() shortcutHelpSection {
 			{"j/k or arrows", "navigate emails for the selected sender or domain"},
 			{"Enter", "open email preview"},
 			{"Space", "select the highlighted message"},
-			{"D / e", "delete or archive selected mail after confirmation"},
+			{"D / a", "delete or archive selected mail after confirmation"},
 			{"Tab", "switch Cleanup panes"},
 		}}
 	}
@@ -567,8 +654,8 @@ func (m *Model) cleanupShortcutHelpSection() shortcutHelpSection {
 		{"Space", "select the highlighted sender or domain"},
 		{"d", "toggle sender/domain grouping"},
 		{"W / C / P", "open rule, cleanup manager, or prompt editor overlays"},
-		{"h", "hide future mail from this sender or domain"},
-		{"D / e", "delete or archive selected mail after confirmation"},
+		{"H", "hide future mail from this sender or domain"},
+		{"D / a", "delete or archive selected mail after confirmation"},
 	}}
 }
 
@@ -594,10 +681,10 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			return shortcutHelpSection{"Timeline Draft", []shortcutHelpEntry{
 				{"j/k or arrows", "scroll preview"},
 				{"Tab", "switch between list and preview"},
-				{"Left arrow", "return focus to the Timeline list without closing preview"},
+				{"h / Left arrow", "return focus to the Timeline list without closing preview"},
 				{"[ / ]", "navigate attachments when preview focus has attachments"},
-				{"Right / ]", "open preview, or focus an already-open preview from list focus"},
-				{"C", "open a blank Compose screen"},
+				{"l / Right / ]", "open preview, or focus an already-open preview from list focus"},
+				{"c", "open a blank Compose screen"},
 				{"U", "mark unread"},
 				{"E", "edit draft in Compose"},
 				{"Ctrl+S", "send draft after confirmation"},
@@ -610,35 +697,36 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		return shortcutHelpSection{"Timeline Preview", []shortcutHelpEntry{
 			{"j/k or arrows", "scroll preview"},
 			{"Tab", "switch between list and preview"},
-			{"Left arrow", "return focus to the Timeline list without closing preview"},
+			{"h / Left arrow", "return focus to the Timeline list without closing preview"},
 			{"[ / ]", "navigate attachments when preview focus has attachments"},
-			{"Right / ]", "open preview, or focus an already-open preview from list focus"},
-			{"C", "open a blank Compose screen"},
+			{"l / Right / ]", "open preview, or focus an already-open preview from list focus"},
+			{"c", "open a blank Compose screen"},
 			{"U", "mark unread"},
-			{"R / F", "reply or forward"},
-			{"D / e", "delete or archive after confirmation"},
-			{"* / A", "star or re-classify"},
-			{"u / h", "unsubscribe when available or hide future mail"},
+			{"r / R / f", "reply all, reply sender, or forward"},
+			{"D / a", "delete or archive after confirmation"},
+			{"* / T", "star or re-classify"},
+			{"u / H", "unsubscribe when available or hide future mail"},
 			{"z", "toggle full-screen preview"},
 			{"v / y / Y", "visual selection and copy"},
 			{"Esc", "close preview"},
 		}}
 	}
 	return shortcutHelpSection{"Timeline", []shortcutHelpEntry{
-		{"j/k or arrows", "navigate messages and threads"},
-		{"Right / ]", "preview the highlighted message, or focus an already-open preview"},
-		{"Left / [", "fold an expanded thread, or close preview and focus folders"},
+		{"h/j/k/l or arrows", "navigate messages and threads"},
+		{"l / Right / ]", "preview the highlighted message, or focus an already-open preview"},
+		{"h / Left / [", "fold an expanded thread, or close preview and focus folders"},
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
 		{"Shift+Up / Shift+Down", "extend Timeline selection when supported"},
 		{"V then j/k", "fallback range selection without shifted arrows"},
 		{"U", "mark unread"},
-		{"C", "open a blank Compose screen"},
+		{"c", "open a blank Compose screen"},
 		{"E / Ctrl+S", "edit or send highlighted draft"},
-		{"R / F", "reply or forward highlighted non-draft email"},
-		{"D / e", "delete or archive after confirmation"},
-		{"* / A", "star or re-classify"},
+		{"r / R / f", "reply all, reply sender, or forward highlighted non-draft email"},
+		{"D / a", "delete or archive after confirmation"},
+		{"* / T", "star or re-classify"},
 		{"/", "start Timeline search; type ? query for semantic search"},
+		{"Ctrl+D / Ctrl+U", "half-page down or up"},
 		{"Tab", "switch visible panels"},
 	}}
 }

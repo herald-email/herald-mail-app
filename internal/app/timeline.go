@@ -1209,17 +1209,25 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.composeTo.Focus()
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
+	m.resetFieldKeyMode()
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	}
 }
 
-func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.EmailBody, composeStatus string) {
+func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.EmailBody, composeStatus string, replyAll bool) {
 	m.rememberComposeReturn()
 	m.activeTab = tabCompose
 	m.replyContextEmail = email
 	m.composeAIThread = true
-	m.composeTo.SetValue(email.Sender)
+	to := email.Sender
+	cc := ""
+	if replyAll {
+		to, cc = m.replyAllRecipientFields(email, body)
+	}
+	m.composeTo.SetValue(to)
+	m.composeCC.SetValue(cc)
+	m.composeBCC.SetValue("")
 	m.composeSubject.SetValue(buildReplySubject(email.Subject))
 	m.composeBody.SetValue("")
 	m.applyConfiguredSignatureToComposeBody()
@@ -1230,6 +1238,7 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeTo.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
+	m.resetFieldKeyMode()
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	}
@@ -1272,6 +1281,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	m.composeBCC.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
+	m.resetFieldKeyMode()
 }
 
 func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
@@ -1394,22 +1404,84 @@ func (m *Model) sendTimelineDraftCmd(email *models.EmailData) tea.Cmd {
 	}
 }
 
-func (m *Model) startTimelineReply(email *models.EmailData) tea.Cmd {
+func (m *Model) replyAllRecipientFields(email *models.EmailData, body *models.EmailBody) (string, string) {
+	if email == nil {
+		return "", ""
+	}
+	own := m.ownAddressSet()
+	seen := map[string]bool{}
+	add := func(values []string, out *[]string) {
+		for _, value := range values {
+			for _, addr := range parseHeaderAddressValues(value) {
+				key := strings.ToLower(addr.Address)
+				if key == "" || own[key] || seen[key] {
+					continue
+				}
+				seen[key] = true
+				*out = append(*out, addr.String())
+			}
+		}
+	}
+
+	to := []string{}
+	cc := []string{}
+	add([]string{email.Sender}, &to)
+	if body != nil {
+		add([]string{body.To}, &to)
+		add([]string{body.CC}, &cc)
+	}
+	if len(to) == 0 {
+		to = append(to, email.Sender)
+	}
+	return strings.Join(to, ", "), strings.Join(cc, ", ")
+}
+
+func (m *Model) ownAddressSet() map[string]bool {
+	values := []string{m.fromAddress}
+	if m.cfg != nil {
+		values = append(values, m.cfg.Credentials.Username, m.cfg.Gmail.Email)
+	}
+	own := map[string]bool{}
+	for _, value := range values {
+		for _, addr := range parseHeaderAddressValues(value) {
+			own[strings.ToLower(addr.Address)] = true
+		}
+	}
+	return own
+}
+
+func parseHeaderAddressValues(value string) []*mail.Address {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	addrs, err := mail.ParseAddressList(value)
+	if err == nil {
+		return addrs
+	}
+	addr, err := mail.ParseAddress(value)
+	if err == nil {
+		return []*mail.Address{addr}
+	}
+	return []*mail.Address{{Address: value}}
+}
+
+func (m *Model) startTimelineReply(email *models.EmailData, replyAll bool) tea.Cmd {
 	if email == nil {
 		return nil
 	}
 	if m.timelineBodyLoadedFor(email) {
-		m.openTimelineReplyCompose(email, m.timeline.body, "")
+		m.openTimelineReplyCompose(email, m.timeline.body, "", replyAll)
 		return nil
 	}
 	m.timeline.replyRequestID++
 	requestID := m.timeline.replyRequestID
 	m.timeline.replyPendingMessage = email.MessageID
 	m.statusMessage = "Loading reply message body..."
-	return m.loadTimelineReplyBodyCmd(email, requestID)
+	return m.loadTimelineReplyBodyCmd(email, requestID, replyAll)
 }
 
-func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int) tea.Cmd {
+func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int, replyAll bool) tea.Cmd {
 	emailCopy := *email
 	b := m.backend
 	return func() tea.Msg {
@@ -1421,6 +1493,7 @@ func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int)
 				},
 				MessageID: emailCopy.MessageID,
 				RequestID: requestID,
+				ReplyAll:  replyAll,
 			}
 		}
 		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
@@ -1430,6 +1503,7 @@ func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int)
 			Err:       err,
 			MessageID: emailCopy.MessageID,
 			RequestID: requestID,
+			ReplyAll:  replyAll,
 		}
 	}
 }
@@ -1637,13 +1711,13 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
 				}
 				return joinHintSegments(append(
-					[]string{"tab: back to results", "C: compose"},
+					[]string{"tab: back to results", "c: compose"},
 					append(m.timelineMessageActionHintSegments(),
 						"↑/k ↓/j: scroll", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
 				)...), true
 			}
 			return joinHintSegments(append(
-				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), "C: compose"},
+				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), "c: compose"},
 				append(m.timelineMessageActionHintSegments(),
 					fmt.Sprintf("/ %s", q), "↑/k ↓/j: results", "space: select", "enter: open", "esc: back to search")...,
 			)...), true
@@ -1662,7 +1736,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	}
 	if m.timeline.chatFilterMode {
 		return joinHintSegments(append(
-			[]string{primaryTabShortcutHint, "C: compose"},
+			[]string{primaryTabShortcutHint, "c: compose"},
 			append(m.timelinePrimaryMessageActionHintSegments(),
 				"esc: clear filter", "↑/k ↓/j: navigate", "space: select", "enter: open", "q: quit")...,
 		)...), true
@@ -1674,7 +1748,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  q: quit  │  read-only", true
 	}
 	if m.timelineIsReadOnlyDiagnostic() {
-		return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  f: sidebar  │  q: quit  │  read-only", true
+		return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  B: sidebar  │  q: quit  │  read-only", true
 	}
 	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
 		segments := []string{"j/k: extend range", "V/Esc: done"}
@@ -1691,45 +1765,43 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		segments := []string{m.timelinePanelSwitchHint(), "C: compose"}
+		segments := []string{m.timelinePanelSwitchHint(), "c: compose"}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
-		segments = append(segments, "U: unread", "left: Timeline", "↑/k ↓/j: scroll")
-		segments = append(segments, previewActionHintText(hasUnsub))
 		if hasAttachments {
 			if hasMultipleAttachments {
 				segments = append(segments, "[ and ]: attachments")
 			}
 			segments = append(segments, "s: save attachment")
 		}
+		segments = append(segments, "U: unread", previewActionHintText(hasUnsub), "h/left: Timeline", "↑/k ↓/j: scroll")
 		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", "q: quit")
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), "C: compose"}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", "right/]: focus preview", "left/[: fold/folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open", "esc: close", "q: quit")...)...), true
+		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), "c: compose"}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", "l/right/]: focus preview", "h/left/[: fold/folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open", "esc: close", "q: quit")...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{primaryTabShortcutHint, "C: compose"}
+		segments := []string{primaryTabShortcutHint, "c: compose"}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, "V: range", "space: select", "S: settings", "↑/k ↓/j: navigate", "shift+↑/↓: range", "right/]: preview", "left/[: folders", "enter: open", "q: quit")
+		segments = append(segments, "V: range", "space: select", "S: settings", "↑/k ↓/j: navigate", "shift+↑/↓: range", "l/right/]: preview", "h/left/[: folders", "enter: open", "q: quit")
 		return joinHintSegments(segments...), true
 	}
-	segments := []string{primaryTabShortcutHint, m.timelinePanelSwitchHint(), "C: compose"}
+	segments := []string{primaryTabShortcutHint, m.timelinePanelSwitchHint(), "c: compose"}
 	if m.currentTimelineRowEmail() != nil {
-		segments = append(segments, "U: unread")
+		segments = append(segments, "S: settings", "U: unread")
 		if m.currentTimelineDraftEmail() != nil {
 			segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-			segments = append(segments, "S: settings")
 		} else {
-			segments = append(segments, "R: reply", "F: forward", "D: delete", "e: archive", "S: settings", "V: range", "*: star")
+			segments = append(segments, "r: all", "R: sender", "f: forward", "D: delete", "a: archive", "V: range", "*: star")
 		}
 	} else {
 		segments = append(segments, "S: settings")
 	}
-	segments = append(segments, "right/]: preview", "left/[: folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, "l/right/]: preview", "h/left/[: folders", "↑/k ↓/j: navigate", "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
 	if m.timelineSelectedCount() == 0 {
-		segments = append(segments, "/: hybrid search", "A: re-classify")
+		segments = append(segments, "/: hybrid search", "T: re-classify")
 	}
-	segments = append(segments, "f: sidebar", "q: quit")
+	segments = append(segments, "B: sidebar", "q: quit")
 	return joinHintSegments(segments...), true
 }
 
@@ -1755,14 +1827,14 @@ func (m *Model) timelineMessageActionHintSegments() []string {
 	if m.timelineSelectedCount() > 0 || m.currentTimelineFocusedDraftEmail() != nil {
 		return segments
 	}
-	return append(segments, "A: re-classify")
+	return append(segments, "T: re-classify")
 }
 
 func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{"D: delete selected"}
 		if len(m.selectedTimelineArchiveEmails()) > 0 {
-			segments = append(segments, "e: archive selected")
+			segments = append(segments, "a: archive selected")
 		}
 		return segments
 	}
@@ -1775,7 +1847,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		}
 		return segments
 	}
-	return []string{"*: star", "R: reply", "F: forward", "D: delete", "e: archive"}
+	return []string{"*: star", "r: all", "R: sender", "f: forward", "D: delete", "a: archive"}
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
@@ -2084,7 +2156,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			composeStatus = "Reply body failed to load: " + msg.Err.Error()
 			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
 		}
-		m.openTimelineReplyCompose(email, body, composeStatus)
+		m.openTimelineReplyCompose(email, body, composeStatus, msg.ReplyAll)
 		return m, nil, true
 
 	case TimelineDraftBodyMsg:
@@ -2216,7 +2288,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
 		}
 		return m, nil, true
-	case "h", "H":
+	case "H":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
@@ -2251,7 +2323,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "F":
+	case "F", "f":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
@@ -2261,17 +2333,17 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "C":
+	case "C", "c":
 		if m.canInteractWithVisibleData() {
 			return m, m.openBlankComposeFromCurrent(), true
 		}
 		return m, nil, true
-	case "right":
+	case "right", "l":
 		if m.canInteractWithVisibleData() {
 			return m, m.previewCurrentTimelineRow(), true
 		}
 		return m, nil, true
-	case "left":
+	case "left", "h":
 		if m.canInteractWithVisibleData() {
 			return m, m.closeTimelinePreviewOrFocusFolders(), true
 		}
@@ -2312,6 +2384,12 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 	case "ctrl+q":
 		return m, m.toggleTimelineQuickReply(), true
+	case "ctrl+d", "ctrl+u":
+		if m.canInteractWithVisibleData() {
+			down := key == "ctrl+d"
+			return m, m.timelineHalfPageScroll(down), true
+		}
+		return m, nil, true
 	case "z":
 		if !m.loading && m.timeline.selectedEmail != nil {
 			m.timeline.fullScreen = !m.timeline.fullScreen
@@ -2370,13 +2448,13 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, m.closeTimelinePreviewOrFocusFolders(), true
 		}
 		return m, nil, true
-	case "R":
+	case "r", "R":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
-				return m, m.startTimelineReply(email), true
+				return m, m.startTimelineReply(email, key == "r"), true
 			}
 		}
 		return m, nil, true
@@ -2533,6 +2611,53 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 	}
 	return m, nil, false
+}
+
+func (m *Model) timelineHalfPageScroll(down bool) tea.Cmd {
+	step := m.timelineTable.Height() / 2
+	if m.focusedPanel == panelPreview || m.timeline.fullScreen {
+		step = m.windowHeight / 2
+	}
+	if step < 1 {
+		step = 1
+	}
+	if !down {
+		step = -step
+	}
+	if m.timeline.fullScreen || m.focusedPanel == panelPreview {
+		m.timeline.bodyScrollOffset += step
+		if m.timeline.bodyScrollOffset < 0 {
+			m.timeline.bodyScrollOffset = 0
+		}
+		return nil
+	}
+	if m.focusedPanel == panelSidebar {
+		if step > 0 {
+			max := len(flattenTree(m.folderTree)) - 1
+			if max < 0 {
+				max = 0
+			}
+			for i := 0; i < step; i++ {
+				m.sidebarCursor++
+				if m.sidebarCursor > max {
+					m.sidebarCursor = max
+					break
+				}
+			}
+		} else {
+			m.sidebarCursor += step
+			if m.sidebarCursor < 0 {
+				m.sidebarCursor = 0
+			}
+		}
+		return nil
+	}
+	if step > 0 {
+		m.timelineTable.MoveDown(step)
+	} else {
+		m.timelineTable.MoveUp(-step)
+	}
+	return m.maybeUpdatePreview()
 }
 
 func cloneTimelineExpandedThreads(src map[string]bool) map[string]bool {

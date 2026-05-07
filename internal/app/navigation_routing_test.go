@@ -115,23 +115,23 @@ func TestBrowsePlainQStillQuits(t *testing.T) {
 	}
 }
 
-func TestComposeAltTabSwitchesAndPersistsDraft(t *testing.T) {
+func TestComposeFunctionTabSwitchesAndPersistsDraft(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabCompose
 	m.composeTo.SetValue("alice@example.com")
 	m.composeBody.SetValue("draft body")
 
-	model, cmd := m.handleKeyMsg(altKey('1'))
+	model, cmd := m.handleKeyMsg(functionKey(1))
 	updated := model.(*Model)
 
 	if updated.activeTab != tabTimeline {
-		t.Fatalf("alt+1 activeTab=%d, want Timeline", updated.activeTab)
+		t.Fatalf("F1 activeTab=%d, want Timeline", updated.activeTab)
 	}
 	if cmd == nil {
-		t.Fatal("expected alt+1 leaving non-empty compose to produce draft persistence command")
+		t.Fatal("expected F1 leaving non-empty compose to produce draft persistence command")
 	}
 	if !updated.draftSaving {
-		t.Fatal("expected alt+1 leaving non-empty compose to mark draftSaving")
+		t.Fatal("expected F1 leaving non-empty compose to mark draftSaving")
 	}
 }
 
@@ -355,7 +355,7 @@ func TestRenumberedTopLevelTabNavigationRoutesCleanupAndContacts(t *testing.T) {
 	if strings.Contains(tabBar, "Compose") || strings.Contains(tabBar, "F4") {
 		t.Fatalf("expected top tab bar without Compose/F4, got %q", tabBar)
 	}
-	for _, want := range []string{"F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
+	for _, want := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
 		if !strings.Contains(tabBar, want) {
 			t.Fatalf("expected tab bar to contain %q, got %q", want, tabBar)
 		}
@@ -399,7 +399,7 @@ func TestCleanupFullScreenPlainTabSwitchClosesPreview(t *testing.T) {
 	}
 }
 
-func TestCleanupFullScreenAltTabSwitchClosesPreview(t *testing.T) {
+func TestCleanupFullScreenFunctionTabSwitchClosesPreview(t *testing.T) {
 	m := makeSizedModel(t, 100, 30)
 	m.activeTab = tabCleanup
 	m.showCleanupPreview = true
@@ -409,7 +409,7 @@ func TestCleanupFullScreenAltTabSwitchClosesPreview(t *testing.T) {
 	m.cleanupPreviewHadSidebar = true
 	m.showSidebar = false
 
-	model, _ := m.handleKeyMsg(altKey('1'))
+	model, _ := m.handleKeyMsg(functionKey(1))
 	updated := model.(*Model)
 
 	if updated.activeTab != tabTimeline {
@@ -419,14 +419,14 @@ func TestCleanupFullScreenAltTabSwitchClosesPreview(t *testing.T) {
 		t.Fatal("cleanupFullScreen should be false after alt tab switch")
 	}
 	if updated.showCleanupPreview || updated.cleanupPreviewEmail != nil || updated.cleanupEmailBody != nil {
-		t.Fatal("cleanup preview should be closed after alt tab switch")
+		t.Fatal("cleanup preview should be closed after function-key tab switch")
 	}
 	if !updated.showSidebar {
 		t.Fatal("sidebar should be restored from cleanup preview state")
 	}
 }
 
-func TestComposeAltGlobalCommandsDoNotTypeIntoDraft(t *testing.T) {
+func TestComposeAltPrintableKeysStayTextSafe(t *testing.T) {
 	m := makeSizedModel(t, 180, 40)
 	m.activeTab = tabCompose
 	m.composeField = 4
@@ -437,53 +437,53 @@ func TestComposeAltGlobalCommandsDoNotTypeIntoDraft(t *testing.T) {
 
 	model, _ := m.handleKeyMsg(altKey('l'))
 	m = model.(*Model)
-	if !m.showLogs {
-		t.Fatal("expected alt+l to open logs from compose")
+	if m.showLogs {
+		t.Fatal("alt+l should not open logs from compose")
 	}
-	if got := m.composeBody.Value(); got != "draft" {
-		t.Fatalf("alt+l typed into draft, body=%q", got)
+	if got := m.composeBody.Value(); !strings.HasPrefix(got, "draft") {
+		t.Fatalf("alt+l changed draft unexpectedly, body=%q", got)
 	}
 
 	model, _ = m.handleKeyMsg(altKey('l'))
 	m = model.(*Model)
 	if m.showLogs {
-		t.Fatal("expected second alt+l to close logs from compose")
+		t.Fatal("alt+l should remain text-safe from compose")
 	}
 
 	model, _ = m.handleKeyMsg(altKey('c'))
 	m = model.(*Model)
-	if !m.showChat {
-		t.Fatal("expected alt+c to open chat from compose")
+	if m.showChat {
+		t.Fatal("alt+c should not open chat from compose")
 	}
-	if got := m.composeBody.Value(); got != "draft" {
-		t.Fatalf("alt+c typed into draft, body=%q", got)
+	if got := m.composeBody.Value(); !strings.HasPrefix(got, "draft") {
+		t.Fatalf("alt+c changed draft unexpectedly, body=%q", got)
 	}
 
 	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = model.(*Model)
 	if m.showChat {
-		t.Fatal("expected esc to close chat after alt+c")
+		t.Fatal("chat should remain closed after alt+c")
 	}
 
 	model, _ = m.handleKeyMsg(altKey('f'))
 	m = model.(*Model)
-	if !m.showSidebar {
-		t.Fatal("expected alt+f to toggle sidebar preference from compose")
+	if m.showSidebar {
+		t.Fatal("alt+f should not toggle sidebar preference from compose")
 	}
-	if got := m.composeBody.Value(); got != "draft" {
-		t.Fatalf("alt+f typed into draft, body=%q", got)
+	if got := m.composeBody.Value(); !strings.HasPrefix(got, "draft") {
+		t.Fatalf("alt+f changed draft unexpectedly, body=%q", got)
 	}
 
 	model, cmd := m.handleKeyMsg(altKey('r'))
 	m = model.(*Model)
-	if !m.loading {
-		t.Fatal("expected alt+r to start refresh from compose")
+	if m.loading {
+		t.Fatal("alt+r should not start refresh from compose")
 	}
-	if cmd == nil {
-		t.Fatal("expected alt+r refresh to return a command")
+	if cmd != nil {
+		t.Fatalf("expected alt+r to remain local to compose, got command %T", cmd)
 	}
-	if got := m.composeBody.Value(); got != "draft" {
-		t.Fatalf("alt+r typed into draft, body=%q", got)
+	if got := m.composeBody.Value(); !strings.HasPrefix(got, "draft") {
+		t.Fatalf("alt+r changed draft unexpectedly, body=%q", got)
 	}
 }
 
@@ -702,8 +702,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hints := stripANSI(tc.model().renderKeyHints())
-			if !strings.Contains(hints, "F1-F3: tabs") {
-				t.Fatalf("expected primary F-key tab hint, got %q", hints)
+			if !strings.Contains(hints, "1-3: tabs") {
+				t.Fatalf("expected primary numbered tab hint, got %q", hints)
 			}
 			for _, stale := range []string{"F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
 				if strings.Contains(hints, stale) {
@@ -726,16 +726,16 @@ func TestRenderKeyHints_TimelineListAdvertisesPanelSwitching(t *testing.T) {
 	}
 }
 
-func TestRenderTabBar_AdvertisesFunctionKeys(t *testing.T) {
+func TestRenderTabBar_AdvertisesNumberKeys(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	rendered := stripANSI(m.renderTabBar())
 
-	for _, want := range []string{"F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
+	for _, want := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected tab bar to include %q, got %q", want, rendered)
 		}
 	}
-	for _, stale := range []string{"F2  Compose", "F4", "  1  Timeline", "  2  Cleanup", "  3  Contacts"} {
+	for _, stale := range []string{"F1  Timeline", "F2  Compose", "F4"} {
 		if strings.Contains(rendered, stale) {
 			t.Fatalf("expected tab bar not to include stale label %q, got %q", stale, rendered)
 		}
@@ -879,11 +879,11 @@ func TestLogOverlayToggleWorksWhileSyncingWithVisibleData(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _ := m.handleKeyMsg(keyRune('l'))
+	model, _ := m.handleKeyMsg(keyRune('L'))
 	updated := model.(*Model)
 
 	if !updated.showLogs {
-		t.Fatal("expected l to toggle log overlay while syncing with visible data")
+		t.Fatal("expected L to toggle log overlay while syncing with visible data")
 	}
 }
 
@@ -894,7 +894,7 @@ func TestChatToggle_ShowsFallbackWhenTooNarrow(t *testing.T) {
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 
-	model, _ := m.handleKeyMsg(keyRune('c'))
+	model, _ := m.handleKeyMsg(keyRune('g'))
 	updated := model.(*Model)
 
 	if updated.showChat {

@@ -58,6 +58,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Contact book
 - [x] First-run setup wizard (detected when no config exists; account type, credentials, AI config steps)
 - [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
+- [x] Configurable keyboard profiles (Default, Vim, Emacs, Custom) with a central command catalog and git-friendly custom keymap files
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`herald serve`, Ollama-style)
@@ -102,13 +103,14 @@ The TUI uses a title-row tab strip beside the `Herald` title, a collapsible fold
 
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
 - [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
+- [x] Keyboard profiles make `h/j/k/l` coherent browse navigation while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
 
 ### Tabs (top-level navigation)
-Keyboard (`F1`-`F3` as the primary visible shortcuts, with browse-context number aliases) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
+Keyboard (`1`-`3` as the primary visible shortcuts, with `F1`-`F3` as legacy aliases) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
-- [x] `F1` — Timeline: chronological email list with body preview split
-- [x] `F2` — Cleanup: sender/domain grouping for bulk deletion
-- [x] `F3` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
+- [x] `1` — Timeline: chronological email list with body preview split
+- [x] `2` — Cleanup: sender/domain grouping for bulk deletion
+- [x] `3` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
 
 ### Timeline View
 
@@ -147,7 +149,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
-- [x] Compose-safe command layer: `F1/F2/F3` are the primary advertised tab shortcuts, secondary `Alt+1/2/3` aliases remain supported, and `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` keep global actions reachable while Compose text fields accept plain letters, digits, and `q`
+- [ ] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
@@ -365,17 +367,17 @@ Rules let the app automatically act on email from known senders — delete newsl
 
 ## Compose and Reply
 
-Write in Markdown, deliver as properly formatted HTML email. Compose is a transient full-screen editor launched from Timeline with `C`, contextual reply/forward/draft actions, or quick replies; `Esc` returns to the screen that initiated it after local Compose transient state is dismissed.
+Write in Markdown, deliver as properly formatted HTML email. Compose is a transient full-screen editor launched from Timeline with `c`, contextual reply/forward/draft actions, or quick replies; `Esc` returns to the screen that initiated it after local Compose transient state is dismissed.
 
 - [x] Markdown editor (textarea)
-- [x] Timeline `C` opens a blank Compose screen for a new message
+- [x] Timeline `c` opens a blank Compose screen for a new message
 - [x] Live Markdown preview (`Ctrl+P`)
 - [x] Send as multipart HTML + plain-text via SMTP
-- [x] Reply (`R` key — pre-fills To, Re: subject, quotes original)
-- [x] Forward (`F` key — pre-fills Fwd: subject, forwarding header, body quote)
+- [x] Reply (`r` reply-all and `R` sender-only keys — pre-fill To, Re: subject, quotes original)
+- [x] Forward (`f` key — pre-fills Fwd: subject, forwarding header, body quote)
 - [x] Attachment support: attach files (`Ctrl+A`), attach list shown in compose
 - [x] Send with attachments (`multipart/mixed`)
-- [x] Plain draft entry is safe: digits, letters, and `q` type into the focused Compose field; global tab/log/chat/sidebar/refresh commands use function keys or Alt chords while composing
+- [x] Plain draft entry is safe: digits, letters, `q`, `/`, `?`, and Option-generated characters type into the focused Compose field; global tab/log/chat/sidebar/refresh commands do not steal printable text while composing
 - [x] Preserved HTML replies and forwards: Compose edits only the user's top note, shows the original message as read-only context while composing replies and forwards, and sends the original HTML quote inline with selectable Safe/Fidelity/Privacy preservation
 - [x] Forwarded attachments are included by default and individually toggleable before sending
 - [x] Timeline drafts open as editable Compose messages with recipients, subject, and body restored from the saved draft; sending deletes the source draft only after SMTP success

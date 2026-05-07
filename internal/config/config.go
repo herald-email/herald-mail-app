@@ -36,6 +36,10 @@ type Config struct {
 			Text string `yaml:"text,omitempty"`
 		} `yaml:"signature,omitempty"`
 	} `yaml:"compose,omitempty"`
+	Keyboard struct {
+		Profile      string `yaml:"profile,omitempty"`
+		CustomKeymap string `yaml:"custom_keymap,omitempty"`
+	} `yaml:"keyboard,omitempty"`
 	Credentials struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
@@ -363,6 +367,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.OpenAI.Model == "" {
 		c.OpenAI.Model = "gpt-4o"
+	}
+	if c.Keyboard.Profile == "" {
+		c.Keyboard.Profile = "default"
 	}
 
 	// Daemon defaults

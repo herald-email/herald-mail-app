@@ -170,7 +170,7 @@ Check these states during every applicable lane:
 - Key hints always match the normalized visible focus.
 - Key hints must not silently drop primary actions at `80x24`; if a primary action cannot fit in the bottom chrome, it must remain discoverable in `?` help and the bottom chrome must still advertise `?: help`.
 - Visible bottom chrome must be compared against the actual shortcuts available for the active pane. Missing primary actions are first-class bugs, not harmless copy drift.
-- Timeline protected hints must stay visible whenever contextually valid: `C: compose`, `R: reply`, `F: forward`, `D: delete`, `e: archive`, panel `Tab`, and `?: help`.
+- Timeline protected hints must stay visible whenever contextually valid: `c: compose`, `r: all`, `R: sender`, `f: forward`, `D: delete`, `a: archive`, panel `Tab`, and `?: help`.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
 - Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
 - Status bar never leaks stale mode or selection from another tab.
@@ -249,7 +249,7 @@ Check these states during every applicable lane:
 - Correct tab highlight.
 - `Herald` and tabs remain on one title row; no separate tab-bar row appears.
 - Tab-specific layout appears.
-- Key hints change with the tab and consistently advertise `F1-F3: tabs`.
+- Key hints change with the tab and consistently advertise `1-3: tabs`.
 - Key hints consistently include `?: help` when there is room or wrapped hint space.
 - Browse-number aliases keep working but are not the primary tab hint.
 - Compose is not shown as a top-level tab.
@@ -262,16 +262,16 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start in Timeline with the app in a browse context.
-2. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `j`, `k`, `l`, `c`, `/`, and `?`.
-3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
-4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
+2. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `h`, `j`, `k`, `l`, `c`, `/`, and `?`.
+3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
+4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
 5. Open Timeline search with the physical `/` key, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
 6. Open Compose from Timeline with the physical `Shift+C` key or Cyrillic fallback uppercase `С`, type native body text, and then leave Compose with `Esc`.
 7. Repeat the safe browse-key portion over SSH.
 
 **Expect:**
-- Physical `j` and `k` positions move the active row regardless of the active text layout when the terminal reports `BaseCode`.
-- Physical `l` opens and closes the log overlay, and physical `c` toggles the chat panel where chat is available.
+- Physical `h/j/k/l` positions navigate left/down/up/right where the active view has a meaningful target.
+- Physical `c` opens Compose from Timeline while literal `c` stays text in editable fields.
 - Physical `/` opens Timeline search and physical `?` opens shortcut help.
 - The Cyrillic and direct-kana fallback aliases continue to behave the same way when `BaseCode` is unavailable and the terminal sends one committed character per keypress.
 - Search and Compose text fields preserve the typed native characters instead of converting them to Latin shortcut names.
@@ -325,7 +325,7 @@ Check these states during every applicable lane:
 - Timeline and preview panels have aligned top/bottom borders in split mode.
 - Preview border is active only when preview has focus.
 - Key hints reflect list mode vs preview mode correctly.
-- When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `R: reply`, `F: forward`, `D: delete`, and `e: archive`.
+- When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `r: all`, `R: sender`, `f: forward`, `D: delete`, and `a: archive`.
 
 ### TC-05C — Timeline reading-first row layout
 
@@ -401,7 +401,7 @@ Check these states during every applicable lane:
 - Status text shows `N messages selected` only on Timeline and does not leak into Cleanup or Contacts.
 - Hints advertise `space: select`, `V: range`, and shifted-arrow range selection where space allows.
 - Shifted-arrow range selection stops when plain `j/k` or arrows are used; the selected set remains selected and normal navigation resumes.
-- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `D: delete selected`, and `e: archive selected`.
+- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `D: delete selected`, and `a: archive selected`.
 - `D` and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected.
 - Read-only diagnostic views do not allow selection or destructive actions.
 - At `50x15`, the minimum-size guard appears instead of clipped selection UI.
@@ -558,32 +558,48 @@ Check these states during every applicable lane:
 - Blank Compose fills the terminal height with no empty rows below the bottom key hints.
 - Key hints match the focused region.
 
-### TC-14A — Compose-safe command layer
+### TC-14A — Profile-aware command layer and text-entry safety
 
 **Lane:** A, B
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Timeline and press `C` to open Compose.
-2. Type `q123` into the focused address field, then tab to the body and type `q123` again.
-3. Press `Esc`, confirm Timeline returns, press `C` again, then press `F1`, `F2`, and `F3` from Compose in separate passes.
-4. Return to Timeline and press `C`, then repeat the same tab switching with `Alt+1/2/3` where the terminal supports Alt-modified digits.
-5. Return to Timeline and press `C`, then press `Alt+L`, `Alt+L`, `Alt+C`, `Esc`, and `Alt+F`.
-6. Press `Alt+R` from Compose.
-7. Repeat with Timeline search open: type `q` into the query and press `Ctrl+C` only after confirming the query text is editable.
+1. Open Timeline and press `c` to open Compose.
+2. Type `q123?/` into the focused address field, then tab to the body and type `q123?/` again.
+3. Type at least one macOS Option-generated character such as `™` or `¬` where available.
+4. Press `Esc`, confirm Timeline returns, then verify `1`, `2`, and `3` switch Timeline/Cleanup/Contacts in browse contexts.
+5. Return to Timeline and confirm `F1`, `F2`, and `F3` remain legacy tab aliases.
+6. Open Timeline search with `/`, type `q?/` into the query, and press `Ctrl+C` only after confirming the query text is editable.
+7. Open Settings with `S`, choose each keyboard profile (Default, Vim, Emacs, Custom), and verify invalid custom keymap paths or unknown command IDs are reported without replacing the active working map.
+8. Use a Custom keymap that extends Default with no `fields.compose.default_mode`, then another that sets `fields.compose.default_mode: normal`.
 
 **Expect:**
-- Plain `q` and digits remain in Compose text fields and do not quit or switch tabs.
+- Plain `q`, digits, `?`, `/`, and Option-generated text remain in Compose text fields and do not quit, search, or switch tabs.
 - `Esc` from Compose returns to the Timeline state that opened it after local Compose transient state is dismissed.
-- `F1/F2/F3` switch to Timeline/Cleanup/Contacts from Compose, and leaving a non-empty draft starts draft persistence.
-- `Alt+1/2/3` keep working as secondary aliases when the terminal sends those chords.
-- Compose and browse hints use `F1-F3: tabs` as the visible tab-switching annotation rather than mixing number-key and Alt-key tab labels.
-- Timeline `C` opens blank Compose; lowercase `c` still opens chat.
-- `Alt+L` opens and closes logs from Compose without typing into the draft.
-- `Alt+C` opens chat from Compose when width allows, and `Esc` closes it cleanly.
-- `Alt+F` toggles the sidebar preference from Compose without typing into the draft.
-- `Alt+R` refreshes from Compose without typing into the draft.
+- `1/2/3` are the advertised tab keys in browse contexts; `F1/F2/F3` remain supported as legacy aliases.
+- Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings.
+- Timeline `c` opens blank Compose; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
+- Settings persists `keyboard.profile` and `keyboard.custom_keymap` without losing unrelated config fields.
+- Custom keymaps that extend Default keep Compose insert-first until `fields.compose.default_mode` opts into a modal field mode.
+
+### TC-14G — Vim profile field modes and visual selection
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`
+
+**Steps:**
+1. Set `keyboard.profile: vim`, launch demo mode, and open Compose.
+2. Confirm the body field starts in normal mode when the Vim profile is active.
+3. Press `i`, type text, press Escape, then press `A`, type more text, and press Escape.
+4. Use `h/j/k/l` in normal mode to move within the body without inserting characters.
+5. Press `v`, extend the selection, and copy with `y`.
+6. Repeat the safe text-entry check in the prompt editor and Settings text fields.
+
+**Expect:**
+- The status/hint chrome shows `NORMAL`, `INSERT`, or `VISUAL` only when a modal field owns focus.
+- Visual mode shows a visible anchor/cursor/highlight and does not appear as a dead mode.
+- Prompt editor and Settings text fields preserve literal printable input unless their active field mode owns a Vim command.
 
 ### TC-14B — Demo Compose send is offline
 
@@ -1401,8 +1417,8 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The preview header includes `Tags:` and `Actions:` rows.
-- With `List-Unsubscribe`, the preview metadata and hint bar both advertise `u: unsubscribe` and `h: hide future mail`.
-- Without `List-Unsubscribe`, the preview metadata and hint bar do not advertise `u`, but still advertise `h: hide future mail`.
+- With `List-Unsubscribe`, the preview metadata and hint bar both advertise `u: unsubscribe` and `H: hide future mail`.
+- Without `List-Unsubscribe`, the preview metadata and hint bar do not advertise `u`, but still advertise `H: hide future mail`.
 - End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
 - A first-time user can identify the available list/sender action from the preview itself without prior knowledge.
 
@@ -1413,12 +1429,12 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Open Cleanup with the sender summary focused and capture the hint bar.
-2. Confirm the sender summary advertises `h: hide future mail`.
+2. Confirm the sender summary advertises `H: hide future mail`.
 3. Open a Cleanup preview for an email whose loaded body exposes `List-Unsubscribe` and capture the preview plus the hint bar.
 4. Open a Cleanup preview for an email whose loaded body does not expose `List-Unsubscribe` and capture again.
 
 **Expect:**
-- Cleanup sender summary advertises `h: hide future mail`.
+- Cleanup sender summary advertises `H: hide future mail`.
 - Cleanup sender summary does not advertise `u: unsubscribe`.
 - Cleanup preview includes `Tags:` and `Actions:` rows in the preview header.
 - Cleanup preview uses the same availability rules as Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `h` remains visible in both cases.
@@ -1492,17 +1508,17 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Build Herald and launch `./bin/herald --demo`; confirm no `Keys:` overlay is visible.
-2. Launch `./bin/herald --demo --demo-keys`, then press `S`, `?`, `2`, `C`, `V`, down-arrow range extension, real shifted down-arrow when the terminal can send it, right arrow, left arrow, and `z` across the Timeline and Cleanup flows.
+2. Launch `./bin/herald --demo --demo-keys`, then press `S`, `?`, `/` in help, `2`, `c`, `V`, down-arrow range extension, real shifted down-arrow when the terminal can send it, right arrow, left arrow, and `z` across the Timeline and Cleanup flows.
 3. Confirm Compose text, Timeline search text, and rule/prompt editor text do not appear in the key overlay.
 4. Run the focused media set with `HERALD_DOC_MEDIA_ONLY=showcase-settings-dark-pastel,showcase-help-dark-pastel,showcase-cleanup-manager-red-alert,showcase-cleanup-rule-editor-red-alert,showcase-range-selection-pastel-dark,showcase-large-preview-pastel-dark demos/generate-doc-media.sh`.
 5. Run `vhs demos/guided-tour-dark-pastel.tape` and `vhs demos/cleanup-rules-red-alert.tape`.
 
 **Expect:**
 - The overlay is opt-in and appears only when demo media explicitly requests `--demo-keys`.
-- Key labels are compact and normalized, including `S`, `?`, `2`, `C`, `Shift+Down`, `Right`, `Left`, and `z`.
+- Key labels are compact and normalized, including `S`, `?`, `/`, `2`, `c`, `Shift+Down`, `Right`, `Left`, and `z`.
 - Text-entry surfaces preserve literal text and do not leak draft/search/editor contents into the overlay.
 - The selected screenshots render with `Dark Pastel`, `Red Alert`, and `Builtin Pastel Dark`; the two GIFs render at high resolution without replacing every existing docs asset.
-- Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `C` to open Compose.
+- Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `c` to open Compose.
 
 ---
 

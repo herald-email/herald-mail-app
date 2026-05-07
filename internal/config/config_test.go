@@ -131,6 +131,43 @@ func TestSaveRoundTrip_ComposeSignature(t *testing.T) {
 	}
 }
 
+func TestLoadKeyboardConfigDefaultsAndRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	original := minimalOAuthConfig()
+	original.Keyboard.Profile = "vim"
+	original.Keyboard.CustomKeymap = "~/.config/herald/keymaps/work.yaml"
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if got := loaded.Keyboard.Profile; got != "vim" {
+		t.Fatalf("Keyboard.Profile = %q, want vim", got)
+	}
+	if got := loaded.Keyboard.CustomKeymap; got != original.Keyboard.CustomKeymap {
+		t.Fatalf("Keyboard.CustomKeymap = %q, want %q", got, original.Keyboard.CustomKeymap)
+	}
+
+	defaultPath := filepath.Join(dir, "default.yaml")
+	defaultConfig := minimalOAuthConfig()
+	if err := defaultConfig.Save(defaultPath); err != nil {
+		t.Fatalf("Save(default) failed: %v", err)
+	}
+	loadedDefault, err := Load(defaultPath)
+	if err != nil {
+		t.Fatalf("Load(default) failed: %v", err)
+	}
+	if got := loadedDefault.Keyboard.Profile; got != "default" {
+		t.Fatalf("default Keyboard.Profile = %q, want default", got)
+	}
+}
+
 func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "work.yaml")

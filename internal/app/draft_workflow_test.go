@@ -380,7 +380,7 @@ func TestRenderKeyHints_DraftPreviewPrioritizesEditAndDiscard(t *testing.T) {
 
 	hints := stripANSI(m.renderKeyHints())
 	requireHintSegments(t, hints, "E: edit draft", "ctrl+s: send draft", "D: discard draft")
-	if strings.Contains(hints, "R: reply") || strings.Contains(hints, "F: forward") {
+	if strings.Contains(hints, "R: sender") || strings.Contains(hints, "f: forward") {
 		t.Fatalf("draft preview hints should prioritize draft workflow, got %q", hints)
 	}
 }

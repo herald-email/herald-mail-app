@@ -1,9 +1,9 @@
-[7m [m[1;7mHerald[m[7m [m [7m  [m[1;7mF1  Timeline[m[7m  [m  F2  Cleanup    F3  Contacts
+[7m [m[1;7mHerald[m[7m [m [7m  [m[1;7m1  Timeline[m[7m  [m  2  Cleanup    3  Contacts
 [90m┌──────────────────────────┐[m [36m┌────────────────────────────────────────────────────────────────────────────────────────┐[m
 [90m│[m[4;4m›[m[4m [m[4m [m[4;4mI[m[4;4mN[m[4;4mB[m[4;4mO[m[4;4mX[m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[90m│[m [36m│[m [1m✓[m  [1mSender[m              [1mSubject[m                                  [1mWhen[m          [1mTag[m      [36m│[m
 [90m│[m   All Mail only          [90m│[m [36m└────────────────────────────────────────────────────────────────────────────────────────┘[m
 [90m└──────────────────────────┘[m
 [7m [m[7mINBOX  │  AI: off  │  0 emails[m[7m [m[7m                                                                                        [m
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ?: help  │  F1-F3: tabs  │  tab/shift+tab: panels  │  C: compose  │  S: settings  │  right/]: preview
- left/[: folders  │  ↑/k ↓/j: navigate  │  space: select  │  shift+↑/↓: range  │  enter: open  │  /: hybrid search
+ ?: help  │  1-3: tabs  │  tab/shift+tab: panels  │  c: compose  │  S: settings  │  l/right/]: preview
+ h/left/[: folders  │  ↑/k ↓/j: navigate  │  ctrl+d/u: half-page  │  space: select  │  shift+↑/↓: range  │  enter: open

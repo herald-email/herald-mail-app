@@ -400,7 +400,7 @@ func TestRenderKeyHints_TimelineSelectionActionsStayVisibleAt80Cols(t *testing.T
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
 	stripped := stripANSI(hints)
-	requireHintSegments(t, stripped, "space: select", "V: range", "D: delete selected", "e: archive selected")
+	requireHintSegments(t, stripped, "space: select", "V: range", "D: delete selected", "a: archive selected")
 }
 
 func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {

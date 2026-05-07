@@ -113,12 +113,12 @@ func TestComposeBlankView_FillsTerminalHeight(t *testing.T) {
 	}
 }
 
-// TestComposeAlt3_SwitchesToContacts verifies that Alt+3 switches from Compose
+// TestComposeFunctionKeyF3_SwitchesToContacts verifies that F3 switches from Compose
 // to Contacts while plain "3" remains available as draft text.
 //
 // Regression test for the compose-safe command layer: global tab switching uses
-// Alt chords when a Compose text field is focused.
-func TestComposeAlt3_SwitchesToContacts(t *testing.T) {
+// function keys when a Compose text field is focused.
+func TestComposeFunctionKeyF3_SwitchesToContacts(t *testing.T) {
 	b := &stubBackend{}
 	m := New(b, nil, "", nil, false)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -126,11 +126,11 @@ func TestComposeAlt3_SwitchesToContacts(t *testing.T) {
 	m.loading = false
 	m.activeTab = tabCompose
 
-	updated2, _ := m.Update(altKey('3'))
+	updated2, _ := m.Update(functionKey(3))
 	m2 := updated2.(*Model)
 
 	if m2.activeTab != tabContacts {
-		t.Fatalf("pressing alt+3 in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
+		t.Fatalf("pressing F3 in compose: activeTab=%d, want %d (tabContacts)", m2.activeTab, tabContacts)
 	}
 }
 

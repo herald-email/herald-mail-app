@@ -133,12 +133,12 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Signature"} {
+	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Signature"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
 		}
 	}
-	for _, notWant := range []string{"Account Type", "Email address", "AI Provider", "Email Signature"} {
+	for _, notWant := range []string{"Account Type", "Email address", "AI Provider", "Keyboard Profile", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected settings menu not to show category form field %q, got:\n%s", notWant, rendered)
 		}
@@ -173,6 +173,22 @@ func TestSettingsPanelAICategorySkipsAccountValidation(t *testing.T) {
 	for _, notWant := range []string{"Email address", "Password", "IMAP Host", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected AI category to skip unrelated field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelKeyboardCategorySkipsUnrelatedFields(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Keyboard")
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if !strings.Contains(rendered, "Keyboard Profile") || !strings.Contains(rendered, "Custom Keymap") {
+		t.Fatalf("expected Keyboard category to show keyboard fields, got:\n%s", rendered)
+	}
+	for _, notWant := range []string{"Account Type", "AI Provider", "Email Signature"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected Keyboard category to skip unrelated field %q, got:\n%s", notWant, rendered)
 		}
 	}
 }

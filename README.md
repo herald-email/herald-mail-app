@@ -344,35 +344,45 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | Key                                | Action                                                                                      |
 | ---------------------------------- | ------------------------------------------------------------------------------------------- |
 | `1` / `2` / `3`                    | Timeline / Cleanup / Contacts tab in browse contexts                                        |
-| `F1` / `F2` / `F3`                 | Timeline / Cleanup / Contacts tab from anywhere in the main TUI, including Compose          |
-| `Alt+1` / `Alt+2` / `Alt+3`        | Secondary Timeline / Cleanup / Contacts aliases when the terminal sends Alt-modified digits |
-| `C`                                | Open a new Compose screen from Timeline                                                     |
-| `j` / `k`                          | Navigate down / up                                                                          |
+| `F1` / `F2` / `F3`                 | Legacy Timeline / Cleanup / Contacts tab aliases                                            |
+| `c`                                | Open a new Compose screen from Timeline                                                     |
+| `h` / `j` / `k` / `l`              | Navigate left / down / up / right where the active pane supports it                         |
 | `Enter`                            | Open email preview                                                                          |
 | `Space`                            | Select Timeline messages or Cleanup rows, depending on focus                                |
 | `Shift+Up` / `Shift+Down`          | Extend Timeline range selection when supported by the terminal                              |
 | `V`, then `j` / `k`                | Fallback Timeline range selection without shifted-arrow support                             |
 | `Escape`                           | Close preview / picker, or return from Compose to its originating Timeline screen           |
 | `D`                                | Delete selected email or sender                                                             |
-| `e`                                | Archive                                                                                     |
-| `R`                                | Reply                                                                                       |
-| `F`                                | Forward                                                                                     |
+| `a`                                | Archive current message immediately; bulk archive still asks for confirmation               |
+| `r` / `R`                          | Reply all / reply sender-only                                                               |
+| `f`                                | Forward                                                                                     |
+| `T`                                | Re-classify the current message with AI (`A` remains a legacy alias)                        |
 | `Ctrl+Q`                           | Quick reply picker (in preview)                                                             |
 | `u`                                | Unsubscribe                                                                                 |
+| `H`                                | Hide future mail from the current sender                                                    |
 | `z`                                | Full-screen preview                                                                         |
 | `S`                                | Open settings as a compact overlay                                                          |
 | `W` / `P` / `C`                    | Open Cleanup automation rules, custom prompts, or cleanup rule manager overlays             |
 | `p` / `r` in Cleanup manager       | Preview selected cleanup rule or all enabled cleanup rules                                  |
 | `s` / `E` / `R` in dry-run preview | Save disabled, enable after confirmation, or run previewed cleanup live                     |
-| `c` / `Alt+C`                      | Toggle AI chat panel (`Alt+C` also works while composing)                                   |
-| `a`                                | Run AI classification on current folder                                                     |
-| `f` / `Alt+F`                      | Toggle folder sidebar (`Alt+F` also works while composing)                                  |
-| `l` / `Alt+L`                      | Toggle logs (`Alt+L` also works while composing)                                            |
-| `r` / `Alt+R`                      | Refresh current folder (`Alt+R` also works while composing)                                 |
-| `/`                                | Search; type `? query` inside search for semantic search when AI/embeddings are available   |
+| `B`                                | Toggle folder sidebar                                                                       |
+| `g`                                | Toggle the AI chat panel                                                                    |
+| `L`                                | Toggle logs                                                                                 |
+| `Ctrl+R`                           | Refresh current folder                                                                      |
+| `/`                                | Contextual search; in mailbox search type `? query` for semantic search when available      |
 | `?`                                | Open context-sensitive shortcut help outside editable text fields                            |
 | `q`                                | Quit in browse contexts only                                                                |
 | `Ctrl+C`                           | Quit from any state, including text inputs                                                  |
+
+Keyboard behavior is configurable:
+
+```yaml
+keyboard:
+  profile: default # default | vim | emacs | custom
+  custom_keymap: ~/.config/herald/keymaps/work.yaml
+```
+
+Custom keymap files extend a built-in profile and bind keys to Herald command IDs. Add `fields.compose.default_mode: normal` when a custom map should opt Compose into Vim-style field modes; otherwise Compose, search, prompt, settings, and editor-like text fields keep literal printable input, including `?`, `/`, and macOS Option-generated characters.
 
 ---
 

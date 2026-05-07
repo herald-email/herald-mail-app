@@ -163,17 +163,17 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 	case "ctrl+c":
 		m.cleanup()
 		return m, tea.Quit, true
-	case "f1", "alt+1":
+	case "f1":
 		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
 			return m, m.switchToTimeline(), true
 		}
 		return m, nil, true
-	case "f2", "alt+2":
+	case "f2":
 		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
 			return m, m.switchToCleanup(), true
 		}
 		return m, nil, true
-	case "f3", "alt+3":
+	case "f3":
 		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
 			return m, m.switchToContacts(), true
 		}
@@ -181,14 +181,6 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 			return m, m.loadContacts(), true
 		}
 		return m, nil, true
-	case "alt+l", "alt+L":
-		return m, m.toggleLogs(), true
-	case "alt+c", "alt+C":
-		return m, m.toggleChat(), true
-	case "alt+f", "alt+F":
-		return m, m.toggleSidebar(), true
-	case "alt+r", "alt+R":
-		return m, m.refreshCurrentFolder(), true
 	}
 	return m, nil, false
 }
@@ -396,7 +388,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 
 func isGlobalContactsKey(key string) bool {
 	switch key {
-	case "1", "2", "3", "q", "ctrl+c", "r", "f", "c", "l", "L":
+	case "1", "2", "3", "q", "ctrl+c", "ctrl+r", "B", "L", "S":
 		return true
 	}
 	return false

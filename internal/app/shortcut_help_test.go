@@ -28,7 +28,7 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 	if updated.timeline.searchMode {
 		t.Fatal("expected plain ? not to open Timeline semantic search")
 	}
-	if !strings.Contains(rendered, "F1-F3") || !strings.Contains(rendered, "Timeline") || !strings.Contains(rendered, "open a blank Compose") {
+	if !strings.Contains(rendered, "1-3") || !strings.Contains(rendered, "Timeline") || !strings.Contains(rendered, "open a blank Compose") {
 		t.Fatalf("expected global and Timeline shortcuts in help, got:\n%s", rendered)
 	}
 
@@ -280,7 +280,7 @@ func TestShortcutHelpTimelineDraftPreviewIncludesDraftActions(t *testing.T) {
 	updated := pressQuestion(m)
 
 	rendered := stripANSI(updated.View().Content)
-	for _, want := range []string{"Timeline Draft", "C", "open a blank Compose", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
+	for _, want := range []string{"Timeline Draft", "c", "open a blank Compose", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected draft preview help to include %q, got:\n%s", want, rendered)
 		}
@@ -303,7 +303,7 @@ func TestShortcutHelpTimelinePreviewIncludesBlankCompose(t *testing.T) {
 	updated := pressQuestion(m)
 
 	rendered := stripANSI(updated.View().Content)
-	for _, want := range []string{"Timeline Preview", "C", "open a blank Compose"} {
+	for _, want := range []string{"Timeline Preview", "c", "open a blank Compose"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected Timeline preview help to include %q, got:\n%s", want, rendered)
 		}

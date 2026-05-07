@@ -14,17 +14,16 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
 | `2` | Switch to Cleanup in browse contexts, or choose quick reply 2 when quick reply picker is open. |
 | `3` | Switch/load Contacts in browse contexts, or choose quick reply 3 when quick reply picker is open. |
-| `4` | Choose quick reply 4 when quick reply picker is open. |
-| `alt+1` / `alt+2` / `alt+3` | Switch to Timeline / Cleanup / Contacts from anywhere in the main TUI, including Compose. |
+| `F1` / `F2` / `F3` | Legacy aliases for Timeline / Cleanup / Contacts. |
 | `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
 | `shift+tab` | Cycle focus backward where supported. |
-| `f` / `alt+f` | Toggle folder sidebar on tabs that support it; use `alt+f` while composing. |
-| `c` / `alt+c` | Toggle chat panel; use `alt+c` while composing. |
-| `l` / `L` / `alt+l` | Toggle log viewer; use `alt+l` while composing. |
-| `r` / `alt+r` | Refresh the current folder; use `alt+r` while composing. |
+| `h` / `j` / `k` / `l` | Navigate left / down / up / right where the active pane supports it. |
+| `B` | Toggle folder sidebar. |
+| `g` | Toggle the AI chat panel outside text-entry fields. |
+| `L` | Toggle log viewer. |
+| `ctrl+r` | Refresh the current folder. |
 | `S` | Open settings. |
-| `a` | Start AI classification for the current folder. |
-| `?` | Open context-sensitive shortcut help in browse and non-text contexts. When help is open, `?`, `esc`, or `q` closes it. |
+| `?` | Open context-sensitive shortcut help in browse and non-text contexts. When help is open, `/` searches help and `?`, `esc`, or `q` closes it. |
 | `esc` | Close or unwind the active transient state. |
 
 ## Mouse
@@ -64,20 +63,22 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `shift+up` / `shift+down` | Extend Timeline selection range when supported by the terminal; plain movement finishes the range and keeps selection. |
 | `V`, then `j` / `k` | Use fallback Timeline range selection without shifted-arrow support; press `V` or `esc` when done. |
 | `/` | Open Timeline search. |
-| `C` | Open a blank Compose screen for a new message. |
+| `c` | Open a blank Compose screen for a new message. |
 | `*` | Toggle star on current email. |
-| `R` | Reply to current email in Compose. |
-| `F` | Forward current email in Compose. |
+| `r` | Reply all to current email in Compose. |
+| `R` | Reply sender-only to current email in Compose. |
+| `f` | Forward current email in Compose. |
 | `D` | Delete current/selected target after confirmation. |
-| `e` | Archive current/selected target after confirmation. |
-| `A` | Re-classify current email with AI. |
+| `a` | Archive the current message immediately; bulk archive still confirms. |
+| `T` | Re-classify current email with AI; `A` remains a legacy alias. |
+| `ctrl+d` / `ctrl+u` | Scroll half a page down / up in scrollable list or preview contexts. |
 | `ctrl+q` | Open quick reply picker. |
 | `z` | Toggle full-screen reader when preview is open. |
 | `s` | Save selected attachment from preview. |
 | `[` | Select previous attachment. |
 | `]` | Select next attachment. |
 | `u` | Unsubscribe when preview body includes unsubscribe data. |
-| `h` / `H` | Hide future mail from current sender. |
+| `H` | Hide future mail from current sender. |
 | `v` | Toggle visual text selection in preview/full-screen. |
 | `y` | Start `yy` line copy or copy visual selection. |
 | `Y` | Copy full wrapped body. |
@@ -109,9 +110,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Key | Result |
 | --- | --- |
-| Plain text and punctuation | Insert text into the focused Compose field, including literal `?`; use Alt chords for global commands while composing. |
-| `alt+1` / `alt+2` / `alt+3` | Switch to Timeline / Cleanup / Contacts without inserting text. |
-| `alt+l` / `alt+c` / `alt+f` / `alt+r` | Toggle logs, chat, sidebar, or refresh without inserting text. |
+| Plain text and punctuation | Insert text into the focused Compose field, including literal `?`, `/`, and macOS Option-generated characters. |
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
 | `ctrl+s` | Send message. |
 | `ctrl+p` | Toggle Markdown preview. |
@@ -134,10 +133,10 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `j` / `down` | Move rows or scroll preview. |
 | `k` / `up` | Move rows or scroll preview. |
 | `D` | Delete selected/current target. |
-| `e` | Archive selected/current target. |
-| `A` | Re-classify preview email. |
+| `a` | Archive selected/current target. |
+| `T` | Re-classify preview email; `A` remains a legacy alias. |
 | `u` | Unsubscribe when preview body supports it. |
-| `h` / `H` | Hide future mail for focused sender. |
+| `H` | Hide future mail for focused sender. |
 | `W` | Open automation rule editor. |
 | `P` | Open custom prompt editor. |
 | `C` | Open cleanup manager. |
@@ -160,6 +159,30 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `k` / `up` | Move up contact list or recent emails. |
 | `e` | Enrich selected contact. |
 
+## Keyboard Profiles
+
+Herald resolves browse shortcuts through the active keyboard profile. Text-entry surfaces keep printable text literal in the default profile; Vim and Custom profiles can use the modal Compose field adapter.
+
+```yaml
+keyboard:
+  profile: default # default | vim | emacs | custom
+  custom_keymap: ~/.config/herald/keymaps/work.yaml
+```
+
+Custom keymap files extend a built-in profile and bind keys to predefined command IDs:
+
+```yaml
+extends: default
+bindings:
+  timeline:
+    normal:
+      x: compose.new
+      a: mail.archive_current
+fields:
+  compose:
+    default_mode: normal # insert | normal | visual
+```
+
 ## Overlays
 
 | Overlay | Keys |
@@ -167,9 +190,9 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Delete/archive confirmation | `y`/`Y` confirm, `n`/`N`/`esc` cancel. |
 | Unsubscribe confirmation | `y`/`Y` confirm, `n`/`N`/`esc` cancel. |
 | Attachment save prompt | `enter` save, `esc` cancel, text edits path. |
-| Logs | `l` close, `j`/`k` or arrows scroll, `q` quit. |
+| Logs | `L` or `esc` close, `j`/`k` or arrows scroll, `q` quit. |
 | Chat | `enter` send, `esc` or `tab` close/leave chat, `q` quit. |
-| Shortcut help | `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
+| Shortcut help | `/` search, `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
 | Rule editor | Form navigation, `esc` cancel. |
 | Prompt editor | Form navigation, `esc` cancel. |
 | Cleanup manager | `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |

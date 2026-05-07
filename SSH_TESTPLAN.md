@@ -124,7 +124,7 @@ tmux kill-session -t ssh_test
 2. Capture screenshot after TUI loads.
 
 **Expect:**
-- Tab bar visible: `1  Timeline  2  Compose  3  Cleanup`
+- Tab bar visible: `1  Timeline  2  Cleanup  3  Contacts`
 - Timeline table populated or "No emails" message shown
 - Folder sidebar visible on the left
 - Status bar at the bottom shows folder name and email count
@@ -145,8 +145,8 @@ tmux kill-session -t ssh_test
 **Expect:**
 - Each tab highlights correctly in the tab bar
 - Timeline: chronological list with Sender, Subject, Date columns
-- Compose: To / Subject fields and body textarea visible
 - Cleanup: two-panel layout (senders left, messages right)
+- Contacts: contact list/detail surface visible
 - No layout corruption when switching
 
 ### TC-SS-02A — Non-Latin browse shortcuts over SSH
@@ -154,13 +154,13 @@ tmux kill-session -t ssh_test
 **Steps:**
 1. Connect (TC-SS-01 setup) and start in Timeline.
 2. If the SSH client and terminal report Bubble Tea v2 physical-key data, press the non-Latin-layout physical positions for `j` and `k`.
-3. Press the physical `l` position twice to open and close logs.
-4. In fallback mode, press `о`, `л`, and `д` to exercise the Russian-layout aliases for `j`, `k`, and `l`.
+3. Press the physical `l` position to exercise right/focus navigation where a rightward target exists.
+4. In fallback mode, press `о`, `л`, `д`, and `р` to exercise the Russian-layout aliases for `j`, `k`, `l`, and `h`.
 5. Press the physical `/` position or fallback `.` to open Timeline search, type a Cyrillic query, then press Escape to leave search.
 
 **Expect:**
 - Timeline selection moves down and up just as it does for `j` and `k`.
-- Logs open and close just as they do for `l`.
+- `h/j/k/l` behave as left/down/up/right browse navigation where the active view has a matching target.
 - Timeline search opens just as it does for `/`.
 - The search input preserves the typed Cyrillic query text instead of rewriting it as Latin shortcut characters.
 - Physical-key support depends on the terminal/SSH client; Cyrillic fallback aliases continue to work when Herald receives normal UTF-8 key messages.

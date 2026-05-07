@@ -29,8 +29,8 @@ func TestLayoutIndependentBrowseKeysFollowPhysicalQWERTYShortcuts(t *testing.T) 
 
 	model, _ = updated.handleKeyMsg(keyPhysical("λ", 'l')) // Greek layout on physical l
 	updated = model.(*Model)
-	if !updated.showLogs {
-		t.Fatal("physical l should toggle logs")
+	if updated.timeline.selectedEmail == nil {
+		t.Fatal("physical l should open or focus the Timeline preview")
 	}
 }
 
@@ -56,8 +56,8 @@ func TestJapaneseKanaFallbackBrowseKeysFollowPhysicalQWERTYShortcuts(t *testing.
 
 	model, _ = updated.handleKeyMsg(keyRunes("り")) // Japanese kana layout on physical l
 	updated = model.(*Model)
-	if !updated.showLogs {
-		t.Fatal("Japanese kana り should toggle logs")
+	if updated.timeline.selectedEmail == nil {
+		t.Fatal("Japanese kana り should open or focus the Timeline preview")
 	}
 }
 

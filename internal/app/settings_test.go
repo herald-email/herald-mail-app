@@ -22,6 +22,8 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	existing.Ollama.Model = "llama3"
 	existing.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
 	existing.Compose.Signature.Text = "-- \nRowan"
+	existing.Keyboard.Profile = keyboardProfileCustom
+	existing.Keyboard.CustomKeymap = "~/.config/herald/keymaps/work.yaml"
 
 	s := NewSettings(SettingsModeWizard, existing)
 
@@ -57,6 +59,12 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	}
 	if s.signatureText != "-- \nRowan" {
 		t.Errorf("signatureText = %q, want configured signature", s.signatureText)
+	}
+	if s.keyboardProfile != keyboardProfileCustom {
+		t.Errorf("keyboardProfile = %q, want custom", s.keyboardProfile)
+	}
+	if s.customKeymap != "~/.config/herald/keymaps/work.yaml" {
+		t.Errorf("customKeymap = %q, want configured keymap", s.customKeymap)
 	}
 }
 
@@ -182,6 +190,8 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	s.smtpHost = "smtp.example.com"
 	s.smtpPort = "587"
 	s.signatureText = "-- \nRowan"
+	s.keyboardProfile = keyboardProfileVim
+	s.customKeymap = "~/.config/herald/keymaps/work.yaml"
 
 	cfg := s.buildConfig()
 
@@ -199,6 +209,12 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	}
 	if got := cfg.Compose.Signature.Text; got != "-- \nRowan" {
 		t.Errorf("Compose.Signature.Text = %q, want configured signature", got)
+	}
+	if cfg.Keyboard.Profile != keyboardProfileVim {
+		t.Errorf("Keyboard.Profile = %q, want vim", cfg.Keyboard.Profile)
+	}
+	if cfg.Keyboard.CustomKeymap != "~/.config/herald/keymaps/work.yaml" {
+		t.Errorf("Keyboard.CustomKeymap = %q, want configured keymap", cfg.Keyboard.CustomKeymap)
 	}
 }
 
@@ -542,7 +558,8 @@ func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *
 		"Account setup":  0,
 		"AI":             1,
 		"Sync & Cleanup": 2,
-		"Signature":      3,
+		"Keyboard":       3,
+		"Signature":      4,
 	}
 	downCount, ok := steps[label]
 	if !ok {

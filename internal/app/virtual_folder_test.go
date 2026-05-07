@@ -60,7 +60,7 @@ func TestTimelineHints_AllMailOnlyReadOnly(t *testing.T) {
 	if !ok {
 		t.Fatal("expected timeline hints")
 	}
-	for _, forbidden := range []string{"D: delete", "e: archive", "R: reply", "F: forward", "A: re-classify", "ctrl+q"} {
+	for _, forbidden := range []string{"D: delete", "a: archive", "r: all", "R: sender", "f: forward", "T: re-classify", "ctrl+q"} {
 		if strings.Contains(hints, forbidden) {
 			t.Fatalf("expected read-only hints to omit %q, got: %s", forbidden, hints)
 		}
@@ -307,7 +307,7 @@ func TestCleanupAllMailOnlyHints_KeepDeleteAndArchiveActions(t *testing.T) {
 	m.setFocusedPanel(panelSummary)
 
 	summaryHints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(summaryHints, "D: delete") || !strings.Contains(summaryHints, "e: archive") {
+	if !strings.Contains(summaryHints, "D: delete") || !strings.Contains(summaryHints, "a: archive") {
 		t.Fatalf("expected Cleanup summary hints to keep delete/archive actions in All Mail only, got %q", summaryHints)
 	}
 
@@ -319,7 +319,7 @@ func TestCleanupAllMailOnlyHints_KeepDeleteAndArchiveActions(t *testing.T) {
 	m.setFocusedPanel(panelDetails)
 
 	preview := stripANSI(m.renderCleanupPreview())
-	if !strings.Contains(preview, "D: delete") || !strings.Contains(preview, "e: archive") {
+	if !strings.Contains(preview, "D: delete") || !strings.Contains(preview, "a: archive") {
 		t.Fatalf("expected Cleanup preview panel to keep delete/archive actions in All Mail only, got:\n%s", preview)
 	}
 

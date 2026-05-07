@@ -334,6 +334,19 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Badges.DryRun.Style().Render("[DRY RUN]")))
 	}
 
+	if m.vimFieldProfileActive() && m.activeTab == tabCompose {
+		mode := strings.ToUpper(m.fieldKeyMode)
+		if mode == "" {
+			mode = "NORMAL"
+		}
+		parts = append(parts, mode)
+		parts = append(parts, "Keys: "+m.keyboardProfileLabel())
+	} else if m.timeline.visualMode {
+		parts = append(parts, "VISUAL")
+	} else if profile := m.keyboardProfileLabel(); profile != "Default" {
+		parts = append(parts, "Keys: "+profile)
+	}
+
 	// Logs indicator
 	if m.showLogs {
 		parts = append(parts, "Logs ON")
@@ -375,7 +388,7 @@ func sidebarHiddenStatusNotice(compact bool) string {
 	if compact {
 		return "sidebar hidden"
 	}
-	return "sidebar hidden (too narrow — widen terminal or press f)"
+	return "sidebar hidden (too narrow - widen terminal or press B)"
 }
 
 func wrapChromeSegments(text string, width, maxLines int) []string {
@@ -497,11 +510,11 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
 	} else if chrome.ShowLogs {
-		hints = "l/alt+l: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+		hints = "L/esc: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  alt+l/c/f/r: logs/chat/sidebar/refresh  │  ctrl+c: quit"
+		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  ctrl+c: quit"
 		if m.composePreserved != nil {
 			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  esc: back  │  ctrl+c: quit"
 			if m.composeField == composeFieldOriginalMessage {
@@ -527,18 +540,18 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			hints = primaryTabShortcutHint + "  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
 		}
 	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
-		hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  e: archive  │  A: re-classify  │  q: quit"
+		hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  a: archive  │  T: re-classify  │  q: quit"
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
-			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  r: refresh  │  f: hide  │  c: chat  │  q: quit"
+			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  ctrl+r: refresh  │  B: hide  │  g: chat  │  q: quit"
 		case panelDetails:
-			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  r: refresh  │  c: chat  │  l: logs  │  q: quit"
+			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  H: hide future mail  │  space: select  │  D: delete  │  a: archive  │  ctrl+r: refresh  │  g: chat  │  L: logs  │  q: quit"
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
-				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: nav  │  enter: details  │  h: hide  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
+				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: nav  │  enter: details  │  H: hide  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
 			} else {
-				hints = primaryTabShortcutHint + "  │  tab: panel  │  enter: details  │  h: hide future mail  │  space: select  │  D: delete  │  e: archive  │  d: domain  │  r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  f: sidebar  │  c: chat  │  q: quit"
+				hints = primaryTabShortcutHint + "  │  tab: panel  │  enter: details  │  H: hide future mail  │  space: select  │  D: delete  │  a: archive  │  d: domain  │  ctrl+r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  B: sidebar  │  g: chat  │  q: quit"
 			}
 		}
 	}
@@ -547,9 +560,9 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 
 func previewActionHintText(hasUnsubscribe bool) string {
 	if hasUnsubscribe {
-		return "u: unsubscribe  │  h: hide future mail"
+		return "H: hide future mail  │  u: unsubscribe"
 	}
-	return "h: hide future mail"
+	return "H: hide future mail"
 }
 
 func (m *Model) setFocusedPanel(panel int) {

@@ -47,7 +47,7 @@ func TestRenderEmailPreview_ShowsTagsAndActionsRows(t *testing.T) {
 	if !strings.Contains(rendered, "u unsubscribe") {
 		t.Fatalf("expected preview to advertise unsubscribe action, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "h hide future mail") {
+	if !strings.Contains(rendered, "H hide future mail") {
 		t.Fatalf("expected preview to advertise hide-future action, got:\n%s", rendered)
 	}
 }
@@ -72,7 +72,7 @@ func TestRenderEmailPreview_HidesUnsubscribeActionWhenHeaderMissing(t *testing.T
 	if strings.Contains(rendered, "u unsubscribe") {
 		t.Fatalf("expected preview to hide unsubscribe when header is missing, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "h hide future mail") {
+	if !strings.Contains(rendered, "H hide future mail") {
 		t.Fatalf("expected preview to keep hide-future action, got:\n%s", rendered)
 	}
 }
@@ -90,7 +90,7 @@ func TestRenderKeyHints_TimelinePreviewShowsHideFutureMailAndConditionalUnsubscr
 		if !strings.Contains(hints, "u: unsubscribe") {
 			t.Fatalf("expected preview hints to advertise unsubscribe, got %q", hints)
 		}
-		if !strings.Contains(hints, "h: hide future mail") {
+		if !strings.Contains(hints, "H: hide future mail") {
 			t.Fatalf("expected preview hints to advertise hide-future action, got %q", hints)
 		}
 	})
@@ -107,7 +107,7 @@ func TestRenderKeyHints_TimelinePreviewShowsHideFutureMailAndConditionalUnsubscr
 		if strings.Contains(hints, "u: unsubscribe") {
 			t.Fatalf("expected preview hints to hide unsubscribe when header is missing, got %q", hints)
 		}
-		if !strings.Contains(hints, "h: hide future mail") {
+		if !strings.Contains(hints, "H: hide future mail") {
 			t.Fatalf("expected preview hints to keep hide-future action, got %q", hints)
 		}
 	})
@@ -123,9 +123,9 @@ func TestHandleTimelineKey_HCreatesHideFutureMailRule(t *testing.T) {
 		Sender:    "Tech Weekly <newsletter@techweekly.example>",
 	}
 
-	_, cmd, handled := m.handleTimelineKey(keyRune('h'))
+	_, cmd, handled := m.handleTimelineKey(keyRune('H'))
 	if !handled {
-		t.Fatal("expected h to be handled in timeline preview")
+		t.Fatal("expected H to be handled in timeline preview")
 	}
 	if cmd == nil {
 		t.Fatal("expected h to return a hide-future-mail command")
@@ -172,7 +172,7 @@ func TestRenderCleanupPreview_ShowsTagsAndActionsRows(t *testing.T) {
 	if !strings.Contains(rendered, "u unsubscribe") {
 		t.Fatalf("expected cleanup preview to advertise unsubscribe action, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "h hide future mail") {
+	if !strings.Contains(rendered, "H hide future mail") {
 		t.Fatalf("expected cleanup preview to advertise hide-future action, got:\n%s", rendered)
 	}
 
@@ -180,7 +180,7 @@ func TestRenderCleanupPreview_ShowsTagsAndActionsRows(t *testing.T) {
 	if !strings.Contains(hints, "u: unsubscribe") {
 		t.Fatalf("expected cleanup preview hints to advertise unsubscribe, got %q", hints)
 	}
-	if !strings.Contains(hints, "h: hide future mail") {
+	if !strings.Contains(hints, "H: hide future mail") {
 		t.Fatalf("expected cleanup preview hints to advertise hide-future action, got %q", hints)
 	}
 }
@@ -193,7 +193,7 @@ func TestRenderKeyHints_CleanupSummaryAdvertisesHideFutureMailNotUnsubscribe(t *
 	m.setFocusedPanel(panelSummary)
 
 	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "h: hide future mail") {
+	if !strings.Contains(hints, "H: hide future mail") {
 		t.Fatalf("expected cleanup summary hints to advertise hide-future action, got %q", hints)
 	}
 	if strings.Contains(hints, "u: unsubscribe") {

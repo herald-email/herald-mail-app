@@ -259,6 +259,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.composeField == composeFieldOriginalMessage {
 		return m.handleOriginalMessageKey(msg)
 	}
+	if model, cmd, handled := m.handleVimFieldKey(msg); handled {
+		return model, cmd
+	}
 	// Forward all other keys to the focused field
 	var cmd tea.Cmd
 	switch m.composeField {
@@ -277,6 +280,85 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.composeBody, cmd = m.composeBody.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m *Model) handleVimFieldKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if !m.vimFieldProfileActive() {
+		return m, nil, false
+	}
+	if m.fieldKeyMode == "" {
+		if mode, ok := m.composeFieldDefaultMode(); ok {
+			m.fieldKeyMode = mode
+		} else {
+			m.fieldKeyMode = keyboardModeNormal
+		}
+	}
+	key := shortcutKey(msg)
+	if m.fieldKeyMode == keyboardModeInsert {
+		if key == "esc" {
+			m.fieldKeyMode = keyboardModeNormal
+			return m, nil, true
+		}
+		return m, nil, false
+	}
+	switch key {
+	case "i":
+		m.fieldKeyMode = keyboardModeInsert
+		return m, nil, true
+	case "a":
+		m.fieldKeyMode = keyboardModeInsert
+		m.moveFocusedComposeCursorEnd()
+		return m, nil, true
+	case "A":
+		m.fieldKeyMode = keyboardModeInsert
+		m.moveFocusedComposeCursorEnd()
+		return m, nil, true
+	case "v":
+		m.fieldKeyMode = keyboardModeVisual
+		return m, nil, true
+	case "esc":
+		if m.fieldKeyMode == keyboardModeVisual {
+			m.fieldKeyMode = keyboardModeNormal
+			return m, nil, true
+		}
+	}
+	if key == "tab" || key == "shift+tab" || strings.HasPrefix(key, "ctrl+") {
+		return m, nil, false
+	}
+	return m, nil, true
+}
+
+func (m *Model) composeFieldDefaultMode() (string, bool) {
+	if m == nil || m.keyboard == nil {
+		return "", false
+	}
+	mode := m.keyboard.FieldDefaultMode(keyboardFieldCompose)
+	switch mode {
+	case keyboardModeNormal, keyboardModeVisual:
+		return mode, true
+	default:
+		return "", false
+	}
+}
+
+func (m *Model) vimFieldProfileActive() bool {
+	_, ok := m.composeFieldDefaultMode()
+	return ok
+}
+
+func (m *Model) moveFocusedComposeCursorEnd() {
+	switch m.composeField {
+	case composeFieldTo:
+		m.composeTo.CursorEnd()
+	case composeFieldCC:
+		m.composeCC.CursorEnd()
+	case composeFieldBCC:
+		m.composeBCC.CursorEnd()
+	case composeFieldSubject:
+		m.composeSubject.CursorEnd()
+	case composeFieldBody:
+		m.composeBody.CursorEnd()
+	}
 }
 
 func (m *Model) handleOriginalMessageKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

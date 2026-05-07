@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -129,6 +130,7 @@ type TimelineReplyBodyMsg struct {
 	Err       error
 	MessageID string
 	RequestID int
+	ReplyAll  bool
 }
 
 // TimelineDraftBodyMsg carries a body fetch result for Timeline draft editing.
@@ -342,6 +344,8 @@ type Model struct {
 	showLogs          bool
 	showHelp          bool
 	helpScrollOffset  int
+	helpSearchActive  bool
+	helpSearch        string
 	windowWidth       int
 	windowHeight      int
 	subjectColWidth   int
@@ -437,6 +441,7 @@ type Model struct {
 	composeReturnSet   bool
 	composeReturnTab   int
 	composeReturnPanel int
+	fieldKeyMode       string
 
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
@@ -520,8 +525,10 @@ type Model struct {
 	contactPreviewLoading bool
 
 	// Config
-	cfg        *config.Config
-	configPath string
+	cfg          *config.Config
+	configPath   string
+	keyboard     *KeyboardResolver
+	keyboardWarn string
 
 	// Settings panel overlay
 	showSettings  bool
@@ -745,6 +752,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		ruleRequestCh:           ruleRequestCh,
 		ruleResultCh:            ruleResultCh,
 		attachmentPathInput:     attachmentPathInput,
+		keyboard:                NewKeyboardResolver(nil),
 	}
 
 	// Detect demo mode via DemoBackendMarker interface
@@ -769,7 +777,36 @@ func (m *Model) SetConfigPath(path string) {
 
 // SetConfig stores the loaded config so the settings panel can pre-fill fields.
 func (m *Model) SetConfig(cfg *config.Config) {
+	m.applyKeyboardConfig(cfg)
+}
+
+func (m *Model) applyKeyboardConfig(cfg *config.Config) {
 	m.cfg = cfg
+	m.keyboardWarn = ""
+	resolver := NewKeyboardResolver(cfg)
+	if cfg != nil && strings.EqualFold(strings.TrimSpace(cfg.Keyboard.Profile), keyboardProfileCustom) {
+		keymapPath := strings.TrimSpace(cfg.Keyboard.CustomKeymap)
+		if keymapPath == "" {
+			m.keyboardWarn = "Custom keyboard profile selected without custom_keymap; using vim defaults."
+		} else {
+			expanded, err := config.ExpandPath(keymapPath)
+			if err != nil {
+				m.keyboardWarn = "Keyboard keymap path failed: " + err.Error()
+			} else if data, err := os.ReadFile(expanded); err != nil {
+				m.keyboardWarn = "Keyboard keymap failed to load: " + err.Error()
+			} else if err := resolver.ApplyCustomKeymap(data); err != nil {
+				m.keyboardWarn = "Keyboard keymap invalid: " + err.Error()
+			}
+		}
+	}
+	m.keyboard = resolver
+	if mode, ok := m.composeFieldDefaultMode(); ok {
+		if m.fieldKeyMode == "" {
+			m.fieldKeyMode = mode
+		}
+	} else {
+		m.fieldKeyMode = ""
+	}
 }
 
 // SetCleanupScheduler wires a cleanup Scheduler into the model so that
@@ -881,8 +918,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cfg != nil {
 			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
 		}
-		m.cfg = msg.Config
+		m.applyKeyboardConfig(msg.Config)
 		m.statusMessage = "Settings saved."
+		if m.keyboardWarn != "" {
+			m.statusMessage = "Settings saved. " + m.keyboardWarn
+		}
 		if m.classifier != nil {
 			m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
 		}
@@ -1915,6 +1955,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleComposeKey(msg)
 	}
 
+	if normalized := m.normalizeShortcutKeyForActiveScope(key); normalized != "" && normalized != key {
+		key = normalized
+		msg = shortcutKeyPressMsg(normalized)
+	}
+
 	// Contacts tab gets its own key handler (except for global keys handled below)
 	if m.activeTab == tabContacts {
 		if m.contactSearchMode != "" {
@@ -1940,7 +1985,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "f":
+	case "B", "f":
 		return m, m.toggleSidebar()
 
 	case "d":
@@ -1949,7 +1994,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "r":
+	case "ctrl+r", "r":
 		return m, m.refreshCurrentFolder()
 
 	case " ":
@@ -2001,7 +2046,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "A":
+	case "A", "T":
 		// Re-classify the currently focused single email with AI.
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
@@ -2080,7 +2125,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "e":
+	case "a", "e":
 		if m.activeTab == tabTimeline {
 			m.finishTimelineRangeSelection()
 		}
@@ -2213,14 +2258,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "l", "L":
 		return m, m.toggleLogs()
 
-	case "c":
+	case "g", "c":
 		return m, m.toggleChat()
 
 	case "q":
 		m.cleanup()
 		return m, tea.Quit
 
-	case "a":
+	case "t":
 		if cmd := m.startClassificationIfNeeded(); cmd != nil {
 			return m, cmd
 		}
@@ -2264,6 +2309,29 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) normalizeShortcutKeyForActiveScope(key string) string {
+	if m == nil || m.keyboard == nil || key == "" {
+		return key
+	}
+	scope := keyboardScopeGlobal
+	switch m.activeTab {
+	case tabTimeline:
+		scope = "timeline"
+	case tabCleanup:
+		scope = "cleanup"
+	case tabContacts:
+		scope = "contacts"
+	}
+	command, ok := m.keyboard.Resolve(scope, keyboardModeNormal, key)
+	if !ok {
+		return key
+	}
+	if canonical := canonicalKeyForCommand(scope, command); canonical != "" {
+		return canonical
+	}
+	return key
 }
 
 // renderLoadingView renders the loading screen

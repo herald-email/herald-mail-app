@@ -205,12 +205,12 @@ func TestMainView_TitleRowIncludesTabsWithoutSeparateTabLine(t *testing.T) {
 		t.Fatalf("expected rendered chrome and content, got %d lines", len(lines))
 	}
 	title := lines[0]
-	for _, want := range []string{"Herald", "F1  Timeline", "F2  Cleanup", "F3  Contacts"} {
+	for _, want := range []string{"Herald", "1  Timeline", "2  Cleanup", "3  Contacts"} {
 		if !strings.Contains(title, want) {
 			t.Fatalf("expected title row to contain %q, got %q", want, title)
 		}
 	}
-	if strings.Contains(lines[1], "F1  Timeline") || strings.Contains(lines[1], "F2  Cleanup") || strings.Contains(lines[1], "F3  Contacts") {
+	if strings.Contains(lines[1], "1  Timeline") || strings.Contains(lines[1], "2  Cleanup") || strings.Contains(lines[1], "3  Contacts") {
 		t.Fatalf("expected no separate tab line below title row, got %q", lines[1])
 	}
 	if strings.TrimSpace(lines[1]) == "" {

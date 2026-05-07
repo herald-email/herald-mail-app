@@ -42,11 +42,12 @@ const (
 	defaultOllamaModel    = "gemma3:4b"
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
 
-	settingsPanelSectionMenu    settingsPanelSection = ""
-	settingsPanelSectionAccount settingsPanelSection = "account"
-	settingsPanelSectionAI      settingsPanelSection = "ai"
-	settingsPanelSectionSync    settingsPanelSection = "sync-cleanup"
-	settingsPanelSectionSign    settingsPanelSection = "signature"
+	settingsPanelSectionMenu     settingsPanelSection = ""
+	settingsPanelSectionAccount  settingsPanelSection = "account"
+	settingsPanelSectionAI       settingsPanelSection = "ai"
+	settingsPanelSectionSync     settingsPanelSection = "sync-cleanup"
+	settingsPanelSectionKeyboard settingsPanelSection = "keyboard"
+	settingsPanelSectionSign     settingsPanelSection = "signature"
 )
 
 // SettingsSavedMsg is sent when the user completes the form and saves.
@@ -109,6 +110,10 @@ type Settings struct {
 
 	// form field backing variables — compose
 	signatureText string
+
+	// form field backing variables — keyboard
+	keyboardProfile string
+	customKeymap    string
 }
 
 type settingsPanelLayout struct {
@@ -174,6 +179,8 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.syncIDLE = existing.Sync.IDLEEnabled
 		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
 		s.signatureText = existing.Compose.Signature.Text
+		s.keyboardProfile = existing.Keyboard.Profile
+		s.customKeymap = existing.Keyboard.CustomKeymap
 
 		if existing.IsGmailOAuth() {
 			s.provider = "gmail-oauth"
@@ -193,6 +200,9 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	}
 	if s.cleanupScheduleStr == "" {
 		s.cleanupScheduleStr = "0"
+	}
+	if s.keyboardProfile == "" {
+		s.keyboardProfile = keyboardProfileDefault
 	}
 
 	s.syncProviderDefaults("", s.provider)
@@ -453,6 +463,23 @@ func (s *Settings) buildForm() {
 			Value(&s.saveButton),
 	).Title("Compose")
 
+	keyboardGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Keyboard Profile").
+			Options(
+				huh.NewOption("Default", keyboardProfileDefault),
+				huh.NewOption("Vim", keyboardProfileVim),
+				huh.NewOption("Emacs", keyboardProfileEmacs),
+				huh.NewOption("Custom YAML", keyboardProfileCustom),
+			).
+			Value(&s.keyboardProfile),
+		huh.NewInput().
+			Title("Custom Keymap").
+			Inline(true).
+			Placeholder("~/.config/herald/keymaps/work.yaml").
+			Value(&s.customKeymap),
+	).Title("Keyboard")
+
 	panelSignatureGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
@@ -487,6 +514,7 @@ func (s *Settings) buildForm() {
 		claudeGroup,
 		openAIGroup,
 		syncGroup,
+		keyboardGroup,
 		composeGroup,
 	}
 
@@ -514,6 +542,11 @@ func (s *Settings) buildForm() {
 			groups = []*huh.Group{
 				syncGroup,
 				saveGroup.Title("Sync & Cleanup"),
+			}
+		case settingsPanelSectionKeyboard:
+			groups = []*huh.Group{
+				keyboardGroup,
+				saveGroup.Title("Keyboard"),
 			}
 		case settingsPanelSectionSign:
 			groups = []*huh.Group{panelSignatureGroup}
@@ -547,6 +580,7 @@ func (s *Settings) buildPanelMenuForm() {
 				huh.NewOption("Account setup", string(settingsPanelSectionAccount)),
 				huh.NewOption("AI", string(settingsPanelSectionAI)),
 				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
+				huh.NewOption("Keyboard", string(settingsPanelSectionKeyboard)),
 				huh.NewOption("Signature", string(settingsPanelSectionSign)),
 			).
 			Value(&s.panelMenuChoice),
@@ -966,6 +1000,8 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Cleanup.ScheduleHours = n
 	}
 	cfg.Compose.Signature.Text = s.signatureText
+	cfg.Keyboard.Profile = s.keyboardProfile
+	cfg.Keyboard.CustomKeymap = strings.TrimSpace(s.customKeymap)
 
 	applyVendorPreset(&cfg)
 	return &cfg

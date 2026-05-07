@@ -38,7 +38,7 @@ func TestReplyAndForwardComposeAppendConfiguredSignature(t *testing.T) {
 	m, email := newTimelineForwardModel(backend)
 	withComposeSignature(m)
 
-	m.openTimelineReplyCompose(email, backend.body, "")
+	m.openTimelineReplyCompose(email, backend.body, "", false)
 	if got := m.composeBody.Value(); got != "\n\n"+testSignature {
 		t.Fatalf("reply body = %q, want signature", got)
 	}

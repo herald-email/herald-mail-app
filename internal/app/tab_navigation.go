@@ -1,6 +1,6 @@
 package app
 
-const primaryTabShortcutHint = "F1-F3: tabs"
+const primaryTabShortcutHint = "1-3: tabs"
 
 type tabNavigationItem struct {
 	tab   int
@@ -9,9 +9,9 @@ type tabNavigationItem struct {
 }
 
 var topLevelTabNavigation = []tabNavigationItem{
-	{tab: tabTimeline, key: "F1", label: "Timeline"},
-	{tab: tabCleanup, key: "F2", label: "Cleanup"},
-	{tab: tabContacts, key: "F3", label: "Contacts"},
+	{tab: tabTimeline, key: "1", label: "Timeline"},
+	{tab: tabCleanup, key: "2", label: "Cleanup"},
+	{tab: tabContacts, key: "3", label: "Contacts"},
 }
 
 func tabBarLabel(item tabNavigationItem) string {

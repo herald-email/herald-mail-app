@@ -79,9 +79,9 @@ func previewHasUnsubscribe(body *models.EmailBody) bool {
 
 func previewActionText(hasUnsubscribe bool) string {
 	if hasUnsubscribe {
-		return "u unsubscribe  h hide future mail"
+		return "u unsubscribe  H hide future mail"
 	}
-	return "h hide future mail"
+	return "H hide future mail"
 }
 
 func previewTagText(category string) string {
@@ -887,6 +887,7 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	m.composeBCC.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
+	m.resetFieldKeyMode()
 	return m, nil
 }
 
@@ -1075,7 +1076,7 @@ func (m *Model) renderCleanupPreview() string {
 
 			escHint := "Esc: close preview"
 			zHint := "z: exit full-screen"
-			actionHint := "D: delete  e: archive"
+			actionHint := "D: delete  a: archive"
 			if layout.TotalRows > maxBodyLines {
 				maxOffset := layout.TotalRows - maxBodyLines
 				pct := 0
@@ -1135,7 +1136,7 @@ func (m *Model) renderCleanupPreview() string {
 
 			escHint := "Esc: close"
 			zHint := "z: full-screen"
-			actionHint := "D: delete  e: archive"
+			actionHint := "D: delete  a: archive"
 			if totalLines > maxBodyLines {
 				pct := 0
 				if maxOffset > 0 {

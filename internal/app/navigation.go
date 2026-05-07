@@ -28,6 +28,15 @@ func (m *Model) resetComposeMode() {
 	m.composeAISubjectHint = ""
 	m.composeAIResponse.SetValue("")
 	m.composeAILoading = false
+	m.resetFieldKeyMode()
+}
+
+func (m *Model) resetFieldKeyMode() {
+	if mode, ok := m.composeFieldDefaultMode(); ok {
+		m.fieldKeyMode = mode
+		return
+	}
+	m.fieldKeyMode = ""
 }
 
 func (m *Model) clearContactsStatus() {
