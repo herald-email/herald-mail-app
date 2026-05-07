@@ -490,7 +490,9 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	}
 	var hints string
 	timelineHints, hasTimelineHints := m.timelineKeyHints(chrome)
-	if m.pendingDeleteConfirm || m.pendingUnsubscribe {
+	if m.showSettings && m.settingsPanel != nil {
+		hints = m.settingsPanel.keyHints()
+	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
 		hints = "enter: send  │  esc/tab: close chat  │  q: quit"

@@ -3,24 +3,24 @@ title: Settings
 description: Edit Herald account, server, AI, sync, cleanup, and OAuth settings from the TUI.
 ---
 
-Settings is a compact centered overlay opened from the main TUI. It lets you adjust configuration without manually editing YAML for common account, AI, sync, and cleanup fields while keeping the current Herald screen visible behind it.
+Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Account setup`, `AI`, `Sync & Cleanup`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
 
 ## Overview
 
-Press `S` from the main UI to open settings. The overlay reads the current config, lets you edit supported fields, writes the config path, updates AI provider details, and can trigger OAuth wait behavior for supported OAuth flows.
+Press `S` from the main UI to open settings. The overlay reads the current config, opens the selected category, writes the config path when that category is saved, updates supported runtime state, and can trigger OAuth wait behavior for supported OAuth flows.
 
 ## Screen Anatomy
 
 | Area | What it shows |
 | --- | --- |
-| Account/provider fields | Vendor, username, password/app password, and provider-specific options. |
+| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, and `Signature` category choices. |
+| Account setup | Vendor, username, password/app password, IMAP, SMTP, and provider-specific options. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
-| AI provider fields | Ollama local/custom, Claude, OpenAI-compatible, or disabled. |
-| AI model fields | Chat/classification model and embedding model. |
-| Sync fields | Poll interval minutes and IMAP IDLE setting. |
-| Cleanup fields | Cleanup schedule hours and related automation timing. |
-| Save/cancel controls | Form-level completion or cancellation behavior inside the modal. |
+| AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
+| Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, cleanup schedule hours, and related automation timing. |
+| Signature | Multiline default Compose signature text. |
+| Save/cancel controls | Category-level save returns to the menu; `esc` backs out one level before exiting and does not save unsaved category edits. |
 | OAuth wait overlay | URL/open-browser state while waiting for OAuth callback and token storage. |
 
 <!-- HERALD_SCREENSHOT id="settings-main-panel" page="settings" alt="Settings overlay open" state="demo mode, 120x40, settings overlay active" desc="Shows compact centered settings form fields for provider, server, SMTP, AI, sync, cleanup, and save/cancel affordances over the current Herald view." capture="tmux demo 120x40; ./bin/herald --demo; press S" -->
@@ -32,9 +32,13 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
 | `S` | Main UI | Settings closed. | Opens settings as a compact centered overlay. |
-| `tab` | Settings form | A form field is active. | Moves through form controls according to the form component. |
-| `enter` | Settings form | Current field or form action is valid. | Accepts selection, advances, or saves when on final action. |
-| `esc` | Settings form | Settings active. | Cancels/closes panel when supported by current form state. |
+| `/` | Settings menu | Category menu is focused. | Opens the category filter prompt. |
+| `enter` | Settings menu | A category is highlighted. | Opens that settings category. |
+| `tab` | Settings category form | A form field is active. | Moves through form controls according to the form component. |
+| `enter` | Settings category form | Current field or form action is valid. | Accepts selection, advances, or saves when on final action. |
+| `esc` | Settings menu filter | Filter is active or applied. | Exits filter entry or clears the applied filter before panel close. |
+| `esc` | Settings category form | No field-local escape action is active. | Returns to the top-level settings menu without saving unsaved category edits. |
+| `esc` | Settings menu | No filter is active. | Exits Settings and returns to the underlying screen. |
 | `enter` | OAuth wait overlay | OAuth URL available. | Opens browser to the authorization URL. |
 | `ctrl+c` | Any settings state | Any state. | Quits Herald. |
 
@@ -43,18 +47,19 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 ### Open and Save Settings
 
 1. Press `S`.
-2. Move through fields with form navigation.
-3. Update provider, server, SMTP, AI, sync, or cleanup fields.
-4. Save the form.
-5. Herald writes config and applies runtime changes that can be applied immediately.
+2. Choose `Account setup`, `AI`, `Sync & Cleanup`, or `Signature`.
+3. Update the fields in that category.
+4. Save the category.
+5. Herald writes config, applies runtime changes that can be applied immediately, and returns to the settings menu.
 
 ### Change AI Provider
 
 1. Press `S`.
-2. Choose an AI provider.
-3. Enter host, model, API key, or compatible base URL as required.
-4. Save.
-5. Watch the AI status chip after returning to the main UI.
+2. Choose `AI`.
+3. Choose an AI provider.
+4. Enter host, model, API key, or compatible base URL as required.
+5. Save.
+6. Watch the AI status chip after returning to the main UI.
 
 ### Start OAuth
 
@@ -69,6 +74,9 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 
 | State | What happens |
 | --- | --- |
+| Menu mode | Settings shows the top-level category menu and any saved/error notice from the last category save. Menu hints show `enter open`, `esc exit`, and bottom-screen Settings hints. |
+| Menu filter | `/` filters the category menu; `esc exit filter` leaves filter entry, `esc clear filter` clears applied text, and only the next `esc` closes Settings. |
+| Category mode | Settings shows only the selected category's fields plus save/cancel controls. `Esc` returns to the menu first; the next menu-level `Esc` exits. |
 | Overlay mode | Settings appears over the current screen at supported sizes; at `80x24` it fits inside the viewport, and at `50x15` the standard minimum-size guard appears instead of a clipped form. |
 | First-run mode | Settings/wizard completion is required before the main mailbox opens. |
 | OAuth waiting | Herald shows authorization URL state and waits for callback. |

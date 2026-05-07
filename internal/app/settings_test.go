@@ -265,7 +265,7 @@ func TestSettingsSignatureFieldShowsMultilineSaveHelp(t *testing.T) {
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
 	normalized := strings.Join(strings.Fields(rendered), " ")
 
-	for _, want := range []string{"Enter adds a line", "moves to Save Settings", "Save Settings", "enter new line", "tab next"} {
+	for _, want := range []string{"Enter adds a line", "Tab moves to Save", "Save", "enter new line", "tab next"} {
 		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected signature settings help to include %q, got:\n%s", want, rendered)
 		}
@@ -283,7 +283,7 @@ func TestSettingsSignatureFieldTabMovesToSaveButtonAndEnterSaves(t *testing.T) {
 		t.Fatal("Tab from signature field should focus the Save Settings button, not submit immediately")
 	}
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
-	for _, want := range []string{"Save Settings", "enter submit"} {
+	for _, want := range []string{"Save", "enter submit"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected focused Save Settings button help to include %q, got:\n%s", want, rendered)
 		}
@@ -308,8 +308,264 @@ func TestSettingsSignatureFieldTabMovesToSaveButtonAndEnterSaves(t *testing.T) {
 	}
 }
 
+func TestSettingsPanelSaveFromCategoryReturnsToMenu(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Signature")
+	s = updateSettingsForTest(t, s, keyRunes("Line one"))
+
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyTab})
+	s, messages := updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	var saved SettingsSavedMsg
+	for _, msg := range messages {
+		if m, ok := msg.(SettingsSavedMsg); ok {
+			saved = m
+			break
+		}
+	}
+	if saved.Config == nil {
+		t.Fatalf("expected SettingsSavedMsg from category save, got messages %#v", messages)
+	}
+	if !saved.ReturnToMenu {
+		t.Fatalf("expected category save to request returning to the settings menu")
+	}
+	if got := saved.Config.Compose.Signature.Text; got != "Line one" {
+		t.Fatalf("saved signature = %q, want field value", got)
+	}
+	if !s.done {
+		t.Fatalf("expected settings component to mark category form done after emitting save")
+	}
+}
+
+func TestModelSettingsSaveReturnToMenuKeepsPanelOpen(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.cfg = &config.Config{}
+	next := &config.Config{}
+	next.Compose.Signature.Text = "-- \nRowan"
+	m.showSettings = true
+	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+
+	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next, ReturnToMenu: true})
+	updated := updatedModel.(*Model)
+
+	if !updated.showSettings || updated.settingsPanel == nil {
+		t.Fatalf("expected category save to keep settings open")
+	}
+	if got := updated.cfg.Compose.Signature.Text; got != "-- \nRowan" {
+		t.Fatalf("model config signature = %q, want saved value", got)
+	}
+	rendered := renderSettingsViewForTest(t, updated.settingsPanel, 80, 24)
+	if !strings.Contains(rendered, "Settings saved.") || !strings.Contains(rendered, "Account setup") {
+		t.Fatalf("expected saved status and top-level settings menu, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsPanelEscReturnsFromCategoryToMenuWithoutSaving(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Signature")
+	s = updateSettingsForTest(t, s, keyRunes("Unsaved signature"))
+
+	s, messages := updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if s.done {
+		t.Fatalf("expected Esc from a category to return to the settings menu before closing")
+	}
+	for _, msg := range messages {
+		if _, ok := msg.(SettingsSavedMsg); ok {
+			t.Fatalf("expected category Esc not to emit SettingsSavedMsg, got messages %#v", messages)
+		}
+		if _, ok := msg.(SettingsCancelledMsg); ok {
+			t.Fatalf("expected category Esc not to emit SettingsCancelledMsg until menu-level Esc, got messages %#v", messages)
+		}
+	}
+	if s.panelSection != settingsPanelSectionMenu {
+		t.Fatalf("panelSection = %q, want menu after category Esc", s.panelSection)
+	}
+	if s.signatureText != "" {
+		t.Fatalf("expected unsaved signature to be discarded when returning to menu, got %q", s.signatureText)
+	}
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	if !strings.Contains(rendered, "Account setup") || !strings.Contains(rendered, "Signature") {
+		t.Fatalf("expected category Esc to return to settings menu, got:\n%s", rendered)
+	}
+
+	s, messages = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if !s.done {
+		t.Fatalf("expected second Esc from menu to close settings")
+	}
+	if !settingsMessagesContainCancel(messages) {
+		t.Fatalf("expected second Esc from menu to emit SettingsCancelledMsg, got messages %#v", messages)
+	}
+}
+
+func TestSettingsPanelEscClearsActiveMenuFilterBeforeClosing(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = updateSettingsForTest(t, s, keyRunes("/"))
+
+	if !settingsFocusedFieldIsFilteringForTest(t, s) {
+		t.Fatalf("expected / to activate category menu filtering")
+	}
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	if !strings.Contains(normalized, "esc exit filter") {
+		t.Fatalf("expected active category menu filter help to explain how to exit filtering, got:\n%s", rendered)
+	}
+
+	updated, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	s = updated.(*Settings)
+	messages := settingsImmediateMessagesForTest(cmd)
+
+	if s.done {
+		t.Fatalf("expected first Esc to clear filtering without closing settings")
+	}
+	for _, msg := range messages {
+		if _, ok := msg.(SettingsCancelledMsg); ok {
+			t.Fatalf("expected first Esc while filtering not to emit SettingsCancelledMsg, got messages %#v", messages)
+		}
+	}
+	if settingsFocusedFieldIsFilteringForTest(t, s) {
+		t.Fatalf("expected first Esc to clear category menu filtering")
+	}
+	rendered = renderSettingsViewForTest(t, s, 80, 24)
+	if !strings.Contains(rendered, "Account setup") || !strings.Contains(rendered, "Signature") {
+		t.Fatalf("expected settings menu to remain open after clearing filter, got:\n%s", rendered)
+	}
+
+	updated, cmd = s.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	s = updated.(*Settings)
+	messages = settingsImmediateMessagesForTest(cmd)
+	if !s.done {
+		t.Fatalf("expected second Esc to close settings")
+	}
+	if !settingsMessagesContainCancel(messages) {
+		t.Fatalf("expected second Esc to emit SettingsCancelledMsg, got messages %#v", messages)
+	}
+}
+
+func TestSettingsPanelEscClearsAppliedMenuFilterBeforeClosing(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = updateSettingsForTest(t, s, keyRunes("/"))
+	s = updateSettingsForTest(t, s, keyRunes("signature"))
+
+	if !settingsFocusedFieldIsFilteringForTest(t, s) {
+		t.Fatalf("expected typing in category menu filter to keep filtering active")
+	}
+
+	updated, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	s = updated.(*Settings)
+	messages := settingsImmediateMessagesForTest(cmd)
+
+	if s.done {
+		t.Fatalf("expected first Esc to apply the filter without closing settings")
+	}
+	if settingsMessagesContainCancel(messages) {
+		t.Fatalf("expected first Esc with active filter text not to emit SettingsCancelledMsg, got messages %#v", messages)
+	}
+	if settingsFocusedFieldIsFilteringForTest(t, s) {
+		t.Fatalf("expected first Esc to leave filter entry mode")
+	}
+
+	updated, cmd = s.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	s = updated.(*Settings)
+	messages = settingsImmediateMessagesForTest(cmd)
+
+	if s.done {
+		t.Fatalf("expected second Esc to clear applied filter without closing settings")
+	}
+	if settingsMessagesContainCancel(messages) {
+		t.Fatalf("expected second Esc with applied filter not to emit SettingsCancelledMsg, got messages %#v", messages)
+	}
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	if !strings.Contains(rendered, "Account setup") || !strings.Contains(rendered, "Signature") {
+		t.Fatalf("expected second Esc to restore the full settings menu, got:\n%s", rendered)
+	}
+
+	updated, cmd = s.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	s = updated.(*Settings)
+	messages = settingsImmediateMessagesForTest(cmd)
+	if !s.done {
+		t.Fatalf("expected third Esc to close settings")
+	}
+	if !settingsMessagesContainCancel(messages) {
+		t.Fatalf("expected third Esc to emit SettingsCancelledMsg, got messages %#v", messages)
+	}
+}
+
+type settingsFilteringFieldForTest interface {
+	GetFiltering() bool
+}
+
+func settingsFocusedFieldIsFilteringForTest(t *testing.T, s *Settings) bool {
+	t.Helper()
+	field, ok := s.form.GetFocusedField().(settingsFilteringFieldForTest)
+	if !ok {
+		t.Fatalf("focused field %T does not expose filtering state", s.form.GetFocusedField())
+	}
+	return field.GetFiltering()
+}
+
+func settingsImmediateMessagesForTest(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var messages []tea.Msg
+		for _, child := range batch {
+			if child == nil {
+				continue
+			}
+			if childMsg := child(); childMsg != nil {
+				messages = append(messages, childMsg)
+			}
+		}
+		return messages
+	}
+	return []tea.Msg{msg}
+}
+
+func settingsMessagesContainCancel(messages []tea.Msg) bool {
+	for _, msg := range messages {
+		if _, ok := msg.(SettingsCancelledMsg); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *Settings {
+	t.Helper()
+	steps := map[string]int{
+		"Account setup":  0,
+		"AI":             1,
+		"Sync & Cleanup": 2,
+		"Signature":      3,
+	}
+	downCount, ok := steps[label]
+	if !ok {
+		t.Fatalf("unknown settings panel category %q", label)
+	}
+	for i := 0; i < downCount; i++ {
+		s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	rendered := stripANSI(s.form.View())
+	if !strings.Contains(rendered, label) {
+		t.Fatalf("expected to open settings category %q, got:\n%s", label, rendered)
+	}
+	return s
+}
+
 func focusSignatureSettingsGroup(t *testing.T, s *Settings) {
 	t.Helper()
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
+		opened := openSettingsPanelCategoryForTest(t, s, "Signature")
+		*s = *opened
+		return
+	}
 	for i := 0; i < 20; i++ {
 		if strings.Contains(s.form.View(), "Email Signature") {
 			return

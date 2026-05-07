@@ -906,6 +906,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
 			}
 		}
+		if msg.ReturnToMenu {
+			m.showSettings = true
+			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
+			m.settingsPanel.panelStatus = m.statusMessage
+			m.settingsPanel.buildForm()
+			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+			return m, m.settingsPanel.Init()
+		}
 		m.showSettings = false
 		m.settingsPanel = nil
 		return m, nil
