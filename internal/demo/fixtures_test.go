@@ -133,11 +133,12 @@ func TestMailboxIncludesOrderedHeraldOnboardingSteps(t *testing.T) {
 		{subject: "Step 1: Move around your inbox", sender: "Herald Guide <guide@herald.demo>"},
 		{subject: "Step 2: Reply, write, and preview Markdown", sender: "Herald Compose Coach <compose@herald.demo>"},
 		{subject: "Step 3: Open and save attachments", sender: "Herald Attachments <attachments@herald.demo>"},
-		{subject: "Step 4: View inline images in full screen", sender: "Herald Image Lab <images@herald.demo>"},
-		{subject: "Step 5: Clean up senders and domains safely", sender: "Herald Cleanup Coach <cleanup@herald.demo>"},
-		{subject: "Step 6: Classify mail and dry-run rules", sender: "Herald AI Rules <rules@herald.demo>"},
-		{subject: "Step 7: Configure accounts, AI, and signatures", sender: "Herald Settings <settings@herald.demo>"},
-		{subject: "Step 8: Explore contacts, chat, SSH, and MCP", sender: "Herald Next Steps <next@herald.demo>"},
+		{subject: "Step 4: Select text from an email", sender: "Herald Selection Coach <selection@herald.demo>"},
+		{subject: "Step 5: View inline images in full screen", sender: "Herald Image Lab <images@herald.demo>"},
+		{subject: "Step 6: Clean up senders and domains safely", sender: "Herald Cleanup Coach <cleanup@herald.demo>"},
+		{subject: "Step 7: Classify mail and dry-run rules", sender: "Herald AI Rules <rules@herald.demo>"},
+		{subject: "Step 8: Configure accounts, AI, and signatures", sender: "Herald Settings <settings@herald.demo>"},
+		{subject: "Step 9: Explore contacts, chat, SSH, and MCP", sender: "Herald Next Steps <next@herald.demo>"},
 	}
 
 	if len(messages) < len(want) {
@@ -197,7 +198,7 @@ func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {
 		},
 		{
 			subject: "Step 1: Move around your inbox",
-			wants:   []string{"try now", "j/k", "enter", "esc", "1/2/3", "?", "what herald is doing"},
+			wants:   []string{"try now", "j/k", "right arrow", "left arrow", "folders", "preview", "auto-open", "auto-close", "mouse wheel", "timeline rows", "tab labels", "enter", "esc", "1/2/3", "?", "what herald is doing"},
 		},
 		{
 			subject: "Step 2: Reply, write, and preview Markdown",
@@ -209,25 +210,29 @@ func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {
 			attachments: 2,
 		},
 		{
-			subject:        "Step 4: View inline images in full screen",
+			subject: "Step 4: Select text from an email",
+			wants:   []string{"try now", "text selection", "mouse capture", "m", "release mouse", "restore mouse", "full-screen preview", "z", "terminal-native selection"},
+		},
+		{
+			subject:        "Step 5: View inline images in full screen",
 			wants:          []string{"creative commons", "z", "kitty", "iterm2", "remote images", "not fetched", "46x21", "330px", "960px", "![remote commons thumbnail]("},
 			inlineImages:   4,
 			htmlCIDSnippet: "cid:cc-by-sa-badge",
 		},
 		{
-			subject: "Step 5: Clean up senders and domains safely",
+			subject: "Step 6: Clean up senders and domains safely",
 			wants:   []string{"try now", "3", "space", "sender", "domain", "unsubscribe", "preview"},
 		},
 		{
-			subject: "Step 6: Classify mail and dry-run rules",
-			wants:   []string{"try now", "a", "? infrastructure budget risk", "cleanup rules", "automation rules", "prompts", "dry-run"},
+			subject: "Step 7: Classify mail and dry-run rules",
+			wants:   []string{"try now", "a", "? infrastructure budget risk", "cleanup rules", "saved filters", "automation rules", "scheduled or repeated actions", "custom prompts", "reusable ai instructions", "dry-run", "matched messages", "planned actions"},
 		},
 		{
-			subject: "Step 7: Configure accounts, AI, and signatures",
+			subject: "Step 8: Configure accounts, AI, and signatures",
 			wants:   []string{"try now", "s", "settings", "provider", "embedding model", "signature"},
 		},
 		{
-			subject: "Step 8: Explore contacts, chat, SSH, and MCP",
+			subject: "Step 9: Explore contacts, chat, SSH, and MCP",
 			wants:   []string{"try now", "contacts", "chat panel", "quick replies", "herald mcp --demo", "herald ssh"},
 		},
 	}
@@ -289,7 +294,7 @@ func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 }
 
 func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
-	const subject = "Step 4: View inline images in full screen"
+	const subject = "Step 5: View inline images in full screen"
 
 	var found bool
 	for _, msg := range Mailbox().Messages {
@@ -366,7 +371,7 @@ func TestCreativeCommonsSamplerIncludesHTMLCIDPlacement(t *testing.T) {
 	box := Mailbox()
 	var found *Message
 	for i := range box.Messages {
-		if box.Messages[i].Email.Subject == "Step 4: View inline images in full screen" {
+		if box.Messages[i].Email.Subject == "Step 5: View inline images in full screen" {
 			found = &box.Messages[i]
 			break
 		}

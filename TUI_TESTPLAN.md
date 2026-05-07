@@ -926,7 +926,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
-1. Open Timeline and search for `Step 4: View inline images in full screen`.
+1. Open Timeline and search for `Step 5: View inline images in full screen`.
 2. Open the split preview and capture the image hint plus body links.
 3. Press `z` to enter full-screen and capture the top of the document.
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
@@ -1023,18 +1023,20 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
-2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 8:` from Herald senders.
+2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 9:` from Herald senders.
 3. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
-4. Open Step 1 and confirm the body teaches navigation keys.
+4. Open Step 1 and confirm the body teaches navigation keys, horizontal movement between folders/Timeline/preview, preview/folder auto-open behavior, and mouse scrolling/clicking.
 5. Open Step 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.
 6. Open Step 3 and confirm at least two attachments are available and selection hints appear.
-7. Open Step 4 and confirm inline image/full-screen instructions are present.
-8. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
-9. Switch to Cleanup, open sender details, and preview one message.
-10. Switch to Contacts, open one contact detail, and open a recent email inline.
+7. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
+8. Open Step 5 and confirm inline image/full-screen instructions are present.
+9. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
+10. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
+11. Switch to Cleanup, open sender details, and preview one message.
+12. Switch to Contacts, open one contact detail, and open a recent email inline.
 
 **Expect:**
-- Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 8.
+- Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 9.
 - Supporting demo messages below the onboarding course are labeled as `Example:` fixtures and the mailbox remains focused.
 - Preview bodies are specific instructional docs rather than generic lorem ipsum.
 - Attachment, unsubscribe, HTML, inline image, cleanup, AI, semantic search, contacts, and MCP demo coverage remains represented in the fixture set.

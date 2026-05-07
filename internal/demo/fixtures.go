@@ -331,22 +331,27 @@ What you can try in demo mode
 
 Demo mode is offline and deterministic. These messages are synthetic, attachments are safe fixtures, and no IMAP or SMTP account is touched.`,
 		withMessageID("demo-welcome-to-herald@demo.local"),
-		withDate(baseTime.Add(9*time.Hour)))
+		withDate(baseTime.Add(10*time.Hour)))
 	add(31, "Herald Guide <guide@herald.demo>", "Step 1: Move around your inbox", "INBOX", 0, 11264, false, true, ai.CategoryImportant, []string{"onboarding", "navigation", "timeline", "search"},
 		`Step 1 is a quick lap around Herald's Timeline.
 
 Try now
 - Move through the list with j/k or the arrow keys.
 - Press Enter or the right arrow to preview the selected email.
+- Press right arrow again to move from the Timeline into the preview.
+- Press left arrow from the preview to move back to the Timeline.
+- Press left arrow from the Timeline to move into folders; Herald will auto-open or auto-close folders and preview as horizontal movement needs them.
 - Press Esc to close a preview.
 - Press 1/2/3 to jump between Timeline, Compose, and Cleanup.
 - Press f to open the folder sidebar.
 - Press / to search.
 - Press ? when you want the current shortcut map.
+- Use the mouse wheel over the Timeline or preview to scroll.
+- Click Timeline rows to select or open mail, and click tab labels to switch sections.
 
 What Herald is doing
-Herald keeps the Timeline keyboard-first, but the same rows can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
-		withDate(baseTime.Add(8*time.Hour)))
+Herald keeps the Timeline keyboard-first, but horizontal movement makes the surrounding panes feel spatial: left for folders, center for the Timeline, right for preview. The same rows, tabs, and scrollable panes can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
+		withDate(baseTime.Add(9*time.Hour)))
 	add(32, "Herald Compose Coach <compose@herald.demo>", "Step 2: Reply, write, and preview Markdown", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"onboarding", "compose", "reply", "markdown", "html"},
 		`Step 2 shows how Herald turns a terminal compose screen into a real email workflow.
 
@@ -358,7 +363,7 @@ Try now
 
 What Herald is doing
 Replies and forwards preserve original formatting, inline images, and attachments where possible. New Markdown you write is rendered HTML for email clients that support rich mail, and Herald also keeps a plain-text alternative so the message stays readable everywhere.`,
-		withDate(baseTime.Add(7*time.Hour)),
+		withDate(baseTime.Add(8*time.Hour)),
 		withHTMLBody(`<html><body>
 <h1>Step 2: Reply, write, and preview Markdown</h1>
 <p>Use this message to practice replies, Markdown preview, and safe demo sending.</p>
@@ -378,11 +383,24 @@ Try now
 
 What Herald is doing
 The subject row shows an attachment marker when a message has files. Save actions use the selected attachment, not just the first one, so multi-file messages can be handled deliberately.`,
-		withDate(baseTime.Add(6*time.Hour)),
+		withDate(baseTime.Add(7*time.Hour)),
 		withAttachment("herald-demo-checklist.txt", "text/plain", 2048),
 		withAttachment("herald-demo-routing.csv", "text/csv", 4096))
-	add(34, "Herald Image Lab <images@herald.demo>", "Step 4: View inline images in full screen", "INBOX", 0, 270336, true, true, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
-		`Step 4 is the image rendering tour.
+	add(40, "Herald Selection Coach <selection@herald.demo>", "Step 4: Select text from an email", "INBOX", 0, 10240, false, true, ai.CategoryImportant, []string{"onboarding", "text selection", "mouse capture", "copy", "full-screen preview"},
+		`Step 4 shows how to select and copy text from a message when Herald owns the mouse.
+
+Try now
+- Open this email and press z for full-screen preview.
+- Press m to release mouse capture.
+- Use terminal-native selection to drag across email text and copy it.
+- Press m again to restore mouse capture when you want Herald clicks and scrolling back.
+- Press Esc to leave full-screen preview.
+
+What Herald is doing
+By default Herald captures mouse input so the app can handle mouse wheel scrolling, Timeline row clicks, tab clicks, and preview clicks. That capture can lock normal terminal text selection. Releasing mouse capture hands the pointer back to your terminal for copying text; full-screen preview gives you the cleanest body-only surface to select from, then m restores Herald's mouse controls.`,
+		withDate(baseTime.Add(6*time.Hour)))
+	add(34, "Herald Image Lab <images@herald.demo>", "Step 5: View inline images in full screen", "INBOX", 0, 270336, true, true, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
+		`Step 5 is the image rendering tour.
 
 Try now
 - Open this message and press z for full-screen reading.
@@ -403,7 +421,7 @@ Remote image link, intentionally not fetched by Herald:
 ![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)`,
 		withDate(baseTime.Add(5*time.Hour)),
 		withHTMLBody(`<html><body>
-<h1>Step 4: View inline images in full screen</h1>
+<h1>Step 5: View inline images in full screen</h1>
 <p>Open this message and press <strong>z</strong> for full-screen reading.</p>
 <p><img alt="CC BY-SA badge" src="cid:cc-by-sa-badge"></p>
 <p><img alt="Color chart" src="cid:color-chart-330px"></p>
@@ -423,8 +441,8 @@ Remote image link, intentionally not fetched by Herald:
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
 		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),
 		withInlineImage("changing-landscape-960px", "image/jpeg", demoChangingLandscapeJPG))
-	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, true, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
-		`Step 5 points you at Herald's bulk cleanup workflow.
+	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 6: Clean up senders and domains safely", "INBOX", 0, 12288, false, true, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
+		`Step 6 points you at Herald's bulk cleanup workflow.
 
 Try now
 - Press 3 to open Cleanup.
@@ -438,8 +456,8 @@ Cleanup groups messages by sender or domain so repeated mail can be handled in b
 		withDate(baseTime.Add(4*time.Hour)),
 		withHTML,
 		withUnsub("https://herald.demo/unsubscribe/cleanup-coach"))
-	add(36, "Herald AI Rules <rules@herald.demo>", "Step 6: Classify mail and dry-run rules", "INBOX", 0, 13568, false, true, ai.CategoryImportant, []string{"onboarding", "ai", "rules", "dry-run", "infrastructure", "budget", "risk"},
-		`Step 6 introduces the offline demo AI and rule previews.
+	add(36, "Herald AI Rules <rules@herald.demo>", "Step 7: Classify mail and dry-run rules", "INBOX", 0, 16896, false, true, ai.CategoryImportant, []string{"onboarding", "ai", "rules", "prompts", "dry-run", "infrastructure", "budget", "risk"},
+		`Step 7 introduces the offline demo AI, cleanup rules, automation rules, and reusable prompts.
 
 Try now
 - Press a to classify the current folder.
@@ -450,10 +468,18 @@ Try now
 - Use dry-run previews before running rules.
 
 What Herald is doing
-Demo AI is deterministic and offline, so classification, semantic search, quick replies, and rule previews work without Ollama. Dry-runs show the matching messages and planned actions before mail is changed.`,
+Demo AI is deterministic and offline, so classification, semantic search, quick replies, and rule previews work without Ollama.
+
+Cleanup rules are saved filters for repeated mail. They match senders, domains, categories, or older messages and turn those matches into planned cleanup actions such as archive, delete, hide, or review.
+
+Automation rules are for scheduled or repeated actions. They let Herald remember a condition and an action so recurring inbox maintenance can be previewed before it ever runs live.
+
+Custom prompts are reusable AI instructions. Use them when you want the same analysis again, such as summarizing invoices, extracting follow-ups, or labeling risky infrastructure mail.
+
+Dry-run previews are the safety layer for all of this: they show matched messages and planned actions before mail is changed.`,
 		withDate(baseTime.Add(3*time.Hour)))
-	add(37, "Herald Settings <settings@herald.demo>", "Step 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, true, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
-		`Step 7 shows where Herald configuration lives.
+	add(37, "Herald Settings <settings@herald.demo>", "Step 8: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, true, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
+		`Step 8 shows where Herald configuration lives.
 
 Try now
 - Press S to open Settings.
@@ -465,8 +491,8 @@ Try now
 What Herald is doing
 The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
 		withDate(baseTime.Add(2*time.Hour)))
-	add(38, "Herald Next Steps <next@herald.demo>", "Step 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
-		`Step 8 gives you a few extra paths to try after the core tour.
+	add(38, "Herald Next Steps <next@herald.demo>", "Step 9: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
+		`Step 9 gives you a few extra paths to try after the core tour.
 
 Try now
 - Open Contacts and inspect a recent email from a contact.

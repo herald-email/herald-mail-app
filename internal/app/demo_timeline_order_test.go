@@ -31,6 +31,7 @@ func TestDemoTimelineRendersWelcomeThenOnboardingStepsAsTopRows(t *testing.T) {
 		"Step 6:",
 		"Step 7:",
 		"Step 8:",
+		"Step 9:",
 	}
 	if len(rows) < len(wantSubjects) {
 		t.Fatalf("expected at least %d timeline rows, got %d", len(wantSubjects), len(rows))
