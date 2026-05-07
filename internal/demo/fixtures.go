@@ -348,7 +348,7 @@ Replies and forwards preserve original formatting, inline images, and attachment
 <li>Markdown sends as rendered HTML with a plain-text alternative.</li>
 </ul>
 </body></html>`))
-	add(33, "Herald Attachments <attachments@herald.demo>", "Step 3: Open and save attachments", "INBOX", 0, 28672, false, false, ai.CategoryTransactional, []string{"onboarding", "attachments", "download", "files"},
+	add(33, "Herald Attachments <attachments@herald.demo>", "Step 3: Open and save attachments", "INBOX", 0, 28672, false, true, ai.CategoryTransactional, []string{"onboarding", "attachments", "download", "files"},
 		`Step 3 gives you a safe attachment message to practice with.
 
 Try now
@@ -362,7 +362,7 @@ The subject row shows an attachment marker when a message has files. Save action
 		withDate(baseTime.Add(6*time.Hour)),
 		withAttachment("herald-demo-checklist.txt", "text/plain", 2048),
 		withAttachment("herald-demo-routing.csv", "text/csv", 4096))
-	add(34, "Herald Image Lab <images@herald.demo>", "Step 4: View inline images in full screen", "INBOX", 0, 270336, true, false, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
+	add(34, "Herald Image Lab <images@herald.demo>", "Step 4: View inline images in full screen", "INBOX", 0, 270336, true, true, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
 		`Step 4 is the image rendering tour.
 
 Try now
@@ -404,7 +404,7 @@ Remote image link, intentionally not fetched by Herald:
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
 		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),
 		withInlineImage("changing-landscape-960px", "image/jpeg", demoChangingLandscapeJPG))
-	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, false, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
+	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, true, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
 		`Step 5 points you at Herald's bulk cleanup workflow.
 
 Try now
@@ -433,7 +433,7 @@ Try now
 What Herald is doing
 Demo AI is deterministic and offline, so classification, semantic search, quick replies, and rule previews work without Ollama. Dry-runs show the matching messages and planned actions before mail is changed.`,
 		withDate(baseTime.Add(3*time.Hour)))
-	add(37, "Herald Settings <settings@herald.demo>", "Step 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, false, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
+	add(37, "Herald Settings <settings@herald.demo>", "Step 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, true, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
 		`Step 7 shows where Herald configuration lives.
 
 Try now
@@ -446,7 +446,7 @@ Try now
 What Herald is doing
 The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
 		withDate(baseTime.Add(2*time.Hour)))
-	add(38, "Herald Next Steps <next@herald.demo>", "Step 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, false, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
+	add(38, "Herald Next Steps <next@herald.demo>", "Step 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
 		`Step 8 gives you a few extra paths to try after the core tour.
 
 Try now
