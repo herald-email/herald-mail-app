@@ -18,6 +18,16 @@ This design covers the original demo email list and body content strategy only. 
 - [ ] Include concrete keypress instructions and a short explanation of the underlying feature in every message body.
 - [ ] Preserve or replace existing fixture coverage for attachments, inline images, HTML rendering, cleanup grouping, AI classification, semantic search, contacts, and MCP demo behavior.
 
+## Demo Welcome Overlay
+
+Demo mode may introduce the mailbox with a compact centered overlay before the user starts reading the course. This overlay is an additive orientation layer: the inbox itself remains the onboarding source of truth, and dismissing the overlay returns the user to the first Timeline email.
+
+- [ ] Show the welcome overlay only in TUI `--demo` mode, never in normal IMAP sessions or MCP demo tools.
+- [ ] Explain that the mailbox is synthetic and safe, that the first Timeline email starts the onboarding guide, and that the user can dismiss the overlay to explore freely.
+- [ ] Dismiss the overlay with `Esc`, `Space`, or `Enter` without also opening a message, toggling selection, or recording the dismiss key in the demo keypress overlay.
+- [ ] Swallow other keys while the overlay is visible so accidental navigation does not change the underlying Timeline.
+- [ ] Keep `q` and `ctrl+c` available to quit from the overlay.
+
 ## Onboarding Sequence
 
 The sequence should be explicit and numbered after a short welcome message. The welcome subject should be `✉ Welcome to Herald`; Herald keeps that stable envelope glyph while still stripping arbitrary emoji from Timeline table subjects. Each onboarding email should have a subject that starts with `Step N:` and a sender in the form `Herald <role> <local-part@herald.demo>`. Supporting fixture emails below the course should use `Example:` subjects, such as `Example: Link rendering stress preview`, so they read as practice data rather than additional onboarding steps.
@@ -82,9 +92,9 @@ Testing should prove the mailbox now functions as onboarding documentation while
 
 ## Out Of Scope
 
-This change should not redesign the TUI or add a separate onboarding system. The mailbox content itself is the onboarding surface.
+This change should not redesign the TUI or add a separate persistent onboarding system. The mailbox content itself remains the onboarding surface, with the demo welcome overlay serving only as a dismissible entry point.
 
-- [ ] Do not add a new onboarding modal or wizard.
+- [ ] Do not add a new persistent onboarding wizard.
 - [ ] Do not change normal IMAP mailbox behavior.
 - [ ] Do not make demo mode write or send real mail.
 - [ ] Do not fetch remote images for the image step.

@@ -45,6 +45,22 @@ func TestDemoKeyOverlayRecordsShortcutLabels(t *testing.T) {
 	}
 }
 
+func TestDemoKeyOverlayDoesNotRecordDemoWelcomeDismissal(t *testing.T) {
+	m := makeDemoWelcomeModel(t, 120, 40)
+	m.SetDemoKeyOverlay(true)
+
+	model, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	updated := model.(*Model)
+
+	rendered := stripANSI(updated.View().Content)
+	if strings.Contains(rendered, "Welcome to Herald Demo") {
+		t.Fatalf("expected Enter to dismiss demo welcome overlay, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Keys: Enter") || strings.Contains(rendered, "Keys:") {
+		t.Fatalf("demo welcome dismissal should not be recorded in demo key overlay, got:\n%s", rendered)
+	}
+}
+
 func TestDemoKeyOverlayFormatsKnownMediaKeys(t *testing.T) {
 	tests := []struct {
 		name string

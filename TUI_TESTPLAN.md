@@ -1049,19 +1049,23 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
-2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 9:` from Herald senders.
-3. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
-4. Open Step 1 and confirm the body teaches `j/k` or up/down movement, `h/l`, arrows, `Tab`, and `Shift+Tab` between folders/Timeline/preview, preview opening with `Enter`, right arrow, `l`, or `Tab`, and mouse scrolling/clicking.
-5. Open Step 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.
-6. Open Step 3 and confirm at least two attachments are available and selection hints appear.
-7. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
-8. Open Step 5 and confirm inline image/full-screen instructions are present.
-9. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
-10. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
-11. Switch to Cleanup, open sender details, and preview one message.
-12. Switch to Contacts, open one contact detail, and open a recent email inline.
+2. Confirm a centered `Welcome to Herald Demo` overlay appears over the Timeline, explains the mailbox is synthetic, and points the user at the first onboarding email.
+3. Press `j` and confirm the Timeline cursor does not move while the overlay remains visible.
+4. Press `Enter`, `Space`, or `Esc` and confirm the overlay closes without opening the first email or toggling selection.
+5. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 9:` from Herald senders.
+6. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
+7. Open Step 1 and confirm the body teaches `j/k` or up/down movement, `h/l`, arrows, `Tab`, and `Shift+Tab` between folders/Timeline/preview, preview opening with `Enter`, right arrow, `l`, or `Tab`, and mouse scrolling/clicking.
+8. Open Step 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.
+9. Open Step 3 and confirm at least two attachments are available and selection hints appear.
+10. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
+11. Open Step 5 and confirm inline image/full-screen instructions are present.
+12. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
+13. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
+14. Switch to Cleanup, open sender details, and preview one message.
+15. Switch to Contacts, open one contact detail, and open a recent email inline.
 
 **Expect:**
+- Demo startup shows a compact welcome overlay only in `--demo`, and dismissing it does not route the dismiss key to the underlying Timeline.
 - Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 9.
 - Supporting demo messages below the onboarding course are labeled as `Example:` fixtures and the mailbox remains focused.
 - Preview bodies are specific instructional docs rather than generic lorem ipsum.
