@@ -102,6 +102,7 @@ func (p *PromptEditor) buildForm() {
 	)
 
 	p.form = huh.NewForm(identityGroup, systemGroup, userGroup).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
 		WithShowHelp(true).
 		WithShowErrors(true)
 

@@ -93,6 +93,24 @@ func TestShortcutHelpFitsAt80ColsAsModal(t *testing.T) {
 	}
 }
 
+func TestShortcutHelpFooterHintHasDivider(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressQuestion(m)
+
+	lines := strings.Split(stripANSI(updated.View().Content), "\n")
+	hintIdx := indexLineContaining(lines, "/ search")
+	if hintIdx < 1 {
+		t.Fatalf("expected shortcut help footer hint, got:\n%s", stripANSI(updated.View().Content))
+	}
+	if !lineHasHorizontalRule(lines[hintIdx-1]) {
+		t.Fatalf("expected shortcut help divider immediately above footer hint, got previous line %q:\n%s", lines[hintIdx-1], stripANSI(updated.View().Content))
+	}
+}
+
 func TestShortcutHelpPageStepUsesModalVisibleRows(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline

@@ -29,7 +29,7 @@ type shortcutHelpLayout struct {
 
 const (
 	shortcutHelpMaxWidth  = 88
-	shortcutHelpMaxHeight = 24
+	shortcutHelpMaxHeight = 25
 )
 
 func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
@@ -217,7 +217,7 @@ func (m *Model) shortcutHelpLayout() shortcutHelpLayout {
 	if contentW < 20 {
 		contentW = 20
 	}
-	visibleRows := panelH - 5
+	visibleRows := panelH - 6
 	if visibleRows < 1 {
 		visibleRows = 1
 	}
@@ -316,6 +316,7 @@ func (m *Model) renderShortcutHelpPanel() string {
 		strings.Repeat("─", layout.contentW),
 	}
 	content = append(content, bodyLines...)
+	content = append(content, strings.Repeat("─", layout.contentW))
 	content = append(content, footerStyle.Render(ansi.Truncate(scroll, layout.contentW, "")))
 
 	return lipgloss.NewStyle().

@@ -119,6 +119,7 @@ func (r *RuleEditor) buildForm() {
 	)
 
 	r.form = huh.NewForm(triggerGroup, actionsGroup, detailsGroup).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
 		WithShowHelp(true).
 		WithShowErrors(true)
 

@@ -554,6 +554,7 @@ func (s *Settings) buildForm() {
 	}
 
 	s.form = huh.NewForm(groups...).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
 		WithShowHelp(true).
 		WithShowErrors(true).
 		WithKeyMap(settingsFormKeyMap())
@@ -586,6 +587,7 @@ func (s *Settings) buildPanelMenuForm() {
 			Value(&s.panelMenuChoice),
 	)
 	s.form = huh.NewForm(huh.NewGroup(fields...).Title("Settings")).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
 		WithShowHelp(true).
 		WithShowErrors(true).
 		WithKeyMap(settingsPanelMenuKeyMap())
@@ -932,7 +934,35 @@ func (s *Settings) panelFormView() string {
 	if s.panelSection == settingsPanelSectionMenu {
 		formView = strings.Replace(formView, "enter submit", "enter open • esc exit", 1)
 	}
-	return formView
+	return s.panelFormViewWithFooterDivider(formView)
+}
+
+func (s *Settings) panelFormViewWithFooterDivider(formView string) string {
+	lines := strings.Split(formView, "\n")
+	footerIdx := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(ansi.Strip(lines[i])) != "" {
+			footerIdx = i
+			break
+		}
+	}
+	if footerIdx <= 0 {
+		return formView
+	}
+
+	dividerWidth := s.panelLayout().formWidth - 6
+	if dividerWidth < 20 {
+		dividerWidth = 20
+	}
+	divider := strings.Repeat("─", dividerWidth)
+	next := make([]string, 0, len(lines)+1)
+	next = append(next, lines[:footerIdx]...)
+	next = append(next, divider, lines[footerIdx])
+	next = append(next, lines[footerIdx+1:]...)
+	if hintBlankIdx := footerIdx + 2; hintBlankIdx < len(next) && strings.TrimSpace(ansi.Strip(next[hintBlankIdx])) == "" {
+		next = append(next[:hintBlankIdx], next[hintBlankIdx+1:]...)
+	}
+	return strings.Join(next, "\n")
 }
 
 // buildConfig constructs a config.Config from the current form field values.

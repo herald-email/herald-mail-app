@@ -59,6 +59,42 @@ func TestAdaptiveChromeInactiveTabsAndHintsUseDefaultForeground(t *testing.T) {
 	}
 }
 
+func TestAdaptiveLowContrastTextRolesUseDefaultForeground(t *testing.T) {
+	roles := map[string]ThemeStyle{
+		"text muted":     defaultTheme.Text.Muted,
+		"text dim":       defaultTheme.Text.Dim,
+		"text disabled":  defaultTheme.Text.Disabled,
+		"metadata label": defaultTheme.Metadata.Label,
+		"metadata date":  defaultTheme.Metadata.Date,
+	}
+	for name, role := range roles {
+		if role.Foreground != nil {
+			t.Fatalf("%s should inherit terminal foreground, got %#v", name, role.Foreground)
+		}
+		if role.Faint {
+			t.Fatalf("%s should not use faint styling", name)
+		}
+	}
+}
+
+func TestHeraldHuhThemeUsesDefaultForegroundForHelp(t *testing.T) {
+	styles := heraldHuhTheme(true)
+	helpStyles := map[string]lipgloss.Style{
+		"ellipsis":        styles.Help.Ellipsis,
+		"short key":       styles.Help.ShortKey,
+		"short desc":      styles.Help.ShortDesc,
+		"short separator": styles.Help.ShortSeparator,
+		"full key":        styles.Help.FullKey,
+		"full desc":       styles.Help.FullDesc,
+		"full separator":  styles.Help.FullSeparator,
+	}
+	for name, style := range helpStyles {
+		if !isUnsetColor(style.GetForeground()) {
+			t.Fatalf("%s help should inherit terminal foreground, got %#v", name, style.GetForeground())
+		}
+	}
+}
+
 func TestLegacyDarkThemeKeepsCurrentXtermPalette(t *testing.T) {
 	theme := ThemeByName("legacy-dark")
 	if theme.Name != "legacy-dark" {

@@ -125,9 +125,9 @@ var adaptiveTheme = Theme{
 	Name: "adaptive",
 	Text: ThemeTextRoles{
 		Primary:  ThemeStyle{},
-		Muted:    ThemeStyle{Foreground: lipgloss.Color("8")},
-		Dim:      ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
-		Disabled: ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
+		Muted:    ThemeStyle{},
+		Dim:      ThemeStyle{},
+		Disabled: ThemeStyle{},
 	},
 	Chrome: ThemeChromeRoles{
 		TitleBar:     ThemeStyle{Bold: true, Reverse: true},
@@ -148,9 +148,9 @@ var adaptiveTheme = Theme{
 		VisualSelection:    ThemeStyle{Reverse: true},
 	},
 	Metadata: ThemeMetadataRoles{
-		Label:   ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
+		Label:   ThemeStyle{},
 		Sender:  ThemeStyle{Foreground: lipgloss.Color("6"), Bold: true},
-		Date:    ThemeStyle{Foreground: lipgloss.Color("8")},
+		Date:    ThemeStyle{},
 		Subject: ThemeStyle{Bold: true},
 		Tag:     ThemeStyle{Foreground: lipgloss.Color("5"), Bold: true},
 		Action:  ThemeStyle{Foreground: lipgloss.Color("3"), Bold: true},

@@ -268,6 +268,10 @@ func findRenderedText(lines []string, needle string) (int, int) {
 	return -1, -1
 }
 
+func lineHasHorizontalRule(line string) bool {
+	return strings.Count(line, "─") >= 8
+}
+
 func TestSettingsPanelRendersCompactCenteredModalOverCurrentView(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline
@@ -292,6 +296,28 @@ func TestSettingsPanelRendersCompactCenteredModalOverCurrentView(t *testing.T) {
 	}
 	if titleCol < 40 || titleCol > 100 {
 		t.Fatalf("expected settings content to be horizontally centered in a compact modal, col=%d:\n%s", titleCol, stripANSI(rendered))
+	}
+}
+
+func TestSettingsPanelInternalFooterHintHasDividerAndLowerRow(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	updated := pressSettingsPanelForTest(t, m)
+
+	rendered := stripANSI(updated.View().Content)
+	lines := strings.Split(rendered, "\n")
+	hintIdx := indexLineContaining(lines, "↑ up")
+	if hintIdx < 1 {
+		t.Fatalf("expected settings internal footer hint, got:\n%s", rendered)
+	}
+	if !lineHasHorizontalRule(lines[hintIdx-1]) {
+		t.Fatalf("expected settings divider immediately above footer hint, got previous line %q:\n%s", lines[hintIdx-1], rendered)
+	}
+	if hintIdx+2 >= len(lines) || !strings.Contains(lines[hintIdx+2], "╰") {
+		t.Fatalf("expected settings footer hint to move one row lower while preserving bottom padding; following lines=%q / %q:\n%s", lines[min(hintIdx+1, len(lines)-1)], lines[min(hintIdx+2, len(lines)-1)], rendered)
 	}
 }
 
