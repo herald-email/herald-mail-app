@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -117,10 +118,160 @@ func TestMailboxOmitsPrivateDemoIdentityTerms(t *testing.T) {
 	}
 }
 
+func TestMailboxIncludesOrderedHeraldOnboardingSteps(t *testing.T) {
+	messages := append([]Message(nil), Mailbox().Messages...)
+	sort.SliceStable(messages, func(i, j int) bool {
+		return messages[i].Email.Date.After(messages[j].Email.Date)
+	})
+
+	want := []struct {
+		subject   string
+		sender    string
+		messageID string
+	}{
+		{subject: "✉ Welcome to Herald", sender: "Herald Welcome <welcome@herald.demo>", messageID: "demo-welcome-to-herald@demo.local"},
+		{subject: "Step 1: Move around your inbox", sender: "Herald Guide <guide@herald.demo>"},
+		{subject: "Step 2: Reply, write, and preview Markdown", sender: "Herald Compose Coach <compose@herald.demo>"},
+		{subject: "Step 3: Open and save attachments", sender: "Herald Attachments <attachments@herald.demo>"},
+		{subject: "Step 4: Select text from an email", sender: "Herald Selection Coach <selection@herald.demo>"},
+		{subject: "Step 5: View inline images in full screen", sender: "Herald Image Lab <images@herald.demo>"},
+		{subject: "Step 6: Clean up senders and domains safely", sender: "Herald Cleanup Coach <cleanup@herald.demo>"},
+		{subject: "Step 7: Classify mail and dry-run rules", sender: "Herald AI Rules <rules@herald.demo>"},
+		{subject: "Step 8: Configure accounts, AI, and signatures", sender: "Herald Settings <settings@herald.demo>"},
+		{subject: "Step 9: Explore contacts, chat, SSH, and MCP", sender: "Herald Next Steps <next@herald.demo>"},
+	}
+
+	if len(messages) < len(want) {
+		t.Fatalf("expected at least %d demo messages, got %d", len(want), len(messages))
+	}
+	for i, w := range want {
+		got := messages[i].Email
+		if got.Subject != w.subject {
+			t.Fatalf("message %d subject = %q, want %q", i+1, got.Subject, w.subject)
+		}
+		if got.Sender != w.sender {
+			t.Fatalf("message %d sender = %q, want %q", i+1, got.Sender, w.sender)
+		}
+		if got.Folder != "INBOX" {
+			t.Fatalf("message %d folder = %q, want INBOX", i+1, got.Folder)
+		}
+		if w.messageID != "" && got.MessageID != w.messageID {
+			t.Fatalf("message %d message ID = %q, want %q", i+1, got.MessageID, w.messageID)
+		}
+	}
+	for i := 1; i < len(want); i++ {
+		if !messages[i-1].Email.Date.After(messages[i].Email.Date) {
+			t.Fatalf("onboarding dates are not strictly descending at messages %d and %d: %s then %s", i, i+1, messages[i-1].Email.Date, messages[i].Email.Date)
+		}
+	}
+}
+
+func TestSupportingDemoMessagesAreExamplesAndNotTooMany(t *testing.T) {
+	mailbox := Mailbox()
+	if len(mailbox.Messages) > 28 {
+		t.Fatalf("expected a focused demo mailbox with at most 28 messages, got %d", len(mailbox.Messages))
+	}
+
+	for _, msg := range mailbox.Messages {
+		subject := msg.Email.Subject
+		if subject == "✉ Welcome to Herald" || strings.HasPrefix(subject, "Step ") {
+			continue
+		}
+		normalized := strings.TrimPrefix(strings.TrimPrefix(subject, "Re: "), "Fwd: ")
+		if !strings.HasPrefix(normalized, "Example: ") {
+			t.Fatalf("supporting demo subject %q should start with Example:", subject)
+		}
+	}
+}
+
+func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {
+	cases := []struct {
+		subject        string
+		wants          []string
+		attachments    int
+		inlineImages   int
+		htmlCIDSnippet string
+	}{
+		{
+			subject: "✉ Welcome to Herald",
+			wants:   []string{"terminal email client", "inbox cleanup", "ai", "demo mode", "synthetic", "timeline", "compose", "cleanup", "contacts"},
+		},
+		{
+			subject: "Step 1: Move around your inbox",
+			wants:   []string{"try now", "j/k", "up/down arrows", "h/l", "left/right arrows", "tab", "shift+tab", "folders", "timeline", "preview", "enter", "right arrow", "open an email preview", "mouse wheel", "timeline rows", "tab labels", "esc", "1/2/3", "?", "what herald is doing"},
+		},
+		{
+			subject: "Step 2: Reply, write, and preview Markdown",
+			wants:   []string{"try now", "r", "ctrl+p", "ctrl+s", "preserve original formatting", "rendered html", "plain-text"},
+		},
+		{
+			subject:     "Step 3: Open and save attachments",
+			wants:       []string{"try now", "[", "]", "s", "save to", "selected attachment"},
+			attachments: 2,
+		},
+		{
+			subject: "Step 4: Select text from an email",
+			wants:   []string{"try now", "text selection", "mouse capture", "m", "release mouse", "restore mouse", "full-screen preview", "z", "terminal-native selection"},
+		},
+		{
+			subject:        "Step 5: View inline images in full screen",
+			wants:          []string{"creative commons", "z", "kitty", "iterm2", "remote images", "not fetched", "46x21", "330px", "960px", "![remote commons thumbnail]("},
+			inlineImages:   4,
+			htmlCIDSnippet: "cid:cc-by-sa-badge",
+		},
+		{
+			subject: "Step 6: Clean up senders and domains safely",
+			wants:   []string{"try now", "3", "space", "sender", "domain", "unsubscribe", "preview"},
+		},
+		{
+			subject: "Step 7: Classify mail and dry-run rules",
+			wants:   []string{"try now", "a", "? infrastructure budget risk", "cleanup rules", "saved filters", "automation rules", "scheduled or repeated actions", "custom prompts", "reusable ai instructions", "dry-run", "matched messages", "planned actions"},
+		},
+		{
+			subject: "Step 8: Configure accounts, AI, and signatures",
+			wants:   []string{"try now", "s", "settings", "provider", "embedding model", "signature"},
+		},
+		{
+			subject: "Step 9: Explore contacts, chat, SSH, and MCP",
+			wants:   []string{"try now", "contacts", "chat panel", "quick replies", "herald mcp --demo", "herald ssh"},
+		},
+	}
+
+	for _, tc := range cases {
+		msg := demoMessageBySubject(t, tc.subject)
+		body := strings.ToLower(msg.Body.TextPlain)
+		for _, want := range tc.wants {
+			if !strings.Contains(body, strings.ToLower(want)) {
+				t.Fatalf("%s body missing %q:\n%s", tc.subject, want, msg.Body.TextPlain)
+			}
+		}
+		if tc.attachments > 0 && len(msg.Body.Attachments) != tc.attachments {
+			t.Fatalf("%s attachment count = %d, want %d", tc.subject, len(msg.Body.Attachments), tc.attachments)
+		}
+		if tc.inlineImages > 0 && len(msg.Body.InlineImages) != tc.inlineImages {
+			t.Fatalf("%s inline image count = %d, want %d", tc.subject, len(msg.Body.InlineImages), tc.inlineImages)
+		}
+		if tc.htmlCIDSnippet != "" && !strings.Contains(msg.Body.TextHTML, tc.htmlCIDSnippet) {
+			t.Fatalf("%s HTML missing %q:\n%s", tc.subject, tc.htmlCIDSnippet, msg.Body.TextHTML)
+		}
+	}
+}
+
+func demoMessageBySubject(t *testing.T, subject string) Message {
+	t.Helper()
+	for _, msg := range Mailbox().Messages {
+		if msg.Email.Subject == subject {
+			return msg
+		}
+	}
+	t.Fatalf("expected demo mailbox to include %q", subject)
+	return Message{}
+}
+
 func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 	var found bool
 	for _, msg := range Mailbox().Messages {
-		if msg.Email.Subject != "Link rendering stress preview" {
+		if msg.Email.Subject != "Example: Link rendering stress preview" {
 			continue
 		}
 		found = true
@@ -138,12 +289,12 @@ func TestMailboxIncludesLinkRenderingStressFixture(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("expected demo mailbox to include Link rendering stress preview fixture")
+		t.Fatal("expected demo mailbox to include Example: Link rendering stress preview fixture")
 	}
 }
 
 func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
-	const subject = "Creative Commons image sampler for terminal previews"
+	const subject = "Step 5: View inline images in full screen"
 
 	var found bool
 	for _, msg := range Mailbox().Messages {
@@ -151,7 +302,7 @@ func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
 			continue
 		}
 		found = true
-		if msg.Email.Sender != "Open Commons Gallery <images@opencommons.example>" {
+		if msg.Email.Sender != "Herald Image Lab <images@herald.demo>" {
 			t.Fatalf("unexpected sampler sender: %q", msg.Email.Sender)
 		}
 		if msg.Email.Folder != "INBOX" {
@@ -186,7 +337,7 @@ func TestMailboxIncludesCreativeCommonsImageSampler(t *testing.T) {
 }
 
 func TestMailboxIncludesRichHTMLRenderingShowcase(t *testing.T) {
-	const subject = "Rich HTML rendering showcase"
+	const subject = "Example: Rich HTML rendering showcase"
 
 	var found bool
 	for _, msg := range Mailbox().Messages {
@@ -220,7 +371,7 @@ func TestCreativeCommonsSamplerIncludesHTMLCIDPlacement(t *testing.T) {
 	box := Mailbox()
 	var found *Message
 	for i := range box.Messages {
-		if box.Messages[i].Email.Subject == "Creative Commons image sampler for terminal previews" {
+		if box.Messages[i].Email.Subject == "Step 5: View inline images in full screen" {
 			found = &box.Messages[i]
 			break
 		}
@@ -241,7 +392,7 @@ func TestCreativeCommonsSamplerIncludesHTMLCIDPlacement(t *testing.T) {
 func TestDemoAIIsDeterministicAndOffline(t *testing.T) {
 	ai := NewAI()
 
-	cat, err := ai.Classify("Northstar Cloud <billing@northstar-cloud.example>", "Invoice and usage alert for Project Orion")
+	cat, err := ai.Classify("Northstar Cloud <billing@northstar-cloud.example>", "Example: Project Orion usage alert")
 	if err != nil {
 		t.Fatalf("Classify: %v", err)
 	}

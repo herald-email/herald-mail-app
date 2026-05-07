@@ -951,7 +951,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
-1. Open Timeline and search for `Creative Commons image sampler for terminal previews`.
+1. Open Timeline and search for `Step 5: View inline images in full screen`.
 2. Open the split preview and capture the image hint plus body links.
 3. Press `z` to enter full-screen and capture the top of the document.
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
@@ -1041,22 +1041,31 @@ Check these states during every applicable lane:
 - Search results are meaningful for the query and can be opened.
 - Quick replies show deterministic suggestions without blocking navigation.
 
-### TC-46 — Demo fixtures cover public UI context
+### TC-46 — Demo fixtures cover onboarding and public UI context
 
 **Lane:** A
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
-2. Open Timeline preview for a newsletter, a billing/security message, and a message with an attachment.
-3. Switch to Cleanup, open sender details, and preview one message.
-4. Switch to Contacts, open one contact detail, and open a recent email inline.
+2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 9:` from Herald senders.
+3. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
+4. Open Step 1 and confirm the body teaches `j/k` or up/down movement, `h/l`, arrows, `Tab`, and `Shift+Tab` between folders/Timeline/preview, preview opening with `Enter`, right arrow, `l`, or `Tab`, and mouse scrolling/clicking.
+5. Open Step 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.
+6. Open Step 3 and confirm at least two attachments are available and selection hints appear.
+7. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
+8. Open Step 5 and confirm inline image/full-screen instructions are present.
+9. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
+10. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
+11. Switch to Cleanup, open sender details, and preview one message.
+12. Switch to Contacts, open one contact detail, and open a recent email inline.
 
 **Expect:**
-- Timeline shows fictional but realistic senders, subjects, folders, read/star states, and visible threads.
-- Preview bodies are specific to each sender rather than placeholder lorem ipsum.
-- At least one preview exposes attachments and at least one preview exposes unsubscribe actions.
-- Contacts are populated from the same demo story and their recent emails open inline.
+- Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 9.
+- Supporting demo messages below the onboarding course are labeled as `Example:` fixtures and the mailbox remains focused.
+- Preview bodies are specific instructional docs rather than generic lorem ipsum.
+- Attachment, unsubscribe, HTML, inline image, cleanup, AI, semantic search, contacts, and MCP demo coverage remains represented in the fixture set.
+- Contacts are populated from demo data and their recent emails open inline.
 
 ### TC-47 — MCP demo mode smoke
 
@@ -1447,7 +1456,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Launch Herald in demo mode.
-2. Open Timeline and search for `Link rendering stress preview`.
+2. Open Timeline and search for `Example: Link rendering stress preview`.
 3. Open the Taskpad demo email preview.
 4. Capture plain text and ANSI output at `220x50`.
 5. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
@@ -1465,10 +1474,10 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Launch Herald in demo mode.
-2. Open Timeline and search for `Rich HTML rendering showcase`.
+2. Open Timeline and search for `Example: Rich HTML rendering showcase`.
 3. Open the split preview, capture it, then press `z` and capture full-screen mode.
 4. Open Cleanup, locate the same sender/message, open its preview, capture split and full-screen modes.
-5. Open Contacts, select `Preview Lab`, open the `Rich HTML rendering showcase` email inline, and capture the preview.
+5. Open Contacts, select `Preview Lab`, open the `Example: Rich HTML rendering showcase` email inline, and capture the preview.
 6. Resize to `80x24` and `50x15`, then back to `220x50`, capturing the affected preview surface at each size.
 
 **Expect:**

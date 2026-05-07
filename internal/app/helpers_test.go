@@ -43,6 +43,7 @@ func TestSanitizeText(t *testing.T) {
 		{"café", "café"},                         // accented letters kept
 		{"日本語テスト", "日本語テスト"},                     // CJK kept
 		{"test@example.com", "test@example.com"}, // @ is punctuation
+		{"✉ Welcome", "✉ Welcome"},               // selected UI icon kept
 		{"emoji 🎉 here", "emoji here"},           // emoji stripped
 		{"🚀launch", "launch"},
 		{"", ""},

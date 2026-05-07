@@ -42,7 +42,7 @@ func TestDemoBackendFetchesRichFixtureBodies(t *testing.T) {
 }
 
 func TestDemoBackendFetchesCreativeCommonsImageSampler(t *testing.T) {
-	const subject = "Creative Commons image sampler for terminal previews"
+	const subject = "Step 5: View inline images in full screen"
 
 	b := NewDemoBackend()
 	emails, err := b.GetTimelineEmails("INBOX")
