@@ -120,6 +120,86 @@ func TestShortcutHelpQuestionMarkClosesOverlay(t *testing.T) {
 	}
 }
 
+func TestShortcutHelpOwnsBottomHintsWhileOpen(t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(*Model)
+		forbidden []string
+	}{
+		{
+			name: "timeline",
+			setup: func(m *Model) {
+				m.activeTab = tabTimeline
+				m.timeline.emails = mockEmails()
+				m.updateTimelineTable()
+			},
+			forbidden: []string{"c: compose", "r: all", "D: delete"},
+		},
+		{
+			name: "cleanup",
+			setup: func(m *Model) {
+				m.activeTab = tabCleanup
+			},
+			forbidden: []string{"enter: details", "W: rule", "D: delete"},
+		},
+		{
+			name: "contacts",
+			setup: func(m *Model) {
+				m.activeTab = tabContacts
+				m.contactsList = []models.ContactData{{Email: "mara@forgepoint.example", DisplayName: "Mara Vale"}}
+				m.contactsFiltered = m.contactsList
+			},
+			forbidden: []string{"enter: detail", "?: semantic", "e: enrich"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 80, 24)
+			tc.setup(m)
+
+			updated := pressQuestion(m)
+
+			hints := stripANSI(updated.renderKeyHints())
+			for _, forbidden := range tc.forbidden {
+				if strings.Contains(hints, forbidden) {
+					t.Fatalf("expected help overlay hints to hide underlying %q hint, got:\n%s", forbidden, hints)
+				}
+			}
+			for _, want := range []string{"j/k scroll", "/ search", "Esc/?/q close"} {
+				if !strings.Contains(hints, want) {
+					t.Fatalf("expected help overlay hints to include %q, got:\n%s", want, hints)
+				}
+			}
+			assertFitsWidth(t, 80, updated.renderKeyHints())
+		})
+	}
+}
+
+func TestShortcutHelpSearchOwnsBottomHints(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	opened := pressQuestion(m)
+	model, _ := opened.handleKeyMsg(keyRunes("/"))
+	searching := model.(*Model)
+
+	hints := stripANSI(searching.renderKeyHints())
+	for _, forbidden := range []string{"c: compose", "r: all", "D: delete"} {
+		if strings.Contains(hints, forbidden) {
+			t.Fatalf("expected help search hints to hide underlying %q hint, got:\n%s", forbidden, hints)
+		}
+	}
+	for _, want := range []string{"type: search", "backspace: delete", "enter: done", "esc: clear"} {
+		if !strings.Contains(hints, want) {
+			t.Fatalf("expected help search hints to include %q, got:\n%s", want, hints)
+		}
+	}
+	assertFitsWidth(t, 80, searching.renderKeyHints())
+}
+
 func TestComposeQuestionMarkTypesIntoEditableFieldsAndDoesNotOpenHelp(t *testing.T) {
 	tests := []struct {
 		name  string

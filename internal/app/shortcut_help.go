@@ -296,16 +296,7 @@ func (m *Model) renderShortcutHelpPanel() string {
 	layout := m.shortcutHelpLayout()
 	title := fmt.Sprintf("Shortcut Help - %s (Profile: %s)", m.shortcutHelpContextTitle(), m.keyboardProfileLabel())
 	lines := m.shortcutHelpLines(layout.contentW)
-	maxOffset := len(lines) - layout.visibleRows
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	if m.helpScrollOffset > maxOffset {
-		m.helpScrollOffset = maxOffset
-	}
-	if m.helpScrollOffset < 0 {
-		m.helpScrollOffset = 0
-	}
+	m.helpScrollOffset = clampShortcutHelpOffset(m.helpScrollOffset, len(lines), layout.visibleRows)
 	end := m.helpScrollOffset + layout.visibleRows
 	if end > len(lines) {
 		end = len(lines)
@@ -316,15 +307,7 @@ func (m *Model) renderShortcutHelpPanel() string {
 		bodyLines = append(bodyLines, "")
 	}
 
-	scroll := "/ search  Esc/?/q close"
-	if m.helpSearchActive || strings.TrimSpace(m.helpSearch) != "" {
-		scroll = fmt.Sprintf("/%s  Enter: done  Esc: clear", m.helpSearch)
-	} else if strings.TrimSpace(m.helpSearch) != "" {
-		scroll = fmt.Sprintf("filter: %s  / edit  Esc/?/q close", m.helpSearch)
-	}
-	if len(lines) > layout.visibleRows {
-		scroll = fmt.Sprintf("j/k scroll  %d/%d  %s", m.helpScrollOffset+1, len(lines), scroll)
-	}
+	scroll := m.shortcutHelpHintText(len(lines), layout.visibleRows, m.helpScrollOffset)
 
 	headerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor()).Bold(true)
 	footerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Dim.ForegroundColor())
@@ -341,6 +324,56 @@ func (m *Model) renderShortcutHelpPanel() string {
 		BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor()).
 		Padding(0, 1).
 		Render(strings.Join(content, "\n"))
+}
+
+func (m *Model) shortcutHelpHintBarText() string {
+	layout := m.shortcutHelpLayout()
+	lines := m.shortcutHelpLines(layout.contentW)
+	offset := clampShortcutHelpOffset(m.helpScrollOffset, len(lines), layout.visibleRows)
+	return m.shortcutHelpHintText(len(lines), layout.visibleRows, offset)
+}
+
+func (m *Model) shortcutHelpHintText(totalRows, visibleRows, offset int) string {
+	segments := m.shortcutHelpHintSegments(totalRows, visibleRows, offset)
+	return joinHintSegments(segments...)
+}
+
+func (m *Model) shortcutHelpHintSegments(totalRows, visibleRows, offset int) []string {
+	if m.helpSearchActive {
+		leader := "type: search"
+		if m.helpSearch != "" {
+			leader = fmt.Sprintf("/%s", m.helpSearch)
+		}
+		return []string{leader, "backspace: delete", "enter: done", "esc: clear", "ctrl+c: quit"}
+	}
+
+	if query := strings.TrimSpace(m.helpSearch); query != "" {
+		segments := []string{fmt.Sprintf("filter: %s", query), "/ edit", "Esc/?/q close", "ctrl+c: quit"}
+		if totalRows > visibleRows {
+			segments = append([]string{fmt.Sprintf("j/k scroll %d/%d", offset+1, totalRows), "pgup/pgdn: page", "home/end: jump"}, segments...)
+		}
+		return segments
+	}
+
+	segments := []string{"/ search", "Esc/?/q close", "ctrl+c: quit"}
+	if totalRows > visibleRows {
+		segments = append([]string{fmt.Sprintf("j/k scroll %d/%d", offset+1, totalRows), "pgup/pgdn: page", "home/end: jump"}, segments...)
+	}
+	return segments
+}
+
+func clampShortcutHelpOffset(offset, totalRows, visibleRows int) int {
+	maxOffset := totalRows - visibleRows
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if offset > maxOffset {
+		return maxOffset
+	}
+	if offset < 0 {
+		return 0
+	}
+	return offset
 }
 
 func overlayCentered(backdrop, overlay string, width, height int) string {

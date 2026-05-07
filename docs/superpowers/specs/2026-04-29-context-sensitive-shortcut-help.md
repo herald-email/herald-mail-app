@@ -5,6 +5,7 @@ This feature gives users an in-app rescue path when a key does something surpris
 
 - [x] Pressing `?` opens compact centered help from Timeline, Compose, Cleanup, Contacts, chat, logs, confirmations, and preview states that Herald owns.
 - [x] The bottom hint bar advertises `?: help` without overflowing at `80x24`.
+- [x] While shortcut help is open, the bottom hint bar shows help-overlay controls instead of the underlying tab or pane shortcuts.
 - [x] Timeline and Contacts semantic search remain reachable through `/` with a leading `? query`.
 
 ## Shortcut Catalog

@@ -172,6 +172,7 @@ Check these states during every applicable lane:
 - Visible bottom chrome must be compared against the actual shortcuts available for the active pane. Missing primary actions are first-class bugs, not harmless copy drift.
 - Timeline protected hints must stay visible whenever contextually valid: `c: compose`, `r: all`, `R: sender`, `f: forward`, `D: delete`, `a: archive`, panel `Tab`, and `?: help`.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
+- While `?` help is open, the bottom hint bar belongs to help and must not continue advertising shortcuts from the underlying tab, pane, or overlay.
 - Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
 - Status bar never leaks stale mode or selection from another tab.
 - Adjacent panels have aligned heights and closed borders.

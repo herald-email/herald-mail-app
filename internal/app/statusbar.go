@@ -490,6 +490,9 @@ func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
 	if width <= 0 {
 		width = 80
 	}
+	if m.showHelp {
+		return wrapChromeSegments(m.shortcutHelpHintBarText(), width-2, 2)
+	}
 	hints := m.rawKeyHintsForWidth(width, chrome)
 	if m.shouldAdvertiseShortcutHelp() {
 		hints = joinHintSegments("?: help", hints)
