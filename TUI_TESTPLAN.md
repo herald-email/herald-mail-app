@@ -1025,7 +1025,7 @@ Check these states during every applicable lane:
 1. Start `/tmp/herald --demo`.
 2. Confirm the top Timeline messages are `✉ Welcome to Herald` followed by `Step 1:` through `Step 9:` from Herald senders.
 3. Open the welcome email and confirm the body explains what Herald is and that demo mode is synthetic.
-4. Open Step 1 and confirm the body teaches navigation keys, horizontal movement between folders/Timeline/preview, preview/folder auto-open behavior, and mouse scrolling/clicking.
+4. Open Step 1 and confirm the body teaches `j/k` or up/down movement, `h/l`, arrows, `Tab`, and `Shift+Tab` between folders/Timeline/preview, preview opening with `Enter`, right arrow, `l`, or `Tab`, and mouse scrolling/clicking.
 5. Open Step 2 and confirm the body explains reply, Markdown preview, preserved original formatting, rendered HTML, and plain-text fallback.
 6. Open Step 3 and confirm at least two attachments are available and selection hints appear.
 7. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.

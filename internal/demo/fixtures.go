@@ -336,11 +336,9 @@ Demo mode is offline and deterministic. These messages are synthetic, attachment
 		`Step 1 is a quick lap around Herald's Timeline.
 
 Try now
-- Move through the list with j/k or the arrow keys.
-- Press Enter or the right arrow to preview the selected email.
-- Press right arrow again to move from the Timeline into the preview.
-- Press left arrow from the preview to move back to the Timeline.
-- Press left arrow from the Timeline to move into folders; Herald will auto-open or auto-close folders and preview as horizontal movement needs them.
+- Use j/k or the up/down arrows to move within the Timeline or folders.
+- Use horizontal movement with h/l, left/right arrows, Tab, or Shift+Tab to switch between folders, Timeline, and preview.
+- Open an email preview with Enter, right arrow, l, or Tab.
 - Press Esc to close a preview.
 - Press 1/2/3 to jump between Timeline, Compose, and Cleanup.
 - Press f to open the folder sidebar.
@@ -350,7 +348,7 @@ Try now
 - Click Timeline rows to select or open mail, and click tab labels to switch sections.
 
 What Herald is doing
-Herald keeps the Timeline keyboard-first, but horizontal movement makes the surrounding panes feel spatial: left for folders, center for the Timeline, right for preview. The same rows, tabs, and scrollable panes can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
+Herald keeps the Timeline keyboard-first, but horizontal movement makes the surrounding panes feel spatial: folders, Timeline, and preview are neighboring places. The same rows, tabs, and scrollable panes can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
 		withDate(baseTime.Add(9*time.Hour)))
 	add(32, "Herald Compose Coach <compose@herald.demo>", "Step 2: Reply, write, and preview Markdown", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"onboarding", "compose", "reply", "markdown", "html"},
 		`Step 2 shows how Herald turns a terminal compose screen into a real email workflow.

@@ -198,7 +198,7 @@ func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {
 		},
 		{
 			subject: "Step 1: Move around your inbox",
-			wants:   []string{"try now", "j/k", "right arrow", "left arrow", "folders", "preview", "auto-open", "auto-close", "mouse wheel", "timeline rows", "tab labels", "enter", "esc", "1/2/3", "?", "what herald is doing"},
+			wants:   []string{"try now", "j/k", "up/down arrows", "h/l", "left/right arrows", "tab", "shift+tab", "folders", "timeline", "preview", "enter", "right arrow", "open an email preview", "mouse wheel", "timeline rows", "tab labels", "esc", "1/2/3", "?", "what herald is doing"},
 		},
 		{
 			subject: "Step 2: Reply, write, and preview Markdown",

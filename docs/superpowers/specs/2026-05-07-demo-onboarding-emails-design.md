@@ -25,7 +25,7 @@ The sequence should be explicit and numbered after a short welcome message. The 
 - [ ] `Herald Welcome <welcome@herald.demo>` sends `✉ Welcome to Herald`.
 - [ ] The welcome email explains Herald as a terminal email client for keyboard navigation, inbox cleanup, rich previews, and AI-assisted triage, and it states that demo mode is synthetic and safe.
 - [ ] `Herald Guide <guide@herald.demo>` sends `Step 1: Move around your inbox`.
-- [ ] Step 1 covers Timeline navigation with `j/k`, arrow keys, `Enter` or right-arrow preview, `Esc`, `1/2/3` tabs, `f` folders, `/` search, and `?` shortcut help.
+- [ ] Step 1 covers vertical movement with `j/k` or up/down arrows, horizontal panel movement with `h/l`, left/right arrows, `Tab`, and `Shift+Tab`, preview opening with `Enter`, right arrow, `l`, or `Tab`, mouse scrolling/clicking, `Esc`, `1/2/3` tabs, `f` folders, `/` search, and `?` shortcut help.
 - [ ] `Herald Compose Coach <compose@herald.demo>` sends `Step 2: Reply, write, and preview Markdown`.
 - [ ] Step 2 covers `R` reply, Compose, Markdown writing, `ctrl+p` preview, and `ctrl+s` demo sending.
 - [ ] Step 2 explains that replies and forwards preserve original formatting, inline images, and attachments where possible, and that Herald sends Markdown as rendered HTML with a plain-text alternative.
