@@ -503,6 +503,7 @@ type Model struct {
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode           bool
+	showDemoWelcome    bool
 	demoKeyOverlay     bool
 	demoKeyOverlayKeys []string
 
@@ -758,6 +759,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	// Detect demo mode via DemoBackendMarker interface
 	if marker, ok := b.(interface{ IsDemo() bool }); ok && marker.IsDemo() {
 		m.demoMode = true
+		m.showDemoWelcome = true
 	}
 
 	// Start deletion worker goroutine
@@ -1902,6 +1904,9 @@ func (m *Model) View() tea.View {
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())
 	}
+	if m.shouldShowDemoWelcomeOverlay() {
+		return m.buildView(m.renderDemoWelcomeOverlayView())
+	}
 	if m.loading && !m.hasVisibleStartupData() {
 		return m.buildView(m.renderLoadingView())
 	}
@@ -1925,6 +1930,10 @@ func (m *Model) buildView(content string) tea.View {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if model, cmd, handled := m.handleDemoWelcomeKey(msg); handled {
+		return model, cmd
+	}
+
 	m.recordDemoKeyOverlayPress(msg)
 
 	if model, cmd, handled := m.handleShortcutHelpKey(msg); handled {
