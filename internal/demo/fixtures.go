@@ -313,8 +313,21 @@ func buildMailbox() MailboxFixture {
 		}
 	}
 
-	add(31, "Herald Guide <guide@herald.demo>", "Step 1: Try this - move around your inbox", "INBOX", 0, 11264, false, true, ai.CategoryImportant, []string{"onboarding", "navigation", "timeline", "search"},
-		`Step 1 is a quick lap around Herald's Timeline.
+	add(39, "Herald Welcome <welcome@herald.demo>", ":sparkles: :mailbox: Welcome to Herald", "INBOX", 0, 10240, false, true, ai.CategoryImportant, []string{"onboarding", "welcome", "terminal email client", "inbox cleanup", "ai"},
+		`Welcome to Herald.
+
+Herald is a terminal email client for people who want fast keyboard navigation, inbox cleanup, rich previews, and AI-assisted triage without leaving the command line.
+
+What you can try in demo mode
+- Timeline shows a realistic mailbox and lets you read, search, reply, and manage threads.
+- Compose can write Markdown, preview rendered HTML, and preserve original message formatting for replies and forwards.
+- Cleanup groups repeated mail by sender or domain so bulk actions stay deliberate.
+- Contacts, chat, rules, MCP, and SSH surfaces all use the same synthetic demo mailbox.
+
+Demo mode is offline and deterministic. These messages are synthetic, attachments are safe fixtures, and no IMAP or SMTP account is touched.`,
+		withDate(baseTime.Add(9*time.Hour)))
+	add(31, "Herald Guide <guide@herald.demo>", "Example 1: Move around your inbox", "INBOX", 0, 11264, false, true, ai.CategoryImportant, []string{"onboarding", "navigation", "timeline", "search"},
+		`Example 1 is a quick lap around Herald's Timeline.
 
 Try now
 - Move through the list with j/k or the arrow keys.
@@ -328,8 +341,8 @@ Try now
 What Herald is doing
 Herald keeps the Timeline keyboard-first, but the same rows can also be clicked in terminals that support mouse events. Demo mode is offline, so every message you open here is synthetic and safe to explore.`,
 		withDate(baseTime.Add(8*time.Hour)))
-	add(32, "Herald Compose Coach <compose@herald.demo>", "Step 2: Reply, write, and preview Markdown", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"onboarding", "compose", "reply", "markdown", "html"},
-		`Step 2 shows how Herald turns a terminal compose screen into a real email workflow.
+	add(32, "Herald Compose Coach <compose@herald.demo>", "Example 2: Reply, write, and preview Markdown", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"onboarding", "compose", "reply", "markdown", "html"},
+		`Example 2 shows how Herald turns a terminal compose screen into a real email workflow.
 
 Try now
 - Highlight this message and press R to start a reply.
@@ -341,15 +354,15 @@ What Herald is doing
 Replies and forwards preserve original formatting, inline images, and attachments where possible. New Markdown you write is rendered HTML for email clients that support rich mail, and Herald also keeps a plain-text alternative so the message stays readable everywhere.`,
 		withDate(baseTime.Add(7*time.Hour)),
 		withHTMLBody(`<html><body>
-<h1>Step 2: Reply, write, and preview Markdown</h1>
+<h1>Example 2: Reply, write, and preview Markdown</h1>
 <p>Use this message to practice replies, Markdown preview, and safe demo sending.</p>
 <ul>
 <li>Replies preserve original formatting where possible.</li>
 <li>Markdown sends as rendered HTML with a plain-text alternative.</li>
 </ul>
 </body></html>`))
-	add(33, "Herald Attachments <attachments@herald.demo>", "Step 3: Open and save attachments", "INBOX", 0, 28672, false, true, ai.CategoryTransactional, []string{"onboarding", "attachments", "download", "files"},
-		`Step 3 gives you a safe attachment message to practice with.
+	add(33, "Herald Attachments <attachments@herald.demo>", "Example 3: Open and save attachments", "INBOX", 0, 28672, false, true, ai.CategoryTransactional, []string{"onboarding", "attachments", "download", "files"},
+		`Example 3 gives you a safe attachment message to practice with.
 
 Try now
 - Open this preview and look for the attachment list below the message body.
@@ -362,8 +375,8 @@ The subject row shows an attachment marker when a message has files. Save action
 		withDate(baseTime.Add(6*time.Hour)),
 		withAttachment("herald-demo-checklist.txt", "text/plain", 2048),
 		withAttachment("herald-demo-routing.csv", "text/csv", 4096))
-	add(34, "Herald Image Lab <images@herald.demo>", "Step 4: View inline images in full screen", "INBOX", 0, 270336, true, true, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
-		`Step 4 is the image rendering tour.
+	add(34, "Herald Image Lab <images@herald.demo>", "Example 4: View inline images in full screen", "INBOX", 0, 270336, true, true, ai.CategoryNewsletter, []string{"onboarding", "images", "creative commons", "rendering", "terminal"},
+		`Example 4 is the image rendering tour.
 
 Try now
 - Open this message and press z for full-screen reading.
@@ -384,7 +397,7 @@ Remote image link, intentionally not fetched by Herald:
 ![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)`,
 		withDate(baseTime.Add(5*time.Hour)),
 		withHTMLBody(`<html><body>
-<h1>Step 4: View inline images in full screen</h1>
+<h1>Example 4: View inline images in full screen</h1>
 <p>Open this message and press <strong>z</strong> for full-screen reading.</p>
 <p><img alt="CC BY-SA badge" src="cid:cc-by-sa-badge"></p>
 <p><img alt="Color chart" src="cid:color-chart-330px"></p>
@@ -404,8 +417,8 @@ Remote image link, intentionally not fetched by Herald:
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
 		withInlineImage("bee-on-sunflower-330px", "image/jpeg", demoBeeOnSunflowerJPG),
 		withInlineImage("changing-landscape-960px", "image/jpeg", demoChangingLandscapeJPG))
-	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Step 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, true, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
-		`Step 5 points you at Herald's bulk cleanup workflow.
+	add(35, "Herald Cleanup Coach <cleanup@herald.demo>", "Example 5: Clean up senders and domains safely", "INBOX", 0, 12288, false, true, ai.CategoryNewsletter, []string{"onboarding", "cleanup", "sender", "domain", "unsubscribe"},
+		`Example 5 points you at Herald's bulk cleanup workflow.
 
 Try now
 - Press 3 to open Cleanup.
@@ -419,8 +432,8 @@ Cleanup groups messages by sender or domain so repeated mail can be handled in b
 		withDate(baseTime.Add(4*time.Hour)),
 		withHTML,
 		withUnsub("https://herald.demo/unsubscribe/cleanup-coach"))
-	add(36, "Herald AI Rules <rules@herald.demo>", "Step 6: Classify mail and dry-run rules", "INBOX", 0, 13568, false, true, ai.CategoryImportant, []string{"onboarding", "ai", "rules", "dry-run", "infrastructure", "budget", "risk"},
-		`Step 6 introduces the offline demo AI and rule previews.
+	add(36, "Herald AI Rules <rules@herald.demo>", "Example 6: Classify mail and dry-run rules", "INBOX", 0, 13568, false, true, ai.CategoryImportant, []string{"onboarding", "ai", "rules", "dry-run", "infrastructure", "budget", "risk"},
+		`Example 6 introduces the offline demo AI and rule previews.
 
 Try now
 - Press a to classify the current folder.
@@ -433,8 +446,8 @@ Try now
 What Herald is doing
 Demo AI is deterministic and offline, so classification, semantic search, quick replies, and rule previews work without Ollama. Dry-runs show the matching messages and planned actions before mail is changed.`,
 		withDate(baseTime.Add(3*time.Hour)))
-	add(37, "Herald Settings <settings@herald.demo>", "Step 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, true, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
-		`Step 7 shows where Herald configuration lives.
+	add(37, "Herald Settings <settings@herald.demo>", "Example 7: Configure accounts, AI, and signatures", "INBOX", 0, 11008, true, true, ai.CategoryImportant, []string{"onboarding", "settings", "configuration", "signature", "embedding model"},
+		`Example 7 shows where Herald configuration lives.
 
 Try now
 - Press S to open Settings.
@@ -446,8 +459,8 @@ Try now
 What Herald is doing
 The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
 		withDate(baseTime.Add(2*time.Hour)))
-	add(38, "Herald Next Steps <next@herald.demo>", "Step 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
-		`Step 8 gives you a few extra paths to try after the core tour.
+	add(38, "Herald Next Steps <next@herald.demo>", "Example 8: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
+		`Example 8 gives you a few extra paths to try after the core tour.
 
 Try now
 - Open Contacts and inspect a recent email from a contact.

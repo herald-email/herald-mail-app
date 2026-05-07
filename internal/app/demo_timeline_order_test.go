@@ -1,14 +1,13 @@
 package app
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/herald-email/herald-mail-app/internal/backend"
 )
 
-func TestDemoTimelineRendersOnboardingStepsAsTopEightRows(t *testing.T) {
+func TestDemoTimelineRendersWelcomeThenOnboardingExamplesAsTopRows(t *testing.T) {
 	b := backend.NewDemoBackend()
 	emails, err := b.GetTimelineEmails("INBOX")
 	if err != nil {
@@ -22,12 +21,22 @@ func TestDemoTimelineRendersOnboardingStepsAsTopEightRows(t *testing.T) {
 	m.updateTimelineTable()
 
 	rows := m.timelineTable.Rows()
-	if len(rows) < 8 {
-		t.Fatalf("expected at least 8 timeline rows, got %d", len(rows))
+	wantSubjects := []string{
+		":sparkles: :mailbox: Welcome to Herald",
+		"Example 1:",
+		"Example 2:",
+		"Example 3:",
+		"Example 4:",
+		"Example 5:",
+		"Example 6:",
+		"Example 7:",
+		"Example 8:",
+	}
+	if len(rows) < len(wantSubjects) {
+		t.Fatalf("expected at least %d timeline rows, got %d", len(wantSubjects), len(rows))
 	}
 
-	for i := 0; i < 8; i++ {
-		want := fmt.Sprintf("Step %d:", i+1)
+	for i, want := range wantSubjects {
 		gotSubject := stripANSI(rows[i][2])
 		if !strings.Contains(gotSubject, want) {
 			t.Fatalf("timeline row %d subject = %q, want it to contain %q", i+1, gotSubject, want)

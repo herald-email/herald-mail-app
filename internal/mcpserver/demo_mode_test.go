@@ -24,7 +24,7 @@ func TestDemoMCPServerListsAndReadsDemoEmails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal list_recent_emails response: %v", err)
 	}
-	if !strings.Contains(string(callJSON), "Herald Guide") {
+	if !strings.Contains(string(callJSON), "Herald Welcome") {
 		t.Fatalf("expected Herald onboarding demo mailbox data in response: %s", callJSON)
 	}
 	if !strings.Contains(string(callJSON), "message_id=") {
@@ -41,8 +41,8 @@ func TestDemoMCPSearchFindsCreativeCommonsImageSampler(t *testing.T) {
 		t.Fatalf("marshal search_emails response: %v", err)
 	}
 	body := strings.ToLower(string(callJSON))
-	if !strings.Contains(body, "step 4: view inline images in full screen") {
-		t.Fatalf("expected Step 4 image sampler in search response: %s", callJSON)
+	if !strings.Contains(body, "example 4: view inline images in full screen") {
+		t.Fatalf("expected Example 4 image sampler in search response: %s", callJSON)
 	}
 	if !strings.Contains(body, "message_id=") {
 		t.Fatalf("expected search_emails response to expose message_id values: %s", callJSON)
@@ -53,7 +53,7 @@ func TestDemoMCPSearchFindsCreativeCommonsImageSampler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal image search_emails response: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(string(callJSON)), "step 4: view inline images in full screen") {
-		t.Fatalf("expected image query to find Step 4 sampler: %s", callJSON)
+	if !strings.Contains(strings.ToLower(string(callJSON)), "example 4: view inline images in full screen") {
+		t.Fatalf("expected image query to find Example 4 sampler: %s", callJSON)
 	}
 }

@@ -236,7 +236,7 @@ capture_tui "timeline-search-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.
 capture_tui "timeline-quick-reply-picker" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nCtrl+Q\nSleep 1.2s'
 capture_tui "timeline-full-screen-reader" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.6s'
 if [[ "$INCLUDE_RASTER" == "1" ]]; then
-	capture_tui "timeline-inline-image-preview" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "Step 4"\nSleep 0.2s\nEnter\nSleep 0.8s\nEnter\nSleep 1s\nType "z"\nSleep 1.2s\nDown 14\nSleep 2s' 1400 700 "./bin/herald --demo -image-protocol=kitty"
+	capture_tui "timeline-inline-image-preview" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "Example 4"\nSleep 0.2s\nEnter\nSleep 0.8s\nEnter\nSleep 1s\nType "z"\nSleep 1.2s\nDown 14\nSleep 2s' 1400 700 "./bin/herald --demo -image-protocol=kitty"
 fi
 
 capture_tui "search-timeline-input" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.6s'

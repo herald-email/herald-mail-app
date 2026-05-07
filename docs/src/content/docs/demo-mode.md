@@ -19,13 +19,13 @@ Presentation tapes can add `--demo-keys` to show a compact keypress overlay with
 
 ## Image rendering demo
 
-Demo mode includes a Step 4 Herald Image Lab email with embedded Creative Commons inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
+Demo mode includes an Example 4 Herald Image Lab email with embedded Creative Commons inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
 
 ```sh
 ./bin/herald --demo -image-protocol=kitty
 ```
 
-Search for `Step 4`, open the image message, and press `z` for full-screen preview. iTerm2 can use `-image-protocol=iterm2`; terminals without raster graphics show safe placeholders or local `open image` links when available.
+Search for `Example 4`, open the image message, and press `z` for full-screen preview. iTerm2 can use `-image-protocol=iterm2`; terminals without raster graphics show safe placeholders or local `open image` links when available.
 
 ## Browser demo
 
