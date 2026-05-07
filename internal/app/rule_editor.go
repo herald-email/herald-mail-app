@@ -212,8 +212,8 @@ func (r *RuleEditor) View() tea.View {
 func (r *RuleEditor) renderPanel() string {
 	formView := strings.TrimRight(r.form.View(), "\n")
 	layout := r.panelLayout()
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render("Automation Rule")
-	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(layout.contentWidth)
+	title := defaultTheme.Rules.Title.Style().Render("Automation Rule")
+	noteStyle := defaultTheme.Rules.Note.Style().MaxWidth(layout.contentWidth)
 	return renderCompactOverlayBox(
 		title+"\n\n"+
 			noteStyle.Render("Purpose: future matching mail automation.")+"\n"+

@@ -206,7 +206,7 @@ func (p *PromptEditor) renderPanel() string {
 		title = "Edit Custom Prompt"
 	}
 	layout := p.panelLayout()
-	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render(title)
+	header := defaultTheme.Rules.Title.Style().Render(title)
 	return renderCompactOverlayBox(
 		header+"\n\n"+
 			p.guideView(layout.contentWidth)+"\n\n"+
@@ -270,8 +270,8 @@ func (p *PromptEditor) compactGuide() bool {
 }
 
 func (p *PromptEditor) guideView(width int) string {
-	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(width)
-	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
+	noteStyle := defaultTheme.Rules.Note.Style().MaxWidth(width)
+	labelStyle := defaultTheme.Rules.GuideLabel.Style()
 
 	if p.compactGuide() {
 		lines := []string{

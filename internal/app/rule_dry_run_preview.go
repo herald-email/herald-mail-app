@@ -230,12 +230,12 @@ func (p *ruleDryRunPreview) renderPanel(width, height int) string {
 	innerW := layout.contentWidth
 	tableW := dryRunPreviewTableWidth(innerW)
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MaxWidth(innerW)
-	tableStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
-	warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
-	rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
+	titleStyle := defaultTheme.Rules.Title.Style()
+	noteStyle := defaultTheme.Rules.Note.Style().MaxWidth(innerW)
+	tableStyle := defaultTheme.Rules.Note.Style()
+	warnStyle := defaultTheme.Rules.DryRun.Style()
+	rowStyle := defaultTheme.Rules.Row.Style()
+	selectedStyle := defaultTheme.Rules.Selected.Style()
 
 	var content []string
 	kind := "Automation Rules"
@@ -251,7 +251,7 @@ func (p *ruleDryRunPreview) renderPanel(width, height int) string {
 		content = append(content, noteStyle.Render(truncateVisual("Pending cleanup rule: "+p.pendingCleanupRule.Name, innerW)))
 	}
 	if p.err != "" {
-		content = append(content, lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(truncateVisual("Error: "+p.err, innerW)))
+		content = append(content, defaultTheme.Rules.Error.Style().Render(truncateVisual("Error: "+p.err, innerW)))
 	}
 	content = append(content, "")
 
