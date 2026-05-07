@@ -7,7 +7,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/backend"
 )
 
-func TestDemoTimelineRendersWelcomeThenOnboardingExamplesAsTopRows(t *testing.T) {
+func TestDemoTimelineRendersWelcomeThenOnboardingStepsAsTopRows(t *testing.T) {
 	b := backend.NewDemoBackend()
 	emails, err := b.GetTimelineEmails("INBOX")
 	if err != nil {
@@ -23,14 +23,14 @@ func TestDemoTimelineRendersWelcomeThenOnboardingExamplesAsTopRows(t *testing.T)
 	rows := m.timelineTable.Rows()
 	wantSubjects := []string{
 		"✉ Welcome to Herald",
-		"Example 1:",
-		"Example 2:",
-		"Example 3:",
-		"Example 4:",
-		"Example 5:",
-		"Example 6:",
-		"Example 7:",
-		"Example 8:",
+		"Step 1:",
+		"Step 2:",
+		"Step 3:",
+		"Step 4:",
+		"Step 5:",
+		"Step 6:",
+		"Step 7:",
+		"Step 8:",
 	}
 	if len(rows) < len(wantSubjects) {
 		t.Fatalf("expected at least %d timeline rows, got %d", len(wantSubjects), len(rows))
