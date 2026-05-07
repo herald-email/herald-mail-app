@@ -782,6 +782,28 @@ Check these states during every applicable lane:
 - Rows whose subject starts with a reply prefix show a visible `↩` reply marker at the beginning of the sender cell; an expanded reply root shows `▾ ↩`.
 - Non-reply child rows still use the existing `↳` indentation marker.
 
+### TC-16B — Multi-recipient preview headers and reply-all
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start `/tmp/herald --demo`.
+2. Open Timeline and select the Cobalt Works reply thread.
+3. Open the message preview for a Cobalt Works message whose loaded body has multiple `To` recipients and a `Cc` recipient.
+4. Confirm the split preview header shows `From:`, `To:`, `Cc:`, `Date:`, `Subj:`, `Tags:`, and `Actions:` in that order when recipients exist.
+5. Press `z` and confirm the full-screen preview shows the same loaded `To:` and `Cc:` recipient headers without showing `Bcc:`.
+6. Press `r` from the message and confirm Compose opens as reply-all with the sender plus non-self `To` and `Cc` participants filled.
+7. Return to Timeline, press `R` from the same message, and confirm Compose addresses only the original sender.
+
+**Expect:**
+- Demo fixtures include at least one Cobalt Works message with more than one `To` recipient and at least one visible `Cc` recipient.
+- Split and full-screen preview headers show loaded `To:` and `Cc:` lines only after the body is loaded and only when those headers are non-empty.
+- Preview headers never show `Bcc:`.
+- Reply-all filters the current account and duplicate addresses while preserving sender, other primary recipients, and copied participants.
+- Sender-only reply remains sender-only.
+- At `50x15`, Herald shows the minimum-size guard and recovers when resized larger.
+
 ### TC-17 — Preview unwind order
 
 **Lane:** A, B

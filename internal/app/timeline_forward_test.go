@@ -253,3 +253,88 @@ func TestTimelineReplyBodyResultOpensComposeWithPreservedContext(t *testing.T) {
 		t.Fatalf("compose subject = %q", got)
 	}
 }
+
+func TestTimelineReplyAllIncludesNonSelfToAndCcRecipients(t *testing.T) {
+	backend := &forwardBodyBackend{body: &models.EmailBody{
+		To:        "Rowan Finch <demo@demo.local>, Rae Stone <rae@cobalt-works.example>",
+		CC:        "Hiring Panel <panel@cobalt-works.example>, Mina Park <mina@cobalt-works.example>",
+		TextPlain: "reply body",
+	}}
+	m, email := newTimelineForwardModel(backend)
+	m.fromAddress = "demo@demo.local"
+	email.Sender = "Mina Park <mina@cobalt-works.example>"
+	email.Subject = "Example: Thread with Cobalt Works"
+	m.timeline.emails[0] = email
+	m.updateTimelineTable()
+
+	model, cmd, handled := m.handleTimelineKey(keyRunes("r"))
+	updated := model.(*Model)
+	if !handled {
+		t.Fatal("expected r reply-all key to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected reply-all to fetch body before opening compose")
+	}
+
+	msg := cmd().(TimelineReplyBodyMsg)
+	model, _, handled = updated.handleTimelineMsg(msg)
+	updated = model.(*Model)
+	if !handled {
+		t.Fatal("expected reply-all body result to be handled")
+	}
+
+	requireAddressList(t, updated.composeTo.Value(), "mina@cobalt-works.example", "rae@cobalt-works.example")
+	requireAddressList(t, updated.composeCC.Value(), "panel@cobalt-works.example")
+	if strings.Contains(updated.composeTo.Value(), "demo@demo.local") || strings.Contains(updated.composeCC.Value(), "demo@demo.local") {
+		t.Fatalf("reply-all must filter self address, got To=%q Cc=%q", updated.composeTo.Value(), updated.composeCC.Value())
+	}
+}
+
+func requireAddressList(t *testing.T, value string, want ...string) {
+	t.Helper()
+	addrs := parseHeaderAddressValues(value)
+	if len(addrs) != len(want) {
+		t.Fatalf("address list %q has %d addresses, want %d", value, len(addrs), len(want))
+	}
+	for i, addr := range addrs {
+		if addr.Address != want[i] {
+			t.Fatalf("address %d in %q = %q, want %q", i, value, addr.Address, want[i])
+		}
+	}
+}
+
+func TestTimelineReplySenderIgnoresOriginalToAndCcRecipients(t *testing.T) {
+	backend := &forwardBodyBackend{body: &models.EmailBody{
+		To:        "Rowan Finch <demo@demo.local>, Rae Stone <rae@cobalt-works.example>",
+		CC:        "Hiring Panel <panel@cobalt-works.example>",
+		TextPlain: "reply body",
+	}}
+	m, email := newTimelineForwardModel(backend)
+	email.Sender = "Mina Park <mina@cobalt-works.example>"
+	email.Subject = "Example: Thread with Cobalt Works"
+	m.timeline.emails[0] = email
+	m.updateTimelineTable()
+
+	model, cmd, handled := m.handleTimelineKey(keyRunes("R"))
+	updated := model.(*Model)
+	if !handled {
+		t.Fatal("expected R sender-only reply key to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected sender-only reply to fetch body before opening compose")
+	}
+
+	msg := cmd().(TimelineReplyBodyMsg)
+	model, _, handled = updated.handleTimelineMsg(msg)
+	updated = model.(*Model)
+	if !handled {
+		t.Fatal("expected sender-only reply body result to be handled")
+	}
+
+	if got, want := updated.composeTo.Value(), "Mina Park <mina@cobalt-works.example>"; got != want {
+		t.Fatalf("sender-only To = %q, want %q", got, want)
+	}
+	if got := updated.composeCC.Value(); got != "" {
+		t.Fatalf("sender-only Cc = %q, want empty", got)
+	}
+}

@@ -139,7 +139,7 @@ func TestRenderPreviewHeaderLines_DraftStateNote(t *testing.T) {
 		IsDraft: true,
 	}
 
-	lines := renderPreviewHeaderLines(email, "", false, 80, true)
+	lines := renderPreviewHeaderLines(email, nil, "", false, 80, true)
 	stripped := stripANSI(strings.Join(lines, "\n"))
 	if !strings.Contains(stripped, "State: Draft reply - E edit draft - Ctrl+S send") {
 		t.Fatalf("expected draft state note in preview header, got:\n%s", stripped)

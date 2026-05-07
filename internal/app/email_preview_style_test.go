@@ -21,7 +21,7 @@ func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T
 		Date:    time.Date(2026, 4, 22, 11, 39, 0, 0, loc),
 	}
 
-	lines := renderPreviewHeaderLines(email, "news", true, 80, true)
+	lines := renderPreviewHeaderLines(email, nil, "news", true, 80, true)
 	rendered := strings.Join(lines, "\n")
 	stripped := stripANSI(rendered)
 

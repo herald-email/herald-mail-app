@@ -147,7 +147,7 @@ func stylePreviewHeaderLine(line, label string, styles previewHeaderStyles, valu
 	return valueStyle.Render(line)
 }
 
-func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsubscribe bool, innerW int, active bool) []string {
+func renderPreviewHeaderLines(email *models.EmailData, body *models.EmailBody, category string, hasUnsubscribe bool, innerW int, active bool) []string {
 	if email == nil {
 		return nil
 	}
@@ -155,9 +155,19 @@ func renderPreviewHeaderLines(email *models.EmailData, category string, hasUnsub
 	styles := newPreviewHeaderStyles(active)
 	lines := []string{
 		renderPreviewHeaderLine("From:", email.Sender, innerW, styles, styles.from),
+	}
+	if body != nil {
+		if to := strings.TrimSpace(body.To); to != "" {
+			lines = append(lines, renderPreviewHeaderWrapped("To:", to, innerW, styles, styles.from)...)
+		}
+		if cc := strings.TrimSpace(body.CC); cc != "" {
+			lines = append(lines, renderPreviewHeaderWrapped("Cc:", cc, innerW, styles, styles.from)...)
+		}
+	}
+	lines = append(lines,
 		renderPreviewHeaderLine("Date:", formatPreviewHeaderDate(email.Date), innerW, styles, styles.date),
 		renderPreviewHeaderLine("Subj:", email.Subject, innerW, styles, styles.subj),
-	}
+	)
 	if email.IsDraft {
 		lines = append(lines, renderPreviewHeaderLine("State:", draftStateText(email), innerW, styles, styles.action))
 	}
@@ -315,7 +325,11 @@ func (m *Model) renderEmailPreview() string {
 	if email != nil {
 		category = m.previewCategory(email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLines(email, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW, headerActive)
+	var headerBody *models.EmailBody
+	if bodyMatchesSelected {
+		headerBody = m.timeline.body
+	}
+	headerLines := renderPreviewHeaderLines(email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW, headerActive)
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
@@ -499,7 +513,11 @@ func (m *Model) renderFullScreenEmail() string {
 	if email != nil {
 		category = m.previewCategory(email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW, true)
+	var headerBody *models.EmailBody
+	if email != nil && m.timeline.bodyMessageID == email.MessageID {
+		headerBody = m.timeline.body
+	}
+	headerLines := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, true)
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
@@ -572,7 +590,11 @@ func (m *Model) timelineFullScreenDocumentBudget() (int, int) {
 	if email != nil {
 		category = m.previewCategory(email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.timeline.body), innerW, true)
+	var headerBody *models.EmailBody
+	if email != nil && m.timeline.bodyMessageID == email.MessageID {
+		headerBody = m.timeline.body
+	}
+	headerLines := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, true)
 
 	maxBodyLines := m.windowHeight - len(headerLines) - 1
 	if m.timeline.quickReplyOpen {
@@ -1045,7 +1067,11 @@ func (m *Model) renderCleanupPreview() string {
 	if m.cleanupPreviewEmail != nil {
 		email := m.cleanupPreviewEmail
 		category := m.previewCategory(email.MessageID)
-		header := renderPreviewHeaderLines(email, category, previewHasUnsubscribe(m.cleanupEmailBody), innerW, headerActive)
+		var headerBody *models.EmailBody
+		if !m.cleanupBodyLoading {
+			headerBody = m.cleanupEmailBody
+		}
+		header := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, headerActive)
 		headerLines = len(header)
 		for _, line := range header {
 			sb.WriteString(line + "\n")

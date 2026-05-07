@@ -275,6 +275,15 @@ func buildMailbox() MailboxFixture {
 			msg.Body.ListUnsubscribePost = "List-Unsubscribe=One-Click"
 		}
 	}
+	withHeaders := func(from, to, cc, bcc string) func(*Message) {
+		return func(msg *Message) {
+			msg.Body.From = from
+			msg.Body.To = to
+			msg.Body.CC = cc
+			msg.Body.BCC = bcc
+			msg.Body.Subject = msg.Email.Subject
+		}
+	}
 	withAttachment := func(filename, mime string, size int) func(*Message) {
 		return func(msg *Message) {
 			msg.Email.HasAttachments = true
@@ -507,9 +516,11 @@ The demo mailbox is shared across the TUI and MCP demo surfaces, so search, stat
 		"Northstar Cloud detected a usage change on Project Orion.\n\nThe compute cluster is 18 percent above forecast and the attached invoice highlights the services driving the budget risk.\n\nReview before Friday so the infrastructure owner can right-size the workload.",
 		withAttachment("northstar-orion-invoice.pdf", "application/pdf", 184320))
 	add(26, "Rowan Finch <demo@demo.local>", "Re: Example: Thread with Cobalt Works", "INBOX", 0, 8704, false, true, ai.CategoryImportant, []string{"reply", "scheduling", "interview"},
-		"Hi Mina,\n\nThanks for the update - looking forward to it. I'll keep an eye out for Rae's message.\n\nBest regards,\nRowan Finch")
+		"Hi Mina,\n\nThanks for the update - looking forward to it. I'll keep an eye out for Rae's message.\n\nBest regards,\nRowan Finch",
+		withHeaders("Rowan Finch <demo@demo.local>", "Mina Park <mina@cobalt-works.example>, Rae Stone <rae@cobalt-works.example>", "Hiring Panel <panel@cobalt-works.example>", ""))
 	add(27, "Mina Park <mina@cobalt-works.example>", "Example: Thread with Cobalt Works", "INBOX", 1, 9216, true, false, ai.CategoryImportant, []string{"scheduling", "interview", "follow-up"},
-		"Hi Rowan,\n\nThank you for taking the time to speak with me. For next steps, we'd like to invite you to complete our technical assessment. Rae will reach out separately with a scheduling link and more details on what to expect.\n\nPlease don't hesitate to reach out if you have any questions.\n\nCheers,\nMina")
+		"Hi Rowan,\n\nThank you for taking the time to speak with me. For next steps, we'd like to invite you to complete our technical assessment. Rae will reach out separately with a scheduling link and more details on what to expect.\n\nPlease don't hesitate to reach out if you have any questions.\n\nCheers,\nMina",
+		withHeaders("Mina Park <mina@cobalt-works.example>", "Rowan Finch <demo@demo.local>, Rae Stone <rae@cobalt-works.example>", "Hiring Panel <panel@cobalt-works.example>", ""))
 	add(28, "Rowan Finch <demo@demo.local>", "Re: Example: Thread with Cobalt Works", "Drafts", 0, 6144, true, false, ai.CategoryImportant, []string{"draft", "scheduling", "interview"},
 		"Hi Mina,\n\nThanks for the details and the scheduling link. I'll use it to select a time shortly.\n\nLooking forward to the next step.\n\nBest regards,\nRowan Finch",
 		withDraft("mina@cobalt-works.example, rae@cobalt-works.example", "", ""))
