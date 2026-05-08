@@ -1,0 +1,4 @@
+interface:
+  display_name: "Finish Development"
+  short_description: "Commit, merge, and clean up Herald worktrees"
+  default_prompt: "Use $finish-development to verify, commit, merge to main, and remove the completed Herald worktree."

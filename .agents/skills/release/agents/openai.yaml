@@ -1,0 +1,4 @@
+interface:
+  display_name: "Herald Release"
+  short_description: "Review changes and publish Herald beta tags"
+  default_prompt: "Use $release to review Herald changes since the last tag, choose the beta version bump, tag, push, monitor CI/CD, and write release notes."
