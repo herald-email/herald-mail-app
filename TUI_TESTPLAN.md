@@ -579,6 +579,7 @@ Check these states during every applicable lane:
 - `Esc` from Compose returns to the Timeline state that opened it after local Compose transient state is dismissed.
 - `1/2/3` are the advertised tab keys in browse contexts; `F1/F2/F3` remain supported as legacy aliases.
 - Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings.
+- A Custom keymap that remaps tab switching, Compose, reply, forward, archive, delete, re-classify, sidebar, logs, or chat shows the remapped primary keys in the bottom hint bar, title-row tabs, and `?` shortcut help.
 - Timeline `c` opens blank Compose; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
 - Settings persists `keyboard.profile` and `keyboard.custom_keymap` without losing unrelated config fields.
