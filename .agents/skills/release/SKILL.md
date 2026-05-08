@@ -151,7 +151,7 @@ Download and checksum artifacts when feasible. Note any hardware-specific verifi
 
 ## Release Notes
 
-Write concise release notes after the successful release run. Prefer a local audit file under `reports/`, for example:
+Write concise user-facing release notes after the successful release run. Prefer a local notes file under `reports/`, for example:
 
 ```bash
 mkdir -p reports
@@ -170,15 +170,9 @@ Use this structure:
 ## Fixes
 
 - ...
-
-## Verification
-
-- ...
-
-## Known Limits
-
-- ...
 ```
+
+Keep verification details, hardware-specific skips, and infrastructure warnings out of the public release notes. Report those in the final response instead.
 
 If GitHub's generated notes need curation, update the versioned release with the notes file:
 
