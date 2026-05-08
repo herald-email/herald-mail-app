@@ -61,6 +61,7 @@ const (
 )
 
 type keyboardBindingMap map[string]map[string]map[string]string
+type keyboardCommandKeyMap map[string]map[string]map[string]string
 
 // KeyboardResolver owns the configured key profile and custom overrides.
 // Handlers can resolve by scope/mode without knowing whether a binding came
@@ -68,6 +69,7 @@ type keyboardBindingMap map[string]map[string]map[string]string
 type KeyboardResolver struct {
 	profile       string
 	bindings      keyboardBindingMap
+	primaryKeys   keyboardCommandKeyMap
 	fieldDefaults map[string]string
 }
 
@@ -125,9 +127,11 @@ func NewKeyboardResolver(cfg *config.Config) *KeyboardResolver {
 	default:
 		profile = keyboardProfileDefault
 	}
+	bindings, primaryKeys := builtInKeyboardProfile(profile)
 	resolver := &KeyboardResolver{
 		profile:       profile,
-		bindings:      builtInKeyboardBindings(profile),
+		bindings:      bindings,
+		primaryKeys:   primaryKeys,
 		fieldDefaults: builtInKeyboardFieldDefaults(profile),
 	}
 	return resolver
@@ -187,10 +191,12 @@ func (r *KeyboardResolver) ApplyCustomKeymap(data []byte) error {
 	if base == "" || base == keyboardProfileCustom {
 		base = keyboardProfileVim
 	}
+	bindings, primaryKeys := builtInKeyboardProfile(base)
 	r.profile = keyboardProfileCustom
-	r.bindings = builtInKeyboardBindings(base)
+	r.bindings = bindings
+	r.primaryKeys = primaryKeys
 	r.fieldDefaults = builtInKeyboardFieldDefaults(base)
-	mergeKeyboardBindings(r.bindings, custom.Bindings)
+	mergeKeyboardBindings(r.bindings, r.primaryKeys, custom.Bindings)
 	for field, cfg := range custom.Fields {
 		field = strings.ToLower(strings.TrimSpace(field))
 		mode := strings.ToLower(strings.TrimSpace(cfg.DefaultMode))
@@ -245,7 +251,13 @@ func parseCustomKeymap(data []byte) (*customKeymapFile, error) {
 }
 
 func builtInKeyboardBindings(profile string) keyboardBindingMap {
+	bindings, _ := builtInKeyboardProfile(profile)
+	return bindings
+}
+
+func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommandKeyMap) {
 	bindings := keyboardBindingMap{}
+	primaryKeys := keyboardCommandKeyMap{}
 	add := func(scope, mode, keyName, command string) {
 		if bindings[scope] == nil {
 			bindings[scope] = map[string]map[string]string{}
@@ -254,10 +266,23 @@ func builtInKeyboardBindings(profile string) keyboardBindingMap {
 			bindings[scope][mode] = map[string]string{}
 		}
 		bindings[scope][mode][keyName] = command
+		if primaryKeys[scope] == nil {
+			primaryKeys[scope] = map[string]map[string]string{}
+		}
+		if primaryKeys[scope][mode] == nil {
+			primaryKeys[scope][mode] = map[string]string{}
+		}
+		if primaryKeys[scope][mode][command] == "" {
+			primaryKeys[scope][mode][command] = keyName
+		}
+	}
+	prefer := func(scope, mode, keyName, command string) {
+		add(scope, mode, keyName, command)
+		primaryKeys[scope][mode][command] = keyName
 	}
 
 	add(keyboardScopeGlobal, keyboardModeNormal, "ctrl+c", CommandAppQuit)
-	add(keyboardScopeGlobal, keyboardModeNormal, "q", CommandAppQuit)
+	prefer(keyboardScopeGlobal, keyboardModeNormal, "q", CommandAppQuit)
 	add(keyboardScopeGlobal, keyboardModeNormal, "?", CommandHelpOpen)
 	add(keyboardScopeGlobal, keyboardModeNormal, "S", CommandAppSettings)
 	add(keyboardScopeGlobal, keyboardModeNormal, "ctrl+r", CommandAppRefresh)
@@ -293,6 +318,24 @@ func builtInKeyboardBindings(profile string) keyboardBindingMap {
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
 
+	for _, scope := range []string{"cleanup", "contacts"} {
+		add(scope, keyboardModeNormal, "h", CommandPaneLeft)
+		add(scope, keyboardModeNormal, "j", CommandPaneDown)
+		add(scope, keyboardModeNormal, "k", CommandPaneUp)
+		add(scope, keyboardModeNormal, "l", CommandPaneRight)
+		add(scope, keyboardModeNormal, "left", CommandPaneLeft)
+		add(scope, keyboardModeNormal, "down", CommandPaneDown)
+		add(scope, keyboardModeNormal, "up", CommandPaneUp)
+		add(scope, keyboardModeNormal, "right", CommandPaneRight)
+		add(scope, keyboardModeNormal, "/", CommandHelpSearch)
+	}
+	add("cleanup", keyboardModeNormal, "a", CommandMailArchiveCurrent)
+	add("cleanup", keyboardModeNormal, "e", CommandMailArchiveCurrent)
+	add("cleanup", keyboardModeNormal, "D", CommandMailDeleteConfirm)
+	add("cleanup", keyboardModeNormal, "T", CommandMailReclassify)
+	add("cleanup", keyboardModeNormal, "A", CommandMailReclassify)
+	add("cleanup", keyboardModeNormal, "H", CommandMailHideFuture)
+
 	add("field", keyboardModeNormal, "i", CommandFieldInsert)
 	add("field", keyboardModeNormal, "a", CommandFieldAppend)
 	add("field", keyboardModeNormal, "A", CommandFieldAppendLineEnd)
@@ -300,16 +343,18 @@ func builtInKeyboardBindings(profile string) keyboardBindingMap {
 
 	switch profile {
 	case keyboardProfileEmacs:
-		add("timeline", keyboardModeNormal, "ctrl+f", CommandPaneRight)
-		add("timeline", keyboardModeNormal, "ctrl+b", CommandPaneLeft)
-		add("timeline", keyboardModeNormal, "ctrl+n", CommandPaneDown)
-		add("timeline", keyboardModeNormal, "ctrl+p", CommandPaneUp)
+		for _, scope := range []string{"timeline", "cleanup", "contacts"} {
+			prefer(scope, keyboardModeNormal, "ctrl+f", CommandPaneRight)
+			prefer(scope, keyboardModeNormal, "ctrl+b", CommandPaneLeft)
+			prefer(scope, keyboardModeNormal, "ctrl+n", CommandPaneDown)
+			prefer(scope, keyboardModeNormal, "ctrl+p", CommandPaneUp)
+		}
 	case keyboardProfileVim, keyboardProfileCustom, keyboardProfileDefault:
 		// The default profile intentionally uses Vim-like movement because it
 		// is the coherent remap requested for browsing mail.
 	}
 
-	return bindings
+	return bindings, primaryKeys
 }
 
 func builtInKeyboardFieldDefaults(profile string) map[string]string {
@@ -335,6 +380,43 @@ func (r *KeyboardResolver) FieldDefaultMode(field string) string {
 		return mode
 	}
 	return keyboardModeInsert
+}
+
+func (r *KeyboardResolver) PrimaryKey(scope, mode, command string) string {
+	if r == nil {
+		r = NewKeyboardResolver(nil)
+	}
+	scope = strings.ToLower(strings.TrimSpace(scope))
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	command = strings.TrimSpace(command)
+	if scope == "" || command == "" {
+		return ""
+	}
+	if mode == "" {
+		mode = keyboardModeNormal
+	}
+	if key := r.lookupPrimary(scope, mode, command); key != "" {
+		return key
+	}
+	if scope != keyboardScopeGlobal {
+		return r.lookupPrimary(keyboardScopeGlobal, mode, command)
+	}
+	return ""
+}
+
+func (r *KeyboardResolver) lookupPrimary(scope, mode, command string) string {
+	if r == nil || r.primaryKeys == nil {
+		return ""
+	}
+	byMode, ok := r.primaryKeys[scope]
+	if !ok {
+		return ""
+	}
+	byCommand, ok := byMode[mode]
+	if !ok {
+		return ""
+	}
+	return byCommand[command]
 }
 
 func canonicalKeyForCommand(scope, command string) string {
@@ -428,13 +510,28 @@ func shortcutKeyPressMsg(key string) tea.KeyPressMsg {
 	return msg
 }
 
-func mergeKeyboardBindings(dst keyboardBindingMap, src map[string]map[string]map[string]string) {
-	for scope, byMode := range src {
+func mergeKeyboardBindings(dst keyboardBindingMap, primary keyboardCommandKeyMap, src map[string]map[string]map[string]string) {
+	scopes := make([]string, 0, len(src))
+	for scope := range src {
+		scopes = append(scopes, scope)
+	}
+	sort.Strings(scopes)
+	for _, scope := range scopes {
+		byMode := src[scope]
 		scope = strings.ToLower(strings.TrimSpace(scope))
 		if dst[scope] == nil {
 			dst[scope] = map[string]map[string]string{}
 		}
-		for mode, byKey := range byMode {
+		if primary[scope] == nil {
+			primary[scope] = map[string]map[string]string{}
+		}
+		modes := make([]string, 0, len(byMode))
+		for mode := range byMode {
+			modes = append(modes, mode)
+		}
+		sort.Strings(modes)
+		for _, mode := range modes {
+			byKey := byMode[mode]
 			mode = strings.ToLower(strings.TrimSpace(mode))
 			if mode == "" {
 				mode = keyboardModeNormal
@@ -442,9 +539,54 @@ func mergeKeyboardBindings(dst keyboardBindingMap, src map[string]map[string]map
 			if dst[scope][mode] == nil {
 				dst[scope][mode] = map[string]string{}
 			}
-			for keyName, command := range byKey {
-				dst[scope][mode][strings.TrimSpace(keyName)] = strings.TrimSpace(command)
+			if primary[scope][mode] == nil {
+				primary[scope][mode] = map[string]string{}
+			}
+			keys := make([]string, 0, len(byKey))
+			for keyName := range byKey {
+				keys = append(keys, keyName)
+			}
+			sort.Strings(keys)
+			for _, keyName := range keys {
+				command := strings.TrimSpace(byKey[keyName])
+				keyName = strings.TrimSpace(keyName)
+				previous := dst[scope][mode][keyName]
+				dst[scope][mode][keyName] = command
+				if previous != "" && previous != command && primary[scope][mode][previous] == keyName {
+					setPrimaryKeyForCommand(scope, primary[scope][mode], dst[scope][mode], previous)
+				}
+				if command != "" {
+					primary[scope][mode][command] = keyName
+				}
 			}
 		}
 	}
+}
+
+func setPrimaryKeyForCommand(scope string, primary map[string]string, bindings map[string]string, command string) {
+	delete(primary, command)
+	if key := preferredBoundKey(scope, bindings, command); key != "" {
+		primary[command] = key
+	}
+}
+
+func preferredBoundKey(scope string, bindings map[string]string, command string) string {
+	var keys []string
+	for keyName, boundCommand := range bindings {
+		if boundCommand == command {
+			keys = append(keys, keyName)
+		}
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	if canonical := canonicalKeyForCommand(scope, command); canonical != "" {
+		for _, keyName := range keys {
+			if keyName == canonical {
+				return keyName
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys[0]
 }

@@ -155,7 +155,7 @@ func (m *Model) renderTabBar() string {
 	active := defaultTheme.Chrome.TabActive.Style().Padding(0, 2)
 
 	tab := func(item tabNavigationItem) string {
-		label := tabBarLabel(item)
+		label := m.tabBarLabel(item)
 		if m.activeTab == item.tab {
 			return active.Render(label)
 		}
@@ -495,7 +495,7 @@ func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
 	}
 	hints := m.rawKeyHintsForWidth(width, chrome)
 	if m.shouldAdvertiseShortcutHelp() {
-		hints = joinHintSegments("?: help", hints)
+		hints = joinHintSegments(m.commandHint(keyboardScopeGlobal, CommandHelpOpen, "help"), hints)
 	}
 	return wrapChromeSegments(hints, width-2, 2)
 }
@@ -511,22 +511,26 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
-		hints = "enter: send  │  esc/tab: close chat  │  q: quit"
+		hints = joinHintSegments("enter: send", "esc/tab: close chat", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 	} else if chrome.ShowLogs {
-		hints = "L/esc: close logs  │  ↑/k ↓/j: scroll  │  q: quit"
+		hints = joinHintSegments(
+			fmt.Sprintf("%s/esc: close logs", displayShortcutKey(m.commandKey(keyboardScopeGlobal, CommandLogsToggle), keyDisplayHint)),
+			m.movementHint("timeline", "scroll"),
+			m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"),
+		)
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  ctrl+c: quit"
+		hints = m.primaryTabShortcutHint() + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  ctrl+c: quit"
 		if m.composePreserved != nil {
-			hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  esc: back  │  ctrl+c: quit"
+			hints = m.primaryTabShortcutHint() + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  esc: back  │  ctrl+c: quit"
 			if m.composeField == composeFieldOriginalMessage {
-				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
+				hints = m.primaryTabShortcutHint() + "  │  " + m.movementHint("timeline", "scroll original") + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
 			}
 			if m.hasForwardedAttachments() {
-				hints = primaryTabShortcutHint + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  esc: back  │  ctrl+c: quit"
+				hints = m.primaryTabShortcutHint() + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  x: toggle fwd attach  │  esc: back  │  ctrl+c: quit"
 				if m.composeField == composeFieldOriginalMessage {
-					hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: scroll original  │  tab: attachments  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
+					hints = m.primaryTabShortcutHint() + "  │  " + m.movementHint("timeline", "scroll original") + "  │  tab: attachments  │  ctrl+o: preserve mode  │  ctrl+s: send  │  esc: back  │  ctrl+c: quit"
 				}
 			}
 		}
@@ -538,23 +542,33 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else if m.contactPreviewEmail != nil {
 			hints = "tab: next panel  │  esc: back to contact  │  q: quit"
 		} else if m.contactFocusPanel == 1 {
-			hints = primaryTabShortcutHint + "  │  tab: list panel  │  ↑/k ↓/j: nav emails  │  e: enrich  │  enter: open email  │  q: quit"
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		} else {
-			hints = primaryTabShortcutHint + "  │  tab: detail panel  │  ↑/k ↓/j: nav  │  enter: detail  │  /: search  │  ?: semantic  │  e: enrich  │  esc: clear  │  q: quit"
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: detail panel", m.movementHint("contacts", "nav"), "enter: detail", m.commandHint("contacts", CommandHelpSearch, "search"), "?: semantic", "e: enrich", "esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}
 	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
-		hints = "↑/k ↓/j: scroll preview  │  " + previewActionHintText(previewHasUnsubscribe(m.cleanupEmailBody)) + "  │  enter: scroll down  │  z: full-screen  │  esc: close preview  │  D: delete  │  a: archive  │  T: re-classify  │  q: quit"
+		hints = joinHintSegments(
+			m.movementHint("cleanup", "scroll preview"),
+			m.previewActionHintText("cleanup", previewHasUnsubscribe(m.cleanupEmailBody)),
+			"enter: scroll down",
+			"z: full-screen",
+			"esc: close preview",
+			m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"),
+			m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"),
+			m.commandHint("cleanup", CommandMailReclassify, "re-classify"),
+			m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"),
+		)
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
-			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  space: expand  │  enter: open  │  ctrl+r: refresh  │  B: hide  │  g: chat  │  q: quit"
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("timeline", "nav"), "space: expand", "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "hide"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		case panelDetails:
-			hints = primaryTabShortcutHint + "  │  tab: next panel  │  ↑/k ↓/j: nav  │  enter: preview  │  H: hide future mail  │  space: select  │  D: delete  │  a: archive  │  ctrl+r: refresh  │  g: chat  │  L: logs  │  q: quit"
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("cleanup", "nav"), "enter: preview", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandLogsToggle, "logs"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
-				hints = primaryTabShortcutHint + "  │  ↑/k ↓/j: nav  │  enter: details  │  H: hide  │  space: select  │  W: rule  │  C: cleanup  │  P: prompt  │  d: domain  │  D: delete  │  q: quit"
+				hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("cleanup", "nav"), "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide"), "space: select", "W: rule", "C: cleanup", "P: prompt", "d: domain", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 			} else {
-				hints = primaryTabShortcutHint + "  │  tab: panel  │  enter: details  │  H: hide future mail  │  space: select  │  D: delete  │  a: archive  │  d: domain  │  ctrl+r: refresh  │  W: rule  │  C: cleanup  │  P: prompt  │  B: sidebar  │  g: chat  │  q: quit"
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: panel", "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), "d: domain", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), "W: rule", "C: cleanup", "P: prompt", m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 			}
 		}
 	}
@@ -566,6 +580,14 @@ func previewActionHintText(hasUnsubscribe bool) string {
 		return "H: hide future mail  │  u: unsubscribe"
 	}
 	return "H: hide future mail"
+}
+
+func (m *Model) previewActionHintText(scope string, hasUnsubscribe bool) string {
+	hide := m.commandHint(scope, CommandMailHideFuture, "hide future mail")
+	if hasUnsubscribe {
+		return joinHintSegments(hide, "u: unsubscribe")
+	}
+	return hide
 }
 
 func (m *Model) setFocusedPanel(panel int) {

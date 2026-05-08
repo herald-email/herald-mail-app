@@ -73,7 +73,7 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 	}
 	x := m.titleTabStartX()
 	for _, item := range topLevelTabNavigation {
-		w := tabMouseWidth(item)
+		w := m.tabMouseWidth(item)
 		if msg.X >= x && msg.X < x+w {
 			switch item.tab {
 			case tabTimeline:

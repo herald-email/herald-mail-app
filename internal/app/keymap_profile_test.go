@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
@@ -92,7 +93,7 @@ bindings:
 }
 
 func TestCustomKeymapRoutesTimelineCommands(t *testing.T) {
-	m := makeSizedModel(t, 140, 40)
+	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
@@ -116,6 +117,221 @@ bindings:
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab = %d, want Compose", updated.activeTab)
 	}
+}
+
+func TestCustomKeymapBottomHintsUseResolvedTimelineKeys(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  global:
+    normal:
+      b: sidebar.toggle
+      o: logs.toggle
+      7: tab.timeline
+      8: tab.cleanup
+      9: tab.contacts
+  timeline:
+    normal:
+      n: compose.new
+      p: mail.reply_all
+      s: mail.reply_sender
+      w: mail.forward
+      x: mail.archive_current
+      z: mail.delete_confirm
+      G: mail.reclassify
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+	m.keyboard = resolver
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints,
+		"7-9: tabs",
+		"n: compose",
+		"p: all",
+		"s: sender",
+		"w: forward",
+		"z: delete",
+		"x: archive",
+		"G: re-classify",
+		"b: sidebar",
+	)
+	for _, stale := range []string{"1-3: tabs", "c: compose", "r: all", "R: sender", "f: forward", "D: delete", "a: archive", "T: re-classify", "B: sidebar"} {
+		if strings.Contains(hints, stale) {
+			t.Fatalf("expected custom keymap hints to omit stale %q, got:\n%s", stale, hints)
+		}
+	}
+}
+
+func TestCustomKeymapOverriddenDefaultKeyIsNotAdvertisedForOldCommand(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  timeline:
+    normal:
+      r: mail.archive_current
+      x: mail.reply_all
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+	m.keyboard = resolver
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints, "x: all", "r: archive")
+	if strings.Contains(hints, "r: all") {
+		t.Fatalf("expected overwritten default key not to be advertised for reply-all, got:\n%s", hints)
+	}
+
+	for _, tc := range []struct {
+		label   string
+		key     string
+		command string
+	}{
+		{label: "advertised reply-all", key: "x", command: CommandMailReplyAll},
+		{label: "advertised archive", key: "r", command: CommandMailArchiveCurrent},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			got, ok := resolver.Resolve("timeline", keyboardModeNormal, tc.key)
+			if !ok {
+				t.Fatalf("expected %q to resolve", tc.key)
+			}
+			if got != tc.command {
+				t.Fatalf("Resolve(%q) = %q, want %q", tc.key, got, tc.command)
+			}
+		})
+	}
+}
+
+func TestCustomKeymapTabBarAndShortcutHelpUseResolvedKeys(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  global:
+    normal:
+      7: tab.timeline
+      8: tab.cleanup
+      9: tab.contacts
+  timeline:
+    normal:
+      n: compose.new
+      p: mail.reply_all
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+	m.keyboard = resolver
+
+	tabBar := stripANSI(m.renderTabBar())
+	for _, want := range []string{"7  Timeline", "8  Cleanup", "9  Contacts"} {
+		if !strings.Contains(tabBar, want) {
+			t.Fatalf("expected custom tab label %q, got %q", want, tabBar)
+		}
+	}
+	for _, stale := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
+		if strings.Contains(tabBar, stale) {
+			t.Fatalf("expected tab bar to omit stale %q, got %q", stale, tabBar)
+		}
+	}
+
+	updated := pressQuestion(m)
+	help := stripANSI(updated.View().Content)
+	for _, want := range []string{"7-9", "switch tabs", "n", "open a blank Compose", "p", "reply all"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("expected shortcut help to include %q, got:\n%s", want, help)
+		}
+	}
+	for _, stale := range []string{"1-3", "c              open a blank Compose", "r / R / f"} {
+		if strings.Contains(help, stale) {
+			t.Fatalf("expected shortcut help to omit stale %q, got:\n%s", stale, help)
+		}
+	}
+}
+
+func TestCustomKeymapBottomHintsUseResolvedComposeCleanupAndContactsKeys(t *testing.T) {
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  global:
+    normal:
+      7: tab.timeline
+      8: tab.cleanup
+      9: tab.contacts
+      b: sidebar.toggle
+      o: logs.toggle
+      y: chat.toggle
+  cleanup:
+    normal:
+      x: mail.archive_current
+      z: mail.delete_confirm
+      G: mail.reclassify
+      h: mail.hide_future
+  contacts:
+    normal:
+      n: pane.down
+      p: pane.up
+      ;: help.search
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+
+	t.Run("compose tab switcher", func(t *testing.T) {
+		m := makeSizedModel(t, 120, 40)
+		m.keyboard = resolver
+		m.activeTab = tabCompose
+
+		hints := stripANSI(m.renderKeyHints())
+		requireHintSegments(t, hints, "7-9: tabs", "ctrl+s: send", "ctrl+p: preview")
+		if strings.Contains(hints, "1-3: tabs") || strings.Contains(hints, "?: help") {
+			t.Fatalf("expected Compose hints to use custom tab keys and avoid browse help, got:\n%s", hints)
+		}
+	})
+
+	t.Run("cleanup", func(t *testing.T) {
+		m := makeSizedModel(t, 180, 40)
+		m.keyboard = resolver
+		m.activeTab = tabCleanup
+		m.stats = makeCleanupStats()
+		m.updateSummaryTable()
+
+		hints := stripANSI(m.renderKeyHints())
+		requireHintSegments(t, hints, "7-9: tabs", "h: hide future mail", "z: delete", "x: archive", "b: sidebar", "y: chat")
+		for _, stale := range []string{"1-3: tabs", "H: hide future mail", "D: delete", "a: archive", "B: sidebar", "g: chat"} {
+			if strings.Contains(hints, stale) {
+				t.Fatalf("expected Cleanup custom hints to omit stale %q, got:\n%s", stale, hints)
+			}
+		}
+	})
+
+	t.Run("contacts", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.keyboard = resolver
+		m.activeTab = tabContacts
+		m.contactsList = []models.ContactData{{Email: "mara@forgepoint.example", DisplayName: "Mara Vale"}}
+		m.contactsFiltered = m.contactsList
+
+		hints := stripANSI(m.renderKeyHints())
+		requireHintSegments(t, hints, "7-9: tabs", "↑/p ↓/n: nav", ";: search")
+		for _, stale := range []string{"1-3: tabs", "↑/k ↓/j: nav", "/: search"} {
+			if strings.Contains(hints, stale) {
+				t.Fatalf("expected Contacts custom hints to omit stale %q, got:\n%s", stale, hints)
+			}
+		}
+	})
 }
 
 func TestCustomKeymapExtendsDefaultKeepsComposeInsertFirst(t *testing.T) {

@@ -22,6 +22,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	demodata "github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 	buildversion "github.com/herald-email/herald-mail-app/internal/version"
@@ -30,6 +31,7 @@ import (
 func Run(commandName string, args []string) error {
 	fs := flag.NewFlagSet(commandName, flag.ExitOnError)
 	configPath := fs.String("config", "~/.herald/conf.yaml", "Path to configuration file")
+	demoMode := fs.Bool("demo", false, "Serve deterministic synthetic demo data without loading config or opening IMAP")
 	addr := fs.String("addr", ":2222", "SSH server listen address")
 	hostKey := fs.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := fs.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
@@ -54,17 +56,27 @@ func Run(commandName string, args []string) error {
 	}
 	defer logger.Close()
 
-	resolvedConfig, err := config.ExpandPath(*configPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve config path: %w", err)
-	}
+	resolvedConfig := "demo-config.yaml"
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "demo@demo.local"
+	cfg.Sync.Interval = 60
+	cfg.Sync.Idle = false
+	cfg.Sync.Background = false
+	cfg.Semantic.Enabled = false
+	cfg.AI.Provider = "disabled"
+	if !*demoMode {
+		resolvedConfig, err = config.ExpandPath(*configPath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve config path: %w", err)
+		}
 
-	cfg, err := config.Load(resolvedConfig)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	if _, err := config.EnsureCacheDatabasePath(resolvedConfig, cfg); err != nil {
-		return fmt.Errorf("failed to resolve cache path: %w", err)
+		cfg, err = config.Load(resolvedConfig)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		if _, err := config.EnsureCacheDatabasePath(resolvedConfig, cfg); err != nil {
+			return fmt.Errorf("failed to resolve cache path: %w", err)
+		}
 	}
 
 	// Ensure host key directory exists
@@ -73,9 +85,14 @@ func Run(commandName string, args []string) error {
 	}
 
 	mailer := appsmtp.New(cfg)
-	classifier, err := ai.NewFromConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to initialize AI client: %w", err)
+	var classifier ai.AIClient
+	if *demoMode {
+		classifier = demodata.NewAI()
+	} else {
+		classifier, err = ai.NewFromConfig(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to initialize AI client: %w", err)
+		}
 	}
 
 	srv, err := wish.NewServer(
@@ -84,7 +101,9 @@ func Run(commandName string, args []string) error {
 		wish.WithMiddleware(
 			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				var b backend.Backend
-				if *daemonURL != "" {
+				if *demoMode {
+					b = backend.NewDemoBackend()
+				} else if *daemonURL != "" {
 					rb, err := backend.NewRemote(*daemonURL)
 					if err != nil {
 						log.Printf("ssh: failed to connect to daemon at %s: %v", *daemonURL, err)

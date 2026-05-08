@@ -1701,7 +1701,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return "", false
 	}
 	if m.timeline.quickReplyOpen {
-		return "↑/k ↓/j: navigate replies  │  enter: compose  │  1-8: select  │  esc: close picker  │  q: quit", true
+		return joinHintSegments(m.movementHint("timeline", "navigate replies"), "enter: compose", "1-8: select", "esc: close picker", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit")), true
 	}
 	if m.timeline.searchMode {
 		q := m.timeline.searchInput.View()
@@ -1711,47 +1711,47 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
 				}
 				return joinHintSegments(append(
-					[]string{"tab: back to results", "c: compose"},
+					[]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")},
 					append(m.timelineMessageActionHintSegments(),
-						"↑/k ↓/j: scroll", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", "q: quit")...,
+						m.movementHint("timeline", "scroll"), "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 				)...), true
 			}
 			return joinHintSegments(append(
-				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), "c: compose"},
+				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), m.commandHint("timeline", CommandComposeNew, "compose")},
 				append(m.timelineMessageActionHintSegments(),
-					fmt.Sprintf("/ %s", q), "↑/k ↓/j: results", "space: select", "enter: open", "esc: back to search")...,
+					fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), m.movementHint("timeline", "results"), "space: select", "enter: open", "esc: back to search")...,
 			)...), true
 		}
 		if m.timeline.searchError != "" {
-			return fmt.Sprintf("/ %s  │  Error: %s  │  esc: back", q, m.timeline.searchError), true
+			return joinHintSegments(fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), "Error: "+m.timeline.searchError, "esc: back"), true
 		}
 		query := m.timeline.searchInput.Value()
 		if !m.timelineIsReadOnlyDiagnostic() && m.timeline.searchResults != nil && len(m.timeline.searchResults) == 0 && query != "" && !strings.HasPrefix(query, "/*") {
-			return fmt.Sprintf("/ %s  │  No results in this folder — try: /* %s  │  ctrl+i: server search  │  esc: back", q, query), true
+			return joinHintSegments(fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), fmt.Sprintf("No results in this folder — try: /* %s", query), "ctrl+i: server search", "esc: back"), true
 		}
 		if m.timelineIsReadOnlyDiagnostic() {
-			return fmt.Sprintf("/ %s  │  read-only local search  │  enter: results  │  esc: back", q), true
+			return joinHintSegments(fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), "read-only local search", "enter: results", "esc: back"), true
 		}
-		return fmt.Sprintf("/ %s  │  current-folder hybrid search  │  enter: results  │  ctrl+i: server search  │  esc: back", q), true
+		return joinHintSegments(fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), "current-folder hybrid search", "enter: results", "ctrl+i: server search", "esc: back"), true
 	}
 	if m.timeline.chatFilterMode {
 		return joinHintSegments(append(
-			[]string{primaryTabShortcutHint, "c: compose"},
+			[]string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")},
 			append(m.timelinePrimaryMessageActionHintSegments(),
-				"esc: clear filter", "↑/k ↓/j: navigate", "space: select", "enter: open", "q: quit")...,
+				"esc: clear filter", m.movementHint("timeline", "navigate"), "space: select", "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 		)...), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && chrome.FocusedPanel == panelPreview {
 		return timelineReadOnlyPreviewHintText("tab/shift+tab: panels", "esc: close"), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() && m.timeline.selectedEmail != nil {
-		return "tab/shift+tab: panels  │  ↑/k ↓/j: navigate  │  enter: open  │  esc: close  │  q: quit  │  read-only", true
+		return joinHintSegments(m.timelinePanelSwitchHint(), m.movementHint("timeline", "navigate"), "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() {
-		return primaryTabShortcutHint + "  │  ↑/k ↓/j: navigate  │  enter: open  │  /: local search  │  B: sidebar  │  q: quit  │  read-only", true
+		return joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
-		segments := []string{"j/k: extend range", "V/Esc: done"}
+		segments := []string{m.rangeExtendHint("timeline"), "V/Esc: done"}
 		if m.timeline.rangeShiftMode {
 			segments = []string{"shift+↑/↓: extend range", "plain ↑/↓: done"}
 		}
@@ -1765,7 +1765,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timeline.visualMode {
 			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
 		}
-		segments := []string{m.timelinePanelSwitchHint(), "c: compose"}
+		segments := []string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
 		if hasAttachments {
 			if hasMultipleAttachments {
@@ -1773,35 +1773,35 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			}
 			segments = append(segments, "s: save attachment")
 		}
-		segments = append(segments, "U: unread", previewActionHintText(hasUnsub), "h/left: Timeline", "↑/k ↓/j: scroll")
-		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", "q: quit")
+		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
+		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), "c: compose"}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", "l/right/]: focus preview", "h/left/[: fold/folders", "↑/k ↓/j: navigate", "space: select", "shift+↑/↓: range", "enter: open", "esc: close", "q: quit")...)...), true
+		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{primaryTabShortcutHint, "c: compose"}
+		segments := []string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, "V: range", "space: select", "S: settings", "↑/k ↓/j: navigate", "shift+↑/↓: range", "l/right/]: preview", "h/left/[: folders", "enter: open", "q: quit")
+		segments = append(segments, "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
-	segments := []string{primaryTabShortcutHint, m.timelinePanelSwitchHint(), "c: compose"}
+	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 	if m.currentTimelineRowEmail() != nil {
-		segments = append(segments, "S: settings", "U: unread")
+		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), "U: unread")
 		if m.currentTimelineDraftEmail() != nil {
 			segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
 		} else {
-			segments = append(segments, "r: all", "R: sender", "f: forward", "D: delete", "a: archive", "V: range", "*: star")
+			segments = append(segments, m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), m.commandHint("timeline", CommandMailReclassify, "re-classify"), "V: range", "*: star")
 		}
 	} else {
-		segments = append(segments, "S: settings")
+		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
 	}
-	segments = append(segments, "l/right/]: preview", "h/left/[: folders", "↑/k ↓/j: navigate", "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
 	if m.timelineSelectedCount() == 0 {
-		segments = append(segments, "/: hybrid search", "T: re-classify")
+		segments = append(segments, m.commandHint("timeline", CommandHelpSearch, "hybrid search"))
 	}
-	segments = append(segments, "B: sidebar", "q: quit")
+	segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 	return joinHintSegments(segments...), true
 }
 
@@ -1827,27 +1827,27 @@ func (m *Model) timelineMessageActionHintSegments() []string {
 	if m.timelineSelectedCount() > 0 || m.currentTimelineFocusedDraftEmail() != nil {
 		return segments
 	}
-	return append(segments, "T: re-classify")
+	return append(segments, m.commandHint("timeline", CommandMailReclassify, "re-classify"))
 }
 
 func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{"D: delete selected"}
+		segments := []string{m.commandHint("timeline", CommandMailDeleteConfirm, "delete selected")}
 		if len(m.selectedTimelineArchiveEmails()) > 0 {
-			segments = append(segments, "a: archive selected")
+			segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"))
 		}
 		return segments
 	}
 	if m.currentTimelineDraftEmail() != nil {
 		segments := []string{"E: edit draft", "ctrl+s: send draft"}
 		if m.currentTimelineFocusedDraftEmail() != nil {
-			segments = append(segments, "D: discard draft")
+			segments = append(segments, m.commandHint("timeline", CommandMailDeleteConfirm, "discard draft"))
 		} else {
-			segments = append(segments, "D: delete")
+			segments = append(segments, m.commandHint("timeline", CommandMailDeleteConfirm, "delete"))
 		}
 		return segments
 	}
-	return []string{"*: star", "r: all", "R: sender", "f: forward", "D: delete", "a: archive"}
+	return []string{"*: star", m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
