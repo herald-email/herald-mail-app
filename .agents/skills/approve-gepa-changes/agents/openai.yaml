@@ -1,0 +1,4 @@
+interface:
+  display_name: "Approve GEPA Changes"
+  short_description: "Approve Herald GEPA pending suggestions"
+  default_prompt: "Use $approve-gepa-changes to review and approve pending Herald GEPA workflow suggestions."

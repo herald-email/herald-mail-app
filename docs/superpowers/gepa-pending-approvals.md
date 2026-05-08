@@ -4,8 +4,8 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-07T22:25:00+00:00
-- Published runs analyzed: 9
+- Updated at: 2026-05-07T23:51:13+00:00
+- Published runs analyzed: 11
 - Total queue items: 6
 - Pending: 1
 - Approved: 0
@@ -24,13 +24,15 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `template-green-demo-key-overlay-app-attempt1-feedback-b19c0ba4a6`
 - Status: pending
-- Seen in runs: 3
+- Seen in runs: 5
 - First seen: 2026-05-07T19:30:58+00:00
-- Last seen: 2026-05-07T21:51:36+00:00
+- Last seen: 2026-05-07T23:24:40+00:00
 - Publish actions: commit, merge, worktree-delete
 - Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
 - Approval prompt: Approve exploring `template-green-demo-key-overlay-app-attempt1-feedback` as the next explicit GEPA improvement pass.
 - Source runs:
+- `20260507-162440-centralize-tui-color-hues-in-internal-app-theme-roles` at 2026-05-07T23:24:40+00:00 via commit, merge
+- `20260507-162311-check-changes-between-the-most-recent-tag-and-head-and-update-documentation-if-needed` at 2026-05-07T23:23:11+00:00 via commit, merge, worktree-delete
 - `20260507-145108` at 2026-05-07T21:51:36+00:00 via commit, merge
 - `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
 - `20260507-123058-demo-onboarding-emails` at 2026-05-07T19:30:58+00:00 via commit
@@ -67,15 +69,16 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `require-doc-first-feature-grounding-ef7c7bc4af`
 - Status: implemented
-- Seen in runs: 3
+- Seen in runs: 4
 - First seen: 2026-05-01T16:45:45+00:00
-- Last seen: 2026-05-07T20:47:20+00:00
+- Last seen: 2026-05-07T23:24:40+00:00
 - Publish actions: commit, merge, worktree-delete
 - Why: Feature work is safer when VISION, ARCHITECTURE, and specs are updated before code rather than only consulted during implementation.
 - Approval prompt: Approve a stricter doc-first gate for non-trivial feature runs.
 - Decision: implemented at 2026-05-07T18:42:31+00:00
 - Note: Approved by user on 2026-05-07 and incorporated into Herald GEPA workflow guidance/templates.
 - Source runs:
+- `20260507-162440-centralize-tui-color-hues-in-internal-app-theme-roles` at 2026-05-07T23:24:40+00:00 via commit, merge
 - `20260507-134720-add-an-attachment-section-divider-with-selection-save-hints-and-a-blank-line-before-the-email-body` at 2026-05-07T20:47:20+00:00 via commit, merge, worktree-delete
 - `20260507-123058-demo-onboarding-emails` at 2026-05-07T19:30:58+00:00 via commit
 - `20260501-self-reflection-validation` at 2026-05-01T16:45:45+00:00 via commit
