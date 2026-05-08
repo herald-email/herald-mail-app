@@ -251,6 +251,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cycleComposeField()
 		return m, nil
 	case "esc":
+		if model, cmd, handled := m.handleVimFieldKey(msg); handled {
+			return model, cmd
+		}
 		return m.handleEscKey()
 	}
 	if m.composeField == composeFieldForwardedAttachments {

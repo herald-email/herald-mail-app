@@ -411,6 +411,50 @@ fields:
 	}
 }
 
+func TestVimComposeEscapeLeavesInsertAndVisualModes(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	cfg := &config.Config{}
+	cfg.Keyboard.Profile = "vim"
+	m.SetConfig(cfg)
+	m.activeTab = tabCompose
+	m.composeField = composeFieldTo
+	m.composeTo.Focus()
+
+	model, _ := m.handleKeyMsg(keyRunes("i"))
+	updated := model.(*Model)
+	if updated.fieldKeyMode != keyboardModeInsert {
+		t.Fatalf("fieldKeyMode after i = %q, want insert", updated.fieldKeyMode)
+	}
+	model, _ = updated.handleKeyMsg(keyRunes("x"))
+	updated = model.(*Model)
+	if got := updated.composeTo.Value(); got != "x" {
+		t.Fatalf("insert mode should type printable text, got To=%q", got)
+	}
+
+	model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated = model.(*Model)
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab after insert esc = %d, want Compose", updated.activeTab)
+	}
+	if updated.fieldKeyMode != keyboardModeNormal {
+		t.Fatalf("fieldKeyMode after insert esc = %q, want normal", updated.fieldKeyMode)
+	}
+
+	model, _ = updated.handleKeyMsg(keyRunes("v"))
+	updated = model.(*Model)
+	if updated.fieldKeyMode != keyboardModeVisual {
+		t.Fatalf("fieldKeyMode after v = %q, want visual", updated.fieldKeyMode)
+	}
+	model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated = model.(*Model)
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab after visual esc = %d, want Compose", updated.activeTab)
+	}
+	if updated.fieldKeyMode != keyboardModeNormal {
+		t.Fatalf("fieldKeyMode after visual esc = %q, want normal", updated.fieldKeyMode)
+	}
+}
+
 func TestComposeAltGlobalCommandsStayTextSafe(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabCompose
