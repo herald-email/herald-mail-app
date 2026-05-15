@@ -47,6 +47,8 @@ func StripInvisibleChars(s string) string {
 		switch {
 		case r == '\t' || r == '\n' || r == '\r' || r == ' ':
 			b.WriteRune(r)
+		case r == '\u00a0' || r == '\u202f':
+			b.WriteRune(' ')
 		case unicode.Is(unicode.Cf, r):
 			// skip format characters (zero-width, BOM, etc.)
 		case r == '\u034f':
@@ -56,6 +58,49 @@ func StripInvisibleChars(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// NormalizeEmailTextArtifacts cleans charset and spacing artifacts that are
+// common in transactional email fallbacks while preserving meaningful Unicode.
+func NormalizeEmailTextArtifacts(s string) string {
+	if s == "" {
+		return ""
+	}
+	runes := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i, r := range runes {
+		switch r {
+		case '\u00a0', '\u202f':
+			b.WriteRune(' ')
+		case '\ufffd':
+			b.WriteRune(' ')
+		case 'Â':
+			if isLikelyNBSPMojibakeMarker(runes, i) {
+				continue
+			}
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isLikelyNBSPMojibakeMarker(runes []rune, i int) bool {
+	if i+1 >= len(runes) {
+		return i == 0 || isArtifactBoundary(runes[i-1])
+	}
+	return isArtifactBoundary(runes[i+1])
+}
+
+func isArtifactBoundary(r rune) bool {
+	switch r {
+	case '\u00a0', '\u202f', ' ', '\t', '\r', '\n':
+		return true
+	default:
+		return false
+	}
 }
 
 // CalculateTextWidth estimates the visual width of text with emojis.

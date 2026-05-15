@@ -20,7 +20,7 @@ func EmailBodyMarkdown(body *models.EmailBody) string {
 			return markdown
 		}
 	}
-	return strings.TrimSpace(body.TextPlain)
+	return strings.TrimSpace(NormalizeEmailTextArtifacts(body.TextPlain))
 }
 
 // HTMLToMarkdown converts an HTML string to Markdown suitable for Herald's
@@ -112,11 +112,14 @@ func HTMLToMarkdown(htmlStr string) string {
 		}
 	}
 
-	renderTable := func(n *html.Node) string {
+	renderDataTable := func(n *html.Node) (string, bool) {
+		if isEmailLayoutTable(n) {
+			return "", false
+		}
 		var rows [][]string
 		collectTableRows(n, &rows)
 		if len(rows) == 0 {
-			return ""
+			return "", false
 		}
 		cols := 0
 		for _, row := range rows {
@@ -125,7 +128,10 @@ func HTMLToMarkdown(htmlStr string) string {
 			}
 		}
 		if cols == 0 {
-			return ""
+			return "", false
+		}
+		if !looksLikeDataTable(n, rows, cols) {
+			return "", false
 		}
 		var sb strings.Builder
 		writeRow := func(row []string) {
@@ -150,7 +156,7 @@ func HTMLToMarkdown(htmlStr string) string {
 		for _, row := range rows[1:] {
 			writeRow(row)
 		}
-		return strings.TrimSpace(sb.String())
+		return strings.TrimSpace(sb.String()), true
 	}
 
 	var walk func(*html.Node)
@@ -276,8 +282,15 @@ func HTMLToMarkdown(htmlStr string) string {
 				addNL(1)
 				return
 			case "table":
-				addNL(2)
-				writeText(renderTable(n))
+				if table, ok := renderDataTable(n); ok {
+					addNL(2)
+					writeText(table)
+				} else {
+					addNL(2)
+					for c := n.FirstChild; c != nil; c = c.NextSibling {
+						walk(c)
+					}
+				}
 				addNL(2)
 				return
 			default:
@@ -301,7 +314,7 @@ func HTMLToMarkdown(htmlStr string) string {
 	for strings.Contains(result, "\n\n\n") {
 		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
 	}
-	return strings.TrimSpace(result)
+	return strings.TrimSpace(NormalizeEmailTextArtifacts(result))
 }
 
 func markdownTableCell(cell string) string {
@@ -309,6 +322,85 @@ func markdownTableCell(cell string) string {
 	cell = strings.ReplaceAll(cell, `\`, `\\`)
 	cell = strings.ReplaceAll(cell, "|", `\|`)
 	return cell
+}
+
+func isEmailLayoutTable(n *html.Node) bool {
+	if n == nil || n.Type != html.ElementNode || !strings.EqualFold(n.Data, "table") {
+		return false
+	}
+	for _, attr := range n.Attr {
+		key := strings.ToLower(attr.Key)
+		val := strings.ToLower(strings.TrimSpace(attr.Val))
+		switch key {
+		case "role":
+			if val == "presentation" || val == "none" {
+				return true
+			}
+		case "style", "class":
+			if strings.Contains(val, "presentation") ||
+				strings.Contains(val, "container") ||
+				strings.Contains(val, "layout") ||
+				strings.Contains(val, "wrapper") ||
+				strings.Contains(val, "email") {
+				return true
+			}
+		}
+	}
+	return tableContainsNestedTable(n)
+}
+
+func looksLikeDataTable(table *html.Node, rows [][]string, cols int) bool {
+	if len(rows) < 2 || cols < 2 {
+		return false
+	}
+	if tableHasHeaderCell(table) {
+		return true
+	}
+	nonEmpty := 0
+	longCells := 0
+	for _, row := range rows {
+		for _, cell := range row {
+			cell = strings.TrimSpace(cell)
+			if cell == "" {
+				continue
+			}
+			nonEmpty++
+			if len([]rune(cell)) > 80 {
+				longCells++
+			}
+		}
+	}
+	return nonEmpty >= len(rows)*2 && longCells == 0
+}
+
+func tableContainsNestedTable(n *html.Node) bool {
+	if n == nil {
+		return false
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && strings.EqualFold(c.Data, "table") {
+			return true
+		}
+		if tableContainsNestedTable(c) {
+			return true
+		}
+	}
+	return false
+}
+
+func tableHasHeaderCell(n *html.Node) bool {
+	if n == nil {
+		return false
+	}
+	if n.Type == html.ElementNode && strings.EqualFold(n.Data, "th") {
+		return true
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if tableHasHeaderCell(c) {
+			return true
+		}
+	}
+	return false
 }
 
 func stripHTMLTags(s string) string {

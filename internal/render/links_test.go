@@ -218,6 +218,93 @@ func TestRenderEmailBodyLines_DoesNotEmitOversizedGlamourLines(t *testing.T) {
 	}
 }
 
+func TestRenderEmailBodyLines_ReflowsPaddedPlaintextFallback(t *testing.T) {
+	body := strings.Join([]string{
+		"        KRYSTAL BARTLETT HAS INVITED",
+		"        YOU TO ATTEND: DOORDASH",
+		"        ROUND 1 - ZOOM INTERVIEW",
+		"        ANTON GOLUBTSOV HI ANTON I'M",
+		"        FOLLOWING UP HERE TO REQUEST",
+		"        YOUR AVAILABILITY FOR THE",
+		"        TECHNICAL INTERVIEWS THE",
+		"        NEXT STEPS IN THE PROCESS",
+		"        WILL BE A 1-HOUR TECHNICAL",
+		"        CODING CHALLENGE IN ADDITION",
+		"        TO A 45-MIN PROJECT DEEP",
+		"        DIVE.",
+	}, "\n")
+
+	lines := RenderEmailBodyLines(body, 88)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+	visibleFlow := strings.Join(strings.Fields(visible), " ")
+
+	if !strings.Contains(visibleFlow, "KRYSTAL BARTLETT HAS INVITED YOU TO ATTEND: DOORDASH ROUND 1 - ZOOM INTERVIEW") {
+		t.Fatalf("expected padded fallback prose to be joined into readable flow, got:\n%s", visible)
+	}
+	if got := nonEmptyLineCount(visible); got > 5 {
+		t.Fatalf("expected hard-wrapped fallback to reflow into a few lines, got %d lines:\n%s", got, visible)
+	}
+	for i, line := range strings.Split(visible, "\n") {
+		if strings.HasPrefix(line, "        ") {
+			t.Fatalf("line %d retained sender padding:\n%s", i, visible)
+		}
+	}
+}
+
+func TestReflowPaddedPlaintextFallbackKeepsSentenceBreaks(t *testing.T) {
+	body := strings.Join([]string{
+		"        THIS NOTICE IS NOT PROOF OF",
+		"        PERMISSION TO TRAVEL TO THE UK.",
+		"        YOU HAVE BEEN GRANTED ENTRY",
+		"        CLEARANCE TO THE UK AS VISIT",
+		"        FROM 5 JUNE 2026 UNTIL 5",
+		"        DECEMBER 2026.",
+		"        IT IS IMPORTANT TO CHECK THAT",
+		"        YOUR DETAILS ABOVE AND ON YOUR",
+		"        EVISA ARE CORRECT BEFORE YOU",
+		"        TRAVEL.",
+	}, "\n")
+
+	got := reflowPaddedPlaintextFallback(body)
+
+	for _, want := range []string{
+		"THIS NOTICE IS NOT PROOF OF PERMISSION TO TRAVEL TO THE UK.",
+		"YOU HAVE BEEN GRANTED ENTRY CLEARANCE TO THE UK AS VISIT FROM 5 JUNE 2026 UNTIL 5 DECEMBER 2026.",
+		"IT IS IMPORTANT TO CHECK THAT YOUR DETAILS ABOVE AND ON YOUR EVISA ARE CORRECT BEFORE YOU TRAVEL.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected reflowed body to contain %q, got:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "UK.\n\nYOU HAVE") || !strings.Contains(got, "2026.\n\nIT IS IMPORTANT") {
+		t.Fatalf("expected sentence boundaries to remain paragraph breaks, got:\n%s", got)
+	}
+}
+
+func TestRenderEmailBodyLines_PreservesIntentionalCodeBlock(t *testing.T) {
+	body := "Config example:\n\n    smtp:\n      host: 127.0.0.1\n      port: 1025\n\nDone."
+
+	lines := RenderEmailBodyLines(body, 80)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+
+	if !strings.Contains(visible, "\nsmtp:\n") && !strings.Contains(visible, "\n  smtp:\n") {
+		t.Fatalf("expected indented code-like block to remain intact, got:\n%s", visible)
+	}
+	if !strings.Contains(visible, "host: 127.0.0.1\n") || !strings.Contains(visible, "port: 1025") {
+		t.Fatalf("expected config lines to remain separate, got:\n%s", visible)
+	}
+}
+
+func nonEmptyLineCount(s string) int {
+	count := 0
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
 func TestStripTrackers(t *testing.T) {
 	tests := []struct {
 		name string

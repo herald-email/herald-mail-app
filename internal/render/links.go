@@ -62,6 +62,7 @@ func RenderEmailBodyLines(body string, width int) []string {
 	}
 	body = collapseLabelURLReferenceLines(body)
 	body = unwrapInlineBracketedURLs(body)
+	body = reflowPaddedPlaintextFallback(body)
 	body = labelBareURLsForMarkdown(body)
 	if lines, err := renderGlamourEmailBodyLines(body, width); err == nil {
 		return lines
@@ -371,6 +372,225 @@ func escapeMarkdownLabel(label string) string {
 
 func unwrapInlineBracketedURLs(body string) string {
 	return bracketedURLRe.ReplaceAllString(body, "$1")
+}
+
+func reflowPaddedPlaintextFallback(body string) string {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	if !looksLikePaddedPlaintextFallback(body) {
+		return body
+	}
+
+	lines := strings.Split(body, "\n")
+	out := make([]string, 0, len(lines))
+	paragraph := make([]string, 0, len(lines))
+	flushParagraph := func() {
+		if len(paragraph) == 0 {
+			return
+		}
+		out = append(out, strings.Join(paragraph, " "))
+		paragraph = paragraph[:0]
+	}
+	appendBlank := func() {
+		if len(out) == 0 || out[len(out)-1] == "" {
+			return
+		}
+		out = append(out, "")
+	}
+
+	for _, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			flushParagraph()
+			appendBlank()
+			continue
+		}
+		if preservePlaintextFallbackLine(trimmed) {
+			flushParagraph()
+			out = append(out, trimmed)
+			continue
+		}
+		paragraph = append(paragraph, trimmed)
+		if endsPlaintextFallbackSentence(trimmed) {
+			flushParagraph()
+			appendBlank()
+		}
+	}
+	flushParagraph()
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func looksLikePaddedPlaintextFallback(body string) bool {
+	if strings.Contains(body, "```") || strings.Contains(body, "~~~") {
+		return false
+	}
+	lines := strings.Split(body, "\n")
+	nonEmpty := 0
+	candidate := 0
+	padded := 0
+	shortWrapped := 0
+	structural := 0
+	codeLike := 0
+
+	for _, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty++
+		if leadingWhitespaceColumns(raw) >= 2 {
+			padded++
+		}
+		if preservePlaintextFallbackLine(trimmed) {
+			structural++
+			continue
+		}
+		if looksLikeCodeConfigLine(trimmed) {
+			codeLike++
+			continue
+		}
+		width := utf8.RuneCountInString(trimmed)
+		if hasLetter(trimmed) && width >= 8 && width <= 72 {
+			candidate++
+			if width <= 48 {
+				shortWrapped++
+			}
+		}
+	}
+
+	if nonEmpty < 6 || candidate < 5 {
+		return false
+	}
+	if structural*2 >= nonEmpty || codeLike*2 >= nonEmpty {
+		return false
+	}
+	return padded*2 >= nonEmpty || (padded >= 3 && shortWrapped*2 >= candidate)
+}
+
+func preservePlaintextFallbackLine(trimmed string) bool {
+	if trimmed == "" {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ">") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "![") || strings.HasPrefix(trimmed, "[") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
+		return true
+	}
+	if looksLikeOrderedListLine(trimmed) {
+		return true
+	}
+	if isMarkdownRule(trimmed) {
+		return true
+	}
+	if strings.Contains(trimmed, "|") && (strings.HasPrefix(trimmed, "|") || strings.HasSuffix(trimmed, "|")) {
+		return true
+	}
+	return isStandaloneURL(trimmed)
+}
+
+func looksLikeOrderedListLine(trimmed string) bool {
+	i := 0
+	for i < len(trimmed) && trimmed[i] >= '0' && trimmed[i] <= '9' {
+		i++
+	}
+	return i > 0 && i+1 < len(trimmed) && (trimmed[i] == '.' || trimmed[i] == ')') && trimmed[i+1] == ' '
+}
+
+func isMarkdownRule(trimmed string) bool {
+	if len(trimmed) < 3 {
+		return false
+	}
+	first := trimmed[0]
+	if first != '-' && first != '*' && first != '_' {
+		return false
+	}
+	for i := 0; i < len(trimmed); i++ {
+		if trimmed[i] != first && trimmed[i] != ' ' {
+			return false
+		}
+	}
+	return true
+}
+
+func isStandaloneURL(trimmed string) bool {
+	match := URLRe.FindString(trimmed)
+	if match == "" {
+		return false
+	}
+	return strings.Trim(trimmed, "<>") == match
+}
+
+func looksLikeCodeConfigLine(trimmed string) bool {
+	if strings.HasSuffix(trimmed, "{") || strings.HasSuffix(trimmed, "}") || strings.Contains(trimmed, " := ") {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range []string{"func ", "package ", "import ", "return ", "const ", "var "} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	if i := strings.Index(trimmed, ":"); i > 0 && i < len(trimmed)-1 {
+		key := trimmed[:i]
+		if isSimpleConfigKey(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSimpleConfigKey(s string) bool {
+	if s == "" || len(s) > 32 {
+		return false
+	}
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func leadingWhitespaceColumns(s string) int {
+	cols := 0
+	for _, r := range s {
+		switch r {
+		case ' ':
+			cols++
+		case '\t':
+			cols += 4
+		default:
+			return cols
+		}
+	}
+	return cols
+}
+
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func endsPlaintextFallbackSentence(s string) bool {
+	s = strings.TrimRight(strings.TrimSpace(s), `"'’”)]}`)
+	if s == "" {
+		return false
+	}
+	r, _ := utf8.DecodeLastRuneInString(s)
+	switch r {
+	case '.', '!', '?', ':':
+		return true
+	default:
+		return false
+	}
 }
 
 func labelBareURLsForMarkdown(body string) string {

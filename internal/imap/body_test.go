@@ -195,3 +195,68 @@ func TestParseMIMEBody_DecodesEditableDraftHeaders(t *testing.T) {
 		t.Fatalf("To header was not decoded: %q", body.To)
 	}
 }
+
+func TestParseMIMEBody_DecodesDeclaredTextCharsets(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		"From: sender@example.com",
+		"Subject: Latin1 body",
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=iso-8859-1",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"Fran=E7ois paid 10 =A3.",
+	}, "\r\n"))
+
+	body, err := parseMIMEBody(raw)
+	if err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	if body.TextPlain != "François paid 10 £." {
+		t.Fatalf("TextPlain = %q", body.TextPlain)
+	}
+}
+
+func TestParseMIMEBody_NormalizesMojibakeNBSPArtifacts(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		"From: notifications@example.com",
+		"Subject: Transactional mail",
+		"MIME-Version: 1.0",
+		"Content-Type: multipart/alternative; boundary=alt",
+		"",
+		"--alt",
+		"Content-Type: text/plain; charset=windows-1252",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"Hi Anton,",
+		"",
+		"=C2=A0",
+		"Pro Tip!",
+		"",
+		"Fran=E7ois can still use accented text.",
+		"--alt",
+		"Content-Type: text/html; charset=windows-1252",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"<p>Hi Anton,</p><p>=C2=A0</p><p>Pro Tip!</p>",
+		"--alt--",
+	}, "\r\n"))
+
+	body, err := parseMIMEBody(raw)
+	if err != nil {
+		t.Fatalf("parseMIMEBody: %v", err)
+	}
+	for label, got := range map[string]string{
+		"plain": body.TextPlain,
+		"html":  body.TextHTML,
+	} {
+		if strings.Contains(got, "Â") || strings.Contains(got, "\u00a0") || strings.Contains(got, "�") {
+			t.Fatalf("%s body retained charset artifact: %q", label, got)
+		}
+	}
+	if !strings.Contains(body.TextPlain, "Pro Tip!") || !strings.Contains(body.TextPlain, "François") {
+		t.Fatalf("TextPlain lost expected content: %q", body.TextPlain)
+	}
+	if !strings.Contains(body.TextHTML, "Pro Tip!") {
+		t.Fatalf("TextHTML lost expected content: %q", body.TextHTML)
+	}
+}

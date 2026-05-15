@@ -65,6 +65,52 @@ func TestHTMLToMarkdownConvertsTablesToMarkdownTables(t *testing.T) {
 	}
 }
 
+func TestHTMLToMarkdownKeepsDataTablesWithEmailStylingAttrs(t *testing.T) {
+	got := HTMLToMarkdown(`<table width="100%" border="1" cellpadding="4" cellspacing="0">
+		<tr><th>Applicant</th><th>Status</th></tr>
+		<tr><td>Anton</td><td>Approved</td></tr>
+	</table>`)
+
+	for _, want := range []string{
+		"| Applicant | Status |",
+		"| --- | --- |",
+		"| Anton | Approved |",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected styled data table row %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestHTMLToMarkdownFlattensEmailLayoutTables(t *testing.T) {
+	got := HTMLToMarkdown(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+		<tr>
+			<td>
+				<table>
+					<tr><td><h1>GOV.UK</h1></td></tr>
+					<tr><td>Dear Anton Golubtsov</td></tr>
+					<tr><td>You have created your UKVI account.</td></tr>
+					<tr><td><a href="https://example.test/sign-in">Sign in to your UKVI account</a></td></tr>
+				</table>
+			</td>
+		</tr>
+	</table>`)
+
+	for _, want := range []string{
+		"GOV.UK",
+		"Dear Anton Golubtsov",
+		"You have created your UKVI account.",
+		"[Sign in to your UKVI account](https://example.test/sign-in)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("layout table markdown missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "|") || strings.Contains(got, "---") {
+		t.Fatalf("layout table should not render as a markdown table:\n%s", got)
+	}
+}
+
 func TestEmailBodyMarkdownPrefersHTMLOverPlainFallback(t *testing.T) {
 	body := &models.EmailBody{
 		TextPlain: "stale plain fallback",
@@ -76,5 +122,29 @@ func TestEmailBodyMarkdownPrefersHTMLOverPlainFallback(t *testing.T) {
 	}
 	if strings.Contains(got, "stale plain fallback") {
 		t.Fatalf("expected HTML to win over plain fallback, got:\n%s", got)
+	}
+}
+
+func TestNormalizeEmailTextArtifactsRemovesNBSPMojibakeButKeepsUnicode(t *testing.T) {
+	got := NormalizeEmailTextArtifacts("Before\n\nÂ\u00a0\nPro Tip!\nName: Âge\nBad�char")
+	for _, bad := range []string{"Â\u00a0", "\u00a0", "�"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("normalized text retained %q:\n%q", bad, got)
+		}
+	}
+	for _, want := range []string{"Before", "Pro Tip!", "Name: Âge", "Bad char"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("normalized text missing %q:\n%q", want, got)
+		}
+	}
+}
+
+func TestHTMLToMarkdownNormalizesMojibakeNBSPSeparators(t *testing.T) {
+	got := HTMLToMarkdown(`<p>Hi Anton,</p><p>Â&nbsp;</p><p>Pro Tip!</p>`)
+	if strings.Contains(got, "Â") || strings.Contains(got, "\u00a0") || strings.Contains(got, "�") {
+		t.Fatalf("HTML markdown retained charset artifact:\n%q", got)
+	}
+	if !strings.Contains(got, "Hi Anton") || !strings.Contains(got, "Pro Tip!") {
+		t.Fatalf("HTML markdown lost expected content:\n%q", got)
 	}
 }

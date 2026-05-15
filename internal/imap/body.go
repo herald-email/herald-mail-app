@@ -16,6 +16,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	emailrender "github.com/herald-email/herald-mail-app/internal/render"
+	htmlcharset "golang.org/x/net/html/charset"
 )
 
 // FetchEmailBody retrieves the full MIME body of the email identified by uid
@@ -169,11 +170,11 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 	switch mediaType {
 	case "text/plain":
 		if result.TextPlain == "" {
-			result.TextPlain = string(data)
+			result.TextPlain = decodeTextPart(data, params)
 		}
 	case "text/html":
 		if result.TextHTML == "" {
-			result.TextHTML = string(data)
+			result.TextHTML = decodeTextPart(data, params)
 		}
 	default:
 		disp := strings.ToLower(header.Get("Content-Disposition"))
@@ -205,6 +206,21 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 			})
 		}
 	}
+}
+
+func decodeTextPart(data []byte, params map[string]string) string {
+	charsetName := strings.TrimSpace(params["charset"])
+	if charsetName != "" {
+		reader, err := htmlcharset.NewReaderLabel(charsetName, bytes.NewReader(data))
+		if err != nil {
+			logger.Warn("Failed to create charset reader for %s: %v", charsetName, err)
+		} else if decoded, err := io.ReadAll(reader); err != nil {
+			logger.Warn("Failed to decode text part charset %s: %v", charsetName, err)
+		} else {
+			data = decoded
+		}
+	}
+	return emailrender.NormalizeEmailTextArtifacts(string(data))
 }
 
 // extractAttachmentFilename parses the filename from Content-Disposition or
