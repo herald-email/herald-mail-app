@@ -1568,14 +1568,17 @@ Check these states during every applicable lane:
 3. Switch to Cleanup, open an individual email preview, and capture it.
 4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector.
 5. Save each policy in turn: `Lightweight previews`, `No attachments`, and `Preserve all data`.
-6. Open a message with an attachment, then save the selected attachment.
-7. Resize to `50x15`, then recover to `80x24`.
+6. With debug logging enabled, wait for the active Timeline folder to finish loading and confirm the log records preview prewarming progress, such as `Preview cache: 0/50 warming folder=INBOX` followed by a completion summary.
+7. Switch folders during prewarming and confirm stale prewarm progress does not continue warming the old folder.
+8. Open a message with an attachment, then save the selected attachment.
+9. Resize to `50x15`, then recover to `80x24`.
 
 **Expect:**
 - Timeline and Cleanup preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
 - The `Load:` row never wraps or pushes body text outside the preview border at supported sizes.
 - Settings defaults to `Lightweight previews` for new configs and preserves the selected policy after saving.
 - Lightweight cached previews render body text from cache without downloading attachment bytes.
+- The preview prewarmer warms active-folder preview misses conservatively, one message at a time, skips already cached messages, and stops scheduling additional old-folder work after a folder switch.
 - Attachment save fetches bytes on demand when preview only has metadata.
 - `50x15` shows the minimum-size guard and resizing back restores a clean preview.
 

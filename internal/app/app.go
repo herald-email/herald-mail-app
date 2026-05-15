@@ -175,6 +175,17 @@ type CleanupEmailBodyMsg struct {
 	LoadDuration   time.Duration
 }
 
+type previewPrewarmMsg struct {
+	Folder     string
+	Generation int64
+	Remaining  []previewPrewarmTarget
+	Done       int
+	Total      int
+	Warmed     int
+	Skipped    int
+	Err        error
+}
+
 // ChatResponseMsg carries an Ollama chat reply
 type ChatResponseMsg struct {
 	Content string
@@ -513,6 +524,11 @@ type Model struct {
 	embeddingBatchActive     bool
 	contactEnrichmentActive  bool
 	backgroundWorkGeneration int64
+	previewPrewarmActive     bool
+	previewPrewarmDone       int
+	previewPrewarmTotal      int
+	previewPrewarmWarmed     int
+	previewPrewarmSkipped    int
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode           bool
@@ -1528,11 +1544,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateTimelineTable()
 		}
 		m.loadClassifications()
+		cmds := make([]tea.Cmd, 0, 1)
 		if msg.FinishLoading {
 			m.loading = false
 			m.progressInfo = models.ProgressInfo{}
 			m.statusMessage = msg.StatusMessage
 			logger.Debug("SyncHydratedMsg: loading finished folder=%s generation=%d", msg.Folder, msg.Generation)
+			if cmd := m.startPreviewPrewarmerIfNeeded(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 
@@ -1763,6 +1786,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCountdown--
 		}
 		return m, m.tickSyncCountdown()
+
+	case previewPrewarmMsg:
+		return m, m.handlePreviewPrewarmMsg(msg)
 
 	case EmbeddingProgressMsg:
 		if msg.Generation != m.backgroundWorkGeneration || (msg.Folder != "" && msg.Folder != m.currentFolder) {

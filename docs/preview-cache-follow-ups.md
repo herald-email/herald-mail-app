@@ -13,13 +13,14 @@ These measurements came from the local Herald logs on 2026-05-15 after testing a
 
 ## Background Preview Prewarmer
 
-Herald already has background work for metadata sync, folder reconciliation, polling, and semantic indexing. What it does not have yet is a dedicated background worker that fills `email_preview_bodies` before the user opens a message.
+Herald now has a dedicated background worker that fills `email_preview_bodies` before the user opens a message. The live default-account run on 2026-05-15 showed the worker makes recent previews land as cache hits while keeping IMAP work serialized.
 
-- [ ] Add a preview prewarmer that runs after the active folder finishes metadata sync and warms the newest or visible messages first.
-- [ ] Respect `cache.storage_policy` when warming previews: `lightweight` should fetch preview text and useful headers only, `no_attachments` should avoid downloadable attachment bytes, and `preserve_all` should fetch full message data only after explicit opt-in.
-- [ ] Keep IMAP pressure conservative by using one preview fetch at a time per account and by cancelling or deprioritizing work when the user changes folders.
-- [ ] Expose progress in logs and optionally the status bar, for example `Preview cache: 12/50 warmed`.
-- [ ] Add tests that prove prewarming skips already cached messages, stops on folder switch, and does not download attachment bytes under `lightweight` or `no_attachments`.
+- [x] Add a preview prewarmer that runs after the active folder finishes metadata sync and warms the newest or visible messages first.
+- [x] Respect `cache.storage_policy` when warming previews: `lightweight` should fetch preview text and useful headers only, `no_attachments` should avoid downloadable attachment bytes, and `preserve_all` should fetch full message data only after explicit opt-in.
+- [x] Keep IMAP pressure conservative by using one preview fetch at a time per account and by cancelling or deprioritizing work when the user changes folders.
+- [x] Expose progress in logs and optionally the status bar, for example `Preview cache: 12/50 warmed`.
+- [x] Add tests that prove prewarming skips already cached messages, stops on folder switch, and does not download attachment bytes under `lightweight` or `no_attachments`.
+- [x] Verify against the live default account: the prewarmer processed 50 INBOX candidates, warmed 19 missing previews, skipped 31 cached previews, and a subsequent 12-message manual preview pass loaded every message from cache in 8-21ms.
 
 ## Policy Changes And Cache Pruning
 

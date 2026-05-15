@@ -1887,15 +1887,27 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 		}
-		if m.classifier != nil && !msg.ReadOnly {
-			cmds := []tea.Cmd{
-				m.startEmbeddingBatchIfNeeded(),
-				m.startContactEnrichmentIfNeeded(),
+		if !msg.ReadOnly {
+			cmds := make([]tea.Cmd, 0, 4)
+			if cmd := m.startPreviewPrewarmerIfNeeded(); cmd != nil {
+				cmds = append(cmds, cmd)
 			}
-			if !m.demoMode {
-				cmds = append(cmds, m.startClassificationIfNeeded())
+			if m.classifier != nil {
+				if cmd := m.startEmbeddingBatchIfNeeded(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if cmd := m.startContactEnrichmentIfNeeded(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if !m.demoMode {
+					if cmd := m.startClassificationIfNeeded(); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
 			}
-			return m, tea.Batch(cmds...), true
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...), true
+			}
 		}
 		return m, nil, true
 

@@ -30,6 +30,11 @@ func (m *Model) cancelBackgroundWork() {
 	m.contactEnrichmentActive = false
 	m.embeddingDone = 0
 	m.embeddingTotal = 0
+	m.previewPrewarmActive = false
+	m.previewPrewarmDone = 0
+	m.previewPrewarmTotal = 0
+	m.previewPrewarmWarmed = 0
+	m.previewPrewarmSkipped = 0
 }
 
 func (m *Model) startEmbeddingBatchIfNeeded() tea.Cmd {

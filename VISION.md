@@ -126,6 +126,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Actions: delete, archive, reply, forward
 - [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline and Cleanup previews
 - [x] Offline cache policy controls whether previews keep lightweight body text only, non-attachment body data, or full attachment data for offline work
+- [x] Background preview prewarming fills the active folder's newest preview-cache misses one message at a time after Timeline data loads
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
 - [x] Mail-style range selection with `Shift+Up` / `Shift+Down` where terminals support it, plus `V` then `j`/`k` fallback range mode
 - [x] Star / pin important threads to top
