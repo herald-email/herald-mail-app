@@ -148,6 +148,10 @@ func stylePreviewHeaderLine(line, label string, styles previewHeaderStyles, valu
 }
 
 func renderPreviewHeaderLines(email *models.EmailData, body *models.EmailBody, category string, hasUnsubscribe bool, innerW int, active bool) []string {
+	return renderPreviewHeaderLinesWithLoad(email, body, category, hasUnsubscribe, "", innerW, active)
+}
+
+func renderPreviewHeaderLinesWithLoad(email *models.EmailData, body *models.EmailBody, category string, hasUnsubscribe bool, loadTag string, innerW int, active bool) []string {
 	if email == nil {
 		return nil
 	}
@@ -173,6 +177,9 @@ func renderPreviewHeaderLines(email *models.EmailData, body *models.EmailBody, c
 	}
 	lines = append(lines, renderPreviewHeaderWrapped("Tags:", previewTagText(category), innerW, styles, styles.tag)...)
 	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe), innerW, styles, styles.action)...)
+	if strings.TrimSpace(loadTag) != "" {
+		lines = append(lines, renderPreviewHeaderLine("Load:", loadTag, innerW, styles, styles.date))
+	}
 	lines = append(lines, strings.Repeat("─", innerW))
 	return lines
 }
@@ -329,7 +336,11 @@ func (m *Model) renderEmailPreview() string {
 	if bodyMatchesSelected {
 		headerBody = m.timeline.body
 	}
-	headerLines := renderPreviewHeaderLines(email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), innerW, headerActive)
+	loadTag := ""
+	if email != nil {
+		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLinesWithLoad(email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), loadTag, innerW, headerActive)
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
@@ -517,7 +528,11 @@ func (m *Model) renderFullScreenEmail() string {
 	if email != nil && m.timeline.bodyMessageID == email.MessageID {
 		headerBody = m.timeline.body
 	}
-	headerLines := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, true)
+	loadTag := ""
+	if email != nil {
+		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLinesWithLoad(email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, true)
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
@@ -594,7 +609,11 @@ func (m *Model) timelineFullScreenDocumentBudget() (int, int) {
 	if email != nil && m.timeline.bodyMessageID == email.MessageID {
 		headerBody = m.timeline.body
 	}
-	headerLines := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, true)
+	loadTag := ""
+	if email != nil {
+		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
+	}
+	headerLines := renderPreviewHeaderLinesWithLoad(email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, true)
 
 	maxBodyLines := m.windowHeight - len(headerLines) - 1
 	if m.timeline.quickReplyOpen {
@@ -799,6 +818,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = true
+	m.timeline.previewLoad = previewLoadTelemetry{}
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.bodyWrappedLines = nil
@@ -821,32 +841,114 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 	b := m.backend // capture for goroutine
 	return func() tea.Msg {
 		defer cancel()
+		started := time.Now()
+		finish := func(body *models.EmailBody, err error, source string) EmailBodyMsg {
+			finished := time.Now()
+			return EmailBodyMsg{
+				Body:           body,
+				Err:            err,
+				MessageID:      messageID,
+				Folder:         folder,
+				UID:            uid,
+				LoadSource:     source,
+				LoadStartedAt:  started,
+				LoadFinishedAt: finished,
+				LoadDuration:   finished.Sub(started),
+			}
+		}
 		if ctx.Err() != nil {
-			return EmailBodyMsg{Err: ctx.Err(), MessageID: messageID}
+			return finish(nil, ctx.Err(), previewLoadSourceIMAP)
+		}
+		if previewBackend, ok := b.(previewCacheBackend); ok {
+			cached, err := previewBackend.GetCachedPreviewBody(messageID)
+			if err != nil {
+				logger.Debug("Preview cache lookup failed for %s: %v", messageID, err)
+			} else if cached != nil {
+				return finish(cached, nil, previewLoadSourceCache)
+			}
 		}
 		if uid == 0 {
-			return EmailBodyMsg{
-				Body: &models.EmailBody{
+			return finish(
+				&models.EmailBody{
 					TextPlain: "(Body unavailable: this cached email has no server UID yet, so Herald cannot safely load its full contents. Re-sync the folder or use server search to refresh it.)",
 				},
-				MessageID: messageID,
-			}
+				nil,
+				previewLoadSourceUnavailable,
+			)
 		}
 		// Single attempt — IMAP layer handles reconnection internally.
 		// Context cancellation handles rapid cursor movement.
-		body, err := b.FetchEmailBody(folder, uid)
-		if ctx.Err() != nil {
-			return EmailBodyMsg{Err: ctx.Err(), MessageID: messageID}
+		var body *models.EmailBody
+		var err error
+		if previewFetcher, ok := b.(previewFetchBackend); ok {
+			body, err = previewFetcher.FetchPreviewBody(messageID, folder, uid)
 		}
-		return EmailBodyMsg{Body: body, Err: err, MessageID: messageID}
+		if body == nil && err == nil {
+			body, err = b.FetchEmailBody(folder, uid)
+		}
+		if ctx.Err() != nil {
+			return finish(nil, ctx.Err(), previewLoadSourceIMAP)
+		}
+		if err == nil && body != nil {
+			if previewBackend, ok := b.(previewCacheBackend); ok {
+				if cacheErr := previewBackend.CachePreviewBody(messageID, body); cacheErr != nil {
+					logger.Warn("Preview cache write failed for %s: %v", messageID, cacheErr)
+				}
+			}
+		}
+		return finish(body, err, previewLoadSourceIMAP)
 	}
 }
 
 // fetchCleanupBodyCmd returns a tea.Cmd that fetches an email body for the Cleanup tab preview.
 func fetchCleanupBodyCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
 	return func() tea.Msg {
-		body, err := b.FetchEmailBody(email.Folder, email.UID)
-		return CleanupEmailBodyMsg{MessageID: email.MessageID, Body: body, Err: err}
+		started := time.Now()
+		if previewBackend, ok := b.(previewCacheBackend); ok {
+			cached, err := previewBackend.GetCachedPreviewBody(email.MessageID)
+			if err != nil {
+				logger.Debug("Cleanup preview cache lookup failed for %s: %v", email.MessageID, err)
+			} else if cached != nil {
+				finished := time.Now()
+				return CleanupEmailBodyMsg{
+					MessageID:      email.MessageID,
+					Folder:         email.Folder,
+					UID:            email.UID,
+					Body:           cached,
+					LoadSource:     previewLoadSourceCache,
+					LoadStartedAt:  started,
+					LoadFinishedAt: finished,
+					LoadDuration:   finished.Sub(started),
+				}
+			}
+		}
+		var body *models.EmailBody
+		var err error
+		if previewFetcher, ok := b.(previewFetchBackend); ok {
+			body, err = previewFetcher.FetchPreviewBody(email.MessageID, email.Folder, email.UID)
+		}
+		if body == nil && err == nil {
+			body, err = b.FetchEmailBody(email.Folder, email.UID)
+		}
+		if err == nil && body != nil {
+			if previewBackend, ok := b.(previewCacheBackend); ok {
+				if cacheErr := previewBackend.CachePreviewBody(email.MessageID, body); cacheErr != nil {
+					logger.Warn("Cleanup preview cache write failed for %s: %v", email.MessageID, cacheErr)
+				}
+			}
+		}
+		finished := time.Now()
+		return CleanupEmailBodyMsg{
+			MessageID:      email.MessageID,
+			Folder:         email.Folder,
+			UID:            email.UID,
+			Body:           body,
+			Err:            err,
+			LoadSource:     previewLoadSourceIMAP,
+			LoadStartedAt:  started,
+			LoadFinishedAt: finished,
+			LoadDuration:   finished.Sub(started),
+		}
 	}
 }
 
@@ -1071,7 +1173,8 @@ func (m *Model) renderCleanupPreview() string {
 		if !m.cleanupBodyLoading {
 			headerBody = m.cleanupEmailBody
 		}
-		header := renderPreviewHeaderLines(email, headerBody, category, previewHasUnsubscribe(headerBody), innerW, headerActive)
+		loadTag := previewLoadTag(m.cleanupPreviewLoad, email.MessageID)
+		header := renderPreviewHeaderLinesWithLoad(email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, headerActive)
 		headerLines = len(header)
 		for _, line := range header {
 			sb.WriteString(line + "\n")

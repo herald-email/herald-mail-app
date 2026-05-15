@@ -115,6 +115,9 @@ Timeline bulk selection follows the same identity rule at message granularity. T
 **Config-specific SQLite cache**
 The SQLite database path is part of configuration. If YAML already contains a cache database path, every local cache reader and writer uses it as authoritative. If it is missing, startup generates an absolute `<home>/.herald/cached/<config-name>.db` path from the config filename, disambiguates with a date and short random suffix when that file already exists, writes the chosen absolute path back to YAML, and then opens the cache.
 
+**Offline preview cache policy**
+`cache.storage_policy` controls how much message body data Herald persists for offline reading. `lightweight` is the default and stores preview text/HTML, useful headers, and attachment metadata without inline image or attachment bytes. `no_attachments` keeps non-downloadable inline body data where available but strips downloadable attachment bytes. `preserve_all` stores fetched preview bodies with attachment bytes so later saves can use local data. Timeline and Cleanup preview loaders first try the persistent preview cache, then use a preview-specific IMAP fetch for lightweight/no-attachment misses, and only fall back to full body fetches where the backend does not expose a preview fetch path.
+
 **SQLite WAL mode**
 `PRAGMA journal_mode=WAL` is set at cache init. This allows the TUI, SSH server, daemon, and MCP server to read and write the same configured SQLite database simultaneously without blocking each other. No cross-process locks are held.
 
@@ -366,6 +369,23 @@ CREATE TABLE email_classifications (
     message_id    TEXT PRIMARY KEY,
     category      TEXT NOT NULL DEFAULT '',
     classified_at DATETIME NOT NULL
+);
+
+CREATE TABLE email_preview_bodies (
+    message_id            TEXT PRIMARY KEY,
+    from_addr             TEXT,
+    to_addr               TEXT,
+    cc                    TEXT,
+    bcc                   TEXT,
+    subject               TEXT,
+    text_plain            TEXT,
+    text_html             TEXT,
+    is_from_html          INTEGER NOT NULL DEFAULT 0,
+    list_unsubscribe      TEXT,
+    list_unsubscribe_post TEXT,
+    inline_images_json    TEXT NOT NULL DEFAULT '[]',
+    attachments_json      TEXT NOT NULL DEFAULT '[]',
+    cached_at             DATETIME NOT NULL
 );
 
 CREATE TABLE email_embeddings (

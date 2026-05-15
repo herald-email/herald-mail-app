@@ -109,9 +109,15 @@ type ValidIDsMsg struct {
 
 // EmailBodyMsg carries the result of fetching an email body from IMAP
 type EmailBodyMsg struct {
-	Body      *models.EmailBody
-	Err       error
-	MessageID string // used to discard stale body fetches from rapid cursor movement
+	Body           *models.EmailBody
+	Err            error
+	MessageID      string // used to discard stale body fetches from rapid cursor movement
+	Folder         string
+	UID            uint32
+	LoadSource     string
+	LoadStartedAt  time.Time
+	LoadFinishedAt time.Time
+	LoadDuration   time.Duration
 }
 
 // TimelineForwardBodyMsg carries a body fetch result for Timeline forwarding.
@@ -158,9 +164,15 @@ type QuickRepliesMsg struct {
 
 // CleanupEmailBodyMsg carries the result of fetching an email body from the Cleanup tab
 type CleanupEmailBodyMsg struct {
-	MessageID string
-	Body      *models.EmailBody
-	Err       error
+	MessageID      string
+	Folder         string
+	UID            uint32
+	Body           *models.EmailBody
+	Err            error
+	LoadSource     string
+	LoadStartedAt  time.Time
+	LoadFinishedAt time.Time
+	LoadDuration   time.Duration
 }
 
 // ChatResponseMsg carries an Ollama chat reply
@@ -396,6 +408,7 @@ type Model struct {
 	cleanupPreviewEmail        *models.EmailData
 	cleanupEmailBody           *models.EmailBody
 	cleanupBodyLoading         bool
+	cleanupPreviewLoad         previewLoadTelemetry
 	cleanupBodyScrollOffset    int
 	cleanupBodyWrappedLines    []string
 	cleanupBodyWrappedWidth    int
@@ -1537,9 +1550,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CleanupEmailBodyMsg:
+		telemetry := previewTelemetryFromCleanupMsg(msg)
 		if m.cleanupPreviewEmail == nil || msg.MessageID != m.cleanupPreviewEmail.MessageID {
+			logPreviewLoad("cleanup", telemetry, true)
 			return m, nil
 		}
+		m.cleanupPreviewLoad = telemetry
+		logPreviewLoad("cleanup", telemetry, false)
 		m.cleanupBodyLoading = false
 		m.revokeImagePreviews()
 		if msg.Err != nil {
@@ -2223,6 +2240,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 						m.cleanupPreviewEmail = email
 						m.showCleanupPreview = true
 						m.cleanupBodyLoading = true
+						m.cleanupPreviewLoad = previewLoadTelemetry{}
 						m.cleanupEmailBody = nil
 						m.cleanupBodyScrollOffset = 0
 						m.cleanupBodyWrappedLines = nil

@@ -29,7 +29,8 @@ func ExpandPath(p string) (string, error) {
 type Config struct {
 	Vendor string `yaml:"vendor"` // gmail | protonmail | fastmail | outlook | icloud
 	Cache  struct {
-		DatabasePath string `yaml:"database_path,omitempty"`
+		DatabasePath  string `yaml:"database_path,omitempty"`
+		StoragePolicy string `yaml:"storage_policy,omitempty"` // lightweight | no_attachments | preserve_all
 	} `yaml:"cache,omitempty"`
 	Compose struct {
 		Signature struct {
@@ -141,6 +142,23 @@ var vendorPresets = map[string]vendorPreset{
 	"outlook":    {"outlook.office365.com", 993, "smtp.office365.com", 587},
 	"fastmail":   {"imap.fastmail.com", 993, "smtp.fastmail.com", 587},
 	"icloud":     {"imap.mail.me.com", 993, "smtp.mail.me.com", 587},
+}
+
+const (
+	CacheStoragePolicyLightweight   = "lightweight"
+	CacheStoragePolicyNoAttachments = "no_attachments"
+	CacheStoragePolicyPreserveAll   = "preserve_all"
+)
+
+func NormalizeCacheStoragePolicy(policy string) string {
+	switch strings.TrimSpace(policy) {
+	case CacheStoragePolicyNoAttachments:
+		return CacheStoragePolicyNoAttachments
+	case CacheStoragePolicyPreserveAll:
+		return CacheStoragePolicyPreserveAll
+	default:
+		return CacheStoragePolicyLightweight
+	}
 }
 
 // ApplyVendorPreset fills in server/smtp host+port when a vendor shortcut is
@@ -321,6 +339,7 @@ func (c *Config) Save(path string) error {
 
 // applyDefaults sets sensible defaults for optional config fields
 func (c *Config) applyDefaults() {
+	c.Cache.StoragePolicy = NormalizeCacheStoragePolicy(c.Cache.StoragePolicy)
 	if c.Ollama.Model == "" {
 		c.Ollama.Model = "gemma3:4b"
 	}

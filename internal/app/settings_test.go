@@ -258,6 +258,28 @@ func TestBuildConfig_PreservesUnmanagedConfigFields(t *testing.T) {
 	}
 }
 
+func TestBuildConfigDefaultsCacheStoragePolicyToLightweight(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, &config.Config{})
+
+	cfg := s.buildConfig()
+
+	if cfg.Cache.StoragePolicy != "lightweight" {
+		t.Fatalf("Cache.StoragePolicy = %q, want lightweight", cfg.Cache.StoragePolicy)
+	}
+}
+
+func TestBuildConfigPreservesSelectedCacheStoragePolicy(t *testing.T) {
+	existing := &config.Config{}
+	existing.Cache.StoragePolicy = "preserve_all"
+	s := NewSettings(SettingsModePanel, existing)
+
+	cfg := s.buildConfig()
+
+	if cfg.Cache.StoragePolicy != "preserve_all" {
+		t.Fatalf("Cache.StoragePolicy = %q, want preserve_all", cfg.Cache.StoragePolicy)
+	}
+}
+
 func TestSettingsSignatureFieldEnterAddsLineInsteadOfSubmitting(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
 	focusSignatureSettingsGroup(t, s)

@@ -52,6 +52,7 @@ func (m *Model) closeCleanupPreviewForTabSwitch() {
 	m.cleanupPreviewEmail = nil
 	m.cleanupEmailBody = nil
 	m.cleanupBodyLoading = false
+	m.cleanupPreviewLoad = previewLoadTelemetry{}
 	m.cleanupBodyScrollOffset = 0
 	m.cleanupBodyWrappedLines = nil
 	m.cleanupFullScreen = false

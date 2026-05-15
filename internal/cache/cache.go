@@ -94,6 +94,27 @@ func (c *Cache) initDB() error {
 		logger.Debug("body_text column might already exist: %v", err)
 	}
 
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS email_preview_bodies (
+			message_id TEXT PRIMARY KEY,
+			from_addr TEXT,
+			to_addr TEXT,
+			cc TEXT,
+			bcc TEXT,
+			subject TEXT,
+			text_plain TEXT,
+			text_html TEXT,
+			is_from_html INTEGER NOT NULL DEFAULT 0,
+			list_unsubscribe TEXT,
+			list_unsubscribe_post TEXT,
+			inline_images_json TEXT NOT NULL DEFAULT '[]',
+			attachments_json TEXT NOT NULL DEFAULT '[]',
+			cached_at DATETIME NOT NULL
+		)
+	`); err != nil {
+		return err
+	}
+
 	// is_read column for read/unread tracking
 	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`); err != nil {
 		logger.Debug("is_read column might already exist: %v", err)
@@ -805,10 +826,151 @@ func (c *Cache) GetBodyText(messageID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !text.Valid {
-		return "", nil
+	if text.Valid && strings.TrimSpace(text.String) != "" {
+		return text.String, nil
 	}
-	return text.String, nil
+	preview, err := c.GetPreviewBody(messageID)
+	if err != nil || preview == nil {
+		return "", err
+	}
+	return preview.TextPlain, nil
+}
+
+// CachePreviewBody stores the preview body using the configured offline-cache
+// policy. Lightweight caches keep text, headers, and attachment metadata only.
+func (c *Cache) CachePreviewBody(messageID string, body *models.EmailBody, policy string) error {
+	if strings.TrimSpace(messageID) == "" || body == nil {
+		return nil
+	}
+	cached := previewBodyForPolicy(body, policy)
+	inlineJSON, err := json.Marshal(cached.InlineImages)
+	if err != nil {
+		return fmt.Errorf("marshal inline preview images: %w", err)
+	}
+	attachmentsJSON, err := json.Marshal(cached.Attachments)
+	if err != nil {
+		return fmt.Errorf("marshal preview attachments: %w", err)
+	}
+	_, err = c.db.Exec(`
+		INSERT OR REPLACE INTO email_preview_bodies
+		(message_id, from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
+		 list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cached_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		messageID,
+		cached.From,
+		cached.To,
+		cached.CC,
+		cached.BCC,
+		cached.Subject,
+		cached.TextPlain,
+		cached.TextHTML,
+		boolToInt(cached.IsFromHTML),
+		cached.ListUnsubscribe,
+		cached.ListUnsubscribePost,
+		string(inlineJSON),
+		string(attachmentsJSON),
+		time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetPreviewBody returns a cached preview body, or nil when the message has not
+// been cached for preview yet.
+func (c *Cache) GetPreviewBody(messageID string) (*models.EmailBody, error) {
+	var body models.EmailBody
+	var isFromHTML int
+	var inlineJSON, attachmentsJSON string
+	err := c.db.QueryRow(`
+		SELECT from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
+		       list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json
+		FROM email_preview_bodies
+		WHERE message_id=?
+	`, messageID).Scan(
+		&body.From,
+		&body.To,
+		&body.CC,
+		&body.BCC,
+		&body.Subject,
+		&body.TextPlain,
+		&body.TextHTML,
+		&isFromHTML,
+		&body.ListUnsubscribe,
+		&body.ListUnsubscribePost,
+		&inlineJSON,
+		&attachmentsJSON,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	body.MessageID = messageID
+	body.IsFromHTML = isFromHTML != 0
+	if strings.TrimSpace(inlineJSON) != "" {
+		if err := json.Unmarshal([]byte(inlineJSON), &body.InlineImages); err != nil {
+			return nil, fmt.Errorf("unmarshal inline preview images: %w", err)
+		}
+	}
+	if strings.TrimSpace(attachmentsJSON) != "" {
+		if err := json.Unmarshal([]byte(attachmentsJSON), &body.Attachments); err != nil {
+			return nil, fmt.Errorf("unmarshal preview attachments: %w", err)
+		}
+	}
+	return &body, nil
+}
+
+func previewBodyForPolicy(body *models.EmailBody, policy string) *models.EmailBody {
+	policy = normalizePreviewStoragePolicy(policy)
+	cached := *body
+	cached.InlineImages = cloneInlineImagesForPolicy(body.InlineImages, policy)
+	cached.Attachments = cloneAttachmentsForPolicy(body.Attachments, policy)
+	return &cached
+}
+
+func normalizePreviewStoragePolicy(policy string) string {
+	switch strings.TrimSpace(policy) {
+	case "no_attachments":
+		return "no_attachments"
+	case "preserve_all":
+		return "preserve_all"
+	default:
+		return "lightweight"
+	}
+}
+
+func cloneInlineImagesForPolicy(images []models.InlineImage, policy string) []models.InlineImage {
+	if policy == "lightweight" || len(images) == 0 {
+		return nil
+	}
+	cloned := make([]models.InlineImage, len(images))
+	for i, image := range images {
+		cloned[i] = image
+		if image.Data != nil {
+			cloned[i].Data = append([]byte(nil), image.Data...)
+		}
+	}
+	return cloned
+}
+
+func cloneAttachmentsForPolicy(attachments []models.Attachment, policy string) []models.Attachment {
+	if len(attachments) == 0 {
+		return nil
+	}
+	cloned := make([]models.Attachment, len(attachments))
+	for i, attachment := range attachments {
+		cloned[i] = attachment
+		switch policy {
+		case "preserve_all":
+			if attachment.Data != nil {
+				cloned[i].Data = append([]byte(nil), attachment.Data...)
+			}
+		default:
+			cloned[i].Data = nil
+		}
+	}
+	return cloned
 }
 
 // GetUnreadEmails returns unread emails in a folder, newest first

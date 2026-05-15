@@ -59,7 +59,11 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 				m.timeline.attachmentSavePrompt = false
 				m.timeline.attachmentSaveWarning = ""
 				m.timeline.attachmentSaveInput.Blur()
-				return m, saveAttachmentCmd(m.backend, att, path), true
+				messageID := ""
+				if m.timeline.selectedEmail != nil {
+					messageID = m.timeline.selectedEmail.MessageID
+				}
+				return m, saveAttachmentCmd(m.backend, messageID, att, path), true
 			}
 			m.timeline.attachmentSavePrompt = false
 			m.timeline.attachmentSaveWarning = ""
@@ -336,6 +340,7 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		m.cleanupPreviewEmail = nil
 		m.cleanupEmailBody = nil
 		m.cleanupBodyLoading = false
+		m.cleanupPreviewLoad = previewLoadTelemetry{}
 		m.cleanupBodyScrollOffset = 0
 		m.cleanupBodyWrappedLines = nil
 		m.cleanupFullScreen = false

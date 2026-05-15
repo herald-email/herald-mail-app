@@ -638,6 +638,36 @@ func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailB
 	return body, nil
 }
 
+func (b *LocalBackend) GetCachedPreviewBody(messageID string) (*models.EmailBody, error) {
+	return b.cache.GetPreviewBody(messageID)
+}
+
+func (b *LocalBackend) CachePreviewBody(messageID string, body *models.EmailBody) error {
+	policy := config.CacheStoragePolicyLightweight
+	if b.cfg != nil {
+		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
+	}
+	return b.cache.CachePreviewBody(messageID, body, policy)
+}
+
+func (b *LocalBackend) FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error) {
+	policy := config.CacheStoragePolicyLightweight
+	if b.cfg != nil {
+		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
+	}
+	if policy == config.CacheStoragePolicyPreserveAll {
+		return b.FetchEmailBody(folder, uid)
+	}
+	body, err := b.imapClient.FetchEmailPreviewBody(uid, folder)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil && body.MessageID == "" {
+		body.MessageID = messageID
+	}
+	return body, nil
+}
+
 func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) error {
 	if att.Data == nil {
 		return fmt.Errorf("attachment data not loaded")
@@ -1233,12 +1263,20 @@ func (b *LocalBackend) GetAttachment(messageID, filename string) (*models.Attach
 		return nil, fmt.Errorf("fetch body: %w", err)
 	}
 	for _, a := range body.Attachments {
-		if strings.EqualFold(a.Filename, filename) {
+		if attachmentMatchesLookup(a, filename) {
 			aCopy := a
 			return &aCopy, nil
 		}
 	}
 	return nil, fmt.Errorf("attachment %q not found in message %s", filename, messageID)
+}
+
+func attachmentMatchesLookup(a models.Attachment, lookup string) bool {
+	lookup = strings.TrimSpace(lookup)
+	if lookup == "" {
+		return false
+	}
+	return strings.EqualFold(a.Filename, lookup) || strings.EqualFold(a.PartPath, lookup)
 }
 
 // --- Drafts ---

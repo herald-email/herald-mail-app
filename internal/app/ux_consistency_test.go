@@ -38,12 +38,21 @@ type attachmentBackend struct {
 	stubBackend
 	savedAttachment *models.Attachment
 	savedPath       string
+	fetchedID       string
+	fetchedName     string
+	fetched         *models.Attachment
 }
 
 func (b *attachmentBackend) SaveAttachment(att *models.Attachment, destPath string) error {
 	b.savedAttachment = att
 	b.savedPath = destPath
 	return nil
+}
+
+func (b *attachmentBackend) GetAttachment(messageID, filename string) (*models.Attachment, error) {
+	b.fetchedID = messageID
+	b.fetchedName = filename
+	return b.fetched, nil
 }
 
 func TestRenderStatusBar_DoesNotLeakCleanupSelectionOutsideCleanup(t *testing.T) {
@@ -115,7 +124,9 @@ func TestRenderKeyHints_ShowAttachmentNavigationWhenMultipleAttachments(t *testi
 }
 
 func TestHandleOverlayKey_AttachmentSaveUsesCurrentSelection(t *testing.T) {
-	backend := &attachmentBackend{}
+	backend := &attachmentBackend{
+		fetched: &models.Attachment{Filename: "second.pdf", Data: []byte("pdf")},
+	}
 	m := New(backend, nil, "", nil, false)
 	m.activeTab = tabTimeline
 	m.loading = false
@@ -152,6 +163,45 @@ func TestHandleOverlayKey_AttachmentSaveUsesCurrentSelection(t *testing.T) {
 	}
 	if backend.savedPath != "/tmp/second.pdf" {
 		t.Fatalf("expected save path /tmp/second.pdf, got %q", backend.savedPath)
+	}
+}
+
+func TestHandleOverlayKey_AttachmentSaveFetchesBytesOnDemand(t *testing.T) {
+	backend := &attachmentBackend{
+		fetched: &models.Attachment{Filename: "second.pdf", MIMEType: "application/pdf", PartPath: "2", Data: []byte("pdf")},
+	}
+	m := New(backend, nil, "", nil, false)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.focusedPanel = panelPreview
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1"}
+	m.timeline.body = &models.EmailBody{
+		Attachments: []models.Attachment{
+			{Filename: "first.pdf", PartPath: "1"},
+			{Filename: "second.pdf", PartPath: "2"},
+		},
+	}
+	m.timeline.selectedAttachment = 1
+	m.timeline.attachmentSavePrompt = true
+	m.timeline.attachmentSaveInput.SetValue("/tmp/second.pdf")
+
+	_, cmd, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !handled {
+		t.Fatal("expected attachment save overlay to handle Enter")
+	}
+	if cmd == nil {
+		t.Fatal("expected attachment save command")
+	}
+
+	msg := cmd()
+	if saved, ok := msg.(AttachmentSavedMsg); !ok || saved.Err != nil {
+		t.Fatalf("expected successful AttachmentSavedMsg, got %#v", msg)
+	}
+	if backend.fetchedID != "msg-1" || backend.fetchedName != "2" {
+		t.Fatalf("GetAttachment called with %q/%q, want msg-1/2", backend.fetchedID, backend.fetchedName)
+	}
+	if backend.savedAttachment == nil || string(backend.savedAttachment.Data) != "pdf" {
+		t.Fatalf("saved attachment = %#v, want fetched bytes", backend.savedAttachment)
 	}
 }
 

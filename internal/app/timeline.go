@@ -1588,6 +1588,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = true
+	m.timeline.previewLoad = previewLoadTelemetry{}
 	m.timeline.inlineImageDescs = nil
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.bodyWrappedLines = nil
@@ -1902,11 +1903,15 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.contactPreviewLoading {
 			return m, nil, false
 		}
+		telemetry := previewTelemetryFromEmailBodyMsg(msg)
 		if msg.MessageID != "" {
 			if m.timeline.selectedEmail == nil || msg.MessageID != m.timeline.selectedEmail.MessageID {
+				logPreviewLoad("timeline", telemetry, true)
 				return m, nil, true
 			}
 		}
+		m.timeline.previewLoad = telemetry
+		logPreviewLoad("timeline", telemetry, false)
 		m.timeline.bodyLoading = false
 		m.timeline.selectedAttachment = 0
 		m.timeline.quickReplies = nil

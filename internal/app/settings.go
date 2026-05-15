@@ -107,6 +107,7 @@ type Settings struct {
 	syncPollStr        string
 	syncIDLE           bool
 	cleanupScheduleStr string
+	cacheStoragePolicy string
 
 	// form field backing variables — compose
 	signatureText string
@@ -178,6 +179,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.syncPollStr = strconv.Itoa(existing.Sync.PollIntervalMinutes)
 		s.syncIDLE = existing.Sync.IDLEEnabled
 		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
+		s.cacheStoragePolicy = config.NormalizeCacheStoragePolicy(existing.Cache.StoragePolicy)
 		s.signatureText = existing.Compose.Signature.Text
 		s.keyboardProfile = existing.Keyboard.Profile
 		s.customKeymap = existing.Keyboard.CustomKeymap
@@ -200,6 +202,9 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	}
 	if s.cleanupScheduleStr == "" {
 		s.cleanupScheduleStr = "0"
+	}
+	if s.cacheStoragePolicy == "" {
+		s.cacheStoragePolicy = config.CacheStoragePolicyLightweight
 	}
 	if s.keyboardProfile == "" {
 		s.keyboardProfile = keyboardProfileDefault
@@ -434,6 +439,14 @@ func (s *Settings) buildForm() {
 		huh.NewConfirm().
 			Title("Enable IMAP IDLE").
 			Value(&s.syncIDLE),
+		huh.NewSelect[string]().
+			Title("Offline Cache").
+			Options(
+				huh.NewOption("Lightweight previews", config.CacheStoragePolicyLightweight),
+				huh.NewOption("No attachments", config.CacheStoragePolicyNoAttachments),
+				huh.NewOption("Preserve all data", config.CacheStoragePolicyPreserveAll),
+			).
+			Value(&s.cacheStoragePolicy),
 		huh.NewInput().
 			Title("Auto-Cleanup Schedule (hours)").
 			Inline(true).
@@ -1023,6 +1036,7 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Sync.PollIntervalMinutes = n
 	}
 	cfg.Sync.IDLEEnabled = s.syncIDLE
+	cfg.Cache.StoragePolicy = config.NormalizeCacheStoragePolicy(s.cacheStoragePolicy)
 	if n, err := strconv.Atoi(s.cleanupScheduleStr); err == nil {
 		cfg.Cleanup.ScheduleHours = n
 	}

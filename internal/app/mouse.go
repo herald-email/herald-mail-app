@@ -348,6 +348,7 @@ func (m *Model) openCleanupPreviewEmail(email *models.EmailData) tea.Cmd {
 	m.cleanupPreviewEmail = email
 	m.showCleanupPreview = true
 	m.cleanupBodyLoading = true
+	m.cleanupPreviewLoad = previewLoadTelemetry{}
 	m.cleanupEmailBody = nil
 	m.cleanupBodyScrollOffset = 0
 	m.cleanupBodyWrappedLines = nil

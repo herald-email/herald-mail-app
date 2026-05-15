@@ -1557,6 +1557,28 @@ Check these states during every applicable lane:
 - The selected screenshots render with `Dark Pastel`, `Red Alert`, and `Builtin Pastel Dark`; the two GIFs render at high resolution without replacing every existing docs asset.
 - Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `c` to open Compose.
 
+### TC-52 — Preview load telemetry and offline cache policy
+
+**Lane:** A/F
+**Sizes:** `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode, dismiss onboarding, and open a Timeline preview.
+2. Capture the split preview at `120x40` and `80x24`.
+3. Switch to Cleanup, open an individual email preview, and capture it.
+4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector.
+5. Save each policy in turn: `Lightweight previews`, `No attachments`, and `Preserve all data`.
+6. Open a message with an attachment, then save the selected attachment.
+7. Resize to `50x15`, then recover to `80x24`.
+
+**Expect:**
+- Timeline and Cleanup preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
+- The `Load:` row never wraps or pushes body text outside the preview border at supported sizes.
+- Settings defaults to `Lightweight previews` for new configs and preserves the selected policy after saving.
+- Lightweight cached previews render body text from cache without downloading attachment bytes.
+- Attachment save fetches bytes on demand when preview only has metadata.
+- `50x15` shows the minimum-size guard and resizing back restores a clean preview.
+
 ---
 
 ## Recommendations

@@ -376,3 +376,19 @@ func TestBuildAllMailOnlyView_ExplainsFolderUnassignedSemantics(t *testing.T) {
 		t.Fatalf("expected supported All Mail only view to explain folder-unassigned semantics, got %q", view.Reason)
 	}
 }
+
+func TestAttachmentMatchesLookupAcceptsFilenameOrPartPath(t *testing.T) {
+	attachment := models.Attachment{
+		Filename: "Invoice.pdf",
+		PartPath: "2.1",
+	}
+
+	for _, lookup := range []string{"invoice.pdf", "2.1"} {
+		if !attachmentMatchesLookup(attachment, lookup) {
+			t.Fatalf("expected lookup %q to match %#v", lookup, attachment)
+		}
+	}
+	if attachmentMatchesLookup(attachment, "other.pdf") {
+		t.Fatal("unexpected match for unrelated attachment lookup")
+	}
+}

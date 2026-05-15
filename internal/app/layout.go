@@ -63,6 +63,7 @@ type TimelineState struct {
 	body                *models.EmailBody
 	bodyMessageID       string
 	bodyLoading         bool
+	previewLoad         previewLoadTelemetry
 	inlineImageDescs    map[string]string
 	previewWidth        int
 	fullScreen          bool

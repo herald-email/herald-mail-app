@@ -26,12 +26,27 @@ func expandTilde(path string) string {
 }
 
 // saveAttachmentCmd returns a tea.Cmd that writes attachment data to destPath.
-func saveAttachmentCmd(b backend.Backend, att *models.Attachment, destPath string) tea.Cmd {
+func saveAttachmentCmd(b backend.Backend, messageID string, att *models.Attachment, destPath string) tea.Cmd {
 	return func() tea.Msg {
-		if err := b.SaveAttachment(att, destPath); err != nil {
+		toSave := att
+		if toSave != nil && len(toSave.Data) == 0 && strings.TrimSpace(messageID) != "" {
+			lookup := strings.TrimSpace(toSave.PartPath)
+			if lookup == "" {
+				lookup = toSave.Filename
+			}
+			fetched, err := b.GetAttachment(messageID, lookup)
+			if err != nil {
+				return AttachmentSavedMsg{Err: err}
+			}
+			if fetched == nil {
+				return AttachmentSavedMsg{Err: fmt.Errorf("attachment %q unavailable", lookup)}
+			}
+			toSave = fetched
+		}
+		if err := b.SaveAttachment(toSave, destPath); err != nil {
 			return AttachmentSavedMsg{Err: err}
 		}
-		return AttachmentSavedMsg{Filename: att.Filename, Path: destPath}
+		return AttachmentSavedMsg{Filename: toSave.Filename, Path: destPath}
 	}
 }
 
