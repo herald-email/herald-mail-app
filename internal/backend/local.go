@@ -650,6 +650,37 @@ func (b *LocalBackend) CachePreviewBody(messageID string, body *models.EmailBody
 	return b.cache.CachePreviewBody(messageID, body, policy)
 }
 
+func (b *LocalBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCachePruneResult, error) {
+	target := config.NormalizeCacheStoragePolicy(policy)
+	previous := config.CacheStoragePolicyLightweight
+	if b.cfg != nil {
+		previous = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
+	} else {
+		b.cfg = &config.Config{}
+	}
+	b.cfg.Cache.StoragePolicy = target
+	if previewPolicyRank(target) < previewPolicyRank(previous) {
+		b.bodyCacheMu.Lock()
+		b.bodyCache = nil
+		b.bodyCacheMu.Unlock()
+	}
+	if b.cache == nil {
+		return models.PreviewCachePruneResult{}, nil
+	}
+	return b.cache.PrunePreviewBodiesForPolicy(target)
+}
+
+func previewPolicyRank(policy string) int {
+	switch config.NormalizeCacheStoragePolicy(policy) {
+	case config.CacheStoragePolicyPreserveAll:
+		return 2
+	case config.CacheStoragePolicyNoAttachments:
+		return 1
+	default:
+		return 0
+	}
+}
+
 func (b *LocalBackend) FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error) {
 	policy := config.CacheStoragePolicyLightweight
 	if b.cfg != nil {

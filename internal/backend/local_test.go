@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -131,6 +133,76 @@ func TestSenderStatisticsFromGroups_IgnoresEmptyGroups(t *testing.T) {
 	}
 	if stat.AvgSize != 200 {
 		t.Fatalf("expected avg size 200, got %f", stat.AvgSize)
+	}
+}
+
+func TestApplyCacheStoragePolicyPrunesRowsClearsBodyCacheAndAffectsFutureWrites(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	b := &LocalBackend{
+		cache: c,
+		cfg:   &config.Config{},
+		bodyCache: map[string]*models.EmailBody{
+			"INBOX:1": {TextPlain: "stale full body"},
+		},
+	}
+	b.cfg.Cache.StoragePolicy = config.CacheStoragePolicyPreserveAll
+	body := &models.EmailBody{
+		TextPlain: "body",
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: []byte("png-bytes")},
+		},
+		Attachments: []models.Attachment{
+			{Filename: "invoice.pdf", MIMEType: "application/pdf", Size: 9, PartPath: "2", Data: []byte("pdf-bytes")},
+		},
+	}
+	if err := b.CachePreviewBody("existing", body); err != nil {
+		t.Fatalf("CachePreviewBody existing: %v", err)
+	}
+
+	result, err := b.ApplyCacheStoragePolicy(config.CacheStoragePolicyLightweight)
+	if err != nil {
+		t.Fatalf("ApplyCacheStoragePolicy: %v", err)
+	}
+	if b.cfg.Cache.StoragePolicy != config.CacheStoragePolicyLightweight {
+		t.Fatalf("backend policy = %q, want lightweight", b.cfg.Cache.StoragePolicy)
+	}
+	if result.RowsChanged != 1 || result.AttachmentBytesRemoved != int64(len("pdf-bytes")) || result.InlineImageBytesRemoved != int64(len("png-bytes")) {
+		t.Fatalf("unexpected prune result: %#v", result)
+	}
+	b.bodyCacheMu.Lock()
+	bodyCacheLen := len(b.bodyCache)
+	b.bodyCacheMu.Unlock()
+	if bodyCacheLen != 0 {
+		t.Fatalf("body cache length = %d, want cleared", bodyCacheLen)
+	}
+
+	pruned, err := b.GetCachedPreviewBody("existing")
+	if err != nil {
+		t.Fatalf("GetCachedPreviewBody existing: %v", err)
+	}
+	if len(pruned.InlineImages) != 0 {
+		t.Fatalf("inline image bytes lingered: %#v", pruned.InlineImages)
+	}
+	if len(pruned.Attachments) != 1 || pruned.Attachments[0].PartPath != "2" || len(pruned.Attachments[0].Data) != 0 {
+		t.Fatalf("attachment metadata/data after prune = %#v", pruned.Attachments)
+	}
+
+	if err := b.CachePreviewBody("future", body); err != nil {
+		t.Fatalf("CachePreviewBody future: %v", err)
+	}
+	future, err := b.GetCachedPreviewBody("future")
+	if err != nil {
+		t.Fatalf("GetCachedPreviewBody future: %v", err)
+	}
+	if len(future.InlineImages) != 0 {
+		t.Fatalf("future write stored inline images under lightweight: %#v", future.InlineImages)
+	}
+	if len(future.Attachments) != 1 || len(future.Attachments[0].Data) != 0 {
+		t.Fatalf("future write stored attachment bytes under lightweight: %#v", future.Attachments)
 	}
 }
 

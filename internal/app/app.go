@@ -186,6 +186,12 @@ type previewPrewarmMsg struct {
 	Err        error
 }
 
+type CacheStoragePolicyAppliedMsg struct {
+	Policy string
+	Result models.PreviewCachePruneResult
+	Err    error
+}
+
 // ChatResponseMsg carries an Ollama chat reply
 type ChatResponseMsg struct {
 	Content string
@@ -946,10 +952,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SettingsSavedMsg:
 		previousEmbeddingModel := ""
+		previousCachePolicy := config.CacheStoragePolicyLightweight
 		if m.cfg != nil {
 			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
+			previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
 		}
 		m.applyKeyboardConfig(msg.Config)
+		nextCachePolicy := config.CacheStoragePolicyLightweight
+		if m.cfg != nil {
+			nextCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
+		}
+		var settingsCmds []tea.Cmd
 		m.statusMessage = "Settings saved."
 		if m.keyboardWarn != "" {
 			m.statusMessage = "Settings saved. " + m.keyboardWarn
@@ -977,16 +990,47 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
 			}
 		}
+		if previousCachePolicy != nextCachePolicy {
+			type cacheStoragePolicyApplier interface {
+				ApplyCacheStoragePolicy(string) (models.PreviewCachePruneResult, error)
+			}
+			if manager, ok := m.backend.(cacheStoragePolicyApplier); ok {
+				policy := nextCachePolicy
+				settingsCmds = append(settingsCmds, func() tea.Msg {
+					result, err := manager.ApplyCacheStoragePolicy(policy)
+					return CacheStoragePolicyAppliedMsg{Policy: policy, Result: result, Err: err}
+				})
+			} else {
+				m.statusMessage = "Settings saved. Restart Herald to prune existing preview cache for the new policy."
+			}
+		}
 		if msg.ReturnToMenu {
 			m.showSettings = true
 			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
 			m.settingsPanel.panelStatus = m.statusMessage
 			m.settingsPanel.buildForm()
 			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
-			return m, m.settingsPanel.Init()
+			initCmd := m.settingsPanel.Init()
+			if len(settingsCmds) > 0 {
+				settingsCmds = append(settingsCmds, initCmd)
+				return m, tea.Batch(settingsCmds...)
+			}
+			return m, initCmd
 		}
 		m.showSettings = false
 		m.settingsPanel = nil
+		if len(settingsCmds) > 0 {
+			return m, tea.Batch(settingsCmds...)
+		}
+		return m, nil
+
+	case CacheStoragePolicyAppliedMsg:
+		if msg.Err != nil {
+			m.statusMessage = fmt.Sprintf("Preview cache policy update failed: %v", msg.Err)
+			return m, nil
+		}
+		bytesRemoved := msg.Result.AttachmentBytesRemoved + msg.Result.InlineImageBytesRemoved
+		m.statusMessage = fmt.Sprintf("Preview cache policy applied: %s (%d rows pruned, %d bytes removed)", msg.Policy, msg.Result.RowsChanged, bytesRemoved)
 		return m, nil
 
 	case SettingsCancelledMsg:

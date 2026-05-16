@@ -10,30 +10,34 @@ import (
 // stubBackend is a minimal backend.Backend implementation for unit tests.
 // Only the methods called by chatToolRegistry dispatch are implemented.
 type stubBackend struct {
-	searchResult         []*models.EmailData
-	imapSearchResult     []*models.EmailData
-	semanticResults      []*models.SemanticSearchResult
-	threadResult         []*models.EmailData
-	statsResult          map[string]*models.SenderStats
-	searchErr            error
-	semanticErr          error
-	ensuredModel         string
-	ensureCalled         bool
-	ensureResult         bool
-	ensureErr            error
-	lastSemanticLimit    int
-	lastSemanticMinScore float64
-	imapSearchCalls      int
-	searchCalls          int
-	saveSearchCalls      int
-	bodyTextByID         map[string]string
-	fetchBodyCalls       int
-	virtualFolderResult  *models.VirtualFolderResult
-	startPollingCalls    int
-	lastPollingInterval  int
-	stopPollingCalls     int
-	startIDLECalls       int
-	stopIDLECalls        int
+	searchResult           []*models.EmailData
+	imapSearchResult       []*models.EmailData
+	semanticResults        []*models.SemanticSearchResult
+	threadResult           []*models.EmailData
+	statsResult            map[string]*models.SenderStats
+	searchErr              error
+	semanticErr            error
+	ensuredModel           string
+	ensureCalled           bool
+	ensureResult           bool
+	ensureErr              error
+	lastSemanticLimit      int
+	lastSemanticMinScore   float64
+	imapSearchCalls        int
+	searchCalls            int
+	saveSearchCalls        int
+	bodyTextByID           map[string]string
+	fetchBodyCalls         int
+	virtualFolderResult    *models.VirtualFolderResult
+	startPollingCalls      int
+	lastPollingInterval    int
+	stopPollingCalls       int
+	startIDLECalls         int
+	stopIDLECalls          int
+	applyCachePolicyCalls  int
+	appliedCachePolicy     string
+	applyCachePolicyResult models.PreviewCachePruneResult
+	applyCachePolicyErr    error
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -194,6 +198,11 @@ func (s *stubBackend) EnsureEmbeddingModel(model string) (bool, error) {
 	s.ensureCalled = true
 	s.ensuredModel = model
 	return s.ensureResult, s.ensureErr
+}
+func (s *stubBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCachePruneResult, error) {
+	s.applyCachePolicyCalls++
+	s.appliedCachePolicy = policy
+	return s.applyCachePolicyResult, s.applyCachePolicyErr
 }
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.

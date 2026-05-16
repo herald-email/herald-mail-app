@@ -99,6 +99,15 @@ type EmailBody struct {
 	References          string // raw References header from the fetched MIME message
 }
 
+// PreviewCachePruneResult summarizes binary data removed from persistent
+// preview-cache rows after applying a stricter offline cache policy.
+type PreviewCachePruneResult struct {
+	RowsScanned             int
+	RowsChanged             int
+	AttachmentBytesRemoved  int64
+	InlineImageBytesRemoved int64
+}
+
 // PreservationMode controls how much of an original HTML message Herald keeps
 // when replying or forwarding with preserved inline content.
 type PreservationMode string

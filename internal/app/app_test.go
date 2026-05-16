@@ -202,6 +202,70 @@ func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
 	}
 }
 
+func TestSettingsSaved_CachePolicyChangeSchedulesAsyncPrune(t *testing.T) {
+	backend := &stubBackend{
+		applyCachePolicyResult: models.PreviewCachePruneResult{
+			RowsChanged:             2,
+			AttachmentBytesRemoved:  10,
+			InlineImageBytesRemoved: 5,
+		},
+	}
+	m := New(backend, nil, "", nil, false)
+	m.cfg = &config.Config{}
+	m.cfg.Cache.StoragePolicy = config.CacheStoragePolicyPreserveAll
+
+	next := &config.Config{}
+	next.Cache.StoragePolicy = config.CacheStoragePolicyLightweight
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected settings save to schedule cache policy pruning")
+	}
+	if backend.applyCachePolicyCalls != 0 {
+		t.Fatal("cache policy pruning should run asynchronously, not during SettingsSavedMsg handling")
+	}
+
+	messages := settingsImmediateMessagesForTest(cmd)
+	var applied CacheStoragePolicyAppliedMsg
+	found := false
+	for _, msg := range messages {
+		if m, ok := msg.(CacheStoragePolicyAppliedMsg); ok {
+			applied = m
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected CacheStoragePolicyAppliedMsg, got %#v", messages)
+	}
+	if backend.applyCachePolicyCalls != 1 || backend.appliedCachePolicy != config.CacheStoragePolicyLightweight {
+		t.Fatalf("backend apply calls=%d policy=%q", backend.applyCachePolicyCalls, backend.appliedCachePolicy)
+	}
+
+	updatedModel, _ = updated.Update(applied)
+	updated = updatedModel.(*Model)
+	if !strings.Contains(updated.statusMessage, "Preview cache policy applied: lightweight") {
+		t.Fatalf("statusMessage = %q", updated.statusMessage)
+	}
+	if !strings.Contains(updated.statusMessage, "2 rows pruned") || !strings.Contains(updated.statusMessage, "15 bytes removed") {
+		t.Fatalf("statusMessage missing prune summary: %q", updated.statusMessage)
+	}
+}
+
+func TestCacheStoragePolicyAppliedMsgReportsFailure(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+
+	updatedModel, _ := m.Update(CacheStoragePolicyAppliedMsg{
+		Policy: config.CacheStoragePolicyLightweight,
+		Err:    errors.New("sqlite locked"),
+	})
+	updated := updatedModel.(*Model)
+
+	if !strings.Contains(updated.statusMessage, "Preview cache policy update failed: sqlite locked") {
+		t.Fatalf("statusMessage = %q", updated.statusMessage)
+	}
+}
+
 func TestHandleTimelineMsg_DedupesBackgroundEmbeddingBatchStart(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.classifier = &stubClassifier{}

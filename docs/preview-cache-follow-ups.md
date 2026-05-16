@@ -26,10 +26,10 @@ Herald now has a dedicated background worker that fills `email_preview_bodies` b
 
 The cache policy now controls future writes, but users can change their mind after richer data has already been stored. A privacy-sensitive setting needs a way to remove data that no longer matches the selected policy.
 
-- [ ] When changing from `preserve_all` to `no_attachments` or `lightweight`, remove stored attachment bytes from preview rows and any future full-message cache table.
-- [ ] When changing from `no_attachments` to `lightweight`, remove inline image bytes and keep only text, HTML, headers, and attachment metadata.
+- [x] When changing from `preserve_all` to `no_attachments` or `lightweight`, remove stored attachment bytes from preview rows and any future full-message cache table.
+- [x] When changing from `no_attachments` to `lightweight`, remove inline image bytes and keep only text, HTML, headers, and attachment metadata.
 - [ ] Add a settings action that explains and performs "reclaim offline cache storage" with a before/after byte estimate.
-- [ ] Add regression tests for policy downgrade cleanup so private attachment bytes cannot linger silently.
+- [x] Add regression tests for policy downgrade cleanup so private attachment bytes cannot linger silently.
 
 ## Attachment Offline Behavior
 

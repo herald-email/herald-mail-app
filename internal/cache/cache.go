@@ -921,6 +921,112 @@ func (c *Cache) GetPreviewBody(messageID string) (*models.EmailBody, error) {
 	return &body, nil
 }
 
+// PrunePreviewBodiesForPolicy rewrites cached preview rows so they match the
+// target offline-cache policy. It never removes text, headers, or attachment
+// metadata; only binary payloads disallowed by the selected policy are pruned.
+func (c *Cache) PrunePreviewBodiesForPolicy(policy string) (models.PreviewCachePruneResult, error) {
+	policy = normalizePreviewStoragePolicy(policy)
+	var result models.PreviewCachePruneResult
+	if policy == "preserve_all" {
+		return result, nil
+	}
+
+	rows, err := c.db.Query(`
+		SELECT message_id, inline_images_json, attachments_json
+		FROM email_preview_bodies
+	`)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+
+	type previewPruneUpdate struct {
+		messageID       string
+		inlineJSON      string
+		attachmentsJSON string
+	}
+	var updates []previewPruneUpdate
+	for rows.Next() {
+		var messageID, inlineJSON, attachmentsJSON string
+		if err := rows.Scan(&messageID, &inlineJSON, &attachmentsJSON); err != nil {
+			return result, err
+		}
+		result.RowsScanned++
+
+		var images []models.InlineImage
+		if strings.TrimSpace(inlineJSON) != "" {
+			if err := json.Unmarshal([]byte(inlineJSON), &images); err != nil {
+				return result, fmt.Errorf("unmarshal inline preview images for %s: %w", messageID, err)
+			}
+		}
+		var attachments []models.Attachment
+		if strings.TrimSpace(attachmentsJSON) != "" {
+			if err := json.Unmarshal([]byte(attachmentsJSON), &attachments); err != nil {
+				return result, fmt.Errorf("unmarshal preview attachments for %s: %w", messageID, err)
+			}
+		}
+
+		prunedImages, inlineBytesRemoved, imagesChanged := pruneInlineImagesForPolicy(images, policy)
+		prunedAttachments, attachmentBytesRemoved, attachmentsChanged := pruneAttachmentsForPolicy(attachments, policy)
+		if !imagesChanged && !attachmentsChanged {
+			continue
+		}
+
+		nextInlineJSON, err := json.Marshal(prunedImages)
+		if err != nil {
+			return result, fmt.Errorf("marshal pruned inline preview images for %s: %w", messageID, err)
+		}
+		nextAttachmentsJSON, err := json.Marshal(prunedAttachments)
+		if err != nil {
+			return result, fmt.Errorf("marshal pruned preview attachments for %s: %w", messageID, err)
+		}
+		updates = append(updates, previewPruneUpdate{
+			messageID:       messageID,
+			inlineJSON:      string(nextInlineJSON),
+			attachmentsJSON: string(nextAttachmentsJSON),
+		})
+		result.RowsChanged++
+		result.InlineImageBytesRemoved += inlineBytesRemoved
+		result.AttachmentBytesRemoved += attachmentBytesRemoved
+	}
+	if err := rows.Err(); err != nil {
+		return result, err
+	}
+	if len(updates) == 0 {
+		return result, nil
+	}
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	stmt, err := tx.Prepare(`
+		UPDATE email_preview_bodies
+		SET inline_images_json=?, attachments_json=?, cached_at=?
+		WHERE message_id=?
+	`)
+	if err != nil {
+		return result, err
+	}
+	defer stmt.Close()
+	now := time.Now().Format(time.RFC3339)
+	for _, update := range updates {
+		if _, err := stmt.Exec(update.inlineJSON, update.attachmentsJSON, now, update.messageID); err != nil {
+			return result, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return result, err
+	}
+	tx = nil
+	return result, nil
+}
+
 func previewBodyForPolicy(body *models.EmailBody, policy string) *models.EmailBody {
 	policy = normalizePreviewStoragePolicy(policy)
 	cached := *body
@@ -971,6 +1077,35 @@ func cloneAttachmentsForPolicy(attachments []models.Attachment, policy string) [
 		}
 	}
 	return cloned
+}
+
+func pruneInlineImagesForPolicy(images []models.InlineImage, policy string) ([]models.InlineImage, int64, bool) {
+	if policy != "lightweight" || len(images) == 0 {
+		return images, 0, false
+	}
+	var removed int64
+	for _, image := range images {
+		removed += int64(len(image.Data))
+	}
+	return nil, removed, true
+}
+
+func pruneAttachmentsForPolicy(attachments []models.Attachment, policy string) ([]models.Attachment, int64, bool) {
+	if policy == "preserve_all" || len(attachments) == 0 {
+		return attachments, 0, false
+	}
+	cloned := make([]models.Attachment, len(attachments))
+	var removed int64
+	changed := false
+	for i, attachment := range attachments {
+		cloned[i] = attachment
+		if attachment.Data != nil {
+			removed += int64(len(attachment.Data))
+			cloned[i].Data = nil
+			changed = true
+		}
+	}
+	return cloned, removed, changed
 }
 
 // GetUnreadEmails returns unread emails in a folder, newest first
