@@ -7,9 +7,9 @@ import "time"
 type CleanupRule struct {
 	ID            int64
 	Name          string
-	MatchType     string     // "sender" | "domain"
+	MatchType     string // "sender" | "domain"
 	MatchValue    string
-	Action        string     // "delete" | "archive"
+	Action        string // "delete" | "archive"
 	OlderThanDays int
 	Enabled       bool
 	LastRun       *time.Time

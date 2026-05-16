@@ -17,9 +17,12 @@ func (m *mockAI) Chat(messages []ChatMessage) (string, error) {
 func (m *mockAI) ChatWithTools(messages []ChatMessage, tools []Tool) (string, []ToolCall, error) {
 	return "ok", nil, nil
 }
-func (m *mockAI) Classify(_, _ string) (Category, error)    { return "imp", nil }
-func (m *mockAI) Embed(_ string) ([]float32, error)          { m.embedCalled = true; return []float32{1, 2, 3}, nil }
-func (m *mockAI) SetEmbeddingModel(_ string)                 {}
+func (m *mockAI) Classify(_, _ string) (Category, error) { return "imp", nil }
+func (m *mockAI) Embed(_ string) ([]float32, error) {
+	m.embedCalled = true
+	return []float32{1, 2, 3}, nil
+}
+func (m *mockAI) SetEmbeddingModel(_ string)                            {}
 func (m *mockAI) GenerateQuickReplies(_, _, _ string) ([]string, error) { return nil, nil }
 func (m *mockAI) EnrichContact(_ string, _ []string) (string, []string, error) {
 	return "", nil, nil
