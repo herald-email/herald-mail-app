@@ -8,6 +8,7 @@ func newHeraldView(content string) tea.View {
 	v.KeyboardEnhancements.ReportAlternateKeys = true
 	v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
 	v.KeyboardEnhancements.ReportAssociatedText = true
+	v.KeyboardEnhancements.ReportEventTypes = true
 	return v
 }
 

@@ -357,27 +357,31 @@ type Model struct {
 	syncEventsCh <-chan models.FolderSyncEvent
 
 	// UI State
-	loading           bool
-	deleting          bool
-	deletionProgress  models.DeletionResult
-	deletionsPending  int  // Number of deletions waiting to complete
-	deletionsTotal    int  // Total deletions in current batch
-	connectionLost    bool // true while IMAP connection is down during deletion
-	loadingSpinner    int
-	startTime         time.Time
-	progressInfo      models.ProgressInfo
-	syncAccumulator   syncAccumulator
-	syncGeneration    int64
-	syncingFolder     string
-	syncCountsSettled bool
-	showLogs          bool
-	showHelp          bool
-	helpScrollOffset  int
-	helpSearchActive  bool
-	helpSearch        string
-	windowWidth       int
-	windowHeight      int
-	subjectColWidth   int
+	loading                   bool
+	deleting                  bool
+	deletionProgress          models.DeletionResult
+	deletionsPending          int  // Number of deletions waiting to complete
+	deletionsTotal            int  // Total deletions in current batch
+	connectionLost            bool // true while IMAP connection is down during deletion
+	loadingSpinner            int
+	startTime                 time.Time
+	progressInfo              models.ProgressInfo
+	syncAccumulator           syncAccumulator
+	syncGeneration            int64
+	syncingFolder             string
+	syncCountsSettled         bool
+	showLogs                  bool
+	showHelp                  bool
+	helpScrollOffset          int
+	helpSearchActive          bool
+	helpSearch                string
+	keyEventTypes             bool
+	activeHintMods            tea.KeyMod
+	modifierHintMods          tea.KeyMod
+	modifierHintFallbackToken int
+	windowWidth               int
+	windowHeight              int
+	subjectColWidth           int
 
 	// Deletion channels
 	deletionRequestCh chan models.DeletionRequest
@@ -1190,8 +1194,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.KeyboardEnhancementsMsg:
+		m.keyEventTypes = msg.SupportsEventTypes()
+		return m, nil
+
+	case tea.KeyReleaseMsg:
+		m.handleModifierHintRelease(msg)
+		return m, nil
+
+	case modifierHintExpiredMsg:
+		if msg.Token == m.modifierHintFallbackToken {
+			m.modifierHintMods = 0
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
-		return m.handleKeyMsg(msg)
+		modifierCmd, handledModifierOnly := m.handleModifierHintPress(msg)
+		if handledModifierOnly {
+			return m, modifierCmd
+		}
+		model, cmd := m.handleKeyMsg(msg)
+		return model, tea.Batch(modifierCmd, cmd)
 
 	case tea.MouseMsg:
 		if model, cmd, handled := m.handleMouseMsg(msg); handled {

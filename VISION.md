@@ -156,6 +156,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
+- [x] Modifier-aware key hints: when the terminal reports Shift, Ctrl, or Alt key state, the bottom hint bar temporarily pivots to existing commands for that modifier without changing shortcut behavior; terminals without key-release support fall back to a brief modified-keypress hint
 - [ ] Key hints always reflect normalized visible focus rather than stale internal focus state
 - [ ] Selection and mode fragments stay scoped to the active tab and never leak across tabs
 - [ ] Hint copy uses one consistent verb set (`open`, `close`, `preview`, `full-screen`, `back`)

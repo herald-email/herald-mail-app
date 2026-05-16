@@ -497,6 +497,9 @@ func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
 	if m.shouldAdvertiseShortcutHelp() {
 		hints = joinHintSegments(m.commandHint(keyboardScopeGlobal, CommandHelpOpen, "help"), hints)
 	}
+	if layer := m.activeModifierHintLayer(); layer != modifierHintNone {
+		hints = m.modifierHintText(layer, chrome, hints)
+	}
 	return wrapChromeSegments(hints, width-2, 2)
 }
 

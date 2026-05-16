@@ -603,6 +603,30 @@ Check these states during every applicable lane:
 - Visual mode shows a visible anchor/cursor/highlight and does not appear as a dead mode.
 - Prompt editor and Settings text fields preserve literal printable input unless their active field mode owns a Vim command.
 
+### TC-14H — Modifier-aware key hint layers
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline in demo mode and capture the default bottom hint bar.
+2. In a terminal that reports key event types, press and hold Shift, then capture the bottom hint bar before releasing it.
+3. Press `Shift+Down` from the Timeline list, capture the momentary Shift hint layer, then press a plain navigation key and confirm default hints return.
+4. Press and hold Ctrl in a supported terminal, then capture the bottom hint bar; in unsupported terminals, press an existing Ctrl chord such as `Ctrl+D` or `Ctrl+R` and capture the short-lived fallback layer.
+5. Press and hold Alt in a supported terminal, then capture the bottom hint bar; if the current context has no Alt-owned actions, confirm the default hints remain visible with a compact no-Alt-actions notice.
+6. Repeat the same checks from Timeline preview, Cleanup summary, and Compose.
+7. Open Compose, Timeline search, and a prompt/editor surface, type printable text including `?`, `/`, and an Option-generated character where available, and confirm no modifier hint state steals the text.
+8. Open a delete or archive confirmation, press `?`, then return and confirm `y` remains the only confirming action while `Esc` cancels.
+
+**Expect:**
+- Modifier hint layers are presentation-only and never add a new shortcut.
+- Default hints still include primary actions and `?: help` in browse contexts where help is available.
+- The Shift layer advertises only existing shifted/uppercase actions valid for the current state.
+- The Ctrl layer advertises only existing Ctrl actions valid for the current state.
+- The Alt layer advertises existing Alt actions where present, or a compact no-Alt-actions note without hiding primary default actions.
+- Multiple active modifiers prefer Ctrl, then Alt, then Shift.
+- At `50x15`, the minimum-size guard still appears and recovers cleanly when resized larger.
+
 ### TC-14B — Demo Compose send is offline
 
 **Lane:** A
