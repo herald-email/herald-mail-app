@@ -35,6 +35,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] TUI-facing runs can now close a first-class visual-evidence gate that requires matched before/after PNG plus ANSI captures at `220x50`, `80x24`, and `50x15`.
 - [x] Shortcut-sensitive TUI runs can now close a first-class input-routing safety gate that proves text entry still works on `compose`, `prompt`, and `editor` surfaces.
 - [x] A dedicated phase-impact report can now compare baseline runs with post-improvement cohorts, while separating workflow-validation evidence from real bug/feature evidence.
+- [x] Final handoffs for autopilot and finish-development now require copy-paste runnable test instructions, including the correct checkout path, build command, and candidate launch command.
 
 ## What Changed In This Version
 
@@ -56,6 +57,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a scored visual-evidence gate so TUI runs must record canonical terminal captures and repro paths instead of treating screenshots as optional.
 - [x] Added a scored input-routing safety gate plus a reusable template for `red-compose-comma-alias` so shortcut-sensitive TUI work has explicit text-entry proof and reusable recovery guidance.
 - [x] Added a phase-impact measurement layer that renders a durable report comparing retries, skipped gates, and clarification load before and after the first four workflow improvements.
+- [x] Tightened final handoff instructions so reports and chat replies include exact `cd`, build, and `./bin/herald --demo` or full-binary launch commands.
 - [x] Tightened the worktree policy after the adaptive terminal-theme implementation used a branch in the main checkout and blocked parallel task setup.
 - [x] Added a scored degradation-review gate so future runs must ask whether degradation is part of the plan and convert preserved behavior into regression checks.
 - [x] Incorporated the first approved pending-approval batch by promoting the backlog decisions and adding a reusable user-reproduced post-handoff failure template for missed real-world repro paths.

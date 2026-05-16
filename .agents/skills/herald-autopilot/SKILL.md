@@ -49,7 +49,7 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 11. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
 12. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
 13. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
-14. Every final handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for building, launching the candidate binary, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path.
+14. Every final chat handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for changing into the correct checkout, building, launching the candidate binary with relevant parameters, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path. If a worktree still exists, use its absolute path; after merge/worktree cleanup, use the main checkout path or the full path to the built binary.
 
 ## Worktree Safety Correction
 
@@ -311,6 +311,12 @@ Focused verification:
 cd /absolute/path/to/worktree
 go test ./...
 make build
+```
+After merge or worktree cleanup, replace the worktree path with the main checkout path and still include the runnable command, for example:
+```bash
+cd /absolute/path/to/main-checkout
+make build
+./bin/herald --demo
 ```
 ````
 

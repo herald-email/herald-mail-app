@@ -123,4 +123,5 @@ Report:
 - merge result on `main`
 - verification commands and outcomes
 - removed worktree path and deleted branch
+- a copy-paste "How To Test This Change" block with `cd <main-checkout>`, the build command, and either `./bin/herald <parameters>` or the full path to the built test binary
 - any skipped step and why
