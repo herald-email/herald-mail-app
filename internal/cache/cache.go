@@ -921,6 +921,91 @@ func (c *Cache) GetPreviewBody(messageID string) (*models.EmailBody, error) {
 	return &body, nil
 }
 
+// EstimatePreviewCacheStorageForPolicy summarizes binary preview-cache bytes
+// that would be removed by applying the given offline-cache policy.
+func (c *Cache) EstimatePreviewCacheStorageForPolicy(policy string) (models.PreviewCacheStorageEstimate, error) {
+	policy = normalizePreviewStoragePolicy(policy)
+	estimate := models.PreviewCacheStorageEstimate{Policy: policy}
+
+	rows, err := c.db.Query(`
+		SELECT message_id, inline_images_json, attachments_json
+		FROM email_preview_bodies
+	`)
+	if err != nil {
+		return estimate, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var messageID, inlineJSON, attachmentsJSON string
+		if err := rows.Scan(&messageID, &inlineJSON, &attachmentsJSON); err != nil {
+			return estimate, err
+		}
+		estimate.RowsScanned++
+
+		var images []models.InlineImage
+		if strings.TrimSpace(inlineJSON) != "" {
+			if err := json.Unmarshal([]byte(inlineJSON), &images); err != nil {
+				return estimate, fmt.Errorf("unmarshal inline preview images for %s: %w", messageID, err)
+			}
+		}
+		var attachments []models.Attachment
+		if strings.TrimSpace(attachmentsJSON) != "" {
+			if err := json.Unmarshal([]byte(attachmentsJSON), &attachments); err != nil {
+				return estimate, fmt.Errorf("unmarshal preview attachments for %s: %w", messageID, err)
+			}
+		}
+
+		inlineBytes := inlineImageBytes(images)
+		attachmentBytes := attachmentPayloadBytes(attachments)
+		reclaimableInline := reclaimableInlineImageBytes(images, policy)
+		reclaimableAttachments := reclaimableAttachmentBytes(attachments, policy)
+
+		estimate.InlineImageBytes += inlineBytes
+		estimate.AttachmentBytes += attachmentBytes
+		estimate.CurrentBytes += inlineBytes + attachmentBytes
+		estimate.ReclaimableInlineImageBytes += reclaimableInline
+		estimate.ReclaimableAttachmentBytes += reclaimableAttachments
+		if reclaimableInline+reclaimableAttachments > 0 {
+			estimate.RowsReclaimable++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return estimate, err
+	}
+
+	estimate.ReclaimableBytes = estimate.ReclaimableInlineImageBytes + estimate.ReclaimableAttachmentBytes
+	estimate.EstimatedAfterBytes = estimate.CurrentBytes - estimate.ReclaimableBytes
+	if estimate.EstimatedAfterBytes < 0 {
+		estimate.EstimatedAfterBytes = 0
+	}
+	return estimate, nil
+}
+
+// ReclaimPreviewCacheStorageForPolicy applies the selected policy to cached
+// preview rows and then runs SQLite VACUUM as best-effort file compaction.
+func (c *Cache) ReclaimPreviewCacheStorageForPolicy(policy string) (models.PreviewCacheReclaimResult, error) {
+	policy = normalizePreviewStoragePolicy(policy)
+	estimate, err := c.EstimatePreviewCacheStorageForPolicy(policy)
+	if err != nil {
+		return models.PreviewCacheReclaimResult{}, err
+	}
+	pruneResult, err := c.PrunePreviewBodiesForPolicy(policy)
+	if err != nil {
+		return models.PreviewCacheReclaimResult{Estimate: estimate}, err
+	}
+	result := models.PreviewCacheReclaimResult{
+		Estimate:    estimate,
+		PruneResult: pruneResult,
+	}
+	if _, err := c.db.Exec(`VACUUM`); err != nil {
+		result.CompactionError = err.Error()
+		return result, nil
+	}
+	result.Compacted = true
+	return result, nil
+}
+
 // PrunePreviewBodiesForPolicy rewrites cached preview rows so they match the
 // target offline-cache policy. It never removes text, headers, or attachment
 // metadata; only binary payloads disallowed by the selected policy are pruned.
@@ -1106,6 +1191,36 @@ func pruneAttachmentsForPolicy(attachments []models.Attachment, policy string) (
 		}
 	}
 	return cloned, removed, changed
+}
+
+func inlineImageBytes(images []models.InlineImage) int64 {
+	var total int64
+	for _, image := range images {
+		total += int64(len(image.Data))
+	}
+	return total
+}
+
+func attachmentPayloadBytes(attachments []models.Attachment) int64 {
+	var total int64
+	for _, attachment := range attachments {
+		total += int64(len(attachment.Data))
+	}
+	return total
+}
+
+func reclaimableInlineImageBytes(images []models.InlineImage, policy string) int64 {
+	if policy != "lightweight" {
+		return 0
+	}
+	return inlineImageBytes(images)
+}
+
+func reclaimableAttachmentBytes(attachments []models.Attachment, policy string) int64 {
+	if policy == "preserve_all" {
+		return 0
+	}
+	return attachmentPayloadBytes(attachments)
 }
 
 // GetUnreadEmails returns unread emails in a folder, newest first

@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
@@ -372,6 +373,147 @@ func TestSettingsPanelSaveFromCategoryReturnsToMenu(t *testing.T) {
 	}
 	if !s.done {
 		t.Fatalf("expected settings component to mark category form done after emitting save")
+	}
+}
+
+func TestSettingsPanelSyncCleanupShowsOfflineCacheReclaimAction(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Sync & Cleanup")
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	for _, want := range []string{"Offline Cache", "Reclaim offline cache storage", "before pruning"} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected Sync & Cleanup settings to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsSaved_ReclaimOfflineCacheSchedulesEstimateAndShowsConfirmation(t *testing.T) {
+	backend := &stubBackend{
+		reclaimEstimateResult: models.PreviewCacheStorageEstimate{
+			Policy:              config.CacheStoragePolicyLightweight,
+			RowsScanned:         2,
+			RowsReclaimable:     1,
+			CurrentBytes:        30,
+			ReclaimableBytes:    15,
+			EstimatedAfterBytes: 15,
+		},
+	}
+	m := makeSizedModel(t, 80, 24)
+	m.backend = backend
+	m.cfg = &config.Config{}
+	m.cfg.Cache.StoragePolicy = config.CacheStoragePolicyLightweight
+	m.showSettings = true
+	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+
+	next := &config.Config{}
+	next.Cache.StoragePolicy = config.CacheStoragePolicyLightweight
+	updatedModel, cmd := m.Update(SettingsSavedMsg{
+		Config:                     next,
+		ReturnToMenu:               true,
+		ReclaimOfflineCacheStorage: true,
+	})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected reclaim estimate command")
+	}
+	if backend.reclaimEstimateCalls != 0 {
+		t.Fatal("estimate should run asynchronously, not during SettingsSavedMsg handling")
+	}
+
+	messages := settingsImmediateMessagesForTest(cmd)
+	var estimateMsg PreviewCacheReclaimEstimateMsg
+	found := false
+	for _, msg := range messages {
+		if m, ok := msg.(PreviewCacheReclaimEstimateMsg); ok {
+			estimateMsg = m
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected PreviewCacheReclaimEstimateMsg, got %#v", messages)
+	}
+	if backend.reclaimEstimateCalls != 1 || backend.estimatedReclaimPolicy != config.CacheStoragePolicyLightweight {
+		t.Fatalf("estimate calls=%d policy=%q", backend.reclaimEstimateCalls, backend.estimatedReclaimPolicy)
+	}
+
+	updatedModel, _ = updated.Update(estimateMsg)
+	updated = updatedModel.(*Model)
+	if !updated.pendingPreviewCacheReclaim {
+		t.Fatal("expected pending reclaim confirmation after estimate")
+	}
+	rendered := stripANSI(updated.View().Content)
+	for _, want := range []string{"Reclaim offline cache storage", "30 B -> 15 B", "Preview text, headers, and attachment metadata stay cached"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected reclaim confirmation to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestPreviewCacheReclaimConfirmRunsAsyncAndReportsResult(t *testing.T) {
+	backend := &stubBackend{
+		reclaimResult: models.PreviewCacheReclaimResult{
+			Estimate: models.PreviewCacheStorageEstimate{
+				Policy:              config.CacheStoragePolicyLightweight,
+				CurrentBytes:        30,
+				ReclaimableBytes:    15,
+				EstimatedAfterBytes: 15,
+			},
+			PruneResult: models.PreviewCachePruneResult{
+				RowsChanged:             2,
+				AttachmentBytesRemoved:  10,
+				InlineImageBytesRemoved: 5,
+			},
+			Compacted: true,
+		},
+	}
+	m := makeSizedModel(t, 80, 24)
+	m.backend = backend
+	m.cfg = &config.Config{}
+	m.cfg.Cache.StoragePolicy = config.CacheStoragePolicyLightweight
+	m.showSettings = true
+	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+	m.pendingPreviewCacheReclaim = true
+	m.previewCacheReclaimEstimate = backend.reclaimResult.Estimate
+	m.previewCacheReclaimPolicy = config.CacheStoragePolicyLightweight
+
+	updatedModel, cmd := m.Update(keyRunes("y"))
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected reclaim command after confirmation")
+	}
+	if backend.reclaimCalls != 0 {
+		t.Fatal("reclaim should run asynchronously after y confirmation")
+	}
+
+	messages := settingsImmediateMessagesForTest(cmd)
+	var doneMsg PreviewCacheReclaimMsg
+	found := false
+	for _, msg := range messages {
+		if m, ok := msg.(PreviewCacheReclaimMsg); ok {
+			doneMsg = m
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected PreviewCacheReclaimMsg, got %#v", messages)
+	}
+	if backend.reclaimCalls != 1 || backend.reclaimedPolicy != config.CacheStoragePolicyLightweight {
+		t.Fatalf("reclaim calls=%d policy=%q", backend.reclaimCalls, backend.reclaimedPolicy)
+	}
+
+	updatedModel, _ = updated.Update(doneMsg)
+	updated = updatedModel.(*Model)
+	if updated.pendingPreviewCacheReclaim {
+		t.Fatal("pending reclaim should close after result")
+	}
+	for _, want := range []string{"Offline cache reclaimed", "2 rows pruned", "15 B removed", "compaction complete"} {
+		if !strings.Contains(updated.statusMessage, want) {
+			t.Fatalf("expected status to include %q, got %q", want, updated.statusMessage)
+		}
 	}
 }
 

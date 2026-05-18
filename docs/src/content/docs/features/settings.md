@@ -18,7 +18,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
-| Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, cleanup schedule hours, and related automation timing. |
+| Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, and related automation timing. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
 | Signature | Multiline default Compose signature text. |
 | Save/cancel controls | Category-level save returns to the menu; `esc` backs out one level before exiting and does not save unsaved category edits. |
@@ -52,6 +52,15 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 3. Update the fields in that category.
 4. Save the category.
 5. Herald writes config, applies runtime changes that can be applied immediately, and returns to the settings menu.
+
+### Reclaim Offline Cache Storage
+
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Enable `Reclaim offline cache storage`.
+4. Save the category.
+5. Review the before/after byte estimate and the preserved-data note.
+6. Press `y` to prune disallowed cached preview bytes and compact SQLite, or press `n`/`Esc` to cancel.
 
 ### Change AI Provider
 
@@ -92,12 +101,14 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | OAuth waiting | Herald shows authorization URL state and waits for callback. |
 | OAuth saved | Token data is written to config. |
 | AI model changed | Herald may reset embeddings so stale vectors do not mix with a new embedding model. |
+| Offline cache reclaim pending | Herald shows the current policy, before/after byte estimate, and note that preview text, headers, and attachment metadata stay cached before it accepts `y` to proceed. |
+| Offline cache reclaimed | Herald reports rows pruned, bytes removed, and whether SQLite compaction completed. |
 | Config permission warning | Startup warns if group/other users can read the config file. |
 | Save error | The panel reports an error if config cannot be written. |
 
 ## Data And Privacy
 
-Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, and cache path values. OAuth refresh tokens and external AI keys should be treated as credentials.
+Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, and cache path values. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
 
 ## Troubleshooting
 

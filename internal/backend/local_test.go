@@ -206,6 +206,68 @@ func TestApplyCacheStoragePolicyPrunesRowsClearsBodyCacheAndAffectsFutureWrites(
 	}
 }
 
+func TestReclaimOfflineCacheStorageEstimatesPrunesAndClearsBodyCache(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	b := &LocalBackend{
+		cache: c,
+		cfg:   &config.Config{},
+		bodyCache: map[string]*models.EmailBody{
+			"INBOX:1": {TextPlain: "stale full body"},
+		},
+	}
+	b.cfg.Cache.StoragePolicy = config.CacheStoragePolicyLightweight
+	body := &models.EmailBody{
+		TextPlain: "body",
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: []byte("png-bytes")},
+		},
+		Attachments: []models.Attachment{
+			{Filename: "invoice.pdf", MIMEType: "application/pdf", Size: 9, PartPath: "2", Data: []byte("pdf-bytes")},
+		},
+	}
+	if err := c.CachePreviewBody("existing", body, config.CacheStoragePolicyPreserveAll); err != nil {
+		t.Fatalf("CachePreviewBody existing: %v", err)
+	}
+
+	estimate, err := b.EstimateOfflineCacheStorageReclaim(config.CacheStoragePolicyLightweight)
+	if err != nil {
+		t.Fatalf("EstimateOfflineCacheStorageReclaim: %v", err)
+	}
+	wantRemoved := int64(len("png-bytes") + len("pdf-bytes"))
+	if estimate.ReclaimableBytes != wantRemoved {
+		t.Fatalf("ReclaimableBytes = %d, want %d", estimate.ReclaimableBytes, wantRemoved)
+	}
+
+	result, err := b.ReclaimOfflineCacheStorage(config.CacheStoragePolicyLightweight)
+	if err != nil {
+		t.Fatalf("ReclaimOfflineCacheStorage: %v", err)
+	}
+	if result.PruneResult.RowsChanged != 1 || !result.Compacted {
+		t.Fatalf("unexpected reclaim result: %#v", result)
+	}
+	b.bodyCacheMu.Lock()
+	bodyCacheLen := len(b.bodyCache)
+	b.bodyCacheMu.Unlock()
+	if bodyCacheLen != 0 {
+		t.Fatalf("body cache length = %d, want cleared", bodyCacheLen)
+	}
+
+	pruned, err := b.GetCachedPreviewBody("existing")
+	if err != nil {
+		t.Fatalf("GetCachedPreviewBody existing: %v", err)
+	}
+	if len(pruned.InlineImages) != 0 {
+		t.Fatalf("inline image bytes lingered after reclaim: %#v", pruned.InlineImages)
+	}
+	if len(pruned.Attachments) != 1 || pruned.Attachments[0].PartPath != "2" || len(pruned.Attachments[0].Data) != 0 {
+		t.Fatalf("attachment metadata/data after reclaim = %#v", pruned.Attachments)
+	}
+}
+
 // --- isValidID ---
 
 func TestIsValidID_NilSet(t *testing.T) {

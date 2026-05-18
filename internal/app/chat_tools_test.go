@@ -38,6 +38,14 @@ type stubBackend struct {
 	appliedCachePolicy     string
 	applyCachePolicyResult models.PreviewCachePruneResult
 	applyCachePolicyErr    error
+	reclaimEstimateCalls   int
+	estimatedReclaimPolicy string
+	reclaimEstimateResult  models.PreviewCacheStorageEstimate
+	reclaimEstimateErr     error
+	reclaimCalls           int
+	reclaimedPolicy        string
+	reclaimResult          models.PreviewCacheReclaimResult
+	reclaimErr             error
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -203,6 +211,16 @@ func (s *stubBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCach
 	s.applyCachePolicyCalls++
 	s.appliedCachePolicy = policy
 	return s.applyCachePolicyResult, s.applyCachePolicyErr
+}
+func (s *stubBackend) EstimateOfflineCacheStorageReclaim(policy string) (models.PreviewCacheStorageEstimate, error) {
+	s.reclaimEstimateCalls++
+	s.estimatedReclaimPolicy = policy
+	return s.reclaimEstimateResult, s.reclaimEstimateErr
+}
+func (s *stubBackend) ReclaimOfflineCacheStorage(policy string) (models.PreviewCacheReclaimResult, error) {
+	s.reclaimCalls++
+	s.reclaimedPolicy = policy
+	return s.reclaimResult, s.reclaimErr
 }
 
 // newStubModel creates a minimal Model with a stubBackend for testing chat tools.

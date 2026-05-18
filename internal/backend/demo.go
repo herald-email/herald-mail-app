@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
@@ -123,6 +124,27 @@ func seedDemoCleanupRules() []*models.CleanupRule {
 
 // IsDemo satisfies DemoBackendMarker.
 func (d *DemoBackend) IsDemo() bool { return true }
+
+func (d *DemoBackend) EstimateOfflineCacheStorageReclaim(policy string) (models.PreviewCacheStorageEstimate, error) {
+	d.mu.Lock()
+	rows := len(d.emails)
+	d.mu.Unlock()
+	return models.PreviewCacheStorageEstimate{
+		Policy:      config.NormalizeCacheStoragePolicy(policy),
+		RowsScanned: rows,
+	}, nil
+}
+
+func (d *DemoBackend) ReclaimOfflineCacheStorage(policy string) (models.PreviewCacheReclaimResult, error) {
+	estimate, err := d.EstimateOfflineCacheStorageReclaim(policy)
+	if err != nil {
+		return models.PreviewCacheReclaimResult{}, err
+	}
+	return models.PreviewCacheReclaimResult{
+		Estimate:  estimate,
+		Compacted: true,
+	}, nil
+}
 
 // --- Backend interface ---
 

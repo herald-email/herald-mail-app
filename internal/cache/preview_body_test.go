@@ -263,3 +263,113 @@ func TestPrunePreviewBodiesForPolicyIsIdempotent(t *testing.T) {
 		t.Fatalf("removed bytes on idempotent prune: %#v", result)
 	}
 }
+
+func TestEstimatePreviewCacheStorageForPolicyCountsReclaimableBytes(t *testing.T) {
+	c := newTestCache(t)
+	body := &models.EmailBody{
+		TextPlain: "body",
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: []byte("png-bytes")},
+		},
+		Attachments: []models.Attachment{
+			{Filename: "invoice.pdf", MIMEType: "application/pdf", Size: 9, PartPath: "2", Data: []byte("pdf-bytes")},
+		},
+	}
+	if err := c.CachePreviewBody("msg-estimate", body, "preserve_all"); err != nil {
+		t.Fatalf("CachePreviewBody: %v", err)
+	}
+
+	lightweight, err := c.EstimatePreviewCacheStorageForPolicy("lightweight")
+	if err != nil {
+		t.Fatalf("EstimatePreviewCacheStorageForPolicy lightweight: %v", err)
+	}
+	total := int64(len("png-bytes") + len("pdf-bytes"))
+	if lightweight.RowsScanned != 1 || lightweight.RowsReclaimable != 1 {
+		t.Fatalf("lightweight rows = scanned %d reclaimable %d, want 1/1", lightweight.RowsScanned, lightweight.RowsReclaimable)
+	}
+	if lightweight.CurrentBytes != total || lightweight.ReclaimableBytes != total || lightweight.EstimatedAfterBytes != 0 {
+		t.Fatalf("lightweight estimate = %#v, want current/reclaimable %d and after 0", lightweight, total)
+	}
+	if lightweight.ReclaimableInlineImageBytes != int64(len("png-bytes")) {
+		t.Fatalf("ReclaimableInlineImageBytes = %d", lightweight.ReclaimableInlineImageBytes)
+	}
+	if lightweight.ReclaimableAttachmentBytes != int64(len("pdf-bytes")) {
+		t.Fatalf("ReclaimableAttachmentBytes = %d", lightweight.ReclaimableAttachmentBytes)
+	}
+
+	noAttachments, err := c.EstimatePreviewCacheStorageForPolicy("no_attachments")
+	if err != nil {
+		t.Fatalf("EstimatePreviewCacheStorageForPolicy no_attachments: %v", err)
+	}
+	if noAttachments.CurrentBytes != total {
+		t.Fatalf("no_attachments current bytes = %d, want %d", noAttachments.CurrentBytes, total)
+	}
+	if noAttachments.ReclaimableBytes != int64(len("pdf-bytes")) {
+		t.Fatalf("no_attachments reclaimable bytes = %d, want attachment bytes", noAttachments.ReclaimableBytes)
+	}
+	if noAttachments.EstimatedAfterBytes != int64(len("png-bytes")) {
+		t.Fatalf("no_attachments estimated after = %d, want inline image bytes", noAttachments.EstimatedAfterBytes)
+	}
+
+	preserveAll, err := c.EstimatePreviewCacheStorageForPolicy("preserve_all")
+	if err != nil {
+		t.Fatalf("EstimatePreviewCacheStorageForPolicy preserve_all: %v", err)
+	}
+	if preserveAll.ReclaimableBytes != 0 || preserveAll.EstimatedAfterBytes != total {
+		t.Fatalf("preserve_all estimate = %#v, want no policy reclaim", preserveAll)
+	}
+}
+
+func TestReclaimPreviewCacheStorageForPolicyPrunesAndCompacts(t *testing.T) {
+	c := newTestCache(t)
+	body := &models.EmailBody{
+		TextPlain: "body",
+		TextHTML:  "<p>body</p>",
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: []byte("png-bytes")},
+		},
+		Attachments: []models.Attachment{
+			{Filename: "archive.zip", MIMEType: "application/zip", Size: 3, PartPath: "2", Data: []byte("zip")},
+		},
+	}
+	if err := c.CachePreviewBody("msg-reclaim", body, "preserve_all"); err != nil {
+		t.Fatalf("CachePreviewBody: %v", err)
+	}
+
+	result, err := c.ReclaimPreviewCacheStorageForPolicy("lightweight")
+	if err != nil {
+		t.Fatalf("ReclaimPreviewCacheStorageForPolicy: %v", err)
+	}
+	wantRemoved := int64(len("png-bytes") + len("zip"))
+	if result.Estimate.ReclaimableBytes != wantRemoved {
+		t.Fatalf("Estimate.ReclaimableBytes = %d, want %d", result.Estimate.ReclaimableBytes, wantRemoved)
+	}
+	if result.PruneResult.RowsChanged != 1 {
+		t.Fatalf("RowsChanged = %d, want 1", result.PruneResult.RowsChanged)
+	}
+	if !result.Compacted || result.CompactionError != "" {
+		t.Fatalf("compaction status = compacted %v error %q, want compacted without error", result.Compacted, result.CompactionError)
+	}
+
+	got, err := c.GetPreviewBody("msg-reclaim")
+	if err != nil {
+		t.Fatalf("GetPreviewBody: %v", err)
+	}
+	if got.TextPlain != "body" || got.TextHTML != "<p>body</p>" {
+		t.Fatalf("reclaim lost preview text/html: %#v", got)
+	}
+	if len(got.InlineImages) != 0 {
+		t.Fatalf("inline image bytes remained after reclaim: %#v", got.InlineImages)
+	}
+	if len(got.Attachments) != 1 || got.Attachments[0].PartPath != "2" || len(got.Attachments[0].Data) != 0 {
+		t.Fatalf("attachment metadata/data after reclaim = %#v", got.Attachments)
+	}
+
+	after, err := c.EstimatePreviewCacheStorageForPolicy("lightweight")
+	if err != nil {
+		t.Fatalf("EstimatePreviewCacheStorageForPolicy after reclaim: %v", err)
+	}
+	if after.CurrentBytes != 0 || after.ReclaimableBytes != 0 {
+		t.Fatalf("after estimate = %#v, want no remaining binary bytes", after)
+	}
+}

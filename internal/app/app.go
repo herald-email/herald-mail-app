@@ -192,6 +192,18 @@ type CacheStoragePolicyAppliedMsg struct {
 	Err    error
 }
 
+type PreviewCacheReclaimEstimateMsg struct {
+	Policy   string
+	Estimate models.PreviewCacheStorageEstimate
+	Err      error
+}
+
+type PreviewCacheReclaimMsg struct {
+	Policy string
+	Result models.PreviewCacheReclaimResult
+	Err    error
+}
+
 // ChatResponseMsg carries an Ollama chat reply
 type ChatResponseMsg struct {
 	Content string
@@ -600,6 +612,10 @@ type Model struct {
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
 
+	pendingPreviewCacheReclaim  bool
+	previewCacheReclaimPolicy   string
+	previewCacheReclaimEstimate models.PreviewCacheStorageEstimate
+
 	// Contacts-only status message. This is cleared when leaving the contacts
 	// workflow so contact actions do not leak stale notices into other tabs.
 	contactStatusMessage string
@@ -994,7 +1010,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
 			}
 		}
-		if previousCachePolicy != nextCachePolicy {
+		if previousCachePolicy != nextCachePolicy && !msg.ReclaimOfflineCacheStorage {
 			type cacheStoragePolicyApplier interface {
 				ApplyCacheStoragePolicy(string) (models.PreviewCachePruneResult, error)
 			}
@@ -1006,6 +1022,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			} else {
 				m.statusMessage = "Settings saved. Restart Herald to prune existing preview cache for the new policy."
+			}
+		}
+		if msg.ReclaimOfflineCacheStorage {
+			type previewCacheReclaimEstimator interface {
+				EstimateOfflineCacheStorageReclaim(string) (models.PreviewCacheStorageEstimate, error)
+			}
+			if manager, ok := m.backend.(previewCacheReclaimEstimator); ok {
+				policy := nextCachePolicy
+				settingsCmds = append(settingsCmds, func() tea.Msg {
+					estimate, err := manager.EstimateOfflineCacheStorageReclaim(policy)
+					return PreviewCacheReclaimEstimateMsg{Policy: policy, Estimate: estimate, Err: err}
+				})
+				m.statusMessage = "Settings saved. Estimating offline cache reclaim..."
+			} else {
+				m.statusMessage = "Settings saved. Restart Herald to reclaim offline cache storage."
 			}
 		}
 		if msg.ReturnToMenu {
@@ -1035,6 +1066,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		bytesRemoved := msg.Result.AttachmentBytesRemoved + msg.Result.InlineImageBytesRemoved
 		m.statusMessage = fmt.Sprintf("Preview cache policy applied: %s (%d rows pruned, %d bytes removed)", msg.Policy, msg.Result.RowsChanged, bytesRemoved)
+		return m, nil
+
+	case PreviewCacheReclaimEstimateMsg:
+		if msg.Err != nil {
+			m.pendingPreviewCacheReclaim = false
+			m.statusMessage = fmt.Sprintf("Offline cache reclaim estimate failed: %v", msg.Err)
+			if m.showSettings && m.settingsPanel != nil {
+				m.settingsPanel.panelStatus = m.statusMessage
+				m.settingsPanel.buildForm()
+				m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+			}
+			return m, nil
+		}
+		m.pendingPreviewCacheReclaim = true
+		m.previewCacheReclaimPolicy = msg.Policy
+		m.previewCacheReclaimEstimate = msg.Estimate
+		m.statusMessage = "Review offline cache reclaim estimate."
+		return m, nil
+
+	case PreviewCacheReclaimMsg:
+		m.pendingPreviewCacheReclaim = false
+		if msg.Err != nil {
+			m.statusMessage = fmt.Sprintf("Offline cache reclaim failed: %v", msg.Err)
+		} else {
+			bytesRemoved := msg.Result.PruneResult.AttachmentBytesRemoved + msg.Result.PruneResult.InlineImageBytesRemoved
+			compactionStatus := "compaction complete"
+			if msg.Result.CompactionError != "" {
+				compactionStatus = "compaction failed: " + msg.Result.CompactionError
+			} else if !msg.Result.Compacted {
+				compactionStatus = "compaction skipped"
+			}
+			m.statusMessage = fmt.Sprintf("Offline cache reclaimed: %d rows pruned, %s removed, %s", msg.Result.PruneResult.RowsChanged, formatPreviewCacheBytes(bytesRemoved), compactionStatus)
+		}
+		if m.showSettings && m.settingsPanel != nil {
+			m.settingsPanel.panelStatus = m.statusMessage
+			m.settingsPanel.buildForm()
+			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+		}
 		return m, nil
 
 	case SettingsCancelledMsg:
@@ -1085,6 +1154,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			model, cmd, handled := m.handleDryRunPreviewKey(key)
+			if handled {
+				return model, cmd
+			}
+		}
+	}
+
+	if m.pendingPreviewCacheReclaim {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			model, cmd, handled := m.handlePreviewCacheReclaimKey(key)
 			if handled {
 				return model, cmd
 			}
@@ -1996,7 +2074,14 @@ func (m *Model) View() tea.View {
 		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
 	}
 	if m.showSettings && m.settingsPanel != nil {
-		return m.buildView(m.renderSettingsOverlayView())
+		view := m.renderSettingsOverlayView()
+		if m.pendingPreviewCacheReclaim {
+			view = m.renderPreviewCacheReclaimOverlayView(view)
+		}
+		return m.buildView(view)
+	}
+	if m.pendingPreviewCacheReclaim {
+		return m.buildView(m.renderPreviewCacheReclaimOverlayView(m.renderMainView()))
 	}
 	if m.ruleDryRunPreview != nil {
 		w, h := m.compactOverlayViewportSize()

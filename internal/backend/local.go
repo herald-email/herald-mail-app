@@ -670,6 +670,33 @@ func (b *LocalBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCac
 	return b.cache.PrunePreviewBodiesForPolicy(target)
 }
 
+func (b *LocalBackend) EstimateOfflineCacheStorageReclaim(policy string) (models.PreviewCacheStorageEstimate, error) {
+	target := config.NormalizeCacheStoragePolicy(policy)
+	if b.cache == nil {
+		return models.PreviewCacheStorageEstimate{Policy: target}, nil
+	}
+	return b.cache.EstimatePreviewCacheStorageForPolicy(target)
+}
+
+func (b *LocalBackend) ReclaimOfflineCacheStorage(policy string) (models.PreviewCacheReclaimResult, error) {
+	target := config.NormalizeCacheStoragePolicy(policy)
+	if b.cache == nil {
+		return models.PreviewCacheReclaimResult{
+			Estimate: models.PreviewCacheStorageEstimate{Policy: target},
+		}, nil
+	}
+	result, err := b.cache.ReclaimPreviewCacheStorageForPolicy(target)
+	if err != nil {
+		return result, err
+	}
+	if previewPolicyRank(target) < previewPolicyRank(config.CacheStoragePolicyPreserveAll) {
+		b.bodyCacheMu.Lock()
+		b.bodyCache = nil
+		b.bodyCacheMu.Unlock()
+	}
+	return result, nil
+}
+
 func previewPolicyRank(policy string) int {
 	switch config.NormalizeCacheStoragePolicy(policy) {
 	case config.CacheStoragePolicyPreserveAll:

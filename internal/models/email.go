@@ -108,6 +108,30 @@ type PreviewCachePruneResult struct {
 	InlineImageBytesRemoved int64
 }
 
+// PreviewCacheStorageEstimate summarizes cached preview binary payloads and
+// how many bytes the selected offline-cache policy can remove.
+type PreviewCacheStorageEstimate struct {
+	Policy                      string
+	RowsScanned                 int
+	RowsReclaimable             int
+	CurrentBytes                int64
+	ReclaimableBytes            int64
+	EstimatedAfterBytes         int64
+	AttachmentBytes             int64
+	InlineImageBytes            int64
+	ReclaimableAttachmentBytes  int64
+	ReclaimableInlineImageBytes int64
+}
+
+// PreviewCacheReclaimResult reports an explicit offline-cache reclaim action:
+// estimate first, policy prune second, and best-effort SQLite compaction last.
+type PreviewCacheReclaimResult struct {
+	Estimate        PreviewCacheStorageEstimate
+	PruneResult     PreviewCachePruneResult
+	Compacted       bool
+	CompactionError string
+}
+
 // PreservationMode controls how much of an original HTML message Herald keeps
 // when replying or forwarding with preserved inline content.
 type PreservationMode string

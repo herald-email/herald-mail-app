@@ -127,6 +127,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline and Cleanup previews
 - [x] Offline cache policy controls whether previews keep lightweight body text only, non-attachment body data, or full attachment data for offline work
 - [x] Changing to a stricter offline cache policy prunes disallowed cached attachment or inline-image bytes while preserving preview text, headers, and attachment metadata
+- [x] Settings exposes a manual offline-cache reclaim action that estimates removable preview bytes, explains preserved data, prunes disallowed binary payloads, and compacts SQLite storage
 - [x] Background preview prewarming fills the active folder's newest preview-cache misses one message at a time after Timeline data loads
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
 - [x] Mail-style range selection with `Shift+Up` / `Shift+Down` where terminals support it, plus `V` then `j`/`k` fallback range mode
@@ -750,6 +751,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
+- [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Passwords always hidden; "reveal" button toggles visibility

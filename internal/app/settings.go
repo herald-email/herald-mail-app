@@ -52,8 +52,9 @@ const (
 
 // SettingsSavedMsg is sent when the user completes the form and saves.
 type SettingsSavedMsg struct {
-	Config       *config.Config
-	ReturnToMenu bool
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
 }
 
 // SettingsCancelledMsg is sent when the user presses esc in panel mode.
@@ -104,10 +105,11 @@ type Settings struct {
 	embedModel    string
 
 	// form field backing variables — sync & cleanup
-	syncPollStr        string
-	syncIDLE           bool
-	cleanupScheduleStr string
-	cacheStoragePolicy string
+	syncPollStr                string
+	syncIDLE                   bool
+	cleanupScheduleStr         string
+	cacheStoragePolicy         string
+	reclaimOfflineCacheStorage bool
 
 	// form field backing variables — compose
 	signatureText string
@@ -447,6 +449,12 @@ func (s *Settings) buildForm() {
 				huh.NewOption("Preserve all data", config.CacheStoragePolicyPreserveAll),
 			).
 			Value(&s.cacheStoragePolicy),
+		huh.NewConfirm().
+			Title("Reclaim offline cache storage").
+			Description("Estimate removable preview bytes before pruning; text, headers, and attachment metadata stay cached.").
+			Affirmative("Reclaim").
+			Negative("Skip").
+			Value(&s.reclaimOfflineCacheStorage),
 		huh.NewInput().
 			Title("Auto-Cleanup Schedule (hours)").
 			Inline(true).
@@ -865,7 +873,11 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Non-Gmail: signal done; the caller is responsible for saving.
 		return s, tea.Batch(cmd, func() tea.Msg {
-			return SettingsSavedMsg{Config: cfg, ReturnToMenu: s.mode == SettingsModePanel}
+			return SettingsSavedMsg{
+				Config:                     cfg,
+				ReturnToMenu:               s.mode == SettingsModePanel,
+				ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
+			}
 		})
 	}
 
