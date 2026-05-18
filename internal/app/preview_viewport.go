@@ -159,6 +159,10 @@ func renderPreviewDocumentViewport(layout previewDocumentLayout, offset, visible
 }
 
 func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offset, visibleRows int, visualMode bool, visualStart, visualEnd int) previewViewportRender {
+	return renderPreviewDocumentViewportWithTheme(defaultTheme, layout, offset, visibleRows, visualMode, visualStart, visualEnd)
+}
+
+func renderPreviewDocumentViewportWithTheme(theme Theme, layout previewDocumentLayout, offset, visibleRows int, visualMode bool, visualStart, visualEnd int) previewViewportRender {
 	if visibleRows < 1 {
 		visibleRows = 1
 	}
@@ -175,7 +179,7 @@ func renderPreviewDocumentViewportWithVisual(layout previewDocumentLayout, offse
 	if lo > hi {
 		lo, hi = hi, lo
 	}
-	highlightStyle := defaultTheme.Focus.VisualSelection.Style()
+	highlightStyle := theme.Focus.VisualSelection.Style()
 	for i := offset; i < end && i < len(layout.Rows); i++ {
 		row := layout.Rows[i]
 		viewportRow := len(lines)

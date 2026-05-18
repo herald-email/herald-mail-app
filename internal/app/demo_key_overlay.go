@@ -93,7 +93,7 @@ func (m *Model) renderDemoKeyOverlay(content string) string {
 		return content
 	}
 	label := truncateVisual("Keys: "+strings.Join(m.demoKeyOverlayKeys, "  "), maxLabelWidth)
-	badge := defaultTheme.Overlay.DemoKeyBadge.Style().
+	badge := m.theme.Overlay.DemoKeyBadge.Style().
 		Padding(0, 1).
 		Render(label)
 	badgeW := ansi.StringWidth(badge)

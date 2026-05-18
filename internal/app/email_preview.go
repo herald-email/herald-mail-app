@@ -109,17 +109,21 @@ type previewHeaderStyles struct {
 }
 
 func newPreviewHeaderStyles(active bool) previewHeaderStyles {
-	label := defaultTheme.Metadata.Label.Style()
+	return newPreviewHeaderStylesForTheme(defaultTheme, active)
+}
+
+func newPreviewHeaderStylesForTheme(theme Theme, active bool) previewHeaderStyles {
+	label := theme.Metadata.Label.Style()
 	if active {
 		label = label.Bold(true)
 	}
 	return previewHeaderStyles{
 		label:  label,
-		from:   defaultTheme.Metadata.Sender.Style(),
-		date:   defaultTheme.Metadata.Date.Style(),
-		subj:   defaultTheme.Metadata.Subject.Style(),
-		tag:    defaultTheme.Metadata.Tag.Style(),
-		action: defaultTheme.Metadata.Action.Style(),
+		from:   theme.Metadata.Sender.Style(),
+		date:   theme.Metadata.Date.Style(),
+		subj:   theme.Metadata.Subject.Style(),
+		tag:    theme.Metadata.Tag.Style(),
+		action: theme.Metadata.Action.Style(),
 	}
 }
 
@@ -152,11 +156,15 @@ func renderPreviewHeaderLines(email *models.EmailData, body *models.EmailBody, c
 }
 
 func renderPreviewHeaderLinesWithLoad(email *models.EmailData, body *models.EmailBody, category string, hasUnsubscribe bool, loadTag string, innerW int, active bool) []string {
+	return renderPreviewHeaderLinesWithTheme(defaultTheme, email, body, category, hasUnsubscribe, loadTag, innerW, active)
+}
+
+func renderPreviewHeaderLinesWithTheme(theme Theme, email *models.EmailData, body *models.EmailBody, category string, hasUnsubscribe bool, loadTag string, innerW int, active bool) []string {
 	if email == nil {
 		return nil
 	}
 
-	styles := newPreviewHeaderStyles(active)
+	styles := newPreviewHeaderStylesForTheme(theme, active)
 	lines := []string{
 		renderPreviewHeaderLine("From:", email.Sender, innerW, styles, styles.from),
 	}
@@ -319,10 +327,10 @@ func (m *Model) renderEmailPreview() string {
 
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := chrome.FocusedPanel == panelPreview
-	borderColor := defaultTheme.PanelBorderColor(headerActive)
-	headerStyle := defaultTheme.Text.Muted.Style()
+	borderColor := m.theme.PanelBorderColor(headerActive)
+	headerStyle := m.theme.Text.Muted.Style()
 	if headerActive {
-		headerStyle = defaultTheme.Severity.Info.Style()
+		headerStyle = m.theme.Severity.Info.Style()
 	}
 
 	// Header block
@@ -340,7 +348,7 @@ func (m *Model) renderEmailPreview() string {
 	if email != nil {
 		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
 	}
-	headerLines := renderPreviewHeaderLinesWithLoad(email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), loadTag, innerW, headerActive)
+	headerLines := renderPreviewHeaderLinesWithTheme(m.theme, email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), loadTag, innerW, headerActive)
 	for _, line := range headerLines {
 		sb.WriteString(line + "\n")
 	}
@@ -386,8 +394,8 @@ func (m *Model) renderEmailPreview() string {
 		}
 
 		// Show downloadable attachments
-		attachStyle := defaultTheme.Text.Primary.Style()
-		selectedAttachStyle := defaultTheme.Focus.SelectionActive.Style()
+		attachStyle := m.theme.Text.Primary.Style()
+		selectedAttachStyle := m.theme.Focus.SelectionActive.Style()
 		for i, att := range m.timeline.body.Attachments {
 			sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)
 			if att.Size >= 1024*1024 {
@@ -405,7 +413,7 @@ func (m *Model) renderEmailPreview() string {
 
 		// Save-path prompt
 		if m.timeline.attachmentSavePrompt {
-			promptStyle := defaultTheme.Severity.Info.Style()
+			promptStyle := m.theme.Severity.Info.Style()
 			if m.timeline.attachmentSaveWarning != "" {
 				sb.WriteString(promptStyle.Render(truncate(m.timeline.attachmentSaveWarning, innerW)) + "\n")
 				imageLines++
@@ -451,7 +459,7 @@ func (m *Model) renderEmailPreview() string {
 		if end > totalLines {
 			end = totalLines
 		}
-		sb.WriteString(renderBodyLines(m.timeline.bodyWrappedLines, m.timeline.bodyScrollOffset, end,
+		sb.WriteString(renderBodyLinesWithTheme(m.theme, m.timeline.bodyWrappedLines, m.timeline.bodyScrollOffset, end,
 			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd))
 
 		// Pad short content so the indicator always sits at the bottom of the panel.
@@ -491,10 +499,14 @@ func (m *Model) renderEmailPreview() string {
 // renderBodyLines joins lines[start:end] into a string, applying the active
 // highlight to lines within [visualStart, visualEnd] when visualMode is true.
 func renderBodyLines(lines []string, start, end int, visualMode bool, visualStart, visualEnd int) string {
+	return renderBodyLinesWithTheme(defaultTheme, lines, start, end, visualMode, visualStart, visualEnd)
+}
+
+func renderBodyLinesWithTheme(theme Theme, lines []string, start, end int, visualMode bool, visualStart, visualEnd int) string {
 	if !visualMode {
 		return strings.Join(lines[start:end], "\n")
 	}
-	highlightStyle := defaultTheme.Focus.VisualSelection.Style()
+	highlightStyle := theme.Focus.VisualSelection.Style()
 	lo, hi := visualStart, visualEnd
 	if lo > hi {
 		lo, hi = hi, lo
@@ -538,7 +550,7 @@ func (m *Model) renderFullScreenEmail() string {
 	}
 	bodyStartRow := len(headerLines) + 1
 
-	dimStyle := defaultTheme.Text.Muted.Style()
+	dimStyle := m.theme.Text.Muted.Style()
 	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 6)
 	if len(threadContextLines) > 0 {
 		maxBodyLines -= len(threadContextLines)
@@ -556,7 +568,7 @@ func (m *Model) renderFullScreenEmail() string {
 	} else if m.timeline.body != nil {
 		layout := m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
 		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, maxBodyLines)
-		viewport := renderPreviewDocumentViewportWithVisual(layout, m.timeline.bodyScrollOffset, maxBodyLines,
+		viewport := renderPreviewDocumentViewportWithTheme(m.theme, layout, m.timeline.bodyScrollOffset, maxBodyLines,
 			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
 		sb.WriteString(viewport.Content)
 		nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, bodyStartRow, 1)
@@ -778,7 +790,7 @@ func (m *Model) emptyStateView(msg string) string {
 	if h < 5 {
 		h = 5
 	}
-	dim := defaultTheme.Text.Dim.Style()
+	dim := m.theme.Text.Dim.Style()
 	mid := h / 2
 	var sb strings.Builder
 	for i := 0; i < mid; i++ {
@@ -1101,10 +1113,10 @@ func (m *Model) renderQuickReplyPicker(width, maxLines int) string {
 	if width < 20 {
 		width = 20
 	}
-	headerStyle := defaultTheme.Text.Muted.Style()
-	selectedStyle := defaultTheme.Focus.SelectionActive.Style().Width(width)
-	normalStyle := defaultTheme.Text.Primary.Style().Width(width)
-	dimStyle := defaultTheme.Text.Dim.Style()
+	headerStyle := m.theme.Text.Muted.Style()
+	selectedStyle := m.theme.Focus.SelectionActive.Style().Width(width)
+	normalStyle := m.theme.Text.Primary.Style().Width(width)
+	dimStyle := m.theme.Text.Dim.Style()
 
 	lines := m.quickReplyPickerLines(width, maxLines)
 	selected := clampInt(m.timeline.quickReplyIdx, 0, max(0, len(m.timeline.quickReplies)-1))
@@ -1157,10 +1169,10 @@ func (m *Model) renderCleanupPreview() string {
 
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := m.cleanupFullScreen || (m.showCleanupPreview && chrome.FocusedPanel == panelPreview)
-	borderColor := defaultTheme.PanelBorderColor(headerActive)
-	headerStyle := defaultTheme.Text.Muted.Style()
+	borderColor := m.theme.PanelBorderColor(headerActive)
+	headerStyle := m.theme.Text.Muted.Style()
 	if headerActive {
-		headerStyle = defaultTheme.Severity.Info.Style()
+		headerStyle = m.theme.Severity.Info.Style()
 	}
 
 	dimStyle := headerStyle
@@ -1174,7 +1186,7 @@ func (m *Model) renderCleanupPreview() string {
 			headerBody = m.cleanupEmailBody
 		}
 		loadTag := previewLoadTag(m.cleanupPreviewLoad, email.MessageID)
-		header := renderPreviewHeaderLinesWithLoad(email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, headerActive)
+		header := renderPreviewHeaderLinesWithTheme(m.theme, email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, headerActive)
 		headerLines = len(header)
 		for _, line := range header {
 			sb.WriteString(line + "\n")
@@ -1199,7 +1211,7 @@ func (m *Model) renderCleanupPreview() string {
 		if m.cleanupFullScreen {
 			layout := m.cleanupPreviewDocumentLayout(innerW, maxBodyLines)
 			m.cleanupBodyScrollOffset = clampPreviewScrollOffset(m.cleanupBodyScrollOffset, layout.TotalRows, maxBodyLines)
-			viewport := renderPreviewDocumentViewport(layout, m.cleanupBodyScrollOffset, maxBodyLines)
+			viewport := renderPreviewDocumentViewportWithTheme(m.theme, layout, m.cleanupBodyScrollOffset, maxBodyLines, false, 0, 0)
 			sb.WriteString(viewport.Content)
 			nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, 2+headerLines, 3)
 

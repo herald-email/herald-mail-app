@@ -14,8 +14,8 @@ func isUnsetColor(c color.Color) bool {
 }
 
 func TestDefaultThemeUsesAdaptiveTerminalRoles(t *testing.T) {
-	if defaultTheme.Name != "adaptive" {
-		t.Fatalf("default theme should be adaptive, got %q", defaultTheme.Name)
+	if defaultTheme.Name != "inherited" {
+		t.Fatalf("default theme should be inherited, got %q", defaultTheme.Name)
 	}
 
 	if defaultTheme.Text.Primary.Foreground != nil {
@@ -97,8 +97,8 @@ func TestHeraldHuhThemeUsesDefaultForegroundForHelp(t *testing.T) {
 
 func TestLegacyDarkThemeKeepsCurrentXtermPalette(t *testing.T) {
 	theme := ThemeByName("legacy-dark")
-	if theme.Name != "legacy-dark" {
-		t.Fatalf("expected legacy-dark theme, got %q", theme.Name)
+	if theme.Name != "herald-dark" {
+		t.Fatalf("expected legacy-dark alias to resolve to herald-dark, got %q", theme.Name)
 	}
 	if !reflect.DeepEqual(theme.Chrome.TabActive.Background, lipgloss.Color("57")) {
 		t.Fatalf("legacy active tab background should keep xterm purple, got %#v", theme.Chrome.TabActive.Background)

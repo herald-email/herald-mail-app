@@ -38,18 +38,22 @@ func NewLogViewer(width, height int) *LogViewer {
 	vp := viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 	vp.YPosition = 0
 
-	styles := LogStyles{
-		info:  lipgloss.NewStyle().Foreground(defaultTheme.Logs.Info.ForegroundColor()),
-		warn:  lipgloss.NewStyle().Foreground(defaultTheme.Logs.Warn.ForegroundColor()),
-		error: lipgloss.NewStyle().Foreground(defaultTheme.Logs.Error.ForegroundColor()),
-		debug: lipgloss.NewStyle().Foreground(defaultTheme.Logs.Debug.ForegroundColor()),
-	}
-
-	return &LogViewer{
+	lv := &LogViewer{
 		viewport: vp,
 		logs:     make([]LogEntry, 0),
-		styles:   styles,
 	}
+	lv.ApplyTheme(defaultTheme)
+	return lv
+}
+
+func (lv *LogViewer) ApplyTheme(theme Theme) {
+	lv.styles = LogStyles{
+		info:  lipgloss.NewStyle().Foreground(theme.Logs.Info.ForegroundColor()),
+		warn:  lipgloss.NewStyle().Foreground(theme.Logs.Warn.ForegroundColor()),
+		error: lipgloss.NewStyle().Foreground(theme.Logs.Error.ForegroundColor()),
+		debug: lipgloss.NewStyle().Foreground(theme.Logs.Debug.ForegroundColor()),
+	}
+	lv.updateContent()
 }
 
 // AddLog adds a new log entry

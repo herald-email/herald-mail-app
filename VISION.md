@@ -59,6 +59,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] First-run setup wizard (detected when no config exists; account type, credentials, AI config steps)
 - [x] Settings panel accessible via `S` key (saves to `~/.herald/conf.yaml`)
 - [x] Configurable keyboard profiles (Default, Vim, Emacs, Custom) with a central command catalog and git-friendly custom keymap files
+- [x] App-level theme system with terminal inheritance, Herald dark/light built-ins, local YAML installs, and Settings-based role editing
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`herald serve`, Ollama-style)
@@ -749,9 +750,10 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
-- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature` so users can change one settings area without stepping through unrelated fields
+- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
+- [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, live preview, reset controls, and save-as-new-theme support
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Passwords always hidden; "reveal" button toggles visibility
@@ -835,6 +837,8 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 
 ## Theming
 
-- [ ] App-level theme system (configurable in `~/.herald/conf.yaml`)
-- [ ] Inherit terminal color profile
-- [ ] Dark theme (current hardcoded styles are dark; no light theme)
+- [x] App-level theme system (configurable in `~/.herald/conf.yaml`)
+- [x] Inherit terminal color profile by default via `theme.name: inherited`
+- [x] Herald dark and Herald light built-in themes, with `adaptive` and `legacy-dark` accepted as backward-compatible aliases
+- [x] Local YAML theme install from Settings into `~/.herald/themes`
+- [x] Custom theme creation and semantic role editing from Settings without adding a global shortcut

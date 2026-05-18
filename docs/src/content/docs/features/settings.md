@@ -1,9 +1,9 @@
 ---
 title: Settings
-description: Edit Herald account, server, AI, sync, cleanup, keyboard, and OAuth settings from the TUI.
+description: Edit Herald account, server, AI, sync, cleanup, keyboard, theme, and OAuth settings from the TUI.
 ---
 
-Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
+Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
 
 ## Overview
 
@@ -13,13 +13,14 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 
 | Area | What it shows |
 | --- | --- |
-| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, and `Signature` category choices. |
+| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` category choices. |
 | Account setup | Vendor, username, password/app password, IMAP, SMTP, and provider-specific options. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
 | Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, and related automation timing. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
+| Theme | App theme selection, local YAML install, semantic role color editing, and custom theme creation. |
 | Signature | Multiline default Compose signature text. |
 | Save/cancel controls | Category-level save returns to the menu; `esc` backs out one level before exiting and does not save unsaved category edits. |
 | OAuth wait overlay | URL/open-browser state while waiting for OAuth callback and token storage. |
@@ -48,7 +49,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 ### Open and Save Settings
 
 1. Press `S`.
-2. Choose `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, or `Signature`.
+2. Choose `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, or `Signature`.
 3. Update the fields in that category.
 4. Save the category.
 5. Herald writes config, applies runtime changes that can be applied immediately, and returns to the settings menu.
@@ -79,6 +80,18 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 4. For `Custom YAML`, enter the keymap file path.
 5. Save.
 6. Reopen shortcut help with `?` to verify the active profile shown in the overlay.
+
+### Change Theme
+
+The Theme category is local-first. It switches built-in themes, installs validated YAML files from disk, and edits semantic roles without adding a new global shortcut.
+
+1. Press `S`.
+2. Choose `Theme`.
+3. Choose `Inherited`, `Herald dark`, `Herald light`, or an installed theme.
+4. Optionally enter a local YAML theme file path to install it into `~/.herald/themes`.
+5. Select a semantic role, edit foreground/background with `inherit`, `ansi:N`, `xterm:N`, or `#RRGGBB`, and review the swatches/live preview.
+6. Use reset controls for one role or all overrides, or provide a new theme name to save the current overrides as a reusable local theme.
+7. Save.
 
 ### Start OAuth
 

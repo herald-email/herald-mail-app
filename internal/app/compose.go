@@ -575,15 +575,15 @@ func (m *Model) renderSuggestionDropdown() string {
 		return ""
 	}
 
-	selectedStyle := defaultTheme.Focus.SelectionActive.Style()
-	normalStyle := defaultTheme.Chrome.TabInactive.Style()
+	selectedStyle := m.theme.Focus.SelectionActive.Style()
+	normalStyle := m.theme.Chrome.TabInactive.Style()
 	maxW := m.windowWidth - 6
 	if maxW < 20 {
 		maxW = 20
 	}
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.PanelBorderColor(true)).
+		BorderForeground(m.theme.PanelBorderColor(true)).
 		Padding(0, 1).
 		MaxWidth(maxW)
 
@@ -604,7 +604,7 @@ func (m *Model) renderSuggestionDropdown() string {
 			label = fmt.Sprintf("%s  (+%d more)", label, more)
 		}
 		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Severity.Info.ForegroundColor()).
+			Foreground(m.theme.Severity.Info.ForegroundColor()).
 			Render(truncateVisual("↓ "+label, maxW))
 	}
 
@@ -649,8 +649,8 @@ func (m *Model) renderAttachmentCompletionDropdown() string {
 	if maxW < 20 {
 		maxW = 20
 	}
-	selectedStyle := defaultTheme.Focus.SelectionActive.Style()
-	normalStyle := defaultTheme.Chrome.TabInactive.Style()
+	selectedStyle := m.theme.Focus.SelectionActive.Style()
+	normalStyle := m.theme.Chrome.TabInactive.Style()
 
 	rendered := make([]string, 0, rows)
 	for i := start; i < start+rows && i < len(m.attachmentCompletions); i++ {
@@ -852,14 +852,14 @@ func (m *Model) renderComposeView() string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor()).
+		Foreground(m.theme.Chrome.TabInactive.ForegroundColor()).
 		Width(plan.Compose.LabelWidth)
 	activeFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.Chrome.TabActive.BackgroundColor())
+		BorderForeground(m.theme.Chrome.TabActive.BackgroundColor())
 	inactiveFieldStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
+		BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor())
 
 	renderField := func(style lipgloss.Style, view string) string {
 		return style.Width(plan.Compose.FieldInnerWidth).Render(view)
@@ -923,8 +923,8 @@ func (m *Model) renderComposeView() string {
 
 	// Subject hint (shown below divider when a suggestion is pending)
 	if m.composeAISubjectHint != "" {
-		hintStyle := defaultTheme.Compose.Accent.Style()
-		dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Focus.PanelBorder.ForegroundColor())
+		hintStyle := m.theme.Compose.Accent.Style()
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Focus.PanelBorder.ForegroundColor())
 		hintText := m.composeAISubjectHint
 		if len(hintText) > divWidth-30 && divWidth > 35 {
 			hintText = hintText[:divWidth-30] + "…"
@@ -965,7 +965,7 @@ func (m *Model) renderComposeView() string {
 
 		var bodyPane string
 		if m.composePreview {
-			previewLabel := defaultTheme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
+			previewLabel := m.theme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
 			body := m.composeBody.Value()
 			if body == "" {
 				body = "_empty body_"
@@ -988,7 +988,7 @@ func (m *Model) renderComposeView() string {
 	} else {
 		// Normal full-width body / preview
 		if m.composePreview {
-			previewLabel := defaultTheme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
+			previewLabel := m.theme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
 			sb.WriteString(previewLabel + "\n")
 			body := m.composeBody.Value()
 			if body == "" {
@@ -1018,7 +1018,7 @@ func (m *Model) renderComposeView() string {
 
 	// Attachment path input prompt
 	if m.attachmentInputActive {
-		promptStyle := defaultTheme.Compose.Accent.Style()
+		promptStyle := m.theme.Compose.Accent.Style()
 		sb.WriteString(promptStyle.Render("Attach file: ") + m.attachmentPathInput.View() + "\n")
 		if drop := m.renderAttachmentCompletionDropdown(); drop != "" {
 			sb.WriteString(drop + "\n")
@@ -1036,20 +1036,20 @@ func (m *Model) renderComposeView() string {
 			warnIcon = " ⚠ (>10 MB)"
 		}
 		label := fmt.Sprintf("  [attach] %s  (%s)%s", att.Filename, sizeStr, warnIcon)
-		attachStyle := defaultTheme.Compose.Attachment.Style()
+		attachStyle := m.theme.Compose.Attachment.Style()
 		if att.Data == nil {
-			attachStyle = defaultTheme.Severity.Error.Style()
+			attachStyle = m.theme.Severity.Error.Style()
 		}
 		sb.WriteString(attachStyle.Render(label) + "\n")
 	}
 
 	// Status message
 	if m.composeStatus != "" {
-		statusStyle := defaultTheme.Compose.StatusInfo.Style()
+		statusStyle := m.theme.Compose.StatusInfo.Style()
 		if strings.HasPrefix(m.composeStatus, "Error") || strings.HasPrefix(m.composeStatus, "Send failed") || strings.HasPrefix(m.composeStatus, "Attach error") {
-			statusStyle = defaultTheme.Compose.StatusError.Style()
+			statusStyle = m.theme.Compose.StatusError.Style()
 		} else if strings.HasPrefix(m.composeStatus, "Warning") {
-			statusStyle = defaultTheme.Compose.StatusWarning.Style()
+			statusStyle = m.theme.Compose.StatusWarning.Style()
 		}
 		sb.WriteString(statusStyle.Render(m.composeStatus) + "\n")
 	}
@@ -1095,9 +1095,9 @@ func (m *Model) renderCompactPreservedResponse(width int) string {
 	}
 	value = strings.ReplaceAll(value, "\n", " ")
 	line := truncateVisual("Response: "+value, width)
-	style := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor())
+	style := lipgloss.NewStyle().Foreground(m.theme.Chrome.TabInactive.ForegroundColor())
 	if m.composeField == composeFieldBody {
-		style = style.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(defaultTheme.Chrome.TabActive.BackgroundColor())
+		style = style.Foreground(m.theme.Chrome.TabActive.ForegroundColor()).Background(m.theme.Chrome.TabActive.BackgroundColor())
 	}
 	return style.Render(line)
 }
@@ -1129,13 +1129,13 @@ func (m *Model) renderComposeOriginalMessagePreview(width int) string {
 		outerRows = 1
 	}
 
-	dimStyle := lipgloss.NewStyle().Foreground(defaultTheme.Chrome.TabInactive.ForegroundColor())
-	labelStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor())
-	borderColor := defaultTheme.Focus.PanelBorder.ForegroundColor()
+	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Chrome.TabInactive.ForegroundColor())
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Severity.Info.ForegroundColor())
+	borderColor := m.theme.Focus.PanelBorder.ForegroundColor()
 	if m.composeField == composeFieldOriginalMessage {
-		dimStyle = dimStyle.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor())
-		labelStyle = labelStyle.Foreground(defaultTheme.Chrome.TabActive.ForegroundColor()).Background(defaultTheme.Chrome.TabActive.BackgroundColor())
-		borderColor = defaultTheme.Focus.PanelBorderFocused.ForegroundColor()
+		dimStyle = dimStyle.Foreground(m.theme.Chrome.TabActive.ForegroundColor())
+		labelStyle = labelStyle.Foreground(m.theme.Chrome.TabActive.ForegroundColor()).Background(m.theme.Chrome.TabActive.BackgroundColor())
+		borderColor = m.theme.Focus.PanelBorderFocused.ForegroundColor()
 	}
 	if outerRows == 1 {
 		parts := m.composeOriginalMessageCompactParts(width)
@@ -1312,9 +1312,9 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 	)
 	rows := []string{truncateVisual(summary, width)}
 	if len(ctx.forwardedAttachments) > 0 {
-		selectedStyle := defaultTheme.Focus.SelectionActive.Style()
-		normalStyle := defaultTheme.Severity.Info.Style()
-		removedStyle := defaultTheme.Focus.PanelBorder.Style()
+		selectedStyle := m.theme.Focus.SelectionActive.Style()
+		normalStyle := m.theme.Severity.Info.Style()
+		removedStyle := m.theme.Focus.PanelBorder.Style()
 		for i, item := range ctx.forwardedAttachments {
 			status := "include"
 			action := "x remove"
@@ -1547,8 +1547,12 @@ func lcsTokens(a, b []string) []string {
 // a lipgloss-styled string. Deleted tokens appear red with strikethrough,
 // added tokens appear green, unchanged tokens are unstyled.
 func wordDiff(original, revised string) string {
-	delStyle := defaultTheme.Diff.Delete.Style()
-	addStyle := defaultTheme.Diff.Add.Style()
+	return wordDiffWithTheme(defaultTheme, original, revised)
+}
+
+func wordDiffWithTheme(theme Theme, original, revised string) string {
+	delStyle := theme.Diff.Delete.Style()
+	addStyle := theme.Diff.Add.Style()
 
 	origTokens := tokenizeWords(original)
 	revTokens := tokenizeWords(revised)
@@ -1686,16 +1690,16 @@ func (m *Model) renderAIPanel(width int) string {
 
 	var sb strings.Builder
 
-	titleStyle := defaultTheme.Compose.AITitle.Style().Width(width)
-	labelStyle := defaultTheme.Compose.AILabel.Style().Width(width)
-	activeToggleStyle := defaultTheme.Compose.AIToggleActive.Style().Padding(0, 1)
-	inactiveToggleStyle := defaultTheme.Compose.AIToggleInactive.Style().Padding(0, 1)
-	actionStyle := defaultTheme.Compose.AIAction.Style().
+	titleStyle := m.theme.Compose.AITitle.Style().Width(width)
+	labelStyle := m.theme.Compose.AILabel.Style().Width(width)
+	activeToggleStyle := m.theme.Compose.AIToggleActive.Style().Padding(0, 1)
+	inactiveToggleStyle := m.theme.Compose.AIToggleInactive.Style().Padding(0, 1)
+	actionStyle := m.theme.Compose.AIAction.Style().
 		Padding(0, 1).
 		Margin(0, 1, 0, 0)
-	acceptStyle := defaultTheme.Compose.AIAccept.Style().Padding(0, 1)
-	discardStyle := defaultTheme.Compose.AIDiscard.Style().Padding(0, 1)
-	spinnerStyle := defaultTheme.Compose.Accent.Style()
+	acceptStyle := m.theme.Compose.AIAccept.Style().Padding(0, 1)
+	discardStyle := m.theme.Compose.AIDiscard.Style().Padding(0, 1)
+	spinnerStyle := m.theme.Compose.Accent.Style()
 
 	// Title
 	sb.WriteString(titleStyle.Render("🤖 AI Assistant") + "\n")
@@ -1732,7 +1736,7 @@ func (m *Model) renderAIPanel(width int) string {
 		sb.WriteString(spinnerStyle.Render("⠋ Thinking…") + "\n")
 		return lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(defaultTheme.Compose.AIBorder.ForegroundColor()).
+			BorderForeground(m.theme.Compose.AIBorder.ForegroundColor()).
 			Width(width).
 			Render(sb.String())
 	}
@@ -1755,13 +1759,13 @@ func (m *Model) renderAIPanel(width int) string {
 
 		// Accept / Discard
 		sb.WriteString(acceptStyle.Render("✓ Accept") + "  " + discardStyle.Render("Discard") + "\n")
-		sb.WriteString(defaultTheme.Compose.AIDim.Style().Render(
+		sb.WriteString(m.theme.Compose.AIDim.Style().Render(
 			"Ctrl+Enter: accept  Esc: discard") + "\n")
 	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(defaultTheme.Compose.AIBorder.ForegroundColor()).
+		BorderForeground(m.theme.Compose.AIBorder.ForegroundColor()).
 		Width(width).
 		Render(sb.String())
 }

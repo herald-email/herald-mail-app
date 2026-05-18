@@ -23,6 +23,13 @@ compose:
 keyboard:
   profile: default
   custom_keymap: ""
+theme:
+  name: inherited
+  overrides:
+    chrome.tab_active:
+      fg: "#ffffff"
+      bg: "#1a73e8"
+      bold: true
 ollama:
   host: "http://localhost:11434"
   model: "gemma3:4b"
@@ -40,6 +47,8 @@ semantic:
 | `compose.signature.text` | Optional default signature inserted into new Compose messages, replies, forwards, and quick replies. |
 | `keyboard.profile` | Keyboard profile: `default`, `vim`, `emacs`, or `custom`. Default `default`. |
 | `keyboard.custom_keymap` | Optional path to a YAML custom keymap file when `keyboard.profile` is `custom`. |
+| `theme.name` | Theme name: `inherited`, `herald-dark`, `herald-light`, or a local theme installed in `~/.herald/themes`. Default `inherited`. |
+| `theme.overrides` | Optional semantic role overrides keyed by role ID, e.g. `chrome.tab_active`. Colors accept `inherit`, `ansi:N`, `xterm:N`, or quoted `#RRGGBB`. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
 | `credentials.password` | Password, app password, or bridge password. |
 | `server.host` | IMAP host. Required for non-demo mode. |
@@ -96,6 +105,20 @@ Herald checks config permissions on startup and warns if group or other users ca
 
 ```sh
 chmod 600 ~/.herald/conf.yaml
+```
+
+## Theme Files
+
+Local theme files can be installed from Settings. A validated theme is copied to `~/.herald/themes/<name>.yaml` with private permissions.
+
+```yaml
+version: 1
+name: quiet-slate
+display_name: Quiet Slate
+inherits: herald-dark
+roles:
+  focus.panel_border_focused:
+    fg: "#55c2ff"
 ```
 
 ## Related Pages

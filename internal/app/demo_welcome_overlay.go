@@ -54,11 +54,15 @@ func (m *Model) renderDemoWelcomeOverlayView() string {
 	}
 
 	backdrop := m.renderShortcutHelpBackdropView()
-	panel := renderDemoWelcomePanel(w)
+	panel := renderDemoWelcomePanelWithTheme(m.theme, w)
 	return overlayCentered(backdrop, panel, w, h)
 }
 
 func renderDemoWelcomePanel(width int) string {
+	return renderDemoWelcomePanelWithTheme(defaultTheme, width)
+}
+
+func renderDemoWelcomePanelWithTheme(theme Theme, width int) string {
 	panelW := demoWelcomeMaxWidth
 	if maxW := width - 8; maxW < panelW {
 		panelW = maxW
@@ -79,9 +83,9 @@ func renderDemoWelcomePanel(width int) string {
 		contentW = 24
 	}
 
-	titleStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Info.ForegroundColor()).Bold(true)
-	bodyStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
-	footerStyle := lipgloss.NewStyle().Foreground(defaultTheme.Severity.Success.ForegroundColor()).Bold(true)
+	titleStyle := lipgloss.NewStyle().Foreground(theme.Severity.Info.ForegroundColor()).Bold(true)
+	bodyStyle := lipgloss.NewStyle().Foreground(theme.Text.Primary.ForegroundColor())
+	footerStyle := lipgloss.NewStyle().Foreground(theme.Severity.Success.ForegroundColor()).Bold(true)
 
 	body := `This is a safe synthetic mailbox. A few Herald demo emails are waiting at the top of Timeline. Open the first email, "Welcome to Herald", to start the onboarding guide, or dismiss this and explore on your own.`
 
@@ -100,7 +104,7 @@ func renderDemoWelcomePanel(width int) string {
 	return lipgloss.NewStyle().
 		Width(styleW).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor()).
+		BorderForeground(theme.Focus.PanelBorderFocused.ForegroundColor()).
 		Padding(0, 1).
 		Render(strings.Join(lines, "\n"))
 }

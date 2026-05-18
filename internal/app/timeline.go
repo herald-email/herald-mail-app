@@ -212,12 +212,12 @@ func threadParticipantLabels(emails []*models.EmailData, fromAddress string) []s
 	return labels
 }
 
-func styledThreadParticipants(labels []string, maxWidth int) string {
+func styledThreadParticipants(theme Theme, labels []string, maxWidth int) string {
 	if len(labels) == 0 {
 		labels = []string{"(unknown)"}
 	}
 	joined := truncate(strings.Join(labels, ", "), maxWidth)
-	return lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor()).Render(joined)
+	return lipgloss.NewStyle().Foreground(theme.Text.Primary.ForegroundColor()).Render(joined)
 }
 
 func formatTimelineListDate(date time.Time) string {
@@ -588,7 +588,7 @@ func (m *Model) updateTimelineTable() {
 		if senderAvail < 1 {
 			senderAvail = 1
 		}
-		sender := unreadDot + starDot + senderPrefix + styledSender(email.Sender, senderAvail)
+		sender := unreadDot + starDot + senderPrefix + styledSenderWithTheme(m.theme, email.Sender, senderAvail)
 		tag := ""
 		if m.classifications != nil {
 			tag = m.classifications[email.MessageID]
@@ -663,7 +663,7 @@ func (m *Model) updateTimelineTable() {
 			if senderAvail < 1 {
 				senderAvail = 1
 			}
-			threadSender := unreadDot + starDot + threadCollapsedPrefix + styledThreadParticipants(threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
+			threadSender := unreadDot + starDot + threadCollapsedPrefix + styledThreadParticipants(m.theme, threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
 			rows = append(rows, table.Row{
 				m.timelineSelectionMark(g.emails),
 				threadSender,
@@ -732,10 +732,10 @@ func (m *Model) renderTimelineView() string {
 	} else {
 		style := m.baseStyle.
 			Width(plan.Timeline.TableWidth + 2).
-			BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
+			BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor())
 		tableStyles := m.inactiveTableStyle
 		if chrome.FocusedPanel == panelTimeline {
-			style = style.BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor())
+			style = style.BorderForeground(m.theme.Focus.PanelBorderFocused.ForegroundColor())
 			tableStyles = m.activeTableStyle
 		}
 		tableView = style.Render(renderStyledTableViewWithStyles(&m.timelineTable, tableStyles))
@@ -752,9 +752,9 @@ func (m *Model) renderTimelineView() string {
 	if plan.SidebarVisible {
 		sidebarStyle := m.baseStyle.Width(sidebarContentWidth + 2)
 		if chrome.FocusedPanel == panelSidebar {
-			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.Focus.PanelBorderFocused.ForegroundColor())
+			sidebarStyle = sidebarStyle.BorderForeground(m.theme.Focus.PanelBorderFocused.ForegroundColor())
 		} else {
-			sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.Focus.PanelBorder.ForegroundColor())
+			sidebarStyle = sidebarStyle.BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor())
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
@@ -1655,7 +1655,7 @@ func (m *Model) timelineFilterPrefix() string {
 		filterLabel = "filtered"
 	}
 	return lipgloss.NewStyle().
-		Foreground(defaultTheme.Severity.Info.ForegroundColor()).
+		Foreground(m.theme.Severity.Info.ForegroundColor()).
 		Bold(true).
 		Render(fmt.Sprintf("⬡ filter: %s (%d emails)  ", filterLabel, len(m.timeline.chatFilteredEmails)))
 }

@@ -41,6 +41,7 @@ type Config struct {
 		Profile      string `yaml:"profile,omitempty"`
 		CustomKeymap string `yaml:"custom_keymap,omitempty"`
 	} `yaml:"keyboard,omitempty"`
+	Theme       ThemeConfig `yaml:"theme,omitempty"`
 	Credentials struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
@@ -126,6 +127,21 @@ type Config struct {
 		BackgroundQueueLimit            int    `yaml:"background_queue_limit"`             // default: 64
 		PauseBackgroundWhileInteractive bool   `yaml:"pause_background_while_interactive"` // default: true
 	} `yaml:"ai"`
+}
+
+type ThemeConfig struct {
+	Name      string                   `yaml:"name,omitempty"`
+	Overrides map[string]ThemeOverride `yaml:"overrides,omitempty"`
+}
+
+type ThemeOverride struct {
+	Foreground    string `yaml:"fg,omitempty"`
+	Background    string `yaml:"bg,omitempty"`
+	Bold          bool   `yaml:"bold,omitempty"`
+	Faint         bool   `yaml:"faint,omitempty"`
+	Underline     bool   `yaml:"underline,omitempty"`
+	Reverse       bool   `yaml:"reverse,omitempty"`
+	Strikethrough bool   `yaml:"strikethrough,omitempty"`
 }
 
 // vendorPreset holds IMAP/SMTP defaults for a known mail provider
@@ -389,6 +405,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Keyboard.Profile == "" {
 		c.Keyboard.Profile = "default"
+	}
+	if strings.TrimSpace(c.Theme.Name) == "" {
+		c.Theme.Name = "inherited"
+	}
+	if c.Theme.Overrides == nil {
+		c.Theme.Overrides = make(map[string]ThemeOverride)
 	}
 
 	// Daemon defaults

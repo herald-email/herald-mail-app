@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -47,6 +48,7 @@ const (
 	settingsPanelSectionAI       settingsPanelSection = "ai"
 	settingsPanelSectionSync     settingsPanelSection = "sync-cleanup"
 	settingsPanelSectionKeyboard settingsPanelSection = "keyboard"
+	settingsPanelSectionTheme    settingsPanelSection = "theme"
 	settingsPanelSectionSign     settingsPanelSection = "signature"
 )
 
@@ -117,6 +119,16 @@ type Settings struct {
 	// form field backing variables — keyboard
 	keyboardProfile string
 	customKeymap    string
+
+	// form field backing variables — theme
+	themeName        string
+	themeInstallPath string
+	themeRole        string
+	themeFG          string
+	themeBG          string
+	themeSaveAs      string
+	themeResetRole   bool
+	themeResetAll    bool
 }
 
 type settingsPanelLayout struct {
@@ -185,6 +197,12 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.signatureText = existing.Compose.Signature.Text
 		s.keyboardProfile = existing.Keyboard.Profile
 		s.customKeymap = existing.Keyboard.CustomKeymap
+		s.themeName = existing.Theme.Name
+		s.themeRole = firstThemeRole(existing.Theme.Overrides)
+		if override, ok := existing.Theme.Overrides[s.themeRole]; ok {
+			s.themeFG = override.Foreground
+			s.themeBG = override.Background
+		}
 
 		if existing.IsGmailOAuth() {
 			s.provider = "gmail-oauth"
@@ -210,6 +228,12 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	}
 	if s.keyboardProfile == "" {
 		s.keyboardProfile = keyboardProfileDefault
+	}
+	if s.themeName == "" {
+		s.themeName = "inherited"
+	}
+	if s.themeRole == "" {
+		s.themeRole = "chrome.tab_active"
 	}
 
 	s.syncProviderDefaults("", s.provider)
@@ -501,6 +525,57 @@ func (s *Settings) buildForm() {
 			Value(&s.customKeymap),
 	).Title("Keyboard")
 
+	themeGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Current Theme").
+			Options(settingsThemeOptions()...).
+			Value(&s.themeName),
+		huh.NewInput().
+			Title("Install local theme YAML").
+			Description("Validated and copied into ~/.herald/themes. Leave blank to skip install.").
+			Placeholder("~/Downloads/quiet-slate.yaml").
+			Value(&s.themeInstallPath),
+		huh.NewSelect[string]().
+			Title("Theme Role").
+			Options(settingsThemeRoleOptions()...).
+			Value(&s.themeRole),
+		huh.NewInput().
+			Title("Foreground").
+			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. Swatch updates after save.").
+			Placeholder("inherit").
+			Value(&s.themeFG),
+		huh.NewInput().
+			Title("Background").
+			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. xterm-256 values are supported.").
+			Placeholder("xterm:25").
+			Value(&s.themeBG),
+		huh.NewNote().
+			Title("Live preview").
+			DescriptionFunc(func() string {
+				return s.themePreviewDescription()
+			}, &s.themeRole),
+		huh.NewConfirm().
+			Title("Reset selected role").
+			Affirmative("Reset Role").
+			Negative("Keep").
+			Value(&s.themeResetRole),
+		huh.NewConfirm().
+			Title("Reset all theme overrides").
+			Affirmative("Reset All").
+			Negative("Keep").
+			Value(&s.themeResetAll),
+		huh.NewInput().
+			Title("Save As New Theme").
+			Description("Optional slug. Uses current overrides and saves a local theme file.").
+			Placeholder("quiet-slate").
+			Value(&s.themeSaveAs),
+		huh.NewConfirm().
+			Title("Save changes").
+			Affirmative("Save").
+			Negative("Cancel").
+			Value(&s.saveButton),
+	).Title("Theme")
+
 	panelSignatureGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
@@ -536,6 +611,7 @@ func (s *Settings) buildForm() {
 		openAIGroup,
 		syncGroup,
 		keyboardGroup,
+		themeGroup,
 		composeGroup,
 	}
 
@@ -569,6 +645,8 @@ func (s *Settings) buildForm() {
 				keyboardGroup,
 				saveGroup.Title("Keyboard"),
 			}
+		case settingsPanelSectionTheme:
+			groups = []*huh.Group{themeGroup}
 		case settingsPanelSectionSign:
 			groups = []*huh.Group{panelSignatureGroup}
 		}
@@ -603,6 +681,7 @@ func (s *Settings) buildPanelMenuForm() {
 				huh.NewOption("AI", string(settingsPanelSectionAI)),
 				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
 				huh.NewOption("Keyboard", string(settingsPanelSectionKeyboard)),
+				huh.NewOption("Theme", string(settingsPanelSectionTheme)),
 				huh.NewOption("Signature", string(settingsPanelSectionSign)),
 			).
 			Value(&s.panelMenuChoice),
@@ -651,6 +730,92 @@ func settingsPanelMenuKeyMap() *huh.KeyMap {
 	keymap := settingsFormKeyMap()
 	keymap.Select.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open • esc exit"))
 	return keymap
+}
+
+func settingsThemeOptions() []huh.Option[string] {
+	names := ThemeDisplayNames(DefaultThemeDir())
+	seen := make(map[string]bool, len(names))
+	options := make([]huh.Option[string], 0, len(names))
+	for _, name := range names {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		options = append(options, huh.NewOption(themeDisplayName(name), name))
+	}
+	return options
+}
+
+func themeDisplayName(name string) string {
+	switch name {
+	case "inherited":
+		return "Inherited"
+	case "herald-dark":
+		return "Herald dark"
+	case "herald-light":
+		return "Herald light"
+	default:
+		return name
+	}
+}
+
+func settingsThemeRoleOptions() []huh.Option[string] {
+	roles := themeRoleIDs()
+	options := make([]huh.Option[string], 0, len(roles))
+	for _, role := range roles {
+		options = append(options, huh.NewOption(role, role))
+	}
+	return options
+}
+
+func themeRoleIDs() []string {
+	roleMap := themeRoleMap(&defaultTheme)
+	roles := make([]string, 0, len(roleMap))
+	for role := range roleMap {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
+}
+
+func firstThemeRole(overrides map[string]config.ThemeOverride) string {
+	for _, role := range themeRoleIDs() {
+		if _, ok := overrides[role]; ok {
+			return role
+		}
+	}
+	return "chrome.tab_active"
+}
+
+func (s *Settings) themePreviewDescription() string {
+	fg := strings.TrimSpace(s.themeFG)
+	bg := strings.TrimSpace(s.themeBG)
+	if fg == "" {
+		fg = "inherit"
+	}
+	if bg == "" {
+		bg = "inherit"
+	}
+	theme := ThemeByName(s.themeName)
+	if role, ok := themeRoleMap(&theme)[s.themeRole]; ok {
+		preview := *role
+		_ = applyThemeOverride(&preview, config.ThemeOverride{Foreground: fg, Background: bg})
+		sample := preview.Style().Render(" Sample ")
+		return fmt.Sprintf("%s\n%s  %s\nxterm-256 grid accepts xterm:0 through xterm:255; hex accepts #RRGGBB.", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg)+"  "+sample)
+	}
+	return fmt.Sprintf("Role %s | %s | %s | xterm-256 grid accepts xterm:0 through xterm:255.", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg))
+}
+
+func themeColorSwatch(label, value string) string {
+	color, err := parseThemeColor(value)
+	if err != nil {
+		return fmt.Sprintf("%s invalid:%s", label, value)
+	}
+	if color == nil {
+		return fmt.Sprintf("%s inherit", label)
+	}
+	block := lipgloss.NewStyle().Background(color).Render("  ")
+	return fmt.Sprintf("%s %s %s", label, block, value)
 }
 
 func (s *Settings) focusedFieldHandlesKey(msg tea.KeyPressMsg) bool {
@@ -863,6 +1028,16 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, tea.Batch(cmd, func() tea.Msg { return SettingsCancelledMsg{} })
 		}
 
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionTheme {
+			if err := s.applyThemeFileActions(); err != nil {
+				s.done = false
+				s.panelStatus = "Theme install failed: " + err.Error()
+				s.saveButton = true
+				s.buildForm()
+				return s, tea.Batch(cmd, s.form.Init())
+			}
+		}
+
 		cfg := s.buildConfig()
 		if s.provider == "gmail-oauth" {
 			// OAuth flow will handle saving after tokens received.
@@ -1055,9 +1230,70 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.Compose.Signature.Text = s.signatureText
 	cfg.Keyboard.Profile = s.keyboardProfile
 	cfg.Keyboard.CustomKeymap = strings.TrimSpace(s.customKeymap)
+	cfg.Theme.Name = strings.TrimSpace(s.themeName)
+	if cfg.Theme.Name == "" {
+		cfg.Theme.Name = "inherited"
+	}
+	cfg.Theme.Overrides = cloneThemeOverrides(cfg.Theme.Overrides)
+	if cfg.Theme.Overrides == nil {
+		cfg.Theme.Overrides = make(map[string]config.ThemeOverride)
+	}
+	if s.themeResetAll {
+		cfg.Theme.Overrides = make(map[string]config.ThemeOverride)
+	} else if s.themeResetRole {
+		delete(cfg.Theme.Overrides, s.themeRole)
+	} else if strings.TrimSpace(s.themeFG) != "" || strings.TrimSpace(s.themeBG) != "" {
+		override := cfg.Theme.Overrides[s.themeRole]
+		override.Foreground = strings.TrimSpace(s.themeFG)
+		override.Background = strings.TrimSpace(s.themeBG)
+		cfg.Theme.Overrides[s.themeRole] = override
+	}
 
 	applyVendorPreset(&cfg)
 	return &cfg
+}
+
+func cloneThemeOverrides(overrides map[string]config.ThemeOverride) map[string]config.ThemeOverride {
+	if len(overrides) == 0 {
+		return make(map[string]config.ThemeOverride)
+	}
+	clone := make(map[string]config.ThemeOverride, len(overrides))
+	for key, value := range overrides {
+		clone[key] = value
+	}
+	return clone
+}
+
+func (s *Settings) applyThemeFileActions() error {
+	if path := strings.TrimSpace(s.themeInstallPath); path != "" {
+		expanded, err := config.ExpandPath(path)
+		if err != nil {
+			return err
+		}
+		installed, err := InstallThemeFile(expanded, DefaultThemeDir())
+		if err != nil {
+			return err
+		}
+		doc, err := LoadThemeFromFile(installed)
+		if err != nil {
+			return err
+		}
+		s.themeName = doc.Name
+	}
+	if slug := strings.TrimSpace(s.themeSaveAs); slug != "" {
+		cfg := s.buildConfig()
+		doc := ThemeDocument{
+			Version:  1,
+			Name:     slug,
+			Inherits: cfg.Theme.Name,
+			Roles:    cfg.Theme.Overrides,
+		}
+		if _, err := SaveThemeDocument(doc, DefaultThemeDir()); err != nil {
+			return err
+		}
+		s.themeName = slug
+	}
+	return nil
 }
 
 func configVendorForProvider(provider string) string {

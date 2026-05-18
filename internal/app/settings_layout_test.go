@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -133,7 +134,7 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Signature"} {
+	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Theme", "Signature"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
 		}
@@ -189,6 +190,38 @@ func TestSettingsPanelKeyboardCategorySkipsUnrelatedFields(t *testing.T) {
 	for _, notWant := range []string{"Account Type", "AI Provider", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected Keyboard category to skip unrelated field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+
+	var views []string
+	for i := 0; i < 10; i++ {
+		views = append(views, renderSettingsViewForTest(t, s, 100, 32))
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	rendered := strings.Join(views, "\n--- next field ---\n")
+
+	for _, want := range []string{
+		"Current Theme",
+		"Install local theme YAML",
+		"Theme Role",
+		"Foreground",
+		"Background",
+		"xterm-256",
+		"Live preview",
+		"Save As New Theme",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Theme category to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Account Type", "AI Provider", "Email Signature"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected Theme category to skip unrelated field %q, got:\n%s", notWant, rendered)
 		}
 	}
 }

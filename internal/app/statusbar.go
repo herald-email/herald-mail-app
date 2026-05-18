@@ -101,7 +101,7 @@ func (m *Model) renderAIStatusChip() string {
 		if m.demoMode {
 			return ""
 		}
-		return defaultTheme.Text.Dim.Style().Render("AI: off")
+		return m.theme.Text.Dim.Style().Render("AI: off")
 	}
 	status := m.schedulerStatus()
 	label := "idle"
@@ -122,14 +122,14 @@ func (m *Model) renderAIStatusChip() string {
 		label = "down"
 	}
 	chip := fmt.Sprintf("%-10s", "AI "+label)
-	style := defaultTheme.Severity.Info.Style()
+	style := m.theme.Severity.Info.Style()
 	switch label {
 	case "idle":
-		style = defaultTheme.Text.Dim.Style()
+		style = m.theme.Text.Dim.Style()
 	case "defer":
-		style = defaultTheme.Badges.Demo.Style()
+		style = m.theme.Badges.Demo.Style()
 	case "down":
-		style = defaultTheme.Severity.Error.Style()
+		style = m.theme.Severity.Error.Style()
 	}
 	return style.Render(chip)
 }
@@ -151,8 +151,8 @@ func (m *Model) titleTabStartX() int {
 }
 
 func (m *Model) renderTabBar() string {
-	inactive := defaultTheme.Chrome.TabInactive.Style().Padding(0, 2)
-	active := defaultTheme.Chrome.TabActive.Style().Padding(0, 2)
+	inactive := m.theme.Chrome.TabInactive.Style().Padding(0, 2)
+	active := m.theme.Chrome.TabActive.Style().Padding(0, 2)
 
 	tab := func(item tabNavigationItem) string {
 		label := m.tabBarLabel(item)
@@ -181,7 +181,7 @@ func (m *Model) renderTopSyncStrip() string {
 	title, detail := m.topSyncStripSegments()
 	line := fmt.Sprintf(" %s  │  %s", title, detail)
 
-	return defaultTheme.Chrome.TopSyncStrip.Style().
+	return m.theme.Chrome.TopSyncStrip.Style().
 		Width(w).
 		Padding(0, 1).
 		Render(safeChromeLine(line, w-2))
@@ -196,7 +196,7 @@ func (m *Model) renderStatusBar() string {
 			w = 80
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingDeleteDesc)
-		return defaultTheme.Severity.Destructive.Style().
+		return m.theme.Severity.Destructive.Style().
 			Width(w).
 			Padding(0, 1).
 			Render(safeChromeLine(line, w-2))
@@ -208,7 +208,7 @@ func (m *Model) renderStatusBar() string {
 			w = 80
 		}
 		line := fmt.Sprintf("  %s  [y] confirm  [n/Esc] cancel", m.pendingUnsubscribeDesc)
-		return defaultTheme.Severity.Caution.Style().
+		return m.theme.Severity.Caution.Style().
 			Width(w).
 			Padding(0, 1).
 			Render(safeChromeLine(line, w-2))
@@ -224,11 +224,11 @@ func (m *Model) renderStatusBar() string {
 	// Folder breadcrumb
 	folderParts := strings.Split(displayFolderName(m.currentFolder), "/")
 	breadcrumb := strings.Join(folderParts, " › ")
-	statusRole := defaultTheme.Chrome.StatusBar
+	statusRole := m.theme.Chrome.StatusBar
 
 	var parts []string
 	if msg := strings.TrimSpace(m.statusMessageForActiveTab()); msg != "" {
-		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Severity.Info.Style().Render(msg)))
+		parts = append(parts, chromeBarPart(statusRole, m.theme.Severity.Info.Style().Render(msg)))
 	}
 	parts = append(parts, breadcrumb)
 	if chip := m.renderAIStatusChip(); chip != "" {
@@ -326,12 +326,12 @@ func (m *Model) renderStatusBar() string {
 
 	// Demo mode indicator
 	if m.demoMode {
-		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Badges.Demo.Style().Render("[DEMO]")))
+		parts = append(parts, chromeBarPart(statusRole, m.theme.Badges.Demo.Style().Render("[DEMO]")))
 	}
 
 	// Dry-run mode indicator
 	if m.dryRun {
-		parts = append(parts, chromeBarPart(statusRole, defaultTheme.Badges.DryRun.Style().Render("[DRY RUN]")))
+		parts = append(parts, chromeBarPart(statusRole, m.theme.Badges.DryRun.Style().Render("[DRY RUN]")))
 	}
 
 	if m.vimFieldProfileActive() && m.activeTab == tabCompose {
@@ -358,7 +358,7 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	line := filterPrefix + strings.Join(parts, "  │  ")
-	return defaultTheme.Chrome.StatusBar.Style().
+	return m.theme.Chrome.StatusBar.Style().
 		Width(w).
 		Padding(0, 1).
 		Render(truncateVisual(line, w-2))
@@ -466,7 +466,7 @@ func (m *Model) renderStatusHintDivider() string {
 	if w <= 0 {
 		w = 80
 	}
-	return defaultTheme.Chrome.HintBar.Style().
+	return m.theme.Chrome.HintBar.Style().
 		Width(w).
 		Render(safeChromeLine(strings.Repeat("─", w), w))
 }
@@ -479,7 +479,7 @@ func (m *Model) renderKeyHints() string {
 	if w <= 0 {
 		w = 80
 	}
-	return renderChromeLines(m.keyHintRows(w, chrome), w, defaultTheme.Chrome.HintBar)
+	return renderChromeLines(m.keyHintRows(w, chrome), w, m.theme.Chrome.HintBar)
 }
 
 func (m *Model) rawKeyHints(chrome ChromeState) string {
@@ -595,7 +595,11 @@ func (m *Model) previewActionHintText(scope string, hasUnsubscribe bool) string 
 
 func (m *Model) setFocusedPanel(panel int) {
 	m.focusedPanel = panel
-	switch panel {
+	m.updateTableFocusStyles()
+}
+
+func (m *Model) updateTableFocusStyles() {
+	switch m.focusedPanel {
 	case panelSummary:
 		m.summaryTable.Focus()
 		m.summaryTable.SetStyles(m.activeTableStyle)

@@ -25,6 +25,10 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	existing.Compose.Signature.Text = "-- \nRowan"
 	existing.Keyboard.Profile = keyboardProfileCustom
 	existing.Keyboard.CustomKeymap = "~/.config/herald/keymaps/work.yaml"
+	existing.Theme.Name = "herald-light"
+	existing.Theme.Overrides = map[string]config.ThemeOverride{
+		"chrome.tab_active": {Foreground: "#ffffff", Background: "#1a73e8", Bold: true},
+	}
 
 	s := NewSettings(SettingsModeWizard, existing)
 
@@ -66,6 +70,12 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 	}
 	if s.customKeymap != "~/.config/herald/keymaps/work.yaml" {
 		t.Errorf("customKeymap = %q, want configured keymap", s.customKeymap)
+	}
+	if s.themeName != "herald-light" {
+		t.Errorf("themeName = %q, want herald-light", s.themeName)
+	}
+	if s.themeFG != "#ffffff" || s.themeBG != "#1a73e8" {
+		t.Errorf("theme role colors = fg %q bg %q, want configured override colors", s.themeFG, s.themeBG)
 	}
 }
 
@@ -193,6 +203,10 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	s.signatureText = "-- \nRowan"
 	s.keyboardProfile = keyboardProfileVim
 	s.customKeymap = "~/.config/herald/keymaps/work.yaml"
+	s.themeName = "herald-dark"
+	s.themeRole = "chrome.tab_active"
+	s.themeFG = "#ffffff"
+	s.themeBG = "xterm:25"
 
 	cfg := s.buildConfig()
 
@@ -216,6 +230,13 @@ func TestBuildConfig_StandardIMAP(t *testing.T) {
 	}
 	if cfg.Keyboard.CustomKeymap != "~/.config/herald/keymaps/work.yaml" {
 		t.Errorf("Keyboard.CustomKeymap = %q, want configured keymap", cfg.Keyboard.CustomKeymap)
+	}
+	if cfg.Theme.Name != "herald-dark" {
+		t.Errorf("Theme.Name = %q, want herald-dark", cfg.Theme.Name)
+	}
+	override := cfg.Theme.Overrides["chrome.tab_active"]
+	if override.Foreground != "#ffffff" || override.Background != "xterm:25" {
+		t.Errorf("theme override = %#v, want configured fg/bg", override)
 	}
 }
 
@@ -256,6 +277,59 @@ func TestBuildConfig_PreservesUnmanagedConfigFields(t *testing.T) {
 	}
 	if cfg.Compose.Signature.Text != "-- \nRowan" {
 		t.Errorf("Compose.Signature.Text = %q, want saved signature", cfg.Compose.Signature.Text)
+	}
+}
+
+func TestBuildConfigThemeResetControls(t *testing.T) {
+	existing := &config.Config{}
+	existing.Theme.Name = "herald-dark"
+	existing.Theme.Overrides = map[string]config.ThemeOverride{
+		"chrome.tab_active":      {Foreground: "#ffffff", Background: "#1a73e8"},
+		"focus.selection_active": {Background: "xterm:25"},
+	}
+	s := NewSettings(SettingsModePanel, existing)
+	s.themeRole = "chrome.tab_active"
+	s.themeResetRole = true
+
+	cfg := s.buildConfig()
+	if _, ok := cfg.Theme.Overrides["chrome.tab_active"]; ok {
+		t.Fatalf("reset role should remove chrome.tab_active override, got %#v", cfg.Theme.Overrides)
+	}
+	if _, ok := cfg.Theme.Overrides["focus.selection_active"]; !ok {
+		t.Fatalf("reset role should preserve unrelated overrides, got %#v", cfg.Theme.Overrides)
+	}
+
+	s = NewSettings(SettingsModePanel, existing)
+	s.themeResetAll = true
+	cfg = s.buildConfig()
+	if len(cfg.Theme.Overrides) != 0 {
+		t.Fatalf("reset all should clear theme overrides, got %#v", cfg.Theme.Overrides)
+	}
+}
+
+func TestSettingsThemeInvalidInstallPathReturnsError(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	s.themeInstallPath = "/tmp/herald-theme-does-not-exist.yaml"
+
+	if err := s.applyThemeFileActions(); err == nil {
+		t.Fatal("expected invalid theme install path to return a bounded error")
+	}
+}
+
+func TestSettingsThemeTextFieldsKeepLiteralShortcutCharacters(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	for i := 0; i < 3; i++ {
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+
+	for _, r := range "#1a:73e8" {
+		s = updateSettingsForTest(t, s, keyRune(r))
+	}
+
+	if got := s.themeFG; got != "#1a:73e8" {
+		t.Fatalf("theme foreground input = %q, want literal shortcut characters preserved", got)
 	}
 }
 
@@ -723,7 +797,8 @@ func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *
 		"AI":             1,
 		"Sync & Cleanup": 2,
 		"Keyboard":       3,
-		"Signature":      4,
+		"Theme":          4,
+		"Signature":      5,
 	}
 	downCount, ok := steps[label]
 	if !ok {

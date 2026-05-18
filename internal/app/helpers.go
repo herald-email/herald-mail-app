@@ -371,7 +371,7 @@ func (m *Model) updateSummaryTable() {
 		if senderColW <= 0 {
 			senderColW = 46
 		}
-		sender := styledSender(item.sender, senderColW)
+		sender := styledSenderWithTheme(m.theme, item.sender, senderColW)
 		stats := item.stats
 
 		dateRangeW := 20
@@ -625,8 +625,8 @@ func (m *Model) renderProgressBar(percent int, width int) string {
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
 
 	progressBarStyle := lipgloss.NewStyle().
-		Foreground(defaultTheme.Severity.Info.ForegroundColor()).
-		Background(defaultTheme.Chrome.TitleBar.BackgroundColor()).
+		Foreground(m.theme.Severity.Info.ForegroundColor()).
+		Background(m.theme.Chrome.TitleBar.BackgroundColor()).
 		Padding(0, 1).
 		Margin(0, 2)
 
@@ -641,8 +641,12 @@ func sanitizeText(text string) string {
 // styledSender renders a sender string with the display name in bright white and
 // the <email> part in dim gray, making the two visually distinct in table columns.
 func styledSender(raw string, maxWidth int) string {
-	nameStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Primary.ForegroundColor())
-	emailStyle := lipgloss.NewStyle().Foreground(defaultTheme.Text.Muted.ForegroundColor())
+	return styledSenderWithTheme(defaultTheme, raw, maxWidth)
+}
+
+func styledSenderWithTheme(theme Theme, raw string, maxWidth int) string {
+	nameStyle := lipgloss.NewStyle().Foreground(theme.Text.Primary.ForegroundColor())
+	emailStyle := lipgloss.NewStyle().Foreground(theme.Text.Muted.ForegroundColor())
 
 	name := senderDisplayLabel(raw)
 	email := senderAddress(raw)

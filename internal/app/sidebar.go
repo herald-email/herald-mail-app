@@ -243,9 +243,9 @@ func (m *Model) renderSidebar() string {
 
 		if i == m.sidebarCursor {
 			if m.focusedPanel == panelSidebar {
-				line = defaultTheme.Focus.SelectionActive.Style().Render(line)
+				line = m.theme.Focus.SelectionActive.Style().Render(line)
 			} else {
-				line = defaultTheme.Focus.SelectionInactive.Style().Render(line)
+				line = m.theme.Focus.SelectionInactive.Style().Render(line)
 			}
 		}
 		sb.WriteString(line + "\n")

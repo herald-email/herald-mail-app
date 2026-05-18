@@ -581,6 +581,8 @@ type Model struct {
 	configPath   string
 	keyboard     *KeyboardResolver
 	keyboardWarn string
+	theme        Theme
+	themeWarn    string
 
 	// Settings panel overlay
 	showSettings  bool
@@ -634,10 +636,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	logger.Info("Creating new application model")
 
 	// Setup styles
-	baseStyle := defaultTheme.BasePanelStyle()
-	headerStyle := defaultTheme.TitleBarStyle()
-	loadingStyle := defaultTheme.LoadingStyle()
-	progressStyle := defaultTheme.ProgressStyle()
+	theme := defaultTheme
+	baseStyle := theme.BasePanelStyle()
+	headerStyle := theme.TitleBarStyle()
+	loadingStyle := theme.LoadingStyle()
+	progressStyle := theme.ProgressStyle()
 
 	// Create tables optimized for side-by-side display
 	// Summary table: ~82 chars total (left side) - added selection column
@@ -665,8 +668,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	)
 
 	// Create role-driven table styles shared by list-like panes.
-	activeStyle := defaultTheme.TableStyles(true)
-	inactiveStyle := defaultTheme.TableStyles(false)
+	activeStyle := theme.TableStyles(true)
+	inactiveStyle := theme.TableStyles(false)
 
 	summaryTable.SetStyles(inactiveStyle)
 	detailsTable.SetStyles(inactiveStyle)
@@ -797,6 +800,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		localImageLinks:         true,
 		previewImageMode:        previewImageModeAuto,
 		imagePreviewLinks:       newImagePreviewServer(),
+		theme:                   theme,
 		baseStyle:               baseStyle,
 		headerStyle:             headerStyle,
 		loadingStyle:            loadingStyle,
@@ -835,6 +839,31 @@ func (m *Model) SetConfigPath(path string) {
 // SetConfig stores the loaded config so the settings panel can pre-fill fields.
 func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyKeyboardConfig(cfg)
+	m.applyThemeConfig(cfg)
+}
+
+func (m *Model) applyThemeConfig(cfg *config.Config) {
+	theme, warning := ResolveThemeForConfig(cfg, "")
+	m.themeWarn = warning
+	if warning != "" {
+		logger.Warn("%s", warning)
+		m.statusMessage = warning
+	}
+	m.applyTheme(theme)
+}
+
+func (m *Model) applyTheme(theme Theme) {
+	m.theme = theme
+	m.baseStyle = theme.BasePanelStyle()
+	m.headerStyle = theme.TitleBarStyle()
+	m.loadingStyle = theme.LoadingStyle()
+	m.progressStyle = theme.ProgressStyle()
+	m.activeTableStyle = theme.TableStyles(true)
+	m.inactiveTableStyle = theme.TableStyles(false)
+	if m.logViewer != nil {
+		m.logViewer.ApplyTheme(theme)
+	}
+	m.updateTableFocusStyles()
 }
 
 func (m *Model) applyKeyboardConfig(cfg *config.Config) {
@@ -977,7 +1006,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
 			previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
 		}
-		m.applyKeyboardConfig(msg.Config)
+		m.SetConfig(msg.Config)
 		nextCachePolicy := config.CacheStoragePolicyLightweight
 		if m.cfg != nil {
 			nextCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
@@ -986,6 +1015,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMessage = "Settings saved."
 		if m.keyboardWarn != "" {
 			m.statusMessage = "Settings saved. " + m.keyboardWarn
+		}
+		if m.themeWarn != "" {
+			m.statusMessage = "Settings saved. " + m.themeWarn
 		}
 		if m.classifier != nil {
 			m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
@@ -1107,6 +1139,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SettingsCancelledMsg:
+		m.applyThemeConfig(m.cfg)
 		m.showSettings = false
 		m.settingsPanel = nil
 		return m, nil
@@ -1172,12 +1205,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward all messages to the settings panel when it is active (intercepts
 	// key presses and window-size events so the panel handles them exclusively).
 	if m.showSettings && m.settingsPanel != nil {
+		prevSection := m.settingsPanel.panelSection
 		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
 			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
 			m.chatWrappedLines = nil
 		}
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
+		if prevSection == settingsPanelSectionTheme && m.settingsPanel.panelSection != settingsPanelSectionTheme {
+			m.applyThemeConfig(m.cfg)
+		} else if m.settingsPanel.panelSection == settingsPanelSectionTheme {
+			m.applyThemeConfig(m.settingsPanel.buildConfig())
+		}
 		if _, ok := msg.(tea.WindowSizeMsg); ok {
 			return m, tea.Batch(cmd, tea.ClearScreen)
 		}
@@ -1552,7 +1591,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		original := m.composeBody.Value()
-		m.composeAIDiff = wordDiff(original, msg.Result)
+		m.composeAIDiff = wordDiffWithTheme(m.theme, original, msg.Result)
 		m.composeAIResponse.SetValue(msg.Result)
 		return m, nil
 
@@ -2625,9 +2664,9 @@ func (m *Model) renderMainView() string {
 			} else {
 				summaryPanelStyle := m.baseStyle.
 					Width(plan.Cleanup.SummaryWidth + 2).
-					BorderForeground(defaultTheme.PanelBorderColor(false))
+					BorderForeground(m.theme.PanelBorderColor(false))
 				if chrome.FocusedPanel == panelSummary {
-					summaryPanelStyle = summaryPanelStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
+					summaryPanelStyle = summaryPanelStyle.BorderForeground(m.theme.PanelBorderColor(true))
 				}
 				summaryStyles := m.inactiveTableStyle
 				if chrome.FocusedPanel == panelSummary {
@@ -2637,9 +2676,9 @@ func (m *Model) renderMainView() string {
 			}
 			detailsPanelStyle := m.baseStyle.
 				Width(plan.Cleanup.DetailsWidth + 2).
-				BorderForeground(defaultTheme.PanelBorderColor(false))
+				BorderForeground(m.theme.PanelBorderColor(false))
 			if chrome.FocusedPanel == panelDetails {
-				detailsPanelStyle = detailsPanelStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
+				detailsPanelStyle = detailsPanelStyle.BorderForeground(m.theme.PanelBorderColor(true))
 			}
 			detailsStyles := m.inactiveTableStyle
 			if chrome.FocusedPanel == panelDetails {
@@ -2657,9 +2696,9 @@ func (m *Model) renderMainView() string {
 			} else if plan.SidebarVisible && !m.sidebarTooWide {
 				sidebarStyle := m.baseStyle.
 					Width(sidebarContentWidth + 2).
-					BorderForeground(defaultTheme.PanelBorderColor(false))
+					BorderForeground(m.theme.PanelBorderColor(false))
 				if chrome.FocusedPanel == panelSidebar {
-					sidebarStyle = sidebarStyle.BorderForeground(defaultTheme.PanelBorderColor(true))
+					sidebarStyle = sidebarStyle.BorderForeground(m.theme.PanelBorderColor(true))
 				}
 				sidebarView := sidebarStyle.Render(m.renderSidebar())
 				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, summaryView, panelGap, detailsView)
