@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -206,5 +207,33 @@ func TestSettingsThemePreviewAppliesImmediatelyAndCancelRestores(t *testing.T) {
 	updated = updatedModel.(*Model)
 	if updated.theme.Name != "inherited" {
 		t.Fatalf("cancel should restore saved config theme, got %q", updated.theme.Name)
+	}
+}
+
+func TestSettingsThemePickerPreviewDoesNotMutateSavedConfigBeforeSave(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	cfg := &config.Config{}
+	cfg.Theme.Name = "inherited"
+	m.SetConfig(cfg)
+
+	m.showSettings = true
+	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+	m.settingsPanel.panelSection = settingsPanelSectionTheme
+	m.settingsPanel.themeRole = "chrome.tab_active"
+	m.settingsPanel.themeFG = "xterm:26"
+	m.settingsPanel.storeThemeFieldsForRole(m.settingsPanel.themeRole, m.settingsPanel.themeFG, m.settingsPanel.themeBG)
+	m.settingsPanel.buildForm()
+	m.settingsPanel.setSize(80, 24)
+
+	updatedModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	updated := updatedModel.(*Model)
+	if got := updated.cfg.Theme.Overrides["chrome.tab_active"].Foreground; got != "" {
+		t.Fatalf("saved config mutated before save, foreground = %q", got)
+	}
+	if updated.theme.Name != "inherited" {
+		t.Fatalf("theme name = %q, want inherited preview with override", updated.theme.Name)
+	}
+	if got := fmt.Sprint(updated.theme.Chrome.TabActive.ForegroundColor()); got != "26" {
+		t.Fatalf("preview foreground = %q, want xterm color 26", got)
 	}
 }

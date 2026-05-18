@@ -754,7 +754,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
-- [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, live preview, reset controls, and save-as-new-theme support
+- [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Passwords always hidden; "reveal" button toggles visibility

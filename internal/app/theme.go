@@ -750,6 +750,19 @@ func applyThemeOverride(target *ThemeStyle, override config.ThemeOverride) error
 	return nil
 }
 
+func themeXtermColor(index int) color.Color {
+	return lipgloss.Color(strconv.Itoa(index))
+}
+
+func themeXtermContrastColor(index int) color.Color {
+	rgb := xterm256ToRGB(index)
+	luminance := 0.2126*float64(rgb[0]) + 0.7152*float64(rgb[1]) + 0.0722*float64(rgb[2])
+	if luminance > 140 {
+		return lipgloss.Color("#000000")
+	}
+	return lipgloss.Color("#ffffff")
+}
+
 func parseThemeColor(value string) (color.Color, error) {
 	v := strings.TrimSpace(value)
 	if v == "" {

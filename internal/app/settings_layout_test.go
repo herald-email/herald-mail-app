@@ -211,7 +211,10 @@ func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
 		"Theme Role",
 		"Foreground",
 		"Background",
+		"Foreground Picker",
+		"Background Picker",
 		"xterm-256",
+		"RGB",
 		"Live preview",
 		"Save As New Theme",
 	} {

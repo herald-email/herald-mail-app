@@ -333,6 +333,159 @@ func TestSettingsThemeTextFieldsKeepLiteralShortcutCharacters(t *testing.T) {
 	}
 }
 
+func TestThemeColorPickerXtermNavigationUpdatesValueImmediately(t *testing.T) {
+	value := "xterm:25"
+	picker := newThemeColorPickerField("Foreground Picker", &value)
+	_, _ = picker.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+
+	if value != "xterm:26" {
+		t.Fatalf("picker value = %q, want xterm:26", value)
+	}
+}
+
+func TestThemeColorPickerRGBModeEmitsHexValue(t *testing.T) {
+	value := "#102030"
+	picker := newThemeColorPickerField("Foreground Picker", &value)
+	_, _ = picker.Update(keyRunes("m"))
+	_, _ = picker.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+
+	if value != "#112030" {
+		t.Fatalf("picker RGB value = %q, want #112030", value)
+	}
+}
+
+func TestThemeColorPickerCanSetInherit(t *testing.T) {
+	value := "xterm:25"
+	picker := newThemeColorPickerField("Foreground Picker", &value)
+	_, _ = picker.Update(keyRunes("i"))
+
+	if value != "inherit" {
+		t.Fatalf("picker value = %q, want inherit", value)
+	}
+}
+
+func TestSettingsThemeColorPickerUpdatesThroughForm(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	for i := 0; i < 4; i++ {
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyRight})
+
+	if s.themeFG != "xterm:26" {
+		t.Fatalf("settings picker value = %q, want xterm:26", s.themeFG)
+	}
+}
+
+func TestSettingsThemeColorPickerModeUpdatesThroughForm(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	for i := 0; i < 4; i++ {
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	s = updateSettingsForTest(t, s, keyRunes("m"))
+
+	if s.themeFG != "#000000" {
+		t.Fatalf("settings picker RGB value = %q, want #000000", s.themeFG)
+	}
+	if rendered := renderSettingsViewForTest(t, s, 100, 32); !strings.Contains(rendered, "value") || !strings.Contains(rendered, "#000000") {
+		t.Fatalf("rendered picker did not show updated RGB value:\n%s", rendered)
+	}
+}
+
+func TestSettingsThemeManualSlashFocusesPicker(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	for i := 0; i < 3; i++ {
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	s = updateSettingsForTest(t, s, keyRunes("/"))
+
+	if got := s.form.GetFocusedField().GetKey(); got != "theme.foreground_picker" {
+		t.Fatalf("focused field key = %q, want theme.foreground_picker", got)
+	}
+	if strings.Contains(s.themeFG, "/") {
+		t.Fatalf("slash should open picker without changing manual value, themeFG = %q", s.themeFG)
+	}
+}
+
+func TestSettingsThemeFocusedPickerKeepsNeighborFieldsVisible(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	for i := 0; i < 4; i++ {
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	for _, want := range []string{"Foreground", "Foreground Picker", "Background"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("focused picker should keep nearby field %q visible at 80x24, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestThemeColorPickerSelectedSwatchUsesContrastMarker(t *testing.T) {
+	value := "xterm:127"
+	picker := newThemeColorPickerField("Foreground Picker", &value)
+	picker.Focus()
+
+	rendered := picker.View()
+	plain := stripANSI(rendered)
+	if !strings.Contains(plain, "[]") {
+		t.Fatalf("selected swatch should render a contrast marker, got:\n%s", rendered)
+	}
+	if strings.Contains(plain, "[48;5;") || strings.Contains(plain, "[m") {
+		t.Fatalf("selected swatch should not leak literal ANSI fragments, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsThemeRoleSwitchLoadsRoleSpecificWorkingOverrides(t *testing.T) {
+	existing := &config.Config{}
+	existing.Theme.Name = "herald-dark"
+	existing.Theme.Overrides = map[string]config.ThemeOverride{
+		"chrome.tab_active":          {Foreground: "#ffffff", Background: "xterm:25"},
+		"focus.panel_border_focused": {Foreground: "xterm:81", Background: "#202020"},
+	}
+	s := NewSettings(SettingsModePanel, existing)
+	s.themeRole = "chrome.tab_active"
+	s.loadThemeFieldsForRole(s.themeRole)
+	s.themeFG = "xterm:26"
+	s.storeThemeFieldsForRole("chrome.tab_active", s.themeFG, s.themeBG)
+	s.themeRole = "focus.panel_border_focused"
+	s.loadThemeFieldsForRole(s.themeRole)
+
+	if s.themeFG != "xterm:81" || s.themeBG != "#202020" {
+		t.Fatalf("loaded role fields = fg %q bg %q, want role-specific override", s.themeFG, s.themeBG)
+	}
+
+	cfg := s.buildConfig()
+	if got := cfg.Theme.Overrides["chrome.tab_active"].Foreground; got != "xterm:26" {
+		t.Fatalf("saved original role foreground = %q, want xterm:26", got)
+	}
+}
+
+func TestSettingsWizardThemeRoleSwitchLoadsRoleSpecificWorkingOverrides(t *testing.T) {
+	existing := &config.Config{}
+	existing.Theme.Name = "herald-dark"
+	existing.Theme.Overrides = map[string]config.ThemeOverride{
+		"chrome.tab_active":          {Foreground: "#ffffff", Background: "xterm:25"},
+		"focus.panel_border_focused": {Foreground: "xterm:81", Background: "#202020"},
+	}
+	s := NewSettings(SettingsModeWizard, existing)
+	prevRole := "chrome.tab_active"
+	prevFG := "xterm:26"
+	prevBG := "xterm:25"
+	s.themeRole = "focus.panel_border_focused"
+	s.syncThemeRoleFields(prevRole, prevFG, prevBG)
+
+	if s.themeFG != "xterm:81" || s.themeBG != "#202020" {
+		t.Fatalf("wizard loaded role fields = fg %q bg %q, want role-specific override", s.themeFG, s.themeBG)
+	}
+	if got := s.themeOverrides["chrome.tab_active"].Foreground; got != "xterm:26" {
+		t.Fatalf("wizard stored prior role foreground = %q, want xterm:26", got)
+	}
+}
+
 func TestBuildConfigDefaultsCacheStoragePolicyToLightweight(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, &config.Config{})
 

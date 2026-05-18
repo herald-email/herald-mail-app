@@ -50,6 +50,11 @@ const (
 	settingsPanelSectionKeyboard settingsPanelSection = "keyboard"
 	settingsPanelSectionTheme    settingsPanelSection = "theme"
 	settingsPanelSectionSign     settingsPanelSection = "signature"
+
+	settingsThemeForegroundKey       = "theme.foreground"
+	settingsThemeForegroundPickerKey = "theme.foreground_picker"
+	settingsThemeBackgroundKey       = "theme.background"
+	settingsThemeBackgroundPickerKey = "theme.background_picker"
 )
 
 // SettingsSavedMsg is sent when the user completes the form and saves.
@@ -126,6 +131,7 @@ type Settings struct {
 	themeRole        string
 	themeFG          string
 	themeBG          string
+	themeOverrides   map[string]config.ThemeOverride
 	themeSaveAs      string
 	themeResetRole   bool
 	themeResetAll    bool
@@ -198,6 +204,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.keyboardProfile = existing.Keyboard.Profile
 		s.customKeymap = existing.Keyboard.CustomKeymap
 		s.themeName = existing.Theme.Name
+		s.themeOverrides = cloneThemeOverrides(existing.Theme.Overrides)
 		s.themeRole = firstThemeRole(existing.Theme.Overrides)
 		if override, ok := existing.Theme.Overrides[s.themeRole]; ok {
 			s.themeFG = override.Foreground
@@ -235,6 +242,10 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	if s.themeRole == "" {
 		s.themeRole = "chrome.tab_active"
 	}
+	if s.themeOverrides == nil {
+		s.themeOverrides = make(map[string]config.ThemeOverride)
+	}
+	s.loadThemeFieldsForRole(s.themeRole)
 
 	s.syncProviderDefaults("", s.provider)
 	s.buildForm()
@@ -541,19 +552,23 @@ func (s *Settings) buildForm() {
 			Value(&s.themeRole),
 		huh.NewInput().
 			Title("Foreground").
-			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. Swatch updates after save.").
+			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. Picker updates this value instantly.").
 			Placeholder("inherit").
+			Key(settingsThemeForegroundKey).
 			Value(&s.themeFG),
+		newThemeColorPickerField("Foreground Picker", &s.themeFG).Key(settingsThemeForegroundPickerKey),
 		huh.NewInput().
 			Title("Background").
-			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. xterm-256 values are supported.").
+			Description("Use inherit, ansi:N, xterm:N, or #RRGGBB. Picker updates this value instantly.").
 			Placeholder("xterm:25").
+			Key(settingsThemeBackgroundKey).
 			Value(&s.themeBG),
+		newThemeColorPickerField("Background Picker", &s.themeBG).Key(settingsThemeBackgroundPickerKey),
 		huh.NewNote().
 			Title("Live preview").
 			DescriptionFunc(func() string {
 				return s.themePreviewDescription()
-			}, &s.themeRole),
+			}, []any{&s.themeName, &s.themeRole, &s.themeFG, &s.themeBG}),
 		huh.NewConfirm().
 			Title("Reset selected role").
 			Affirmative("Reset Role").
@@ -787,6 +802,53 @@ func firstThemeRole(overrides map[string]config.ThemeOverride) string {
 	return "chrome.tab_active"
 }
 
+func (s *Settings) storeThemeFieldsForRole(role, fg, bg string) {
+	storeThemeFieldsInMap(s.themeOverrides, role, fg, bg)
+}
+
+func storeThemeFieldsInMap(overrides map[string]config.ThemeOverride, role, fg, bg string) {
+	if overrides == nil || strings.TrimSpace(role) == "" {
+		return
+	}
+	fg = strings.TrimSpace(fg)
+	bg = strings.TrimSpace(bg)
+	if fg == "" && bg == "" {
+		return
+	}
+	override := overrides[role]
+	if fg != "" {
+		override.Foreground = fg
+	}
+	if bg != "" {
+		override.Background = bg
+	}
+	overrides[role] = override
+}
+
+func (s *Settings) loadThemeFieldsForRole(role string) {
+	s.themeFG = ""
+	s.themeBG = ""
+	if s.themeOverrides == nil {
+		s.themeOverrides = make(map[string]config.ThemeOverride)
+	}
+	if override, ok := s.themeOverrides[role]; ok {
+		s.themeFG = override.Foreground
+		s.themeBG = override.Background
+	}
+}
+
+func (s *Settings) syncThemeRoleFields(prevRole, prevFG, prevBG string) {
+	if s.mode == SettingsModePanel && s.panelSection != settingsPanelSectionTheme {
+		return
+	}
+	if prevRole != s.themeRole {
+		s.storeThemeFieldsForRole(prevRole, prevFG, prevBG)
+		s.loadThemeFieldsForRole(s.themeRole)
+		return
+	}
+	s.storeThemeFieldsForRole(s.themeRole, s.themeFG, s.themeBG)
+}
+
 func (s *Settings) themePreviewDescription() string {
 	fg := strings.TrimSpace(s.themeFG)
 	bg := strings.TrimSpace(s.themeBG)
@@ -796,14 +858,18 @@ func (s *Settings) themePreviewDescription() string {
 	if bg == "" {
 		bg = "inherit"
 	}
-	theme := ThemeByName(s.themeName)
+	cfg := s.buildConfig()
+	theme, warning := ResolveThemeForConfig(cfg, "")
+	if warning != "" {
+		theme = ThemeByName(s.themeName)
+	}
 	if role, ok := themeRoleMap(&theme)[s.themeRole]; ok {
 		preview := *role
 		_ = applyThemeOverride(&preview, config.ThemeOverride{Foreground: fg, Background: bg})
 		sample := preview.Style().Render(" Sample ")
-		return fmt.Sprintf("%s\n%s  %s\nxterm-256 grid accepts xterm:0 through xterm:255; hex accepts #RRGGBB.", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg)+"  "+sample)
+		return fmt.Sprintf("%s\n%s  %s\nxterm-256 grid: arrows/hjkl. RGB: m then arrows. i inherits.\n%s", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg), sample)
 	}
-	return fmt.Sprintf("Role %s | %s | %s | xterm-256 grid accepts xterm:0 through xterm:255.", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg))
+	return fmt.Sprintf("Role %s | %s | %s | xterm-256 grid and RGB picker values update instantly.", s.themeRole, themeColorSwatch("fg", fg), themeColorSwatch("bg", bg))
 }
 
 func themeColorSwatch(label, value string) string {
@@ -842,6 +908,21 @@ func (s *Settings) focusedFieldEscHelp() string {
 		}
 	}
 	return ""
+}
+
+func (s *Settings) shouldOpenThemePickerFromManualInput(msg tea.KeyPressMsg) bool {
+	if s == nil || s.form == nil || (msg.Text != "/" && msg.Code != '/') {
+		return false
+	}
+	if s.mode == SettingsModePanel && s.panelSection != settingsPanelSectionTheme {
+		return false
+	}
+	switch s.form.GetFocusedField().GetKey() {
+	case settingsThemeForegroundKey, settingsThemeBackgroundKey:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Settings) keyHints() string {
@@ -984,6 +1065,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 
+	formMsg := msg
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.setSize(msg.Width, msg.Height)
@@ -1000,11 +1082,17 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return s, func() tea.Msg { return SettingsCancelledMsg{} }
 			}
 		}
+		if s.shouldOpenThemePickerFromManualInput(msg) {
+			formMsg = huh.NextField()
+		}
 	}
 
 	// Forward to the form.
 	prevProvider := s.provider
-	model, cmd := s.form.Update(msg)
+	prevThemeRole := s.themeRole
+	prevThemeFG := s.themeFG
+	prevThemeBG := s.themeBG
+	model, cmd := s.form.Update(formMsg)
 	if f, ok := model.(*huh.Form); ok {
 		s.form = f
 	}
@@ -1012,6 +1100,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.syncProviderDefaults(prevProvider, s.provider)
 	}
 	s.syncAIDefaults()
+	s.syncThemeRoleFields(prevThemeRole, prevThemeFG, prevThemeBG)
 
 	// Check if the form just completed.
 	if s.form.State == huh.StateCompleted && !s.done {
@@ -1234,7 +1323,7 @@ func (s *Settings) buildConfig() *config.Config {
 	if cfg.Theme.Name == "" {
 		cfg.Theme.Name = "inherited"
 	}
-	cfg.Theme.Overrides = cloneThemeOverrides(cfg.Theme.Overrides)
+	cfg.Theme.Overrides = cloneThemeOverrides(s.themeOverrides)
 	if cfg.Theme.Overrides == nil {
 		cfg.Theme.Overrides = make(map[string]config.ThemeOverride)
 	}
@@ -1243,10 +1332,7 @@ func (s *Settings) buildConfig() *config.Config {
 	} else if s.themeResetRole {
 		delete(cfg.Theme.Overrides, s.themeRole)
 	} else if strings.TrimSpace(s.themeFG) != "" || strings.TrimSpace(s.themeBG) != "" {
-		override := cfg.Theme.Overrides[s.themeRole]
-		override.Foreground = strings.TrimSpace(s.themeFG)
-		override.Background = strings.TrimSpace(s.themeBG)
-		cfg.Theme.Overrides[s.themeRole] = override
+		storeThemeFieldsInMap(cfg.Theme.Overrides, s.themeRole, s.themeFG, s.themeBG)
 	}
 
 	applyVendorPreset(&cfg)

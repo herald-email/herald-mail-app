@@ -947,7 +947,7 @@ Check these states during every applicable lane:
 2. Press `S`, open `Theme`, and capture the Theme category.
 3. Switch between `Inherited`, `Herald dark`, and `Herald light`; save each and confirm the visible chrome changes without leaving Settings.
 4. Enter a valid local theme YAML path, save, reopen Theme, and confirm the installed theme appears in the selector.
-5. Edit one semantic role foreground with a hex value and one background with an `xterm:N` value, observe swatches/live preview, save as a new theme, then reopen Theme.
+5. Edit one semantic role foreground with a hex value and one background with an `xterm:N` value, then use the foreground/background color pickers to try an xterm-grid value and an RGB value with instant preview before saving as a new theme and reopening Theme.
 6. Repeat with an invalid install path and confirm the bounded error stays inside Settings.
 7. Resize to `50x15` while Theme is open, then resize back to `80x24`.
 
@@ -955,6 +955,7 @@ Check these states during every applicable lane:
 - Missing or inherited config keeps terminal-default foreground/background behavior.
 - `Herald dark` and `Herald light` visibly differ while preserving readable focused panel, status bar, hint bar, and selection contrast.
 - Theme role text fields preserve literal `#`, `:`, digits, and letters; no browse shortcut fires while editing theme values.
+- Theme color pickers update the same foreground/background values immediately: `/` from a manual color field opens that field's picker, xterm-grid moves emit `xterm:N`, RGB edits emit `#RRGGBB`, `m` switches picker mode, `i` restores `inherit`, and the selected swatch is marked with a contrasting in-cell marker without leaking ANSI text.
 - Invalid installed themes and invalid install paths do not crash, overwrite config, or close Settings.
 - At `50x15`, the standard minimum-size guard appears; returning to `80x24` restores the Theme modal.
 
