@@ -48,6 +48,7 @@ type TimelineState struct {
 	senderWidth        int
 	subjectWidth       int
 	virtualNotice      string
+	groupingMode       timelineGroupingMode
 	selectedMessageIDs map[string]bool
 	rangeMode          bool
 	rangeShiftMode     bool

@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/iterm2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -21,6 +22,38 @@ import (
 type threadGroup struct {
 	normalizedSubject string
 	emails            []*models.EmailData // newest first (inherited from sorted input)
+	label             string
+	groupingMode      timelineGroupingMode
+}
+
+type timelineGroupingMode int
+
+const (
+	timelineGroupingThread timelineGroupingMode = iota
+	timelineGroupingSender
+	timelineGroupingDomain
+)
+
+func (mode timelineGroupingMode) Label() string {
+	switch mode {
+	case timelineGroupingSender:
+		return "Sender"
+	case timelineGroupingDomain:
+		return "Domain"
+	default:
+		return "Thread"
+	}
+}
+
+func (mode timelineGroupingMode) next() timelineGroupingMode {
+	switch mode {
+	case timelineGroupingThread:
+		return timelineGroupingSender
+	case timelineGroupingSender:
+		return timelineGroupingDomain
+	default:
+		return timelineGroupingThread
+	}
 }
 
 // timelineRowKind distinguishes collapsed thread headers from individual email rows.
@@ -274,6 +307,38 @@ func timelineSubjectText(subject string, hasAttachments bool) string {
 // emails must already be sorted newest-first; group order is determined by each
 // group's most-recent email, so groups are also implicitly newest-first.
 func buildThreadGroups(emails []*models.EmailData) []threadGroup {
+	return buildTimelineGroups(emails, timelineGroupingThread)
+}
+
+func buildTimelineGroups(emails []*models.EmailData, mode timelineGroupingMode) []threadGroup {
+	if mode != timelineGroupingSender && mode != timelineGroupingDomain {
+		return buildThreadSubjectGroups(emails)
+	}
+
+	var groups []threadGroup
+	seen := make(map[string]int)
+	for _, e := range emails {
+		key, label := timelineGroupingKeyAndLabel(e, mode)
+		if key == "" {
+			key = "(unknown)"
+		}
+		groupKey := fmt.Sprintf("%s:%s", strings.ToLower(mode.Label()), key)
+		if idx, ok := seen[groupKey]; ok {
+			groups[idx].emails = append(groups[idx].emails, e)
+			continue
+		}
+		seen[groupKey] = len(groups)
+		groups = append(groups, threadGroup{
+			normalizedSubject: groupKey,
+			emails:            []*models.EmailData{e},
+			label:             label,
+			groupingMode:      mode,
+		})
+	}
+	return groups
+}
+
+func buildThreadSubjectGroups(emails []*models.EmailData) []threadGroup {
 	var groups []threadGroup
 	seen := make(map[string]int) // normalised subject → index in groups
 
@@ -284,6 +349,7 @@ func buildThreadGroups(emails []*models.EmailData) []threadGroup {
 			groups = append(groups, threadGroup{
 				normalizedSubject: ns,
 				emails:            []*models.EmailData{e},
+				groupingMode:      timelineGroupingThread,
 			})
 			continue
 		}
@@ -294,10 +360,71 @@ func buildThreadGroups(emails []*models.EmailData) []threadGroup {
 			groups = append(groups, threadGroup{
 				normalizedSubject: ns,
 				emails:            []*models.EmailData{e},
+				groupingMode:      timelineGroupingThread,
 			})
 		}
 	}
 	return groups
+}
+
+func timelineGroupingKeyAndLabel(email *models.EmailData, mode timelineGroupingMode) (string, string) {
+	if email == nil {
+		return "", "(unknown)"
+	}
+	switch mode {
+	case timelineGroupingSender:
+		key := senderAddress(email.Sender)
+		label := senderDisplayLabel(email.Sender)
+		if key == "" {
+			key = strings.ToLower(label)
+		}
+		return key, label
+	case timelineGroupingDomain:
+		domain := timelineSenderDomain(email.Sender)
+		return domain, domain
+	default:
+		subject := normalizeSubject(email.Subject)
+		return subject, subject
+	}
+}
+
+func timelineSenderDomain(raw string) string {
+	addr := senderAddress(raw)
+	if at := strings.LastIndex(addr, "@"); at >= 0 && at < len(addr)-1 {
+		return timelineRootDomain(addr[at+1:])
+	}
+	if addr != "" {
+		return addr
+	}
+	return "(unknown)"
+}
+
+func timelineRootDomain(host string) string {
+	host = strings.ToLower(strings.Trim(strings.TrimSpace(host), "."))
+	if host == "" {
+		return "(unknown)"
+	}
+	parts := strings.Split(host, ".")
+	clean := parts[:0]
+	for _, part := range parts {
+		if part != "" {
+			clean = append(clean, part)
+		}
+	}
+	parts = clean
+	if len(parts) == 0 {
+		return "(unknown)"
+	}
+	if len(parts) > 2 {
+		switch parts[len(parts)-2] {
+		case "co", "com", "org", "gov", "edu", "net":
+			return strings.Join(parts[len(parts)-3:], ".")
+		}
+	}
+	if len(parts) >= 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+	return parts[0]
 }
 
 func (m *Model) ensureTimelineSelection() {
@@ -534,6 +661,45 @@ func (m *Model) selectedTimelineArchiveEmails() []*models.EmailData {
 	return m.selectedTimelineEmails(false)
 }
 
+func timelineCollapsedGroupLabel(theme Theme, g *threadGroup, fromAddress string, maxWidth int) string {
+	if g == nil {
+		return styledThreadParticipants(theme, nil, maxWidth)
+	}
+	if g.groupingMode == timelineGroupingSender || g.groupingMode == timelineGroupingDomain {
+		label := sanitizeText(g.label)
+		if label == "" {
+			label = "(unknown)"
+		}
+		return lipgloss.NewStyle().
+			Foreground(theme.Text.Primary.ForegroundColor()).
+			Render(truncate(label, maxWidth))
+	}
+	return styledThreadParticipants(theme, threadParticipantLabels(g.emails, fromAddress), maxWidth)
+}
+
+func timelineExpandedRowPrefix(g *threadGroup, email *models.EmailData, idx int) string {
+	if g == nil || g.groupingMode == timelineGroupingThread {
+		if idx == 0 {
+			prefix := threadExpandedPrefix
+			if email != nil && isReplySubject(email.Subject) {
+				prefix += threadReplyPrefix
+			}
+			return prefix
+		}
+		if email != nil && isReplySubject(email.Subject) {
+			return threadReplyPrefix
+		}
+		if idx > 0 {
+			return threadNestedPrefix
+		}
+		return ""
+	}
+	if idx == 0 {
+		return threadExpandedPrefix
+	}
+	return threadNestedPrefix
+}
+
 // updateTimelineTable rebuilds the timeline table rows from m.timeline.emails,
 // grouping them into collapsed threads where appropriate.
 func (m *Model) updateTimelineTable() {
@@ -605,8 +771,9 @@ func (m *Model) updateTimelineTable() {
 	displayEmails := m.timelineDisplayEmails()
 	m.pruneTimelineSelection(displayEmails)
 
-	// Build thread groups from the full email list
-	m.timeline.threadGroups = buildThreadGroups(displayEmails)
+	// Build groups from the full display list. Thread mode keeps the original
+	// subject-based behavior; sender/domain modes reuse the same row machinery.
+	m.timeline.threadGroups = buildTimelineGroups(displayEmails, m.timeline.groupingMode)
 	m.timeline.threadRowMap = m.timeline.threadRowMap[:0]
 
 	// Sort starred threads to the top, preserving date order within each bucket.
@@ -663,7 +830,7 @@ func (m *Model) updateTimelineTable() {
 			if senderAvail < 1 {
 				senderAvail = 1
 			}
-			threadSender := unreadDot + starDot + threadCollapsedPrefix + styledThreadParticipants(m.theme, threadParticipantLabels(g.emails, m.fromAddress), senderAvail)
+			threadSender := unreadDot + starDot + threadCollapsedPrefix + timelineCollapsedGroupLabel(m.theme, g, m.fromAddress, senderAvail)
 			rows = append(rows, table.Row{
 				m.timelineSelectionMark(g.emails),
 				threadSender,
@@ -675,21 +842,10 @@ func (m *Model) updateTimelineTable() {
 				kind: rowKindThread, group: g,
 			})
 		} else {
-			// Expanded: mark replies explicitly and keep nested markers for older
-			// non-reply rows so conversation shape is visible at a glance.
+			// Expanded: thread mode marks replies explicitly; sender/domain
+			// grouping keeps a simpler nested shape under the grouped row.
 			for ei, email := range g.emails {
-				prefix := ""
-				if ei == 0 {
-					prefix = threadExpandedPrefix
-					if isReplySubject(email.Subject) {
-						prefix += threadReplyPrefix
-					}
-				} else if isReplySubject(email.Subject) {
-					prefix = threadReplyPrefix
-				} else if ei > 0 {
-					prefix = threadNestedPrefix
-				}
-				rows = append(rows, emailRow(email, prefix))
+				rows = append(rows, emailRow(email, timelineExpandedRowPrefix(g, email, ei)))
 				m.timeline.threadRowMap = append(m.timeline.threadRowMap, timelineRowRef{
 					kind: rowKindEmail, group: g, emailIdx: ei,
 				})
@@ -738,7 +894,7 @@ func (m *Model) renderTimelineView() string {
 			style = style.BorderForeground(m.theme.Focus.PanelBorderFocused.ForegroundColor())
 			tableStyles = m.activeTableStyle
 		}
-		tableView = style.Render(renderStyledTableViewWithStyles(&m.timelineTable, tableStyles))
+		tableView = m.renderTimelineGroupingNotice(style.Render(renderStyledTableViewWithStyles(&m.timelineTable, tableStyles)))
 	}
 
 	var mainContent string
@@ -760,6 +916,47 @@ func (m *Model) renderTimelineView() string {
 		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
 	}
 	return mainContent
+}
+
+func (m *Model) timelineGroupingNoticeText(maxWidth int) string {
+	if maxWidth < 16 {
+		return ""
+	}
+	key := displayShortcutKey(m.commandKey("timeline", CommandTimelineGroupCycle), keyDisplayHint)
+	if key == "" {
+		key = "G"
+	}
+	text := fmt.Sprintf("Grouped by: %s (%s to change)", m.timeline.groupingMode.Label(), key)
+	if ansi.StringWidth(text) > maxWidth {
+		text = truncateVisual(text, maxWidth)
+	}
+	return text
+}
+
+func (m *Model) renderTimelineGroupingNotice(view string) string {
+	lines := strings.Split(view, "\n")
+	if len(lines) == 0 {
+		return view
+	}
+	lineWidth := ansi.StringWidth(lines[0])
+	maxTextWidth := lineWidth - 4
+	text := m.timelineGroupingNoticeText(maxTextWidth)
+	if text == "" {
+		return view
+	}
+
+	notice := defaultTheme.Text.Dim.Style().Render(" " + text + " ")
+	noticeWidth := ansi.StringWidth(notice)
+	startX := lineWidth - noticeWidth - 2
+	if startX < 1 {
+		startX = 1
+	}
+
+	line := lines[0]
+	left := padANSIToWidth(ansi.Cut(line, 0, startX), startX)
+	right := ansi.Cut(line, startX+noticeWidth, lineWidth)
+	lines[0] = ansi.Cut(left+notice+right, 0, lineWidth)
+	return strings.Join(lines, "\n")
 }
 
 func (m *Model) clearTimelineSearch() {
@@ -843,6 +1040,21 @@ func (m *Model) clearTimelinePreview() {
 	m.timeline.pendingY = false
 	m.setFocusedPanel(panelTimeline)
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
+}
+
+func (m *Model) cycleTimelineGrouping() {
+	m.finishTimelineRangeSelection()
+	m.timeline.groupingMode = m.timeline.groupingMode.next()
+	if m.timeline.selectedEmail != nil || m.timeline.body != nil || m.timeline.bodyMessageID != "" {
+		m.clearTimelinePreview()
+	} else {
+		m.updateTimelineTable()
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+	if len(m.timeline.threadRowMap) == 0 {
+		m.timelineTable.SetCursor(0)
+	}
+	m.statusMessage = "Grouped by " + strings.ToLower(m.timeline.groupingMode.Label())
 }
 
 func (m *Model) clearTimelineChatFilter() {
@@ -1662,6 +1874,9 @@ func (m *Model) timelineFilterPrefix() string {
 
 func (m *Model) appendTimelineStatusParts(parts []string) []string {
 	if m.activeTab == tabTimeline {
+		if !(m.windowWidth <= 80 && m.sidebarTooWide) {
+			parts = append(parts, "Group: "+m.timeline.groupingMode.Label())
+		}
 		if m.timelineIsReadOnlyDiagnostic() {
 			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
 			parts = append(parts, "diagnostic read-only")
@@ -1718,7 +1933,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				)...), true
 			}
 			return joinHintSegments(append(
-				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), m.commandHint("timeline", CommandComposeNew, "compose")},
+				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), m.commandHint("timeline", CommandComposeNew, "compose"), m.commandHint("timeline", CommandTimelineGroupCycle, "group")},
 				append(m.timelineMessageActionHintSegments(),
 					fmt.Sprintf("%s %s", displayShortcutKey(m.commandKey("timeline", CommandHelpSearch), keyDisplayHint), q), m.movementHint("timeline", "results"), "space: select", "enter: open", "esc: back to search")...,
 			)...), true
@@ -1737,7 +1952,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	}
 	if m.timeline.chatFilterMode {
 		return joinHintSegments(append(
-			[]string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")},
+			[]string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose"), m.commandHint("timeline", CommandTimelineGroupCycle, "group")},
 			append(m.timelinePrimaryMessageActionHintSegments(),
 				"esc: clear filter", m.movementHint("timeline", "navigate"), "space: select", "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 		)...), true
@@ -1749,7 +1964,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(m.timelinePanelSwitchHint(), m.movementHint("timeline", "navigate"), "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() {
-		return joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
+		return joinHintSegments(m.primaryTabShortcutHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
 		segments := []string{m.rangeExtendHint("timeline"), "V/Esc: done"}
@@ -1768,6 +1983,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		}
 		segments := []string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
+		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"))
 		if hasAttachments {
 			if hasMultipleAttachments {
 				segments = append(segments, "[ and ]: attachments")
@@ -1779,12 +1995,12 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, append(m.timelineMessageActionHintSegments(), "V: range", "U: unread", m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...)...), true
+		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, append(m.timelineMessageActionHintSegments(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "U: unread", m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...)...), true
 	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
@@ -1798,7 +2014,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	} else {
 		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
 	}
-	segments = append(segments, m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, m.commandHint("timeline", CommandHelpSearch, "hybrid search"))
 	}
@@ -2276,6 +2492,14 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			} else {
 				m.beginTimelineRangeSelection(false)
 			}
+		}
+		return m, nil, true
+	case "G":
+		if m.timeline.quickReplyOpen {
+			return m, nil, false
+		}
+		if m.canInteractWithVisibleData() {
+			m.cycleTimelineGrouping()
 		}
 		return m, nil, true
 	case "esc":

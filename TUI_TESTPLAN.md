@@ -348,6 +348,30 @@ Check these states during every applicable lane:
 - Header rows are visually distinct from body rows without breaking row selection styling.
 - At `50x15`, the minimum-size guard appears instead of clipped row chrome, and resizing back restores a clean Timeline.
 
+### TC-05D — Timeline grouping switch
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline with demo data and confirm the Timeline frame starts with `Grouped by: Thread (G to change)`.
+2. Press `G` once and capture the Timeline list.
+3. Press `G` again and capture the Timeline list.
+4. Press `G` a third time and capture the Timeline list.
+5. In sender and domain modes, press `Enter` on a collapsed grouped row, then `Esc` or left arrow / `[` to return to normal browsing.
+6. Open Compose from Timeline, type a literal `G` in an editable field, then cancel back to Timeline.
+7. Resize to `50x15`, then back to `80x24`.
+
+**Expect:**
+- `G` rotates `Thread -> Sender -> Domain -> Thread` without switching tabs or opening chat/log/sidebar overlays.
+- Sender and domain modes use Timeline row chrome: disclosure markers, message counts, newest dates, unread/star indicators, attachment state, and tags where width allows.
+- Existing Timeline actions remain available in grouped modes: preview, expand/fold, select, delete/archive confirmation, reply/forward on highlighted message, search, help, logs, and chat.
+- The Timeline frame top border shows `Grouped by: Thread/Sender/Domain (G to change)` for the active grouping mode.
+- Status text reflects grouping changes and stays scoped to Timeline.
+- Hints and shortcut help advertise `G: group` where Timeline browse shortcuts are valid.
+- Literal `G` remains text in Compose and other editable fields.
+- At `50x15`, the minimum-size guard appears instead of clipped grouping UI, and resizing back restores a clean Timeline.
+
 ### TC-05B — Timeline horizontal reading movement
 
 **Lane:** A, B

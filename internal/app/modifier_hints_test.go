@@ -28,7 +28,7 @@ func TestModifierHintPressReleaseSwitchesShiftLayer(t *testing.T) {
 	m = model.(*Model)
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "shift+tab: prev panel", "shift+↑/↓: range", "R: sender", "D: delete")
+	requireHintSegments(t, hints, "shift+tab: prev panel", "shift+↑/↓: range", "G: group", "R: sender", "D: delete")
 	if strings.Contains(hints, "ctrl+c: quit") {
 		t.Fatalf("shift layer should not advertise ctrl actions, got:\n%s", hints)
 	}

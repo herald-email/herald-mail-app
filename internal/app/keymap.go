@@ -54,6 +54,8 @@ const (
 
 	CommandSidebarToggle = "sidebar.toggle"
 
+	CommandTimelineGroupCycle = "timeline.group_cycle"
+
 	CommandFieldInsert        = "field.insert"
 	CommandFieldAppend        = "field.append"
 	CommandFieldAppendLineEnd = "field.append_line_end"
@@ -110,6 +112,8 @@ var commandCatalog = map[string]struct{}{
 	CommandChatToggle: {},
 
 	CommandSidebarToggle: {},
+
+	CommandTimelineGroupCycle: {},
 
 	CommandFieldInsert:        {},
 	CommandFieldAppend:        {},
@@ -316,6 +320,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "T", CommandMailReclassify)
 	add("timeline", keyboardModeNormal, "A", CommandMailReclassify)
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
+	add("timeline", keyboardModeNormal, "G", CommandTimelineGroupCycle)
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
 
 	for _, scope := range []string{"cleanup", "contacts"} {
@@ -435,6 +440,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "3"
 	case CommandSidebarToggle:
 		return "B"
+	case CommandTimelineGroupCycle:
+		return "G"
 	case CommandLogsToggle:
 		return "L"
 	case CommandChatToggle:

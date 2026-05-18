@@ -128,7 +128,7 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "H: hide future mail", "D: delete", "W/C/P: tools", "S: settings"}
 	}
 	if m.activeTab == tabTimeline {
-		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", "C: compose", "S: settings"}
+		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "C: compose", "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
 			segments = append(segments, "R: sender", "D: delete", "U: unread", "F: forward", "T/A: re-classify")
 		}
