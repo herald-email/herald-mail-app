@@ -30,6 +30,18 @@ class RemediationTemplateTests(unittest.TestCase):
         self.assertIsNotNone(template)
         self.assertIn("text-entry surface", " ".join(template["checklist"]))
 
+    def test_green_demo_key_overlay_alias_matches_demo_overlay_template(self) -> None:
+        templates = load_remediation_templates(REPO_ROOT)
+
+        key, template = match_remediation_template("template-green-demo-key-overlay-app-attempt1-feedback", templates)
+
+        self.assertEqual(key, "demo-key-overlay")
+        self.assertIsNotNone(template)
+        checklist = " ".join(template["checklist"])
+        self.assertIn("import", checklist)
+        self.assertIn("--demo --demo-keys", checklist)
+        self.assertIn("text-entry", checklist)
+
 
 if __name__ == "__main__":
     unittest.main()

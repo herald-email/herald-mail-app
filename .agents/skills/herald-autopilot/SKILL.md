@@ -249,7 +249,7 @@ python3 .agents/skills/herald-autopilot/scripts/record_reflection.py \
 
 Stay in the same worktree for v1. Keep retries bounded by the run's retry limit.
 
-When the failing evidence matches a reusable remediation template such as `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `user-repro-after-commit`, or `degradation-review`, use that checklist before inventing a new retry plan from scratch.
+When the failing evidence matches a reusable remediation template such as `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `demo-key-overlay`, `user-repro-after-commit`, or `degradation-review`, use that checklist before inventing a new retry plan from scratch.
 
 ## Update Run State
 

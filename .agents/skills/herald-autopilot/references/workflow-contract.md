@@ -80,7 +80,7 @@ Use `docs/superpowers/gepa-pending-approvals.md` as the curated approval backlog
 - Run environment preflight before implementation whenever the task touches docs, SSH, or long-running media workflows
 - Every run should close the degradation-review gate before implementation so release drift is explicit instead of accidental
 - Required failures generate explicit natural-language feedback
-- Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time, including user-reproduced post-handoff failures that automated gates missed
+- Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time, including demo key overlay failures and user-reproduced post-handoff failures that automated gates missed
 - TUI-facing runs should record canonical visual evidence at `220x50`, `80x24`, and `50x15` before they can claim handoff readiness
 - Shortcut-sensitive TUI runs should prove aliases and hotkeys stay out of `compose`, `prompt`, and `editor` text-entry surfaces before they can claim handoff readiness
 - `run.json` and `evidence/manifest.json` updates should be serialized so adjacent helpers cannot clobber each other

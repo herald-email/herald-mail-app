@@ -4,13 +4,13 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-16T00:54:30+00:00
+- Updated at: 2026-05-18T20:16:26+00:00
 - Published runs analyzed: 14
 - Total queue items: 7
 - Pending: 0
-- Approved: 1
+- Approved: 0
 - Rejected: 0
-- Implemented: 6
+- Implemented: 7
 
 ## How To Update
 
@@ -24,30 +24,32 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Approved Items
 
-### template-green-demo-key-overlay-app-attempt1-feedback
-
-- Queue key: `template-green-demo-key-overlay-app-attempt1-feedback-b19c0ba4a6`
-- Status: approved
-- Seen in runs: 8
-- First seen: 2026-05-07T19:30:58+00:00
-- Last seen: 2026-05-15T23:00:24+00:00
-- Publish actions: branch-delete, commit, merge, worktree-delete
-- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
-- Approval prompt: Approve exploring `template-green-demo-key-overlay-app-attempt1-feedback` as the next explicit GEPA improvement pass.
-- Decision: approved at 2026-05-08T05:45:50+00:00
-- Note: Approved by user: approve-gepa-changes
-- Source runs:
-- `20260515-160024-modifier-aware-key-hints` at 2026-05-15T23:00:24+00:00 via commit, merge, worktree-delete, branch-delete
-- `20260515-155701-preview-cache-policy-pruning` at 2026-05-15T22:57:01+00:00 via commit, merge, worktree-delete, branch-delete
-- `20260507-162440-centralize-tui-color-hues-in-internal-app-theme-roles` at 2026-05-07T23:24:40+00:00 via commit, merge, worktree-delete
-- `20260507-162410-make-tui-key-hints-consistently-come-from-the-global-keyboard-config` at 2026-05-07T23:24:10+00:00 via commit, merge, worktree-delete
-- `20260507-162311-check-changes-between-the-most-recent-tag-and-head-and-update-documentation-if-needed` at 2026-05-07T23:23:11+00:00 via commit, merge, worktree-delete
+- No approved items.
 
 ## Rejected Items
 
 - No rejected items.
 
 ## Implemented Items
+
+### template-green-demo-key-overlay-app-attempt1-feedback
+
+- Queue key: `template-green-demo-key-overlay-app-attempt1-feedback-b19c0ba4a6`
+- Status: implemented
+- Seen in runs: 8
+- First seen: 2026-05-07T19:30:58+00:00
+- Last seen: 2026-05-15T23:00:24+00:00
+- Publish actions: branch-delete, commit, merge, worktree-delete
+- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
+- Approval prompt: Approve exploring `template-green-demo-key-overlay-app-attempt1-feedback` as the next explicit GEPA improvement pass.
+- Decision: implemented at 2026-05-18T20:16:26+00:00
+- Note: Implemented by user request: added demo-key-overlay remediation template.
+- Source runs:
+- `20260515-160024-modifier-aware-key-hints` at 2026-05-15T23:00:24+00:00 via commit, merge, worktree-delete, branch-delete
+- `20260515-155701-preview-cache-policy-pruning` at 2026-05-15T22:57:01+00:00 via commit, merge, worktree-delete, branch-delete
+- `20260507-162440-centralize-tui-color-hues-in-internal-app-theme-roles` at 2026-05-07T23:24:40+00:00 via commit, merge, worktree-delete
+- `20260507-162410-make-tui-key-hints-consistently-come-from-the-global-keyboard-config` at 2026-05-07T23:24:10+00:00 via commit, merge, worktree-delete
+- `20260507-162311-check-changes-between-the-most-recent-tag-and-head-and-update-documentation-if-needed` at 2026-05-07T23:23:11+00:00 via commit, merge, worktree-delete
 
 ### Require doc-first feature grounding
 

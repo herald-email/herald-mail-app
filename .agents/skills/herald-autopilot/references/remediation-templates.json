@@ -73,6 +73,26 @@
     ],
     "approval_prompt": "Approve keeping the input-routing safety remediation template as a default GEPA retry aid."
   },
+  "demo-key-overlay": {
+    "title": "Demo key overlay remediation template",
+    "aliases": [
+      "green-demo-key-overlay-app-attempt1",
+      "green-demo-key-overlay-app",
+      "template-green-demo-key-overlay-app-attempt1-feedback",
+      "demo-key-overlay-app",
+      "demo-key-overlay",
+      "demo-keys-overlay",
+      "vhs-demo-keys"
+    ],
+    "why": "Demo-key overlay failures tend to pass the design intent but miss a package boundary, dependency, or demo execution path, so retries should prove the overlay through focused app tests, demo launch commands, visual evidence, and text-entry preservation.",
+    "checklist": [
+      "Treat the first focused app-test failure as a package-boundary signal: verify new overlay imports already exist in go.mod or use existing repo helpers before changing the user-visible overlay behavior.",
+      "Rerun the narrow app package test that failed, then run the exact demo launch path with `--demo --demo-keys` so the overlay is proven outside the unit-test path.",
+      "When the run generates VHS tapes, screenshots, or demo media, separate code fixes from media regeneration and record the command that produced the refreshed artifact.",
+      "Because the overlay observes keys, capture text-entry preservation evidence for compose, prompt, and editor surfaces before handoff."
+    ],
+    "approval_prompt": "Approve keeping the demo key overlay remediation template as a default GEPA retry aid."
+  },
   "user-repro-after-commit": {
     "title": "User-reproduced post-handoff failure template",
     "aliases": [

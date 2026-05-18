@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-18T20:17:13 | Demo key overlay remediation template | applied | 30 | 86.55172413793103 | 100% | 0 | 8 |
 | 2026-05-07T18:43:05 | Approved pending-approval batch incorporation | applied | 30 | 88.44827586206897 | 100% | 0 | 2 |
 | 2026-05-06T15:18:30 | Degradation review gate for explicit regression guardrails | applied | 30 | 87.42857142857143 | 100% | 0 | 2 |
 | 2026-05-01T22:30:21 | Phase-impact measurement for the first four GEPA improvements | validated | 30 | 87.42857142857143 | 100% | 0 | 2 |
@@ -25,6 +26,73 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Demo key overlay remediation template
+
+- Logged at: 2026-05-18T20:17:13+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: The approved template-green-demo-key-overlay-app-attempt1-feedback item was still only an approval-queue recommendation instead of incorporated workflow behavior.
+- Summary: Incorporated the approved demo-key overlay GEPA item by adding a reusable remediation template for package-boundary import failures, demo launch verification, media regeneration, and text-entry preservation evidence.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 86.55172413793103
+- Average retries: 0.3333333333333333
+- Failed runs: 0
+- Frontier members: 8
+- Product-truth required runs: 28
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 16
+- Preflight required runs: 23
+- Preflight ready runs: 23
+- Preflight readiness rate: 1.0
+- Degradation-review required runs: 20
+- Degradation-review ready runs: 20
+- Degradation-review readiness rate: 1.0
+- Visual-required runs: 27
+- Visual-ready runs: 27
+- Visual readiness rate: 1.0
+- Input-routing required runs: 9
+- Input-routing ready runs: 9
+- Input-routing readiness rate: 1.0
+- Pending approval items: 0
+- Approved approval items: 0
+- Implemented approval items: 7
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: -1.896551724137936
+- average_retry_count: -0.033333333333333326
+- failed_run_count: +0
+- frontier_count: +6
+- product_truth_required_runs: +4
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: -3
+- preflight_required_runs: +11
+- preflight_ready_runs: +11
+- preflight_readiness_rate: +0.0
+- degradation_review_required_runs: +18
+- degradation_review_ready_runs: +18
+- degradation_review_readiness_rate: +0.0
+- visual_required_runs: +10
+- visual_ready_runs: +10
+- visual_readiness_rate: +0.0
+- input_routing_required_runs: +5
+- input_routing_ready_runs: +5
+- input_routing_readiness_rate: +0.0
+- pending_approval_items: +0
+- approved_approval_items: +0
+- implemented_approval_items: +2
+Changes:
+- Added the demo-key-overlay remediation template with aliases for the approved queue item and original failing evidence.
+- Extended template tests so the approved queue title resolves to the new template and checks for import, demo launch, and text-entry guidance.
+- Updated Herald Autopilot workflow references and the GEPA ledger to list demo-key-overlay as incorporated behavior.
+Recommended experiment at log time:
+- `template-user-review-followup-settings-hints-feedback` (medium value, low risk)
+Article notes:
+- A small package import mistake in demo-only overlay code became durable retry policy instead of another one-off memory.
+Follow-ups:
+- Measure whether demo/media-heavy runs use the new template when overlay or tape-generation retries recur.
 
 ### Approved pending-approval batch incorporation
 
