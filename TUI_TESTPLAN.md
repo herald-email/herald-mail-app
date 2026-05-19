@@ -542,6 +542,7 @@ Check these states during every applicable lane:
 - `Ctrl+Enter` copies the accepted suggestion into the compose body and closes the panel cleanly.
 - `Ctrl+Z` restores the body from before the accepted rewrite.
 - With AI unavailable, the default bar shows an `AI disabled` warning and does not advertise active rewrite controls.
+- If the AI provider declines a rewrite or translation request, Herald shows a concise Compose status warning and does not place the refusal text in the editable suggestion area.
 - Narrow sizes degrade cleanly without broken borders or hidden compose inputs.
 - Failure path stays responsive and shows concise bounded feedback in compose status instead of panicking or flooding logs.
 

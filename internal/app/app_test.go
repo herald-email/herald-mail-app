@@ -31,12 +31,18 @@ func TestValidIDsMsg_TypeExists(t *testing.T) {
 type stubClassifier struct {
 	category           ai.Category
 	err                error
+	chatResponse       string
+	chatErr            error
+	chatMessages       []ai.ChatMessage
 	lastEmbeddingModel string
 	embedCalls         int
 }
 
 func (s *stubClassifier) Classify(_, _ string) (ai.Category, error) { return s.category, s.err }
-func (s *stubClassifier) Chat(_ []ai.ChatMessage) (string, error)   { return "", nil }
+func (s *stubClassifier) Chat(messages []ai.ChatMessage) (string, error) {
+	s.chatMessages = append([]ai.ChatMessage(nil), messages...)
+	return s.chatResponse, s.chatErr
+}
 func (s *stubClassifier) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string, []ai.ToolCall, error) {
 	return "", nil, ai.ErrToolsNotSupported
 }

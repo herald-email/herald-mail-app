@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -45,6 +47,36 @@ type composeAIAction struct {
 	Key         string
 	Label       string
 	Instruction string
+}
+
+type composeAIRewritePayload struct {
+	Status    string `json:"status"`
+	Text      string `json:"text"`
+	ErrorCode string `json:"error_code"`
+	Message   string `json:"message"`
+}
+
+type composeAIRewriteError struct {
+	Code    string
+	Message string
+}
+
+func (e *composeAIRewriteError) Error() string {
+	if e == nil {
+		return ""
+	}
+	code := strings.TrimSpace(e.Code)
+	message := strings.TrimSpace(e.Message)
+	switch {
+	case code != "" && message != "":
+		return code + ": " + message
+	case message != "":
+		return message
+	case code != "":
+		return code
+	default:
+		return "AI rewrite failed"
+	}
 }
 
 const (
@@ -109,7 +141,12 @@ func composeAISelectedStyle(style string) string {
 }
 
 func composeAITranslateInstruction(language string) string {
-	return fmt.Sprintf("Translate this email to %s while preserving formatting intent, names, dates, commitments, and the original meaning.", composeAISelectedLanguage(language))
+	selected := composeAISelectedLanguage(language)
+	instruction := fmt.Sprintf("Translate this email to %s as a natural, idiomatic translation while preserving formatting intent, names, dates, commitments, and the original meaning. Preserve names, signatures, separators, and line breaks. Do not transliterate source-language sentences, approximate their sounds, invent words, or output placeholder language.", selected)
+	if strings.EqualFold(selected, "Japanese") {
+		instruction += " For Japanese, use standard modern Japanese with normal kanji/kana where appropriate. Do not output random kana or hiragana-only gibberish; keep proper names such as sender names or product names unchanged unless a conventional Japanese rendering is clearly appropriate. Example: English `you are the best, Herald.` should translate naturally as `Herald、あなたは最高です。`, not as a phonetic kana string."
+	}
+	return instruction
 }
 
 func composeAIStyleInstruction(style string) string {
@@ -1850,6 +1887,297 @@ func wordDiffWithTheme(theme Theme, original, revised string) string {
 	return sb.String()
 }
 
+func parseComposeAIRewriteResponse(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", &composeAIRewriteError{Code: "empty_response", Message: "AI returned an empty rewrite"}
+	}
+
+	candidate := trimComposeAIRewriteEnvelope(raw)
+	if text, err, ok := parseComposeAIRewriteJSONCandidate(candidate); ok {
+		return text, err
+	}
+	if embedded, ok := extractComposeAIRewriteJSONCandidate(candidate); ok {
+		if text, err, parsed := parseComposeAIRewriteJSONCandidate(embedded); parsed {
+			return text, err
+		}
+	}
+
+	if looksLikeComposeAIRefusal(raw) {
+		return "", &composeAIRewriteError{Code: "safety_refusal", Message: "AI declined this rewrite"}
+	}
+	return raw, nil
+}
+
+func parseComposeAIRewriteJSONCandidate(candidate string) (string, error, bool) {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return "", nil, false
+	}
+	switch candidate[0] {
+	case '{':
+		var payload composeAIRewritePayload
+		if err := json.Unmarshal([]byte(candidate), &payload); err != nil {
+			return "", nil, false
+		}
+		text, err := composeAIRewriteResultFromPayload(payload)
+		return text, err, true
+	case '[':
+		var payloads []composeAIRewritePayload
+		if err := json.Unmarshal([]byte(candidate), &payloads); err != nil || len(payloads) == 0 {
+			return "", nil, false
+		}
+		text, err := composeAIRewriteResultFromPayload(payloads[0])
+		return text, err, true
+	case '"':
+		var inner string
+		if err := json.Unmarshal([]byte(candidate), &inner); err != nil {
+			return "", nil, false
+		}
+		text, err := parseComposeAIRewriteResponse(inner)
+		return text, err, true
+	default:
+		return "", nil, false
+	}
+}
+
+func composeAIRewriteResultFromPayload(payload composeAIRewritePayload) (string, error) {
+	status := strings.ToLower(strings.TrimSpace(payload.Status))
+	switch status {
+	case "", "ok", "success":
+		text := strings.TrimSpace(payload.Text)
+		if text == "" {
+			return "", &composeAIRewriteError{Code: "empty_rewrite", Message: "AI returned an empty rewrite"}
+		}
+		if looksLikeComposeAIRefusal(text) {
+			return "", &composeAIRewriteError{Code: "safety_refusal", Message: "AI declined this rewrite"}
+		}
+		return text, nil
+	case "error", "refusal", "refused":
+		code := strings.TrimSpace(payload.ErrorCode)
+		if code == "" {
+			code = "rewrite_error"
+		}
+		message := strings.TrimSpace(payload.Message)
+		if message == "" {
+			message = "AI declined or could not complete this rewrite"
+		}
+		return "", &composeAIRewriteError{Code: code, Message: message}
+	default:
+		return "", &composeAIRewriteError{Code: "rewrite_error", Message: "AI returned an unsupported rewrite status"}
+	}
+}
+
+func extractComposeAIRewriteJSONCandidate(raw string) (string, bool) {
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '{' && raw[i] != '[' {
+			continue
+		}
+		end := matchingJSONEnd(raw, i)
+		if end <= i {
+			continue
+		}
+		candidate := raw[i:end]
+		if strings.Contains(candidate, `"status"`) && (strings.Contains(candidate, `"text"`) || strings.Contains(candidate, `"error_code"`)) {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func matchingJSONEnd(raw string, start int) int {
+	if start < 0 || start >= len(raw) {
+		return -1
+	}
+	var stack []byte
+	inString := false
+	escaped := false
+	for i := start; i < len(raw); i++ {
+		c := raw[i]
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '{':
+			stack = append(stack, '}')
+		case '[':
+			stack = append(stack, ']')
+		case '}', ']':
+			if len(stack) == 0 || stack[len(stack)-1] != c {
+				return -1
+			}
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+func trimComposeAIRewriteEnvelope(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "```") {
+		return raw
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) < 3 {
+		return raw
+	}
+	first := strings.TrimSpace(lines[0])
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if strings.HasPrefix(first, "```") && strings.HasPrefix(last, "```") {
+		return strings.TrimSpace(strings.Join(lines[1:len(lines)-1], "\n"))
+	}
+	return raw
+}
+
+func looksLikeComposeAIRefusal(raw string) bool {
+	text := strings.ToLower(strings.TrimSpace(raw))
+	text = strings.ReplaceAll(text, "’", "'")
+	patterns := []string{
+		"i'm sorry, but i cannot",
+		"i'm sorry, but i can't",
+		"i am sorry, but i cannot",
+		"i am sorry, but i can't",
+		"sorry, but i cannot",
+		"sorry, but i can't",
+		"i cannot fulfill your request",
+		"i can't fulfill your request",
+		"i cannot comply with",
+		"i can't comply with",
+		"i cannot assist with",
+		"i can't assist with",
+		"i'm unable to assist",
+		"i am unable to assist",
+		"i'm unable to help",
+		"i am unable to help",
+		"as an ai, i cannot",
+		"as an ai language model, i cannot",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(text, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func composeAIInstructionWithDraftBounds(instruction, draft string) string {
+	if !isComposeAITranslationInstruction(instruction) {
+		return instruction
+	}
+	limit := composeAITranslationLengthLimit(draft)
+	if limit <= 0 {
+		return instruction
+	}
+	return fmt.Sprintf("%s\n\nOutput bounds: return only the translated body; keep the same number of lines where possible and no longer than %d Unicode characters. Do not add examples, alternatives, explanations, or new content.", instruction, limit)
+}
+
+func validateComposeAIRewrite(instruction, draft, rewrite string) error {
+	if isComposeAITranslationInstruction(instruction) && composeAIRewriteExceedsTranslationLengthLimit(draft, rewrite) {
+		return &composeAIRewriteError{
+			Code:    "translation_quality",
+			Message: "AI returned a translation that was much longer than the draft",
+		}
+	}
+	if isComposeAIJapaneseTranslationInstruction(instruction) && looksLikeJapaneseKanaNoise(rewrite) {
+		return &composeAIRewriteError{
+			Code:    "translation_quality",
+			Message: "AI returned text that did not look like a natural Japanese translation",
+		}
+	}
+	return nil
+}
+
+func isComposeAITranslationInstruction(instruction string) bool {
+	return strings.Contains(strings.ToLower(instruction), "translate")
+}
+
+func isComposeAIJapaneseTranslationInstruction(instruction string) bool {
+	instruction = strings.ToLower(instruction)
+	return strings.Contains(instruction, "translate") && strings.Contains(instruction, "japanese")
+}
+
+func composeAIRewriteExceedsTranslationLengthLimit(draft, rewrite string) bool {
+	limit := composeAITranslationLengthLimit(draft)
+	if limit <= 0 {
+		return false
+	}
+	return len([]rune(strings.TrimSpace(rewrite))) > limit
+}
+
+func composeAITranslationLengthLimit(draft string) int {
+	draftLen := len([]rune(strings.TrimSpace(draft)))
+	if draftLen <= 0 {
+		return 0
+	}
+	limit := draftLen*2 + 40
+	if limit < 80 {
+		return 80
+	}
+	return limit
+}
+
+func looksLikeJapaneseKanaNoise(text string) bool {
+	var japanese, hiragana, katakana, kanji int
+	longestHiraganaRun := 0
+	currentHiraganaRun := 0
+
+	for _, r := range text {
+		switch {
+		case r >= '\u3040' && r <= '\u309f':
+			japanese++
+			hiragana++
+			currentHiraganaRun++
+			if currentHiraganaRun > longestHiraganaRun {
+				longestHiraganaRun = currentHiraganaRun
+			}
+		case r >= '\u30a0' && r <= '\u30ff':
+			japanese++
+			katakana++
+			currentHiraganaRun = 0
+		case r >= '\u4e00' && r <= '\u9fff':
+			japanese++
+			kanji++
+			currentHiraganaRun = 0
+		default:
+			currentHiraganaRun = 0
+		}
+	}
+
+	if japanese < 40 {
+		return false
+	}
+	kana := hiragana + katakana
+	return longestHiraganaRun >= 18 && kanji == 0 && kana*100 >= japanese*90
+}
+
+func composeAIStatusForRewriteError(err error) (string, bool) {
+	var rewriteErr *composeAIRewriteError
+	if !errors.As(err, &rewriteErr) {
+		return "", false
+	}
+	switch rewriteErr.Code {
+	case "safety_refusal":
+		return "AI warning: rewrite declined by the model; your draft was not changed", true
+	case "translation_quality":
+		return "AI warning: translation looked invalid; your draft was not changed", true
+	default:
+		return "AI warning: rewrite failed; your draft was not changed", true
+	}
+}
+
 // aiAssistCmd fires an AI body-rewrite request with the given instruction.
 // If m.composeAIThread is true and m.replyContextEmail is non-nil, the
 // original email's sender and subject are included as context.
@@ -1875,6 +2203,7 @@ func (m *Model) aiAssistCmd(instruction string) tea.Cmd {
 		}
 		contextParts = append(contextParts, "Current draft:\n"+draft)
 		context := strings.Join(contextParts, "\n\n")
+		requestInstruction := composeAIInstructionWithDraftBounds(instruction, draft)
 
 		messages := []ai.ChatMessage{
 			{
@@ -1882,18 +2211,32 @@ func (m *Model) aiAssistCmd(instruction string) tea.Cmd {
 				Content: "You are an expert email writing assistant. " +
 					"Rewrite the email body according to the user's instruction, including requests to translate, fix typos, adjust tone, change style, shorten, or expand. " +
 					"Preserve facts, names, dates, commitments, formatting intent, and any signature unless the user explicitly asks otherwise. " +
-					"Return only the rewritten body text, no explanations or preamble.",
+					"Treat translation, style, grammar, length, and clarity requests as text transformation tasks. " +
+					"For translation requests, produce a natural, idiomatic translation in the target language. " +
+					"Do not transliterate source-language sentences, approximate their sounds, invent words, or output random kana or placeholder language. " +
+					"For Japanese, use standard modern Japanese with normal kanji/kana where appropriate. " +
+					"Preserve names, signatures, separators, and line breaks unless the user explicitly asks otherwise. " +
+					"Return JSON only using one of these shapes: {\"status\":\"ok\",\"text\":\"...rewritten body...\"} or {\"status\":\"error\",\"error_code\":\"safety_refusal\",\"message\":\"...short reason...\"}. " +
+					"If you decline or cannot complete the request, put the reason only in the error JSON message; never put refusal text in the ok text field. " +
+					"Do not return markdown, preamble, or explanations.",
 			},
 			{
 				Role:    "user",
-				Content: instruction + "\n\n" + context,
+				Content: requestInstruction + "\n\n" + context,
 			},
 		}
 		result, err := classifier.Chat(messages)
 		if err != nil {
 			return AIAssistMsg{Err: err}
 		}
-		return AIAssistMsg{Result: strings.TrimSpace(result)}
+		rewrite, err := parseComposeAIRewriteResponse(result)
+		if err != nil {
+			return AIAssistMsg{Err: err}
+		}
+		if err := validateComposeAIRewrite(instruction, draft, rewrite); err != nil {
+			return AIAssistMsg{Err: err}
+		}
+		return AIAssistMsg{Result: rewrite}
 	}
 }
 

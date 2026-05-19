@@ -178,6 +178,7 @@ Tokens are split on word boundaries (spaces, newlines, punctuation) so that "syn
 This section captures the bounded failure states that must be visible to the user. Failures should leave Compose responsive and should never mutate the draft body.
 
 - [x] AI call fails: show error in `composeStatus` bar ("AI assistant unavailable"), clear loading state
+- [x] AI rewrite refusals: request structured rewrite responses, treat provider refusal/error payloads or common refusal prose as bounded Compose status warnings, and never place refusal text into the editable suggestion
 - [x] No AI configured (`m.ai == nil`): Compose opens with an `AI disabled` warning in the bar, suppresses active rewrite controls, and shows a bounded status if an AI action is attempted
 - [x] Empty body when requesting assist: show status "Write something first"
 

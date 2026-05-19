@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -108,6 +109,211 @@ func TestAiSubjectCmd_NilClassifier(t *testing.T) {
 	}
 	if subjectMsg.Err == nil {
 		t.Fatal("expected error when classifier is nil")
+	}
+}
+
+func TestParseComposeAIRewriteResponseStructuredSuccess(t *testing.T) {
+	got, err := parseComposeAIRewriteResponse(`{"status":"ok","text":"よろしくお願いいたします。","error_code":"","message":""}`)
+	if err != nil {
+		t.Fatalf("parseComposeAIRewriteResponse returned error: %v", err)
+	}
+	if got != "よろしくお願いいたします。" {
+		t.Fatalf("parsed rewrite = %q", got)
+	}
+}
+
+func TestParseComposeAIRewriteResponseStructuredArrayWithEscapedUnicode(t *testing.T) {
+	got, err := parseComposeAIRewriteResponse(`[{"status":"ok","text":"\u3042\u306a\u305f\u306f\u6700\u9ad8\u3067\u3059\u3001Herald\u3002"}]`)
+	if err != nil {
+		t.Fatalf("parseComposeAIRewriteResponse returned error: %v", err)
+	}
+	if got != "あなたは最高です、Herald。" {
+		t.Fatalf("parsed rewrite = %q", got)
+	}
+}
+
+func TestParseComposeAIRewriteResponseFindsEmbeddedStructuredJSON(t *testing.T) {
+	got, err := parseComposeAIRewriteResponse("Here is the JSON:\n\n{\"status\":\"ok\",\"text\":\"あなたは最高です、Herald。\"}")
+	if err != nil {
+		t.Fatalf("parseComposeAIRewriteResponse returned error: %v", err)
+	}
+	if got != "あなたは最高です、Herald。" {
+		t.Fatalf("parsed rewrite = %q", got)
+	}
+}
+
+func TestParseComposeAIRewriteResponseStructuredRefusal(t *testing.T) {
+	_, err := parseComposeAIRewriteResponse(`{"status":"error","error_code":"safety_refusal","message":"The model declined this rewrite."}`)
+	if err == nil {
+		t.Fatal("expected structured refusal error")
+	}
+	var rewriteErr *composeAIRewriteError
+	if !errors.As(err, &rewriteErr) {
+		t.Fatalf("error = %T %v, want composeAIRewriteError", err, err)
+	}
+	if rewriteErr.Code != "safety_refusal" {
+		t.Fatalf("rewrite error code = %q", rewriteErr.Code)
+	}
+}
+
+func TestParseComposeAIRewriteResponsePlainRefusal(t *testing.T) {
+	_, err := parseComposeAIRewriteResponse("I'm sorry, but I cannot fulfill your request to rewrite an email that uses derogatory language.")
+	if err == nil {
+		t.Fatal("expected plain refusal to become an error")
+	}
+	var rewriteErr *composeAIRewriteError
+	if !errors.As(err, &rewriteErr) {
+		t.Fatalf("error = %T %v, want composeAIRewriteError", err, err)
+	}
+	if rewriteErr.Code != "safety_refusal" {
+		t.Fatalf("rewrite error code = %q", rewriteErr.Code)
+	}
+}
+
+func TestParseComposeAIRewriteResponsePlainTextFallback(t *testing.T) {
+	got, err := parseComposeAIRewriteResponse("Please review the proposal by Friday.")
+	if err != nil {
+		t.Fatalf("plain rewrite fallback returned error: %v", err)
+	}
+	if got != "Please review the proposal by Friday." {
+		t.Fatalf("plain rewrite fallback = %q", got)
+	}
+}
+
+func TestAiAssistCmdParsesStructuredRewriteAndRequestsJSON(t *testing.T) {
+	classifier := &stubClassifier{chatResponse: `{"status":"ok","text":"あなたは最高です、Herald。"} `}
+	m := New(&stubBackend{}, nil, "", classifier, false)
+	m.composeBody.SetValue("you are the best, Herald.")
+
+	msg, ok := m.aiAssistCmd(composeAITranslateInstruction("Japanese"))().(AIAssistMsg)
+	if !ok {
+		t.Fatalf("expected AIAssistMsg")
+	}
+	if msg.Err != nil {
+		t.Fatalf("aiAssistCmd returned error: %v", msg.Err)
+	}
+	if msg.Result != "あなたは最高です、Herald。" {
+		t.Fatalf("AIAssistMsg.Result = %q", msg.Result)
+	}
+	if len(classifier.chatMessages) != 2 {
+		t.Fatalf("captured %d chat messages, want 2", len(classifier.chatMessages))
+	}
+	system := classifier.chatMessages[0].Content
+	user := classifier.chatMessages[1].Content
+	for _, want := range []string{`"status":"ok"`, `"status":"error"`, "error_code", "Return JSON only"} {
+		if !strings.Contains(system, want) {
+			t.Fatalf("system prompt missing %q:\n%s", want, system)
+		}
+	}
+	if !strings.Contains(user, "Translate this email to Japanese") {
+		t.Fatalf("user prompt missing Japanese translation instruction:\n%s", user)
+	}
+}
+
+func TestAiAssistCmdJapaneseTranslatePromptRequestsNaturalTranslation(t *testing.T) {
+	classifier := &stubClassifier{chatResponse: `{"status":"ok","text":"Herald、あなたは最高です。"}`}
+	m := New(&stubBackend{}, nil, "", classifier, false)
+	m.composeBody.SetValue("you are the best, Herald.")
+
+	msg, ok := m.aiAssistCmd(composeAITranslateInstruction("Japanese"))().(AIAssistMsg)
+	if !ok {
+		t.Fatalf("expected AIAssistMsg")
+	}
+	if msg.Err != nil {
+		t.Fatalf("aiAssistCmd returned error: %v", msg.Err)
+	}
+	if len(classifier.chatMessages) != 2 {
+		t.Fatalf("captured %d chat messages, want 2", len(classifier.chatMessages))
+	}
+
+	system := classifier.chatMessages[0].Content
+	user := classifier.chatMessages[1].Content
+	for _, want := range []string{
+		"natural, idiomatic translation",
+		"Do not transliterate source-language sentences",
+		"Do not output random kana",
+		"standard modern Japanese",
+		"Preserve names, signatures, separators, and line breaks",
+		"same number of lines",
+		"no longer than",
+		"Do not add examples, alternatives, explanations, or new content",
+	} {
+		if !strings.Contains(system+"\n"+user, want) {
+			t.Fatalf("Japanese translation prompt missing %q:\nsystem:\n%s\n\nuser:\n%s", want, system, user)
+		}
+	}
+}
+
+func TestAiAssistCmdJapaneseTranslateRejectsKanaNoise(t *testing.T) {
+	noisy := "わたしはすをりおいうましんたすえるえりしだたちだになちつすがせつるひつおりしつぜらぜう"
+	classifier := &stubClassifier{chatResponse: `{"status":"ok","text":"` + noisy + `"}`}
+	m := New(&stubBackend{}, nil, "", classifier, false)
+	m.composeBody.SetValue("you are the best, Herald.")
+
+	msg, ok := m.aiAssistCmd(composeAITranslateInstruction("Japanese"))().(AIAssistMsg)
+	if !ok {
+		t.Fatalf("expected AIAssistMsg")
+	}
+	if msg.Err == nil {
+		t.Fatalf("expected noisy Japanese translation to be rejected, got result %q", msg.Result)
+	}
+	var rewriteErr *composeAIRewriteError
+	if !errors.As(msg.Err, &rewriteErr) {
+		t.Fatalf("expected composeAIRewriteError, got %T: %v", msg.Err, msg.Err)
+	}
+	if rewriteErr.Code != "translation_quality" {
+		t.Fatalf("rewriteErr.Code = %q, want translation_quality", rewriteErr.Code)
+	}
+}
+
+func TestAiAssistCmdJapaneseTranslateRejectsRunawayLength(t *testing.T) {
+	runaway := strings.Repeat("Herald、あなたは最高です。", 12)
+	classifier := &stubClassifier{chatResponse: `{"status":"ok","text":"` + runaway + `"}`}
+	m := New(&stubBackend{}, nil, "", classifier, false)
+	m.composeBody.SetValue("you are the best, Herald.")
+
+	msg, ok := m.aiAssistCmd(composeAITranslateInstruction("Japanese"))().(AIAssistMsg)
+	if !ok {
+		t.Fatalf("expected AIAssistMsg")
+	}
+	if msg.Err == nil {
+		t.Fatalf("expected runaway Japanese translation to be rejected, got result length %d", len([]rune(msg.Result)))
+	}
+	var rewriteErr *composeAIRewriteError
+	if !errors.As(msg.Err, &rewriteErr) {
+		t.Fatalf("expected composeAIRewriteError, got %T: %v", msg.Err, msg.Err)
+	}
+	if rewriteErr.Code != "translation_quality" {
+		t.Fatalf("rewriteErr.Code = %q, want translation_quality", rewriteErr.Code)
+	}
+}
+
+func TestAIAssistRefusalShowsStatusWithoutReplacingSuggestion(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeAIPanel = true
+	m.composeBody.SetValue("Original draft")
+	m.composeAIDiff = "existing diff"
+	m.composeAIResponse.SetValue("Existing suggestion")
+	m.composeAILoading = true
+
+	updatedModel, _ := m.Update(AIAssistMsg{Err: &composeAIRewriteError{Code: "safety_refusal", Message: "Declined"}})
+	updated := updatedModel.(*Model)
+
+	if updated.composeAILoading {
+		t.Fatal("refusal should clear loading state")
+	}
+	if !strings.Contains(updated.composeStatus, "AI warning") || !strings.Contains(updated.composeStatus, "draft was not changed") {
+		t.Fatalf("composeStatus = %q", updated.composeStatus)
+	}
+	if got := updated.composeBody.Value(); got != "Original draft" {
+		t.Fatalf("compose body changed to %q", got)
+	}
+	if got := updated.composeAIResponse.Value(); got != "Existing suggestion" {
+		t.Fatalf("AI suggestion changed to %q", got)
+	}
+	if got := updated.composeAIDiff; got != "existing diff" {
+		t.Fatalf("AI diff changed to %q", got)
 	}
 }
 

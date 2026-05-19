@@ -1930,7 +1930,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AIAssistMsg:
 		m.composeAILoading = false
 		if msg.Err != nil {
-			m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			if status, ok := composeAIStatusForRewriteError(msg.Err); ok {
+				m.composeStatus = status
+			} else {
+				m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			}
 			m.refreshComposeLayout()
 			return m, nil
 		}
