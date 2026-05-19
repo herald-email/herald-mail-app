@@ -1065,11 +1065,12 @@ Check these states during every applicable lane:
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
 5. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
 6. Repeat with the repo custom ttyd harness: `PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
-7. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
-8. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
-9. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
-10. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
-11. Run the standard resize cycle while full-screen preview is open.
+7. Repeat the custom ttyd harness with a full-screen app theme: `HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
+8. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
+9. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
+10. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
+11. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+12. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
@@ -1079,13 +1080,14 @@ Check these states during every applicable lane:
 - iTerm2-compatible terminals render bounded inline images using OSC 1337 when selected or auto-detected.
 - Kitty-compatible terminals, including Ghostty, render bounded inline images using Kitty graphics protocol when selected or auto-detected.
 - Kitty/Ghostty scrolling does not leave stale image placements over text or unrelated images.
-- Custom ttyd + xterm image-addon mode reproduces browser-visible iTerm2 OSC 1337 image behavior more strictly and records screenshot plus pixel metrics for color-chart cells and at least two large photo regions.
+- Custom ttyd + xterm image-addon mode reproduces browser-visible iTerm2 OSC 1337 image behavior more strictly and records screenshot plus pixel metrics for color-chart evidence and large raster image area.
+- Custom ttyd with `HERALD_THEME=jade-signal` preserves real raster images while the app-level theme background is active; native image overlay escape tails are not styled, padded, or split by theme rendering.
 - Stock ttyd smoke records screenshot plus pixel metrics for color-chart cells and at least one large photo region; its placement is not authoritative for acceptance.
 - Non-raster local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH auto mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs; forced `-image-protocol=iterm2` or `-image-protocol=kitty` emits the selected raster protocol.
 - Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
-- Test reports include terminal app/version, ttyd/frontend mode, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
+- Test reports include terminal app/version, ttyd/frontend mode, selected app theme, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 
 ### TC-24 — Local AI backlog and responsiveness
 

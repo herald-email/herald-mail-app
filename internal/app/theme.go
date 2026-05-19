@@ -1182,6 +1182,10 @@ func (t Theme) RenderScreen(content string, width, height int) string {
 		lines = append(lines, "")
 	}
 	for i, line := range lines {
+		if isNativeImageOverlayTailLine(line) {
+			lines[i] = line
+			continue
+		}
 		line = reapplyScreenStyleAfterReset(line, prefix)
 		if missing := width - ansi.StringWidth(line); missing > 0 {
 			line += suffix + prefix + strings.Repeat(" ", missing)
@@ -1214,6 +1218,12 @@ func reapplyScreenStyleAfterReset(line, prefix string) string {
 		"\x1b[49;39m", "\x1b[49;39m"+prefix,
 	)
 	return replacer.Replace(line)
+}
+
+func isNativeImageOverlayTailLine(line string) bool {
+	return strings.Contains(line, "\x1b7") &&
+		strings.HasSuffix(line, "\x1b8") &&
+		(strings.Contains(line, "\x1b]1337;File=") || strings.Contains(line, "\x1b_G"))
 }
 
 func (t Theme) TableStyles(active bool) table.Styles {

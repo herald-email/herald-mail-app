@@ -1164,6 +1164,14 @@ PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
+Run the same browser-raster probe with an app-level theme whenever preview, raster image, or theme code changes. This catches regressions where `-theme` full-screen background styling mutates native image overlay escape bytes:
+
+```bash
+make build
+HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview \
+  tools/ttyd-image-harness/probe.sh
+```
+
 Run the stock-ttyd smoke only when you need to compare against the manual ttyd frontend. This intentionally mirrors the manual command shape used during image-preview debugging:
 
 ```bash
@@ -1172,7 +1180,7 @@ TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
-Both probe modes drive the demo to `Creative Commons image sampler for terminal previews`, capture a browser screenshot, and write pixel-component metrics. Custom mode launches ttyd with `tools/ttyd-image-harness/index.html` and passes when it detects the color-chart cells plus at least two large photo regions. Stock mode launches normal ttyd with `-W -t enableSixel=true -t rendererType=canvas` and passes when it detects the color-chart cells plus at least one large photo region. These probes prove browser-visible raster rendering, not exact native-terminal placement.
+Probe modes drive the demo to `Step 5: View inline images in full screen`, capture a browser screenshot, and write pixel-component metrics. Custom mode launches ttyd with `tools/ttyd-image-harness/index.html` and passes when it detects color-chart evidence plus enough large raster image area to prove the photo previews painted. Stock mode launches normal ttyd with `-W -t enableSixel=true -t rendererType=canvas` and uses a lighter version of the same image-area gate. When `HERALD_THEME` is set, the metrics JSON records the selected app theme and the screenshot must show real raster images with the themed app background still active. These probes prove browser-visible raster rendering, not exact native-terminal placement.
 
 For an interactive custom-harness run:
 
@@ -1182,7 +1190,7 @@ ttyd -W -p 7682 \
   -I tools/ttyd-image-harness/index.html \
   -t disableLeaveAlert=true \
   -t disableResizeOverlay=true \
-  ./bin/herald -debug -demo -image-protocol=iterm2
+  ./bin/herald -debug -demo -image-protocol=iterm2 -theme jade-signal
 ```
 
 The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image` from CDN, with image addon options such as `iipSupport: true` and `sixelSupport: true`. It fetches `/token`, connects to `/ws` with the `tty` subprotocol, and sends the first websocket frame as raw JSON:
@@ -1191,7 +1199,7 @@ The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@
 {"AuthToken":"","columns":120,"rows":40}
 ```
 
-After that initial frame, send terminal input as `0` + input bytes and resize messages as `1` + `{"columns":120,"rows":40}`. If the browser page is blank and ttyd logs a websocket connection but no Herald process, the initial JSON handshake is probably missing. Once the custom client renders, open the demo email, press `z`, save a browser screenshot under `reports/`, and record the ttyd command, browser, addon status, selected image protocol, and whether raster output displaced preview chrome. Keep a native iTerm2/Ghostty check for any release-blocking claim about exact placement.
+After that initial frame, send terminal input as `0` + input bytes and resize messages as `1` + `{"columns":120,"rows":40}`. If the browser page is blank and ttyd logs a websocket connection but no Herald process, the initial JSON handshake is probably missing. Once the custom client renders, open the Step 5 demo email, press `z`, save a browser screenshot under `reports/`, and record the ttyd command, browser, addon status, selected app theme, selected image protocol, and whether raster output displaced preview chrome. Keep a native iTerm2/Ghostty check for any release-blocking claim about exact placement.
 
 For a quick stock ttyd smoke:
 

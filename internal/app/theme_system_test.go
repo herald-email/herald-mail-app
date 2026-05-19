@@ -164,6 +164,28 @@ func TestSelectedBuiltInThemeRenderScreenReappliesBackgroundAfterReset(t *testin
 	}
 }
 
+func TestSelectedBuiltInThemeRenderScreenLeavesNativeImageOverlayTailsAtomic(t *testing.T) {
+	theme := ThemeByName("solar-paper")
+	tests := map[string]string{
+		"iterm2":      "\x1b7\x1b[4;1H\x1b]1337;File=inline=1;width=12;height=2:payload\a\x1b8",
+		"kitty":       "\x1b7\x1b[5;1H\x1b_Ga=T,f=100,t=d,q=2,c=10,r=4;payload\x1b\\\x1b8",
+		"kitty-clear": "\x1b_Ga=d,d=A,q=2\x1b\\\x1b7\x1b[5;1H\x1b_Ga=T,f=100,t=d,q=2,c=10,r=4;payload\x1b\\\x1b8",
+	}
+
+	for name, tail := range tests {
+		t.Run(name, func(t *testing.T) {
+			rendered := theme.RenderScreen("body\n"+tail, 12, 2)
+			lines := strings.Split(rendered, "\n")
+			if len(lines) != 2 {
+				t.Fatalf("rendered lines = %d, want 2: %q", len(lines), rendered)
+			}
+			if lines[1] != tail {
+				t.Fatalf("native image overlay tail was styled, padded, or split:\ngot  %q\nwant %q", lines[1], tail)
+			}
+		})
+	}
+}
+
 func TestResolveThemeForConfigAppliesOverrides(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Theme.Name = "herald-dark"

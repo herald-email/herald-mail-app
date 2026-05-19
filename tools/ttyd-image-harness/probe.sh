@@ -17,6 +17,7 @@ Environment:
   TTYD_MODE        custom or stock (default: custom)
   RENDERER_TYPE    ttyd renderer for stock mode (default: canvas)
   IMAGE_PROTOCOL   Herald image protocol (default: iterm2)
+  HERALD_THEME     Optional Herald app theme, e.g. jade-signal
   EVIDENCE_DIR     output directory under reports/
   HERALD_BIN       Herald binary path (default: ./bin/herald)
   CHROME_BIN       Chrome/Chromium executable path
@@ -43,6 +44,7 @@ HOST="${HOST:-127.0.0.1}"
 TTYD_MODE="${TTYD_MODE:-custom}"
 RENDERER_TYPE="${RENDERER_TYPE:-canvas}"
 IMAGE_PROTOCOL="${IMAGE_PROTOCOL:-iterm2}"
+HERALD_THEME="${HERALD_THEME:-}"
 HERALD_BIN="${HERALD_BIN:-./bin/herald}"
 TTYD_BIN="${TTYD_BIN:-ttyd}"
 NODE_BIN="${NODE_BIN:-node}"
@@ -125,9 +127,14 @@ case "$TTYD_MODE" in
     ;;
 esac
 
+herald_args=(-debug -demo -image-protocol="$IMAGE_PROTOCOL")
+if [ -n "$HERALD_THEME" ]; then
+  herald_args+=(-theme "$HERALD_THEME")
+fi
+
 "$TTYD_BIN" \
   "${ttyd_args[@]}" \
-  "$HERALD_BIN" -debug -demo -image-protocol="$IMAGE_PROTOCOL" \
+  "$HERALD_BIN" "${herald_args[@]}" \
   >"$TTYD_LOG" 2>&1 &
 TTYD_PID=$!
 
@@ -173,24 +180,31 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   page.on("pageerror", (err) => logs.push(`pageerror: ${err.message}`));
 
   await page.goto(process.env.URL, { waitUntil: "domcontentloaded" });
-  await sleep(5000);
+  await sleep(2500);
 
-  for (let i = 0; i < 6; i++) await page.keyboard.press("j");
+  await page.keyboard.press("Escape");
+  await sleep(400);
+  await page.keyboard.press("/");
+  await sleep(250);
+  await page.keyboard.type("Step 5");
+  await sleep(1200);
   await page.keyboard.press("Enter");
-  await sleep(1800);
-  await page.keyboard.press("ArrowRight");
-  await sleep(300);
+  await sleep(900);
+  await page.keyboard.press("Enter");
+  await sleep(1200);
   await page.keyboard.press("z");
+  await sleep(1000);
+  for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowDown");
   await sleep(6000);
 
   await page.screenshot({ path: process.env.SCREENSHOT_PATH, fullPage: true });
-  const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1000));
-  console.log(JSON.stringify({ bodyText, logs }, null, 2));
+  const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1600));
+  console.log(JSON.stringify({ screenshot: process.env.SCREENSHOT_PATH, bodyText, logs }, null, 2));
   await browser.close();
 })();
 NODE
 
-SCREENSHOT_PATH="$SCREENSHOT_PATH" METRICS_PATH="$METRICS_PATH" TTYD_MODE="$TTYD_MODE" "$PYTHON_BIN" <<'PY'
+SCREENSHOT_PATH="$SCREENSHOT_PATH" METRICS_PATH="$METRICS_PATH" TTYD_MODE="$TTYD_MODE" HERALD_THEME="$HERALD_THEME" "$PYTHON_BIN" <<'PY'
 from __future__ import annotations
 
 import json
@@ -203,6 +217,7 @@ from PIL import Image
 screenshot = Path(os.environ["SCREENSHOT_PATH"])
 metrics_path = Path(os.environ["METRICS_PATH"])
 ttyd_mode = os.environ["TTYD_MODE"]
+herald_theme = os.environ.get("HERALD_THEME", "")
 image = Image.open(screenshot).convert("RGB")
 width, height = image.size
 pixels = image.load()
@@ -264,21 +279,84 @@ chart_cells = [
     and comp["y0"] < int(height * 0.55)
 ]
 
+def detect_solid_color_blocks():
+    bg = pixels[max(0, width - 20), height // 2]
+    win = 20
+    step = 4
+    sample = 3
+    candidates = []
+    x_limit = min(width, 620)
+    y_limit = min(int(height * 0.45), height - win)
+    for y in range(120, y_limit, step):
+        for x in range(0, x_limit - win, step):
+            vals = []
+            off_background = 0
+            for yy in range(y, y + win, sample):
+                for xx in range(x, x + win, sample):
+                    rgb = pixels[xx, yy]
+                    vals.append(rgb)
+                    if sum(abs(rgb[i] - bg[i]) for i in range(3)) > 55:
+                        off_background += 1
+            sample_count = len(vals)
+            if sample_count == 0 or off_background / sample_count < 0.86:
+                continue
+            avg = [sum(v[i] for v in vals) / sample_count for i in range(3)]
+            variance = sum(
+                sum((v[i] - avg[i]) ** 2 for i in range(3)) for v in vals
+            ) / sample_count
+            if variance < 900 and sum(abs(avg[i] - bg[i]) for i in range(3)) > 70:
+                candidates.append((x + win // 2, y + win // 2))
+
+    clusters = []
+    for cx, cy in candidates:
+        for cluster in clusters:
+            if abs(cluster["cx"] - cx) < 22 and abs(cluster["cy"] - cy) < 22:
+                cluster["points"].append((cx, cy))
+                cluster["cx"] = sum(px for px, _ in cluster["points"]) / len(cluster["points"])
+                cluster["cy"] = sum(py for _, py in cluster["points"]) / len(cluster["points"])
+                break
+        else:
+            clusters.append({"cx": cx, "cy": cy, "points": [(cx, cy)]})
+
+    solid = [
+        {"x": round(cluster["cx"]), "y": round(cluster["cy"]), "hits": len(cluster["points"])}
+        for cluster in clusters
+        if len(cluster["points"]) >= 10
+    ]
+    rows = {}
+    for block in solid:
+        if block["x"] > 420 or block["y"] < 140 or block["y"] > 330:
+            continue
+        row_key = round(block["y"] / 32)
+        rows.setdefault(row_key, []).append(block)
+    if not rows:
+        return solid, []
+    chart_row = max(rows.values(), key=len)
+    return solid, sorted(chart_row, key=lambda block: block["x"])
+
+solid_color_blocks, solid_chart_blocks = detect_solid_color_blocks()
+large_raster_area = sum(comp["area"] for comp in large_images)
+chart_evidence_count = max(len(chart_cells), len(solid_chart_blocks))
 if ttyd_mode == "custom":
-    # The custom harness loads @xterm/addon-image directly and currently paints
-    # the color chart plus both large demo photos in document order.
-    ok = len(large_images) >= 2 and len(chart_cells) >= 8
+    # The custom harness loads @xterm/addon-image directly and should paint the
+    # color chart plus enough large photo area to prove native raster rendering.
+    ok = large_raster_area >= 45000 and chart_evidence_count >= 4
 else:
     # Stock ttyd is intentionally a smoke test for the exact manual command.
     # xterm.js may relocate or omit later overlays, so require only that browser
     # raster bytes visibly paint at least the color chart plus one large image.
-    ok = len(large_images) >= 1 and len(chart_cells) >= 8
+    ok = large_raster_area >= 10000 and chart_evidence_count >= 4
 metrics = {
     "mode": ttyd_mode,
+    "theme": herald_theme or None,
     "screenshot": str(screenshot),
     "image_size": {"width": width, "height": height},
     "large_image_components": large_images[:10],
+    "large_raster_area": large_raster_area,
     "chart_cell_components": chart_cells[:20],
+    "solid_color_blocks": solid_color_blocks[:30],
+    "solid_chart_blocks": solid_chart_blocks[:20],
+    "chart_evidence_count": chart_evidence_count,
     "component_count": len(components),
     "pass": ok,
 }

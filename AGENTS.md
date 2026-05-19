@@ -267,6 +267,14 @@ After a bug fix or large feature is complete, run all three surface tests and sa
 | **SSH** | `go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server && ./bin/herald-ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
 | **MCP** | `go build -o ./bin/herald-mcp-server ./cmd/herald-mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/herald-mcp-server` — then invoke the relevant tool(s) and verify output |
 
+If the change touches themes, full-screen preview, inline images, terminal graphics protocols, or screen-level rendering, also run the combined theme/image gate:
+
+```bash
+make build
+PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh
+HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh
+```
+
 Save the report as `reports/TEST_REPORT_<YYYY-MM-DD>_<short-description>.md`.
 
 ---

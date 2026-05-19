@@ -1,0 +1,4 @@
+interface:
+  display_name: "Herald Pre-Release Test"
+  short_description: "Run deterministic release-readiness gates for Herald"
+  default_prompt: "Use $pre-release-test to run Herald's deterministic pre-release gate across tests, TUI theme captures, inline image raster proof, SSH, and MCP."

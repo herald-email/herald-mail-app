@@ -52,6 +52,43 @@ func TestTUITestSkillFrontMatterParses(t *testing.T) {
 	}
 }
 
+func TestPreReleaseTestSkillFrontMatterParses(t *testing.T) {
+	data, err := os.ReadFile(".agents/skills/pre-release-test/SKILL.md")
+	if err != nil {
+		t.Fatalf("read skill file: %v", err)
+	}
+
+	frontMatter, body, ok := extractSkillFrontMatter(string(data))
+	if !ok {
+		t.Fatal("skill file is missing YAML front matter")
+	}
+
+	var meta skillFrontMatter
+	if err := yaml.Unmarshal([]byte(frontMatter), &meta); err != nil {
+		t.Fatalf("parse front matter: %v", err)
+	}
+
+	if meta.Name != "pre-release-test" {
+		t.Fatalf("unexpected skill name %q", meta.Name)
+	}
+
+	if meta.Description == "" {
+		t.Fatal("description should not be empty")
+	}
+
+	if !strings.Contains(body, ".agents/skills/pre-release-test/scripts/run_pre_release_gate.sh") {
+		t.Fatal("skill body should point at the bundled runner")
+	}
+
+	info, err := os.Stat(".agents/skills/pre-release-test/scripts/run_pre_release_gate.sh")
+	if err != nil {
+		t.Fatalf("stat runner script: %v", err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatal("runner script should be executable")
+	}
+}
+
 func extractSkillFrontMatter(raw string) (frontMatter string, body string, ok bool) {
 	rest, ok := strings.CutPrefix(raw, "---\n")
 	if !ok {

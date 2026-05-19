@@ -842,6 +842,7 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 
 - [x] IMAP mock server (`internal/testutil/imap_server.go`) — in-process IMAP server for integration tests
 - [x] Integration tests against the mock server (`internal/imap/integration_test.go`)
+- [x] Repo-local pre-release test skill runs deterministic demo gates for Go tests, theme/image raster proof, SSH, and MCP before beta tagging
 - [ ] 360 TUI manual QA matrix covering demo, live IMAP, live Ollama, SSH, and MCP lanes
 - [ ] TUI snapshot tests via `teatest` or PTY (render correctness at fixed terminal sizes)
 - [ ] CI pipeline running all tests on push
