@@ -184,12 +184,58 @@ func TestSettingsPanelKeyboardCategorySkipsUnrelatedFields(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	if !strings.Contains(rendered, "Keyboard Profile") || !strings.Contains(rendered, "Custom Keymap") {
-		t.Fatalf("expected Keyboard category to show keyboard fields, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Keyboard Profile") {
+		t.Fatalf("expected Keyboard category to show keyboard profile, got:\n%s", rendered)
 	}
 	for _, notWant := range []string{"Account Type", "AI Provider", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected Keyboard category to skip unrelated field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelKeyboardDefaultHidesCustomKeymap(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Keyboard")
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	if !strings.Contains(rendered, "Keyboard Profile") {
+		t.Fatalf("expected Keyboard category to show keyboard profile, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Custom Keymap") {
+		t.Fatalf("expected default keyboard profile to hide custom keymap, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsPanelKeyboardCustomShowsCustomKeymap(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.keyboardProfile = keyboardProfileCustom
+	s.customKeymap = "~/.config/herald/keymaps/work.yaml"
+	s = openSettingsPanelCategoryForTest(t, s, "Keyboard")
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{"Keyboard Profile", "Custom YAML", "Custom Keymap", "~/.config/herald/keymaps/work.yaml"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected custom keyboard profile to show %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelKeyboardSelectingCustomShowsCustomKeymap(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.customKeymap = "~/.config/herald/keymaps/work.yaml"
+	s = openSettingsPanelCategoryForTest(t, s, "Keyboard")
+
+	for i := 0; i < 3; i++ {
+		s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{"Custom YAML", "Custom Keymap", "~/.config/herald/keymaps/work.yaml"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected selected custom keyboard profile to show %q, got:\n%s", want, rendered)
 		}
 	}
 }

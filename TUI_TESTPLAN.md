@@ -595,7 +595,7 @@ Check these states during every applicable lane:
 4. Press `Esc`, confirm Timeline returns, then verify `1`, `2`, and `3` switch Timeline/Cleanup/Contacts in browse contexts.
 5. Return to Timeline and confirm `F1`, `F2`, and `F3` remain legacy tab aliases.
 6. Open Timeline search with `/`, type `q?/` into the query, and press `Ctrl+C` only after confirming the query text is editable.
-7. Open Settings with `S`, choose each keyboard profile (Default, Vim, Emacs, Custom), and verify invalid custom keymap paths or unknown command IDs are reported without replacing the active working map.
+7. Open Settings with `S`, choose each keyboard profile (Default, Vim, Emacs, Custom), verify the Custom Keymap path field appears only when Custom YAML is selected, and verify invalid custom keymap paths or unknown command IDs are reported without replacing the active working map.
 8. Use a Custom keymap that extends Default with no `fields.compose.default_mode`, then another that sets `fields.compose.default_mode: normal`.
 
 **Expect:**
@@ -606,7 +606,7 @@ Check these states during every applicable lane:
 - A Custom keymap that remaps tab switching, Compose, reply, forward, archive, delete, re-classify, sidebar, logs, or chat shows the remapped primary keys in the bottom hint bar, title-row tabs, and `?` shortcut help.
 - Timeline `c` opens blank Compose; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
-- Settings persists `keyboard.profile` and `keyboard.custom_keymap` without losing unrelated config fields.
+- Settings shows the Custom Keymap path field only for Custom YAML, while persisting `keyboard.profile` and any configured `keyboard.custom_keymap` without losing unrelated config fields.
 - Custom keymaps that extend Default keep Compose insert-first until `fields.compose.default_mode` opts into a modal field mode.
 
 ### TC-14G — Vim profile field modes and visual selection

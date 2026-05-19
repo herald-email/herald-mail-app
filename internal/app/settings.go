@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,6 +136,121 @@ type Settings struct {
 	themeSaveAs      string
 	themeResetRole   bool
 	themeResetAll    bool
+}
+
+type conditionalSettingsField struct {
+	field huh.Field
+	hide  func() bool
+}
+
+func hideSettingsFieldWhen(field huh.Field, hide func() bool) huh.Field {
+	return &conditionalSettingsField{field: field, hide: hide}
+}
+
+func (f *conditionalSettingsField) hidden() bool {
+	return f != nil && f.hide != nil && f.hide()
+}
+
+func (f *conditionalSettingsField) Init() tea.Cmd {
+	return f.field.Init()
+}
+
+func (f *conditionalSettingsField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
+	model, cmd := f.field.Update(msg)
+	if field, ok := model.(huh.Field); ok {
+		f.field = field
+	}
+	return f, cmd
+}
+
+func (f *conditionalSettingsField) View() string {
+	if f.hidden() {
+		return ""
+	}
+	return f.field.View()
+}
+
+func (f *conditionalSettingsField) Blur() tea.Cmd {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.Blur()
+}
+
+func (f *conditionalSettingsField) Focus() tea.Cmd {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.Focus()
+}
+
+func (f *conditionalSettingsField) Error() error {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.Error()
+}
+
+func (f *conditionalSettingsField) Run() error {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.Run()
+}
+
+func (f *conditionalSettingsField) RunAccessible(w io.Writer, r io.Reader) error {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.RunAccessible(w, r)
+}
+
+func (f *conditionalSettingsField) Skip() bool {
+	return f.hidden() || f.field.Skip()
+}
+
+func (f *conditionalSettingsField) Zoom() bool {
+	return !f.hidden() && f.field.Zoom()
+}
+
+func (f *conditionalSettingsField) KeyBinds() []key.Binding {
+	if f.hidden() {
+		return nil
+	}
+	return f.field.KeyBinds()
+}
+
+func (f *conditionalSettingsField) WithTheme(theme huh.Theme) huh.Field {
+	f.field = f.field.WithTheme(theme)
+	return f
+}
+
+func (f *conditionalSettingsField) WithKeyMap(keymap *huh.KeyMap) huh.Field {
+	f.field = f.field.WithKeyMap(keymap)
+	return f
+}
+
+func (f *conditionalSettingsField) WithWidth(width int) huh.Field {
+	f.field = f.field.WithWidth(width)
+	return f
+}
+
+func (f *conditionalSettingsField) WithHeight(height int) huh.Field {
+	f.field = f.field.WithHeight(height)
+	return f
+}
+
+func (f *conditionalSettingsField) WithPosition(position huh.FieldPosition) huh.Field {
+	f.field = f.field.WithPosition(position)
+	return f
+}
+
+func (f *conditionalSettingsField) GetKey() string {
+	return f.field.GetKey()
+}
+
+func (f *conditionalSettingsField) GetValue() any {
+	return f.field.GetValue()
 }
 
 type settingsPanelLayout struct {
@@ -529,11 +645,14 @@ func (s *Settings) buildForm() {
 				huh.NewOption("Custom YAML", keyboardProfileCustom),
 			).
 			Value(&s.keyboardProfile),
-		huh.NewInput().
-			Title("Custom Keymap").
-			Inline(true).
-			Placeholder("~/.config/herald/keymaps/work.yaml").
-			Value(&s.customKeymap),
+		hideSettingsFieldWhen(
+			huh.NewInput().
+				Title("Custom Keymap").
+				Inline(true).
+				Placeholder("~/.config/herald/keymaps/work.yaml").
+				Value(&s.customKeymap),
+			func() bool { return s.keyboardProfile != keyboardProfileCustom },
+		),
 	).Title("Keyboard")
 
 	themeGroup := huh.NewGroup(
