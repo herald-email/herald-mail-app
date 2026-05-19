@@ -4,10 +4,10 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-18T20:16:26+00:00
-- Published runs analyzed: 14
-- Total queue items: 7
-- Pending: 0
+- Updated at: 2026-05-19T00:26:16+00:00
+- Published runs analyzed: 15
+- Total queue items: 8
+- Pending: 1
 - Approved: 0
 - Rejected: 0
 - Implemented: 7
@@ -20,7 +20,18 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Pending Items
 
-- No pending items.
+### template-user-review-followup-settings-hints-feedback
+
+- Queue key: `template-user-review-followup-settings-hints-feedback-11020dbda5`
+- Status: pending
+- Seen in runs: 1
+- First seen: 2026-05-18T23:21:53+00:00
+- Last seen: 2026-05-18T23:21:53+00:00
+- Publish actions: commit, merge
+- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
+- Approval prompt: Approve exploring `template-user-review-followup-settings-hints-feedback` as the next explicit GEPA improvement pass.
+- Source runs:
+- `20260518-162153-hide-custom-keymap-in-keyboard-settings-unless-custom-yaml-is-selected` at 2026-05-18T23:21:53+00:00 via commit, merge
 
 ## Approved Items
 
