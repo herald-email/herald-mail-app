@@ -21,6 +21,8 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 	m.composeTo.SetValue("")
 	m.composeCC.SetValue("")
 	m.composeBCC.SetValue("")
+	m.composeCCExpanded = false
+	m.composeBCCExpanded = false
 	m.composeSubject.SetValue("")
 	m.composeBody.SetValue("")
 	m.composeStatus = ""

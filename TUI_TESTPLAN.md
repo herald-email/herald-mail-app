@@ -467,7 +467,7 @@ Check these states during every applicable lane:
 
 ### TC-08 — Interactive-first local AI scheduling
 
-**Lane:** C  
+**Lane:** C
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -528,23 +528,49 @@ Check these states during every applicable lane:
 6. Trigger typo-fix with `Ctrl+F`, shorten with `Ctrl+N`, and expand with `Ctrl+E` from the AI bar.
 7. Press `Ctrl+K`, type a custom freeform instruction such as `make this warmer and translate it to Spanish`, then press `Enter`.
 8. Wait for a suggestion or bounded failure.
-9. Edit the suggestion once, then press `Ctrl+Enter` to accept it into the compose body.
-10. Press `Ctrl+Z` and confirm the previous body is restored.
-11. Repeat once with AI unavailable, misconfigured, or using an invalid model.
+9. Confirm the suggestion replaces the main body editor instead of appearing below it, and that prompt scaffolding such as `Current draft:` or model context explanations are not inserted into the suggestion text.
+10. Confirm the Changes box shows inline word-level changes, not whole-line delete/add blocks, and the action hints sit directly below the Changes box without a large empty gap.
+11. Press `Tab` to compare the original draft, then `Tab` again to return to the suggestion.
+12. Edit the suggestion once, then press `Ctrl+Enter` to accept it into the compose body.
+13. Confirm the AI command bar remains usable after accept by triggering another quick action such as `Ctrl+F`.
+14. Press `Ctrl+Z` and confirm the previous body is restored.
+15. Repeat once with AI unavailable, misconfigured, or using an invalid model.
 
 **Expect:**
 - The AI command bar is open by default without pushing the compose chrome off-screen or narrowing the body editor.
 - The freeform instruction input is inline with the toolbar controls, not a separate `Ask:` row.
-- Success path shows loading state, diff/suggestion content, and an editable response area.
+- Success path shows loading state, a bounded diff/change strip, and an editable suggestion in the main editor slot.
+- AI review shows only the rewritten body in the suggestion editor; request context and `Current draft:` prompt echoes are stripped before display.
+- The Changes box uses readable word-level highlighting with changed tokens separated clearly, and does not advertise unsupported change paging controls.
+- The original body editor is hidden during AI review; the original draft is reachable with `Tab`, and the AI suggestion is reachable by pressing `Tab` again.
 - Quick actions include typo-fix, translation dropdown, style dropdown, and length adjustments.
 - Translate and Style actions use visible dropdown menus in the AI bar.
 - Freeform instructions behave like a chat-style writing request over the current draft and produce an editable rewrite.
-- `Ctrl+Enter` copies the accepted suggestion into the compose body and closes the panel cleanly.
+- `Ctrl+Enter` copies the accepted suggestion into the compose body, closes review mode, and leaves the AI command bar available for another action.
 - `Ctrl+Z` restores the body from before the accepted rewrite.
 - With AI unavailable, the default bar shows an `AI disabled` warning and does not advertise active rewrite controls.
 - If the AI provider declines a rewrite or translation request, Herald shows a concise Compose status warning and does not place the refusal text in the editable suggestion area.
 - Narrow sizes degrade cleanly without broken borders or hidden compose inputs.
 - Failure path stays responsive and shows concise bounded feedback in compose status instead of panicking or flooding logs.
+
+### TC-11A — Compose CC/BCC collapse and reveal
+
+**Lane:** C
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline and press `c` to open a blank Compose screen.
+2. Confirm empty CC and BCC rows are hidden and the header advertises `Ctrl+Alt+C` and `Ctrl+Alt+B`.
+3. Press `Tab` repeatedly and confirm focus cycles through To, Subject, Body without stopping on hidden CC/BCC.
+4. Press `Ctrl+Alt+C`, type a CC address, then press `Ctrl+Alt+B` and type a BCC address.
+5. Confirm CC/BCC rows stay visible once non-empty, contact autocomplete still opens in those fields, and `Tab` includes visible CC/BCC fields.
+6. Open or restore a draft/reply that already has CC and confirm the CC row is visible without pressing the hotkey.
+
+**Expect:**
+- Empty CC/BCC no longer consume vertical space.
+- `Ctrl+Alt+C` and `Ctrl+Alt+B` reveal and focus their fields without interfering with `Ctrl+C` quit or plain text entry.
+- Non-empty CC/BCC preserve existing send, draft-save, draft-restore, and autocomplete behavior.
+- At `50x15`, the minimum-size guard is acceptable; returning to larger sizes restores the composed layout cleanly.
 
 ### TC-12 — Compose AI subject hint accept and dismiss
 

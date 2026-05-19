@@ -15,6 +15,8 @@ func (m *Model) resetComposeMode() {
 	m.summaryTable.Blur()
 	m.detailsTable.Blur()
 	m.composeField = 0
+	m.composeCCExpanded = false
+	m.composeBCCExpanded = false
 	m.composeTo.Focus()
 	m.composeCC.Blur()
 	m.composeBCC.Blur()

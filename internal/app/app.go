@@ -354,8 +354,9 @@ type ContactSuggestionsMsg struct {
 
 // AIAssistMsg carries the result of an AI body-rewrite request.
 type AIAssistMsg struct {
-	Result string
-	Err    error
+	Result   string
+	Original string
+	Err      error
 }
 
 // AISubjectMsg carries the result of an AI subject-suggestion request.
@@ -521,6 +522,8 @@ type Model struct {
 	composeTo          textinput.Model
 	composeCC          textinput.Model
 	composeBCC         textinput.Model
+	composeCCExpanded  bool
+	composeBCCExpanded bool
 	composeSubject     textinput.Model
 	composeBody        textarea.Model
 	composeField       int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
@@ -541,6 +544,8 @@ type Model struct {
 	composeAIPanel        bool
 	composeAIInput        textinput.Model // free-form prompt
 	composeAIResponse     textarea.Model  // editable AI rewrite
+	composeAIOriginal     string          // original draft shown while reviewing an AI rewrite
+	composeAIShowOriginal bool            // true = review original instead of editable suggestion
 	composeAIDiff         string          // lipgloss-styled word diff (display only)
 	composeAILoading      bool
 	composeAIThread       bool              // true = include reply context in prompt
@@ -1996,11 +2001,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshComposeLayout()
 			return m, nil
 		}
-		original := m.composeBody.Value()
+		original := msg.Original
+		if original == "" {
+			original = m.composeBody.Value()
+		}
+		suggestion := cleanComposeAISuggestion(msg.Result, original)
 		m.composeAIMenu = ""
-		m.composeAIDiff = wordDiffWithTheme(m.theme, original, msg.Result)
-		m.composeAIResponse.SetValue(msg.Result)
+		m.composeAIDiff = wordDiffWithTheme(m.theme, original, suggestion)
+		m.composeAIOriginal = original
+		m.composeAIShowOriginal = false
+		m.composeAIResponse.SetValue(suggestion)
+		m.composeAIResponse.MoveToBegin()
 		m.composeAIInput.Blur()
+		m.composeBody.Blur()
 		m.composeAIResponse.Focus()
 		m.refreshComposeLayout()
 		return m, nil
@@ -2453,6 +2466,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.updateTableDimensions(msg.Width, msg.Height)
+		if m.composeAIReviewActive() && msg.Height <= 24 {
+			m.composeAIResponse.MoveToBegin()
+		}
 		m.chatWrappedLines = nil // invalidate on resize
 		return m, tea.ClearScreen
 

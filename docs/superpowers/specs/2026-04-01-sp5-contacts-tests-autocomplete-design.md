@@ -85,28 +85,38 @@ func TestSnapshot_TimelinePopulated(t *testing.T) {
 ```go
 composeCC     textinput.Model   // CC addresses (comma-separated)
 composeBCC    textinput.Model   // BCC addresses (comma-separated)
+composeCCExpanded  bool         // true when an empty CC field is explicitly shown
+composeBCCExpanded bool         // true when an empty BCC field is explicitly shown
 suggestions   []models.ContactData  // current autocomplete candidates
 suggestionIdx int               // selected row in dropdown (-1 = none)
 ```
 
-`composeField` currently cycles through 3 values (0=To, 1=Subject, 2=Body). It extends to 5: 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body.
+`composeField` currently cycles through 3 values (0=To, 1=Subject, 2=Body). It extends to 5 internally: 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body. Empty CC/BCC fields are skipped until expanded or populated.
 
 ### Layout change
 
-The compose form gains two rows between To and Subject:
+The compose form supports CC/BCC rows between To and Subject, but empty fields are collapsed by default:
+
+```
+To:      [____________________________]
+         Ctrl+Alt+C CC  Ctrl+Alt+B BCC
+Subject: [____________________________]
+─────────────────────────────────────────
+[body textarea]
+```
+
+When a user presses `Ctrl+Alt+C` or `Ctrl+Alt+B`, or when a draft/reply already has CC/BCC values, the corresponding row is shown:
 
 ```
 To:      [____________________________]
 CC:      [____________________________]
 BCC:     [____________________________]
 Subject: [____________________________]
-─────────────────────────────────────────
-[body textarea]
 ```
 
 ### Focus cycle
 
-`Tab` advances: To → CC → BCC → Subject → Body → (wrap).
+`Tab` advances through visible fields: To → Subject → Body → (wrap) when CC/BCC are empty and collapsed; To → CC → BCC → Subject → Body when both optional fields are visible.
 `Shift+Tab` reverses. Active field highlighted with existing focus style.
 
 **Exception**: when the autocomplete dropdown is open (`len(suggestions) > 0`), `Tab` accepts the selected suggestion instead of advancing focus. Focus advances only after the dropdown is cleared.

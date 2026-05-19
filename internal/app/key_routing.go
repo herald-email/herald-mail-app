@@ -380,10 +380,14 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		} else if m.composeAIMenu != "" {
 			m.composeAIMenu = ""
 			m.refreshComposeLayout()
-		} else if m.composeAIPanel && (m.composeAIInput.Focused() || m.composeAIResponse.Focused() || m.composeAILoading || m.composeAIDiff != "" || m.composeAIResponse.Value() != "") {
+		} else if m.composeAIReviewActive() {
+			m.dismissComposeAIReview()
+		} else if m.composeAIPanel && (m.composeAIInput.Focused() || m.composeAIResponse.Focused() || m.composeAILoading || m.composeAIDiff != "") {
 			m.composeAIPanel = false
 			m.composeAIMenu = ""
 			m.composeAIDiff = ""
+			m.composeAIOriginal = ""
+			m.composeAIShowOriginal = false
 			m.composeAIInput.Blur()
 			m.composeAIResponse.Blur()
 			m.refreshComposeLayout()

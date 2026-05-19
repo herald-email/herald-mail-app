@@ -905,7 +905,7 @@ func (m *Model) updateTableDimensions(width, height int) {
 	// Compose renders directly in the main viewport, while tableHeight is the
 	// bordered-panel inner budget used by table surfaces. Give Compose back
 	// those two rows so the body editor absorbs spare vertical space.
-	const composeFixedRows = 15 // 4 bordered fields + divider + body borders.
+	composeFixedRows := m.composeFixedRows()
 	composeViewportRows := tableHeight + 2
 	composeBodyHeight := composeViewportRows - composeFixedRows - composeExtraRows
 	minComposeBodyHeight := 3
@@ -917,6 +917,8 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.composeBody.SetWidth(composeBodyWidth)
 	m.composeBody.SetHeight(composeBodyHeight)
+	m.composeAIResponse.SetWidth(composeBodyWidth)
+	m.composeAIResponse.SetHeight(composeBodyHeight)
 
 	m.reflowVisibleTableRows()
 }

@@ -65,6 +65,16 @@ func TestWordDiff_PhraseSwap(t *testing.T) {
 	}
 }
 
+func TestWordDiff_ReplacementRunsRemainReadable(t *testing.T) {
+	result := wordDiff("you are the best, Herald.", "I'm sorry, but I cannot help.")
+	stripped := stripANSI(result)
+	for _, glued := range []string{"youI'm", "aresorry", "bestI"} {
+		if strings.Contains(stripped, glued) {
+			t.Fatalf("replacement diff should separate changed runs, found %q in %q", glued, stripped)
+		}
+	}
+}
+
 func TestComposeAIFields_Initialized(t *testing.T) {
 	b := &stubBackend{}
 	m := New(b, nil, "", nil, false)

@@ -630,6 +630,7 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 		{"Ctrl+S", "send the current message"},
 		{"Ctrl+P", "toggle Markdown preview"},
 		{"Ctrl+A", "attach a file"},
+		{"Ctrl+Alt+C/B", "show and focus CC or BCC"},
 		{"Ctrl+K", "focus the inline AI instruction field"},
 		{"Ctrl+J", "suggest a subject from the draft"},
 		{"Esc", "dismiss Compose status, subject suggestion, or AI bar"},
@@ -643,6 +644,7 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 			shortcutHelpEntry{"Ctrl+E", "expand the current draft"},
 			shortcutHelpEntry{"Ctrl+Z", "undo the last accepted AI rewrite"},
 			shortcutHelpEntry{"Ctrl+Enter", "accept the editable AI suggestion"},
+			shortcutHelpEntry{"Tab", "toggle Original/Suggestion while reviewing AI output"},
 		)
 	}
 	if m.composePreserved != nil {

@@ -279,9 +279,11 @@ func TestComposeQuestionMarkTypesIntoEditableFieldsAndDoesNotOpenHelp(t *testing
 			name: "AI response",
 			setup: func(m *Model) {
 				m.composeAIPanel = true
+				m.composeAIOriginal = "original"
+				m.composeAIResponse.SetValue("draft")
 				m.composeAIResponse.Focus()
 			},
-			value: func(m *Model) string { return m.composeAIResponse.Value() },
+			value: func(m *Model) string { return strings.TrimPrefix(m.composeAIResponse.Value(), "draft") },
 		},
 	}
 

@@ -404,7 +404,7 @@ Write in Markdown, deliver as properly formatted HTML email. Compose is a transi
 
 ### AI Writing Assistant (Compose)
 
-While composing, the configured AI model acts as an inline writing assistant. The assistant defaults open as a compact command bar between the header fields and body, with Translate and Style dropdowns, quick actions, undo, and a small inline custom-instruction field in the same row.
+While composing, the configured AI model acts as an inline writing assistant. The assistant defaults open as a compact command bar between the header fields and body, with Translate and Style dropdowns, quick actions, undo, and a small inline custom-instruction field in the same row. When a rewrite returns, Compose enters a review mode where the cleaned editable suggestion replaces the main body editor until the user accepts or dismisses it, after which the command bar remains available.
 
 - [x] **Default-open AI bar** — Compose shows the compact AI command bar immediately; `Ctrl+K` focuses the inline instruction field
 - [x] **Disabled AI warning** — when no AI provider is configured, Compose shows an `AI disabled` warning in the bar instead of active rewrite controls
@@ -415,6 +415,8 @@ While composing, the configured AI model acts as an inline writing assistant. Th
 - [x] **Subject line suggest** (`Ctrl+J`) — when a draft or reply context exists, offer a concise subject hint that can be accepted with `Tab`
 - [x] **Length adjust** — AI bar quick actions can shorten the draft to key points or expand it with useful context
 - [x] **Freeform instruction chat** (`Ctrl+K`) — the user can type natural-language directions inline, such as "make this warmer and translate it to Spanish", and press `Enter` for an editable rewrite
+- [x] **Review-in-place rewrite** — AI suggestions occupy the main editor slot instead of being appended below it; `Tab` toggles Original/Suggestion while reviewing
+- [x] **Clean review surface** — AI review strips `Current draft:` prompt echoes, uses readable word-level Changes without fake pager hints, and keeps the action row attached to the Changes box
 
 ### Quick Replies
 

@@ -32,13 +32,8 @@ func TestComposeCCBCCWidth_MatchesToField(t *testing.T) {
 }
 
 // TestComposeBodyHeight_FitsTerminal verifies that the compose body textarea
-// height is calculated to leave room for all four header fields (To/CC/BCC/Subject),
-// the divider, status line, and body borders — so the total compose view never
-// overflows the terminal height and pushes the To: field off the top of the screen.
-//
-// Regression test for the overflow bug where composeBodyHeight used -10 (missing
-// CC and BCC rows) instead of the correct -16, causing the To: field to be
-// scrolled off the top in a 50-row terminal.
+// height is calculated from the currently visible header fields, divider, and
+// body borders so the total compose view never overflows the terminal height.
 func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 	for _, h := range []int{24, 40, 50, 80} {
 		b := &stubBackend{}
@@ -52,13 +47,8 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 		// that table panels spend on their own outer border.
 		composeViewportRows := tableHeight + 2
 
-		// Fixed compose rows (excluding body content):
-		//   To(3) + CC(3) + BCC(3) + Subject(3) = 12 field rows
-		//   divider(1) + body borders(2) = 3 overhead rows
-		//   total fixed = 15
-		const fixedRows = 15
 		composeExtraRows := m.composeAdditionalRows(tableHeight)
-		expectedBodyHeight := composeViewportRows - fixedRows - composeExtraRows
+		expectedBodyHeight := composeViewportRows - m.composeFixedRows() - composeExtraRows
 		minExpectedBodyHeight := 3
 		if composeExtraRows > 0 {
 			minExpectedBodyHeight = 1
@@ -335,12 +325,403 @@ func TestComposeAIResultRefreshesBodyHeight(t *testing.T) {
 	updated, _ := m.Update(AIAssistMsg{Result: "Please review this draft."})
 	m = updated.(*Model)
 
-	if got := m.composeBody.Height(); got >= heightBefore {
-		t.Fatalf("compose body height after AI result = %d, want less than %d so the result editor fits", got, heightBefore)
+	if got := m.composeAIResponse.Height(); got >= heightBefore {
+		t.Fatalf("AI response height after AI result = %d, want less than %d so the review chrome fits", got, heightBefore)
+	}
+	if m.composeAIResponse.Height() != m.composeBody.Height() {
+		t.Fatalf("AI response height = %d, want body editor slot height %d", m.composeAIResponse.Height(), m.composeBody.Height())
 	}
 	rendered := stripANSI(m.renderMainView())
-	if !strings.Contains(rendered, "Changes:") || !strings.Contains(rendered, "Please review this draft.") {
-		t.Fatalf("expected AI result editor to remain visible after layout refresh, got:\n%s", rendered)
+	for _, want := range []string{"AI Assist", "Suggestion", "Original: tab", "Changes", "Please review this draft."} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected AI review to contain %q after layout refresh, got:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Suggestion (edit freely):") {
+		t.Fatalf("AI suggestion should replace the body editor instead of rendering the old appended panel:\n%s", rendered)
+	}
+}
+
+func TestComposeAIReviewRendersFramedReviewSurface(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeBody.SetValue("you are the best, Herald.")
+	m.composeAIPanel = true
+
+	updated, _ := m.Update(AIAssistMsg{
+		Original: "you are the best, Herald.",
+		Result:   "I'm sorry, but I cannot fulfill your request.",
+	})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"AI Assist · Suggestion replaces draft",
+		"Original: tab",
+		"Suggestion",
+		"(edit freely)",
+		"Changes",
+		"Accept ctrl+enter",
+		"Discard esc",
+		"Edit in place",
+		"Undo ctrl+z",
+		"Tab original/suggestion",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("AI review surface missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Count(rendered, "Suggestion") < 2 {
+		t.Fatalf("expected header and section title to both name Suggestion:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Suggestion (edit freely):") {
+		t.Fatalf("review mode should use the framed mock surface, not the old appended panel:\n%s", rendered)
+	}
+}
+
+func TestComposeAIResultStripsPromptScaffoldingBeforeReview(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeBody.SetValue("pleese review the budget note.")
+	m.composeAIPanel = true
+
+	raw := "Please review the budget note.\n\n" +
+		"Demo AI: I found the most relevant mailbox context for \"Fix typos\".\n\n" +
+		"Current draft:\npleese review the budget note."
+	updated, _ := m.Update(AIAssistMsg{
+		Original: "pleese review the budget note.",
+		Result:   raw,
+	})
+	m = updated.(*Model)
+
+	if got := m.composeAIResponse.Value(); got != "Please review the budget note." {
+		t.Fatalf("cleaned AI suggestion = %q, want only rewritten body", got)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, leaked := range []string{"Current draft:", "Demo AI:", "most relevant mailbox context"} {
+		if strings.Contains(rendered, leaked) {
+			t.Fatalf("AI review leaked prompt scaffolding %q:\n%s", leaked, rendered)
+		}
+	}
+}
+
+func TestComposeAIReviewUsesWordDiffInsteadOfWholeLineReplacement(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeBody.SetValue("you are the best, Herald.")
+	m.composeAIPanel = true
+
+	updated, _ := m.Update(AIAssistMsg{
+		Original: "you are the best, Herald.",
+		Result:   "you are the best, Herald!",
+	})
+	m = updated.(*Model)
+
+	rendered := stripANSI(m.renderMainView())
+	for _, unwanted := range []string{"- you are the best, Herald.", "+ you are the best, Herald!"} {
+		if strings.Contains(rendered, unwanted) {
+			t.Fatalf("changes box should show word-level diff, not whole-line replacement %q:\n%s", unwanted, rendered)
+		}
+	}
+	for _, want := range []string{"you are the best", "Herald", ".", "!"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("word-level diff missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestComposeAIReviewView_FillsTerminalHeight(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{name: "wide", width: 220, height: 50},
+		{name: "snapshot", width: 120, height: 40},
+		{name: "standard", width: 80, height: 24},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, tc.width, tc.height)
+			m.activeTab = tabCompose
+			m.classifier = &stubClassifier{}
+			m.composeBody.SetValue("you are the best, Herald.")
+			m.composeAIPanel = true
+
+			updated, _ := m.Update(AIAssistMsg{
+				Original: "you are the best, Herald.",
+				Result:   "I'm sorry, but I cannot fulfill your request.",
+			})
+			m = updated.(*Model)
+			freezeComposeCursors(m)
+
+			rendered := m.renderMainView()
+			lines := strings.Split(stripANSI(rendered), "\n")
+			if len(lines) != tc.height {
+				t.Fatalf("AI review Compose rendered %d lines at %dx%d, want exactly %d lines:\n%s",
+					len(lines), tc.width, tc.height, tc.height, stripANSI(rendered))
+			}
+			bottomRows := strings.Join(lines[len(lines)-4:], "\n")
+			if !strings.Contains(bottomRows, "ctrl+enter: accept") || !strings.Contains(bottomRows, "ctrl+alt+c/b: CC/BCC") {
+				t.Fatalf("expected review key hints near bottom at %dx%d, got:\n%s",
+					tc.width, tc.height, bottomRows)
+			}
+		})
+	}
+}
+
+func TestComposeAIReviewActionsStayAdjacentToChanges(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeBody.SetValue("original draft")
+	m.composeAIPanel = true
+
+	result := strings.Repeat("This suggestion has enough text to wrap across the review editor. ", 8)
+	updated, _ := m.Update(AIAssistMsg{Original: "original draft", Result: result})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	lines := strings.Split(stripANSI(m.renderMainView()), "\n")
+	changesTop := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Changes") {
+			changesTop = i
+			break
+		}
+	}
+	if changesTop < 0 {
+		t.Fatalf("expected Changes section:\n%s", strings.Join(lines, "\n"))
+	}
+	changesBottom := -1
+	for i := changesTop + 1; i < len(lines); i++ {
+		if strings.Contains(lines[i], "└") && strings.Contains(lines[i], "─") {
+			changesBottom = i
+			break
+		}
+	}
+	acceptLine := -1
+	for i := changesTop + 1; i < len(lines); i++ {
+		if strings.Contains(lines[i], "Accept ctrl+enter") {
+			acceptLine = i
+			break
+		}
+	}
+	if changesBottom < 0 || acceptLine < 0 {
+		t.Fatalf("expected Changes bottom and Accept row, got bottom=%d accept=%d:\n%s", changesBottom, acceptLine, strings.Join(lines, "\n"))
+	}
+	if acceptLine-changesBottom > 2 {
+		t.Fatalf("Accept row is detached from Changes by %d rows:\n%s", acceptLine-changesBottom, strings.Join(lines, "\n"))
+	}
+}
+
+func TestComposeAIReviewDoesNotAdvertiseUnsupportedChangePager(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeBody.SetValue("hello team")
+	m.composeAIPanel = true
+
+	updated, _ := m.Update(AIAssistMsg{Original: "hello team", Result: "hello everyone"})
+	m = updated.(*Model)
+
+	rendered := stripANSI(m.renderMainView())
+	for _, unwanted := range []string{"1/2", "▲▼", "Alt+[n/p]"} {
+		if strings.Contains(rendered, unwanted) {
+			t.Fatalf("review should not advertise unsupported change pager hint %q:\n%s", unwanted, rendered)
+		}
+	}
+}
+
+func TestComposeAIReviewCompactViewStartsAtSuggestionTop(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeBody.SetValue("original draft")
+	m.composeAIPanel = true
+
+	result := "First sentence starts the suggestion so it must remain visible. " +
+		"Second sentence adds enough text to wrap through the compact review. " +
+		"Final sentence should not be the only visible line."
+	updated, _ := m.Update(AIAssistMsg{Original: "original draft", Result: result})
+	m = updated.(*Model)
+	resized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = resized.(*Model)
+	freezeComposeCursors(m)
+
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "First sentence") {
+		t.Fatalf("compact review should show the start of the suggestion, got:\n%s", rendered)
+	}
+}
+
+func TestComposeAIReviewWideSurfaceKeepsChangesAboveFooter(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeBody.SetValue("original draft")
+	m.composeAIPanel = true
+
+	result := strings.Repeat("This suggestion has enough text to wrap across the review editor. ", 8)
+	updated, _ := m.Update(AIAssistMsg{Original: "original draft", Result: result})
+	m = updated.(*Model)
+	freezeComposeCursors(m)
+
+	lines := strings.Split(stripANSI(m.renderMainView()), "\n")
+	changesLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Changes") {
+			changesLine = i
+			break
+		}
+	}
+	if changesLine < 0 {
+		t.Fatalf("expected framed review to include Changes section:\n%s", strings.Join(lines, "\n"))
+	}
+	if changesLine > 36 {
+		t.Fatalf("Changes section starts too low at line %d; suggestion editor is absorbing the review surface:\n%s", changesLine+1, strings.Join(lines, "\n"))
+	}
+}
+
+func TestComposeCollapsedCCBCCRevealAndTabOrder(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeField = composeFieldTo
+	m.composeTo.Focus()
+	m.updateTableDimensions(120, 40)
+
+	rendered := stripANSI(m.renderMainView())
+	if strings.Contains(rendered, "CC:") || strings.Contains(rendered, "BCC:") {
+		t.Fatalf("blank Compose should hide empty CC/BCC rows:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Ctrl+Alt+C CC") || !strings.Contains(rendered, "Ctrl+Alt+B BCC") {
+		t.Fatalf("collapsed CC/BCC hint missing:\n%s", rendered)
+	}
+
+	m.cycleComposeField()
+	if m.composeField != composeFieldSubject {
+		t.Fatalf("tab from To should skip hidden CC/BCC and focus Subject, got field %d", m.composeField)
+	}
+	m.cycleComposeField()
+	if m.composeField != composeFieldBody {
+		t.Fatalf("tab from Subject should focus Body, got field %d", m.composeField)
+	}
+
+	model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl | tea.ModAlt})
+	if cmd != nil {
+		t.Fatalf("Ctrl+Alt+C should reveal CC synchronously, got command %T", cmd)
+	}
+	m = model.(*Model)
+	if !m.composeCCVisible() || m.composeField != composeFieldCC || !m.composeCC.Focused() {
+		t.Fatalf("Ctrl+Alt+C should reveal and focus CC, visible=%v field=%d focused=%v", m.composeCCVisible(), m.composeField, m.composeCC.Focused())
+	}
+
+	model, cmd = m.handleComposeKey(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
+	if cmd != nil {
+		t.Fatalf("Ctrl+Alt+B should reveal BCC synchronously, got command %T", cmd)
+	}
+	m = model.(*Model)
+	if !m.composeBCCVisible() || m.composeField != composeFieldBCC || !m.composeBCC.Focused() {
+		t.Fatalf("Ctrl+Alt+B should reveal and focus BCC, visible=%v field=%d focused=%v", m.composeBCCVisible(), m.composeField, m.composeBCC.Focused())
+	}
+
+	m.cycleComposeField()
+	if m.composeField != composeFieldSubject {
+		t.Fatalf("tab from visible BCC should focus Subject, got field %d", m.composeField)
+	}
+}
+
+func TestComposeNonEmptyCCBCCRenderWithoutExpansion(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeCC.SetValue("cc@example.com")
+	m.composeBCC.SetValue("bcc@example.com")
+	m.composeCCExpanded = false
+	m.composeBCCExpanded = false
+	m.updateTableDimensions(120, 40)
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"CC:", "cc@example.com", "BCC:", "bcc@example.com"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("non-empty CC/BCC should render %q without expansion:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestComposeAIReviewTabTogglesOriginalAndEscDismissesWithoutMutation(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeBody.SetValue("original draft")
+	m.composeAIPanel = true
+
+	updated, _ := m.Update(AIAssistMsg{Original: "original draft", Result: "better draft"})
+	m = updated.(*Model)
+	if !m.composeAIReviewActive() || m.composeAIShowOriginal {
+		t.Fatalf("expected suggestion review active, active=%v original=%v", m.composeAIReviewActive(), m.composeAIShowOriginal)
+	}
+
+	model, _ := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyTab})
+	m = model.(*Model)
+	if !m.composeAIShowOriginal {
+		t.Fatal("Tab should switch AI review to the original draft")
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "AI Assist · Original") || !strings.Contains(rendered, "original draft") {
+		t.Fatalf("original review missing:\n%s", rendered)
+	}
+
+	model, _ = m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.composeAIReviewActive() {
+		t.Fatal("Esc should dismiss AI review")
+	}
+	if got := m.composeBody.Value(); got != "original draft" {
+		t.Fatalf("Esc mutated compose body to %q", got)
+	}
+}
+
+func TestComposeAIReviewCtrlEnterAcceptsAndUndoRestores(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeBody.SetValue("helo team")
+	m.composeAIPanel = true
+
+	updated, _ := m.Update(AIAssistMsg{Original: "helo team", Result: "hello team"})
+	m = updated.(*Model)
+
+	model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl})
+	if cmd != nil {
+		t.Fatalf("Ctrl+Enter should accept synchronously, got command %T", cmd)
+	}
+	m = model.(*Model)
+	if m.composeAIReviewActive() {
+		t.Fatal("Ctrl+Enter should close AI review")
+	}
+	if got := m.composeBody.Value(); got != "hello team" {
+		t.Fatalf("compose body after Ctrl+Enter = %q", got)
+	}
+	if got := m.composeAIUndoBody; got != "helo team" {
+		t.Fatalf("composeAIUndoBody = %q", got)
+	}
+	if !m.composeAIPanel {
+		t.Fatal("accepting a suggestion should leave the AI toolbar available")
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "[Fix: ctrl+f]") {
+		t.Fatalf("AI toolbar missing after accept:\n%s", rendered)
+	}
+	model, cmd = m.handleComposeKey(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("Ctrl+F should still start an AI rewrite after accepting a suggestion")
+	}
+	if !m.composeAILoading {
+		t.Fatal("Ctrl+F after accept should show AI loading state")
+	}
+
+	m.undoComposeAIRewrite()
+	if got := m.composeBody.Value(); got != "helo team" {
+		t.Fatalf("compose body after undo = %q", got)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-An AI command bar in Compose that opens by default and rewrites, translates, fixes typos, changes style/tone, shortens, or expands the email body without narrowing the editor. It keeps Translate, Style, quick actions, undo, and a freeform chat-style instruction input in one compact row, suggests subject lines, supports one-step undo after accepting a rewrite, and shows word-level diffs so the user can edit the AI suggestion before accepting it.
+An AI command bar in Compose that opens by default and rewrites, translates, fixes typos, changes style/tone, shortens, or expands the email body without narrowing the editor. It keeps Translate, Style, quick actions, undo, and a freeform chat-style instruction input in one compact row, suggests subject lines, supports one-step undo after accepting a rewrite, strips prompt scaffolding from model responses, and shows word-level diffs so the user can edit the AI suggestion before accepting it.
 
 ---
 
@@ -18,7 +18,9 @@ This section lists the user-visible writing-assistant capabilities that Compose 
 - [x] **Freeform instruction chat** — the inline `Ask:` field accepts natural-language writing requests such as "make this warmer and translate it to Spanish"
 - [x] **Word-level diff** — only changed words highlighted inline (red strikethrough for deletions, green for additions); unchanged words stay plain
 - [x] **Editable suggestion** — AI response placed in an editable textarea; user modifies before accepting
+- [x] **Clean suggestion body** — request context, `Current draft:` echoes, and demo/context explanations are removed before review display
 - [x] **Accept all** — `Ctrl+Enter` copies the (possibly edited) AI version into the compose body
+- [x] **Toolbar continuity** — after accepting or dismissing review mode, the compact AI command bar remains available for another action
 - [x] **Undo accepted rewrite** — `Ctrl+Z` restores the previous body after accepting an AI suggestion
 - [x] **Subject suggestion** — `Ctrl+J` fires a subject hint; `Tab` to accept, `Esc` to dismiss
 - [x] **Thread context** — by default uses the full reply thread as context; toggle to "Draft only" in panel
@@ -34,14 +36,12 @@ This section defines the terminal interaction model for the Compose AI panel. Th
 ```
 AI  Translate: Spanish v  Style: Friendly v  [Fix] [Shorten] [Expand] Undo  Ask: > make this warmer
 ──────────────────────────────────────────────────────────────────────────────
-┌─ draft body editor remains full width ─────────────────────────────────────┐
-│ Hey Alice,                                                                 │
-└────────────────────────────────────────────────────────────────────────────┘
-┌─ AI suggestion ─────────────────────────────────────────────────────────────┐
-│ Changes: ~~Hey~~ Hi Alice, ...                                             │
-│ Suggestion (edit freely):                                                  │
+┌─ AI Assist · Suggestion replaces draft ────────────────────────────────────┐
+│ Suggestion (edit freely)                                                    │
 │ Hi Alice, ...                                                              │
-│ [Accept] [Discard]  Ctrl+Enter: accept  Ctrl+Z: undo accepted rewrite      │
+│ Changes · word diff                                                        │
+│ ~~Hey~~ Hi Alice, ...                                                      │
+│ Accept ctrl+enter  │  Discard esc  │  Undo ctrl+z  │  Tab original/suggestion
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -82,6 +82,8 @@ composeAIPanel       bool
 composeAIInput       textinput.Model  // free-form prompt
 composeAIResponse    textarea.Model   // editable AI rewrite
 composeAIDiff        string           // rendered word-level diff (lipgloss styled)
+composeAIOriginal    string           // draft snapshot used for the request
+composeAIShowOriginal bool            // true while review shows original draft
 composeAILoading     bool
 composeAIThread      bool             // true = use thread context (default)
 composeAISubjectHint string           // pending subject suggestion ("" = none)
@@ -93,6 +95,7 @@ composeAISubjectHint string           // pending subject suggestion ("" = none)
 // AIAssistMsg carries the AI body rewrite result.
 type AIAssistMsg struct {
     Result string
+    Original string
     Err    error
 }
 
@@ -109,7 +112,7 @@ type AISubjectMsg struct {
 1. Snapshots `composeBody.Value()` as the draft
 2. If `composeAIThread == true` AND `replyToMessageID != ""` (i.e. this is a reply): fetches thread context from `m.replyThread` (already loaded when reply was initiated) and prepends to context. For new emails (no thread), `composeAIThread` is forced false and the context toggle is hidden in the panel.
 3. Calls `m.ai.Chat([]ChatMessage{system, user})` where system = "You are an email writing assistant. Rewrite the email body following the instruction. Return only the rewritten body, no explanation." and user = `instruction + "\n\nDraft:\n" + draft`
-4. Returns `AIAssistMsg{Result: response}`
+4. Returns `AIAssistMsg{Result: response, Original: draft}`
 
 **`composeAIQuickAction(key string)`**
 1. Maps AI-bar quick actions to immediate rewrite instructions.
@@ -149,12 +152,13 @@ Tokens are split on word boundaries (spaces, newlines, punctuation) so that "syn
 - Shows a dropdown row when Translate or Style is open
 
 **`renderComposeAIResult(width int) string`**
-- Shows `composeAIDiff` and `composeAIResponse.View()` as a full-width editable result area when a suggestion is available
-- Keeps the result below the compose body rather than narrowing the draft editor into side-by-side columns
+- Shows only a bounded loading state when a rewrite is pending
+- Does not render an appended suggestion panel below the compose body; completed suggestions are handled by review mode in the main editor slot
 
 **`renderComposeView()` changes**
 - When `composeAIPanel == true`: command bar renders between Subject and the body, and body height is recalculated for dropdown/loading/result rows
 - When `composeAISubjectHint != ""`: hint line appended below Subject row with `Tab=accept Esc=dismiss` indicator
+- When `composeAIResponse` has content: the editable suggestion replaces the main body editor until accepted or dismissed, and `Tab` toggles between Suggestion and Original review views
 
 ### Update() handlers
 
@@ -166,9 +170,11 @@ Tokens are split on word boundaries (spaces, newlines, punctuation) so that "syn
 - `Ctrl+F`: run typo-fix rewrite
 - `Ctrl+N` / `Ctrl+E`: run shorten or expand rewrites
 - `Ctrl+Z`: restore the prior body after an accepted rewrite
-- `Ctrl+Enter` (panel open): copy `composeAIResponse.Value()` into `composeBody.SetValue()`; close panel
+- `Ctrl+Enter` (AI review open): copy `composeAIResponse.Value()` into `composeBody.SetValue()`; close review mode while keeping the AI command bar available
+- `Esc` (AI review open): close the review and restore focus to the draft body without mutating `composeBody`, while keeping the AI command bar available
+- `Tab` (AI review open): toggle between the editable Suggestion view and read-only Original view
 - `Tab` (subject hint visible): `composeSubject.SetValue(composeAISubjectHint)`; clear hint
-- `AIAssistMsg`: set `composeAIResponse` content to result; compute `composeAIDiff = wordDiff(original, result)`; `composeAILoading = false`
+- `AIAssistMsg`: clean prompt scaffolding from result, set `composeAIResponse` content to the clean suggestion, preserve the original draft snapshot, compute `composeAIDiff = wordDiff(original, suggestion)`, focus AI review, and set `composeAILoading = false`
 - `AISubjectMsg`: set `composeAISubjectHint`; `composeAILoading = false`
 
 ---

@@ -194,9 +194,7 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 		if m.composeAILoading {
 			rows++
 		}
-		if m.composeAIDiff != "" || m.composeAIResponse.Value() != "" {
-			rows += 8
-		}
+		rows += m.composeAIReviewExtraRows()
 	}
 	if m.composeAISubjectHint != "" {
 		rows++
@@ -223,12 +221,56 @@ func (m *Model) refreshComposeLayout() {
 	}
 }
 
+func (m *Model) composeCCVisible() bool {
+	return m.composeCCExpanded || strings.TrimSpace(m.composeCC.Value()) != "" || m.composeField == composeFieldCC
+}
+
+func (m *Model) composeBCCVisible() bool {
+	return m.composeBCCExpanded || strings.TrimSpace(m.composeBCC.Value()) != "" || m.composeField == composeFieldBCC
+}
+
+func (m *Model) composeOptionalRecipientHintVisible() bool {
+	return !m.composeCCVisible() || !m.composeBCCVisible()
+}
+
+func (m *Model) composeAIReviewActive() bool {
+	return m.composeAIPanel && strings.TrimSpace(m.composeAIResponse.Value()) != ""
+}
+
+func (m *Model) composeAIReviewExtraRows() int {
+	if !m.composeAIReviewActive() {
+		return 0
+	}
+	if m.windowHeight <= 24 {
+		return 7
+	}
+	// The framed review surface adds an outer frame, header, nested Changes
+	// section, and action row around the suggestion editor.
+	return 12
+}
+
+func (m *Model) composeFixedRows() int {
+	fieldRows := 2 * 3 // To and Subject are always visible.
+	if m.composeCCVisible() {
+		fieldRows += 3
+	}
+	if m.composeBCCVisible() {
+		fieldRows += 3
+	}
+	if m.composeOptionalRecipientHintVisible() {
+		fieldRows++
+	}
+	return fieldRows + 1 + 2 // divider + main editor borders.
+}
+
 func (m *Model) resetComposeAIBar() {
 	m.composeAIPanel = true
 	m.composeAIMenu = ""
 	m.composeAIStyle = ""
 	m.composeAITranslate = ""
 	m.composeAIUndoBody = ""
+	m.composeAIOriginal = ""
+	m.composeAIShowOriginal = false
 	m.composeAIDiff = ""
 	m.composeAISubjectHint = ""
 	m.composeAIInput.SetValue("")
@@ -242,6 +284,23 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Attachment path input intercepts all keys while active
 	if m.attachmentInputActive {
 		return m.handleAttachmentPathKey(msg)
+	}
+
+	switch shortcutKey(msg) {
+	case "ctrl+alt+c":
+		m.composeCCExpanded = true
+		m.composeAIInput.Blur()
+		m.composeAIResponse.Blur()
+		m.focusComposeField(composeFieldCC)
+		m.refreshComposeLayout()
+		return m, nil
+	case "ctrl+alt+b":
+		m.composeBCCExpanded = true
+		m.composeAIInput.Blur()
+		m.composeAIResponse.Blur()
+		m.focusComposeField(composeFieldBCC)
+		m.refreshComposeLayout()
+		return m, nil
 	}
 
 	if m.composeAIPanel {
@@ -267,8 +326,27 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// When AI response textarea is focused, route to it
-	if m.composeAIPanel && m.composeAIResponse.Focused() {
+	if m.composeAIReviewActive() {
+		switch shortcutKey(msg) {
+		case "tab":
+			m.composeAIShowOriginal = !m.composeAIShowOriginal
+			if m.composeAIShowOriginal {
+				m.composeAIResponse.Blur()
+			} else {
+				m.composeAIResponse.Focus()
+			}
+			m.refreshComposeLayout()
+			return m, nil
+		case "esc":
+			m.dismissComposeAIReview()
+			return m, nil
+		case "ctrl+enter":
+			m.acceptComposeAIResponse()
+			return m, nil
+		}
+		if m.composeAIShowOriginal {
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.composeAIResponse, cmd = m.composeAIResponse.Update(msg)
 		return m, cmd
@@ -349,6 +427,10 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.refreshComposeLayout()
 		return m, nil
 	case "ctrl+g":
+		if m.composeAIReviewActive() {
+			m.dismissComposeAIReview()
+			return m, nil
+		}
 		if !m.composeAIPanel {
 			m.composeAIPanel = true
 			if m.classifier != nil {
@@ -585,9 +667,11 @@ func (m *Model) acceptComposeAIResponse() bool {
 	}
 	m.composeAIUndoBody = m.composeBody.Value()
 	m.composeBody.SetValue(m.composeAIResponse.Value())
-	m.composeAIPanel = false
+	m.composeAIPanel = true
 	m.composeAIMenu = ""
 	m.composeAIDiff = ""
+	m.composeAIOriginal = ""
+	m.composeAIShowOriginal = false
 	m.composeAIResponse.SetValue("")
 	m.composeAIInput.Blur()
 	m.composeAIResponse.Blur()
@@ -595,6 +679,20 @@ func (m *Model) acceptComposeAIResponse() bool {
 	m.composeField = composeFieldBody
 	m.refreshComposeLayout()
 	return true
+}
+
+func (m *Model) dismissComposeAIReview() {
+	m.composeAIPanel = true
+	m.composeAIMenu = ""
+	m.composeAIDiff = ""
+	m.composeAIOriginal = ""
+	m.composeAIShowOriginal = false
+	m.composeAIResponse.SetValue("")
+	m.composeAIInput.Blur()
+	m.composeAIResponse.Blur()
+	m.composeBody.Focus()
+	m.composeField = composeFieldBody
+	m.refreshComposeLayout()
 }
 
 func (m *Model) undoComposeAIRewrite() *Model {
@@ -1019,18 +1117,14 @@ func (m *Model) acceptSuggestion(label string) {
 	}
 }
 
-// cycleComposeField advances focus to the next compose input field.
-// Order: To(0) → CC(1) → BCC(2) → Subject(3) → Body(4) → wrap.
-func (m *Model) cycleComposeField() {
-	fieldCount := 5
-	if m.composePreserved != nil {
-		fieldCount = composeFieldOriginalMessage + 1
+func (m *Model) focusComposeField(field int) {
+	if field == composeFieldCC {
+		m.composeCCExpanded = true
 	}
-	if m.hasForwardedAttachments() {
-		fieldCount = composeFieldForwardedAttachments + 1
+	if field == composeFieldBCC {
+		m.composeBCCExpanded = true
 	}
-	m.composeField = (m.composeField + 1) % fieldCount
-	// Clear autocomplete when moving away from address fields (0–2)
+	m.composeField = field
 	if m.composeField > composeFieldBCC {
 		m.suggestions = nil
 		m.suggestionIdx = -1
@@ -1040,6 +1134,7 @@ func (m *Model) cycleComposeField() {
 	m.composeBCC.Blur()
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
+	m.composeAIResponse.Blur()
 	switch m.composeField {
 	case composeFieldTo:
 		m.composeTo.Focus()
@@ -1052,6 +1147,45 @@ func (m *Model) cycleComposeField() {
 	case composeFieldBody:
 		m.composeBody.Focus()
 	}
+}
+
+func (m *Model) visibleComposeFields() []int {
+	fields := []int{composeFieldTo}
+	if m.composeCCVisible() {
+		fields = append(fields, composeFieldCC)
+	}
+	if m.composeBCCVisible() {
+		fields = append(fields, composeFieldBCC)
+	}
+	fields = append(fields, composeFieldSubject, composeFieldBody)
+	if m.composePreserved != nil {
+		fields = append(fields, composeFieldOriginalMessage)
+	}
+	if m.hasForwardedAttachments() {
+		fields = append(fields, composeFieldForwardedAttachments)
+	}
+	return fields
+}
+
+// cycleComposeField advances focus to the next visible compose input field.
+// Empty CC/BCC fields are skipped until expanded or populated.
+func (m *Model) cycleComposeField() {
+	fields := m.visibleComposeFields()
+	if len(fields) == 0 {
+		return
+	}
+	current := -1
+	for i, field := range fields {
+		if field == m.composeField {
+			current = i
+			break
+		}
+	}
+	next := fields[0]
+	if current >= 0 {
+		next = fields[(current+1)%len(fields)]
+	}
+	m.focusComposeField(next)
 }
 
 func (m *Model) hasForwardedAttachments() bool {
@@ -1203,25 +1337,41 @@ func (m *Model) renderComposeView() string {
 		renderField(toStyle, m.composeTo.View()),
 	) + "\n")
 
-	// CC field
-	ccStyle := inactiveFieldStyle
-	if m.composeField == 1 {
-		ccStyle = activeFieldStyle
+	if m.composeOptionalRecipientHintVisible() {
+		var hints []string
+		if !m.composeCCVisible() {
+			hints = append(hints, "Ctrl+Alt+C CC")
+		}
+		if !m.composeBCCVisible() {
+			hints = append(hints, "Ctrl+Alt+B BCC")
+		}
+		hint := truncateVisual(strings.Join(hints, "  "), plan.Compose.FieldInnerWidth)
+		sb.WriteString(labelStyle.Render("") + m.theme.Compose.AIDim.Style().Render(hint) + "\n")
 	}
-	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("CC:"),
-		renderField(ccStyle, m.composeCC.View()),
-	) + "\n")
+
+	// CC field
+	if m.composeCCVisible() {
+		ccStyle := inactiveFieldStyle
+		if m.composeField == composeFieldCC {
+			ccStyle = activeFieldStyle
+		}
+		sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+			labelStyle.Render("CC:"),
+			renderField(ccStyle, m.composeCC.View()),
+		) + "\n")
+	}
 
 	// BCC field
-	bccStyle := inactiveFieldStyle
-	if m.composeField == 2 {
-		bccStyle = activeFieldStyle
+	if m.composeBCCVisible() {
+		bccStyle := inactiveFieldStyle
+		if m.composeField == composeFieldBCC {
+			bccStyle = activeFieldStyle
+		}
+		sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+			labelStyle.Render("BCC:"),
+			renderField(bccStyle, m.composeBCC.View()),
+		) + "\n")
 	}
-	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("BCC:"),
-		renderField(bccStyle, m.composeBCC.View()),
-	) + "\n")
 
 	// Autocomplete dropdown (shown when address field has suggestions)
 	if drop := m.renderSuggestionDropdown(); drop != "" {
@@ -1277,11 +1427,9 @@ func (m *Model) renderComposeView() string {
 	}
 
 	// Body
-	bodyAreaWidth := plan.Compose.BodyInnerWidth + 2
-	if bodyAreaWidth < 10 {
-		bodyAreaWidth = 10
-	}
-	if m.compactPreservedCompose() {
+	if m.composeAIReviewActive() {
+		sb.WriteString(m.renderComposeAIReview(plan.Compose.BodyInnerWidth, activeFieldStyle, inactiveFieldStyle) + "\n")
+	} else if m.compactPreservedCompose() {
 		sb.WriteString(m.renderCompactPreservedResponse(plan.Compose.BodyInnerWidth) + "\n")
 	} else {
 		// Normal full-width body / preview
@@ -1411,7 +1559,7 @@ func (m *Model) composeOriginalPreviewRows(tableHeight int) int {
 	// Match Compose's full-viewport height budget so preserved replies keep the
 	// read-only original pane balanced with the editable response pane.
 	composeViewportRows := tableHeight + 2
-	rows := (composeViewportRows - 14) / 2
+	rows := (composeViewportRows - m.composeFixedRows()) / 2
 	if rows < 3 {
 		return 3
 	}
@@ -1863,28 +2011,43 @@ func wordDiffWithTheme(theme Theme, original, revised string) string {
 	var sb strings.Builder
 	i, j, k := 0, 0, 0
 	for k < len(common) {
+		deletedStart := i
 		for i < len(origTokens) && origTokens[i] != common[k] {
-			sb.WriteString(delStyle.Render(origTokens[i]))
 			i++
 		}
+		addedStart := j
 		for j < len(revTokens) && revTokens[j] != common[k] {
-			sb.WriteString(addStyle.Render(revTokens[j]))
 			j++
 		}
+		writeWordDiffChunk(&sb, delStyle, addStyle, origTokens[deletedStart:i], revTokens[addedStart:j])
 		sb.WriteString(common[k])
 		i++
 		j++
 		k++
 	}
-	for i < len(origTokens) {
-		sb.WriteString(delStyle.Render(origTokens[i]))
-		i++
-	}
-	for j < len(revTokens) {
-		sb.WriteString(addStyle.Render(revTokens[j]))
-		j++
-	}
+	writeWordDiffChunk(&sb, delStyle, addStyle, origTokens[i:], revTokens[j:])
 	return sb.String()
+}
+
+func writeWordDiffChunk(sb *strings.Builder, delStyle, addStyle lipgloss.Style, deleted, added []string) {
+	for _, token := range deleted {
+		sb.WriteString(delStyle.Render(token))
+	}
+	if wordDiffNeedsReplacementSeparator(deleted, added) {
+		sb.WriteString(" ")
+	}
+	for _, token := range added {
+		sb.WriteString(addStyle.Render(token))
+	}
+}
+
+func wordDiffNeedsReplacementSeparator(deleted, added []string) bool {
+	if len(deleted) == 0 || len(added) == 0 {
+		return false
+	}
+	lastDeleted := deleted[len(deleted)-1]
+	firstAdded := added[0]
+	return strings.TrimSpace(lastDeleted) != "" && strings.TrimSpace(firstAdded) != ""
 }
 
 func parseComposeAIRewriteResponse(raw string) (string, error) {
@@ -2073,6 +2236,83 @@ func looksLikeComposeAIRefusal(raw string) bool {
 	return false
 }
 
+func cleanComposeAISuggestion(raw, original string) string {
+	raw = strings.TrimSpace(strings.ReplaceAll(raw, "\r\n", "\n"))
+	if raw == "" {
+		return ""
+	}
+	original = strings.TrimSpace(strings.ReplaceAll(original, "\r\n", "\n"))
+
+	var kept []string
+	for _, paragraph := range composeAIParagraphs(raw) {
+		if composeAIScaffoldParagraph(paragraph, original) {
+			continue
+		}
+		kept = append(kept, paragraph)
+	}
+
+	cleaned := strings.TrimSpace(strings.Join(kept, "\n\n"))
+	if cleaned != "" {
+		return cleaned
+	}
+	if original != "" {
+		return original
+	}
+	return raw
+}
+
+func composeAIParagraphs(text string) []string {
+	var paragraphs []string
+	var current []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, " \t")
+		if strings.TrimSpace(line) == "" {
+			if len(current) > 0 {
+				paragraphs = append(paragraphs, strings.TrimSpace(strings.Join(current, "\n")))
+				current = nil
+			}
+			continue
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		paragraphs = append(paragraphs, strings.TrimSpace(strings.Join(current, "\n")))
+	}
+	return paragraphs
+}
+
+func composeAIScaffoldParagraph(paragraph, original string) bool {
+	trimmed := strings.TrimSpace(paragraph)
+	if trimmed == "" {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "current draft:") || strings.Contains(lower, "\ncurrent draft:") {
+		return true
+	}
+	if composeAIComparableText(trimmed) == composeAIComparableText(original) {
+		return true
+	}
+	if strings.HasPrefix(lower, "demo ai:") {
+		for _, marker := range []string{
+			"most relevant mailbox context",
+			"current draft",
+			"while preserving",
+			"rewrite",
+			"translate this email",
+		} {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func composeAIComparableText(text string) string {
+	return strings.Join(strings.Fields(ansi.Strip(text)), " ")
+}
+
 func composeAIInstructionWithDraftBounds(instruction, draft string) string {
 	if !isComposeAITranslationInstruction(instruction) {
 		return instruction
@@ -2233,10 +2473,11 @@ func (m *Model) aiAssistCmd(instruction string) tea.Cmd {
 		if err != nil {
 			return AIAssistMsg{Err: err}
 		}
+		rewrite = cleanComposeAISuggestion(rewrite, draft)
 		if err := validateComposeAIRewrite(instruction, draft, rewrite); err != nil {
 			return AIAssistMsg{Err: err}
 		}
-		return AIAssistMsg{Result: rewrite}
+		return AIAssistMsg{Result: rewrite, Original: draft}
 	}
 }
 
@@ -2400,46 +2641,282 @@ func (m *Model) renderComposeAIDropdown(width int) string {
 	return truncateVisual(strings.Join(parts, "  "), width)
 }
 
-func (m *Model) renderComposeAIResult(width int) string {
-	if !m.composeAIPanel {
-		return ""
-	}
-	if m.composeAIResponse.Value() == "" && m.composeAIDiff == "" && !m.composeAILoading {
-		return ""
-	}
+func (m *Model) renderComposeAIReview(width int, activeFieldStyle, inactiveFieldStyle lipgloss.Style) string {
 	if width < 30 {
 		width = 30
 	}
+	compact := m.windowHeight <= 24
+	contentWidth := width - 2
+	if contentWidth < 28 {
+		contentWidth = 28
+	}
+	title := "AI Assist · Suggestion replaces draft"
+	trailing := "Original: tab"
+	if m.composeAIShowOriginal {
+		title = "AI Assist · Original draft"
+		trailing = "Suggestion: tab"
+	}
+	header := composeReviewAlignedLine(
+		m.theme.Compose.AILabel.Style().Render(title),
+		m.theme.Compose.AILabel.Style().Render(trailing),
+		contentWidth,
+	)
 
-	labelStyle := m.theme.Compose.AILabel.Style().Width(width)
-	acceptStyle := m.theme.Compose.AIAccept.Style().Padding(0, 1)
-	discardStyle := m.theme.Compose.AIDiscard.Style().Padding(0, 1)
-	spinnerStyle := m.theme.Compose.Accent.Style()
+	sectionTitle := "Suggestion"
+	sectionTrailing := "(edit freely)"
+	bodyWidth := contentWidth - 4
+	if bodyWidth < 20 {
+		bodyWidth = 20
+	}
+	var bodyLines []string
+	suggestionHeight := m.composeAIReviewSuggestionHeight()
+	if m.composeAIShowOriginal {
+		sectionTitle = "Original"
+		sectionTrailing = "(read only)"
+		bodyLines = strings.Split(m.renderComposeAIOriginalView(bodyWidth, suggestionHeight), "\n")
+	} else {
+		oldHeight := m.composeAIResponse.Height()
+		m.composeAIResponse.SetWidth(bodyWidth)
+		m.composeAIResponse.SetHeight(suggestionHeight)
+		if compact {
+			m.composeAIResponse.MoveToBegin()
+		}
+		bodyLines = strings.Split(m.composeAIResponse.View(), "\n")
+		m.composeAIResponse.SetHeight(oldHeight)
+	}
+	suggestion := m.renderComposeAISection(sectionTitle, sectionTrailing, bodyLines, contentWidth)
+	extraChangeRows := m.composeAIReviewFillerRows(suggestionHeight)
+	changes := m.renderComposeAIChanges(contentWidth, compact, extraChangeRows)
+	actions := m.renderComposeAIActionRow(contentWidth)
 
-	var sb strings.Builder
-	if m.composeAILoading {
-		sb.WriteString(spinnerStyle.Render("Thinking...") + "\n")
+	parts := []string{
+		header,
+		suggestion,
+		changes,
+		actions,
 	}
-	if m.composeAIDiff != "" {
-		sb.WriteString(labelStyle.Render("Changes:") + "\n")
-		diffStyle := lipgloss.NewStyle().
-			Width(width).
-			MaxWidth(width)
-		sb.WriteString(diffStyle.Render(m.composeAIDiff) + "\n")
+	if !compact {
+		rule := m.theme.Compose.AIBorder.Style().Render(strings.Repeat("─", contentWidth))
+		parts = []string{header, rule, suggestion, "", changes, actions}
 	}
-	if m.composeAIResponse.Value() != "" || m.composeAIDiff != "" {
-		sb.WriteString(labelStyle.Render("Suggestion (edit freely):") + "\n")
-		m.composeAIResponse.SetWidth(width)
-		m.composeAIResponse.SetHeight(4)
-		sb.WriteString(m.composeAIResponse.View() + "\n")
-		sb.WriteString(acceptStyle.Render("Accept") + "  " + discardStyle.Render("Discard") + "\n")
-		sb.WriteString(m.theme.Compose.AIDim.Style().Render(
-			"Ctrl+Enter: accept  Ctrl+Z: undo accepted rewrite  Esc: close AI") + "\n")
-	}
+	content := strings.Join(parts, "\n")
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(m.theme.Compose.AIBorder.ForegroundColor()).
 		Width(width).
-		Render(sb.String())
+		Render(content)
+}
+
+func (m *Model) composeAIReviewFillerRows(suggestionHeight int) int {
+	if m.windowHeight <= 24 {
+		return 0
+	}
+	filler := m.composeAIResponse.Height() - suggestionHeight
+	if filler < 0 {
+		return 0
+	}
+	return filler
+}
+
+func (m *Model) composeAIReviewSuggestionHeight() int {
+	height := m.composeAIResponse.Height()
+	if height < 1 {
+		height = 1
+	}
+	switch {
+	case m.windowHeight <= 24:
+		return 1
+	case m.windowHeight <= 40 && height > 8:
+		return 8
+	case height > 12:
+		return 12
+	default:
+		return height
+	}
+}
+
+func (m *Model) renderComposeAIOriginalView(width, height int) string {
+	if height < 1 {
+		height = 1
+	}
+	innerW := width - 6
+	if innerW < 10 {
+		innerW = 10
+	}
+	text := m.composeAIOriginal
+	if text == "" {
+		text = m.composeBody.Value()
+	}
+	lines := wrapLines(text, innerW)
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+	rows := make([]string, 0, height)
+	lineNo := 1
+	for len(rows) < height {
+		line := ""
+		if len(rows) < len(lines) {
+			line = lines[len(rows)]
+		}
+		rows = append(rows, fmt.Sprintf("┃ %3d %s", lineNo, truncateVisual(line, innerW)))
+		lineNo++
+	}
+	return strings.Join(rows, "\n")
+}
+
+func composeReviewAlignedLine(left, right string, width int) string {
+	gap := width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	if gap < 1 {
+		gap = 1
+	}
+	line := left + strings.Repeat(" ", gap) + right
+	return truncateVisual(line, width)
+}
+
+func composeReviewPadLine(line string, width int) string {
+	line = truncateVisual(line, width)
+	if missing := width - ansi.StringWidth(line); missing > 0 {
+		line += strings.Repeat(" ", missing)
+	}
+	return line
+}
+
+func (m *Model) renderComposeAISection(title, trailing string, bodyLines []string, width int) string {
+	innerWidth := width - 2
+	if innerWidth < 20 {
+		innerWidth = 20
+	}
+	titleLabel := " " + title + " "
+	rightLabel := ""
+	if trailing != "" {
+		rightLabel = " " + trailing + " "
+	}
+	topInnerWidth := innerWidth - ansi.StringWidth(titleLabel) - ansi.StringWidth(rightLabel)
+	if topInnerWidth < 0 {
+		topInnerWidth = 0
+	}
+	leftRule := topInnerWidth
+	if rightLabel != "" {
+		leftRule = topInnerWidth / 2
+	}
+	rightRule := topInnerWidth - leftRule
+	borderStyle := m.theme.Compose.AIBorder.Style()
+	labelStyle := m.theme.Compose.AILabel.Style()
+	dimStyle := m.theme.Compose.AIDim.Style()
+	top := borderStyle.Render("┌") +
+		borderStyle.Render(strings.Repeat("─", leftRule)) +
+		labelStyle.Render(titleLabel) +
+		borderStyle.Render(strings.Repeat("─", rightRule)) +
+		dimStyle.Render(rightLabel) +
+		borderStyle.Render("┐")
+
+	rows := []string{top}
+	for _, line := range bodyLines {
+		rows = append(rows,
+			borderStyle.Render("│")+
+				composeReviewPadLine(line, innerWidth)+
+				borderStyle.Render("│"),
+		)
+	}
+	rows = append(rows, borderStyle.Render("└"+strings.Repeat("─", innerWidth)+"┘"))
+	return strings.Join(rows, "\n")
+}
+
+func (m *Model) composeAIChangeRows(width int) []string {
+	original := strings.TrimSpace(m.composeAIOriginal)
+	if original == "" {
+		original = strings.TrimSpace(m.composeBody.Value())
+	}
+	suggestion := strings.TrimSpace(m.composeAIResponse.Value())
+	if original == "" && suggestion == "" {
+		return nil
+	}
+	if composeAIComparableText(original) == composeAIComparableText(suggestion) {
+		return nil
+	}
+
+	diff := m.composeAIDiff
+	if strings.TrimSpace(ansi.Strip(diff)) == "" {
+		diff = wordDiffWithTheme(m.theme, original, suggestion)
+	}
+	wrapped := wrapLines(diff, width)
+	rows := make([]string, 0, len(wrapped))
+	for _, line := range wrapped {
+		if strings.TrimSpace(ansi.Strip(line)) == "" {
+			rows = append(rows, "")
+			continue
+		}
+		rows = append(rows, truncateVisual(line, width))
+	}
+	return rows
+}
+
+func (m *Model) renderComposeAIActionRow(width int) string {
+	segments := []string{
+		m.theme.Compose.AILabel.Style().Render("Accept ctrl+enter"),
+		m.theme.Compose.AIDim.Style().Render("Discard esc"),
+		m.theme.Compose.AIDim.Style().Render("Edit in place"),
+		m.theme.Compose.AIDim.Style().Render("Undo ctrl+z"),
+		m.theme.Compose.AIDim.Style().Render("Tab original/suggestion"),
+	}
+	return truncateVisual(strings.Join(segments, "  │  "), width)
+}
+
+func (m *Model) renderComposeAIChanges(width int, compact bool, extraRows int) string {
+	if width < 30 {
+		width = 30
+	}
+	bodyWidth := width - 4
+	if bodyWidth < 20 {
+		bodyWidth = 20
+	}
+	if compact {
+		return m.renderComposeAISection("Changes", "word diff", []string{m.composeAICompactChangeLine(bodyWidth)}, width)
+	}
+	rows := m.composeAIChangeRows(bodyWidth)
+	if len(rows) == 0 {
+		rows = []string{m.theme.Compose.AIDim.Style().Render("(no word-level changes)")}
+	}
+	rowBudget := 4 + extraRows
+	if rowBudget < 1 {
+		rowBudget = 1
+	}
+	for len(rows) < rowBudget {
+		rows = append(rows, "")
+	}
+	if len(rows) > rowBudget {
+		rows = rows[:rowBudget]
+	}
+	return m.renderComposeAISection("Changes", "word diff", rows, width)
+}
+
+func (m *Model) composeAICompactChangeLine(width int) string {
+	rows := m.composeAIChangeRows(width)
+	if len(rows) == 0 {
+		return m.theme.Compose.AIDim.Style().Render("(no word-level changes)")
+	}
+	for _, row := range rows {
+		if strings.TrimSpace(ansi.Strip(row)) != "" {
+			return truncateVisual(row, width)
+		}
+	}
+	return m.theme.Compose.AIDim.Style().Render("(no word-level changes)")
+}
+
+func (m *Model) renderComposeAIResult(width int) string {
+	if !m.composeAIPanel {
+		return ""
+	}
+	if m.composeAIReviewActive() {
+		return ""
+	}
+	if !m.composeAILoading {
+		return ""
+	}
+	if width < 30 {
+		width = 30
+	}
+	spinnerStyle := m.theme.Compose.Accent.Style()
+	return spinnerStyle.Render(truncateVisual("Thinking...", width))
 }
