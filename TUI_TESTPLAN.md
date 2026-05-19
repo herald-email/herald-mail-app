@@ -1481,12 +1481,31 @@ Check these states during every applicable lane:
 1. From the first-run wizard, choose `Standard IMAP`.
 2. Advance to the credentials step.
 3. Capture before and after moving focus through the first three inputs.
+4. Press `Esc` from the empty credentials step and capture the result.
+5. Return to the credentials step, press `Shift+Tab` from the first control, and capture the result.
 
 **Expect:**
 - The active top input still has visible context; the user can tell it is the email field.
 - `Password`, `IMAP Host`, `IMAP Port`, `SMTP Host`, and `SMTP Port` remain readable.
 - Hints match the current control.
+- `Esc` returns to the previous wizard screen without showing required-field validation errors for the empty credentials form.
+- `Shift+Tab` can cross back to the previous wizard screen without showing required-field validation errors for the empty credentials form.
 - At `50x15`, Herald falls back to the minimum-size guard rather than clipping later fields off-screen.
+
+### TC-40A — IMAP presets are pre-populated
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. From the first-run wizard, choose `ProtonMail Bridge`.
+2. Capture the credentials step.
+3. Repeat for Fastmail, iCloud, Outlook, and Gmail advanced server settings.
+
+**Expect:**
+- ProtonMail Bridge shows `127.0.0.1`, IMAP port `1143`, and SMTP port `1025` in editable fields before the user types.
+- Fastmail, iCloud, Outlook, and Gmail advanced fields show their known IMAP/SMTP host and port defaults before the user types.
+- Editing any preset field keeps the user's manual value unless the field is blank or still matches the previous preset.
 
 ### TC-41 — Gmail OAuth experimental gate and IMAP guidance
 
@@ -1529,12 +1548,32 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The wizard shows a validation-in-progress state immediately after the account details step.
+- Validation progress and failure states render inside the Herald setup box, not as unstyled terminal text.
 - If IMAP fails, the config path remains missing or empty and the user sees a clear IMAP failure.
 - If SMTP fails, the config path remains missing or empty and the user sees a clear SMTP failure.
 - If both pass, Herald advances to optional preferences; the final save writes the validated config and proceeds to the inbox.
 - At `50x15`, validation and error states use the minimum-size guard rather than clipped modal content.
 
-### TC-41B — In-app account settings keep the previous account on validation failure
+### TC-41B — First-run AI defaults and advanced preference scoping
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Complete or mock a successful account validation so the first-run preferences step opens.
+2. Capture the default Ollama AI step.
+3. Select custom Ollama and capture the chat and embedding model selectors.
+4. Continue through first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
+5. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
+
+**Expect:**
+- The default Ollama step names `llama3.2:1b` and `nomic-embed-text`, warns that larger local models can pressure 8GB Macs, and suggests custom local or external AI options for heavier models.
+- Custom Ollama setup offers curated chat options including `llama3.2:1b`, `qwen3.5:0.8b`, `llama3.2:3b`, `gemma3:4b`, and a freeform custom model name.
+- Custom Ollama setup offers curated embedding options including `nomic-embed-text`, `all-minilm`, `nomic-embed-text-v2-moe`, `mxbai-embed-large`, `bge-m3`, and a freeform custom model name.
+- First-run preferences do not show `Poll Interval`, `Enable IMAP IDLE`, `Reclaim offline cache storage`, or `Auto-Cleanup Schedule`.
+- In-app Settings still exposes those advanced controls under `Sync & Cleanup`.
+
+### TC-41C — In-app account settings keep the previous account on validation failure
 
 **Lane:** F
 **Sizes:** `220x50`, `80x24`, `50x15`
@@ -1706,6 +1745,7 @@ Check these states during every applicable lane:
 - Timeline and Cleanup preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
 - The `Load:` row never wraps or pushes body text outside the preview border at supported sizes.
 - Setup wizard and Settings show the compact policy choices `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive` without redundant explanatory copy inside the selector.
+- Setup wizard keeps reclaim, poll interval, IMAP IDLE, and auto-cleanup out of onboarding; those advanced controls remain in Settings.
 - Settings defaults to `Message bodies without attachments` for new configs and preserves the selected policy after saving.
 - The reclaim action does not run silently: it estimates removable cached preview bytes, explains that preview text, headers, and attachment metadata stay cached, and waits for `y` before pruning and compacting.
 - Reclaim under `lightweight` removes inline image and attachment bytes; reclaim under `no_attachments` removes only attachment bytes; reclaim under `preserve_all` reports no removable policy bytes.

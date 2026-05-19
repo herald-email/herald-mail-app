@@ -74,7 +74,7 @@ func (c *Client) Check(ctx context.Context) error {
 		port = 1025
 	}
 	addr := fmt.Sprintf("%s:%d", host, port)
-	if port == 465 {
+	if c.shouldTryImplicitTLSFirst(port) {
 		tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
 		tlsDialer := tls.Dialer{NetDialer: &net.Dialer{}, Config: tlsCfg}
 		if conn, err := tlsDialer.DialContext(ctx, "tcp", addr); err == nil {
@@ -87,6 +87,16 @@ func (c *Client) Check(ctx context.Context) error {
 		return fmt.Errorf("smtp connect: %w", err)
 	}
 	return c.checkSMTPConn(ctx, conn, host)
+}
+
+func (c *Client) shouldTryImplicitTLSFirst(port int) bool {
+	if port == 465 {
+		return true
+	}
+	if c == nil || c.cfg == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(c.cfg.Vendor), "protonmail")
 }
 
 func (c *Client) checkSMTPConn(ctx context.Context, conn net.Conn, host string) error {

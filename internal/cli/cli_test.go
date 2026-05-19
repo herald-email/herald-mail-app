@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/config"
@@ -157,6 +158,43 @@ func TestWizardPreferencesSavePersistsValidatedConfig(t *testing.T) {
 	}
 	if _, err := config.Load(configPath); err != nil {
 		t.Fatalf("validated config was not saved: %v", err)
+	}
+}
+
+func TestRenderWizardStatusUsesSetupChrome(t *testing.T) {
+	rendered := ansi.Strip(renderWizardStatus(100, 32,
+		"Account setup failed",
+		"SMTP: connection timed out Settings were not saved to /tmp/herald-first-run-test.yaml.",
+		"Enter: return to setup  Esc/q: quit without saving",
+	))
+	for _, want := range []string{
+		"Herald Setup",
+		"Account setup failed",
+		"SMTP: connection timed out",
+		"Enter: return to setup",
+		"╭",
+		"╰",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected wizard status to include %q, got:\n%s", want, rendered)
+		}
+	}
+	if strings.HasPrefix(rendered, "\n\nAccount setup failed") {
+		t.Fatalf("wizard status rendered as unboxed terminal text:\n%s", rendered)
+	}
+}
+
+func TestRenderWizardStatusUsesMinimumSizeGuard(t *testing.T) {
+	rendered := ansi.Strip(renderWizardStatus(50, 15,
+		"Account setup failed",
+		"SMTP: connection timed out.",
+		"Enter: return to setup",
+	))
+	if !strings.Contains(rendered, "Terminal too narrow") {
+		t.Fatalf("expected wizard status minimum-size guard, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Account setup failed") {
+		t.Fatalf("minimum-size guard should replace clipped status content, got:\n%s", rendered)
 	}
 }
 

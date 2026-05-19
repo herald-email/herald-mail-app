@@ -1019,7 +1019,8 @@ func focusSyncCleanupSettingsGroupForTest(t *testing.T, s *Settings) {
 		return
 	}
 	for i := 0; i < 20; i++ {
-		if strings.Contains(s.form.View(), "Sync & Cleanup") {
+		view := s.form.View()
+		if strings.Contains(view, "Sync & Cleanup") || strings.Contains(view, "Offline Cache") {
 			return
 		}
 		s.form.NextGroup()

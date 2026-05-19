@@ -223,20 +223,7 @@ func (m wizardModel) View() tea.View {
 }
 
 func renderWizardStatus(width, height int, title, body, footer string) string {
-	if width <= 0 {
-		width = 80
-	}
-	if height <= 0 {
-		height = 24
-	}
-	content := strings.Join([]string{
-		title,
-		"",
-		body,
-		"",
-		footer,
-	}, "\n")
-	return "\n\n" + content
+	return app.RenderSetupStatus(width, height, title, body, footer)
 }
 
 func setupOAuthStartFailureMessage(err error) string {

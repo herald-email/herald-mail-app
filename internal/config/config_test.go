@@ -388,8 +388,19 @@ func TestEnsureCacheDatabasePathDisambiguatesExistingGeneratedPath(t *testing.T)
 func TestDefaultOllamaModel(t *testing.T) {
 	c := &Config{}
 	c.applyDefaults()
-	if c.Ollama.Model != "gemma3:4b" {
-		t.Errorf("expected default Ollama model %q, got %q", "gemma3:4b", c.Ollama.Model)
+	if c.Ollama.Model != "llama3.2:1b" {
+		t.Errorf("expected default Ollama model %q, got %q", "llama3.2:1b", c.Ollama.Model)
+	}
+}
+
+func TestDefaultEmbeddingModel(t *testing.T) {
+	c := &Config{}
+	c.applyDefaults()
+	if c.Ollama.EmbeddingModel != "nomic-embed-text" {
+		t.Errorf("expected default Ollama embedding model %q, got %q", "nomic-embed-text", c.Ollama.EmbeddingModel)
+	}
+	if c.Semantic.Model != "nomic-embed-text" {
+		t.Errorf("expected semantic model to follow default embedding model, got %q", c.Semantic.Model)
 	}
 }
 

@@ -81,8 +81,8 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
 | Bulk cleanup — delete/archive by sender or domain, plus dry-run cleanup rule previews     | ✅     |
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
-| AI classification via Ollama (gemma3, llama3, etc.)                                       | ✅     |
-| Semantic search with `nomic-embed-text-v2-moe` + chunked body embeddings                  | ✅     |
+| AI classification via Ollama (`llama3.2:1b` default, custom models supported)             | ✅     |
+| Semantic search with `nomic-embed-text` default + chunked body embeddings                 | ✅     |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
 | Contact book with LLM enrichment and Apple Contacts import                                | ✅     |
 | Compose + reply + forward with Markdown preview                                           | ✅     |
@@ -214,8 +214,8 @@ smtp:
     port: 587
 ollama:
     host: "http://localhost:11434"
-    model: "gemma3:4b" # for classification, chat, quick replies
-    embedding_model: "nomic-embed-text-v2-moe" # for semantic search
+    model: "llama3.2:1b" # for classification, chat, quick replies
+    embedding_model: "nomic-embed-text" # for semantic search
 ```
 
 Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`

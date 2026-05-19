@@ -520,7 +520,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ### Semantic search
 - [x] `?` prefix in search bar triggers semantic mode
-- [x] Local embeddings via Ollama (`nomic-embed-text-v2-moe` default)
+- [x] Local embeddings via Ollama (`nomic-embed-text` default, with larger curated options available)
 - [x] Vectors stored in SQLite (`email_embeddings` table)
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
@@ -745,21 +745,24 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
 - [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
 - [x] Step 1 — Account type: recommended `Gmail (IMAP + App Password)`, supported `Standard IMAP` plus IMAP presets for ProtonMail Bridge, Fastmail, iCloud, and Outlook; `Gmail OAuth (Experimental)` appears only when launched with `-experimental`
-- [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields, then Herald validates IMAP and SMTP before optional preferences
+- [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields with known preset host/port defaults pre-populated, then Herald validates IMAP and SMTP before optional preferences
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth remains available as an experimental browser-based path behind `-experimental`; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
 - [x] Account setup validates both IMAP and SMTP before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates IMAP plus SMTP XOAUTH2 before saving, and makes Google cancel/timeout states explicit
-- [x] Step 3 — Preferences: enter AI settings, sync options, keyboard profile, theme, and signature only after the account connection has passed
+- [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
+- [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
+- [x] AI setup defaults to small-machine-friendly local models (`llama3.2:1b` and `nomic-embed-text`) and custom Ollama setup offers curated chat and embedding model choices plus freeform model names
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
 - [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install and semantic role editing stay in the in-app Theme settings category
-- [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
+- [x] Advanced Sync & Cleanup preferences such as poll interval, IMAP IDLE, reclaim, and auto-cleanup stay out of first-run onboarding and remain available in in-app Settings
 - [x] Final save writes `~/.herald/conf.yaml` only after the account connection gate has passed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
+- [x] AI settings expose curated Ollama chat and embedding model recommendations, including small 8GB-safe defaults and freeform custom model names
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact
 - [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support

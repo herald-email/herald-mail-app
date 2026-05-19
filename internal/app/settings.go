@@ -43,8 +43,9 @@ const (
 	aiProviderDisabled      = "disabled"
 
 	defaultOllamaHost     = "http://localhost:11434"
-	defaultOllamaModel    = "gemma3:4b"
-	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
+	defaultOllamaModel    = "llama3.2:1b"
+	defaultEmbeddingModel = "nomic-embed-text"
+	customModelChoice     = "custom"
 
 	settingsPanelSectionMenu     settingsPanelSection = ""
 	settingsPanelSectionAccount  settingsPanelSection = "account"
@@ -107,15 +108,19 @@ type Settings struct {
 	editGmailAdvanced bool
 
 	// form field backing variables — AI provider
-	aiProvider    string
-	claudeAPIKey  string
-	claudeModel   string
-	openAIAPIKey  string
-	openAIBaseURL string
-	openAIModel   string
-	ollamaHost    string
-	ollamaModel   string
-	embedModel    string
+	aiProvider        string
+	claudeAPIKey      string
+	claudeModel       string
+	openAIAPIKey      string
+	openAIBaseURL     string
+	openAIModel       string
+	ollamaHost        string
+	ollamaModel       string
+	ollamaModelChoice string
+	ollamaModelCustom string
+	embedModel        string
+	embedModelChoice  string
+	embedModelCustom  string
 
 	// form field backing variables — sync & cleanup
 	syncPollStr                string
@@ -141,6 +146,8 @@ type Settings struct {
 	themeSaveAs      string
 	themeResetRole   bool
 	themeResetAll    bool
+
+	bypassWizardBackValidation bool
 }
 
 type conditionalSettingsField struct {
@@ -369,6 +376,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.themeOverrides = make(map[string]config.ThemeOverride)
 	}
 	s.loadThemeFieldsForRole(s.themeRole)
+	s.syncAIModelChoicesFromValues()
 
 	s.syncProviderDefaults("", s.provider)
 	s.buildForm()
@@ -426,6 +434,72 @@ func (s *Settings) providerPresetDescription(base string) string {
 	return base + " This path is still experimental."
 }
 
+func (s *Settings) validateSetupEmail(value string) error {
+	if s.bypassWizardBackValidation {
+		return nil
+	}
+	return validateEmail(value)
+}
+
+func ollamaChatModelOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("llama3.2:1b - safe default (~1.3GB)", "llama3.2:1b"),
+		huh.NewOption("qwen3.5:0.8b - smallest curated option (~1.0GB)", "qwen3.5:0.8b"),
+		huh.NewOption("llama3.2:3b - stronger text, larger (~2.0GB)", "llama3.2:3b"),
+		huh.NewOption("gemma3:4b - larger/vision-capable (~3.3GB)", "gemma3:4b"),
+		huh.NewOption("Custom model name", customModelChoice),
+	}
+}
+
+func ollamaEmbeddingModelOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("nomic-embed-text - safe default (~274MB, 2K context)", "nomic-embed-text"),
+		huh.NewOption("all-minilm - smallest embeddings (~46MB)", "all-minilm"),
+		huh.NewOption("nomic-embed-text-v2-moe - multilingual, larger (~958MB)", "nomic-embed-text-v2-moe"),
+		huh.NewOption("mxbai-embed-large - larger general-purpose embeddings (~670MB)", "mxbai-embed-large"),
+		huh.NewOption("bge-m3 - multilingual, larger (~1.2GB)", "bge-m3"),
+		huh.NewOption("Custom model name", customModelChoice),
+	}
+}
+
+func modelChoiceForValue(value string, options []huh.Option[string], defaultValue string) (choice, custom string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = defaultValue
+	}
+	for _, option := range options {
+		if option.Value == value {
+			return value, ""
+		}
+	}
+	return customModelChoice, value
+}
+
+func selectedModelValue(choice, custom, current, defaultValue string) string {
+	switch strings.TrimSpace(choice) {
+	case "":
+		if trimmed := strings.TrimSpace(current); trimmed != "" {
+			return trimmed
+		}
+		return defaultValue
+	case customModelChoice:
+		if trimmed := strings.TrimSpace(custom); trimmed != "" {
+			return trimmed
+		}
+		if trimmed := strings.TrimSpace(current); trimmed != "" {
+			return trimmed
+		}
+		return defaultValue
+	default:
+		return strings.TrimSpace(choice)
+	}
+}
+
+func (s *Settings) syncAIModelChoicesFromValues() {
+	s.ollamaModelChoice, s.ollamaModelCustom = modelChoiceForValue(s.ollamaModel, ollamaChatModelOptions(), defaultOllamaModel)
+	s.embedModelChoice, s.embedModelCustom = modelChoiceForValue(s.embedModel, ollamaEmbeddingModelOptions(), defaultEmbeddingModel)
+}
+
 func (s *Settings) requiresAccountValidation() bool {
 	if s.mode == SettingsModeWizard {
 		return !s.firstRunPreferencesOnly
@@ -464,19 +538,21 @@ func (s *Settings) buildForm() {
 			case "imap":
 				return "Use this for providers where you already know the IMAP and SMTP settings."
 			case "protonmail":
-				return s.providerPresetDescription("Requires ProtonMail Bridge on localhost. Herald prefills the known Bridge ports.")
+				return s.providerPresetDescription("Requires ProtonMail Bridge on localhost. Herald prefills the known Bridge ports." + providerPresetSummary(s.provider))
 			default:
-				return s.providerPresetDescription("Herald prefills the known IMAP/SMTP defaults for this provider.")
+				return s.providerPresetDescription("Herald prefills the known IMAP/SMTP defaults for this provider." + providerPresetSummary(s.provider))
 			}
 		}, &s.provider)
 
 	// Group 2a — Credentials for Standard IMAP and experimental vendor presets
 	credentialsGroup := huh.NewGroup(
 		credentialsIntro,
-		huh.NewInput().Title("Email address").Inline(true).Value(&s.email).Validate(validateEmail),
+		huh.NewInput().Title("Email address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
-		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost),
+		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost).
+			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "imap-host") }, &s.provider),
 		huh.NewInput().Title("IMAP Port").Inline(true).Value(&s.imapPort).
+			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "imap-port") }, &s.provider).
 			Validate(func(v string) error {
 				if v == "" {
 					return nil
@@ -487,8 +563,10 @@ func (s *Settings) buildForm() {
 				}
 				return nil
 			}),
-		huh.NewInput().Title("SMTP Host").Inline(true).Value(&s.smtpHost),
+		huh.NewInput().Title("SMTP Host").Inline(true).Value(&s.smtpHost).
+			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "smtp-host") }, &s.provider),
 		huh.NewInput().Title("SMTP Port").Inline(true).Value(&s.smtpPort).
+			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "smtp-port") }, &s.provider).
 			Validate(func(v string) error {
 				if v == "" {
 					return nil
@@ -506,7 +584,7 @@ func (s *Settings) buildForm() {
 		huh.NewNote().
 			Title("Personal Gmail via IMAP").
 			Description("Normal Gmail setup. Use your Gmail address and a Google App Password. Google Workspace accounts may still require OAuth."),
-		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
+		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
 		huh.NewConfirm().
 			Title("Edit advanced Gmail server settings").
@@ -545,7 +623,7 @@ func (s *Settings) buildForm() {
 		huh.NewNote().
 			Title("Gmail OAuth").
 			Description("Experimental browser-based Gmail setup. Source builds need Google OAuth env vars or make build-release-local."),
-		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(validateEmail),
+		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 	).WithHideFunc(func() bool { return s.provider != "gmail-oauth" })
 
 	// Group 3 — AI provider selection
@@ -565,14 +643,31 @@ func (s *Settings) buildForm() {
 	ollamaDefaultGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Ollama local default").
-			Description("Uses http://localhost:11434 with gemma3:4b and nomic-embed-text-v2-moe."),
+			Description("Uses http://localhost:11434 with llama3.2:1b and nomic-embed-text. On 8GB Macs, larger models can pressure memory; use custom Ollama for smaller/larger local models or choose an external AI provider."),
 	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaDefault })
 
 	// Group 3a — Ollama settings (shown only when provider = custom Ollama)
 	ollamaGroup := huh.NewGroup(
 		huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder(defaultOllamaHost),
-		huh.NewInput().Title("Ollama Model").Inline(true).Value(&s.ollamaModel).Placeholder(defaultOllamaModel),
-		huh.NewInput().Title("Embedding Model").Inline(true).Value(&s.embedModel).Placeholder(defaultEmbeddingModel),
+		huh.NewNote().
+			Title("Model recommendations").
+			Description("Chat: llama3.2:1b, qwen3.5:0.8b, llama3.2:3b, gemma3:4b, Custom model name.\nEmbeddings: nomic-embed-text, all-minilm, nomic-embed-text-v2-moe, mxbai-embed-large, bge-m3, Custom model name."),
+		huh.NewSelect[string]().
+			Title("Chat Model").
+			Options(ollamaChatModelOptions()...).
+			Value(&s.ollamaModelChoice),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Custom Chat Model").Inline(true).Value(&s.ollamaModelCustom).Placeholder(defaultOllamaModel),
+			func() bool { return s.ollamaModelChoice != customModelChoice },
+		),
+		huh.NewSelect[string]().
+			Title("Embedding Model").
+			Options(ollamaEmbeddingModelOptions()...).
+			Value(&s.embedModelChoice),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Custom Embedding Model").Inline(true).Value(&s.embedModelCustom).Placeholder(defaultEmbeddingModel),
+			func() bool { return s.embedModelChoice != customModelChoice },
+		),
 	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaCustom })
 
 	// Group 3b — Claude settings (shown only when provider = claude)
@@ -587,6 +682,21 @@ func (s *Settings) buildForm() {
 		huh.NewInput().Title("OpenAI Base URL").Inline(true).Placeholder("https://api.openai.com/v1").Value(&s.openAIBaseURL),
 		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder("gpt-4o").Value(&s.openAIModel),
 	).WithHideFunc(func() bool { return s.aiProvider != "openai" })
+
+	offlineCacheSelect := func() huh.Field {
+		return huh.NewSelect[string]().
+			Title("Offline Cache").
+			Options(
+				huh.NewOption("Lightweight previews", config.CacheStoragePolicyLightweight),
+				huh.NewOption("Message bodies without attachments", config.CacheStoragePolicyNoAttachments),
+				huh.NewOption("Full offline archive", config.CacheStoragePolicyPreserveAll),
+			).
+			Value(&s.cacheStoragePolicy)
+	}
+
+	wizardCacheGroup := huh.NewGroup(
+		offlineCacheSelect(),
+	).Title("Offline Cache")
 
 	// Group 4 — Sync & Cleanup preferences
 	syncGroup := huh.NewGroup(
@@ -606,14 +716,7 @@ func (s *Settings) buildForm() {
 		huh.NewConfirm().
 			Title("Enable IMAP IDLE").
 			Value(&s.syncIDLE),
-		huh.NewSelect[string]().
-			Title("Offline Cache").
-			Options(
-				huh.NewOption("Lightweight previews", config.CacheStoragePolicyLightweight),
-				huh.NewOption("Message bodies without attachments", config.CacheStoragePolicyNoAttachments),
-				huh.NewOption("Full offline archive", config.CacheStoragePolicyPreserveAll),
-			).
-			Value(&s.cacheStoragePolicy),
+		offlineCacheSelect(),
 		huh.NewConfirm().
 			Title("Reclaim offline cache storage").
 			Description("Estimate removable preview bytes before pruning; text, headers, and attachment metadata stay cached.").
@@ -771,7 +874,7 @@ func (s *Settings) buildForm() {
 		ollamaGroup,
 		claudeGroup,
 		openAIGroup,
-		syncGroup,
+		wizardCacheGroup,
 		keyboardGroup,
 		wizardThemeGroup,
 		composeGroup,
@@ -829,9 +932,9 @@ func (s *Settings) buildForm() {
 			ollamaGroup,
 			claudeGroup,
 			openAIGroup,
-			syncGroup,
+			wizardCacheGroup,
 			keyboardGroup,
-			themeGroup,
+			wizardThemeGroup,
 			composeGroup,
 		}
 	}
@@ -1101,6 +1204,45 @@ func (s *Settings) shouldOpenThemePickerFromManualInput(msg tea.KeyPressMsg) boo
 	}
 }
 
+func (s *Settings) consumeFormNavigationCmd(cmd tea.Cmd, depth int) {
+	if cmd == nil || depth > 8 {
+		return
+	}
+	msg := cmd()
+	if msg == nil {
+		return
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, child := range batch {
+			s.consumeFormNavigationCmd(child, depth+1)
+		}
+		return
+	}
+	if model, next := s.form.Update(msg); model != nil {
+		if form, ok := model.(*huh.Form); ok {
+			s.form = form
+		}
+		s.consumeFormNavigationCmd(next, depth+1)
+	}
+}
+
+func (s *Settings) navigateWizardBack(msg tea.Msg) tea.Cmd {
+	if s.mode != SettingsModeWizard || s.form == nil || s.form.State == huh.StateCompleted {
+		return nil
+	}
+	s.bypassWizardBackValidation = true
+	defer func() { s.bypassWizardBackValidation = false }()
+
+	var cmd tea.Cmd
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.Code == tea.KeyEscape {
+		cmd = s.form.PrevGroup()
+	} else {
+		cmd = s.form.PrevField()
+	}
+	s.consumeFormNavigationCmd(cmd, 0)
+	return nil
+}
+
 func (s *Settings) keyHints() string {
 	escHelp := s.focusedFieldEscHelp()
 	if s.panelSection == settingsPanelSectionMenu {
@@ -1217,17 +1359,7 @@ func (s *Settings) formHeight() int {
 }
 
 func (s *Settings) wizardBoxWidth() int {
-	if s.width <= 0 {
-		return 88
-	}
-	w := s.width - 8
-	if w > 88 {
-		w = 88
-	}
-	if w < 56 {
-		w = s.width
-	}
-	return w
+	return wizardBoxWidthFor(s.width)
 }
 
 // Init implements tea.Model.
@@ -1248,6 +1380,12 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
+		if s.mode == SettingsModeWizard && msg.Code == tea.KeyEscape {
+			return s, s.navigateWizardBack(msg)
+		}
+		if s.mode == SettingsModeWizard && msg.Code == tea.KeyTab && msg.Mod.Contains(tea.ModShift) {
+			return s, s.navigateWizardBack(msg)
+		}
 		// In panel mode, esc cancels if the active field has no local esc action.
 		if s.mode == SettingsModePanel && msg.Code == tea.KeyEscape {
 			if s.form.State != huh.StateCompleted && !s.focusedFieldHandlesKey(msg) {
@@ -1337,7 +1475,13 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (s *Settings) View() tea.View {
-	formView := strings.TrimRight(s.form.View(), "\n")
+	currentFormView := s.form.View()
+	if s.ensureProviderDefaults() || s.needsPresetFieldRefresh(currentFormView) {
+		s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
+		currentFormView = s.form.View()
+	}
+	s.syncAIDefaults()
+	formView := strings.TrimRight(currentFormView, "\n")
 
 	if s.mode == SettingsModePanel {
 		rendered := s.renderPanel()
@@ -1433,6 +1577,8 @@ func (s *Settings) panelFormViewWithFooterDivider(formView string) string {
 // this form (Daemon, Semantic, Classification.Prompts, OAuth tokens, etc.) are
 // preserved unchanged.
 func (s *Settings) buildConfig() *config.Config {
+	s.ensureProviderDefaults()
+	s.syncAIDefaults()
 	// Shallow copy preserves all non-pointer fields; pointer/slice fields that
 	// this form does not modify are left pointing at the same underlying data
 	// (safe because we never mutate them — we only overwrite scalar fields below).
@@ -1619,12 +1765,84 @@ func (s *Settings) syncAIDefaults() {
 	if s.ollamaHost == "" || s.aiProvider == aiProviderOllamaDefault {
 		s.ollamaHost = defaultOllamaHost
 	}
-	if s.ollamaModel == "" || s.aiProvider == aiProviderOllamaDefault {
+	if s.aiProvider == aiProviderOllamaDefault {
 		s.ollamaModel = defaultOllamaModel
-	}
-	if s.embedModel == "" || s.aiProvider == aiProviderOllamaDefault {
 		s.embedModel = defaultEmbeddingModel
+		s.ollamaModelChoice = defaultOllamaModel
+		s.embedModelChoice = defaultEmbeddingModel
+		s.ollamaModelCustom = ""
+		s.embedModelCustom = ""
+		return
 	}
+	if s.ollamaModelChoice == "" || s.embedModelChoice == "" {
+		s.syncAIModelChoicesFromValues()
+	}
+	s.ollamaModel = selectedModelValue(s.ollamaModelChoice, s.ollamaModelCustom, s.ollamaModel, defaultOllamaModel)
+	s.embedModel = selectedModelValue(s.embedModelChoice, s.embedModelCustom, s.embedModel, defaultEmbeddingModel)
+}
+
+func (s *Settings) ensureProviderDefaults() bool {
+	before := []string{s.imapHost, s.imapPort, s.smtpHost, s.smtpPort}
+	s.syncProviderDefaults("", s.provider)
+	if s.provider == "gmail" {
+		s.syncProviderDefaults("", "gmail")
+	}
+	after := []string{s.imapHost, s.imapPort, s.smtpHost, s.smtpPort}
+	for i := range before {
+		if before[i] != after[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Settings) refreshFormPreservingVisibleGroup(target string) {
+	if target == "" || s.form == nil || s.form.State != huh.StateNormal {
+		return
+	}
+	s.buildForm()
+	for i := 0; i < 20; i++ {
+		if strings.Contains(s.form.View(), target) {
+			return
+		}
+		s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
+	}
+}
+
+func (s *Settings) visibleSettingsGroupTarget(view string) string {
+	for _, target := range []string{
+		"Email address>",
+		"Gmail address>",
+		"IMAP Host>",
+		"AI Provider",
+		"Offline Cache",
+		"Sync & Cleanup",
+		"Keyboard Profile",
+		"Current Theme",
+		"Email Signature",
+		"Settings",
+	} {
+		if strings.Contains(view, target) {
+			return target
+		}
+	}
+	return ""
+}
+
+func (s *Settings) needsPresetFieldRefresh(view string) bool {
+	if !strings.Contains(view, "IMAP Host>") {
+		return false
+	}
+	imapHost, imapPort, smtpHost, smtpPort, ok := providerPresetValues(s.provider)
+	if !ok {
+		return false
+	}
+	for _, want := range []string{imapHost, imapPort, smtpHost, smtpPort} {
+		if want != "" && !strings.Contains(view, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func providerPresetValues(provider string) (imapHost, imapPort, smtpHost, smtpPort string, ok bool) {
@@ -1639,6 +1857,33 @@ func providerPresetValues(provider string) (imapHost, imapPort, smtpHost, smtpPo
 		return "", "", "", "", false
 	}
 	return cfg.Server.Host, portToString(cfg.Server.Port), cfg.SMTP.Host, portToString(cfg.SMTP.Port), true
+}
+
+func providerPresetPlaceholder(provider string, part string) string {
+	imapHost, imapPort, smtpHost, smtpPort, ok := providerPresetValues(provider)
+	if !ok {
+		return ""
+	}
+	switch part {
+	case "imap-host":
+		return imapHost
+	case "imap-port":
+		return imapPort
+	case "smtp-host":
+		return smtpHost
+	case "smtp-port":
+		return smtpPort
+	default:
+		return ""
+	}
+}
+
+func providerPresetSummary(provider string) string {
+	imapHost, imapPort, smtpHost, smtpPort, ok := providerPresetValues(provider)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf(" Defaults: IMAP %s:%s, SMTP %s:%s.", imapHost, imapPort, smtpHost, smtpPort)
 }
 
 func (s *Settings) syncProviderDefaults(oldProvider, newProvider string) {
@@ -1705,7 +1950,7 @@ func (s *Settings) wizardSummaryLines() []string {
 	case "protonmail":
 		return []string{
 			wizardSummaryLine("IMAP preset:", "requires ProtonMail Bridge running locally."),
-			wizardSummaryLine("Defaults:", "Herald prefills the known localhost IMAP and SMTP ports."),
+			wizardSummaryLine("Defaults:", "IMAP 127.0.0.1:1143 and SMTP 127.0.0.1:1025 are prefilled."),
 		}
 	case "fastmail", "icloud", "outlook":
 		return []string{

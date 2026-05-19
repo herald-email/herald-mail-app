@@ -73,21 +73,101 @@ func TestSettingsWizard_GmailIMAPStepIncludesGuidance(t *testing.T) {
 	}
 }
 
+func TestSettingsWizardEscBackBypassesRequiredFieldValidation(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.form.NextGroup()
+
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	if !strings.Contains(rendered, "Account Type") {
+		t.Fatalf("expected Esc to return to account type without validating empty credentials, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "email address is required") {
+		t.Fatalf("expected Esc back navigation to bypass required-field error, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsWizardShiftTabBackBypassesRequiredFieldValidation(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.form.NextGroup()
+
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	if !strings.Contains(rendered, "Account Type") {
+		t.Fatalf("expected Shift+Tab from first credentials control to return to account type, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "email address is required") {
+		t.Fatalf("expected Shift+Tab back navigation to bypass required-field error, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsWizard_ProtonMailPresetFieldsArePrepopulated(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	for _, want := range []string{"127.0.0.1", "1143", "1025"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected ProtonMail Bridge preset field %q to be visible, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardPreferencesOmitAdvancedSyncCleanupControls(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
+	var views []string
+	for i := 0; i < 12 && s.form.State != huh.StateCompleted; i++ {
+		views = append(views, renderSettingsViewForTest(t, s, 120, 40))
+		s.form.NextGroup()
+	}
+	rendered := strings.Join(views, "\n")
+	for _, notWant := range []string{
+		"Poll Interval",
+		"Enable IMAP IDLE",
+		"Reclaim offline cache storage",
+		"Auto-Cleanup Schedule",
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected first-run preferences to omit advanced sync/cleanup control %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelSyncCleanupKeepsAdvancedControls(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Sync & Cleanup")
+
+	var views []string
+	for i := 0; i < 8; i++ {
+		views = append(views, renderSettingsViewForTest(t, s, 120, 40))
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	rendered := strings.Join(views, "\n")
+	for _, want := range []string{
+		"Poll Interval",
+		"Enable IMAP IDLE",
+		"Lightweight previews",
+		"Message bodies without attachments",
+		"Full offline archive",
+		"Reclaim offline cache storage",
+		"Auto-Cleanup Schedule",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected in-app Sync & Cleanup to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestSettingsWizard_SyncCleanupUsesCompactOfflineCachePolicyLabels(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 	focusSyncCleanupSettingsGroupForTest(t, s)
 
 	rendered := renderSettingsViewForTest(t, s, 120, 40)
 	normalized := strings.Join(strings.Fields(rendered), " ")
-	for _, want := range []string{
-		"Lightweight previews",
-		"Message bodies without attachments",
-		"Full offline archive",
-	} {
-		if !strings.Contains(normalized, want) {
-			t.Fatalf("expected setup wizard to include %q, got:\n%s", want, rendered)
-		}
-	}
 	for _, oldCopy := range []string{
 		"First open/prewarm",
 		"media fetches on demand",
@@ -305,18 +385,22 @@ func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
 func TestSettingsWizardThemeStepOnlyShowsThemePicker(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 
-	var rendered string
+	var views []string
 	for i := 0; i < 12; i++ {
 		view := renderSettingsViewForTest(t, s, 100, 32)
 		if strings.Contains(view, "Current Theme") {
-			rendered = view
+			for j := 0; j < 8; j++ {
+				views = append(views, renderSettingsViewForTest(t, s, 100, 32))
+				s = updateSettingsForTest(t, s, huh.NextField())
+			}
 			break
 		}
 		s.form.NextGroup()
 	}
-	if rendered == "" {
+	if len(views) == 0 {
 		t.Fatalf("expected setup wizard to include a Theme step")
 	}
+	rendered := strings.Join(views, "\n--- next field ---\n")
 
 	for _, want := range []string{"Current Theme", "Inherited", "Herald dark", "Herald light"} {
 		if !strings.Contains(rendered, want) {
@@ -335,6 +419,47 @@ func TestSettingsWizardThemeStepOnlyShowsThemePicker(t *testing.T) {
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected setup wizard Theme step to hide advanced field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardPreferencesThemeStepOnlyShowsThemePicker(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
+
+	var views []string
+	for i := 0; i < 12; i++ {
+		view := renderSettingsViewForTest(t, s, 100, 32)
+		if strings.Contains(view, "Current Theme") {
+			for j := 0; j < 8; j++ {
+				views = append(views, renderSettingsViewForTest(t, s, 100, 32))
+				s = updateSettingsForTest(t, s, huh.NextField())
+			}
+			break
+		}
+		s.form.NextGroup()
+	}
+	if len(views) == 0 {
+		t.Fatalf("expected first-run preferences to include a Theme step")
+	}
+	rendered := strings.Join(views, "\n--- next field ---\n")
+
+	for _, want := range []string{"Current Theme", "Inherited", "Herald dark", "Herald light"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run preferences Theme step to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{
+		"Install local theme YAML",
+		"Theme Role",
+		"Foreground",
+		"Background",
+		"Live preview",
+		"Reset selected role",
+		"Reset all theme overrides",
+		"Save As New Theme",
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected first-run preferences Theme step to hide advanced field %q, got:\n%s", notWant, rendered)
 		}
 	}
 }
@@ -617,5 +742,55 @@ func TestSettingsWizard_OllamaDefaultDoesNotAskForCustomValues(t *testing.T) {
 
 	if strings.Contains(rendered, "Ollama Host>") || strings.Contains(rendered, "Ollama Model>") {
 		t.Fatalf("expected default Ollama path to hide custom fields, got:\n%s", rendered)
+	}
+}
+
+func TestSettingsWizard_OllamaDefaultWarnsAboutMemoryAndShowsSafeDefaults(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "ollama-default"
+	s.buildForm()
+	s.form.NextGroup()
+	s.form.NextGroup()
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{
+		"llama3.2:1b",
+		"nomic-embed-text",
+		"8GB",
+		"larger models",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Ollama default guidance to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsWizard_CustomOllamaShowsCuratedChatAndEmbeddingChoices(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "ollama-custom"
+	s.buildForm()
+	s.form.NextGroup()
+	s.form.NextGroup()
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 120, 40)
+	for _, want := range []string{
+		"Chat Model",
+		"llama3.2:1b",
+		"qwen3.5:0.8b",
+		"llama3.2:3b",
+		"gemma3:4b",
+		"Embedding Model",
+		"nomic-embed-text",
+		"all-minilm",
+		"nomic-embed-text-v2-moe",
+		"mxbai-embed-large",
+		"bge-m3",
+		"Custom model name",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected custom Ollama choices to include %q, got:\n%s", want, rendered)
+		}
 	}
 }

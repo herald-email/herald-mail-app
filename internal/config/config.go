@@ -56,8 +56,8 @@ type Config struct {
 	} `yaml:"smtp"`
 	Ollama struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
-		Model          string `yaml:"model"`           // default: gemma3:4b
-		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text-v2-moe
+		Model          string `yaml:"model"`           // default: llama3.2:1b
+		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text
 	} `yaml:"ollama"`
 	Sync struct {
 		Idle                bool `yaml:"idle"`                  // default: true
@@ -69,7 +69,7 @@ type Config struct {
 	} `yaml:"sync"`
 	Semantic struct {
 		Enabled   bool    `yaml:"enabled"`    // default: true when Ollama configured
-		Model     string  `yaml:"model"`      // default: nomic-embed-text-v2-moe
+		Model     string  `yaml:"model"`      // default: nomic-embed-text
 		BatchSize int     `yaml:"batch_size"` // default: 20
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
@@ -359,10 +359,10 @@ func (c *Config) Save(path string) error {
 func (c *Config) applyDefaults() {
 	c.Cache.StoragePolicy = NormalizeCacheStoragePolicy(c.Cache.StoragePolicy)
 	if c.Ollama.Model == "" {
-		c.Ollama.Model = "gemma3:4b"
+		c.Ollama.Model = "llama3.2:1b"
 	}
 	if c.Ollama.EmbeddingModel == "" {
-		c.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+		c.Ollama.EmbeddingModel = "nomic-embed-text"
 	}
 	if c.Semantic.Model == "" {
 		c.Semantic.Model = c.Ollama.EmbeddingModel
