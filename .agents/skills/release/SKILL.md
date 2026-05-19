@@ -26,13 +26,14 @@ Also inspect `README.md` or product docs when the change summary needs user-faci
 5. Use annotated tags in the exact shape `v0.X.Y-beta.Z` with message `Herald v0.X.Y-beta.Z`.
 6. Treat immutable beta tags as public once release assets are published or testers may have downloaded them. In that case, publish a new beta tag instead of moving the old one.
 7. Do not manually create, edit, or push `beta-latest`; the GitHub Actions release workflow owns it.
+8. Treat local `beta-latest` tag drift during fetch as expected workflow-owned state. Do not call it a release hiccup, do not manually touch it, and fetch immutable version tags with `+refs/tags/v*:refs/tags/v*` when needed.
 
 ## Review Changes
 
 Sync the local view:
 
 ```bash
-git fetch origin main --tags
+git fetch origin main '+refs/tags/v*:refs/tags/v*'
 git switch main
 git pull --ff-only origin main
 git status --short
