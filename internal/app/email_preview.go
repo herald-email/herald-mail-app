@@ -1009,6 +1009,7 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	m.composePreserved = nil
 	m.replyContextEmail = email
 	m.composeAIThread = true
+	m.resetComposeAIBar()
 	m.composeTo.SetValue(email.Sender)
 	subject := email.Subject
 	if !strings.HasPrefix(strings.ToLower(subject), "re:") {

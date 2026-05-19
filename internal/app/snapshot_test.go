@@ -194,6 +194,7 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 func TestSnapshot_ComposeAIPanel(t *testing.T) {
 	m := testModelWithEmails(nil)
 	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
 	m.composeField = 4
 	m.composeBody.SetValue("Hey Alice,\n\nCan we meet tomorrow for a quick sync?\n\nThanks")
 	m.composeAIPanel = true

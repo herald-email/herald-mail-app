@@ -517,20 +517,31 @@ Check these states during every applicable lane:
 ### TC-11 — Compose AI assistant success and degrade
 
 **Lane:** C  
-**Sizes:** `220x50`, `120x40`, `80x24`
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
 1. Open Timeline and press `c` to open Compose with a non-empty draft body.
-2. Press `Ctrl+G` to open the AI assistant.
-3. Trigger one quick action (`1`-`5`) or enter a custom prompt and press `Enter`.
-4. Wait for a suggestion or bounded failure.
-5. Edit the suggestion once, then press `Ctrl+Enter` to accept it into the compose body.
-6. Repeat once with AI unavailable, misconfigured, or using an invalid model.
+2. Confirm the AI command bar is visible by default between the message headers and body without narrowing the body editor.
+3. Confirm the bar is one compact row with Translate, Style, quick actions, Undo, and an inline `Ask:` input.
+4. Open the Translate dropdown with `Ctrl+T` and choose a language option.
+5. Open the Style dropdown with `Ctrl+Y` and choose a style option.
+6. Trigger typo-fix with `Ctrl+F`, shorten with `Ctrl+N`, and expand with `Ctrl+E` from the AI bar.
+7. Press `Ctrl+K`, type a custom freeform instruction such as `make this warmer and translate it to Spanish`, then press `Enter`.
+8. Wait for a suggestion or bounded failure.
+9. Edit the suggestion once, then press `Ctrl+Enter` to accept it into the compose body.
+10. Press `Ctrl+Z` and confirm the previous body is restored.
+11. Repeat once with AI unavailable, misconfigured, or using an invalid model.
 
 **Expect:**
-- The AI panel opens without pushing the compose chrome off-screen.
+- The AI command bar is open by default without pushing the compose chrome off-screen or narrowing the body editor.
+- The freeform instruction input is inline with the toolbar controls, not a separate `Ask:` row.
 - Success path shows loading state, diff/suggestion content, and an editable response area.
+- Quick actions include typo-fix, translation dropdown, style dropdown, and length adjustments.
+- Translate and Style actions use visible dropdown menus in the AI bar.
+- Freeform instructions behave like a chat-style writing request over the current draft and produce an editable rewrite.
 - `Ctrl+Enter` copies the accepted suggestion into the compose body and closes the panel cleanly.
+- `Ctrl+Z` restores the body from before the accepted rewrite.
+- With AI unavailable, the default bar shows an `AI disabled` warning and does not advertise active rewrite controls.
 - Narrow sizes degrade cleanly without broken borders or hidden compose inputs.
 - Failure path stays responsive and shows concise bounded feedback in compose status instead of panicking or flooding logs.
 

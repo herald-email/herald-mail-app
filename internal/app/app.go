@@ -493,13 +493,17 @@ type Model struct {
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
 	suggestionIdx int                  // selected row index (-1 = none selected)
 
-	// Compose AI panel (Ctrl+G)
+	// Compose AI toolbar (Ctrl+K)
 	composeAIPanel        bool
 	composeAIInput        textinput.Model // free-form prompt
 	composeAIResponse     textarea.Model  // editable AI rewrite
 	composeAIDiff         string          // lipgloss-styled word diff (display only)
 	composeAILoading      bool
 	composeAIThread       bool              // true = include reply context in prompt
+	composeAIMenu         string            // open command-bar dropdown: translate/style
+	composeAIStyle        string            // selected style dropdown option
+	composeAITranslate    string            // selected translation language
+	composeAIUndoBody     string            // previous body before accepted AI rewrite
 	composeAISubjectHint  string            // pending subject suggestion ("" = none)
 	replyContextEmail     *models.EmailData // set when reply is initiated; nil for new emails
 	attachmentPathInput   textinput.Model
@@ -726,11 +730,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	composeBody.CharLimit = 0 // unlimited
 
 	composeAIInput := textinput.New()
-	composeAIInput.Placeholder = "Ask AI anything about this email…"
+	composeAIInput.Placeholder = " custom instruction..."
 	composeAIInput.CharLimit = 512
 
 	composeAIResponse := textarea.New()
-	composeAIResponse.Placeholder = "AI suggestion will appear here…"
+	composeAIResponse.Placeholder = "AI suggestion will appear here..."
 	composeAIResponse.SetWidth(38)
 	composeAIResponse.SetHeight(8)
 	composeAIResponse.CharLimit = 0
@@ -794,6 +798,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		composeSubject:          composeSubject,
 		composeBody:             composeBody,
 		suggestionIdx:           -1,
+		composeAIPanel:          true,
 		composeAIInput:          composeAIInput,
 		composeAIResponse:       composeAIResponse,
 		attachmentCompletionIdx: -1,
@@ -1413,11 +1418,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.replyContextEmail = nil
 			m.composePreserved = nil
 			m.composeAIThread = false
-			m.composeAIPanel = false
-			m.composeAIDiff = ""
-			m.composeAISubjectHint = ""
-			m.composeAIResponse.SetValue("")
-			m.composeAILoading = false
+			m.resetComposeAIBar()
 			// Delete the auto-saved draft (if any) since the email was sent
 			if m.lastDraftUID != 0 {
 				if !m.lastDraftReplaceable {
@@ -1598,20 +1599,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.composeAILoading = false
 		if msg.Err != nil {
 			m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			m.refreshComposeLayout()
 			return m, nil
 		}
 		original := m.composeBody.Value()
+		m.composeAIMenu = ""
 		m.composeAIDiff = wordDiffWithTheme(m.theme, original, msg.Result)
 		m.composeAIResponse.SetValue(msg.Result)
+		m.composeAIInput.Blur()
+		m.composeAIResponse.Focus()
+		m.refreshComposeLayout()
 		return m, nil
 
 	case AISubjectMsg:
 		m.composeAILoading = false
 		if msg.Err != nil {
 			m.composeStatus = fmt.Sprintf("AI error: %v", msg.Err)
+			m.refreshComposeLayout()
 			return m, nil
 		}
 		m.composeAISubjectHint = strings.TrimSpace(msg.Subject)
+		m.refreshComposeLayout()
 		return m, nil
 
 	case ValidIDsMsg:

@@ -44,7 +44,7 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 | `ctrl+a` | Compose | Attachment prompt not already active. | Opens file path input for adding an attachment. |
 | `enter` | Attachment prompt | Attachment prompt active. | Adds the expanded path as an attachment. |
 | `esc` | Attachment prompt | Attachment prompt active. | Cancels attachment input. |
-| `ctrl+g` | Compose | AI backend configured. | Opens or closes the AI assistant panel. |
+| `ctrl+k` | Compose | AI backend configured. | Focuses the inline AI prompt in the Compose toolbar. |
 | `enter` | AI prompt field | AI assistant prompt has text. | Sends the custom instruction to the AI assistant. |
 | `1` to `5` | AI panel | AI panel open and body is not empty. | Runs quick actions: improve, shorten, lengthen, formal, or casual. |
 | `ctrl+enter` | AI panel | AI response is available. | Replaces the body with the AI response and closes the panel. |
@@ -83,8 +83,8 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 ### Use AI Writing Assistance
 
 1. Write body text first.
-2. Press `ctrl+g`.
-3. Press `1` through `5` for a built-in rewrite or type a custom instruction and press `enter`.
+2. Press `ctrl+t` or `ctrl+y` to choose a translate or style option, or press `ctrl+k` to focus the inline AI prompt.
+3. Use the toolbar quick actions or type a custom instruction and press `enter`.
 4. Review the AI response.
 5. Press `ctrl+enter` to accept it into the body, or `esc` to close the panel.
 
@@ -105,7 +105,7 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 | Attachment input | Key input is captured by the path prompt until `enter` or `esc`. |
 | Large attachment warning | Attachment add flow can warn when a file is larger than the configured threshold. |
 | Autocomplete compact | Suggestions collapse to a single line when vertical space is tight. |
-| AI unavailable | `ctrl+g` and `ctrl+j` report no AI backend configured. |
+| AI unavailable | The Compose AI toolbar shows a configuration warning; `ctrl+k` and `ctrl+j` report no AI backend configured. |
 | AI loading | The assistant waits for provider output and then displays a response. |
 | Draft saved | Compose auto-saves drafts about every 30 seconds when there is content. |
 | Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `F1-F3` for tabs, with `Alt+1/2/3`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` as secondary global actions while writing. |
@@ -139,7 +139,7 @@ If a send error occurs after attaching files, verify the file still exists and t
 
 ![Compose address autocomplete dropdown](/screenshots/compose-autocomplete.png)
 
-<!-- HERALD_SCREENSHOT id="compose-ai-assistant" page="compose" alt="Compose AI assistant panel" state="demo mode, 120x40, AI configured, assistant panel open" desc="Shows AI quick actions, custom instruction input, generated response area, and accept key hint." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; enter body text; press ctrl+g" -->
+<!-- HERALD_SCREENSHOT id="compose-ai-assistant" page="compose" alt="Compose AI assistant toolbar" state="demo mode, 120x40, AI configured, Compose AI toolbar visible" desc="Shows the compact Translate and Style controls, quick actions, inline custom instruction input, generated response area, and accept key hint." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; enter body text; press ctrl+k" -->
 
 ![Compose AI assistant panel](/screenshots/compose-ai-assistant.png)
 

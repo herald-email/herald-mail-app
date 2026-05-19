@@ -57,9 +57,14 @@ func TestComposeBodyHeight_FitsTerminal(t *testing.T) {
 		//   divider(1) + body borders(2) = 3 overhead rows
 		//   total fixed = 15
 		const fixedRows = 15
-		expectedBodyHeight := composeViewportRows - fixedRows
-		if expectedBodyHeight < 3 {
-			expectedBodyHeight = 3
+		composeExtraRows := m.composeAdditionalRows(tableHeight)
+		expectedBodyHeight := composeViewportRows - fixedRows - composeExtraRows
+		minExpectedBodyHeight := 3
+		if composeExtraRows > 0 {
+			minExpectedBodyHeight = 1
+		}
+		if expectedBodyHeight < minExpectedBodyHeight {
+			expectedBodyHeight = minExpectedBodyHeight
 		}
 
 		got := m.composeBody.Height()
@@ -108,6 +113,260 @@ func TestComposeBlankView_FillsTerminalHeight(t *testing.T) {
 			if !dividerSeen {
 				t.Fatalf("expected status/key-hint divider near the bottom at %dx%d, got:\n%s",
 					tc.width, tc.height, strings.Join(lines[len(lines)-4:], "\n"))
+			}
+		})
+	}
+}
+
+func TestComposeAIBarOpensByDefaultForBlankCompose(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+
+	cmd := m.openBlankComposeFromCurrent()
+
+	if cmd != nil {
+		t.Fatalf("blank compose open should be synchronous, got %T", cmd)
+	}
+	if !m.composeAIPanel {
+		t.Fatal("expected Compose AI bar to be open by default")
+	}
+	if m.composeAIInput.Focused() {
+		t.Fatal("default-open AI bar must not steal focus from the compose fields")
+	}
+}
+
+func TestComposeAIBarShowsDisabledWarningWhenAIUnavailable(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = nil
+	m.composeAIPanel = true
+	m.updateTableDimensions(120, 40)
+
+	rendered := stripANSI(m.renderMainView())
+
+	if !strings.Contains(rendered, "AI disabled") {
+		t.Fatalf("expected disabled warning in Compose AI bar, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Ctrl+T Translate") {
+		t.Fatalf("disabled AI bar should not advertise active rewrite controls, got:\n%s", rendered)
+	}
+}
+
+func TestComposeAIBarRendersCompactInlineAskToolbar(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.updateTableDimensions(120, 40)
+
+	rendered := stripANSI(m.renderMainView())
+
+	for _, want := range []string{"[Translate: ctrl+t]", "[Style: ctrl+y]", "[Fix: ctrl+f]", "[Shorten: ctrl+n]", "[Expand: ctrl+e]", "[Undo: ctrl+z]", "Ask: ctrl+k"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("compact AI toolbar missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "AI  [Translate:") {
+		t.Fatalf("compact AI toolbar should not include a leading AI label:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Spanish") || strings.Contains(rendered, "Friendly") {
+		t.Fatalf("default compact AI toolbar should show shortcuts until a menu option is selected:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Ask: ctrl+k >  ") {
+		t.Fatalf("inline Ask field should keep extra spacing before placeholder:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Tell AI how to rewrite this draft") {
+		t.Fatalf("inline Ask field should not render the old full-width prompt placeholder:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Ctrl+G: prompt") {
+		t.Fatalf("compact AI toolbar should not advertise Ctrl+G prompt focus:\n%s", rendered)
+	}
+	toolbarLines := 0
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "AI") || strings.Contains(line, "Ask:") {
+			if strings.Contains(line, "Translate:") || strings.Contains(line, "Ask:") {
+				toolbarLines++
+			}
+		}
+	}
+	if toolbarLines != 1 {
+		t.Fatalf("AI toolbar should occupy one compact row, counted %d relevant rows:\n%s", toolbarLines, rendered)
+	}
+}
+
+func TestComposeAIBarRendersSelectedMenuValuesAfterSelection(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeAITranslate = "Spanish"
+	m.composeAIStyle = "Friendly"
+	m.updateTableDimensions(120, 40)
+
+	rendered := stripANSI(m.renderMainView())
+
+	for _, want := range []string{"Spanish v", "Friendly v"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("compact AI toolbar missing selected value %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestComposeAIDropdownRendersBelowDivider(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeAIMenu = composeAIMenuTranslate
+	m.updateTableDimensions(120, 40)
+
+	lines := strings.Split(stripANSI(m.renderMainView()), "\n")
+	toolbarLine := -1
+	dividerLine := -1
+	dropdownLine := -1
+	for i, line := range lines {
+		switch {
+		case strings.Contains(line, "[Translate: ctrl+t]"):
+			toolbarLine = i
+		case toolbarLine >= 0 && dividerLine < 0 && strings.Contains(line, "────"):
+			dividerLine = i
+		case strings.HasPrefix(strings.TrimSpace(line), "Translate:"):
+			dropdownLine = i
+		}
+	}
+	if toolbarLine < 0 || dividerLine < 0 || dropdownLine < 0 {
+		t.Fatalf("expected toolbar, divider, and dropdown lines, got toolbar=%d divider=%d dropdown=%d:\n%s", toolbarLine, dividerLine, dropdownLine, strings.Join(lines, "\n"))
+	}
+	if !(toolbarLine < dividerLine && dividerLine < dropdownLine) {
+		t.Fatalf("divider should render between toolbar and dropdown, got toolbar=%d divider=%d dropdown=%d:\n%s", toolbarLine, dividerLine, dropdownLine, strings.Join(lines, "\n"))
+	}
+}
+
+func TestComposeAIBarUsesOneAdditionalRowByDefault(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeAIMenu = ""
+	m.composeAILoading = false
+	m.composeAIDiff = ""
+	m.composeAIResponse.SetValue("")
+
+	tableHeight := m.buildLayoutPlan(120, 40).ContentHeight
+	if got := m.composeAdditionalRows(tableHeight); got != 1 {
+		t.Fatalf("default compact AI toolbar extra rows = %d, want 1", got)
+	}
+}
+
+func TestComposeCtrlKFocusesInlineAIInstruction(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeField = composeFieldBody
+	m.composeBody.Focus()
+
+	model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl})
+	updated := model.(*Model)
+
+	if cmd != nil {
+		t.Fatalf("Ctrl+K should focus the inline AI input synchronously, got command %T", cmd)
+	}
+	if !updated.composeAIInput.Focused() {
+		t.Fatal("Ctrl+K should focus the inline AI instruction input")
+	}
+	if updated.composeAIResponse.Focused() {
+		t.Fatal("Ctrl+K should blur the AI response editor")
+	}
+	if updated.composeField != composeFieldBody {
+		t.Fatalf("Ctrl+K should not change compose field, got %d", updated.composeField)
+	}
+}
+
+func TestComposeAIInputEnterSubmitsCustomRewrite(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeBody.SetValue("Please review this draft.")
+	m.composeAIInput.SetValue("make this warmer")
+	m.composeAIInput.Focus()
+
+	model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	updated := model.(*Model)
+
+	if cmd == nil {
+		t.Fatal("Enter from focused inline AI input should dispatch a custom rewrite")
+	}
+	if !updated.composeAILoading {
+		t.Fatal("Enter from focused inline AI input should show loading state")
+	}
+	if got := updated.composeAIInput.Value(); got != "" {
+		t.Fatalf("AI input should clear after submit, got %q", got)
+	}
+}
+
+func TestDefaultOpenComposeAIBarDoesNotStealBodyText(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeAIPanel = true
+	m.composeField = composeFieldBody
+	m.composeBody.Focus()
+
+	for _, r := range []rune("taste fine") {
+		model, _ := m.handleComposeKey(tea.KeyPressMsg{Text: string(r), Code: r})
+		m = model.(*Model)
+	}
+
+	if got := m.composeBody.Value(); got != "taste fine" {
+		t.Fatalf("compose body = %q, want literal text preserved with default-open AI bar", got)
+	}
+}
+
+func TestComposeAIResultRefreshesBodyHeight(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCompose
+	m.composeField = composeFieldBody
+	m.composeBody.SetValue("pleese review this draft.")
+	m.composeAIPanel = true
+	m.updateTableDimensions(120, 40)
+	heightBefore := m.composeBody.Height()
+
+	updated, _ := m.Update(AIAssistMsg{Result: "Please review this draft."})
+	m = updated.(*Model)
+
+	if got := m.composeBody.Height(); got >= heightBefore {
+		t.Fatalf("compose body height after AI result = %d, want less than %d so the result editor fits", got, heightBefore)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Changes:") || !strings.Contains(rendered, "Please review this draft.") {
+		t.Fatalf("expected AI result editor to remain visible after layout refresh, got:\n%s", rendered)
+	}
+}
+
+func TestComposeAILengthShortcutsStartActions(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  rune
+	}{
+		{name: "shorten", key: 'n'},
+		{name: "expand", key: 'e'},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 120, 40)
+			m.activeTab = tabCompose
+			m.composeAIPanel = true
+			m.classifier = &stubClassifier{}
+			m.composeBody.SetValue("Please review this draft.")
+
+			model, cmd := m.handleComposeKey(tea.KeyPressMsg{Code: tc.key, Mod: tea.ModCtrl})
+			updated := model.(*Model)
+
+			if cmd == nil {
+				t.Fatal("expected length shortcut to dispatch an AI rewrite command")
+			}
+			if !updated.composeAILoading {
+				t.Fatal("expected length shortcut to show AI loading state")
 			}
 		})
 	}

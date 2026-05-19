@@ -41,6 +41,81 @@ type composeSuggestionLayout struct {
 	compact      bool
 }
 
+type composeAIAction struct {
+	Key         string
+	Label       string
+	Instruction string
+}
+
+const (
+	composeAIMenuTranslate = "translate"
+	composeAIMenuStyle     = "style"
+)
+
+func composeAIQuickActions() []composeAIAction {
+	return []composeAIAction{
+		{
+			Key:         "i",
+			Label:       "Improve",
+			Instruction: "Improve the clarity, flow, and professionalism of this email while preserving its meaning and key details.",
+		},
+		{
+			Key:         "f",
+			Label:       "Fix typos",
+			Instruction: "Fix typos, grammar, punctuation, and awkward wording in this email while preserving the original meaning and level of detail.",
+		},
+		{
+			Key:         "n",
+			Label:       "Shorten",
+			Instruction: "Shorten this email to the essential points while preserving all necessary context and requested actions.",
+		},
+		{
+			Key:         "e",
+			Label:       "Expand",
+			Instruction: "Expand this email with helpful context, smoother transitions, and complete sentences while preserving its intent.",
+		},
+	}
+}
+
+func composeAIActionByKey(key string) (composeAIAction, bool) {
+	for _, action := range composeAIQuickActions() {
+		if action.Key == key {
+			return action, true
+		}
+	}
+	return composeAIAction{}, false
+}
+
+func composeAITranslateOptions() []string {
+	return []string{"Spanish", "French", "German", "Japanese", "Portuguese", "Custom..."}
+}
+
+func composeAIStyleOptions() []string {
+	return []string{"Professional", "Friendly", "Direct", "Formal", "Warmer", "Concise"}
+}
+
+func composeAISelectedLanguage(language string) string {
+	if strings.TrimSpace(language) == "" {
+		return "Spanish"
+	}
+	return language
+}
+
+func composeAISelectedStyle(style string) string {
+	if strings.TrimSpace(style) == "" {
+		return "Friendly"
+	}
+	return style
+}
+
+func composeAITranslateInstruction(language string) string {
+	return fmt.Sprintf("Translate this email to %s while preserving formatting intent, names, dates, commitments, and the original meaning.", composeAISelectedLanguage(language))
+}
+
+func composeAIStyleInstruction(style string) string {
+	return fmt.Sprintf("Rewrite this email in a %s style while preserving all facts, commitments, names, dates, and action items.", strings.ToLower(composeAISelectedStyle(style)))
+}
+
 func (m *Model) composeSuggestionLayout(tableHeight int) composeSuggestionLayout {
 	if len(m.suggestions) == 0 {
 		return composeSuggestionLayout{}
@@ -74,6 +149,18 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	default:
 		rows += layout.visibleCount + 2
 	}
+	if m.composeAIPanel {
+		rows++ // compact command bar with inline custom instruction input
+		if m.composeAIMenu != "" {
+			rows++
+		}
+		if m.composeAILoading {
+			rows++
+		}
+		if m.composeAIDiff != "" || m.composeAIResponse.Value() != "" {
+			rows += 8
+		}
+	}
 	if m.composeAISubjectHint != "" {
 		rows++
 	}
@@ -93,10 +180,37 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	return rows
 }
 
+func (m *Model) refreshComposeLayout() {
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+}
+
+func (m *Model) resetComposeAIBar() {
+	m.composeAIPanel = true
+	m.composeAIMenu = ""
+	m.composeAIStyle = ""
+	m.composeAITranslate = ""
+	m.composeAIUndoBody = ""
+	m.composeAIDiff = ""
+	m.composeAISubjectHint = ""
+	m.composeAIInput.SetValue("")
+	m.composeAIInput.Blur()
+	m.composeAIResponse.SetValue("")
+	m.composeAIResponse.Blur()
+	m.composeAILoading = false
+}
+
 func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Attachment path input intercepts all keys while active
 	if m.attachmentInputActive {
 		return m.handleAttachmentPathKey(msg)
+	}
+
+	if m.composeAIPanel {
+		if model, cmd, handled := m.handleComposeAIKey(msg); handled {
+			return model, cmd
+		}
 	}
 
 	// When AI panel prompt is focused, route keystrokes to it
@@ -108,6 +222,7 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			m.composeAILoading = true
 			m.composeAIInput.SetValue("")
+			m.refreshComposeLayout()
 			return m, m.aiAssistCmd(instruction)
 		}
 		var cmd tea.Cmd
@@ -120,25 +235,6 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.composeAIResponse, cmd = m.composeAIResponse.Update(msg)
 		return m, cmd
-	}
-
-	// When AI panel is open, number keys 1-5 trigger quick actions
-	if m.composeAIPanel && !m.composeAIInput.Focused() {
-		actions := map[string]string{
-			"1": "Improve the clarity and professionalism of this email",
-			"2": "Shorten this email to be more concise",
-			"3": "Lengthen this email with more detail",
-			"4": "Rewrite this email in a formal tone",
-			"5": "Rewrite this email in a casual, friendly tone",
-		}
-		if instruction, ok := actions[msg.String()]; ok {
-			if m.composeBody.Value() == "" {
-				m.composeStatus = "Write something first"
-				return m, nil
-			}
-			m.composeAILoading = true
-			return m, m.aiAssistCmd(instruction)
-		}
 	}
 
 	// Autocomplete dropdown interactions take priority over normal field navigation
@@ -205,18 +301,42 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.attachmentPathInput.Focus()
 		m.clearAttachmentCompletions()
 		return m, nil
-	case "ctrl+g":
+	case "ctrl+k":
+		m.composeAIPanel = true
 		if m.classifier == nil {
-			m.composeStatus = "No AI backend configured"
+			m.composeStatus = "AI writing tools are disabled until an AI provider is configured"
+		} else {
+			m.composeAIInput.Focus()
+			m.composeAIResponse.Blur()
+		}
+		m.refreshComposeLayout()
+		return m, nil
+	case "ctrl+g":
+		if !m.composeAIPanel {
+			m.composeAIPanel = true
+			if m.classifier != nil {
+				m.composeAIInput.Focus()
+				m.composeAIResponse.Blur()
+			}
+			m.refreshComposeLayout()
 			return m, nil
 		}
-		m.composeAIPanel = !m.composeAIPanel
-		if m.composeAIPanel {
+		if m.classifier == nil {
+			m.composeAIPanel = false
+			m.composeAIMenu = ""
+			m.refreshComposeLayout()
+			return m, nil
+		}
+		if !m.composeAIInput.Focused() && !m.composeAIResponse.Focused() {
 			m.composeAIInput.Focus()
+			m.composeAIResponse.Blur()
 		} else {
+			m.composeAIPanel = false
+			m.composeAIMenu = ""
 			m.composeAIInput.Blur()
 			m.composeAIResponse.Blur()
 		}
+		m.refreshComposeLayout()
 		return m, nil
 	case "ctrl+j":
 		if m.classifier == nil {
@@ -228,24 +348,17 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.composeAILoading = true
+		m.refreshComposeLayout()
 		return m, m.aiSubjectCmd()
 	case "ctrl+enter":
-		if m.composeAIPanel && m.composeAIResponse.Value() != "" {
-			m.composeBody.SetValue(m.composeAIResponse.Value())
-			m.composeAIPanel = false
-			m.composeAIDiff = ""
-			m.composeAIResponse.SetValue("")
-			m.composeAIInput.Blur()
-			m.composeAIResponse.Blur()
-			m.composeBody.Focus()
-			m.composeField = 4
-		}
+		m.acceptComposeAIResponse()
 		return m, nil
 	case "tab":
 		// If a subject hint is pending, Tab accepts it
 		if m.composeAISubjectHint != "" {
 			m.composeSubject.SetValue(m.composeAISubjectHint)
 			m.composeAISubjectHint = ""
+			m.refreshComposeLayout()
 			return m, nil
 		}
 		m.cycleComposeField()
@@ -281,8 +394,186 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.composeSubject, cmd = m.composeSubject.Update(msg)
 	case composeFieldBody:
 		m.composeBody, cmd = m.composeBody.Update(msg)
+		if msg.Key().Mod.Contains(tea.ModAlt) && msg.Key().Text != "" {
+			cmd = nil
+		}
 	}
 	return m, cmd
+}
+
+func (m *Model) handleComposeAIKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	key := shortcutKey(msg)
+	switch key {
+	case "ctrl+k":
+		if m.classifier == nil {
+			m.composeStatus = "AI writing tools are disabled until an AI provider is configured"
+			return m, nil, true
+		}
+		m.composeAIPanel = true
+		m.composeAIInput.Focus()
+		m.composeAIResponse.Blur()
+		m.refreshComposeLayout()
+		return m, nil, true
+	case "ctrl+t":
+		if m.classifier == nil {
+			m.composeStatus = "AI writing tools are disabled until an AI provider is configured"
+			return m, nil, true
+		}
+		m.openComposeAIMenu(composeAIMenuTranslate)
+		return m, nil, true
+	case "ctrl+y":
+		if m.classifier == nil {
+			m.composeStatus = "AI writing tools are disabled until an AI provider is configured"
+			return m, nil, true
+		}
+		m.openComposeAIMenu(composeAIMenuStyle)
+		return m, nil, true
+	case "ctrl+z":
+		return m.undoComposeAIRewrite(), nil, true
+	case "ctrl+f":
+		if action, ok := composeAIActionByKey("f"); ok {
+			model, cmd := m.startComposeAIAction(action)
+			return model, cmd, true
+		}
+	case "ctrl+n":
+		if action, ok := composeAIActionByKey("n"); ok {
+			model, cmd := m.startComposeAIAction(action)
+			return model, cmd, true
+		}
+	case "ctrl+e":
+		if action, ok := composeAIActionByKey("e"); ok {
+			model, cmd := m.startComposeAIAction(action)
+			return model, cmd, true
+		}
+	case "ctrl+enter":
+		if m.acceptComposeAIResponse() {
+			return m, nil, true
+		}
+	}
+
+	if m.composeAIMenu != "" {
+		switch msg.String() {
+		case "esc":
+			m.composeAIMenu = ""
+			m.refreshComposeLayout()
+			return m, nil, true
+		case "up", "k":
+			return m, nil, true
+		case "down", "j":
+			return m, nil, true
+		}
+		if cmd, handled := m.selectComposeAIMenuOption(msg.String()); handled {
+			return m, cmd, true
+		}
+		return m, nil, true
+	}
+
+	if !m.composeAIInput.Focused() && !m.composeAIResponse.Focused() {
+		switch key {
+		case "ctrl+u":
+			return m.undoComposeAIRewrite(), nil, true
+		}
+	}
+	return m, nil, false
+}
+
+func (m *Model) openComposeAIMenu(menu string) {
+	m.composeAIMenu = menu
+	m.composeAIInput.Blur()
+	m.composeAIResponse.Blur()
+	m.refreshComposeLayout()
+}
+
+func (m *Model) selectComposeAIMenuOption(key string) (tea.Cmd, bool) {
+	index := -1
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
+		index = int(key[0] - '1')
+	}
+	if index < 0 {
+		return nil, false
+	}
+	switch m.composeAIMenu {
+	case composeAIMenuTranslate:
+		options := composeAITranslateOptions()
+		if index >= len(options) {
+			return nil, true
+		}
+		selected := options[index]
+		m.composeAIMenu = ""
+		if selected == "Custom..." {
+			m.composeAIInput.SetValue("Translate this email to ")
+			m.composeAIInput.Focus()
+			m.composeStatus = "Enter a target language, then press Enter"
+			m.refreshComposeLayout()
+			return nil, true
+		}
+		m.composeAITranslate = selected
+		_, cmd := m.startComposeAIAction(composeAIAction{Instruction: composeAITranslateInstruction(selected)})
+		return cmd, true
+	case composeAIMenuStyle:
+		options := composeAIStyleOptions()
+		if index >= len(options) {
+			return nil, true
+		}
+		selected := options[index]
+		m.composeAIMenu = ""
+		m.composeAIStyle = selected
+		_, cmd := m.startComposeAIAction(composeAIAction{Instruction: composeAIStyleInstruction(selected)})
+		return cmd, true
+	default:
+		m.composeAIMenu = ""
+		m.refreshComposeLayout()
+		return nil, true
+	}
+}
+
+func (m *Model) startComposeAIAction(action composeAIAction) (tea.Model, tea.Cmd) {
+	if m.classifier == nil {
+		m.composeStatus = "AI writing tools are disabled until an AI provider is configured"
+		return m, nil
+	}
+	if strings.TrimSpace(m.composeBody.Value()) == "" {
+		m.composeStatus = "Write something first"
+		return m, nil
+	}
+	m.composeAILoading = true
+	m.composeStatus = ""
+	m.refreshComposeLayout()
+	return m, m.aiAssistCmd(action.Instruction)
+}
+
+func (m *Model) acceptComposeAIResponse() bool {
+	if !m.composeAIPanel || m.composeAIResponse.Value() == "" {
+		return false
+	}
+	m.composeAIUndoBody = m.composeBody.Value()
+	m.composeBody.SetValue(m.composeAIResponse.Value())
+	m.composeAIPanel = false
+	m.composeAIMenu = ""
+	m.composeAIDiff = ""
+	m.composeAIResponse.SetValue("")
+	m.composeAIInput.Blur()
+	m.composeAIResponse.Blur()
+	m.composeBody.Focus()
+	m.composeField = composeFieldBody
+	m.refreshComposeLayout()
+	return true
+}
+
+func (m *Model) undoComposeAIRewrite() *Model {
+	if m.composeAIUndoBody == "" {
+		m.composeStatus = "Nothing to undo"
+		return m
+	}
+	current := m.composeBody.Value()
+	m.composeBody.SetValue(m.composeAIUndoBody)
+	m.composeAIUndoBody = current
+	m.composeStatus = "AI rewrite undone"
+	m.composeField = composeFieldBody
+	m.composeBody.Focus()
+	m.composeAIInput.Blur()
+	m.composeAIResponse.Blur()
+	return m
 }
 
 func (m *Model) handleVimFieldKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
@@ -915,10 +1206,24 @@ func (m *Model) renderComposeView() string {
 	if divWidth < 10 {
 		divWidth = 10
 	}
+	divider := strings.Repeat("─", divWidth)
 	if m.composePreserved != nil {
-		sb.WriteString(composeSectionDivider("Response", divWidth) + "\n")
+		divider = composeSectionDivider("Response", divWidth)
+	}
+	if aiBar := m.renderComposeAIBar(divWidth); aiBar != "" {
+		if m.composeAIMenu != "" {
+			aiRows := strings.Split(aiBar, "\n")
+			sb.WriteString(aiRows[0] + "\n")
+			sb.WriteString(divider + "\n")
+			if len(aiRows) > 1 {
+				sb.WriteString(strings.Join(aiRows[1:], "\n") + "\n")
+			}
+		} else {
+			sb.WriteString(aiBar + "\n")
+			sb.WriteString(divider + "\n")
+		}
 	} else {
-		sb.WriteString(strings.Repeat("─", divWidth) + "\n")
+		sb.WriteString(divider + "\n")
 	}
 
 	// Subject hint (shown below divider when a suggestion is pending)
@@ -934,57 +1239,13 @@ func (m *Model) renderComposeView() string {
 		sb.WriteString(hint + "\n")
 	}
 
-	// Body + optional AI panel
+	// Body
 	bodyAreaWidth := plan.Compose.BodyInnerWidth + 2
 	if bodyAreaWidth < 10 {
 		bodyAreaWidth = 10
 	}
 	if m.compactPreservedCompose() {
 		sb.WriteString(m.renderCompactPreservedResponse(plan.Compose.BodyInnerWidth) + "\n")
-	} else if m.composeAIPanel {
-		// Split outer width between bordered body pane and bordered AI pane.
-		totalOuterWidth := plan.Compose.BodyInnerWidth + 2
-		panelWidth := 36 // inner width
-		if totalOuterWidth < 90 {
-			panelWidth = totalOuterWidth/2 - 3
-		}
-		if panelWidth < 24 {
-			panelWidth = 24
-		}
-		panelOuterWidth := panelWidth + 2
-		bodyOuterWidth := totalOuterWidth - panelOuterWidth - 2 // 2 for gap
-		if bodyOuterWidth < 24 {
-			bodyOuterWidth = 24
-			panelOuterWidth = totalOuterWidth - bodyOuterWidth - 2
-			panelWidth = panelOuterWidth - 2
-		}
-		bodyWidth := bodyOuterWidth - 2
-		if bodyWidth < 20 {
-			bodyWidth = 20
-		}
-
-		var bodyPane string
-		if m.composePreview {
-			previewLabel := m.theme.Compose.Accent.Style().Render("  Preview (Ctrl+P to edit)  ")
-			body := m.composeBody.Value()
-			if body == "" {
-				body = "_empty body_"
-			}
-			rendered := body
-			if r, err := glamour.Render(body, "dark"); err == nil {
-				rendered = r
-			}
-			bodyPane = previewLabel + "\n" + lipgloss.NewStyle().Width(bodyWidth).Render(rendered)
-		} else {
-			bodyStyle := inactiveFieldStyle.Width(bodyWidth)
-			if m.composeField == composeFieldBody {
-				bodyStyle = activeFieldStyle.Width(bodyWidth)
-			}
-			m.composeBody.SetWidth(bodyWidth)
-			bodyPane = bodyStyle.Render(m.composeBody.View())
-		}
-		panelPane := m.renderAIPanel(panelWidth)
-		sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, bodyPane, "  ", panelPane) + "\n")
 	} else {
 		// Normal full-width body / preview
 		if m.composePreview {
@@ -1006,6 +1267,10 @@ func (m *Model) renderComposeView() string {
 			}
 			sb.WriteString(bodyStyle.Render(m.composeBody.View()) + "\n")
 		}
+	}
+
+	if aiResult := m.renderComposeAIResult(plan.Compose.BodyInnerWidth); aiResult != "" {
+		sb.WriteString(aiResult + "\n")
 	}
 
 	if original := m.renderComposeOriginalMessagePreview(plan.Compose.BodyInnerWidth); original != "" {
@@ -1615,7 +1880,8 @@ func (m *Model) aiAssistCmd(instruction string) tea.Cmd {
 			{
 				Role: "system",
 				Content: "You are an expert email writing assistant. " +
-					"Rewrite the email body according to the user's instruction. " +
+					"Rewrite the email body according to the user's instruction, including requests to translate, fix typos, adjust tone, change style, shorten, or expand. " +
+					"Preserve facts, names, dates, commitments, formatting intent, and any signature unless the user explicitly asks otherwise. " +
 					"Return only the rewritten body text, no explanations or preamble.",
 			},
 			{
@@ -1677,90 +1943,155 @@ func (m *Model) aiSubjectCmd() tea.Cmd {
 	}
 }
 
-// renderAIPanel renders the compose AI assistant panel.
-// Returns an empty string when composeAIPanel is false.
-// width is the panel's character width.
-func (m *Model) renderAIPanel(width int) string {
+func (m *Model) renderComposeAIBar(width int) string {
 	if !m.composeAIPanel {
 		return ""
 	}
-	if width < 20 {
-		width = 20
+	if width < 30 {
+		width = 30
 	}
 
-	var sb strings.Builder
+	barStyle := m.theme.Compose.AIAction.Style()
 
-	titleStyle := m.theme.Compose.AITitle.Style().Width(width)
+	if m.classifier == nil {
+		line := "AI disabled  Configure an AI provider in Settings to enable writing tools"
+		return barStyle.Width(width).Render(truncateVisual(line, width))
+	}
+
+	translateLabel := composeAIToolbarTranslateLabel(m.composeAITranslate)
+	styleLabel := composeAIToolbarStyleLabel(m.composeAIStyle)
+	undoLabel := "[Undo: ctrl+z]"
+	prefixes := []string{
+		fmt.Sprintf("%s %s [Fix: ctrl+f] [Shorten: ctrl+n] [Expand: ctrl+e] %s Ask: ctrl+k ", translateLabel, styleLabel, undoLabel),
+		fmt.Sprintf("%s %s [Fix: ctrl+f] [Short: ctrl+n] [Exp: ctrl+e] %s Ask: ctrl+k ", translateLabel, styleLabel, undoLabel),
+		fmt.Sprintf("%s %s [Fix: ctrl+f] [Short: ctrl+n] [Exp: ctrl+e] %s Ask: ctrl+k ", composeAIShortToolbarTranslateLabel(m.composeAITranslate), composeAIShortToolbarStyleLabel(m.composeAIStyle), undoLabel),
+		fmt.Sprintf("[Fix: ctrl+f] [Short: ctrl+n] [Exp: ctrl+e] %s Ask: ctrl+k ", undoLabel),
+	}
+	prefix := prefixes[len(prefixes)-1]
+	for _, candidate := range prefixes {
+		if width-ansi.StringWidth(candidate) >= 8 {
+			prefix = candidate
+			break
+		}
+	}
+	inputWidth := width - ansi.StringWidth(prefix)
+	if m.composeAILoading {
+		inputWidth -= ansi.StringWidth("  Thinking...")
+	}
+	if inputWidth < 8 {
+		inputWidth = 8
+	}
+	m.composeAIInput.SetWidth(inputWidth)
+	line := prefix + m.composeAIInput.View()
+	if m.composeAILoading {
+		line += "  Thinking..."
+	}
+
+	rows := []string{barStyle.Width(width).Render(truncateVisual(line, width))}
+	if dropdown := m.renderComposeAIDropdown(width); dropdown != "" {
+		rows = append(rows, dropdown)
+	}
+	return strings.Join(rows, "\n")
+}
+
+func composeAIToolbarTranslateLabel(language string) string {
+	if strings.TrimSpace(language) == "" {
+		return "[Translate: ctrl+t]"
+	}
+	return fmt.Sprintf("[Translate: %s v]", composeAISelectedLanguage(language))
+}
+
+func composeAIToolbarStyleLabel(style string) string {
+	if strings.TrimSpace(style) == "" {
+		return "[Style: ctrl+y]"
+	}
+	return fmt.Sprintf("[Style: %s v]", composeAISelectedStyle(style))
+}
+
+func composeAIShortToolbarTranslateLabel(language string) string {
+	if strings.TrimSpace(language) == "" {
+		return "[T: ctrl+t]"
+	}
+	return fmt.Sprintf("[T: %s v]", composeAISelectedLanguage(language))
+}
+
+func composeAIShortToolbarStyleLabel(style string) string {
+	if strings.TrimSpace(style) == "" {
+		return "[S: ctrl+y]"
+	}
+	return fmt.Sprintf("[S: %s v]", composeAISelectedStyle(style))
+}
+
+func (m *Model) renderComposeAIDropdown(width int) string {
+	if m.composeAIMenu == "" {
+		return ""
+	}
+	var title string
+	var options []string
+	var selected string
+	switch m.composeAIMenu {
+	case composeAIMenuTranslate:
+		title = "Translate"
+		options = composeAITranslateOptions()
+		selected = composeAISelectedLanguage(m.composeAITranslate)
+	case composeAIMenuStyle:
+		title = "Style"
+		options = composeAIStyleOptions()
+		selected = composeAISelectedStyle(m.composeAIStyle)
+	default:
+		return ""
+	}
+
+	itemStyle := m.theme.Compose.AIToggleInactive.Style()
+	selectedStyle := m.theme.Compose.AIToggleActive.Style()
+	parts := []string{title + ":"}
+	for i, option := range options {
+		label := fmt.Sprintf("%d %s", i+1, option)
+		if option == selected {
+			label = "> " + label
+			parts = append(parts, selectedStyle.Render(label))
+		} else {
+			parts = append(parts, itemStyle.Render(label))
+		}
+	}
+	return truncateVisual(strings.Join(parts, "  "), width)
+}
+
+func (m *Model) renderComposeAIResult(width int) string {
+	if !m.composeAIPanel {
+		return ""
+	}
+	if m.composeAIResponse.Value() == "" && m.composeAIDiff == "" && !m.composeAILoading {
+		return ""
+	}
+	if width < 30 {
+		width = 30
+	}
+
 	labelStyle := m.theme.Compose.AILabel.Style().Width(width)
-	activeToggleStyle := m.theme.Compose.AIToggleActive.Style().Padding(0, 1)
-	inactiveToggleStyle := m.theme.Compose.AIToggleInactive.Style().Padding(0, 1)
-	actionStyle := m.theme.Compose.AIAction.Style().
-		Padding(0, 1).
-		Margin(0, 1, 0, 0)
 	acceptStyle := m.theme.Compose.AIAccept.Style().Padding(0, 1)
 	discardStyle := m.theme.Compose.AIDiscard.Style().Padding(0, 1)
 	spinnerStyle := m.theme.Compose.Accent.Style()
 
-	// Title
-	sb.WriteString(titleStyle.Render("🤖 AI Assistant") + "\n")
-	sb.WriteString(strings.Repeat("─", width) + "\n")
-
-	// Context toggle — only shown when replying (replyContextEmail != nil)
-	if m.replyContextEmail != nil {
-		sb.WriteString(labelStyle.Render("Context:") + "\n")
-		threadLabel := inactiveToggleStyle.Render("Thread")
-		draftLabel := inactiveToggleStyle.Render("Draft only")
-		if m.composeAIThread {
-			threadLabel = activeToggleStyle.Render("● Thread")
-		} else {
-			draftLabel = activeToggleStyle.Render("● Draft only")
-		}
-		sb.WriteString(threadLabel + "  " + draftLabel + "\n\n")
-	}
-
-	// Quick action buttons
-	actions := []string{"Improve", "Shorten", "Lengthen", "Formal", "Casual"}
-	var actionRow strings.Builder
-	for _, a := range actions {
-		actionRow.WriteString(actionStyle.Render(a))
-	}
-	sb.WriteString(actionRow.String() + "\n\n")
-
-	// Free-form prompt input
-	sb.WriteString(labelStyle.Render("Custom prompt:") + "\n")
-	m.composeAIInput.SetWidth(width - 2)
-	sb.WriteString(m.composeAIInput.View() + "\n\n")
-
-	// Loading spinner
+	var sb strings.Builder
 	if m.composeAILoading {
-		sb.WriteString(spinnerStyle.Render("⠋ Thinking…") + "\n")
-		return lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(m.theme.Compose.AIBorder.ForegroundColor()).
-			Width(width).
-			Render(sb.String())
+		sb.WriteString(spinnerStyle.Render("Thinking...") + "\n")
 	}
-
-	// Diff view (if result available)
 	if m.composeAIDiff != "" {
 		sb.WriteString(labelStyle.Render("Changes:") + "\n")
 		diffStyle := lipgloss.NewStyle().
-			Width(width - 2).
-			MaxWidth(width - 2)
-		sb.WriteString(diffStyle.Render(m.composeAIDiff) + "\n\n")
+			Width(width).
+			MaxWidth(width)
+		sb.WriteString(diffStyle.Render(m.composeAIDiff) + "\n")
 	}
-
-	// Editable response textarea
 	if m.composeAIResponse.Value() != "" || m.composeAIDiff != "" {
 		sb.WriteString(labelStyle.Render("Suggestion (edit freely):") + "\n")
-		m.composeAIResponse.SetWidth(width - 2)
-		m.composeAIResponse.SetHeight(8)
-		sb.WriteString(m.composeAIResponse.View() + "\n\n")
-
-		// Accept / Discard
-		sb.WriteString(acceptStyle.Render("✓ Accept") + "  " + discardStyle.Render("Discard") + "\n")
+		m.composeAIResponse.SetWidth(width)
+		m.composeAIResponse.SetHeight(4)
+		sb.WriteString(m.composeAIResponse.View() + "\n")
+		sb.WriteString(acceptStyle.Render("Accept") + "  " + discardStyle.Render("Discard") + "\n")
 		sb.WriteString(m.theme.Compose.AIDim.Style().Render(
-			"Ctrl+Enter: accept  Esc: discard") + "\n")
+			"Ctrl+Enter: accept  Ctrl+Z: undo accepted rewrite  Esc: close AI") + "\n")
 	}
 
 	return lipgloss.NewStyle().

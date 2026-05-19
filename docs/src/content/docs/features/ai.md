@@ -37,7 +37,7 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | `? query` | Contacts search after `/` | AI/embeddings available. | Runs semantic contact search. |
 | `ctrl+q` | Timeline | Current email exists. | Opens quick reply picker with canned and optional AI choices. |
 | `c` | Main UI | AI configured, not loading, width allows chat. | Opens chat panel. |
-| `ctrl+g` | Compose | AI configured. | Opens Compose AI assistant panel. |
+| `ctrl+k` | Compose | AI configured. | Focuses the inline Compose AI prompt. |
 | `ctrl+j` | Compose | AI configured and body or reply context exists. | Generates subject suggestion. |
 | `ctrl+enter` | Compose AI panel | AI response available. | Accepts generated response into the body. |
 | `P` | Main UI | Prompt editor closed. | Opens custom prompt editor. |
@@ -69,8 +69,8 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 ### Use Compose AI
 
 1. Open Compose and write body text.
-2. Press `ctrl+g`.
-3. Use quick actions `1` through `5` or type a custom instruction.
+2. Use `ctrl+t` or `ctrl+y` for dropdown controls, quick actions in the toolbar, or `ctrl+k` to focus the custom instruction field.
+3. Type a custom instruction and press `enter` when using the inline prompt.
 4. Press `ctrl+enter` to accept the generated text.
 
 ### Enrich Contacts
@@ -116,7 +116,7 @@ If Compose AI says "Write something first", add body text or open Compose from a
 
 ![AI classification progress in status bar](/screenshots/ai-classification-progress.png)
 
-<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI panel with response" desc="Shows AI rewrite response, quick action controls, custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; write body; press ctrl+g; press 1" -->
+<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI toolbar with response" desc="Shows AI rewrite response, compact quick action controls, inline custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; write body; press ctrl+k; press 1" -->
 
 ![Compose AI assistant response](/screenshots/ai-compose-assist.png)
 

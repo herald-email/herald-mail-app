@@ -17,7 +17,7 @@ This pass should make modifier behavior discoverable without turning the hint ba
 - [x] Pressing or holding Shift, Ctrl, or Alt in terminals that report event types changes only the bottom hint presentation.
 - [x] Terminals without key-release reporting show the relevant modifier layer briefly after a modified keypress, then return to default hints.
 - [x] The Shift layer advertises existing shifted or uppercase actions such as `Shift+Tab`, `Shift+Up/Down`, `R`, `D`, `C`, `S`, and other context-valid uppercase actions.
-- [x] The Ctrl layer advertises existing Ctrl actions such as `Ctrl+C`, `Ctrl+R`, `Ctrl+D/U`, `Ctrl+I`, `Ctrl+Q`, `Ctrl+S`, `Ctrl+P`, `Ctrl+A`, and `Ctrl+G` only where those actions are already valid.
+- [x] The Ctrl layer advertises existing Ctrl actions such as `Ctrl+C`, `Ctrl+R`, `Ctrl+D/U`, `Ctrl+I`, `Ctrl+Q`, `Ctrl+S`, `Ctrl+P`, `Ctrl+A`, and `Ctrl+K` only where those actions are already valid.
 - [x] The Alt layer advertises existing Alt actions where a context already owns them; otherwise it keeps default hints visible with a compact no-Alt-actions notice.
 
 ## Behavior Contract

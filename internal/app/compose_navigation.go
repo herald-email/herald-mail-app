@@ -31,12 +31,7 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 	m.replyContextEmail = nil
 	m.composePreserved = nil
 	m.composeAIThread = false
-	m.composeAIPanel = false
-	m.composeAIDiff = ""
-	m.composeAISubjectHint = ""
-	m.composeAIInput.SetValue("")
-	m.composeAIResponse.SetValue("")
-	m.composeAILoading = false
+	m.resetComposeAIBar()
 	m.attachmentInputActive = false
 	m.attachmentPathInput.SetValue("")
 	m.clearAttachmentCompletions()

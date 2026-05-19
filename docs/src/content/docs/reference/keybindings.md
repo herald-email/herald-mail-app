@@ -115,7 +115,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `ctrl+s` | Send message. |
 | `ctrl+p` | Toggle Markdown preview. |
 | `ctrl+a` | Open outgoing attachment path prompt. |
-| `ctrl+g` | Toggle Compose AI assistant panel. |
+| `ctrl+k` | Focus the inline Compose AI prompt. |
 | `ctrl+j` | Generate AI subject suggestion. |
 | `ctrl+enter` | Accept AI response into body. |
 | `esc` | Dismiss subject hint, AI panel, or compose status; then return to the screen that opened Compose. |

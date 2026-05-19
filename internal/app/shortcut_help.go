@@ -630,9 +630,20 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 		{"Ctrl+S", "send the current message"},
 		{"Ctrl+P", "toggle Markdown preview"},
 		{"Ctrl+A", "attach a file"},
-		{"Ctrl+G", "open or close the AI writing assistant"},
+		{"Ctrl+K", "focus the inline AI instruction field"},
 		{"Ctrl+J", "suggest a subject from the draft"},
-		{"Esc", "dismiss Compose status, subject suggestion, or AI panel"},
+		{"Esc", "dismiss Compose status, subject suggestion, or AI bar"},
+	}
+	if m.composeAIPanel {
+		entries = append(entries,
+			shortcutHelpEntry{"Ctrl+T", "open the Translate dropdown"},
+			shortcutHelpEntry{"Ctrl+Y", "open the Style dropdown"},
+			shortcutHelpEntry{"Ctrl+F", "fix typos in the current draft"},
+			shortcutHelpEntry{"Ctrl+N", "shorten the current draft"},
+			shortcutHelpEntry{"Ctrl+E", "expand the current draft"},
+			shortcutHelpEntry{"Ctrl+Z", "undo the last accepted AI rewrite"},
+			shortcutHelpEntry{"Ctrl+Enter", "accept the editable AI suggestion"},
+		)
 	}
 	if m.composePreserved != nil {
 		entries = append(entries, shortcutHelpEntry{"Ctrl+O", "cycle preservation mode for the original reply or forward context"})

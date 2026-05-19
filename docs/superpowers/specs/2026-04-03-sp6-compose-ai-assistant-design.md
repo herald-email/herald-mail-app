@@ -2,47 +2,47 @@
 
 ## Overview
 
-A right-side AI panel in the compose tab that rewrites, shortens, lengthens, or adjusts the tone of the email body, suggests subject lines, and shows word-level diffs of its changes. The user can edit the AI suggestion before accepting it.
+An AI command bar in Compose that opens by default and rewrites, translates, fixes typos, changes style/tone, shortens, or expands the email body without narrowing the editor. It keeps Translate, Style, quick actions, undo, and a freeform chat-style instruction input in one compact row, suggests subject lines, supports one-step undo after accepting a rewrite, and shows word-level diffs so the user can edit the AI suggestion before accepting it.
 
 ---
 
 ## Features
 
-- **Body rewrite** — quick actions (Improve, Shorten, Lengthen, Formal, Casual) + free-form prompt input
-- **Word-level diff** — only changed words highlighted inline (red strikethrough for deletions, green for additions); unchanged words stay plain
-- **Editable suggestion** — AI response placed in an editable textarea; user modifies before accepting
-- **Accept all** — `Ctrl+Enter` copies the (possibly edited) AI version into the compose body
-- **Subject suggestion** — `Ctrl+J` fires a subject hint; `Tab` to accept, `Esc` to dismiss
-- **Thread context** — by default uses the full reply thread as context; toggle to "Draft only" in panel
-- **Free-form prompt** — text input for custom instructions ("make this more concise", "add a P.S. about the deadline")
+This section lists the user-visible writing-assistant capabilities that Compose must expose. Each item should be observable from the AI command bar or its accept/dismiss flows.
+
+- [x] **Body rewrite** — quick actions for Improve, Fix typos, Shorten, and Expand
+- [x] **Default-open command bar** — every Compose entrypoint shows the compact one-row AI bar immediately without stealing body text input
+- [x] **Disabled warning** — when no AI provider is configured, the default bar says `AI disabled` and hides active rewrite controls
+- [x] **Translation dropdown** — Translate opens a language dropdown in the AI bar and rewrites into the selected language
+- [x] **Style dropdown** — Style opens a style dropdown in the AI bar and rewrites in the selected style
+- [x] **Freeform instruction chat** — the inline `Ask:` field accepts natural-language writing requests such as "make this warmer and translate it to Spanish"
+- [x] **Word-level diff** — only changed words highlighted inline (red strikethrough for deletions, green for additions); unchanged words stay plain
+- [x] **Editable suggestion** — AI response placed in an editable textarea; user modifies before accepting
+- [x] **Accept all** — `Ctrl+Enter` copies the (possibly edited) AI version into the compose body
+- [x] **Undo accepted rewrite** — `Ctrl+Z` restores the previous body after accepting an AI suggestion
+- [x] **Subject suggestion** — `Ctrl+J` fires a subject hint; `Tab` to accept, `Esc` to dismiss
+- [x] **Thread context** — by default uses the full reply thread as context; toggle to "Draft only" in panel
 
 ---
 
 ## UX
 
-### Panel layout (right column, toggled with `Ctrl+G`)
+This section defines the terminal interaction model for the Compose AI panel. The panel should remain compact enough for common terminal sizes while still making the rewrite actions discoverable.
+
+### Command bar layout (between headers and body, open by default)
 
 ```
-┌─ 🤖 AI ASSISTANT ──────────────────┐
-│ Context: [● Thread] [ Draft only]  │
-│                                    │
-│ [Improve] [Shorten] [Lengthen]     │
-│ [Formal]  [Casual]                 │
-│                                    │
-│ ┌─ Ask AI anything… ─────────────┐ │
-│ └────────────────────────────────┘ │
-│                                    │
-│ SUGGESTION — edit freely           │
-│ ┌────────────────────────────────┐ │
-│ │ ~~Hey~~ Hi Alice,              │ │
-│ │                                │ │
-│ │ Are you ~~free~~ available     │ │
-│ │ tomorrow for a ~~sync~~        │ │
-│ │ catch-up?                      │ │
-│ └────────────────────────────────┘ │
-│                                    │
-│ [✓ Accept  Ctrl+Enter] [Discard]   │
-└────────────────────────────────────┘
+AI  Translate: Spanish v  Style: Friendly v  [Fix] [Shorten] [Expand] Undo  Ask: > make this warmer
+──────────────────────────────────────────────────────────────────────────────
+┌─ draft body editor remains full width ─────────────────────────────────────┐
+│ Hey Alice,                                                                 │
+└────────────────────────────────────────────────────────────────────────────┘
+┌─ AI suggestion ─────────────────────────────────────────────────────────────┐
+│ Changes: ~~Hey~~ Hi Alice, ...                                             │
+│ Suggestion (edit freely):                                                  │
+│ Hi Alice, ...                                                              │
+│ [Accept] [Discard]  Ctrl+Enter: accept  Ctrl+Z: undo accepted rewrite      │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Subject suggestion overlay
@@ -56,16 +56,23 @@ Subject: [Quick sync tomorrow?]  ✨ Suggested: "Meeting request: project update
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+G` | Toggle AI panel |
+| `Ctrl+K` | Focus the inline `Ask:` instruction field |
 | `Ctrl+J` | Suggest subject |
 | `Ctrl+Enter` | Accept AI suggestion |
+| `Ctrl+T` | Open Translate dropdown |
+| `Ctrl+Y` | Open Style dropdown |
+| `Ctrl+F` | Fix typos |
+| `Ctrl+N` | Shorten draft |
+| `Ctrl+E` | Expand draft |
+| `Ctrl+Z` | Undo accepted AI rewrite |
 | `Tab` | Accept subject hint (when visible) |
-| `Esc` | Dismiss panel or subject hint |
-| `↑` / `↓` | Navigate quick actions (when panel focused) |
+| `Esc` | Dismiss dropdown, AI bar, or subject hint |
 
 ---
 
 ## Architecture
+
+This section describes how the Compose-owned UI state coordinates AI requests without changing backend boundaries. The assistant continues to use the configured AI client and keeps generated text editable until the user accepts it.
 
 ### New model fields (`internal/app/app.go`)
 
@@ -104,6 +111,16 @@ type AISubjectMsg struct {
 3. Calls `m.ai.Chat([]ChatMessage{system, user})` where system = "You are an email writing assistant. Rewrite the email body following the instruction. Return only the rewritten body, no explanation." and user = `instruction + "\n\nDraft:\n" + draft`
 4. Returns `AIAssistMsg{Result: response}`
 
+**`composeAIQuickAction(key string)`**
+1. Maps AI-bar quick actions to immediate rewrite instructions.
+2. Immediate actions validate that the draft has content, set the loading state, and call `aiAssistCmd`.
+
+**`selectComposeAIMenuOption(key string)`**
+1. Applies the selected Translate or Style dropdown option.
+2. Translate options build instructions such as `Translate this email to French`.
+3. Style options build instructions such as `Rewrite this email in a direct style`.
+4. A custom Translate option focuses `composeAIInput` with `Translate this email to ` so the user can type an unlisted language.
+
 **`aiSubjectCmd()`**
 1. Snapshots `composeBody.Value()` + thread context
 2. Calls `m.ai.Chat()` with prompt: "Suggest a concise email subject line (max 10 words) for this email. Return only the subject, no explanation."
@@ -124,21 +141,31 @@ Tokens are split on word boundaries (spaces, newlines, punctuation) so that "syn
 
 ### Rendering (`internal/app/helpers.go`)
 
-**`renderAIPanel(width int) string`**
+**`renderComposeAIBar(width int) string`**
 - Returns `""` when `composeAIPanel == false`
+- Shows an `AI disabled` warning and suppresses action controls when no AI provider is configured
 - Shows spinner when `composeAILoading == true`
-- Shows `composeAIResponse.View()` (editable textarea with diff content) when result available
-- Quick action buttons rendered as a row of lipgloss-styled labels
-- Context toggle rendered as two styled labels
+- Shows Translate and Style dropdown triggers, typo-fix action, undo status, and the inline freeform instruction input in one compact toolbar row
+- Shows a dropdown row when Translate or Style is open
+
+**`renderComposeAIResult(width int) string`**
+- Shows `composeAIDiff` and `composeAIResponse.View()` as a full-width editable result area when a suggestion is available
+- Keeps the result below the compose body rather than narrowing the draft editor into side-by-side columns
 
 **`renderComposeView()` changes**
-- When `composeAIPanel == true`: compose body narrows to ~60% width, panel takes remaining ~40%
+- When `composeAIPanel == true`: command bar renders between Subject and the body, and body height is recalculated for dropdown/loading/result rows
 - When `composeAISubjectHint != ""`: hint line appended below Subject row with `Tab=accept Esc=dismiss` indicator
 
 ### Update() handlers
 
-- `Ctrl+G`: toggle `composeAIPanel`; initialize `composeAIInput` and `composeAIResponse` on open
+- Compose entrypoints call `resetComposeAIBar()` so the bar starts open with clean menu, diff, prompt, response, and undo state
+- `Ctrl+K`: focus the inline AI instruction field
 - `Ctrl+J`: dispatch `aiSubjectCmd()`, set `composeAILoading = true`
+- `Ctrl+T`: open Translate dropdown
+- `Ctrl+Y`: open Style dropdown
+- `Ctrl+F`: run typo-fix rewrite
+- `Ctrl+N` / `Ctrl+E`: run shorten or expand rewrites
+- `Ctrl+Z`: restore the prior body after an accepted rewrite
 - `Ctrl+Enter` (panel open): copy `composeAIResponse.Value()` into `composeBody.SetValue()`; close panel
 - `Tab` (subject hint visible): `composeSubject.SetValue(composeAISubjectHint)`; clear hint
 - `AIAssistMsg`: set `composeAIResponse` content to result; compute `composeAIDiff = wordDiff(original, result)`; `composeAILoading = false`
@@ -148,37 +175,55 @@ Tokens are split on word boundaries (spaces, newlines, punctuation) so that "syn
 
 ## Error handling
 
-- AI call fails: show error in `composeStatus` bar ("AI assistant unavailable"), clear loading state
-- No AI configured (`m.ai == nil`): `Ctrl+G` shows status message "No AI backend configured"
-- Empty body when requesting assist: show status "Write something first"
+This section captures the bounded failure states that must be visible to the user. Failures should leave Compose responsive and should never mutate the draft body.
+
+- [x] AI call fails: show error in `composeStatus` bar ("AI assistant unavailable"), clear loading state
+- [x] No AI configured (`m.ai == nil`): Compose opens with an `AI disabled` warning in the bar, suppresses active rewrite controls, and shows a bounded status if an AI action is attempted
+- [x] Empty body when requesting assist: show status "Write something first"
 
 ---
 
 ## Files changed
 
+This section tracks the implementation files that carry the feature. It is intentionally concrete so future maintenance can quickly find the Compose AI surface area.
+
 | File | Change |
 |------|--------|
-| `internal/app/app.go` | New fields, message types, `Ctrl+G`/`Ctrl+J` key routing |
-| `internal/app/helpers.go` | `renderAIPanel()`, `wordDiff()`, `aiAssistCmd()`, `aiSubjectCmd()`, updated `renderComposeView()`, updated `handleComposeKey()` |
+| `internal/app/app.go` | New fields and message types for Compose AI rewriting |
+| `internal/app/compose.go` | `renderComposeAIBar()`, dropdown handling, one-step AI undo, `wordDiff()`, `aiAssistCmd()`, `aiSubjectCmd()`, updated `renderComposeView()`, updated `handleComposeKey()` |
+| `internal/app/statusbar.go` and `internal/app/modifier_hints.go` | Disabled-AI hint text while the default bar is visible |
 | `internal/app/snapshot_test.go` | Snapshot: compose with AI panel open and diff visible |
 
 ---
 
 ## Testing plan
 
+This section defines the checks required before handoff. The tests cover prompt/action mapping, diff rendering, snapshot rendering, and the manual TUI flow.
+
 ### Unit tests
 - `TestWordDiff_SingleWordChange` — "Hey" → "Hi" produces one deletion + one addition token
 - `TestWordDiff_Unchanged` — identical strings produce no highlighted tokens
 - `TestWordDiff_PhraseSwap` — multi-word replacement highlights only the changed words
+- `TestComposeAIQuickActionInstructions` — quick actions and dropdown instruction builders map to typo-fix, style, translation, and length instructions
+- `TestComposeAITranslateDropdownCustomPrefillsFreeformInstruction` — custom Translate focuses the freeform prompt with editable guidance instead of guessing
+- `TestAcceptComposeAIResponseStoresUndoBody` — accepting a rewrite stores the prior body and `Ctrl+Z` can restore it
+- `TestComposeAIBarOpensByDefaultForBlankCompose` — blank Compose starts with the AI bar visible and body focus preserved
+- `TestComposeAIBarShowsDisabledWarningWhenAIUnavailable` — no configured AI renders the disabled warning instead of action controls
+- `TestComposeAIBarRendersCompactInlineAskToolbar` — the toolbar renders as one row with grouped controls and inline `Ask:`
+- `TestComposeCtrlKFocusesInlineAIInstruction` — `Ctrl+K` focuses the inline custom-instruction input
+- `TestComposeAIInputEnterSubmitsCustomRewrite` — `Enter` from the inline input dispatches a custom rewrite
+- `TestDefaultOpenComposeAIBarDoesNotStealBodyText` — normal typed letters still enter the body while the bar is open
 
 ### Snapshot test
 - `TestSnapshot_ComposeAIPanel` — panel open, suggestion loaded, diff visible at 120×40
 
 ### Manual (tmux)
-- `Ctrl+G` opens panel, compose body narrows
-- Quick actions fire and populate suggestion with word-level diff
-- Free-form prompt works
+- AI command bar opens by default as one compact row between headers and body without narrowing the editor
+- `Ctrl+K` focuses the inline `Ask:` field
+- Quick actions include typo-fix, translation dropdown, style dropdown, and length adjustments
+- Accepted AI rewrites can be undone once
+- Freeform prompt works for natural-language writing directions
 - `Ctrl+Enter` accepts and closes panel
 - `Ctrl+J` shows subject hint; `Tab` accepts
 - Thread context toggle works (verify different output vs. draft-only)
-- No AI configured → friendly error, no panic
+- No AI configured → default `AI disabled` warning, no active rewrite controls, no panic

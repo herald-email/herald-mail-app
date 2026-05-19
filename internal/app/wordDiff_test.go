@@ -71,9 +71,10 @@ func TestComposeAIFields_Initialized(t *testing.T) {
 	if m.composeAIThread {
 		t.Fatal("composeAIThread should default to false")
 	}
-	// composeAIPanel should default to false
-	if m.composeAIPanel {
-		t.Fatal("composeAIPanel should default to false")
+	// composeAIPanel defaults open so Compose can show enabled controls or
+	// a disabled warning immediately.
+	if !m.composeAIPanel {
+		t.Fatal("composeAIPanel should default to true")
 	}
 	// composeAISubjectHint should default to empty
 	if m.composeAISubjectHint != "" {
@@ -107,6 +108,97 @@ func TestAiSubjectCmd_NilClassifier(t *testing.T) {
 	}
 	if subjectMsg.Err == nil {
 		t.Fatal("expected error when classifier is nil")
+	}
+}
+
+func TestComposeAIQuickActionsIncludeWritingImprovements(t *testing.T) {
+	actions := map[string]composeAIAction{}
+	for _, action := range composeAIQuickActions() {
+		actions[action.Key] = action
+	}
+
+	checkInstruction := func(key, want string) {
+		t.Helper()
+		action, ok := actions[key]
+		if !ok {
+			t.Fatalf("missing action %q", key)
+		}
+		if !strings.Contains(strings.ToLower(action.Instruction), want) {
+			t.Fatalf("action %q instruction = %q, want to contain %q", key, action.Instruction, want)
+		}
+	}
+
+	checkInstruction("f", "typos")
+	checkInstruction("n", "shorten")
+	checkInstruction("e", "expand")
+	if !strings.Contains(strings.ToLower(composeAITranslateInstruction("French")), "translate") {
+		t.Fatal("translate dropdown instruction should include translate")
+	}
+	if !strings.Contains(strings.ToLower(composeAIStyleInstruction("Direct")), "direct") {
+		t.Fatal("style dropdown instruction should include selected style")
+	}
+}
+
+func TestComposeAITranslateDropdownCustomPrefillsFreeformInstruction(t *testing.T) {
+	b := &stubBackend{}
+	m := New(b, nil, "", nil, false)
+	m.composeAIPanel = true
+	m.composeBody.SetValue("Please review the proposal by Friday.")
+	m.openComposeAIMenu(composeAIMenuTranslate)
+	cmd, handled := m.selectComposeAIMenuOption("6")
+	if !handled {
+		t.Fatal("expected custom translate option to be handled")
+	}
+	if cmd != nil {
+		t.Fatal("custom translate setup should not dispatch AI before the target language is entered")
+	}
+	if got := m.composeAIInput.Value(); got != "Translate this email to " {
+		t.Fatalf("composeAIInput = %q", got)
+	}
+	if !m.composeAIInput.Focused() {
+		t.Fatal("translate setup should focus the freeform instruction input")
+	}
+	if m.composeStatus == "" {
+		t.Fatal("translate setup should tell the user what to enter next")
+	}
+}
+
+func TestStartComposeAIActionImmediateRequiresDraft(t *testing.T) {
+	b := &stubBackend{}
+	m := New(b, nil, "", nil, false)
+	m.classifier = &stubClassifier{}
+	action, ok := composeAIActionByKey("f")
+	if !ok {
+		t.Fatal("missing typo-fix action")
+	}
+	model, cmd := m.startComposeAIAction(action)
+	if cmd != nil {
+		t.Fatal("empty draft should not dispatch AI")
+	}
+	updated := model.(*Model)
+	if updated.composeStatus != "Write something first" {
+		t.Fatalf("composeStatus = %q", updated.composeStatus)
+	}
+}
+
+func TestAcceptComposeAIResponseStoresUndoBody(t *testing.T) {
+	b := &stubBackend{}
+	m := New(b, nil, "", nil, false)
+	m.composeAIPanel = true
+	m.composeBody.SetValue("helo team")
+	m.composeAIResponse.SetValue("hello team")
+	if !m.acceptComposeAIResponse() {
+		t.Fatal("expected AI response to be accepted")
+	}
+	if got := m.composeBody.Value(); got != "hello team" {
+		t.Fatalf("composeBody = %q", got)
+	}
+	if got := m.composeAIUndoBody; got != "helo team" {
+		t.Fatalf("composeAIUndoBody = %q", got)
+	}
+	m.undoComposeAIRewrite()
+	if got := m.composeBody.Value(); got != "helo team" {
+		t.Fatalf("composeBody after undo = %q", got)
 	}
 }
 

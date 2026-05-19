@@ -524,7 +524,15 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if hasTimelineHints {
 		hints = timelineHints
 	} else if m.activeTab == tabCompose {
-		hints = m.primaryTabShortcutHint() + "  │  tab: next field  │  ctrl+s: send  │  ctrl+p: preview  │  ctrl+a: attach  │  ctrl+g: AI  │  esc: back  │  ctrl+c: quit"
+		if m.composeAIPanel {
+			if m.classifier == nil {
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+s: send", "ctrl+p: preview", "AI disabled", "esc: back", "ctrl+c: quit")
+			} else {
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "ctrl+k: AI prompt", "ctrl+t: translate", "ctrl+y: style", "ctrl+f: fix", "ctrl+n/e: length", "ctrl+z: undo", "ctrl+enter: accept", "esc: AI/back")
+			}
+		} else {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+s: send", "ctrl+p: preview", "ctrl+a: attach", "ctrl+k: AI prompt", "esc: back", "ctrl+c: quit")
+		}
 		if m.composePreserved != nil {
 			hints = m.primaryTabShortcutHint() + "  │  tab: next field  │  ctrl+o: preserve mode  │  ctrl+s: send  │  ctrl+p: preview  │  esc: back  │  ctrl+c: quit"
 			if m.composeField == composeFieldOriginalMessage {

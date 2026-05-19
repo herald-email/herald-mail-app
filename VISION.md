@@ -403,13 +403,17 @@ Write in Markdown, deliver as properly formatted HTML email. Compose is a transi
 
 ### AI Writing Assistant (Compose)
 
-While composing, the local Ollama model acts as an inline writing assistant — no cloud, no round-trip, just a keystroke. The assistant operates on the current draft and replaces or annotates it in place. All rewrites are diff-previewed before applying: old text greyed out, new text highlighted; `y` accepts, `n` keeps the original.
+While composing, the configured AI model acts as an inline writing assistant. The assistant defaults open as a compact command bar between the header fields and body, with Translate and Style dropdowns, quick actions, undo, and a small inline custom-instruction field in the same row.
 
-- [ ] **Spell / grammar check** (`Ctrl+G`) — highlights errors inline; `Tab` to accept suggestion, `Esc` to dismiss
-- [ ] **Style rewrite** (`Ctrl+W`) — rewrites the selected paragraph in a cleaner, more concise style while preserving meaning
-- [ ] **Tone adjuster** — cycle through tones: `professional → friendly → direct → formal`; model rewrites the draft to match
-- [ ] **Subject line suggest** — when To is filled and the body has content, offer 3 subject line options ranked by clarity
-- [ ] **Length adjust** — `shorten` (condense to key points) / `expand` (add context and detail)
+- [x] **Default-open AI bar** — Compose shows the compact AI command bar immediately; `Ctrl+K` focuses the inline instruction field
+- [x] **Disabled AI warning** — when no AI provider is configured, Compose shows an `AI disabled` warning in the bar instead of active rewrite controls
+- [x] **Spell / grammar fix** (`Ctrl+F`) — rewrites the current draft to fix typos, grammar, punctuation, and clarity issues while preserving meaning
+- [x] **Translation dropdown** (`Ctrl+T`) — opens a language menu in the AI bar and rewrites the current draft into the selected language
+- [x] **Style dropdown** (`Ctrl+Y`) — opens a style menu in the AI bar and rewrites the current draft in the selected style
+- [x] **Undo accepted rewrite** (`Ctrl+Z`) — restores the body from before the last accepted AI suggestion
+- [x] **Subject line suggest** (`Ctrl+J`) — when a draft or reply context exists, offer a concise subject hint that can be accepted with `Tab`
+- [x] **Length adjust** — AI bar quick actions can shorten the draft to key points or expand it with useful context
+- [x] **Freeform instruction chat** (`Ctrl+K`) — the user can type natural-language directions inline, such as "make this warmer and translate it to Spanish", and press `Enter` for an editable rewrite
 
 ### Quick Replies
 

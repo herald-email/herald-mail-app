@@ -23,11 +23,7 @@ func (m *Model) resetComposeMode() {
 	m.replyContextEmail = nil
 	m.composePreserved = nil
 	m.composeAIThread = false
-	m.composeAIPanel = false
-	m.composeAIDiff = ""
-	m.composeAISubjectHint = ""
-	m.composeAIResponse.SetValue("")
-	m.composeAILoading = false
+	m.resetComposeAIBar()
 	m.resetFieldKeyMode()
 }
 

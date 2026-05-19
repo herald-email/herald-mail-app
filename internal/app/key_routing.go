@@ -376,13 +376,25 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 	if m.activeTab == tabCompose {
 		if m.composeAISubjectHint != "" {
 			m.composeAISubjectHint = ""
-		} else if m.composeAIPanel {
+			m.refreshComposeLayout()
+		} else if m.composeAIMenu != "" {
+			m.composeAIMenu = ""
+			m.refreshComposeLayout()
+		} else if m.composeAIPanel && (m.composeAIInput.Focused() || m.composeAIResponse.Focused() || m.composeAILoading || m.composeAIDiff != "" || m.composeAIResponse.Value() != "") {
 			m.composeAIPanel = false
+			m.composeAIMenu = ""
 			m.composeAIDiff = ""
 			m.composeAIInput.Blur()
 			m.composeAIResponse.Blur()
+			m.refreshComposeLayout()
 		} else if m.composeStatus != "" {
 			m.composeStatus = ""
+		} else if m.composeAIPanel && !m.composeReturnSet && composeHasContent(m) {
+			m.composeAIPanel = false
+			m.composeAIMenu = ""
+			m.composeAIInput.Blur()
+			m.composeAIResponse.Blur()
+			m.refreshComposeLayout()
 		} else {
 			return m, m.returnFromCompose()
 		}

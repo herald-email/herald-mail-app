@@ -1416,6 +1416,7 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.statusMessage = ""
 	m.replyContextEmail = nil
 	m.composeAIThread = false
+	m.resetComposeAIBar()
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindForward, email, body, composeStatus)
 	m.composeField = 0
 	m.composeTo.Focus()
@@ -1446,6 +1447,7 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindReply, email, body, composeStatus)
+	m.resetComposeAIBar()
 	m.composeField = composeFieldBody
 	m.composeTo.Blur()
 	m.composeSubject.Blur()
@@ -1476,6 +1478,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	m.composeSubject.SetValue(subject)
 	m.composeBody.SetValue(body.TextPlain)
 	m.composeAttachments = nil
+	m.resetComposeAIBar()
 	m.composeStatus = composeStatus
 	if m.composeStatus == "" {
 		m.composeStatus = "Editing draft"
