@@ -136,6 +136,11 @@ func glamourEmailStyle() glamouransi.StyleConfig {
 	style.Document.BlockPrefix = ""
 	style.Document.BlockSuffix = ""
 	style.Document.Margin = uintPtr(0)
+	style.Document.Color = nil
+	style.Paragraph.Color = nil
+	style.Text.Color = nil
+	style.Strong.Color = nil
+	style.Emph.Color = nil
 	style.Link.Format = `{{ "" }}`
 	style.LinkText.Color = stringPtr("39")
 	style.LinkText.Underline = boolPtr(true)

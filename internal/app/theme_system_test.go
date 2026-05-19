@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
@@ -27,6 +28,124 @@ func TestThemeByNameBuiltInsAndAliases(t *testing.T) {
 		if got := ThemeByName(input).Name; got != want {
 			t.Fatalf("ThemeByName(%q).Name = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestSelectedBuiltInThemesResolveByName(t *testing.T) {
+	for _, name := range []string{
+		"red-black",
+		"crimson",
+		"ember",
+		"ruby-noir",
+		"garnet-console",
+		"jade-signal",
+		"viridian-glass",
+		"forest-crt",
+		"pine-mail",
+		"amber-furnace",
+		"copper-ash",
+		"magma-core",
+		"peacock-ink",
+		"ultramarine-desk",
+		"amethyst-night",
+		"graphite-rose",
+		"olive-circuit",
+		"arctic-signal",
+		"sepia-debug",
+		"ayu-courier",
+		"cobalt-dispatch",
+		"kanagawa-post",
+		"rose-pine-desk",
+		"solar-paper",
+		"tokyo-dusk",
+		"iceberg-queue",
+		"panda-packet",
+		"sonokai-signal",
+		"zenbones-light",
+		"tomorrow-desk",
+	} {
+		t.Run(name, func(t *testing.T) {
+			theme := ThemeByName(name)
+			if theme.Name != name {
+				t.Fatalf("ThemeByName(%q).Name = %q, want %q", name, theme.Name, name)
+			}
+			if theme.Text.Primary.Foreground == nil {
+				t.Fatalf("%s primary text should own a readable foreground", name)
+			}
+			if theme.Text.Primary.Background == nil {
+				t.Fatalf("%s primary text should own a full-screen background", name)
+			}
+			if theme.Chrome.StatusBar.Background == nil {
+				t.Fatalf("%s status bar should own a readable background", name)
+			}
+			if theme.Focus.SelectionActive.Background == nil || theme.Focus.SelectionActive.Foreground == nil {
+				t.Fatalf("%s active selection should use explicit foreground/background", name)
+			}
+		})
+	}
+}
+
+func TestResolveLaunchThemeAcceptsThemeFilePath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "launch-theme.yaml")
+	if err := os.WriteFile(path, []byte(`
+version: 1
+name: launch-theme
+inherits: herald-dark
+roles:
+  chrome.status_bar:
+    bg: "#112233"
+  focus.panel_border_focused:
+    fg: "#44cc88"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	theme, err := ResolveLaunchTheme(path, t.TempDir())
+	if err != nil {
+		t.Fatalf("ResolveLaunchTheme(file) returned error: %v", err)
+	}
+	if theme.Name != "launch-theme" {
+		t.Fatalf("theme name = %q, want launch-theme", theme.Name)
+	}
+	if !reflect.DeepEqual(theme.Chrome.StatusBar.Background, lipgloss.Color("#112233")) {
+		t.Fatalf("status bar bg = %#v, want #112233", theme.Chrome.StatusBar.Background)
+	}
+	if !reflect.DeepEqual(theme.Focus.PanelBorderFocused.Foreground, lipgloss.Color("#44cc88")) {
+		t.Fatalf("focused border fg = %#v, want #44cc88", theme.Focus.PanelBorderFocused.Foreground)
+	}
+}
+
+func TestSelectedBuiltInThemeRenderScreenPadsBackground(t *testing.T) {
+	theme := ThemeByName("solar-paper")
+
+	rendered := theme.RenderScreen("x", 5, 3)
+	lines := strings.Split(rendered, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("rendered lines = %d, want 3: %q", len(lines), rendered)
+	}
+	for i, line := range lines {
+		if got := ansi.StringWidth(line); got != 5 {
+			t.Fatalf("line %d width = %d, want 5: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(rendered, "\x1b[") {
+		t.Fatalf("rendered screen should include ANSI styling for theme background: %q", rendered)
+	}
+}
+
+func TestSelectedBuiltInThemeRenderScreenReappliesBackgroundAfterReset(t *testing.T) {
+	theme := ThemeByName("solar-paper")
+	prefix, _ := theme.screenStyleSequences()
+
+	rendered := theme.RenderScreen("\x1b[48;5;32mhot\x1b[49m tail", 10, 1)
+	resetIndex := strings.Index(rendered, "\x1b[49m")
+	if resetIndex < 0 {
+		t.Fatalf("rendered screen should preserve the inner background reset: %q", rendered)
+	}
+	afterReset := rendered[resetIndex+len("\x1b[49m"):]
+	if !strings.HasPrefix(afterReset, prefix) {
+		t.Fatalf("screen style was not reapplied after background reset; after reset = %q, prefix = %q", afterReset, prefix)
 	}
 }
 

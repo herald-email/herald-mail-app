@@ -841,5 +841,8 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 - [x] App-level theme system (configurable in `~/.herald/conf.yaml`)
 - [x] Inherit terminal color profile by default via `theme.name: inherited`
 - [x] Herald dark and Herald light built-in themes, with `adaptive` and `legacy-dark` accepted as backward-compatible aliases
+- [x] Diverse built-in app theme catalog covering red/black, crimson, emerald, ember, blue, violet, paper/light, and terminal-inspired palettes
+- [x] `-theme` launch override accepts a built-in theme name or theme YAML file without saving config
 - [x] Local YAML theme install from Settings into `~/.herald/themes`
 - [x] Custom theme creation and semantic role editing from Settings without adding a global shortcut
+- [x] Theme gallery docs screenshots can be regenerated with `scripts/regenerate-theme-screenshots.sh` for Timeline and `HERALD_THEME_SCREENSHOT_VIEW=preview` for open preview captures

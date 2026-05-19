@@ -132,6 +132,15 @@ func TestRenderEmailBodyLines_UsesGlamourStyledMarkdown(t *testing.T) {
 	}
 }
 
+func TestRenderEmailBodyLines_DoesNotForceDarkThemeBodyForeground(t *testing.T) {
+	lines := RenderEmailBodyLines("Herald is a terminal email client.", 80)
+	rendered := strings.Join(lines, "\n")
+
+	if strings.Contains(rendered, "\x1b[38;5;") {
+		t.Fatalf("plain body rendering should inherit the app theme foreground, got hard-coded xterm color in:\n%q", rendered)
+	}
+}
+
 func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
 	lines := RenderEmailBodyLines("Open "+longURL+" today", 80)

@@ -29,6 +29,22 @@ palettes to bright paper-like setups.
 
 ![Herald inheriting terminal themes](assets/examples/themes-sliced-dark-to-light-reordered-drop-2-3-8-0.2.0.png)
 
+Herald also ships a broader built-in app theme catalog. Try one without saving
+config by passing `-theme` a built-in name or a local YAML theme file:
+
+```bash
+./bin/herald --demo -theme jade-signal
+./bin/herald -config ~/.herald/conf.yaml -theme amber-furnace
+./bin/herald --demo -theme ./my-theme.yaml
+```
+
+Theme screenshots for the docs gallery can be refreshed with:
+
+```bash
+scripts/regenerate-theme-screenshots.sh
+HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh
+```
+
 ---
 
 ## Try The Demo First

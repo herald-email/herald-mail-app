@@ -79,6 +79,7 @@ export default defineConfig({
             { label: 'Attachments', slug: 'features/attachments' },
             { label: 'Text Selection', slug: 'features/text-selection' },
             { label: 'Settings', slug: 'features/settings' },
+            { label: 'Themes', slug: 'features/themes' },
             { label: 'Sync and Status', slug: 'features/sync-status' },
             { label: 'Destructive Actions', slug: 'features/destructive-actions' },
           ],

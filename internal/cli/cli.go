@@ -133,7 +133,7 @@ func runWizard(configPath string, experimental bool) error {
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, themeValue string) {
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -167,6 +167,11 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool) {
 	model.SetDemoKeyOverlay(demoKeys)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
+	if err := applyLaunchTheme(model, themeValue); err != nil {
+		logger.Error("Failed to apply theme override: %v", err)
+		fmt.Printf("Error applying theme: %v\n", err)
+		os.Exit(1)
+	}
 
 	logger.Info("Starting demo TUI application...")
 	p := tea.NewProgram(model, app.ProgramOptions()...)
@@ -203,6 +208,7 @@ type tuiFlagOptions struct {
 	dryRun        *bool
 	experimental  *bool
 	imageProtocol *string
+	theme         *string
 	configPath    *string
 	showHelp      *bool
 	showVersion   *bool
@@ -218,6 +224,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 		dryRun:        fs.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)"),
 		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
 		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
+		theme:         fs.String("theme", "", "Start with a built-in theme name or theme YAML file path without saving config"),
 		configPath:    fs.String("config", defaultConfig, "Path to configuration file"),
 		showHelp:      fs.Bool("help", false, "Show help message"),
 		showVersion:   fs.Bool("version", false, "Show version information"),
@@ -496,6 +503,7 @@ func printRootHelp(w io.Writer, executable string, fs *flag.FlagSet) {
 	fmt.Fprintf(w, "  %s -verbose                # Alias for -debug\n", executable)
 	fmt.Fprintf(w, "  %s -experimental           # Show experimental first-run email service onboarding\n", executable)
 	fmt.Fprintf(w, "  %s -config custom.yaml     # Use custom config file\n", executable)
+	fmt.Fprintf(w, "  %s --demo -theme jade-signal # Preview a built-in app theme without saving config\n", executable)
 	fmt.Fprintf(w, "  %s mcp --demo              # Run the MCP server with deterministic demo data\n", executable)
 	fmt.Fprintf(w, "  %s ssh -addr :2222         # Serve the TUI over SSH\n", executable)
 	fmt.Fprintln(w)
@@ -537,7 +545,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if *opts.demo {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys)
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.theme)
 		return
 	}
 
@@ -701,6 +709,10 @@ func runTUI() {
 	model.SetPreviewImageMode(imageMode)
 	model.SetConfigPath(resolvedConfig)
 	model.SetConfig(cfg)
+	if err := applyLaunchTheme(model, *opts.theme); err != nil {
+		logger.Error("Failed to apply theme override: %v", err)
+		log.Fatalf("Failed to apply theme: %v", err)
+	}
 
 	// Wire cleanup scheduler if using a local backend and schedule is configured.
 	if lb, ok := b.(*backend.LocalBackend); ok && cfg.Cleanup.ScheduleHours > 0 {
@@ -725,4 +737,16 @@ func runTUI() {
 
 func parseImageProtocolFlag(value string) (app.PreviewImageMode, error) {
 	return app.ParsePreviewImageMode(value)
+}
+
+type themeApplicator interface {
+	SetLaunchTheme(string) error
+}
+
+func applyLaunchTheme(model themeApplicator, themeValue string) error {
+	themeValue = strings.TrimSpace(themeValue)
+	if themeValue == "" {
+		return nil
+	}
+	return model.SetLaunchTheme(themeValue)
 }

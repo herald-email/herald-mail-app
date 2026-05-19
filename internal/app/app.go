@@ -852,6 +852,16 @@ func (m *Model) applyThemeConfig(cfg *config.Config) {
 	m.applyTheme(theme)
 }
 
+func (m *Model) SetLaunchTheme(value string) error {
+	theme, err := ResolveLaunchTheme(value, "")
+	if err != nil {
+		return err
+	}
+	m.themeWarn = ""
+	m.applyTheme(theme)
+	return nil
+}
+
 func (m *Model) applyTheme(theme Theme) {
 	m.theme = theme
 	m.baseStyle = theme.BasePanelStyle()
@@ -2155,6 +2165,9 @@ func (m *Model) View() tea.View {
 
 func (m *Model) buildView(content string) tea.View {
 	content = m.renderDemoKeyOverlay(content)
+	if m.theme.Text.Primary.Background != nil {
+		content = m.theme.RenderScreen(content, m.windowWidth, m.windowHeight)
+	}
 	v := newHeraldView(content)
 	if !m.timeline.mouseMode {
 		v.MouseMode = tea.MouseModeCellMotion

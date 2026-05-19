@@ -47,7 +47,7 @@ semantic:
 | `compose.signature.text` | Optional default signature inserted into new Compose messages, replies, forwards, and quick replies. |
 | `keyboard.profile` | Keyboard profile: `default`, `vim`, `emacs`, or `custom`. Default `default`. |
 | `keyboard.custom_keymap` | Optional path to a YAML custom keymap file when `keyboard.profile` is `custom`. |
-| `theme.name` | Theme name: `inherited`, `herald-dark`, `herald-light`, or a local theme installed in `~/.herald/themes`. Default `inherited`. |
+| `theme.name` | Theme name: `inherited`, `herald-dark`, `herald-light`, another built-in theme such as `jade-signal`, or a local theme installed in `~/.herald/themes`. Default `inherited`. |
 | `theme.overrides` | Optional semantic role overrides keyed by role ID, e.g. `chrome.tab_active`. Colors accept `inherit`, `ansi:N`, `xterm:N`, or quoted `#RRGGBB`. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
 | `credentials.password` | Password, app password, or bridge password. |
@@ -121,10 +121,18 @@ roles:
     fg: "#55c2ff"
 ```
 
+Use `-theme` to launch a built-in theme or theme file for one session without changing the config:
+
+```sh
+./bin/herald --demo -theme jade-signal
+./bin/herald -theme ./quiet-slate.yaml
+```
+
 ## Related Pages
 
 - [First-run Wizard](/first-run-wizard/)
 - [Settings](/features/settings/)
+- [Themes](/features/themes/)
 - [Provider Setup](/provider-setup/)
 - [Daemon Commands](/advanced/daemon/)
 - [Privacy and Security](/security-privacy/)

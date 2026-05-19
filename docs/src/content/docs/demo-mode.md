@@ -13,6 +13,12 @@ make build
 Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP credentials. Demo AI features are deterministic and run offline, so classification, semantic search, chat, and quick replies can be exercised without Ollama.
 Presentation tapes can add `--demo-keys` to show a compact keypress overlay without changing normal app key routing.
 
+Use `-theme` with demo mode to try a built-in palette or local YAML theme without saving config:
+
+```sh
+./bin/herald --demo -theme jade-signal
+```
+
 <!-- HERALD_SCREENSHOT id="demo-mode-timeline" page="demo-mode" alt="Demo mode Timeline with synthetic messages" state="demo mode, 120x40, Timeline tab active" desc="Shows the default screenshot source for documentation: synthetic folders and messages without a live mailbox." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
 ![Demo mode Timeline with synthetic messages](/screenshots/demo-mode-timeline.png)
@@ -45,6 +51,13 @@ make docs-media
 ```
 
 Run media generation from the repository root because the tapes reference `./bin/herald`.
+
+Theme gallery screenshots use a separate tmux flow:
+
+```sh
+scripts/regenerate-theme-screenshots.sh
+HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh
+```
 
 See [Demo GIF Workflow](/advanced/demo-gifs/) for the full recording flow.
 

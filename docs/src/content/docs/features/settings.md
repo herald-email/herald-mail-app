@@ -87,7 +87,7 @@ The Theme category is local-first. It switches built-in themes, installs validat
 
 1. Press `S`.
 2. Choose `Theme`.
-3. Choose `Inherited`, `Herald dark`, `Herald light`, or an installed theme.
+3. Choose `Inherited`, `Herald dark`, `Herald light`, a built-in palette such as `Jade Signal` or `Amber Furnace`, or an installed theme.
 4. Optionally enter a local YAML theme file path to install it into `~/.herald/themes`.
 5. Select a semantic role, edit foreground/background with `inherit`, `ansi:N`, `xterm:N`, or `#RRGGBB`, and review the swatches/live preview.
 6. Use reset controls for one role or all overrides, or provide a new theme name to save the current overrides as a reusable local theme.
@@ -133,6 +133,8 @@ If OAuth is missing from first-run onboarding, relaunch with `-experimental`. If
 
 If AI stops working after model changes, verify the new model is installed or reachable and allow embedding regeneration to complete.
 
+Use `./bin/herald --demo -theme jade-signal` to preview a theme for one session without changing Settings.
+
 ## Screenshot Placeholders
 
 <!-- HERALD_SCREENSHOT id="settings-oauth-wait" page="settings" alt="OAuth wait overlay" state="live OAuth setup, 120x40, OAuth wait active" desc="Shows OAuth authorization URL, enter-to-open behavior, waiting status, and cancellation path." capture="tmux live 120x40; launch Gmail OAuth setup; start OAuth flow" deferred="true" reason="requires live OAuth setup" -->
@@ -146,5 +148,6 @@ If AI stops working after model changes, verify the new model is installed or re
 - [First-run Wizard](/first-run-wizard/)
 - [Provider Setup](/provider-setup/)
 - [AI Features](/features/ai/)
+- [Themes](/features/themes/)
 - [Sync and Status](/features/sync-status/)
 - [Config Reference](/reference/config/)

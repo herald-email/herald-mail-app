@@ -770,7 +770,14 @@ func themeDisplayName(name string) string {
 	case "herald-light":
 		return "Herald light"
 	default:
-		return name
+		parts := strings.Split(name, "-")
+		for i, part := range parts {
+			if part == "" {
+				continue
+			}
+			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+		}
+		return strings.Join(parts, " ")
 	}
 }
 

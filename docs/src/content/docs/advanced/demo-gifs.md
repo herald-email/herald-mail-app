@@ -19,6 +19,12 @@ make docs-media
 
 Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`. Showcase tapes use `./bin/herald --demo --demo-keys` so viewers can see shortcuts such as `S`, `?`, `2`, `C`, range selection, horizontal preview movement, and full-screen preview. The image-preview tape forces `-image-protocol=kitty` against the Creative Commons sampler so the generated media can exercise the Kitty/Ghostty rendering path once the capture stack can render raster blocks.
 
+Theme gallery screenshots are regenerated separately because they need one `--demo -theme <name>` launch per built-in palette:
+
+```sh
+scripts/regenerate-theme-screenshots.sh
+```
+
 ![Themed Herald guided tour](/demo/guided-tour-dark-pastel.gif)
 
 <!-- HERALD_SCREENSHOT id="demo-gif-vhs-run" page="demo-gifs" alt="VHS demo tape generation command" state="local shell, demo tapes present" desc="Shows the command used to regenerate all Herald demo GIFs and screenshots." capture="terminal; make docs-media" -->
@@ -35,9 +41,11 @@ Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.
 - For inline image demos, use the Creative Commons sampler fixture and force `-image-protocol=kitty`; reject captures that show raw protocol text or hide the image area.
 - If the installed VHS/ttyd stack cannot render Kitty or iTerm2 raster blocks, keep the tape as key-flow coverage and record native Ghostty/Kitty evidence separately instead of committing a blank raster capture. Default `make docs-media` skips raster image-preview media; set `HERALD_DOC_MEDIA_INCLUDE_RASTER=1` only after confirming the local capture stack paints the embedded image.
 - After changing a visible feature, regenerate the relevant tape.
+- After changing theme roles, Timeline chrome, or preview header/body colors, run `scripts/regenerate-theme-screenshots.sh` and `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh`, then visually inspect the refreshed gallery images.
 
 ## Related Pages
 
 - [Demo Mode](/demo-mode/)
+- [Themes](/features/themes/)
 - [Global UI](/using-herald/global-ui/)
 - [Timeline](/using-herald/timeline/)
