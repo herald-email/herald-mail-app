@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +211,59 @@ func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
 	}
 	if updated.statusMessage != "Settings saved. Embeddings reset for the new model." {
 		t.Fatalf("statusMessage = %q", updated.statusMessage)
+	}
+}
+
+func TestSettingsSaved_ChatModelChangeAppliesImmediately(t *testing.T) {
+	seenModels := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/generate" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		seenModels <- req.Model
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": "imp"})
+	}))
+	defer srv.Close()
+
+	original := ollamaAppConfig(srv.URL, "old-chat-model", "embed-model")
+	classifier, err := ai.NewFromConfig(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(&stubBackend{}, nil, "", classifier, false)
+	m.SetConfig(original)
+
+	next := ollamaAppConfig(srv.URL, "new-chat-model", "embed-model")
+	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next})
+	updated := updatedModel.(*Model)
+
+	cmd := updated.reclassifyEmailCmd(&models.EmailData{
+		MessageID: "msg-1",
+		Sender:    "alice@example.test",
+		Subject:   "Needs review",
+	})
+	msg := cmd().(ReclassifyResultMsg)
+	if msg.Err != nil {
+		t.Fatalf("reclassify failed: %v", msg.Err)
+	}
+
+	select {
+	case got := <-seenModels:
+		if got != "new-chat-model" {
+			t.Fatalf("classification used model %q, want %q", got, "new-chat-model")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for classification request")
 	}
 }
 
@@ -428,6 +484,37 @@ func TestOllamaStartupWarningMarksAIDownAndDisablesAIFunctionsWithoutBlocking(t 
 	}
 	if updated.classifier != nil {
 		t.Fatal("startup warning should disable AI functions for the unavailable local model")
+	}
+}
+
+func TestSettingsSaved_UnrelatedChangeKeepsStartupAIWarningDown(t *testing.T) {
+	m := New(&stubBackend{}, nil, "user@example.test", &stubClassifier{}, false)
+	original := ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text")
+	m.SetConfig(original)
+
+	updatedModel, _ := m.Update(OllamaModelWarningMsg{
+		Result: aicheck.Result{
+			Host: "http://ollama.test",
+			Missing: []aicheck.MissingModel{
+				{Role: "chat/classification", Name: "missing-chat"},
+			},
+		},
+	})
+	updated := updatedModel.(*Model)
+	if updated.classifier != nil {
+		t.Fatal("startup warning should disable the unavailable AI client")
+	}
+
+	next := ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text")
+	next.Compose.Signature.Text = "Regards"
+	updatedModel, _ = updated.Update(SettingsSavedMsg{Config: next})
+	updated = updatedModel.(*Model)
+
+	if updated.classifier != nil {
+		t.Fatal("unrelated settings save should not revive an unavailable AI client")
+	}
+	if updated.aiModelWarning == nil {
+		t.Fatal("expected AI model warning to remain visible until AI settings are repaired")
 	}
 }
 

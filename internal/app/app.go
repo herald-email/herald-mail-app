@@ -931,6 +931,63 @@ func ollamaModelWarningCmd(cfg *config.Config, demoMode bool) tea.Cmd {
 	}
 }
 
+func aiRuntimeConfigChanged(previous, next *config.Config) bool {
+	if previous == nil || next == nil {
+		return previous != next
+	}
+	return previous.AI.Provider != next.AI.Provider ||
+		previous.AI.LocalMaxConcurrency != next.AI.LocalMaxConcurrency ||
+		previous.AI.ExternalMaxConcurrency != next.AI.ExternalMaxConcurrency ||
+		previous.AI.BackgroundQueueLimit != next.AI.BackgroundQueueLimit ||
+		previous.AI.PauseBackgroundWhileInteractive != next.AI.PauseBackgroundWhileInteractive ||
+		previous.Ollama.Host != next.Ollama.Host ||
+		previous.Ollama.Model != next.Ollama.Model ||
+		previous.Claude.APIKey != next.Claude.APIKey ||
+		previous.Claude.Model != next.Claude.Model ||
+		previous.OpenAI.APIKey != next.OpenAI.APIKey ||
+		previous.OpenAI.BaseURL != next.OpenAI.BaseURL ||
+		previous.OpenAI.Model != next.OpenAI.Model
+}
+
+func aiEmbeddingConfigChanged(previous, next *config.Config) bool {
+	if previous == nil || next == nil {
+		return previous != next
+	}
+	return previous.EffectiveEmbeddingModel() != next.EffectiveEmbeddingModel()
+}
+
+func (m *Model) syncBackendAIClient(classifier ai.AIClient) {
+	type aiClientSetter interface {
+		SetAIClient(ai.AIClient)
+	}
+	if manager, ok := m.backend.(aiClientSetter); ok {
+		manager.SetAIClient(classifier)
+	}
+}
+
+func (m *Model) refreshAIClientForConfig(previous, next *config.Config) error {
+	rebuild := aiRuntimeConfigChanged(previous, next) || (m.classifier == nil && aiEmbeddingConfigChanged(previous, next))
+	if rebuild {
+		if next == nil {
+			m.classifier = nil
+			m.syncBackendAIClient(nil)
+			return nil
+		}
+		classifier, err := ai.NewFromConfig(next)
+		if err != nil {
+			return err
+		}
+		m.classifier = classifier
+		m.syncBackendAIClient(classifier)
+		return nil
+	}
+	if m.classifier != nil && next != nil {
+		m.classifier.SetEmbeddingModel(next.EffectiveEmbeddingModel())
+		m.syncBackendAIClient(m.classifier)
+	}
+	return nil
+}
+
 func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
 	m.showSettings = false
 	m.settingsPanel = nil
@@ -1234,6 +1291,7 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
+	previousCfg := m.cfg
 	previousEmbeddingModel := ""
 	previousCachePolicy := config.CacheStoragePolicyNoAttachments
 	if m.cfg != nil {
@@ -1256,8 +1314,8 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 	if m.themeWarn != "" {
 		m.statusMessage = "Settings saved. " + m.themeWarn
 	}
-	if m.classifier != nil {
-		m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+	if err := m.refreshAIClientForConfig(previousCfg, m.cfg); err != nil {
+		m.statusMessage = fmt.Sprintf("Settings saved, but AI reload failed: %v", err)
 	}
 	if previousEmbeddingModel != "" && previousEmbeddingModel != m.cfg.EffectiveEmbeddingModel() {
 		type embeddingModelEnsurer interface {

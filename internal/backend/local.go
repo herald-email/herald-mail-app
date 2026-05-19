@@ -27,6 +27,7 @@ type LocalBackend struct {
 	imapClient       *imap.Client
 	cache            *cache.Cache
 	classifier       ai.AIClient
+	classifierMu     sync.RWMutex
 	cfg              *config.Config
 	progressCh       chan models.ProgressInfo
 	rawProgressCh    chan models.ProgressInfo
@@ -755,6 +756,12 @@ func (b *LocalBackend) EnsureEmbeddingModel(model string) (bool, error) {
 	return b.cache.EnsureEmbeddingModel(model)
 }
 
+func (b *LocalBackend) SetAIClient(classifier ai.AIClient) {
+	b.classifierMu.Lock()
+	defer b.classifierMu.Unlock()
+	b.classifier = classifier
+}
+
 // Close shuts down the IMAP connection and the cache database.
 func (b *LocalBackend) Close() error {
 	b.closed.Store(true)
@@ -818,11 +825,14 @@ func (b *LocalBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailDa
 }
 
 func (b *LocalBackend) SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error) {
-	if b.classifier == nil {
+	b.classifierMu.RLock()
+	classifier := b.classifier
+	b.classifierMu.RUnlock()
+	if classifier == nil {
 		return nil, nil
 	}
 	queryText := ai.BuildQueryText(query)
-	vec, err := b.classifier.Embed(queryText)
+	vec, err := classifier.Embed(queryText)
 	if err != nil {
 		return nil, fmt.Errorf("embedding failed: %w", err)
 	}
