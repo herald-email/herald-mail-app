@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -345,6 +346,122 @@ func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
 	if _, err := config.Load(configPath); err != nil {
 		t.Fatalf("validated config was not saved: %v", err)
 	}
+}
+
+func TestAISettingsOllamaValidationFailureKeepsPreviousConfig(t *testing.T) {
+	oldValidate := validateOllamaModels
+	validateOllamaModels = func(context.Context, *config.Config) aicheck.Result {
+		return aicheck.Result{
+			Host: "http://ollama.test",
+			Missing: []aicheck.MissingModel{
+				{Role: "chat/classification", Name: "missing-chat"},
+			},
+		}
+	}
+	defer func() { validateOllamaModels = oldValidate }()
+
+	original := &config.Config{}
+	original.AI.Provider = "disabled"
+	next := &config.Config{}
+	next.AI.Provider = "ollama"
+	next.Ollama.Host = "http://ollama.test"
+	next.Ollama.Model = "missing-chat"
+	next.Ollama.EmbeddingModel = "nomic-embed-text"
+
+	configPath := t.TempDir() + "/conf.yaml"
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(configPath)
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ReturnToMenu: true, ValidateOllamaModels: true})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected Ollama model validation command")
+	}
+	if updated.cfg != original {
+		t.Fatal("candidate config should not be applied before Ollama model validation passes")
+	}
+
+	msg := cmd().(OllamaModelValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if updated.cfg != original || updated.cfg.AI.Provider != "disabled" {
+		t.Fatalf("failed Ollama validation replaced config: %#v", updated.cfg)
+	}
+	if updated.aiModelWarning == nil {
+		t.Fatal("expected persistent AI model warning after failed validation")
+	}
+	if !updated.showSettings || updated.settingsPanel == nil {
+		t.Fatal("failed AI validation should return to Settings > AI")
+	}
+	if got := updated.settingsPanel.panelStatus; !strings.Contains(got, "ollama pull missing-chat") {
+		t.Fatalf("expected settings panel status to include install command, got %q", got)
+	}
+}
+
+func TestOllamaStartupWarningMarksAIDownAndDisablesAIFunctionsWithoutBlocking(t *testing.T) {
+	m := New(&stubBackend{}, nil, "user@example.test", &stubClassifier{}, false)
+	m.SetConfig(ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text"))
+
+	updatedModel, _ := m.Update(OllamaModelWarningMsg{
+		Result: aicheck.Result{
+			Host: "http://ollama.test",
+			Missing: []aicheck.MissingModel{
+				{Role: "chat/classification", Name: "missing-chat"},
+			},
+		},
+	})
+	updated := updatedModel.(*Model)
+
+	if updated.aiModelWarning == nil {
+		t.Fatal("expected startup warning to be retained")
+	}
+	if chip := stripANSI(updated.renderAIStatusChip()); !strings.Contains(chip, "AI down") {
+		t.Fatalf("expected AI status chip to show down, got %q", chip)
+	}
+	if updated.classifier != nil {
+		t.Fatal("startup warning should disable AI functions for the unavailable local model")
+	}
+}
+
+func TestDisableAIFromWarningSavesDisabledConfig(t *testing.T) {
+	configPath := t.TempDir() + "/conf.yaml"
+	m := New(&stubBackend{}, nil, "user@example.test", nil, false)
+	m.SetConfig(ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text"))
+	m.SetConfigPath(configPath)
+
+	disabled := ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text")
+	disabled.AI.Provider = "disabled"
+	updatedModel, _ := m.Update(SettingsSavedMsg{Config: disabled, ReturnToMenu: true})
+	updated := updatedModel.(*Model)
+
+	if updated.cfg.AI.Provider != "disabled" {
+		t.Fatalf("AI provider = %q, want disabled", updated.cfg.AI.Provider)
+	}
+	loaded, err := config.Load(configPath)
+	if err != nil {
+		t.Fatalf("disabled config was not saved: %v", err)
+	}
+	if loaded.AI.Provider != "disabled" {
+		t.Fatalf("saved AI provider = %q, want disabled", loaded.AI.Provider)
+	}
+}
+
+func ollamaAppConfig(host, chatModel, embedModel string) *config.Config {
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "user@example.test"
+	cfg.Credentials.Password = "secret"
+	cfg.Server.Host = "imap.example.test"
+	cfg.Server.Port = 993
+	cfg.SMTP.Host = "smtp.example.test"
+	cfg.SMTP.Port = 587
+	cfg.AI.Provider = "ollama"
+	cfg.Ollama.Host = host
+	cfg.Ollama.Model = chatModel
+	cfg.Ollama.EmbeddingModel = embedModel
+	cfg.Semantic.Model = embedModel
+	return cfg
 }
 
 func TestCacheStoragePolicyAppliedMsgReportsFailure(t *testing.T) {

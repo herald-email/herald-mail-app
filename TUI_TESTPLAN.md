@@ -1565,13 +1565,19 @@ Check these states during every applicable lane:
 1. Complete or mock a successful account validation so the first-run preferences step opens.
 2. Capture the default Ollama AI step.
 3. Select custom Ollama and capture the chat and embedding model selectors.
-4. Continue through first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
-5. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
+4. Attempt to save Ollama settings with one missing chat model and one missing embedding model.
+5. Repeat with both models installed or mocked as installed.
+6. Continue through first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
+7. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
+8. Simulate an existing saved Ollama config whose model is no longer installed.
 
 **Expect:**
 - The default Ollama step names `llama3.2:1b` and `nomic-embed-text`, warns that larger local models can pressure 8GB Macs, and suggests custom local or external AI options for heavier models.
 - Custom Ollama setup offers curated chat options including `llama3.2:1b`, `qwen3.5:0.8b`, `llama3.2:3b`, `gemma3:4b`, and a freeform custom model name.
 - Custom Ollama setup offers curated embedding options including `nomic-embed-text`, `all-minilm`, `nomic-embed-text-v2-moe`, `mxbai-embed-large`, `bge-m3`, and a freeform custom model name.
+- Missing first-run Ollama models block the final save, leave the config path missing or unchanged, and show exact `ollama pull <model>` commands in the setup chrome.
+- Installed or mocked-installed Ollama models allow first-run setup to continue and save normally.
+- A previously saved but now unavailable Ollama config does not block cached/offline startup; the status chip shows `AI down`, AI actions are disabled, Settings > AI shows install commands, and Save Disabled writes AI-off config.
 - First-run preferences do not show `Poll Interval`, `Enable IMAP IDLE`, `Reclaim offline cache storage`, or `Auto-Cleanup Schedule`.
 - In-app Settings still exposes those advanced controls under `Sync & Cleanup`.
 

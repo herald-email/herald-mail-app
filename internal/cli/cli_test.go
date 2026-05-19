@@ -14,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/config"
 )
@@ -158,6 +159,56 @@ func TestWizardPreferencesSavePersistsValidatedConfig(t *testing.T) {
 	}
 	if _, err := config.Load(configPath); err != nil {
 		t.Fatalf("validated config was not saved: %v", err)
+	}
+}
+
+func TestWizardPreferencesOllamaValidationFailureDoesNotSaveConfig(t *testing.T) {
+	oldValidate := validateWizardOllamaModels
+	validateWizardOllamaModels = func(context.Context, *config.Config) aicheck.Result {
+		return aicheck.Result{
+			Host: "http://ollama.test",
+			Missing: []aicheck.MissingModel{
+				{Role: "chat/classification", Name: "missing-chat"},
+			},
+		}
+	}
+	defer func() { validateWizardOllamaModels = oldValidate }()
+
+	configPath := filepath.Join(t.TempDir(), "conf.yaml")
+	cfg := &config.Config{}
+	cfg.AI.Provider = "ollama"
+	cfg.Ollama.Host = "http://ollama.test"
+	cfg.Ollama.Model = "missing-chat"
+	cfg.Ollama.EmbeddingModel = "nomic-embed-text"
+	model := wizardModel{
+		settings:   newWizardPreferencesSettings(cfg, configPath, false),
+		configPath: configPath,
+		step:       wizardStepPreferences,
+	}
+
+	updatedModel, cmd := model.Update(app.SettingsSavedMsg{Config: cfg, ValidateOllamaModels: true})
+	updated := updatedModel.(wizardModel)
+	if cmd == nil {
+		t.Fatal("expected Ollama validation command")
+	}
+	msg := cmd().(wizardOllamaValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(wizardModel)
+
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("failed Ollama validation saved config, stat err=%v", err)
+	}
+	if updated.step != wizardStepPreferences {
+		t.Fatalf("step = %v, want preferences", updated.step)
+	}
+	for _, want := range []string{"AI setup failed", "ollama pull missing-chat", "Settings were not saved"} {
+		if !strings.Contains(updated.validationMessage, want) {
+			t.Fatalf("expected validation message to include %q, got %q", want, updated.validationMessage)
+		}
+	}
+	rendered := ansi.Strip(updated.View().Content)
+	if !strings.Contains(rendered, "AI setup failed") {
+		t.Fatalf("expected AI failure view title, got:\n%s", rendered)
 	}
 }
 

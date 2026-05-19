@@ -56,15 +56,15 @@ semantic:
 | `smtp.host` | SMTP host for Compose send. |
 | `smtp.port` | SMTP port for Compose send. |
 | `ollama.host` | Ollama base URL. |
-| `ollama.model` | Local chat/classification model. Default `gemma3:4b`. |
-| `ollama.embedding_model` | Local embedding model. Default `nomic-embed-text-v2-moe`. |
+| `ollama.model` | Local chat/classification model. Default `llama3.2:1b`. Setup and changed AI settings verify that the model is installed locally before saving. |
+| `ollama.embedding_model` | Local embedding model. Default `nomic-embed-text`. Setup and changed AI settings verify that the model is installed locally before saving. |
 | `sync.interval` | Fallback poll seconds. Default `60`. |
 | `sync.poll_interval_minutes` | Poll interval in minutes for settings-oriented sync. |
 | `sync.idle_enabled` | Enables IMAP IDLE when supported. |
 | `sync.background` | Enables background sync of other folders. |
 | `sync.notify` | Enables status notification behavior. |
 | `semantic.enabled` | Enables semantic search indexing and automatic background embedding/contact enrichment when AI is configured. Keep `false` to avoid background body fetches and embedding work. |
-| `semantic.model` | Embedding model name. Defaults to Ollama embedding model. |
+| `semantic.model` | Embedding model name. Defaults to Ollama embedding model. When Ollama is selected, setup validates this effective embedding model and shows `ollama pull <model>` when it is missing. |
 | `semantic.batch_size` | Embedding batch size. Default `20`. |
 | `semantic.min_score` | Minimum semantic result score. Default `0.30`. |
 | `gmail.access_token` | Gmail OAuth access token. |
@@ -88,6 +88,8 @@ semantic:
 | `ai.external_max_concurrency` | External AI concurrency. Default `4`. |
 | `ai.background_queue_limit` | Background AI queue limit. Default `64`. |
 | `ai.pause_background_while_interactive` | Pauses background AI while interactive tasks run. Default true. |
+
+Existing Ollama configs are checked at startup without blocking cached/offline mail. If a configured local model is unavailable, Herald shows `AI down`, disables AI actions, and lists the relevant `ollama pull <model>` commands in Settings > AI.
 
 ## Provider Presets
 

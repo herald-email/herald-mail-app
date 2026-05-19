@@ -34,3 +34,7 @@ Local AI defaults should be conservative on an 8GB laptop while still allowing s
 - [x] The default Ollama wizard copy warns that larger local models can pressure 8GB Macs.
 - [x] Custom Ollama setup offers curated chat choices plus a freeform custom model name.
 - [x] Custom Ollama setup offers curated embedding choices plus a freeform custom model name.
+- [x] First-run Ollama setup verifies that the selected chat/classification model and embedding model are installed before writing the initial config.
+- [x] Missing first-run Ollama models keep the config unwritten and show exact `ollama pull <model>` commands.
+- [x] In-app AI settings validate newly selected or changed Ollama models before applying them.
+- [x] Previously saved Ollama configs that become unavailable keep cached/offline startup non-blocking, show `AI down`, disable AI actions, and expose install commands plus a Save Disabled action in Settings > AI.

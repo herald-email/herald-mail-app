@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -1316,6 +1317,55 @@ func TestFirstRunPreferencesDoNotRevalidateAccount(t *testing.T) {
 	}
 	if cfg.Credentials.Username != "validated@example.test" || cfg.Server.Host != "imap.example.test" {
 		t.Fatalf("preferences step should preserve validated account, got user=%q host=%q", cfg.Credentials.Username, cfg.Server.Host)
+	}
+}
+
+func TestSettingsSavedMsgMarksFirstRunOllamaPreferencesForModelValidation(t *testing.T) {
+	s := NewSettingsWithPathAndOptions(SettingsModeWizard, &config.Config{}, "/tmp/herald.yaml", SettingsOptions{
+		FirstRunPreferencesOnly: true,
+	})
+	s.aiProvider = aiProviderOllamaDefault
+
+	cfg := s.buildConfig()
+	if !s.requiresOllamaModelValidation(cfg) {
+		t.Fatal("first-run Ollama preferences should validate installed models before saving")
+	}
+}
+
+func TestSettingsSavedMsgMarksChangedAISettingsOllamaForModelValidation(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "disabled"
+	s := NewSettingsWithPath(SettingsModePanel, existing, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAI
+	s.aiProvider = aiProviderOllamaDefault
+
+	cfg := s.buildConfig()
+	if !s.requiresOllamaModelValidation(cfg) {
+		t.Fatal("changed in-app AI settings should validate selected Ollama models before applying")
+	}
+}
+
+func TestSettingsAIWarningShowsInstallCommandsAndDisableAction(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "ollama"
+	existing.Ollama.Host = defaultOllamaHost
+	existing.Ollama.Model = defaultOllamaModel
+	existing.Ollama.EmbeddingModel = defaultEmbeddingModel
+	s := NewSettingsWithPath(SettingsModePanel, existing, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAI
+	s.aiModelWarning = &aicheck.Result{
+		Host: defaultOllamaHost,
+		Missing: []aicheck.MissingModel{
+			{Role: "chat/classification", Name: "missing-chat"},
+		},
+	}
+	s.buildForm()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"AI unavailable", "ollama pull missing-chat", "Disable AI"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected AI warning to include %q, got:\n%s", want, rendered)
+		}
 	}
 }
 

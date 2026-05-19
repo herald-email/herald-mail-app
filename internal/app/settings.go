@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/render"
 )
@@ -80,6 +81,7 @@ type SettingsSavedMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidateOllamaModels       bool
 }
 
 // SettingsCancelledMsg is sent when the user presses esc in panel mode.
@@ -108,6 +110,8 @@ type Settings struct {
 	panelSection                  settingsPanelSection
 	panelMenuChoice               string
 	panelStatus                   string
+	aiModelWarning                *aicheck.Result
+	disableAIFromWarning          bool
 
 	// form field backing variables — account
 	provider string
@@ -683,6 +687,19 @@ func (s *Settings) buildForm() {
 		),
 	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaCustom })
 
+	ollamaWarningGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("AI unavailable").
+			Description(s.aiModelWarningDescription()),
+		huh.NewConfirm().
+			Title("Disable AI").
+			Affirmative("Disable AI").
+			Negative("Keep Ollama").
+			Value(&s.disableAIFromWarning),
+	).WithHideFunc(func() bool {
+		return s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAI || s.aiModelWarning == nil || s.aiModelWarning.OK()
+	})
+
 	// Group 3b — Claude settings (shown only when provider = claude)
 	claudeGroup := huh.NewGroup(
 		huh.NewInput().Title("Claude API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey),
@@ -920,6 +937,9 @@ func (s *Settings) buildForm() {
 				claudeGroup,
 				openAIGroup,
 				saveGroup.Title("AI"),
+			}
+			if s.hasAIModelWarning() {
+				groups = append([]*huh.Group{ollamaWarningGroup}, groups...)
 			}
 		case settingsPanelSectionSync:
 			groups = []*huh.Group{
@@ -1481,6 +1501,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ReturnToMenu:               s.mode == SettingsModePanel,
 				ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
 				ValidateAccount:            s.requiresAccountValidation(),
+				ValidateOllamaModels:       s.requiresOllamaModelValidation(cfg),
 			}
 		})
 	}
@@ -1631,6 +1652,9 @@ func (s *Settings) buildConfig() *config.Config {
 	}
 
 	// AI provider
+	if s.disableAIFromWarning {
+		s.aiProvider = aiProviderDisabled
+	}
 	cfg.AI.Provider = configAIProvider(s.aiProvider)
 	cfg.Ollama.Host = s.ollamaHost
 	cfg.Ollama.Model = s.ollamaModel
@@ -1687,6 +1711,30 @@ func (s *Settings) buildConfig() *config.Config {
 
 	applyVendorPreset(&cfg)
 	return &cfg
+}
+
+func (s *Settings) requiresOllamaModelValidation(candidate *config.Config) bool {
+	if candidate == nil || s.disableAIFromWarning {
+		return false
+	}
+	if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly {
+		return aicheck.OllamaConfigured(candidate)
+	}
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAI {
+		return aicheck.RequiresOllamaModelValidation(s.cfg, candidate)
+	}
+	return false
+}
+
+func (s *Settings) hasAIModelWarning() bool {
+	return s.aiModelWarning != nil && !s.aiModelWarning.OK()
+}
+
+func (s *Settings) aiModelWarningDescription() string {
+	if !s.hasAIModelWarning() {
+		return ""
+	}
+	return s.aiModelWarning.CompactMessage() + "\nUse Disable AI to save this config with local AI features off."
 }
 
 func cloneThemeOverrides(overrides map[string]config.ThemeOverride) map[string]config.ThemeOverride {

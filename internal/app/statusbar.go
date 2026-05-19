@@ -97,6 +97,9 @@ func (m *Model) schedulerStatus() ai.SchedulerStatus {
 }
 
 func (m *Model) renderAIStatusChip() string {
+	if m.aiModelWarning != nil && m.aiModelWarning.Err() != nil {
+		return m.theme.Severity.Error.Style().Render(fmt.Sprintf("%-10s", "AI down"))
+	}
 	if m.classifier == nil {
 		if m.demoMode {
 			return ""

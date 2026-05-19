@@ -14,6 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cleanup"
 	"github.com/herald-email/herald-mail-app/internal/config"
@@ -371,6 +372,17 @@ type AccountValidationMsg struct {
 	Result                     accountcheck.Result
 }
 
+type OllamaModelValidationMsg struct {
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	Result                     aicheck.Result
+}
+
+type OllamaModelWarningMsg struct {
+	Result aicheck.Result
+}
+
 type accountValidationState struct {
 	Config                     *config.Config
 	ReturnToMenu               bool
@@ -379,7 +391,16 @@ type accountValidationState struct {
 	Message                    string
 }
 
+type aiModelValidationState struct {
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	Checking                   bool
+	Message                    string
+}
+
 var validateAccountConfig = accountcheck.Validate
+var validateOllamaModels = aicheck.ValidateOllamaModels
 
 var newValidatedLocalBackend = func(cfg *config.Config, configPath string, classifier ai.AIClient) (backend.Backend, error) {
 	return backend.NewLocal(cfg, configPath, classifier)
@@ -635,6 +656,10 @@ type Model struct {
 	// Account validation overlay used when saving first-class mail account settings.
 	accountValidation *accountValidationState
 
+	// Ollama model validation and advisory warning state for local AI setup.
+	aiModelValidation *aiModelValidationState
+	aiModelWarning    *aicheck.Result
+
 	// Local inline-image preview links. Disabled for SSH sessions, where
 	// localhost would point at the server instead of the user's browser.
 	localImageLinks   bool
@@ -885,6 +910,27 @@ func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToM
 	}
 }
 
+func validateOllamaModelsCmd(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+	return func() tea.Msg {
+		result := validateOllamaModels(context.Background(), cfg)
+		return OllamaModelValidationMsg{
+			Config:                     cfg,
+			ReturnToMenu:               returnToMenu,
+			ReclaimOfflineCacheStorage: reclaimOfflineCache,
+			Result:                     result,
+		}
+	}
+}
+
+func ollamaModelWarningCmd(cfg *config.Config, demoMode bool) tea.Cmd {
+	if demoMode || !aicheck.OllamaConfigured(cfg) {
+		return nil
+	}
+	return func() tea.Msg {
+		return OllamaModelWarningMsg{Result: validateOllamaModels(context.Background(), cfg)}
+	}
+}
+
 func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
 	m.showSettings = false
 	m.settingsPanel = nil
@@ -899,6 +945,22 @@ func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaim
 	m.statusMessage = "Validating account settings..."
 	logger.Info("Validating account settings before applying config")
 	return validateAccountSettingsCmd(cfg, m.configPath, returnToMenu, reclaimOfflineCache)
+}
+
+func (m *Model) beginOllamaModelValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+	m.showSettings = false
+	m.settingsPanel = nil
+	m.oauthWait = nil
+	m.aiModelValidation = &aiModelValidationState{
+		Config:                     cfg,
+		ReturnToMenu:               returnToMenu,
+		ReclaimOfflineCacheStorage: reclaimOfflineCache,
+		Checking:                   true,
+		Message:                    "Checking local Ollama models before saving AI settings...",
+	}
+	m.statusMessage = "Validating Ollama models..."
+	logger.Info("Validating configured Ollama models before applying AI settings")
+	return validateOllamaModelsCmd(cfg, returnToMenu, reclaimOfflineCache)
 }
 
 func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
@@ -916,6 +978,35 @@ func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
 		return nil
 	}
 	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+}
+
+func (m *Model) finishOllamaModelValidation(msg OllamaModelValidationMsg) tea.Cmd {
+	if m.aiModelValidation == nil {
+		m.aiModelValidation = &aiModelValidationState{}
+	}
+	m.aiModelValidation.Checking = false
+	m.aiModelValidation.Config = msg.Config
+	m.aiModelValidation.ReturnToMenu = msg.ReturnToMenu
+	m.aiModelValidation.ReclaimOfflineCacheStorage = msg.ReclaimOfflineCacheStorage
+	if err := msg.Result.Err(); err != nil {
+		warning := msg.Result
+		m.aiModelWarning = &warning
+		message := "AI setup failed. " + msg.Result.UserMessage(logger.Path(), m.configPath)
+		m.aiModelValidation.Message = message
+		m.statusMessage = "AI settings were not saved."
+		logger.Error("Ollama model validation failed: %v", err)
+		m.showSettings = true
+		m.settingsPanel = m.newSettingsPanel(settingsPanelSectionAI, msg.Result.CompactMessage())
+		m.aiModelValidation = nil
+		return m.settingsPanel.Init()
+	}
+	m.aiModelWarning = nil
+	m.aiModelValidation = nil
+	return m.applySettingsSaved(SettingsSavedMsg{
+		Config:                     msg.Config,
+		ReturnToMenu:               msg.ReturnToMenu,
+		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+	})
 }
 
 func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu bool) tea.Cmd {
@@ -963,10 +1054,7 @@ func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu boo
 	var cmds []tea.Cmd
 	if returnToMenu {
 		m.showSettings = true
-		m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
-		m.settingsPanel.panelStatus = "Account settings validated and saved."
-		m.settingsPanel.buildForm()
-		m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+		m.settingsPanel = m.newSettingsPanel("", "Account settings validated and saved.")
 		cmds = append(cmds, m.settingsPanel.Init())
 	}
 	cmds = append(cmds, m.startLoading(), m.listenForSyncEvents(), m.tickSpinner())
@@ -984,6 +1072,18 @@ func accountEmailAddress(cfg *config.Config) string {
 		return strings.TrimSpace(cfg.Credentials.Username)
 	}
 	return strings.TrimSpace(cfg.Gmail.Email)
+}
+
+func (m *Model) newSettingsPanel(section settingsPanelSection, status string) *Settings {
+	panel := NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
+	panel.aiModelWarning = m.aiModelWarning
+	if section != "" {
+		panel.panelSection = section
+	}
+	panel.panelStatus = status
+	panel.buildForm()
+	panel.setSize(m.windowWidth, m.windowHeight)
+	return panel
 }
 
 func oauthStartFailureMessage(err error) string {
@@ -1113,11 +1213,13 @@ func (m *Model) SetDemoKeyOverlay(enabled bool) {
 
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
+	startupAIWarning := ollamaModelWarningCmd(m.cfg, m.demoMode)
 	if !m.loading {
 		return tea.Batch(
 			m.listenForRuleResult(),
 			m.importAppleContacts(),
 			draftSaveTick(),
+			startupAIWarning,
 		)
 	}
 	return tea.Batch(
@@ -1127,7 +1229,101 @@ func (m *Model) Init() tea.Cmd {
 		m.listenForRuleResult(),
 		m.importAppleContacts(),
 		draftSaveTick(),
+		startupAIWarning,
 	)
+}
+
+func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
+	previousEmbeddingModel := ""
+	previousCachePolicy := config.CacheStoragePolicyNoAttachments
+	if m.cfg != nil {
+		previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
+		previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
+	}
+	m.SetConfig(msg.Config)
+	if m.cfg == nil || !aicheck.OllamaConfigured(m.cfg) {
+		m.aiModelWarning = nil
+	}
+	nextCachePolicy := config.CacheStoragePolicyNoAttachments
+	if m.cfg != nil {
+		nextCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
+	}
+	var settingsCmds []tea.Cmd
+	m.statusMessage = "Settings saved."
+	if m.keyboardWarn != "" {
+		m.statusMessage = "Settings saved. " + m.keyboardWarn
+	}
+	if m.themeWarn != "" {
+		m.statusMessage = "Settings saved. " + m.themeWarn
+	}
+	if m.classifier != nil {
+		m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+	}
+	if previousEmbeddingModel != "" && previousEmbeddingModel != m.cfg.EffectiveEmbeddingModel() {
+		type embeddingModelEnsurer interface {
+			EnsureEmbeddingModel(string) (bool, error)
+		}
+		if manager, ok := m.backend.(embeddingModelEnsurer); ok {
+			invalidated, err := manager.EnsureEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+			if err != nil {
+				m.statusMessage = fmt.Sprintf("Settings saved, but embedding reset failed: %v", err)
+			} else if invalidated {
+				m.statusMessage = "Settings saved. Embeddings reset for the new model."
+			}
+		} else {
+			m.statusMessage = "Settings saved. Restart Herald to rebuild embeddings for the new model."
+		}
+	}
+	if m.configPath != "" {
+		if err := m.cfg.Save(m.configPath); err != nil {
+			m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
+		}
+	}
+	if previousCachePolicy != nextCachePolicy && !msg.ReclaimOfflineCacheStorage {
+		type cacheStoragePolicyApplier interface {
+			ApplyCacheStoragePolicy(string) (models.PreviewCachePruneResult, error)
+		}
+		if manager, ok := m.backend.(cacheStoragePolicyApplier); ok {
+			policy := nextCachePolicy
+			settingsCmds = append(settingsCmds, func() tea.Msg {
+				result, err := manager.ApplyCacheStoragePolicy(policy)
+				return CacheStoragePolicyAppliedMsg{Policy: policy, Result: result, Err: err}
+			})
+		} else {
+			m.statusMessage = "Settings saved. Restart Herald to prune existing preview cache for the new policy."
+		}
+	}
+	if msg.ReclaimOfflineCacheStorage {
+		type previewCacheReclaimEstimator interface {
+			EstimateOfflineCacheStorageReclaim(string) (models.PreviewCacheStorageEstimate, error)
+		}
+		if manager, ok := m.backend.(previewCacheReclaimEstimator); ok {
+			policy := nextCachePolicy
+			settingsCmds = append(settingsCmds, func() tea.Msg {
+				estimate, err := manager.EstimateOfflineCacheStorageReclaim(policy)
+				return PreviewCacheReclaimEstimateMsg{Policy: policy, Estimate: estimate, Err: err}
+			})
+			m.statusMessage = "Settings saved. Estimating offline cache reclaim..."
+		} else {
+			m.statusMessage = "Settings saved. Restart Herald to reclaim offline cache storage."
+		}
+	}
+	if msg.ReturnToMenu {
+		m.showSettings = true
+		m.settingsPanel = m.newSettingsPanel("", m.statusMessage)
+		initCmd := m.settingsPanel.Init()
+		if len(settingsCmds) > 0 {
+			settingsCmds = append(settingsCmds, initCmd)
+			return tea.Batch(settingsCmds...)
+		}
+		return initCmd
+	}
+	m.showSettings = false
+	m.settingsPanel = nil
+	if len(settingsCmds) > 0 {
+		return tea.Batch(settingsCmds...)
+	}
+	return nil
 }
 
 // Update implements tea.Model
@@ -1189,100 +1385,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AccountValidationMsg:
 		return m, m.finishAccountValidation(msg)
 
+	case OllamaModelValidationMsg:
+		return m, m.finishOllamaModelValidation(msg)
+
+	case OllamaModelWarningMsg:
+		if err := msg.Result.Err(); err != nil {
+			warning := msg.Result
+			m.aiModelWarning = &warning
+			m.classifier = nil
+			m.statusMessage = "AI unavailable. Open Settings > AI for repair commands."
+			logger.Warn("Startup Ollama model check failed: %v", err)
+		} else {
+			m.aiModelWarning = nil
+		}
+		return m, nil
+
 	case SettingsSavedMsg:
 		if msg.ValidateAccount {
 			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
 		}
-		previousEmbeddingModel := ""
-		previousCachePolicy := config.CacheStoragePolicyNoAttachments
-		if m.cfg != nil {
-			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
-			previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
+		if msg.ValidateOllamaModels {
+			return m, m.beginOllamaModelValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
 		}
-		m.SetConfig(msg.Config)
-		nextCachePolicy := config.CacheStoragePolicyNoAttachments
-		if m.cfg != nil {
-			nextCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
-		}
-		var settingsCmds []tea.Cmd
-		m.statusMessage = "Settings saved."
-		if m.keyboardWarn != "" {
-			m.statusMessage = "Settings saved. " + m.keyboardWarn
-		}
-		if m.themeWarn != "" {
-			m.statusMessage = "Settings saved. " + m.themeWarn
-		}
-		if m.classifier != nil {
-			m.classifier.SetEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
-		}
-		if previousEmbeddingModel != "" && previousEmbeddingModel != m.cfg.EffectiveEmbeddingModel() {
-			type embeddingModelEnsurer interface {
-				EnsureEmbeddingModel(string) (bool, error)
-			}
-			if manager, ok := m.backend.(embeddingModelEnsurer); ok {
-				invalidated, err := manager.EnsureEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
-				if err != nil {
-					m.statusMessage = fmt.Sprintf("Settings saved, but embedding reset failed: %v", err)
-				} else if invalidated {
-					m.statusMessage = "Settings saved. Embeddings reset for the new model."
-				}
-			} else {
-				m.statusMessage = "Settings saved. Restart Herald to rebuild embeddings for the new model."
-			}
-		}
-		if m.configPath != "" {
-			if err := m.cfg.Save(m.configPath); err != nil {
-				m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
-			}
-		}
-		if previousCachePolicy != nextCachePolicy && !msg.ReclaimOfflineCacheStorage {
-			type cacheStoragePolicyApplier interface {
-				ApplyCacheStoragePolicy(string) (models.PreviewCachePruneResult, error)
-			}
-			if manager, ok := m.backend.(cacheStoragePolicyApplier); ok {
-				policy := nextCachePolicy
-				settingsCmds = append(settingsCmds, func() tea.Msg {
-					result, err := manager.ApplyCacheStoragePolicy(policy)
-					return CacheStoragePolicyAppliedMsg{Policy: policy, Result: result, Err: err}
-				})
-			} else {
-				m.statusMessage = "Settings saved. Restart Herald to prune existing preview cache for the new policy."
-			}
-		}
-		if msg.ReclaimOfflineCacheStorage {
-			type previewCacheReclaimEstimator interface {
-				EstimateOfflineCacheStorageReclaim(string) (models.PreviewCacheStorageEstimate, error)
-			}
-			if manager, ok := m.backend.(previewCacheReclaimEstimator); ok {
-				policy := nextCachePolicy
-				settingsCmds = append(settingsCmds, func() tea.Msg {
-					estimate, err := manager.EstimateOfflineCacheStorageReclaim(policy)
-					return PreviewCacheReclaimEstimateMsg{Policy: policy, Estimate: estimate, Err: err}
-				})
-				m.statusMessage = "Settings saved. Estimating offline cache reclaim..."
-			} else {
-				m.statusMessage = "Settings saved. Restart Herald to reclaim offline cache storage."
-			}
-		}
-		if msg.ReturnToMenu {
-			m.showSettings = true
-			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
-			m.settingsPanel.panelStatus = m.statusMessage
-			m.settingsPanel.buildForm()
-			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
-			initCmd := m.settingsPanel.Init()
-			if len(settingsCmds) > 0 {
-				settingsCmds = append(settingsCmds, initCmd)
-				return m, tea.Batch(settingsCmds...)
-			}
-			return m, initCmd
-		}
-		m.showSettings = false
-		m.settingsPanel = nil
-		if len(settingsCmds) > 0 {
-			return m, tea.Batch(settingsCmds...)
-		}
-		return m, nil
+		return m, m.applySettingsSaved(msg)
 
 	case CacheStoragePolicyAppliedMsg:
 		if msg.Err != nil {
@@ -2340,6 +2465,9 @@ func (m *Model) View() tea.View {
 	if m.accountValidation != nil {
 		return m.buildView(m.renderAccountValidationOverlayView())
 	}
+	if m.aiModelValidation != nil {
+		return m.buildView(m.renderAIModelValidationOverlayView())
+	}
 	if m.showSettings && m.settingsPanel != nil {
 		view := m.renderSettingsOverlayView()
 		if m.pendingPreviewCacheReclaim {
@@ -2593,8 +2721,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		if !m.showSettings {
 			m.showSettings = true
-			m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
-			m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+			m.settingsPanel = m.newSettingsPanel("", "")
 			return m, m.settingsPanel.Init()
 		}
 		return m, nil

@@ -17,6 +17,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cache"
@@ -61,6 +62,7 @@ type wizardModel struct {
 	pendingConfig     *config.Config
 	validating        bool
 	validationMessage string
+	validationStep    wizardStep
 }
 
 func (m wizardModel) Init() tea.Cmd {
@@ -72,12 +74,25 @@ type wizardAccountValidationMsg struct {
 	Result accountcheck.Result
 }
 
+type wizardOllamaValidationMsg struct {
+	Config *config.Config
+	Result aicheck.Result
+}
+
 var validateWizardAccountConfig = accountcheck.Validate
+var validateWizardOllamaModels = aicheck.ValidateOllamaModels
 
 func validateWizardAccountCmd(cfg *config.Config, configPath string) tea.Cmd {
 	return func() tea.Msg {
 		result := validateWizardAccountConfig(context.Background(), cfg, configPath)
 		return wizardAccountValidationMsg{Config: cfg, Result: result}
+	}
+}
+
+func validateWizardOllamaCmd(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		result := validateWizardOllamaModels(context.Background(), cfg)
+		return wizardOllamaValidationMsg{Config: cfg, Result: result}
 	}
 }
 
@@ -92,6 +107,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pendingConfig = msg.Config
 		if err := msg.Result.Err(); err != nil {
 			m.validationMessage = msg.Result.UserMessage(logger.Path(), m.configPath)
+			m.validationStep = wizardStepAccount
 			logger.Error("Setup account validation failed: %v", err)
 			return m, nil
 		}
@@ -107,6 +123,20 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, tea.Quit
+
+	case wizardOllamaValidationMsg:
+		m.validating = false
+		m.pendingConfig = msg.Config
+		if err := msg.Result.Err(); err != nil {
+			m.validationMessage = "AI setup failed. " + msg.Result.UserMessage(logger.Path(), m.configPath)
+			m.validationStep = wizardStepPreferences
+			logger.Error("Setup Ollama model validation failed: %v", err)
+			return m, nil
+		}
+		if err := msg.Config.Save(m.configPath); err != nil {
+			m.err = err
+		}
+		return m, tea.Quit
 	}
 
 	if m.validationMessage != "" {
@@ -115,9 +145,14 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.validationMessage = ""
 				if m.pendingConfig != nil {
-					m.settings = newWizardAccountSettings(m.pendingConfig, m.configPath, m.experimental)
+					if m.validationStep == wizardStepPreferences {
+						m.settings = newWizardPreferencesSettings(m.pendingConfig, m.configPath, m.experimental)
+						m.step = wizardStepPreferences
+					} else {
+						m.settings = newWizardAccountSettings(m.pendingConfig, m.configPath, m.experimental)
+						m.step = wizardStepAccount
+					}
 				}
-				m.step = wizardStepAccount
 				m.state = wizardStateSettings
 				return m, m.settings.Init()
 			case "esc", "q", "ctrl+c":
@@ -140,8 +175,17 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingConfig = msg.Config
 			m.validating = true
 			m.validationMessage = ""
+			m.validationStep = wizardStepAccount
 			logger.Info("Validating setup account before continuing")
 			return m, validateWizardAccountCmd(msg.Config, m.configPath)
+		}
+		if msg.ValidateOllamaModels {
+			m.pendingConfig = msg.Config
+			m.validating = true
+			m.validationMessage = ""
+			m.validationStep = wizardStepPreferences
+			logger.Info("Validating setup Ollama models before saving")
+			return m, validateWizardOllamaCmd(msg.Config)
 		}
 		if err := msg.Config.Save(m.configPath); err != nil {
 			m.err = err
@@ -201,6 +245,13 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m wizardModel) View() tea.View {
 	if m.validating {
+		if m.validationStep == wizardStepPreferences {
+			return newWizardView(renderWizardStatus(m.width, m.height,
+				"Validating AI setup",
+				"Checking local Ollama models before saving your config.",
+				"You will only continue after the selected models are installed.",
+			))
+		}
 		return newWizardView(renderWizardStatus(m.width, m.height,
 			"Validating account",
 			"Checking IMAP and SMTP before continuing. This can take a few seconds.",
@@ -208,8 +259,12 @@ func (m wizardModel) View() tea.View {
 		))
 	}
 	if m.validationMessage != "" {
+		title := "Account setup failed"
+		if m.validationStep == wizardStepPreferences {
+			title = "AI setup failed"
+		}
 		return newWizardView(renderWizardStatus(m.width, m.height,
-			"Account setup failed",
+			title,
 			m.validationMessage,
 			"Enter: return to setup  Esc/q: quit without saving",
 		))

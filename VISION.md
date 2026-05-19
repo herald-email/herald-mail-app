@@ -156,6 +156,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Key hints (changes per panel)
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
+- [x] Global AI status chip reflects startup-detected missing or unreachable Ollama models as `AI down`, disables AI actions until repaired, and keeps repair details available from Settings > AI
 - [x] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
@@ -753,6 +754,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
 - [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
 - [x] AI setup defaults to small-machine-friendly local models (`llama3.2:1b` and `nomic-embed-text`) and custom Ollama setup offers curated chat and embedding model choices plus freeform model names
+- [x] First-run Ollama setup validates that the selected chat/classification and embedding models are installed before saving; missing models show exact `ollama pull` commands and keep the config unwritten
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
 - [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install stays in Theme Selection and semantic role editing stays in Theme Editor
 - [x] Advanced Sync & Cleanup preferences such as poll interval, IMAP IDLE, reclaim, and auto-cleanup stay out of first-run onboarding and remain available in in-app Settings
@@ -763,6 +765,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] AI settings expose curated Ollama chat and embedding model recommendations, including small 8GB-safe defaults and freeform custom model names
+- [x] AI settings warn when a previously configured Ollama model is no longer installed or reachable, disable AI actions, show install commands, and offer a Save Disabled action without blocking cached/offline startup
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact
 - [x] Theme Selection switches between inherited, Herald dark, Herald light, and installed YAML themes and installs local YAML files; Theme Editor edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
