@@ -669,6 +669,13 @@ func (s *Settings) buildForm() {
 		),
 	).Title("Keyboard")
 
+	wizardThemeGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Current Theme").
+			Options(settingsThemeOptions()...).
+			Value(&s.themeName),
+	).Title("Theme")
+
 	themeGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Current Theme").
@@ -766,7 +773,7 @@ func (s *Settings) buildForm() {
 		openAIGroup,
 		syncGroup,
 		keyboardGroup,
-		themeGroup,
+		wizardThemeGroup,
 		composeGroup,
 	}
 

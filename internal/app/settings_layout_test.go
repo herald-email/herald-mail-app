@@ -302,6 +302,43 @@ func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
 	}
 }
 
+func TestSettingsWizardThemeStepOnlyShowsThemePicker(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+
+	var rendered string
+	for i := 0; i < 12; i++ {
+		view := renderSettingsViewForTest(t, s, 100, 32)
+		if strings.Contains(view, "Current Theme") {
+			rendered = view
+			break
+		}
+		s.form.NextGroup()
+	}
+	if rendered == "" {
+		t.Fatalf("expected setup wizard to include a Theme step")
+	}
+
+	for _, want := range []string{"Current Theme", "Inherited", "Herald dark", "Herald light"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected setup wizard Theme step to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{
+		"Install local theme YAML",
+		"Theme Role",
+		"Foreground",
+		"Background",
+		"Live preview",
+		"Reset selected role",
+		"Reset all theme overrides",
+		"Save As New Theme",
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected setup wizard Theme step to hide advanced field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
 func TestSettingsWizardDoesNotShowPanelCategoryMenu(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 

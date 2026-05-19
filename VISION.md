@@ -752,6 +752,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates IMAP plus SMTP XOAUTH2 before saving, and makes Google cancel/timeout states explicit
 - [x] Step 3 — Preferences: enter AI settings, sync options, keyboard profile, theme, and signature only after the account connection has passed
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
+- [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install and semantic role editing stay in the in-app Theme settings category
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
 - [x] Final save writes `~/.herald/conf.yaml` only after the account connection gate has passed
 

@@ -947,6 +947,7 @@ Check these states during every applicable lane:
 - Returning from `50x15` to `80x24` restores the settings modal over the current screen without stale or clipped content.
 - `Esc` exits or clears an active settings-menu filter before it exits Settings; from a category, `Esc` returns to the top-level menu without saving unsaved edits, and the next menu-level `Esc` exits Settings.
 - First-run setup remains a linear fullscreen wizard and does not show the top-level settings menu.
+- First-run setup's Theme step shows only the current theme picker with all available themes; local YAML install, semantic theme roles, foreground/background fields, live preview, reset controls, and save-as-new-theme stay exclusive to the in-app Theme settings category.
 
 ### TC-24A — Theme settings and custom theme editing
 
