@@ -521,7 +521,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ### Semantic search
 - [x] `?` prefix in search bar triggers semantic mode
-- [x] Local embeddings via Ollama (`nomic-embed-text` default, with larger curated options available)
+- [x] Local embeddings via Ollama (`nomic-embed-text-v2-moe` default, with smaller curated downgrade options available)
 - [x] Vectors stored in SQLite (`email_embeddings` table)
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
@@ -753,7 +753,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates IMAP plus SMTP XOAUTH2 before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
 - [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
-- [x] AI setup defaults to small-machine-friendly local models (`llama3.2:1b` and `nomic-embed-text`) and custom Ollama setup offers curated chat and embedding model choices plus freeform model names
+- [x] AI setup defaults to quality-first local models (`gemma3:4b` and `nomic-embed-text-v2-moe`), warns that 16GB RAM is comfortable while 8GB can work more slowly, and keeps custom Ollama downgrade choices plus freeform model names
 - [x] First-run Ollama setup validates that the selected chat/classification and embedding models are installed before saving; missing models show exact `ollama pull` commands and keep the config unwritten
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
 - [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install stays in Theme Selection and semantic role editing stays in Theme Editor
@@ -764,7 +764,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
-- [x] AI settings expose curated Ollama chat and embedding model recommendations, including small 8GB-safe defaults and freeform custom model names
+- [x] AI settings expose curated Ollama chat and embedding model recommendations, including downgrade guidance for constrained machines and a translation-quality warning for `llama3.x` choices
 - [x] AI settings warn when a previously configured Ollama model is no longer installed or reachable, disable AI actions, show install commands, and offer a Save Disabled action without blocking cached/offline startup
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact

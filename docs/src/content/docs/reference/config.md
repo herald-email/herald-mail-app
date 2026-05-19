@@ -56,8 +56,8 @@ semantic:
 | `smtp.host` | SMTP host for Compose send. |
 | `smtp.port` | SMTP port for Compose send. |
 | `ollama.host` | Ollama base URL. |
-| `ollama.model` | Local chat/classification model. Default `llama3.2:1b`. Setup and changed AI settings verify that the model is installed locally before saving. |
-| `ollama.embedding_model` | Local embedding model. Default `nomic-embed-text`. Setup and changed AI settings verify that the model is installed locally before saving. |
+| `ollama.model` | Local chat/classification model. Default `gemma3:4b`. Setup and changed AI settings verify that the model is installed locally before saving. |
+| `ollama.embedding_model` | Local embedding model. Default `nomic-embed-text-v2-moe`. Setup and changed AI settings verify that the model is installed locally before saving. |
 | `sync.interval` | Fallback poll seconds. Default `60`. |
 | `sync.poll_interval_minutes` | Poll interval in minutes for settings-oriented sync. |
 | `sync.idle_enabled` | Enables IMAP IDLE when supported. |

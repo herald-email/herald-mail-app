@@ -668,6 +668,31 @@ func TestSettingsPanelSignatureFieldKeepsFooterAt80x24(t *testing.T) {
 	t.Fatalf("expected settings signature panel to keep the bottom border at 80x24, got:\n%s", rendered)
 }
 
+func TestSettingsPanelAICustomModelGuidanceKeepsBottomBorderAt80x24(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "AI")
+	s.aiProvider = aiProviderOllamaCustom
+	s.buildForm()
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+
+	for _, want := range []string{"Model recommendations", "gemma3:4b", "translation"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected AI settings guidance to include %q at 80x24, got:\n%s", want, rendered)
+		}
+	}
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.HasSuffix(strings.Trim(line, " │"), "-") {
+			t.Fatalf("expected AI settings model names not to hyphen-wrap at 80x24, got line %q in:\n%s", line, rendered)
+		}
+		if strings.Contains(line, "╰") && strings.Contains(line, "╯") {
+			return
+		}
+	}
+	t.Fatalf("expected AI settings custom model guidance to keep the bottom border at 80x24, got:\n%s", rendered)
+}
+
 func TestSettingsPanelUsesMinimumSizeGuardWhenTooSmall(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline
@@ -788,10 +813,14 @@ func TestSettingsWizard_OllamaDefaultWarnsAboutMemoryAndShowsSafeDefaults(t *tes
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
 	for _, want := range []string{
-		"llama3.2:1b",
-		"nomic-embed-text",
+		"gemma3:4b",
+		"nomic-embed-text-v2-moe",
+		"16GB",
 		"8GB",
-		"larger models",
+		"slower",
+		"downgrade",
+		"llama3.x",
+		"translation",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected Ollama default guidance to include %q, got:\n%s", want, rendered)
@@ -810,14 +839,15 @@ func TestSettingsWizard_CustomOllamaShowsCuratedChatAndEmbeddingChoices(t *testi
 	rendered := renderSettingsViewForTest(t, s, 120, 40)
 	for _, want := range []string{
 		"Chat Model",
-		"llama3.2:1b",
-		"qwen3.5:0.8b",
-		"llama3.2:3b",
 		"gemma3:4b",
+		"qwen3.5:0.8b",
+		"llama3.2:1b",
+		"llama3.2:3b",
+		"translation",
 		"Embedding Model",
+		"nomic-embed-text-v2-moe",
 		"nomic-embed-text",
 		"all-minilm",
-		"nomic-embed-text-v2-moe",
 		"mxbai-embed-large",
 		"bge-m3",
 		"Custom model name",

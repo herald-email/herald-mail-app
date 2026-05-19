@@ -15,8 +15,8 @@ import (
 
 const (
 	defaultOllamaHost           = "http://localhost:11434"
-	defaultOllamaModel          = "llama3.2:1b"
-	defaultOllamaEmbeddingModel = "nomic-embed-text"
+	defaultOllamaModel          = "gemma3:4b"
+	defaultOllamaEmbeddingModel = "nomic-embed-text-v2-moe"
 	defaultOllamaTimeout        = 6 * time.Second
 )
 

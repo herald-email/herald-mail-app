@@ -43,12 +43,12 @@ func New(host, model string) *Classifier {
 		host = "http://localhost:11434"
 	}
 	if model == "" {
-		model = "llama3.2:1b"
+		model = "gemma3:4b"
 	}
 	return &Classifier{
 		host:           strings.TrimRight(host, "/"),
 		model:          model,
-		embeddingModel: "nomic-embed-text",
+		embeddingModel: "nomic-embed-text-v2-moe",
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{

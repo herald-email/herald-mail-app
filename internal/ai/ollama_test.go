@@ -51,6 +51,17 @@ func newTestClassifier(srvURL string) *Classifier {
 	return c
 }
 
+func TestNewUsesRestoredDefaultModels(t *testing.T) {
+	c := New("", "")
+
+	if c.model != "gemma3:4b" {
+		t.Fatalf("default chat model = %q, want gemma3:4b", c.model)
+	}
+	if c.embeddingModel != "nomic-embed-text-v2-moe" {
+		t.Fatalf("default embedding model = %q, want nomic-embed-text-v2-moe", c.embeddingModel)
+	}
+}
+
 func TestChatWithTools_ReturnsToolCalls(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -146,10 +146,11 @@ Timeline and Cleanup previews keep image bytes local to the TUI process. Full-sc
 - Strict interactive-first means no new background local-AI task is dispatched while interactive work is queued or running
 - The scheduler is intentionally non-preemptive: one already-running background Ollama call may finish before the waiting interactive task begins
 
-**Small-machine AI defaults**
+**Quality-first local AI defaults**
 
-- New configs default local Ollama chat/classification to `llama3.2:1b` and embeddings to `nomic-embed-text` so an 8GB laptop is less likely to be overwhelmed during onboarding
-- Custom Ollama setup uses curated selectors for common chat and embedding model sizes, while preserving freeform model names for users who pull another model from Ollama
+- New configs default local Ollama chat/classification to `gemma3:4b` and embeddings to `nomic-embed-text-v2-moe` so translation, writing assistance, and semantic search start from stronger local models
+- Setup warns that these recommended defaults are comfortable with at least 16GB RAM; 8GB can still work, but users should expect slower local AI responses
+- Custom Ollama setup uses curated selectors for common chat and embedding model sizes, while preserving freeform model names and a downgrade path for constrained machines; the downgrade copy calls out that `llama3.x` is weaker for translation
 - Existing explicit model values remain authoritative; default changes only fill blank config values
 - Setup and changed AI settings validate local Ollama model names against `/api/tags` before saving, while existing configs use non-blocking warning state so offline startup remains available
 

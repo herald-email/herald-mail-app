@@ -44,8 +44,8 @@ const (
 	aiProviderDisabled      = "disabled"
 
 	defaultOllamaHost     = "http://localhost:11434"
-	defaultOllamaModel    = "llama3.2:1b"
-	defaultEmbeddingModel = "nomic-embed-text"
+	defaultOllamaModel    = "gemma3:4b"
+	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
 	customModelChoice     = "custom"
 
 	settingsPanelSectionMenu           settingsPanelSection = ""
@@ -460,19 +460,19 @@ func (s *Settings) validateSetupEmail(value string) error {
 
 func ollamaChatModelOptions() []huh.Option[string] {
 	return []huh.Option[string]{
-		huh.NewOption("llama3.2:1b - safe default (~1.3GB)", "llama3.2:1b"),
-		huh.NewOption("qwen3.5:0.8b - smallest curated option (~1.0GB)", "qwen3.5:0.8b"),
-		huh.NewOption("llama3.2:3b - stronger text, larger (~2.0GB)", "llama3.2:3b"),
-		huh.NewOption("gemma3:4b - larger/vision-capable (~3.3GB)", "gemma3:4b"),
+		huh.NewOption("gemma3:4b - recommended quality default (~3.3GB)", "gemma3:4b"),
+		huh.NewOption("qwen3.5:0.8b - downgrade for constrained RAM (~1.0GB)", "qwen3.5:0.8b"),
+		huh.NewOption("llama3.2:1b - smallest downgrade, weaker translation (~1.3GB)", "llama3.2:1b"),
+		huh.NewOption("llama3.2:3b - downgrade, llama3.x translation weaker (~2.0GB)", "llama3.2:3b"),
 		huh.NewOption("Custom model name", customModelChoice),
 	}
 }
 
 func ollamaEmbeddingModelOptions() []huh.Option[string] {
 	return []huh.Option[string]{
-		huh.NewOption("nomic-embed-text - safe default (~274MB, 2K context)", "nomic-embed-text"),
+		huh.NewOption("nomic-embed-text-v2-moe - recommended multilingual default (~958MB)", "nomic-embed-text-v2-moe"),
+		huh.NewOption("nomic-embed-text - smaller downgrade (~274MB, 2K context)", "nomic-embed-text"),
 		huh.NewOption("all-minilm - smallest embeddings (~46MB)", "all-minilm"),
-		huh.NewOption("nomic-embed-text-v2-moe - multilingual, larger (~958MB)", "nomic-embed-text-v2-moe"),
 		huh.NewOption("mxbai-embed-large - larger general-purpose embeddings (~670MB)", "mxbai-embed-large"),
 		huh.NewOption("bge-m3 - multilingual, larger (~1.2GB)", "bge-m3"),
 		huh.NewOption("Custom model name", customModelChoice),
@@ -660,7 +660,7 @@ func (s *Settings) buildForm() {
 	ollamaDefaultGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Ollama local default").
-			Description("Uses http://localhost:11434 with llama3.2:1b and nomic-embed-text. On 8GB Macs, larger models can pressure memory; use custom Ollama for smaller/larger local models or choose an external AI provider."),
+			Description("Default chat: gemma3:4b.\nDefault embeddings: nomic-embed-text-v2-moe.\nBest with 16GB RAM; 8GB works but slower.\nUse custom Ollama to downgrade.\nAvoid llama3.x for translation-heavy work."),
 	).WithHideFunc(func() bool { return s.aiProvider != aiProviderOllamaDefault })
 
 	// Group 3a — Ollama settings (shown only when provider = custom Ollama)
@@ -668,7 +668,7 @@ func (s *Settings) buildForm() {
 		huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder(defaultOllamaHost),
 		huh.NewNote().
 			Title("Model recommendations").
-			Description("Chat: llama3.2:1b, qwen3.5:0.8b, llama3.2:3b, gemma3:4b, Custom model name.\nEmbeddings: nomic-embed-text, all-minilm, nomic-embed-text-v2-moe, mxbai-embed-large, bge-m3, Custom model name."),
+			Description("Chat default: gemma3:4b.\nLower RAM: qwen3.5:0.8b or llama3.2:1b/3b.\nAvoid llama3.x for translation-heavy work.\nEmbedding default: nomic-embed-text-v2-moe.\nSmaller embeddings: nomic-embed-text, all-minilm.\nMore embeddings: mxbai-embed-large or bge-m3."),
 		huh.NewSelect[string]().
 			Title("Chat Model").
 			Options(ollamaChatModelOptions()...).
@@ -1573,8 +1573,9 @@ func (s *Settings) renderPanel() string {
 
 	rendered := strings.TrimRight(box.Render(formView), "\n")
 	lines := strings.Split(rendered, "\n")
-	if len(lines) > layout.panelHeight {
-		lines = lines[:layout.panelHeight]
+	if len(lines) > layout.panelHeight && layout.panelHeight > 0 {
+		bottomBorder := lines[len(lines)-1]
+		lines = append(lines[:layout.panelHeight-1], bottomBorder)
 	}
 	for i, line := range lines {
 		lines[i] = ansi.Cut(line, 0, layout.panelWidth)

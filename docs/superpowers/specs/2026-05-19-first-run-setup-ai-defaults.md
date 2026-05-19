@@ -26,13 +26,13 @@ First-run preferences should stay small and approachable after account validatio
 
 ## AI Defaults
 
-Local AI defaults should be conservative on an 8GB laptop while still allowing stronger custom models. The YAML schema stays unchanged so existing configs and scripts keep working.
+Local AI defaults should prefer good translation and writing quality while making the hardware cost explicit. The YAML schema stays unchanged so existing configs and scripts keep working, and users on constrained machines can intentionally downgrade through custom Ollama selection.
 
-- [x] Blank/new Ollama chat and classification model defaults to `llama3.2:1b`.
-- [x] Blank/new Ollama embedding model defaults to `nomic-embed-text`, with `semantic.model` following that default.
+- [x] Blank/new Ollama chat and classification model defaults to `gemma3:4b`.
+- [x] Blank/new Ollama embedding model defaults to `nomic-embed-text-v2-moe`, with `semantic.model` following that default.
 - [x] Existing explicit `ollama.model`, `ollama.embedding_model`, and `semantic.model` values are not overwritten.
-- [x] The default Ollama wizard copy warns that larger local models can pressure 8GB Macs.
-- [x] Custom Ollama setup offers curated chat choices plus a freeform custom model name.
+- [x] The default Ollama wizard copy warns that the recommended defaults are comfortable with at least 16GB RAM, while 8GB can work more slowly.
+- [x] Custom Ollama setup offers curated chat choices plus a freeform custom model name, including a downgrade path for constrained machines and a warning that `llama3.x` models are weaker for translation.
 - [x] Custom Ollama setup offers curated embedding choices plus a freeform custom model name.
 - [x] First-run Ollama setup verifies that the selected chat/classification model and embedding model are installed before writing the initial config.
 - [x] Missing first-run Ollama models keep the config unwritten and show exact `ollama pull <model>` commands.
