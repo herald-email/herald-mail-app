@@ -1651,8 +1651,8 @@ Check these states during every applicable lane:
 1. Launch Herald in demo mode, dismiss onboarding, and open a Timeline preview.
 2. Capture the split preview at `120x40` and `80x24`.
 3. Switch to Cleanup, open an individual email preview, and capture it.
-4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector.
-5. Save each policy in turn: `Lightweight previews`, `No attachments`, and `Preserve all data`.
+4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector. Confirm the selector uses compact policy labels without the longer helper paragraph.
+5. Save each policy in turn: `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive`.
 6. In `Sync & Cleanup`, enable `Reclaim offline cache storage`, save, and confirm the reclaim prompt shows before/after byte estimates plus the preserved-data explanation.
 7. Press `n`, repeat the action, then press `y` and confirm the status bar reports the reclaimed bytes and compaction result.
 8. With debug logging enabled, wait for the active Timeline folder to finish loading and confirm the log records preview prewarming progress, such as `Preview cache: 0/50 warming folder=INBOX` followed by a completion summary.
@@ -1663,7 +1663,8 @@ Check these states during every applicable lane:
 **Expect:**
 - Timeline and Cleanup preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
 - The `Load:` row never wraps or pushes body text outside the preview border at supported sizes.
-- Settings defaults to `Lightweight previews` for new configs and preserves the selected policy after saving.
+- Setup wizard and Settings show the compact policy choices `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive` without redundant explanatory copy inside the selector.
+- Settings defaults to `Message bodies without attachments` for new configs and preserves the selected policy after saving.
 - The reclaim action does not run silently: it estimates removable cached preview bytes, explains that preview text, headers, and attachment metadata stay cached, and waits for `y` before pruning and compacting.
 - Reclaim under `lightweight` removes inline image and attachment bytes; reclaim under `no_attachments` removes only attachment bytes; reclaim under `preserve_all` reports no removable policy bytes.
 - Lightweight cached previews render body text from cache without downloading attachment bytes.

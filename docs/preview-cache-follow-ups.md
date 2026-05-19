@@ -62,8 +62,8 @@ The new telemetry is useful, but cache hits can show `duration=0s` in logs becau
 
 The settings form now exposes the offline cache policy, but the first-run experience should explain the tradeoff in plain language. Users should understand that "cache" can mean metadata, preview text, or full attachment data.
 
-- [ ] In the install wizard, explain the three policies with disk and privacy impact: lightweight previews, no attachments, and preserve all data.
-- [ ] Add a settings description that clarifies `lightweight` still enables instant previews after prewarming or first open.
+- [x] In the install wizard, use compact policy labels for lightweight previews, message bodies without attachments, and full offline archives.
+- [x] Default new configs to message bodies without attachments so background prewarming supports offline reading without caching downloadable attachment bytes.
 - [ ] Show the current preview cache footprint and row count in settings.
 - [ ] Add a manual "warm current folder previews" command for users who want control without enabling broad background work.
 

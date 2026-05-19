@@ -347,7 +347,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.cleanupScheduleStr = "0"
 	}
 	if s.cacheStoragePolicy == "" {
-		s.cacheStoragePolicy = config.CacheStoragePolicyLightweight
+		s.cacheStoragePolicy = config.CacheStoragePolicyNoAttachments
 	}
 	if s.keyboardProfile == "" {
 		s.keyboardProfile = keyboardProfileDefault
@@ -596,8 +596,8 @@ func (s *Settings) buildForm() {
 			Title("Offline Cache").
 			Options(
 				huh.NewOption("Lightweight previews", config.CacheStoragePolicyLightweight),
-				huh.NewOption("No attachments", config.CacheStoragePolicyNoAttachments),
-				huh.NewOption("Preserve all data", config.CacheStoragePolicyPreserveAll),
+				huh.NewOption("Message bodies without attachments", config.CacheStoragePolicyNoAttachments),
+				huh.NewOption("Full offline archive", config.CacheStoragePolicyPreserveAll),
 			).
 			Value(&s.cacheStoragePolicy),
 		huh.NewConfirm().

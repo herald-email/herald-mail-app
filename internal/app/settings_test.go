@@ -486,13 +486,13 @@ func TestSettingsWizardThemeRoleSwitchLoadsRoleSpecificWorkingOverrides(t *testi
 	}
 }
 
-func TestBuildConfigDefaultsCacheStoragePolicyToLightweight(t *testing.T) {
+func TestBuildConfigDefaultsCacheStoragePolicyToNoAttachments(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, &config.Config{})
 
 	cfg := s.buildConfig()
 
-	if cfg.Cache.StoragePolicy != "lightweight" {
-		t.Fatalf("Cache.StoragePolicy = %q, want lightweight", cfg.Cache.StoragePolicy)
+	if cfg.Cache.StoragePolicy != config.CacheStoragePolicyNoAttachments {
+		t.Fatalf("Cache.StoragePolicy = %q, want %s", cfg.Cache.StoragePolicy, config.CacheStoragePolicyNoAttachments)
 	}
 }
 
@@ -612,6 +612,33 @@ func TestSettingsPanelSyncCleanupShowsOfflineCacheReclaimAction(t *testing.T) {
 	for _, want := range []string{"Offline Cache", "Reclaim offline cache storage", "before pruning"} {
 		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected Sync & Cleanup settings to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelSyncCleanupUsesCompactOfflineCachePolicyLabels(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Sync & Cleanup")
+
+	rendered := renderSettingsViewForTest(t, s, 120, 40)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	for _, want := range []string{
+		"Lightweight previews",
+		"Message bodies without attachments",
+		"Full offline archive",
+	} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected Sync & Cleanup settings to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, oldCopy := range []string{
+		"First open/prewarm",
+		"media fetches on demand",
+		"No attachments - preview data",
+		"Preserve all data - attachments too",
+	} {
+		if strings.Contains(normalized, oldCopy) {
+			t.Fatalf("expected Sync & Cleanup settings to omit distracting copy %q, got:\n%s", oldCopy, rendered)
 		}
 	}
 }
@@ -982,6 +1009,22 @@ func focusSignatureSettingsGroup(t *testing.T, s *Settings) {
 		s.form.NextGroup()
 	}
 	t.Fatalf("signature settings group not reached; current form:\n%s", s.form.View())
+}
+
+func focusSyncCleanupSettingsGroupForTest(t *testing.T, s *Settings) {
+	t.Helper()
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
+		opened := openSettingsPanelCategoryForTest(t, s, "Sync & Cleanup")
+		*s = *opened
+		return
+	}
+	for i := 0; i < 20; i++ {
+		if strings.Contains(s.form.View(), "Sync & Cleanup") {
+			return
+		}
+		s.form.NextGroup()
+	}
+	t.Fatalf("sync cleanup settings group not reached; current form:\n%s", s.form.View())
 }
 
 func updateSettingsForTest(t *testing.T, s *Settings, msg tea.Msg) *Settings {

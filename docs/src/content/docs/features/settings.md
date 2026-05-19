@@ -63,6 +63,10 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 5. Review the before/after byte estimate and the preserved-data note.
 6. Press `y` to prune disallowed cached preview bytes and compact SQLite, or press `n`/`Esc` to cancel.
 
+### Choose Offline Cache Policy
+
+The `Offline Cache` selector controls how much fetched preview data Herald keeps for later reading. New configs default to `Message bodies without attachments`, which lets background preview loading support offline reading without keeping downloadable attachment bytes. `Lightweight previews` keeps preview text, headers, and attachment metadata only. `Full offline archive` keeps fetched preview data including attachment bytes, using more disk and keeping more mail data locally.
+
 ### Change AI Provider
 
 1. Press `S`.

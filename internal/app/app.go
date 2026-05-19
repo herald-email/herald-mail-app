@@ -1016,13 +1016,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SettingsSavedMsg:
 		previousEmbeddingModel := ""
-		previousCachePolicy := config.CacheStoragePolicyLightweight
+		previousCachePolicy := config.CacheStoragePolicyNoAttachments
 		if m.cfg != nil {
 			previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
 			previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
 		}
 		m.SetConfig(msg.Config)
-		nextCachePolicy := config.CacheStoragePolicyLightweight
+		nextCachePolicy := config.CacheStoragePolicyNoAttachments
 		if m.cfg != nil {
 			nextCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
 		}

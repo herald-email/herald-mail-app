@@ -73,6 +73,33 @@ func TestSettingsWizard_GmailIMAPStepIncludesGuidance(t *testing.T) {
 	}
 }
 
+func TestSettingsWizard_SyncCleanupUsesCompactOfflineCachePolicyLabels(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	focusSyncCleanupSettingsGroupForTest(t, s)
+
+	rendered := renderSettingsViewForTest(t, s, 120, 40)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	for _, want := range []string{
+		"Lightweight previews",
+		"Message bodies without attachments",
+		"Full offline archive",
+	} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected setup wizard to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, oldCopy := range []string{
+		"First open/prewarm",
+		"media fetches on demand",
+		"No attachments - preview data",
+		"Preserve all data - attachments too",
+	} {
+		if strings.Contains(normalized, oldCopy) {
+			t.Fatalf("expected setup wizard to omit distracting copy %q, got:\n%s", oldCopy, rendered)
+		}
+	}
+}
+
 func TestSettingsWizard_DefaultHidesGmailOAuthAndShowsIMAPPresets(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 

@@ -168,12 +168,14 @@ const (
 
 func NormalizeCacheStoragePolicy(policy string) string {
 	switch strings.TrimSpace(policy) {
+	case CacheStoragePolicyLightweight:
+		return CacheStoragePolicyLightweight
 	case CacheStoragePolicyNoAttachments:
 		return CacheStoragePolicyNoAttachments
 	case CacheStoragePolicyPreserveAll:
 		return CacheStoragePolicyPreserveAll
 	default:
-		return CacheStoragePolicyLightweight
+		return CacheStoragePolicyNoAttachments
 	}
 }
 

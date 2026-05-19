@@ -45,6 +45,10 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 6. Review the generated settings and save.
 7. Herald connects to IMAP, creates or opens the SQLite cache, processes new mail, and opens the Timeline tab.
 
+## Offline Cache Policy
+
+The Sync and cleanup step asks how much fetched preview data Herald should keep. New configs default to `Message bodies without attachments`, which lets background preview loading support offline reading without keeping downloadable attachment bytes. `Lightweight previews` keeps preview text, headers, and attachment metadata only. `Full offline archive` keeps fetched preview data including attachment bytes, using more disk and keeping more mail data locally.
+
 ## Provider Choices
 
 | Choice | Use when | Notes |

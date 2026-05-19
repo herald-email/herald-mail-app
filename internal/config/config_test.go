@@ -168,6 +168,21 @@ func TestLoadKeyboardConfigDefaultsAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNormalizeCacheStoragePolicyDefaultsToNoAttachments(t *testing.T) {
+	for _, input := range []string{"", "unknown", " lightweight "} {
+		got := NormalizeCacheStoragePolicy(input)
+		if input == " lightweight " {
+			if got != CacheStoragePolicyLightweight {
+				t.Fatalf("NormalizeCacheStoragePolicy(%q) = %q, want %q", input, got, CacheStoragePolicyLightweight)
+			}
+			continue
+		}
+		if got != CacheStoragePolicyNoAttachments {
+			t.Fatalf("NormalizeCacheStoragePolicy(%q) = %q, want %q", input, got, CacheStoragePolicyNoAttachments)
+		}
+	}
+}
+
 func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "work.yaml")

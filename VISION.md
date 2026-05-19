@@ -749,6 +749,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth remains available as an experimental browser-based path behind `-experimental`; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
 - [x] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, pick embedding model; skip if Ollama not running
+- [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
 - [ ] Step 5 — Test connection button; shows result inline before saving
 - [x] Writes `~/.herald/conf.yaml` on finish
@@ -758,6 +759,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
+- [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact
 - [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits

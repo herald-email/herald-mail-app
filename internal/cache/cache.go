@@ -1122,12 +1122,14 @@ func previewBodyForPolicy(body *models.EmailBody, policy string) *models.EmailBo
 
 func normalizePreviewStoragePolicy(policy string) string {
 	switch strings.TrimSpace(policy) {
+	case "lightweight":
+		return "lightweight"
 	case "no_attachments":
 		return "no_attachments"
 	case "preserve_all":
 		return "preserve_all"
 	default:
-		return "lightweight"
+		return "no_attachments"
 	}
 }
 

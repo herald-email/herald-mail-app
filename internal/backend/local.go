@@ -643,7 +643,7 @@ func (b *LocalBackend) GetCachedPreviewBody(messageID string) (*models.EmailBody
 }
 
 func (b *LocalBackend) CachePreviewBody(messageID string, body *models.EmailBody) error {
-	policy := config.CacheStoragePolicyLightweight
+	policy := config.CacheStoragePolicyNoAttachments
 	if b.cfg != nil {
 		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
 	}
@@ -652,7 +652,7 @@ func (b *LocalBackend) CachePreviewBody(messageID string, body *models.EmailBody
 
 func (b *LocalBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCachePruneResult, error) {
 	target := config.NormalizeCacheStoragePolicy(policy)
-	previous := config.CacheStoragePolicyLightweight
+	previous := config.CacheStoragePolicyNoAttachments
 	if b.cfg != nil {
 		previous = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
 	} else {
@@ -709,7 +709,7 @@ func previewPolicyRank(policy string) int {
 }
 
 func (b *LocalBackend) FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error) {
-	policy := config.CacheStoragePolicyLightweight
+	policy := config.CacheStoragePolicyNoAttachments
 	if b.cfg != nil {
 		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
 	}
