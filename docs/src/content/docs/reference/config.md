@@ -131,7 +131,7 @@ Use `-theme` to launch a built-in theme or theme file for one session without ch
 ./bin/herald -theme ./quiet-slate.yaml
 ```
 
-To install a local file from the TUI, open Settings with `S`, choose `Theme`, and enter the YAML path in `Install local theme YAML`. After installation, set `theme.name` to the file's slug, for example `my-jade-signal`.
+To install a local file from the TUI, open Settings with `S`, choose `Theme Selection`, and enter the YAML path in `Install local theme YAML`. After installation, set `theme.name` to the file's slug, for example `my-jade-signal`.
 
 ## Related Pages
 

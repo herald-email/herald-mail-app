@@ -23,7 +23,7 @@ Start from the [Jade Signal baseline YAML](/examples/themes/jade-signal-baseline
 ./bin/herald --demo -theme ./jade-signal-baseline.yaml
 ```
 
-You can also install the same file from Settings by opening `S`, choosing `Theme`, and entering the local YAML path in `Install local theme YAML`.
+You can also install the same file from Settings by opening `S`, choosing `Theme Selection`, and entering the local YAML path in `Install local theme YAML`.
 
 ## Theme Index
 

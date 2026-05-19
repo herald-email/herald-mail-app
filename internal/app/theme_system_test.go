@@ -318,7 +318,7 @@ func TestModelThemeStateIsPerInstance(t *testing.T) {
 	}
 }
 
-func TestSettingsThemePreviewAppliesImmediatelyAndCancelRestores(t *testing.T) {
+func TestSettingsThemeSelectionPreviewAppliesImmediatelyAndCancelRestores(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	cfg := &config.Config{}
 	cfg.Theme.Name = "inherited"
@@ -326,7 +326,7 @@ func TestSettingsThemePreviewAppliesImmediatelyAndCancelRestores(t *testing.T) {
 
 	m.showSettings = true
 	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
-	m.settingsPanel.panelSection = settingsPanelSectionTheme
+	m.settingsPanel.panelSection = settingsPanelSection("theme-selection")
 	m.settingsPanel.themeName = "herald-light"
 	m.settingsPanel.buildForm()
 	m.settingsPanel.setSize(80, 24)
@@ -344,7 +344,7 @@ func TestSettingsThemePreviewAppliesImmediatelyAndCancelRestores(t *testing.T) {
 	}
 }
 
-func TestSettingsThemePickerPreviewDoesNotMutateSavedConfigBeforeSave(t *testing.T) {
+func TestSettingsThemeEditorPreviewDoesNotMutateSavedConfigBeforeSave(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	cfg := &config.Config{}
 	cfg.Theme.Name = "inherited"
@@ -352,7 +352,7 @@ func TestSettingsThemePickerPreviewDoesNotMutateSavedConfigBeforeSave(t *testing
 
 	m.showSettings = true
 	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
-	m.settingsPanel.panelSection = settingsPanelSectionTheme
+	m.settingsPanel.panelSection = settingsPanelSection("theme-editor")
 	m.settingsPanel.themeRole = "chrome.tab_active"
 	m.settingsPanel.themeFG = "xterm:26"
 	m.settingsPanel.storeThemeFieldsForRole(m.settingsPanel.themeRole, m.settingsPanel.themeFG, m.settingsPanel.themeBG)

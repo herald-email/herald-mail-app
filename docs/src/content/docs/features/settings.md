@@ -13,14 +13,15 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 
 | Area | What it shows |
 | --- | --- |
-| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` category choices. |
+| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
 | Account setup | Vendor, username, password/app password, IMAP, SMTP, and provider-specific options. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
 | Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, and related automation timing. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
-| Theme | App theme selection, local YAML install, semantic role color editing, and custom theme creation. |
+| Theme Selection | App theme selection and local YAML install. |
+| Theme Editor | Semantic role color editing, live preview, reset controls, and custom theme creation. |
 | Signature | Multiline default Compose signature text. |
 | Save/cancel controls | Category-level save returns to the menu; `esc` backs out one level before exiting and does not save unsaved category edits. |
 | OAuth wait overlay | URL/open-browser state while waiting for OAuth callback and token storage. |
@@ -49,7 +50,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 ### Open and Save Settings
 
 1. Press `S`.
-2. Choose `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, or `Signature`.
+2. Choose `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, or `Signature`.
 3. Update the fields in that category.
 4. Save the category.
 5. Herald writes config, applies runtime changes that can be applied immediately, and returns to the settings menu.
@@ -87,15 +88,17 @@ The `Offline Cache` selector controls how much fetched preview data Herald keeps
 
 ### Change Theme
 
-The Theme category is local-first. It switches built-in themes, installs validated YAML files from disk, and edits semantic roles without adding a new global shortcut.
+Theme settings stay local-first while separating quick selection from deeper editing. Theme Selection switches built-in themes and installs validated YAML files from disk; Theme Editor edits semantic roles without adding a new global shortcut.
 
 1. Press `S`.
-2. Choose `Theme`.
+2. Choose `Theme Selection`.
 3. Choose `Inherited`, `Herald dark`, `Herald light`, a built-in palette such as `Jade Signal` or `Amber Furnace`, or an installed theme.
 4. Optionally enter a local YAML theme file path to install it into `~/.herald/themes`.
-5. Select a semantic role, edit foreground/background with `inherit`, `ansi:N`, `xterm:N`, or `#RRGGBB`, and review the swatches/live preview.
-6. Use reset controls for one role or all overrides, or provide a new theme name to save the current overrides as a reusable local theme.
-7. Save.
+5. Save.
+6. Reopen Settings and choose `Theme Editor`.
+7. Select a semantic role, edit foreground/background with `inherit`, `ansi:N`, `xterm:N`, or `#RRGGBB`, and review the swatches/live preview.
+8. Use reset controls for one role or all overrides, or provide a new theme name to save the current overrides as a reusable local theme.
+9. Save.
 
 ### Start OAuth
 

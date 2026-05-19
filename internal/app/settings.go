@@ -47,19 +47,32 @@ const (
 	defaultEmbeddingModel = "nomic-embed-text"
 	customModelChoice     = "custom"
 
-	settingsPanelSectionMenu     settingsPanelSection = ""
-	settingsPanelSectionAccount  settingsPanelSection = "account"
-	settingsPanelSectionAI       settingsPanelSection = "ai"
-	settingsPanelSectionSync     settingsPanelSection = "sync-cleanup"
-	settingsPanelSectionKeyboard settingsPanelSection = "keyboard"
-	settingsPanelSectionTheme    settingsPanelSection = "theme"
-	settingsPanelSectionSign     settingsPanelSection = "signature"
+	settingsPanelSectionMenu           settingsPanelSection = ""
+	settingsPanelSectionAccount        settingsPanelSection = "account"
+	settingsPanelSectionAI             settingsPanelSection = "ai"
+	settingsPanelSectionSync           settingsPanelSection = "sync-cleanup"
+	settingsPanelSectionKeyboard       settingsPanelSection = "keyboard"
+	settingsPanelSectionThemeSelection settingsPanelSection = "theme-selection"
+	settingsPanelSectionThemeEditor    settingsPanelSection = "theme-editor"
+	settingsPanelSectionSign           settingsPanelSection = "signature"
 
 	settingsThemeForegroundKey       = "theme.foreground"
 	settingsThemeForegroundPickerKey = "theme.foreground_picker"
 	settingsThemeBackgroundKey       = "theme.background"
 	settingsThemeBackgroundPickerKey = "theme.background_picker"
 )
+
+func isThemeSelectionSection(section settingsPanelSection) bool {
+	return section == settingsPanelSectionThemeSelection
+}
+
+func isThemeEditorSection(section settingsPanelSection) bool {
+	return section == settingsPanelSectionThemeEditor
+}
+
+func isThemeSettingsSection(section settingsPanelSection) bool {
+	return isThemeSelectionSection(section) || isThemeEditorSection(section)
+}
 
 // SettingsSavedMsg is sent when the user completes the form and saves.
 type SettingsSavedMsg struct {
@@ -779,7 +792,7 @@ func (s *Settings) buildForm() {
 			Value(&s.themeName),
 	).Title("Theme")
 
-	themeGroup := huh.NewGroup(
+	themeSelectionGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Current Theme").
 			Options(settingsThemeOptions()...).
@@ -789,6 +802,14 @@ func (s *Settings) buildForm() {
 			Description("Validated and copied into ~/.herald/themes. Leave blank to skip install.").
 			Placeholder("~/Downloads/quiet-slate.yaml").
 			Value(&s.themeInstallPath),
+		huh.NewConfirm().
+			Title("Save changes").
+			Affirmative("Save").
+			Negative("Cancel").
+			Value(&s.saveButton),
+	).Title("Theme Selection")
+
+	themeEditorGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Theme Role").
 			Options(settingsThemeRoleOptions()...).
@@ -832,7 +853,7 @@ func (s *Settings) buildForm() {
 			Affirmative("Save").
 			Negative("Cancel").
 			Value(&s.saveButton),
-	).Title("Theme")
+	).Title("Theme Editor")
 
 	panelSignatureGroup := huh.NewGroup(
 		huh.NewText().
@@ -910,8 +931,10 @@ func (s *Settings) buildForm() {
 				keyboardGroup,
 				saveGroup.Title("Keyboard"),
 			}
-		case settingsPanelSectionTheme:
-			groups = []*huh.Group{themeGroup}
+		case settingsPanelSectionThemeSelection:
+			groups = []*huh.Group{themeSelectionGroup}
+		case settingsPanelSectionThemeEditor:
+			groups = []*huh.Group{themeEditorGroup}
 		case settingsPanelSectionSign:
 			groups = []*huh.Group{panelSignatureGroup}
 		}
@@ -956,19 +979,21 @@ func (s *Settings) buildForm() {
 
 func (s *Settings) buildPanelMenuForm() {
 	fields := []huh.Field{}
-	if strings.TrimSpace(s.panelStatus) != "" {
-		fields = append(fields, huh.NewNote().Title(s.panelStatus))
+	description := "Choose one area to edit. Save returns here; Esc closes without saving."
+	if status := strings.TrimSpace(s.panelStatus); status != "" {
+		description = status + "\n" + description
 	}
 	fields = append(fields,
 		huh.NewSelect[string]().
 			Title("Settings").
-			Description("Choose one area to edit. Save returns here; Esc closes without saving.").
+			Description(description).
 			Options(
 				huh.NewOption("Account setup", string(settingsPanelSectionAccount)),
 				huh.NewOption("AI", string(settingsPanelSectionAI)),
 				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
 				huh.NewOption("Keyboard", string(settingsPanelSectionKeyboard)),
-				huh.NewOption("Theme", string(settingsPanelSectionTheme)),
+				huh.NewOption("Theme Selection", string(settingsPanelSectionThemeSelection)),
+				huh.NewOption("Theme Editor", string(settingsPanelSectionThemeEditor)),
 				huh.NewOption("Signature", string(settingsPanelSectionSign)),
 			).
 			Value(&s.panelMenuChoice),
@@ -1117,7 +1142,7 @@ func (s *Settings) loadThemeFieldsForRole(role string) {
 }
 
 func (s *Settings) syncThemeRoleFields(prevRole, prevFG, prevBG string) {
-	if s.mode == SettingsModePanel && s.panelSection != settingsPanelSectionTheme {
+	if s.mode == SettingsModePanel && !isThemeEditorSection(s.panelSection) {
 		return
 	}
 	if prevRole != s.themeRole {
@@ -1193,7 +1218,7 @@ func (s *Settings) shouldOpenThemePickerFromManualInput(msg tea.KeyPressMsg) boo
 	if s == nil || s.form == nil || (msg.Text != "/" && msg.Code != '/') {
 		return false
 	}
-	if s.mode == SettingsModePanel && s.panelSection != settingsPanelSectionTheme {
+	if s.mode == SettingsModePanel && !isThemeEditorSection(s.panelSection) {
 		return false
 	}
 	switch s.form.GetFocusedField().GetKey() {
@@ -1431,10 +1456,10 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, tea.Batch(cmd, func() tea.Msg { return SettingsCancelledMsg{} })
 		}
 
-		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionTheme {
+		if s.mode == SettingsModePanel && isThemeSettingsSection(s.panelSection) {
 			if err := s.applyThemeFileActions(); err != nil {
 				s.done = false
-				s.panelStatus = "Theme install failed: " + err.Error()
+				s.panelStatus = "Theme update failed: " + err.Error()
 				s.saveButton = true
 				s.buildForm()
 				return s, tea.Batch(cmd, s.form.Init())
@@ -1676,7 +1701,7 @@ func cloneThemeOverrides(overrides map[string]config.ThemeOverride) map[string]c
 }
 
 func (s *Settings) applyThemeFileActions() error {
-	if path := strings.TrimSpace(s.themeInstallPath); path != "" {
+	if path := strings.TrimSpace(s.themeInstallPath); path != "" && (s.mode != SettingsModePanel || isThemeSelectionSection(s.panelSection)) {
 		expanded, err := config.ExpandPath(path)
 		if err != nil {
 			return err
@@ -1691,7 +1716,7 @@ func (s *Settings) applyThemeFileActions() error {
 		}
 		s.themeName = doc.Name
 	}
-	if slug := strings.TrimSpace(s.themeSaveAs); slug != "" {
+	if slug := strings.TrimSpace(s.themeSaveAs); slug != "" && (s.mode != SettingsModePanel || isThemeEditorSection(s.panelSection)) {
 		cfg := s.buildConfig()
 		doc := ThemeDocument{
 			Version:  1,

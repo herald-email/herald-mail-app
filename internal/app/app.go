@@ -1434,9 +1434,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
-		if prevSection == settingsPanelSectionTheme && m.settingsPanel.panelSection != settingsPanelSectionTheme {
+		if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
 			m.applyThemeConfig(m.cfg)
-		} else if m.settingsPanel.panelSection == settingsPanelSectionTheme {
+		} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
 			m.applyThemeConfig(m.settingsPanel.buildConfig())
 		}
 		if _, ok := msg.(tea.WindowSizeMsg); ok {

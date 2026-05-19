@@ -241,7 +241,7 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Theme", "Signature"} {
+	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Theme Selection", "Theme Editor", "Signature"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
 		}
@@ -347,9 +347,44 @@ func TestSettingsPanelKeyboardSelectingCustomShowsCustomKeymap(t *testing.T) {
 	}
 }
 
-func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
+func TestSettingsPanelThemeSelectionCategoryShowsPickerAndInstallOnly(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Selection")
+
+	var views []string
+	for i := 0; i < 4; i++ {
+		views = append(views, renderSettingsViewForTest(t, s, 100, 32))
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	rendered := strings.Join(views, "\n--- next field ---\n")
+
+	for _, want := range []string{
+		"Current Theme",
+		"Install local theme YAML",
+		"Save changes",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Theme Selection category to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{
+		"Theme Role",
+		"Foreground",
+		"Background",
+		"Foreground Picker",
+		"Background Picker",
+		"Live preview",
+		"Save As New Theme",
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected Theme Selection category to skip editor field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelThemeEditorCategoryShowsRoleEditorOnly(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
 
 	var views []string
 	for i := 0; i < 10; i++ {
@@ -359,8 +394,6 @@ func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
 	rendered := strings.Join(views, "\n--- next field ---\n")
 
 	for _, want := range []string{
-		"Current Theme",
-		"Install local theme YAML",
 		"Theme Role",
 		"Foreground",
 		"Background",
@@ -372,12 +405,12 @@ func TestSettingsPanelThemeCategoryShowsRoleEditor(t *testing.T) {
 		"Save As New Theme",
 	} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected Theme category to include %q, got:\n%s", want, rendered)
+			t.Fatalf("expected Theme Editor category to include %q, got:\n%s", want, rendered)
 		}
 	}
-	for _, notWant := range []string{"Account Type", "AI Provider", "Email Signature"} {
+	for _, notWant := range []string{"Current Theme", "Install local theme YAML", "Account Type", "AI Provider", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
-			t.Fatalf("expected Theme category to skip unrelated field %q, got:\n%s", notWant, rendered)
+			t.Fatalf("expected Theme Editor category to skip unrelated field %q, got:\n%s", notWant, rendered)
 		}
 	}
 }

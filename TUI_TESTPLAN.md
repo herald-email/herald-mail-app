@@ -928,7 +928,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. From Timeline, press `S` to open settings.
 2. Repeat from Compose, Cleanup, and Contacts to confirm the current screen remains visible behind the panel.
-3. At `220x50`, capture the settings menu, confirm it lists `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature`, then close it with `Esc`.
+3. At `220x50`, capture the settings menu, confirm it lists `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, then close it with `Esc`.
 4. At `80x24`, reopen settings and confirm the modal footer says `enter open` and `esc exit`, while the bottom hint bar says `enter: open category`, `/: filter`, and `esc: exit settings`.
 5. Reopen settings, enter `Signature`, edit the multiline field, save, and confirm the menu returns without requiring account or AI fields.
 6. Reopen settings, enter `Signature`, press `Esc`, and confirm Settings returns to the top-level menu before a second `Esc` exits.
@@ -947,22 +947,22 @@ Check these states during every applicable lane:
 - Returning from `50x15` to `80x24` restores the settings modal over the current screen without stale or clipped content.
 - `Esc` exits or clears an active settings-menu filter before it exits Settings; from a category, `Esc` returns to the top-level menu without saving unsaved edits, and the next menu-level `Esc` exits Settings.
 - First-run setup remains a linear fullscreen wizard and does not show the top-level settings menu.
-- First-run setup's Theme step shows only the current theme picker with all available themes; local YAML install, semantic theme roles, foreground/background fields, live preview, reset controls, and save-as-new-theme stay exclusive to the in-app Theme settings category.
+- First-run setup's Theme step shows only the current theme picker with all available themes; local YAML install stays exclusive to in-app Theme Selection, while semantic theme roles, foreground/background fields, live preview, reset controls, and save-as-new-theme stay exclusive to in-app Theme Editor.
 
-### TC-24A — Theme settings and custom theme editing
+### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
-2. Press `S`, open `Theme`, and capture the Theme category.
+2. Press `S`, open `Theme Selection`, and capture the Theme Selection category.
 3. Switch between `Inherited`, `Herald dark`, `Herald light`, `Jade Signal`, `Amber Furnace`, `Solar Paper`, and `Tokyo Dusk`; save each and confirm the visible chrome changes without leaving Settings.
 4. Launch `/tmp/herald --demo -theme jade-signal` and `/tmp/herald --demo -theme <valid-theme-file.yaml>`; confirm both start in the requested theme without writing config.
-5. Enter a valid local theme YAML path, save, reopen Theme, and confirm the installed theme appears in the selector.
-6. Edit one semantic role foreground with a hex value and one background with an `xterm:N` value, then use the foreground/background color pickers to try an xterm-grid value and an RGB value with instant preview, observe swatches/live preview, save as a new theme, then reopen Theme.
+5. In `Theme Selection`, enter a valid local theme YAML path, save, reopen Theme Selection, and confirm the installed theme appears in the selector.
+6. Open `Theme Editor`, edit one semantic role foreground with a hex value and one background with an `xterm:N` value, then use the foreground/background color pickers to try an xterm-grid value and an RGB value with instant preview, observe swatches/live preview, save as a new theme, then reopen Theme Editor.
 7. Repeat with an invalid install path and invalid `-theme` value and confirm the bounded error stays inside Settings or fails launch loudly for the explicit CLI override.
-8. Resize to `50x15` while Theme is open, then resize back to `80x24`.
+8. Resize to `50x15` while Theme Selection is open, repeat while Theme Editor is open, then resize back to `80x24`.
 
 **Expect:**
 - Missing or inherited config keeps terminal-default foreground/background behavior.
@@ -971,7 +971,7 @@ Check these states during every applicable lane:
 - Theme role text fields preserve literal `#`, `:`, digits, and letters; no browse shortcut fires while editing theme values.
 - Theme color pickers update the same foreground/background values immediately: `/` from a manual color field opens that field's picker, xterm-grid moves emit `xterm:N`, RGB edits emit `#RRGGBB`, `m` switches picker mode, `i` restores `inherit`, and the selected swatch is marked with a contrasting in-cell marker without leaking ANSI text.
 - Invalid installed themes and invalid install paths do not crash, overwrite config, or close Settings.
-- At `50x15`, the standard minimum-size guard appears; returning to `80x24` restores the Theme modal.
+- At `50x15`, the standard minimum-size guard appears; returning to `80x24` restores the Theme Selection or Theme Editor modal.
 
 ### TC-19 — Multi-attachment navigation and save
 

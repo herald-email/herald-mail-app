@@ -309,7 +309,7 @@ func TestBuildConfigThemeResetControls(t *testing.T) {
 
 func TestSettingsThemeInvalidInstallPathReturnsError(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Selection")
 	s.themeInstallPath = "/tmp/herald-theme-does-not-exist.yaml"
 
 	if err := s.applyThemeFileActions(); err == nil {
@@ -319,8 +319,8 @@ func TestSettingsThemeInvalidInstallPathReturnsError(t *testing.T) {
 
 func TestSettingsThemeTextFieldsKeepLiteralShortcutCharacters(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
-	for i := 0; i < 3; i++ {
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
+	for i := 0; i < 1; i++ {
 		s = updateSettingsForTest(t, s, huh.NextField())
 	}
 
@@ -366,8 +366,8 @@ func TestThemeColorPickerCanSetInherit(t *testing.T) {
 
 func TestSettingsThemeColorPickerUpdatesThroughForm(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
-	for i := 0; i < 4; i++ {
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
+	for i := 0; i < 2; i++ {
 		s = updateSettingsForTest(t, s, huh.NextField())
 	}
 	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyRight})
@@ -379,8 +379,8 @@ func TestSettingsThemeColorPickerUpdatesThroughForm(t *testing.T) {
 
 func TestSettingsThemeColorPickerModeUpdatesThroughForm(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
-	for i := 0; i < 4; i++ {
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
+	for i := 0; i < 2; i++ {
 		s = updateSettingsForTest(t, s, huh.NextField())
 	}
 	s = updateSettingsForTest(t, s, keyRunes("m"))
@@ -395,8 +395,8 @@ func TestSettingsThemeColorPickerModeUpdatesThroughForm(t *testing.T) {
 
 func TestSettingsThemeManualSlashFocusesPicker(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
-	for i := 0; i < 3; i++ {
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
+	for i := 0; i < 1; i++ {
 		s = updateSettingsForTest(t, s, huh.NextField())
 	}
 	s = updateSettingsForTest(t, s, keyRunes("/"))
@@ -411,8 +411,8 @@ func TestSettingsThemeManualSlashFocusesPicker(t *testing.T) {
 
 func TestSettingsThemeFocusedPickerKeepsNeighborFieldsVisible(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s = openSettingsPanelCategoryForTest(t, s, "Theme")
-	for i := 0; i < 4; i++ {
+	s = openSettingsPanelCategoryForTest(t, s, "Theme Editor")
+	for i := 0; i < 2; i++ {
 		s = updateSettingsForTest(t, s, huh.NextField())
 	}
 
@@ -973,12 +973,13 @@ func settingsMessagesContainCancel(messages []tea.Msg) bool {
 func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *Settings {
 	t.Helper()
 	steps := map[string]int{
-		"Account setup":  0,
-		"AI":             1,
-		"Sync & Cleanup": 2,
-		"Keyboard":       3,
-		"Theme":          4,
-		"Signature":      5,
+		"Account setup":   0,
+		"AI":              1,
+		"Sync & Cleanup":  2,
+		"Keyboard":        3,
+		"Theme Selection": 4,
+		"Theme Editor":    5,
+		"Signature":       6,
 	}
 	downCount, ok := steps[label]
 	if !ok {

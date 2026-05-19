@@ -754,18 +754,18 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
 - [x] AI setup defaults to small-machine-friendly local models (`llama3.2:1b` and `nomic-embed-text`) and custom Ollama setup offers curated chat and embedding model choices plus freeform model names
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
-- [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install and semantic role editing stay in the in-app Theme settings category
+- [x] Theme step shows a current-theme picker for inherited, built-in, and installed themes; local YAML install stays in Theme Selection and semantic role editing stays in Theme Editor
 - [x] Advanced Sync & Cleanup preferences such as poll interval, IMAP IDLE, reclaim, and auto-cleanup stay out of first-run onboarding and remain available in in-app Settings
 - [x] Final save writes `~/.herald/conf.yaml` only after the account connection gate has passed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
-- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature` so users can change one settings area without stepping through unrelated fields
+- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] AI settings expose curated Ollama chat and embedding model recommendations, including small 8GB-safe defaults and freeform custom model names
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact
-- [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
+- [x] Theme Selection switches between inherited, Herald dark, Herald light, and installed YAML themes and installs local YAML files; Theme Editor edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Account setup saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
