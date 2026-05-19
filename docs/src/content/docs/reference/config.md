@@ -121,18 +121,23 @@ roles:
     fg: "#55c2ff"
 ```
 
+Use the [Jade Signal baseline YAML](/examples/themes/jade-signal-baseline.yaml) as a complete starter file when building your own theme. It uses `name: my-jade-signal` so it can be installed as a local theme without colliding with Herald's built-in `jade-signal`.
+
 Use `-theme` to launch a built-in theme or theme file for one session without changing the config:
 
 ```sh
 ./bin/herald --demo -theme jade-signal
+./bin/herald --demo -theme ./jade-signal-baseline.yaml
 ./bin/herald -theme ./quiet-slate.yaml
 ```
+
+To install a local file from the TUI, open Settings with `S`, choose `Theme`, and enter the YAML path in `Install local theme YAML`. After installation, set `theme.name` to the file's slug, for example `my-jade-signal`.
 
 ## Related Pages
 
 - [First-run Wizard](/first-run-wizard/)
 - [Settings](/features/settings/)
-- [Themes](/features/themes/)
+- [Themes](/themes/)
 - [Provider Setup](/provider-setup/)
 - [Daemon Commands](/advanced/daemon/)
 - [Privacy and Security](/security-privacy/)

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="${HERALD_BIN:-$ROOT/bin/herald}"
-VIEW="${HERALD_THEME_SCREENSHOT_VIEW:-timeline}"
+VIEW="${HERALD_THEME_SCREENSHOT_VIEW:-both}"
 WIDTH="${HERALD_THEME_SCREENSHOT_COLS:-140}"
 HEIGHT="${HERALD_THEME_SCREENSHOT_ROWS:-42}"
 CANVAS="${HERALD_THEME_SCREENSHOT_CANVAS:-1320x900}"
@@ -11,19 +11,52 @@ DELAY="${HERALD_THEME_SCREENSHOT_DELAY:-5}"
 CHROME="${HERALD_THEME_SCREENSHOT_CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 
 case "$VIEW" in
-  timeline)
-    DEFAULT_OUT_DIR="$ROOT/docs/public/screenshots/themes"
-    ;;
-  preview)
-    DEFAULT_OUT_DIR="$ROOT/docs/public/screenshots/themes/preview"
+  timeline|preview|both)
     ;;
   *)
-    echo "error: HERALD_THEME_SCREENSHOT_VIEW must be 'timeline' or 'preview' (got '$VIEW')" >&2
+    echo "error: HERALD_THEME_SCREENSHOT_VIEW must be 'timeline', 'preview', or 'both' (got '$VIEW')" >&2
     exit 1
     ;;
 esac
 
-OUT_DIR="${HERALD_THEME_SCREENSHOT_DIR:-$DEFAULT_OUT_DIR}"
+capture_views() {
+  case "$VIEW" in
+    timeline)
+      printf '%s\n' "timeline"
+      ;;
+    preview)
+      printf '%s\n' "preview"
+      ;;
+    both)
+      printf '%s\n' "timeline" "preview"
+      ;;
+  esac
+}
+
+out_dir_for_view() {
+  local view="$1"
+  local default_out_dir
+
+  if [[ -n "${HERALD_THEME_SCREENSHOT_DIR:-}" ]]; then
+    if [[ "$VIEW" == "both" && "$view" == "preview" ]]; then
+      printf '%s\n' "$HERALD_THEME_SCREENSHOT_DIR/preview"
+    else
+      printf '%s\n' "$HERALD_THEME_SCREENSHOT_DIR"
+    fi
+    return 0
+  fi
+
+  case "$view" in
+    timeline)
+      default_out_dir="$ROOT/docs/public/screenshots/themes"
+      ;;
+    preview)
+      default_out_dir="$ROOT/docs/public/screenshots/themes/preview"
+      ;;
+  esac
+
+  printf '%s\n' "$default_out_dir"
+}
 
 THEMES=(
   red-black
@@ -81,8 +114,6 @@ if [[ ! -x "$CHROME" ]]; then
   exit 1
 fi
 
-mkdir -p "$OUT_DIR"
-
 capture_tmux_png() {
   local session="$1"
   local output="$2"
@@ -92,7 +123,6 @@ capture_tmux_png() {
   tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/herald-theme-shot.XXXXXX")"
   ansi_file="$tmpdir/capture.ansi"
   html_file="$tmpdir/capture.html"
-  trap 'rm -rf "$tmpdir"' RETURN
 
   tmux capture-pane -t "$session" -p -e > "$ansi_file"
   {
@@ -124,7 +154,12 @@ HTMLEOF
     --headless --disable-gpu \
     "--screenshot=$output" \
     "--window-size=${canvas/x/,}" \
-    "file://$html_file" >/dev/null 2>&1
+    "file://$html_file" >/dev/null 2>&1 || {
+      local status=$?
+      rm -rf "$tmpdir"
+      return "$status"
+    }
+  rm -rf "$tmpdir"
 }
 
 pane_contains() {
@@ -147,8 +182,29 @@ wait_for_pane_text() {
   return 1
 }
 
-for theme in "${THEMES[@]}"; do
-  session="herald-theme-${theme//[^a-zA-Z0-9]/-}"
+open_preview() {
+  local session="$1"
+
+  tmux send-keys -t "$session" Enter
+  sleep 1
+  if ! pane_contains "$session" "From:"; then
+    tmux send-keys -t "$session" "l"
+    sleep 1
+  fi
+  if ! wait_for_pane_text "$session" "From:" "$DELAY"; then
+    echo "error: preview did not open in tmux session $session" >&2
+    tmux capture-pane -t "$session" -p >&2 || true
+    return 1
+  fi
+}
+
+capture_theme_view() {
+  local theme="$1"
+  local view="$2"
+  local out_dir="$3"
+  local session launch_cmd
+
+  session="herald-theme-${view}-${theme//[^a-zA-Z0-9]/-}"
   tmux kill-session -t "$session" 2>/dev/null || true
   launch_cmd="$(printf "%q --demo -theme %q" "$BIN" "$theme")"
   tmux new-session -d -s "$session" -x "$WIDTH" -y "$HEIGHT" "$launch_cmd"
@@ -161,13 +217,20 @@ for theme in "${THEMES[@]}"; do
   fi
   tmux send-keys -t "$session" "1"
   sleep 0.6
-  if [[ "$VIEW" == "preview" ]]; then
-    tmux send-keys -t "$session" "l"
-    sleep 1
+  if [[ "$view" == "preview" ]]; then
+    open_preview "$session"
   fi
 
-  tmux capture-pane -t "$session" -p -e > "$OUT_DIR/$theme.ansi.txt"
-  capture_tmux_png "$session" "$OUT_DIR/$theme.png" "$CANVAS"
+  tmux capture-pane -t "$session" -p -e > "$out_dir/$theme.ansi.txt"
+  capture_tmux_png "$session" "$out_dir/$theme.png" "$CANVAS"
   tmux kill-session -t "$session" 2>/dev/null || true
-  echo "wrote $OUT_DIR/$theme.png"
+  echo "wrote $out_dir/$theme.png"
+}
+
+for theme in "${THEMES[@]}"; do
+  while IFS= read -r view; do
+    out_dir="$(out_dir_for_view "$view")"
+    mkdir -p "$out_dir"
+    capture_theme_view "$theme" "$view" "$out_dir"
+  done < <(capture_views)
 done

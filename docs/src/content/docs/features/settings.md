@@ -156,6 +156,6 @@ Use `./bin/herald --demo -theme jade-signal` to preview a theme for one session 
 - [First-run Wizard](/first-run-wizard/)
 - [Provider Setup](/provider-setup/)
 - [AI Features](/features/ai/)
-- [Themes](/features/themes/)
+- [Themes](/themes/)
 - [Sync and Status](/features/sync-status/)
 - [Config Reference](/reference/config/)

@@ -966,7 +966,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Missing or inherited config keeps terminal-default foreground/background behavior.
 - `Herald dark`, `Herald light`, and the diverse built-in themes visibly differ while preserving readable focused panel, status bar, hint bar, selection contrast, and full-screen background contrast.
-- `scripts/regenerate-theme-screenshots.sh` refreshes docs theme screenshots from `--demo -theme <name>` launches; `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh` captures the open preview state, and both PNG sets are visually inspected rather than assumed good.
+- `scripts/regenerate-theme-screenshots.sh` refreshes both Timeline and Preview docs theme screenshots from `--demo -theme <name>` launches; `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh` remains available for a preview-only refresh, and both PNG sets are visually inspected rather than assumed good.
 - Theme role text fields preserve literal `#`, `:`, digits, and letters; no browse shortcut fires while editing theme values.
 - Theme color pickers update the same foreground/background values immediately: `/` from a manual color field opens that field's picker, xterm-grid moves emit `xterm:N`, RGB edits emit `#RRGGBB`, `m` switches picker mode, `i` restores `inherit`, and the selected swatch is marked with a contrasting in-cell marker without leaking ANSI text.
 - Invalid installed themes and invalid install paths do not crash, overwrite config, or close Settings.
@@ -1673,14 +1673,14 @@ Check these states during every applicable lane:
 3. Confirm Compose text, Timeline search text, and rule/prompt editor text do not appear in the key overlay.
 4. Run the focused media set with `HERALD_DOC_MEDIA_ONLY=showcase-settings-dark-pastel,showcase-help-dark-pastel,showcase-cleanup-manager-red-alert,showcase-cleanup-rule-editor-red-alert,showcase-range-selection-pastel-dark,showcase-large-preview-pastel-dark demos/generate-doc-media.sh`.
 5. Run `vhs demos/guided-tour-dark-pastel.tape` and `vhs demos/cleanup-rules-red-alert.tape`.
-6. Run `scripts/regenerate-theme-screenshots.sh jade-signal amber-furnace solar-paper tokyo-dusk` and `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh jade-signal amber-furnace solar-paper tokyo-dusk` after visual theme changes and inspect the generated PNGs before publishing docs.
+6. Run `scripts/regenerate-theme-screenshots.sh jade-signal amber-furnace solar-paper tokyo-dusk` after visual theme changes; use `HERALD_THEME_SCREENSHOT_VIEW=timeline` or `HERALD_THEME_SCREENSHOT_VIEW=preview` only when refreshing one gallery lane, then inspect the generated PNGs before publishing docs.
 
 **Expect:**
 - The overlay is opt-in and appears only when demo media explicitly requests `--demo-keys`.
 - Key labels are compact and normalized, including `S`, `?`, `/`, `2`, `c`, `Shift+Down`, `Right`, `Left`, and `z`.
 - Text-entry surfaces preserve literal text and do not leak draft/search/editor contents into the overlay.
 - The selected screenshots render with `Dark Pastel`, `Red Alert`, and `Builtin Pastel Dark`; the two GIFs render at high resolution without replacing every existing docs asset.
-- Theme gallery screenshots render through Herald's own `-theme` flag and show readable Timeline chrome for each refreshed palette.
+- Theme gallery screenshots render through Herald's own `-theme` flag and show readable Timeline and Preview chrome for each refreshed palette.
 - Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `c` to open Compose.
 
 ### TC-52 — Preview load telemetry and offline cache policy

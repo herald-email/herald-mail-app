@@ -116,6 +116,21 @@ roles:
 	}
 }
 
+func TestDocsJadeSignalBaselineThemeIsInstallable(t *testing.T) {
+	path := filepath.Join("..", "..", "docs", "public", "examples", "themes", "jade-signal-baseline.yaml")
+
+	doc, err := LoadThemeFromFile(path)
+	if err != nil {
+		t.Fatalf("LoadThemeFromFile(%s) returned error: %v", path, err)
+	}
+	if doc.Name != "my-jade-signal" {
+		t.Fatalf("theme name = %q, want my-jade-signal", doc.Name)
+	}
+	if isBuiltInThemeName(doc.Name) {
+		t.Fatalf("sample theme slug %q must not be reserved", doc.Name)
+	}
+}
+
 func TestSelectedBuiltInThemeRenderScreenPadsBackground(t *testing.T) {
 	theme := ThemeByName("solar-paper")
 

@@ -18,6 +18,9 @@ email_cache.db*
 proton.yaml
 config.yaml
 *.yaml
+!docs/public/examples/
+!docs/public/examples/themes/
+!docs/public/examples/themes/*.yaml
 .herald-release.env
 .ssh
 

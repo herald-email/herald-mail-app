@@ -41,11 +41,12 @@ scripts/regenerate-theme-screenshots.sh
 - For inline image demos, use the Creative Commons sampler fixture and force `-image-protocol=kitty`; reject captures that show raw protocol text or hide the image area.
 - If the installed VHS/ttyd stack cannot render Kitty or iTerm2 raster blocks, keep the tape as key-flow coverage and record native Ghostty/Kitty evidence separately instead of committing a blank raster capture. Default `make docs-media` skips raster image-preview media; set `HERALD_DOC_MEDIA_INCLUDE_RASTER=1` only after confirming the local capture stack paints the embedded image.
 - After changing a visible feature, regenerate the relevant tape.
-- After changing theme roles, Timeline chrome, or preview header/body colors, run `scripts/regenerate-theme-screenshots.sh` and `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh`, then visually inspect the refreshed gallery images.
+- After changing theme roles, Timeline chrome, or preview header/body colors, run `scripts/regenerate-theme-screenshots.sh`; use `HERALD_THEME_SCREENSHOT_VIEW=timeline` or `HERALD_THEME_SCREENSHOT_VIEW=preview` only when refreshing a single gallery lane.
 
 ## Related Pages
 
 - [Demo Mode](/demo-mode/)
-- [Themes](/features/themes/)
+- [Themes](/themes/)
+- [Regenerate Screenshots](/development/regenerate-screenshots/)
 - [Global UI](/using-herald/global-ui/)
 - [Timeline](/using-herald/timeline/)

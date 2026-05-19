@@ -1,0 +1,85 @@
+version: 1
+name: my-jade-signal
+display_name: My Jade Signal
+inherits: herald-dark
+roles:
+  text.primary:
+    fg: "#def7e8"
+  text.muted:
+    fg: "#87baa0"
+  text.dim:
+    fg: "#577865"
+  chrome.title_bar:
+    fg: "#35e89b"
+    bg: "#0b2017"
+    bold: true
+  chrome.tab_active:
+    fg: "#00140c"
+    bg: "#35e89b"
+    bold: true
+  chrome.tab_inactive:
+    fg: "#87baa0"
+  chrome.status_bar:
+    fg: "#def7e8"
+    bg: "#03110b"
+  chrome.hint_bar:
+    fg: "#87baa0"
+    bg: "#0b2017"
+  chrome.table_header:
+    fg: "#35e89b"
+    bg: "#0b2017"
+    bold: true
+  focus.panel_border:
+    fg: "#244b39"
+  focus.panel_border_focused:
+    fg: "#50fa7b"
+  focus.selection_active:
+    fg: "#00140c"
+    bg: "#35e89b"
+    bold: true
+  focus.selection_inactive:
+    fg: "#def7e8"
+    bg: "#0b2017"
+    underline: true
+  focus.visual_selection:
+    fg: "#00140c"
+    bg: "#35e89b"
+  metadata.label:
+    fg: "#87baa0"
+  metadata.sender:
+    fg: "#50fa7b"
+    bold: true
+  metadata.date:
+    fg: "#87baa0"
+  metadata.subject:
+    fg: "#c7f59b"
+    bold: true
+  metadata.tag:
+    fg: "#5ccfe6"
+    bold: true
+  severity.info:
+    fg: "#50fa7b"
+  severity.success:
+    fg: "#50fa7b"
+  severity.warning:
+    fg: "#f1fa8c"
+  severity.error:
+    fg: "#ff6e6e"
+  severity.destructive:
+    fg: "#fff5f5"
+    bg: "#9b1c31"
+    bold: true
+  compose.accent:
+    fg: "#50fa7b"
+  compose.attachment:
+    fg: "#5ccfe6"
+  contacts.keyword_search:
+    fg: "#50fa7b"
+  contacts.company:
+    fg: "#87baa0"
+  rules.title:
+    fg: "#35e89b"
+    bold: true
+  rules.selected:
+    fg: "#00140c"
+    bg: "#35e89b"

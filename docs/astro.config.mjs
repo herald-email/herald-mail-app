@@ -11,6 +11,7 @@ export default defineConfig({
       title: 'Herald Docs',
       description: 'User and integration documentation for Herald, the terminal email client for power users.',
       favicon: '/favicon.ico',
+      customCss: ['/src/styles/theme-gallery.css'],
       head: [
         {
           tag: 'link',
@@ -36,6 +37,13 @@ export default defineConfig({
             rel: 'apple-touch-icon',
             sizes: '180x180',
             href: '/apple-touch-icon.png',
+          },
+        },
+        {
+          tag: 'script',
+          attrs: {
+            src: '/scripts/theme-gallery.js',
+            defer: true,
           },
         },
       ],
@@ -79,7 +87,7 @@ export default defineConfig({
             { label: 'Attachments', slug: 'features/attachments' },
             { label: 'Text Selection', slug: 'features/text-selection' },
             { label: 'Settings', slug: 'features/settings' },
-            { label: 'Themes', slug: 'features/themes' },
+            { label: 'Themes', slug: 'themes' },
             { label: 'Sync and Status', slug: 'features/sync-status' },
             { label: 'Destructive Actions', slug: 'features/destructive-actions' },
           ],
@@ -102,6 +110,12 @@ export default defineConfig({
             { label: 'FAQ', slug: 'faq' },
             { label: 'Troubleshooting', slug: 'troubleshooting' },
             { label: 'Uninstall', slug: 'uninstall' },
+          ],
+        },
+        {
+          label: 'Development',
+          items: [
+            { label: 'Regenerate Screenshots', slug: 'development/regenerate-screenshots' },
           ],
         },
       ],

@@ -42,7 +42,7 @@ Theme screenshots for the docs gallery can be refreshed with:
 
 ```bash
 scripts/regenerate-theme-screenshots.sh
-HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh
+HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh jade-signal
 ```
 
 ---

@@ -56,10 +56,10 @@ Theme gallery screenshots use a separate tmux flow:
 
 ```sh
 scripts/regenerate-theme-screenshots.sh
-HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh
+HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh jade-signal
 ```
 
-See [Demo GIF Workflow](/advanced/demo-gifs/) for the full recording flow.
+See [Regenerate Screenshots](/development/regenerate-screenshots/) and [Demo GIF Workflow](/advanced/demo-gifs/) for the full recording flow.
 
 ## What demo mode is not
 
