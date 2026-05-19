@@ -7,7 +7,7 @@ Herald talks to mail providers through IMAP for reading and SMTP for sending. Pr
 
 ## Overview
 
-Choose the narrowest supported path that matches your account. Gmail users should use Gmail IMAP with an App Password unless they explicitly opt into experimental OAuth with `-experimental`. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset.
+Choose the narrowest supported path that matches your account. Gmail users should use Gmail IMAP with an App Password unless they explicitly opt into experimental OAuth with `-experimental`. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates both IMAP and SMTP immediately after account details; in-app account settings validate before saving or applying account changes.
 
 ## Provider Matrix
 
@@ -29,7 +29,8 @@ Choose the narrowest supported path that matches your account. Gmail users shoul
 2. Run `herald -experimental`.
 3. Choose `Gmail OAuth (Experimental)`.
 4. Complete browser authorization and return to Herald.
-5. Save the generated config and let Herald sync.
+5. Wait for Herald to validate Gmail IMAP and SMTP XOAUTH2 before it continues to optional preferences.
+6. Save the generated config and let Herald sync.
 
 ### Gmail with an App Password
 
@@ -38,7 +39,8 @@ Choose the narrowest supported path that matches your account. Gmail users shoul
 3. Run `herald` or `./bin/herald`.
 4. Choose `Gmail (IMAP + App Password)`.
 5. Enter the Gmail address and App Password.
-6. Save the generated config and let Herald sync.
+6. Wait for Herald to validate Gmail IMAP and SMTP.
+7. Save the generated config and let Herald sync.
 
 ### Proton Mail Bridge
 
@@ -60,7 +62,7 @@ Provider credentials live in the Herald config file. Herald opens an IMAP connec
 
 ## Troubleshooting
 
-If IMAP works but send fails, the SMTP section is wrong or the provider requires a separate app password. If the mailbox stays empty, verify the selected folder and check [Sync and Status](/features/sync-status/).
+If setup validation fails, fix the IMAP or SMTP section named in the error and try saving again. If an already configured mailbox later stays empty, verify the selected folder and check [Sync and Status](/features/sync-status/).
 
 ## Related Pages
 

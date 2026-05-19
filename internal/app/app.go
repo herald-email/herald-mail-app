@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cleanup"
@@ -362,6 +363,28 @@ type AISubjectMsg struct {
 	Err     error
 }
 
+// AccountValidationMsg carries setup/account-settings connection validation.
+type AccountValidationMsg struct {
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	Result                     accountcheck.Result
+}
+
+type accountValidationState struct {
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	Checking                   bool
+	Message                    string
+}
+
+var validateAccountConfig = accountcheck.Validate
+
+var newValidatedLocalBackend = func(cfg *config.Config, configPath string, classifier ai.AIClient) (backend.Backend, error) {
+	return backend.NewLocal(cfg, configPath, classifier)
+}
+
 // Model represents the main application state
 type Model struct {
 	backend      backend.Backend
@@ -609,6 +632,9 @@ type Model struct {
 	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
 	oauthWait *OAuthWaitModel
 
+	// Account validation overlay used when saving first-class mail account settings.
+	accountValidation *accountValidationState
+
 	// Local inline-image preview links. Disabled for SSH sessions, where
 	// localhost would point at the server instead of the user's browser.
 	localImageLinks   bool
@@ -847,6 +873,152 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyThemeConfig(cfg)
 }
 
+func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+	return func() tea.Msg {
+		result := validateAccountConfig(context.Background(), cfg, configPath)
+		return AccountValidationMsg{
+			Config:                     cfg,
+			ReturnToMenu:               returnToMenu,
+			ReclaimOfflineCacheStorage: reclaimOfflineCache,
+			Result:                     result,
+		}
+	}
+}
+
+func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+	m.showSettings = false
+	m.settingsPanel = nil
+	m.oauthWait = nil
+	m.accountValidation = &accountValidationState{
+		Config:                     cfg,
+		ReturnToMenu:               returnToMenu,
+		ReclaimOfflineCacheStorage: reclaimOfflineCache,
+		Checking:                   true,
+		Message:                    "Checking IMAP and SMTP before saving account settings...",
+	}
+	m.statusMessage = "Validating account settings..."
+	logger.Info("Validating account settings before applying config")
+	return validateAccountSettingsCmd(cfg, m.configPath, returnToMenu, reclaimOfflineCache)
+}
+
+func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
+	if m.accountValidation == nil {
+		m.accountValidation = &accountValidationState{}
+	}
+	m.accountValidation.Checking = false
+	m.accountValidation.Config = msg.Config
+	m.accountValidation.ReturnToMenu = msg.ReturnToMenu
+	m.accountValidation.ReclaimOfflineCacheStorage = msg.ReclaimOfflineCacheStorage
+	if err := msg.Result.Err(); err != nil {
+		m.accountValidation.Message = msg.Result.UserMessage(logger.Path(), m.configPath)
+		m.statusMessage = "Account settings were not saved."
+		logger.Error("Account settings validation failed: %v", err)
+		return nil
+	}
+	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+}
+
+func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu bool) tea.Cmd {
+	if cfg == nil {
+		m.accountValidation.Message = "Account validation finished without a config. Settings were not saved."
+		m.statusMessage = "Account settings were not saved."
+		return nil
+	}
+	nextBackend, err := newValidatedLocalBackend(cfg, m.configPath, m.classifier)
+	if err != nil {
+		m.accountValidation.Message = fmt.Sprintf("Account validated, but Herald could not prepare the mailbox backend: %v. Settings were not applied.", err)
+		m.statusMessage = "Account settings were not applied."
+		logger.Error("Validated account backend replacement failed: %v", err)
+		return nil
+	}
+	if m.configPath != "" {
+		if err := cfg.Save(m.configPath); err != nil {
+			_ = nextBackend.Close()
+			m.accountValidation.Message = fmt.Sprintf("Account validated, but config write failed: %v. Settings were not saved.", err)
+			m.statusMessage = "Account settings were not saved."
+			logger.Error("Account config save failed after validation: %v", err)
+			return nil
+		}
+	}
+
+	oldBackend := m.backend
+	m.backend = nextBackend
+	m.progressCh = nextBackend.Progress()
+	m.syncEventsCh = nextBackend.SyncEvents()
+	if oldBackend != nil && oldBackend != nextBackend {
+		go func() {
+			if err := oldBackend.Close(); err != nil {
+				logger.Warn("Failed to close previous backend after account switch: %v", err)
+			}
+		}()
+	}
+
+	m.SetConfig(cfg)
+	m.mailer = appsmtp.New(cfg)
+	m.fromAddress = accountEmailAddress(cfg)
+	m.resetMailboxStateForAccountSwitch()
+	m.accountValidation = nil
+	m.statusMessage = "Account settings validated and saved. Reconnecting..."
+
+	var cmds []tea.Cmd
+	if returnToMenu {
+		m.showSettings = true
+		m.settingsPanel = NewSettingsWithPath(SettingsModePanel, m.cfg, m.configPath)
+		m.settingsPanel.panelStatus = "Account settings validated and saved."
+		m.settingsPanel.buildForm()
+		m.settingsPanel.setSize(m.windowWidth, m.windowHeight)
+		cmds = append(cmds, m.settingsPanel.Init())
+	}
+	cmds = append(cmds, m.startLoading(), m.listenForSyncEvents(), m.tickSpinner())
+	return tea.Batch(cmds...)
+}
+
+func accountEmailAddress(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.IsGmailOAuth() && strings.TrimSpace(cfg.Gmail.Email) != "" {
+		return strings.TrimSpace(cfg.Gmail.Email)
+	}
+	if strings.TrimSpace(cfg.Credentials.Username) != "" {
+		return strings.TrimSpace(cfg.Credentials.Username)
+	}
+	return strings.TrimSpace(cfg.Gmail.Email)
+}
+
+func oauthStartFailureMessage(err error) string {
+	if err == nil {
+		return "OAuth could not start. Settings were not saved."
+	}
+	parts := []string{"OAuth could not start: " + err.Error() + ". Settings were not saved."}
+	if path := logger.Path(); path != "" {
+		parts = append(parts, "Debug log: "+path)
+	}
+	return strings.Join(parts, " ")
+}
+
+func (m *Model) resetMailboxStateForAccountSwitch() {
+	m.currentFolder = "INBOX"
+	m.folders = []string{"INBOX"}
+	m.folderTree = buildFolderTree(m.folders)
+	m.folderStatus = make(map[string]models.FolderStatus)
+	m.sidebarCursor = 0
+	m.focusedPanel = panelTimeline
+	m.clearCleanupData()
+	m.resetCleanupSelection()
+	m.timeline.emails = nil
+	m.timeline.emailsCache = nil
+	m.timeline.selectedEmail = nil
+	m.timeline.selectedMessageIDs = make(map[string]bool)
+	m.timeline.searchResults = nil
+	m.timeline.searchMode = false
+	m.timeline.searchError = ""
+	m.timeline.fullScreen = false
+	m.timelineTable.SetRows([]table.Row{})
+	m.timelineTable.SetCursor(0)
+	m.classifications = make(map[string]string)
+}
+
 func (m *Model) applyThemeConfig(cfg *config.Config) {
 	theme, warning := ResolveThemeForConfig(cfg, "")
 	m.themeWarn = warning
@@ -1014,7 +1186,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle settings panel messages before forwarding to the panel, so we can
 	// close it cleanly when it emits a completion message.
 	switch msg := msg.(type) {
+	case AccountValidationMsg:
+		return m, m.finishAccountValidation(msg)
+
 	case SettingsSavedMsg:
+		if msg.ValidateAccount {
+			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
+		}
 		previousEmbeddingModel := ""
 		previousCachePolicy := config.CacheStoragePolicyNoAttachments
 		if m.cfg != nil {
@@ -1165,22 +1343,35 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.settingsPanel = nil
 		oauthModel, err := NewOAuthWaitModel(msg.Email, msg.Config, m.configPath)
 		if err != nil {
-			m.statusMessage = fmt.Sprintf("Failed to start OAuth flow: %v", err)
+			m.accountValidation = &accountValidationState{
+				Checking: false,
+				Message:  oauthStartFailureMessage(err),
+			}
+			m.statusMessage = "OAuth could not start. Settings were not saved."
+			logger.Error("OAuth start failed: %v", err)
 			return m, nil
 		}
 		m.oauthWait = oauthModel
 		return m, m.oauthWait.Init()
 
 	case OAuthDoneMsg:
-		m.oauthWait = nil
-		m.cfg = msg.Config
-		m.statusMessage = "Gmail account authorized. Reconnecting…"
-		// TODO: trigger backend reconnect when reconnect API is available
-		return m, nil
+		return m, m.beginAccountValidation(msg.Config, true, false)
 
 	case OAuthErrorMsg:
 		m.oauthWait = nil
-		m.statusMessage = fmt.Sprintf("OAuth failed: %v", msg.Err)
+		message := msg.UserMessage
+		if message == "" && msg.Err != nil {
+			message = msg.Err.Error()
+		}
+		if message == "" {
+			message = "OAuth authorization failed. Settings were not saved."
+		}
+		m.accountValidation = &accountValidationState{
+			Checking: false,
+			Message:  message,
+		}
+		m.statusMessage = "OAuth authorization failed. Settings were not saved."
+		logger.Error("OAuth failed: %v", msg.Err)
 		return m, nil
 	}
 
@@ -1189,6 +1380,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd := m.oauthWait.Update(msg)
 		m.oauthWait = newModel.(*OAuthWaitModel)
 		return m, cmd
+	}
+
+	if m.accountValidation != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+			return m, tea.ClearScreen
+		}
+		if key, ok := msg.(tea.KeyPressMsg); ok && !m.accountValidation.Checking {
+			switch shortcutKey(key) {
+			case "enter", "esc", "q":
+				m.accountValidation = nil
+				return m, nil
+			}
+		}
+		return m, nil
 	}
 
 	if m.ruleDryRunPreview != nil {
@@ -2129,6 +2336,9 @@ func (m *Model) View() tea.View {
 	}
 	if m.windowHeight > 0 && m.windowHeight < minTermHeight {
 		return m.buildView(renderMinSizeMessage(m.windowWidth, m.windowHeight))
+	}
+	if m.accountValidation != nil {
+		return m.buildView(m.renderAccountValidationOverlayView())
 	}
 	if m.showSettings && m.settingsPanel != nil {
 		view := m.renderSettingsOverlayView()

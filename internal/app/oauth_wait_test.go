@@ -1,16 +1,21 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
+	"golang.org/x/oauth2"
 )
 
 // TestNewOAuthWaitModel_ReturnsValidModel verifies that NewOAuthWaitModel returns a
@@ -156,6 +161,104 @@ func TestOAuthWaitModel_EnterKeepsBrowserOpenFalseWhenOpenFails(t *testing.T) {
 
 	if updated.browserOpen {
 		t.Error("browserOpen should remain false when opening the browser fails")
+	}
+}
+
+func TestOAuthWaitModel_EscapeCancelsWithoutSaving(t *testing.T) {
+	cfg := &config.Config{}
+	path := filepath.Join(t.TempDir(), "conf.yaml")
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		configPath:  path,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		cancel:      func() {},
+	}
+
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if cmd == nil {
+		t.Fatal("expected cancel command")
+	}
+	updated := updatedModel.(*OAuthWaitModel)
+	if updated.err == nil || !strings.Contains(updated.err.Error(), "cancelled") {
+		t.Fatalf("expected cancellation error, got %v", updated.err)
+	}
+	msg, ok := cmd().(OAuthErrorMsg)
+	if !ok {
+		t.Fatalf("expected OAuthErrorMsg, got %T", cmd())
+	}
+	if !strings.Contains(msg.UserMessage, "not saved") {
+		t.Fatalf("expected not-saved user message, got %q", msg.UserMessage)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("OAuth cancel must not save config, stat err=%v", err)
+	}
+}
+
+func TestOAuthWaitModel_TimeoutExplainsGoogleContinuePath(t *testing.T) {
+	cfg := &config.Config{}
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		configPath:  filepath.Join(t.TempDir(), "conf.yaml"),
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		cancel:      func() {},
+	}
+
+	_, cmd := m.Update(oauthWaitTimeoutMsg{})
+	if cmd == nil {
+		t.Fatal("expected timeout command")
+	}
+	msg, ok := cmd().(OAuthErrorMsg)
+	if !ok {
+		t.Fatalf("expected OAuthErrorMsg, got %T", cmd())
+	}
+	if !strings.Contains(msg.UserMessage, "Continue") || !strings.Contains(msg.UserMessage, "Back to safety") {
+		t.Fatalf("timeout message should explain Google test-app buttons, got %q", msg.UserMessage)
+	}
+}
+
+func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
+	originalExchange := exchangeOAuthCodeFn
+	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+		return &oauth2.Token{
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+			Expiry:       time.Now().Add(time.Hour),
+		}, nil
+	}
+	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
+
+	cfg := &config.Config{}
+	path := filepath.Join(t.TempDir(), "conf.yaml")
+	m := &OAuthWaitModel{
+		email:       "test@gmail.com",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		configPath:  path,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	_, cmd := m.Update(oauthCodeReceivedMsg{result: oauth.Result{Code: "code"}})
+	if cmd == nil {
+		t.Fatal("expected OAuthDoneMsg command")
+	}
+	if _, ok := cmd().(OAuthDoneMsg); !ok {
+		t.Fatalf("expected OAuthDoneMsg, got %T", cmd())
+	}
+	if cfg.Gmail.RefreshToken != "refresh-token" {
+		t.Fatalf("expected token on candidate config, got %q", cfg.Gmail.RefreshToken)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("OAuth success must wait for parent validation before saving config, stat err=%v", err)
 	}
 }
 

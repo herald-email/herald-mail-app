@@ -14,6 +14,7 @@ var (
 	errorLogger *log.Logger
 	debugLogger *log.Logger
 	logFile     *os.File
+	logPath     string
 	debugMode   bool
 	logCallback func(level, message string)
 )
@@ -34,7 +35,7 @@ func Init(debug bool) error {
 		return fmt.Errorf("failed to create log directory %s: %w", logDir, err)
 	}
 
-	logPath := filepath.Join(logDir, filename)
+	logPath = filepath.Join(logDir, filename)
 
 	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
@@ -56,6 +57,11 @@ func Init(debug bool) error {
 	}
 
 	return nil
+}
+
+// Path returns the active log file path, when logging has been initialized.
+func Path() string {
+	return logPath
 }
 
 func defaultLogDir() (string, error) {

@@ -104,7 +104,7 @@ The Theme category is local-first. It switches built-in themes, installs validat
 3. Confirm you are using Homebrew/a release binary with OAuth defaults, or that your shell has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported.
 4. In the OAuth wait overlay, press `enter` to open the browser.
 5. Complete provider consent.
-6. Wait for Herald to save token data and return to the app.
+6. Wait for Herald to validate IMAP and SMTP. First-run setup then continues to optional preferences; in-app account settings save token data and return to the app after validation succeeds.
 
 ## States
 
@@ -114,9 +114,11 @@ The Theme category is local-first. It switches built-in themes, installs validat
 | Menu filter | `/` filters the category menu; `esc exit filter` leaves filter entry, `esc clear filter` clears applied text, and only the next `esc` closes Settings. |
 | Category mode | Settings shows only the selected category's fields plus save/cancel controls. `Esc` returns to the menu first; the next menu-level `Esc` exits. |
 | Overlay mode | Settings appears over the current screen at supported sizes; at `80x24` it fits inside the viewport, and at `50x15` the standard minimum-size guard appears instead of a clipped form. |
-| First-run mode | Settings/wizard completion is required before the main mailbox opens. |
-| OAuth waiting | Herald shows authorization URL state and waits for callback. |
-| OAuth saved | Token data is written to config. |
+| First-run mode | Account details are validated before optional preference steps, and wizard completion is required before the main mailbox opens. |
+| Account validation | Account settings are held in memory while Herald checks IMAP and SMTP before saving or applying them. |
+| OAuth waiting | Herald shows authorization URL state, waits for callback, and lets `Esc`/`q` cancel without saving settings. |
+| OAuth cancelled or timed out | Herald shows a clear error, keeps previous settings active, and does not write token data. |
+| OAuth saved | Token data is written to config only after OAuth, IMAP, SMTP validation, and final setup save succeed. |
 | AI model changed | Herald may reset embeddings so stale vectors do not mix with a new embedding model. |
 | Offline cache reclaim pending | Herald shows the current policy, before/after byte estimate, and note that preview text, headers, and attachment metadata stay cached before it accepts `y` to proceed. |
 | Offline cache reclaimed | Herald reports rows pruned, bytes removed, and whether SQLite compaction completed. |
@@ -125,13 +127,15 @@ The Theme category is local-first. It switches built-in themes, installs validat
 
 ## Data And Privacy
 
-Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, and cache path values. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
+Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, and cache path values. Account settings are validated before they replace the active account; failed validation leaves the previous config, backend, and SMTP client active. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
 
 ## Troubleshooting
 
 If settings will not save, check file permissions for the config path and parent directory.
 
-If OAuth does not complete, copy the displayed URL into a browser, finish consent, and confirm the callback server is reachable.
+If account validation fails, check the IMAP or SMTP section named in the error. Run `herald -debug` and open the latest file in `~/Library/Logs/Herald` on macOS, `${XDG_STATE_HOME:-~/.local/state}/herald/logs` on Linux/BSD, or `%LOCALAPPDATA%\\Herald\\Logs` on Windows.
+
+If OAuth does not complete, copy the displayed URL into a browser and finish consent. On Google's test-app warning page, choose `Continue`; `Back to safety` does not authorize Herald. If you choose `Cancel` on the consent screen, Herald reports that authorization was cancelled and does not save settings.
 
 If OAuth is missing from first-run onboarding, relaunch with `-experimental`. If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use Homebrew or another release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally with `make build-release-local`. A plain `make build` binary does not embed `.herald-release.env`.
 

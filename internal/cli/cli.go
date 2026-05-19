@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/app"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -39,19 +40,45 @@ const (
 	wizardStateOAuth
 )
 
+type wizardStep int
+
+const (
+	wizardStepAccount wizardStep = iota
+	wizardStepPreferences
+)
+
 // wizardModel is a thin tea.Model wrapper that drives the first-run setup wizard.
 type wizardModel struct {
-	settings   *app.Settings
-	oauthWait  *app.OAuthWaitModel
-	configPath string
-	state      wizardState
-	width      int
-	height     int
-	err        error
+	settings          *app.Settings
+	oauthWait         *app.OAuthWaitModel
+	configPath        string
+	experimental      bool
+	state             wizardState
+	step              wizardStep
+	width             int
+	height            int
+	err               error
+	pendingConfig     *config.Config
+	validating        bool
+	validationMessage string
 }
 
 func (m wizardModel) Init() tea.Cmd {
 	return m.settings.Init()
+}
+
+type wizardAccountValidationMsg struct {
+	Config *config.Config
+	Result accountcheck.Result
+}
+
+var validateWizardAccountConfig = accountcheck.Validate
+
+func validateWizardAccountCmd(cfg *config.Config, configPath string) tea.Cmd {
+	return func() tea.Msg {
+		result := validateWizardAccountConfig(context.Background(), cfg, configPath)
+		return wizardAccountValidationMsg{Config: cfg, Result: result}
+	}
 }
 
 func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -60,7 +87,62 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		// Fall through to delegate WindowSizeMsg to the active sub-model.
 
+	case wizardAccountValidationMsg:
+		m.validating = false
+		m.pendingConfig = msg.Config
+		if err := msg.Result.Err(); err != nil {
+			m.validationMessage = msg.Result.UserMessage(logger.Path(), m.configPath)
+			logger.Error("Setup account validation failed: %v", err)
+			return m, nil
+		}
+		if m.step == wizardStepAccount {
+			m.step = wizardStepPreferences
+			m.validationMessage = ""
+			m.settings = newWizardPreferencesSettings(msg.Config, m.configPath, m.experimental)
+			m.state = wizardStateSettings
+			logger.Info("Setup account validated; continuing to preference setup before saving config")
+			return m, m.settings.Init()
+		}
+		if err := msg.Config.Save(m.configPath); err != nil {
+			m.err = err
+		}
+		return m, tea.Quit
+	}
+
+	if m.validationMessage != "" {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			switch key.String() {
+			case "enter":
+				m.validationMessage = ""
+				if m.pendingConfig != nil {
+					m.settings = newWizardAccountSettings(m.pendingConfig, m.configPath, m.experimental)
+				}
+				m.step = wizardStepAccount
+				m.state = wizardStateSettings
+				return m, m.settings.Init()
+			case "esc", "q", "ctrl+c":
+				return m, tea.Quit
+			}
+		}
+		return m, nil
+	}
+
+	if m.validating {
+		return m, nil
+	}
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// Already recorded above; delegate below.
+
 	case app.SettingsSavedMsg:
+		if msg.ValidateAccount {
+			m.pendingConfig = msg.Config
+			m.validating = true
+			m.validationMessage = ""
+			logger.Info("Validating setup account before continuing")
+			return m, validateWizardAccountCmd(msg.Config, m.configPath)
+		}
 		if err := msg.Config.Save(m.configPath); err != nil {
 			m.err = err
 		}
@@ -77,19 +159,30 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		oauthModel, err := app.NewOAuthWaitModel(msg.Email, cfg, m.configPath)
 		if err != nil {
-			m.err = err
-			return m, tea.Quit
+			m.validationMessage = setupOAuthStartFailureMessage(err)
+			logger.Error("Setup OAuth start failed: %v", err)
+			return m, nil
 		}
 		m.oauthWait = oauthModel
 		m.state = wizardStateOAuth
 		return m, m.oauthWait.Init()
 
 	case app.OAuthDoneMsg:
-		return m, tea.Quit
+		m.pendingConfig = msg.Config
+		m.validating = true
+		m.validationMessage = ""
+		logger.Info("OAuth tokens received; validating setup account before continuing")
+		return m, validateWizardAccountCmd(msg.Config, m.configPath)
 
 	case app.OAuthErrorMsg:
-		m.err = msg.Err
-		return m, tea.Quit
+		m.oauthWait = nil
+		m.state = wizardStateSettings
+		m.validationMessage = msg.UserMessage
+		if m.validationMessage == "" && msg.Err != nil {
+			m.validationMessage = msg.Err.Error()
+		}
+		logger.Error("Setup OAuth failed: %v", msg.Err)
+		return m, nil
 	}
 
 	// Delegate to the active sub-model.
@@ -107,6 +200,20 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m wizardModel) View() tea.View {
+	if m.validating {
+		return newWizardView(renderWizardStatus(m.width, m.height,
+			"Validating account",
+			"Checking IMAP and SMTP before continuing. This can take a few seconds.",
+			"You will only continue to preferences after both checks pass.",
+		))
+	}
+	if m.validationMessage != "" {
+		return newWizardView(renderWizardStatus(m.width, m.height,
+			"Account setup failed",
+			m.validationMessage,
+			"Enter: return to setup  Esc/q: quit without saving",
+		))
+	}
 	switch m.state {
 	case wizardStateOAuth:
 		return m.oauthWait.View()
@@ -115,12 +222,48 @@ func (m wizardModel) View() tea.View {
 	}
 }
 
+func renderWizardStatus(width, height int, title, body, footer string) string {
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 24
+	}
+	content := strings.Join([]string{
+		title,
+		"",
+		body,
+		"",
+		footer,
+	}, "\n")
+	return "\n\n" + content
+}
+
+func setupOAuthStartFailureMessage(err error) string {
+	if err == nil {
+		return "OAuth could not start. Settings were not saved."
+	}
+	parts := []string{"OAuth could not start: " + err.Error() + ". Settings were not saved."}
+	if path := logger.Path(); path != "" {
+		parts = append(parts, "Debug log: "+path)
+	}
+	return strings.Join(parts, " ")
+}
+
+func newWizardView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.KeyboardEnhancements.ReportAlternateKeys = true
+	v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+	v.KeyboardEnhancements.ReportAssociatedText = true
+	v.KeyboardEnhancements.ReportEventTypes = true
+	return v
+}
+
 // runWizard runs the first-run setup wizard as a standalone Bubble Tea program.
 func runWizard(configPath string, experimental bool) error {
-	s := app.NewSettingsWithPathAndOptions(app.SettingsModeWizard, nil, configPath, app.SettingsOptions{
-		ShowExperimentalEmailServices: experimental,
-	})
-	wm := wizardModel{settings: s, configPath: configPath}
+	s := newWizardAccountSettings(nil, configPath, experimental)
+	wm := wizardModel{settings: s, configPath: configPath, experimental: experimental}
 	p := tea.NewProgram(wm, app.ProgramOptions()...)
 	finalModel, err := p.Run()
 	if err != nil {
@@ -130,6 +273,20 @@ func runWizard(configPath string, experimental bool) error {
 		return final.err
 	}
 	return nil
+}
+
+func newWizardAccountSettings(existing *config.Config, configPath string, experimental bool) *app.Settings {
+	return app.NewSettingsWithPathAndOptions(app.SettingsModeWizard, existing, configPath, app.SettingsOptions{
+		ShowExperimentalEmailServices: experimental,
+		FirstRunAccountOnly:           true,
+	})
+}
+
+func newWizardPreferencesSettings(existing *config.Config, configPath string, experimental bool) *app.Settings {
+	return app.NewSettingsWithPathAndOptions(app.SettingsModeWizard, existing, configPath, app.SettingsOptions{
+		ShowExperimentalEmailServices: experimental,
+		FirstRunPreferencesOnly:       true,
+	})
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
@@ -585,9 +742,21 @@ func runTUI() {
 		log.Fatalf("Failed to inspect config %s: %v", resolvedConfig, err)
 	}
 
+	// Initialize logging before first-run setup so OAuth and validation failures
+	// have a user-shareable log path even when no config has been saved yet.
+	if err := logger.Init(*opts.debug || *opts.verbose); err != nil {
+		log.Fatalf("Failed to initialize logging: %v", err)
+	}
+	defer logger.Close()
+
+	logger.Info("Starting Herald...")
+	logger.Debug("Debug mode enabled")
+
 	// First-run: if config doesn't exist or is empty, launch the setup wizard.
 	if needsOnboarding {
+		logger.Info("Launching first-run setup wizard")
 		if err := runWizard(resolvedConfig, *opts.experimental); err != nil {
+			logger.Error("Setup wizard failed: %v", err)
 			log.Fatalf("setup wizard failed: %v", err)
 		}
 		// Wizard exited — verify config was actually written (user may have cancelled).
@@ -600,15 +769,6 @@ func runTUI() {
 			os.Exit(0)
 		}
 	}
-
-	// Initialize logging
-	if err := logger.Init(*opts.debug || *opts.verbose); err != nil {
-		log.Fatalf("Failed to initialize logging: %v", err)
-	}
-	defer logger.Close()
-
-	logger.Info("Starting Herald...")
-	logger.Debug("Debug mode enabled")
 
 	// Load configuration
 	cfg, err := config.Load(resolvedConfig)
@@ -705,7 +865,7 @@ func runTUI() {
 	mailer := appsmtp.New(cfg)
 
 	// Create the TUI application
-	model := app.New(b, mailer, cfg.Credentials.Username, classifier, *opts.dryRun)
+	model := app.New(b, mailer, configuredEmailAddress(cfg), classifier, *opts.dryRun)
 	model.SetPreviewImageMode(imageMode)
 	model.SetConfigPath(resolvedConfig)
 	model.SetConfig(cfg)
@@ -733,6 +893,19 @@ func runTUI() {
 	}
 
 	logger.Info("Application finished successfully")
+}
+
+func configuredEmailAddress(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.IsGmailOAuth() && strings.TrimSpace(cfg.Gmail.Email) != "" {
+		return strings.TrimSpace(cfg.Gmail.Email)
+	}
+	if strings.TrimSpace(cfg.Credentials.Username) != "" {
+		return strings.TrimSpace(cfg.Credentials.Username)
+	}
+	return strings.TrimSpace(cfg.Gmail.Email)
 }
 
 func parseImageProtocolFlag(value string) (app.PreviewImageMode, error) {

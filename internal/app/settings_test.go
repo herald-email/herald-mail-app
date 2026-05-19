@@ -1253,6 +1253,70 @@ func TestUpdateCompleted_GmailOAuthBranchesOnProvider(t *testing.T) {
 	}
 }
 
+func TestSettingsSavedMsgMarksAccountSavesForValidation(t *testing.T) {
+	s := NewSettingsWithPath(SettingsModePanel, &config.Config{}, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAccount
+	s.provider = "imap"
+	s.email = "user@example.test"
+	s.password = "secret"
+	s.imapHost = "imap.example.test"
+	s.imapPort = "993"
+	s.smtpHost = "smtp.example.test"
+	s.smtpPort = "587"
+
+	cfg := s.buildConfig()
+	msg := SettingsSavedMsg{Config: cfg, ReturnToMenu: true, ValidateAccount: s.requiresAccountValidation()}
+	if !msg.ValidateAccount {
+		t.Fatal("account settings save should require connection validation")
+	}
+}
+
+func TestSettingsSavedMsgDoesNotValidateNonAccountCategory(t *testing.T) {
+	existing := &config.Config{}
+	existing.Server.Host = "imap.gmail.com"
+	existing.Server.Port = 993
+	existing.SMTP.Host = "smtp.gmail.com"
+	existing.SMTP.Port = 587
+	existing.Gmail.Email = "oauth@example.test"
+	existing.Gmail.RefreshToken = "refresh-token"
+	s := NewSettingsWithPath(SettingsModePanel, existing, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAI
+	s.aiProvider = aiProviderDisabled
+
+	cfg := s.buildConfig()
+	msg := SettingsSavedMsg{Config: cfg, ReturnToMenu: true, ValidateAccount: s.requiresAccountValidation()}
+	if msg.ValidateAccount {
+		t.Fatal("non-account settings save should not require connection validation")
+	}
+	if cfg.Gmail.RefreshToken != "refresh-token" {
+		t.Fatalf("non-account settings save should preserve OAuth refresh token, got %q", cfg.Gmail.RefreshToken)
+	}
+}
+
+func TestFirstRunPreferencesDoNotRevalidateAccount(t *testing.T) {
+	existing := &config.Config{}
+	existing.Credentials.Username = "validated@example.test"
+	existing.Credentials.Password = "secret"
+	existing.Server.Host = "imap.example.test"
+	existing.Server.Port = 993
+	existing.SMTP.Host = "smtp.example.test"
+	existing.SMTP.Port = 587
+
+	s := NewSettingsWithPathAndOptions(SettingsModeWizard, existing, "/tmp/herald.yaml", SettingsOptions{
+		FirstRunPreferencesOnly: true,
+	})
+	s.aiProvider = aiProviderDisabled
+
+	cfg := s.buildConfig()
+	msg := SettingsSavedMsg{Config: cfg, ValidateAccount: s.requiresAccountValidation()}
+	if msg.ValidateAccount {
+		t.Fatal("first-run preferences step should not revalidate the already-validated account")
+	}
+	if cfg.Credentials.Username != "validated@example.test" || cfg.Server.Host != "imap.example.test" {
+		t.Fatalf("preferences step should preserve validated account, got user=%q host=%q", cfg.Credentials.Username, cfg.Server.Host)
+	}
+}
+
 // TestUpdateCompleted_NonGmailBranchesOnProvider verifies that a non-Gmail-OAuth
 // provider would take the SettingsSavedMsg path (not the OAuthRequiredMsg path).
 func TestUpdateCompleted_NonGmailBranchesOnProvider(t *testing.T) {

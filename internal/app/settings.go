@@ -31,6 +31,8 @@ const (
 // need a narrower first-run surface than the in-app settings panel.
 type SettingsOptions struct {
 	ShowExperimentalEmailServices bool
+	FirstRunAccountOnly           bool
+	FirstRunPreferencesOnly       bool
 }
 
 type settingsPanelSection string
@@ -63,6 +65,7 @@ type SettingsSavedMsg struct {
 	Config                     *config.Config
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
+	ValidateAccount            bool
 }
 
 // SettingsCancelledMsg is sent when the user presses esc in panel mode.
@@ -86,6 +89,8 @@ type Settings struct {
 	saveButton bool
 
 	showExperimentalEmailServices bool
+	firstRunAccountOnly           bool
+	firstRunPreferencesOnly       bool
 	panelSection                  settingsPanelSection
 	panelMenuChoice               string
 	panelStatus                   string
@@ -287,6 +292,8 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		saveButton:                    true,
 		panelMenuChoice:               string(settingsPanelSectionAccount),
 		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
+		firstRunAccountOnly:           opts.FirstRunAccountOnly,
+		firstRunPreferencesOnly:       opts.FirstRunPreferencesOnly,
 	}
 
 	if existing != nil {
@@ -417,6 +424,13 @@ func (s *Settings) providerPresetDescription(base string) string {
 		return base
 	}
 	return base + " This path is still experimental."
+}
+
+func (s *Settings) requiresAccountValidation() bool {
+	if s.mode == SettingsModeWizard {
+		return !s.firstRunPreferencesOnly
+	}
+	return s.panelSection == settingsPanelSectionAccount
 }
 
 // buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
@@ -731,6 +745,13 @@ func (s *Settings) buildForm() {
 			Negative("Cancel").
 			Value(&s.saveButton),
 	)
+	connectGroup := huh.NewGroup(
+		huh.NewConfirm().
+			Title("Validate IMAP and SMTP").
+			Affirmative("Connect").
+			Negative("Cancel").
+			Value(&s.saveButton),
+	).Title("Connect account")
 
 	groups := []*huh.Group{
 		accountGroup,
@@ -783,6 +804,28 @@ func (s *Settings) buildForm() {
 			groups = []*huh.Group{themeGroup}
 		case settingsPanelSectionSign:
 			groups = []*huh.Group{panelSignatureGroup}
+		}
+	}
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		groups = []*huh.Group{
+			accountGroup,
+			credentialsGroup,
+			gmailGroup,
+			gmailAdvancedGroup,
+			gmailOAuthGroup,
+			connectGroup,
+		}
+	} else if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly {
+		groups = []*huh.Group{
+			aiProviderGroup,
+			ollamaDefaultGroup,
+			ollamaGroup,
+			claudeGroup,
+			openAIGroup,
+			syncGroup,
+			keyboardGroup,
+			themeGroup,
+			composeGroup,
 		}
 	}
 
@@ -1267,6 +1310,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Config:                     cfg,
 				ReturnToMenu:               s.mode == SettingsModePanel,
 				ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
+				ValidateAccount:            s.requiresAccountValidation(),
 			}
 		})
 	}
@@ -1386,25 +1430,27 @@ func (s *Settings) buildConfig() *config.Config {
 	// this form does not modify are left pointing at the same underlying data
 	// (safe because we never mutate them — we only overwrite scalar fields below).
 	cfg := *s.cfg
-	cfg.Vendor = configVendorForProvider(s.provider)
-	cfg.Gmail.AccessToken = ""
-	cfg.Gmail.RefreshToken = ""
-	cfg.Gmail.TokenExpiry = ""
-	cfg.Gmail.Email = ""
-	cfg.Credentials.Username = ""
-	cfg.Credentials.Password = ""
+	if s.requiresAccountValidation() {
+		cfg.Vendor = configVendorForProvider(s.provider)
+		cfg.Gmail.AccessToken = ""
+		cfg.Gmail.RefreshToken = ""
+		cfg.Gmail.TokenExpiry = ""
+		cfg.Gmail.Email = ""
+		cfg.Credentials.Username = ""
+		cfg.Credentials.Password = ""
 
-	if s.provider == "gmail-oauth" {
-		cfg.Gmail.Email = s.email
-	} else {
-		cfg.Credentials.Username = s.email
-		cfg.Credentials.Password = s.password
+		if s.provider == "gmail-oauth" {
+			cfg.Gmail.Email = s.email
+		} else {
+			cfg.Credentials.Username = s.email
+			cfg.Credentials.Password = s.password
+		}
+
+		cfg.Server.Host = s.imapHost
+		cfg.Server.Port = parsePort(s.imapPort)
+		cfg.SMTP.Host = s.smtpHost
+		cfg.SMTP.Port = parsePort(s.smtpPort)
 	}
-
-	cfg.Server.Host = s.imapHost
-	cfg.Server.Port = parsePort(s.imapPort)
-	cfg.SMTP.Host = s.smtpHost
-	cfg.SMTP.Port = parsePort(s.smtpPort)
 
 	// AI provider
 	cfg.AI.Provider = configAIProvider(s.aiProvider)
@@ -1626,6 +1672,12 @@ func (s *Settings) renderWizardSummary(width int) string {
 }
 
 func (s *Settings) wizardSummaryLines() []string {
+	if s.firstRunPreferencesOnly {
+		return []string{
+			wizardSummaryLine("Account:", "validated. Finish optional Herald preferences."),
+			wizardSummaryLine("Next:", "choose AI, sync, theme, keyboard, and signature settings."),
+		}
+	}
 	switch s.provider {
 	case "gmail":
 		return []string{

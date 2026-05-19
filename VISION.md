@@ -745,14 +745,15 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
 - [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
 - [x] Step 1 — Account type: recommended `Gmail (IMAP + App Password)`, supported `Standard IMAP` plus IMAP presets for ProtonMail Bridge, Fastmail, iCloud, and Outlook; `Gmail OAuth (Experimental)` appears only when launched with `-experimental`
-- [x] Step 2 — Credentials: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields
+- [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields, then Herald validates IMAP and SMTP before optional preferences
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth remains available as an experimental browser-based path behind `-experimental`; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials
-- [x] Step 3 — AI: enter Ollama host (default `localhost:11434`), pick model from detected list, pick embedding model; skip if Ollama not running
+- [x] Account setup validates both IMAP and SMTP before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
+- [x] Gmail OAuth setup treats browser consent as a candidate config, validates IMAP plus SMTP XOAUTH2 before saving, and makes Google cancel/timeout states explicit
+- [x] Step 3 — Preferences: enter AI settings, sync options, keyboard profile, theme, and signature only after the account connection has passed
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives
 - [ ] Step 4 — Sync: poll interval, IMAP IDLE toggle
-- [ ] Step 5 — Test connection button; shows result inline before saving
-- [x] Writes `~/.herald/conf.yaml` on finish
+- [x] Final save writes `~/.herald/conf.yaml` only after the account connection gate has passed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
@@ -763,6 +764,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Theme category switches between inherited, Herald dark, Herald light, and installed YAML themes; edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
 - [ ] Account list for multi-account (add / remove / reorder)
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
+- [x] Account setup saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
 - [x] Passwords always hidden; "reveal" button toggles visibility
 
 ---

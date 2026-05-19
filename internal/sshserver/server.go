@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -120,7 +121,7 @@ func Run(commandName string, args []string) error {
 					}
 					b = lb
 				}
-				m := app.New(b, mailer, cfg.Credentials.Username, classifier, false)
+				m := app.New(b, mailer, configuredEmailAddress(cfg), classifier, false)
 				m.SetLocalImageLinksEnabled(false)
 				m.SetPreviewImageMode(imageMode)
 				m.SetConfigPath(resolvedConfig)
@@ -163,4 +164,17 @@ func Run(commandName string, args []string) error {
 		}
 		return nil
 	}
+}
+
+func configuredEmailAddress(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.IsGmailOAuth() && strings.TrimSpace(cfg.Gmail.Email) != "" {
+		return strings.TrimSpace(cfg.Gmail.Email)
+	}
+	if strings.TrimSpace(cfg.Credentials.Username) != "" {
+		return strings.TrimSpace(cfg.Credentials.Username)
+	}
+	return strings.TrimSpace(cfg.Gmail.Email)
 }

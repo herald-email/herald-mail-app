@@ -1490,7 +1490,7 @@ Check these states during every applicable lane:
 ### TC-41 — Gmail OAuth experimental gate and IMAP guidance
 
 **Lane:** F
-**Sizes:** `220x50`, `80x24`
+**Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
 1. Launch Herald with a missing temp config path and no `-experimental` flag.
@@ -1500,14 +1500,55 @@ Check these states during every applicable lane:
 5. Toggle advanced server editing and capture again.
 6. Relaunch with `-experimental` and a missing temp config path.
 7. Choose `Gmail OAuth (Experimental)` and capture the OAuth account guidance and wait screen.
+8. Simulate or perform Google consent cancellation and capture the resulting setup error state.
+9. Simulate an OAuth wait timeout and capture the guidance state.
 
 **Expect:**
 - Gmail OAuth is hidden in default first-run onboarding.
 - Gmail OAuth appears as `Gmail OAuth (Experimental)` only when launched with `-experimental`.
 - The OAuth wait screen remains centered and shows an unboxed browser-auth prompt: `Click: [here] or copy this link to the browser:`, where `[here]` is an OSC 8 terminal hyperlink and a short `http://localhost:<port>/authorize` URL remains visible for copying.
+- OAuth wait hints include local cancel behavior, and `Esc`/`q` cancellation returns a clear "settings were not saved" result.
+- Google consent cancellation reports authorization cancelled, does not write the config file, and keeps the user in setup.
+- OAuth timeout mentions that Google test-app screens require choosing `Continue` and that `Back to safety` does not authorize Herald.
 - Gmail IMAP guidance includes Gmail server defaults and links or copy for IMAP/App Password setup.
 - Gmail IMAP is described as the normal Gmail setup path while OAuth onboarding is experimental, with a note that Workspace may require OAuth.
 - Advanced server fields are hidden until explicitly requested.
+
+### TC-41A — First-run validates account before preferences
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch first-run setup with a missing temp config path.
+2. Configure a provider with intentionally failing IMAP credentials and valid-looking SMTP fields.
+3. Attempt to connect the account and capture the validation result before any AI, sync, theme, keyboard, or signature steps appear.
+4. Repeat with valid-looking IMAP fields and intentionally failing SMTP credentials.
+5. Repeat with mock or live valid IMAP and SMTP credentials.
+
+**Expect:**
+- The wizard shows a validation-in-progress state immediately after the account details step.
+- If IMAP fails, the config path remains missing or empty and the user sees a clear IMAP failure.
+- If SMTP fails, the config path remains missing or empty and the user sees a clear SMTP failure.
+- If both pass, Herald advances to optional preferences; the final save writes the validated config and proceeds to the inbox.
+- At `50x15`, validation and error states use the minimum-size guard rather than clipped modal content.
+
+### TC-41B — In-app account settings keep the previous account on validation failure
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald with a working demo or test config and open Settings with `S`.
+2. Open `Account setup`, change the account to failing IMAP or SMTP values, and save.
+3. Capture the error modal and then dismiss it.
+4. Confirm the previous account view remains active and the original config file contents are unchanged.
+
+**Expect:**
+- Account settings show a validation-in-progress state before replacing runtime account state.
+- Failed validation shows a compact centered error modal over the current Herald screen.
+- The previous config/backend/SMTP client remain active after failure.
+- Non-account settings categories still save normally without account validation.
 
 ### TC-42 — Missing, empty, and malformed config startup behavior
 

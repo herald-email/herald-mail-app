@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
@@ -23,6 +24,8 @@ type OAuthWaitModel struct {
 	configPath  string
 	spinner     spinner.Model
 	browserOpen bool
+	cancel      context.CancelFunc
+	timeout     time.Duration
 	done        bool
 	err         error
 	width       int
@@ -36,17 +39,30 @@ type OAuthDoneMsg struct {
 
 // OAuthErrorMsg is sent when OAuth fails.
 type OAuthErrorMsg struct {
-	Err error
+	Err         error
+	UserMessage string
 }
 
 // oauthCodeReceivedMsg is an internal message carrying the result from the OAuth callback.
 type oauthCodeReceivedMsg struct{ result oauth.Result }
 
+type oauthWaitTimeoutMsg struct{}
+
+var (
+	ErrOAuthCancelled = errors.New("OAuth authorization cancelled")
+	ErrOAuthTimeout   = errors.New("OAuth authorization timed out")
+
+	oauthWaitTimeout    = 5 * time.Minute
+	exchangeOAuthCodeFn = oauth.ExchangeCode
+)
+
 // NewOAuthWaitModel creates an OAuthWaitModel. It calls oauth.StartFlow to begin the
 // authorization code flow, then returns the model ready to use.
 func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OAuthWaitModel, error) {
-	authURL, codeCh, err := oauth.StartFlow(context.Background(), email)
+	ctx, cancel := context.WithCancel(context.Background())
+	authURL, codeCh, err := oauth.StartFlow(ctx, email)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
@@ -67,6 +83,8 @@ func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OA
 		cfg:         cfg,
 		configPath:  configPath,
 		spinner:     sp,
+		cancel:      cancel,
+		timeout:     oauthWaitTimeout,
 	}, nil
 }
 
@@ -78,9 +96,21 @@ func listenForOAuthCode(codeCh <-chan oauth.Result) tea.Cmd {
 	}
 }
 
+func waitForOAuthTimeout(timeout time.Duration) tea.Cmd {
+	return func() tea.Msg {
+		if timeout <= 0 {
+			return nil
+		}
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		<-timer.C
+		return oauthWaitTimeoutMsg{}
+	}
+}
+
 // Init implements tea.Model.
 func (m *OAuthWaitModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, listenForOAuthCode(m.codeCh))
+	return tea.Batch(m.spinner.Tick, listenForOAuthCode(m.codeCh), waitForOAuthTimeout(m.timeout))
 }
 
 // Update implements tea.Model.
@@ -96,6 +126,16 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEscape || strings.EqualFold(msg.String(), "q") {
+			m.done = true
+			m.err = ErrOAuthCancelled
+			if m.cancel != nil {
+				m.cancel()
+			}
+			return m, func() tea.Msg {
+				return OAuthErrorMsg{Err: ErrOAuthCancelled, UserMessage: oauthFailureMessage(ErrOAuthCancelled)}
+			}
+		}
 		if msg.Code == tea.KeyEnter && !m.browserOpen {
 			if err := openBrowserFn(m.authorizeURL()); err == nil {
 				m.browserOpen = true
@@ -106,20 +146,32 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+	case oauthWaitTimeoutMsg:
+		m.done = true
+		m.err = ErrOAuthTimeout
+		if m.cancel != nil {
+			m.cancel()
+		}
+		return m, func() tea.Msg {
+			return OAuthErrorMsg{Err: ErrOAuthTimeout, UserMessage: oauthFailureMessage(ErrOAuthTimeout)}
+		}
+
 	case oauthCodeReceivedMsg:
 		m.done = true
 		if msg.result.Err != nil {
 			m.err = msg.result.Err
-			return m, func() tea.Msg { return OAuthErrorMsg{Err: msg.result.Err} }
+			return m, func() tea.Msg {
+				return OAuthErrorMsg{Err: msg.result.Err, UserMessage: oauthFailureMessage(msg.result.Err)}
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		token, err := oauth.ExchangeCode(ctx, msg.result.Code, m.redirectURI)
+		token, err := exchangeOAuthCodeFn(ctx, msg.result.Code, m.redirectURI)
 		if err != nil {
 			m.err = err
-			return m, func() tea.Msg { return OAuthErrorMsg{Err: err} }
+			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
 		}
 
 		m.cfg.Gmail.Email = m.email
@@ -127,11 +179,6 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cfg.Gmail.RefreshToken = token.RefreshToken
 		if !token.Expiry.IsZero() {
 			m.cfg.Gmail.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
-		}
-
-		if err := m.cfg.Save(m.configPath); err != nil {
-			m.err = err
-			return m, func() tea.Msg { return OAuthErrorMsg{Err: err} }
 		}
 
 		cfg := m.cfg
@@ -177,6 +224,7 @@ func (m *OAuthWaitModel) View() tea.View {
 		"  " + m.spinner.View() + " Waiting for authorization…",
 		"",
 		browserLine,
+		"  Esc/q cancels without saving settings",
 		"",
 	}, "\n")
 
@@ -194,6 +242,23 @@ func (m *OAuthWaitModel) View() tea.View {
 		return newHeraldView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered))
 	}
 	return newHeraldView(rendered)
+}
+
+func oauthFailureMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, ErrOAuthCancelled) {
+		return "Authorization cancelled; settings were not saved."
+	}
+	if errors.Is(err, ErrOAuthTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return "No authorization received; settings were not saved. On Google's test-app warning page choose Continue. Back to safety does not authorize Herald."
+	}
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "authorization denied") || strings.Contains(strings.ToLower(msg), "access_denied") {
+		return "Authorization cancelled; settings were not saved."
+	}
+	return "OAuth failed: " + msg + ". Settings were not saved."
 }
 
 func (m *OAuthWaitModel) authorizeURL() string {

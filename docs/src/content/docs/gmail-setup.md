@@ -14,6 +14,7 @@ Use this path for personal Gmail accounts with 2-Step Verification.
 3. Run `herald` or `./bin/herald`.
 4. Choose `Gmail (IMAP + App Password)` in the setup wizard.
 5. Enter your Gmail address and the App Password.
+6. Let Herald validate Gmail IMAP and SMTP before continuing to optional preferences.
 
 The wizard fills:
 
@@ -31,7 +32,7 @@ For personal Gmail, IMAP is generally already enabled. Google Workspace accounts
 
 ## Experimental: Gmail OAuth
 
-OAuth opens a local browser authorization flow and stores the resulting refresh token in Herald's config so access can refresh later. This path is opt-in because Google OAuth onboarding and verification can take weeks and significant cost.
+OAuth opens a local browser authorization flow, then Herald validates Gmail IMAP and SMTP with XOAUTH2 before it continues to optional preferences or stores the resulting refresh token in config. This path is opt-in because Google OAuth onboarding and verification can take weeks and significant cost.
 
 1. Install with Homebrew:
 
@@ -43,10 +44,14 @@ OAuth opens a local browser authorization flow and stores the resulting refresh 
 2. Run `herald -experimental`.
 3. Choose `Gmail OAuth (Experimental)` in the setup wizard.
 4. Complete browser authorization, then return to Herald.
+5. Wait for Herald to validate IMAP and SMTP before it continues to optional preferences.
+6. Finish the remaining setup steps to save the validated config.
 
 Homebrew and release binaries include the desktop OAuth defaults needed by the experimental wizard.
 
-OAuth stores refresh token data in the Herald config so it can refresh access tokens later. Treat the config file like a credential.
+On Google's test-app warning page, choose `Continue` to reach the real consent screen. `Back to safety` does not authorize Herald. On the consent screen, `Cancel` returns an authorization-cancelled error and Herald does not save settings.
+
+OAuth stores refresh token data in the Herald config only after validation succeeds and you finish setup so it can refresh access tokens later. Treat the config file like a credential.
 
 OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
 

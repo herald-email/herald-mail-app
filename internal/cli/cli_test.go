@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -10,7 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/app"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func TestConfigNeedsOnboarding_MissingFile(t *testing.T) {
@@ -60,6 +64,99 @@ func TestConfigNeedsOnboarding_NonEmptyFileDoesNotTriggerOnboarding(t *testing.T
 	}
 	if needs {
 		t.Fatalf("expected non-empty config file to skip onboarding and fail later via normal validation")
+	}
+}
+
+func TestWizardValidationFailureDoesNotSaveConfig(t *testing.T) {
+	oldValidate := validateWizardAccountConfig
+	validateWizardAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP", Err: errors.New("imap refused")},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateWizardAccountConfig = oldValidate }()
+
+	configPath := filepath.Join(t.TempDir(), "conf.yaml")
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "new@example.test"
+	model := wizardModel{settings: newWizardAccountSettings(nil, configPath, false), configPath: configPath}
+
+	updatedModel, cmd := model.Update(app.SettingsSavedMsg{Config: cfg, ValidateAccount: true})
+	updated := updatedModel.(wizardModel)
+	if cmd == nil {
+		t.Fatal("expected validation command")
+	}
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("config should not be written before validation, stat err=%v", err)
+	}
+
+	msg := cmd().(wizardAccountValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(wizardModel)
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("failed validation saved config, stat err=%v", err)
+	}
+	if !strings.Contains(updated.validationMessage, "Settings were not saved") {
+		t.Fatalf("expected not-saved message, got %q", updated.validationMessage)
+	}
+}
+
+func TestWizardAccountValidationSuccessContinuesToPreferencesWithoutSaving(t *testing.T) {
+	oldValidate := validateWizardAccountConfig
+	validateWizardAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP"},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateWizardAccountConfig = oldValidate }()
+
+	configPath := filepath.Join(t.TempDir(), "conf.yaml")
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "new@example.test"
+	cfg.Credentials.Password = "secret"
+	cfg.Server.Host = "imap.example.test"
+	cfg.Server.Port = 993
+	model := wizardModel{settings: newWizardAccountSettings(nil, configPath, false), configPath: configPath}
+
+	updatedModel, cmd := model.Update(app.SettingsSavedMsg{Config: cfg, ValidateAccount: true})
+	updated := updatedModel.(wizardModel)
+	msg := cmd().(wizardAccountValidationMsg)
+	updatedModel, nextCmd := updated.Update(msg)
+	updated = updatedModel.(wizardModel)
+	if nextCmd == nil {
+		t.Fatal("expected preferences form init command")
+	}
+	if updated.step != wizardStepPreferences {
+		t.Fatalf("step = %v, want preferences", updated.step)
+	}
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("account validation should not save before preferences, stat err=%v", err)
+	}
+}
+
+func TestWizardPreferencesSavePersistsValidatedConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "conf.yaml")
+	cfg := &config.Config{}
+	cfg.Credentials.Username = "new@example.test"
+	cfg.Credentials.Password = "secret"
+	cfg.Server.Host = "imap.example.test"
+	cfg.Server.Port = 993
+	cfg.SMTP.Host = "smtp.example.test"
+	cfg.SMTP.Port = 587
+	model := wizardModel{
+		settings:   newWizardPreferencesSettings(cfg, configPath, false),
+		configPath: configPath,
+		step:       wizardStepPreferences,
+	}
+
+	_, quitCmd := model.Update(app.SettingsSavedMsg{Config: cfg, ValidateAccount: false})
+	if quitCmd == nil {
+		t.Fatal("expected wizard to quit after saving preferences")
+	}
+	if _, err := config.Load(configPath); err != nil {
+		t.Fatalf("validated config was not saved: %v", err)
 	}
 }
 

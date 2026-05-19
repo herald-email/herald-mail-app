@@ -9,7 +9,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -249,6 +251,99 @@ func TestSettingsSaved_CachePolicyChangeSchedulesAsyncPrune(t *testing.T) {
 	}
 	if !strings.Contains(updated.statusMessage, "2 rows pruned") || !strings.Contains(updated.statusMessage, "15 bytes removed") {
 		t.Fatalf("statusMessage missing prune summary: %q", updated.statusMessage)
+	}
+}
+
+func TestAccountSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
+	oldValidate := validateAccountConfig
+	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP", Err: errors.New("imap refused")},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateAccountConfig = oldValidate }()
+
+	original := &config.Config{}
+	original.Credentials.Username = "old@example.test"
+	next := &config.Config{}
+	next.Credentials.Username = "new@example.test"
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ValidateAccount: true})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected account validation command")
+	}
+	if updated.cfg != original {
+		t.Fatal("candidate config should not be applied before validation passes")
+	}
+
+	msg, ok := cmd().(AccountValidationMsg)
+	if !ok {
+		t.Fatalf("expected AccountValidationMsg, got %T", cmd())
+	}
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if updated.cfg != original || updated.cfg.Credentials.Username != "old@example.test" {
+		t.Fatalf("failed validation replaced config: %#v", updated.cfg)
+	}
+	if updated.accountValidation == nil || !strings.Contains(updated.accountValidation.Message, "Settings were not saved") {
+		t.Fatalf("expected visible not-saved validation message, got %#v", updated.accountValidation)
+	}
+}
+
+func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
+	oldValidate := validateAccountConfig
+	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP"},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateAccountConfig = oldValidate }()
+
+	newBackend := &stubBackend{}
+	oldFactory := newValidatedLocalBackend
+	newValidatedLocalBackend = func(*config.Config, string, ai.AIClient) (backend.Backend, error) {
+		return newBackend, nil
+	}
+	defer func() { newValidatedLocalBackend = oldFactory }()
+
+	original := &config.Config{}
+	original.Credentials.Username = "old@example.test"
+	next := &config.Config{}
+	next.Credentials.Username = "new@example.test"
+	next.Credentials.Password = "secret"
+	next.Server.Host = "imap.example.test"
+	next.Server.Port = 993
+
+	configPath := t.TempDir() + "/conf.yaml"
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(configPath)
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ValidateAccount: true})
+	updated := updatedModel.(*Model)
+	msg := cmd().(AccountValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if updated.cfg != next {
+		t.Fatal("validated config was not applied")
+	}
+	if updated.backend != newBackend {
+		t.Fatal("validated account did not replace backend")
+	}
+	if updated.fromAddress != "new@example.test" {
+		t.Fatalf("fromAddress = %q", updated.fromAddress)
+	}
+	if _, err := config.Load(configPath); err != nil {
+		t.Fatalf("validated config was not saved: %v", err)
 	}
 }
 

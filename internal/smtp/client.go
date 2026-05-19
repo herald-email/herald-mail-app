@@ -1,15 +1,18 @@
 package smtp
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
 // Client sends email via SMTP (ProtonMail Bridge or compatible server)
@@ -20,6 +23,98 @@ type Client struct {
 // New creates a new SMTP client
 func New(cfg *config.Config) *Client {
 	return &Client{cfg: cfg}
+}
+
+type xoauth2Auth struct {
+	username string
+	token    string
+}
+
+func (a xoauth2Auth) Start(_ *smtp.ServerInfo) (string, []byte, error) {
+	payload := fmt.Sprintf("user=%s\x01auth=Bearer %s\x01\x01", a.username, a.token)
+	return "XOAUTH2", []byte(payload), nil
+}
+
+func (a xoauth2Auth) Next(_ []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, fmt.Errorf("smtp XOAUTH2 authentication failed")
+	}
+	return nil, nil
+}
+
+func (c *Client) auth(ctx context.Context, host string) (smtp.Auth, error) {
+	if c == nil || c.cfg == nil {
+		return nil, fmt.Errorf("smtp config not configured")
+	}
+	if c.cfg != nil && c.cfg.IsGmailOAuth() {
+		token, err := oauth.RefreshIfNeeded(ctx, c.cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refresh OAuth token: %w", err)
+		}
+		return xoauth2Auth{username: c.cfg.Gmail.Email, token: token}, nil
+	}
+	return smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host), nil
+}
+
+// Check verifies that the configured SMTP server is reachable and accepts
+// authentication. It does not send a message.
+func (c *Client) Check(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if c == nil || c.cfg == nil {
+		return fmt.Errorf("smtp config not configured")
+	}
+	host := c.cfg.SMTP.Host
+	port := c.cfg.SMTP.Port
+	if host == "" {
+		return fmt.Errorf("smtp.host not configured")
+	}
+	if port == 0 {
+		port = 1025
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+	if port == 465 {
+		tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
+		tlsDialer := tls.Dialer{NetDialer: &net.Dialer{}, Config: tlsCfg}
+		if conn, err := tlsDialer.DialContext(ctx, "tcp", addr); err == nil {
+			return c.checkSMTPConn(ctx, conn, host)
+		}
+	}
+	dialer := net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("smtp connect: %w", err)
+	}
+	return c.checkSMTPConn(ctx, conn, host)
+}
+
+func (c *Client) checkSMTPConn(ctx context.Context, conn net.Conn, host string) error {
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp connect: %w", err)
+	}
+	defer client.Close()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsCfg := &tls.Config{InsecureSkipVerify: true, ServerName: host}
+		if err := client.StartTLS(tlsCfg); err != nil {
+			return fmt.Errorf("smtp STARTTLS: %w", err)
+		}
+	}
+	auth, err := c.auth(ctx, host)
+	if err != nil {
+		return err
+	}
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	_ = client.Quit()
+	return nil
 }
 
 // Send sends an email. plainText is the fallback plain-text body; htmlBody is
@@ -66,7 +161,10 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
@@ -221,7 +319,10 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
@@ -370,7 +471,10 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
@@ -475,7 +579,10 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
@@ -514,7 +621,10 @@ func extFromMIME(mimeType string) string {
 
 func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) error {
 	host := c.cfg.SMTP.Host
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	return smtp.SendMail(addr, auth, from, rcpts, []byte(rawMsg))
 }
 

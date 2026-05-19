@@ -2,6 +2,7 @@ package smtp
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -77,7 +78,10 @@ func (c *Client) sendRawMessage(addr, host, from string, rcpts []string, rawMsg 
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host)
+	auth, err := c.auth(context.Background(), host)
+	if err != nil {
+		return err
+	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
