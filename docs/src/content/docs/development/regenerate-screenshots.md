@@ -5,6 +5,8 @@ description: Refresh Herald docs screenshots and theme gallery captures from rep
 
 Screenshots are generated from demo mode so documentation media can be refreshed without touching a real mailbox. Use these workflows after changing visible UI layout, theme roles, demo data, or docs pages that reference generated screenshots.
 
+Demo screenshots are intentionally curated. When a visual regression depends on real-world MIME shape, such as calendar invites, table-heavy HTML, malformed charsets, inline CID images, or long links, add or use an `internal/testmail` virtual lab scenario instead of recording private mail. Reports should distinguish `demo`, `virtual lab`, `live config`, `tmux`, `ttyd`, `SSH`, `MCP`, and `daemon` evidence.
+
 ## Theme Screenshots
 
 Run the theme screenshot script from the repository root after changing visible theme behavior:

@@ -1,0 +1,21 @@
+From: Receipts <receipts@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Receipt for order HLD-1001
+Date: Wed, 20 May 2026 10:30:00 -0700
+Message-ID: <receipt-html-001@herald.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="receipt-boundary"
+
+--receipt-boundary
+Content-Type: text/plain; charset=utf-8
+
+Receipt HLD-1001
+Subtotal: $24.00
+Tax: $2.10
+Total: $26.10
+
+--receipt-boundary
+Content-Type: text/html; charset=utf-8
+
+<html><body><table><tr><th>Item</th><th>Total</th></tr><tr><td>Fixture service</td><td>$26.10</td></tr></table><p><a href="https://billing.herald.test/orders/HLD-1001">View receipt</a></p></body></html>
+--receipt-boundary--

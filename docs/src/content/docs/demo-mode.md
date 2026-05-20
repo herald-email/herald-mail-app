@@ -64,3 +64,5 @@ See [Regenerate Screenshots](/development/regenerate-screenshots/) and [Demo GIF
 ## What demo mode is not
 
 Demo mode is not a local mailbox emulator. It is a presentation and UI testing mode with synthetic data. Use a real IMAP account or a test IMAP server when you need to verify provider behavior.
+
+For development regression tests, Herald also has an internal virtual mail lab in `internal/testmail`. That lab starts local IMAP/SMTP servers, routes mail between `alice@herald.test` and `bob@herald.test`, and can replay sanitized realistic fixtures from `internal/testmail/testdata/corpus`. Use demo mode for polished demos and broad UI smoke checks; use the virtual lab for realistic MIME, calendar invite, inline image, draft, reply, and send-flow regressions; use live config only for provider-specific behavior.

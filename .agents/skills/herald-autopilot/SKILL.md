@@ -41,15 +41,23 @@ If the user explicitly asks to improve GEPA itself, also read [`references/gepa-
 3. Show a concise plan summary, then proceed unless a risky or non-obvious tradeoff needs the user's decision.
 4. Before tracked-file edits, explicitly ask whether the plan intentionally degrades, removes, or weakens existing behavior. No degradation is allowed unless the user explicitly approves it.
 5. Record the degradation review gate with preserved behaviors and regression checks. If degradation is approved, record the approved degradation list and the remaining behaviors still protected by regression checks.
-6. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
-7. Verify baseline, then create and switch into a dedicated worktree under `.worktrees/` before any tracked-file edits. Creating only a branch in the current checkout does not satisfy this.
-8. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
-9. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
-10. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
-11. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
-12. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
-13. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
-14. Every final chat handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for changing into the correct checkout, building, launching the candidate binary with relevant parameters, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path. If a worktree still exists, use its absolute path; after merge/worktree cleanup, use the main checkout path or the full path to the built binary.
+6. Select and record a verification budget before implementation: focused, package, visual/TUI, surface smoke, or release/hardening. Use the smallest budget that proves the affected behavior and nearby regressions.
+7. Prefer deterministic `internal/testmail` virtual lab scenarios for realistic mail shapes before using private live mailboxes. Report whether evidence came from `demo`, `virtual lab`, `live config`, `tmux`, `ttyd`, `SSH`, `MCP`, or `daemon`.
+8. Run preflight for docs, SSH, and media prerequisites before baseline or implementation work begins.
+9. Verify baseline, then create and switch into a dedicated worktree under `.worktrees/` before any tracked-file edits. Creating only a branch in the current checkout does not satisfy this.
+10. Keep all raw machine-readable artifacts under `.superpowers/autopilot/runs/<run-id>/`.
+11. Stop at local branch + worktree + report. Do not push, create a PR, or merge unless the user asks.
+12. If the user asks to commit, merge, push, or open a PR, do that requested publish step and then surface a visible self-reflection report with approval-ready workflow suggestions before you close out.
+13. After a requested publish step, sync the cross-run pending-approval queue so those suggestions become visible in one backlog instead of staying trapped in the single run report.
+14. If the task touches the TUI, close the canonical visual-evidence gate before handoff with matched before/after PNG and ANSI evidence at `220x50`, `80x24`, and `50x15`.
+15. If the task changes shortcuts, aliases, IME routing, or keyboard dispatch on the TUI surface, close the input-routing safety gate before handoff by proving text entry still works on `compose`, `prompt`, and `editor` surfaces.
+16. Every final chat handoff and rendered report must include a compact "How To Test This Change" section with exact copy-paste commands for changing into the correct checkout, building, launching the candidate binary with relevant parameters, running focused verification, and exercising any affected TUI, MCP, or SSH smoke path. If a worktree still exists, use its absolute path; after merge/worktree cleanup, use the main checkout path or the full path to the built binary.
+
+## Process Throttle
+
+Use full ceremony for bugs, large features, releases, review feedback, and risky TUI/rendering work. For small or already-understood tasks, use micro-mode: name the relevant rule once, choose the verification budget, then act. Do not stack multiple process skills unless each one changes the next action.
+
+After two similar failed commands, apply the second-failure rule before rerunning: record the hypothesis, smallest failing command, failure class, and next narrower diagnostic.
 
 ## Worktree Safety Correction
 

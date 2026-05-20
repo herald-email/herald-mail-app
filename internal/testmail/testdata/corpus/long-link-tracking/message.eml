@@ -1,0 +1,11 @@
+From: Link Lab <links@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Long safe link sample
+Date: Wed, 20 May 2026 11:00:00 -0700
+Message-ID: <long-link-001@herald.test>
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>This fixture keeps a very long URL shape without real tracking parameters.</p>
+<a href="https://links.herald.test/path/with/a/very/long/segment/that/should/wrap/predictably?campaign=redacted-fixture&recipient=person-redacted&token=redacted-fixture-token">Open safe fixture link</a>
+</body></html>

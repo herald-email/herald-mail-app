@@ -1,0 +1,11 @@
+From: Charset Lab <charset@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Odd charset fallback
+Date: Wed, 20 May 2026 10:40:00 -0700
+Message-ID: <malformed-charset-001@herald.test>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=x-unknown-herald-fixture
+Content-Transfer-Encoding: quoted-printable
+
+This fixture declares an unknown charset but still contains mostly readable=
+ text. The renderer should fall back without blanking the preview.

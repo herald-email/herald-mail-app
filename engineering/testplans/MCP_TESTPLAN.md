@@ -7,6 +7,12 @@ Run this after any change to `herald mcp`, `internal/mcpserver/`, `cmd/herald-mc
 
 ## Setup
 
+### 0. Deterministic virtual lab lane
+
+For MCP changes that depend on realistic MIME shapes, drafts, replies, attachments, or send flows, prefer a Go test backed by `internal/testmail` before using a private mailbox. The virtual lab can seed sanitized fixtures from `internal/testmail/testdata/corpus`, route SMTP from `alice@herald.test` to `bob@herald.test`, and prove daemon-backed flows without real credentials.
+
+Manual reports should use `engineering/testplans/REPORT_TEMPLATE.md` and mark the surface as `virtual lab`, `MCP`, and `daemon` when applicable. Cache-only MCP tools can still be tested with demo or populated SQLite cache; live mutation tools require `herald serve`.
+
 ### 1. Populate the cache
 
 The MCP server reads from `email_cache.db` — it does not connect to IMAP.
@@ -125,6 +131,18 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   - `classify_email`, `summarise_email`, `draft_reply`
 - Each tool has a `description` and `inputSchema` field
 - No error field in response
+
+### TC-MCP-01A — Virtual lab realistic fixture smoke
+
+**Steps:**
+1. Add or run a Go test that starts `internal/testmail` with one sanitized corpus fixture.
+2. Populate the test cache or daemon-backed backend from the virtual account.
+3. Invoke the MCP tool affected by the change.
+
+**Expect:**
+- The tool response is deterministic and does not require private credentials.
+- The report records `virtual lab` plus `MCP`, and `daemon` if a live mutation path was used.
+- If the same behavior is later checked against live config, the report clearly separates virtual-lab evidence from provider-specific evidence.
 
 ---
 

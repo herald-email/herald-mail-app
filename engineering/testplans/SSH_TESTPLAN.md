@@ -7,6 +7,12 @@ Run this after any change to `herald ssh`, `internal/sshserver/`, `cmd/herald-ss
 
 ## Setup
 
+### 0. Deterministic virtual lab lane
+
+For SSH changes involving realistic message rendering, drafts, replies, or terminal image behavior, prefer a test or harness backed by `internal/testmail` before using private live mail. The virtual lab provides local IMAP/SMTP accounts (`alice@herald.test`, `bob@herald.test`) and sanitized fixtures under `internal/testmail/testdata/corpus`.
+
+Reports should use `engineering/testplans/REPORT_TEMPLATE.md` and mark `virtual lab` and `SSH` when this lane is used. Demo mode remains best for presentation and broad layout smoke; virtual lab is for ugly realistic regression mail.
+
 ### 1. Build the Herald binary
 
 ```bash
@@ -194,6 +200,18 @@ tmux kill-session -t ssh_test
 **Expect (step 9 — preview closed):**
 - Layout returns to full-width timeline
 - Cursor remains on the previously selected email
+
+### TC-SS-03A — SSH preview with virtual lab fixture
+
+**Steps:**
+1. Start Herald SSH against a config generated from an `internal/testmail` account.
+2. Seed one sanitized corpus fixture, such as `calendly-invite` or `inline-cid-image`.
+3. Connect over SSH, open Timeline, preview the seeded message, and capture the pane.
+
+**Expect:**
+- The preview opens without private credentials or live mailbox state.
+- Calendar, HTML fallback, long-link, or inline-image behavior matches the fixture expectation.
+- The report marks `virtual lab` and `SSH` surfaces and includes terminal size.
 
 ---
 

@@ -124,6 +124,23 @@ Use a missing or empty temp config file to validate:
 - Standard IMAP credential labeling and navigation
 - default-hidden Gmail OAuth, Gmail IMAP guidance, IMAP preset visibility, and hidden advanced defaults
 
+### Lane G — Virtual Mail Lab
+
+Use `internal/testmail` for deterministic realistic mail scenarios before falling back to private live mail. The virtual lab starts local IMAP/SMTP servers, default `alice@herald.test` and `bob@herald.test` accounts, and sanitized corpus fixtures under `internal/testmail/testdata/corpus`.
+
+Virtual lab scenarios should cover:
+
+- plain two-user threads
+- Calendly-like `text/calendar` invites
+- table-heavy newsletters
+- receipt/transactional HTML
+- malformed charset/plaintext fallback messages
+- inline CID images
+- long safe links that preserve wrapping stress without tracking parameters
+- draft, send, reply, Sent, and recipient INBOX flows
+
+Reports that use this lane must mark `virtual lab` in `engineering/testplans/REPORT_TEMPLATE.md`. Demo mode remains the presentation lane; virtual lab is the realistic regression lane.
+
 ---
 
 ## Terminal Sizes

@@ -1,0 +1,21 @@
+From: Image Lab <images@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Inline CID image sample
+Date: Wed, 20 May 2026 10:50:00 -0700
+Message-ID: <inline-cid-image-001@herald.test>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="cid-related"
+
+--cid-related
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Inline fixture image follows.</p><img src="cid:chart-001@herald.test" alt="fixture chart"></body></html>
+
+--cid-related
+Content-Type: image/png
+Content-Disposition: inline; filename="chart.png"
+Content-ID: <chart-001@herald.test>
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgo=
+--cid-related--

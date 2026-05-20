@@ -168,6 +168,58 @@ bindings:
 	}
 }
 
+func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	hints := stripANSI(m.renderKeyHints())
+	helpEntries := m.shortcutHelpSections()
+	for _, tc := range []struct {
+		scope   string
+		command string
+		hint    string
+		help    string
+	}{
+		{scope: "timeline", command: CommandComposeNew, hint: "compose", help: "open a blank Compose"},
+		{scope: "timeline", command: CommandMailReplyAll, hint: "all", help: "reply all"},
+		{scope: "timeline", command: CommandMailReplySender, hint: "sender", help: "reply sender"},
+		{scope: "timeline", command: CommandMailForward, hint: "forward", help: "forward highlighted"},
+		{scope: "timeline", command: CommandMailDeleteConfirm, hint: "delete", help: "delete or archive"},
+		{scope: "timeline", command: CommandMailArchiveCurrent, hint: "archive", help: "delete or archive"},
+		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, hint: "sidebar", help: "toggle sidebar"},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			key := m.commandKey(tc.scope, tc.command)
+			if key == "" {
+				t.Fatalf("commandKey(%q, %q) was empty", tc.scope, tc.command)
+			}
+			got, ok := m.keyboard.Resolve(tc.scope, keyboardModeNormal, key)
+			if !ok || got != tc.command {
+				t.Fatalf("Resolve(%q, %q) = %q, %v; want %q, true", tc.scope, key, got, ok, tc.command)
+			}
+			if !strings.Contains(hints, displayShortcutKey(key, keyDisplayHint)+": "+tc.hint) {
+				t.Fatalf("bottom hints missing %q for %s:\n%s", key+": "+tc.hint, tc.command, hints)
+			}
+			if !shortcutHelpSectionsContain(helpEntries, displayShortcutKey(key, keyDisplayHelp), tc.help) {
+				t.Fatalf("shortcut help missing key %q or help containing %q for %s: %#v", key, tc.help, tc.command, helpEntries)
+			}
+		})
+	}
+}
+
+func shortcutHelpSectionsContain(sections []shortcutHelpSection, key, desc string) bool {
+	for _, section := range sections {
+		for _, entry := range section.Entries {
+			if strings.Contains(entry.Key, key) && strings.Contains(entry.Desc, desc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestCustomKeymapOverriddenDefaultKeyIsNotAdvertisedForOldCommand(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline

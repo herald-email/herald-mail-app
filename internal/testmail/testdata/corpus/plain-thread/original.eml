@@ -1,0 +1,12 @@
+From: Bob Example <bob@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Plain thread kickoff
+Date: Wed, 20 May 2026 10:00:00 -0700
+Message-ID: <plain-thread-001@herald.test>
+Content-Type: text/plain; charset=utf-8
+
+Hi Alice,
+
+This is a plain text thread starter with predictable wrapping.
+
+Bob

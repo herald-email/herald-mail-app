@@ -82,6 +82,16 @@ If AI is unavailable, Herald should keep the TUI responsive and show concise AI 
 
 Some MCP tools need cached body text. Open the email in the TUI first so Herald fetches and caches the body, then retry the MCP tool.
 
+## Demo, virtual lab, or live config?
+
+Use the smallest realistic surface that can prove the issue:
+
+- Demo mode is synthetic and best for UI smoke checks, screenshots, and presentations.
+- The internal virtual mail lab is for development tests that need realistic MIME, calendar, inline image, draft, reply, or send behavior without private mail.
+- Live config is for provider-specific behavior such as OAuth, bridge quirks, server folders, throttling, or production IMAP/SMTP differences.
+
+Bug reports and test reports should say which surface reproduced the issue. If a virtual-lab fixture exists for a failure, include its scenario name so the bug can be replayed without personal data.
+
 ## Terminal layout looks wrong
 
 Try a larger terminal first. The TUI is responsive, but very small terminals can trigger fallback layouts.
@@ -95,3 +105,7 @@ tmux resize-window -t herald-doc-check -x 50 -y 15
 ```
 
 If rendering artifacts appear, capture the pane and include the terminal size in the bug report.
+
+## Terminal images do not render
+
+Inline raster images depend on terminal graphics support. Native iTerm2, Ghostty, and Kitty checks are authoritative for exact placement. The ttyd browser harness is useful for repeatable browser-visible pixel checks, but stock ttyd can relocate or omit later images and should be treated as a smoke lane. Terminals without supported raster protocols should show safe placeholders or open-image links instead of corrupting layout.

@@ -92,3 +92,14 @@ CODEX_MCP_SERVERS='{"herald":{"command":"herald","args":["mcp","-config","~/.her
 Herald includes tools for recent mail, unread mail, sender search, date search, semantic search, body lookup, classification, summaries, contacts, draft replies, rule inspection, and `dry_run_cleanup_rules` previews. AI-powered tools require an AI backend, body-based tools require cached body text, and live mail mutation still requires the daemon.
 
 If `herald serve` crashes with `wildcard not at end`, upgrade Herald. Older binaries had an invalid daemon route pattern and cannot unlock daemon-backed MCP tools.
+
+## Development test lanes
+
+Demo MCP mode is deterministic and good for smoke tests, but it does not exercise real IMAP or SMTP. For realistic automated MCP tests, use `internal/testmail` to start virtual IMAP/SMTP accounts and seed sanitized fixtures from `internal/testmail/testdata/corpus`. This is the preferred fallback before private live mail when testing calendar invites, malformed MIME, inline CID images, drafts, replies, sends, or daemon-backed mutations.
+
+Keep the boundaries explicit in reports:
+
+- `demo`: synthetic, presentation-friendly, no IMAP/SMTP
+- `virtual lab`: local IMAP/SMTP with sanitized realistic fixtures
+- `live config`: provider-specific behavior with a real account
+- `daemon`: required for live mutation tools such as send, draft, attachment, sync, and folder changes

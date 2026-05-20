@@ -1,0 +1,12 @@
+From: Alice Example <alice@herald.test>
+To: Bob Example <bob@herald.test>
+Subject: Re: Plain thread kickoff
+Date: Wed, 20 May 2026 10:05:00 -0700
+Message-ID: <plain-thread-002@herald.test>
+In-Reply-To: <plain-thread-001@herald.test>
+References: <plain-thread-001@herald.test>
+Content-Type: text/plain; charset=utf-8
+
+Thanks Bob.
+
+Replying here keeps the thread headers realistic without any private data.

@@ -248,6 +248,17 @@ When adding or updating features in `VISION.md` or any other planning/design doc
 - Never use plain bullet points for feature lists — always checkboxes so the document is also a progress tracker.
 - Keep checkbox descriptions concrete and testable (what a user can observe), not vague intentions.
 
+#### Process guardrails
+
+Use these guardrails to keep Herald work fast, realistic, and bounded:
+
+- **Verification budget**: Match verification to risk. Tiny pure-function changes need a focused test and, when warranted, the package test. UI state or key-routing changes need focused Go tests plus a relevant snapshot or tmux capture. Visual rendering, themes, inline images, or terminal protocol work needs early tmux/ttyd evidence. Large features, regressions, releases, and hardening work use the full TUI/SSH/MCP ladder.
+- **Second-failure rule**: After two similar failed commands or test runs, stop rerunning the same thing. Record the current hypothesis, the smallest failing command, whether the failure is environment, fixture/setup, assertion drift, product regression, or flaky harness, and the next narrower diagnostic.
+- **Degradation check**: Before implementing a bug fix or feature, identify nearby behavior that must not regress. If the plan intentionally removes, weakens, or substitutes behavior, get explicit user approval before coding.
+- **No silent scope substitution**: Do not replace requested behavior with a safer or adjacent slice without saying so. If the requested behavior is unsafe, impossible, or too risky, explain the constraint and name the narrower slice before implementation.
+- **Superpowers throttle**: Use full Superpowers ceremony for bugs, large features, releases, review feedback, and risky TUI/rendering work. For small or already-understood tasks, use micro-mode: name the relevant rule once, then act. Do not stack multiple process skills unless each one changes the next action.
+- **Verification surface**: Every durable report should say which surface proved the change: `demo`, `virtual lab`, `live config`, `tmux`, `ttyd`, `SSH`, `MCP`, or `daemon`. Prefer the virtual mail lab for deterministic realistic mail before falling back to private live mailboxes.
+
 #### Large feature workflow
 1. **Update [TUI_TESTPLAN.md](engineering/testplans/TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
 2. **Update [VISION.md](VISION.md)** — add the feature as a `- [ ]` checkbox in the relevant section with a brief description.

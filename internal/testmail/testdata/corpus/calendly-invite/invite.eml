@@ -1,0 +1,42 @@
+From: Scheduling Bot <scheduler@herald.test>
+To: Alice Example <alice@herald.test>
+Subject: Invitation: Product review with Bob
+Date: Wed, 20 May 2026 10:10:00 -0700
+Message-ID: <calendly-invite-001@herald.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="cal-boundary"
+
+--cal-boundary
+Content-Type: text/plain; charset=utf-8
+
+Bob invited you to a product review.
+
+When: Thu, 21 May 2026 09:00:00 -0700
+Where: https://meet.herald.test/product-review
+
+--cal-boundary
+Content-Type: text/html; charset=utf-8
+
+<html><body><table><tr><td>Product review</td></tr><tr><td><a href="https://meet.herald.test/product-review">Join meeting</a></td></tr></table></body></html>
+
+--cal-boundary
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+Content-Transfer-Encoding: 7bit
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Herald Test//Virtual Mail Lab//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:calendly-invite-001@herald.test
+DTSTAMP:20260520T170000Z
+DTSTART:20260521T160000Z
+DTEND:20260521T163000Z
+SUMMARY:Product review with Bob
+ORGANIZER;CN=Bob Example:mailto:bob@herald.test
+ATTENDEE;CN=Alice Example;ROLE=REQ-PARTICIPANT:mailto:alice@herald.test
+LOCATION:https://meet.herald.test/product-review
+DESCRIPTION:Deterministic calendar invite fixture.
+END:VEVENT
+END:VCALENDAR
+--cal-boundary--

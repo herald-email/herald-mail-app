@@ -63,6 +63,10 @@ For Herald in this repo, use this default profile:
   tmux send-keys -t test '/tmp/herald --demo' Enter
   sleep 5
   ```
+- Launch against deterministic realistic mail:
+  - Prefer an `internal/testmail` virtual lab scenario when the issue depends on MIME shape, calendar invites, inline CID images, long links, drafts, replies, or sender-to-recipient delivery.
+  - Record the scenario name and mark the report verification surface as `virtual lab`.
+  - Use live config only when testing provider-specific behavior that the virtual lab cannot model.
 - Reset recipe:
   ```bash
   tmux send-keys -t test Escape
@@ -258,6 +262,18 @@ Default thrash:
 Run the full cycle at least twice for high-value states. Log the first cycle count or transition count where the UI diverges.
 
 ## Reporting
+
+Every report should include a Verification Surface section using `engineering/testplans/REPORT_TEMPLATE.md`. Mark whether the evidence came from `demo`, `virtual lab`, `live config`, `tmux`, `ttyd`, `SSH`, `MCP`, or `daemon`.
+
+For rendering or key-routing issues, classify failures before changing code again:
+
+- product regression
+- fixture/setup issue
+- terminal/harness limitation
+- assertion drift
+- environment failure
+
+After two similar failed captures or commands, apply the second-failure rule and switch to the next narrower diagnostic.
 
 Write the report under `reports/` with a stable name such as:
 
