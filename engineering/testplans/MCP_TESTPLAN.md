@@ -162,6 +162,23 @@ go test ./internal/mcpserver -run 'VirtualLab|Daemon|Draft|Reply|Send'
 
 ---
 
+### TC-MCP-01C — Virtual lab daemon mutation expansion
+
+**Steps:**
+```bash
+go test ./internal/daemon -run 'VirtualLab|Forward|Attachment|Archive|Delete|Move|Unread|Read|Bulk'
+go test ./internal/mcpserver -run 'VirtualLab|Daemon|Forward|Attachment|Archive|Delete|Move|Unread|Read|Bulk|MissingDaemon'
+```
+
+**Expect:**
+- `forward_email` sends through daemon-backed SMTP, appends Alice `Sent`, and preserves the forwarded note plus original context.
+- `list_attachments` and `get_attachment` return deterministic metadata, write exact attachment bytes, and refuse existing destination paths with a suggested alternative.
+- `mark_read`, `mark_unread`, `archive_email`, `move_email`, `delete_email`, `bulk_move`, and `bulk_delete` mutate the virtual mailbox and cache without live credentials.
+- Path-based tools handle realistic `Message-ID` values containing characters such as `<`, `>`, `@`, and `/`.
+- Representative mutation tools still return a clear `daemon not running` result when no daemon is available.
+
+---
+
 ### TC-MCP-02 — list_recent_emails basic
 
 **Steps:**

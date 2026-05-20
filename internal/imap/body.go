@@ -419,6 +419,22 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 		return
 	}
 
+	disp := strings.ToLower(header.Get("Content-Disposition"))
+	if strings.HasPrefix(disp, "attachment") {
+		filename := extractAttachmentFilename(header)
+		if filename == "" {
+			filename = fmt.Sprintf("attachment_%s", partPath)
+		}
+		result.Attachments = append(result.Attachments, models.Attachment{
+			Filename: filename,
+			MIMEType: mediaType,
+			Size:     len(data),
+			PartPath: partPath,
+			Data:     data,
+		})
+		return
+	}
+
 	switch mediaType {
 	case "text/plain":
 		if result.TextPlain == "" {
@@ -429,7 +445,6 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 			result.TextHTML = decodeTextPart(data, params)
 		}
 	default:
-		disp := strings.ToLower(header.Get("Content-Disposition"))
 		if strings.HasPrefix(mediaType, "image/") {
 			// Inline images (no disposition or explicitly inline) go to InlineImages
 			if disp == "" || strings.HasPrefix(disp, "inline") {

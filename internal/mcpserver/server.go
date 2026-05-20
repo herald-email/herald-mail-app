@@ -156,6 +156,22 @@ func attachmentDownloadDaemonPath(messageID, filename, destPath string) string {
 	return urlPath + "?" + values.Encode()
 }
 
+func emailDaemonPath(messageID, suffix string, values url.Values) string {
+	urlPath := "/v1/emails/" + url.PathEscape(messageID) + suffix
+	if len(values) == 0 {
+		return urlPath
+	}
+	return urlPath + "?" + values.Encode()
+}
+
+func emailDaemonFolderPath(messageID, suffix, folder string) string {
+	values := url.Values{}
+	if folder != "" {
+		values.Set("folder", folder)
+	}
+	return emailDaemonPath(messageID, suffix, values)
+}
+
 func formatAttachmentDownloadError(status int, respBody []byte) string {
 	if status == http.StatusConflict {
 		var conflict struct {
@@ -1100,7 +1116,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/read?folder=%s", msgID, folder), nil)
+			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/read", folder), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1126,7 +1142,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/unread?folder=%s", msgID, folder), nil)
+			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/unread", folder), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1152,7 +1168,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			status, err := daemonDelete(fmt.Sprintf("/v1/emails/%s?folder=%s", msgID, folder))
+			status, err := daemonDelete(emailDaemonFolderPath(msgID, "", folder))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1178,7 +1194,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/archive?folder=%s", msgID, folder), nil)
+			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/archive", folder), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1212,7 +1228,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			_, status, err := daemonPost(fmt.Sprintf("/v1/emails/%s/move", msgID), map[string]string{
+			_, status, err := daemonPost(emailDaemonPath(msgID, "/move", nil), map[string]string{
 				"fromFolder": fromFolder,
 				"toFolder":   toFolder,
 			})
@@ -1864,7 +1880,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if omitted := req.GetString("omitted_original_attachment_names", ""); omitted != "" {
 				payload["omitted_original_attachment_names"] = splitCommaList(omitted)
 			}
-			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/forward", payload)
+			respBody, status, err := daemonPost(emailDaemonPath(messageID, "/forward", nil), payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1888,7 +1904,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			respBody, status, err := daemonGet("/v1/emails/" + messageID + "/attachments")
+			respBody, status, err := daemonGet(emailDaemonPath(messageID, "/attachments", nil))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

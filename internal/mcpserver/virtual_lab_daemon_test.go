@@ -3,12 +3,15 @@ package mcpserver
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -100,6 +103,246 @@ func TestVirtualLabDaemonBackedMCPMutations(t *testing.T) {
 	}
 }
 
+func TestVirtualLabDaemonBackedMCPForwardAndAttachments(t *testing.T) {
+	h := startMCPVirtualLabDaemon(t)
+
+	forwardSubject := "Slice 6 forward source"
+	forwardID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		forwardSubject,
+		"<slice6.forward/source@herald.test>",
+		"Original body for the forwarded message.",
+	))
+
+	forwardJSON := callVirtualLabTool(t, h.mcp, 10, "forward_email", map[string]any{
+		"message_id": forwardID,
+		"to":         h.bob.Address,
+		"body":       "Forward note from MCP.",
+	})
+	if !strings.Contains(forwardJSON, "Forwarded to "+h.bob.Address) {
+		t.Fatalf("forward_email response missing success text:\n%s", forwardJSON)
+	}
+	h.lab.WaitForSubject(h.bob.Address, "INBOX", "Fwd: "+forwardSubject)
+	h.lab.WaitForSubject(h.alice.Address, "Sent", "Fwd: "+forwardSubject)
+
+	captured := h.lab.CapturedSMTP()
+	if len(captured) == 0 {
+		t.Fatal("expected forwarded message to be captured by virtual SMTP")
+	}
+	forwarded := string(captured[len(captured)-1].Data)
+	for _, want := range []string{
+		"Subject: Fwd: " + forwardSubject,
+		"Forward note from MCP.",
+		"---------- Forwarded message ----------",
+		"Original body for the forwarded message.",
+	} {
+		if !strings.Contains(forwarded, want) {
+			t.Fatalf("forwarded SMTP data missing %q:\n%s", want, forwarded)
+		}
+	}
+
+	attachmentID := h.appendAliceInboxAndSync(t, rawVirtualLabAttachmentMessage(
+		h.bob.Address,
+		h.alice.Address,
+		"Slice 6 attachment source",
+		"<slice6.attach/source@herald.test>",
+		"safe-report.txt",
+		"safe attachment body\n",
+	))
+
+	listJSON := callVirtualLabTool(t, h.mcp, 11, "list_attachments", map[string]any{
+		"message_id": attachmentID,
+	})
+	if !strings.Contains(listJSON, "safe-report.txt") || !strings.Contains(listJSON, "text/plain") {
+		t.Fatalf("list_attachments did not return expected metadata:\n%s", listJSON)
+	}
+
+	destPath := filepath.Join(t.TempDir(), "safe-report.txt")
+	getJSON := callVirtualLabTool(t, h.mcp, 12, "get_attachment", map[string]any{
+		"message_id": attachmentID,
+		"filename":   "safe-report.txt",
+		"dest_path":  destPath,
+	})
+	if !strings.Contains(getJSON, "Saved to "+destPath) {
+		t.Fatalf("get_attachment response missing saved path:\n%s", getJSON)
+	}
+	written, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read saved attachment: %v", err)
+	}
+	if string(written) != "safe attachment body\n" {
+		t.Fatalf("saved attachment = %q", written)
+	}
+
+	conflictJSON := callVirtualLabTool(t, h.mcp, 13, "get_attachment", map[string]any{
+		"message_id": attachmentID,
+		"filename":   "safe-report.txt",
+		"dest_path":  destPath,
+	})
+	if !strings.Contains(conflictJSON, "file already exists") || !strings.Contains(conflictJSON, "suggested:") {
+		t.Fatalf("get_attachment conflict response missing suggested path:\n%s", conflictJSON)
+	}
+}
+
+func TestVirtualLabDaemonBackedMCPMailboxMutations(t *testing.T) {
+	h := startMCPVirtualLabDaemon(t)
+
+	readID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		"Slice 6 read state",
+		"<slice6.read/state@herald.test>",
+		"Read state body.",
+	))
+	if got := h.requireCachedEmail(t, readID); got.IsRead {
+		t.Fatalf("seeded read-state message should start unread: %#v", got)
+	}
+	markReadJSON := callVirtualLabTool(t, h.mcp, 20, "mark_read", map[string]any{
+		"message_id": readID,
+		"folder":     "INBOX",
+	})
+	if !strings.Contains(markReadJSON, "Marked as read") {
+		t.Fatalf("mark_read response missing success text:\n%s", markReadJSON)
+	}
+	if got := h.requireCachedEmail(t, readID); !got.IsRead {
+		t.Fatalf("cached message should be read after mark_read: %#v", got)
+	}
+	markUnreadJSON := callVirtualLabTool(t, h.mcp, 21, "mark_unread", map[string]any{
+		"message_id": readID,
+		"folder":     "INBOX",
+	})
+	if !strings.Contains(markUnreadJSON, "Marked as unread") {
+		t.Fatalf("mark_unread response missing success text:\n%s", markUnreadJSON)
+	}
+	if got := h.requireCachedEmail(t, readID); got.IsRead {
+		t.Fatalf("cached message should be unread after mark_unread: %#v", got)
+	}
+
+	archiveSubject := "Slice 6 archive action"
+	archiveID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		archiveSubject,
+		"<slice6.archive/action@herald.test>",
+		"Archive body.",
+	))
+	archiveJSON := callVirtualLabTool(t, h.mcp, 22, "archive_email", map[string]any{
+		"message_id": archiveID,
+		"folder":     "INBOX",
+	})
+	if !strings.Contains(archiveJSON, "Email archived") {
+		t.Fatalf("archive_email response missing success text:\n%s", archiveJSON)
+	}
+	h.lab.WaitForSubject(h.alice.Address, "Archive", archiveSubject)
+	h.requireNotCached(t, archiveID)
+
+	moveSubject := "Slice 6 move action"
+	moveID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		moveSubject,
+		"<slice6.move/action@herald.test>",
+		"Move body.",
+	))
+	moveJSON := callVirtualLabTool(t, h.mcp, 23, "move_email", map[string]any{
+		"message_id":  moveID,
+		"from_folder": "INBOX",
+		"to_folder":   "Archive",
+	})
+	if !strings.Contains(moveJSON, "Moved to Archive") {
+		t.Fatalf("move_email response missing success text:\n%s", moveJSON)
+	}
+	h.lab.WaitForSubject(h.alice.Address, "Archive", moveSubject)
+	h.requireNotCached(t, moveID)
+
+	deleteSubject := "Slice 6 delete action"
+	deleteID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		deleteSubject,
+		"<slice6.delete/action@herald.test>",
+		"Delete body.",
+	))
+	deleteJSON := callVirtualLabTool(t, h.mcp, 24, "delete_email", map[string]any{
+		"message_id": deleteID,
+		"folder":     "INBOX",
+	})
+	if !strings.Contains(deleteJSON, "Email deleted") {
+		t.Fatalf("delete_email response missing success text:\n%s", deleteJSON)
+	}
+	h.lab.WaitForSubject(h.alice.Address, "Trash", deleteSubject)
+	h.requireNotCached(t, deleteID)
+}
+
+func TestVirtualLabDaemonBackedMCPBulkMoveAndDelete(t *testing.T) {
+	h := startMCPVirtualLabDaemon(t)
+
+	moveOneSubject := "Slice 6 bulk move one"
+	moveOneID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		moveOneSubject,
+		"<slice6.bulk-move/one@herald.test>",
+		"Bulk move one.",
+	))
+	moveTwoSubject := "Slice 6 bulk move two"
+	moveTwoID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		moveTwoSubject,
+		"<slice6.bulk-move/two@herald.test>",
+		"Bulk move two.",
+	))
+	deleteOneSubject := "Slice 6 bulk delete one"
+	deleteOneID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		deleteOneSubject,
+		"<slice6.bulk-delete/one@herald.test>",
+		"Bulk delete one.",
+	))
+	deleteTwoSubject := "Slice 6 bulk delete two"
+	deleteTwoID := h.appendAliceInboxAndSync(t, rawVirtualLabTextMessage(
+		h.bob.Address,
+		h.alice.Address,
+		deleteTwoSubject,
+		"<slice6.bulk-delete/two@herald.test>",
+		"Bulk delete two.",
+	))
+
+	moveIDs, err := json.Marshal([]string{moveOneID, moveTwoID})
+	if err != nil {
+		t.Fatalf("marshal bulk move ids: %v", err)
+	}
+	bulkMoveJSON := callVirtualLabTool(t, h.mcp, 30, "bulk_move", map[string]any{
+		"message_ids": string(moveIDs),
+		"to_folder":   "Archive",
+	})
+	if !strings.Contains(bulkMoveJSON, "Moved 2 emails to Archive") {
+		t.Fatalf("bulk_move response missing success text:\n%s", bulkMoveJSON)
+	}
+	h.lab.WaitForSubject(h.alice.Address, "Archive", moveOneSubject)
+	h.lab.WaitForSubject(h.alice.Address, "Archive", moveTwoSubject)
+	h.requireNotCached(t, moveOneID)
+	h.requireNotCached(t, moveTwoID)
+
+	deleteIDs, err := json.Marshal([]string{deleteOneID, deleteTwoID})
+	if err != nil {
+		t.Fatalf("marshal bulk delete ids: %v", err)
+	}
+	bulkDeleteJSON := callVirtualLabTool(t, h.mcp, 31, "bulk_delete", map[string]any{
+		"message_ids": string(deleteIDs),
+	})
+	if !strings.Contains(bulkDeleteJSON, "Deleted 2 emails") {
+		t.Fatalf("bulk_delete response missing success text:\n%s", bulkDeleteJSON)
+	}
+	h.lab.WaitForSubject(h.alice.Address, "Trash", deleteOneSubject)
+	h.lab.WaitForSubject(h.alice.Address, "Trash", deleteTwoSubject)
+	h.requireNotCached(t, deleteOneID)
+	h.requireNotCached(t, deleteTwoID)
+}
+
 func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
 	setMCPDaemonURLForTest(t, "")
 
@@ -117,6 +360,39 @@ func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
 	})
 	if !strings.Contains(callJSON, "daemon not running") {
 		t.Fatalf("send_email without daemon should explain daemon requirement:\n%s", callJSON)
+	}
+
+	for i, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{
+			tool: "forward_email",
+			args: map[string]any{
+				"message_id": "<missing.forward/source@herald.test>",
+				"to":         testmail.DefaultBobAddress,
+			},
+		},
+		{
+			tool: "list_attachments",
+			args: map[string]any{
+				"message_id": "<missing.attach/source@herald.test>",
+			},
+		},
+		{
+			tool: "delete_email",
+			args: map[string]any{
+				"message_id": "<missing.delete/source@herald.test>",
+				"folder":     "INBOX",
+			},
+		},
+	} {
+		t.Run(tc.tool, func(t *testing.T) {
+			raw := callVirtualLabTool(t, s, 10+i, tc.tool, tc.args)
+			if !strings.Contains(raw, "daemon not running") {
+				t.Fatalf("%s without daemon should explain daemon requirement:\n%s", tc.tool, raw)
+			}
+		})
 	}
 }
 
@@ -196,6 +472,18 @@ func startMCPVirtualLabDaemon(t *testing.T) *mcpVirtualLabDaemon {
 
 func (h *mcpVirtualLabDaemon) syncAndWaitForOriginal(t *testing.T) {
 	t.Helper()
+	h.syncAndWaitForMessageID(t, h.originalID)
+}
+
+func (h *mcpVirtualLabDaemon) appendAliceInboxAndSync(t *testing.T, raw []byte, flags ...string) string {
+	t.Helper()
+	ref := h.alice.AppendEML("INBOX", raw, flags...)
+	h.syncAndWaitForMessageID(t, ref.MessageID)
+	return ref.MessageID
+}
+
+func (h *mcpVirtualLabDaemon) syncAndWaitForMessageID(t *testing.T, messageID string) {
+	t.Helper()
 	daemonPostJSON(t, h.baseURL+"/v1/sync", map[string]string{"folder": "INBOX"}, http.StatusAccepted)
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -204,14 +492,37 @@ func (h *mcpVirtualLabDaemon) syncAndWaitForOriginal(t *testing.T) {
 		var emails []models.EmailData
 		if err := json.Unmarshal(body, &emails); err == nil {
 			for _, email := range emails {
-				if email.MessageID == h.originalID {
+				if email.MessageID == messageID {
 					return
 				}
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for daemon sync of %s", h.originalID)
+	t.Fatalf("timed out waiting for daemon sync of %s", messageID)
+}
+
+func (h *mcpVirtualLabDaemon) requireCachedEmail(t *testing.T, messageID string) *models.EmailData {
+	t.Helper()
+	email, err := h.cache.GetEmailByID(messageID)
+	if err != nil {
+		t.Fatalf("expected %s in cache: %v", messageID, err)
+	}
+	if email == nil {
+		t.Fatalf("expected %s in cache, got nil", messageID)
+	}
+	return email
+}
+
+func (h *mcpVirtualLabDaemon) requireNotCached(t *testing.T, messageID string) {
+	t.Helper()
+	email, err := h.cache.GetEmailByID(messageID)
+	if err == nil {
+		t.Fatalf("expected %s to be removed from cache, got %#v", messageID, email)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("cache lookup for %s failed unexpectedly: %v", messageID, err)
+	}
 }
 
 func setMCPDaemonURLForTest(t *testing.T, baseURL string) {
@@ -316,4 +627,12 @@ func extractDraftUID(t *testing.T, rawJSON string) int {
 		t.Fatalf("draft UID must be nonzero in response:\n%s", rawJSON)
 	}
 	return uid
+}
+
+func rawVirtualLabTextMessage(from, to, subject, messageID, body string) []byte {
+	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", from, to, subject, messageID, body))
+}
+
+func rawVirtualLabAttachmentMessage(from, to, subject, messageID, filename, body string) []byte {
+	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"slice6-attachment-boundary\"\r\n\r\n--slice6-attachment-boundary\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nPlease review the attachment.\r\n--slice6-attachment-boundary\r\nContent-Type: text/plain; name=\"%s\"\r\nContent-Disposition: attachment; filename=\"%s\"\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--slice6-attachment-boundary--\r\n", from, to, subject, messageID, filename, filename, base64.StdEncoding.EncodeToString([]byte(body))))
 }
