@@ -79,3 +79,82 @@ func TestLocalBackendUsesVirtualMailLabForSendDraftAndReply(t *testing.T) {
 		t.Fatalf("reply missing top note:\n%s", string(reply))
 	}
 }
+
+func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
+	names := []testmail.ScenarioName{
+		testmail.ScenarioPlainThread,
+		testmail.ScenarioCalendlyInvite,
+		testmail.ScenarioNewsletterTable,
+		testmail.ScenarioReceiptHTML,
+		testmail.ScenarioMalformedCharset,
+		testmail.ScenarioInlineCIDImage,
+		testmail.ScenarioLongLinkTracking,
+	}
+
+	for _, name := range names {
+		t.Run(string(name), func(t *testing.T) {
+			seeded := testmail.StartScenario(t, name)
+			backendByAccount := make(map[string]*LocalBackend)
+			t.Cleanup(func() {
+				for _, b := range backendByAccount {
+					_ = b.Close()
+				}
+			})
+
+			getBackend := func(account string) *LocalBackend {
+				if b := backendByAccount[account]; b != nil {
+					return b
+				}
+				virtualAccount := seeded.Lab.Account(account)
+				if virtualAccount == nil {
+					t.Fatalf("missing virtual account %q", account)
+				}
+				cacheName := strings.NewReplacer("@", "_", ".", "_").Replace(account) + ".db"
+				b, err := NewLocal(virtualAccount.Config(filepath.Join(t.TempDir(), cacheName)), "", nil)
+				if err != nil {
+					t.Fatalf("NewLocal(%s): %v", account, err)
+				}
+				if err := b.imapClient.Connect(); err != nil {
+					t.Fatalf("connect virtual IMAP for %s: %v", account, err)
+				}
+				backendByAccount[account] = b
+				return b
+			}
+
+			for _, msg := range seeded.Messages {
+				ref, ok := seeded.Refs[msg.Key]
+				if !ok {
+					t.Fatalf("missing ref for %q", msg.Key)
+				}
+				body, err := getBackend(msg.Account).FetchEmailBody(ref.Folder, ref.UID)
+				if err != nil {
+					t.Fatalf("FetchEmailBody(%s/%s/%d): %v", msg.Account, ref.Folder, ref.UID, err)
+				}
+				if body.Subject != msg.Subject {
+					t.Fatalf("%s subject = %q, want %q", msg.Key, body.Subject, msg.Subject)
+				}
+				if body.MessageID != msg.MessageID {
+					t.Fatalf("%s message ID = %q, want %q", msg.Key, body.MessageID, msg.MessageID)
+				}
+				if strings.TrimSpace(body.TextPlain) == "" && strings.TrimSpace(body.TextHTML) == "" && len(body.InlineImages) == 0 {
+					t.Fatalf("%s fetched no previewable body content: %+v", msg.Key, body)
+				}
+
+				switch name {
+				case testmail.ScenarioCalendlyInvite:
+					if !strings.Contains(body.TextPlain, "Bob invited you") || !strings.Contains(body.TextHTML, "Join meeting") {
+						t.Fatalf("calendly-like body lost expected text/html parts: %+v", body)
+					}
+				case testmail.ScenarioMalformedCharset:
+					if !strings.Contains(body.TextPlain, "fall back without blanking") {
+						t.Fatalf("malformed charset fallback missing readable text: %q", body.TextPlain)
+					}
+				case testmail.ScenarioInlineCIDImage:
+					if len(body.InlineImages) != 1 || body.InlineImages[0].ContentID != "chart-001@herald.test" {
+						t.Fatalf("inline CID images = %#v, want chart-001@herald.test", body.InlineImages)
+					}
+				}
+			}
+		})
+	}
+}

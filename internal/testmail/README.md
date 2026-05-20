@@ -18,6 +18,19 @@ The default lab starts:
 
 Each account has `INBOX`, `Sent`, `Drafts`, `Archive`, and `Trash`. SMTP delivery records every accepted message, appends the sender copy to `Sent`, and delivers known recipients to `INBOX`.
 
+## Scenarios
+
+Use named scenarios when a test depends on a realistic fixture shape:
+
+```go
+seeded := testmail.StartScenario(t, testmail.ScenarioCalendlyInvite)
+alice := seeded.Lab.Account(testmail.DefaultAliceAddress)
+ref := seeded.Refs["invite"]
+cfg := alice.Config(filepath.Join(t.TempDir(), "alice-cache.db"))
+```
+
+Single-message scenarios seed Alice `INBOX`. `ScenarioPlainThread` seeds Bob's original into Alice `INBOX`, Alice's reply into Alice `Sent`, and the same reply into Bob `INBOX`.
+
 ## Corpus
 
 Sanitized realistic fixtures live under `internal/testmail/testdata/corpus/<scenario>/`.
