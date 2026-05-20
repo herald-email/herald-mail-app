@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -80,11 +81,6 @@ func Run(commandName string, args []string) error {
 		}
 	}
 
-	// Ensure host key directory exists
-	if err := os.MkdirAll(".ssh", 0700); err != nil {
-		return fmt.Errorf("failed to create .ssh dir: %w", err)
-	}
-
 	mailer := appsmtp.New(cfg)
 	var classifier ai.AIClient
 	if *demoMode {
@@ -96,40 +92,17 @@ func Run(commandName string, args []string) error {
 		}
 	}
 
-	srv, err := wish.NewServer(
-		wish.WithAddress(*addr),
-		wish.WithHostKeyPath(*hostKey),
-		wish.WithMiddleware(
-			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				var b backend.Backend
-				if *demoMode {
-					b = backend.NewDemoBackend()
-				} else if *daemonURL != "" {
-					rb, err := backend.NewRemote(*daemonURL)
-					if err != nil {
-						log.Printf("ssh: failed to connect to daemon at %s: %v", *daemonURL, err)
-						fmt.Fprintf(s, "Failed to connect to daemon: %v\n", err)
-						return nil, nil
-					}
-					b = rb
-				} else {
-					// Each SSH connection gets its own backend (own IMAP connection + shared cache)
-					lb, err := backend.NewLocal(cfg, resolvedConfig, classifier)
-					if err != nil {
-						fmt.Fprintf(s, "Failed to create backend: %v\n", err)
-						return nil, nil
-					}
-					b = lb
-				}
-				m := app.New(b, mailer, configuredEmailAddress(cfg), classifier, false)
-				m.SetLocalImageLinksEnabled(false)
-				m.SetPreviewImageMode(imageMode)
-				m.SetConfigPath(resolvedConfig)
-				m.SetConfig(cfg)
-				return m, app.ProgramOptions()
-			}),
-		),
-	)
+	srv, err := newSSHServer(sshServerOptions{
+		Addr:           *addr,
+		HostKeyPath:    *hostKey,
+		Config:         cfg,
+		ResolvedConfig: resolvedConfig,
+		DemoMode:       *demoMode,
+		DaemonURL:      *daemonURL,
+		ImageMode:      imageMode,
+		Mailer:         mailer,
+		Classifier:     classifier,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create SSH server: %w", err)
 	}
@@ -164,6 +137,79 @@ func Run(commandName string, args []string) error {
 		}
 		return nil
 	}
+}
+
+type sshServerOptions struct {
+	Addr           string
+	HostKeyPath    string
+	Config         *config.Config
+	ResolvedConfig string
+	DemoMode       bool
+	DaemonURL      string
+	ImageMode      app.PreviewImageMode
+	Mailer         *appsmtp.Client
+	Classifier     ai.AIClient
+}
+
+func newSSHServer(opts sshServerOptions) (*ssh.Server, error) {
+	if opts.Mailer == nil {
+		opts.Mailer = appsmtp.New(opts.Config)
+	}
+	if err := ensureHostKeyParent(opts.HostKeyPath); err != nil {
+		return nil, err
+	}
+	return wish.NewServer(
+		wish.WithAddress(opts.Addr),
+		wish.WithHostKeyPath(opts.HostKeyPath),
+		wish.WithMiddleware(
+			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+				return newSessionModel(s, opts)
+			}),
+		),
+	)
+}
+
+func ensureHostKeyParent(hostKeyPath string) error {
+	if strings.TrimSpace(hostKeyPath) == "" {
+		return nil
+	}
+	dir := filepath.Dir(hostKeyPath)
+	if dir == "" || dir == "." {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create host key directory %s: %w", dir, err)
+	}
+	return nil
+}
+
+func newSessionModel(s ssh.Session, opts sshServerOptions) (tea.Model, []tea.ProgramOption) {
+	var b backend.Backend
+	if opts.DemoMode {
+		b = backend.NewDemoBackend()
+	} else if opts.DaemonURL != "" {
+		rb, err := backend.NewRemote(opts.DaemonURL)
+		if err != nil {
+			log.Printf("ssh: failed to connect to daemon at %s: %v", opts.DaemonURL, err)
+			fmt.Fprintf(s, "Failed to connect to daemon: %v\n", err)
+			return nil, nil
+		}
+		b = rb
+	} else {
+		// Each SSH connection gets its own backend (own IMAP connection + shared cache)
+		lb, err := backend.NewLocal(opts.Config, opts.ResolvedConfig, opts.Classifier)
+		if err != nil {
+			fmt.Fprintf(s, "Failed to create backend: %v\n", err)
+			return nil, nil
+		}
+		b = lb
+	}
+	m := app.New(b, opts.Mailer, configuredEmailAddress(opts.Config), opts.Classifier, false)
+	m.SetLocalImageLinksEnabled(false)
+	m.SetPreviewImageMode(opts.ImageMode)
+	m.SetConfigPath(opts.ResolvedConfig)
+	m.SetConfig(opts.Config)
+	return m, app.ProgramOptions()
 }
 
 func configuredEmailAddress(cfg *config.Config) string {
