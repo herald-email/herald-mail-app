@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -51,10 +51,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -109,7 +109,7 @@ jobs:
           shasum -a 256 "dist/${artifact}.tar.gz" | tee "dist/${artifact}.sha256"
 
       - name: Upload macOS release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: herald-darwin-${{ matrix.arch }}
           path: |
@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Classify release channel
         id: channel
@@ -133,7 +133,7 @@ jobs:
           bash .github/scripts/release-channel.sh "${GITHUB_REF_NAME}" | tee -a "${GITHUB_OUTPUT}"
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: herald-darwin-*
           path: dist
@@ -145,7 +145,7 @@ jobs:
           shasum -a 256 *.tar.gz > checksums.txt
 
       - name: Publish versioned release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Herald ${{ github.ref_name }}
           generate_release_notes: true
