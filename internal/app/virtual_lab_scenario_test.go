@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/imap"
@@ -73,13 +74,7 @@ func TestTimelinePreviewRendersVirtualMailScenarios(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(string(tc.name), func(t *testing.T) {
-			email, body := fetchFirstScenarioPreviewBody(t, tc.name)
-			m := makeSizedModel(t, 120, 40)
-			m.activeTab = tabTimeline
-			m.focusedPanel = panelPreview
-			m.timeline.selectedEmail = email
-			m.timeline.bodyMessageID = email.MessageID
-			m.timeline.body = body
+			m := newVirtualLabTimelinePreviewModel(t, tc.name, 120, 40)
 
 			rendered := m.renderEmailPreview()
 			visible := ansi.Strip(rendered)
@@ -103,7 +98,26 @@ func TestTimelinePreviewRendersVirtualMailScenarios(t *testing.T) {
 	}
 }
 
-func fetchFirstScenarioPreviewBody(t *testing.T, name testmail.ScenarioName) (*models.EmailData, *models.EmailBody) {
+func newVirtualLabTimelinePreviewModel(t testing.TB, name testmail.ScenarioName, width, height int) *Model {
+	t.Helper()
+	email, body := fetchFirstScenarioPreviewBody(t, name)
+	m := makeSizedModel(t, width, height)
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	m.timeline.emails = []*models.EmailData{email}
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = body
+	m.timeline.bodyLoading = false
+	m.timeline.bodyWrappedLines = nil
+	m.timeline.bodyWrappedWidth = 0
+	m.updateTimelineTable()
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return updated.(*Model)
+}
+
+func fetchFirstScenarioPreviewBody(t testing.TB, name testmail.ScenarioName) (*models.EmailData, *models.EmailBody) {
 	t.Helper()
 	seeded := testmail.StartScenario(t, name)
 	var selected testmail.ScenarioMessage
