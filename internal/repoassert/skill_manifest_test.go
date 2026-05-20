@@ -1,4 +1,4 @@
-package main
+package repoassert
 
 import (
 	"os"
@@ -16,7 +16,7 @@ type skillFrontMatter struct {
 }
 
 func TestTUITestSkillFrontMatterParses(t *testing.T) {
-	data, err := os.ReadFile(".agents/skills/tui-test/SKILL.md")
+	data, err := os.ReadFile(repoPath(t, ".agents", "skills", "tui-test", "SKILL.md"))
 	if err != nil {
 		t.Fatalf("read skill file: %v", err)
 	}
@@ -53,7 +53,8 @@ func TestTUITestSkillFrontMatterParses(t *testing.T) {
 }
 
 func TestPreReleaseTestSkillFrontMatterParses(t *testing.T) {
-	data, err := os.ReadFile(".agents/skills/pre-release-test/SKILL.md")
+	runnerPath := repoPath(t, ".agents", "skills", "pre-release-test", "scripts", "run_pre_release_gate.sh")
+	data, err := os.ReadFile(repoPath(t, ".agents", "skills", "pre-release-test", "SKILL.md"))
 	if err != nil {
 		t.Fatalf("read skill file: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestPreReleaseTestSkillFrontMatterParses(t *testing.T) {
 		t.Fatal("skill body should point at the bundled runner")
 	}
 
-	info, err := os.Stat(".agents/skills/pre-release-test/scripts/run_pre_release_gate.sh")
+	info, err := os.Stat(runnerPath)
 	if err != nil {
 		t.Fatalf("stat runner script: %v", err)
 	}

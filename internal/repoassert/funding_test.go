@@ -1,4 +1,4 @@
-package main
+package repoassert
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestFundingYAMLUsesValidExternalFundingLinks(t *testing.T) {
-	data, err := os.ReadFile(".github/FUNDING.yml")
+	data, err := os.ReadFile(repoPath(t, ".github", "FUNDING.yml"))
 	if err != nil {
 		t.Fatalf("read funding file: %v", err)
 	}

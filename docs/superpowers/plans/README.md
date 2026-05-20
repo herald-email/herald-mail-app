@@ -9,4 +9,4 @@ For current product truth, use this order:
 1. `VISION.md`
 2. `ARCHITECTURE.md`
 3. `docs/superpowers/specs/*.md`
-4. The current acceptance plans (`TUI_TESTPLAN.md`, `SSH_TESTPLAN.md`, `MCP_TESTPLAN.md`)
+4. The current acceptance plans (`engineering/testplans/TUI_TESTPLAN.md`, `engineering/testplans/SSH_TESTPLAN.md`, `engineering/testplans/MCP_TESTPLAN.md`)

@@ -1,4 +1,4 @@
-package main
+package repoassert
 
 import (
 	"os"
@@ -7,7 +7,8 @@ import (
 )
 
 func TestPreCommitHookRunsVetAndTests(t *testing.T) {
-	info, err := os.Stat(".githooks/pre-commit")
+	hookPath := repoPath(t, ".githooks", "pre-commit")
+	info, err := os.Stat(hookPath)
 	if err != nil {
 		t.Fatalf("expected versioned pre-commit hook: %v", err)
 	}
@@ -18,7 +19,7 @@ func TestPreCommitHookRunsVetAndTests(t *testing.T) {
 		t.Fatalf("expected pre-commit hook to be executable, mode is %04o", info.Mode().Perm())
 	}
 
-	data, err := os.ReadFile(".githooks/pre-commit")
+	data, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatalf("read pre-commit hook: %v", err)
 	}

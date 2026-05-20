@@ -1,8 +1,7 @@
-package main
+package repoassert
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,7 +38,7 @@ esac
 		t.Fatalf("write curl stub: %v", err)
 	}
 
-	cmd := exec.Command("bash", "scripts/homebrew-install-stats.sh")
+	cmd := repoCommand(t, "bash", "scripts/homebrew-install-stats.sh")
 	cmd.Env = append(os.Environ(), "PATH="+tempDir+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {

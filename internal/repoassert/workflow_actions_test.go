@@ -1,4 +1,4 @@
-package main
+package repoassert
 
 import (
 	"fmt"
@@ -61,7 +61,7 @@ func workflowFiles(t *testing.T) []string {
 
 	var files []string
 	for _, pattern := range []string{".github/workflows/*.yml", ".github/workflows/*.yaml"} {
-		matches, err := filepath.Glob(pattern)
+		matches, err := filepath.Glob(repoPath(t, filepath.FromSlash(pattern)))
 		if err != nil {
 			t.Fatalf("glob %s: %v", pattern, err)
 		}

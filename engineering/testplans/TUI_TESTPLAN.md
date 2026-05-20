@@ -1237,7 +1237,7 @@ Check these states during every applicable lane:
 - GIFs are written to `assets/demo/`.
 - Each GIF is between 5 and 30 seconds.
 - No GIF shows a panic, unavailable AI state, missing private config, or empty demo data.
-- The canonical scope is the five tapes under `demos/`; root `demo.tape` remains legacy.
+- The canonical scope is the five tapes under `demos/`; `demos/legacy/demo.tape` remains legacy.
 
 ### TC-27 — Virtual `All Mail only` inspector
 

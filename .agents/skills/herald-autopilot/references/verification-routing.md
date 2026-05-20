@@ -29,7 +29,7 @@ Run:
 
 - focused tests if the bug is testable in Go
 - tmux-based visual checks
-- the relevant `TUI_TESTPLAN.md` cases
+- the relevant `engineering/testplans/TUI_TESTPLAN.md` cases
 
 For visual styling, layout, copy, or chrome changes, capture before/after evidence:
 

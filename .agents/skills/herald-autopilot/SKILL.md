@@ -77,7 +77,7 @@ Use this grounding order:
 1. `VISION.md` for product direction and user-visible intent
 2. `ARCHITECTURE.md` for system boundaries and high-level implementation shape
 3. `docs/superpowers/specs/*.md` for concrete feature contracts
-4. `TUI_TESTPLAN.md`, `SSH_TESTPLAN.md`, and `MCP_TESTPLAN.md` for acceptance surfaces
+4. `engineering/testplans/TUI_TESTPLAN.md`, `engineering/testplans/SSH_TESTPLAN.md`, and `engineering/testplans/MCP_TESTPLAN.md` for acceptance surfaces
 
 Record the consulted product-truth sources in the run metadata and final report whenever the task needs product grounding.
 

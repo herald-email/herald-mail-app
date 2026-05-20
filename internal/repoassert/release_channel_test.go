@@ -1,8 +1,7 @@
-package main
+package repoassert
 
 import (
 	"bufio"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -60,7 +59,7 @@ func TestReleaseChannelClassification(t *testing.T) {
 func runReleaseChannelScript(t *testing.T, tag string) map[string]string {
 	t.Helper()
 
-	cmd := exec.Command("bash", ".github/scripts/release-channel.sh", tag)
+	cmd := repoCommand(t, "bash", ".github/scripts/release-channel.sh", tag)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("release-channel.sh %q failed: %v\n%s", tag, err, out)

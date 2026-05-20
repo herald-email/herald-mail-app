@@ -102,10 +102,10 @@ make test     # Run tests
 ### TUI Testing with tmux
 
 > **Use both files together:**
-> - [TUI_TESTPLAN.md](TUI_TESTPLAN.md) — the full manual QA checklist (what to test and what to expect at each step)
-> - [TUI_TESTING.md](TUI_TESTING.md) — programmatic/agent harness guide using `teatest` or PTY + virtual terminal (how to automate TUI interactions in Go tests)
+> - [TUI_TESTPLAN.md](engineering/testplans/TUI_TESTPLAN.md) — the full manual QA checklist (what to test and what to expect at each step)
+> - [TUI_TESTING.md](engineering/testplans/TUI_TESTING.md) — programmatic/agent harness guide using `teatest` or PTY + virtual terminal (how to automate TUI interactions in Go tests)
 >
-> When writing automated TUI tests, consult `TUI_TESTING.md` for the harness pattern, then use the test cases in `TUI_TESTPLAN.md` as the specification for what to assert.
+> When writing automated TUI tests, consult `engineering/testplans/TUI_TESTING.md` for the harness pattern, then use the test cases in `engineering/testplans/TUI_TESTPLAN.md` as the specification for what to assert.
 
 **Always verify visual/layout changes using tmux.** The TUI renders differently at different terminal sizes; a change that looks correct in code can break layout at 80×24 or produce garbage at 50×15. tmux lets you spin up headless sessions at exact dimensions, send keystrokes, and capture rendered output — all without interrupting your working terminal.
 
@@ -249,7 +249,7 @@ When adding or updating features in `VISION.md` or any other planning/design doc
 - Keep checkbox descriptions concrete and testable (what a user can observe), not vague intentions.
 
 #### Large feature workflow
-1. **Update [TUI_TESTPLAN.md](TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
+1. **Update [TUI_TESTPLAN.md](engineering/testplans/TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
 2. **Update [VISION.md](VISION.md)** — add the feature as a `- [ ]` checkbox in the relevant section with a brief description.
 3. **Update [ARCHITECTURE.md](ARCHITECTURE.md)** if the change affects package responsibilities, data flows, the Backend interface, the SQLite schema, or the Phase 2/3 design. Update the relevant diagram, table, or section before writing implementation code.
 4. Implement the feature.
@@ -262,7 +262,7 @@ After a bug fix or large feature is complete, run all three surface tests and sa
 
 | Surface | How to test |
 |---------|-------------|
-| **TUI** | tmux workflow (see below) + relevant `TUI_TESTPLAN.md` test cases |
+| **TUI** | tmux workflow (see below) + relevant `engineering/testplans/TUI_TESTPLAN.md` test cases |
 | **SSH** | `go build -o ./bin/herald-ssh-server ./cmd/herald-ssh-server && ./bin/herald-ssh-server`, then `ssh -p 2222 localhost` in a second terminal and exercise the affected flows |
 | **MCP** | `go build -o ./bin/herald-mcp-server ./cmd/herald-mcp-server && echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \| ./bin/herald-mcp-server` — then invoke the relevant tool(s) and verify output |
 

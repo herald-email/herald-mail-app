@@ -1,8 +1,7 @@
-package main
+package repoassert
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestModulePathIsCanonicalGitHubPath(t *testing.T) {
-	cmd := exec.Command("go", "list", "-m")
+	cmd := repoCommand(t, "go", "list", "-m")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("go list -m failed: %v\n%s", err, out)
@@ -23,7 +22,7 @@ func TestModulePathIsCanonicalGitHubPath(t *testing.T) {
 func TestSourceInstallLayoutInstallsHeraldBinary(t *testing.T) {
 	gobin := t.TempDir()
 
-	cmd := exec.Command("go", "install", "./cmd/herald")
+	cmd := repoCommand(t, "go", "install", "./cmd/herald")
 	cmd.Env = append(os.Environ(), "GOBIN="+gobin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

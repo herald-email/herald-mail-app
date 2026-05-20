@@ -1,8 +1,7 @@
-package main
+package repoassert
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,7 +20,7 @@ func TestRenderHomebrewFormulaUsesImmutableReleaseAssets(t *testing.T) {
 		t.Fatalf("write checksums: %v", err)
 	}
 
-	cmd := exec.Command("bash", ".github/scripts/render-homebrew-formula.sh", "v0.1.0-beta.1", checksumsPath, outputPath)
+	cmd := repoCommand(t, "bash", ".github/scripts/render-homebrew-formula.sh", "v0.1.0-beta.1", checksumsPath, outputPath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("render-homebrew-formula.sh failed: %v\n%s", err, out)
@@ -74,7 +73,7 @@ func TestRenderHomebrewFormulaFailsWhenChecksumIsMissing(t *testing.T) {
 		t.Fatalf("write checksums: %v", err)
 	}
 
-	cmd := exec.Command("bash", ".github/scripts/render-homebrew-formula.sh", "v0.1.0-beta.1", checksumsPath, outputPath)
+	cmd := repoCommand(t, "bash", ".github/scripts/render-homebrew-formula.sh", "v0.1.0-beta.1", checksumsPath, outputPath)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("render-homebrew-formula.sh unexpectedly succeeded:\n%s", out)
