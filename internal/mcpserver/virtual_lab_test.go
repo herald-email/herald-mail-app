@@ -3,7 +3,6 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,13 +13,12 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 	"github.com/herald-email/herald-mail-app/internal/testmail"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 func TestVirtualLabCacheBackedMCPReadsScenarioMail(t *testing.T) {
 	c, msgID := populateVirtualLabScenarioCache(t, testmail.ScenarioCalendlyInvite)
-	s := newVirtualLabCacheMCPServer(c)
+	s := newMCPServer(c, nil)
 
 	listJSON := callVirtualLabTool(t, s, 1, "list_recent_emails", map[string]any{
 		"folder": "INBOX",
@@ -96,75 +94,6 @@ func populateVirtualLabScenarioCache(t *testing.T, name testmail.ScenarioName) (
 		t.Fatalf("scenario %q did not seed Alice INBOX mail", name)
 	}
 	return c, firstMessageID
-}
-
-func newVirtualLabCacheMCPServer(c *cache.Cache) *server.MCPServer {
-	s := server.NewMCPServer("herald-test", "test", server.WithToolCapabilities(false))
-	s.AddTool(
-		mcp.NewTool("list_recent_emails",
-			mcp.WithString("folder", mcp.Required()),
-			mcp.WithNumber("limit"),
-		),
-		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			folder, err := req.RequireString("folder")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			limit := req.GetInt("limit", 20)
-			emails, err := c.GetEmailsSortedByDate(folder)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("cache error: %v", err)), nil
-			}
-			if len(emails) > limit {
-				emails = emails[:limit]
-			}
-			var sb strings.Builder
-			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("%s %s %s\n", e.Sender, e.Subject, mcpMessageIDRef(e)))
-			}
-			return mcp.NewToolResultText(sb.String()), nil
-		},
-	)
-	s.AddTool(
-		mcp.NewTool("search_emails",
-			mcp.WithString("folder", mcp.Required()),
-			mcp.WithString("query", mcp.Required()),
-		),
-		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			folder, err := req.RequireString("folder")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			query, err := req.RequireString("query")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			emails, err := c.SearchEmails(folder, query)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("search error: %v", err)), nil
-			}
-			var sb strings.Builder
-			for _, e := range emails {
-				sb.WriteString(fmt.Sprintf("%s %s %s\n", e.Sender, e.Subject, mcpMessageIDRef(e)))
-			}
-			return mcp.NewToolResultText(sb.String()), nil
-		},
-	)
-	s.AddTool(
-		mcp.NewTool("get_email_body", mcp.WithString("message_id", mcp.Required())),
-		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			msgID, err := req.RequireString("message_id")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			body, err := c.GetBodyText(msgID)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("error: %v", err)), nil
-			}
-			return mcp.NewToolResultText(body), nil
-		},
-	)
-	return s
 }
 
 func callVirtualLabTool(t *testing.T, s *server.MCPServer, id int, name string, args map[string]any) string {

@@ -146,6 +146,22 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 ---
 
+### TC-MCP-01B — Virtual lab daemon mutation smoke
+
+**Steps:**
+```bash
+go test ./internal/daemon -run 'VirtualLab|Draft|Reply|Send'
+go test ./internal/mcpserver -run 'VirtualLab|Daemon|Draft|Reply|Send'
+```
+
+**Expect:**
+- `send_email` delivers from Alice to Bob through virtual SMTP and appends Alice `Sent`.
+- `save_draft`, `list_drafts`, and `send_draft` round-trip through the daemon-backed Drafts folder, and sent drafts disappear after send.
+- `reply_to_email` sends a reply with visible reply body and threading headers.
+- A mutation tool called without a daemon returns a clear `daemon not running` error result.
+
+---
+
 ### TC-MCP-02 — list_recent_emails basic
 
 **Steps:**

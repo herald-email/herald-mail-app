@@ -245,6 +245,21 @@ func Run(commandName string, args []string) error {
 	configureDaemonProbe(cfg.Daemon.BindAddr, cfg.Daemon.Port)
 	_ = probeConfiguredDaemon()
 
+	s := newMCPServerWithConfig(c, classifier, cfg)
+	if err := server.ServeStdio(s); err != nil {
+		return fmt.Errorf("MCP server error: %w", err)
+	}
+	return nil
+}
+
+func newMCPServer(c *cache.Cache, classifier ai.AIClient) *server.MCPServer {
+	return newMCPServerWithConfig(c, classifier, nil)
+}
+
+func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.Config) *server.MCPServer {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 	s := server.NewMCPServer(
 		"herald",
 		buildversion.Version,
@@ -1801,7 +1816,7 @@ func Run(commandName string, args []string) error {
 			if mode := req.GetString("preservation_mode", ""); mode != "" {
 				payload["preservation_mode"] = mode
 			}
-			respBody, status, err := daemonPost("/v1/emails/"+messageID+"/reply", payload)
+			respBody, status, err := daemonPost("/v1/emails/"+url.PathEscape(messageID)+"/reply", payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2290,10 +2305,7 @@ func Run(commandName string, args []string) error {
 		},
 	)
 
-	if err := server.ServeStdio(s); err != nil {
-		return fmt.Errorf("MCP server error: %w", err)
-	}
-	return nil
+	return s
 }
 
 // formatContactsWithScores formats semantic search results including similarity scores.
