@@ -2,6 +2,8 @@
 
 `internal/testmail` provides deterministic local IMAP/SMTP servers for tests. It is the realistic regression lane between polished demo mode and private live mailboxes.
 
+Roadmap closure and coverage tracking live in `docs/superpowers/specs/2026-05-21-virtual-mail-lab-roadmap-closure.md` and `engineering/testplans/VIRTUAL_MAIL_LAB_COVERAGE.md`.
+
 ## Use
 
 ```go
