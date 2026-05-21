@@ -60,7 +60,7 @@ herald --demo
 Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not send anything to Ollama. Your real email is never loaded or shared.
 For presentation captures, add `--demo-keys` to show a compact overlay of the keys being pressed.
 
-To test terminal image rendering, run demo mode in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself, then open the Example 4 Herald Image Lab email:
+To test terminal image rendering, run demo mode in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself, then open the `Step 5: View inline images in full screen` Herald Image Lab email:
 
 ```bash
 ./bin/herald --demo -image-protocol=kitty

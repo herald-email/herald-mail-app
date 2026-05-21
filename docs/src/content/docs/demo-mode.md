@@ -25,13 +25,13 @@ Use `-theme` with demo mode to try a built-in palette or local YAML theme withou
 
 ## Image rendering demo
 
-Demo mode includes an Example 4 Herald Image Lab email with embedded Creative Commons inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
+Demo mode includes a `Step 5: View inline images in full screen` Herald Image Lab email with embedded Creative Commons inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
 
 ```sh
 ./bin/herald --demo -image-protocol=kitty
 ```
 
-Search for `Example 4`, open the image message, and press `z` for full-screen preview. iTerm2 can use `-image-protocol=iterm2`; terminals without raster graphics show safe placeholders or local `open image` links when available.
+Search for `Step 5: View inline images in full screen`, open the image message, and press `z` for full-screen preview. iTerm2 can use `-image-protocol=iterm2`; terminals without raster graphics show safe placeholders or local `open image` links when available.
 
 ## Browser demo
 

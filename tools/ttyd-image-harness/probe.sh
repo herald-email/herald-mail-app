@@ -15,6 +15,8 @@ Environment:
   PORT             ttyd port (default: 7682)
   HOST             ttyd bind host (default: 127.0.0.1)
   TTYD_MODE        custom or stock (default: custom)
+  PROBE_TARGET     demo-image-sampler (default: demo-image-sampler)
+  SEARCH_QUERY     Herald search query (default: Step 5: View inline images in full screen)
   RENDERER_TYPE    ttyd renderer for stock mode (default: canvas)
   IMAGE_PROTOCOL   Herald image protocol (default: iterm2)
   HERALD_THEME     Optional Herald app theme, e.g. jade-signal
@@ -42,6 +44,8 @@ esac
 PORT="${PORT:-7682}"
 HOST="${HOST:-127.0.0.1}"
 TTYD_MODE="${TTYD_MODE:-custom}"
+PROBE_TARGET="${PROBE_TARGET:-demo-image-sampler}"
+SEARCH_QUERY="${SEARCH_QUERY:-Step 5: View inline images in full screen}"
 RENDERER_TYPE="${RENDERER_TYPE:-canvas}"
 IMAGE_PROTOCOL="${IMAGE_PROTOCOL:-iterm2}"
 HERALD_THEME="${HERALD_THEME:-}"
@@ -52,9 +56,20 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 EVIDENCE_DIR="${EVIDENCE_DIR:-reports/ttyd-image-preview_$(date +%F_%H%M%S)}"
 SCREENSHOT_PATH="$EVIDENCE_DIR/ttyd-image-preview.png"
 METRICS_PATH="$EVIDENCE_DIR/ttyd-image-preview-metrics.json"
+METADATA_PATH="$EVIDENCE_DIR/ttyd-image-preview-metadata.json"
 TTYD_LOG="$EVIDENCE_DIR/ttyd.log"
+GIT_SHA="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 
 mkdir -p "$EVIDENCE_DIR"
+
+case "$PROBE_TARGET" in
+  demo-image-sampler)
+    ;;
+  *)
+    echo "PROBE_TARGET must be 'demo-image-sampler' for this harness slice." >&2
+    exit 2
+    ;;
+esac
 
 if [ ! -x "$HERALD_BIN" ]; then
   go build -o ./bin/herald ./cmd/herald
@@ -159,11 +174,32 @@ fi
 
 URL="http://$HOST:$PORT" \
 SCREENSHOT_PATH="$SCREENSHOT_PATH" \
+METADATA_PATH="$METADATA_PATH" \
+METRICS_PATH="$METRICS_PATH" \
 CHROME_BIN="$CHROME_BIN" \
+PROBE_TARGET="$PROBE_TARGET" \
+SEARCH_QUERY="$SEARCH_QUERY" \
+TTYD_MODE="$TTYD_MODE" \
+IMAGE_PROTOCOL="$IMAGE_PROTOCOL" \
+HERALD_THEME="$HERALD_THEME" \
+GIT_SHA="$GIT_SHA" \
 "$NODE_BIN" <<'NODE'
 const { chromium } = require("playwright");
+const fs = require("fs");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const visibleText = async (page, limit = 4000) =>
+  page.evaluate((n) => document.body.innerText.slice(0, n), limit);
+const waitForVisibleText = async (page, predicate, label, timeoutMs = 10000) => {
+  const deadline = Date.now() + timeoutMs;
+  let lastText = "";
+  while (Date.now() < deadline) {
+    lastText = await visibleText(page);
+    if (predicate(lastText)) return lastText;
+    await sleep(250);
+  }
+  throw new Error(`timed out waiting for ${label}; visible text was: ${lastText.slice(0, 1000)}`);
+};
 
 (async () => {
   const browser = await chromium.launch({
@@ -180,25 +216,62 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   page.on("pageerror", (err) => logs.push(`pageerror: ${err.message}`));
 
   await page.goto(process.env.URL, { waitUntil: "domcontentloaded" });
-  await sleep(2500);
+  await waitForVisibleText(
+    page,
+    (text) => text.includes("Timeline") && text.includes("Herald Welcome") && text.includes("Step 1: Move around your inbox"),
+    "Herald demo Timeline readiness",
+  );
 
   await page.keyboard.press("Escape");
   await sleep(400);
   await page.keyboard.press("/");
   await sleep(250);
-  await page.keyboard.type("Step 5");
-  await sleep(1200);
+  await page.keyboard.type(process.env.SEARCH_QUERY, { delay: 5 });
+  await waitForVisibleText(
+    page,
+    (text) => text.includes(process.env.SEARCH_QUERY) && !text.includes("Search: 0 results"),
+    `search results for ${JSON.stringify(process.env.SEARCH_QUERY)}`,
+  );
   await page.keyboard.press("Enter");
   await sleep(900);
   await page.keyboard.press("Enter");
   await sleep(1200);
+
+  const openedText = await visibleText(page);
+  if (
+    !openedText.includes(process.env.SEARCH_QUERY) ||
+    !openedText.includes("Herald Image Lab") ||
+    openedText.includes("Search: 0 results")
+  ) {
+    throw new Error(`failed to reach demo image email for query ${JSON.stringify(process.env.SEARCH_QUERY)}; visible text was: ${openedText.slice(0, 1000)}`);
+  }
+
   await page.keyboard.press("z");
   await sleep(1000);
   for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowDown");
   await sleep(6000);
 
   await page.screenshot({ path: process.env.SCREENSHOT_PATH, fullPage: true });
-  const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1600));
+  const bodyText = await visibleText(page, 1600);
+  fs.writeFileSync(
+    process.env.METADATA_PATH,
+    JSON.stringify(
+      {
+        "probeTarget": process.env.PROBE_TARGET,
+        "searchQuery": process.env.SEARCH_QUERY,
+        "imageProtocol": process.env.IMAGE_PROTOCOL,
+        "theme": process.env.HERALD_THEME || null,
+        "ttydMode": process.env.TTYD_MODE,
+        "browserPath": process.env.CHROME_BIN,
+        "gitSHA": process.env.GIT_SHA,
+        "url": process.env.URL,
+        "screenshot": process.env.SCREENSHOT_PATH,
+        "metrics": process.env.METRICS_PATH,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
   console.log(JSON.stringify({ screenshot: process.env.SCREENSHOT_PATH, bodyText, logs }, null, 2));
   await browser.close();
 })();
@@ -368,3 +441,4 @@ PY
 
 echo "ttyd image preview screenshot: $SCREENSHOT_PATH"
 echo "ttyd image preview metrics:    $METRICS_PATH"
+echo "ttyd image preview metadata:   $METADATA_PATH"

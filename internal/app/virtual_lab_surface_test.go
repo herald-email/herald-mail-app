@@ -139,6 +139,90 @@ func TestVirtualLabTimelinePreviewMinimumSizeGuardAndRecovery(t *testing.T) {
 	}
 }
 
+func TestVirtualLabInlineCIDFullScreenImageModes(t *testing.T) {
+	cases := []struct {
+		name          string
+		mode          PreviewImageMode
+		wantVisible   []string
+		forbidVisible []string
+		wantRaw       []string
+		forbidRaw     []string
+	}{
+		{
+			name:        "local links",
+			mode:        PreviewImageModeLinks,
+			wantVisible: []string{"Inline fixture image follows", "fixture chart", "open image 1"},
+			forbidVisible: []string{
+				"cid:chart-001@herald.test",
+			},
+			wantRaw: []string{"\x1b]8;;http://127.0.0.1:"},
+			forbidRaw: []string{
+				"\x1b]1337;File=",
+			},
+		},
+		{
+			name:        "placeholder",
+			mode:        PreviewImageModePlaceholder,
+			wantVisible: []string{"Inline fixture image follows", "Image: fixture chart"},
+			forbidVisible: []string{
+				"open image",
+				"127.0.0.1",
+				"cid:chart-001@herald.test",
+			},
+			forbidRaw: []string{
+				"\x1b]1337;File=",
+				"\x1b]8;;http://127.0.0.1:",
+			},
+		},
+		{
+			name:        "forced iterm2",
+			mode:        PreviewImageModeIterm2,
+			wantVisible: []string{"Inline fixture image follows"},
+			forbidVisible: []string{
+				"open image",
+				"127.0.0.1",
+			},
+			wantRaw: []string{"\x1b]1337;File="},
+			forbidRaw: []string{
+				"\x1b]8;;http://127.0.0.1:",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newVirtualLabTimelinePreviewModel(t, testmail.ScenarioInlineCIDImage, 120, 40)
+			m.SetPreviewImageMode(tc.mode)
+			m.timeline.fullScreen = true
+			m.timeline.bodyScrollOffset = 0
+
+			rendered := viewContent(m.View())
+			visible := ansi.Strip(rendered)
+			normalizedVisible := normalizePreviewText(visible)
+			for _, want := range tc.wantVisible {
+				if !strings.Contains(normalizedVisible, normalizePreviewText(want)) {
+					t.Fatalf("%s full-screen preview missing visible %q:\n%s", tc.name, want, visible)
+				}
+			}
+			for _, bad := range tc.forbidVisible {
+				if strings.Contains(normalizedVisible, normalizePreviewText(bad)) {
+					t.Fatalf("%s full-screen preview visibly leaked %q:\n%s", tc.name, bad, visible)
+				}
+			}
+			for _, want := range tc.wantRaw {
+				if !strings.Contains(rendered, want) {
+					t.Fatalf("%s full-screen preview missing raw %q:\n%q", tc.name, want, rendered)
+				}
+			}
+			for _, bad := range tc.forbidRaw {
+				if strings.Contains(rendered, bad) {
+					t.Fatalf("%s full-screen preview emitted forbidden raw %q:\n%q", tc.name, bad, rendered)
+				}
+			}
+		})
+	}
+}
+
 func assertVirtualLabTimelineChrome(t *testing.T, rendered string) {
 	t.Helper()
 	visible := ansi.Strip(rendered)

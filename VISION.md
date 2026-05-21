@@ -835,7 +835,7 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] Demo media can opt into a compact keypress overlay with `--demo-keys` so presentation GIFs show the shortcuts being pressed
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
 - [x] Demo TUI startup shows a compact dismissible welcome overlay that points users at the first onboarding email before they explore freely
-- [x] Creative Commons image sampler email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode
+- [x] `Step 5: View inline images in full screen` Herald Image Lab email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode
 - [x] Rich HTML rendering showcase email lets users verify headings, lists, links, remote image labels, and shared preview behavior in demo mode
 - [ ] Demo mode accessible from the first-run wizard ("Try without an account")
 

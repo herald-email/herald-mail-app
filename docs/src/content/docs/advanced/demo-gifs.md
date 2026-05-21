@@ -17,7 +17,7 @@ brew install vhs ffmpeg
 make docs-media
 ```
 
-Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`. Showcase tapes use `./bin/herald --demo --demo-keys` so viewers can see shortcuts such as `S`, `?`, `2`, `C`, range selection, horizontal preview movement, and full-screen preview. The image-preview tape forces `-image-protocol=kitty` against the Creative Commons sampler so the generated media can exercise the Kitty/Ghostty rendering path once the capture stack can render raster blocks.
+Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`. Showcase tapes use `./bin/herald --demo --demo-keys` so viewers can see shortcuts such as `S`, `?`, `2`, `C`, range selection, horizontal preview movement, and full-screen preview. The image-preview tape forces `-image-protocol=kitty` against `Step 5: View inline images in full screen` so the generated media can exercise the Kitty/Ghostty rendering path once the capture stack can render raster blocks.
 
 Theme gallery screenshots are regenerated separately because they need one `--demo -theme <name>` launch per built-in palette:
 

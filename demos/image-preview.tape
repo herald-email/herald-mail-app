@@ -10,10 +10,10 @@ Type "./bin/herald --demo -image-protocol=kitty"
 Enter
 Sleep 3s
 
-# Open the Example 4 image lab message without relying on row position.
+# Open the Step 5 image lab message without relying on row position.
 Type "/"
 Sleep 0.2s
-Type "Example 4"
+Type "Step 5: View inline images in full screen"
 Sleep 0.2s
 Enter
 Sleep 0.8s
