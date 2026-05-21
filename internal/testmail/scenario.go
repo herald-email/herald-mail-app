@@ -18,13 +18,14 @@ import (
 type ScenarioName string
 
 const (
-	ScenarioPlainThread      ScenarioName = "plain-thread"
-	ScenarioCalendlyInvite   ScenarioName = "calendly-invite"
-	ScenarioNewsletterTable  ScenarioName = "newsletter-table"
-	ScenarioReceiptHTML      ScenarioName = "receipt-html"
-	ScenarioMalformedCharset ScenarioName = "malformed-charset"
-	ScenarioInlineCIDImage   ScenarioName = "inline-cid-image"
-	ScenarioLongLinkTracking ScenarioName = "long-link-tracking"
+	ScenarioPlainThread        ScenarioName = "plain-thread"
+	ScenarioCalendlyInvite     ScenarioName = "calendly-invite"
+	ScenarioNewsletterTable    ScenarioName = "newsletter-table"
+	ScenarioReceiptHTML        ScenarioName = "receipt-html"
+	ScenarioMalformedCharset   ScenarioName = "malformed-charset"
+	ScenarioInlineCIDImage     ScenarioName = "inline-cid-image"
+	ScenarioLongLinkTracking   ScenarioName = "long-link-tracking"
+	ScenarioUnsubscribeHeaders ScenarioName = "unsubscribe-headers"
 )
 
 // Scenario is a named set of fixture placements ready to seed into a Lab.

@@ -1,0 +1,29 @@
+From: digest@herald.test
+To: alice@herald.test
+Subject: Unsubscribe fixture no header
+Date: Wed, 20 May 2026 10:00:00 -0700
+Message-ID: <unsubscribe.no-header@herald.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="unsubscribe-no-header-boundary"
+
+--unsubscribe-no-header-boundary
+Content-Type: text/plain; charset=utf-8
+
+Weekly fixture digest
+
+This message intentionally has no List-Unsubscribe header so tests can verify
+that Herald does not advertise unsubscribe where it cannot run.
+
+--unsubscribe-no-header-boundary
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html>
+  <body>
+    <h1>Weekly fixture digest</h1>
+    <p>This message intentionally has no List-Unsubscribe header.</p>
+    <p><a href="https://news.herald.test/preferences">Manage preferences</a></p>
+  </body>
+</html>
+
+--unsubscribe-no-header-boundary--

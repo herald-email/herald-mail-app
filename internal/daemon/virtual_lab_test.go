@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +27,65 @@ type virtualLabDaemon struct {
 	httpServer      *httptest.Server
 	originalID      string
 	originalSubject string
+}
+
+func TestVirtualLabDaemonUnsubscribeAndSoftUnsubscribe(t *testing.T) {
+	h := startVirtualLabDaemon(t)
+
+	var posts atomic.Int32
+	postBodies := make(chan string, 2)
+	unsubServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		postBodies <- string(body)
+		if r.Method != http.MethodPost {
+			t.Errorf("unsubscribe method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer unsubServer.Close()
+
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = unsubServer.Client().Transport
+	t.Cleanup(func() { http.DefaultTransport = oldTransport })
+
+	oneClickID := h.appendAliceInboxAndSync(t, rawVirtualLabUnsubscribeMessage(
+		"digest@herald.test",
+		h.alice.Address,
+		"Daemon unsubscribe one-click",
+		"<daemon.unsubscribe.one-click@herald.test>",
+		"<"+unsubServer.URL+"/one-click>",
+		"List-Unsubscribe=One-Click",
+	))
+
+	h.postJSON(t, "/v1/emails/"+url.PathEscape(oneClickID)+"/unsubscribe", nil, http.StatusOK)
+	select {
+	case body := <-postBodies:
+		if body != "List-Unsubscribe=One-Click" {
+			t.Fatalf("one-click POST body = %q", body)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for local one-click unsubscribe POST")
+	}
+	if posts.Load() != 1 {
+		t.Fatalf("unsubscribe POST count = %d, want 1", posts.Load())
+	}
+	if ok, err := h.server.cache.IsUnsubscribedSender("digest@herald.test"); err != nil || !ok {
+		t.Fatalf("expected digest@herald.test recorded as unsubscribed, ok=%v err=%v", ok, err)
+	}
+
+	noHeaderID := h.appendAliceInboxAndSync(t, []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: Daemon unsubscribe no header\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: <daemon.unsubscribe.no-header@herald.test>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nNo unsubscribe header here.\r\n", h.bob.Address, h.alice.Address)))
+	noHeaderBody := h.postJSON(t, "/v1/emails/"+url.PathEscape(noHeaderID)+"/unsubscribe", nil, http.StatusInternalServerError)
+	if !bytes.Contains(noHeaderBody, []byte("no List-Unsubscribe header")) {
+		t.Fatalf("missing-header unsubscribe error should be clear:\n%s", noHeaderBody)
+	}
+
+	h.postJSON(t, "/v1/senders/"+url.PathEscape("digest@herald.test")+"/soft-unsubscribe", nil, http.StatusOK)
+	assertSoftUnsubscribeRule(t, h.server.cache, "digest@herald.test", "Disabled Subscriptions")
+
+	h.postJSON(t, "/v1/senders/"+url.PathEscape("alerts@herald.test")+"/soft-unsubscribe", map[string]string{"to_folder": "Archive"}, http.StatusOK)
+	assertSoftUnsubscribeRule(t, h.server.cache, "alerts@herald.test", "Archive")
 }
 
 func TestVirtualLabDaemonRoutesSendDraftAndReply(t *testing.T) {
@@ -143,6 +204,18 @@ func startVirtualLabDaemon(t *testing.T) *virtualLabDaemon {
 
 func (h *virtualLabDaemon) syncAndWaitForOriginal(t *testing.T) {
 	t.Helper()
+	h.syncAndWaitForMessageID(t, h.originalID)
+}
+
+func (h *virtualLabDaemon) appendAliceInboxAndSync(t *testing.T, raw []byte, flags ...string) string {
+	t.Helper()
+	ref := h.alice.AppendEML("INBOX", raw, flags...)
+	h.syncAndWaitForMessageID(t, ref.MessageID)
+	return ref.MessageID
+}
+
+func (h *virtualLabDaemon) syncAndWaitForMessageID(t *testing.T, messageID string) {
+	t.Helper()
 	h.postJSON(t, "/v1/sync", map[string]string{"folder": "INBOX"}, http.StatusAccepted)
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -151,14 +224,14 @@ func (h *virtualLabDaemon) syncAndWaitForOriginal(t *testing.T) {
 		var emails []models.EmailData
 		if err := json.Unmarshal(body, &emails); err == nil {
 			for _, email := range emails {
-				if email.MessageID == h.originalID {
+				if email.MessageID == messageID {
 					return
 				}
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for daemon sync of %s", h.originalID)
+	t.Fatalf("timed out waiting for daemon sync of %s", messageID)
 }
 
 func (h *virtualLabDaemon) postJSON(t *testing.T, path string, payload any, wantStatus int) []byte {
@@ -195,4 +268,29 @@ func (h *virtualLabDaemon) get(t *testing.T, path string, wantStatus int) []byte
 		t.Fatalf("GET %s status = %d, want %d:\n%s", path, resp.StatusCode, wantStatus, body.String())
 	}
 	return body.Bytes()
+}
+
+func rawVirtualLabUnsubscribeMessage(from, to, subject, messageID, listUnsubscribe, listUnsubscribePost string) []byte {
+	postHeader := ""
+	if listUnsubscribePost != "" {
+		postHeader = "List-Unsubscribe-Post: " + listUnsubscribePost + "\r\n"
+	}
+	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nList-Unsubscribe: %s\r\n%sContent-Type: text/plain; charset=utf-8\r\n\r\nUnsubscribe fixture body.\r\n", from, to, subject, messageID, listUnsubscribe, postHeader))
+}
+
+func assertSoftUnsubscribeRule(t *testing.T, store interface {
+	GetAllRules() ([]*models.Rule, error)
+}, sender, folder string) {
+	t.Helper()
+	rules, err := store.GetAllRules()
+	if err != nil {
+		t.Fatalf("GetAllRules: %v", err)
+	}
+	for _, rule := range rules {
+		if rule.TriggerType == models.TriggerSender && rule.TriggerValue == sender && rule.Enabled && len(rule.Actions) == 1 &&
+			rule.Actions[0].Type == models.ActionMove && rule.Actions[0].DestFolder == folder {
+			return
+		}
+	}
+	t.Fatalf("missing soft-unsubscribe rule sender=%q folder=%q in %#v", sender, folder, rules)
 }

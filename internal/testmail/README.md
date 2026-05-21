@@ -44,6 +44,7 @@ Current scenarios cover:
 - malformed charset fallback
 - inline CID image
 - long safe link
+- unsubscribe headers, including one-click, mailto, and absent-header variants
 
 ## Sanitizing Real Repros
 

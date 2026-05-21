@@ -11,11 +11,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -343,6 +345,75 @@ func TestVirtualLabDaemonBackedMCPBulkMoveAndDelete(t *testing.T) {
 	h.requireNotCached(t, deleteTwoID)
 }
 
+func TestVirtualLabDaemonBackedMCPUnsubscribeAndSoftUnsubscribe(t *testing.T) {
+	h := startMCPVirtualLabDaemon(t)
+
+	var posts atomic.Int32
+	postBodies := make(chan string, 2)
+	unsubServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		postBodies <- string(body)
+		if r.Method != http.MethodPost {
+			t.Errorf("unsubscribe method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer unsubServer.Close()
+
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = unsubServer.Client().Transport
+	t.Cleanup(func() { http.DefaultTransport = oldTransport })
+
+	oneClickID := h.appendAliceInboxAndSync(t, rawMCPVirtualLabUnsubscribeMessage(
+		"digest@herald.test",
+		h.alice.Address,
+		"MCP unsubscribe one-click",
+		"<mcp.unsubscribe.one-click@herald.test>",
+		"<"+unsubServer.URL+"/one-click>",
+		"List-Unsubscribe=One-Click",
+	))
+
+	unsubJSON := callVirtualLabTool(t, h.mcp, 40, "unsubscribe_sender", map[string]any{
+		"message_id": oneClickID,
+	})
+	if !strings.Contains(unsubJSON, "Unsubscribed") {
+		t.Fatalf("unsubscribe_sender response missing success text:\n%s", unsubJSON)
+	}
+	select {
+	case body := <-postBodies:
+		if body != "List-Unsubscribe=One-Click" {
+			t.Fatalf("one-click POST body = %q", body)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for local one-click unsubscribe POST")
+	}
+	if posts.Load() != 1 {
+		t.Fatalf("unsubscribe POST count = %d, want 1", posts.Load())
+	}
+	if ok, err := h.cache.IsUnsubscribedSender("digest@herald.test"); err != nil || !ok {
+		t.Fatalf("expected digest@herald.test recorded as unsubscribed, ok=%v err=%v", ok, err)
+	}
+
+	softJSON := callVirtualLabTool(t, h.mcp, 41, "soft_unsubscribe_sender", map[string]any{
+		"sender": "digest@herald.test",
+	})
+	if !strings.Contains(softJSON, "Auto-move rule created for digest@herald.test") {
+		t.Fatalf("soft_unsubscribe_sender response missing success text:\n%s", softJSON)
+	}
+	assertMCPSoftUnsubscribeRule(t, h.cache, "digest@herald.test", "Disabled Subscriptions")
+
+	customJSON := callVirtualLabTool(t, h.mcp, 42, "soft_unsubscribe_sender", map[string]any{
+		"sender":    "alerts@herald.test",
+		"to_folder": "Archive",
+	})
+	if !strings.Contains(customJSON, "Auto-move rule created for alerts@herald.test") {
+		t.Fatalf("soft_unsubscribe_sender custom response missing success text:\n%s", customJSON)
+	}
+	assertMCPSoftUnsubscribeRule(t, h.cache, "alerts@herald.test", "Archive")
+}
+
 func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
 	setMCPDaemonURLForTest(t, "")
 
@@ -384,6 +455,18 @@ func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
 			args: map[string]any{
 				"message_id": "<missing.delete/source@herald.test>",
 				"folder":     "INBOX",
+			},
+		},
+		{
+			tool: "unsubscribe_sender",
+			args: map[string]any{
+				"message_id": "<missing.unsubscribe/source@herald.test>",
+			},
+		},
+		{
+			tool: "soft_unsubscribe_sender",
+			args: map[string]any{
+				"sender": "digest@herald.test",
 			},
 		},
 	} {
@@ -633,6 +716,29 @@ func rawVirtualLabTextMessage(from, to, subject, messageID, body string) []byte 
 	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", from, to, subject, messageID, body))
 }
 
+func rawMCPVirtualLabUnsubscribeMessage(from, to, subject, messageID, listUnsubscribe, listUnsubscribePost string) []byte {
+	postHeader := ""
+	if listUnsubscribePost != "" {
+		postHeader = "List-Unsubscribe-Post: " + listUnsubscribePost + "\r\n"
+	}
+	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nList-Unsubscribe: %s\r\n%sContent-Type: text/plain; charset=utf-8\r\n\r\nUnsubscribe fixture body.\r\n", from, to, subject, messageID, listUnsubscribe, postHeader))
+}
+
 func rawVirtualLabAttachmentMessage(from, to, subject, messageID, filename, body string) []byte {
 	return []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: Wed, 20 May 2026 10:00:00 -0700\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"slice6-attachment-boundary\"\r\n\r\n--slice6-attachment-boundary\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nPlease review the attachment.\r\n--slice6-attachment-boundary\r\nContent-Type: text/plain; name=\"%s\"\r\nContent-Disposition: attachment; filename=\"%s\"\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--slice6-attachment-boundary--\r\n", from, to, subject, messageID, filename, filename, base64.StdEncoding.EncodeToString([]byte(body))))
+}
+
+func assertMCPSoftUnsubscribeRule(t *testing.T, c *cache.Cache, sender, folder string) {
+	t.Helper()
+	rules, err := c.GetAllRules()
+	if err != nil {
+		t.Fatalf("GetAllRules: %v", err)
+	}
+	for _, rule := range rules {
+		if rule.TriggerType == models.TriggerSender && rule.TriggerValue == sender && rule.Enabled && len(rule.Actions) == 1 &&
+			rule.Actions[0].Type == models.ActionMove && rule.Actions[0].DestFolder == folder {
+			return
+		}
+	}
+	t.Fatalf("missing soft-unsubscribe rule sender=%q folder=%q in %#v", sender, folder, rules)
 }

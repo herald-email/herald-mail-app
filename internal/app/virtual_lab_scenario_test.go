@@ -98,9 +98,84 @@ func TestTimelinePreviewRendersVirtualMailScenarios(t *testing.T) {
 	}
 }
 
+func TestVirtualLabUnsubscribePreviewHints(t *testing.T) {
+	cases := []struct {
+		key             string
+		wantUnsubscribe bool
+	}{
+		{key: "one-click", wantUnsubscribe: true},
+		{key: "mailto", wantUnsubscribe: true},
+		{key: "no-header", wantUnsubscribe: false},
+	}
+
+	for _, tc := range cases {
+		t.Run("timeline/"+tc.key, func(t *testing.T) {
+			email, body := fetchScenarioPreviewBodyByKey(t, testmail.ScenarioUnsubscribeHeaders, tc.key)
+			m := newVirtualLabPreviewModelForEmail(t, email, body, 120, 40)
+
+			rendered := ansi.Strip(m.renderEmailPreview())
+			hints := ansi.Strip(m.renderKeyHints())
+			assertVirtualLabUnsubscribeHints(t, tc.key, rendered, hints, tc.wantUnsubscribe)
+		})
+
+		t.Run("cleanup/"+tc.key, func(t *testing.T) {
+			email, body := fetchScenarioPreviewBodyByKey(t, testmail.ScenarioUnsubscribeHeaders, tc.key)
+			m := makeSizedModel(t, 120, 40)
+			m.activeTab = tabCleanup
+			m.showCleanupPreview = true
+			m.cleanupPreviewWidth = 70
+			m.cleanupPreviewEmail = email
+			m.cleanupEmailBody = body
+			m.detailsEmails = []*models.EmailData{email}
+			m.setFocusedPanel(panelDetails)
+
+			rendered := ansi.Strip(m.renderCleanupPreview())
+			hints := ansi.Strip(m.renderKeyHints())
+			assertVirtualLabUnsubscribeHints(t, tc.key, rendered, hints, tc.wantUnsubscribe)
+		})
+	}
+}
+
+func assertVirtualLabUnsubscribeHints(t testing.TB, key, rendered, hints string, wantUnsubscribe bool) {
+	t.Helper()
+	normalizedRendered := normalizePreviewText(rendered)
+	normalizedHints := normalizePreviewText(hints)
+	if !strings.Contains(normalizedRendered, normalizePreviewText("Actions:")) {
+		t.Fatalf("%s preview missing Actions row:\n%s", key, rendered)
+	}
+	if !strings.Contains(normalizedRendered, normalizePreviewText("H hide future mail")) {
+		t.Fatalf("%s preview missing hide-future action:\n%s", key, rendered)
+	}
+	if !strings.Contains(normalizedHints, normalizePreviewText("H: hide future mail")) {
+		t.Fatalf("%s hints missing hide-future action:\n%s", key, hints)
+	}
+	for _, stale := range []string{"hard unsubscribe", "soft unsubscribe"} {
+		if strings.Contains(normalizedRendered, stale) || strings.Contains(normalizedHints, stale) {
+			t.Fatalf("%s leaked stale wording %q:\npreview:\n%s\nhints:\n%s", key, stale, rendered, hints)
+		}
+	}
+
+	hasPreviewUnsub := strings.Contains(normalizedRendered, normalizePreviewText("u unsubscribe"))
+	hasHintUnsub := strings.Contains(normalizedHints, normalizePreviewText("u: unsubscribe"))
+	if wantUnsubscribe {
+		if !hasPreviewUnsub || !hasHintUnsub {
+			t.Fatalf("%s should advertise unsubscribe:\npreview:\n%s\nhints:\n%s", key, rendered, hints)
+		}
+		return
+	}
+	if hasPreviewUnsub || hasHintUnsub {
+		t.Fatalf("%s should not advertise unsubscribe:\npreview:\n%s\nhints:\n%s", key, rendered, hints)
+	}
+}
+
 func newVirtualLabTimelinePreviewModel(t testing.TB, name testmail.ScenarioName, width, height int) *Model {
 	t.Helper()
 	email, body := fetchFirstScenarioPreviewBody(t, name)
+	return newVirtualLabPreviewModelForEmail(t, email, body, width, height)
+}
+
+func newVirtualLabPreviewModelForEmail(t testing.TB, email *models.EmailData, body *models.EmailBody, width, height int) *Model {
+	t.Helper()
 	m := makeSizedModel(t, width, height)
 	m.activeTab = tabTimeline
 	m.focusedPanel = panelPreview
@@ -130,6 +205,23 @@ func fetchFirstScenarioPreviewBody(t testing.TB, name testmail.ScenarioName) (*m
 	if selected.Key == "" {
 		t.Fatalf("scenario %q has no Alice INBOX message", name)
 	}
+	return fetchScenarioPreviewBody(t, seeded, selected)
+}
+
+func fetchScenarioPreviewBodyByKey(t testing.TB, name testmail.ScenarioName, key string) (*models.EmailData, *models.EmailBody) {
+	t.Helper()
+	seeded := testmail.StartScenario(t, name)
+	for _, msg := range seeded.Messages {
+		if msg.Key == key {
+			return fetchScenarioPreviewBody(t, seeded, msg)
+		}
+	}
+	t.Fatalf("scenario %q has no message key %q", name, key)
+	return nil, nil
+}
+
+func fetchScenarioPreviewBody(t testing.TB, seeded *testmail.SeededScenario, selected testmail.ScenarioMessage) (*models.EmailData, *models.EmailBody) {
+	t.Helper()
 	ref := seeded.Refs[selected.Key]
 	alice := seeded.Lab.Account(testmail.DefaultAliceAddress)
 	c, err := cache.New(filepath.Join(t.TempDir(), "preview-cache.db"))

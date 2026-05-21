@@ -179,6 +179,22 @@ go test ./internal/mcpserver -run 'VirtualLab|Daemon|Forward|Attachment|Archive|
 
 ---
 
+### TC-MCP-01D — Virtual lab unsubscribe and sender cleanup
+
+**Steps:**
+```bash
+go test ./internal/daemon -run 'VirtualLab|Unsubscribe|Soft'
+go test ./internal/mcpserver -run 'VirtualLab|Unsubscribe|Soft|MissingDaemon'
+```
+
+**Expect:**
+- `unsubscribe_sender` executes only against a local test HTTPS endpoint and sends the RFC 8058 one-click POST body exactly once.
+- `soft_unsubscribe_sender` creates an enabled sender auto-move rule, using `Disabled Subscriptions` by default or the supplied `to_folder`.
+- Missing-header messages return a clear unsubscribe error, and missing-daemon MCP calls return `daemon not running`.
+- Automated regression tests do not contact live or external unsubscribe endpoints; live provider behavior remains a separately labeled manual check.
+
+---
+
 ### TC-MCP-02 — list_recent_emails basic
 
 **Steps:**

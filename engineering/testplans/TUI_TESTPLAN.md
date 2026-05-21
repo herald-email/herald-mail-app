@@ -1659,7 +1659,7 @@ Check these states during every applicable lane:
 
 ### TC-43 — Timeline preview exposes unsubscribe and Hide Future Mail in context
 
-**Lane:** A, B
+**Lane:** A, B, G
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -1667,17 +1667,19 @@ Check these states during every applicable lane:
 2. Open the email preview and capture the preview plus the bottom hint bar.
 3. Open a second Timeline preview whose loaded body does not expose `List-Unsubscribe`.
 4. Capture the preview plus the bottom hint bar again.
+5. In automated virtual-lab coverage, use `ScenarioUnsubscribeHeaders` and assert the `one-click`, `mailto`, and `no-header` fixture variants.
 
 **Expect:**
 - The preview header includes `Tags:` and `Actions:` rows.
 - With `List-Unsubscribe`, the preview metadata and hint bar both advertise `u: unsubscribe` and `H: hide future mail`.
 - Without `List-Unsubscribe`, the preview metadata and hint bar do not advertise `u`, but still advertise `H: hide future mail`.
 - End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
+- Virtual-lab assertions do not contact live or external unsubscribe endpoints; they only prove parsed-header availability and visible affordances.
 - A first-time user can identify the available list/sender action from the preview itself without prior knowledge.
 
 ### TC-44 — Cleanup summary and preview use the same `u` / `h` semantics
 
-**Lane:** A, B
+**Lane:** A, B, G
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
@@ -1685,6 +1687,7 @@ Check these states during every applicable lane:
 2. Confirm the sender summary advertises `H: hide future mail`.
 3. Open a Cleanup preview for an email whose loaded body exposes `List-Unsubscribe` and capture the preview plus the hint bar.
 4. Open a Cleanup preview for an email whose loaded body does not expose `List-Unsubscribe` and capture again.
+5. In automated virtual-lab coverage, use `ScenarioUnsubscribeHeaders` and assert the same `one-click`, `mailto`, and `no-header` availability rules as Timeline.
 
 **Expect:**
 - Cleanup sender summary advertises `H: hide future mail`.
@@ -1692,6 +1695,7 @@ Check these states during every applicable lane:
 - Cleanup preview includes `Tags:` and `Actions:` rows in the preview header.
 - Cleanup preview uses the same availability rules as Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `h` remains visible in both cases.
 - End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
+- Virtual-lab assertions do not contact live or external unsubscribe endpoints; daemon/MCP one-click execution is covered separately with a local test server.
 
 ### TC-49 — Email preview hides long link destinations behind OSC 8 labels
 

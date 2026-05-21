@@ -27,6 +27,7 @@ func TestCorpusScenariosCoverPlannedRealisticCases(t *testing.T) {
 		"malformed-charset",
 		"inline-cid-image",
 		"long-link-tracking",
+		"unsubscribe-headers",
 	}
 	for _, name := range want {
 		scenario, ok := scenarios[name]

@@ -89,6 +89,7 @@ func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 		testmail.ScenarioMalformedCharset,
 		testmail.ScenarioInlineCIDImage,
 		testmail.ScenarioLongLinkTracking,
+		testmail.ScenarioUnsubscribeHeaders,
 	}
 
 	for _, name := range names {
@@ -152,6 +153,27 @@ func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 				case testmail.ScenarioInlineCIDImage:
 					if len(body.InlineImages) != 1 || body.InlineImages[0].ContentID != "chart-001@herald.test" {
 						t.Fatalf("inline CID images = %#v, want chart-001@herald.test", body.InlineImages)
+					}
+				case testmail.ScenarioUnsubscribeHeaders:
+					switch msg.Key {
+					case "one-click":
+						if body.ListUnsubscribe != "<https://unsubscribe.herald.test/one-click>" {
+							t.Fatalf("one-click List-Unsubscribe = %q", body.ListUnsubscribe)
+						}
+						if body.ListUnsubscribePost != "List-Unsubscribe=One-Click" {
+							t.Fatalf("one-click List-Unsubscribe-Post = %q", body.ListUnsubscribePost)
+						}
+					case "mailto":
+						if body.ListUnsubscribe != "<mailto:unsubscribe@herald.test?subject=unsubscribe>" {
+							t.Fatalf("mailto List-Unsubscribe = %q", body.ListUnsubscribe)
+						}
+						if body.ListUnsubscribePost != "" {
+							t.Fatalf("mailto List-Unsubscribe-Post = %q, want empty", body.ListUnsubscribePost)
+						}
+					case "no-header":
+						if body.ListUnsubscribe != "" || body.ListUnsubscribePost != "" {
+							t.Fatalf("no-header unsubscribe headers = %q / %q", body.ListUnsubscribe, body.ListUnsubscribePost)
+						}
 					}
 				}
 			}

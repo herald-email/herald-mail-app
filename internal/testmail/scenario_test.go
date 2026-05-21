@@ -11,6 +11,7 @@ func TestLoadScenarioParsesFixtureMetadata(t *testing.T) {
 		ScenarioMalformedCharset,
 		ScenarioInlineCIDImage,
 		ScenarioLongLinkTracking,
+		ScenarioUnsubscribeHeaders,
 	}
 
 	for _, name := range names {
@@ -37,6 +38,34 @@ func TestLoadScenarioParsesFixtureMetadata(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStartScenarioSeedsUnsubscribeHeaders(t *testing.T) {
+	seeded := StartScenario(t, ScenarioUnsubscribeHeaders)
+	want := map[string]struct {
+		subject string
+	}{
+		"one-click": {subject: "Unsubscribe fixture one-click"},
+		"mailto":    {subject: "Unsubscribe fixture mailto"},
+		"no-header": {subject: "Unsubscribe fixture no header"},
+	}
+
+	if len(seeded.Refs) != len(want) {
+		t.Fatalf("seeded refs = %d, want %d: %#v", len(seeded.Refs), len(want), seeded.Refs)
+	}
+	for key, expected := range want {
+		ref, ok := seeded.Refs[key]
+		if !ok {
+			t.Fatalf("missing ref %q in %#v", key, seeded.Refs)
+		}
+		if ref.Account != DefaultAliceAddress || ref.Folder != "INBOX" || ref.UID == 0 {
+			t.Fatalf("ref %q = %+v, want Alice INBOX nonzero UID", key, ref)
+		}
+		got := seeded.Lab.WaitForSubject(DefaultAliceAddress, "INBOX", expected.subject)
+		if got.MessageID != ref.MessageID {
+			t.Fatalf("ref %q message ID = %q, WaitForSubject returned %q", key, ref.MessageID, got.MessageID)
+		}
 	}
 }
 

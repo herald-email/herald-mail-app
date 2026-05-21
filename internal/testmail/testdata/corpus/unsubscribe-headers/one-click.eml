@@ -1,0 +1,31 @@
+From: digest@herald.test
+To: alice@herald.test
+Subject: Unsubscribe fixture one-click
+Date: Wed, 20 May 2026 10:00:00 -0700
+Message-ID: <unsubscribe.one-click@herald.test>
+MIME-Version: 1.0
+List-Unsubscribe: <https://unsubscribe.herald.test/one-click>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+Content-Type: multipart/alternative; boundary="unsubscribe-one-click-boundary"
+
+--unsubscribe-one-click-boundary
+Content-Type: text/plain; charset=utf-8
+
+Weekly fixture digest
+
+This message carries an RFC 8058 one-click unsubscribe header so tests can
+verify availability without contacting a live mailing-list provider.
+
+--unsubscribe-one-click-boundary
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html>
+  <body>
+    <h1>Weekly fixture digest</h1>
+    <p>This message carries an RFC 8058 one-click unsubscribe header.</p>
+    <p><a href="https://unsubscribe.herald.test/preferences">Manage preferences</a></p>
+  </body>
+</html>
+
+--unsubscribe-one-click-boundary--
