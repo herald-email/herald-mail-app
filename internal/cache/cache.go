@@ -109,6 +109,10 @@ func (c *Cache) initDB() error {
 	if _, err := c.db.Exec(`
 		CREATE TABLE IF NOT EXISTS email_preview_bodies (
 			message_id TEXT PRIMARY KEY,
+			source_id TEXT NOT NULL DEFAULT 'default-mail',
+			account_id TEXT NOT NULL DEFAULT 'default',
+			local_id TEXT,
+			uid_validity INTEGER NOT NULL DEFAULT 0,
 			from_addr TEXT,
 			to_addr TEXT,
 			cc TEXT,
@@ -121,10 +125,26 @@ func (c *Cache) initDB() error {
 			list_unsubscribe_post TEXT,
 			inline_images_json TEXT NOT NULL DEFAULT '[]',
 			attachments_json TEXT NOT NULL DEFAULT '[]',
-			cached_at DATETIME NOT NULL
+			cached_at DATETIME NOT NULL,
+			cache_policy TEXT NOT NULL DEFAULT 'no_attachments',
+			invalidated_at DATETIME
 		)
 	`); err != nil {
 		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE email_preview_bodies ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN local_id TEXT`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN uid_validity INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN cache_policy TEXT NOT NULL DEFAULT 'no_attachments'`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN invalidated_at DATETIME`,
+		`CREATE INDEX IF NOT EXISTS idx_preview_bodies_scope ON email_preview_bodies(source_id, account_id, local_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_preview_bodies_invalidated ON email_preview_bodies(invalidated_at)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("preview source lifecycle migration might already be applied: %v", err)
+		}
 	}
 
 	// is_read column for read/unread tracking
@@ -886,9 +906,22 @@ func (c *Cache) GetBodyText(messageID string) (string, error) {
 // CachePreviewBody stores the preview body using the configured offline-cache
 // policy. Lightweight caches keep text, headers, and attachment metadata only.
 func (c *Cache) CachePreviewBody(messageID string, body *models.EmailBody, policy string) error {
-	if strings.TrimSpace(messageID) == "" || body == nil {
+	ref := models.MessageRef{MessageID: messageID}
+	return c.CachePreviewBodyByRef(ref, body, policy)
+}
+
+// CachePreviewBodyByRef stores a scoped preview body using the configured
+// offline-cache policy. It keeps the legacy message_id primary key while adding
+// source/account/local identity for cache-first callers.
+func (c *Cache) CachePreviewBodyByRef(ref models.MessageRef, body *models.EmailBody, policy string) error {
+	if strings.TrimSpace(ref.MessageID) == "" && body != nil && strings.TrimSpace(body.MessageID) != "" {
+		ref.MessageID = body.MessageID
+	}
+	if strings.TrimSpace(ref.MessageID) == "" || body == nil {
 		return nil
 	}
+	ref = ref.WithDefaults()
+	policy = normalizePreviewStoragePolicy(policy)
 	cached := previewBodyForPolicy(body, policy)
 	inlineJSON, err := json.Marshal(cached.InlineImages)
 	if err != nil {
@@ -900,11 +933,17 @@ func (c *Cache) CachePreviewBody(messageID string, body *models.EmailBody, polic
 	}
 	_, err = c.db.Exec(`
 		INSERT OR REPLACE INTO email_preview_bodies
-		(message_id, from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
-		 list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cached_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, source_id, account_id, local_id, uid_validity,
+		 from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
+		 list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cached_at,
+		 cache_policy, invalidated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`,
-		messageID,
+		ref.MessageID,
+		string(ref.SourceID),
+		string(ref.AccountID),
+		ref.LocalID,
+		ref.UIDValidity,
 		cached.From,
 		cached.To,
 		cached.CC,
@@ -918,22 +957,73 @@ func (c *Cache) CachePreviewBody(messageID string, body *models.EmailBody, polic
 		string(inlineJSON),
 		string(attachmentsJSON),
 		time.Now().Format(time.RFC3339),
+		policy,
 	)
 	return err
+}
+
+// PutMessageBodyByRef stores a scoped full-body cache row. Only rows persisted
+// with preserve_all are eligible for full-body reads.
+func (c *Cache) PutMessageBodyByRef(ref models.MessageRef, body *models.EmailBody, policy string) error {
+	if err := c.CachePreviewBodyByRef(ref, body, policy); err != nil {
+		return err
+	}
+	if body != nil && strings.TrimSpace(ref.MessageID) != "" && strings.TrimSpace(body.TextPlain) != "" {
+		if err := c.CacheBodyText(ref.MessageID, body.TextPlain); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetPreviewBody returns a cached preview body, or nil when the message has not
 // been cached for preview yet.
 func (c *Cache) GetPreviewBody(messageID string) (*models.EmailBody, error) {
+	return c.GetPreviewBodyByRef(models.MessageRef{MessageID: messageID})
+}
+
+// GetPreviewBodyByRef returns a scoped cached preview body, or nil when the
+// preview is absent or has been invalidated.
+func (c *Cache) GetPreviewBodyByRef(ref models.MessageRef) (*models.EmailBody, error) {
+	body, _, err := c.getPreviewBodyByRef(ref)
+	return body, err
+}
+
+// GetMessageBodyByRef returns a scoped cached full body only when the row was
+// stored under preserve_all. Rows cached under lighter preview policies remain
+// previews and are treated as a full-body miss.
+func (c *Cache) GetMessageBodyByRef(ref models.MessageRef) (*models.EmailBody, error) {
+	body, policy, err := c.getPreviewBodyByRef(ref)
+	if err != nil || body == nil {
+		return body, err
+	}
+	if normalizePreviewStoragePolicy(policy) != "preserve_all" {
+		return nil, nil
+	}
+	return body, nil
+}
+
+func (c *Cache) getPreviewBodyByRef(ref models.MessageRef) (*models.EmailBody, string, error) {
+	ref = ref.WithDefaults()
+	if strings.TrimSpace(ref.MessageID) == "" && strings.TrimSpace(ref.LocalID) == "" {
+		return nil, "", nil
+	}
 	var body models.EmailBody
 	var isFromHTML int
-	var inlineJSON, attachmentsJSON string
+	var messageID, inlineJSON, attachmentsJSON, policy string
 	err := c.db.QueryRow(`
-		SELECT from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
-		       list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json
+		SELECT message_id, from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
+		       list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cache_policy
 		FROM email_preview_bodies
-		WHERE message_id=?
-	`, messageID).Scan(
+		WHERE invalidated_at IS NULL
+		  AND (
+		    (local_id = ? AND local_id <> '')
+		    OR (? <> '' AND message_id = ?)
+		  )
+		ORDER BY CASE WHEN local_id = ? AND local_id <> '' THEN 0 ELSE 1 END
+		LIMIT 1
+	`, ref.LocalID, ref.MessageID, ref.MessageID, ref.LocalID).Scan(
+		&messageID,
 		&body.From,
 		&body.To,
 		&body.CC,
@@ -946,26 +1036,65 @@ func (c *Cache) GetPreviewBody(messageID string) (*models.EmailBody, error) {
 		&body.ListUnsubscribePost,
 		&inlineJSON,
 		&attachmentsJSON,
+		&policy,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	body.MessageID = messageID
 	body.IsFromHTML = isFromHTML != 0
 	if strings.TrimSpace(inlineJSON) != "" {
 		if err := json.Unmarshal([]byte(inlineJSON), &body.InlineImages); err != nil {
-			return nil, fmt.Errorf("unmarshal inline preview images: %w", err)
+			return nil, "", fmt.Errorf("unmarshal inline preview images: %w", err)
 		}
 	}
 	if strings.TrimSpace(attachmentsJSON) != "" {
 		if err := json.Unmarshal([]byte(attachmentsJSON), &body.Attachments); err != nil {
-			return nil, fmt.Errorf("unmarshal preview attachments: %w", err)
+			return nil, "", fmt.Errorf("unmarshal preview attachments: %w", err)
 		}
 	}
-	return &body, nil
+	return &body, policy, nil
+}
+
+// InvalidatePreviewByRef marks a scoped preview/full-body cache row stale
+// without deleting it, so background refreshes can make future reads fast again.
+func (c *Cache) InvalidatePreviewByRef(ref models.MessageRef) error {
+	ref = ref.WithDefaults()
+	now := time.Now().Format(time.RFC3339)
+	if strings.TrimSpace(ref.LocalID) != "" {
+		if _, err := c.db.Exec(`UPDATE email_preview_bodies SET invalidated_at=? WHERE local_id=?`, now, ref.LocalID); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(ref.MessageID) != "" {
+		if _, err := c.db.Exec(`UPDATE email_preview_bodies SET invalidated_at=? WHERE message_id=?`, now, ref.MessageID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// InvalidateMessageByRef marks the full message body stale and clears indexed
+// body text so future foreground reads must refresh or replay a valid cache row.
+func (c *Cache) InvalidateMessageByRef(ref models.MessageRef) error {
+	ref = ref.WithDefaults()
+	if err := c.InvalidatePreviewByRef(ref); err != nil {
+		return err
+	}
+	if strings.TrimSpace(ref.LocalID) != "" {
+		if _, err := c.db.Exec(`UPDATE emails SET body_text='' WHERE local_id=?`, ref.LocalID); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(ref.MessageID) != "" {
+		if _, err := c.db.Exec(`UPDATE emails SET body_text='' WHERE message_id=?`, ref.MessageID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EstimatePreviewCacheStorageForPolicy summarizes binary preview-cache bytes
@@ -1139,7 +1268,7 @@ func (c *Cache) PrunePreviewBodiesForPolicy(policy string) (models.PreviewCacheP
 	}()
 	stmt, err := tx.Prepare(`
 		UPDATE email_preview_bodies
-		SET inline_images_json=?, attachments_json=?, cached_at=?
+		SET inline_images_json=?, attachments_json=?, cached_at=?, cache_policy=?
 		WHERE message_id=?
 	`)
 	if err != nil {
@@ -1148,7 +1277,7 @@ func (c *Cache) PrunePreviewBodiesForPolicy(policy string) (models.PreviewCacheP
 	defer stmt.Close()
 	now := time.Now().Format(time.RFC3339)
 	for _, update := range updates {
-		if _, err := stmt.Exec(update.inlineJSON, update.attachmentsJSON, now, update.messageID); err != nil {
+		if _, err := stmt.Exec(update.inlineJSON, update.attachmentsJSON, now, policy, update.messageID); err != nil {
 			return result, err
 		}
 	}
@@ -1655,6 +1784,18 @@ func (c *Cache) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) 
 		return nil, sql.ErrNoRows
 	}
 	return c.GetEmailByID(ref.MessageID)
+}
+
+// GetEmailByFolderUID returns a cached email by its legacy folder/UID identity.
+// It is used by compatibility callers that have not yet been migrated to
+// MessageRef but still need to enter the cache-first read path.
+func (c *Cache) GetEmailByFolderUID(folder string, uid uint32) (*models.EmailData, error) {
+	row := c.db.QueryRow(`SELECT message_id FROM emails WHERE folder = ? AND uid = ? LIMIT 1`, folder, uid)
+	var messageID string
+	if err := row.Scan(&messageID); err != nil {
+		return nil, err
+	}
+	return c.GetEmailByID(messageID)
 }
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending

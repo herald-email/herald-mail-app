@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -22,6 +24,14 @@ type previewCacheBackend interface {
 
 type previewFetchBackend interface {
 	FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error)
+}
+
+type messagePreviewServiceBackend interface {
+	GetMessagePreview(context.Context, models.MessageRef, backendpkg.MessageReadIntent) (backendpkg.MessageReadResult, error)
+}
+
+type messageBodyServiceBackend interface {
+	GetMessage(context.Context, models.MessageRef) (backendpkg.MessageReadResult, error)
 }
 
 type previewLoadTelemetry struct {

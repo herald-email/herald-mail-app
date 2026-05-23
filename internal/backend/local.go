@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -57,6 +59,9 @@ type LocalBackend struct {
 	// the user navigates back-and-forth through the same emails.
 	bodyCache   map[string]*models.EmailBody // key: "folder:uid"
 	bodyCacheMu sync.Mutex
+
+	messageService   *MessageService
+	messageServiceMu sync.Mutex
 }
 
 func summarizeTraceMessage(message string) string {
@@ -205,6 +210,11 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 		lastFetchCurrent: make(map[int64]int),
 		newEmailsCh:      make(chan models.NewEmailsNotification, 10),
 	}
+	b.messageService = NewMessageService(MessageServiceOptions{
+		Cache:         c,
+		Source:        b,
+		StoragePolicy: b.currentCacheStoragePolicy,
+	})
 	go b.fanoutProgressLoop()
 	go b.loadWorker()
 	return b, nil
@@ -608,36 +618,106 @@ func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error)
 	return email, nil
 }
 
-func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
-	key := fmt.Sprintf("%s:%d", folder, uid)
+func (b *LocalBackend) GetMessage(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
+	return b.ensureMessageService().GetMessage(ctx, ref)
+}
 
-	// Check in-memory cache first.
-	b.bodyCacheMu.Lock()
-	if b.bodyCache == nil {
-		b.bodyCache = make(map[string]*models.EmailBody, 256)
-	}
-	if cached, ok := b.bodyCache[key]; ok {
-		b.bodyCacheMu.Unlock()
-		return cached, nil
-	}
-	b.bodyCacheMu.Unlock()
+func (b *LocalBackend) GetMessageNoCache(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
+	return b.ensureMessageService().GetMessageNoCache(ctx, ref)
+}
 
-	body, err := b.imapClient.FetchEmailBody(uid, folder)
+func (b *LocalBackend) GetMessagePreview(ctx context.Context, ref models.MessageRef, intent MessageReadIntent) (MessageReadResult, error) {
+	return b.ensureMessageService().GetMessagePreview(ctx, ref, intent)
+}
+
+func (b *LocalBackend) GetMessagePreviewNoCache(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
+	return b.ensureMessageService().GetMessagePreviewNoCache(ctx, ref)
+}
+
+func (b *LocalBackend) PutMessageBody(ref models.MessageRef, body *models.EmailBody) error {
+	return b.ensureMessageService().PutMessageBody(ref, body)
+}
+
+func (b *LocalBackend) PutMessagePreview(ref models.MessageRef, body *models.EmailBody) error {
+	return b.ensureMessageService().PutMessagePreview(ref, body)
+}
+
+func (b *LocalBackend) InvalidateMessage(ref models.MessageRef) error {
+	return b.ensureMessageService().InvalidateMessage(ref)
+}
+
+func (b *LocalBackend) InvalidatePreview(ref models.MessageRef) error {
+	return b.ensureMessageService().InvalidatePreview(ref)
+}
+
+func (b *LocalBackend) ensureMessageService() *MessageService {
+	b.messageServiceMu.Lock()
+	defer b.messageServiceMu.Unlock()
+	if b.messageService == nil {
+		b.messageService = NewMessageService(MessageServiceOptions{
+			Cache:         b.cache,
+			Source:        b,
+			StoragePolicy: b.currentCacheStoragePolicy,
+		})
+	}
+	return b.messageService
+}
+
+func (b *LocalBackend) currentCacheStoragePolicy() string {
+	if b == nil || b.cfg == nil {
+		return config.CacheStoragePolicyNoAttachments
+	}
+	return config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
+}
+
+func (b *LocalBackend) FetchMessageNoCache(_ context.Context, ref models.MessageRef) (*models.EmailBody, error) {
+	ref = ref.WithDefaults()
+	if b.imapClient == nil {
+		return nil, fmt.Errorf("IMAP client unavailable")
+	}
+	body, err := b.imapClient.FetchEmailBody(ref.UID, ref.Folder)
+	if body != nil && body.MessageID == "" {
+		body.MessageID = ref.MessageID
+	}
+	return body, err
+}
+
+func (b *LocalBackend) FetchMessagePreviewNoCache(ctx context.Context, ref models.MessageRef) (*models.EmailBody, error) {
+	ref = ref.WithDefaults()
+	if b.imapClient == nil {
+		return nil, fmt.Errorf("IMAP client unavailable")
+	}
+	if b.currentCacheStoragePolicy() == config.CacheStoragePolicyPreserveAll {
+		return b.FetchMessageNoCache(ctx, ref)
+	}
+	body, err := b.imapClient.FetchEmailPreviewBody(ref.UID, ref.Folder)
 	if err != nil {
 		return nil, err
 	}
-
-	// Store in cache; evict oldest if over 500 entries.
-	b.bodyCacheMu.Lock()
-	if len(b.bodyCache) >= 500 {
-		// Simple eviction: clear the whole cache when full.
-		// An LRU would be better but this is good enough.
-		b.bodyCache = make(map[string]*models.EmailBody, 256)
+	if body == nil {
+		return b.FetchMessageNoCache(ctx, ref)
 	}
-	b.bodyCache[key] = body
-	b.bodyCacheMu.Unlock()
-
+	if body.MessageID == "" {
+		body.MessageID = ref.MessageID
+	}
 	return body, nil
+}
+
+func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
+	ref := models.MessageRef{Folder: folder, UID: uid}.WithDefaults()
+	if b.cache != nil {
+		email, err := b.cache.GetEmailByFolderUID(folder, uid)
+		if err == nil && email != nil {
+			ref = email.MessageRef()
+			result, err := b.GetMessage(context.Background(), ref)
+			return result.Body, err
+		}
+		if err != nil && err != sql.ErrNoRows {
+			logger.Debug("FetchEmailBody cache lookup failed for %s/%d: %v", folder, uid, err)
+		}
+	}
+	result, err := b.GetMessageNoCache(context.Background(), ref)
+	return result.Body, err
 }
 
 func (b *LocalBackend) GetCachedPreviewBody(messageID string) (*models.EmailBody, error) {
@@ -645,11 +725,7 @@ func (b *LocalBackend) GetCachedPreviewBody(messageID string) (*models.EmailBody
 }
 
 func (b *LocalBackend) CachePreviewBody(messageID string, body *models.EmailBody) error {
-	policy := config.CacheStoragePolicyNoAttachments
-	if b.cfg != nil {
-		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
-	}
-	return b.cache.CachePreviewBody(messageID, body, policy)
+	return b.cache.CachePreviewBody(messageID, body, b.currentCacheStoragePolicy())
 }
 
 func (b *LocalBackend) ApplyCacheStoragePolicy(policy string) (models.PreviewCachePruneResult, error) {
@@ -711,21 +787,12 @@ func previewPolicyRank(policy string) int {
 }
 
 func (b *LocalBackend) FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error) {
-	policy := config.CacheStoragePolicyNoAttachments
-	if b.cfg != nil {
-		policy = config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
-	}
-	if policy == config.CacheStoragePolicyPreserveAll {
-		return b.FetchEmailBody(folder, uid)
-	}
-	body, err := b.imapClient.FetchEmailPreviewBody(uid, folder)
-	if err != nil {
-		return nil, err
-	}
-	if body != nil && body.MessageID == "" {
-		body.MessageID = messageID
-	}
-	return body, nil
+	result, err := b.GetMessagePreviewNoCache(context.Background(), models.MessageRef{
+		Folder:    folder,
+		UID:       uid,
+		MessageID: messageID,
+	})
+	return result.Body, err
 }
 
 func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) error {
@@ -776,6 +843,9 @@ func (b *LocalBackend) Close() error {
 	}
 	if b.newEmailsCh != nil {
 		close(b.newEmailsCh)
+	}
+	if b.messageService != nil {
+		b.messageService.Close()
 	}
 	imapErr := b.imapClient.Close()
 	cacheErr := b.cache.Close()
@@ -965,11 +1035,12 @@ func (b *LocalBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, e
 	if email == nil {
 		return nil, fmt.Errorf("FetchAndCacheBody: message %s not found in cache", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return nil, err
 	}
-	if body.TextPlain != "" {
+	body := result.Body
+	if body != nil && result.Source != MessageReadSourceUnavailable && body.TextPlain != "" {
 		if err := b.cache.CacheBodyText(messageID, body.TextPlain); err != nil {
 			logger.Warn("FetchAndCacheBody CacheBodyText %s: %v", messageID, err)
 		}
@@ -1202,10 +1273,11 @@ func (b *LocalBackend) ReplyToEmailWithOptions(messageID string, opts models.Rep
 	if email == nil {
 		return fmt.Errorf("email %s not found", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return fmt.Errorf("fetch original body: %w", err)
 	}
+	body := result.Body
 	subject := buildReplySubject(email.Subject)
 	from := b.cfg.Credentials.Username
 	mailer := appsmtp.New(b.cfg)
@@ -1236,10 +1308,11 @@ func (b *LocalBackend) ForwardEmailWithOptions(messageID string, opts models.For
 	if email == nil {
 		return fmt.Errorf("email %s not found", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return fmt.Errorf("fetch original body: %w", err)
 	}
+	body := result.Body
 	subject := buildForwardSubject(email.Subject)
 	from := b.cfg.Credentials.Username
 	mailer := appsmtp.New(b.cfg)
@@ -1308,9 +1381,13 @@ func (b *LocalBackend) ListAttachments(messageID string) ([]models.Attachment, e
 	if email == nil {
 		return nil, fmt.Errorf("email %s not found", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return nil, fmt.Errorf("fetch body: %w", err)
+	}
+	body := result.Body
+	if body == nil {
+		return nil, fmt.Errorf("fetch body: empty body")
 	}
 	// Zero out binary data — return metadata only
 	for i := range body.Attachments {
@@ -1327,9 +1404,13 @@ func (b *LocalBackend) GetAttachment(messageID, filename string) (*models.Attach
 	if email == nil {
 		return nil, fmt.Errorf("email %s not found", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return nil, fmt.Errorf("fetch body: %w", err)
+	}
+	body := result.Body
+	if body == nil {
+		return nil, fmt.Errorf("fetch body: empty body")
 	}
 	for _, a := range body.Attachments {
 		if attachmentMatchesLookup(a, filename) {
@@ -1498,9 +1579,13 @@ func (b *LocalBackend) UnsubscribeSender(messageID string) error {
 	if email == nil {
 		return fmt.Errorf("UnsubscribeSender: message %s not found", messageID)
 	}
-	body, err := b.imapClient.FetchEmailBody(email.UID, email.Folder)
+	result, err := b.GetMessage(context.Background(), email.MessageRef())
 	if err != nil {
 		return fmt.Errorf("UnsubscribeSender fetch body: %w", err)
+	}
+	body := result.Body
+	if body == nil {
+		return fmt.Errorf("UnsubscribeSender fetch body: empty body")
 	}
 	raw := body.ListUnsubscribe
 	if raw == "" {

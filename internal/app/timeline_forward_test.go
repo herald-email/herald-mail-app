@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -19,6 +21,20 @@ type forwardBodyBackend struct {
 func (b *forwardBodyBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
 	b.calls++
 	return b.body, b.err
+}
+
+type forwardBodyServiceBackend struct {
+	forwardBodyBackend
+	serviceResult backendpkg.MessageReadResult
+	serviceErr    error
+	serviceCalls  int
+	serviceRef    models.MessageRef
+}
+
+func (b *forwardBodyServiceBackend) GetMessage(_ context.Context, ref models.MessageRef) (backendpkg.MessageReadResult, error) {
+	b.serviceCalls++
+	b.serviceRef = ref
+	return b.serviceResult, b.serviceErr
 }
 
 func newTimelineForwardModel(b *forwardBodyBackend) (*Model, *models.EmailData) {
@@ -69,6 +85,41 @@ func TestTimelineForwardWithoutPreviewFetchesBodyBeforeCompose(t *testing.T) {
 	}
 	if backend.calls != 1 {
 		t.Fatalf("FetchEmailBody calls = %d, want 1", backend.calls)
+	}
+}
+
+func TestTimelineForwardUsesCacheFirstGetMessageService(t *testing.T) {
+	backend := &forwardBodyServiceBackend{
+		serviceResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "service full body"},
+			Source: backendpkg.MessageReadSourceCache,
+		},
+	}
+	m, _ := newTimelineForwardModel(&backend.forwardBodyBackend)
+	m.backend = backend
+
+	_, cmd, handled := m.handleTimelineKey(keyRunes("F"))
+	if !handled {
+		t.Fatal("expected F to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected body fetch command")
+	}
+	msg := cmd().(TimelineForwardBodyMsg)
+	if msg.Err != nil {
+		t.Fatalf("unexpected err: %v", msg.Err)
+	}
+	if msg.Body == nil || msg.Body.TextPlain != "service full body" {
+		t.Fatalf("body = %#v, want service full body", msg.Body)
+	}
+	if backend.serviceCalls != 1 {
+		t.Fatalf("GetMessage calls = %d, want 1", backend.serviceCalls)
+	}
+	if backend.calls != 0 {
+		t.Fatalf("legacy FetchEmailBody calls = %d, want 0", backend.calls)
+	}
+	if backend.serviceRef.MessageID != "msg-forward" || backend.serviceRef.Folder != "INBOX" || backend.serviceRef.UID != 42 {
+		t.Fatalf("service ref = %#v, want msg-forward/INBOX/42", backend.serviceRef)
 	}
 }
 
@@ -217,6 +268,38 @@ func TestTimelineReplyWithoutPreviewFetchesBodyBeforeCompose(t *testing.T) {
 	}
 	if !strings.Contains(updated.statusMessage, "Loading reply message body") {
 		t.Fatalf("statusMessage = %q, want reply loading message", updated.statusMessage)
+	}
+}
+
+func TestTimelineReplyUsesCacheFirstGetMessageService(t *testing.T) {
+	backend := &forwardBodyServiceBackend{
+		serviceResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "service reply body"},
+			Source: backendpkg.MessageReadSourceCache,
+		},
+	}
+	m, _ := newTimelineForwardModel(&backend.forwardBodyBackend)
+	m.backend = backend
+
+	_, cmd, handled := m.handleTimelineKey(keyRunes("R"))
+	if !handled {
+		t.Fatal("expected R to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected reply body command")
+	}
+	msg := cmd().(TimelineReplyBodyMsg)
+	if msg.Err != nil {
+		t.Fatalf("unexpected err: %v", msg.Err)
+	}
+	if msg.Body == nil || msg.Body.TextPlain != "service reply body" {
+		t.Fatalf("reply body = %#v, want service reply body", msg.Body)
+	}
+	if backend.serviceCalls != 1 {
+		t.Fatalf("GetMessage calls = %d, want 1", backend.serviceCalls)
+	}
+	if backend.calls != 0 {
+		t.Fatalf("legacy FetchEmailBody calls = %d, want 0", backend.calls)
 	}
 }
 

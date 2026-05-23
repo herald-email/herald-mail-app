@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -48,6 +50,22 @@ func (b *previewTelemetryBackend) FetchPreviewBody(messageID, _ string, uid uint
 	b.previewFetchID = messageID
 	b.previewFetchUID = uid
 	return b.previewBody, b.err
+}
+
+type previewTelemetryServiceBackend struct {
+	previewTelemetryBackend
+	servicePreviewResult backendpkg.MessageReadResult
+	servicePreviewErr    error
+	servicePreviewCalls  int
+	servicePreviewRef    models.MessageRef
+	servicePreviewIntent backendpkg.MessageReadIntent
+}
+
+func (b *previewTelemetryServiceBackend) GetMessagePreview(_ context.Context, ref models.MessageRef, intent backendpkg.MessageReadIntent) (backendpkg.MessageReadResult, error) {
+	b.servicePreviewCalls++
+	b.servicePreviewRef = ref
+	b.servicePreviewIntent = intent
+	return b.servicePreviewResult, b.servicePreviewErr
 }
 
 func TestLoadEmailBodyCmdPopulatesTelemetryOnSuccess(t *testing.T) {
@@ -215,6 +233,40 @@ func TestLoadEmailBodyCmdUsesCachedPreviewBeforeIMAP(t *testing.T) {
 	}
 }
 
+func TestLoadEmailBodyCmdUsesCacheFirstServiceWhenAvailable(t *testing.T) {
+	backend := &previewTelemetryServiceBackend{
+		servicePreviewResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "service cached preview"},
+			Source: backendpkg.MessageReadSourceCache,
+		},
+	}
+	m := New(backend, nil, "", nil, false)
+
+	msg := m.loadEmailBodyCmd("msg-service", "INBOX", 77)().(EmailBodyMsg)
+
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+	if got := msg.Body.TextPlain; got != "service cached preview" {
+		t.Fatalf("body = %q, want service cached preview", got)
+	}
+	if backend.servicePreviewCalls != 1 {
+		t.Fatalf("GetMessagePreview calls = %d, want 1", backend.servicePreviewCalls)
+	}
+	if backend.servicePreviewRef.MessageID != "msg-service" || backend.servicePreviewRef.Folder != "INBOX" || backend.servicePreviewRef.UID != 77 {
+		t.Fatalf("service ref = %#v, want msg-service/INBOX/77", backend.servicePreviewRef)
+	}
+	if backend.servicePreviewIntent.ViewID != "timeline-preview" {
+		t.Fatalf("service intent = %#v, want timeline-preview", backend.servicePreviewIntent)
+	}
+	if backend.cacheLookupCall != 0 || backend.previewFetchID != "" || backend.fetchBodyCalls != 0 {
+		t.Fatalf("legacy preview path used: cacheLookups=%d previewFetch=%q fullFetch=%d", backend.cacheLookupCall, backend.previewFetchID, backend.fetchBodyCalls)
+	}
+	if msg.LoadSource != previewLoadSourceCache {
+		t.Fatalf("LoadSource = %q, want cache", msg.LoadSource)
+	}
+}
+
 func TestLoadEmailBodyCmdCachesPreviewAfterIMAPMiss(t *testing.T) {
 	backend := &previewTelemetryBackend{
 		body: &models.EmailBody{TextPlain: "fresh imap body"},
@@ -260,5 +312,36 @@ func TestLoadEmailBodyCmdUsesPreviewFetcherOnCacheMiss(t *testing.T) {
 	}
 	if backend.fetchBodyCalls != 0 {
 		t.Fatalf("FetchEmailBody calls = %d, want 0", backend.fetchBodyCalls)
+	}
+}
+
+func TestFetchCleanupBodyCmdUsesCacheFirstServiceWhenAvailable(t *testing.T) {
+	email := &models.EmailData{MessageID: "cleanup-service", Folder: "INBOX", UID: 88}
+	backend := &previewTelemetryServiceBackend{
+		servicePreviewResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "cleanup service preview"},
+			Source: backendpkg.MessageReadSourceCache,
+		},
+	}
+
+	msg := fetchCleanupBodyCmd(backend, email)().(CleanupEmailBodyMsg)
+
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+	if got := msg.Body.TextPlain; got != "cleanup service preview" {
+		t.Fatalf("cleanup body = %q, want service preview", got)
+	}
+	if backend.servicePreviewCalls != 1 {
+		t.Fatalf("GetMessagePreview calls = %d, want 1", backend.servicePreviewCalls)
+	}
+	if backend.servicePreviewIntent.ViewID != "cleanup-preview" {
+		t.Fatalf("service intent = %#v, want cleanup-preview", backend.servicePreviewIntent)
+	}
+	if backend.cacheLookupCall != 0 || backend.previewFetchID != "" || backend.fetchBodyCalls != 0 {
+		t.Fatalf("legacy cleanup preview path used: cacheLookups=%d previewFetch=%q fullFetch=%d", backend.cacheLookupCall, backend.previewFetchID, backend.fetchBodyCalls)
+	}
+	if msg.LoadSource != previewLoadSourceCache {
+		t.Fatalf("LoadSource = %q, want cache", msg.LoadSource)
 	}
 }

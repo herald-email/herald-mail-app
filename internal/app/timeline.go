@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/mail"
 	"sort"
@@ -1528,7 +1529,14 @@ func (m *Model) loadTimelineForwardBodyCmd(email *models.EmailData, requestID in
 				RequestID: requestID,
 			}
 		}
-		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		var body *models.EmailBody
+		var err error
+		if serviceBackend, ok := b.(messageBodyServiceBackend); ok {
+			result, serviceErr := serviceBackend.GetMessage(context.Background(), emailCopy.MessageRef())
+			body, err = result.Body, serviceErr
+		} else {
+			body, err = b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		}
 		return TimelineForwardBodyMsg{
 			Email:     &emailCopy,
 			Body:      body,
@@ -1569,7 +1577,14 @@ func (m *Model) loadTimelineDraftBodyCmd(email *models.EmailData, requestID int)
 				RequestID: requestID,
 			}
 		}
-		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		var body *models.EmailBody
+		var err error
+		if serviceBackend, ok := b.(messageBodyServiceBackend); ok {
+			result, serviceErr := serviceBackend.GetMessage(context.Background(), emailCopy.MessageRef())
+			body, err = result.Body, serviceErr
+		} else {
+			body, err = b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		}
 		return TimelineDraftBodyMsg{
 			Email:     &emailCopy,
 			Body:      body,
@@ -1711,7 +1726,14 @@ func (m *Model) loadTimelineReplyBodyCmd(email *models.EmailData, requestID int,
 				ReplyAll:  replyAll,
 			}
 		}
-		body, err := b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		var body *models.EmailBody
+		var err error
+		if serviceBackend, ok := b.(messageBodyServiceBackend); ok {
+			result, serviceErr := serviceBackend.GetMessage(context.Background(), emailCopy.MessageRef())
+			body, err = result.Body, serviceErr
+		} else {
+			body, err = b.FetchEmailBody(emailCopy.Folder, emailCopy.UID)
+		}
 		return TimelineReplyBodyMsg{
 			Email:     &emailCopy,
 			Body:      body,

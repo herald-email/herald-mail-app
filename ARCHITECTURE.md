@@ -205,7 +205,8 @@ The next refactor layer turns the current single-account backend discipline into
 - [ ] Introduce `EventRef` before exposing calendar UI or cross-source event APIs.
 - [ ] Keep source plugins provider-specific but small: IMAP, Google Calendar, and CalDAV handle transport details while Herald owns cache policy, queue policy, stale-result filtering, and UI priority.
 - [x] Move latest-user-intent, duplicate resource coalescing, serial mutations, and fair background work into reusable coordination primitives before migrating existing queues.
-- [ ] Keep reads cache-first so callers ask for a message body or calendar event once while the service decides memory cache, persistent cache, in-flight join, or provider fetch.
+- [x] Keep mail body and preview reads cache-first so callers ask once while the service decides persistent cache, in-flight join, completed replay, or provider fetch.
+- [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

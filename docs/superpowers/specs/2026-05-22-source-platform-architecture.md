@@ -8,7 +8,8 @@ The first goal is to introduce durable source identity and work coordination bef
 
 - [ ] Add source and account identity to mail data, sync events, background work, daemon APIs, and MCP-facing references without changing single-account behavior.
 - [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
-- [ ] Make body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
+- [x] Make mail body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
+- [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
 - [ ] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
 - [ ] Introduce calendar as a source capability so Google Calendar and CalDAV share Herald-facing models even though their transports differ.
 
@@ -132,11 +133,12 @@ The canonical preview sequence is `email1 -> email2 -> email1`. If the first `em
 
 Callers should not decide whether a body, event, or preview comes from cache or provider fetch. Herald-owned services sit between the TUI/backend and raw source plugins.
 
-- [ ] `MessageBodyService.GetMessageBody(ctx, ref)` checks memory cache, persistent cache, in-flight work, then source fetch.
-- [ ] `MessagePreviewService.GetMessagePreview(ctx, ref)` follows the same pattern but honors offline cache policy.
+- [x] `MessageService.GetMessage(ctx, ref)` checks persistent cache, in-flight work/completed replay, then source fetch.
+- [x] `MessageService.GetMessagePreview(ctx, ref, intent)` follows the same pattern, honors offline cache policy, and applies latest-intent filtering.
+- [x] `MessageService.GetMessageNoCache(ctx, ref)` and `GetMessagePreviewNoCache(ctx, ref)` make deliberate provider bypasses explicit and write through to cache.
 - [ ] `CalendarEventService.GetEvent(ctx, ref)` checks event cache and provider freshness metadata before fetching.
-- [ ] Cache keys include source/account/collection identity and freshness metadata where available.
-- [ ] Context cancellation is useful but not required for correctness; cache hits, singleflight joining, and stale-result tokens provide the correctness guarantee.
+- [x] Cache keys include source/account/collection identity and freshness metadata where available for mail reads.
+- [x] Context cancellation is useful but not required for correctness; cache hits, in-flight joining, completed replay, and stale-result tokens provide the correctness guarantee.
 
 ## Queue Impact On Current Work
 
@@ -147,7 +149,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [ ] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
 - [ ] `classifyCh` remains mail-only at first but stores results under scoped message identity.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
-- [ ] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
+- [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
 - [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
 - [ ] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
 
@@ -215,7 +217,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 0: Write and review this architecture spec plus the first two implementation plans.
 - [x] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
 - [x] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
-- [ ] Phase 3: Add cache-first message body and preview services with memory cache, persistent cache, and in-flight coalescing.
+- [x] Phase 3: Add cache-first message body and preview services with persistent cache, completed replay, explicit `NoCache` bypasses, and in-flight coalescing.
 - [ ] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
 - [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
@@ -228,5 +230,5 @@ This refactor is accepted only if it preserves current behavior while making fut
 - [x] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
 - [x] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
 - [x] Source identity tests prove legacy config normalization and scoped cache key generation.
-- [ ] Cache-first service tests prove cache hit, in-flight join, source fetch/store, stale-result filtering, and context cancellation behavior where supported.
+- [x] Cache-first service tests prove cache hit, in-flight join, completed replay, source fetch/store, stale-result filtering, and replay result isolation.
 - [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.

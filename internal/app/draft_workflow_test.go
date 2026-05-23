@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -22,6 +24,20 @@ type timelineDraftBackend struct {
 func (b *timelineDraftBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
 	b.calls++
 	return b.body, nil
+}
+
+type timelineDraftServiceBackend struct {
+	timelineDraftBackend
+	serviceResult backendpkg.MessageReadResult
+	serviceErr    error
+	serviceCalls  int
+	serviceRef    models.MessageRef
+}
+
+func (b *timelineDraftServiceBackend) GetMessage(_ context.Context, ref models.MessageRef) (backendpkg.MessageReadResult, error) {
+	b.serviceCalls++
+	b.serviceRef = ref
+	return b.serviceResult, b.serviceErr
 }
 
 func (b *timelineDraftBackend) SendDraft(uid uint32, folder string) error {
@@ -275,6 +291,71 @@ func TestTimelineEditDraftFetchesBodyAndOpensCompose(t *testing.T) {
 	}
 	if updated.lastDraftUID != 42 || updated.lastDraftFolder != "Drafts" {
 		t.Fatalf("expected source draft tracking 42/Drafts, got %d/%q", updated.lastDraftUID, updated.lastDraftFolder)
+	}
+}
+
+func TestTimelineDraftUsesCacheFirstGetMessageService(t *testing.T) {
+	now := time.Now()
+	backend := &timelineDraftServiceBackend{
+		serviceResult: backendpkg.MessageReadResult{
+			Body: &models.EmailBody{
+				To:        "rae@cobalt-works.example",
+				Subject:   "Re: Interview with Cobalt Works",
+				TextPlain: "Service draft body",
+			},
+			Source: backendpkg.MessageReadSourceCache,
+		},
+	}
+	m := New(backend, nil, "me@example.com", nil, false)
+	m.loading = false
+	m.activeTab = tabTimeline
+	m.currentFolder = "INBOX"
+	m.timeline.senderWidth = 32
+	m.timeline.subjectWidth = 64
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "latest",
+			UID:       1,
+			Sender:    "Rae <rae@cobalt-works.example>",
+			Subject:   "Interview with Cobalt Works",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "draft",
+			UID:       42,
+			Sender:    "me@example.com",
+			Subject:   "Re: Interview with Cobalt Works",
+			Date:      now.Add(-time.Minute),
+			Folder:    "Drafts",
+			IsDraft:   true,
+		},
+	}
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+
+	_, cmd, handled := m.handleTimelineKey(keyRunes("E"))
+	if !handled {
+		t.Fatal("expected E to be handled on collapsed thread containing a draft")
+	}
+	if cmd == nil {
+		t.Fatal("expected draft body command")
+	}
+	msg := cmd().(TimelineDraftBodyMsg)
+	if msg.Err != nil {
+		t.Fatalf("unexpected err: %v", msg.Err)
+	}
+	if msg.Body == nil || msg.Body.TextPlain != "Service draft body" {
+		t.Fatalf("draft body = %#v, want service draft body", msg.Body)
+	}
+	if backend.serviceCalls != 1 {
+		t.Fatalf("GetMessage calls = %d, want 1", backend.serviceCalls)
+	}
+	if backend.calls != 0 {
+		t.Fatalf("legacy FetchEmailBody calls = %d, want 0", backend.calls)
+	}
+	if backend.serviceRef.MessageID != "draft" || backend.serviceRef.Folder != "Drafts" || backend.serviceRef.UID != 42 {
+		t.Fatalf("service ref = %#v, want draft/Drafts/42", backend.serviceRef)
 	}
 }
 

@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -53,11 +55,13 @@ func (m *Model) startPreviewPrewarmerIfNeeded() tea.Cmd {
 	if m == nil || m.demoMode || m.previewPrewarmActive || isVirtualAllMailOnlyFolder(m.currentFolder) {
 		return nil
 	}
-	if _, ok := m.backend.(previewCacheBackend); !ok {
-		return nil
-	}
-	if _, ok := m.backend.(previewFetchBackend); !ok {
-		return nil
+	if _, ok := m.backend.(messagePreviewServiceBackend); !ok {
+		if _, ok := m.backend.(previewCacheBackend); !ok {
+			return nil
+		}
+		if _, ok := m.backend.(previewFetchBackend); !ok {
+			return nil
+		}
 	}
 	targets := previewPrewarmTargets(m.timeline.emails, m.currentFolder, previewPrewarmLimit)
 	if len(targets) == 0 {
@@ -76,9 +80,10 @@ func (m *Model) runPreviewPrewarmNext(targets []previewPrewarmTarget, folder str
 	if len(targets) == 0 {
 		return nil
 	}
+	serviceBackend, serviceOK := m.backend.(messagePreviewServiceBackend)
 	cacheBackend, cacheOK := m.backend.(previewCacheBackend)
 	fetchBackend, fetchOK := m.backend.(previewFetchBackend)
-	if !cacheOK || !fetchOK {
+	if !serviceOK && (!cacheOK || !fetchOK) {
 		return nil
 	}
 	target := targets[0]
@@ -89,22 +94,39 @@ func (m *Model) runPreviewPrewarmNext(targets []previewPrewarmTarget, folder str
 		nextSkipped := skipped
 		var resultErr error
 
-		cached, err := cacheBackend.GetCachedPreviewBody(target.MessageID)
-		if err != nil {
-			logger.Debug("Preview cache prewarm lookup failed: folder=%s message_id=%s error=%v", target.Folder, target.MessageID, err)
-		}
-		if err == nil && cached != nil {
-			nextSkipped++
-		} else {
-			body, fetchErr := fetchBackend.FetchPreviewBody(target.MessageID, target.Folder, target.UID)
+		if serviceOK {
+			result, fetchErr := serviceBackend.GetMessagePreview(context.Background(), models.MessageRef{
+				MessageID: target.MessageID,
+				Folder:    target.Folder,
+				UID:       target.UID,
+			}.WithDefaults(), backend.MessageReadIntent{ViewID: "timeline-prewarm"})
 			if fetchErr != nil {
 				resultErr = fetchErr
-			} else if body == nil {
+			} else if result.Body == nil {
 				nextSkipped++
-			} else if cacheErr := cacheBackend.CachePreviewBody(target.MessageID, body); cacheErr != nil {
-				resultErr = cacheErr
+			} else if result.Source == backend.MessageReadSourceCache {
+				nextSkipped++
 			} else {
 				nextWarmed++
+			}
+		} else {
+			cached, err := cacheBackend.GetCachedPreviewBody(target.MessageID)
+			if err != nil {
+				logger.Debug("Preview cache prewarm lookup failed: folder=%s message_id=%s error=%v", target.Folder, target.MessageID, err)
+			}
+			if err == nil && cached != nil {
+				nextSkipped++
+			} else {
+				body, fetchErr := fetchBackend.FetchPreviewBody(target.MessageID, target.Folder, target.UID)
+				if fetchErr != nil {
+					resultErr = fetchErr
+				} else if body == nil {
+					nextSkipped++
+				} else if cacheErr := cacheBackend.CachePreviewBody(target.MessageID, body); cacheErr != nil {
+					resultErr = cacheErr
+				} else {
+					nextWarmed++
+				}
 			}
 		}
 

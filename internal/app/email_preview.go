@@ -871,6 +871,22 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 		if ctx.Err() != nil {
 			return finish(nil, ctx.Err(), previewLoadSourceIMAP)
 		}
+		ref := models.MessageRef{
+			MessageID: messageID,
+			Folder:    folder,
+			UID:       uid,
+		}.WithDefaults()
+		if serviceBackend, ok := b.(messagePreviewServiceBackend); ok {
+			result, err := serviceBackend.GetMessagePreview(ctx, ref, backend.MessageReadIntent{ViewID: "timeline-preview"})
+			if ctx.Err() != nil {
+				return finish(nil, ctx.Err(), previewLoadSourceIMAP)
+			}
+			source := result.Source
+			if strings.TrimSpace(source) == "" {
+				source = previewLoadSourceIMAP
+			}
+			return finish(result.Body, err, source)
+		}
 		if previewBackend, ok := b.(previewCacheBackend); ok {
 			cached, err := previewBackend.GetCachedPreviewBody(messageID)
 			if err != nil {
@@ -916,6 +932,25 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 func fetchCleanupBodyCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
 	return func() tea.Msg {
 		started := time.Now()
+		if serviceBackend, ok := b.(messagePreviewServiceBackend); ok {
+			result, err := serviceBackend.GetMessagePreview(context.Background(), email.MessageRef(), backend.MessageReadIntent{ViewID: "cleanup-preview"})
+			finished := time.Now()
+			source := result.Source
+			if strings.TrimSpace(source) == "" {
+				source = previewLoadSourceIMAP
+			}
+			return CleanupEmailBodyMsg{
+				MessageID:      email.MessageID,
+				Folder:         email.Folder,
+				UID:            email.UID,
+				Body:           result.Body,
+				Err:            err,
+				LoadSource:     source,
+				LoadStartedAt:  started,
+				LoadFinishedAt: finished,
+				LoadDuration:   finished.Sub(started),
+			}
+		}
 		if previewBackend, ok := b.(previewCacheBackend); ok {
 			cached, err := previewBackend.GetCachedPreviewBody(email.MessageID)
 			if err != nil {

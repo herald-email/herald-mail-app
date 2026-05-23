@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -33,6 +35,23 @@ func (b *previewPrewarmBackend) CachePreviewBody(messageID string, body *models.
 func (b *previewPrewarmBackend) FetchPreviewBody(messageID, _ string, _ uint32) (*models.EmailBody, error) {
 	b.fetchIDs = append(b.fetchIDs, messageID)
 	return &models.EmailBody{TextPlain: "preview " + messageID}, nil
+}
+
+type previewPrewarmServiceBackend struct {
+	stubBackend
+	serviceIDs      []string
+	serviceIntents  []backendpkg.MessageReadIntent
+	serviceRefScope []models.MessageRef
+}
+
+func (b *previewPrewarmServiceBackend) GetMessagePreview(_ context.Context, ref models.MessageRef, intent backendpkg.MessageReadIntent) (backendpkg.MessageReadResult, error) {
+	b.serviceIDs = append(b.serviceIDs, ref.MessageID)
+	b.serviceIntents = append(b.serviceIntents, intent)
+	b.serviceRefScope = append(b.serviceRefScope, ref)
+	return backendpkg.MessageReadResult{
+		Body:   &models.EmailBody{TextPlain: "preview " + ref.MessageID},
+		Source: backendpkg.MessageReadSourceProvider,
+	}, nil
 }
 
 func previewPrewarmEmails() []*models.EmailData {
@@ -112,6 +131,33 @@ func TestStartPreviewPrewarmerSkipsCachedMessagesAndWarmsOneAtATime(t *testing.T
 	}
 	if len(backend.cacheWriteIDs) != 1 || backend.cacheWriteIDs[0] != "msg-2" {
 		t.Fatalf("cacheWriteIDs = %#v, want [msg-2]", backend.cacheWriteIDs)
+	}
+}
+
+func TestPreviewPrewarmUsesCacheFirstServiceWhenAvailable(t *testing.T) {
+	backend := &previewPrewarmServiceBackend{}
+	m := New(backend, nil, "", nil, false)
+	m.currentFolder = "INBOX"
+	m.backgroundWorkGeneration = 17
+	m.timeline.emails = previewPrewarmEmails()
+
+	cmd := m.startPreviewPrewarmerIfNeeded()
+	if cmd == nil {
+		t.Fatal("expected service-backed preview prewarmer command")
+	}
+
+	first := cmd().(previewPrewarmMsg)
+	if first.Done != 1 || first.Total != 3 || first.Warmed != 1 || first.Skipped != 0 {
+		t.Fatalf("first service progress = %#v, want one warmed out of three", first)
+	}
+	if len(backend.serviceIDs) != 1 || backend.serviceIDs[0] != "msg-1" {
+		t.Fatalf("serviceIDs = %#v, want [msg-1]", backend.serviceIDs)
+	}
+	if backend.serviceIntents[0].ViewID != "timeline-prewarm" {
+		t.Fatalf("service intent = %#v, want timeline-prewarm", backend.serviceIntents[0])
+	}
+	if got := backend.serviceRefScope[0]; got.SourceID == "" || got.AccountID == "" || got.LocalID == "" {
+		t.Fatalf("service ref missing default source/account/local scope: %#v", got)
 	}
 }
 

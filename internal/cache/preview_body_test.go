@@ -3,8 +3,116 @@ package cache
 import (
 	"testing"
 
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
+
+func TestPreviewBodyCacheAddsScopedLifecycleColumns(t *testing.T) {
+	c := newTestCache(t)
+
+	cols := tableColumns(t, c.db, "email_preview_bodies")
+	for _, name := range []string{"source_id", "account_id", "local_id", "uid_validity", "cache_policy", "invalidated_at"} {
+		if !cols[name] {
+			t.Fatalf("email_preview_bodies missing column %s", name)
+		}
+	}
+}
+
+func TestCachePreviewBodyByRefWritesScopeAndPolicy(t *testing.T) {
+	c := newTestCache(t)
+	ref := models.MessageRef{
+		SourceID:    models.SourceID("work-mail"),
+		AccountID:   models.AccountID("work"),
+		Folder:      "INBOX",
+		UID:         42,
+		UIDValidity: 777,
+		MessageID:   "msg-scoped",
+	}.WithDefaults()
+
+	if err := c.CachePreviewBodyByRef(ref, &models.EmailBody{TextPlain: "scoped body"}, config.CacheStoragePolicyPreserveAll); err != nil {
+		t.Fatalf("CachePreviewBodyByRef: %v", err)
+	}
+
+	got, err := c.GetPreviewBodyByRef(ref)
+	if err != nil {
+		t.Fatalf("GetPreviewBodyByRef: %v", err)
+	}
+	if got == nil || got.TextPlain != "scoped body" {
+		t.Fatalf("scoped preview = %#v, want cached body", got)
+	}
+
+	var sourceID, accountID, localID, policy string
+	var uidValidity uint32
+	if err := c.db.QueryRow(`SELECT source_id, account_id, local_id, uid_validity, cache_policy FROM email_preview_bodies WHERE message_id = ?`, ref.MessageID).Scan(&sourceID, &accountID, &localID, &uidValidity, &policy); err != nil {
+		t.Fatalf("select scoped preview row: %v", err)
+	}
+	if sourceID != "work-mail" || accountID != "work" || localID != ref.LocalID || uidValidity != 777 || policy != config.CacheStoragePolicyPreserveAll {
+		t.Fatalf("scope row = %q/%q/%q/%d/%q, want work-mail/work/%q/777/%q", sourceID, accountID, localID, uidValidity, policy, ref.LocalID, config.CacheStoragePolicyPreserveAll)
+	}
+}
+
+func TestGetMessageBodyByRefRequiresPreserveAllAndHonorsInvalidation(t *testing.T) {
+	c := newTestCache(t)
+	ref := models.MessageRef{MessageID: "msg-body", Folder: "INBOX", UID: 7}.WithDefaults()
+
+	if err := c.CachePreviewBodyByRef(ref, &models.EmailBody{TextPlain: "preview only"}, config.CacheStoragePolicyNoAttachments); err != nil {
+		t.Fatalf("CachePreviewBodyByRef preview: %v", err)
+	}
+	if got, err := c.GetMessageBodyByRef(ref); err != nil || got != nil {
+		t.Fatalf("GetMessageBodyByRef with no_attachments = (%#v, %v), want nil nil", got, err)
+	}
+
+	if err := c.PutMessageBodyByRef(ref, &models.EmailBody{TextPlain: "full body"}, config.CacheStoragePolicyPreserveAll); err != nil {
+		t.Fatalf("PutMessageBodyByRef: %v", err)
+	}
+	got, err := c.GetMessageBodyByRef(ref)
+	if err != nil {
+		t.Fatalf("GetMessageBodyByRef preserve_all: %v", err)
+	}
+	if got == nil || got.TextPlain != "full body" {
+		t.Fatalf("full body = %#v, want cached full body", got)
+	}
+
+	if err := c.InvalidatePreviewByRef(ref); err != nil {
+		t.Fatalf("InvalidatePreviewByRef: %v", err)
+	}
+	if got, err := c.GetMessageBodyByRef(ref); err != nil || got != nil {
+		t.Fatalf("GetMessageBodyByRef after invalidation = (%#v, %v), want nil nil", got, err)
+	}
+	if got, err := c.GetPreviewBodyByRef(ref); err != nil || got != nil {
+		t.Fatalf("GetPreviewBodyByRef after invalidation = (%#v, %v), want nil nil", got, err)
+	}
+}
+
+func TestInvalidateMessageByRefClearsBodyTextAndPreview(t *testing.T) {
+	c := newTestCache(t)
+	email := &models.EmailData{
+		MessageID: "msg-invalidate",
+		UID:       8,
+		Folder:    "INBOX",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+	ref := email.MessageRef()
+	if err := c.CacheBodyText(ref.MessageID, "indexed body"); err != nil {
+		t.Fatalf("CacheBodyText: %v", err)
+	}
+	if err := c.PutMessageBodyByRef(ref, &models.EmailBody{TextPlain: "full body"}, config.CacheStoragePolicyPreserveAll); err != nil {
+		t.Fatalf("PutMessageBodyByRef: %v", err)
+	}
+
+	if err := c.InvalidateMessageByRef(ref); err != nil {
+		t.Fatalf("InvalidateMessageByRef: %v", err)
+	}
+
+	if got, err := c.GetBodyText(ref.MessageID); err != nil || got != "" {
+		t.Fatalf("GetBodyText after invalidation = %q, %v; want empty nil", got, err)
+	}
+	if got, err := c.GetMessageBodyByRef(ref); err != nil || got != nil {
+		t.Fatalf("GetMessageBodyByRef after invalidation = (%#v, %v), want nil nil", got, err)
+	}
+}
 
 func TestPreviewBodyCacheLightweightStripsBinaryData(t *testing.T) {
 	c := newTestCache(t)

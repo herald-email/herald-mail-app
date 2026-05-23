@@ -52,7 +52,8 @@ type Backend interface {
 	// GetEmailByID returns a single cached email by message ID.
 	GetEmailByID(messageID string) (*models.EmailData, error)
 
-	// FetchEmailBody fetches the full MIME body of an email by UID from the IMAP server.
+	// FetchEmailBody fetches the full MIME body of an email by UID. LocalBackend routes
+	// this legacy API through the cache-first message service after resolving a scoped ref.
 	FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error)
 
 	// SaveAttachment writes attachment data to the given destination path.
