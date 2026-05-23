@@ -105,6 +105,7 @@ The TUI uses a title-row tab strip beside the `Herald` title, a collapsible fold
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
 - [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
 - [x] Keyboard profiles make `h/j/k/l` coherent browse navigation while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
+- [x] Delete shortcuts use a safe/fast split: `d` or `Backspace` asks for confirmation, while `D` or `Shift+Backspace` deletes immediately in browse contexts
 
 ### Tabs (top-level navigation)
 Keyboard (`1`-`3` as the primary visible shortcuts, with `F1`-`F3` as legacy aliases) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
@@ -308,7 +309,7 @@ The Cleanup tab groups emails by sender or domain and shows volume statistics, m
 ### Sender / Domain grouping
 
 - [x] Group by sender (default)
-- [x] Group by domain (`d` key toggle)
+- [x] Group by domain
 - [x] Stats per sender: count, size, date range
 - [x] Details panel: individual emails for selected sender
 - [x] Bulk delete: all from sender, all from domain
@@ -702,12 +703,12 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] `r` / `R` keys in Timeline open Compose pre-filled for reply-all or sender-only reply (Re: subject, quoted body, To pre-filled)
 - [x] Reply/forward Compose shows a preserved-content summary with HTML, inline image, attachment, and preservation-mode status
 - [x] Reply/forward Compose separates the editable response from a read-only original-message preview so users can keep source context visible while writing
-- [x] `D` in Timeline deletes the highlighted email (single message)
-- [x] `D` on a collapsed `[N]` thread prompts to delete all N emails
+- [x] `d` / `Backspace` in Timeline prompts before deleting the highlighted email, selected messages, or collapsed thread
+- [x] `D` / `Shift+Backspace` in Timeline immediately deletes the highlighted email, selected messages, or collapsed thread
 - [x] `Space` in Timeline selects messages for bulk delete/archive; collapsed thread rows select the represented thread
 - [x] `Shift+Up` / `Shift+Down` and `V` range mode extend Timeline bulk selection across visible rows
-- [x] `D` / `e` in Timeline act on selected messages when selection exists, with confirmation copy showing selected counts
-- [x] `D` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command and `Ctrl+S` as the explicit send-draft command
+- [x] `d` / `e` in Timeline act on selected messages when selection exists, with confirmation copy showing selected counts
+- [x] `d` on a draft uses discard-draft confirmation copy, while `E` is advertised as the explicit edit-draft command and `Ctrl+S` as the explicit send-draft command
 - [x] `e` archives the highlighted email or sender
 - [x] Inline confirmation prompt (`y` to confirm, `Esc` to cancel)
 

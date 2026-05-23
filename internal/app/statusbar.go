@@ -570,6 +570,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			"z: full-screen",
 			"esc: close preview",
 			m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"),
+			m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"),
 			m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"),
 			m.commandHint("cleanup", CommandMailReclassify, "re-classify"),
 			m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"),
@@ -579,12 +580,12 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		case panelSidebar:
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("timeline", "nav"), "space: expand", "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "hide"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		case panelDetails:
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("cleanup", "nav"), "enter: preview", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandLogsToggle, "logs"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("cleanup", "nav"), "enter: preview", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandLogsToggle, "logs"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		default: // panelSummary
 			if m.activeTab == tabCleanup && w <= 80 {
-				hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("cleanup", "nav"), "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide"), "space: select", "W: rule", "C: cleanup", "P: prompt", "d: domain", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+				hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("cleanup", "nav"), "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide"), "space: select", "W: rule", "C: cleanup", "P: prompt", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 			} else {
-				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: panel", "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), "d: domain", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), "W: rule", "C: cleanup", "P: prompt", m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: panel", "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), "W: rule", "C: cleanup", "P: prompt", m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 			}
 		}
 	}

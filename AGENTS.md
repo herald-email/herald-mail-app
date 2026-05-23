@@ -168,7 +168,8 @@ tmux kill-session -t test
 | Toggle chat | `c` |
 | Toggle logs | `l` |
 | Navigate | `j` / `k` |
-| Domain mode | `d` (Cleanup tab) |
+| Delete with confirmation | `d` or `Backspace` |
+| Delete immediately | `D` or `Shift+Backspace` |
 | Markdown preview | `C-p` (Compose tab) |
 
 #### What to look for in captures
@@ -220,9 +221,9 @@ Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 |-----|--------|
 | `q` / `ctrl+c` | Quit |
 | `1` / `2` / `3` | Switch to Timeline / Compose / Cleanup tab |
-| `d` | Toggle domain/sender grouping mode (Cleanup tab) |
+| `d` / `backspace` | Delete selected or current sender/message after confirmation |
 | `r` | Refresh (reconnect + re-process) |
-| `D` | Delete selected or current sender/message |
+| `D` / `shift+backspace` | Delete selected or current sender/message immediately, without confirmation |
 | `space` | Toggle selection (sender row or individual message) |
 | `tab` | Cycle focus between panels |
 | `enter` | Load details (Cleanup) or open body preview (Timeline) |

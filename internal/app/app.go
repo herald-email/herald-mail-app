@@ -2670,12 +2670,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "B", "f":
 		return m, m.toggleSidebar()
 
-	case "d":
-		if !m.loading {
-			m.toggleDomainMode()
-		}
-		return m, nil
-
 	case "ctrl+r", "r":
 		return m, m.refreshCurrentFolder()
 
@@ -2689,44 +2683,17 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "d":
+		return m, m.confirmDeleteSelected()
+
 	case "D":
-		if m.activeTab == tabTimeline {
-			m.finishTimelineRangeSelection()
-		}
-		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil
-		}
-		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
-			email := m.cleanupPreviewEmail
-			m.cleanupPreviewDeleting = true
-			m.cleanupPreviewIsArchive = false
-			m.deleting = true
-			m.deletionsPending++
-			m.deletionsTotal++
-			ch := m.deletionRequestCh
-			go func() {
-				ch <- models.DeletionRequest{
-					MessageID:          email.MessageID,
-					Folder:             email.Folder,
-					IsArchive:          false,
-					AffectedMessageIDs: []string{email.MessageID},
-				}
-			}()
-			return m, m.listenForDeletionResults()
-		}
-		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
-			desc := m.buildDeleteDesc()
-			if desc != "" {
-				m.pendingDeleteConfirm = true
-				m.pendingDeleteDesc = desc
-				m.pendingArchive = false
-				m.pendingDeleteAction = func() tea.Cmd {
-					m.deleting = true
-					return m.deleteSelected()
-				}
-			}
-		}
-		return m, nil
+		return m, m.deleteSelectedImmediately()
+
+	case "backspace":
+		return m, m.confirmDeleteSelected()
+
+	case "shift+backspace":
+		return m, m.deleteSelectedImmediately()
 
 	case "A", "T":
 		// Re-classify the currently focused single email with AI.

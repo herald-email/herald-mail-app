@@ -113,6 +113,51 @@ func (m *Model) deleteSelected() tea.Cmd {
 	return m.queueRequests(false)
 }
 
+func (m *Model) confirmDeleteSelected() tea.Cmd {
+	if m.activeTab == tabTimeline {
+		m.finishTimelineRangeSelection()
+	}
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
+	if m.loading || m.deleting || m.pendingDeleteConfirm {
+		return nil
+	}
+	desc := m.buildDeleteDesc()
+	if desc == "" {
+		return nil
+	}
+	m.pendingDeleteConfirm = true
+	m.pendingDeleteDesc = desc
+	m.pendingArchive = false
+	m.pendingDeleteAction = func() tea.Cmd {
+		m.deleting = true
+		return m.deleteSelected()
+	}
+	return nil
+}
+
+func (m *Model) deleteSelectedImmediately() tea.Cmd {
+	if m.activeTab == tabTimeline {
+		m.finishTimelineRangeSelection()
+	}
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
+	if m.loading || m.deleting {
+		return nil
+	}
+	if m.buildDeleteDesc() == "" {
+		return nil
+	}
+	m.pendingDeleteConfirm = false
+	m.pendingDeleteAction = nil
+	m.pendingDeleteDesc = ""
+	m.pendingArchive = false
+	m.deleting = true
+	return m.deleteSelected()
+}
+
 // archiveSelected archives the selected senders or individual messages via queue.
 func (m *Model) archiveSelected() tea.Cmd {
 	return m.queueRequests(true)
@@ -228,7 +273,11 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		return m.listenForDeletionResults()
 	}
 
-	if m.detailsTable.Focused() {
+	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
+		m.cleanupPreviewDeleting = true
+		m.cleanupPreviewIsArchive = isArchive
+		appendMessageTarget(m.cleanupPreviewEmail)
+	} else if m.detailsTable.Focused() {
 		if len(m.selectedMessages) > 0 {
 			// Delete all selected messages (across all senders)
 			for messageID := range m.selectedMessages {
@@ -289,6 +338,10 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	}
 
 	if len(targets) == 0 {
+		if m.cleanupPreviewDeleting {
+			m.cleanupPreviewDeleting = false
+			m.cleanupPreviewIsArchive = false
+		}
 		return nil
 	}
 
@@ -614,6 +667,16 @@ func (m *Model) buildDeleteDesc() string {
 			return fmt.Sprintf("Delete \"%s\"?", subj)
 		}
 		return ""
+	}
+	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
+		subj := m.cleanupPreviewEmail.Subject
+		if len(subj) > 50 {
+			subj = subj[:47] + "..."
+		}
+		if strings.TrimSpace(subj) == "" {
+			return fmt.Sprintf("Delete message from %s?", m.cleanupPreviewEmail.Sender)
+		}
+		return fmt.Sprintf("Delete \"%s\"?", subj)
 	}
 	if m.detailsTable.Focused() {
 		if len(m.selectedMessages) > 0 {

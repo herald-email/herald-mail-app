@@ -261,18 +261,113 @@ func TestTimelineDeleteKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
 	m = timelineKeyPress(t, m, keyRunes("V"))
 	m = timelineKeyPress(t, m, keyRunes("j"))
 
-	model, _ := m.handleKeyMsg(keyRunes("D"))
+	model, _ := m.handleKeyMsg(keyRunes("d"))
 	updated := model.(*Model)
 	if updated.timeline.rangeMode {
-		t.Fatal("expected D to exit Timeline range mode before confirmation")
+		t.Fatal("expected d to exit Timeline range mode before confirmation")
 	}
 	if !updated.pendingDeleteConfirm {
-		t.Fatal("expected D to open delete confirmation")
+		t.Fatal("expected d to open delete confirmation")
 	}
 	if !strings.Contains(updated.pendingDeleteDesc, "Delete 2 selected messages") {
 		t.Fatalf("expected selected-message delete confirmation, got %q", updated.pendingDeleteDesc)
 	}
 	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-1")
+}
+
+func TestTimelineImmediateDeleteKeyExitsRangeModeAndQueuesWithoutConfirmation(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+	m.setFocusedPanel(panelTimeline)
+
+	m = timelineKeyPress(t, m, keyRunes("V"))
+	m = timelineKeyPress(t, m, keyRunes("j"))
+
+	model, cmd := m.handleKeyMsg(keyRunes("D"))
+	updated := model.(*Model)
+	if updated.timeline.rangeMode {
+		t.Fatal("expected D to exit Timeline range mode before immediate delete")
+	}
+	if updated.pendingDeleteConfirm {
+		t.Fatal("expected D to bypass delete confirmation")
+	}
+	if cmd == nil {
+		t.Fatal("expected D to start listening for deletion results")
+	}
+
+	reqs := readDeletionRequests(t, updated.deletionRequestCh, 2)
+	got := map[string]bool{}
+	for _, req := range reqs {
+		got[req.MessageID] = true
+	}
+	for _, want := range []string{"msg-0", "msg-1"} {
+		if !got[want] {
+			t.Fatalf("expected immediate delete to queue %s, got %#v", want, got)
+		}
+	}
+}
+
+func TestTimelineImmediateDeleteWithoutTargetDoesNotEnterDeletingState(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = nil
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelTimeline)
+
+	model, cmd := m.handleKeyMsg(keyRunes("D"))
+	updated := model.(*Model)
+
+	if cmd != nil {
+		t.Fatal("expected no command when immediate delete has no target")
+	}
+	if updated.deleting {
+		t.Fatal("expected immediate delete with no target to leave deleting=false")
+	}
+	if updated.pendingDeleteConfirm {
+		t.Fatal("expected immediate delete with no target not to open confirmation")
+	}
+}
+
+func TestTimelineBackspaceAliasesDeleteConfirmationAndImmediateDelete(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+	m.setFocusedPanel(panelTimeline)
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	updated := model.(*Model)
+	if !updated.pendingDeleteConfirm {
+		t.Fatal("expected Backspace to open delete confirmation")
+	}
+
+	m = makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+	m.setFocusedPanel(panelTimeline)
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModShift})
+	updated = model.(*Model)
+	if updated.pendingDeleteConfirm {
+		t.Fatal("expected Shift+Backspace to bypass delete confirmation")
+	}
+	if cmd == nil {
+		t.Fatal("expected Shift+Backspace to queue immediate delete")
+	}
+	reqs := readDeletionRequests(t, updated.deletionRequestCh, 1)
+	if reqs[0].MessageID != "msg-0" {
+		t.Fatalf("expected Shift+Backspace to queue current message msg-0, got %q", reqs[0].MessageID)
+	}
 }
 
 func TestTimelineArchiveKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
@@ -400,7 +495,7 @@ func TestRenderKeyHints_TimelineSelectionActionsStayVisibleAt80Cols(t *testing.T
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
 	stripped := stripANSI(hints)
-	requireHintSegments(t, stripped, "space: select", "V: range", "D: delete selected", "a: archive selected")
+	requireHintSegments(t, stripped, "space: select", "V: range", "d: delete selected", "D: delete now", "a: archive selected")
 }
 
 func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {
@@ -414,7 +509,7 @@ func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {
 	m = timelineKeyPress(t, m, keyRunes("V"))
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "j/k: extend range", "V/Esc: done", "D: delete selected")
+	requireHintSegments(t, hints, "j/k: extend range", "V/Esc: done", "d: delete selected", "D: delete now")
 	status := stripANSI(m.renderStatusBar())
 	if !strings.Contains(status, "range select") || !strings.Contains(status, "1 message selected") {
 		t.Fatalf("expected range status and selected count, got %q", status)
@@ -438,7 +533,7 @@ func TestRenderKeyHints_TimelineShiftRangeModeShowsMomentaryActions(t *testing.T
 	m = timelineKeyPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "shift+↑/↓: extend range", "plain ↑/↓: done", "D: delete selected")
+	requireHintSegments(t, hints, "shift+↑/↓: extend range", "plain ↑/↓: done", "d: delete selected", "D: delete now")
 	if strings.Contains(hints, "j/k: extend range") {
 		t.Fatalf("shift range should not advertise plain j/k extension, got %q", hints)
 	}

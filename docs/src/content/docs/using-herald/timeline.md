@@ -47,7 +47,8 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `*` | Timeline row | Not read-only. | Toggles star on the current row email. |
 | `R` | Timeline row | Not loading and not read-only. | Opens Compose as a reply to the selected email. |
 | `F` | Timeline row | Not read-only. | Opens Compose as a forward of the selected email. |
-| `D` | Timeline or selected message | Not read-only. | Starts delete confirmation for the current or selected target. |
+| `d` / `backspace` | Timeline or selected message | Not read-only. | Starts delete confirmation for the current or selected target. |
+| `D` / `shift+backspace` | Timeline or selected message | Not read-only. | Immediately queues deletion for the current or selected target without confirmation. |
 | `e` | Timeline or selected message | Not read-only. | Starts archive confirmation for the current or selected target. |
 | `A` | Timeline row | AI configured. | Re-classifies the current email. |
 | `ctrl+q` | Timeline row | A current email exists. | Opens or closes the quick reply picker. |

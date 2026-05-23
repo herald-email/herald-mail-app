@@ -151,14 +151,14 @@ func TestShortcutHelpOwnsBottomHintsWhileOpen(t *testing.T) {
 				m.timeline.emails = mockEmails()
 				m.updateTimelineTable()
 			},
-			forbidden: []string{"c: compose", "r: all", "D: delete"},
+			forbidden: []string{"c: compose", "r: all", "d: delete", "D: delete now"},
 		},
 		{
 			name: "cleanup",
 			setup: func(m *Model) {
 				m.activeTab = tabCleanup
 			},
-			forbidden: []string{"enter: details", "W: rule", "D: delete"},
+			forbidden: []string{"enter: details", "W: rule", "d: delete", "D: delete now"},
 		},
 		{
 			name: "contacts",
@@ -205,7 +205,7 @@ func TestShortcutHelpSearchOwnsBottomHints(t *testing.T) {
 	searching := model.(*Model)
 
 	hints := stripANSI(searching.renderKeyHints())
-	for _, forbidden := range []string{"c: compose", "r: all", "D: delete"} {
+	for _, forbidden := range []string{"c: compose", "r: all", "d: delete", "D: delete now"} {
 		if strings.Contains(hints, forbidden) {
 			t.Fatalf("expected help search hints to hide underlying %q hint, got:\n%s", forbidden, hints)
 		}

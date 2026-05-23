@@ -2030,16 +2030,34 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	}
 	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 	if m.currentTimelineRowEmail() != nil {
-		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), "U: unread")
 		if m.currentTimelineDraftEmail() != nil {
+			segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
+			if m.windowWidth == 0 || m.windowWidth > 80 {
+				segments = append(segments, "U: unread")
+			}
 			segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
+		} else if m.windowWidth > 0 && m.windowWidth <= 80 {
+			segments = []string{
+				m.primaryTabShortcutHint(),
+				m.commandHint("timeline", CommandComposeNew, "compose"),
+				m.commandHint("timeline", CommandMailReplyAll, "all"),
+				m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"),
+				m.commandHint("timeline", CommandMailDeleteConfirm, "delete"),
+				m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"),
+				m.timelinePanelSwitchHint(),
+				m.commandHint("timeline", CommandMailReplySender, "sender"),
+				m.commandHint("timeline", CommandMailForward, "forward"),
+				m.commandHint("timeline", CommandMailArchiveCurrent, "archive"),
+				m.commandHint("timeline", CommandMailReclassify, "re-classify"),
+			}
 		} else {
-			segments = append(segments, m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), m.commandHint("timeline", CommandMailReclassify, "re-classify"), "V: range", "*: star")
+			segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), "U: unread")
+			segments = append(segments, m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), m.commandHint("timeline", CommandMailReclassify, "re-classify"), "V: range", "*: star")
 		}
 	} else {
 		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
 	}
-	segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, m.foldersFocusHint("timeline"), m.timelineOpenPreviewHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, m.commandHint("timeline", CommandHelpSearch, "hybrid search"))
 	}
@@ -2074,7 +2092,10 @@ func (m *Model) timelineMessageActionHintSegments() []string {
 
 func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 	if m.timelineSelectedCount() > 0 {
-		segments := []string{m.commandHint("timeline", CommandMailDeleteConfirm, "delete selected")}
+		segments := []string{
+			m.commandHint("timeline", CommandMailDeleteConfirm, "delete selected"),
+			m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"),
+		}
 		if len(m.selectedTimelineArchiveEmails()) > 0 {
 			segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"))
 		}
@@ -2087,9 +2108,10 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		} else {
 			segments = append(segments, m.commandHint("timeline", CommandMailDeleteConfirm, "delete"))
 		}
+		segments = append(segments, m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"))
 		return segments
 	}
-	return []string{"*: star", m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
+	return []string{"*: star", m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {

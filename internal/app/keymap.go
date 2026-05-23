@@ -39,13 +39,14 @@ const (
 
 	CommandComposeNew = "compose.new"
 
-	CommandMailReplyAll       = "mail.reply_all"
-	CommandMailReplySender    = "mail.reply_sender"
-	CommandMailForward        = "mail.forward"
-	CommandMailArchiveCurrent = "mail.archive_current"
-	CommandMailDeleteConfirm  = "mail.delete_confirm"
-	CommandMailReclassify     = "mail.reclassify"
-	CommandMailHideFuture     = "mail.hide_future"
+	CommandMailReplyAll        = "mail.reply_all"
+	CommandMailReplySender     = "mail.reply_sender"
+	CommandMailForward         = "mail.forward"
+	CommandMailArchiveCurrent  = "mail.archive_current"
+	CommandMailDeleteConfirm   = "mail.delete_confirm"
+	CommandMailDeleteImmediate = "mail.delete_immediate"
+	CommandMailReclassify      = "mail.reclassify"
+	CommandMailHideFuture      = "mail.hide_future"
 
 	CommandHelpOpen   = "help.open"
 	CommandHelpSearch = "help.search"
@@ -98,13 +99,14 @@ var commandCatalog = map[string]struct{}{
 
 	CommandComposeNew: {},
 
-	CommandMailReplyAll:       {},
-	CommandMailReplySender:    {},
-	CommandMailForward:        {},
-	CommandMailArchiveCurrent: {},
-	CommandMailDeleteConfirm:  {},
-	CommandMailReclassify:     {},
-	CommandMailHideFuture:     {},
+	CommandMailReplyAll:        {},
+	CommandMailReplySender:     {},
+	CommandMailForward:         {},
+	CommandMailArchiveCurrent:  {},
+	CommandMailDeleteConfirm:   {},
+	CommandMailDeleteImmediate: {},
+	CommandMailReclassify:      {},
+	CommandMailHideFuture:      {},
 
 	CommandHelpOpen:   {},
 	CommandHelpSearch: {},
@@ -316,7 +318,10 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "F", CommandMailForward)
 	add("timeline", keyboardModeNormal, "a", CommandMailArchiveCurrent)
 	add("timeline", keyboardModeNormal, "e", CommandMailArchiveCurrent)
-	add("timeline", keyboardModeNormal, "D", CommandMailDeleteConfirm)
+	add("timeline", keyboardModeNormal, "d", CommandMailDeleteConfirm)
+	add("timeline", keyboardModeNormal, "backspace", CommandMailDeleteConfirm)
+	add("timeline", keyboardModeNormal, "D", CommandMailDeleteImmediate)
+	add("timeline", keyboardModeNormal, "shift+backspace", CommandMailDeleteImmediate)
 	add("timeline", keyboardModeNormal, "T", CommandMailReclassify)
 	add("timeline", keyboardModeNormal, "A", CommandMailReclassify)
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
@@ -336,7 +341,10 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	}
 	add("cleanup", keyboardModeNormal, "a", CommandMailArchiveCurrent)
 	add("cleanup", keyboardModeNormal, "e", CommandMailArchiveCurrent)
-	add("cleanup", keyboardModeNormal, "D", CommandMailDeleteConfirm)
+	add("cleanup", keyboardModeNormal, "d", CommandMailDeleteConfirm)
+	add("cleanup", keyboardModeNormal, "backspace", CommandMailDeleteConfirm)
+	add("cleanup", keyboardModeNormal, "D", CommandMailDeleteImmediate)
+	add("cleanup", keyboardModeNormal, "shift+backspace", CommandMailDeleteImmediate)
 	add("cleanup", keyboardModeNormal, "T", CommandMailReclassify)
 	add("cleanup", keyboardModeNormal, "A", CommandMailReclassify)
 	add("cleanup", keyboardModeNormal, "H", CommandMailHideFuture)
@@ -465,6 +473,8 @@ func canonicalKeyForCommand(scope, command string) string {
 	case CommandMailArchiveCurrent:
 		return "a"
 	case CommandMailDeleteConfirm:
+		return "d"
+	case CommandMailDeleteImmediate:
 		return "D"
 	case CommandMailReclassify:
 		return "T"
@@ -508,6 +518,10 @@ func shortcutKeyPressMsg(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
+	case "shift+backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModShift}
 	}
 	runes := []rune(key)
 	msg := tea.KeyPressMsg{Text: key}

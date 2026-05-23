@@ -1253,7 +1253,7 @@ func (m *Model) renderCleanupPreview() string {
 
 			escHint := "Esc: close preview"
 			zHint := "z: exit full-screen"
-			actionHint := "D: delete  a: archive"
+			actionHint := "d: delete  D: delete now  a: archive"
 			if layout.TotalRows > maxBodyLines {
 				maxOffset := layout.TotalRows - maxBodyLines
 				pct := 0
@@ -1313,7 +1313,7 @@ func (m *Model) renderCleanupPreview() string {
 
 			escHint := "Esc: close"
 			zHint := "z: full-screen"
-			actionHint := "D: delete  a: archive"
+			actionHint := "d: delete  D: delete now  a: archive"
 			if totalLines > maxBodyLines {
 				pct := 0
 				if maxOffset > 0 {

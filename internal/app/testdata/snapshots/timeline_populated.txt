@@ -37,4 +37,4 @@
 [7m [m[7mINBOX  │  AI: off  │  Group: Thread  │  3 emails[m[7m [m[7m                                                                      [m
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ?: help  │  1-3: tabs  │  tab/shift+tab: panels  │  c: compose  │  S: settings  │  U: unread  │  r: all  │  R: sender
- f: forward  │  D: delete  │  a: archive  │  T: re-classify  │  V: range  │  *: star  │  G: group
+ f: forward  │  d: delete  │  D: delete now  │  a: archive  │  T: re-classify  │  V: range  │  *: star

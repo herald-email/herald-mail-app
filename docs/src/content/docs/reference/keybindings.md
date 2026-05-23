@@ -68,7 +68,8 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `r` | Reply all to current email in Compose. |
 | `R` | Reply sender-only to current email in Compose. |
 | `f` | Forward current email in Compose. |
-| `D` | Delete current/selected target after confirmation. |
+| `d` / `backspace` | Delete current/selected target after confirmation. |
+| `D` / `shift+backspace` | Delete current/selected target immediately, without confirmation. |
 | `a` | Archive the current message immediately; bulk archive still confirms. |
 | `T` | Re-classify current email with AI; `A` remains a legacy alias. |
 | `ctrl+d` / `ctrl+u` | Scroll half a page down / up in scrollable list or preview contexts. |
@@ -127,12 +128,12 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Key | Result |
 | --- | --- |
-| `d` | Toggle sender/domain grouping. |
 | `space` | Select summary row or detail message. |
 | `enter` | Load details from summary, open preview from details, or scroll preview. |
 | `j` / `down` | Move rows or scroll preview. |
 | `k` / `up` | Move rows or scroll preview. |
-| `D` | Delete selected/current target. |
+| `d` / `backspace` | Delete selected/current target after confirmation. |
+| `D` / `shift+backspace` | Delete selected/current target immediately, without confirmation. |
 | `a` | Archive selected/current target. |
 | `T` | Re-classify preview email; `A` remains a legacy alias. |
 | `u` | Unsubscribe when preview body supports it. |
@@ -178,6 +179,8 @@ bindings:
     normal:
       x: compose.new
       a: mail.archive_current
+      d: mail.delete_confirm
+      D: mail.delete_immediate
 fields:
   compose:
     default_mode: normal # insert | normal | visual

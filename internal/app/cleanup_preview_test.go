@@ -213,9 +213,44 @@ func TestCleanupFullScreenScrollIgnoresHiddenFocus(t *testing.T) {
 	}
 }
 
+func TestCleanupPreviewDeleteConfirmRequiresApproval(t *testing.T) {
+	m := makeCleanupPreviewModel()
+
+	newM, _ := m.Update(keyRunes("d"))
+	updated := newM.(*Model)
+
+	if !updated.pendingDeleteConfirm {
+		t.Fatal("expected d to open delete confirmation")
+	}
+	if !strings.Contains(updated.pendingDeleteDesc, "Test Subject") {
+		t.Fatalf("expected preview subject in confirmation, got %q", updated.pendingDeleteDesc)
+	}
+	select {
+	case req := <-updated.deletionRequestCh:
+		t.Fatalf("expected no delete request before confirmation, got %#v", req)
+	default:
+	}
+
+	newM, _ = updated.Update(keyRunes("y"))
+	updated = newM.(*Model)
+
+	var req models.DeletionRequest
+	select {
+	case req = <-updated.deletionRequestCh:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for confirmed DeletionRequest on channel")
+	}
+	if req.MessageID != "test-msg-1" {
+		t.Errorf("expected MessageID=test-msg-1, got %q", req.MessageID)
+	}
+	if req.IsArchive {
+		t.Error("expected IsArchive=false for confirmed delete")
+	}
+}
+
 // TestCleanupPreviewDelete verifies that pressing D in cleanup preview sends a deletion request
-// and that, on receiving a DeletionResult for the previewed message, the preview closes and
-// the email is removed from detailsEmails.
+// immediately and that, on receiving a DeletionResult for the previewed message, the preview
+// closes and the email is removed from detailsEmails.
 func TestCleanupPreviewDelete(t *testing.T) {
 	m := makeCleanupPreviewModel()
 
@@ -235,6 +270,9 @@ func TestCleanupPreviewDelete(t *testing.T) {
 	}
 	if req.IsArchive {
 		t.Error("expected IsArchive=false for D key")
+	}
+	if updated.pendingDeleteConfirm {
+		t.Fatal("expected D to bypass delete confirmation")
 	}
 
 	if !updated.cleanupPreviewDeleting {

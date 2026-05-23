@@ -187,7 +187,7 @@ Check these states during every applicable lane:
 - Key hints always match the normalized visible focus.
 - Key hints must not silently drop primary actions at `80x24`; if a primary action cannot fit in the bottom chrome, it must remain discoverable in `?` help and the bottom chrome must still advertise `?: help`.
 - Visible bottom chrome must be compared against the actual shortcuts available for the active pane. Missing primary actions are first-class bugs, not harmless copy drift.
-- Timeline protected hints must stay visible whenever contextually valid: `c: compose`, `r: all`, `R: sender`, `f: forward`, `D: delete`, `a: archive`, panel `Tab`, and `?: help`.
+- Timeline protected hints must stay visible whenever contextually valid: `c: compose`, `r: all`, `R: sender`, `f: forward`, `d: delete`, `D: delete now`, `a: archive`, panel `Tab`, and `?: help`.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
 - While `?` help is open, the bottom hint bar belongs to help and must not continue advertising shortcuts from the underlying tab, pane, or overlay.
 - Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
@@ -343,7 +343,7 @@ Check these states during every applicable lane:
 - Timeline and preview panels have aligned top/bottom borders in split mode.
 - Preview border is active only when preview has focus.
 - Key hints reflect list mode vs preview mode correctly.
-- When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `r: all`, `R: sender`, `f: forward`, `D: delete`, and `a: archive`.
+- When the split preview has focus, the bottom hint bar still exposes read/write message actions that work from preview focus: `r: all`, `R: sender`, `f: forward`, `d: delete`, `D: delete now`, and `a: archive`.
 
 ### TC-05C — Timeline reading-first row layout
 
@@ -443,8 +443,8 @@ Check these states during every applicable lane:
 - Status text shows `N messages selected` only on Timeline and does not leak into Cleanup or Contacts.
 - Hints advertise `space: select`, `V: range`, and shifted-arrow range selection where space allows.
 - Shifted-arrow range selection stops when plain `j/k` or arrows are used; the selected set remains selected and normal navigation resumes.
-- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `D: delete selected`, and `a: archive selected`.
-- `D` and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected.
+- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `d: delete selected`, `D: delete now`, and `a: archive selected`.
+- `d`, `D`, `Backspace`, `Shift+Backspace`, and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected; lowercase/delete-Backspace paths prompt, uppercase/Shift+Backspace paths delete immediately.
 - Read-only diagnostic views do not allow selection or destructive actions.
 - At `50x15`, the minimum-size guard appears instead of clipped selection UI.
 
@@ -792,7 +792,7 @@ Check these states during every applicable lane:
 - Reply drafts show `Draft reply` in Timeline and preview state text.
 - Draft reply preview shows compact thread context with the other visible messages in the conversation before the draft body.
 - Preview header shows `State: Draft - E edit draft - Ctrl+S send` for plain drafts or `State: Draft reply - E edit draft - Ctrl+S send` for reply drafts.
-- Draft preview/list hints prioritize `E: edit draft`, `Ctrl+S: send draft`, and `D: discard draft`.
+- Draft preview/list hints prioritize `E: edit draft`, `Ctrl+S: send draft`, `d: discard draft`, and `D: delete now`.
 - `E` opens Compose from a highlighted draft, from draft preview focus, and from a collapsed thread that contains a draft.
 - `Ctrl+S` sends a highlighted draft, draft preview, or collapsed thread draft without switching to Compose.
 - Sending deletes the source draft only after send success; autosave replacement never deletes the previous draft before the new save succeeds.
@@ -1361,7 +1361,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode.
 2. Open Cleanup, focus a sender with visible messages, and capture the sender/details state.
-3. Delete or archive one visible Cleanup message, confirming the prompt when shown.
+3. Delete or archive one visible Cleanup message, confirming the prompt when using `d` or `Backspace`; reserve `D` and `Shift+Backspace` for approved immediate-delete checks.
 4. Switch immediately to Timeline and search or navigate to the same sender/subject.
 5. Repeat for a Cleanup sender/domain batch when demo data makes a safe target obvious.
 6. Resize to `50x15`, then recover to `80x24` and Timeline.

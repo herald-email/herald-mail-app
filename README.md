@@ -368,7 +368,8 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `Shift+Up` / `Shift+Down`          | Extend Timeline range selection when supported by the terminal                              |
 | `V`, then `j` / `k`                | Fallback Timeline range selection without shifted-arrow support                             |
 | `Escape`                           | Close preview / picker, or return from Compose to its originating Timeline screen           |
-| `D`                                | Delete selected email or sender                                                             |
+| `d` / `Backspace`                  | Delete selected/current target after confirmation                                           |
+| `D` / `Shift+Backspace`            | Delete selected/current target immediately, without confirmation                            |
 | `a`                                | Archive current message immediately; bulk archive still asks for confirmation               |
 | `r` / `R`                          | Reply all / reply sender-only                                                               |
 | `f`                                | Forward                                                                                     |

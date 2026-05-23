@@ -31,6 +31,10 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "forward legacy", scope: "timeline", mode: "normal", key: "F", command: CommandMailForward},
 		{name: "archive primary", scope: "timeline", mode: "normal", key: "a", command: CommandMailArchiveCurrent},
 		{name: "archive legacy", scope: "timeline", mode: "normal", key: "e", command: CommandMailArchiveCurrent},
+		{name: "delete confirm primary", scope: "timeline", mode: "normal", key: "d", command: CommandMailDeleteConfirm},
+		{name: "delete confirm backspace", scope: "timeline", mode: "normal", key: "backspace", command: CommandMailDeleteConfirm},
+		{name: "delete immediate primary", scope: "timeline", mode: "normal", key: "D", command: CommandMailDeleteImmediate},
+		{name: "delete immediate shift backspace", scope: "timeline", mode: "normal", key: "shift+backspace", command: CommandMailDeleteImmediate},
 		{name: "classify relocated", scope: "timeline", mode: "normal", key: "T", command: CommandMailReclassify},
 		{name: "sidebar primary", scope: "global", mode: "normal", key: "B", command: CommandSidebarToggle},
 		{name: "logs primary", scope: "global", mode: "normal", key: "L", command: CommandLogsToggle},
@@ -143,6 +147,7 @@ bindings:
       w: mail.forward
       x: mail.archive_current
       z: mail.delete_confirm
+      y: mail.delete_immediate
       G: mail.reclassify
 `)); err != nil {
 		t.Fatalf("ApplyCustomKeymap failed: %v", err)
@@ -157,11 +162,12 @@ bindings:
 		"s: sender",
 		"w: forward",
 		"z: delete",
+		"y: delete now",
 		"x: archive",
 		"G: re-classify",
 		"b: sidebar",
 	)
-	for _, stale := range []string{"1-3: tabs", "c: compose", "r: all", "R: sender", "f: forward", "D: delete", "a: archive", "T: re-classify", "B: sidebar"} {
+	for _, stale := range []string{"1-3: tabs", "c: compose", "r: all", "R: sender", "f: forward", "a: archive", "T: re-classify", "B: sidebar"} {
 		if strings.Contains(hints, stale) {
 			t.Fatalf("expected custom keymap hints to omit stale %q, got:\n%s", stale, hints)
 		}
@@ -186,8 +192,9 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 		{scope: "timeline", command: CommandMailReplyAll, hint: "all", help: "reply all"},
 		{scope: "timeline", command: CommandMailReplySender, hint: "sender", help: "reply sender"},
 		{scope: "timeline", command: CommandMailForward, hint: "forward", help: "forward highlighted"},
-		{scope: "timeline", command: CommandMailDeleteConfirm, hint: "delete", help: "delete or archive"},
-		{scope: "timeline", command: CommandMailArchiveCurrent, hint: "archive", help: "delete or archive"},
+		{scope: "timeline", command: CommandMailDeleteConfirm, hint: "delete", help: "after confirmation"},
+		{scope: "timeline", command: CommandMailDeleteImmediate, hint: "delete now", help: "immediately"},
+		{scope: "timeline", command: CommandMailArchiveCurrent, hint: "archive", help: "after confirmation"},
 		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, hint: "sidebar", help: "toggle sidebar"},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
@@ -330,6 +337,7 @@ bindings:
     normal:
       x: mail.archive_current
       z: mail.delete_confirm
+      v: mail.delete_immediate
       G: mail.reclassify
       h: mail.hide_future
   contacts:
@@ -361,8 +369,8 @@ bindings:
 		m.updateSummaryTable()
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-9: tabs", "h: hide future mail", "z: delete", "x: archive", "b: sidebar", "y: chat")
-		for _, stale := range []string{"1-3: tabs", "H: hide future mail", "D: delete", "a: archive", "B: sidebar", "g: chat"} {
+		requireHintSegments(t, hints, "7-9: tabs", "h: hide future mail", "z: delete", "v: delete now", "x: archive", "b: sidebar", "y: chat")
+		for _, stale := range []string{"1-3: tabs", "H: hide future mail", "a: archive", "B: sidebar", "g: chat"} {
 			if strings.Contains(hints, stale) {
 				t.Fatalf("expected Cleanup custom hints to omit stale %q, got:\n%s", stale, hints)
 			}
@@ -461,6 +469,75 @@ fields:
 	if got := updated.composeTo.Value(); got != "x" {
 		t.Fatalf("insert mode should type printable text, got To=%q", got)
 	}
+}
+
+func TestDeleteShortcutAliasesDoNotStealTextEntry(t *testing.T) {
+	t.Run("compose", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("d"))
+		updated := model.(*Model)
+		model, _ = updated.handleKeyMsg(keyRunes("D"))
+		updated = model.(*Model)
+		model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		updated = model.(*Model)
+
+		if got := updated.composeBody.Value(); got != "d" {
+			t.Fatalf("expected compose field to keep literal delete-alias text editing, got %q", got)
+		}
+		if updated.pendingDeleteConfirm {
+			t.Fatal("compose text entry must not open delete confirmation")
+		}
+	})
+
+	t.Run("search prompt", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabTimeline
+		m.timeline.emails = mockEmails()
+		m.updateTimelineTable()
+		m.openTimelineSearch()
+
+		model, _ := m.handleKeyMsg(keyRunes("d"))
+		updated := model.(*Model)
+		model, _ = updated.handleKeyMsg(keyRunes("D"))
+		updated = model.(*Model)
+		model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		updated = model.(*Model)
+
+		if got := updated.timeline.searchInput.Value(); got != "d" {
+			t.Fatalf("expected search prompt to keep literal delete-alias text editing, got %q", got)
+		}
+		if updated.pendingDeleteConfirm {
+			t.Fatal("search prompt text entry must not open delete confirmation")
+		}
+	})
+
+	t.Run("prompt editor", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, 140, 40)
+		if cmd := m.promptEditor.Init(); cmd != nil {
+			model, _ := m.Update(cmd())
+			m = model.(*Model)
+		}
+
+		model, _ := m.Update(keyRunes("d"))
+		updated := model.(*Model)
+		model, _ = updated.Update(keyRunes("D"))
+		updated = model.(*Model)
+		model, _ = updated.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		updated = model.(*Model)
+
+		if got := updated.promptEditor.name; got != "d" {
+			t.Fatalf("expected prompt editor to keep literal delete-alias text editing, got %q", got)
+		}
+		if updated.pendingDeleteConfirm {
+			t.Fatal("prompt editor text entry must not open delete confirmation")
+		}
+	})
 }
 
 func TestVimComposeEscapeLeavesInsertAndVisualModes(t *testing.T) {

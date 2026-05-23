@@ -192,6 +192,8 @@ func displayHelpKeyPart(part string) string {
 		return "Enter"
 	case "tab":
 		return "Tab"
+	case "backspace":
+		return "Backspace"
 	case "shift":
 		return "Shift"
 	case "pgup":

@@ -32,7 +32,8 @@ Press `2` to open Cleanup. Use it when you want to answer questions like "which 
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `d` | Cleanup | Not loading. | Toggles sender grouping and domain grouping. |
+| `d` / `backspace` | Cleanup | Not loading, not already deleting, target exists. | Opens delete confirmation for the selected or current target. |
+| `D` / `shift+backspace` | Cleanup | Not loading, not already deleting, target exists. | Immediately queues deletion for the selected or current target without confirmation. |
 | `space` | Summary or details | Visible data can be interacted with. | Selects or unselects the focused sender/domain row or message row. |
 | `enter` | Summary | Summary focused. | Loads detail table for the focused sender/domain. |
 | `enter` | Details | Details focused and preview closed. | Opens preview for the focused message. |
@@ -41,7 +42,6 @@ Press `2` to open Cleanup. Use it when you want to answer questions like "which 
 | `k` / `up` | Summary/details | Preview not intercepting scroll. | Moves selection up. |
 | `j` / `down` | Preview | Cleanup preview open and details focused. | Scrolls body down. |
 | `k` / `up` | Preview | Cleanup preview open and details focused. | Scrolls body up. |
-| `D` | Cleanup | Not loading, not already deleting, target exists. | Opens delete confirmation or directly queues current preview email. |
 | `e` | Cleanup | Not loading, not already deleting, target exists. | Opens archive confirmation or directly queues current preview email. |
 | `A` | Cleanup preview | AI configured and preview email exists. | Re-classifies the preview email. |
 | `u` | Cleanup preview | Body includes `List-Unsubscribe`. | Opens unsubscribe confirmation. |
@@ -66,12 +66,11 @@ Press `2` to open Cleanup. Use it when you want to answer questions like "which 
 
 ### Review a Sender
 
-1. Press `3`.
-2. Keep sender mode or press `d` for domain mode.
-3. Move through the summary table with `j`/`k`.
-4. Press `enter` to load details.
-5. Press `tab` to focus details, then move through messages.
-6. Press `enter` to preview a message.
+1. Press `2`.
+2. Move through the summary table with `j`/`k`.
+3. Press `enter` to load details.
+4. Press `tab` to focus details, then move through messages.
+5. Press `enter` to preview a message.
 
 Mouse path: click a summary row to refresh details, click a detail row to open its preview, then scroll over the preview to read more of the message body.
 
@@ -79,17 +78,21 @@ Mouse path: click a summary row to refresh details, click a detail row to open i
 
 1. Focus the summary table.
 2. Press `space` on one or more senders or domains.
-3. Press `D` to delete or `e` to archive.
+3. Press `d` to delete with confirmation or `e` to archive.
 4. Read the confirmation description in the status bar.
 5. Press `y` to confirm or `n`/`Esc` to cancel.
+
+Use `D` only when you intentionally want to queue deletion immediately without the confirmation step.
 
 ### Delete or Archive Individual Messages
 
 1. Load details for a sender or domain.
 2. Press `tab` to focus details.
 3. Press `space` on individual messages.
-4. Press `D` or `e`.
+4. Press `d` to delete with confirmation or `e` to archive.
 5. Confirm only when the status description matches your selection.
+
+Use `D` only when you intentionally want to queue deletion immediately without the confirmation step.
 
 ### Create a Hide-Future-Mail Rule
 
@@ -154,15 +157,11 @@ If automation actions do not run, reopen `W` or `C` to verify the rule is enable
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="cleanup-domain-mode" page="cleanup" alt="Cleanup domain grouping mode" state="demo mode, 120x40, Cleanup tab, domain mode" desc="Shows domain mode status, domain summary rows, detail table, and key hints after pressing d." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press d" -->
-
-![Cleanup domain grouping mode](/screenshots/cleanup-domain-mode.png)
-
 <!-- HERALD_SCREENSHOT id="cleanup-preview" page="cleanup" alt="Cleanup message preview open" state="demo mode, 120x40, Cleanup detail preview" desc="Shows cleanup preview body, hidden sidebar behavior, action hints for unsubscribe/hide/delete/archive, and scroll state." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press enter; press tab; press enter" -->
 
 ![Cleanup message preview open](/screenshots/cleanup-preview.png)
 
-<!-- HERALD_SCREENSHOT id="cleanup-delete-confirmation" page="cleanup" alt="Cleanup delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows destructive confirmation text with y confirm and n or Esc cancel controls." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press D" -->
+<!-- HERALD_SCREENSHOT id="cleanup-delete-confirmation" page="cleanup" alt="Cleanup delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows destructive confirmation text with y confirm and n or Esc cancel controls." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press d" -->
 
 ![Cleanup delete confirmation status bar](/screenshots/cleanup-delete-confirmation.png)
 

@@ -20,7 +20,7 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 | Read-only status | Diagnostic mode that blocks mutations. |
 | Dry-run flag | `[DRY RUN]` when runtime mode avoids live mutation for supported cleanup paths. |
 
-<!-- HERALD_SCREENSHOT id="destructive-delete-confirm" page="destructive-actions" alt="Delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows confirmation description, y confirm, n or Esc cancel, selected rows, and status override." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press D" -->
+<!-- HERALD_SCREENSHOT id="destructive-delete-confirm" page="destructive-actions" alt="Delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows confirmation description, y confirm, n or Esc cancel, selected rows, and status override." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press d" -->
 
 ![Delete confirmation status bar](/screenshots/destructive-delete-confirm.png)
 
@@ -28,7 +28,8 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `D` | Timeline/Cleanup | Target exists, not read-only, not already deleting. | Opens delete confirmation or queues current preview email. |
+| `d` / `backspace` | Timeline/Cleanup | Target exists, not read-only, not already deleting. | Opens delete confirmation. |
+| `D` / `shift+backspace` | Timeline/Cleanup | Target exists, not read-only, not already deleting. | Queues deletion immediately without confirmation. |
 | `e` | Timeline/Cleanup | Target exists, not read-only, not already deleting. | Opens archive confirmation or queues current preview email. |
 | `y` / `Y` | Confirmation | Delete/archive/unsubscribe confirmation active. | Confirms the pending action. |
 | `n` / `N` | Confirmation | Confirmation active. | Cancels the pending action. |
@@ -43,9 +44,11 @@ Delete, archive, unsubscribe, and hide-future-mail are available from Timeline a
 
 1. Open Cleanup with `2`.
 2. Use `space` to select sender/domain rows or individual messages.
-3. Press `D`.
+3. Press `d`.
 4. Read the confirmation text.
 5. Press `y` only if the target is correct.
+
+Use `D` only when you intentionally want to delete immediately without the confirmation step.
 
 ### Archive Selected Cleanup Rows
 
@@ -88,7 +91,7 @@ Delete/archive operations mutate the configured IMAP mailbox and SQLite cache. D
 
 ## Troubleshooting
 
-If `D` or `e` appears inactive, check for read-only folder mode, active deletion progress, or missing selection.
+If `d`, `D`, or `e` appears inactive, check for read-only folder mode, active deletion progress, or missing selection.
 
 If deletion progress stalls, open logs with `l` after the UI is usable and check provider connectivity.
 
@@ -106,7 +109,7 @@ If mail reappears after delete/archive, refresh with `r` and verify provider Tra
 
 ![Unsubscribe confirmation status bar](/screenshots/destructive-unsubscribe-confirm.png)
 
-<!-- HERALD_SCREENSHOT id="destructive-progress" page="destructive-actions" alt="Delete or archive progress in status bar" state="demo mode, 120x40, deletion worker active" desc="Shows serialized worker progress, completed/total count, sender label, and reconnecting state if applicable." capture="tmux demo 120x40; ./bin/herald --demo; press 2; select rows; press D; press y; capture during progress" -->
+<!-- HERALD_SCREENSHOT id="destructive-progress" page="destructive-actions" alt="Delete or archive progress in status bar" state="demo mode, 120x40, deletion worker active" desc="Shows serialized worker progress, completed/total count, sender label, and reconnecting state if applicable." capture="tmux demo 120x40; ./bin/herald --demo; press 2; select rows; press d; press y; capture during progress" -->
 
 ![Delete or archive progress in status bar](/screenshots/destructive-progress.png)
 
