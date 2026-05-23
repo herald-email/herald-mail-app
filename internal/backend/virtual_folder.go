@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -74,7 +75,8 @@ func buildAllMailOnlyView(allMailFolder string, allMailEmails []*models.EmailDat
 }
 
 func (b *LocalBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error) {
-	folders, err := b.imapClient.ListFolders()
+	ctx := context.Background()
+	folders, err := b.mailSource.ListFolders(ctx)
 	if err != nil {
 		return &models.VirtualFolderResult{
 			Name:      virtualFolderAllMailOnlyName,
@@ -89,7 +91,7 @@ func (b *LocalBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error)
 		return buildAllMailOnlyView("", nil, nil, true, ""), nil
 	}
 
-	if err := b.imapClient.ProcessEmailsIncremental(allMailFolder); err != nil {
+	if err := b.mailSource.ProcessEmailsIncremental(ctx, allMailFolder); err != nil {
 		return &models.VirtualFolderResult{
 			Name:         virtualFolderAllMailOnlyName,
 			Supported:    false,
@@ -99,7 +101,7 @@ func (b *LocalBackend) GetAllMailOnlyView() (*models.VirtualFolderResult, error)
 		}, nil
 	}
 
-	membershipByFolder, err := b.imapClient.GetFolderMessageIDs(folders)
+	membershipByFolder, err := b.mailSource.GetFolderMessageIDs(ctx, folders)
 	if err != nil {
 		logger.Warn("GetAllMailOnlyView: membership inspection failed: %v", err)
 		return buildAllMailOnlyView(allMailFolder, nil, nil, false, fmt.Sprintf("Failed to inspect folder membership: %v", err)), nil

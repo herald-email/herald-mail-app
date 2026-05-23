@@ -80,9 +80,9 @@ type EventRef struct {
 Sources are provider adapters, not mini-apps. They should know how to talk to IMAP, Google Calendar, or CalDAV, but they should not decide UI priority, cache eviction, background fairness, or stale-result behavior.
 
 - [ ] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
-- [ ] `MailSource` covers mail-specific collections, sync, body fetch, mutation, drafts, and send.
+- [x] `MailSource` covers current mail-specific collections, sync, body fetch, mutation, drafts, folder status, and search behind `IMAPMailSource`.
 - [ ] `CalendarSource` covers calendars, event sync, event detail fetch, and later event mutations.
-- [ ] Plugins accept `context.Context` so HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
+- [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
 - [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
 
 Example capability shape:
@@ -218,7 +218,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
 - [x] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
 - [x] Phase 3: Add cache-first message body and preview services with persistent cache, completed replay, explicit `NoCache` bypasses, and in-flight coalescing.
-- [ ] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
+- [x] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
 - [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
@@ -231,4 +231,5 @@ This refactor is accepted only if it preserves current behavior while making fut
 - [x] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
 - [x] Source identity tests prove legacy config normalization and scoped cache key generation.
 - [x] Cache-first service tests prove cache hit, in-flight join, completed replay, source fetch/store, stale-result filtering, and replay result isolation.
+- [x] IMAP mail source tests prove `LocalBackend` routes sync, folder, search, mutation, draft, body, and virtual-folder provider calls through `MailSource`.
 - [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.

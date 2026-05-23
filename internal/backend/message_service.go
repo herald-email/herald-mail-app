@@ -162,7 +162,18 @@ func (s *MessageService) GetMessagePreviewNoCache(ctx context.Context, ref model
 	if s.source == nil {
 		return MessageReadResult{}, fmt.Errorf("message source unavailable")
 	}
-	body, err := s.source.FetchMessagePreviewNoCache(ctx, ref)
+	var (
+		body *models.EmailBody
+		err  error
+	)
+	if s.currentStoragePolicy() == config.CacheStoragePolicyPreserveAll {
+		body, err = s.source.FetchMessageNoCache(ctx, ref)
+	} else {
+		body, err = s.source.FetchMessagePreviewNoCache(ctx, ref)
+		if err == nil && body == nil {
+			body, err = s.source.FetchMessageNoCache(ctx, ref)
+		}
+	}
 	if err != nil {
 		return MessageReadResult{Source: MessageReadSourceProvider}, err
 	}

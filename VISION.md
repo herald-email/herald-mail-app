@@ -646,6 +646,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [x] Source identity foundation (`source_id`, `account_id`, and scoped message refs) lands before multi-account UI
 - [x] Work coordinator policies preserve latest UI intent, coalesce duplicate resource fetches, serialize source mutations, and keep background work fair
 - [x] Cache-first mail body and preview services use scoped message refs, coalesce duplicate provider fetches, replay safe completed work, and keep direct provider reads behind explicit `NoCache` methods
+- [x] Current IMAP provider access is isolated behind `IMAPMailSource` before visible account switching
 - [ ] Folder sidebar grouped under account headers
 - [ ] Status bar shows active account name
 - [ ] Compose "From" field lets user pick sending account

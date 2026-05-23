@@ -2,6 +2,7 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ func TestLocalBackendUsesVirtualMailLabForSendDraftAndReply(t *testing.T) {
 		t.Fatalf("NewLocal: %v", err)
 	}
 	defer b.Close()
-	if err := b.imapClient.Connect(); err != nil {
+	if err := b.mailSource.Connect(context.Background()); err != nil {
 		t.Fatalf("connect virtual IMAP: %v", err)
 	}
 
@@ -115,7 +116,7 @@ func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 				if err != nil {
 					t.Fatalf("NewLocal(%s): %v", account, err)
 				}
-				if err := b.imapClient.Connect(); err != nil {
+				if err := b.mailSource.Connect(context.Background()); err != nil {
 					t.Fatalf("connect virtual IMAP for %s: %v", account, err)
 				}
 				backendByAccount[account] = b

@@ -16,7 +16,6 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/filesafe"
-	"github.com/herald-email/herald-mail-app/internal/imap"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
@@ -26,7 +25,7 @@ import (
 // LocalBackend implements Backend with a direct IMAP connection and local SQLite cache.
 // This is the single-process implementation; a future RemoteBackend will speak to a daemon.
 type LocalBackend struct {
-	imapClient       *imap.Client
+	mailSource       MailSource
 	cache            *cache.Cache
 	classifier       ai.AIClient
 	classifierMu     sync.RWMutex
@@ -198,8 +197,9 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 
 	progressCh := make(chan models.ProgressInfo, 100)
 	rawProgressCh := make(chan models.ProgressInfo, 100)
+	mailSource := NewIMAPMailSource(cfg, configPath, c, rawProgressCh)
 	b := &LocalBackend{
-		imapClient:       imap.New(cfg, configPath, c, rawProgressCh),
+		mailSource:       mailSource,
 		cache:            c,
 		classifier:       classifier,
 		cfg:              cfg,
@@ -212,7 +212,7 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 	}
 	b.messageService = NewMessageService(MessageServiceOptions{
 		Cache:         c,
-		Source:        b,
+		Source:        mailSource,
 		StoragePolicy: b.currentCacheStoragePolicy,
 	})
 	go b.fanoutProgressLoop()
@@ -375,6 +375,7 @@ func (b *LocalBackend) loadWorker() {
 }
 
 func (b *LocalBackend) runLoad(req folderLoadRequest) {
+	ctx := context.Background()
 	start := time.Now()
 	b.setActiveLoad(req)
 	defer b.clearActiveLoad(req)
@@ -387,7 +388,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	time.Sleep(200 * time.Millisecond)
 
 	b.tracef("connecting IMAP: folder=%s generation=%d", req.Folder, req.Generation)
-	if err := b.imapClient.Connect(); err != nil {
+	if err := b.mailSource.Connect(ctx); err != nil {
 		logger.Error("Failed to connect to IMAP: %v", err)
 		b.sendProgress(models.ProgressInfo{
 			Phase:   "error",
@@ -405,7 +406,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	b.tracef("IMAP connected: folder=%s generation=%d", req.Folder, req.Generation)
 
 	b.tracef("priming folder cache after connect: folder=%s generation=%d", req.Folder, req.Generation)
-	if folders, err := b.imapClient.ListFolders(); err != nil {
+	if folders, err := b.mailSource.ListFolders(ctx); err != nil {
 		logger.Warn("Failed to prime folder cache after connect: %v", err)
 	} else if len(folders) > 0 {
 		b.foldersMu.Lock()
@@ -416,7 +417,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 	}
 
 	b.tracef("starting ProcessEmailsIncremental: folder=%s generation=%d", req.Folder, req.Generation)
-	if err := b.imapClient.ProcessEmailsIncremental(req.Folder); err != nil {
+	if err := b.mailSource.ProcessEmailsIncremental(ctx, req.Folder); err != nil {
 		logger.Error("Failed to process emails: %v", err)
 		b.sendProgress(models.ProgressInfo{
 			Phase:   "error",
@@ -438,7 +439,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Message: "Generating statistics...",
 	})
 	b.tracef("loading sender statistics: folder=%s generation=%d", req.Folder, req.Generation)
-	stats, err := b.imapClient.GetSenderStatistics(req.Folder)
+	stats, err := b.mailSource.GetSenderStatistics(ctx, req.Folder)
 	if err != nil {
 		logger.Error("Failed to get statistics: %v", err)
 		b.sendProgress(models.ProgressInfo{
@@ -486,7 +487,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Phase:      models.SyncPhaseReconcileStarted,
 		Message:    fmt.Sprintf("Reconciling live %s state...", req.Folder),
 	})
-	b.imapClient.StartBackgroundReconcile(req.Folder, validIDsCh)
+	b.mailSource.StartBackgroundReconcile(ctx, req.Folder, validIDsCh)
 }
 
 func senderStatisticsFromGroups(grouped map[string][]*models.EmailData) map[string]*models.SenderStats {
@@ -534,7 +535,7 @@ func (b *LocalBackend) GetSenderStatistics(folder string) (map[string]*models.Se
 }
 
 func (b *LocalBackend) GetEmailsBySender(folder string) (map[string][]*models.EmailData, error) {
-	grouped, err := b.imapClient.GetEmailsBySender(folder)
+	grouped, err := b.mailSource.GetEmailsBySender(context.Background(), folder)
 	if err != nil {
 		return nil, err
 	}
@@ -550,15 +551,15 @@ func (b *LocalBackend) GetEmailsBySender(folder string) (map[string][]*models.Em
 }
 
 func (b *LocalBackend) DeleteSenderEmails(sender, folder string) error {
-	return b.imapClient.DeleteSenderEmails(sender, folder)
+	return b.mailSource.DeleteSenderEmails(context.Background(), sender, folder)
 }
 
 func (b *LocalBackend) DeleteDomainEmails(domain, folder string) error {
-	return b.imapClient.DeleteDomainEmails(domain, folder)
+	return b.mailSource.DeleteDomainEmails(context.Background(), domain, folder)
 }
 
 func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
-	return b.imapClient.DeleteEmail(messageID, folder)
+	return b.mailSource.DeleteEmail(context.Background(), messageID, folder)
 }
 
 func (b *LocalBackend) ListFolders() ([]string, error) {
@@ -570,11 +571,11 @@ func (b *LocalBackend) ListFolders() ([]string, error) {
 	}
 	b.foldersMu.RUnlock()
 
-	return b.imapClient.ListFolders()
+	return b.mailSource.ListFolders(context.Background())
 }
 
 func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
-	return b.imapClient.GetFolderStatus(folders)
+	return b.mailSource.GetFolderStatus(context.Background(), folders)
 }
 
 func (b *LocalBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
@@ -656,7 +657,7 @@ func (b *LocalBackend) ensureMessageService() *MessageService {
 	if b.messageService == nil {
 		b.messageService = NewMessageService(MessageServiceOptions{
 			Cache:         b.cache,
-			Source:        b,
+			Source:        b.mailSource,
 			StoragePolicy: b.currentCacheStoragePolicy,
 		})
 	}
@@ -670,12 +671,12 @@ func (b *LocalBackend) currentCacheStoragePolicy() string {
 	return config.NormalizeCacheStoragePolicy(b.cfg.Cache.StoragePolicy)
 }
 
-func (b *LocalBackend) FetchMessageNoCache(_ context.Context, ref models.MessageRef) (*models.EmailBody, error) {
+func (b *LocalBackend) FetchMessageNoCache(ctx context.Context, ref models.MessageRef) (*models.EmailBody, error) {
 	ref = ref.WithDefaults()
-	if b.imapClient == nil {
-		return nil, fmt.Errorf("IMAP client unavailable")
+	if b.mailSource == nil {
+		return nil, fmt.Errorf("mail source unavailable")
 	}
-	body, err := b.imapClient.FetchEmailBody(ref.UID, ref.Folder)
+	body, err := b.mailSource.FetchMessageNoCache(ctx, ref)
 	if body != nil && body.MessageID == "" {
 		body.MessageID = ref.MessageID
 	}
@@ -684,13 +685,13 @@ func (b *LocalBackend) FetchMessageNoCache(_ context.Context, ref models.Message
 
 func (b *LocalBackend) FetchMessagePreviewNoCache(ctx context.Context, ref models.MessageRef) (*models.EmailBody, error) {
 	ref = ref.WithDefaults()
-	if b.imapClient == nil {
-		return nil, fmt.Errorf("IMAP client unavailable")
+	if b.mailSource == nil {
+		return nil, fmt.Errorf("mail source unavailable")
 	}
 	if b.currentCacheStoragePolicy() == config.CacheStoragePolicyPreserveAll {
 		return b.FetchMessageNoCache(ctx, ref)
 	}
-	body, err := b.imapClient.FetchEmailPreviewBody(ref.UID, ref.Folder)
+	body, err := b.mailSource.FetchMessagePreviewNoCache(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -803,7 +804,7 @@ func (b *LocalBackend) SaveAttachment(att *models.Attachment, destPath string) e
 }
 
 func (b *LocalBackend) SetGroupByDomain(v bool) {
-	b.imapClient.SetGroupByDomain(v)
+	b.mailSource.SetGroupByDomain(v)
 }
 
 func (b *LocalBackend) Progress() <-chan models.ProgressInfo {
@@ -847,20 +848,23 @@ func (b *LocalBackend) Close() error {
 	if b.messageService != nil {
 		b.messageService.Close()
 	}
-	imapErr := b.imapClient.Close()
+	var sourceErr error
+	if b.mailSource != nil {
+		sourceErr = b.mailSource.Close()
+	}
 	cacheErr := b.cache.Close()
-	if imapErr != nil {
-		return imapErr
+	if sourceErr != nil {
+		return sourceErr
 	}
 	return cacheErr
 }
 
 func (b *LocalBackend) ArchiveEmail(messageID, folder string) error {
-	return b.imapClient.ArchiveEmail(messageID, folder)
+	return b.mailSource.ArchiveEmail(context.Background(), messageID, folder)
 }
 
 func (b *LocalBackend) ArchiveSenderEmails(sender, folder string) error {
-	return b.imapClient.ArchiveSenderEmails(sender, folder)
+	return b.mailSource.ArchiveSenderEmails(context.Background(), sender, folder)
 }
 
 func (b *LocalBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
@@ -892,7 +896,7 @@ func (b *LocalBackend) SearchEmailsCrossFolder(query string) ([]*models.EmailDat
 }
 
 func (b *LocalBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailData, error) {
-	return b.imapClient.SearchIMAP(folder, query)
+	return b.mailSource.SearchIMAP(context.Background(), folder, query)
 }
 
 func (b *LocalBackend) SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error) {
@@ -939,7 +943,7 @@ func (b *LocalBackend) MarkRead(messageID, folder string) error {
 	if err != nil {
 		return err
 	}
-	if err := b.imapClient.MarkRead(email.UID, folder); err != nil {
+	if err := b.mailSource.MarkRead(context.Background(), email.UID, folder); err != nil {
 		logger.Warn("MarkRead IMAP failed for %s: %v", messageID, err)
 	}
 	return b.cache.MarkRead(messageID)
@@ -950,7 +954,7 @@ func (b *LocalBackend) MarkUnread(messageID, folder string) error {
 	if err != nil {
 		return err
 	}
-	if err := b.imapClient.MarkUnread(email.UID, folder); err != nil {
+	if err := b.mailSource.MarkUnread(context.Background(), email.UID, folder); err != nil {
 		logger.Warn("MarkUnread IMAP failed for %s: %v", messageID, err)
 	}
 	return b.cache.MarkUnread(messageID)
@@ -961,7 +965,7 @@ func (b *LocalBackend) MarkStarred(messageID, folder string) error {
 	if err != nil {
 		return err
 	}
-	if err := b.imapClient.MarkStarred(email.UID, folder); err != nil {
+	if err := b.mailSource.MarkStarred(context.Background(), email.UID, folder); err != nil {
 		logger.Warn("MarkStarred IMAP failed for %s: %v", messageID, err)
 	}
 	return b.cache.UpdateStarred(messageID, true)
@@ -972,7 +976,7 @@ func (b *LocalBackend) UnmarkStarred(messageID, folder string) error {
 	if err != nil {
 		return err
 	}
-	if err := b.imapClient.UnmarkStarred(email.UID, folder); err != nil {
+	if err := b.mailSource.UnmarkStarred(context.Background(), email.UID, folder); err != nil {
 		logger.Warn("UnmarkStarred IMAP failed for %s: %v", messageID, err)
 	}
 	return b.cache.UpdateStarred(messageID, false)
@@ -1053,11 +1057,13 @@ func (b *LocalBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
 }
 
 func (b *LocalBackend) StartIDLE(folder string) error {
-	return b.imapClient.StartIDLE(folder, b.newEmailsCh)
+	return b.mailSource.StartIDLE(context.Background(), folder, b.newEmailsCh)
 }
 
 func (b *LocalBackend) StopIDLE() {
-	b.imapClient.StopIDLE()
+	if b.mailSource != nil {
+		b.mailSource.StopIDLE()
+	}
 }
 
 func (b *LocalBackend) StartPolling(folder string, interval int) {
@@ -1077,7 +1083,7 @@ func (b *LocalBackend) StartPolling(folder string, interval int) {
 			case <-stop:
 				return
 			case <-ticker.C:
-				emails, err := b.imapClient.PollForNewEmails(folder, lastDate)
+				emails, err := b.mailSource.PollForNewEmails(context.Background(), folder, lastDate)
 				if err != nil {
 					logger.Warn("Polling error: %v", err)
 					continue
@@ -1110,7 +1116,7 @@ func (b *LocalBackend) StopPolling() {
 }
 
 func (b *LocalBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
-	return b.imapClient.MoveEmail(messageID, fromFolder, toFolder)
+	return b.mailSource.MoveEmail(context.Background(), messageID, fromFolder, toFolder)
 }
 
 func (b *LocalBackend) SaveRule(r *models.Rule) error {
@@ -1437,19 +1443,19 @@ func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, str
 	if err != nil {
 		return 0, "", fmt.Errorf("build draft message: %w", err)
 	}
-	return b.imapClient.AppendDraft(raw)
+	return b.mailSource.AppendDraft(context.Background(), raw)
 }
 
 func (b *LocalBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
-	return b.imapClient.AppendDraft(raw)
+	return b.mailSource.AppendDraft(context.Background(), raw)
 }
 
 func (b *LocalBackend) ListDrafts() ([]*models.Draft, error) {
-	return b.imapClient.ListDrafts()
+	return b.mailSource.ListDrafts(context.Background())
 }
 
 func (b *LocalBackend) DeleteDraft(uid uint32, folder string) error {
-	return b.imapClient.DeleteDraft(uid, folder)
+	return b.mailSource.DeleteDraft(context.Background(), uid, folder)
 }
 
 func (b *LocalBackend) SendDraft(uid uint32, folder string) error {
@@ -1664,15 +1670,15 @@ func (b *LocalBackend) SoftUnsubscribeSender(sender, toFolder string) error {
 // --- Folder management ---
 
 func (b *LocalBackend) CreateFolder(name string) error {
-	return b.imapClient.CreateMailbox(name)
+	return b.mailSource.CreateMailbox(context.Background(), name)
 }
 
 func (b *LocalBackend) RenameFolder(existingName, newName string) error {
-	return b.imapClient.RenameMailbox(existingName, newName)
+	return b.mailSource.RenameMailbox(context.Background(), existingName, newName)
 }
 
 func (b *LocalBackend) DeleteFolder(name string) error {
-	return b.imapClient.DeleteMailbox(name)
+	return b.mailSource.DeleteMailbox(context.Background(), name)
 }
 
 // SyncAllFolders triggers background sync for all known folders.
