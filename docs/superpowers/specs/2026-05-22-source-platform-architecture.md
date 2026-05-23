@@ -25,12 +25,12 @@ This foundation does not require a full multi-account UI or a calendar UI in the
 
 Every item shown by Herald needs an identity that says which source owns it, which account or credential set produced it, which collection it belongs to, and which provider version makes cached data fresh. Legacy single-account configs map to default IDs so existing users keep the same behavior.
 
-- [ ] `SourceID` identifies one configured source instance, such as `default-mail`, `work-mail`, `personal-google-calendar`, or `family-caldav`.
-- [ ] `AccountID` identifies the credential/account owner under a source. For most first-party sources, source and account are one-to-one, but keeping both lets shared calendars and future delegated access stay precise.
-- [ ] `CollectionRef` identifies a provider collection: IMAP folder, Google calendar, CalDAV calendar, or future contact/address-book collection.
-- [ ] `MessageRef` identifies mail by source, account, folder, UID, UIDVALIDITY, message ID, and a Herald local ID.
+- [x] `SourceID` identifies one configured source instance, such as `default-mail`, `work-mail`, `personal-google-calendar`, or `family-caldav`.
+- [x] `AccountID` identifies the credential/account owner under a source. For most first-party sources, source and account are one-to-one, but keeping both lets shared calendars and future delegated access stay precise.
+- [x] `CollectionRef` identifies a provider collection: IMAP folder, Google calendar, CalDAV calendar, or future contact/address-book collection.
+- [x] `MessageRef` identifies mail by source, account, folder, UID, UIDVALIDITY, message ID, and a Herald local ID.
 - [ ] `EventRef` identifies calendar events by source, account, calendar ID, provider event ID, recurrence instance ID when present, ETag/revision, and a Herald local ID.
-- [ ] Legacy message IDs remain displayable and MCP-friendly, but internal writes and cache lookups prefer scoped local IDs.
+- [x] Legacy message IDs remain displayable and MCP-friendly, but internal writes and cache lookups prefer scoped local IDs.
 
 Example type shape:
 
@@ -155,8 +155,8 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 
 The preferred long-term storage model is one profile database with source-scoped rows. That model supports unified search, contacts, calendar agenda, automation, and MCP better than one database per account.
 
-- [ ] Existing `cache.database_path` remains valid and points to the profile database.
-- [ ] Initial migration adds nullable or defaulted `source_id`, `account_id`, and `local_id` columns while keeping legacy primary keys operational.
+- [x] Existing `cache.database_path` remains valid and points to the profile database.
+- [x] Initial migration adds nullable or defaulted `source_id`, `account_id`, and `local_id` columns while keeping legacy primary keys operational.
 - [ ] Later migration can move from `message_id` primary keys to scoped local IDs once all callers use refs.
 - [ ] Calendar tables use source-scoped primary keys from the start.
 - [ ] FTS and embedding tables include source/account scope before unified cross-source search ships.
@@ -165,8 +165,8 @@ The preferred long-term storage model is one profile database with source-scoped
 
 Config should preserve existing single-account YAML and introduce an additive `sources:` or `accounts:` structure. The loader normalizes both into the same internal source graph.
 
-- [ ] Existing single-account config normalizes to one mail source named `default-mail`.
-- [ ] Multi-account mail config can add multiple mail sources without requiring users to split config files.
+- [x] Existing single-account config normalizes to one mail source named `default-mail`.
+- [x] Multi-account mail config can add multiple mail sources without requiring users to split config files.
 - [ ] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
 - [ ] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
 - [ ] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
@@ -214,7 +214,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 
 - [x] Phase 0: Write and review this architecture spec plus the first two implementation plans.
 - [x] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
-- [ ] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
+- [x] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
 - [ ] Phase 3: Add cache-first message body and preview services with memory cache, persistent cache, and in-flight coalescing.
 - [ ] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
@@ -227,6 +227,6 @@ This refactor is accepted only if it preserves current behavior while making fut
 
 - [ ] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
 - [x] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
-- [ ] Source identity tests prove legacy config normalization and scoped cache key generation.
+- [x] Source identity tests prove legacy config normalization and scoped cache key generation.
 - [ ] Cache-first service tests prove cache hit, in-flight join, source fetch/store, stale-result filtering, and context cancellation behavior where supported.
 - [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.

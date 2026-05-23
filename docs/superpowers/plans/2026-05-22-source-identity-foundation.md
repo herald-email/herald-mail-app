@@ -21,7 +21,7 @@ These are the tracked files expected for the first identity slice. Keep this sli
 - Modify: `internal/config/config_test.go` - verify legacy and new source config normalization.
 - Modify: `internal/cache/cache.go` - add source/account/local columns and keep legacy message-ID primary key behavior.
 - Modify: `internal/cache/cache_test.go` - verify migrations, default source values, and legacy lookups.
-- Create: `reports/TEST_REPORT_2026-05-22_source-identity-foundation.md` during verification. The `reports/` directory is gitignored and the report is not committed.
+- Create: `reports/TEST_REPORT_2026-05-23_source-identity-foundation.md` during verification. The `reports/` directory is gitignored and the report is not committed.
 
 ## Task 1: Specify Scoped Identity Models
 
@@ -30,7 +30,7 @@ This task defines the identity language before touching config or cache code. Th
 **Files:**
 - Create: `internal/models/identity_test.go`
 
-- [ ] **Step 1: Write failing tests for default identity helpers**
+- [x] **Step 1: Write failing tests for default identity helpers**
 
 Create `internal/models/identity_test.go` with:
 
@@ -95,7 +95,7 @@ func TestCollectionRefCacheKeyIncludesScope(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the model tests and verify they fail**
+- [x] **Step 2: Run the model tests and verify they fail**
 
 Run:
 
@@ -105,7 +105,7 @@ go test ./internal/models -run 'MessageRef|CollectionRef' -count=1
 
 Expected: FAIL because the identity types and helper methods do not exist yet.
 
-- [ ] **Step 3: Commit the failing tests**
+- [x] **Step 3: Commit the failing tests**
 
 Run:
 
@@ -122,7 +122,7 @@ This task adds the stable data structures that later source plugins, cache servi
 - Create: `internal/models/identity.go`
 - Modify: `internal/models/email.go`
 
-- [ ] **Step 1: Add shared identity types**
+- [x] **Step 1: Add shared identity types**
 
 Create `internal/models/identity.go` with:
 
@@ -204,7 +204,7 @@ func (r MessageRef) WithDefaults() MessageRef {
 }
 ```
 
-- [ ] **Step 2: Add scoped fields to mail models**
+- [x] **Step 2: Add scoped fields to mail models**
 
 Modify `internal/models/email.go`:
 
@@ -263,7 +263,7 @@ type NewEmailsNotification struct {
 }
 ```
 
-- [ ] **Step 3: Run focused model tests**
+- [x] **Step 3: Run focused model tests**
 
 Run:
 
@@ -273,7 +273,7 @@ go test ./internal/models -run 'MessageRef|CollectionRef' -count=1
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit the model implementation**
+- [x] **Step 4: Commit the model implementation**
 
 Run:
 
@@ -290,7 +290,7 @@ This task makes config loading additive. Existing YAML must normalize to the sam
 - Modify: `internal/config/config.go`
 - Modify: `internal/config/config_test.go`
 
-- [ ] **Step 1: Write config normalization tests**
+- [x] **Step 1: Write config normalization tests**
 
 Add tests that load both legacy config and a new `sources:` config:
 
@@ -328,7 +328,7 @@ func TestConfigNormalizedSourcesKeepsExplicitSources(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add source config structs and normalization**
+- [x] **Step 2: Add source config structs and normalization**
 
 Add source config structs that do not disturb existing top-level fields:
 
@@ -359,7 +359,7 @@ func (c Config) NormalizedSources() []SourceConfig {
 }
 ```
 
-- [ ] **Step 3: Run config tests**
+- [x] **Step 3: Run config tests**
 
 Run:
 
@@ -369,7 +369,7 @@ go test ./internal/config -run 'NormalizedSources|Load' -count=1
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit the config implementation**
+- [x] **Step 4: Commit the config implementation**
 
 Run:
 
@@ -386,7 +386,7 @@ This task adds defaulted source columns to the profile database while keeping le
 - Modify: `internal/cache/cache.go`
 - Modify: `internal/cache/cache_test.go`
 
-- [ ] **Step 1: Write migration and cache-write tests**
+- [x] **Step 1: Write migration and cache-write tests**
 
 Add cache tests that create a temp database, initialize it, and inspect schema/data:
 
@@ -422,7 +422,7 @@ func TestCacheEmailWritesDefaultScopeForLegacyEmail(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add safe SQLite migrations**
+- [x] **Step 2: Add safe SQLite migrations**
 
 In `initDB`, add best-effort column migrations after the `emails` table exists:
 
@@ -443,7 +443,7 @@ _, _ = c.db.Exec(`ALTER TABLE folder_sync_state ADD COLUMN account_id TEXT NOT N
 _, _ = c.db.Exec(`CREATE INDEX IF NOT EXISTS idx_folder_sync_state_source ON folder_sync_state(source_id, account_id, folder)`)
 ```
 
-- [ ] **Step 3: Update email inserts and scans**
+- [x] **Step 3: Update email inserts and scans**
 
 Update `CacheEmail` and `BatchCacheEmails` so they write normalized source/account/local values:
 
@@ -456,7 +456,7 @@ localID := ref.LocalID
 
 Update row scans such as `GetEmailByID`, `GetEmailsSortedByDate`, `SearchEmails`, `SearchEmailsFTS`, and helper scanners so returned `EmailData` carries the scoped fields. Use `COALESCE(source_id, 'default-mail')`, `COALESCE(account_id, 'default')`, and `COALESCE(local_id, '')` in SELECTs during the migration.
 
-- [ ] **Step 4: Keep legacy APIs intact**
+- [x] **Step 4: Keep legacy APIs intact**
 
 Do not remove or rename existing methods such as `GetEmailByID(messageID string)`, `DeleteEmail(messageID string)`, or `GetCachedUIDsAndMessageIDs(folder string)`. Add scoped alternatives only when a caller in this slice needs them, for example:
 
@@ -466,7 +466,7 @@ func (c *Cache) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error)
 
 The default implementation should prefer `local_id` when present and fall back to `message_id` for legacy rows.
 
-- [ ] **Step 5: Run cache tests**
+- [x] **Step 5: Run cache tests**
 
 Run:
 
@@ -476,7 +476,7 @@ go test ./internal/cache -run 'Source|Scope|CacheEmail|GetEmailByID' -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the cache migration**
+- [x] **Step 6: Commit the cache migration**
 
 Run:
 
@@ -495,19 +495,19 @@ This task makes source identity visible to asynchronous lanes without changing q
 - Modify: `internal/backend/remote.go`
 - Modify: focused backend/app tests as needed.
 
-- [ ] **Step 1: Add default scope at backend emission points**
+- [x] **Step 1: Add default scope at backend emission points**
 
 When `LocalBackend` emits `FolderSyncEvent` or `NewEmailsNotification`, set `SourceID: models.DefaultMailSourceID` and `AccountID: models.DefaultAccountID` unless the backend has explicit source identity. Do the same in `DemoBackend` and `RemoteBackend` so tests stay deterministic.
 
-- [ ] **Step 2: Preserve app behavior while storing scope**
+- [x] **Step 2: Preserve app behavior while storing scope**
 
 When app handlers receive scoped events, use the existing folder/message-ID behavior for rendering and state updates. Store source/account fields on message state where the model already carries full `EmailData`, but avoid UI changes in this slice.
 
-- [ ] **Step 3: Add focused event tests**
+- [x] **Step 3: Add focused event tests**
 
 Add or update tests so they assert default scope is carried through sync events and new-email notifications without changing existing UI state transitions.
 
-- [ ] **Step 4: Run focused backend/app tests**
+- [x] **Step 4: Run focused backend/app tests**
 
 Run:
 
@@ -517,7 +517,7 @@ go test ./internal/backend ./internal/app -run 'SyncEvent|NewEmails|Deletion|Sou
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit event plumbing**
+- [x] **Step 5: Commit event plumbing**
 
 Run:
 
@@ -531,9 +531,9 @@ git commit -m "feat: carry source scope through async events"
 This task proves the source identity foundation without claiming multi-account support. Since this slice should not change visible TUI behavior, tmux evidence is optional unless implementation touches rendering or key routing.
 
 **Files:**
-- Create: `reports/TEST_REPORT_2026-05-22_source-identity-foundation.md`
+- Create: `reports/TEST_REPORT_2026-05-23_source-identity-foundation.md`
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -543,7 +543,7 @@ go test ./internal/models ./internal/config ./internal/cache -run 'MessageRef|Co
 
 Expected: PASS.
 
-- [ ] **Step 2: Run package tests for touched areas**
+- [x] **Step 2: Run package tests for touched areas**
 
 Run:
 
@@ -553,9 +553,9 @@ go test ./internal/models ./internal/config ./internal/cache ./internal/backend 
 
 Expected: PASS.
 
-- [ ] **Step 3: Save a local verification report**
+- [x] **Step 3: Save a local verification report**
 
-Create `reports/TEST_REPORT_2026-05-22_source-identity-foundation.md` with:
+Create `reports/TEST_REPORT_2026-05-23_source-identity-foundation.md` with:
 
 ```markdown
 # Source Identity Foundation Test Report
@@ -573,7 +573,7 @@ Surface: focused Go package tests; no visible TUI behavior changed
 Both commands passed. Legacy config normalizes to the default mail source, cache rows carry default source/account/local identity, and existing folder/message-ID APIs remain available.
 ```
 
-- [ ] **Step 4: Commit tracked source changes**
+- [x] **Step 4: Commit tracked source changes**
 
 Run:
 

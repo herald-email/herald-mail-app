@@ -642,8 +642,8 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 
 - [ ] `accounts:` list in `~/.herald/conf.yaml` (current single-account format still works)
 - [ ] Per-account IMAP connection, cache file, and folder tree
-- [ ] Source identity foundation (`source_id`, `account_id`, and scoped message refs) lands before multi-account UI
-- [ ] Work coordinator policies preserve latest UI intent, coalesce duplicate resource fetches, serialize source mutations, and keep background work fair
+- [x] Source identity foundation (`source_id`, `account_id`, and scoped message refs) lands before multi-account UI
+- [x] Work coordinator policies preserve latest UI intent, coalesce duplicate resource fetches, serialize source mutations, and keep background work fair
 - [ ] Folder sidebar grouped under account headers
 - [ ] Status bar shows active account name
 - [ ] Compose "From" field lets user pick sending account

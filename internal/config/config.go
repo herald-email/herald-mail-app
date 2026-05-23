@@ -39,8 +39,8 @@ type ServerConfig struct {
 type GoogleConfig struct {
 	AccessToken  string `yaml:"access_token,omitempty"`
 	RefreshToken string `yaml:"refresh_token,omitempty"`
-	TokenExpiry   string `yaml:"token_expiry,omitempty"`
-	Email         string `yaml:"email,omitempty"`
+	TokenExpiry  string `yaml:"token_expiry,omitempty"`
+	Email        string `yaml:"email,omitempty"`
 }
 
 type CalDAVConfig struct {
@@ -84,7 +84,7 @@ type Config struct {
 	Credentials CredentialsConfig `yaml:"credentials"`
 	Server      ServerConfig      `yaml:"server"`
 	SMTP        ServerConfig      `yaml:"smtp"`
-	Ollama struct {
+	Ollama      struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
 		Model          string `yaml:"model"`           // default: gemma3:4b
 		EmbeddingModel string `yaml:"embedding_model"` // default: nomic-embed-text-v2-moe
@@ -302,8 +302,8 @@ func legacyDefaultMailSource(c Config) SourceConfig {
 		Google: GoogleConfig{
 			AccessToken:  c.Gmail.AccessToken,
 			RefreshToken: c.Gmail.RefreshToken,
-			TokenExpiry:   c.Gmail.TokenExpiry,
-			Email:         c.Gmail.Email,
+			TokenExpiry:  c.Gmail.TokenExpiry,
+			Email:        c.Gmail.Email,
 		},
 	}
 }
