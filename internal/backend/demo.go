@@ -152,18 +152,18 @@ func (d *DemoBackend) ReclaimOfflineCacheStorage(policy string) (models.PreviewC
 func (d *DemoBackend) Load(folder string) {
 	go func() {
 		generation := time.Now().UnixNano()
-		d.syncEventsCh <- models.FolderSyncEvent{
+		d.syncEventsCh <- withDefaultFolderSyncScope(models.FolderSyncEvent{
 			Folder:     folder,
 			Generation: generation,
 			Phase:      models.SyncPhaseSyncStarted,
 			Message:    "Connecting to demo backend…",
-		}
-		d.syncEventsCh <- models.FolderSyncEvent{
+		})
+		d.syncEventsCh <- withDefaultFolderSyncScope(models.FolderSyncEvent{
 			Folder:     folder,
 			Generation: generation,
 			Phase:      models.SyncPhaseSnapshotReady,
 			Message:    "Rendering demo data…",
-		}
+		})
 		phases := []models.ProgressInfo{
 			{Phase: "connecting", Message: "Connecting to demo backend…"},
 			{Phase: "scanning", Message: "Scanning demo emails…", Current: 25, Total: 50},
@@ -183,7 +183,7 @@ func (d *DemoBackend) Load(folder string) {
 				eventPhase = models.SyncPhaseComplete
 				eventCount = 1
 			}
-			d.syncEventsCh <- models.FolderSyncEvent{
+			d.syncEventsCh <- withDefaultFolderSyncScope(models.FolderSyncEvent{
 				Folder:     folder,
 				Generation: generation,
 				Phase:      eventPhase,
@@ -191,7 +191,7 @@ func (d *DemoBackend) Load(folder string) {
 				Current:    p.Current,
 				Total:      p.Total,
 				EventCount: eventCount,
-			}
+			})
 		}
 	}()
 }

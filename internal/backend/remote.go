@@ -112,13 +112,13 @@ func (b *RemoteBackend) handleSSEEvent(eventType string, data []byte) {
 			case b.progressCh <- p:
 			default:
 			}
-			event := models.FolderSyncEvent{
+			event := withDefaultFolderSyncScope(models.FolderSyncEvent{
 				Folder:  "",
 				Message: p.Message,
 				Current: p.Current,
 				Total:   p.Total,
 				Phase:   models.SyncPhaseSyncStarted,
-			}
+			})
 			if p.Phase == "fetching" {
 				event.Phase = models.SyncPhaseRowsCached
 				event.EventCount = 1
@@ -134,6 +134,7 @@ func (b *RemoteBackend) handleSSEEvent(eventType string, data []byte) {
 	case "new_emails":
 		var n models.NewEmailsNotification
 		if json.Unmarshal(data, &n) == nil {
+			n = withDefaultNewEmailsScope(n)
 			select {
 			case b.newEmailsCh <- n:
 			default:

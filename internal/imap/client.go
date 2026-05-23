@@ -1506,7 +1506,12 @@ func (c *Client) StartIDLE(folder string, newEmailsCh chan<- models.NewEmailsNot
 					if len(emails) > 0 {
 						lastPoll = time.Now()
 						select {
-						case newEmailsCh <- models.NewEmailsNotification{Emails: emails, Folder: folder}:
+						case newEmailsCh <- models.NewEmailsNotification{
+							SourceID:  models.DefaultMailSourceID,
+							AccountID: models.DefaultAccountID,
+							Emails:    emails,
+							Folder:    folder,
+						}:
 						default:
 						}
 					}

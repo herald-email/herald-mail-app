@@ -46,6 +46,7 @@ type stubBackend struct {
 	reclaimedPolicy        string
 	reclaimResult          models.PreviewCacheReclaimResult
 	reclaimErr             error
+	newEmailsCh            chan models.NewEmailsNotification
 }
 
 func (s *stubBackend) Load(_ string) {}
@@ -129,7 +130,12 @@ func (s *stubBackend) GetBodyText(messageID string) (string, error) {
 	return s.bodyTextByID[messageID], nil
 }
 func (s *stubBackend) FetchAndCacheBody(_ string) (*models.EmailBody, error) { return nil, nil }
-func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification      { return nil }
+func (s *stubBackend) NewEmailsCh() <-chan models.NewEmailsNotification {
+	if s.newEmailsCh != nil {
+		return s.newEmailsCh
+	}
+	return nil
+}
 func (s *stubBackend) StartIDLE(_ string) error {
 	s.startIDLECalls++
 	return nil

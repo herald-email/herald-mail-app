@@ -236,8 +236,10 @@ type TimelineSearchDebounceMsg struct {
 
 // NewEmailsMsg signals new emails arrived via IDLE/polling
 type NewEmailsMsg struct {
-	Emails []*models.EmailData
-	Folder string
+	SourceID  models.SourceID
+	AccountID models.AccountID
+	Emails    []*models.EmailData
+	Folder    string
 }
 
 // EmailExpungedMsg signals an email was deleted on the server

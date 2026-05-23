@@ -410,6 +410,9 @@ func TestFanoutProgressLoop_EmitsCompleteSyncEventForBackendProgress(t *testing.
 		if event.Folder != "INBOX" || event.Generation != 7 {
 			t.Fatalf("unexpected sync event identity: %+v", event)
 		}
+		if event.SourceID != models.DefaultMailSourceID || event.AccountID != models.DefaultAccountID {
+			t.Fatalf("unexpected sync event source scope: %+v", event)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for sync completion event")
 	}
@@ -428,6 +431,48 @@ func TestFanoutProgressLoop_EmitsCompleteSyncEventForBackendProgress(t *testing.
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("fanout progress loop did not exit after raw progress channel closed")
+	}
+}
+
+func TestDemoBackendLoadEmitsDefaultSourceScope(t *testing.T) {
+	b := NewDemoBackend()
+	b.Load("INBOX")
+
+	select {
+	case event := <-b.SyncEvents():
+		if event.SourceID != models.DefaultMailSourceID || event.AccountID != models.DefaultAccountID {
+			t.Fatalf("unexpected demo sync event source scope: %+v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for demo sync event")
+	}
+}
+
+func TestRemoteBackendEventsUseDefaultSourceScope(t *testing.T) {
+	b := &RemoteBackend{
+		progressCh:   make(chan models.ProgressInfo, 1),
+		syncEventsCh: make(chan models.FolderSyncEvent, 1),
+		newEmailsCh:  make(chan models.NewEmailsNotification, 1),
+	}
+
+	b.handleSSEEvent("progress", []byte(`{"phase":"complete","message":"done"}`))
+	select {
+	case event := <-b.SyncEvents():
+		if event.SourceID != models.DefaultMailSourceID || event.AccountID != models.DefaultAccountID {
+			t.Fatalf("unexpected remote sync event source scope: %+v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for remote sync event")
+	}
+
+	b.handleSSEEvent("new_emails", []byte(`{"folder":"INBOX","emails":[]}`))
+	select {
+	case notification := <-b.NewEmailsCh():
+		if notification.SourceID != models.DefaultMailSourceID || notification.AccountID != models.DefaultAccountID {
+			t.Fatalf("unexpected remote new-email source scope: %+v", notification)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for remote new-email notification")
 	}
 }
 

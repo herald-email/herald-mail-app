@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	imapClient "github.com/herald-email/herald-mail-app/internal/imap"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- Background sync helpers ---
@@ -16,7 +17,12 @@ func (m *Model) listenForNewEmails() tea.Cmd {
 	ch := m.backend.NewEmailsCh()
 	return func() tea.Msg {
 		notif := <-ch
-		return NewEmailsMsg{Emails: notif.Emails, Folder: notif.Folder}
+		return NewEmailsMsg{
+			SourceID:  models.NormalizeSourceID(notif.SourceID, models.DefaultMailSourceID),
+			AccountID: models.NormalizeAccountID(notif.AccountID),
+			Emails:    notif.Emails,
+			Folder:    notif.Folder,
+		}
 	}
 }
 

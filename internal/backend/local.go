@@ -247,6 +247,7 @@ func (b *LocalBackend) emitSyncEvent(event models.FolderSyncEvent) {
 	if b.syncEventsCh == nil || b.closed.Load() {
 		return
 	}
+	event = withDefaultFolderSyncScope(event)
 	b.tracef(
 		"emit sync event: folder=%s generation=%d phase=%s current=%d total=%d delta=%d error=%q message=%q",
 		event.Folder,
@@ -1019,7 +1020,7 @@ func (b *LocalBackend) StartPolling(folder string, interval int) {
 						}
 					}
 					select {
-					case b.newEmailsCh <- models.NewEmailsNotification{Emails: emails, Folder: folder}:
+					case b.newEmailsCh <- withDefaultNewEmailsScope(models.NewEmailsNotification{Emails: emails, Folder: folder}):
 					default:
 					}
 				}
