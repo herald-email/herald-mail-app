@@ -6,6 +6,11 @@ import (
 
 // EmailData represents a cached email message
 type EmailData struct {
+	SourceID    SourceID  `db:"source_id"`
+	AccountID   AccountID `db:"account_id"`
+	LocalID     string    `db:"local_id"`
+	UIDValidity uint32    `db:"uid_validity"`
+
 	MessageID      string    `db:"message_id"`
 	UID            uint32    `db:"uid"`
 	Sender         string    `db:"sender"`
@@ -18,6 +23,18 @@ type EmailData struct {
 	IsRead         bool      `db:"is_read"`
 	IsStarred      bool      `db:"is_starred"`
 	IsDraft        bool      `db:"is_draft"`
+}
+
+func (e EmailData) MessageRef() MessageRef {
+	return MessageRef{
+		SourceID:    e.SourceID,
+		AccountID:   e.AccountID,
+		Folder:      e.Folder,
+		UID:         e.UID,
+		UIDValidity: e.UIDValidity,
+		MessageID:   e.MessageID,
+		LocalID:     e.LocalID,
+	}.WithDefaults()
 }
 
 // SenderStats represents statistics for a sender
@@ -52,6 +69,9 @@ const (
 // FolderSyncEvent is an internal sync-stream event consumed by the TUI to keep
 // folder loading flowing forward without repainting on every raw IMAP update.
 type FolderSyncEvent struct {
+	SourceID  SourceID
+	AccountID AccountID
+
 	Folder     string
 	Generation int64
 	Phase      string
@@ -63,6 +83,10 @@ type FolderSyncEvent struct {
 }
 
 type DeletionResult struct {
+	SourceID  SourceID  `json:"source_id,omitempty"`
+	AccountID AccountID `json:"account_id,omitempty"`
+	LocalID   string    `json:"local_id,omitempty"`
+
 	MessageID          string   `json:"message_id"`
 	Sender             string   `json:"sender"`
 	Folder             string   `json:"folder"`
@@ -225,6 +249,10 @@ type ComposeAttachment struct {
 
 // Deletion Request
 type DeletionRequest struct {
+	SourceID  SourceID  `json:"source_id,omitempty"`
+	AccountID AccountID `json:"account_id,omitempty"`
+	LocalID   string    `json:"local_id,omitempty"`
+
 	MessageID          string   `json:"message_id"`
 	Sender             string   `json:"sender"`
 	IsDomain           bool     `json:"is_domain"` // True if Sender is a domain, not a full email
@@ -236,8 +264,10 @@ type DeletionRequest struct {
 
 // NewEmailsNotification carries new emails found by background polling
 type NewEmailsNotification struct {
-	Emails []*EmailData
-	Folder string
+	SourceID  SourceID
+	AccountID AccountID
+	Emails    []*EmailData
+	Folder    string
 }
 
 // SavedSearch represents a user-saved search query
