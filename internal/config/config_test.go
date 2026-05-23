@@ -57,6 +57,92 @@ func TestIsGmailOAuth(t *testing.T) {
 	})
 }
 
+func TestConfigNormalizedSourcesFromLegacyMailConfig(t *testing.T) {
+	var cfg Config
+	cfg.Credentials.Username = "user@example.com"
+	cfg.Credentials.Password = "secret"
+	cfg.Server.Host = "127.0.0.1"
+	cfg.Server.Port = 1143
+	cfg.SMTP.Host = "127.0.0.1"
+	cfg.SMTP.Port = 1025
+
+	sources := cfg.NormalizedSources()
+	if len(sources) != 1 {
+		t.Fatalf("len(sources) = %d, want 1", len(sources))
+	}
+	if sources[0].ID != "default-mail" || sources[0].Kind != "mail" || sources[0].Provider != "imap" || sources[0].AccountID != "default" {
+		t.Fatalf("source = %#v, want default mail source", sources[0])
+	}
+	if sources[0].Credentials.Username != "user@example.com" || sources[0].IMAP.Host != "127.0.0.1" || sources[0].SMTP.Port != 1025 {
+		t.Fatalf("legacy fields were not copied into source: %#v", sources[0])
+	}
+}
+
+func TestConfigNormalizedSourcesKeepsExplicitSources(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{ID: "work-mail", Kind: "mail", Provider: "imap", AccountID: "work"},
+			{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+		},
+	}
+
+	sources := cfg.NormalizedSources()
+	if len(sources) != 2 {
+		t.Fatalf("len(sources) = %d, want 2", len(sources))
+	}
+	if sources[0].ID != "work-mail" || sources[0].Kind != "mail" || sources[0].Provider != "imap" || sources[0].AccountID != "work" {
+		t.Fatalf("first source = %#v, want explicit work mail source", sources[0])
+	}
+	if sources[1].ID != "work-calendar" || sources[1].Kind != "calendar" || sources[1].Provider != "google_calendar" || sources[1].AccountID != "work" {
+		t.Fatalf("second source = %#v, want explicit work calendar source", sources[1])
+	}
+}
+
+func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	original := minimalOAuthConfig()
+	original.Sources = []SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "imap",
+			DisplayName: "Work Mail",
+			AccountID:   "work",
+			Credentials: CredentialsConfig{Username: "user@example.com", Password: "secret"},
+			IMAP:        ServerConfig{Host: "imap.example.com", Port: 993},
+			SMTP:        ServerConfig{Host: "smtp.example.com", Port: 587},
+		},
+		{
+			ID:          "work-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Work Calendar",
+			AccountID:   "work",
+			Google:      GoogleConfig{RefreshToken: "refresh-token"},
+		},
+	}
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	sources := loaded.NormalizedSources()
+	if len(sources) != 2 {
+		t.Fatalf("len(sources) = %d, want 2", len(sources))
+	}
+	if sources[0].DisplayName != "Work Mail" || sources[0].IMAP.Host != "imap.example.com" {
+		t.Fatalf("mail source did not roundtrip: %#v", sources[0])
+	}
+	if sources[1].DisplayName != "Work Calendar" || sources[1].Google.RefreshToken != "refresh-token" {
+		t.Fatalf("calendar source did not roundtrip: %#v", sources[1])
+	}
+}
+
 func TestSaveRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

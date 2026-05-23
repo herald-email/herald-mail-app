@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,43 @@ func ExpandPath(p string) (string, error) {
 		return "", fmt.Errorf("could not determine home directory: %w", err)
 	}
 	return filepath.Join(home, p[1:]), nil
+}
+
+type CredentialsConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type ServerConfig struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
+type GoogleConfig struct {
+	AccessToken  string `yaml:"access_token,omitempty"`
+	RefreshToken string `yaml:"refresh_token,omitempty"`
+	TokenExpiry   string `yaml:"token_expiry,omitempty"`
+	Email         string `yaml:"email,omitempty"`
+}
+
+type CalDAVConfig struct {
+	URL      string `yaml:"url,omitempty"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
+}
+
+type SourceConfig struct {
+	ID          string `yaml:"id"`
+	Kind        string `yaml:"kind"`     // mail | calendar
+	Provider    string `yaml:"provider"` // imap | gmail | google_calendar | caldav
+	DisplayName string `yaml:"display_name,omitempty"`
+	AccountID   string `yaml:"account_id,omitempty"`
+
+	Credentials CredentialsConfig `yaml:"credentials,omitempty"`
+	IMAP        ServerConfig      `yaml:"imap,omitempty"`
+	SMTP        ServerConfig      `yaml:"smtp,omitempty"`
+	Google      GoogleConfig      `yaml:"google,omitempty"`
+	CalDAV      CalDAVConfig      `yaml:"caldav,omitempty"`
 }
 
 // Config represents the application configuration
@@ -41,19 +79,11 @@ type Config struct {
 		Profile      string `yaml:"profile,omitempty"`
 		CustomKeymap string `yaml:"custom_keymap,omitempty"`
 	} `yaml:"keyboard,omitempty"`
-	Theme       ThemeConfig `yaml:"theme,omitempty"`
-	Credentials struct {
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-	} `yaml:"credentials"`
-	Server struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
-	} `yaml:"server"`
-	SMTP struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
-	} `yaml:"smtp"`
+	Theme       ThemeConfig       `yaml:"theme,omitempty"`
+	Sources     []SourceConfig    `yaml:"sources,omitempty"`
+	Credentials CredentialsConfig `yaml:"credentials"`
+	Server      ServerConfig      `yaml:"server"`
+	SMTP        ServerConfig      `yaml:"smtp"`
 	Ollama struct {
 		Host           string `yaml:"host"`            // default: http://localhost:11434
 		Model          string `yaml:"model"`           // default: gemma3:4b
@@ -218,6 +248,64 @@ func (c *Config) EffectiveEmbeddingModel() string {
 		return strings.TrimSpace(c.Semantic.Model)
 	}
 	return strings.TrimSpace(c.Ollama.EmbeddingModel)
+}
+
+func (c Config) NormalizedSources() []SourceConfig {
+	if len(c.Sources) > 0 {
+		return normalizeExplicitSources(c.Sources)
+	}
+	return []SourceConfig{legacyDefaultMailSource(c)}
+}
+
+func normalizeExplicitSources(sources []SourceConfig) []SourceConfig {
+	normalized := make([]SourceConfig, 0, len(sources))
+	for _, source := range sources {
+		source.ID = strings.TrimSpace(source.ID)
+		source.Kind = strings.TrimSpace(source.Kind)
+		source.Provider = strings.TrimSpace(source.Provider)
+		source.AccountID = strings.TrimSpace(source.AccountID)
+		if source.Kind == "" {
+			source.Kind = string(models.SourceKindMail)
+		}
+		if source.Provider == "" {
+			if source.Kind == string(models.SourceKindCalendar) {
+				source.Provider = "google_calendar"
+			} else {
+				source.Provider = "imap"
+			}
+		}
+		if source.AccountID == "" {
+			source.AccountID = string(models.DefaultAccountID)
+		}
+		if source.ID == "" {
+			if source.Kind == string(models.SourceKindCalendar) {
+				source.ID = "default-calendar"
+			} else {
+				source.ID = string(models.DefaultMailSourceID)
+			}
+		}
+		normalized = append(normalized, source)
+	}
+	return normalized
+}
+
+func legacyDefaultMailSource(c Config) SourceConfig {
+	return SourceConfig{
+		ID:          string(models.DefaultMailSourceID),
+		Kind:        string(models.SourceKindMail),
+		Provider:    "imap",
+		DisplayName: "Default Mail",
+		AccountID:   string(models.DefaultAccountID),
+		Credentials: c.Credentials,
+		IMAP:        c.Server,
+		SMTP:        c.SMTP,
+		Google: GoogleConfig{
+			AccessToken:  c.Gmail.AccessToken,
+			RefreshToken: c.Gmail.RefreshToken,
+			TokenExpiry:   c.Gmail.TokenExpiry,
+			Email:         c.Gmail.Email,
+		},
+	}
 }
 
 // EnsureCacheDatabasePath returns the SQLite cache path for this config. An
