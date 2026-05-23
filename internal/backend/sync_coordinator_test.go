@@ -52,3 +52,23 @@ func TestLatestWinsLoadCoordinator_KeepsNewestWhileWorkIsInFlight(t *testing.T) 
 		t.Fatalf("expected generations to increase, got sent=%d archive=%d", sent.Generation, archive.Generation)
 	}
 }
+
+func TestLatestWinsLoadCoordinator_RepeatedFolderStillAdvancesGeneration(t *testing.T) {
+	c := newLatestWinsLoadCoordinator()
+
+	first := c.Submit("INBOX")
+	second := c.Submit("Archive")
+	third := c.Submit("INBOX")
+
+	if first.Generation != 1 || second.Generation != 2 || third.Generation != 3 {
+		t.Fatalf("generations = %d, %d, %d; want 1, 2, 3", first.Generation, second.Generation, third.Generation)
+	}
+
+	got, ok := c.DrainPending()
+	if !ok {
+		t.Fatal("expected pending request")
+	}
+	if got.Folder != "INBOX" || got.Generation != third.Generation {
+		t.Fatalf("pending = %#v, want latest INBOX generation %d", got, third.Generation)
+	}
+}
