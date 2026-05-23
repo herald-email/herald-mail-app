@@ -29,6 +29,32 @@ func encodeTestEmbedding(vec []float32) []byte {
 	return buf
 }
 
+func tableColumns(t *testing.T, db *sql.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		t.Fatalf("PRAGMA table_info(%s): %v", table, err)
+	}
+	defer rows.Close()
+
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatalf("scan table info: %v", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("table info rows: %v", err)
+	}
+	return cols
+}
+
 // --- extractDomain ---
 
 func TestExtractDomain(t *testing.T) {
@@ -139,6 +165,94 @@ func TestCacheEmail_DraftFlagIsPersistedAndReadable(t *testing.T) {
 	}
 	if len(timeline) != 1 || !timeline[0].IsDraft {
 		t.Fatalf("expected timeline draft flag to roundtrip, got %#v", timeline)
+	}
+}
+
+func TestCacheAddsDefaultSourceColumns(t *testing.T) {
+	c := newTestCache(t)
+
+	emailCols := tableColumns(t, c.db, "emails")
+	for _, name := range []string{"source_id", "account_id", "local_id", "uid_validity"} {
+		if !emailCols[name] {
+			t.Fatalf("emails missing column %s", name)
+		}
+	}
+
+	folderCols := tableColumns(t, c.db, "folder_sync_state")
+	for _, name := range []string{"source_id", "account_id"} {
+		if !folderCols[name] {
+			t.Fatalf("folder_sync_state missing column %s", name)
+		}
+	}
+}
+
+func TestCacheEmailWritesDefaultScopeForLegacyEmail(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{MessageID: "<m@example.com>", UID: 1, Folder: "INBOX", Date: time.Now()}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	got, err := c.GetEmailByID("<m@example.com>")
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if got.SourceID != models.DefaultMailSourceID || got.AccountID != models.DefaultAccountID || got.LocalID == "" {
+		t.Fatalf("scope = %#v, want default source/account/local id", got)
+	}
+	if got.UIDValidity != 0 {
+		t.Fatalf("UIDValidity = %d, want 0 default", got.UIDValidity)
+	}
+}
+
+func TestCacheEmailPreservesExplicitScope(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{
+		SourceID:    models.SourceID("work-mail"),
+		AccountID:   models.AccountID("work"),
+		LocalID:     "mail:work-mail:work:INBOX:<m@example.com>",
+		UIDValidity: 777,
+		MessageID:   "<m@example.com>",
+		UID:         2,
+		Folder:      "INBOX",
+		Date:        time.Now(),
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	got, err := c.GetEmailByID("<m@example.com>")
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if got.SourceID != models.SourceID("work-mail") || got.AccountID != models.AccountID("work") || got.LocalID != email.LocalID || got.UIDValidity != 777 {
+		t.Fatalf("scope = %#v, want explicit source/account/local/uidvalidity", got)
+	}
+}
+
+func TestGetEmailByRefUsesScopedLocalID(t *testing.T) {
+	c := newTestCache(t)
+
+	first := &models.EmailData{
+		SourceID:  models.SourceID("work-mail"),
+		AccountID: models.AccountID("work"),
+		LocalID:   "mail:work-mail:work:INBOX:<shared@example.com>",
+		MessageID: "<shared@example.com>",
+		Folder:    "INBOX",
+		Date:      time.Now(),
+	}
+	if err := c.CacheEmail(first); err != nil {
+		t.Fatalf("CacheEmail(first): %v", err)
+	}
+
+	got, err := c.GetEmailByRef(first.MessageRef())
+	if err != nil {
+		t.Fatalf("GetEmailByRef: %v", err)
+	}
+	if got.LocalID != first.LocalID || got.SourceID != first.SourceID || got.AccountID != first.AccountID {
+		t.Fatalf("got %#v, want scoped local id %q", got, first.LocalID)
 	}
 }
 

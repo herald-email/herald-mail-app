@@ -76,6 +76,18 @@ func (c *Cache) initDB() error {
 	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN uid INTEGER`); err != nil {
 		logger.Debug("UID column might already exist: %v", err)
 	}
+	for _, stmt := range []string{
+		`ALTER TABLE emails ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE emails ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`ALTER TABLE emails ADD COLUMN local_id TEXT`,
+		`ALTER TABLE emails ADD COLUMN uid_validity INTEGER NOT NULL DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_emails_source_folder_date ON emails(source_id, account_id, folder, date DESC)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_local_id ON emails(local_id) WHERE local_id IS NOT NULL`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity email migration might already be applied: %v", err)
+		}
+	}
 
 	// Classifications table
 	classQuery := `
@@ -226,6 +238,15 @@ func (c *Cache) initDB() error {
 			updated_at  DATETIME NOT NULL
 		)`); err != nil {
 		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE folder_sync_state ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE folder_sync_state ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`CREATE INDEX IF NOT EXISTS idx_folder_sync_state_source ON folder_sync_state(source_id, account_id, folder)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity folder sync migration might already be applied: %v", err)
+		}
 	}
 
 	// custom_prompts: stores reusable AI prompt templates
@@ -664,12 +685,25 @@ func (c *Cache) GetCachedIDs(folder string) (map[string]bool, error) {
 	return ids, rows.Err()
 }
 
+func normalizeEmailScope(email *models.EmailData) *models.EmailData {
+	if email == nil {
+		return nil
+	}
+	ref := email.MessageRef()
+	email.SourceID = ref.SourceID
+	email.AccountID = ref.AccountID
+	email.LocalID = ref.LocalID
+	email.UIDValidity = ref.UIDValidity
+	return email
+}
+
 // CacheEmail stores email data in cache
 func (c *Cache) CacheEmail(email *models.EmailData) error {
+	ref := email.MessageRef()
 	query := `
 		INSERT OR REPLACE INTO emails
-		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	hasAttachments := 0
@@ -692,6 +726,10 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 	_, err := c.db.Exec(query,
 		email.MessageID,
 		email.UID,
+		ref.UIDValidity,
+		string(ref.SourceID),
+		string(ref.AccountID),
+		ref.LocalID,
 		email.Sender,
 		email.Subject,
 		email.Date.Format(time.RFC3339),
@@ -708,6 +746,10 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 		return fmt.Errorf("failed to cache email %s: %w", email.MessageID, err)
 	}
 
+	email.SourceID = ref.SourceID
+	email.AccountID = ref.AccountID
+	email.LocalID = ref.LocalID
+	email.UIDValidity = ref.UIDValidity
 	return nil
 }
 
@@ -723,8 +765,8 @@ func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
 	}
 	query := `
 		INSERT OR REPLACE INTO emails
-		(message_id, uid, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	stmt, err := tx.Prepare(query)
 	if err != nil {
@@ -735,6 +777,7 @@ func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
 
 	now := time.Now().Format(time.RFC3339)
 	for _, email := range emails {
+		ref := email.MessageRef()
 		hasAttachments := 0
 		if email.HasAttachments {
 			hasAttachments = 1
@@ -752,13 +795,17 @@ func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
 			isDraft = 1
 		}
 		if _, err = stmt.Exec(
-			email.MessageID, email.UID, email.Sender, email.Subject,
+			email.MessageID, email.UID, ref.UIDValidity, string(ref.SourceID), string(ref.AccountID), ref.LocalID, email.Sender, email.Subject,
 			email.Date.Format(time.RFC3339), email.Size, hasAttachments,
 			email.Folder, now, isRead, isStarred, isDraft,
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("BatchCacheEmails: exec for %s: %w", email.MessageID, err)
 		}
+		email.SourceID = ref.SourceID
+		email.AccountID = ref.AccountID
+		email.LocalID = ref.LocalID
+		email.UIDValidity = ref.UIDValidity
 	}
 	return tx.Commit()
 }
@@ -1289,7 +1336,7 @@ func (c *Cache) SearchBySender(sender, folder string) ([]*models.EmailData, erro
 		if err := rows.Scan(&msgID, &uid, &sndr, &subj, &date, &size, &hasAtt, &isRead, &fldr, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
-		emails = append(emails, &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sndr,
@@ -1302,6 +1349,7 @@ func (c *Cache) SearchBySender(sender, folder string) ([]*models.EmailData, erro
 			IsDraft:        isDraft == 1,
 			Folder:         fldr,
 		})
+		emails = append(emails, email)
 	}
 	return emails, rows.Err()
 }
@@ -1340,7 +1388,7 @@ func scanEmailRowsWithRead(rows *sql.Rows, folder string) ([]*models.EmailData, 
 		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
-		emails = append(emails, &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sender,
@@ -1353,6 +1401,7 @@ func scanEmailRowsWithRead(rows *sql.Rows, folder string) ([]*models.EmailData, 
 			IsDraft:        isDraft == 1,
 			Folder:         folder,
 		})
+		emails = append(emails, email)
 	}
 	return emails, rows.Err()
 }
@@ -1381,7 +1430,7 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 			return nil, err
 		}
 
-		email := &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      messageID,
 			UID:            uid,
 			Sender:         sender,
@@ -1393,7 +1442,7 @@ func (c *Cache) GetAllEmails(folder string, groupByDomain bool) (map[string][]*m
 			IsStarred:      isStarred == 1,
 			IsDraft:        isDraft == 1,
 			Folder:         folder,
-		}
+		})
 
 		// Group by domain if requested
 		key := sender
@@ -1541,7 +1590,7 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
-		emails = append(emails, &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sender,
@@ -1554,22 +1603,29 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 			IsDraft:        isDraft == 1,
 			Folder:         folder,
 		})
+		emails = append(emails, email)
 	}
 	return emails, rows.Err()
 }
 
 // GetEmailByID returns a single email by message ID
 func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
-	row := c.db.QueryRow(`SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
+	row := c.db.QueryRow(`SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0), message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 	                       FROM emails WHERE message_id = ?`, messageID)
 	var msgID, sender, subject, folder string
+	var sourceID, accountID, localID string
 	var uid uint32
+	var uidValidity uint32
 	var date time.Time
 	var size, hasAtt, isRead, isStarred, isDraft int
-	if err := row.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
+	if err := row.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
 		return nil, err
 	}
-	return &models.EmailData{
+	return normalizeEmailScope(&models.EmailData{
+		SourceID:       models.SourceID(sourceID),
+		AccountID:      models.AccountID(accountID),
+		LocalID:        localID,
+		UIDValidity:    uidValidity,
 		MessageID:      msgID,
 		UID:            uid,
 		Sender:         sender,
@@ -1581,7 +1637,24 @@ func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
 		IsStarred:      isStarred == 1,
 		IsDraft:        isDraft == 1,
 		Folder:         folder,
-	}, nil
+	}), nil
+}
+
+func (c *Cache) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {
+	ref = ref.WithDefaults()
+	if ref.LocalID != "" {
+		row := c.db.QueryRow(`SELECT message_id FROM emails WHERE local_id = ?`, ref.LocalID)
+		var messageID string
+		if err := row.Scan(&messageID); err == nil {
+			return c.GetEmailByID(messageID)
+		} else if err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+	if ref.MessageID == "" {
+		return nil, sql.ErrNoRows
+	}
+	return c.GetEmailByID(ref.MessageID)
 }
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending
@@ -1603,7 +1676,7 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
-		emails = append(emails, &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      messageID,
 			UID:            uid,
 			Sender:         sender,
@@ -1616,6 +1689,7 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 			IsDraft:        isDraft == 1,
 			Folder:         folder,
 		})
+		emails = append(emails, email)
 	}
 	return emails, rows.Err()
 }
@@ -1765,7 +1839,7 @@ func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
-		emails = append(emails, &models.EmailData{
+		email := normalizeEmailScope(&models.EmailData{
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sender,
@@ -1778,6 +1852,7 @@ func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 			IsDraft:        isDraft == 1,
 			Folder:         folder,
 		})
+		emails = append(emails, email)
 	}
 	return emails, rows.Err()
 }
@@ -2475,7 +2550,7 @@ func (c *Cache) GetContactEmails(contactEmail string, limit int) ([]*models.Emai
 		e.IsRead = isRead != 0
 		e.IsStarred = isStarred != 0
 		e.IsDraft = isDraft != 0
-		emails = append(emails, &e)
+		emails = append(emails, normalizeEmailScope(&e))
 	}
 	return emails, rows.Err()
 }
