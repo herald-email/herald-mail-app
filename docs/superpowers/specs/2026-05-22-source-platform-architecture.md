@@ -120,10 +120,10 @@ type CalendarSource interface {
 
 The queue abstraction should preserve the product rule that UI intent is more important than background work. Queue policy should be explicit per operation rather than hidden in ad hoc channels.
 
-- [ ] `TakeLatestByIntent` keeps only the newest request for a visible UI intent, such as timeline preview or active search.
-- [ ] `CoalesceByResource` joins duplicate in-flight work for the same provider resource, such as fetching the same email body twice.
-- [ ] `SerialBySource` preserves mutation order per source and never drops confirmed user actions.
-- [ ] `FairBySource` prevents one account or calendar from monopolizing background sync or indexing.
+- [x] `TakeLatestByIntent` keeps only the newest request for a visible UI intent, such as timeline preview or active search.
+- [x] `CoalesceByResource` joins duplicate in-flight work for the same provider resource, such as fetching the same email body twice.
+- [x] `SerialBySource` preserves mutation order per source and never drops confirmed user actions.
+- [x] `FairBySource` prevents one account or calendar from monopolizing background sync or indexing.
 - [ ] `GlobalBudget` preserves the current AI scheduler idea: interactive AI beats background AI, and local Ollama capacity is shared across all sources.
 
 The canonical preview sequence is `email1 -> email2 -> email1`. If the first `email1` body completed, the second `email1` returns from cache. If it is in flight, the second request joins it. If `email2` finishes after the user returned to `email1`, its result is stale and cannot repaint the preview.
@@ -212,8 +212,8 @@ The daemon and MCP layers must stop treating `folder` plus `message_id` as globa
 
 The work should land in small slices that each preserve current behavior. Multi-account UI and calendar UI should not start until the foundation slices have focused tests.
 
-- [ ] Phase 0: Write and review this architecture spec plus the first two implementation plans.
-- [ ] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
+- [x] Phase 0: Write and review this architecture spec plus the first two implementation plans.
+- [x] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
 - [ ] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
 - [ ] Phase 3: Add cache-first message body and preview services with memory cache, persistent cache, and in-flight coalescing.
 - [ ] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
@@ -226,7 +226,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 This refactor is accepted only if it preserves current behavior while making future source work mechanically safer. Each phase should ship with focused Go tests and only broaden to tmux/daemon/MCP evidence when user-visible behavior changes.
 
 - [ ] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
-- [ ] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
+- [x] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
 - [ ] Source identity tests prove legacy config normalization and scoped cache key generation.
 - [ ] Cache-first service tests prove cache hit, in-flight join, source fetch/store, stale-result filtering, and context cancellation behavior where supported.
 - [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.

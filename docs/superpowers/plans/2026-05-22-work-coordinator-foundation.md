@@ -27,7 +27,7 @@ This task defines the behavior before implementation. The tests lock down the im
 **Files:**
 - Create: `internal/work/coordinator_test.go`
 
-- [ ] **Step 1: Write failing tests for latest intent and coalesced resources**
+- [x] **Step 1: Write failing tests for latest intent and coalesced resources**
 
 Create `internal/work/coordinator_test.go` with:
 
@@ -192,7 +192,7 @@ func TestSerialBySourcePreservesMutationOrder(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run:
 
@@ -202,7 +202,7 @@ go test ./internal/work -count=1
 
 Expected: FAIL because `internal/work` has no implementation yet.
 
-- [ ] **Step 3: Commit the failing tests**
+- [x] **Step 3: Commit the failing tests**
 
 Run:
 
@@ -219,7 +219,7 @@ This task implements the smallest reusable coordination package that satisfies t
 - Create: `internal/work/work.go`
 - Create: `internal/work/coordinator.go`
 
-- [ ] **Step 1: Add shared work types**
+- [x] **Step 1: Add shared work types**
 
 Create `internal/work/work.go` with:
 
@@ -310,7 +310,7 @@ func completedResult(state resultState) Result {
 }
 ```
 
-- [ ] **Step 2: Add the coordinator implementation**
+- [x] **Step 2: Add the coordinator implementation**
 
 Create `internal/work/coordinator.go` with:
 
@@ -471,7 +471,7 @@ func (c *Coordinator) intentFilter(spec Spec, generation int64) func(resultState
 }
 ```
 
-- [ ] **Step 3: Run the work package tests**
+- [x] **Step 3: Run the work package tests**
 
 Run:
 
@@ -481,7 +481,7 @@ go test ./internal/work -count=1
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit the implementation**
+- [x] **Step 4: Commit the implementation**
 
 Run:
 
@@ -497,7 +497,7 @@ This task protects the existing folder load behavior while the reusable coordina
 **Files:**
 - Modify: `internal/backend/sync_coordinator_test.go`
 
-- [ ] **Step 1: Add a regression assertion for existing latest-wins load behavior**
+- [x] **Step 1: Add a regression assertion for existing latest-wins load behavior**
 
 Append this test to `internal/backend/sync_coordinator_test.go`:
 
@@ -523,7 +523,7 @@ func TestLatestWinsLoadCoordinator_RepeatedFolderStillAdvancesGeneration(t *test
 }
 ```
 
-- [ ] **Step 2: Run backend coordinator tests**
+- [x] **Step 2: Run backend coordinator tests**
 
 Run:
 
@@ -533,7 +533,7 @@ go test ./internal/backend -run LatestWinsLoadCoordinator -count=1
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit the regression test**
+- [x] **Step 3: Commit the regression test**
 
 Run:
 
@@ -549,7 +549,7 @@ This task verifies the implementation through focused package tests and records 
 **Files:**
 - Create: `reports/TEST_REPORT_2026-05-22_work-coordinator-foundation.md`
 
-- [ ] **Step 1: Run focused verification**
+- [x] **Step 1: Run focused verification**
 
 Run:
 
@@ -559,7 +559,7 @@ go test ./internal/work ./internal/backend -run 'Work|LatestWinsLoadCoordinator'
 
 Expected: PASS.
 
-- [ ] **Step 2: Run package tests touched by the new package**
+- [x] **Step 2: Run package tests touched by the new package**
 
 Run:
 
@@ -569,7 +569,7 @@ go test ./internal/work ./internal/backend -count=1
 
 Expected: PASS.
 
-- [ ] **Step 3: Save a local verification report**
+- [x] **Step 3: Save a local verification report**
 
 Create `reports/TEST_REPORT_2026-05-22_work-coordinator-foundation.md` with:
 
@@ -589,7 +589,7 @@ Surface: virtual lab not required; focused Go package tests only
 Both commands passed. The new `internal/work` package is covered by unit tests for latest UI intent, resource coalescing, completed resource replay, and serial source mutation ordering. The legacy backend load coordinator remains unchanged.
 ```
 
-- [ ] **Step 4: Commit tracked source changes**
+- [x] **Step 4: Commit tracked source changes**
 
 Run:
 
