@@ -642,6 +642,8 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 
 - [ ] `accounts:` list in `~/.herald/conf.yaml` (current single-account format still works)
 - [ ] Per-account IMAP connection, cache file, and folder tree
+- [ ] Source identity foundation (`source_id`, `account_id`, and scoped message refs) lands before multi-account UI
+- [ ] Work coordinator policies preserve latest UI intent, coalesce duplicate resource fetches, serialize source mutations, and keep background work fair
 - [ ] Folder sidebar grouped under account headers
 - [ ] Status bar shows active account name
 - [ ] Compose "From" field lets user pick sending account
@@ -649,6 +651,18 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [x] Gmail OAuth is experimental first-run onboarding, hidden unless Herald starts with `-experimental`
 - [ ] Outlook OAuth
 - [x] Vendor presets: `protonmail`, `gmail`, `outlook`, `fastmail`, `icloud`
+
+---
+
+## Calendar Sources
+
+Calendar sources extend Herald's source platform beyond mail while keeping provider-specific sync details out of the TUI. The first milestone is read-only calendar collection/event sync and search; mutations come after source identity and cache-first event services are stable.
+
+- [ ] `CalendarSource` capability shared by Google Calendar and CalDAV providers
+- [ ] Source-scoped calendar and event cache with provider freshness metadata such as ETag, revision, or sync token
+- [ ] Read-only agenda/search view before RSVP, edit, or create flows
+- [ ] Google Calendar source using OAuth and provider sync tokens
+- [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
 
 ---
 

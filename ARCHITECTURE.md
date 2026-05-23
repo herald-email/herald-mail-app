@@ -197,6 +197,18 @@ These controls live under `ai:` in config:
 
 ---
 
+## Source Platform Direction
+
+The next refactor layer turns the current single-account backend discipline into a source platform for multi-account mail and calendar integrations. The detailed architecture lives in [docs/superpowers/specs/2026-05-22-source-platform-architecture.md](docs/superpowers/specs/2026-05-22-source-platform-architecture.md), and the first implementation roadmaps live in [docs/superpowers/plans/2026-05-22-work-coordinator-foundation.md](docs/superpowers/plans/2026-05-22-work-coordinator-foundation.md) and [docs/superpowers/plans/2026-05-22-source-identity-foundation.md](docs/superpowers/plans/2026-05-22-source-identity-foundation.md).
+
+- [ ] Introduce `SourceID`, `AccountID`, `CollectionRef`, `MessageRef`, and later `EventRef` before exposing multi-account UI.
+- [ ] Keep source plugins provider-specific but small: IMAP, Google Calendar, and CalDAV handle transport details while Herald owns cache policy, queue policy, stale-result filtering, and UI priority.
+- [ ] Move latest-user-intent, duplicate resource coalescing, serial mutations, and fair background work into reusable coordination primitives before migrating existing queues.
+- [ ] Keep reads cache-first so callers ask for a message body or calendar event once while the service decides memory cache, persistent cache, in-flight join, or provider fetch.
+- [ ] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
+
+---
+
 ## Phase 2 — Daemon Server (target)
 
 ```

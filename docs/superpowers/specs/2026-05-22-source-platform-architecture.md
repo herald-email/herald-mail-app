@@ -1,0 +1,232 @@
+# Source Platform Architecture
+
+This spec defines the refactoring direction for multi-account mail and future calendar integration. It matters because Herald should grow from a single IMAP mailbox client into a source platform without losing the current responsiveness rules that make the TUI feel immediate.
+
+## Goals
+
+The first goal is to introduce durable source identity and work coordination before adding visible multi-account or calendar UI. This keeps the migration safe because every later feature can depend on scoped references, cache-first reads, and explicit queue policy.
+
+- [ ] Add source and account identity to mail data, sync events, background work, daemon APIs, and MCP-facing references without changing single-account behavior.
+- [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
+- [ ] Make body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
+- [ ] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
+- [ ] Introduce calendar as a source capability so Google Calendar and CalDAV share Herald-facing models even though their transports differ.
+
+## Non-Goals
+
+This foundation does not require a full multi-account UI or a calendar UI in the first implementation slice. Those features should arrive only after source identity and work coordination are boring and test-covered.
+
+- [ ] Do not replace the Bubble Tea app with a daemon-only client as part of the first refactor.
+- [ ] Do not build calendar mutation UI before read-only calendar sync/detail/search exists.
+- [ ] Do not make one generic queue that handles every operation identically.
+- [ ] Do not move provider-specific sync token, ETag, OAuth, or IMAP command details into the TUI.
+
+## Identity Model
+
+Every item shown by Herald needs an identity that says which source owns it, which account or credential set produced it, which collection it belongs to, and which provider version makes cached data fresh. Legacy single-account configs map to default IDs so existing users keep the same behavior.
+
+- [ ] `SourceID` identifies one configured source instance, such as `default-mail`, `work-mail`, `personal-google-calendar`, or `family-caldav`.
+- [ ] `AccountID` identifies the credential/account owner under a source. For most first-party sources, source and account are one-to-one, but keeping both lets shared calendars and future delegated access stay precise.
+- [ ] `CollectionRef` identifies a provider collection: IMAP folder, Google calendar, CalDAV calendar, or future contact/address-book collection.
+- [ ] `MessageRef` identifies mail by source, account, folder, UID, UIDVALIDITY, message ID, and a Herald local ID.
+- [ ] `EventRef` identifies calendar events by source, account, calendar ID, provider event ID, recurrence instance ID when present, ETag/revision, and a Herald local ID.
+- [ ] Legacy message IDs remain displayable and MCP-friendly, but internal writes and cache lookups prefer scoped local IDs.
+
+Example type shape:
+
+```go
+type SourceID string
+type AccountID string
+
+type SourceKind string
+
+const (
+	SourceKindMail     SourceKind = "mail"
+	SourceKindCalendar SourceKind = "calendar"
+)
+
+type CollectionRef struct {
+	SourceID     SourceID
+	AccountID    AccountID
+	Kind         SourceKind
+	CollectionID string
+	DisplayName  string
+}
+
+type MessageRef struct {
+	SourceID    SourceID
+	AccountID   AccountID
+	Folder      string
+	UID         uint32
+	UIDValidity uint32
+	MessageID   string
+	LocalID     string
+}
+
+type EventRef struct {
+	SourceID     SourceID
+	AccountID    AccountID
+	CalendarID   string
+	EventID      string
+	InstanceID   string
+	ETag         string
+	LocalID      string
+}
+```
+
+## Source Plugins
+
+Sources are provider adapters, not mini-apps. They should know how to talk to IMAP, Google Calendar, or CalDAV, but they should not decide UI priority, cache eviction, background fairness, or stale-result behavior.
+
+- [ ] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
+- [ ] `MailSource` covers mail-specific collections, sync, body fetch, mutation, drafts, and send.
+- [ ] `CalendarSource` covers calendars, event sync, event detail fetch, and later event mutations.
+- [ ] Plugins accept `context.Context` so HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
+- [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
+
+Example capability shape:
+
+```go
+type SourcePlugin interface {
+	Kind() SourceKind
+	Open(ctx context.Context, cfg SourceConfig, deps SourceDeps) (Source, error)
+}
+
+type Source interface {
+	ID() SourceID
+	AccountID() AccountID
+	DisplayName() string
+	Capabilities() SourceCapabilities
+	Close() error
+}
+
+type MailSource interface {
+	ListMailboxes(ctx context.Context) ([]CollectionRef, error)
+	SyncMailbox(ctx context.Context, ref CollectionRef) error
+	FetchMessageBody(ctx context.Context, ref MessageRef) (*EmailBody, error)
+	DeleteMessage(ctx context.Context, ref MessageRef) error
+	SendMessage(ctx context.Context, draft OutgoingMessage) error
+}
+
+type CalendarSource interface {
+	ListCalendars(ctx context.Context) ([]CollectionRef, error)
+	SyncCalendar(ctx context.Context, ref CollectionRef) error
+	FetchEvent(ctx context.Context, ref EventRef) (*CalendarEvent, error)
+	UpdateEvent(ctx context.Context, ref EventRef, patch EventPatch) error
+}
+```
+
+## Work Coordination
+
+The queue abstraction should preserve the product rule that UI intent is more important than background work. Queue policy should be explicit per operation rather than hidden in ad hoc channels.
+
+- [ ] `TakeLatestByIntent` keeps only the newest request for a visible UI intent, such as timeline preview or active search.
+- [ ] `CoalesceByResource` joins duplicate in-flight work for the same provider resource, such as fetching the same email body twice.
+- [ ] `SerialBySource` preserves mutation order per source and never drops confirmed user actions.
+- [ ] `FairBySource` prevents one account or calendar from monopolizing background sync or indexing.
+- [ ] `GlobalBudget` preserves the current AI scheduler idea: interactive AI beats background AI, and local Ollama capacity is shared across all sources.
+
+The canonical preview sequence is `email1 -> email2 -> email1`. If the first `email1` body completed, the second `email1` returns from cache. If it is in flight, the second request joins it. If `email2` finishes after the user returned to `email1`, its result is stale and cannot repaint the preview.
+
+## Cache-First Services
+
+Callers should not decide whether a body, event, or preview comes from cache or provider fetch. Herald-owned services sit between the TUI/backend and raw source plugins.
+
+- [ ] `MessageBodyService.GetMessageBody(ctx, ref)` checks memory cache, persistent cache, in-flight work, then source fetch.
+- [ ] `MessagePreviewService.GetMessagePreview(ctx, ref)` follows the same pattern but honors offline cache policy.
+- [ ] `CalendarEventService.GetEvent(ctx, ref)` checks event cache and provider freshness metadata before fetching.
+- [ ] Cache keys include source/account/collection identity and freshness metadata where available.
+- [ ] Context cancellation is useful but not required for correctness; cache hits, singleflight joining, and stale-result tokens provide the correctness guarantee.
+
+## Queue Impact On Current Work
+
+Existing background lanes should migrate gradually. Each lane keeps the semantics that currently make it safe, but the work keys become source-scoped.
+
+- [ ] `latestWinsLoadCoordinator` migrates first into a reusable `internal/work` policy for active collection sync.
+- [ ] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
+- [ ] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
+- [ ] `classifyCh` remains mail-only at first but stores results under scoped message identity.
+- [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
+- [ ] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
+- [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
+- [ ] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
+
+## Storage Direction
+
+The preferred long-term storage model is one profile database with source-scoped rows. That model supports unified search, contacts, calendar agenda, automation, and MCP better than one database per account.
+
+- [ ] Existing `cache.database_path` remains valid and points to the profile database.
+- [ ] Initial migration adds nullable or defaulted `source_id`, `account_id`, and `local_id` columns while keeping legacy primary keys operational.
+- [ ] Later migration can move from `message_id` primary keys to scoped local IDs once all callers use refs.
+- [ ] Calendar tables use source-scoped primary keys from the start.
+- [ ] FTS and embedding tables include source/account scope before unified cross-source search ships.
+
+## Config Direction
+
+Config should preserve existing single-account YAML and introduce an additive `sources:` or `accounts:` structure. The loader normalizes both into the same internal source graph.
+
+- [ ] Existing single-account config normalizes to one mail source named `default-mail`.
+- [ ] Multi-account mail config can add multiple mail sources without requiring users to split config files.
+- [ ] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
+- [ ] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
+- [ ] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
+
+Sketch:
+
+```yaml
+sources:
+  - id: work-mail
+    kind: mail
+    provider: imap
+    display_name: Work Mail
+    account_id: work
+    credentials:
+      username: user@example.com
+      password: ref-or-secret
+    imap:
+      host: imap.example.com
+      port: 993
+    smtp:
+      host: smtp.example.com
+      port: 587
+  - id: work-calendar
+    kind: calendar
+    provider: google_calendar
+    display_name: Work Calendar
+    account_id: work
+    google:
+      refresh_token: ref-or-secret
+```
+
+## Daemon And MCP Direction
+
+The daemon and MCP layers must stop treating `folder` plus `message_id` as globally unique. API paths can remain friendly, but request bodies and responses need scoped references.
+
+- [ ] Read endpoints accept optional `source_id` and `account_id`; default values preserve legacy clients.
+- [ ] Mutating endpoints require scoped refs once multi-account writes are enabled.
+- [ ] MCP listing outputs include both human-readable message IDs and scoped refs suitable for follow-up calls.
+- [ ] Daemon event streams include source/account/collection fields on progress, new item, valid ID, sync, and mutation events.
+- [ ] Calendar MCP tools are read-only at first and use the same scoped reference style as mail.
+
+## Phased Roadmap
+
+The work should land in small slices that each preserve current behavior. Multi-account UI and calendar UI should not start until the foundation slices have focused tests.
+
+- [ ] Phase 0: Write and review this architecture spec plus the first two implementation plans.
+- [ ] Phase 1: Add `internal/work` with take-latest, coalescing, serial, fair, and status primitives. Prove duplicate/stale UI cases with tests.
+- [ ] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
+- [ ] Phase 3: Add cache-first message body and preview services with memory cache, persistent cache, and in-flight coalescing.
+- [ ] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
+- [ ] Phase 5: Add multi-account mail config and active-account switching UI.
+- [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
+- [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
+
+## Acceptance Criteria
+
+This refactor is accepted only if it preserves current behavior while making future source work mechanically safer. Each phase should ship with focused Go tests and only broaden to tmux/daemon/MCP evidence when user-visible behavior changes.
+
+- [ ] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
+- [ ] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
+- [ ] Source identity tests prove legacy config normalization and scoped cache key generation.
+- [ ] Cache-first service tests prove cache hit, in-flight join, source fetch/store, stale-result filtering, and context cancellation behavior where supported.
+- [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.
