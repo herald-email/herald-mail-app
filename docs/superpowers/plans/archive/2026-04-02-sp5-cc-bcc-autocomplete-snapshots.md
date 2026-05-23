@@ -39,7 +39,7 @@
 - Modify: `internal/smtp/client.go`
 - Test: `internal/smtp/mime_test.go`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `internal/smtp/mime_test.go`:
 
@@ -66,7 +66,7 @@ func TestBuildMIMEMessage_NoCCOmitsHeader(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 cd /Users/zoomacode/Developer/mail-processor
@@ -75,7 +75,7 @@ go test ./internal/smtp/... -run "TestBuildMIMEMessage_CC|TestBuildMIMEMessage_B
 
 Expected: FAIL — `buildMIMEMessage` has wrong signature.
 
-- [ ] **Step 3: Refactor `sendPlain` to accept `rcpts []string`**
+- [x] **Step 3: Refactor `sendPlain` to accept `rcpts []string`**
 
 In `internal/smtp/client.go`, replace:
 
@@ -97,7 +97,7 @@ func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) err
 }
 ```
 
-- [ ] **Step 4: Update `buildMIMEMessage` to accept cc and bcc**
+- [x] **Step 4: Update `buildMIMEMessage` to accept cc and bcc**
 
 Replace the existing `buildMIMEMessage` function signature and add the `Cc:` header:
 
@@ -143,7 +143,7 @@ func buildMIMEMessage(from, to, subject, plainText, htmlBody, cc, bcc string) st
 }
 ```
 
-- [ ] **Step 5: Update `Send` to pass empty cc/bcc and use new sendPlain signature**
+- [x] **Step 5: Update `Send` to pass empty cc/bcc and use new sendPlain signature**
 
 In `Send`, change:
 ```go
@@ -165,7 +165,7 @@ return c.sendPlain(addr, from, []string{to}, rawMsg)
 
 And the `client.Rcpt` call stays the same (single to).
 
-- [ ] **Step 6: Update `SendWithAttachments` for new sendPlain signature**
+- [x] **Step 6: Update `SendWithAttachments` for new sendPlain signature**
 
 In `SendWithAttachments`, change:
 ```go
@@ -176,7 +176,7 @@ to:
 return c.sendPlain(addr, from, []string{to}, rawMsg)
 ```
 
-- [ ] **Step 7: Update `SendReply` for new sendPlain signature**
+- [x] **Step 7: Update `SendReply` for new sendPlain signature**
 
 In `SendReply`, change:
 ```go
@@ -187,7 +187,7 @@ to:
 return c.sendPlain(addr, from, []string{to}, rawMsg)
 ```
 
-- [ ] **Step 8: Add `parseAddrs` helper and update `SendWithInlineImages`**
+- [x] **Step 8: Add `parseAddrs` helper and update `SendWithInlineImages`**
 
 Add this helper near the bottom of `client.go` (before or after `extFromMIME`):
 
@@ -264,7 +264,7 @@ allRcpts = append(allRcpts, parseAddrs(bcc)...)
 return c.sendPlain(addr, from, allRcpts, rawMsg)
 ```
 
-- [ ] **Step 9: Run tests**
+- [x] **Step 9: Run tests**
 
 ```bash
 go test ./internal/smtp/... -v
@@ -272,7 +272,7 @@ go test ./internal/smtp/... -v
 
 Expected: all pass.
 
-- [ ] **Step 10: Build check**
+- [x] **Step 10: Build check**
 
 ```bash
 make build
@@ -280,7 +280,7 @@ make build
 
 Expected: FAIL — `sendCompose` in helpers.go calls `SendWithInlineImages` with old signature. That's expected; it will be fixed in Task 8.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add internal/smtp/client.go internal/smtp/mime_test.go
@@ -296,7 +296,7 @@ git commit -m "feat: add CC/BCC support to SMTP send — buildMIMEMessage, SendW
 - Modify: `internal/smtp/mime.go`
 - Modify: `internal/smtp/mime_test.go`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Add to `internal/smtp/mime_test.go`:
 
@@ -322,7 +322,7 @@ func TestBuildDraftMessage_NoBCCHeader(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```bash
 go test ./internal/smtp/... -run "TestBuildDraftMessage_CC|TestBuildDraftMessage_NoBCC" -v
@@ -330,7 +330,7 @@ go test ./internal/smtp/... -run "TestBuildDraftMessage_CC|TestBuildDraftMessage
 
 Expected: FAIL — `BuildDraftMessage` has wrong signature.
 
-- [ ] **Step 3: Add CC/BCC to Draft struct**
+- [x] **Step 3: Add CC/BCC to Draft struct**
 
 In `internal/models/email.go`, change:
 
@@ -360,7 +360,7 @@ type Draft struct {
 }
 ```
 
-- [ ] **Step 4: Update BuildDraftMessage signature**
+- [x] **Step 4: Update BuildDraftMessage signature**
 
 In `internal/smtp/mime.go`, change:
 
@@ -385,7 +385,7 @@ func BuildDraftMessage(from, to, cc, bcc, subject, body string) ([]byte, error) 
     msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 go test ./internal/smtp/... -v
@@ -393,7 +393,7 @@ go test ./internal/smtp/... -v
 
 Expected: all pass. Note: `local.go` now fails to compile (calls `BuildDraftMessage` with old 4-arg signature). That's expected — fixed in Task 3.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/models/email.go internal/smtp/mime.go internal/smtp/mime_test.go
@@ -414,7 +414,7 @@ git commit -m "feat: add CC/BCC fields to Draft model and BuildDraftMessage"
 - Modify: `internal/cleanup/noop_backend_test.go`
 - Test: `internal/backend/demo_draft_test.go`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 In `internal/backend/demo_draft_test.go`, add:
 
@@ -441,7 +441,7 @@ func TestDemoBackend_SaveDraft_WithCC(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```bash
 go test ./internal/backend/... -run "TestDemoBackend_SaveDraft_WithCC" -v
@@ -449,7 +449,7 @@ go test ./internal/backend/... -run "TestDemoBackend_SaveDraft_WithCC" -v
 
 Expected: FAIL.
 
-- [ ] **Step 3: Update Backend interface**
+- [x] **Step 3: Update Backend interface**
 
 In `internal/backend/backend.go`, change:
 
@@ -463,7 +463,7 @@ to:
 SaveDraft(to, cc, bcc, subject, body string) (uid uint32, folder string, err error)
 ```
 
-- [ ] **Step 4: Update LocalBackend.SaveDraft**
+- [x] **Step 4: Update LocalBackend.SaveDraft**
 
 In `internal/backend/local.go`, change:
 
@@ -481,7 +481,7 @@ func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, str
     raw, err := appsmtp.BuildDraftMessage(from, to, cc, bcc, subject, body)
 ```
 
-- [ ] **Step 5: Update RemoteBackend.SaveDraft**
+- [x] **Step 5: Update RemoteBackend.SaveDraft**
 
 In `internal/backend/remote.go`, change:
 
@@ -514,7 +514,7 @@ func (b *RemoteBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, st
 }
 ```
 
-- [ ] **Step 6: Update DemoBackend.SaveDraft**
+- [x] **Step 6: Update DemoBackend.SaveDraft**
 
 In `internal/backend/demo.go`, change:
 
@@ -545,7 +545,7 @@ draft := &models.Draft{
 
 (Replace whatever the existing draft literal looks like — add the `CC` and `BCC` fields.)
 
-- [ ] **Step 7: Update daemon saveDraftRequest and handler**
+- [x] **Step 7: Update daemon saveDraftRequest and handler**
 
 In `internal/daemon/server.go`, change:
 
@@ -581,7 +581,7 @@ to:
 uid, folder, err := s.backend.SaveDraft(req.To, req.CC, req.BCC, req.Subject, req.Body)
 ```
 
-- [ ] **Step 8: Update stub backends**
+- [x] **Step 8: Update stub backends**
 
 In `internal/app/chat_tools_test.go`, change:
 
@@ -607,7 +607,7 @@ to:
 func (noopBackend) SaveDraft(_, _, _, _, _ string) (uint32, string, error) { return 0, "", nil }
 ```
 
-- [ ] **Step 9: Run tests**
+- [x] **Step 9: Run tests**
 
 ```bash
 go test ./internal/backend/... -v
@@ -617,7 +617,7 @@ go test ./internal/cleanup/... -v
 
 Expected: all pass.
 
-- [ ] **Step 10: Build check**
+- [x] **Step 10: Build check**
 
 ```bash
 make build
@@ -625,7 +625,7 @@ make build
 
 Expected: FAIL — `saveDraftCmd` in helpers.go still calls old signature. Expected; fixed in Task 8.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add internal/backend/backend.go internal/backend/local.go internal/backend/remote.go \
@@ -642,7 +642,7 @@ git commit -m "feat: update SaveDraft signature to include CC/BCC"
 **Files:**
 - Modify: `internal/app/app.go`
 
-- [ ] **Step 1: Add new fields to Model struct**
+- [x] **Step 1: Add new fields to Model struct**
 
 In `internal/app/app.go`, in the `// Compose` block (around line 359), add after `composeField`:
 
@@ -667,7 +667,7 @@ suggestions   []models.ContactData // current autocomplete candidates (empty = d
 suggestionIdx int                  // selected row index (-1 = none selected)
 ```
 
-- [ ] **Step 2: Add ContactSuggestionsMsg type**
+- [x] **Step 2: Add ContactSuggestionsMsg type**
 
 Near the other message type declarations (around line 225), add:
 
@@ -678,7 +678,7 @@ type ContactSuggestionsMsg struct {
 }
 ```
 
-- [ ] **Step 3: Initialize new fields in New()**
+- [x] **Step 3: Initialize new fields in New()**
 
 In the `New()` function, after the existing `composeTo` initialization, add:
 
@@ -699,7 +699,7 @@ composeBCC:   composeBCC,
 suggestionIdx: -1,
 ```
 
-- [ ] **Step 4: Update field routing in Update() for non-key messages**
+- [x] **Step 4: Update field routing in Update() for non-key messages**
 
 In `app.go` around line 1540, the compose field routing block routes all messages to the active field:
 
@@ -741,7 +741,7 @@ if m.activeTab == tabCompose {
 }
 ```
 
-- [ ] **Step 5: Update any hardcoded composeField==1 (Subject) and composeField==2 (Body) references**
+- [x] **Step 5: Update any hardcoded composeField==1 (Subject) and composeField==2 (Body) references**
 
 Search for all places that compare `composeField` to 1 or 2 and shift them to 3 and 4 respectively:
 
@@ -757,7 +757,7 @@ Update each:
 
 Do NOT change `composeField == 0` (To field — unchanged).
 
-- [ ] **Step 6: Handle ContactSuggestionsMsg in Update()**
+- [x] **Step 6: Handle ContactSuggestionsMsg in Update()**
 
 In `app.go`, find the `switch msg.(type)` in `Update`. Add:
 
@@ -772,7 +772,7 @@ case ContactSuggestionsMsg:
     return m, nil
 ```
 
-- [ ] **Step 7: Build check**
+- [x] **Step 7: Build check**
 
 ```bash
 make build
@@ -780,7 +780,7 @@ make build
 
 Expected: FAIL due to Tasks 1–3 pending callers (sendCompose, saveDraftCmd, cycleComposeField). That's fine — the compile errors show what's left.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/app/app.go
@@ -794,7 +794,7 @@ git commit -m "feat: add composeCC/BCC fields, suggestionIdx, ContactSuggestions
 **Files:**
 - Modify: `internal/app/helpers.go`
 
-- [ ] **Step 1: Update `cycleComposeField`**
+- [x] **Step 1: Update `cycleComposeField`**
 
 In `internal/app/helpers.go`, replace `cycleComposeField`:
 
@@ -823,7 +823,7 @@ func (m *Model) cycleComposeField() {
 }
 ```
 
-- [ ] **Step 2: Update key handler field routing in handleComposeKey**
+- [x] **Step 2: Update key handler field routing in handleComposeKey**
 
 In `helpers.go` around line 2502, the compose key handler routes keys to the focused field:
 
@@ -855,7 +855,7 @@ case 4:
 }
 ```
 
-- [ ] **Step 3: Update `renderComposeView` to add CC/BCC rows**
+- [x] **Step 3: Update `renderComposeView` to add CC/BCC rows**
 
 In `renderComposeView`, after the `// To field` block and before the `// Subject field` block, add CC and BCC rows:
 
@@ -899,7 +899,7 @@ to:
 if m.composeField == 4 {   // new (Body is now field 4)
 ```
 
-- [ ] **Step 4: Build check**
+- [x] **Step 4: Build check**
 
 ```bash
 make build
@@ -907,7 +907,7 @@ make build
 
 Expected: FAIL on `sendCompose` and `saveDraftCmd` (still use old signatures). Expected.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/app/helpers.go
@@ -922,7 +922,7 @@ git commit -m "feat: update compose view — CC/BCC rows, cycleComposeField exte
 - Modify: `internal/app/helpers.go`
 - Modify: `internal/app/app.go`
 
-- [ ] **Step 1: Add `currentComposeToken` helper**
+- [x] **Step 1: Add `currentComposeToken` helper**
 
 In `internal/app/helpers.go`, add:
 
@@ -938,7 +938,7 @@ func currentComposeToken(s string) string {
 }
 ```
 
-- [ ] **Step 2: Add `searchContactsCmd`**
+- [x] **Step 2: Add `searchContactsCmd`**
 
 In `internal/app/helpers.go`, add:
 
@@ -963,7 +963,7 @@ func (m *Model) searchContactsCmd(token string) tea.Cmd {
 }
 ```
 
-- [ ] **Step 3: Fire search after keypress in address fields**
+- [x] **Step 3: Fire search after keypress in address fields**
 
 In `helpers.go`, in the compose key handler (the `switch m.composeField` block for routing keys to fields), after forwarding the keystroke to the active field, add autocomplete triggering for fields 0, 1, 2:
 
@@ -993,7 +993,7 @@ case 4:
 return m, cmd
 ```
 
-- [ ] **Step 4: Clear suggestions when focus leaves address fields**
+- [x] **Step 4: Clear suggestions when focus leaves address fields**
 
 In `cycleComposeField`, after the field switch, clear suggestions when advancing past field 2:
 
@@ -1010,7 +1010,7 @@ func (m *Model) cycleComposeField() {
 }
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/app/helpers.go internal/app/app.go
@@ -1025,7 +1025,7 @@ git commit -m "feat: autocomplete — searchContactsCmd fires on keypress in To/
 - Modify: `internal/app/helpers.go`
 - Modify: `internal/app/app.go`
 
-- [ ] **Step 1: Add `renderSuggestionDropdown` helper**
+- [x] **Step 1: Add `renderSuggestionDropdown` helper**
 
 In `internal/app/helpers.go`, add:
 
@@ -1064,7 +1064,7 @@ func (m *Model) renderSuggestionDropdown() string {
 }
 ```
 
-- [ ] **Step 2: Insert dropdown into renderComposeView**
+- [x] **Step 2: Insert dropdown into renderComposeView**
 
 In `renderComposeView`, after the CC field row is written, add the dropdown insertion. The dropdown appears below the active address field. Insert it after the BCC row (so it always renders at the same vertical position regardless of which field is active):
 
@@ -1077,7 +1077,7 @@ if drop := m.renderSuggestionDropdown(); drop != "" {
 
 Place this block after the BCC row write and before the Subject row.
 
-- [ ] **Step 3: Handle dropdown navigation and accept in the compose key handler**
+- [x] **Step 3: Handle dropdown navigation and accept in the compose key handler**
 
 In the compose key handler (the `case "tab":` and surrounding key checks in `helpers.go`), add dropdown-aware handling BEFORE the existing `case "tab":` check:
 
@@ -1121,7 +1121,7 @@ if len(m.suggestions) > 0 {
 }
 ```
 
-- [ ] **Step 4: Add `acceptSuggestion` helper**
+- [x] **Step 4: Add `acceptSuggestion` helper**
 
 ```go
 // acceptSuggestion replaces the current token in the active address field
@@ -1152,7 +1152,7 @@ func (m *Model) acceptSuggestion(label string) *Model {
 }
 ```
 
-- [ ] **Step 5: Build check**
+- [x] **Step 5: Build check**
 
 ```bash
 make build
@@ -1160,7 +1160,7 @@ make build
 
 Expected: FAIL only on `sendCompose`/`saveDraftCmd` (will be fixed in Task 8).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/app/helpers.go
@@ -1176,7 +1176,7 @@ git commit -m "feat: autocomplete dropdown — render, navigation, accept, dismi
 
 This task makes the build green.
 
-- [ ] **Step 1: Update sendCompose**
+- [x] **Step 1: Update sendCompose**
 
 In `helpers.go`, `sendCompose()`, add cc/bcc snapshots:
 
@@ -1216,7 +1216,7 @@ func (m *Model) sendCompose() tea.Cmd {
 }
 ```
 
-- [ ] **Step 2: Update saveDraftCmd**
+- [x] **Step 2: Update saveDraftCmd**
 
 ```go
 func (m *Model) saveDraftCmd() tea.Cmd {
@@ -1233,7 +1233,7 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 }
 ```
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 ```bash
 make build
@@ -1241,7 +1241,7 @@ make build
 
 Expected: SUCCESS.
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 ```bash
 go test ./...
@@ -1249,7 +1249,7 @@ go test ./...
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/app/helpers.go
@@ -1265,7 +1265,7 @@ git commit -m "feat: wire CC/BCC into sendCompose and saveDraftCmd — build gre
 - Create: `internal/app/snapshot_test.go`
 - Create: `internal/app/testdata/snapshots/` (directory)
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 ```bash
 cd /Users/zoomacode/Developer/mail-processor
@@ -1274,7 +1274,7 @@ go get github.com/charmbracelet/x/exp/teatest@latest
 
 `teatest` pulls in `charmbracelet/x/vt` and related packages as transitive dependencies. No need to import `vt` directly.
 
-- [ ] **Step 2: Verify go.mod updated**
+- [x] **Step 2: Verify go.mod updated**
 
 ```bash
 grep "teatest" go.mod
@@ -1282,13 +1282,13 @@ grep "teatest" go.mod
 
 Expected: `github.com/charmbracelet/x/exp/teatest` present.
 
-- [ ] **Step 3: Create golden file directory**
+- [x] **Step 3: Create golden file directory**
 
 ```bash
 mkdir -p internal/app/testdata/snapshots
 ```
 
-- [ ] **Step 4: Create snapshot_test.go with requireGolden helper**
+- [x] **Step 4: Create snapshot_test.go with requireGolden helper**
 
 Create `internal/app/snapshot_test.go`:
 
@@ -1350,7 +1350,7 @@ func testModelWithEmails(emails []*models.EmailData) *Model {
 
 > **Note to implementer:** `New(b, nil, "", nil, false)` initialises all TUI fields including compose inputs, tables, and sidebar. Override `windowWidth`/`windowHeight` after construction to fix the terminal size. If `buildTimelineRows` is unexported or doesn't exist, substitute with whatever helper populates `m.timelineTable` rows from a `[]*models.EmailData` slice — check `helpers.go` for the right call. The key constraint: `m.View()` must not panic.
 
-- [ ] **Step 5: Verify the test file compiles**
+- [x] **Step 5: Verify the test file compiles**
 
 ```bash
 go build ./internal/app/...
@@ -1364,7 +1364,7 @@ go vet ./internal/app/...
 
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add go.mod go.sum internal/app/snapshot_test.go internal/app/testdata/
@@ -1380,7 +1380,7 @@ git commit -m "feat: add teatest+vt deps and snapshot test infrastructure"
 - Create: `internal/app/testdata/snapshots/timeline_empty.txt`
 - Create: `internal/app/testdata/snapshots/timeline_populated.txt`
 
-- [ ] **Step 1: Add mock email factory**
+- [x] **Step 1: Add mock email factory**
 
 In `snapshot_test.go`, add:
 
@@ -1415,7 +1415,7 @@ func mockEmails() []*models.EmailData {
 }
 ```
 
-- [ ] **Step 2: Write timeline_empty test**
+- [x] **Step 2: Write timeline_empty test**
 
 ```go
 func TestSnapshot_TimelineEmpty(t *testing.T) {
@@ -1431,7 +1431,7 @@ func TestSnapshot_TimelineEmpty(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Write timeline_populated test**
+- [x] **Step 3: Write timeline_populated test**
 
 ```go
 func TestSnapshot_TimelinePopulated(t *testing.T) {
@@ -1446,7 +1446,7 @@ func TestSnapshot_TimelinePopulated(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Generate golden files**
+- [x] **Step 4: Generate golden files**
 
 ```bash
 go test ./internal/app/... -run "TestSnapshot_Timeline" -update -v
@@ -1454,7 +1454,7 @@ go test ./internal/app/... -run "TestSnapshot_Timeline" -update -v
 
 Expected: golden files written to `testdata/snapshots/`.
 
-- [ ] **Step 5: Verify tests pass without -update**
+- [x] **Step 5: Verify tests pass without -update**
 
 ```bash
 go test ./internal/app/... -run "TestSnapshot_Timeline" -v
@@ -1462,7 +1462,7 @@ go test ./internal/app/... -run "TestSnapshot_Timeline" -v
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/app/snapshot_test.go internal/app/testdata/snapshots/
@@ -1478,7 +1478,7 @@ git commit -m "test: add timeline snapshot tests (empty + populated)"
 - Create: `internal/app/testdata/snapshots/compose_blank.txt`
 - Create: `internal/app/testdata/snapshots/compose_with_cc_bcc.txt`
 
-- [ ] **Step 1: Write compose_blank test**
+- [x] **Step 1: Write compose_blank test**
 
 ```go
 func TestSnapshot_ComposeBlank(t *testing.T) {
@@ -1494,7 +1494,7 @@ func TestSnapshot_ComposeBlank(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Write compose_with_cc_bcc test**
+- [x] **Step 2: Write compose_with_cc_bcc test**
 
 ```go
 func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
@@ -1514,7 +1514,7 @@ func TestSnapshot_ComposeWithCCBCC(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Generate golden files**
+- [x] **Step 3: Generate golden files**
 
 ```bash
 go test ./internal/app/... -run "TestSnapshot_Compose" -update -v
@@ -1522,7 +1522,7 @@ go test ./internal/app/... -run "TestSnapshot_Compose" -update -v
 
 Expected: golden files written.
 
-- [ ] **Step 4: Verify all snapshot tests pass**
+- [x] **Step 4: Verify all snapshot tests pass**
 
 ```bash
 go test ./internal/app/... -run "TestSnapshot" -v
@@ -1530,7 +1530,7 @@ go test ./internal/app/... -run "TestSnapshot" -v
 
 Expected: all 4 pass.
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 ```bash
 go test ./...
@@ -1538,7 +1538,7 @@ go test ./...
 
 Expected: all pass.
 
-- [ ] **Step 6: Final build**
+- [x] **Step 6: Final build**
 
 ```bash
 make build
@@ -1546,7 +1546,7 @@ make build
 
 Expected: SUCCESS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/app/snapshot_test.go internal/app/testdata/snapshots/

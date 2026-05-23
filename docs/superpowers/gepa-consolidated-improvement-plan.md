@@ -46,7 +46,7 @@ This section sequences the backlog into a practical rollout. The idea is to stab
 
 This section converts the plan into direct asks that future sessions can execute without extra archaeology. Each prompt is meant to be approved or deferred explicitly so GEPA remains visible and user-controlled.
 
-- [ ] Approve a verification-template pass focused on `focused-tests` and `app-tests`.
+- [x] Approved and completed a verification-template pass focused on `focused-tests` and `app-tests`.
 - [x] Approved and completed a workflow-safety pass focused on serialized writes and preflight checks.
 - [x] Approved and completed a visual-evidence gate pass focused on canonical TUI before/after capture at `220x50`, `80x24`, and `50x15`.
 - [x] Approved and completed an input-routing safety gate pass focused on compose, prompt, and editor text-entry proof for shortcut-sensitive TUI work.

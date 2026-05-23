@@ -225,7 +225,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 
 This refactor is accepted only if it preserves current behavior while making future source work mechanically safer. Each phase should ship with focused Go tests and only broaden to tmux/daemon/MCP evidence when user-visible behavior changes.
 
-- [ ] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
+- [x] Existing single-account TUI, SSH, daemon, and MCP flows continue to pass their current focused tests.
 - [x] Work coordinator tests prove latest UI intent, resource coalescing, cached replay, mutation serialization, and source fairness.
 - [x] Source identity tests prove legacy config normalization and scoped cache key generation.
 - [ ] Cache-first service tests prove cache hit, in-flight join, source fetch/store, stale-result filtering, and context cancellation behavior where supported.

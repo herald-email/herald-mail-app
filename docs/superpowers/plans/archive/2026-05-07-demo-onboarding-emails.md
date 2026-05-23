@@ -24,7 +24,7 @@
 **Files:**
 - Modify: `internal/demo/fixtures_test.go`
 
-- [ ] **Step 1: Add `sort` to the imports**
+- [x] **Step 1: Add `sort` to the imports**
 
 Change the import block at the top of `internal/demo/fixtures_test.go` to:
 
@@ -36,7 +36,7 @@ import (
 )
 ```
 
-- [ ] **Step 2: Add onboarding order and body tests**
+- [x] **Step 2: Add onboarding order and body tests**
 
 Append these tests after `TestMailboxOmitsPrivateDemoIdentityTerms`:
 
@@ -160,7 +160,7 @@ func demoMessageBySubject(t *testing.T, subject string) Message {
 }
 ```
 
-- [ ] **Step 3: Run the focused failing tests**
+- [x] **Step 3: Run the focused failing tests**
 
 Run:
 
@@ -170,7 +170,7 @@ go test ./internal/demo -run 'TestMailboxIncludesOrderedHeraldOnboardingSteps|Te
 
 Expected: FAIL because the Step 1 through Step 8 onboarding messages do not exist yet.
 
-- [ ] **Step 4: Commit the failing tests**
+- [x] **Step 4: Commit the failing tests**
 
 Run:
 
@@ -184,7 +184,7 @@ git commit -m "test: specify demo onboarding email sequence"
 **Files:**
 - Modify: `internal/demo/fixtures.go`
 
-- [ ] **Step 1: Add `strconv` to the fixture imports**
+- [x] **Step 1: Add `strconv` to the fixture imports**
 
 Change the import block in `internal/demo/fixtures.go` to include `strconv`:
 
@@ -202,7 +202,7 @@ import (
 )
 ```
 
-- [ ] **Step 2: Make demo attachment part paths unique**
+- [x] **Step 2: Make demo attachment part paths unique**
 
 Replace the `withAttachment` helper in `buildMailbox` with:
 
@@ -221,7 +221,7 @@ Replace the `withAttachment` helper in `buildMailbox` with:
 	}
 ```
 
-- [ ] **Step 3: Add a date override helper**
+- [x] **Step 3: Add a date override helper**
 
 Add this helper after `withInlineImage` and before `withDraft`:
 
@@ -233,7 +233,7 @@ Add this helper after `withInlineImage` and before `withDraft`:
 	}
 ```
 
-- [ ] **Step 4: Add the eight onboarding messages before the existing `add(1, "Northstar Cloud...`) call**
+- [x] **Step 4: Add the eight onboarding messages before the existing `add(1, "Northstar Cloud...`) call**
 
 Insert this block before the current first `add(1, ...)` call:
 
@@ -386,11 +386,11 @@ The demo mailbox is shared across the TUI and MCP demo surfaces, so search, stat
 		withDate(baseTime.Add(1*time.Hour)))
 ```
 
-- [ ] **Step 5: Remove the old Open Commons sampler fixture**
+- [x] **Step 5: Remove the old Open Commons sampler fixture**
 
 Delete the existing `add(29, "Open Commons Gallery <images@opencommons.example>", "Creative Commons image sampler for terminal previews", ...)` block from `internal/demo/fixtures.go`. The new Step 4 message now owns the same inline image coverage and Creative Commons attribution.
 
-- [ ] **Step 6: Run the focused fixture tests**
+- [x] **Step 6: Run the focused fixture tests**
 
 Run:
 
@@ -400,7 +400,7 @@ go test ./internal/demo -run 'TestMailboxIncludesOrderedHeraldOnboardingSteps|Te
 
 Expected: PASS.
 
-- [ ] **Step 7: Run all demo fixture tests**
+- [x] **Step 7: Run all demo fixture tests**
 
 Run:
 
@@ -410,7 +410,7 @@ go test ./internal/demo -count=1
 
 Expected: FAIL because existing tests still look for the old Creative Commons sampler subject and sender.
 
-- [ ] **Step 8: Commit the fixture implementation**
+- [x] **Step 8: Commit the fixture implementation**
 
 Run:
 
@@ -426,7 +426,7 @@ git commit -m "feat: add Herald onboarding demo emails"
 - Modify: `internal/backend/demo_behavior_test.go`
 - Modify: `internal/mcpserver/demo_mode_test.go`
 
-- [ ] **Step 1: Update the image sampler fixture test constants**
+- [x] **Step 1: Update the image sampler fixture test constants**
 
 In `internal/demo/fixtures_test.go`, change `TestMailboxIncludesCreativeCommonsImageSampler` to use:
 
@@ -442,7 +442,7 @@ Then change its sender expectation to:
 		}
 ```
 
-- [ ] **Step 2: Update the HTML CID placement subject**
+- [x] **Step 2: Update the HTML CID placement subject**
 
 In `internal/demo/fixtures_test.go`, change the subject checked in `TestCreativeCommonsSamplerIncludesHTMLCIDPlacement` to:
 
@@ -453,7 +453,7 @@ In `internal/demo/fixtures_test.go`, change the subject checked in `TestCreative
 		}
 ```
 
-- [ ] **Step 3: Update the backend image sampler subject**
+- [x] **Step 3: Update the backend image sampler subject**
 
 In `internal/backend/demo_behavior_test.go`, change the subject constant in `TestDemoBackendFetchesCreativeCommonsImageSampler` to:
 
@@ -461,7 +461,7 @@ In `internal/backend/demo_behavior_test.go`, change the subject constant in `Tes
 	const subject = "Step 4: View inline images in full screen"
 ```
 
-- [ ] **Step 4: Update MCP list and search expectations**
+- [x] **Step 4: Update MCP list and search expectations**
 
 In `internal/mcpserver/demo_mode_test.go`, change the recent-mail expectation in `TestDemoMCPServerListsAndReadsDemoEmails` to:
 
@@ -501,7 +501,7 @@ func TestDemoMCPSearchFindsCreativeCommonsImageSampler(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: Run updated demo tests**
+- [x] **Step 5: Run updated demo tests**
 
 Run:
 
@@ -511,7 +511,7 @@ go test ./internal/demo ./internal/backend ./internal/mcpserver -run 'Demo|Mailb
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the test expectation updates**
+- [x] **Step 6: Commit the test expectation updates**
 
 Run:
 
@@ -525,7 +525,7 @@ git commit -m "test: align demo expectations with onboarding mailbox"
 **Files:**
 - Modify: `TUI_TESTPLAN.md`
 
-- [ ] **Step 1: Replace TC-46 steps and expectations**
+- [x] **Step 1: Replace TC-46 steps and expectations**
 
 Replace the TC-46 block in `TUI_TESTPLAN.md` with:
 
@@ -552,7 +552,7 @@ Replace the TC-46 block in `TUI_TESTPLAN.md` with:
 - Contacts are populated from demo data and their recent emails open inline.
 ```
 
-- [ ] **Step 2: Run a docs diff check**
+- [x] **Step 2: Run a docs diff check**
 
 Run:
 
@@ -562,7 +562,7 @@ git diff -- TUI_TESTPLAN.md
 
 Expected: the diff only changes TC-46.
 
-- [ ] **Step 3: Commit the manual test plan update**
+- [x] **Step 3: Commit the manual test plan update**
 
 Run:
 
@@ -576,7 +576,7 @@ git commit -m "docs: update demo onboarding TUI test plan"
 **Files:**
 - Create: `reports/TEST_REPORT_2026-05-07_demo-onboarding-emails.md`
 
-- [ ] **Step 1: Run focused Go verification**
+- [x] **Step 1: Run focused Go verification**
 
 Run:
 
@@ -586,7 +586,7 @@ go test ./internal/demo ./internal/backend ./internal/mcpserver -count=1
 
 Expected: PASS.
 
-- [ ] **Step 2: Run all Go tests**
+- [x] **Step 2: Run all Go tests**
 
 Run:
 
@@ -596,7 +596,7 @@ go test ./...
 
 Expected: PASS.
 
-- [ ] **Step 3: Build the TUI binary**
+- [x] **Step 3: Build the TUI binary**
 
 Run:
 
@@ -606,7 +606,7 @@ go build -o /tmp/herald-demo-onboarding .
 
 Expected: command exits 0 and writes `/tmp/herald-demo-onboarding`.
 
-- [ ] **Step 4: Verify the wide demo Timeline in tmux**
+- [x] **Step 4: Verify the wide demo Timeline in tmux**
 
 Run:
 
@@ -620,7 +620,7 @@ tmux kill-session -t herald-demo-onboarding-220
 
 Expected: `/tmp/herald-demo-onboarding-220.txt` shows Step 1 through Step 8 near the top of Timeline, with Herald senders and no panic.
 
-- [ ] **Step 5: Verify the standard demo Timeline in tmux**
+- [x] **Step 5: Verify the standard demo Timeline in tmux**
 
 Run:
 
@@ -634,7 +634,7 @@ tmux kill-session -t herald-demo-onboarding-80
 
 Expected: `/tmp/herald-demo-onboarding-80.txt` shows the onboarding sequence without horizontal overflow or broken chrome.
 
-- [ ] **Step 6: Verify the minimum-size guard**
+- [x] **Step 6: Verify the minimum-size guard**
 
 Run:
 
@@ -648,7 +648,7 @@ tmux kill-session -t herald-demo-onboarding-50
 
 Expected: `/tmp/herald-demo-onboarding-50.txt` shows the standard minimum-size guard or compact recovery behavior, with no clipped onboarding UI.
 
-- [ ] **Step 7: Write the verification report**
+- [x] **Step 7: Write the verification report**
 
 Create `reports/TEST_REPORT_2026-05-07_demo-onboarding-emails.md` with this content:
 
@@ -684,7 +684,7 @@ Create `reports/TEST_REPORT_2026-05-07_demo-onboarding-emails.md` with this cont
 - Supporting fixture coverage remains present for attachments, inline images, cleanup, AI, semantic search, contacts, and MCP.
 ```
 
-- [ ] **Step 8: Confirm the local verification report exists**
+- [x] **Step 8: Confirm the local verification report exists**
 
 Run:
 
@@ -699,7 +699,7 @@ Expected: command exits 0. Do not commit this file because `reports/` is intenti
 **Files:**
 - Review: all files changed by Tasks 1 through 5
 
-- [ ] **Step 1: Check final status**
+- [x] **Step 1: Check final status**
 
 Run:
 
@@ -709,7 +709,7 @@ git status --short
 
 Expected: only pre-existing unrelated local changes remain, or a clean tree if the implementer started from a clean worktree.
 
-- [ ] **Step 2: Review the final diff**
+- [x] **Step 2: Review the final diff**
 
 Run:
 
@@ -720,7 +720,7 @@ git diff HEAD~4..HEAD -- internal/demo/fixtures.go internal/demo/fixtures_test.g
 
 Expected: the diff adds onboarding fixtures, updates demo expectations, and updates TC-46. It does not alter normal IMAP behavior, SMTP behavior, or TUI key routing.
 
-- [ ] **Step 3: Confirm the design requirements are covered**
+- [x] **Step 3: Confirm the design requirements are covered**
 
 Check the implementation against `docs/superpowers/specs/2026-05-07-demo-onboarding-emails-design.md`:
 

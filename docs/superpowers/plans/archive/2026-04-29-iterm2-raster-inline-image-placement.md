@@ -37,7 +37,7 @@
 - Read: `reports/ttyd-image-harness/index.html`
 - Artifact: `reports/iterm2-raster-inline-image-placement_2026-04-29/`
 
-- [ ] **Step 1: Create an isolated implementation worktree**
+- [x] **Step 1: Create an isolated implementation worktree**
 
 Run:
 
@@ -49,7 +49,7 @@ cd .worktrees/20260429-iterm2-raster-inline-image-placement
 
 Expected: new worktree on branch `codex/iterm2-raster-inline-image-placement-20260429`.
 
-- [ ] **Step 2: Create the evidence directory**
+- [x] **Step 2: Create the evidence directory**
 
 Run:
 
@@ -59,7 +59,7 @@ mkdir -p reports/iterm2-raster-inline-image-placement_2026-04-29
 
 Expected: the directory exists and is gitignored by `reports/`.
 
-- [ ] **Step 3: Build the red repro binary**
+- [x] **Step 3: Build the red repro binary**
 
 Run:
 
@@ -69,7 +69,7 @@ go build -o /tmp/herald-iterm-red ./main.go
 
 Expected: command exits 0.
 
-- [ ] **Step 4: Capture tmux fallback baseline**
+- [x] **Step 4: Capture tmux fallback baseline**
 
 Run:
 
@@ -97,7 +97,7 @@ tmux capture-pane -t herald-iterm-red -p -e > reports/iterm2-raster-inline-image
 
 Expected: capture shows the Creative Commons sampler in full-screen mode with safe fallback links in tmux.
 
-- [ ] **Step 5: Capture custom ttyd+xterm image-addon red screenshot**
+- [x] **Step 5: Capture custom ttyd+xterm image-addon red screenshot**
 
 Run this in one terminal:
 
@@ -146,7 +146,7 @@ NODE
 
 Expected: `browser_red_iterm2_raster.png` shows the current broken raster placement: the full-screen header/body context is missing or displaced by image output.
 
-- [ ] **Step 6: Stop red repro processes**
+- [x] **Step 6: Stop red repro processes**
 
 Run:
 
@@ -163,7 +163,7 @@ Expected: no `ttyd` or tmux repro session remains.
 - Modify: `internal/app/preview_image_renderer_test.go`
 - Test: `internal/app/preview_image_renderer_test.go`
 
-- [ ] **Step 1: Add tests for iTerm2 safe landscape sizing and terminal row consumption**
+- [x] **Step 1: Add tests for iTerm2 safe landscape sizing and terminal row consumption**
 
 Append this test block after `TestPreviewImageCellSizeBoundsLargeImages` in `internal/app/preview_image_renderer_test.go`:
 
@@ -206,7 +206,7 @@ func TestIterm2PreviewRendererMarksTerminalConsumedRows(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the focused red tests**
+- [x] **Step 2: Run the focused red tests**
 
 Run:
 
@@ -222,7 +222,7 @@ Expected: FAIL because `previewImageCellSizeForMode` and `TerminalConsumesRows` 
 - Modify: `internal/app/preview_image_renderer.go`
 - Test: `internal/app/preview_image_renderer_test.go`
 
-- [ ] **Step 1: Extend `previewImageRenderResult`**
+- [x] **Step 1: Extend `previewImageRenderResult`**
 
 In `internal/app/preview_image_renderer.go`, replace:
 
@@ -243,7 +243,7 @@ type previewImageRenderResult struct {
 }
 ```
 
-- [ ] **Step 2: Add mode-aware cell sizing helpers**
+- [x] **Step 2: Add mode-aware cell sizing helpers**
 
 In `internal/app/preview_image_renderer.go`, replace the body of `previewImageCellSize` and add the new helpers below it:
 
@@ -353,7 +353,7 @@ func previewIterm2ImageCellSize(img models.InlineImage, innerW, availableRows in
 }
 ```
 
-- [ ] **Step 3: Add integer helpers**
+- [x] **Step 3: Add integer helpers**
 
 Add these helpers below `minInt`:
 
@@ -373,7 +373,7 @@ func ceilDivInt(a, b int) int {
 }
 ```
 
-- [ ] **Step 4: Use mode-aware sizing and terminal-consumed rows**
+- [x] **Step 4: Use mode-aware sizing and terminal-consumed rows**
 
 In `renderPreviewImageBlock`, replace both raster sizing calls:
 
@@ -405,7 +405,7 @@ Leave the Kitty return as:
 return previewImageRenderResult{Content: strings.TrimRight(rendered, "\n"), Rows: size.Rows}
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run:
 
@@ -415,7 +415,7 @@ go test ./internal/app -run 'PreviewImageCellSize|Iterm2PreviewRendererMarks|Kit
 
 Expected: PASS for the new sizing/render-result tests and existing Kitty renderer tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -433,7 +433,7 @@ Expected: commit succeeds.
 - Modify: `internal/app/preview_viewport_test.go`
 - Test: `internal/app/preview_viewport_test.go`
 
-- [ ] **Step 1: Add a row flag test**
+- [x] **Step 1: Add a row flag test**
 
 Append this test to `internal/app/preview_viewport_test.go`:
 
@@ -485,7 +485,7 @@ func TestRenderPreviewDocumentViewportSkipsIterm2ConsumedPhysicalRows(t *testing
 }
 ```
 
-- [ ] **Step 2: Run the focused red viewport tests**
+- [x] **Step 2: Run the focused red viewport tests**
 
 Run:
 
@@ -495,7 +495,7 @@ go test ./internal/app -run 'PreviewRowsFromIterm2|SkipsIterm2Consumed' -count=1
 
 Expected: FAIL because `previewRenderedRow.TerminalConsumed` does not exist yet.
 
-- [ ] **Step 3: Add `TerminalConsumed` to preview rows**
+- [x] **Step 3: Add `TerminalConsumed` to preview rows**
 
 In `internal/app/preview_viewport.go`, replace:
 
@@ -514,7 +514,7 @@ type previewRenderedRow struct {
 }
 ```
 
-- [ ] **Step 4: Update image row materialization**
+- [x] **Step 4: Update image row materialization**
 
 Replace `previewRowsFromRenderedImage` in `internal/app/preview_viewport.go` with:
 
@@ -541,7 +541,7 @@ func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth 
 }
 ```
 
-- [ ] **Step 5: Update viewport rendering to skip consumed physical rows**
+- [x] **Step 5: Update viewport rendering to skip consumed physical rows**
 
 In `renderPreviewDocumentViewportWithVisual`, replace this loop body:
 
@@ -595,7 +595,7 @@ Then change it to:
 return previewViewportRender{Content: content, Rows: visibleRows}
 ```
 
-- [ ] **Step 6: Run viewport tests**
+- [x] **Step 6: Run viewport tests**
 
 Run:
 
@@ -605,7 +605,7 @@ go test ./internal/app -run 'PreviewRowsFrom|RenderPreviewDocumentViewport|Clamp
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
@@ -623,7 +623,7 @@ Expected: commit succeeds.
 - Modify: `internal/iterm2/render.go`
 - Test: `internal/iterm2/render_test.go`
 
-- [ ] **Step 1: Add OSC output tests**
+- [x] **Step 1: Add OSC output tests**
 
 Create `internal/iterm2/render_test.go`:
 
@@ -671,7 +671,7 @@ func TestRenderRequiresItermEnvironmentButRenderInlineDoesNot(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the iTerm2 tests**
+- [x] **Step 2: Run the iTerm2 tests**
 
 Run:
 
@@ -681,7 +681,7 @@ go test ./internal/iterm2 -count=1
 
 Expected: PASS. If this fails because current output differs, update `internal/iterm2/render.go` only to preserve explicit `inline`, `preserveAspectRatio`, `size`, `width`, and `height` arguments. Do not add undocumented cursor-control arguments.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run:
 
@@ -698,7 +698,7 @@ Expected: commit succeeds.
 - Modify: `internal/app/image_preview_test.go`
 - Test: `internal/app/image_preview_test.go`
 
-- [ ] **Step 1: Add a full-screen iTerm2 row-budget regression**
+- [x] **Step 1: Add a full-screen iTerm2 row-budget regression**
 
 Append this test after `TestTimelineFullScreen_ItermRendersBoundedInlineImage` in `internal/app/image_preview_test.go`:
 
@@ -734,7 +734,7 @@ func TestTimelineFullScreen_ItermDoesNotPrintDuplicateImagePadding(t *testing.T)
 }
 ```
 
-- [ ] **Step 2: Run the focused app regression**
+- [x] **Step 2: Run the focused app regression**
 
 Run:
 
@@ -744,7 +744,7 @@ go test ./internal/app -run 'TimelineFullScreen_Iterm|ItermDoesNotPrintDuplicate
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run:
 
@@ -760,7 +760,7 @@ Expected: commit succeeds.
 **Files:**
 - Artifact: `reports/iterm2-raster-inline-image-placement_2026-04-29/*.log`
 
-- [ ] **Step 1: Run focused image tests**
+- [x] **Step 1: Run focused image tests**
 
 Run:
 
@@ -772,7 +772,7 @@ go test ./internal/app ./internal/iterm2 ./internal/kittyimg \
 
 Expected: all listed packages pass.
 
-- [ ] **Step 2: Run broad tests**
+- [x] **Step 2: Run broad tests**
 
 Run:
 
@@ -782,7 +782,7 @@ go test ./... 2>&1 | tee reports/iterm2-raster-inline-image-placement_2026-04-29
 
 Expected: all packages pass.
 
-- [ ] **Step 3: Commit any missed test-only changes**
+- [x] **Step 3: Commit any missed test-only changes**
 
 Run:
 
@@ -807,7 +807,7 @@ Expected: either no commit is needed or the commit succeeds.
 - Artifact: `reports/iterm2-raster-inline-image-placement_2026-04-29/tmux_fixed_80x24.png`
 - Artifact: `reports/iterm2-raster-inline-image-placement_2026-04-29/tmux_fixed_50x15.png`
 
-- [ ] **Step 1: Build the fixed binary**
+- [x] **Step 1: Build the fixed binary**
 
 Run:
 
@@ -817,7 +817,7 @@ go build -o /tmp/herald-iterm-fixed ./main.go
 
 Expected: command exits 0.
 
-- [ ] **Step 2: Capture fixed custom ttyd+xterm raster screenshot**
+- [x] **Step 2: Capture fixed custom ttyd+xterm raster screenshot**
 
 Run in one terminal:
 
@@ -866,7 +866,7 @@ NODE
 
 Expected: screenshot shows real raster images, not `open image` links, with the full-screen header still visible and images near authored positions.
 
-- [ ] **Step 3: Capture tmux sizes**
+- [x] **Step 3: Capture tmux sizes**
 
 Run:
 
@@ -904,7 +904,7 @@ tmux capture-pane -t herald-iterm-fixed -p -e > reports/iterm2-raster-inline-ima
 
 Expected: `220x50` and `80x24` show readable full-screen content; `50x15` shows the minimum-size guard.
 
-- [ ] **Step 4: Stop visual verification processes**
+- [x] **Step 4: Stop visual verification processes**
 
 Run:
 
@@ -920,7 +920,7 @@ Expected: no verification tmux session or ttyd server remains.
 **Files:**
 - Create: `reports/TEST_REPORT_2026-04-29_iterm2-raster-inline-image-placement.md`
 
-- [ ] **Step 1: Write the final report**
+- [x] **Step 1: Write the final report**
 
 Create `reports/TEST_REPORT_2026-04-29_iterm2-raster-inline-image-placement.md` with this structure:
 
@@ -960,7 +960,7 @@ No open blocking findings if the browser fixed screenshot shows real raster imag
 iTerm2 remains less robust than Kitty/Ghostty. The accepted behavior is bounded, approximate raster placement rather than pixel-perfect HTML email rendering.
 ```
 
-- [ ] **Step 2: Check status and diff**
+- [x] **Step 2: Check status and diff**
 
 Run:
 
@@ -971,7 +971,7 @@ git diff --check
 
 Expected: no whitespace errors; only intended source/test changes are tracked. Report files under `reports/` remain untracked/ignored.
 
-- [ ] **Step 3: Final commit if needed**
+- [x] **Step 3: Final commit if needed**
 
 Run:
 
@@ -988,7 +988,7 @@ git commit -m "fix: stabilize iterm2 raster image placement"
 
 Expected: final code commit succeeds.
 
-- [ ] **Step 4: Handoff**
+- [x] **Step 4: Handoff**
 
 Final response must include:
 

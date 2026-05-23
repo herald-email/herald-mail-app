@@ -55,7 +55,7 @@
 - Create: `internal/app/preview_document.go`
 - Create: `internal/app/preview_document_test.go`
 
-- [ ] **Step 1: Write failing document builder tests**
+- [x] **Step 1: Write failing document builder tests**
 
 Add `internal/app/preview_document_test.go`:
 
@@ -185,7 +185,7 @@ func TestBuildPreviewDocument_HTMLPlacedImageIsNotRepeatedAsOrphan(t *testing.T)
 }
 ```
 
-- [ ] **Step 2: Run document builder tests and verify they fail**
+- [x] **Step 2: Run document builder tests and verify they fail**
 
 Run:
 
@@ -195,7 +195,7 @@ go test ./internal/app -run 'TestBuildPreviewDocument' -count=1
 
 Expected: FAIL with compile errors for `previewDocumentBlock`, `previewBlockText`, `previewBlockInlineImage`, and `buildPreviewDocument`.
 
-- [ ] **Step 3: Implement the document builder**
+- [x] **Step 3: Implement the document builder**
 
 Create `internal/app/preview_document.go`:
 
@@ -484,7 +484,7 @@ func orphanInlineImageBlocks(images []models.InlineImage, placed map[string]bool
 }
 ```
 
-- [ ] **Step 4: Run document builder tests and verify they pass**
+- [x] **Step 4: Run document builder tests and verify they pass**
 
 Run:
 
@@ -494,7 +494,7 @@ go test ./internal/app -run 'TestBuildPreviewDocument' -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit document builder**
+- [x] **Step 5: Commit document builder**
 
 Run:
 
@@ -514,7 +514,7 @@ Expected: commit succeeds.
 - Create: `internal/app/preview_image_renderer_test.go`
 - Modify: `internal/app/image_preview_render.go`
 
-- [ ] **Step 1: Write failing image renderer tests**
+- [x] **Step 1: Write failing image renderer tests**
 
 Add `internal/app/preview_image_renderer_test.go`:
 
@@ -629,7 +629,7 @@ func TestPreviewImageRendererFallbacks(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run image renderer tests and verify they fail**
+- [x] **Step 2: Run image renderer tests and verify they fail**
 
 Run:
 
@@ -639,7 +639,7 @@ go test ./internal/app -run 'TestDetectPreviewImageMode|TestPreviewImageCellSize
 
 Expected: FAIL with compile errors for `previewImageModeAuto`, `detectPreviewImageMode`, `previewImageCellSize`, `renderPreviewImageBlock`, and related types.
 
-- [ ] **Step 3: Implement image renderer mode, sizing, and row accounting**
+- [x] **Step 3: Implement image renderer mode, sizing, and row accounting**
 
 Create `internal/app/preview_image_renderer.go`:
 
@@ -824,7 +824,7 @@ func renderIterm2PreviewImages(images []models.InlineImage, descs map[string]str
 }
 ```
 
-- [ ] **Step 4: Run image renderer tests and existing image tests**
+- [x] **Step 4: Run image renderer tests and existing image tests**
 
 Run:
 
@@ -834,7 +834,7 @@ go test ./internal/app -run 'TestDetectPreviewImageMode|TestPreviewImageCellSize
 
 Expected: PASS after updating existing assertions for the new row accounting. `TestTimelineFullScreen_ItermRendersBoundedInlineImage` should verify bounded `width=` and `height=` values are present and `height` is no more than available rows, because the new sizing avoids upscaling small images. `TestItermPreviewImagesDoNotExceedAvailableRows` should expect two one-row images when two rows are available, because the separator newline moves to the next occupied row but does not consume a separate blank row.
 
-- [ ] **Step 5: Commit image renderer**
+- [x] **Step 5: Commit image renderer**
 
 Run:
 
@@ -853,7 +853,7 @@ Expected: commit succeeds.
 - Create: `internal/app/preview_viewport.go`
 - Create: `internal/app/preview_viewport_test.go`
 
-- [ ] **Step 1: Write failing viewport tests**
+- [x] **Step 1: Write failing viewport tests**
 
 Add `internal/app/preview_viewport_test.go`:
 
@@ -925,7 +925,7 @@ func TestClampPreviewScrollOffsetUsesDocumentRows(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run viewport tests and verify they fail**
+- [x] **Step 2: Run viewport tests and verify they fail**
 
 Run:
 
@@ -935,7 +935,7 @@ go test ./internal/app -run 'TestLayoutPreviewDocument|TestRenderPreviewDocument
 
 Expected: FAIL with compile errors for `layoutPreviewDocument`, `previewLayoutOptions`, `renderPreviewDocumentViewport`, and `clampPreviewScrollOffset`.
 
-- [ ] **Step 3: Implement layout and viewport rendering**
+- [x] **Step 3: Implement layout and viewport rendering**
 
 Create `internal/app/preview_viewport.go`:
 
@@ -1057,7 +1057,7 @@ func renderPreviewDocumentViewport(layout previewDocumentLayout, offset, visible
 }
 ```
 
-- [ ] **Step 4: Run viewport tests**
+- [x] **Step 4: Run viewport tests**
 
 Run:
 
@@ -1067,7 +1067,7 @@ go test ./internal/app -run 'TestLayoutPreviewDocument|TestRenderPreviewDocument
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit viewport layout**
+- [x] **Step 5: Commit viewport layout**
 
 Run:
 
@@ -1091,7 +1091,7 @@ Expected: commit succeeds.
 - Modify: `internal/app/image_preview_test.go`
 - Modify: `internal/app/layout_regression_test.go`
 
-- [ ] **Step 1: Write failing Timeline full-screen integration tests**
+- [x] **Step 1: Write failing Timeline full-screen integration tests**
 
 Append to `internal/app/image_preview_test.go`:
 
@@ -1149,7 +1149,7 @@ func TestTimelineFullScreen_DocumentRowsDriveScrollIndicator(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run Timeline integration tests and verify they fail**
+- [x] **Step 2: Run Timeline integration tests and verify they fail**
 
 Run:
 
@@ -1159,7 +1159,7 @@ go test ./internal/app -run 'TestTimelineFullScreen_RendersCIDImageInDocumentOrd
 
 Expected: first test FAILS because current full-screen renders all images before text. The row test FAILS if the old text-only scroll accounting still allows the full-screen render to exceed the terminal budget.
 
-- [ ] **Step 3: Add cache fields and clear helper**
+- [x] **Step 3: Add cache fields and clear helper**
 
 Modify `internal/app/layout.go`:
 
@@ -1206,7 +1206,7 @@ func (m *Model) clearCleanupPreviewDocumentCache() {
 }
 ```
 
-- [ ] **Step 4: Build Timeline full-screen document layout**
+- [x] **Step 4: Build Timeline full-screen document layout**
 
 Add to `internal/app/email_preview.go` near `renderFullScreenEmail`:
 
@@ -1239,7 +1239,7 @@ func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) preview
 }
 ```
 
-- [ ] **Step 5: Replace Timeline full-screen body rendering**
+- [x] **Step 5: Replace Timeline full-screen body rendering**
 
 In `renderFullScreenEmail`, replace the current image-block-plus-`bodyWrappedLines` section from `imageBlock, imageRows := ...` through the scroll indicator with this structure:
 
@@ -1264,7 +1264,7 @@ In `renderFullScreenEmail`, replace the current image-block-plus-`bodyWrappedLin
 
 Keep `Loading…`, quick reply picker reservation, header rendering, and bottom hint behavior intact.
 
-- [ ] **Step 6: Clear Timeline document cache at existing invalidation points**
+- [x] **Step 6: Clear Timeline document cache at existing invalidation points**
 
 At every site already setting `m.timeline.bodyWrappedLines = nil` because the body, width, message, visual content, or full-screen state changed, add:
 
@@ -1281,7 +1281,7 @@ Required sites from current code:
 - `internal/app/timeline.go` in `clearTimelineFullScreen`
 - `internal/app/mouse.go` if revoking image previews after mode changes affects full-screen rendered links
 
-- [ ] **Step 7: Run Timeline tests**
+- [x] **Step 7: Run Timeline tests**
 
 Run:
 
@@ -1291,7 +1291,7 @@ go test ./internal/app -run 'TestTimelineFullScreen_RendersCIDImageInDocumentOrd
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Timeline integration**
+- [x] **Step 8: Commit Timeline integration**
 
 Run:
 
@@ -1313,7 +1313,7 @@ Expected: commit succeeds.
 - Modify: `internal/app/image_preview_server.go`
 - Modify: `internal/app/image_preview_test.go`
 
-- [ ] **Step 1: Write failing local link viewport test**
+- [x] **Step 1: Write failing local link viewport test**
 
 Append to `internal/app/image_preview_test.go`:
 
@@ -1347,7 +1347,7 @@ func TestTimelineFullScreen_DocumentImageUsesLocalOpenLinkWhenNotIterm(t *testin
 }
 ```
 
-- [ ] **Step 2: Run local link test and verify it fails if links are not wired into document renderer**
+- [x] **Step 2: Run local link test and verify it fails if links are not wired into document renderer**
 
 Run:
 
@@ -1357,7 +1357,7 @@ go test ./internal/app -run 'TestTimelineFullScreen_DocumentImageUsesLocalOpenLi
 
 Expected: FAIL if Task 4 used placeholders for `previewImageModeLinks`.
 
-- [ ] **Step 3: Add model-aware local link rendering to document layout**
+- [x] **Step 3: Add model-aware local link rendering to document layout**
 
 Update `previewImageRenderRequest` in `internal/app/preview_image_renderer.go`:
 
@@ -1392,7 +1392,7 @@ Add the missing import:
 	"mail-processor/internal/render"
 ```
 
-- [ ] **Step 4: Pass registered links from `Model` into layout options**
+- [x] **Step 4: Pass registered links from `Model` into layout options**
 
 Update `imagePreviewLink` and `RegisterSet` in `internal/app/image_preview_server.go`:
 
@@ -1484,7 +1484,7 @@ Use it in `timelinePreviewDocumentLayout`:
 	})
 ```
 
-- [ ] **Step 5: Run local link and image tests**
+- [x] **Step 5: Run local link and image tests**
 
 Run:
 
@@ -1494,7 +1494,7 @@ go test ./internal/app -run 'TestTimelineFullScreen_DocumentImageUsesLocalOpenLi
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit local link integration**
+- [x] **Step 6: Commit local link integration**
 
 Run:
 
@@ -1515,7 +1515,7 @@ Expected: commit succeeds.
 - Modify: `internal/app/cleanup_preview_test.go`
 - Modify: `internal/app/image_preview_test.go`
 
-- [ ] **Step 1: Write failing Cleanup document-order test**
+- [x] **Step 1: Write failing Cleanup document-order test**
 
 Append to `internal/app/image_preview_test.go`:
 
@@ -1548,7 +1548,7 @@ func TestCleanupFullScreen_RendersCIDImageInDocumentOrder(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run Cleanup test and verify it fails**
+- [x] **Step 2: Run Cleanup test and verify it fails**
 
 Run:
 
@@ -1558,7 +1558,7 @@ go test ./internal/app -run 'TestCleanupFullScreen_RendersCIDImageInDocumentOrde
 
 Expected: FAIL because current Cleanup full-screen still renders image block before text.
 
-- [ ] **Step 3: Add Cleanup document layout helper**
+- [x] **Step 3: Add Cleanup document layout helper**
 
 Add to `internal/app/email_preview.go` near the Timeline helper:
 
@@ -1598,7 +1598,7 @@ func (m *Model) cleanupPreviewDocumentLayout(innerW, availableRows int) previewD
 }
 ```
 
-- [ ] **Step 4: Replace Cleanup full-screen body rendering**
+- [x] **Step 4: Replace Cleanup full-screen body rendering**
 
 In `renderCleanupPreview`, keep split preview behavior unchanged. Inside `if m.cleanupFullScreen { ... }`, stop calling `renderInlineImagesForPreview`; instead use:
 
@@ -1631,7 +1631,7 @@ In `renderCleanupPreview`, keep split preview behavior unchanged. Inside `if m.c
 
 Make the split-preview branch keep the existing `cleanupBodyWrappedLines` code.
 
-- [ ] **Step 5: Clear Cleanup document cache at invalidation points**
+- [x] **Step 5: Clear Cleanup document cache at invalidation points**
 
 Add `m.clearCleanupPreviewDocumentCache()` wherever Cleanup body state changes:
 - `CleanupEmailBodyMsg` handling in `internal/app/app.go`
@@ -1640,7 +1640,7 @@ Add `m.clearCleanupPreviewDocumentCache()` wherever Cleanup body state changes:
 - cleanup preview email changes
 - `SetLocalImageLinksEnabled(false)`
 
-- [ ] **Step 6: Run Cleanup tests**
+- [x] **Step 6: Run Cleanup tests**
 
 Run:
 
@@ -1650,7 +1650,7 @@ go test ./internal/app -run 'TestCleanupFullScreen_RendersCIDImageInDocumentOrde
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Cleanup integration**
+- [x] **Step 7: Commit Cleanup integration**
 
 Run:
 
@@ -1670,7 +1670,7 @@ Expected: commit succeeds.
 - Modify: `internal/demo/fixtures_test.go`
 - Modify: `internal/backend/demo_behavior_test.go`
 
-- [ ] **Step 1: Write failing demo fixture tests**
+- [x] **Step 1: Write failing demo fixture tests**
 
 Append to `internal/demo/fixtures_test.go`:
 
@@ -1706,7 +1706,7 @@ Add the same behavior assertion to `internal/backend/demo_behavior_test.go` in t
 	}
 ```
 
-- [ ] **Step 2: Run demo tests and verify they fail**
+- [x] **Step 2: Run demo tests and verify they fail**
 
 Run:
 
@@ -1716,7 +1716,7 @@ go test ./internal/demo ./internal/backend -run 'CreativeCommons|Sampler|Demo' -
 
 Expected: FAIL because sampler currently marks `IsFromHTML` but only has markdown/plain text and no `TextHTML`.
 
-- [ ] **Step 3: Update Creative Commons sampler fixture**
+- [x] **Step 3: Update Creative Commons sampler fixture**
 
 Modify the sampler `add(29, ...)` call in `internal/demo/fixtures.go`. Keep the existing plain text as the body argument. Add a new option helper near `withHTML`:
 
@@ -1754,7 +1754,7 @@ withHTMLBody(`<html><body>
 
 Remove the older `withHTML` option from this fixture if both are present.
 
-- [ ] **Step 4: Run demo tests**
+- [x] **Step 4: Run demo tests**
 
 Run:
 
@@ -1764,7 +1764,7 @@ go test ./internal/demo ./internal/backend -run 'CreativeCommons|Sampler|Demo' -
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit demo fixture**
+- [x] **Step 5: Commit demo fixture**
 
 Run:
 
@@ -1783,7 +1783,7 @@ Expected: commit succeeds.
 - Modify: `TUI_TESTPLAN.md`
 - Modify: `TUI_TESTING.md`
 
-- [ ] **Step 1: Update TC-23A in `TUI_TESTPLAN.md`**
+- [x] **Step 1: Update TC-23A in `TUI_TESTPLAN.md`**
 
 Replace the TC-23A steps and expectations with:
 
@@ -1810,7 +1810,7 @@ Replace the TC-23A steps and expectations with:
 - Test reports include terminal app/version, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 ```
 
-- [ ] **Step 2: Add raster caveat to `TUI_TESTING.md`**
+- [x] **Step 2: Add raster caveat to `TUI_TESTING.md`**
 
 Add this paragraph near the tmux capture guidance:
 
@@ -1818,7 +1818,7 @@ Add this paragraph near the tmux capture guidance:
 **Terminal raster image protocols.** tmux captures are still required for layout, key routing, fallback links, and escape-sequence checks, but tmux cannot prove actual raster placement for protocols such as iTerm2 OSC 1337, Kitty graphics, or Sixel. For changes that affect inline raster images, run the demo in a real compatible terminal as well, capture screenshots, record the terminal app/version and selected graphics mode, and verify native scrollback does not show images displacing pinned preview chrome.
 ```
 
-- [ ] **Step 3: Review documentation diff**
+- [x] **Step 3: Review documentation diff**
 
 Run:
 
@@ -1828,7 +1828,7 @@ git diff -- TUI_TESTPLAN.md TUI_TESTING.md
 
 Expected: diff contains only the TC-23A/testing-protocol changes above.
 
-- [ ] **Step 4: Commit test protocol docs**
+- [x] **Step 4: Commit test protocol docs**
 
 Run:
 
@@ -1846,7 +1846,7 @@ Expected: commit succeeds.
 **Files:**
 - Create: `reports/TEST_REPORT_2026-04-29_full-screen-inline-image-document-preview.md`
 
-- [ ] **Step 1: Run focused Go tests**
+- [x] **Step 1: Run focused Go tests**
 
 Run:
 
@@ -1856,7 +1856,7 @@ go test ./internal/app ./internal/demo ./internal/backend -run 'PreviewDocument|
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full Go test suite**
+- [x] **Step 2: Run full Go test suite**
 
 Run:
 
@@ -1866,7 +1866,7 @@ go test ./...
 
 Expected: PASS.
 
-- [ ] **Step 3: Build TUI and run tmux smoke checks**
+- [x] **Step 3: Build TUI and run tmux smoke checks**
 
 Run:
 
@@ -1900,7 +1900,7 @@ tmux kill-session -t herald-image-doc
 
 Expected: command sequence completes. The `50x15` capture shows the minimum-size guard. The `220x50` and `80x24` captures show clean full-screen preview text with either local `open image` links or placeholders depending on environment.
 
-- [ ] **Step 4: Run real-terminal raster check**
+- [x] **Step 4: Run real-terminal raster check**
 
 In iTerm2 or another supported raster terminal, run:
 
@@ -1924,7 +1924,7 @@ Expected:
 - Raster images appear near the HTML-authored positions.
 - Native scrollback does not show raster images pushing the title/header out of order.
 
-- [ ] **Step 5: Run SSH surface check**
+- [x] **Step 5: Run SSH surface check**
 
 Run server:
 
@@ -1941,7 +1941,7 @@ ssh -p 2222 localhost
 
 Expected: open the sampler in full-screen; SSH mode shows placeholders or remote links without misleading localhost image links.
 
-- [ ] **Step 6: Run MCP surface check**
+- [x] **Step 6: Run MCP surface check**
 
 Run:
 
@@ -1952,7 +1952,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/herald-mcp-server 
 
 Expected: tools list succeeds. No preview renderer code is exercised by MCP, but the surface still builds after shared model/demo changes.
 
-- [ ] **Step 7: Save test report**
+- [x] **Step 7: Save test report**
 
 Create `reports/TEST_REPORT_2026-04-29_full-screen-inline-image-document-preview.md` with:
 
@@ -2005,7 +2005,7 @@ Date: 2026-04-29
 - Any deviations, limitations, or follow-up work:
 ```
 
-- [ ] **Step 8: Commit implementation report**
+- [x] **Step 8: Commit implementation report**
 
 Run:
 
@@ -2020,9 +2020,9 @@ Expected: commit succeeds.
 
 ## Final Verification Before Handoff
 
-- [ ] Run `git status --short` and confirm only intentional files are modified.
-- [ ] Run `go test ./...` and confirm PASS.
-- [ ] Confirm `reports/TEST_REPORT_2026-04-29_full-screen-inline-image-document-preview.md` exists and includes real-terminal raster evidence or clearly explains why the raster terminal was unavailable.
-- [ ] Confirm TC-23A in `TUI_TESTPLAN.md` mentions native scrollback and terminal app/version evidence.
-- [ ] Confirm full-screen Timeline and Cleanup previews still exit with `z` and `Esc`.
-- [ ] Confirm split preview still shows only the compact inline-image hint.
+- [x] Run `git status --short` and confirm only intentional files are modified.
+- [x] Run `go test ./...` and confirm PASS.
+- [x] Confirm `reports/TEST_REPORT_2026-04-29_full-screen-inline-image-document-preview.md` exists and includes real-terminal raster evidence or clearly explains why the raster terminal was unavailable.
+- [x] Confirm TC-23A in `TUI_TESTPLAN.md` mentions native scrollback and terminal app/version evidence.
+- [x] Confirm full-screen Timeline and Cleanup previews still exit with `z` and `Esc`.
+- [x] Confirm split preview still shows only the compact inline-image hint.

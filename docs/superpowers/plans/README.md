@@ -4,6 +4,8 @@ This directory contains implementation plans and execution checklists for past o
 
 Treat these files as historical planning artifacts, not as the source of truth for shipped product status. Checkbox state here may reflect task-tracking at the time a plan was written rather than the current behavior on `main`.
 
+Completed historical plans that have been reconciled against implementation evidence live in `archive/`. Keep active, unfinished plans at the top level so simple scans of this directory surface current work instead of stale execution checklists.
+
 For current product truth, use this order:
 
 1. `VISION.md`

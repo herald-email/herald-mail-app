@@ -28,7 +28,7 @@
 **Files:**
 - Create: `reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md`
 
-- [ ] **Step 1: Build Herald**
+- [x] **Step 1: Build Herald**
 
 Run:
 
@@ -38,7 +38,7 @@ make build
 
 Expected: command exits `0` and creates `bin/herald`.
 
-- [ ] **Step 2: Capture environment facts**
+- [x] **Step 2: Capture environment facts**
 
 Run:
 
@@ -63,7 +63,7 @@ Run:
 
 Expected: report file exists with non-empty environment values.
 
-- [ ] **Step 3: Commit checkpoint if plan-only changes are being preserved**
+- [x] **Step 3: Commit checkpoint if plan-only changes are being preserved**
 
 Run only if this plan file should be committed separately:
 
@@ -80,7 +80,7 @@ Expected: commit succeeds after repository hooks pass. If this is being treated 
 - Modify: `reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md`
 - Create: `reports/browser-image-rendering-repro-stock-ttyd.png`
 
-- [ ] **Step 1: Start stock ttyd**
+- [x] **Step 1: Start stock ttyd**
 
 Run:
 
@@ -90,7 +90,7 @@ ttyd -W -p 7681 -t rendererType=canvas -t disableLeaveAlert=true -t disableResiz
 
 Expected: ttyd logs a server URL such as `http://127.0.0.1:7681`.
 
-- [ ] **Step 2: Open the browser URL**
+- [x] **Step 2: Open the browser URL**
 
 Use the in-app browser or a normal browser to open:
 
@@ -100,7 +100,7 @@ http://127.0.0.1:7681
 
 Expected: Herald renders in demo mode with the Timeline tab visible.
 
-- [ ] **Step 3: Navigate to the sampler email**
+- [x] **Step 3: Navigate to the sampler email**
 
 Send keys:
 
@@ -118,7 +118,7 @@ Creative Commons image sampler for terminal previews
 
 Expected: split preview shows the sampler email and the image hint.
 
-- [ ] **Step 4: Enter full-screen preview**
+- [x] **Step 4: Enter full-screen preview**
 
 Send key:
 
@@ -128,7 +128,7 @@ z
 
 Expected: Herald enters full-screen preview mode, with status text similar to `z/esc: exit full-screen`.
 
-- [ ] **Step 5: Capture screenshot**
+- [x] **Step 5: Capture screenshot**
 
 Save the visible browser window as:
 
@@ -138,7 +138,7 @@ reports/browser-image-rendering-repro-stock-ttyd.png
 
 Expected: screenshot shows the post-`z` state. If stock ttyd does not render inline images, that is still useful baseline evidence; continue to Task 3.
 
-- [ ] **Step 6: Append stock ttyd notes**
+- [x] **Step 6: Append stock ttyd notes**
 
 Append:
 
@@ -169,7 +169,7 @@ Expected: report has a baseline browser attempt section.
 - Modify: `reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md`
 - Create: `reports/browser-image-rendering-repro-custom-xterm.png`
 
-- [ ] **Step 1: Create custom ttyd index**
+- [x] **Step 1: Create custom ttyd index**
 
 Create `reports/ttyd-image-harness/index.html` with a minimal xterm.js client. It must load xterm.js, fit support, and image addon support, then connect to ttyd's websocket endpoint.
 
@@ -267,7 +267,7 @@ Use this initial implementation:
 
 Expected: file exists and can be served by `ttyd -I`.
 
-- [ ] **Step 2: Start ttyd with the custom index and iTerm-compatible environment**
+- [x] **Step 2: Start ttyd with the custom index and iTerm-compatible environment**
 
 Run:
 
@@ -277,7 +277,7 @@ TERM_PROGRAM=iTerm.app ttyd -W -p 7682 -I reports/ttyd-image-harness/index.html 
 
 Expected: ttyd serves `http://127.0.0.1:7682` and the child Herald process sees `TERM_PROGRAM=iTerm.app`, so Herald may emit OSC 1337 inline image sequences.
 
-- [ ] **Step 3: Open custom browser terminal**
+- [x] **Step 3: Open custom browser terminal**
 
 Open:
 
@@ -287,7 +287,7 @@ http://127.0.0.1:7682
 
 Expected: Herald renders and browser console does not show module load errors for `@xterm/addon-image`.
 
-- [ ] **Step 4: Navigate and enter full-screen**
+- [x] **Step 4: Navigate and enter full-screen**
 
 Send keys:
 
@@ -300,7 +300,7 @@ z
 
 Expected: full-screen preview opens and the custom frontend either renders inline images or reveals the specific failure mode.
 
-- [ ] **Step 5: Capture custom frontend screenshot**
+- [x] **Step 5: Capture custom frontend screenshot**
 
 Save:
 
@@ -310,7 +310,7 @@ reports/browser-image-rendering-repro-custom-xterm.png
 
 Expected: screenshot shows the post-`z` browser terminal state with image rendering behavior visible.
 
-- [ ] **Step 6: Append custom frontend notes**
+- [x] **Step 6: Append custom frontend notes**
 
 Append:
 
@@ -341,7 +341,7 @@ Expected: report documents whether the browser-first image path succeeded.
 - Modify: `reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md`
 - Create: `reports/browser-image-rendering-repro-iterm-fallback.png`
 
-- [ ] **Step 1: Launch native fallback only if needed**
+- [x] **Step 1: Launch native fallback only if needed**
 
 Run only if Task 3 cannot render or capture the needed browser evidence:
 
@@ -352,7 +352,7 @@ TERM_PROGRAM=iTerm.app ./bin/herald --demo
 
 Expected: Herald runs in a native terminal that supports OSC 1337 inline images.
 
-- [ ] **Step 2: Navigate to the sampler and press `z`**
+- [x] **Step 2: Navigate to the sampler and press `z`**
 
 Use the same key path:
 
@@ -365,7 +365,7 @@ z
 
 Expected: full-screen preview opens and native inline image behavior is visible.
 
-- [ ] **Step 3: Capture fallback screenshot**
+- [x] **Step 3: Capture fallback screenshot**
 
 Save:
 
@@ -375,7 +375,7 @@ reports/browser-image-rendering-repro-iterm-fallback.png
 
 Expected: screenshot proves the post-`z` rendering state in native fallback.
 
-- [ ] **Step 4: Append fallback notes**
+- [x] **Step 4: Append fallback notes**
 
 Append:
 
@@ -399,7 +399,7 @@ Expected: fallback notes do not replace the browser notes; they explain why fall
 **Files:**
 - Modify: `reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md`
 
-- [ ] **Step 1: Add future-debugging instructions**
+- [x] **Step 1: Add future-debugging instructions**
 
 Append a concise section:
 
@@ -418,7 +418,7 @@ Append a concise section:
 
 Expected: report tells future Codex sessions how to repeat the investigation.
 
-- [ ] **Step 2: Verify artifacts exist**
+- [x] **Step 2: Verify artifacts exist**
 
 Run:
 
@@ -428,7 +428,7 @@ ls -lh reports/TEST_REPORT_2026-04-29_browser-image-rendering-repro.md reports/b
 
 Expected: report exists and at least one screenshot exists.
 
-- [ ] **Step 3: Sanity-check report**
+- [x] **Step 3: Sanity-check report**
 
 Run:
 

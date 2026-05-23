@@ -70,8 +70,8 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 - [x] Initial bootstrap indicates the repo already supports the required storage layout because `.worktrees/`, `.superpowers/`, and `reports/` are available and ignored.
 - [x] The repo has strong surface-specific verification docs already, especially for TUI, SSH, and MCP checks.
 - [x] Validation history now includes one successful code-oriented run, one failed TUI-path reflection run, and one workflow-tuning ledger run.
-- [x] The first phase-impact report shows lower retries, skipped gates, and clarification touches in the post-Phase 1 cohort, but every post-Phase 1 run so far is still a workflow-improvement validation run.
-- [ ] We still do not have post-Phase 1 bug or feature runs, so the current measurement pass is directional rather than strong real-task evidence.
+- [x] The first phase-impact report showed lower retries, skipped gates, and clarification touches in the post-Phase 1 cohort when the sample was still workflow-validation-heavy.
+- [x] Later phase-impact measurement includes post-Phase 1 bug and feature runs, so the original sample-starved warning has been resolved for the current evidence pass.
 
 ## Auto Snapshot
 
@@ -84,7 +84,7 @@ This section is generated from the optimizer state under `.superpowers/autopilot
 - [x] Most repeated failing evidence: `app-package-tests` (2 occurrences).
 - [x] Current top recommended experiment: `template-user-review-followup-settings-hints-feedback` (medium value, low risk).
 - [x] Degradation-review gate: 20/20 required run(s) ready (100%).
-- [x] Pending-approval queue: 0 pending, 0 approved, 7 implemented.
+- [x] Pending-approval queue: 1 pending, 0 approved, 7 implemented.
 - [x] Phase-impact report: 15 post-Phase 1 real bug/feature run(s) measured so far.
 <!-- AUTOGEN:END -->
 
@@ -92,7 +92,7 @@ This section is generated from the optimizer state under `.superpowers/autopilot
 
 This section should stay honest about what still hurts. Items remain unchecked until the weakness is materially addressed and validated in later runs.
 
-- [ ] v1 only supports reflective single-run optimization; it does not explore challenger worktrees or a Pareto frontier yet.
+- [ ] v1 still does not explore challenger worktrees; lightweight Pareto frontier data exists, but candidate worktree comparison is not implemented yet.
 - [ ] The workflow does not self-edit its own prompts or policies based on accumulated traces.
 - [ ] Cross-run learning is still mediated by this ledger and human judgment rather than automated frontier selection.
 - [ ] Verification routing is documented, but its real cost and false-positive rate are not yet measured across multiple tasks.
@@ -101,17 +101,17 @@ This section should stay honest about what still hurts. Items remain unchecked u
 - [ ] The workflow still needs empirical proof that grounding on product docs reduces feature drift on real tasks.
 - [ ] The workflow does not yet enforce issue-reference notation mechanically; future helpers could validate commit messages, PR bodies, and reports against the intake issue.
 - [x] The first approved queue batch has now been turned into tracked workflow changes instead of remaining as unincorporated approvals.
-- [ ] The current phase-impact report is honest but sample-starved: it has no post-Phase 1 bug or feature runs yet, so it cannot prove real-task gains from the recent workflow changes.
+- [x] The phase-impact report now includes post-Phase 1 bug and feature runs, so the original no-real-task-sample warning has been resolved.
 - [ ] Non-autopilot implementation requests can still bypass this repo-local skill unless future sessions load the worktree policy before editing; a lightweight repo-level reminder may be needed outside GEPA.
-- [ ] The degradation-review gate is new, so we still need real bug and feature runs to measure whether it catches release-drift risks before handoff.
+- [ ] Degradation-review now has real bug and feature run coverage, but still needs outcome measurement showing whether it catches release-drift risks before handoff.
 
 ## Candidate Next Experiments
 
 This section ranks the most valuable next improvements so a future session can start from a crisp backlog. Keep the list short and ordered by likely payoff, not by novelty.
 
 - [ ] Add challenger worktrees for the highest-risk tasks and compare candidates on verification completeness, retry count, and handoff readiness.
-- [ ] Derive a lightweight Pareto frontier from recent runs so later candidate selection is grounded in actual repo experience.
-- [ ] Auto-summarize recent run folders into this ledger after each meaningful task to reduce manual curation.
+- [x] Derived a lightweight Pareto frontier from recent runs so later candidate selection is grounded in actual repo experience.
+- [ ] Auto-summarize recent run folders into this ledger after each meaningful task; helper summaries exist, but ledger updates are not automatic after every task.
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
 - [x] Learn common failure-mode prompts from repeated reflections and use them as reusable feedback templates.
 - [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
@@ -123,7 +123,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [ ] Measure whether updating product-definition docs first reduces rework on feature implementation runs.
 - [ ] Add a scored issue-linking gate that checks `Refs #N` for branch handoff and `Closes #N` / `Fixes #N` for PR or default-branch completion.
 - [ ] Measure whether the visual and input-routing gates reduce TUI retry count and post-handoff clarification load enough to justify stricter automatic enforcement.
-- [ ] Collect and measure the next 3 to 5 real bug or feature autopilot runs so the phase-impact report stops relying on workflow-validation-only evidence.
+- [x] Collected and measured more than the next 3 to 5 real bug or feature autopilot runs; the phase-impact report now records post-Phase 1 real-task evidence.
 - [ ] Add a pre-edit worktree gate that checks `pwd` and `git worktree list` before tracked-file edits, and records an explicit opt-out when working in the main checkout.
 - [ ] Measure whether the degradation-review gate reduces later reports of removed affordances, broken previews, or accidental compatibility loss.
 
@@ -138,5 +138,5 @@ This section is the handoff bridge for future sessions. Each prompt should be ph
 - [ ] "Improve GEPA by adding an issue-reference validator before commit, PR, or merge handoff."
 - [x] "Improve GEPA by reviewing the pending-approval queue and turning the approved items into tracked workflow changes."
 - [ ] "Improve GEPA by measuring whether the pending-approval queue reduced follow-up questions and hidden process drift."
-- [ ] "Improve GEPA by collecting enough real bug and feature runs to turn the current phase-impact report into stronger evidence."
+- [x] "Improve GEPA by collecting enough real bug and feature runs to turn the current phase-impact report into stronger evidence."
 - [ ] "Improve GEPA by measuring whether degradation-review evidence catches accidental release drift before handoff."
