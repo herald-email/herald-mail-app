@@ -225,6 +225,10 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 5C: Add account-aware Compose `From` selection and route sends/drafts through the selected mail source.
 - [x] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
+  - [x] Phase 7A: Add an optional read-only Calendar Agenda and Event Detail TUI foundation backed by demo/cache rows.
+  - [ ] Add calendar search and cross-source search over mail plus events.
+  - [ ] Add source-aware automation lanes for mail and calendar events.
+  - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 
 ## Acceptance Criteria
 

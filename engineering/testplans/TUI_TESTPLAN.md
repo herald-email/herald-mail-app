@@ -70,9 +70,10 @@ sleep 0.3
 Use `--demo` for repeatable layout, chrome, focus, and navigation checks.
 Demo mode must not require IMAP credentials, SMTP credentials, Ollama, or a
 private cache database. Its synthetic mailbox and AI responses should be stable
-enough that demo tapes can double as lightweight smoke tests. Top-level
-navigation should show Timeline and Contacts only; Timeline grouping covers the
-former cleanup browse workflow.
+enough that demo tapes can double as lightweight smoke tests. Mail-only
+navigation should show Timeline and Contacts; calendar-enabled demo sessions add
+a Calendar destination without replacing the existing mail keys. Timeline
+grouping covers the former cleanup browse workflow.
 
 Use `--demo --demo-keys` only for media captures that need a visible keypress
 overlay. Normal demo sessions must keep the overlay hidden and must preserve
@@ -261,16 +262,17 @@ Check these states during every applicable lane:
 **Sizes:** all except `50x15`
 
 **Steps:**
-1. Press `F1`, `F2`, `F3`.
+1. Press `F1`, `F2`, `F3`, and `F4` in a calendar-enabled demo session.
 2. Capture after each switch.
 3. In a non-text browse context, press `1`, `2`, and then `3`.
+4. Repeat in a mail-only session with no calendar agenda backend.
 
 **Expect:**
-- `F1`/`1` open Timeline, `F2`/`2` open Contacts, and `F3` remains a legacy Contacts alias.
-- Plain `3` is not a top-level tab switcher outside quick-reply selection.
+- `F1`/`1` open Timeline, `F2`/`2` open Contacts, `F3` remains a legacy Contacts alias, and `F4` opens Calendar only when Calendar is advertised.
+- Plain `3` opens Calendar only when the title row advertises Calendar; otherwise it is not a top-level tab switcher outside quick-reply selection.
 - `Herald` and tabs remain on one title row; no separate tab-bar row appears.
 - Tab-specific layout appears.
-- Key hints change with the tab and consistently advertise `1-2: tabs`.
+- Key hints change with the tab and advertise `1-2: tabs` for mail-only sessions or `1-3: tabs` for calendar-enabled sessions.
 - Key hints consistently include `?: help` when there is room or wrapped hint space.
 - Browse-number aliases keep working but are not the primary tab hint.
 - Compose is not shown as a top-level tab.
@@ -650,8 +652,8 @@ Check these states during every applicable lane:
 1. Open Timeline and press `c` to open Compose.
 2. Type `q123?/` into the focused address field, then tab to the body and type `q123?/` again.
 3. Type at least one macOS Option-generated character such as `™` or `¬` where available.
-4. Press `Esc`, confirm Timeline returns, then verify `1`, `2`, and `3` switch Timeline/Cleanup/Contacts in browse contexts.
-5. Return to Timeline and confirm `F1`, `F2`, and `F3` remain legacy tab aliases.
+4. Press `Esc`, confirm Timeline returns, then verify `1` and `2` switch Timeline/Contacts in browse contexts, while `3` switches Calendar only when Calendar is advertised.
+5. Return to Timeline and confirm `F1`, `F2`, and `F3` remain legacy mail tab aliases; `F4` opens Calendar only when Calendar is advertised.
 6. Open Timeline search with `/`, type `q?/` into the query, and press `Ctrl+C` only after confirming the query text is editable.
 7. Open Settings with `S`, choose each keyboard profile (Default, Vim, Emacs, Custom), verify the Custom Keymap path field appears only when Custom YAML is selected, and verify invalid custom keymap paths or unknown command IDs are reported without replacing the active working map.
 8. Use a Custom keymap that extends Default with no `fields.compose.default_mode`, then another that sets `fields.compose.default_mode: normal`.
@@ -659,7 +661,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Plain `q`, digits, `?`, `/`, and Option-generated text remain in Compose text fields and do not quit, search, or switch tabs.
 - `Esc` from Compose returns to the Timeline state that opened it after local Compose transient state is dismissed.
-- `1/2/3` are the advertised tab keys in browse contexts; `F1/F2/F3` remain supported as legacy aliases.
+- `1/2` are the advertised mail tab keys in browse contexts; `3` joins the advertised tab keys only when Calendar is available, and `F1/F2/F3` remain supported as legacy mail aliases.
 - Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings.
 - A Custom keymap that remaps tab switching, Compose, reply, forward, archive, delete, re-classify, sidebar, logs, or chat shows the remapped primary keys in the bottom hint bar, title-row tabs, and `?` shortcut help.
 - Timeline `c` opens blank Compose; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
@@ -1561,6 +1563,28 @@ Check these states during every applicable lane:
 - [x] Literal `A`/`a` typed in Compose text fields remains text and does not open account switching or change the sending account.
 - [x] Single-account Compose keeps the existing header layout and does not render account picker chrome.
 
+### TC-38D — Calendar agenda read-only foundation
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar.
+3. Capture the Agenda List with the selected event detail visible.
+4. Move through events with `j/k` or arrow keys.
+5. Press `Enter` to open the full Event Detail view, then `Esc` to return to the agenda without losing position.
+6. Switch back to Timeline and Contacts, then repeat in a mail-only session with no calendar agenda backend.
+
+**Expect:**
+- Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
+- The Agenda List is sorted by start time, shows each event's calendar/source label, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
+- `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
+- Calendar hints are read-only and do not advertise RSVP, edit, create, or provider mutation actions.
+- Timeline, Contacts, Compose, account switching, chat, settings, SSH, and MCP behavior remain unchanged.
+- At `50x15`, the minimum-size guard appears instead of clipped calendar chrome, and resizing larger restores the agenda or detail state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F
@@ -1804,7 +1828,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode with mouse capture enabled.
 2. Click each top tab and confirm the active tab changes without typing into Compose fields.
-3. Confirm the top tab row contains Timeline and Contacts only.
+3. Confirm the top tab row contains Timeline and Contacts in mail-only sessions, and adds Calendar only in calendar-enabled sessions.
 3. In Timeline, click a visible single-message row to open preview, then wheel over the list and the preview.
 4. In Timeline, click a collapsed thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays collapsed. Click the same selected root again; confirm the thread expands.
 5. In Timeline, click an expanded thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays expanded. Click the same selected root again; confirm the thread folds.

@@ -176,6 +176,10 @@ func (m *Model) switchActiveAccount(sourceID models.SourceID) tea.Cmd {
 		return nil
 	}
 	m.syncAccountsFromBackend()
+	m.refreshCalendarAvailability()
+	if m.activeTab == tabCalendar && !m.calendarAvailable {
+		m.activeTab = tabTimeline
+	}
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	}

@@ -569,7 +569,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	globalEntries := []shortcutHelpEntry{
 		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpOpen, "open or close this shortcut help"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpSearch, "search this help overlay while it is open"),
-		{m.primaryTabHelpKey(), "switch tabs; F2 and F3 open Contacts"},
+		{m.primaryTabHelpKey(), m.primaryTabHelpDescription()},
 	}
 	if m.hasMultipleAccounts() {
 		globalEntries = append(globalEntries, shortcutHelpEntry{"A", "open account switcher"})

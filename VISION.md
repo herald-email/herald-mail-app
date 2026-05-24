@@ -634,7 +634,8 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] `CalendarSource` capability shared by Google Calendar and CalDAV providers
 - [x] Source-scoped calendar and event cache with provider freshness metadata such as ETag, revision, or sync token
 - [x] Read-only Google Calendar and CalDAV adapters list calendars/events and fetch event details against deterministic local provider harnesses before live-provider checks
-- [ ] Read-only agenda/search view before RSVP, edit, or create flows
+- [x] Read-only cache-backed agenda and event detail view before RSVP, edit, or create flows
+- [ ] Calendar search view before RSVP, edit, or create flows
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
 

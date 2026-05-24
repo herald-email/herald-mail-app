@@ -6,8 +6,8 @@ This spec captures the exploratory direction for a Herald calendar surface. It k
 
 Calendar should become a first-class Herald workspace for understanding the day, navigating commitments, and acting on events with the same keyboard-first density as the mail timeline. The direction is not to clone a web calendar, but to translate the useful parts of Apple Calendar and Google Calendar into terminal-native views.
 
-- [ ] Users can switch between calendar views with the same confidence they switch between Herald tabs today.
-- [ ] Users can inspect an event without losing context, using a side drawer when the surrounding schedule still matters.
+- [x] Users can switch into the read-only Calendar Agenda destination with the same confidence they switch between Herald mail tabs today.
+- [x] Users can inspect an event without losing context, using a side detail panel when the surrounding schedule still matters.
 - [ ] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
 - [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
 - [ ] Users can reason about cross-timezone meetings before saving changes.
@@ -35,12 +35,12 @@ These images are reference material only. They sit next to this spec so future p
 
 The calendar surface should feel like a peer to Timeline, Compose, Cleanup, and Contacts rather than a separate mini-app. It can start as a new top-level mode, then grow into a cross-source command center once the source identity and calendar provider foundation are ready.
 
-- [ ] Calendar appears as a durable navigation destination, not a transient overlay.
+- [x] Calendar appears as a durable navigation destination, not a transient overlay.
 - [ ] View switching is explicit and fast: Month, Week, Day, Agenda, and later 3-Day or Search.
 - [ ] The active view owns the center of the screen, while side panels provide context such as mini month, calendar filters, timezone preview, conflicts, and selected event details.
-- [ ] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
+- [x] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
 - [ ] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
-- [ ] The minimum useful calendar experience works in demo mode before any live provider is required.
+- [x] The minimum useful calendar experience works in demo mode before any live provider is required.
 
 ## Core Views
 
@@ -71,8 +71,8 @@ Timezone support should be visible, not hidden in a settings corner. Users sched
 The roadmap should evolve from useful read-only surfaces toward confident event mutation. Each stage should be independently valuable and should preserve Herald's existing mail behavior while calendar support matures.
 
 - [ ] Stage 0: Product alignment. Keep this spec, the mockups, and the existing source-platform architecture aligned before choosing a first work slice.
-- [ ] Stage 1: Demo-mode calendar shell. Add static/demo events and view-switching prototypes so layout, key hints, and navigation can be judged without provider auth.
-- [ ] Stage 2: Agenda-first read-only calendar. Ship a cache-backed Agenda List and Event Detail path because those map cleanly to Herald's existing timeline and reader patterns.
+- [x] Stage 1: Demo-mode calendar shell. Add static/demo events and view-switching prototypes so layout, key hints, and navigation can be judged without provider auth.
+- [x] Stage 2: Agenda-first read-only calendar. Ship a cache-backed Agenda List and Event Detail path because those map cleanly to Herald's existing timeline and reader patterns.
 - [ ] Stage 3: Spatial schedule views. Add Day Agenda + Drawer, then Week Time-Grid, after the event model and render constraints are proven by the list view.
 - [ ] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
 - [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
@@ -83,7 +83,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 
 These gates define what must be true before moving from one evolutionary stage to the next. They are intentionally high-level acceptance signals, not test cases or task steps.
 
-- [ ] A read-only stage is acceptable only when users can navigate events, open detail, return without losing position, and understand which calendar each event belongs to.
+- [x] A read-only stage is acceptable only when users can navigate events, open detail, return without losing position, and understand which calendar each event belongs to.
 - [ ] A spatial-view stage is acceptable only when terminal resize behavior remains understandable at wide, standard, and narrow sizes.
 - [ ] A timezone stage is acceptable only when event detail and edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
@@ -98,7 +98,7 @@ Calendar will be easier and safer if it builds on the source identity and cache-
 - [ ] Treat `EventRef` as the calendar equivalent of a scoped message reference before live provider reads become user-visible.
 - [ ] Keep provider details such as Google event IDs, CalDAV URLs, ETags, sync tokens, recurrence IDs, and revisions out of the TUI.
 - [ ] Let Herald own cache-first reads, in-flight coalescing, stale-result filtering, and visible-work priority.
-- [ ] Preserve demo mode as the design lab for calendar UI, just as it already supports mail screenshots and tapes.
+- [x] Preserve demo mode as the design lab for calendar UI, just as it already supports mail screenshots and tapes.
 - [ ] Defer live event mutation until source identity, cache freshness, timezone rendering, and detail surfaces are all proven.
 
 ## Design Principles
@@ -127,9 +127,9 @@ This roadmap does not require every calendar idea to ship, and it does not defin
 
 These are the product choices to make before the next planning pass. They should be answered when the team picks a stage, not resolved by this exploratory roadmap.
 
-- [ ] Decide whether Calendar is a new top-level tab or part of a broader future Sources workspace.
-- [ ] Decide whether Agenda List or Day Agenda is the first user-facing slice.
-- [ ] Decide whether Google Calendar, CalDAV, or demo-only data should be the first provider-backed surface.
-- [ ] Decide how calendar keybindings coexist with Timeline, Compose, Cleanup, Contacts, chat, folders, and settings.
+- [x] Decide whether Calendar is a new top-level tab or part of a broader future Sources workspace.
+- [x] Decide whether Agenda List or Day Agenda is the first user-facing slice.
+- [x] Decide whether Google Calendar, CalDAV, or demo-only data should be the first provider-backed surface.
+- [x] Decide how calendar keybindings coexist with Timeline, Compose, Cleanup, Contacts, chat, folders, and settings.
 - [ ] Decide how much recurrence editing belongs in the first mutation stage.
 - [ ] Decide whether meeting-prep features should live in Calendar, AI Chat, or a later unified command view.

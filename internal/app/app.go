@@ -38,6 +38,7 @@ const (
 	tabTimeline = 0
 	tabCompose  = 1
 	tabContacts = 2
+	tabCalendar = 3
 )
 
 // LoadingMsg represents a loading state update
@@ -53,6 +54,19 @@ type FoldersLoadedMsg struct {
 // FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
 type FolderStatusMsg struct {
 	Status map[string]models.FolderStatus
+}
+
+// CalendarAgendaLoadedMsg carries cache-backed events for the Calendar tab.
+type CalendarAgendaLoadedMsg struct {
+	Events []models.CalendarEvent
+	Err    error
+}
+
+// CalendarEventDetailMsg carries a selected read-only event detail.
+type CalendarEventDetailMsg struct {
+	Ref   models.EventRef
+	Event *models.CalendarEvent
+	Err   error
 }
 
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
@@ -645,6 +659,17 @@ type Model struct {
 	// workflow so contact actions do not leak stale notices into other tabs.
 	contactStatusMessage string
 
+	// Calendar tab. Calendar is additive and appears only when the backend
+	// advertises a cache-backed read-only agenda surface.
+	calendarAvailable     bool
+	calendarLoading       bool
+	calendarEvents        []models.CalendarEvent
+	calendarCursor        int
+	calendarDetailOpen    bool
+	calendarDetailLoading bool
+	calendarDetail        *models.CalendarEvent
+	calendarStatus        string
+
 	// Styles
 	baseStyle          lipgloss.Style
 	headerStyle        lipgloss.Style
@@ -811,6 +836,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	}
 
 	m.syncAccountsFromBackend()
+	m.refreshCalendarAvailability()
 
 	// Detect demo mode via DemoBackendMarker interface
 	if marker, ok := b.(interface{ IsDemo() bool }); ok && marker.IsDemo() {
@@ -1778,6 +1804,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case CalendarAgendaLoadedMsg:
+		m.calendarLoading = false
+		if msg.Err != nil {
+			m.calendarEvents = nil
+			m.calendarDetail = nil
+			m.calendarStatus = "Calendar agenda failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.calendarEvents = msg.Events
+		if m.calendarCursor >= len(m.calendarEvents) {
+			m.calendarCursor = len(m.calendarEvents) - 1
+		}
+		if m.calendarCursor < 0 {
+			m.calendarCursor = 0
+		}
+		m.calendarDetail = m.selectedCalendarEvent()
+		m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+		return m, nil
+
+	case CalendarEventDetailMsg:
+		m.calendarDetailLoading = false
+		if msg.Err != nil {
+			m.calendarStatus = "Calendar detail failed: " + msg.Err.Error()
+			return m, nil
+		}
+		if msg.Event != nil {
+			m.calendarDetail = msg.Event
+		}
+		m.calendarDetailOpen = true
+		return m, nil
+
 	case ComposeStatusMsg:
 		m.composeStatus = msg.Message
 		if msg.Err == nil && msg.Message != "" {
@@ -2528,6 +2585,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
+	if m.activeTab == tabCalendar {
+		return m.handleCalendarKey(msg)
+	}
+
 	if model, cmd, handled := m.handleTimelineKey(msg); handled {
 		return model, cmd
 	}
@@ -2719,6 +2780,8 @@ func (m *Model) normalizeShortcutKeyForActiveScope(key string) string {
 		scope = "timeline"
 	case tabContacts:
 		scope = "contacts"
+	case tabCalendar:
+		scope = "calendar"
 	}
 	command, ok := m.keyboard.Resolve(scope, keyboardModeNormal, key)
 	if !ok {
@@ -2803,6 +2866,8 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderComposeView()
 	} else if m.activeTab == tabContacts {
 		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
+	} else if m.activeTab == tabCalendar {
+		mainContent = m.renderCalendarView()
 	} else {
 		mainContent = m.renderTimelineView()
 	}

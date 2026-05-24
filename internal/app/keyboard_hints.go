@@ -101,7 +101,8 @@ func (m *Model) timelineOpenPreviewHint() string {
 
 func (m *Model) primaryTabShortcutHint() string {
 	keys := m.primaryTabKeys(keyDisplayHint)
-	if len(keys) == len(topLevelTabNavigation) {
+	tabs := m.visibleTopLevelTabNavigation()
+	if len(keys) == len(tabs) {
 		if compressed, ok := compressSequentialDigitKeys(keys); ok {
 			return compressed + ": tabs"
 		}
@@ -114,7 +115,8 @@ func (m *Model) primaryTabShortcutHint() string {
 
 func (m *Model) primaryTabHelpKey() string {
 	keys := m.primaryTabKeys(keyDisplayHelp)
-	if len(keys) == len(topLevelTabNavigation) {
+	tabs := m.visibleTopLevelTabNavigation()
+	if len(keys) == len(tabs) {
 		if compressed, ok := compressSequentialDigitKeys(keys); ok {
 			return compressed
 		}
@@ -125,9 +127,17 @@ func (m *Model) primaryTabHelpKey() string {
 	return "1-2"
 }
 
+func (m *Model) primaryTabHelpDescription() string {
+	if m != nil && m.calendarAvailable {
+		return "switch tabs; F2/F3 open Contacts; F4 opens Calendar"
+	}
+	return "switch tabs; F2 and F3 open Contacts"
+}
+
 func (m *Model) primaryTabKeys(style keyDisplayStyle) []string {
-	keys := make([]string, 0, len(topLevelTabNavigation))
-	for _, item := range topLevelTabNavigation {
+	tabs := m.visibleTopLevelTabNavigation()
+	keys := make([]string, 0, len(tabs))
+	for _, item := range tabs {
 		key := item.key
 		if item.command != "" {
 			if resolved := m.commandKey(keyboardScopeGlobal, item.command); resolved != "" {

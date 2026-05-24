@@ -67,3 +67,17 @@ func (m *Model) switchToContacts() tea.Cmd {
 	cmds = append(cmds, m.loadContacts())
 	return tea.Batch(cmds...)
 }
+
+func (m *Model) switchToCalendar() tea.Cmd {
+	cmds := m.composeExitCmds()
+	m.clearContactsStatus()
+	m.finishTimelineRangeSelection()
+	m.activeTab = tabCalendar
+	m.clearComposeReturn()
+	m.setFocusedPanel(panelTimeline)
+	m.calendarDetailOpen = false
+	m.calendarLoading = true
+	m.calendarStatus = "Loading calendar agenda..."
+	cmds = append(cmds, m.loadCalendarAgenda())
+	return tea.Batch(cmds...)
+}

@@ -134,6 +134,40 @@ func (c *Cache) ListCalendarEvents(ref models.CollectionRef, start, end time.Tim
 	return events, rows.Err()
 }
 
+func (c *Cache) ListCalendarAgendaEvents(sourceID models.SourceID, accountID models.AccountID, start, end time.Time) ([]models.CalendarEvent, error) {
+	sourceID = models.NormalizeSourceID(sourceID, models.DefaultCalendarSourceID)
+	accountID = models.NormalizeAccountID(accountID)
+	if start.IsZero() {
+		start = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+	if end.IsZero() {
+		end = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	}
+	rows, err := c.db.Query(`
+		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
+		       title, description, location, starts_at, ends_at, all_day, status, updated_at, raw, local_id
+		FROM calendar_events
+		WHERE source_id = ? AND account_id = ? AND invalidated_at IS NULL
+		  AND (starts_at IS NULL OR starts_at < ?)
+		  AND (ends_at IS NULL OR ends_at > ?)
+		ORDER BY starts_at ASC, title ASC
+	`, string(sourceID), string(accountID), end, start)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.CalendarEvent
+	for rows.Next() {
+		event, err := scanCalendarEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, *event)
+	}
+	return events, rows.Err()
+}
+
 type calendarEventScanner interface {
 	Scan(dest ...any) error
 }

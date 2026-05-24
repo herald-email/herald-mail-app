@@ -172,8 +172,9 @@ func (m *Model) renderTabBar() string {
 		}
 		return inactive.Render(label)
 	}
-	rendered := make([]string, 0, len(topLevelTabNavigation))
-	for _, item := range topLevelTabNavigation {
+	tabs := m.visibleTopLevelTabNavigation()
+	rendered := make([]string, 0, len(tabs))
+	for _, item := range tabs {
 		rendered = append(rendered, tab(item))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
@@ -526,6 +527,12 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		} else {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: detail panel", m.movementHint("contacts", "nav"), "enter: detail", m.commandHint("contacts", CommandHelpSearch, "search"), "?: semantic", "e: enrich", "esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		}
+	} else if m.activeTab == tabCalendar {
+		if m.calendarDetailOpen {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "esc: agenda", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+		} else {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		}
 	} else {
 		switch chrome.FocusedPanel {

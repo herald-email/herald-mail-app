@@ -12,6 +12,20 @@ type tabNavigationItem struct {
 var topLevelTabNavigation = []tabNavigationItem{
 	{tab: tabTimeline, key: "1", label: "Timeline", command: CommandTabTimeline},
 	{tab: tabContacts, key: "2", label: "Contacts", command: CommandTabContacts},
+	{tab: tabCalendar, key: "3", label: "Calendar", command: CommandTabCalendar},
+}
+
+func (m *Model) visibleTopLevelTabNavigation() []tabNavigationItem {
+	if m == nil || m.calendarAvailable {
+		return topLevelTabNavigation
+	}
+	items := make([]tabNavigationItem, 0, len(topLevelTabNavigation))
+	for _, item := range topLevelTabNavigation {
+		if item.tab != tabCalendar {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func tabBarLabel(item tabNavigationItem) string {

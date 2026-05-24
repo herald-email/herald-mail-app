@@ -191,6 +191,11 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 			return m, m.loadContacts(), true
 		}
 		return m, nil, true
+	case "f4":
+		if m.calendarAvailable && m.canInteractWithVisibleData() && m.activeTab != tabCalendar {
+			return m, m.switchToCalendar(), true
+		}
+		return m, nil, m.calendarAvailable
 	}
 	return m, nil, false
 }
@@ -274,6 +279,12 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
 			return model, cmd, true
+		}
+		if m.calendarAvailable && m.canInteractWithVisibleData() && m.activeTab != tabCalendar {
+			return m, m.switchToCalendar(), true
+		}
+		if m.calendarAvailable {
+			return m, m.loadCalendarAgenda(), true
 		}
 		return m, nil, false
 	case "4":

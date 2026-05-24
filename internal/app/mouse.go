@@ -66,7 +66,7 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 		return nil, true
 	}
 	x := m.titleTabStartX()
-	for _, item := range topLevelTabNavigation {
+	for _, item := range m.visibleTopLevelTabNavigation() {
 		w := m.tabMouseWidth(item)
 		if msg.X >= x && msg.X < x+w {
 			switch item.tab {
@@ -77,6 +77,10 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 			case tabContacts:
 				if m.activeTab != tabContacts {
 					return m.switchToContacts(), true
+				}
+			case tabCalendar:
+				if m.activeTab != tabCalendar {
+					return m.switchToCalendar(), true
 				}
 			}
 			return nil, true

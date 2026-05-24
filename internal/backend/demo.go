@@ -27,6 +27,8 @@ type DemoBackend struct {
 	prompts             []*models.CustomPrompt
 	classifications     map[string]string
 	savedSearches       []*models.SavedSearch
+	calendarCollections []models.CalendarCollection
+	calendarEvents      []models.CalendarEvent
 	deletedIDs          map[string]bool
 	progressCh          chan models.ProgressInfo
 	syncEventsCh        chan models.FolderSyncEvent
@@ -53,6 +55,8 @@ func NewDemoBackend() *DemoBackend {
 		rules:               seedDemoRules(),
 		cleanupRules:        seedDemoCleanupRules(),
 		classifications:     demo.Classifications(),
+		calendarCollections: demo.CalendarCollections(),
+		calendarEvents:      demo.CalendarEvents(),
 		deletedIDs:          make(map[string]bool),
 		bodyCache:           make(map[string]string),
 		unsubscribedSenders: make(map[string]bool),
@@ -79,7 +83,30 @@ func NewScopedDemoBackend(info AccountInfo) *DemoBackend {
 		ref := email.MessageRef()
 		email.LocalID = ref.LocalID
 	}
+	calendarSourceID := scopedDemoCalendarSourceID(info.SourceID)
+	for i := range d.calendarCollections {
+		d.calendarCollections[i].Ref.SourceID = calendarSourceID
+		d.calendarCollections[i].Ref.AccountID = info.AccountID
+		if info.DisplayName != "" {
+			d.calendarCollections[i].Ref.DisplayName = info.DisplayName + " Calendar"
+		}
+	}
+	for i := range d.calendarEvents {
+		d.calendarEvents[i].Ref.SourceID = calendarSourceID
+		d.calendarEvents[i].Ref.AccountID = info.AccountID
+		d.calendarEvents[i].Ref.LocalID = ""
+		d.calendarEvents[i].Ref = d.calendarEvents[i].Ref.WithDefaults()
+	}
 	return d
+}
+
+func scopedDemoCalendarSourceID(mailSourceID models.SourceID) models.SourceID {
+	value := strings.TrimSpace(string(mailSourceID))
+	value = strings.TrimSuffix(value, "-mail")
+	if value == "" || value == string(models.DefaultMailSourceID) {
+		return demo.CalendarSourceID
+	}
+	return models.SourceID(value + "-calendar")
 }
 
 func NewMultiDemoBackend() *MultiBackend {
