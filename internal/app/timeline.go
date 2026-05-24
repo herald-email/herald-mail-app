@@ -2029,6 +2029,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
+	if m.hasMultipleAccounts() {
+		segments = append(segments, "A: accounts")
+	}
 	if m.currentTimelineRowEmail() != nil {
 		if m.currentTimelineDraftEmail() != nil {
 			segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
@@ -2655,7 +2658,10 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				return model, cmd, true
 			}
 			if m.focusedPanel == panelSidebar {
-				m.selectSidebarFolder()
+				if cmd, handledAccount := m.selectSidebarFolder(); handledAccount {
+					m.clearTimelineChatFilter()
+					return m, cmd, true
+				}
 				m.clearTimelineChatFilter()
 				return m, m.activateCurrentFolder(), true
 			}
@@ -2921,7 +2927,7 @@ func (m *Model) timelineHalfPageScroll(down bool) tea.Cmd {
 	}
 	if m.focusedPanel == panelSidebar {
 		if step > 0 {
-			max := len(flattenTree(m.folderTree)) - 1
+			max := len(m.visibleSidebarItems()) - 1
 			if max < 0 {
 				max = 0
 			}
@@ -2974,7 +2980,7 @@ func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	if m.focusedPanel == panelSidebar {
-		max := len(flattenTree(m.folderTree)) - 1
+		max := len(m.visibleSidebarItems()) - 1
 		if max < 0 {
 			max = 0
 		}

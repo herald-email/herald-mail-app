@@ -641,14 +641,14 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 
 The app currently supports one IMAP account per config file. Multi-account support will allow managing several inboxes (e.g. personal + work) in a single session.
 
-- [ ] `accounts:` list in `~/.herald/conf.yaml` (current single-account format still works)
-- [ ] Per-account IMAP connection, cache file, and folder tree
+- [x] `sources:` list in `~/.herald/conf.yaml` supports multiple mail sources while the current single-account format still works
+- [x] Active account switching uses one backend connection per mail source and restores an account-scoped folder tree
 - [x] Source identity foundation (`source_id`, `account_id`, and scoped message refs) lands before multi-account UI
 - [x] Work coordinator policies preserve latest UI intent, coalesce duplicate resource fetches, serialize source mutations, and keep background work fair
 - [x] Cache-first mail body and preview services use scoped message refs, coalesce duplicate provider fetches, replay safe completed work, and keep direct provider reads behind explicit `NoCache` methods
 - [x] Current IMAP provider access is isolated behind `IMAPMailSource` before visible account switching
-- [ ] Folder sidebar grouped under account headers
-- [ ] Status bar shows active account name
+- [x] Folder sidebar exposes an account rail and account-scoped folder tree when multiple mail sources are configured
+- [x] Status bar shows active account name when multiple mail sources are configured
 - [ ] Compose "From" field lets user pick sending account
 - [ ] Unified Timeline view across accounts (opt-in)
 - [x] Gmail OAuth is experimental first-run onboarding, hidden unless Herald starts with `-experimental`
@@ -851,6 +851,7 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] High-resolution themed showcase tapes cover Dark Pastel, Red Alert, and softer dark terminal profiles without multiplying every docs capture
 - [x] Demo media can opt into a compact keypress overlay with `--demo-keys` so presentation GIFs show the shortcuts being pressed
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account
+- [x] Demo mode can launch a deterministic multi-account mailbox for account-switching visual checks without live IMAP
 - [x] Demo TUI startup shows a compact dismissible welcome overlay that points users at the first onboarding email before they explore freely
 - [x] `Step 5: View inline images in full screen` Herald Image Lab email lets users test inline image hints, full-screen rendering, and local image fallback links in demo mode
 - [x] Rich HTML rendering showcase email lets users verify headings, lists, links, remote image labels, and shared preview behavior in demo mode

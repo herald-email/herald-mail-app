@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- Folder tree types ---
@@ -19,10 +21,19 @@ type folderNode struct {
 	expanded bool
 }
 
+type sidebarItemKind int
+
+const (
+	sidebarItemFolder sidebarItemKind = iota
+	sidebarItemAccount
+)
+
 // sidebarItem is a flattened entry used for navigation
 type sidebarItem struct {
-	node  *folderNode
-	depth int
+	node    *folderNode
+	depth   int
+	kind    sidebarItemKind
+	account models.SourceID
 }
 
 // commonFolderPriority defines the sort order for well-known top-level folders
@@ -106,7 +117,7 @@ func flattenTree(roots []*folderNode) []sidebarItem {
 	var walk func(nodes []*folderNode, depth int)
 	walk = func(nodes []*folderNode, depth int) {
 		for _, node := range nodes {
-			items = append(items, sidebarItem{node, depth})
+			items = append(items, sidebarItem{node: node, depth: depth, kind: sidebarItemFolder})
 			if node.expanded && len(node.children) > 0 {
 				walk(node.children, depth+1)
 			}
@@ -116,33 +127,53 @@ func flattenTree(roots []*folderNode) []sidebarItem {
 	return items
 }
 
-func (m *Model) toggleSidebarNode() {
+func (m *Model) visibleSidebarItems() []sidebarItem {
 	items := flattenTree(m.folderTree)
+	if !m.hasMultipleAccounts() {
+		return items
+	}
+	accountItems := make([]sidebarItem, 0, len(m.accounts)+len(items))
+	for _, account := range m.accounts {
+		accountItems = append(accountItems, sidebarItem{kind: sidebarItemAccount, account: account.SourceID})
+	}
+	return append(accountItems, items...)
+}
+
+func (m *Model) toggleSidebarNode() {
+	items := m.visibleSidebarItems()
 	if m.sidebarCursor >= len(items) {
+		return
+	}
+	if items[m.sidebarCursor].kind != sidebarItemFolder {
 		return
 	}
 	node := items[m.sidebarCursor].node
 	if len(node.children) > 0 {
 		node.expanded = !node.expanded
 		// Clamp cursor if it fell outside the new visible range
-		newLen := len(flattenTree(m.folderTree))
+		newLen := len(m.visibleSidebarItems())
 		if m.sidebarCursor >= newLen {
 			m.sidebarCursor = newLen - 1
 		}
 	}
 }
 
-// selectSidebarFolder switches to the folder at sidebarCursor
-func (m *Model) selectSidebarFolder() {
-	items := flattenTree(m.folderTree)
+// selectSidebarFolder switches to the folder at sidebarCursor. It returns a
+// command when the selected row is an account rail item instead of a folder.
+func (m *Model) selectSidebarFolder() (tea.Cmd, bool) {
+	items := m.visibleSidebarItems()
 	if m.sidebarCursor < 0 || m.sidebarCursor >= len(items) {
-		return
+		return nil, false
 	}
-	node := items[m.sidebarCursor].node
+	item := items[m.sidebarCursor]
+	if item.kind == sidebarItemAccount {
+		return m.switchActiveAccount(item.account), true
+	}
+	node := item.node
 	if node.fullPath == "" {
 		// Synthetic parent — toggle expand instead of navigating
 		m.toggleSidebarNode()
-		return
+		return nil, false
 	}
 	m.currentFolder = node.fullPath
 	m.loading = true
@@ -161,6 +192,7 @@ func (m *Model) selectSidebarFolder() {
 		m.setFocusedPanel(panelSummary)
 	}
 	logger.Info("Switching to folder: %s", m.currentFolder)
+	return nil, false
 }
 
 // sidebarContentWidth is the fixed display width of sidebar content (excluding border)
@@ -171,7 +203,7 @@ const chatPanelWidth = 36
 
 // renderSidebar renders the folder tree sidebar content (without border)
 func (m *Model) renderSidebar() string {
-	items := flattenTree(m.folderTree)
+	items := m.visibleSidebarItems()
 	var sb strings.Builder
 
 	// Limit rendered rows to tableHeight to prevent overflow at small terminal heights
@@ -190,8 +222,29 @@ func (m *Model) renderSidebar() string {
 		}
 	}
 
+	accountHeaderWritten := false
+	folderHeaderWritten := false
 	for i, item := range items {
 		if i < startIdx || i >= startIdx+maxRows {
+			continue
+		}
+		if m.hasMultipleAccounts() && item.kind == sidebarItemAccount && !accountHeaderWritten {
+			sb.WriteString(m.theme.Text.Primary.Style().Bold(true).Render("Accounts") + "\n")
+			accountHeaderWritten = true
+		}
+		if m.hasMultipleAccounts() && item.kind == sidebarItemFolder && !folderHeaderWritten {
+			if accountHeaderWritten {
+				sb.WriteString("\n")
+			}
+			label := "Folders"
+			if active := m.activeAccountLabel(); active != "" {
+				label = "Folders - " + active
+			}
+			sb.WriteString(m.theme.Text.Primary.Style().Bold(true).Render(truncateVisual(label, sidebarContentWidth)) + "\n")
+			folderHeaderWritten = true
+		}
+		if item.kind == sidebarItemAccount {
+			sb.WriteString(m.renderSidebarAccountLine(i, item.account) + "\n")
 			continue
 		}
 		indent := strings.Repeat("  ", item.depth)
@@ -251,6 +304,55 @@ func (m *Model) renderSidebar() string {
 		sb.WriteString(line + "\n")
 	}
 	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) string {
+	accountName := string(sourceID)
+	for _, account := range m.accounts {
+		if account.SourceID == sourceID {
+			accountName = account.DisplayName
+			break
+		}
+	}
+	status := m.accountStatuses[sourceID]
+	countSuffix := ""
+	if status.Total > 0 {
+		countSuffix = fmt.Sprintf(" %d/%d", status.Unread, status.Total)
+	}
+	if status.Error != "" {
+		countSuffix = " auth"
+	}
+	selectionMarker := " "
+	if index == m.sidebarCursor && m.focusedPanel != panelSidebar {
+		selectionMarker = "›"
+	}
+	activeMarker := " "
+	if sourceID == m.activeSourceID {
+		activeMarker = ">"
+	}
+	prefixLen := 3
+	available := sidebarContentWidth - prefixLen - len([]rune(countSuffix))
+	if available < 1 {
+		available = 1
+	}
+	label := accountName
+	runes := []rune(label)
+	if len(runes) > available {
+		if available > 3 {
+			label = string(runes[:available-3]) + "..."
+		} else {
+			label = string(runes[:available])
+		}
+	}
+	line := fmt.Sprintf("%s%s %-*s%s", selectionMarker, activeMarker, available, label, countSuffix)
+	if index == m.sidebarCursor {
+		if m.focusedPanel == panelSidebar {
+			line = m.theme.Focus.SelectionActive.Style().Render(line)
+		} else {
+			line = m.theme.Focus.SelectionInactive.Style().Render(line)
+		}
+	}
+	return line
 }
 
 // startClassification starts background AI classification for unclassified emails.

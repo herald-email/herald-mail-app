@@ -7,6 +7,7 @@ This spec defines the refactoring direction for multi-account mail and future ca
 The first goal is to introduce durable source identity and work coordination before adding visible multi-account or calendar UI. This keeps the migration safe because every later feature can depend on scoped references, cache-first reads, and explicit queue policy.
 
 - [ ] Add source and account identity to mail data, sync events, background work, daemon APIs, and MCP-facing references without changing single-account behavior.
+- [x] Add active-account mail switching in the TUI without enabling cross-account writes or changing single-account behavior.
 - [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
 - [x] Make mail body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
 - [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
@@ -220,6 +221,8 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 3: Add cache-first message body and preview services with persistent cache, completed replay, explicit `NoCache` bypasses, and in-flight coalescing.
 - [x] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
+  - [x] Phase 5A: Add active-account backend switching, account rail/sidebar, account switcher overlay, and account-aware status chrome.
+  - [ ] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
 - [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
 

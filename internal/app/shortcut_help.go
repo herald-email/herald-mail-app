@@ -577,17 +577,23 @@ func (m *Model) keyboardProfileLabel() string {
 }
 
 func (m *Model) shortcutHelpSections() []shortcutHelpSection {
+	globalEntries := []shortcutHelpEntry{
+		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpOpen, "open or close this shortcut help"),
+		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpSearch, "search this help overlay while it is open"),
+		{m.primaryTabHelpKey(), "switch tabs; F1-F3 remain legacy aliases"},
+	}
+	if m.hasMultipleAccounts() {
+		globalEntries = append(globalEntries, shortcutHelpEntry{"A", "open account switcher"})
+	}
+	globalEntries = append(globalEntries,
+		shortcutHelpEntry{m.commandHelpKey(keyboardScopeGlobal, CommandSidebarToggle) + " / " + m.commandHelpKey(keyboardScopeGlobal, CommandLogsToggle), "toggle sidebar or logs"},
+		m.commandHelpEntry(keyboardScopeGlobal, CommandChatToggle, "toggle the AI chat panel"),
+		m.commandHelpEntry(keyboardScopeGlobal, CommandAppRefresh, "refresh the current folder outside text-entry fields"),
+		m.commandHelpEntry(keyboardScopeGlobal, CommandAppQuit, "quit Herald"),
+	)
 	sections := []shortcutHelpSection{{
-		Title: "Global",
-		Entries: []shortcutHelpEntry{
-			m.commandHelpEntry(keyboardScopeGlobal, CommandHelpOpen, "open or close this shortcut help"),
-			m.commandHelpEntry(keyboardScopeGlobal, CommandHelpSearch, "search this help overlay while it is open"),
-			{m.primaryTabHelpKey(), "switch tabs; F1-F3 remain legacy aliases"},
-			{m.commandHelpKey(keyboardScopeGlobal, CommandSidebarToggle) + " / " + m.commandHelpKey(keyboardScopeGlobal, CommandLogsToggle), "toggle sidebar or logs"},
-			m.commandHelpEntry(keyboardScopeGlobal, CommandChatToggle, "toggle the AI chat panel"),
-			m.commandHelpEntry(keyboardScopeGlobal, CommandAppRefresh, "refresh the current folder outside text-entry fields"),
-			m.commandHelpEntry(keyboardScopeGlobal, CommandAppQuit, "quit Herald"),
-		},
+		Title:   "Global",
+		Entries: globalEntries,
 	}}
 
 	switch {

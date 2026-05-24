@@ -142,7 +142,11 @@ func (m *Model) renderTitleBar(width int) string {
 		width = 80
 	}
 	title := m.headerStyle.Render("Herald")
-	line := truncateVisual(title+titleTabGap+m.renderTabBar(), width)
+	prefix := title + titleTabGap
+	if account := m.activeAccountLabel(); account != "" {
+		prefix += m.theme.Chrome.TabInactive.Style().Padding(0, 1).Render(account) + titleTabGap
+	}
+	line := truncateVisual(prefix+m.renderTabBar(), width)
 	if missing := width - ansi.StringWidth(line); missing > 0 {
 		line += strings.Repeat(" ", missing)
 	}
@@ -150,7 +154,11 @@ func (m *Model) renderTitleBar(width int) string {
 }
 
 func (m *Model) titleTabStartX() int {
-	return ansi.StringWidth(m.headerStyle.Render("Herald")) + ansi.StringWidth(titleTabGap)
+	start := ansi.StringWidth(m.headerStyle.Render("Herald")) + ansi.StringWidth(titleTabGap)
+	if account := m.activeAccountLabel(); account != "" {
+		start += ansi.StringWidth(m.theme.Chrome.TabInactive.Style().Padding(0, 1).Render(account)) + ansi.StringWidth(titleTabGap)
+	}
+	return start
 }
 
 func (m *Model) renderTabBar() string {
@@ -232,6 +240,9 @@ func (m *Model) renderStatusBar() string {
 	var parts []string
 	if msg := strings.TrimSpace(m.statusMessageForActiveTab()); msg != "" {
 		parts = append(parts, chromeBarPart(statusRole, m.theme.Severity.Info.Style().Render(msg)))
+	}
+	if account := m.activeAccountLabel(); account != "" {
+		parts = append(parts, account)
 	}
 	parts = append(parts, breadcrumb)
 	if chip := m.renderAIStatusChip(); chip != "" {
@@ -495,6 +506,9 @@ func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
 	}
 	if m.showHelp {
 		return wrapChromeSegments(m.shortcutHelpHintBarText(), width-2, 2)
+	}
+	if m.showAccountSwitcher {
+		return wrapChromeSegments("up/down: move  │  enter: switch account  │  esc: close", width-2, 2)
 	}
 	hints := m.rawKeyHintsForWidth(width, chrome)
 	if m.shouldAdvertiseShortcutHelp() {

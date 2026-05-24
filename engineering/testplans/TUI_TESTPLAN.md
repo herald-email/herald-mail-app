@@ -1500,6 +1500,25 @@ Check these states during every applicable lane:
 - Mail that also belongs to `Sent`, `Archive`, or any nested subfolder is excluded.
 - If live membership inspection is incomplete, the view fails closed with a visible unsupported/error explanation rather than showing a partial result.
 
+### TC-38A — Multi-account active switching
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic multi-account demo mode.
+2. Capture the Timeline with the sidebar visible.
+3. Press `A` to open the account switcher overlay.
+4. Move to another account, press `Enter`, and capture the reloaded account folder tree.
+5. Repeat in normal single-account demo mode.
+
+**Expect:**
+- Multi-account demo shows an `Accounts` rail above folders and the active account in title/status chrome.
+- The switcher overlay names each source, shows status/error state, and `Esc` closes it without changing accounts.
+- `Enter` switches the active account, restores that account's selected folder, and keeps same-named folders isolated.
+- Single-account demo keeps the existing sidebar/status chrome and does not advertise account switching.
+- At `50x15`, the minimum-size guard appears and resizing larger restores the account rail or switcher state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

@@ -46,8 +46,11 @@ func (m *Model) blockCleanupReadOnlyMutation() bool {
 }
 
 func (m *Model) selectedSidebarFolderPath() string {
-	items := flattenTree(m.folderTree)
+	items := m.visibleSidebarItems()
 	if m.sidebarCursor < 0 || m.sidebarCursor >= len(items) {
+		return ""
+	}
+	if items[m.sidebarCursor].kind != sidebarItemFolder {
 		return ""
 	}
 	return items[m.sidebarCursor].node.fullPath

@@ -332,7 +332,7 @@ func newWizardPreferencesSettings(existing *config.Config, configPath string, ex
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, themeValue string) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string) {
 	if err := logger.Init(false); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -352,7 +352,16 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, themeVa
 	logger.Info("Demo resource policy: sync listeners and background semantic indexing disabled; localhost image links start only while previewing embedded MIME images")
 
 	// Build demo backend
-	demoBackend := backend.NewDemoBackend()
+	var demoBackend backend.Backend = backend.NewDemoBackend()
+	if demoMultiAccount {
+		if multi := backend.NewMultiDemoBackend(); multi != nil {
+			demoBackend = multi
+			cfg.Sources = []config.SourceConfig{
+				{ID: "work-mail", Kind: "mail", Provider: "demo-imap", DisplayName: "Work Mail", AccountID: "work", Credentials: config.CredentialsConfig{Username: "work@demo.local"}},
+				{ID: "personal-mail", Kind: "mail", Provider: "demo-imap", DisplayName: "Personal", AccountID: "personal", Credentials: config.CredentialsConfig{Username: "personal@demo.local"}},
+			}
+		}
+	}
 
 	// Demo mode uses a deterministic offline AI client.
 	var classifier ai.AIClient = demodata.NewAI()
@@ -404,6 +413,7 @@ type tuiFlagOptions struct {
 	verbose       *bool
 	demo          *bool
 	demoKeys      *bool
+	demoMulti     *bool
 	dryRun        *bool
 	experimental  *bool
 	imageProtocol *string
@@ -420,6 +430,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 		verbose:       fs.Bool("verbose", false, "Alias for -debug (same behavior today)"),
 		demo:          fs.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)"),
 		demoKeys:      fs.Bool("demo-keys", false, "Show a demo keypress overlay while running with --demo"),
+		demoMulti:     fs.Bool("demo-multi-account", false, "Start demo mode with two deterministic mail accounts"),
 		dryRun:        fs.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)"),
 		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
 		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
@@ -744,7 +755,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if *opts.demo {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.theme)
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme)
 		return
 	}
 
@@ -895,12 +906,27 @@ func runTUI() {
 		b = remoteB
 	} else {
 		// Create the backend (pass classifier so semantic search can embed queries)
-		lb, err := backend.NewLocal(cfg, resolvedConfig, classifier)
-		if err != nil {
-			logger.Error("Failed to create backend: %v", err)
-			log.Fatalf("Failed to create backend: %v", err)
+		mailSourceCount := 0
+		for _, source := range cfg.NormalizedSources() {
+			if strings.TrimSpace(source.Kind) == "" || source.Kind == string(models.SourceKindMail) {
+				mailSourceCount++
+			}
 		}
-		b = lb
+		if mailSourceCount > 1 {
+			mb, err := backend.NewMultiLocal(cfg, resolvedConfig, classifier)
+			if err != nil {
+				logger.Error("Failed to create multi-account backend: %v", err)
+				log.Fatalf("Failed to create backend: %v", err)
+			}
+			b = mb
+		} else {
+			lb, err := backend.NewLocal(cfg, resolvedConfig, classifier)
+			if err != nil {
+				logger.Error("Failed to create backend: %v", err)
+				log.Fatalf("Failed to create backend: %v", err)
+			}
+			b = lb
+		}
 	}
 
 	// Create SMTP client for compose/reply

@@ -837,7 +837,7 @@ func TestSelectSidebarFolder_CleanupRestoresSummaryTableFocus(t *testing.T) {
 	m.setFocusedPanel(panelSidebar)
 	m.sidebarCursor = 1
 
-	m.selectSidebarFolder()
+	_, _ = m.selectSidebarFolder()
 
 	if m.focusedPanel != panelSummary {
 		t.Fatalf("expected focus to return to cleanup summary, got %d", m.focusedPanel)

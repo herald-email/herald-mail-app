@@ -146,7 +146,7 @@ func (m *Model) handleSidebarMouse(msg tea.Mouse, rect mouseRect) (tea.Model, te
 	if msg.Button != tea.MouseLeft {
 		return m, nil, true
 	}
-	items := flattenTree(m.folderTree)
+	items := m.visibleSidebarItems()
 	rowOffset := msg.Y - (rect.y + 1)
 	if rowOffset < 0 {
 		return m, nil, true
@@ -171,7 +171,10 @@ func (m *Model) handleSidebarMouse(msg tea.Mouse, rect mouseRect) (tea.Model, te
 	}
 	m.sidebarCursor = idx
 	m.setFocusedPanel(panelSidebar)
-	m.selectSidebarFolder()
+	if cmd, handledAccount := m.selectSidebarFolder(); handledAccount {
+		m.clearTimelineChatFilter()
+		return m, cmd, true
+	}
 	m.clearTimelineChatFilter()
 	return m, m.activateCurrentFolder(), true
 }

@@ -580,6 +580,16 @@ type Model struct {
 	sidebarCursor int
 	focusedPanel  int // panelSidebar, panelSummary, panelDetails
 
+	// Multi-account chrome. These fields are populated only when the backend
+	// implements backend.AccountAwareBackend; single-account sessions hide them.
+	accounts               []backend.AccountInfo
+	accountStatuses        map[models.SourceID]backend.AccountStatus
+	activeSourceID         models.SourceID
+	activeAccountID        models.AccountID
+	accountSelectedFolders map[models.SourceID]string
+	showAccountSwitcher    bool
+	accountSwitcherCursor  int
+
 	// Deletion confirmation
 	pendingDeleteConfirm bool
 	pendingDeleteDesc    string
@@ -818,18 +828,22 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	attachmentPathInput.CharLimit = 512
 
 	m := &Model{
-		backend:             b,
-		progressCh:          b.Progress(),
-		syncEventsCh:        b.SyncEvents(),
-		loading:             true,
-		dryRun:              dryRun,
-		startTime:           time.Now(),
-		currentFolder:       "INBOX",
-		folders:             []string{"INBOX"},
-		folderTree:          buildFolderTree([]string{"INBOX"}),
-		folderStatus:        make(map[string]models.FolderStatus),
-		showSidebar:         true,
-		focusedPanel:        panelTimeline,
+		backend:         b,
+		progressCh:      b.Progress(),
+		syncEventsCh:    b.SyncEvents(),
+		loading:         true,
+		dryRun:          dryRun,
+		startTime:       time.Now(),
+		currentFolder:   "INBOX",
+		folders:         []string{"INBOX"},
+		folderTree:      buildFolderTree([]string{"INBOX"}),
+		folderStatus:    make(map[string]models.FolderStatus),
+		showSidebar:     true,
+		focusedPanel:    panelTimeline,
+		accountStatuses: make(map[models.SourceID]backend.AccountStatus),
+		accountSelectedFolders: map[models.SourceID]string{
+			models.DefaultMailSourceID: "INBOX",
+		},
 		selectedSummaryKeys: make(map[string]bool),
 		selectedMessages:    make(map[string]bool),
 		rowToSender:         make(map[int]string),
@@ -877,6 +891,8 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		attachmentPathInput:     attachmentPathInput,
 		keyboard:                NewKeyboardResolver(nil),
 	}
+
+	m.syncAccountsFromBackend()
 
 	// Detect demo mode via DemoBackendMarker interface
 	if marker, ok := b.(interface{ IsDemo() bool }); ok && marker.IsDemo() {
@@ -1162,8 +1178,16 @@ func oauthStartFailureMessage(err error) string {
 }
 
 func (m *Model) resetMailboxStateForAccountSwitch() {
-	m.currentFolder = "INBOX"
-	m.folders = []string{"INBOX"}
+	m.resetMailboxStateForFolder("INBOX")
+}
+
+func (m *Model) resetMailboxStateForFolder(folder string) {
+	folder = strings.TrimSpace(folder)
+	if folder == "" {
+		folder = "INBOX"
+	}
+	m.currentFolder = folder
+	m.folders = []string{folder}
 	m.folderTree = buildFolderTree(m.folders)
 	m.folderStatus = make(map[string]models.FolderStatus)
 	m.sidebarCursor = 0
@@ -1765,10 +1789,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.folders = msg.Folders
 		m.folderTree = buildFolderTree(msg.Folders)
 		// Keep cursor on the active folder
-		items := flattenTree(m.folderTree)
+		items := m.visibleSidebarItems()
 		m.sidebarCursor = 0
 		for i, item := range items {
-			if item.node.fullPath == m.currentFolder {
+			if item.kind == sidebarItemFolder && item.node.fullPath == m.currentFolder {
 				m.sidebarCursor = i
 				break
 			}
@@ -2571,6 +2595,9 @@ func (m *Model) View() tea.View {
 	if m.showCleanupMgr && m.cleanupManager != nil {
 		return m.buildView(m.renderCompactOverlayView(m.cleanupManager.renderPanel()))
 	}
+	if m.showAccountSwitcher {
+		return m.buildView(m.renderAccountSwitcherOverlayView())
+	}
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())
 	}
@@ -2847,7 +2874,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.canInteractWithVisibleData() {
 			if m.focusedPanel == panelSidebar {
-				m.selectSidebarFolder()
+				if cmd, handledAccount := m.selectSidebarFolder(); handledAccount {
+					m.clearTimelineChatFilter()
+					return m, cmd
+				}
 				m.clearTimelineChatFilter()
 				return m, m.activateCurrentFolder()
 			} else if m.focusedPanel == panelDetails && m.activeTab == tabCleanup {

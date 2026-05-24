@@ -188,7 +188,7 @@ func TestCleanupAllMailOnly_SidebarSwitchClearsStaleSummaryRows(t *testing.T) {
 		}
 	}
 	m.setFocusedPanel(panelSidebar)
-	m.selectSidebarFolder()
+	_, _ = m.selectSidebarFolder()
 
 	if got := len(m.summaryTable.Rows()); got != 0 {
 		t.Fatalf("expected switching to All Mail only to clear stale Cleanup summary rows immediately, got %d rows", got)

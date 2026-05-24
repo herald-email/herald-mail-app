@@ -163,6 +163,9 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 }
 
 func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if model, cmd, handled := m.handleAccountSwitcherKey(msg); handled {
+		return model, cmd, true
+	}
 	switch shortcutKey(msg) {
 	case "ctrl+c":
 		m.cleanup()

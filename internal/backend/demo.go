@@ -68,6 +68,45 @@ func NewDemoBackend() *DemoBackend {
 	return d
 }
 
+func NewScopedDemoBackend(info AccountInfo) *DemoBackend {
+	info = normalizeAccountInfo(info)
+	d := NewDemoBackend()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, email := range d.emails {
+		email.SourceID = info.SourceID
+		email.AccountID = info.AccountID
+		ref := email.MessageRef()
+		email.LocalID = ref.LocalID
+	}
+	return d
+}
+
+func NewMultiDemoBackend() *MultiBackend {
+	work := AccountInfo{
+		SourceID:    "work-mail",
+		AccountID:   "work",
+		DisplayName: "Work Mail",
+		Provider:    "demo-imap",
+		Address:     "work@demo.local",
+	}
+	personal := AccountInfo{
+		SourceID:    "personal-mail",
+		AccountID:   "personal",
+		DisplayName: "Personal",
+		Provider:    "demo-imap",
+		Address:     "personal@demo.local",
+	}
+	backend, err := NewMultiBackend([]AccountBackend{
+		{Info: work, Backend: NewScopedDemoBackend(work)},
+		{Info: personal, Backend: NewScopedDemoBackend(personal)},
+	})
+	if err != nil {
+		return nil
+	}
+	return backend
+}
+
 func seedDemoRules() []*models.Rule {
 	return []*models.Rule{
 		{
