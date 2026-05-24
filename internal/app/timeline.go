@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/iterm2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -434,19 +435,57 @@ func (m *Model) ensureTimelineSelection() {
 	}
 }
 
+func timelineSelectionKey(email *models.EmailData) string {
+	if email == nil {
+		return ""
+	}
+	if email.SourceID != "" && email.SourceID != models.DefaultMailSourceID {
+		return email.MessageRef().LocalID
+	}
+	if email.AccountID != "" && email.AccountID != models.DefaultAccountID {
+		return email.MessageRef().LocalID
+	}
+	if strings.TrimSpace(email.LocalID) != "" && !strings.HasPrefix(email.LocalID, "mail:default-mail:default:") {
+		return email.LocalID
+	}
+	return email.MessageID
+}
+
+func timelineEmailMatchesSelectionKey(email *models.EmailData, key string) bool {
+	if email == nil || key == "" {
+		return false
+	}
+	if timelineSelectionKey(email) == key {
+		return true
+	}
+	return email.MessageID != "" && email.MessageID == key
+}
+
+func timelineEmailsSameIdentity(a, b *models.EmailData) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	aKey := timelineSelectionKey(a)
+	bKey := timelineSelectionKey(b)
+	if aKey != "" || bKey != "" {
+		return aKey == bKey
+	}
+	return a == b
+}
+
 func (m *Model) pruneTimelineSelection(displayEmails []*models.EmailData) {
 	if len(m.timeline.selectedMessageIDs) == 0 {
 		return
 	}
 	visible := make(map[string]bool, len(displayEmails))
 	for _, email := range displayEmails {
-		if email != nil && email.MessageID != "" {
-			visible[email.MessageID] = true
+		if key := timelineSelectionKey(email); key != "" {
+			visible[key] = true
 		}
 	}
-	for messageID := range m.timeline.selectedMessageIDs {
-		if !visible[messageID] {
-			delete(m.timeline.selectedMessageIDs, messageID)
+	for key := range m.timeline.selectedMessageIDs {
+		if !visible[key] {
+			delete(m.timeline.selectedMessageIDs, key)
 		}
 	}
 }
@@ -541,8 +580,8 @@ func (m *Model) applyTimelineRangeSelection() {
 	selected := cloneTimelineSelectedMessageIDs(m.timeline.rangeBaseSelection)
 	for row := lo; row <= hi; row++ {
 		for _, email := range m.timelineRowEmails(m.timeline.threadRowMap[row]) {
-			if email != nil && strings.TrimSpace(email.MessageID) != "" {
-				selected[email.MessageID] = true
+			if key := timelineSelectionKey(email); key != "" {
+				selected[key] = true
 			}
 		}
 	}
@@ -601,11 +640,12 @@ func (m *Model) timelineSelectionMark(emails []*models.EmailData) string {
 	selectable := 0
 	selected := 0
 	for _, email := range emails {
-		if email == nil || email.MessageID == "" {
+		key := timelineSelectionKey(email)
+		if key == "" {
 			continue
 		}
 		selectable++
-		if m.timeline.selectedMessageIDs[email.MessageID] {
+		if m.timeline.selectedMessageIDs[key] {
 			selected++
 		}
 	}
@@ -643,7 +683,8 @@ func (m *Model) selectedTimelineEmails(includeDrafts bool) []*models.EmailData {
 	}
 	var out []*models.EmailData
 	for _, email := range m.timelineDisplayEmails() {
-		if email == nil || email.MessageID == "" || !m.timeline.selectedMessageIDs[email.MessageID] {
+		key := timelineSelectionKey(email)
+		if key == "" || !m.timeline.selectedMessageIDs[key] {
 			continue
 		}
 		if !includeDrafts && email.IsDraft {
@@ -660,6 +701,72 @@ func (m *Model) timelineSelectedCount() int {
 
 func (m *Model) selectedTimelineArchiveEmails() []*models.EmailData {
 	return m.selectedTimelineEmails(false)
+}
+
+func (m *Model) timelineShowsAccountBadges() bool {
+	if !m.hasMultipleAccounts() {
+		return false
+	}
+	if m.allAccountsScopeActive() {
+		return true
+	}
+	var seen models.SourceID
+	for _, email := range m.timelineDisplayEmails() {
+		if email == nil || email.SourceID == "" {
+			continue
+		}
+		if seen == "" {
+			seen = email.SourceID
+			continue
+		}
+		if seen != email.SourceID {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) accountLabelForSource(sourceID models.SourceID) string {
+	if sourceID == backend.AllAccountsSourceID {
+		return "All Accounts"
+	}
+	for _, account := range m.accounts {
+		if account.SourceID == sourceID {
+			if strings.TrimSpace(account.DisplayName) != "" {
+				return account.DisplayName
+			}
+			break
+		}
+	}
+	if sourceID == "" {
+		return ""
+	}
+	return string(sourceID)
+}
+
+func (m *Model) accountBadgeForEmail(email *models.EmailData) string {
+	if email == nil {
+		return ""
+	}
+	return m.accountLabelForSource(email.SourceID)
+}
+
+func (m *Model) accountBadgeForEmails(emails []*models.EmailData) string {
+	var label string
+	for _, email := range emails {
+		current := m.accountBadgeForEmail(email)
+		if current == "" {
+			continue
+		}
+		if label == "" {
+			label = current
+			continue
+		}
+		if label != current {
+			return "Mixed"
+		}
+	}
+	return label
 }
 
 func timelineCollapsedGroupLabel(theme Theme, g *threadGroup, fromAddress string, maxWidth int) string {
@@ -705,6 +812,7 @@ func timelineExpandedRowPrefix(g *threadGroup, email *models.EmailData, idx int)
 // grouping them into collapsed threads where appropriate.
 func (m *Model) updateTimelineTable() {
 	m.ensureTimelineSelection()
+	showAccount := m.timelineShowsAccountBadges() && m.timeline.accountColumnVisible
 	maxSubj := m.timeline.subjectWidth
 	if maxSubj <= 0 {
 		maxSubj = 40
@@ -760,13 +868,14 @@ func (m *Model) updateTimelineTable() {
 		if m.classifications != nil {
 			tag = m.classifications[email.MessageID]
 		}
-		return table.Row{
+		row := table.Row{
 			m.timelineSelectionMark([]*models.EmailData{email}),
-			sender,
-			trunc(subject, maxSubj),
-			dateStr,
-			tag,
 		}
+		if showAccount {
+			row = append(row, m.accountBadgeForEmail(email))
+		}
+		row = append(row, sender, trunc(subject, maxSubj), dateStr, tag)
+		return row
 	}
 
 	displayEmails := m.timelineDisplayEmails()
@@ -832,13 +941,14 @@ func (m *Model) updateTimelineTable() {
 				senderAvail = 1
 			}
 			threadSender := unreadDot + starDot + threadCollapsedPrefix + timelineCollapsedGroupLabel(m.theme, g, m.fromAddress, senderAvail)
-			rows = append(rows, table.Row{
+			row := table.Row{
 				m.timelineSelectionMark(g.emails),
-				threadSender,
-				trunc(threadSubj, maxSubj),
-				dateStr,
-				tag,
-			})
+			}
+			if showAccount {
+				row = append(row, m.accountBadgeForEmails(g.emails))
+			}
+			row = append(row, threadSender, trunc(threadSubj, maxSubj), dateStr, tag)
+			rows = append(rows, row)
 			m.timeline.threadRowMap = append(m.timeline.threadRowMap, timelineRowRef{
 				kind: rowKindThread, group: g,
 			})
@@ -1228,16 +1338,12 @@ func (m *Model) setTimelineEmailReadState(email *models.EmailData, read bool) bo
 	if email == nil {
 		return false
 	}
-	messageID := email.MessageID
 	changed := false
 	visit := func(candidate *models.EmailData) {
 		if candidate == nil {
 			return
 		}
-		same := candidate == email
-		if messageID != "" && candidate.MessageID == messageID {
-			same = true
-		}
+		same := candidate == email || timelineEmailsSameIdentity(candidate, email)
 		if !same || candidate.IsRead == read {
 			return
 		}
@@ -1295,7 +1401,7 @@ func (m *Model) markCurrentTimelineUnread() tea.Cmd {
 		m.updateTimelineTable()
 	}
 	m.statusMessage = "Marked unread"
-	return markUnreadCmd(m.backend, email.MessageID, email.Folder)
+	return markUnreadEmailCmd(m.backend, email)
 }
 
 func (m *Model) currentTimelineDraftEmail() *models.EmailData {
@@ -2220,7 +2326,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				if !email.IsRead && !m.timelineIsReadOnlyDiagnostic() {
 					m.setTimelineEmailReadState(email, true)
 					m.updateTimelineTable()
-					cmds = append(cmds, markReadCmd(m.backend, email.MessageID, email.Folder))
+					cmds = append(cmds, markReadEmailCmd(m.backend, email))
 				}
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") && !m.timelineIsReadOnlyDiagnostic() {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))

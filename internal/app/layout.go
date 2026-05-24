@@ -44,17 +44,18 @@ type timelineSearchOrigin struct {
 }
 
 type TimelineState struct {
-	emails             []*models.EmailData
-	senderWidth        int
-	subjectWidth       int
-	virtualNotice      string
-	groupingMode       timelineGroupingMode
-	selectedMessageIDs map[string]bool
-	rangeMode          bool
-	rangeShiftMode     bool
-	rangeAnchorRow     int
-	rangeCursorRow     int
-	rangeBaseSelection map[string]bool
+	emails               []*models.EmailData
+	senderWidth          int
+	subjectWidth         int
+	accountColumnVisible bool
+	virtualNotice        string
+	groupingMode         timelineGroupingMode
+	selectedMessageIDs   map[string]bool
+	rangeMode            bool
+	rangeShiftMode       bool
+	rangeAnchorRow       int
+	rangeCursorRow       int
+	rangeBaseSelection   map[string]bool
 
 	threadGroups    []threadGroup
 	threadRowMap    []timelineRowRef

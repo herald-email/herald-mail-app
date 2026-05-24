@@ -1523,6 +1523,25 @@ Check these states during every applicable lane:
 - Single-account demo keeps the existing sidebar/status chrome and does not advertise account switching.
 - At `50x15`, the minimum-size guard appears and resizing larger restores the account rail or switcher state cleanly.
 
+### TC-38B — Unified inbox/search and account badges
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic multi-account demo mode.
+2. Select `All Accounts` from the account rail or account switcher overlay.
+3. Capture the unified Timeline and open a preview for messages from at least two accounts.
+4. Run a search while `All Accounts` is selected and capture the search results.
+5. Repeat in normal single-account demo mode.
+
+**Expect:**
+- [x] Multi-account demo shows an `All Accounts` entry; selecting it loads a unified inbox without changing single-account chrome.
+- [x] Unified Timeline and search rows show a compact account badge or `Acct` column at `220x50` and `80x24`, and collapse cleanly at `50x15`.
+- [x] Same-named folders and duplicate Message-IDs from different accounts remain distinct for selection, preview, reply/forward body loading, star/read/archive/delete routing, and stale-result filtering.
+- [x] Search in the unified scope aggregates the visible account set and preserves account identity on results.
+- [x] Single-account demo does not render account badges, all-account chrome, or changed key hints.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

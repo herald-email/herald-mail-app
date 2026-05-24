@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -11,6 +13,8 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
+
+const AllAccountsSourceID models.SourceID = "all-accounts"
 
 // AccountInfo is the minimal account identity surfaced to TUI account chrome.
 type AccountInfo struct {
@@ -69,6 +73,15 @@ type MultiBackend struct {
 }
 
 var _ AccountAwareBackend = (*MultiBackend)(nil)
+
+func allAccountsInfo() AccountInfo {
+	return AccountInfo{
+		SourceID:    AllAccountsSourceID,
+		AccountID:   models.AccountID("all"),
+		DisplayName: "All Accounts",
+		Provider:    "virtual",
+	}
+}
 
 func NewMultiBackend(accounts []AccountBackend) (*MultiBackend, error) {
 	if len(accounts) == 0 {
@@ -150,7 +163,7 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 func (m *MultiBackend) isActive(sourceID models.SourceID) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return !m.closed && m.active == sourceID
+	return !m.closed && (m.active == sourceID || m.active == AllAccountsSourceID)
 }
 
 func (m *MultiBackend) sendProgress(p models.ProgressInfo) {
@@ -190,6 +203,9 @@ func (m *MultiBackend) Accounts() []AccountInfo {
 func (m *MultiBackend) ActiveAccount() AccountInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.active == AllAccountsSourceID {
+		return allAccountsInfo()
+	}
 	if slot := m.slots[m.active]; slot != nil {
 		return slot.info
 	}
@@ -206,6 +222,10 @@ func (m *MultiBackend) SwitchAccount(sourceID models.SourceID) error {
 	sourceID = models.NormalizeSourceID(sourceID, "")
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if sourceID == AllAccountsSourceID {
+		m.active = sourceID
+		return nil
+	}
 	slot := m.slots[sourceID]
 	if slot == nil {
 		return fmt.Errorf("unknown source id %q", sourceID)
@@ -266,6 +286,335 @@ func (m *MultiBackend) ValidIDsCh() <-chan map[string]bool {
 		return nil
 	}
 	return active.ValidIDsCh()
+}
+
+func (m *MultiBackend) allAccountsActive() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.active == AllAccountsSourceID
+}
+
+func (m *MultiBackend) activeBackend() Backend {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == AllAccountsSourceID {
+		return m.Backend
+	}
+	if slot := m.slots[m.active]; slot != nil {
+		return slot.backend
+	}
+	return m.Backend
+}
+
+func (m *MultiBackend) activeRealSlot() *accountSlot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if slot := m.slots[m.active]; slot != nil {
+		return slot
+	}
+	for _, id := range m.order {
+		if slot := m.slots[id]; slot != nil {
+			return slot
+		}
+	}
+	return nil
+}
+
+func (m *MultiBackend) slotForRef(ref models.MessageRef) (*accountSlot, models.MessageRef, error) {
+	rawSource := ref.SourceID
+	ref = ref.WithDefaults()
+	m.mu.RLock()
+	slot := m.slots[ref.SourceID]
+	if slot == nil && rawSource == "" {
+		if m.active != AllAccountsSourceID {
+			slot = m.slots[m.active]
+		}
+		if slot == nil && len(m.order) > 0 {
+			slot = m.slots[m.order[0]]
+		}
+		if slot != nil {
+			ref.SourceID = slot.info.SourceID
+			ref.AccountID = slot.info.AccountID
+			ref.LocalID = ""
+			ref = ref.WithDefaults()
+		}
+	}
+	m.mu.RUnlock()
+	if slot == nil {
+		return nil, ref, fmt.Errorf("unknown source id %q", ref.SourceID)
+	}
+	return slot, ref, nil
+}
+
+func emailForAccountSlot(slot *accountSlot, email *models.EmailData) *models.EmailData {
+	if email == nil {
+		return nil
+	}
+	clone := *email
+	clone.SourceID = slot.info.SourceID
+	clone.AccountID = slot.info.AccountID
+	ref := clone.MessageRef()
+	clone.LocalID = ref.LocalID
+	return &clone
+}
+
+func sortEmailsNewestFirst(emails []*models.EmailData) {
+	sort.SliceStable(emails, func(i, j int) bool {
+		if emails[i] == nil || emails[j] == nil {
+			return emails[j] == nil
+		}
+		return emails[i].Date.After(emails[j].Date)
+	})
+}
+
+func (m *MultiBackend) aggregateEmails(fn func(*accountSlot) ([]*models.EmailData, error)) ([]*models.EmailData, error) {
+	slots := m.snapshotSlots()
+	var out []*models.EmailData
+	for _, slot := range slots {
+		emails, err := fn(slot)
+		if err != nil {
+			return out, err
+		}
+		for _, email := range emails {
+			out = append(out, emailForAccountSlot(slot, email))
+		}
+	}
+	sortEmailsNewestFirst(out)
+	return out, nil
+}
+
+func (m *MultiBackend) Load(folder string) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			active.Load(folder)
+		}
+		return
+	}
+	for _, slot := range m.snapshotSlots() {
+		slot.backend.Load(folder)
+	}
+}
+
+func (m *MultiBackend) ListFolders() ([]string, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.ListFolders()
+		}
+		return nil, nil
+	}
+	seen := make(map[string]bool)
+	var folders []string
+	for _, slot := range m.snapshotSlots() {
+		accountFolders, err := slot.backend.ListFolders()
+		if err != nil {
+			return nil, err
+		}
+		for _, folder := range accountFolders {
+			if !seen[folder] {
+				seen[folder] = true
+				folders = append(folders, folder)
+			}
+		}
+	}
+	sort.Strings(folders)
+	return folders, nil
+}
+
+func (m *MultiBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.GetFolderStatus(folders)
+		}
+		return nil, nil
+	}
+	total := make(map[string]models.FolderStatus, len(folders))
+	for _, slot := range m.snapshotSlots() {
+		statuses, err := slot.backend.GetFolderStatus(folders)
+		if err != nil {
+			return total, err
+		}
+		for folder, status := range statuses {
+			merged := total[folder]
+			merged.Total += status.Total
+			merged.Unseen += status.Unseen
+			total[folder] = merged
+		}
+	}
+	return total, nil
+}
+
+func (m *MultiBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.GetTimelineEmails(folder)
+		}
+		return nil, nil
+	}
+	return m.aggregateEmails(func(slot *accountSlot) ([]*models.EmailData, error) {
+		return slot.backend.GetTimelineEmails(folder)
+	})
+}
+
+func (m *MultiBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.SearchEmails(folder, query, bodySearch)
+		}
+		return nil, nil
+	}
+	return m.aggregateEmails(func(slot *accountSlot) ([]*models.EmailData, error) {
+		return slot.backend.SearchEmails(folder, query, bodySearch)
+	})
+}
+
+func (m *MultiBackend) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.SearchEmailsCrossFolder(query)
+		}
+		return nil, nil
+	}
+	return m.aggregateEmails(func(slot *accountSlot) ([]*models.EmailData, error) {
+		return slot.backend.SearchEmailsCrossFolder(query)
+	})
+}
+
+func (m *MultiBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailData, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.SearchEmailsIMAP(folder, query)
+		}
+		return nil, nil
+	}
+	return m.aggregateEmails(func(slot *accountSlot) ([]*models.EmailData, error) {
+		return slot.backend.SearchEmailsIMAP(folder, query)
+	})
+}
+
+func (m *MultiBackend) SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.SearchEmailsSemantic(folder, query, limit, minScore)
+		}
+		return nil, nil
+	}
+	emails, err := m.aggregateEmails(func(slot *accountSlot) ([]*models.EmailData, error) {
+		return slot.backend.SearchEmailsSemantic(folder, query, limit, minScore)
+	})
+	if err != nil || limit <= 0 || len(emails) <= limit {
+		return emails, err
+	}
+	return emails[:limit], nil
+}
+
+func (m *MultiBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
+	if !m.allAccountsActive() {
+		if active := m.activeBackend(); active != nil {
+			return active.SearchSemanticChunked(folder, queryVec, limit, minScore)
+		}
+		return nil, nil
+	}
+	var out []*models.SemanticSearchResult
+	for _, slot := range m.snapshotSlots() {
+		results, err := slot.backend.SearchSemanticChunked(folder, queryVec, limit, minScore)
+		if err != nil {
+			return out, err
+		}
+		for _, result := range results {
+			if result == nil {
+				continue
+			}
+			clone := *result
+			clone.Email = emailForAccountSlot(slot, result.Email)
+			out = append(out, &clone)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i] == nil || out[j] == nil {
+			return out[j] == nil
+		}
+		return out[i].Score > out[j].Score
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (m *MultiBackend) GetMessage(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return MessageReadResult{}, err
+	}
+	getter, ok := slot.backend.(interface {
+		GetMessage(context.Context, models.MessageRef) (MessageReadResult, error)
+	})
+	if !ok {
+		return MessageReadResult{}, fmt.Errorf("source %q does not support cache-first message reads", slot.info.SourceID)
+	}
+	return getter.GetMessage(ctx, ref)
+}
+
+func (m *MultiBackend) GetMessagePreview(ctx context.Context, ref models.MessageRef, intent MessageReadIntent) (MessageReadResult, error) {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return MessageReadResult{}, err
+	}
+	getter, ok := slot.backend.(interface {
+		GetMessagePreview(context.Context, models.MessageRef, MessageReadIntent) (MessageReadResult, error)
+	})
+	if !ok {
+		return MessageReadResult{}, fmt.Errorf("source %q does not support cache-first preview reads", slot.info.SourceID)
+	}
+	return getter.GetMessagePreview(ctx, ref, intent)
+}
+
+func (m *MultiBackend) ArchiveEmailByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.ArchiveEmail(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) DeleteEmailByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.DeleteEmail(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) MarkReadByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.MarkRead(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) MarkUnreadByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.MarkUnread(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) MarkStarredByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.MarkStarred(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) UnmarkStarredByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.UnmarkStarred(ref.MessageID, ref.Folder)
 }
 
 func (m *MultiBackend) SetGroupByDomain(groupByDomain bool) {

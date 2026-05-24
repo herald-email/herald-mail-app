@@ -179,6 +179,27 @@ func markReadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
 	}
 }
 
+func markReadEmailCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
+	if email == nil {
+		return nil
+	}
+	messageID := email.MessageID
+	folder := email.Folder
+	ref := email.MessageRef()
+	return func() tea.Msg {
+		var err error
+		if scoped, ok := b.(interface{ MarkReadByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+			err = scoped.MarkReadByRef(ref)
+		} else {
+			err = b.MarkRead(messageID, folder)
+		}
+		if err != nil {
+			logger.Warn("markReadEmailCmd failed for %s: %v", messageID, err)
+		}
+		return nil
+	}
+}
+
 // markUnreadCmd fires and forgets; marks the email as unread on IMAP and in cache.
 func markUnreadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
 	return func() tea.Msg {
@@ -189,18 +210,48 @@ func markUnreadCmd(b backend.Backend, messageID, folder string) tea.Cmd {
 	}
 }
 
+func markUnreadEmailCmd(b backend.Backend, email *models.EmailData) tea.Cmd {
+	if email == nil {
+		return nil
+	}
+	messageID := email.MessageID
+	folder := email.Folder
+	ref := email.MessageRef()
+	return func() tea.Msg {
+		var err error
+		if scoped, ok := b.(interface{ MarkUnreadByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+			err = scoped.MarkUnreadByRef(ref)
+		} else {
+			err = b.MarkUnread(messageID, folder)
+		}
+		if err != nil {
+			logger.Warn("markUnreadEmailCmd failed for %s: %v", messageID, err)
+		}
+		return nil
+	}
+}
+
 // toggleStarCmd toggles the \Flagged IMAP flag and returns a StarResultMsg.
 func (m *Model) toggleStarCmd(email *models.EmailData) tea.Cmd {
 	b := m.backend
 	messageID := email.MessageID
 	folder := email.Folder
+	ref := email.MessageRef()
 	starred := !email.IsStarred
 	return func() tea.Msg {
 		var err error
 		if starred {
-			err = b.MarkStarred(messageID, folder)
+			if scoped, ok := b.(interface{ MarkStarredByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+				err = scoped.MarkStarredByRef(ref)
+			} else {
+				err = b.MarkStarred(messageID, folder)
+			}
 		} else {
-			err = b.UnmarkStarred(messageID, folder)
+			if scoped, ok := b.(interface{ UnmarkStarredByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+				err = scoped.UnmarkStarredByRef(ref)
+			} else {
+				err = b.UnmarkStarred(messageID, folder)
+			}
 		}
 		if err != nil {
 			return StarResultMsg{MessageID: messageID, Err: err}

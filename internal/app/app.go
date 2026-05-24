@@ -1146,6 +1146,7 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.timeline.searchResults = nil
 	m.timeline.searchMode = false
 	m.timeline.searchError = ""
+	m.timeline.searchToken++
 	m.timeline.fullScreen = false
 	m.timelineTable.SetRows([]table.Row{})
 	m.timelineTable.SetCursor(0)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -132,7 +133,8 @@ func (m *Model) visibleSidebarItems() []sidebarItem {
 	if !m.hasMultipleAccounts() {
 		return items
 	}
-	accountItems := make([]sidebarItem, 0, len(m.accounts)+len(items))
+	accountItems := make([]sidebarItem, 0, len(m.accounts)+1+len(items))
+	accountItems = append(accountItems, sidebarItem{kind: sidebarItemAccount, account: backend.AllAccountsSourceID})
 	for _, account := range m.accounts {
 		accountItems = append(accountItems, sidebarItem{kind: sidebarItemAccount, account: account.SourceID})
 	}
@@ -301,6 +303,9 @@ func (m *Model) renderSidebar() string {
 
 func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) string {
 	accountName := string(sourceID)
+	if sourceID == backend.AllAccountsSourceID {
+		accountName = "All Accounts"
+	}
 	for _, account := range m.accounts {
 		if account.SourceID == sourceID {
 			accountName = account.DisplayName

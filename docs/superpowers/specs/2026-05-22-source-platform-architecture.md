@@ -222,7 +222,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
   - [x] Phase 5A: Add active-account backend switching, account rail/sidebar, account switcher overlay, and account-aware status chrome.
-  - [ ] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
+  - [x] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
 - [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
 

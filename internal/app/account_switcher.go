@@ -44,8 +44,9 @@ func (m *Model) syncAccountsFromBackend() {
 	if m.accountSwitcherCursor < 0 {
 		m.accountSwitcherCursor = 0
 	}
-	if m.accountSwitcherCursor >= len(m.accounts) {
-		m.accountSwitcherCursor = len(m.accounts) - 1
+	switchable := m.accountSwitcherAccounts()
+	if m.accountSwitcherCursor >= len(switchable) {
+		m.accountSwitcherCursor = len(switchable) - 1
 	}
 }
 
@@ -53,9 +54,35 @@ func (m *Model) hasMultipleAccounts() bool {
 	return len(m.accounts) > 1
 }
 
+func (m *Model) allAccountsInfo() backend.AccountInfo {
+	return backend.AccountInfo{
+		SourceID:    backend.AllAccountsSourceID,
+		AccountID:   models.AccountID("all"),
+		DisplayName: "All Accounts",
+		Provider:    "virtual",
+	}
+}
+
+func (m *Model) accountSwitcherAccounts() []backend.AccountInfo {
+	if !m.hasMultipleAccounts() {
+		return m.accounts
+	}
+	out := make([]backend.AccountInfo, 0, len(m.accounts)+1)
+	out = append(out, m.allAccountsInfo())
+	out = append(out, m.accounts...)
+	return out
+}
+
+func (m *Model) allAccountsScopeActive() bool {
+	return m.hasMultipleAccounts() && m.activeSourceID == backend.AllAccountsSourceID
+}
+
 func (m *Model) activeAccountInfo() backend.AccountInfo {
 	if !m.hasMultipleAccounts() {
 		return backend.AccountInfo{}
+	}
+	if m.activeSourceID == backend.AllAccountsSourceID {
+		return m.allAccountsInfo()
 	}
 	for _, account := range m.accounts {
 		if account.SourceID == m.activeSourceID {
@@ -102,13 +129,14 @@ func (m *Model) handleAccountSwitcherKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			}
 			return m, nil, true
 		case "down", "j":
-			if m.accountSwitcherCursor < len(m.accounts)-1 {
+			if m.accountSwitcherCursor < len(m.accountSwitcherAccounts())-1 {
 				m.accountSwitcherCursor++
 			}
 			return m, nil, true
 		case "enter":
-			if m.accountSwitcherCursor >= 0 && m.accountSwitcherCursor < len(m.accounts) {
-				return m, m.switchActiveAccount(m.accounts[m.accountSwitcherCursor].SourceID), true
+			accounts := m.accountSwitcherAccounts()
+			if m.accountSwitcherCursor >= 0 && m.accountSwitcherCursor < len(accounts) {
+				return m, m.switchActiveAccount(accounts[m.accountSwitcherCursor].SourceID), true
 			}
 			m.showAccountSwitcher = false
 			return m, nil, true
@@ -117,7 +145,7 @@ func (m *Model) handleAccountSwitcherKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 	if key == "A" && m.accountSwitcherShortcutAvailable() {
 		m.syncAccountsFromBackend()
-		for i, account := range m.accounts {
+		for i, account := range m.accountSwitcherAccounts() {
 			if account.SourceID == m.activeSourceID {
 				m.accountSwitcherCursor = i
 				break
@@ -148,6 +176,9 @@ func (m *Model) switchActiveAccount(sourceID models.SourceID) tea.Cmd {
 		return nil
 	}
 	m.syncAccountsFromBackend()
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
 	m.resetMailboxStateForFolder(targetFolder)
 	m.showAccountSwitcher = false
 	m.statusMessage = fmt.Sprintf("Switched to %s", m.activeAccountLabel())
@@ -179,13 +210,17 @@ func (m *Model) renderAccountSwitcherPanel() string {
 	contentW := width - 4
 	var lines []string
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render("Accounts"))
-	lines = append(lines, m.theme.Text.Dim.Style().Render("Switch the visible mail source. All reads and writes stay scoped to the active account."))
+	lines = append(lines, m.theme.Text.Dim.Style().Render("Switch the visible mail source. Reads can span accounts; writes stay scoped to selected messages."))
 	lines = append(lines, "")
-	for i, account := range m.accounts {
+	accounts := m.accountSwitcherAccounts()
+	for i, account := range accounts {
 		status := m.accountStatuses[account.SourceID]
 		state := strings.TrimSpace(status.State)
 		if state == "" {
 			state = "live"
+		}
+		if account.SourceID == backend.AllAccountsSourceID {
+			state = "browse"
 		}
 		if status.Error != "" {
 			state = "auth"
@@ -214,8 +249,8 @@ func (m *Model) renderAccountSwitcherPanel() string {
 	}
 	lines = append(lines, "")
 	selected := backend.AccountInfo{}
-	if m.accountSwitcherCursor >= 0 && m.accountSwitcherCursor < len(m.accounts) {
-		selected = m.accounts[m.accountSwitcherCursor]
+	if m.accountSwitcherCursor >= 0 && m.accountSwitcherCursor < len(accounts) {
+		selected = accounts[m.accountSwitcherCursor]
 	}
 	if selected.SourceID != "" {
 		status := m.accountStatuses[selected.SourceID]

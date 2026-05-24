@@ -204,6 +204,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [ ] Keep source plugins provider-specific but small: IMAP, Google Calendar, and CalDAV handle transport details while Herald owns cache policy, queue policy, stale-result filtering, and UI priority.
 - [x] Extract current IMAP provider operations from `LocalBackend` into `IMAPMailSource` behind a mail capability interface.
 - [x] Add an active-account backend wrapper so the TUI can switch between configured mail sources while legacy `Backend` callers continue to use folder/message-ID methods.
+- [x] Add an opt-in `All Accounts` TUI scope that aggregates Timeline/search through source backends, renders account badges, and routes selected-message reads/writes by `MessageRef`.
 - [x] Move latest-user-intent, duplicate resource coalescing, serial mutations, and fair background work into reusable coordination primitives before migrating existing queues.
 - [x] Keep mail body and preview reads cache-first so callers ask once while the service decides persistent cache, in-flight join, completed replay, or provider fetch.
 - [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.

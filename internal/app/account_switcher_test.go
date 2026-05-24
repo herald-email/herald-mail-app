@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -36,6 +37,9 @@ func (b *accountAwareStubBackend) Accounts() []backend.AccountInfo {
 }
 
 func (b *accountAwareStubBackend) ActiveAccount() backend.AccountInfo {
+	if b.activeSource == backend.AllAccountsSourceID {
+		return backend.AccountInfo{SourceID: backend.AllAccountsSourceID, DisplayName: "All Accounts", Provider: "virtual"}
+	}
 	for _, account := range b.accounts {
 		if account.SourceID == b.activeSource {
 			return account
@@ -73,6 +77,14 @@ func accountSwitcherTestModel(b *accountAwareStubBackend) *Model {
 	m.folderStatus = map[string]models.FolderStatus{"INBOX": {Unseen: 7, Total: 23}}
 	m.syncAccountsFromBackend()
 	return m
+}
+
+func scopedAppEmail(email *models.EmailData) *models.EmailData {
+	ref := email.MessageRef()
+	email.SourceID = ref.SourceID
+	email.AccountID = ref.AccountID
+	email.LocalID = ref.LocalID
+	return email
 }
 
 func TestSingleAccountSidebarDoesNotRenderAccountRail(t *testing.T) {
@@ -147,8 +159,8 @@ func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T
 	opened := model.(*Model)
 	model, _ = opened.handleKeyMsg(keyRunes("j"))
 	selected := model.(*Model)
-	if selected.accountSwitcherCursor != 1 {
-		t.Fatalf("cursor=%d, want 1", selected.accountSwitcherCursor)
+	if selected.accountSwitcherCursor != 2 {
+		t.Fatalf("cursor=%d, want 2", selected.accountSwitcherCursor)
 	}
 	model, cmd := selected.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 	switched := model.(*Model)
@@ -177,7 +189,7 @@ func TestAccountRailEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T) {
 	m.accountSelectedFolders["work-mail"] = "Clients"
 	m.accountSelectedFolders["personal-mail"] = "Travel"
 	m.focusedPanel = panelSidebar
-	m.sidebarCursor = 1
+	m.sidebarCursor = 2
 
 	cmd, handledAccount := m.selectSidebarFolder()
 	if !handledAccount {
@@ -191,6 +203,115 @@ func TestAccountRailEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T) {
 	}
 	if m.currentFolder != "Travel" {
 		t.Fatalf("currentFolder=%q, want restored Travel", m.currentFolder)
+	}
+}
+
+func TestAllAccountsRailAndSwitcherEntrySwitchUnifiedScope(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	})
+	m := accountSwitcherTestModel(b)
+	m.currentFolder = "Clients"
+	m.accountSelectedFolders["work-mail"] = "Clients"
+	m.accountSelectedFolders["personal-mail"] = "Travel"
+	m.focusedPanel = panelSidebar
+	m.sidebarCursor = 0
+
+	sidebar := stripANSI(m.renderSidebar())
+	if !strings.Contains(sidebar, "All Accounts") {
+		t.Fatalf("multi-account sidebar missing All Accounts row:\n%s", sidebar)
+	}
+
+	cmd, handledAccount := m.selectSidebarFolder()
+	if !handledAccount {
+		t.Fatal("expected All Accounts rail row to be handled as an account switch")
+	}
+	if cmd == nil {
+		t.Fatal("expected All Accounts switch to schedule reload commands")
+	}
+	if b.activeSource != backend.AllAccountsSourceID {
+		t.Fatalf("active source=%q, want all accounts", b.activeSource)
+	}
+	if m.currentFolder != "INBOX" {
+		t.Fatalf("currentFolder=%q, want unified INBOX", m.currentFolder)
+	}
+	if title := stripANSI(m.renderTitleBar(120)); !strings.Contains(title, "All Accounts") {
+		t.Fatalf("title missing All Accounts scope: %q", title)
+	}
+
+	model, _ := m.handleKeyMsg(keyRunes("A"))
+	opened := model.(*Model)
+	overlay := stripANSI(opened.renderAccountSwitcherOverlayView())
+	if !strings.Contains(overlay, "All Accounts") {
+		t.Fatalf("switcher overlay missing All Accounts:\n%s", overlay)
+	}
+}
+
+func TestUnifiedTimelineRendersAccountBadgesAndKeepsDuplicateSelections(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	})
+	m := accountSwitcherTestModel(b)
+	m.activeSourceID = backend.AllAccountsSourceID
+	m.timeline.senderWidth = 28
+	m.timeline.subjectWidth = 44
+	now := time.Date(2026, 5, 23, 14, 0, 0, 0, time.UTC)
+	m.timeline.emails = []*models.EmailData{
+		scopedAppEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "same-message", UID: 11, Folder: "INBOX", Sender: "work@example.test", Subject: "Work note", Date: now}),
+		scopedAppEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "same-message", UID: 22, Folder: "INBOX", Sender: "me@example.test", Subject: "Personal note", Date: now.Add(-time.Minute)}),
+	}
+	m.updateTableDimensions(120, 40)
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("expected two unified rows, got %d: %#v", len(rows), rows)
+	}
+	renderedRows := stripANSI(strings.Join([]string{strings.Join(rows[0], " "), strings.Join(rows[1], " ")}, "\n"))
+	for _, want := range []string{"Work Mail", "Personal"} {
+		if !strings.Contains(renderedRows, want) {
+			t.Fatalf("unified rows missing account badge %q:\n%s", want, renderedRows)
+		}
+	}
+
+	m.timelineTable.SetCursor(0)
+	m.toggleTimelineSelection()
+	m.timelineTable.SetCursor(1)
+	m.toggleTimelineSelection()
+	if got := len(m.timeline.selectedMessageIDs); got != 2 {
+		t.Fatalf("selected duplicate message IDs count=%d, want 2; selected=%#v", got, m.timeline.selectedMessageIDs)
+	}
+	if m.timeline.selectedMessageIDs["same-message"] {
+		t.Fatalf("unified selection should use scoped keys, got %#v", m.timeline.selectedMessageIDs)
+	}
+}
+
+func TestSingleAccountTimelineDoesNotRenderAccountBadges(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{{
+		SourceID:    "default-mail",
+		AccountID:   "default",
+		DisplayName: "Default Mail",
+	}})
+	m := accountSwitcherTestModel(b)
+	m.timeline.senderWidth = 28
+	m.timeline.subjectWidth = 44
+	m.timeline.emails = []*models.EmailData{{
+		MessageID: "solo",
+		Sender:    "sender@example.test",
+		Subject:   "Hello",
+		Date:      time.Date(2026, 5, 23, 14, 0, 0, 0, time.UTC),
+		Folder:    "INBOX",
+	}}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected one row, got %d: %#v", len(rows), rows)
+	}
+	if rendered := stripANSI(strings.Join(rows[0], " ")); strings.Contains(rendered, "Default Mail") || strings.Contains(rendered, "Acct") {
+		t.Fatalf("single-account row should not show account badge: %q", rendered)
 	}
 }
 

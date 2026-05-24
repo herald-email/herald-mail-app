@@ -379,8 +379,15 @@ func (m *Model) updateTableDimensions(width, height int) {
 	// the sender and subject stop feeling like the primary reading surface.
 	tWhenW := 12
 	tTagW := 8
-	tFixed := 1 + tWhenW + tTagW // Select + When + Tag
-	tNCols := 5                  // Select, Sender, Subject, When, Tag
+	tAcctW := 0
+	if m.timelineShowsAccountBadges() {
+		tAcctW = 10
+	}
+	tFixed := 1 + tAcctW + tWhenW + tTagW // Select + optional Acct + When + Tag
+	tNCols := 5                           // Select, Sender, Subject, When, Tag
+	if tAcctW > 0 {
+		tNCols++
+	}
 	const minTimelineVariable = 30
 
 	timelineAvailable := plan.Timeline.TableWidth
@@ -402,6 +409,12 @@ func (m *Model) updateTableDimensions(width, height int) {
 		tNCols--
 		tWhenW = 0
 	}
+	if calcTimelineVar() < minTimelineVariable && tAcctW > 0 {
+		tFixed -= tAcctW
+		tNCols--
+		tAcctW = 0
+	}
+	m.timeline.accountColumnVisible = tAcctW > 0
 
 	timelineVariable := calcTimelineVar()
 	tSenderWidth := timelineVariable * 32 / 100
@@ -427,15 +440,33 @@ func (m *Model) updateTableDimensions(width, height int) {
 	}
 	m.timeline.senderWidth = tSenderWidth
 	m.timeline.subjectWidth = tSubjectWidth
-	m.timelineTable.SetColumns([]table.Column{
+	columns := []table.Column{
 		{Title: "✓", Width: 1},
-		{Title: "Sender", Width: tSenderWidth},
-		{Title: "Subject", Width: tSubjectWidth},
-		{Title: "When", Width: tWhenW},
-		{Title: "Tag", Width: tTagW},
-	})
+	}
+	if tAcctW > 0 {
+		columns = append(columns, table.Column{Title: "Acct", Width: tAcctW})
+	}
+	columns = append(columns,
+		table.Column{Title: "Sender", Width: tSenderWidth},
+		table.Column{Title: "Subject", Width: tSubjectWidth},
+		table.Column{Title: "When", Width: tWhenW},
+		table.Column{Title: "Tag", Width: tTagW},
+	)
+	savedTimelineCursor := m.timelineTable.Cursor()
+	m.timelineTable.SetRows([]table.Row{})
+	m.timelineTable.SetColumns(columns)
 	m.timelineTable.SetWidth(tFixed + tSenderWidth + tSubjectWidth + tNCols*2)
 	m.timelineTable.SetHeight(tableHeight + 1)
+	m.updateTimelineTable()
+	if rows := m.timelineTable.Rows(); len(rows) > 0 {
+		if savedTimelineCursor >= len(rows) {
+			savedTimelineCursor = len(rows) - 1
+		}
+		if savedTimelineCursor < 0 {
+			savedTimelineCursor = 0
+		}
+		m.timelineTable.SetCursor(savedTimelineCursor)
+	}
 
 	logWidth := width - 4
 	if logWidth < 20 {
