@@ -62,31 +62,15 @@ func makeMouseThreadTimelineModel(t *testing.T) (*Model, *models.EmailData, *mod
 	return m, root, child
 }
 
-func makeMouseCleanupModel(t *testing.T) *Model {
-	t.Helper()
-	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
-	m.showSidebar = false
-	m.stats = makeCleanupStats()
-	m.emailsBySender = makeCleanupEmails()
-	if b, ok := m.backend.(*layoutBackend); ok {
-		b.emailsBySender = m.emailsBySender
-	}
-	m.updateSummaryTable()
-	m.updateDetailsTable()
-	m.setFocusedPanel(panelSummary)
-	return m
-}
-
 func TestMouseClickTabSwitchesWithoutTypingIntoCompose(t *testing.T) {
 	m := makeMouseTimelineModel(t)
 
-	cleanupTabX := visibleWidth(" Herald  ") + tabMouseWidth(topLevelTabNavigation[0]) + 1
-	model, _ := m.Update(mousePress(cleanupTabX, 0))
+	contactsTabX := visibleWidth(" Herald  ") + tabMouseWidth(topLevelTabNavigation[0]) + 1
+	model, _ := m.Update(mousePress(contactsTabX, 0))
 	updated := model.(*Model)
 
-	if updated.activeTab != tabCleanup {
-		t.Fatalf("expected mouse click on title-row tab to switch to Cleanup, got tab %d", updated.activeTab)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("expected mouse click on title-row tab to switch to Contacts, got tab %d", updated.activeTab)
 	}
 	if got := updated.composeTo.Value(); got != "" {
 		t.Fatalf("expected tab mouse click not to type into compose field, got %q", got)
@@ -227,66 +211,6 @@ func TestMouseWheelTimelinePreviewScrollsBody(t *testing.T) {
 	}
 }
 
-func TestMouseClickCleanupSummaryUpdatesDetails(t *testing.T) {
-	m := makeMouseCleanupModel(t)
-	before, ok := m.summaryKeyAtCursor()
-	if !ok {
-		t.Fatal("expected initial cleanup summary row")
-	}
-
-	model, _ := m.Update(mousePress(5, 4))
-	updated := model.(*Model)
-	after, ok := updated.summaryKeyAtCursor()
-	if !ok {
-		t.Fatal("expected clicked cleanup summary row")
-	}
-
-	if before == after {
-		t.Fatalf("expected click on second summary row to move selection from %q", before)
-	}
-	if updated.focusedPanel != panelSummary {
-		t.Fatalf("expected summary click to focus summary panel, got %d", updated.focusedPanel)
-	}
-	if len(updated.detailsEmails) == 0 || updated.detailsEmails[0].Sender != after {
-		t.Fatalf("expected details to refresh for %q, got %d detail emails", after, len(updated.detailsEmails))
-	}
-}
-
-func TestMouseClickCleanupDetailsOpensPreview(t *testing.T) {
-	m := makeMouseCleanupModel(t)
-	m.setFocusedPanel(panelDetails)
-
-	detailsX := m.summaryTable.Width() + panelGapWidth + 3
-	model, cmd := m.Update(mousePress(detailsX, 3))
-	updated := model.(*Model)
-
-	if !updated.showCleanupPreview || updated.cleanupPreviewEmail == nil {
-		t.Fatal("expected details row click to open cleanup preview")
-	}
-	if cmd == nil {
-		t.Fatal("expected details row click to request cleanup body loading")
-	}
-}
-
-func TestMouseWheelCleanupPreviewScrollsBody(t *testing.T) {
-	m := makeMouseCleanupModel(t)
-	m.showCleanupPreview = true
-	m.cleanupPreviewEmail = m.detailsEmails[0]
-	m.cleanupEmailBody = &models.EmailBody{TextPlain: strings.Repeat("line\n", 80)}
-	m.cleanupBodyWrappedLines = strings.Split(strings.Repeat("line\n", 80), "\n")
-	m.cleanupBodyLoading = false
-	m.setFocusedPanel(panelDetails)
-	m.updateTableDimensions(120, 40)
-
-	previewX := m.windowWidth - 3
-	model, _ := m.Update(mouseWheelDown(previewX, 10))
-	updated := model.(*Model)
-
-	if updated.cleanupBodyScrollOffset != 3 {
-		t.Fatalf("expected cleanup preview wheel to scroll by 3 lines, got %d", updated.cleanupBodyScrollOffset)
-	}
-}
-
 func TestMouseModeToggleReleasesAndRestoresCapture(t *testing.T) {
 	m := makeMouseTimelineModel(t)
 
@@ -309,37 +233,6 @@ func TestMouseModeToggleReleasesAndRestoresCapture(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected second m to update mouse capture through the next Bubble Tea v2 view")
-	}
-	if got := updated.View().MouseMode; got != tea.MouseModeCellMotion {
-		t.Fatalf("MouseMode=%v, want MouseModeCellMotion", got)
-	}
-}
-
-func TestMouseModeToggleWorksInCleanupPreview(t *testing.T) {
-	m := makeMouseCleanupModel(t)
-	m.showCleanupPreview = true
-	m.cleanupPreviewEmail = m.detailsEmails[0]
-	m.setFocusedPanel(panelDetails)
-
-	model, cmd := m.Update(keyRunes("m"))
-	updated := model.(*Model)
-	if !updated.timeline.mouseMode {
-		t.Fatal("expected m to enter terminal mouse-selection mode from cleanup preview")
-	}
-	if cmd != nil {
-		t.Fatal("expected cleanup preview m to update mouse capture through the next Bubble Tea v2 view")
-	}
-	if got := updated.View().MouseMode; got != tea.MouseModeNone {
-		t.Fatalf("MouseMode=%v, want MouseModeNone", got)
-	}
-
-	model, cmd = updated.Update(keyRunes("m"))
-	updated = model.(*Model)
-	if updated.timeline.mouseMode {
-		t.Fatal("expected second cleanup preview m to restore TUI mouse capture mode")
-	}
-	if cmd != nil {
-		t.Fatal("expected cleanup preview second m to update mouse capture through the next Bubble Tea v2 view")
 	}
 	if got := updated.View().MouseMode; got != tea.MouseModeCellMotion {
 		t.Fatalf("MouseMode=%v, want MouseModeCellMotion", got)

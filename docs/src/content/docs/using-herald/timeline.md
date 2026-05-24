@@ -15,6 +15,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | --- | --- |
 | Folder sidebar | Folder tree, unread counts, total counts, expandable parents, and virtual `All Mail only` when available. |
 | Timeline table | One row per visible thread or email. Columns prioritize Sender, Subject, When, and Tag when width allows. |
+| Grouped Timeline | `G` cycles the list between thread, sender, and domain grouping for reading and cleanup review. |
 | Sender cell | Sender display name plus unread indicator, star indicator, thread count, and child-row prefix for expanded threads. Wider terminals may also show the muted email address. |
 | Subject cell | Subject for the newest thread message or the individual email row, with an attachment marker when Herald detected attachments. |
 | When column | Local, human-readable message date such as a time, yesterday label, weekday, or calendar date depending on age. |
@@ -39,6 +40,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `space` | Timeline list | Timeline list is focused and the view is not read-only. | Toggles selection for the current message or collapsed thread. |
 | `shift+down` / `shift+up` | Timeline list | Timeline list is focused, the view is not read-only, and the terminal reports shifted arrows. | Extends or shrinks message selection across visible rows. Plain movement ends the range and keeps the selected messages. |
 | `V`, then `j` / `k` | Timeline list | Timeline list is focused and the view is not read-only. | Enters fallback range selection mode and extends the selected range without requiring shifted arrows. Press `V` or `esc` to finish. |
+| `G` | Timeline list | Timeline list is focused. | Cycles thread, sender, and domain grouping. Sender/domain groups are the cleanup browse workflow. |
 | `j` / `down` | Preview/full-screen | Preview or full-screen is focused. | Scrolls body down, or extends visual selection. |
 | `k` / `up` | Preview/full-screen | Preview or full-screen is focused. | Scrolls body up, or shrinks visual selection. |
 | `/` | Timeline | Not loading and search is closed. | Opens Timeline search. |
@@ -92,6 +94,14 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 4. Press `enter` to run or focus existing results.
 5. Press `ctrl+i` or `tab` from the search input to run server IMAP search.
 6. Press `esc` once to leave results or twice to clear search.
+
+### Review Cleanup Groups
+
+1. Press `1`.
+2. Press `G` until Timeline is grouped by sender or domain.
+3. Move through groups with `j`/`k` or arrows.
+4. Press `space` to select groups, then press `d` to delete or `a`/`e` to archive.
+5. Confirm only when the status description names the expected sender or domain group.
 
 ### Reply or Forward
 

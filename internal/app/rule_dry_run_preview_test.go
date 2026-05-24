@@ -222,7 +222,7 @@ func TestRuleEditorDoneOpensDryRunPreviewBeforeSaving(t *testing.T) {
 func TestCleanupManagerPreviewSelectedRule(t *testing.T) {
 	backend := &dryRunPreviewBackend{cleanupReport: sampleDryRunReport(models.RuleDryRunKindCleanup)}
 	m := New(backend, nil, "", nil, false)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(*Model)
 	m.cleanupManager = NewCleanupManager(backend, 120, 40)

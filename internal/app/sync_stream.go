@@ -24,7 +24,6 @@ type SyncFlushMsg struct {
 type SyncHydratedMsg struct {
 	Folder        string
 	Generation    int64
-	Stats         map[string]*models.SenderStats
 	Emails        []*models.EmailData
 	Err           error
 	FinishLoading bool

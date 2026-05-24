@@ -130,7 +130,7 @@ tmux kill-session -t ssh_test
 2. Capture screenshot after TUI loads.
 
 **Expect:**
-- Tab bar visible: `1  Timeline  2  Cleanup  3  Contacts`
+- Tab bar visible: `1  Timeline  2  Contacts`
 - Timeline table populated or "No emails" message shown
 - Folder sidebar visible on the left
 - Status bar at the bottom shows folder name and email count
@@ -139,20 +139,20 @@ tmux kill-session -t ssh_test
 
 ---
 
-### TC-SS-02 — All tabs accessible over SSH
+### TC-SS-02 — Top-level tabs accessible over SSH
 
 **Steps:**
 1. Connect (TC-SS-01 setup).
 2. Press `1` → capture.
 3. Press `2` → capture.
-4. Press `3` → capture.
+4. Press `F3` → capture.
 5. Press `1` to return to Timeline.
 
 **Expect:**
 - Each tab highlights correctly in the tab bar
 - Timeline: chronological list with Sender, Subject, Date columns
-- Cleanup: two-panel layout (senders left, messages right)
-- Contacts: contact list/detail surface visible
+- Contacts: contact list/detail surface visible for both `2` and `F3`
+- No Cleanup top-level tab is reachable
 - No layout corruption when switching
 
 ### TC-SS-02A — Non-Latin browse shortcuts over SSH

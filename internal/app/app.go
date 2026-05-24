@@ -37,19 +37,12 @@ const (
 const (
 	tabTimeline = 0
 	tabCompose  = 1
-	tabCleanup  = 2
-	tabContacts = 3
+	tabContacts = 2
 )
 
 // LoadingMsg represents a loading state update
 type LoadingMsg struct {
 	Info models.ProgressInfo
-}
-
-// LoadCompleteMsg indicates loading is complete
-type LoadCompleteMsg struct {
-	Stats map[string]*models.SenderStats
-	Error error
 }
 
 // FoldersLoadedMsg carries the folder list fetched after connect
@@ -65,7 +58,6 @@ type FolderStatusMsg struct {
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
 // the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
-	Stats         map[string]*models.SenderStats
 	Emails        []*models.EmailData
 	Err           error
 	FinishLoading bool
@@ -162,19 +154,6 @@ type TimelineDraftSentMsg struct {
 type QuickRepliesMsg struct {
 	Replies []string
 	Err     error
-}
-
-// CleanupEmailBodyMsg carries the result of fetching an email body from the Cleanup tab
-type CleanupEmailBodyMsg struct {
-	MessageID      string
-	Folder         string
-	UID            uint32
-	Body           *models.EmailBody
-	Err            error
-	LoadSource     string
-	LoadStartedAt  time.Time
-	LoadFinishedAt time.Time
-	LoadDuration   time.Duration
 }
 
 type previewPrewarmMsg struct {
@@ -457,51 +436,19 @@ type Model struct {
 	// validIDsCh receives the live valid-ID set from background reconciliation.
 	validIDsCh <-chan map[string]bool
 
-	// Data
-	stats          map[string]*models.SenderStats
-	emailsBySender map[string][]*models.EmailData
-
 	// Tables
-	summaryTable  table.Model
-	detailsTable  table.Model
 	timelineTable table.Model
 	logViewer     *LogViewer
 
 	// Display options
-	groupByDomain       bool
-	currentFolder       string
-	selectedSender      string
-	selectedSummaryKeys map[string]bool     // Selected sender/domain keys in summary table
-	selectedMessages    map[string]bool     // Selected messages by MessageID (across all senders)
-	rowToSender         map[int]string      // Maps row index to original sender (before sanitization)
-	detailsEmails       []*models.EmailData // Current emails shown in details table
-	sidebarTooWide      bool                // set by layout when sidebar + terminal width leaves < 16 variable cols
+	currentFolder  string
+	sidebarTooWide bool // set by layout when sidebar + terminal width leaves < 16 variable cols
 
 	// Tabs
-	activeTab int // tabCleanup, tabTimeline, or tabCompose
+	activeTab int // tabTimeline, tabCompose, or tabContacts
 
 	// Timeline
 	timeline TimelineState
-
-	// Email body preview (cleanup tab)
-	showCleanupPreview         bool
-	cleanupPreviewEmail        *models.EmailData
-	cleanupEmailBody           *models.EmailBody
-	cleanupBodyLoading         bool
-	cleanupPreviewLoad         previewLoadTelemetry
-	cleanupBodyScrollOffset    int
-	cleanupBodyWrappedLines    []string
-	cleanupBodyWrappedWidth    int
-	cleanupPreviewDocLayout    *previewDocumentLayout
-	cleanupPreviewDocWidth     int
-	cleanupPreviewDocRows      int
-	cleanupPreviewDocMode      previewImageMode
-	cleanupPreviewDocMessageID string
-	cleanupPreviewWidth        int // computed in updateTableDimensions
-	cleanupPreviewHadSidebar   bool
-	cleanupFullScreen          bool // true = preview takes entire screen
-	cleanupPreviewDeleting     bool // true = deletion/archive was triggered from preview
-	cleanupPreviewIsArchive    bool // true = the preview action was archive (not delete)
 
 	// Chat panel
 	showChat         bool
@@ -714,37 +661,9 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	loadingStyle := theme.LoadingStyle()
 	progressStyle := theme.ProgressStyle()
 
-	// Create tables optimized for side-by-side display
-	// Summary table: ~82 chars total (left side) - added selection column
-	summaryTable := table.New(
-		table.WithColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Sender/Domain", Width: 46},
-			{Title: "Count", Width: 6},
-			{Title: "Dates", Width: 20},
-		}),
-		table.WithFocused(true),
-		table.WithHeight(11),
-	)
-
-	// Details table: ~69 chars total (right side) - added selection column
-	detailsTable := table.New(
-		table.WithColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Date", Width: 16},
-			{Title: "Subject", Width: 32},
-			{Title: "Size", Width: 8},
-			{Title: "Att", Width: 3},
-		}),
-		table.WithHeight(11),
-	)
-
 	// Create role-driven table styles shared by list-like panes.
 	activeStyle := theme.TableStyles(true)
 	inactiveStyle := theme.TableStyles(false)
-
-	summaryTable.SetStyles(inactiveStyle)
-	detailsTable.SetStyles(inactiveStyle)
 
 	// Timeline table: full-width chronological email list
 	timelineTable := table.New(
@@ -844,16 +763,11 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		accountSelectedFolders: map[models.SourceID]string{
 			models.DefaultMailSourceID: "INBOX",
 		},
-		selectedSummaryKeys: make(map[string]bool),
-		selectedMessages:    make(map[string]bool),
-		rowToSender:         make(map[int]string),
-		summaryTable:        summaryTable,
-		detailsTable:        detailsTable,
-		timelineTable:       timelineTable,
-		logViewer:           logViewer,
-		chatInput:           chatInput,
-		classifier:          classifier,
-		classifications:     make(map[string]string),
+		timelineTable:   timelineTable,
+		logViewer:       logViewer,
+		chatInput:       chatInput,
+		classifier:      classifier,
+		classifications: make(map[string]string),
 		timeline: TimelineState{
 			expandedThreads:     make(map[string]bool),
 			selectedMessageIDs:  make(map[string]bool),
@@ -1166,6 +1080,39 @@ func (m *Model) newSettingsPanel(section settingsPanelSection, status string) *S
 	return panel
 }
 
+func (m *Model) openSettingsCleanupTool(tool string) tea.Cmd {
+	m.showSettings = false
+	m.settingsPanel = nil
+
+	switch tool {
+	case settingsCleanupToolAutomation:
+		m.ruleEditor = NewRuleEditor("", "", m.windowWidth, m.windowHeight)
+		if lister, ok := m.backend.(interface {
+			GetAllRules() ([]*models.Rule, error)
+		}); ok {
+			rules, err := lister.GetAllRules()
+			m.ruleEditor.WithSavedRules(rules, err)
+		}
+		m.showRuleEditor = true
+		return m.ruleEditor.Init()
+	case settingsCleanupToolPrompts:
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		if m.backend != nil {
+			prompts, err := m.backend.GetAllCustomPrompts()
+			m.promptEditor.WithSavedPrompts(prompts, err)
+		}
+		return m.promptEditor.Init()
+	case settingsCleanupToolRules:
+		m.cleanupManager = NewCleanupManager(m.backend, m.windowWidth, m.windowHeight)
+		m.showCleanupMgr = true
+		return m.cleanupManager.Init()
+	default:
+		m.statusMessage = "Unknown cleanup settings tool."
+		return nil
+	}
+}
+
 func oauthStartFailureMessage(err error) string {
 	if err == nil {
 		return "OAuth could not start. Settings were not saved."
@@ -1192,8 +1139,6 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.folderStatus = make(map[string]models.FolderStatus)
 	m.sidebarCursor = 0
 	m.focusedPanel = panelTimeline
-	m.clearCleanupData()
-	m.resetCleanupSelection()
 	m.timeline.emails = nil
 	m.timeline.emailsCache = nil
 	m.timeline.selectedEmail = nil
@@ -1281,13 +1226,11 @@ func (m *Model) SetLocalImageLinksEnabled(enabled bool) {
 	if !enabled {
 		m.revokeImagePreviews()
 	}
-	m.clearCleanupPreviewDocumentCache()
 }
 
 func (m *Model) SetPreviewImageMode(mode PreviewImageMode) {
 	m.previewImageMode = previewImageMode(mode)
 	m.clearTimelinePreviewDocumentCache()
-	m.clearCleanupPreviewDocumentCache()
 }
 
 // SetDemoKeyOverlay toggles the small demo-media keypress overlay. It is only
@@ -1457,7 +1400,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.backend.SaveCustomPrompt(msg.Prompt); err != nil {
 				m.statusMessage = "Error saving prompt: " + err.Error()
 			} else {
-				m.statusMessage = "Prompt saved: " + msg.Prompt.Name + ". Reopen P to review saved prompts."
+				m.statusMessage = "Prompt saved: " + msg.Prompt.Name + ". Review saved prompts in Settings > Sync & Cleanup."
 			}
 		}
 		return m, nil
@@ -1497,6 +1440,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.beginOllamaModelValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
 		}
 		return m, m.applySettingsSaved(msg)
+
+	case SettingsToolRequestedMsg:
+		return m, m.openSettingsCleanupTool(msg.Tool)
 
 	case CacheStoragePolicyAppliedMsg:
 		if msg.Err != nil {
@@ -1881,7 +1827,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ClassifyDoneMsg:
 		m.classifying = false
 		m.updateTimelineTable()
-		m.updateSummaryTable()
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
 		return m, nil
 
@@ -1896,7 +1841,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.classifications[msg.MessageID] = msg.Category
 		m.statusMessage = "Reclassified: " + msg.Category
 		m.updateTimelineTable()
-		m.updateSummaryTable()
 		return m, nil
 
 	case AttachmentSavedMsg:
@@ -1986,12 +1930,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Warn("startup snapshot hydrate failed: %v", msg.Err)
 			return m, nil
 		}
-		logger.Debug("StartupHydratedMsg: stats=%d emails=%d finish=%v status=%q", len(msg.Stats), len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
-		if msg.Stats != nil {
-			m.stats = msg.Stats
-			m.updateSummaryTable()
-			m.updateDetailsTable()
-		}
+		logger.Debug("StartupHydratedMsg: emails=%d finish=%v status=%q", len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
@@ -2062,12 +2001,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isVirtualAllMailOnlyFolder(m.currentFolder) {
 			return m, nil
 		}
-		if stats, err := m.backend.GetSenderStatistics(m.currentFolder); err == nil {
-			m.stats = stats
-		}
 		m.loadClassifications()
-		m.updateSummaryTable()
-		m.updateDetailsTable()
 		return m, m.loadTimelineEmails()
 
 	case SyncEventMsg:
@@ -2167,12 +2101,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		logger.Debug("SyncHydratedMsg: folder=%s generation=%d stats=%d emails=%d finish=%v status=%q", msg.Folder, msg.Generation, len(msg.Stats), len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
-		if msg.Stats != nil {
-			m.stats = msg.Stats
-			m.updateSummaryTable()
-			m.updateDetailsTable()
-		}
+		logger.Debug("SyncHydratedMsg: folder=%s generation=%d emails=%d finish=%v status=%q", msg.Folder, msg.Generation, len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
@@ -2205,26 +2134,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		return m, nil
-
-	case CleanupEmailBodyMsg:
-		telemetry := previewTelemetryFromCleanupMsg(msg)
-		if m.cleanupPreviewEmail == nil || msg.MessageID != m.cleanupPreviewEmail.MessageID {
-			logPreviewLoad("cleanup", telemetry, true)
-			return m, nil
-		}
-		m.cleanupPreviewLoad = telemetry
-		logPreviewLoad("cleanup", telemetry, false)
-		m.cleanupBodyLoading = false
-		m.revokeImagePreviews()
-		if msg.Err != nil {
-			logger.Warn("Failed to fetch cleanup email body: %v", msg.Err)
-			m.cleanupEmailBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
-		} else {
-			m.cleanupEmailBody = msg.Body
-			m.cleanupBodyWrappedLines = nil // force rewrap on next render
-		}
-		m.clearCleanupPreviewDocumentCache()
 		return m, nil
 
 	case ChatResponseMsg:
@@ -2271,18 +2180,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Debug("LoadingMsg: phase=%s current=%d total=%d message=%q", msg.Info.Phase, msg.Info.Current, msg.Info.Total, strings.TrimSpace(msg.Info.Message))
 		return m, nil
 
-	case LoadCompleteMsg:
-		m.loading = false
-		m.deleting = false
-		if msg.Error != nil {
-			logger.Error("Error loading data: %v", msg.Error)
-			return m, tea.Quit
-		}
-		m.stats = msg.Stats
-		m.updateSummaryTable()
-		m.updateDetailsTable()
-		return m, nil
-
 	case models.DeletionResult:
 		// Update deletion progress
 		m.deletionProgress = msg
@@ -2297,48 +2194,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.Error != nil {
 			logger.Error("Deletion error: %v", msg.Error)
-			if m.cleanupPreviewDeleting {
-				m.cleanupPreviewDeleting = false
-				m.cleanupPreviewIsArchive = false
-			}
 		} else {
-			// Handle cleanup preview deletion: close preview and remove from details list
-			if m.cleanupPreviewDeleting && msg.MessageID != "" &&
-				m.cleanupPreviewEmail != nil && msg.MessageID == m.cleanupPreviewEmail.MessageID {
-				toast := "Deleted"
-				if m.cleanupPreviewIsArchive {
-					toast = "Archived"
-				}
-				m.statusMessage = toast
-				// Remove from detailsEmails slice
-				filtered := m.detailsEmails[:0]
-				for _, e := range m.detailsEmails {
-					if e.MessageID != msg.MessageID {
-						filtered = append(filtered, e)
-					}
-				}
-				m.detailsEmails = filtered
-				// Close the preview
-				m.revokeImagePreviews()
-				m.showCleanupPreview = false
-				m.cleanupPreviewEmail = nil
-				m.cleanupEmailBody = nil
-				m.cleanupBodyLoading = false
-				m.cleanupBodyScrollOffset = 0
-				m.cleanupBodyWrappedLines = nil
-				m.cleanupFullScreen = false
-				m.cleanupPreviewDeleting = false
-				m.cleanupPreviewIsArchive = false
-				m.showSidebar = m.cleanupPreviewHadSidebar
-				m.clearCleanupPreviewDocumentCache()
-				m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			}
-
 			// Remove from local cache immediately for instant UI update
 			if msg.Sender != "" {
 				logger.Info("Deletion complete: %s", msg.Sender)
-				// Remove sender from stats
-				delete(m.stats, msg.Sender)
 			} else if msg.MessageID != "" {
 				logger.Info("Deletion complete: message %s", msg.MessageID)
 				// Remove individual message from cache
@@ -2346,10 +2205,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.pruneTimelineStateAfterDeletion(msg)
-
-			// Update UI immediately
-			m.updateSummaryTable()
-			m.updateDetailsTable()
 		}
 
 		// Check if all deletions are complete
@@ -2359,18 +2214,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
 			m.connectionLost = false
-			m.resetCleanupSelection()
 			m.clearTimelineSelection()
 
 			// Reload data after all deletions complete to sync with server
-			stats, err := m.backend.GetSenderStatistics(m.currentFolder)
-			if err != nil {
-				logger.Error("Failed to reload after deletion: %v", err)
-				return m, nil
-			}
-			m.stats = stats
-			m.updateSummaryTable()
-			m.updateDetailsTable()
 			// Also refresh timeline and sidebar folder counts
 			folders := m.folders
 			refreshCounts := func() tea.Msg {
@@ -2535,12 +2381,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update tables and log viewer
 	var cmd tea.Cmd
-	m.summaryTable, cmd = m.summaryTable.Update(msg)
-	cmds = append(cmds, cmd)
-
-	m.detailsTable, cmd = m.detailsTable.Update(msg)
-	cmds = append(cmds, cmd)
-
 	m.timelineTable, cmd = m.timelineTable.Update(msg)
 	cmds = append(cmds, cmd)
 
@@ -2609,9 +2449,6 @@ func (m *Model) View() tea.View {
 	}
 	if m.timeline.fullScreen {
 		return m.buildView(m.renderFullScreenEmail())
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-		return m.buildView(m.renderCleanupPreview())
 	}
 	return m.buildView(m.renderMainView())
 }
@@ -2689,9 +2526,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "m":
-		if m.activeTab == tabCleanup && m.showCleanupPreview {
-			return m, m.toggleMouseCaptureMode()
-		}
 		return m, nil
 
 	case "B", "f":
@@ -2704,8 +2538,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.canInteractWithVisibleData() {
 			if m.focusedPanel == panelSidebar {
 				m.toggleSidebarNode()
-			} else {
-				m.toggleSelection()
 			}
 		}
 		return m, nil
@@ -2729,9 +2561,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if !m.loading && m.classifier != nil {
 			var target *models.EmailData
-			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
-				target = m.cleanupPreviewEmail
-			} else if m.activeTab == tabTimeline {
+			if m.activeTab == tabTimeline {
 				cursor := m.timelineTable.Cursor()
 				if cursor < len(m.timeline.threadRowMap) {
 					ref := m.timeline.threadRowMap[cursor]
@@ -2751,45 +2581,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "W":
-		if m.activeTab == tabCleanup && !m.showRuleEditor {
-			sender := ""
-			domain := ""
-			cursor := m.summaryTable.Cursor()
-			if s, ok := m.rowToSender[cursor]; ok {
-				if m.groupByDomain {
-					domain = s
-				} else {
-					sender = s
-				}
-			}
-			m.ruleEditor = NewRuleEditor(sender, domain, m.windowWidth, m.windowHeight)
-			if lister, ok := m.backend.(interface {
-				GetAllRules() ([]*models.Rule, error)
-			}); ok {
-				rules, err := lister.GetAllRules()
-				m.ruleEditor.WithSavedRules(rules, err)
-			}
-			m.showRuleEditor = true
-			return m, m.ruleEditor.Init()
-		}
+		m.statusMessage = "Cleanup tools moved to Settings > Sync & Cleanup."
 		return m, nil
 
 	case "P":
-		if !m.showRuleEditor && !m.showPromptEditor && !m.showSettings {
-			m.showPromptEditor = true
-			m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
-			prompts, err := m.backend.GetAllCustomPrompts()
-			m.promptEditor.WithSavedPrompts(prompts, err)
-			return m, m.promptEditor.Init()
-		}
+		m.statusMessage = "Custom prompts moved to Settings > Sync & Cleanup."
 		return m, nil
 
 	case "C":
-		if m.activeTab == tabCleanup && !m.showCleanupMgr {
-			m.cleanupManager = NewCleanupManager(m.backend, m.windowWidth, m.windowHeight)
-			m.showCleanupMgr = true
-			return m, m.cleanupManager.Init()
-		}
+		m.statusMessage = "Cleanup tools moved to Settings > Sync & Cleanup."
 		return m, nil
 
 	case "S":
@@ -2806,24 +2606,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
-		}
-		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && !m.loading && !m.deleting {
-			email := m.cleanupPreviewEmail
-			m.cleanupPreviewDeleting = true
-			m.cleanupPreviewIsArchive = true
-			m.deleting = true
-			m.deletionsPending++
-			m.deletionsTotal++
-			ch := m.deletionRequestCh
-			go func() {
-				ch <- models.DeletionRequest{
-					MessageID:          email.MessageID,
-					Folder:             email.Folder,
-					IsArchive:          true,
-					AffectedMessageIDs: []string{email.MessageID},
-				}
-			}()
-			return m, m.listenForDeletionResults()
 		}
 		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
 			if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 && len(m.selectedTimelineArchiveEmails()) == 0 {
@@ -2847,28 +2629,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil
 		}
-		if m.blockCleanupReadOnlyMutation() {
-			return m, nil
-		}
-		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil && m.cleanupEmailBody != nil && m.cleanupEmailBody.ListUnsubscribe != "" {
-			sender := m.cleanupPreviewEmail.Sender
-			body := m.cleanupEmailBody
-			m.pendingUnsubscribe = true
-			m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
-			m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
-		}
 		return m, nil
 
 	case "h", "H":
-		if m.activeTab == tabCleanup && !m.loading && !m.deleting {
-			if m.showCleanupPreview && m.cleanupPreviewEmail != nil {
-				return m, createHideFutureMailCmd(m.backend, m.cleanupPreviewEmail.Sender)
-			}
-			cursor := m.summaryTable.Cursor()
-			if sender, ok := m.rowToSender[cursor]; ok && sender != "" {
-				return m, createHideFutureMailCmd(m.backend, sender)
-			}
-		}
 		return m, nil
 
 	case "enter":
@@ -2880,43 +2643,11 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				m.clearTimelineChatFilter()
 				return m, m.activateCurrentFolder()
-			} else if m.focusedPanel == panelDetails && m.activeTab == tabCleanup {
-				// Open or scroll cleanup preview
-				if m.showCleanupPreview {
-					m.cleanupBodyScrollOffset++
-				} else {
-					idx := m.detailsTable.Cursor()
-					if idx < len(m.detailsEmails) {
-						email := m.detailsEmails[idx]
-						m.revokeImagePreviews()
-						m.cleanupPreviewEmail = email
-						m.showCleanupPreview = true
-						m.cleanupBodyLoading = true
-						m.cleanupPreviewLoad = previewLoadTelemetry{}
-						m.cleanupEmailBody = nil
-						m.cleanupBodyScrollOffset = 0
-						m.cleanupBodyWrappedLines = nil
-						m.clearCleanupPreviewDocumentCache()
-						m.cleanupPreviewHadSidebar = m.showSidebar
-						m.showSidebar = false
-						m.updateTableDimensions(m.windowWidth, m.windowHeight)
-						return m, fetchCleanupBodyCmd(m.backend, email)
-					}
-				}
-			} else if m.focusedPanel == panelSummary {
-				m.updateDetailsTable()
 			}
 		}
 		return m, nil
 
 	case "z":
-		if m.activeTab == tabCleanup && m.showCleanupPreview {
-			m.cleanupFullScreen = !m.cleanupFullScreen
-			m.cleanupBodyWrappedLines = nil // force re-wrap at new width
-			m.clearCleanupPreviewDocumentCache()
-			m.updateTableDimensions(m.windowWidth, m.windowHeight)
-			return m, nil
-		}
 		return m, nil
 
 	case "esc":
@@ -2952,18 +2683,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		if m.canInteractWithVisibleData() {
-			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-				if m.cleanupBodyScrollOffset > 0 {
-					m.cleanupBodyScrollOffset--
-				}
-				return m, nil
-			}
-			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
-				if m.cleanupBodyScrollOffset > 0 {
-					m.cleanupBodyScrollOffset--
-				}
-				return m, nil
-			}
 			if m.activeTab != tabTimeline {
 				return m.handleNavigation(-1)
 			}
@@ -2972,14 +2691,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		if m.canInteractWithVisibleData() {
-			if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-				m.cleanupBodyScrollOffset++
-				return m, nil
-			}
-			if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel == panelDetails {
-				m.cleanupBodyScrollOffset++
-				return m, nil
-			}
 			if m.activeTab != tabTimeline {
 				return m.handleNavigation(1)
 			}
@@ -2998,8 +2709,6 @@ func (m *Model) normalizeShortcutKeyForActiveScope(key string) string {
 	switch m.activeTab {
 	case tabTimeline:
 		scope = "timeline"
-	case tabCleanup:
-		scope = "cleanup"
 	case tabContacts:
 		scope = "contacts"
 	}
@@ -3068,7 +2777,6 @@ func (m *Model) renderMainView() string {
 	var content strings.Builder
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
-	chrome := m.chromeState(plan)
 
 	// Header
 	content.WriteString(m.renderTitleBar(m.windowWidth) + "\n")
@@ -3088,59 +2796,7 @@ func (m *Model) renderMainView() string {
 	} else if m.activeTab == tabContacts {
 		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
 	} else {
-		// Cleanup tab
-		if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-			// Full-screen: the entire content area is the preview
-			mainContent = m.renderCleanupPreview()
-		} else {
-			var summaryView string
-			if m.stats != nil && len(m.stats) == 0 {
-				summaryView = m.emptyStateView("No emails in this folder  •  press r to refresh")
-			} else {
-				summaryPanelStyle := m.baseStyle.
-					Width(plan.Cleanup.SummaryWidth + 2).
-					BorderForeground(m.theme.PanelBorderColor(false))
-				if chrome.FocusedPanel == panelSummary {
-					summaryPanelStyle = summaryPanelStyle.BorderForeground(m.theme.PanelBorderColor(true))
-				}
-				summaryStyles := m.inactiveTableStyle
-				if chrome.FocusedPanel == panelSummary {
-					summaryStyles = m.activeTableStyle
-				}
-				summaryView = summaryPanelStyle.Render(renderStyledTableViewWithCompactLeadingCell(&m.summaryTable, summaryStyles))
-			}
-			detailsPanelStyle := m.baseStyle.
-				Width(plan.Cleanup.DetailsWidth + 2).
-				BorderForeground(m.theme.PanelBorderColor(false))
-			if chrome.FocusedPanel == panelDetails {
-				detailsPanelStyle = detailsPanelStyle.BorderForeground(m.theme.PanelBorderColor(true))
-			}
-			detailsStyles := m.inactiveTableStyle
-			if chrome.FocusedPanel == panelDetails {
-				detailsStyles = m.activeTableStyle
-			}
-			detailsView := detailsPanelStyle.Render(renderStyledTableViewWithCompactLeadingCell(&m.detailsTable, detailsStyles))
-			if m.showCleanupPreview {
-				// 3-column layout: summary | details | preview (sidebar hidden while preview is open)
-				previewPanel := m.renderCleanupPreview()
-				if plan.Cleanup.SummaryWidth == 0 {
-					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, detailsView, panelGap, previewPanel)
-				} else {
-					mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView, panelGap, previewPanel)
-				}
-			} else if plan.SidebarVisible && !m.sidebarTooWide {
-				sidebarStyle := m.baseStyle.
-					Width(sidebarContentWidth + 2).
-					BorderForeground(m.theme.PanelBorderColor(false))
-				if chrome.FocusedPanel == panelSidebar {
-					sidebarStyle = sidebarStyle.BorderForeground(m.theme.PanelBorderColor(true))
-				}
-				sidebarView := sidebarStyle.Render(m.renderSidebar())
-				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, summaryView, panelGap, detailsView)
-			} else {
-				mainContent = lipgloss.JoinHorizontal(lipgloss.Top, summaryView, panelGap, detailsView)
-			}
-		}
+		mainContent = m.renderTimelineView()
 	}
 	if plan.ChatVisible {
 		chatView := m.baseStyle.Width(chatPanelWidth + 2).Render(m.renderChatPanel())

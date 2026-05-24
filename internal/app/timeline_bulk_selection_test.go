@@ -10,6 +10,22 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
+func readDeletionRequests(t *testing.T, ch <-chan models.DeletionRequest, want int) []models.DeletionRequest {
+	t.Helper()
+
+	reqs := make([]models.DeletionRequest, 0, want)
+	timeout := time.After(500 * time.Millisecond)
+	for len(reqs) < want {
+		select {
+		case req := <-ch:
+			reqs = append(reqs, req)
+		case <-timeout:
+			t.Fatalf("timed out waiting for %d deletion requests; got %d", want, len(reqs))
+		}
+	}
+	return reqs
+}
+
 func timelineBulkEmails() []*models.EmailData {
 	now := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
 	return []*models.EmailData{

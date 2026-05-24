@@ -56,23 +56,3 @@ func TestTimelinePreview_HTMLMarkdownLinksUseReadableOSC8Labels(t *testing.T) {
 
 	assertNoVisibleLinkDestination(t, m.renderEmailPreview(), longURL)
 }
-
-func TestCleanupPreview_HTMLMarkdownLinksUseReadableOSC8Labels(t *testing.T) {
-	body, longURL := linkStressMarkdownBody()
-	email := &models.EmailData{
-		MessageID: "cleanup-link-stress",
-		Sender:    "teams@example.test",
-		Subject:   "Link stress",
-		Date:      time.Date(2026, 4, 26, 2, 31, 0, 0, time.UTC),
-		Folder:    "INBOX",
-	}
-	m := makeSizedModel(t, 140, 50)
-	m.activeTab = tabCleanup
-	m.focusedPanel = panelDetails
-	m.showCleanupPreview = true
-	m.cleanupPreviewEmail = email
-	m.cleanupEmailBody = &models.EmailBody{TextPlain: body, IsFromHTML: true}
-	m.cleanupPreviewWidth = 100
-
-	assertNoVisibleLinkDestination(t, m.renderCleanupPreview(), longURL)
-}

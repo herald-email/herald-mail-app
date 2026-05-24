@@ -32,41 +32,6 @@ func countLabel(count int, singular, plural string) string {
 	return fmt.Sprintf("%d %s", count, plural)
 }
 
-func (m *Model) toggleSelection() {
-	if m.summaryTable.Focused() {
-		key, ok := m.summaryKeyAtCursor()
-		if !ok {
-			return
-		}
-		if m.selectedSummaryKeys[key] {
-			delete(m.selectedSummaryKeys, key)
-		} else {
-			m.selectedSummaryKeys[key] = true
-		}
-		// Refresh the table to show/hide checkmarks
-		m.updateSummaryTable()
-	} else if m.detailsTable.Focused() {
-		cursor := m.detailsTable.Cursor()
-		if cursor < len(m.detailsEmails) {
-			messageID := m.detailsEmails[cursor].MessageID
-			if messageID == "" {
-				logger.Warn("Cannot select message with empty MessageID")
-				return
-			}
-			if m.selectedMessages[messageID] {
-				logger.Debug("Deselecting message: %s", messageID)
-				delete(m.selectedMessages, messageID)
-			} else {
-				logger.Debug("Selecting message: %s", messageID)
-				m.selectedMessages[messageID] = true
-			}
-			logger.Debug("Total selected messages: %d", len(m.selectedMessages))
-			// Refresh the table to show/hide checkmarks
-			m.updateDetailsTable()
-		}
-	}
-}
-
 func (m *Model) toggleTimelineSelection() {
 	if m.activeTab != tabTimeline || m.timelineIsReadOnlyDiagnostic() {
 		return
@@ -174,37 +139,8 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	}
 
 	folder := m.currentFolder
-	virtualCleanup := m.activeTab == tabCleanup && isVirtualAllMailOnlyFolder(folder)
 	var targets []deleteTarget
 	seenMessageIDs := make(map[string]bool)
-
-	affectedIDsForEmails := func(emails []*models.EmailData) []string {
-		ids := make([]string, 0, len(emails))
-		seen := make(map[string]bool, len(emails))
-		for _, email := range emails {
-			if email == nil {
-				continue
-			}
-			id := strings.TrimSpace(email.MessageID)
-			if id == "" || seen[id] {
-				continue
-			}
-			seen[id] = true
-			ids = append(ids, id)
-		}
-		return ids
-	}
-
-	findCleanupEmail := func(messageID string) *models.EmailData {
-		for _, emails := range m.emailsBySender {
-			for _, email := range emails {
-				if email != nil && email.MessageID == messageID {
-					return email
-				}
-			}
-		}
-		return nil
-	}
 
 	appendMessageTarget := func(email *models.EmailData) {
 		if email == nil || strings.TrimSpace(email.MessageID) == "" || seenMessageIDs[email.MessageID] {
@@ -213,10 +149,6 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		targetFolder := strings.TrimSpace(email.Folder)
 		if targetFolder == "" {
 			targetFolder = folder
-		}
-		if virtualCleanup && isVirtualAllMailOnlyFolder(targetFolder) {
-			logger.Warn("Skipping virtual-folder cleanup delete for %q with unresolved real folder", email.MessageID)
-			return
 		}
 		seenMessageIDs[email.MessageID] = true
 		targets = append(targets, deleteTarget{
@@ -273,101 +205,7 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		return m.listenForDeletionResults()
 	}
 
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
-		m.cleanupPreviewDeleting = true
-		m.cleanupPreviewIsArchive = isArchive
-		appendMessageTarget(m.cleanupPreviewEmail)
-	} else if m.detailsTable.Focused() {
-		if len(m.selectedMessages) > 0 {
-			// Delete all selected messages (across all senders)
-			for messageID := range m.selectedMessages {
-				if email := findCleanupEmail(messageID); email != nil {
-					appendMessageTarget(email)
-					continue
-				}
-				targets = append(targets, deleteTarget{
-					messageID:          messageID,
-					folder:             folder,
-					affectedMessageIDs: []string{messageID},
-				})
-			}
-		} else {
-			// Delete current message
-			cursor := m.detailsTable.Cursor()
-			if cursor < len(m.detailsEmails) {
-				email := m.detailsEmails[cursor]
-				appendMessageTarget(email)
-			}
-		}
-	} else if len(m.selectedSummaryKeys) > 0 {
-		// Delete multiple selected senders (or domains in domain mode)
-		for key := range m.selectedSummaryKeys {
-			if key == "" {
-				continue
-			}
-			if virtualCleanup {
-				for _, email := range m.emailsBySender[key] {
-					appendMessageTarget(email)
-				}
-				continue
-			}
-			targets = append(targets, deleteTarget{
-				sender:             key,
-				isDomain:           m.groupByDomain,
-				folder:             folder,
-				affectedMessageIDs: affectedIDsForEmails(m.emailsBySender[key]),
-			})
-		}
-	} else {
-		// Delete current sender using row mapping (or domain in domain mode)
-		sender, ok := m.summaryKeyAtCursor()
-		if ok && sender != "" {
-			if virtualCleanup {
-				for _, email := range m.emailsBySender[sender] {
-					appendMessageTarget(email)
-				}
-			} else {
-				targets = append(targets, deleteTarget{
-					sender:             sender,
-					isDomain:           m.groupByDomain,
-					folder:             folder,
-					affectedMessageIDs: affectedIDsForEmails(m.emailsBySender[sender]),
-				})
-			}
-		}
-	}
-
-	if len(targets) == 0 {
-		if m.cleanupPreviewDeleting {
-			m.cleanupPreviewDeleting = false
-			m.cleanupPreviewIsArchive = false
-		}
-		return nil
-	}
-
-	// Send deletion requests to the queue from a goroutine so we don't block
-	// the Update loop. targets is a local copy; no model state is accessed.
-	ch := m.deletionRequestCh
-	go func() {
-		for _, t := range targets {
-			ch <- models.DeletionRequest{
-				MessageID:          t.messageID,
-				Sender:             t.sender,
-				IsDomain:           t.isDomain,
-				Folder:             t.folder,
-				IsArchive:          isArchive,
-				AffectedMessageIDs: t.affectedMessageIDs,
-			}
-		}
-	}()
-
-	// Set pending counters
-	m.deletionsPending = len(targets)
-	m.deletionsTotal = len(targets)
-	logger.Info("Queued %d deletion(s) isArchive=%v", len(targets), isArchive)
-
-	// Start listening for deletion results
-	return m.listenForDeletionResults()
+	return nil
 }
 
 // executeDeletion runs a single deletion/archive request and returns the error.
@@ -533,37 +371,6 @@ func (m *Model) clearTimelinePreviewIfDeleted(ids map[string]bool) {
 	m.timeline.pendingY = false
 }
 
-func (m *Model) pruneCleanupStateAfterDeletion(ids map[string]bool) bool {
-	if len(ids) == 0 {
-		return false
-	}
-	pruned := false
-	for id := range ids {
-		delete(m.selectedMessages, id)
-	}
-	if filtered, ok := pruneEmailSliceByMessageID(m.detailsEmails, ids); ok {
-		m.detailsEmails = filtered
-		pruned = true
-	}
-	for key, emails := range m.emailsBySender {
-		filtered, ok := pruneEmailSliceByMessageID(emails, ids)
-		if !ok {
-			continue
-		}
-		pruned = true
-		if len(filtered) == 0 {
-			delete(m.emailsBySender, key)
-			delete(m.selectedSummaryKeys, key)
-			if m.selectedSender == key {
-				m.selectedSender = ""
-			}
-			continue
-		}
-		m.emailsBySender[key] = filtered
-	}
-	return pruned
-}
-
 func (m *Model) pruneTimelineStateAfterDeletion(result models.DeletionResult) bool {
 	ids := affectedDeletionMessageIDSet(result)
 	if len(ids) == 0 {
@@ -589,12 +396,8 @@ func (m *Model) pruneTimelineStateAfterDeletion(result models.DeletionResult) bo
 		pruned = true
 	}
 	m.clearTimelinePreviewIfDeleted(ids)
-	if m.pruneCleanupStateAfterDeletion(ids) {
-		pruned = true
-	}
 	if pruned {
 		m.updateTimelineTable()
-		m.rebuildDetailsRows()
 	}
 	return pruned
 }
@@ -657,6 +460,11 @@ func (m *Model) buildDeleteDesc() string {
 		}
 		targets := m.currentTimelineRowEmails()
 		if len(targets) > 0 {
+			if len(targets) > 1 {
+				if kind, label, ok := m.currentTimelineCleanupGroupLabel(); ok {
+					return fmt.Sprintf("Delete %s \"%s\" (%s)?", kind, label, countLabel(len(targets), "message", "messages"))
+				}
+			}
 			subj := targets[0].Subject
 			if len(subj) > 50 {
 				subj = subj[:47] + "..."
@@ -668,39 +476,30 @@ func (m *Model) buildDeleteDesc() string {
 		}
 		return ""
 	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupPreviewEmail != nil {
-		subj := m.cleanupPreviewEmail.Subject
-		if len(subj) > 50 {
-			subj = subj[:47] + "..."
-		}
-		if strings.TrimSpace(subj) == "" {
-			return fmt.Sprintf("Delete message from %s?", m.cleanupPreviewEmail.Sender)
-		}
-		return fmt.Sprintf("Delete \"%s\"?", subj)
-	}
-	if m.detailsTable.Focused() {
-		if len(m.selectedMessages) > 0 {
-			return fmt.Sprintf("Delete %d selected message(s)?", len(m.selectedMessages))
-		}
-		cursor := m.detailsTable.Cursor()
-		if cursor < len(m.detailsEmails) {
-			return fmt.Sprintf("Delete message from %s?", m.detailsEmails[cursor].Sender)
-		}
-		return ""
-	}
-	if len(m.selectedSummaryKeys) > 0 {
-		if m.groupByDomain {
-			return fmt.Sprintf("Delete emails from %d selected domain(s)?", len(m.selectedSummaryKeys))
-		}
-		return fmt.Sprintf("Delete emails from %d selected sender(s)?", len(m.selectedSummaryKeys))
-	}
-	if sender, ok := m.summaryKeyAtCursor(); ok && sender != "" {
-		if m.groupByDomain {
-			return fmt.Sprintf("Delete all emails from domain %s?", sender)
-		}
-		return fmt.Sprintf("Delete all emails from %s?", sender)
-	}
 	return ""
+}
+
+func (m *Model) currentTimelineCleanupGroupLabel() (string, string, bool) {
+	ref, ok := m.currentTimelineRowRef()
+	if !ok || ref.group == nil {
+		return "", "", false
+	}
+	switch ref.group.groupingMode {
+	case timelineGroupingSender:
+		label := strings.TrimSpace(ref.group.label)
+		if label == "" {
+			label = "(unknown)"
+		}
+		return "sender group", label, true
+	case timelineGroupingDomain:
+		label := strings.TrimSpace(ref.group.label)
+		if label == "" {
+			label = "(unknown)"
+		}
+		return "domain group", label, true
+	default:
+		return "", "", false
+	}
 }
 
 // buildArchiveDesc builds a human-readable description for the archive confirmation prompt.
@@ -739,6 +538,15 @@ func (m *Model) buildArchiveDesc() string {
 			}
 		}
 		if len(eligible) > 0 {
+			if len(targets) > 1 {
+				if kind, label, ok := m.currentTimelineCleanupGroupLabel(); ok {
+					desc := fmt.Sprintf("Archive %s \"%s\" (%s", kind, label, countLabel(len(eligible), "message", "messages"))
+					if drafts > 0 {
+						desc += ", skipping " + countLabel(drafts, "draft", "drafts")
+					}
+					return desc + ")?"
+				}
+			}
 			subj := eligible[0].Subject
 			if len(subj) > 50 {
 				subj = subj[:47] + "..."
@@ -753,28 +561,6 @@ func (m *Model) buildArchiveDesc() string {
 			return fmt.Sprintf("Archive \"%s\"?", subj)
 		}
 		return ""
-	}
-	if m.detailsTable.Focused() {
-		if len(m.selectedMessages) > 0 {
-			return fmt.Sprintf("Archive %d selected message(s)?", len(m.selectedMessages))
-		}
-		cursor := m.detailsTable.Cursor()
-		if cursor < len(m.detailsEmails) {
-			return fmt.Sprintf("Archive message from %s?", m.detailsEmails[cursor].Sender)
-		}
-		return ""
-	}
-	if len(m.selectedSummaryKeys) > 0 {
-		if m.groupByDomain {
-			return fmt.Sprintf("Archive emails from %d selected domain(s)?", len(m.selectedSummaryKeys))
-		}
-		return fmt.Sprintf("Archive emails from %d selected sender(s)?", len(m.selectedSummaryKeys))
-	}
-	if sender, ok := m.summaryKeyAtCursor(); ok && sender != "" {
-		if m.groupByDomain {
-			return fmt.Sprintf("Archive all emails from domain %s?", sender)
-		}
-		return fmt.Sprintf("Archive all emails from %s?", sender)
 	}
 	return ""
 }

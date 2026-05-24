@@ -29,7 +29,6 @@ const (
 	CommandAppSettings = "app.settings"
 
 	CommandTabTimeline = "tab.timeline"
-	CommandTabCleanup  = "tab.cleanup"
 	CommandTabContacts = "tab.contacts"
 
 	CommandPaneLeft  = "pane.left"
@@ -89,7 +88,6 @@ var commandCatalog = map[string]struct{}{
 	CommandAppRefresh:  {},
 	CommandAppSettings: {},
 	CommandTabTimeline: {},
-	CommandTabCleanup:  {},
 	CommandTabContacts: {},
 
 	CommandPaneLeft:  {},
@@ -296,10 +294,9 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add(keyboardScopeGlobal, keyboardModeNormal, "L", CommandLogsToggle)
 	add(keyboardScopeGlobal, keyboardModeNormal, "g", CommandChatToggle)
 	add(keyboardScopeGlobal, keyboardModeNormal, "1", CommandTabTimeline)
-	add(keyboardScopeGlobal, keyboardModeNormal, "2", CommandTabCleanup)
-	add(keyboardScopeGlobal, keyboardModeNormal, "3", CommandTabContacts)
+	add(keyboardScopeGlobal, keyboardModeNormal, "2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f1", CommandTabTimeline)
-	add(keyboardScopeGlobal, keyboardModeNormal, "f2", CommandTabCleanup)
+	add(keyboardScopeGlobal, keyboardModeNormal, "f2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f3", CommandTabContacts)
 
 	add("timeline", keyboardModeNormal, "h", CommandPaneLeft)
@@ -311,7 +308,6 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "up", CommandPaneUp)
 	add("timeline", keyboardModeNormal, "right", CommandPaneRight)
 	add("timeline", keyboardModeNormal, "c", CommandComposeNew)
-	add("timeline", keyboardModeNormal, "C", CommandComposeNew)
 	add("timeline", keyboardModeNormal, "r", CommandMailReplyAll)
 	add("timeline", keyboardModeNormal, "R", CommandMailReplySender)
 	add("timeline", keyboardModeNormal, "f", CommandMailForward)
@@ -442,10 +438,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "S"
 	case CommandTabTimeline:
 		return "1"
-	case CommandTabCleanup:
-		return "2"
 	case CommandTabContacts:
-		return "3"
+		return "2"
 	case CommandSidebarToggle:
 		return "B"
 	case CommandTimelineGroupCycle:

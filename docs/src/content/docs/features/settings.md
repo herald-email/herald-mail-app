@@ -18,7 +18,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
-| Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, and related automation timing. |
+| Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, automation-rule launcher, custom-prompt launcher, and cleanup-rule manager launcher. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
 | Theme Selection | App theme selection and local YAML install. |
 | Theme Editor | Semantic role color editing, live preview, reset controls, and custom theme creation. |
@@ -63,6 +63,13 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 4. Save the category.
 5. Review the before/after byte estimate and the preserved-data note.
 6. Press `y` to prune disallowed cached preview bytes and compact SQLite, or press `n`/`Esc` to cancel.
+
+### Manage Cleanup Automation
+
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Choose the automation-rule, custom-prompt, or cleanup-rule manager launcher.
+4. Use the compact overlay to edit, preview, save, enable, or run the chosen rule surface.
 
 ### Choose Offline Cache Policy
 
@@ -130,7 +137,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 
 ## Data And Privacy
 
-Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, and cache path values. Account settings are validated before they replace the active account; failed validation leaves the previous config, backend, and SMTP client active. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
+Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, cleanup automation entrypoints, and cache path values. Account settings are validated before they replace the active account; failed validation leaves the previous config, backend, and SMTP client active. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
 
 ## Troubleshooting
 

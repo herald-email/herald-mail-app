@@ -28,7 +28,7 @@ func TestShortcutHelpQuestionMarkOpensOverlayFromTimeline(t *testing.T) {
 	if updated.timeline.searchMode {
 		t.Fatal("expected plain ? not to open Timeline semantic search")
 	}
-	if !strings.Contains(rendered, "1-3") || !strings.Contains(rendered, "Timeline") || !strings.Contains(rendered, "open a blank Compose") {
+	if !strings.Contains(rendered, "1-2") || !strings.Contains(rendered, "Timeline") || !strings.Contains(rendered, "open a blank Compose") {
 		t.Fatalf("expected global and Timeline shortcuts in help, got:\n%s", rendered)
 	}
 
@@ -152,13 +152,6 @@ func TestShortcutHelpOwnsBottomHintsWhileOpen(t *testing.T) {
 				m.updateTimelineTable()
 			},
 			forbidden: []string{"c: compose", "r: all", "d: delete", "D: delete now"},
-		},
-		{
-			name: "cleanup",
-			setup: func(m *Model) {
-				m.activeTab = tabCleanup
-			},
-			forbidden: []string{"enter: details", "W: rule", "d: delete", "D: delete now"},
 		},
 		{
 			name: "contacts",
@@ -319,7 +312,7 @@ func TestComposeQuestionMarkNotAdvertisedAsHelp(t *testing.T) {
 
 func TestPromptEditorQuestionMarkTypesIntoNameAndDoesNotOpenHelp(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	m.showPromptEditor = true
 	m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
 	_ = m.promptEditor.Init()
@@ -410,7 +403,7 @@ func TestShortcutHelpTimelinePreviewIncludesBlankCompose(t *testing.T) {
 	}
 }
 
-func TestShortcutHelpOpensFromLogsChatCleanupAndConfirmation(t *testing.T) {
+func TestShortcutHelpOpensFromLogsChatAndConfirmation(t *testing.T) {
 	tests := []struct {
 		name  string
 		setup func(*Model)
@@ -431,16 +424,6 @@ func TestShortcutHelpOpensFromLogsChatCleanupAndConfirmation(t *testing.T) {
 				m.chatInput.Focus()
 			},
 			want: "Chat",
-		},
-		{
-			name: "cleanup preview",
-			setup: func(m *Model) {
-				m.activeTab = tabCleanup
-				m.showCleanupPreview = true
-				m.cleanupPreviewEmail = &models.EmailData{MessageID: "cleanup-a", Subject: "Cleanup A"}
-				m.cleanupEmailBody = &models.EmailBody{TextPlain: "cleanup body"}
-			},
-			want: "Cleanup Preview",
 		},
 		{
 			name: "delete confirmation",

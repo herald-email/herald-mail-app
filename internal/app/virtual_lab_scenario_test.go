@@ -118,21 +118,6 @@ func TestVirtualLabUnsubscribePreviewHints(t *testing.T) {
 			assertVirtualLabUnsubscribeHints(t, tc.key, rendered, hints, tc.wantUnsubscribe)
 		})
 
-		t.Run("cleanup/"+tc.key, func(t *testing.T) {
-			email, body := fetchScenarioPreviewBodyByKey(t, testmail.ScenarioUnsubscribeHeaders, tc.key)
-			m := makeSizedModel(t, 120, 40)
-			m.activeTab = tabCleanup
-			m.showCleanupPreview = true
-			m.cleanupPreviewWidth = 70
-			m.cleanupPreviewEmail = email
-			m.cleanupEmailBody = body
-			m.detailsEmails = []*models.EmailData{email}
-			m.setFocusedPanel(panelDetails)
-
-			rendered := ansi.Strip(m.renderCleanupPreview())
-			hints := ansi.Strip(m.renderKeyHints())
-			assertVirtualLabUnsubscribeHints(t, tc.key, rendered, hints, tc.wantUnsubscribe)
-		})
 	}
 }
 

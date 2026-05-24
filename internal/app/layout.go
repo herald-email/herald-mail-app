@@ -119,12 +119,6 @@ type TimelineState struct {
 	pendingY    bool
 }
 
-type CleanupState struct {
-	PreviewOpen   bool
-	FullScreen    bool
-	GroupByDomain bool
-}
-
 type ComposeState struct {
 	PreviewOpen bool
 	AIPanelOpen bool
@@ -145,19 +139,12 @@ type LayoutPlan struct {
 	SidebarVisible bool
 	ChatVisible    bool
 	Timeline       TimelineLayoutPlan
-	Cleanup        CleanupLayoutPlan
 	Compose        ComposeLayoutPlan
 	Contacts       ContactsLayoutPlan
 }
 
 type TimelineLayoutPlan struct {
 	TableWidth   int
-	PreviewWidth int
-}
-
-type CleanupLayoutPlan struct {
-	SummaryWidth int
-	DetailsWidth int
 	PreviewWidth int
 }
 
@@ -186,18 +173,15 @@ func (m *Model) chromeState(plan LayoutPlan) ChromeState {
 		if m.activeTab == tabTimeline {
 			focused = panelTimeline
 		} else {
-			focused = panelSummary
+			focused = panelTimeline
 		}
 	}
 	if focused == panelChat && !plan.ChatVisible {
 		if m.activeTab == tabTimeline {
 			focused = panelTimeline
 		} else {
-			focused = panelSummary
+			focused = panelTimeline
 		}
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview {
-		focused = panelPreview
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && focused == panelPreview {
 		focused = panelTimeline
@@ -215,14 +199,6 @@ func (m *Model) chromeState(plan LayoutPlan) ChromeState {
 
 func (m *Model) timelineState() TimelineState {
 	return m.timeline
-}
-
-func (m *Model) cleanupState() CleanupState {
-	return CleanupState{
-		PreviewOpen:   m.showCleanupPreview,
-		FullScreen:    m.cleanupFullScreen,
-		GroupByDomain: m.groupByDomain,
-	}
 }
 
 func (m *Model) composeState() ComposeState {
@@ -302,29 +278,11 @@ func splitWidth(total, separator, leftMin, rightMin, leftPreferred int) (int, in
 	return left, right
 }
 
-func splitThreeWidth(total, leftMin, middleMin, rightMin, rightPreferred int) (int, int, int) {
-	available := total
-	if available < leftMin+middleMin+rightMin {
-		return leftMin, middleMin, rightMin
-	}
-	right := rightPreferred
-	if right < rightMin {
-		right = rightMin
-	}
-	if right > available-leftMin-middleMin {
-		right = available - leftMin - middleMin
-	}
-	remaining := available - right
-	leftPreferred := remaining * 45 / 100
-	left, middle := splitWidth(remaining, 0, leftMin, middleMin, leftPreferred)
-	return left, middle, right
-}
-
 func (m *Model) defaultFocusPanel() int {
 	if m.activeTab == tabTimeline {
 		return panelTimeline
 	}
-	return panelSummary
+	return panelTimeline
 }
 
 func (m *Model) normalizeFocusForLayout(plan LayoutPlan) {
@@ -333,12 +291,6 @@ func (m *Model) normalizeFocusForLayout(plan LayoutPlan) {
 	}
 	if m.focusedPanel == panelChat && !plan.ChatVisible {
 		m.setFocusedPanel(m.defaultFocusPanel())
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.focusedPanel != panelDetails {
-		m.setFocusedPanel(panelDetails)
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0 && m.focusedPanel == panelSummary {
-		m.setFocusedPanel(panelDetails)
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail == nil && m.focusedPanel == panelPreview {
 		m.setFocusedPanel(panelTimeline)
@@ -403,8 +355,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	}
 
 	canShowSidebar := m.showSidebar &&
-		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
-		!m.showCleanupPreview &&
+		m.activeTab == tabTimeline &&
 		!(m.activeTab == tabTimeline && m.timeline.selectedEmail != nil)
 	if canShowSidebar {
 		sidebarOuter := sidebarContentWidth + 2
@@ -463,42 +414,6 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 		}
 	} else {
 		plan.Timeline = TimelineLayoutPlan{TableWidth: clamp(timelineWidth-3, 20)}
-	}
-
-	// Cleanup: summary/details inner widths with optional preview outer width.
-	cleanupWidth := width
-	if plan.ChatVisible {
-		cleanupWidth -= chatPanelWidth + 2 + panelGapWidth
-	}
-	if plan.SidebarVisible {
-		cleanupWidth -= sidebarContentWidth + 2 + panelGapWidth
-	}
-	if m.showCleanupPreview && !m.cleanupFullScreen {
-		if cleanupWidth < 100 {
-			previewWidth := 24
-			if previewWidth > cleanupWidth-30 {
-				previewWidth = clamp(cleanupWidth/3, 20)
-			}
-			plan.Cleanup = CleanupLayoutPlan{
-				SummaryWidth: 0,
-				DetailsWidth: clamp(cleanupWidth-previewWidth-(4+panelGapWidth), 24),
-				PreviewWidth: previewWidth,
-			}
-		} else {
-			leftW, midW, rightW := splitThreeWidth(clamp(cleanupWidth-(6+2*panelGapWidth), 30), 18, 24, 24, 24)
-			plan.Cleanup = CleanupLayoutPlan{
-				SummaryWidth: leftW,
-				DetailsWidth: midW,
-				PreviewWidth: rightW,
-			}
-		}
-	} else {
-		available := clamp(cleanupWidth-(4+panelGapWidth), 24)
-		leftW, rightW := splitWidth(available, 0, 20, 24, available*42/100)
-		plan.Cleanup = CleanupLayoutPlan{
-			SummaryWidth: leftW,
-			DetailsWidth: rightW,
-		}
 	}
 
 	plan.ContentHeight = m.contentHeightForLayout(width, height, plan)

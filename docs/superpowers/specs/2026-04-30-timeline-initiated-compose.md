@@ -6,8 +6,8 @@ This spec defines Compose as a transient writing screen launched from Timeline i
 
 This section covers what users should see and which keys should be discoverable after Compose stops being a tab.
 
-- [x] Top-level navigation advertises three tabs: `1` Timeline, `2` Cleanup, and `3` Contacts.
-- [x] Function-key aliases map to the same three tabs: `F1` Timeline, `F2` Cleanup, and `F3` Contacts.
+- [x] Top-level navigation advertises two tabs: `1` Timeline and `2` Contacts.
+- [x] Function-key aliases map to `F1` Timeline, `F2` Contacts, and `F3` Contacts as a legacy alias.
 - [x] Timeline lowercase `c` opens a blank Compose screen for a new outgoing message; uppercase `C` remains a legacy alias.
 - [x] Timeline `r`/`R`, `f`/`F`, `E`, and quick replies keep opening Compose with their existing contextual draft state.
 - [x] Lowercase `g` opens the chat panel so lowercase `c` can launch Compose from Timeline.

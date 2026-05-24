@@ -41,7 +41,7 @@ func TestDeletionResultPrunesTimelineMessageStateImmediately(t *testing.T) {
 	keep := makeDeletionPruneEmail("keep-me", "friend@example.com", "Keep me", 0)
 
 	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	m.deleting = true
 	m.deletionsPending = 1
 	m.deletionsTotal = 1
@@ -87,7 +87,7 @@ func TestDeletionResultPrunesTimelineBatchAffectedIDsForArchive(t *testing.T) {
 	keep := makeDeletionPruneEmail("keep-me", "friend@example.com", "Keep me", 0)
 
 	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	m.deleting = true
 	m.deletionsPending = 1
 	m.deletionsTotal = 1
@@ -125,48 +125,5 @@ func TestDeletionResultPrunesTimelineBatchAffectedIDsForArchive(t *testing.T) {
 	requireMessagePresent(t, updated.timeline.emails, keep.MessageID)
 	if updated.timeline.selectedEmail != nil || updated.timeline.body != nil || updated.timeline.bodyMessageID != "" {
 		t.Fatalf("expected archived preview state to clear")
-	}
-}
-
-func TestQueueRequestsCleanupSenderCarriesAffectedMessageIDs(t *testing.T) {
-	first := makeDeletionPruneEmail("sender-1", "news@example.com", "Newsletter one", 1)
-	second := makeDeletionPruneEmail("sender-2", "news@example.com", "Newsletter two", 0)
-
-	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
-	m.currentFolder = "INBOX"
-	m.deletionRequestCh = make(chan models.DeletionRequest, 2)
-	m.deletionResultCh = make(chan models.DeletionResult, 2)
-	m.emailsBySender = map[string][]*models.EmailData{
-		"news@example.com": {first, second},
-	}
-	m.selectedSummaryKeys = map[string]bool{"news@example.com": true}
-	m.stats = map[string]*models.SenderStats{
-		"news@example.com": {TotalEmails: 2},
-	}
-
-	cmd := m.queueRequests(false)
-	if cmd == nil {
-		t.Fatal("expected deletion listener command")
-	}
-
-	req := <-m.deletionRequestCh
-	if req.Sender != "news@example.com" {
-		t.Fatalf("expected sender batch request, got %#v", req)
-	}
-	if len(req.AffectedMessageIDs) != 2 {
-		t.Fatalf("expected affected message IDs to travel with request, got %#v", req.AffectedMessageIDs)
-	}
-	for _, want := range []string{first.MessageID, second.MessageID} {
-		found := false
-		for _, got := range req.AffectedMessageIDs {
-			if got == want {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("expected affected IDs to include %s, got %#v", want, req.AffectedMessageIDs)
-		}
 	}
 }

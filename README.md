@@ -12,8 +12,8 @@
 Herald is keyboard-first, but it is not keyboard-only. Press `?` in browse and
 non-text contexts to open context-sensitive shortcut help; editable Compose
 fields keep literal `?` for writing. In modern
-terminals you can click the top tabs, folder/sidebar rows, Timeline and Cleanup
-rows, and use the mouse wheel or trackpad to scroll lists and email previews.
+terminals you can click the top tabs, folder/sidebar rows, Timeline and
+Contacts rows, and use the mouse wheel or trackpad to scroll lists and email previews.
 Email links render as OSC 8 hyperlinks when your terminal supports them, so
 readable labels like `Display in your browser` still open the real URL.
 
@@ -79,7 +79,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Reading-first Timeline with split/full previews and range selection                       | ✅     |
 | Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews                  | ✅     |
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
-| Bulk cleanup — delete/archive by sender or domain, plus dry-run cleanup rule previews     | ✅     |
+| Bulk cleanup — Timeline sender/domain grouping plus dry-run cleanup rule previews         | ✅     |
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
 | AI classification via Ollama (`gemma3:4b` default, custom models supported)               | ✅     |
 | Semantic search with `nomic-embed-text-v2-moe` default + chunked body embeddings          | ✅     |
@@ -359,12 +359,12 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 
 | Key                                | Action                                                                                      |
 | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| `1` / `2` / `3`                    | Timeline / Cleanup / Contacts tab in browse contexts                                        |
-| `F1` / `F2` / `F3`                 | Legacy Timeline / Cleanup / Contacts tab aliases                                            |
+| `1` / `2`                          | Timeline / Contacts tab in browse contexts                                                  |
+| `F1` / `F2` / `F3`                 | Timeline / Contacts / Contacts legacy aliases                                               |
 | `c`                                | Open a new Compose screen from Timeline                                                     |
 | `h` / `j` / `k` / `l`              | Navigate left / down / up / right where the active pane supports it                         |
 | `Enter`                            | Open email preview                                                                          |
-| `Space`                            | Select Timeline messages or Cleanup rows, depending on focus                                |
+| `Space`                            | Select Timeline messages or grouped sender/domain rows                                      |
 | `Shift+Up` / `Shift+Down`          | Extend Timeline range selection when supported by the terminal                              |
 | `V`, then `j` / `k`                | Fallback Timeline range selection without shifted-arrow support                             |
 | `Escape`                           | Close preview / picker, or return from Compose to its originating Timeline screen           |
@@ -378,8 +378,7 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `u`                                | Unsubscribe                                                                                 |
 | `H`                                | Hide future mail from the current sender                                                    |
 | `z`                                | Full-screen preview                                                                         |
-| `S`                                | Open settings as a compact overlay                                                          |
-| `W` / `P` / `C`                    | Open Cleanup automation rules, custom prompts, or cleanup rule manager overlays             |
+| `S`                                | Open settings as a compact overlay, including Sync & Cleanup managers                       |
 | `p` / `r` in Cleanup manager       | Preview selected cleanup rule or all enabled cleanup rules                                  |
 | `s` / `E` / `R` in dry-run preview | Save disabled, enable after confirmation, or run previewed cleanup live                     |
 | `B`                                | Toggle folder sidebar                                                                       |

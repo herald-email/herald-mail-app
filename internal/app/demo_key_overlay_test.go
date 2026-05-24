@@ -69,8 +69,8 @@ func TestDemoKeyOverlayFormatsKnownMediaKeys(t *testing.T) {
 	}{
 		{name: "settings", msg: keyRunes("S"), want: "S"},
 		{name: "help", msg: keyRunes("?"), want: "?"},
-		{name: "cleanup tab", msg: keyRunes("2"), want: "2"},
-		{name: "cleanup manager", msg: keyRunes("C"), want: "C"},
+		{name: "contacts tab", msg: keyRunes("2"), want: "2"},
+		{name: "retired cleanup shortcut", msg: keyRunes("C"), want: "C"},
 		{name: "full screen", msg: keyRunes("z"), want: "z"},
 		{name: "right arrow", msg: tea.KeyPressMsg{Code: tea.KeyRight}, want: "Right"},
 		{name: "left arrow", msg: tea.KeyPressMsg{Code: tea.KeyLeft}, want: "Left"},
@@ -145,7 +145,7 @@ func TestDemoKeyOverlayDoesNotRecordEditorText(t *testing.T) {
 		{
 			name: "rule editor",
 			setup: func(m *Model) {
-				m.activeTab = tabCleanup
+				m.activeTab = tabTimeline
 				m.showRuleEditor = true
 			},
 		},

@@ -286,9 +286,6 @@ func (m *Model) renderShortcutHelpBackdropView() string {
 	if m.timeline.fullScreen {
 		return m.renderFullScreenEmail()
 	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-		return m.renderCleanupPreview()
-	}
 	return m.renderMainView()
 }
 
@@ -474,14 +471,6 @@ func (m *Model) shortcutHelpContextTitle() string {
 			return "Contacts Detail"
 		}
 		return "Contacts"
-	case m.activeTab == tabCleanup:
-		if m.showCleanupPreview {
-			return "Cleanup Preview"
-		}
-		if m.focusedPanel == panelDetails {
-			return "Cleanup Details"
-		}
-		return "Cleanup Summary"
 	default:
 		if m.timeline.fullScreen {
 			return "Timeline Full-Screen Preview"
@@ -580,7 +569,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	globalEntries := []shortcutHelpEntry{
 		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpOpen, "open or close this shortcut help"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpSearch, "search this help overlay while it is open"),
-		{m.primaryTabHelpKey(), "switch tabs; F1-F3 remain legacy aliases"},
+		{m.primaryTabHelpKey(), "switch tabs; F2 and F3 open Contacts"},
 	}
 	if m.hasMultipleAccounts() {
 		globalEntries = append(globalEntries, shortcutHelpEntry{"A", "open account switcher"})
@@ -622,8 +611,6 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		sections = append(sections, m.composeShortcutHelpSection())
 	case m.activeTab == tabContacts:
 		sections = append(sections, m.contactsShortcutHelpSection())
-	case m.activeTab == tabCleanup:
-		sections = append(sections, m.cleanupShortcutHelpSection())
 	default:
 		sections = append(sections, m.timelineShortcutHelpSection())
 	}
@@ -677,44 +664,6 @@ func (m *Model) contactsShortcutHelpSection() shortcutHelpSection {
 		m.commandHelpEntry("contacts", CommandHelpSearch, "start contact search; type ? query for semantic search"),
 		{"e", "enrich the selected contact"},
 		{"Esc", "clear search or return to the contacts list"},
-	}}
-}
-
-func (m *Model) cleanupShortcutHelpSection() shortcutHelpSection {
-	if m.showCleanupPreview {
-		return shortcutHelpSection{"Cleanup Preview", []shortcutHelpEntry{
-			{"j/k or arrows", "scroll preview"},
-			{"Enter", "scroll down"},
-			{"z", "toggle full-screen preview"},
-			{"u", "unsubscribe when mailing-list headers are available"},
-			m.commandHelpEntry("cleanup", CommandMailHideFuture, "hide future mail from this sender"),
-			m.commandHelpEntry("cleanup", CommandMailDeleteConfirm, "delete this email after confirmation"),
-			m.commandHelpEntry("cleanup", CommandMailDeleteImmediate, "delete this email immediately"),
-			m.commandHelpEntry("cleanup", CommandMailArchiveCurrent, "archive this email"),
-			m.commandHelpEntry("cleanup", CommandMailReclassify, "re-classify this email"),
-			{"Esc", "close preview"},
-		}}
-	}
-	if m.focusedPanel == panelDetails {
-		return shortcutHelpSection{"Cleanup Details", []shortcutHelpEntry{
-			{"j/k or arrows", "navigate emails for the selected sender or domain"},
-			{"Enter", "open email preview"},
-			{"Space", "select the highlighted message"},
-			m.commandHelpEntry("cleanup", CommandMailDeleteConfirm, "delete selected mail after confirmation"),
-			m.commandHelpEntry("cleanup", CommandMailDeleteImmediate, "delete selected mail immediately"),
-			m.commandHelpEntry("cleanup", CommandMailArchiveCurrent, "archive selected mail after confirmation"),
-			{"Tab", "switch Cleanup panes"},
-		}}
-	}
-	return shortcutHelpSection{"Cleanup Summary", []shortcutHelpEntry{
-		{"j/k or arrows", "navigate sender or domain groups"},
-		{"Enter", "load details for the highlighted group"},
-		{"Space", "select the highlighted sender or domain"},
-		{"W / C / P", "open rule, cleanup manager, or prompt editor overlays"},
-		m.commandHelpEntry("cleanup", CommandMailHideFuture, "hide future mail from this sender or domain"),
-		m.commandHelpEntry("cleanup", CommandMailDeleteConfirm, "delete selected mail after confirmation"),
-		m.commandHelpEntry("cleanup", CommandMailDeleteImmediate, "delete selected mail immediately"),
-		m.commandHelpEntry("cleanup", CommandMailArchiveCurrent, "archive selected mail after confirmation"),
 	}}
 }
 

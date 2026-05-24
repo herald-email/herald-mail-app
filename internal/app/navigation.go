@@ -12,8 +12,6 @@ func (m *Model) composeExitCmds() []tea.Cmd {
 
 func (m *Model) resetComposeMode() {
 	m.timelineTable.Blur()
-	m.summaryTable.Blur()
-	m.detailsTable.Blur()
 	m.composeField = 0
 	m.composeCCExpanded = false
 	m.composeBCCExpanded = false
@@ -41,34 +39,9 @@ func (m *Model) clearContactsStatus() {
 	m.contactStatusMessage = ""
 }
 
-func (m *Model) closeCleanupPreviewForTabSwitch() {
-	if !m.cleanupFullScreen && !m.showCleanupPreview {
-		return
-	}
-	m.revokeImagePreviews()
-	m.showCleanupPreview = false
-	m.cleanupPreviewEmail = nil
-	m.cleanupEmailBody = nil
-	m.cleanupBodyLoading = false
-	m.cleanupPreviewLoad = previewLoadTelemetry{}
-	m.cleanupBodyScrollOffset = 0
-	m.cleanupBodyWrappedLines = nil
-	m.cleanupFullScreen = false
-	m.cleanupPreviewDeleting = false
-	m.cleanupPreviewIsArchive = false
-	m.showSidebar = m.cleanupPreviewHadSidebar
-	m.clearCleanupPreviewDocumentCache()
-	if m.windowWidth > 0 {
-		m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	}
-}
-
 func (m *Model) switchToTimeline() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.clearContactsStatus()
-	if m.activeTab == tabCleanup {
-		m.closeCleanupPreviewForTabSwitch()
-	}
 	m.activeTab = tabTimeline
 	m.clearComposeReturn()
 	m.setFocusedPanel(panelTimeline)
@@ -80,22 +53,9 @@ func (m *Model) switchToCompose() tea.Cmd {
 	return m.openBlankComposeFromCurrent()
 }
 
-func (m *Model) switchToCleanup() tea.Cmd {
-	cmds := m.composeExitCmds()
-	m.clearContactsStatus()
-	m.finishTimelineRangeSelection()
-	m.activeTab = tabCleanup
-	m.clearComposeReturn()
-	m.setFocusedPanel(panelSummary)
-	return tea.Batch(cmds...)
-}
-
 func (m *Model) switchToContacts() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.finishTimelineRangeSelection()
-	if m.activeTab == tabCleanup {
-		m.closeCleanupPreviewForTabSwitch()
-	}
 	m.activeTab = tabContacts
 	m.clearComposeReturn()
 	m.contactFocusPanel = 0

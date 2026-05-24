@@ -171,5 +171,4 @@ func (m *Model) revokeImagePreviews() {
 		m.imagePreviewLinks.RevokeAll()
 	}
 	m.clearTimelinePreviewDocumentCache()
-	m.clearCleanupPreviewDocumentCache()
 }

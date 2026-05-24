@@ -55,23 +55,6 @@ func (b *attachmentBackend) GetAttachment(messageID, filename string) (*models.A
 	return b.fetched, nil
 }
 
-func TestRenderStatusBar_DoesNotLeakCleanupSelectionOutsideCleanup(t *testing.T) {
-	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabTimeline
-	m.selectedSummaryKeys = map[string]bool{"alice@example.com": true}
-	m.selectedMessages = map[string]bool{"msg-1": true}
-	m.emailsBySender = map[string][]*models.EmailData{
-		"alice@example.com": {{MessageID: "msg-1"}},
-	}
-	m.timeline.emails = mockEmails()
-	m.updateTimelineTable()
-
-	status := stripANSI(m.renderStatusBar())
-	if strings.Contains(status, "selected") {
-		t.Fatalf("expected timeline status to hide cleanup selection state, got %q", status)
-	}
-}
-
 func TestHandleTimelineKey_AttachmentNavigationMovesSelection(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabTimeline

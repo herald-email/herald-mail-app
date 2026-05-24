@@ -529,7 +529,7 @@ func TestSettingsSignatureFieldShowsMultilineSaveHelp(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
 	focusSignatureSettingsGroup(t, s)
 
-	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	rendered := renderSettingsViewForTest(t, s, 120, 44)
 	normalized := strings.Join(strings.Fields(rendered), " ")
 
 	for _, want := range []string{"Enter adds a line", "Tab moves to Save", "Save", "enter new line", "tab next"} {
@@ -549,7 +549,7 @@ func TestSettingsSignatureFieldTabMovesToSaveButtonAndEnterSaves(t *testing.T) {
 	if s.form.State == huh.StateCompleted || s.done {
 		t.Fatal("Tab from signature field should focus the Save Settings button, not submit immediately")
 	}
-	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	rendered := renderSettingsViewForTest(t, s, 120, 44)
 	for _, want := range []string{"Save", "enter submit"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected focused Save Settings button help to include %q, got:\n%s", want, rendered)
@@ -610,10 +610,74 @@ func TestSettingsPanelSyncCleanupShowsOfflineCacheReclaimAction(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
 	normalized := strings.Join(strings.Fields(rendered), " ")
-	for _, want := range []string{"Offline Cache", "Reclaim offline cache storage", "before pruning"} {
+	for _, want := range []string{"Offline Cache", "Reclaim offline cache storage", "before pruning", "Cleanup Tools", "Automation rules", "Custom prompts", "Cleanup rules"} {
 		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected Sync & Cleanup settings to include %q, got:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestSettingsCleanupToolLaunchersOpenCompactManagers(t *testing.T) {
+	tests := []struct {
+		name string
+		tool string
+		want func(*Model) bool
+	}{
+		{name: "automation rules", tool: settingsCleanupToolAutomation, want: func(m *Model) bool { return m.showRuleEditor && m.ruleEditor != nil }},
+		{name: "custom prompts", tool: settingsCleanupToolPrompts, want: func(m *Model) bool { return m.showPromptEditor && m.promptEditor != nil }},
+		{name: "cleanup rules", tool: settingsCleanupToolRules, want: func(m *Model) bool { return m.showCleanupMgr && m.cleanupManager != nil }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := makeSizedModel(t, 120, 40)
+			m.showSettings = true
+			m.settingsPanel = m.newSettingsPanel(settingsPanelSectionSync, "")
+
+			model, cmd := m.Update(SettingsToolRequestedMsg{Tool: tc.tool})
+			updated := model.(*Model)
+
+			if updated.showSettings || updated.settingsPanel != nil {
+				t.Fatalf("expected settings to close before launching %s", tc.tool)
+			}
+			if !tc.want(updated) {
+				t.Fatalf("expected %s launcher to open the matching compact manager/editor", tc.tool)
+			}
+			if cmd == nil {
+				t.Fatalf("expected %s launcher to initialize the manager/editor", tc.tool)
+			}
+		})
+	}
+}
+
+func TestSettingsSyncCleanupShortcutLaunchersEmitToolRequests(t *testing.T) {
+	tests := []struct {
+		key  string
+		want string
+	}{
+		{key: "W", want: settingsCleanupToolAutomation},
+		{key: "P", want: settingsCleanupToolPrompts},
+		{key: "C", want: settingsCleanupToolRules},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.key, func(t *testing.T) {
+			s := NewSettings(SettingsModePanel, nil)
+			s.panelSection = settingsPanelSectionSync
+			s.buildForm()
+
+			_, cmd := s.Update(keyRunes(tc.key))
+			if cmd == nil {
+				t.Fatalf("expected Settings shortcut %s to emit a tool request", tc.key)
+			}
+			msg, ok := cmd().(SettingsToolRequestedMsg)
+			if !ok {
+				t.Fatalf("expected SettingsToolRequestedMsg, got %T", cmd())
+			}
+			if msg.Tool != tc.want {
+				t.Fatalf("tool=%q, want %q", msg.Tool, tc.want)
+			}
+		})
 	}
 }
 

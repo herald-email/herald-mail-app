@@ -43,7 +43,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
 - [x] Config-specific SQLite cache paths persisted in YAML so separate account configs do not share one working-directory database
 - [x] IMAP IDLE (real push; currently polling only)
-- [x] Email preview in Cleanup tab (open individual email at 50%, panels shrink to 25%)
+- [x] Timeline grouped cleanup replaces the retired Cleanup tab for sender/domain browse workflows
 - [x] Hide Future Mail sender rule (`h` key; auto-moves future emails to a local folder)
 - [x] Custom classification prompts (user-defined categories + data extraction)
 - [x] Classification actions (notify, command, webhook, move, archive, delete)
@@ -100,19 +100,19 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 
 ## UI Layout
 
-The TUI uses a title-row tab strip beside the `Herald` title, a collapsible folder sidebar on the left, and a main content area whose layout changes per tab.
+The TUI uses a title-row tab strip beside the `Herald` title, a collapsible folder sidebar on the left, and a main content area whose layout changes per top-level view.
 
-- [x] Mouse navigation supports top tabs, sidebars, Timeline/Cleanup rows, and preview wheel scrolling while preserving keyboard parity
+- [x] Mouse navigation supports top tabs, sidebars, Timeline/Contacts rows, and preview wheel scrolling while preserving keyboard parity
 - [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
 - [x] Keyboard profiles make `h/j/k/l` coherent browse navigation while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
 - [x] Delete shortcuts use a safe/fast split: `d` or `Backspace` asks for confirmation, while `D` or `Shift+Backspace` deletes immediately in browse contexts
 
 ### Tabs (top-level navigation)
-Keyboard (`1`-`3` as the primary visible shortcuts, with `F1`-`F3` as legacy aliases) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
+Keyboard (`1`-`2` as the primary visible shortcuts, with `F1`-`F2` as visible function aliases and `F3` as a temporary Contacts alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
 - [x] `1` — Timeline: chronological email list with body preview split
-- [x] `2` — Cleanup: sender/domain grouping for bulk deletion
-- [x] `3` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
+- [x] `2` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
+- [x] `F3` — Contacts legacy alias while existing muscle memory sunsets
 
 ### Timeline View
 
@@ -126,7 +126,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)
 - [x] Actions: delete, archive, reply, forward
-- [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline and Cleanup previews
+- [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline previews
 - [x] Offline cache policy controls whether previews keep lightweight body text only, non-attachment body data, or full attachment data for offline work
 - [x] Changing to a stricter offline cache policy prunes disallowed cached attachment or inline-image bytes while preserving preview text, headers, and attachment metadata
 - [x] Settings exposes a manual offline-cache reclaim action that estimates removable preview bytes, explains preserved data, prunes disallowed binary payloads, and compacts SQLite storage
@@ -137,7 +137,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, including reply drafts, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [x] Reading-first Timeline rows hide spreadsheet-only size/attachment columns, show attachments in the subject cell, use local human dates, and keep Sender/Subject dominant at `80x24`, `120x40`, and `220x50`
-- [x] Timeline grouping switch cycles the reading list between default thread, sender, and domain grouping with `G`, preserving Timeline actions and leaving Cleanup intact during the migration
+- [x] Timeline grouping switch cycles the reading list between default thread, sender, and domain grouping with `G`, preserving Timeline actions and fully covering the cleanup browse workflow
 - [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)
@@ -158,7 +158,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
 - [x] Global AI status chip reflects startup-detected missing or unreachable Ollama models as `AI down`, disables AI actions until repaired, and keeps repair details available from Settings > AI
-- [x] Profile-aware command layer: `1/2/3` are the advertised tab shortcuts, `F1/F2/F3` remain legacy aliases, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
+- [x] Profile-aware command layer: `1/2` are the advertised tab shortcuts, `F1/F2` mirror those tabs, `F3` remains a temporary Contacts alias, `h/j/k/l` are browse navigation, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
 - [x] Modifier-aware key hints: when the terminal reports Shift, Ctrl, or Alt key state, the bottom hint bar temporarily pivots to existing commands for that modifier without changing shortcut behavior; terminals without key-release support fall back to a brief modified-keypress hint
@@ -218,7 +218,7 @@ The app can automatically tag emails with categories (subscription, important, u
 
 - [x] Background classification via Ollama (`a` key)
 - [x] Category tags stored in SQLite (`email_classifications` table)
-- [x] Tag column visible in Timeline and Cleanup tabs
+- [x] Tag column visible in Timeline, including sender/domain grouped cleanup workflows
 - [x] MCP tool: `classify_email` (single message)
 - [x] `classify_folder` MCP tool (batch, with progress)
 - [x] Auto-classify new emails as they arrive (background, rate-limited)
@@ -253,11 +253,11 @@ When an email matches a category, the system can trigger an action automatically
 - [x] Action type: `archive` — archive the matching email
 - [x] Action type: `delete` — delete the matching email
 - [x] Action execution logged to SQLite (`rule_action_log` table) with timestamp and result
-- [x] Rule editor TUI form (`W` key in Cleanup tab — add/edit rules interactively)
+- [x] Rule editor TUI form in `Settings > Sync & Cleanup` — add/edit rules interactively
 - [x] `classification_actions` section in `~/.herald/conf.yaml` — declarative config format (current: DB-only)
 - [x] Auto-classify new emails as they arrive to trigger rules in real time
 - [x] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
-- [x] Rule overlay explains that `W` creates future-mail automations, shows saved rules in the same compact centered overlay, and tells the user where the action results surface
+- [x] Rule overlay explains that automation rules handle future matching mail, shows saved rules in the same compact centered overlay, and tells the user where the action results surface
 - [x] Rule editor dry-run preview shows matched cached messages and planned actions before users save or enable move/archive/delete automation
 
 #### Example configuration
@@ -302,58 +302,28 @@ classification_actions:
 
 ---
 
-## Cleanup Mode
+## Cleanup Via Timeline
 
-The Cleanup tab groups emails by sender or domain and shows volume statistics, making it easy to identify and bulk-delete noise. It is the original core of the app and the area where unsubscribe and auto-cleanup rules will land.
+Cleanup browsing now lives in Timeline instead of a separate top-level view. The `G` grouping switch lets users review mail by thread, sender, or domain in one list, then use the same Timeline selection, preview, delete, archive, unsubscribe, and hide-future-mail controls.
 
 ### Sender / Domain grouping
 
-- [x] Group by sender (default)
-- [x] Group by domain
-- [x] Stats per sender: count, size, date range
-- [x] Details panel: individual emails for selected sender
-- [x] Bulk delete: all from sender, all from domain
-- [x] Bulk archive: all from sender
-- [ ] Stable sender/domain selection keyed by logical identity rather than row index
-- [ ] Selection checkmarks and `N selected` status always agree across refreshes, re-sorts, and resizes
-- [ ] Cleanup summary columns simplified to `✓`, `Sender/Domain`, `Count`, and `Date Range`
-- [ ] Cleanup summary resizes responsively at `220x50`, `120x40`, `80x24`, and `50x15` without losing the selection column
-- [ ] Wide Cleanup layouts expand the date-range column enough to show a more specific first/last date range instead of the narrow fallback format
-
-### Email preview in Cleanup
-
-The Cleanup tab has two panels side by side: the sender summary (left) and the email list for the selected sender (right). Today the email list is read-only. The goal is to make individual emails fully actionable from within Cleanup — open, read, reply, unsubscribe — without switching to the Timeline tab.
-
-**Layout when an email is open:**
-- Folder sidebar hides completely (same as full-screen mode in Timeline)
-- Summary panel (sender list) shrinks to 25% of the terminal width
-- Email list panel (details) shrinks to 25%
-- Email preview panel opens at 50% on the right
-
-This gives enough room to read the email while keeping both panels visible as context. `Esc` closes the preview and restores the normal two-panel layout.
-
-- [x] `Tab` cycles focus between the summary panel and the email list panel
-- [x] `Enter` on a row in the email list opens the email preview at 50% width
-- [x] Folder sidebar hides when preview is open; restores on `Esc`
-- [x] Summary and email list panels each shrink to 25% when preview is open
-- [x] Preview panel supports the same scroll controls as Timeline (`j`/`k`, `PgUp`/`PgDn`)
-- [ ] `r` / `R` — reply from within Cleanup preview (opens Compose, pre-filled)
-- [x] `u` — unsubscribe from within an open email preview when the message exposes `List-Unsubscribe`
-- [x] `H` — hide future mail from the open email's sender
-- [x] `D` — delete the open email from within the preview
-- [x] `a` — archive the open email from within the preview (`e` remains a legacy alias)
-- [x] `z` — expand to full-screen (same as Timeline full-screen mode)
-- [x] `Esc` — close preview, restore two-panel Cleanup layout
+- [x] Group Timeline rows by sender with `G`
+- [x] Group Timeline rows by domain with `G`
+- [x] Delete or archive a highlighted sender/domain group through Timeline destructive actions
+- [x] Bulk-select grouped Timeline rows with `Space` before delete/archive
+- [x] Confirmation copy names sender/domain groups rather than calling them threads
+- [x] Sender/domain grouping uses the same preview, reply, forward, attachment, unsubscribe, and hide-future-mail behavior as normal Timeline rows
+- [x] Top-level Cleanup browse tab, Cleanup preview, Cleanup row selection, Cleanup mouse flows, and direct `W`/`P`/`C` browse shortcuts are intentionally retired
 
 ### Unsubscribe
 
 Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers, while `H` acts on the sender and keeps future mail out of the inbox without pretending to be a real unsubscribe.
 
 - [x] Preview metadata shows explicit `Tags:` and `Actions:` rows so list/sender actions are visible in context
-- [x] `u` unsubscribes the currently open Timeline or Cleanup preview email when it exposes `List-Unsubscribe`
+- [x] `u` unsubscribes the currently open Timeline preview email when it exposes `List-Unsubscribe`
 - [x] `H` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions`
-- [x] Cleanup sender summary exposes `H` but not `u`, because true unsubscribe depends on message-level headers
-- [x] Timeline preview and Cleanup preview share the same `u` / `H` semantics and user-facing copy
+- [x] Timeline sender/domain groups expose `H` for the highlighted sender while `u` remains tied to an open message preview with real unsubscribe headers
 - [x] `u` performs RFC 8058 one-click POST when `List-Unsubscribe-Post` is available
 - [x] `u` falls back to `List-Unsubscribe` mailto handling when the message only exposes an email-action target
 - [x] `u` falls back to opening a `List-Unsubscribe` browser URL for HTTP links
@@ -362,13 +332,13 @@ Unsubscribe and sender-hiding actions should be visible from the open email prev
 
 ### Auto-Cleanup Rules
 
-Rules let the app automatically act on email from known senders — delete newsletters older than 30 days, archive promotional email weekly, etc. Rules are defined per-sender or per-domain and stored in SQLite.
+Rules let the app automatically act on email from known senders — delete newsletters older than 30 days, archive promotional email weekly, etc. Rules are defined per-sender or per-domain, stored in SQLite, and managed from `Settings > Sync & Cleanup` rather than a browse tab.
 
 - [x] Per-sender / per-domain rules (action + older-than-days condition)
 - [x] Rule storage in SQLite (`cleanup_rules` table)
 - [x] Manual rule execution (`run_cleanup_rules` trigger)
 - [x] Scheduled execution (configurable interval in `~/.herald/conf.yaml`; TUI-only — daemon runs rules on-demand via `/v1/cleanup-rules/run`)
-- [x] TUI rule manager (list, add, remove)
+- [x] TUI rule manager (list, add, remove) launched from `Settings > Sync & Cleanup`
 - [x] MCP tools: `list_cleanup_rules`, `create_cleanup_rule`, `dry_run_cleanup_rules`, `run_cleanup_rules`
 - [x] Cleanup rule manager appears as a compact centered overlay and explains what manual vs scheduled cleanup does, where saved rules live, and how run results become visible
 - [x] Cleanup rule dry-run preview shows selected/all rule matches and requires confirmation before live archive/delete execution
@@ -492,7 +462,7 @@ Links in email bodies can be shown in different ways depending on user preferenc
 Search is layered: fast local metadata search first, full-text body search next, IMAP server-side search as a fallback for emails not yet cached.
 
 ### In-folder search (local, fast)
-- [x] `/` key opens search bar in Timeline and Cleanup tabs
+- [x] `/` key opens search bar in Timeline
 - [x] SQLite `LIKE` search on sender + subject
 - [x] Timeline `/` search merges keyword and semantic results when embeddings are available
 - [x] Results replace current list view; `Esc` clears
@@ -677,7 +647,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] Name, email, company, topics, first/last-seen, email/sent counts per contact
 - [x] LLM enrichment via Ollama: extracts company name and discussed topics from email subjects (`e` key)
 - [x] Semantic contact embeddings for natural-language search
-- [x] Tab 3 — Contacts TUI: two-panel list+detail, `/` keyword search, `/` then `? query` semantic search
+- [x] Tab 2 — Contacts TUI: two-panel list+detail, `/` keyword search, `/` then `? query` semantic search
 - [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
 - [x] Common AI/model-related contact enrichment failures are deduplicated per batch and surfaced in the Contacts status area

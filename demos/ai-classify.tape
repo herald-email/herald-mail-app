@@ -22,6 +22,12 @@ Sleep 0.3s
 Down
 Sleep 0.3s
 
+Type "G"
+Sleep 1s
+
+Type "G"
+Sleep 1s
+
 Type "2"
 Sleep 1s
 

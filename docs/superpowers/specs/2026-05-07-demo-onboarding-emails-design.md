@@ -35,7 +35,7 @@ The sequence should be explicit and numbered after a short welcome message. The 
 - [x] `Herald Welcome <welcome@herald.demo>` sends `✉ Welcome to Herald`.
 - [x] The welcome email explains Herald as a terminal email client for keyboard navigation, inbox cleanup, rich previews, and AI-assisted triage, and it states that demo mode is synthetic and safe.
 - [x] `Herald Guide <guide@herald.demo>` sends `Step 1: Move around your inbox`.
-- [x] Step 1 covers vertical movement with `j/k` or up/down arrows, horizontal panel movement with `h/l`, left/right arrows, `Tab`, and `Shift+Tab`, preview opening with `Enter`, right arrow, `l`, or `Tab`, mouse scrolling/clicking, `Esc`, `1/2/3` tabs, `f` folders, `/` search, and `?` shortcut help.
+- [x] Step 1 covers vertical movement with `j/k` or up/down arrows, horizontal panel movement with `h/l`, left/right arrows, `Tab`, and `Shift+Tab`, preview opening with `Enter`, right arrow, `l`, or `Tab`, mouse scrolling/clicking, `Esc`, `1/2` tabs, `F3` Contacts legacy alias, `f` folders, `/` search, and `?` shortcut help.
 - [x] `Herald Compose Coach <compose@herald.demo>` sends `Step 2: Reply, write, and preview Markdown`.
 - [x] Step 2 covers `R` reply, Compose, Markdown writing, `ctrl+p` preview, and `ctrl+s` demo sending.
 - [x] Step 2 explains that replies and forwards preserve original formatting, inline images, and attachments where possible, and that Herald sends Markdown as rendered HTML with a plain-text alternative.
@@ -46,9 +46,9 @@ The sequence should be explicit and numbered after a short welcome message. The 
 - [x] `Herald Image Lab <images@herald.demo>` sends `Step 5: View inline images in full screen`.
 - [x] Step 5 retains the Creative Commons sampler behavior with embedded images, `z` full-screen mode, Kitty/iTerm2 rendering, safe fallback links or placeholders, and no remote image fetching.
 - [x] `Herald Cleanup Coach <cleanup@herald.demo>` sends `Step 6: Clean up senders and domains safely`.
-- [x] Step 6 covers Cleanup tab `3`, sender and domain grouping, `space` selection, delete/archive actions, unsubscribe hints, and preview-before-action behavior.
+- [x] Step 6 covers Timeline `G` sender and domain grouping, `space` selection, delete/archive actions, unsubscribe hints, and preview-before-action behavior.
 - [x] `Herald AI Rules <rules@herald.demo>` sends `Step 7: Classify mail and dry-run rules`.
-- [x] Step 7 covers `a` classification, deterministic demo AI, semantic search with a sample query such as `? infrastructure budget risk`, cleanup rules `C`, automation rules `W`, prompts `P`, dry-run previews, and explanations of what rules and custom prompts are for.
+- [x] Step 7 covers `a` classification, deterministic demo AI, semantic search with a sample query such as `? infrastructure budget risk`, Settings > Sync & Cleanup launchers for cleanup rules, automation rules, prompts, dry-run previews, and explanations of what rules and custom prompts are for.
 - [x] `Herald Settings <settings@herald.demo>` sends `Step 8: Configure accounts, AI, and signatures`.
 - [x] Step 8 covers the `S` settings overlay, provider configuration, local/Ollama/OpenAI-compatible AI settings, embedding model choice, and email signatures.
 - [x] `Herald Next Steps <next@herald.demo>` sends `Step 9: Explore contacts, chat, SSH, and MCP`.

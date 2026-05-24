@@ -235,7 +235,7 @@ func (p *PromptEditor) savedPromptsSummary() string {
 		return "Saved prompts: unavailable (" + p.savedErr + ")"
 	}
 	if len(p.savedPrompts) == 0 {
-		return "Saved prompts: none yet. Reopen P after saving."
+		return "Saved prompts: none yet. Reopen Settings > Sync & Cleanup after saving."
 	}
 	const maxShown = 3
 	parts := make([]string, 0, maxShown)
@@ -278,7 +278,7 @@ func (p *PromptEditor) guideView(width int) string {
 			"Purpose: reusable AI instructions.",
 			"Saving does not run the prompt.",
 			"Example: sender triage with {{.Sender}} and {{.Subject}}.",
-			"Next: Use W to attach, or MCP classify_email_custom.",
+			"Next: attach in Settings > Sync & Cleanup, or MCP classify_email_custom.",
 			"Results are stored per email in custom category storage.",
 			p.savedPromptsSummary(),
 		}
@@ -306,7 +306,7 @@ func (p *PromptEditor) guideView(width int) string {
 		},
 		{
 			label: "Next",
-			body:  "Use W to attach this prompt to an automation rule.\nRun manually through MCP classify_email_custom.",
+			body:  "Attach this prompt to an automation rule from Settings > Sync & Cleanup.\nRun manually through MCP classify_email_custom.",
 		},
 		{
 			label: "Results",

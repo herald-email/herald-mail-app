@@ -14,14 +14,14 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | Area | What it shows |
 | --- | --- |
 | AI status chip | Bottom status fragment such as idle, tag, embed, reply, search, chat, defer, down, or off. |
-| Classification tags | Timeline and Cleanup tag columns or preview tag lines. |
+| Classification tags | Timeline tag columns, including grouped cleanup rows, or preview tag lines. |
 | Classification progress | Status fragment like current/total tag progress. |
 | Embedding progress | Status fragment for embedding batch processing. |
 | Semantic search | Timeline and Contacts search queries that start with `?` after opening search with `/`. |
 | Quick reply picker | Canned replies plus optional AI-generated replies. |
 | Chat panel | AI conversation over recent mailbox context and tool results. |
 | Compose AI panel | Rewrite prompt, quick actions, AI response, and accept control. |
-| Prompt editor | Saved reusable AI prompts opened with `P`. |
+| Prompt editor | Saved reusable AI prompts opened from Settings > Sync & Cleanup. |
 
 <!-- HERALD_SCREENSHOT id="ai-status-chip" page="ai" alt="AI status chip in Herald status bar" state="demo mode, 120x40, AI configured" desc="Shows AI status chip in the bottom status bar alongside folder status and key hints." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press 1" -->
 
@@ -40,7 +40,7 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | `ctrl+k` | Compose | AI configured. | Focuses the inline Compose AI prompt. |
 | `ctrl+j` | Compose | AI configured and body or reply context exists. | Generates subject suggestion. |
 | `ctrl+enter` | Compose AI panel | AI response available. | Accepts generated response into the body. |
-| `P` | Main UI | Prompt editor closed. | Opens custom prompt editor. |
+| Settings > Sync & Cleanup | Main UI | Prompt editor closed. | Opens custom prompt editor. |
 | `e` | Contacts | A contact is selected. | Runs contact enrichment. |
 
 ## Workflows
@@ -116,7 +116,7 @@ If Compose AI says "Write something first", add body text or open Compose from a
 
 ![AI classification progress in status bar](/screenshots/ai-classification-progress.png)
 
-<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI toolbar with response" desc="Shows AI rewrite response, compact quick action controls, inline custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; write body; press ctrl+k; press 1" -->
+<!-- HERALD_SCREENSHOT id="ai-compose-assist" page="ai" alt="Compose AI assistant response" state="demo mode, 120x40, Compose AI toolbar with response" desc="Shows AI rewrite response, compact quick action controls, inline custom prompt field, and ctrl+enter accept state." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press c; write body; press ctrl+k; press 1" -->
 
 ![Compose AI assistant response](/screenshots/ai-compose-assist.png)
 

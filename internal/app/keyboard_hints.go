@@ -101,7 +101,7 @@ func (m *Model) timelineOpenPreviewHint() string {
 
 func (m *Model) primaryTabShortcutHint() string {
 	keys := m.primaryTabKeys(keyDisplayHint)
-	if len(keys) == 3 {
+	if len(keys) == len(topLevelTabNavigation) {
 		if compressed, ok := compressSequentialDigitKeys(keys); ok {
 			return compressed + ": tabs"
 		}
@@ -114,7 +114,7 @@ func (m *Model) primaryTabShortcutHint() string {
 
 func (m *Model) primaryTabHelpKey() string {
 	keys := m.primaryTabKeys(keyDisplayHelp)
-	if len(keys) == 3 {
+	if len(keys) == len(topLevelTabNavigation) {
 		if compressed, ok := compressSequentialDigitKeys(keys); ok {
 			return compressed
 		}
@@ -122,7 +122,7 @@ func (m *Model) primaryTabHelpKey() string {
 	if len(keys) > 0 {
 		return strings.Join(keys, "/")
 	}
-	return "1-3"
+	return "1-2"
 }
 
 func (m *Model) primaryTabKeys(style keyDisplayStyle) []string {

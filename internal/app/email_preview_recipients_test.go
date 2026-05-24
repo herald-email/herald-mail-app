@@ -89,28 +89,3 @@ func TestTimelineFullScreenPreviewShowsLoadedToAndCcHeaders(t *testing.T) {
 		t.Fatalf("full-screen preview header must not expose Bcc, got:\n%s", rendered)
 	}
 }
-
-func TestCleanupPreviewShowsLoadedToAndCcHeaders(t *testing.T) {
-	m := makeSizedModel(t, 140, 40)
-	m.activeTab = tabCleanup
-	m.showCleanupPreview = true
-	m.cleanupPreviewWidth = 96
-	m.cleanupPreviewEmail = recipientHeaderEmail()
-	m.cleanupEmailBody = recipientHeaderBody()
-
-	split := stripANSI(m.renderCleanupPreview())
-	requireHeaderOrder(t, split, "From:", "To:", "Cc:", "Date:", "Subj:", "Tags:", "Actions:")
-	if !strings.Contains(split, "To: Rowan Finch <demo@demo.local>, Rae Stone <rae@cobalt-works.example>") {
-		t.Fatalf("expected cleanup split preview To header, got:\n%s", split)
-	}
-	if !strings.Contains(split, "Cc: Hiring Panel <panel@cobalt-works.example>") {
-		t.Fatalf("expected cleanup split preview Cc header, got:\n%s", split)
-	}
-
-	m.cleanupFullScreen = true
-	full := stripANSI(m.renderCleanupPreview())
-	requireHeaderOrder(t, full, "From:", "To:", "Cc:", "Date:", "Subj:", "Tags:", "Actions:")
-	if strings.Contains(split, "Bcc:") || strings.Contains(full, "Bcc:") {
-		t.Fatalf("cleanup preview header must not expose Bcc, got split:\n%s\nfull:\n%s", split, full)
-	}
-}

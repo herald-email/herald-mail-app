@@ -17,7 +17,7 @@ func TestCleanupConfigurationOverlaysRenderAsCompactModals(t *testing.T) {
 		{
 			name: "automation rule editor",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("W"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolAutomation})
 				return updated.(*Model)
 			},
 			title: "Automation Rule",
@@ -25,7 +25,7 @@ func TestCleanupConfigurationOverlaysRenderAsCompactModals(t *testing.T) {
 		{
 			name: "custom prompt editor",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("P"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolPrompts})
 				return updated.(*Model)
 			},
 			title: "New Custom Prompt",
@@ -33,7 +33,7 @@ func TestCleanupConfigurationOverlaysRenderAsCompactModals(t *testing.T) {
 		{
 			name: "cleanup rule manager",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("C"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolRules})
 				return updated.(*Model)
 			},
 			title: "Auto-Cleanup Rules",
@@ -51,16 +51,14 @@ func TestCleanupConfigurationOverlaysRenderAsCompactModals(t *testing.T) {
 			} {
 				t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 					m := makeSizedModel(t, size.width, size.height)
-					m.activeTab = tabCleanup
-					m.stats = makeCleanupStats()
-					m.updateSummaryTable()
+					m.activeTab = tabTimeline
 
 					m = tc.open(m)
 
 					rendered := m.View().Content
 					assertFitsWidth(t, size.width, rendered)
 					assertFitsHeight(t, size.height, rendered)
-					assertOverlayKeepsCleanupBackdrop(t, rendered, tc.title)
+					assertOverlayKeepsTimelineBackdrop(t, rendered, tc.title)
 				})
 			}
 		})
@@ -77,15 +75,13 @@ func TestCleanupDryRunPreviewRendersAsCompactModal(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 			m := makeSizedModel(t, size.width, size.height)
-			m.activeTab = tabCleanup
-			m.stats = makeCleanupStats()
-			m.updateSummaryTable()
+			m.activeTab = tabTimeline
 			m.ruleDryRunPreview = newCleanupDryRunPreview(sampleDryRunReport(models.RuleDryRunKindCleanup), models.RuleDryRunRequest{}, nil)
 
 			rendered := m.View().Content
 			assertFitsWidth(t, size.width, rendered)
 			assertFitsHeight(t, size.height, rendered)
-			assertOverlayKeepsCleanupBackdrop(t, rendered, "Cleanup Rules Preview")
+			assertOverlayKeepsTimelineBackdrop(t, rendered, "Cleanup Rules Preview")
 		})
 	}
 }
@@ -98,21 +94,21 @@ func TestCleanupConfigurationOverlaysUseMinimumSizeGuard(t *testing.T) {
 		{
 			name: "automation rule editor",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("W"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolAutomation})
 				return updated.(*Model)
 			},
 		},
 		{
 			name: "custom prompt editor",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("P"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolPrompts})
 				return updated.(*Model)
 			},
 		},
 		{
 			name: "cleanup rule manager",
 			open: func(m *Model) *Model {
-				updated, _ := m.Update(keyRunes("C"))
+				updated, _ := m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolRules})
 				return updated.(*Model)
 			},
 		},
@@ -128,7 +124,7 @@ func TestCleanupConfigurationOverlaysUseMinimumSizeGuard(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			m := makeSizedModel(t, 50, 15)
-			m.activeTab = tabCleanup
+			m.activeTab = tabTimeline
 			m = tc.open(m)
 
 			rendered := m.View().Content
@@ -141,7 +137,7 @@ func TestCleanupConfigurationOverlaysUseMinimumSizeGuard(t *testing.T) {
 	}
 }
 
-func assertOverlayKeepsCleanupBackdrop(t *testing.T, rendered, title string) {
+func assertOverlayKeepsTimelineBackdrop(t *testing.T, rendered, title string) {
 	t.Helper()
 	stripped := stripANSI(rendered)
 	if !strings.Contains(stripped, title) {
@@ -149,7 +145,7 @@ func assertOverlayKeepsCleanupBackdrop(t *testing.T, rendered, title string) {
 	}
 	lines := strings.Split(strings.TrimRight(stripped, "\n"), "\n")
 	if len(lines) == 0 || !strings.Contains(lines[0], "Herald") {
-		t.Fatalf("expected Cleanup backdrop chrome to remain visible above modal, got first line %q:\n%s", firstLine(lines), stripped)
+		t.Fatalf("expected Timeline backdrop chrome to remain visible above modal, got first line %q:\n%s", firstLine(lines), stripped)
 	}
 	titleRow := -1
 	for i, line := range lines {

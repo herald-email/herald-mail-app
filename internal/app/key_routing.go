@@ -176,8 +176,11 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 		}
 		return m, nil, true
 	case "f2":
-		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
-			return m, m.switchToCleanup(), true
+		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
+			return m, m.switchToContacts(), true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.loadContacts(), true
 		}
 		return m, nil, true
 	case "f3":
@@ -199,7 +202,7 @@ func (m *Model) toggleSidebar() tea.Cmd {
 			m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		}
 		if !m.showSidebar && m.focusedPanel == panelSidebar {
-			m.setFocusedPanel(panelSummary)
+			m.setFocusedPanel(m.defaultFocusPanel())
 		}
 	}
 	return nil
@@ -236,8 +239,6 @@ func (m *Model) toggleChat() tea.Cmd {
 		if m.showChat {
 			m.focusedPanel = panelChat
 			m.chatInput.Focus()
-			m.summaryTable.Blur()
-			m.detailsTable.Blur()
 		} else {
 			m.chatInput.Blur()
 			m.setFocusedPanel(m.defaultFocusPanel())
@@ -262,15 +263,6 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
 		}
-		if m.canInteractWithVisibleData() && m.activeTab != tabCleanup {
-			return m, m.switchToCleanup(), true
-		}
-		return m, nil, true
-	case "3":
-		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
-			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
-			return model, cmd, true
-		}
 		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
 			return m, m.switchToContacts(), true
 		}
@@ -278,6 +270,12 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 			return m, m.loadContacts(), true
 		}
 		return m, nil, true
+	case "3":
+		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
+			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
+			return model, cmd, true
+		}
+		return m, nil, false
 	case "4":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 3 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
@@ -328,30 +326,6 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 	}
 	if m.activeTab == tabTimeline && m.timeline.rangeMode {
 		m.finishTimelineRangeSelection()
-		return m, nil
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview && m.cleanupFullScreen {
-		m.cleanupFullScreen = false
-		m.cleanupBodyWrappedLines = nil
-		m.clearCleanupPreviewDocumentCache()
-		m.updateTableDimensions(m.windowWidth, m.windowHeight)
-		return m, nil
-	}
-	if m.activeTab == tabCleanup && m.showCleanupPreview {
-		m.revokeImagePreviews()
-		m.showCleanupPreview = false
-		m.cleanupPreviewEmail = nil
-		m.cleanupEmailBody = nil
-		m.cleanupBodyLoading = false
-		m.cleanupPreviewLoad = previewLoadTelemetry{}
-		m.cleanupBodyScrollOffset = 0
-		m.cleanupBodyWrappedLines = nil
-		m.cleanupFullScreen = false
-		m.cleanupPreviewDeleting = false
-		m.cleanupPreviewIsArchive = false
-		m.showSidebar = m.cleanupPreviewHadSidebar
-		m.clearCleanupPreviewDocumentCache()
-		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 		return m, nil
 	}
 	if m.activeTab == tabTimeline && m.timeline.chatFilterMode {

@@ -3,11 +3,11 @@ title: Rules and Automation
 description: Use automation rules, custom prompts, cleanup rules, scheduled cleanup, and dry-run mode.
 ---
 
-Rules and automation turn repeated cleanup decisions into saved behavior. Herald exposes automation through the Cleanup tab rule editor, custom prompt editor, cleanup manager, schedule settings, MCP tools, and dry-run status.
+Rules and automation turn repeated cleanup decisions into saved behavior. Herald exposes automation through `Settings > Sync & Cleanup`, MCP tools, scheduled cleanup, and dry-run status.
 
 ## Overview
 
-Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` for cleanup rules that target older mail by sender or domain. These are shipped user-facing features backed by Herald's rule and cleanup-rule storage.
+Use `Settings > Sync & Cleanup` for future-mail automation rules, reusable AI prompts, and cleanup rules that target older mail by sender or domain. These are shipped user-facing features backed by Herald's rule and cleanup-rule storage.
 
 ## Screen Anatomy
 
@@ -23,7 +23,7 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 | Dry-run preview | Compact centered modal showing matched messages, folders, categories, and planned actions before save, enable, or live run. |
 | Status bar | Run results, dry-run marker, deletion/archive progress, and error messages. |
 
-<!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Cleanup tab, W overlay open" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press W" -->
+<!-- HERALD_SCREENSHOT id="automation-rule-editor" page="rules-automation" alt="Automation rule editor form" state="demo mode, 120x40, Settings Sync & Cleanup launcher" desc="Shows trigger type/value, action selection, details fields, saved rule summary, and form help." capture="tmux demo 120x40; ./bin/herald --demo; press S; open Sync & Cleanup; launch automation rules" -->
 
 ![Automation rule editor form](/screenshots/automation-rule-editor.png)
 
@@ -31,11 +31,11 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `W` | Cleanup | Rule editor closed. | Opens automation rule editor, prefilled from focused sender/domain when available. |
+| `S` then Sync & Cleanup launcher | Main UI | Settings closed. | Opens automation rule editor. |
 | `esc` | Rule editor | Form not completed. | Cancels and closes the rule editor. |
-| `P` | Main UI | Rule editor, prompt editor, and settings closed. | Opens custom prompt editor. |
+| `S` then Sync & Cleanup launcher | Main UI | Settings closed. | Opens custom prompt editor. |
 | `esc` | Prompt editor | Form not completed. | Cancels and closes the prompt editor. |
-| `C` | Cleanup | Cleanup manager closed. | Opens cleanup manager. |
+| `S` then Sync & Cleanup launcher | Main UI | Settings closed. | Opens cleanup manager. |
 | `n` | Cleanup manager list | Manager open. | Creates a new cleanup rule. |
 | `enter` | Cleanup manager list | A rule exists. | Edits selected cleanup rule. |
 | `p` | Cleanup manager list | A rule exists. | Opens dry-run preview for the selected cleanup rule. |
@@ -52,9 +52,9 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 
 ### Create a Future-Mail Automation Rule
 
-1. Open Cleanup with `2`.
-2. Focus a sender/domain row when you want prefilled context.
-3. Press `W`.
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Launch automation rules.
 4. Choose trigger type.
 5. Enter trigger value.
 6. Select one or more actions.
@@ -64,32 +64,35 @@ Use `W` for future-mail automation rules, `P` for reusable AI prompts, and `C` f
 
 ### Create a Custom AI Prompt
 
-1. Press `P`.
-2. Enter a name.
-3. Optionally enter an output variable.
-4. Write system instructions.
-5. Write a user template using placeholders such as `{{.Sender}}`, `{{.Subject}}`, and `{{.Body}}`.
-6. Complete the form to save.
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Launch custom prompts.
+4. Enter a name.
+5. Optionally enter an output variable.
+6. Write system instructions.
+7. Write a user template using placeholders such as `{{.Sender}}`, `{{.Subject}}`, and `{{.Body}}`.
+8. Complete the form to save.
 
 Custom prompts are reusable instructions. A rule or MCP tool must invoke a saved prompt before it produces results.
 
 ### Create a Cleanup Rule
 
-1. Open Cleanup with `2`.
-2. Press `C`.
-3. Press `n`.
-4. Fill rule name, match type, match value, action, older-than days, and intended enabled state.
-5. Complete the form to open the dry-run preview.
-6. Save disabled with `s`, or enable with `E` after confirmation for archive/delete rules.
-7. Later, press `p` to preview the selected saved rule or `r` to preview all enabled rules.
-8. From the dry-run preview, press `R` and confirm before running archive/delete live, or rely on configured scheduling.
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Launch cleanup rules.
+4. Press `n`.
+5. Fill rule name, match type, match value, action, older-than days, and intended enabled state.
+6. Complete the form to open the dry-run preview.
+7. Save disabled with `s`, or enable with `E` after confirmation for archive/delete rules.
+8. Later, press `p` to preview the selected saved rule or `r` to preview all enabled rules.
+9. From the dry-run preview, press `R` and confirm before running archive/delete live, or rely on configured scheduling.
 
 ### Configure Scheduled Cleanup
 
 1. Press `S` to open settings.
 2. Set cleanup schedule hours in the sync/cleanup section.
 3. Save settings.
-4. Reopen Cleanup manager with `C` to review enabled rules.
+4. Reopen the cleanup manager from `Settings > Sync & Cleanup` to review enabled rules.
 
 ## States
 
@@ -112,7 +115,7 @@ Rules are stored in Herald's backend and may include trigger values, destination
 
 ## Troubleshooting
 
-If a rule does not match, compare trigger type and value with the exact sender/domain/category shown in Cleanup.
+If a rule does not match, compare trigger type and value with the exact sender/domain/category shown in Timeline grouping.
 
 If a custom prompt saves but appears to do nothing, remember that saved prompts are invoked by rules or MCP tools; saving alone does not run a prompt.
 
@@ -122,21 +125,21 @@ If experimenting with delete rules, use the dry-run preview first. In global `--
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="automation-prompt-editor" page="rules-automation" alt="Custom prompt editor form" state="demo mode, 120x40, prompt editor open" desc="Shows prompt identity fields, system prompt, user template, template-variable descriptions, and saved prompt summary." capture="tmux demo 120x40; ./bin/herald --demo; press P" -->
+<!-- HERALD_SCREENSHOT id="automation-prompt-editor" page="rules-automation" alt="Custom prompt editor form" state="demo mode, 120x40, Settings Sync & Cleanup prompt editor open" desc="Shows prompt identity fields, system prompt, user template, template-variable descriptions, and saved prompt summary." capture="tmux demo 120x40; ./bin/herald --demo; press S; open Sync & Cleanup; launch custom prompts" -->
 
 ![Custom prompt editor form](/screenshots/automation-prompt-editor.png)
 
-<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-list" page="rules-automation" alt="Cleanup manager rule list" state="demo mode, 120x40, Cleanup manager list" desc="Shows saved cleanup rule rows or empty state, n/enter/d/r/esc controls, and last run details when present." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press C" -->
+<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-list" page="rules-automation" alt="Cleanup manager rule list" state="demo mode, 120x40, Settings Sync & Cleanup cleanup manager list" desc="Shows saved cleanup rule rows or empty state, n/enter/d/r/esc controls, and last run details when present." capture="tmux demo 120x40; ./bin/herald --demo; press S; open Sync & Cleanup; launch cleanup rules" -->
 
 ![Cleanup manager rule list](/screenshots/automation-cleanup-manager-list.png)
 
-<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-edit" page="rules-automation" alt="Cleanup manager edit form" state="demo mode, 120x40, new cleanup rule form" desc="Shows cleanup rule name, match type, match value, action, older-than days, enabled field, and cancel hint." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press C; press n" -->
+<!-- HERALD_SCREENSHOT id="automation-cleanup-manager-edit" page="rules-automation" alt="Cleanup manager edit form" state="demo mode, 120x40, new cleanup rule form" desc="Shows cleanup rule name, match type, match value, action, older-than days, enabled field, and cancel hint." capture="tmux demo 120x40; ./bin/herald --demo; press S; open Sync & Cleanup; launch cleanup rules; press n" -->
 
 ![Cleanup manager edit form](/screenshots/automation-cleanup-manager-edit.png)
 
 ## Related Pages
 
-- [Cleanup](/using-herald/cleanup/)
+- [Cleanup via Timeline](/using-herald/cleanup/)
 - [AI Features](/features/ai/)
 - [Destructive Actions](/features/destructive-actions/)
 - [MCP Server](/advanced/mcp/)

@@ -113,17 +113,17 @@ func TestCyrillicPunctuationOpensTimelineSearchAndPreservesQueryText(t *testing.
 	}
 }
 
-func TestCyrillicUppercaseShortcutOpensTimelineCompose(t *testing.T) {
+func TestCyrillicLowercaseShortcutOpensTimelineCompose(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 	m.setFocusedPanel(panelTimeline)
 
-	model, cmd := m.handleKeyMsg(keyRunes("С")) // Russian layout physical Shift+C
+	model, cmd := m.handleKeyMsg(keyRunes("с")) // Russian layout physical c
 	updated := model.(*Model)
 	if cmd != nil {
-		t.Fatalf("expected Cyrillic С to open blank Compose synchronously, got command %T", cmd)
+		t.Fatalf("expected Cyrillic с to open blank Compose synchronously, got command %T", cmd)
 	}
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)

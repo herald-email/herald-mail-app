@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -165,34 +164,25 @@ func (m *Model) startLoading() tea.Cmd {
 func (m *Model) loadCachedStartupCmd() tea.Cmd {
 	folder := m.currentFolder
 	return func() tea.Msg {
-		stats, statsErr := m.backend.GetSenderStatistics(folder)
-		if statsErr != nil {
-			return StartupHydratedMsg{Err: statsErr}
-		}
 		emails, emailsErr := m.backend.GetTimelineEmails(folder)
 		if emailsErr != nil {
 			return StartupHydratedMsg{Err: emailsErr}
 		}
-		return StartupHydratedMsg{Stats: stats, Emails: emails}
+		return StartupHydratedMsg{Emails: emails}
 	}
 }
 
 func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoading bool, status string) tea.Cmd {
 	return func() tea.Msg {
 		logger.Debug("loadSyncSnapshotCmd: folder=%s generation=%d finish=%v status=%q", folder, generation, finishLoading, strings.TrimSpace(status))
-		stats, statsErr := m.backend.GetSenderStatistics(folder)
-		if statsErr != nil {
-			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: statsErr, FinishLoading: finishLoading, StatusMessage: status}
-		}
 		emails, emailsErr := m.backend.GetTimelineEmails(folder)
 		if emailsErr != nil {
 			return SyncHydratedMsg{Folder: folder, Generation: generation, Err: emailsErr, FinishLoading: finishLoading, StatusMessage: status}
 		}
-		logger.Debug("loadSyncSnapshotCmd: hydrated folder=%s generation=%d stats=%d emails=%d", folder, generation, len(stats), len(emails))
+		logger.Debug("loadSyncSnapshotCmd: hydrated folder=%s generation=%d emails=%d", folder, generation, len(emails))
 		return SyncHydratedMsg{
 			Folder:        folder,
 			Generation:    generation,
-			Stats:         stats,
 			Emails:        emails,
 			FinishLoading: finishLoading,
 			StatusMessage: status,
@@ -203,16 +193,11 @@ func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoadi
 func (m *Model) loadCachedStartupFinalCmd(status string) tea.Cmd {
 	folder := m.currentFolder
 	return func() tea.Msg {
-		stats, statsErr := m.backend.GetSenderStatistics(folder)
-		if statsErr != nil {
-			return StartupHydratedMsg{Err: statsErr, FinishLoading: true}
-		}
 		emails, emailsErr := m.backend.GetTimelineEmails(folder)
 		if emailsErr != nil {
 			return StartupHydratedMsg{Err: emailsErr, FinishLoading: true}
 		}
 		return StartupHydratedMsg{
-			Stats:         stats,
 			Emails:        emails,
 			FinishLoading: true,
 			StatusMessage: status,
@@ -222,9 +207,6 @@ func (m *Model) loadCachedStartupFinalCmd(status string) tea.Cmd {
 
 func (m *Model) hasVisibleStartupData() bool {
 	if len(m.timeline.emails) > 0 {
-		return true
-	}
-	if len(m.stats) > 0 {
 		return true
 	}
 	return false
@@ -275,279 +257,7 @@ func (m *Model) loadFolderStatusCmd(folders []string, delay time.Duration) tea.C
 	})
 }
 
-func (m *Model) summaryKeyAtCursor() (string, bool) {
-	cursor := m.summaryTable.Cursor()
-	key, ok := m.rowToSender[cursor]
-	if !ok || key == "" {
-		return "", false
-	}
-	return key, true
-}
-
-func (m *Model) selectedSummaryCount() int {
-	return len(m.selectedSummaryKeys)
-}
-
-func (m *Model) pruneCleanupSummaryRows(emailsBySender map[string][]*models.EmailData) bool {
-	if m.stats == nil {
-		return false
-	}
-
-	pruned := false
-	for key := range m.stats {
-		if len(emailsBySender[key]) > 0 {
-			continue
-		}
-		delete(m.stats, key)
-		delete(m.selectedSummaryKeys, key)
-		if m.selectedSender == key {
-			m.selectedSender = ""
-		}
-		pruned = true
-	}
-	return pruned
-}
-
-func (m *Model) resetCleanupSelection() {
-	m.selectedSummaryKeys = make(map[string]bool)
-	m.selectedMessages = make(map[string]bool)
-}
-
-func (m *Model) clearCleanupData() {
-	m.stats = nil
-	m.selectedSender = ""
-	m.emailsBySender = nil
-	m.detailsEmails = nil
-	m.rowToSender = make(map[int]string)
-	m.summaryTable.SetRows([]table.Row{})
-	m.summaryTable.SetCursor(0)
-	m.detailsTable.SetRows([]table.Row{})
-	m.detailsTable.SetCursor(0)
-}
-
-// updateSummaryTable updates the summary table with current data
-func (m *Model) updateSummaryTable() {
-	if m.stats == nil {
-		return
-	}
-
-	// Sort senders by total emails
-	type senderStat struct {
-		sender string
-		stats  *models.SenderStats
-	}
-
-	var sortedStats []senderStat
-	for sender, stats := range m.stats {
-		sortedStats = append(sortedStats, senderStat{sender, stats})
-	}
-
-	// Sort by email count (descending), then by sender name (ascending) for stable order
-	sort.Slice(sortedStats, func(i, j int) bool {
-		if sortedStats[i].stats.TotalEmails == sortedStats[j].stats.TotalEmails {
-			return sortedStats[i].sender < sortedStats[j].sender
-		}
-		return sortedStats[i].stats.TotalEmails > sortedStats[j].stats.TotalEmails
-	})
-
-	oldCursor := m.summaryTable.Cursor()
-	preservedKey := m.selectedSender
-	if preservedKey == "" {
-		if key, ok := m.rowToSender[oldCursor]; ok {
-			preservedKey = key
-		}
-	}
-
-	// Build table rows and mapping
-	var rows []table.Row
-	m.rowToSender = make(map[int]string) // Clear and rebuild mapping
-	keyToRow := make(map[string]int)
-	for i, item := range sortedStats {
-		// Store original sender for deletion
-		m.rowToSender[i] = item.sender
-		keyToRow[item.sender] = i
-
-		senderColW := m.summaryTable.Columns()[1].Width
-		if senderColW <= 0 {
-			senderColW = 46
-		}
-		sender := styledSenderWithTheme(m.theme, item.sender, senderColW)
-		stats := item.stats
-
-		dateRangeW := 20
-		if cols := m.summaryTable.Columns(); len(cols) > 3 && cols[3].Width > 0 {
-			dateRangeW = cols[3].Width
-		}
-		dateRange := formatCleanupDateRange(stats.FirstEmail, stats.LastEmail, dateRangeW)
-
-		// Add selection indicator in first column
-		checkmark := " "
-		if m.selectedSummaryKeys[item.sender] {
-			checkmark = "✓"
-		}
-
-		row := table.Row{
-			checkmark,
-			sender,
-			fmt.Sprintf("%d", stats.TotalEmails),
-			dateRange,
-		}
-		rows = append(rows, row)
-	}
-
-	m.summaryTable.SetRows(rows)
-	if len(rows) == 0 {
-		m.summaryTable.SetCursor(0)
-		m.selectedSender = ""
-		return
-	}
-	if preservedKey != "" {
-		if row, ok := keyToRow[preservedKey]; ok {
-			m.summaryTable.SetCursor(row)
-		} else if oldCursor >= 0 && oldCursor < len(rows) {
-			m.summaryTable.SetCursor(oldCursor)
-		} else {
-			m.summaryTable.SetCursor(0)
-		}
-	} else if oldCursor >= 0 && oldCursor < len(rows) {
-		m.summaryTable.SetCursor(oldCursor)
-	} else {
-		m.summaryTable.SetCursor(0)
-	}
-}
-
-// updateDetailsTable updates the details table for the selected sender
-func (m *Model) updateDetailsTable() {
-	var emails map[string][]*models.EmailData
-	if isVirtualAllMailOnlyFolder(m.currentFolder) {
-		emails = m.emailsBySender
-	} else {
-		var err error
-		emails, err = m.backend.GetEmailsBySender(m.currentFolder)
-		if err != nil {
-			logger.Warn("Failed to get emails for cleanup details: %v", err)
-			m.detailsTable.SetRows([]table.Row{})
-			return
-		}
-	}
-	if len(emails) == 0 {
-		if len(m.detailsEmails) > 0 {
-			m.rebuildDetailsRows()
-			return
-		}
-		m.selectedSender = ""
-		m.detailsEmails = nil
-		m.detailsTable.SetRows([]table.Row{})
-		return
-	}
-
-	m.emailsBySender = emails
-	if m.pruneCleanupSummaryRows(emails) {
-		m.updateSummaryTable()
-	}
-
-	cursor := m.summaryTable.Cursor()
-	sender := m.selectedSender
-	if key, ok := m.rowToSender[cursor]; ok && key != "" {
-		sender = key
-	}
-	ok := sender != ""
-	if !ok || sender == "" {
-		sender, ok = m.rowToSender[0]
-	}
-	if !ok || sender == "" {
-		m.selectedSender = ""
-		m.detailsEmails = nil
-		m.detailsTable.SetRows([]table.Row{})
-		return
-	}
-
-	m.selectedSender = sender
-
-	senderEmails := emails[sender]
-	if len(senderEmails) == 0 {
-		logger.Debug("No emails found for sender: %s", sender)
-		m.detailsEmails = nil
-		m.detailsTable.SetRows([]table.Row{})
-		return
-	}
-
-	sort.Slice(senderEmails, func(i, j int) bool {
-		return senderEmails[i].Date.After(senderEmails[j].Date)
-	})
-
-	m.detailsEmails = senderEmails
-
-	logger.Debug("updateDetailsTable: %d messages shown, %d selected globally", len(senderEmails), len(m.selectedMessages))
-
-	m.rebuildDetailsRows()
-}
-
-func (m *Model) rebuildDetailsRows() {
-	oldCursor := m.detailsTable.Cursor()
-	if len(m.detailsEmails) == 0 {
-		m.detailsTable.SetRows([]table.Row{})
-		m.detailsTable.SetCursor(0)
-		return
-	}
-
-	var rows []table.Row
-	for _, email := range m.detailsEmails {
-		dateStr := "N/A"
-		if !email.Date.IsZero() {
-			dateStr = email.Date.Format("06-01-02 15:04")
-		}
-
-		subject := sanitizeText(email.Subject)
-		if subject == "" {
-			subject = "No Subject"
-		}
-		maxLen := m.subjectColWidth
-		if maxLen <= 0 {
-			maxLen = 32
-		}
-		subject = truncate(subject, maxLen)
-
-		attachments := "N"
-		if email.HasAttachments {
-			attachments = "Y"
-		}
-
-		checkmark := " "
-		if email.MessageID != "" && m.selectedMessages[email.MessageID] {
-			checkmark = "✓"
-		}
-
-		row := table.Row{
-			checkmark,
-			dateStr,
-			subject,
-			fmt.Sprintf("%.1f", float64(email.Size)/1024),
-			attachments,
-		}
-		rows = append(rows, row)
-	}
-
-	m.detailsTable.SetRows(rows)
-	if len(rows) == 0 {
-		m.detailsTable.SetCursor(0)
-		return
-	}
-	if oldCursor < 0 {
-		oldCursor = 0
-	}
-	if oldCursor >= len(rows) {
-		oldCursor = len(rows) - 1
-	}
-	m.detailsTable.SetCursor(oldCursor)
-}
-
 func (m *Model) reflowVisibleTableRows() {
-	if m.stats != nil {
-		m.updateSummaryTable()
-	}
-	m.rebuildDetailsRows()
-
 	cursor := m.timelineTable.Cursor()
 	m.updateTimelineTable()
 	rows := m.timelineTable.Rows()
@@ -562,33 +272,6 @@ func (m *Model) reflowVisibleTableRows() {
 		cursor = len(rows) - 1
 	}
 	m.timelineTable.SetCursor(cursor)
-}
-
-// toggleDomainMode switches between domain and email grouping
-func (m *Model) toggleDomainMode() {
-	m.groupByDomain = !m.groupByDomain
-	m.backend.SetGroupByDomain(m.groupByDomain)
-
-	logger.Info("Toggling domain mode to: %v", m.groupByDomain)
-
-	if isVirtualAllMailOnlyFolder(m.currentFolder) {
-		m.selectedSender = ""
-		m.resetCleanupSelection()
-		m.hydrateCleanupFromVirtualFolderEmails(m.timeline.emails)
-		return
-	}
-
-	stats, err := m.backend.GetSenderStatistics(m.currentFolder)
-	if err != nil {
-		logger.Error("Failed to reload statistics after toggling domain mode: %v", err)
-		return
-	}
-
-	m.stats = stats
-	m.selectedSender = ""
-	m.resetCleanupSelection()
-	m.updateSummaryTable()
-	m.updateDetailsTable()
 }
 
 // getPhaseIcon returns an icon for the current phase
@@ -678,144 +361,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 	m.normalizeFocusForLayout(plan)
 	tableHeight := plan.ContentHeight
 	m.sidebarTooWide = m.showSidebar &&
-		(m.activeTab == tabTimeline || m.activeTab == tabCleanup) &&
-		!m.showCleanupPreview &&
+		m.activeTab == tabTimeline &&
 		!(m.activeTab == tabTimeline && m.timeline.selectedEmail != nil) &&
 		!plan.SidebarVisible
-
-	const summaryFixedCols = 7
-	const summaryNumCols = 4
-	const detailsFixedCols = 28
-	const detailsNumCols = 5
-
-	if m.showCleanupPreview && m.cleanupFullScreen {
-		m.cleanupPreviewWidth = width
-	} else if m.showCleanupPreview {
-		m.cleanupPreviewWidth = plan.Cleanup.PreviewWidth + 2
-		cpDetAttW := 3
-		sumF := summaryFixedCols
-		sumN := summaryNumCols
-		detF := detailsFixedCols
-		detN := detailsNumCols
-
-		const cpMinSender = 6
-		const cpMinDateRange = 8
-
-		summaryAvailable := plan.Cleanup.SummaryWidth
-		detailsAvailable := plan.Cleanup.DetailsWidth
-		if summaryAvailable == 0 {
-			summaryAvailable = 12
-		}
-		remaining := summaryAvailable - (sumF + sumN*2)
-		if remaining < 0 {
-			remaining = 0
-		}
-		cpDateRangeW := clampInt(remaining/3, cpMinDateRange, 24)
-		if remaining-cpDateRangeW < cpMinSender {
-			cpDateRangeW = remaining - cpMinSender
-		}
-		if cpDateRangeW < cpMinDateRange {
-			cpDateRangeW = cpMinDateRange
-		}
-		senderW := remaining - cpDateRangeW
-		if senderW < cpMinSender {
-			senderW = cpMinSender
-		}
-
-		if detailsAvailable-(detF+detN*2) < 8 && cpDetAttW > 0 {
-			detF -= cpDetAttW
-			detN--
-			cpDetAttW = 0
-		}
-		subjectW := detailsAvailable - (detF + detN*2)
-		if subjectW < 4 {
-			subjectW = 4
-		}
-
-		m.summaryTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Sender/Domain", Width: senderW},
-			{Title: "Count", Width: 6},
-			{Title: "Dates", Width: cpDateRangeW},
-		})
-		m.summaryTable.SetWidth(sumF + senderW + cpDateRangeW + sumN*2)
-
-		m.subjectColWidth = subjectW
-		m.detailsTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Date", Width: 16},
-			{Title: "Subject", Width: subjectW},
-			{Title: "Size", Width: 8},
-			{Title: "Att", Width: cpDetAttW},
-		})
-		m.detailsTable.SetWidth(detF + subjectW + detN*2)
-	} else {
-		m.cleanupPreviewWidth = 0
-
-		const minSender = 8
-		const minDateRange = 8
-		detailsAttW := 3
-
-		sumFixed := summaryFixedCols
-		detFixed := detailsFixedCols
-		sumNCols := summaryNumCols
-		detNCols := detailsNumCols
-
-		if plan.Cleanup.DetailsWidth-(detFixed+detNCols*2) < 8 && detailsAttW > 0 {
-			detFixed -= 3
-			detNCols--
-			detailsAttW = 0
-		}
-
-		summaryAvailable := plan.Cleanup.SummaryWidth
-		remaining := summaryAvailable - sumFixed - sumNCols*2
-		if remaining < 0 {
-			remaining = 0
-		}
-		dateRangeW := clampInt(remaining/2, minDateRange, 30)
-		if remaining-dateRangeW < minSender {
-			dateRangeW = remaining - minSender
-		}
-		if dateRangeW < minDateRange {
-			dateRangeW = minDateRange
-		}
-		senderWidth := remaining - dateRangeW
-		if senderWidth < minSender {
-			senderWidth = minSender
-		}
-		subjectWidth := plan.Cleanup.DetailsWidth - detFixed - detNCols*2
-		if senderWidth < 8 {
-			senderWidth = 8
-		}
-		if subjectWidth < 8 {
-			subjectWidth = 8
-		}
-
-		m.summaryTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Sender/Domain", Width: senderWidth},
-			{Title: "Count", Width: 6},
-			{Title: "Dates", Width: dateRangeW},
-		})
-		m.summaryTable.SetWidth(sumFixed + senderWidth + dateRangeW + sumNCols*2)
-
-		m.subjectColWidth = subjectWidth
-		m.detailsTable.SetColumns([]table.Column{
-			{Title: "✓", Width: 1},
-			{Title: "Date", Width: 16},
-			{Title: "Subject", Width: subjectWidth},
-			{Title: "Size", Width: 8},
-			{Title: "Att", Width: detailsAttW},
-		})
-		m.detailsTable.SetWidth(detFixed + subjectWidth + detNCols*2)
-	}
-
-	// bubbles/table v2 treats SetHeight as the viewport height including its
-	// internal chrome. Height() then returns visible data rows. Add one here so
-	// our custom table renderer plus the outer panel border fills the shared
-	// content budget exactly.
-	m.summaryTable.SetHeight(tableHeight + 1)
-	m.detailsTable.SetHeight(tableHeight + 1)
 
 	const minPreviewWidth = 25
 	previewWidth := 0
@@ -971,33 +519,4 @@ func wrapText(text string, width int) []string {
 // skipEscapeSeq delegates to render.SkipEscapeSeq.
 func skipEscapeSeq(runes []rune, pos int) int {
 	return render.SkipEscapeSeq(runes, pos)
-}
-
-func formatCleanupDateRange(first, last time.Time, width int) string {
-	if first.IsZero() || last.IsZero() {
-		return "N/A"
-	}
-	if width >= 25 {
-		return fmt.Sprintf("%s - %s",
-			first.Format("Jan 02 2006"),
-			last.Format("Jan 02 2006"))
-	}
-	if width >= 20 {
-		if first.Year() == last.Year() {
-			return fmt.Sprintf("%s - %s",
-				first.Format("Jan 02"),
-				last.Format("Jan 02 2006"))
-		}
-		return fmt.Sprintf("%s - %s",
-			first.Format("Jan 02 2006"),
-			last.Format("Jan 02 2006"))
-	}
-	if first.Year() == last.Year() {
-		return fmt.Sprintf("%s - %s",
-			first.Format("Jan"),
-			last.Format("Jan 2006"))
-	}
-	return fmt.Sprintf("%s - %s",
-		first.Format("Jan 2006"),
-		last.Format("Jan 2006"))
 }

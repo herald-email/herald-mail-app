@@ -7,7 +7,7 @@ Compose is Herald's writing screen. It supports normal message composition, repl
 
 ## Overview
 
-Press `C` from Timeline to open a blank Compose screen. Compose sends through the configured SMTP server and can also be opened pre-filled by Timeline reply, Timeline forward, draft edit, or quick reply workflows.
+Press `c` from Timeline to open a blank Compose screen. Compose sends through the configured SMTP server and can also be opened pre-filled by Timeline reply, Timeline forward, draft edit, or quick reply workflows.
 
 ## Screen Anatomy
 
@@ -25,7 +25,7 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 | AI assistant panel | Custom prompt input, quick rewrite actions, generated response, and accept behavior. |
 | Compose status | Validation errors, send state, AI messages, attachment errors, and draft status. |
 
-<!-- HERALD_SCREENSHOT id="compose-main-fields" page="compose" alt="Compose screen with empty message fields" state="demo mode, 120x40, Compose launched from Timeline" desc="Shows To, CC, BCC, Subject, Body, status area, and Compose key hints." capture="tmux demo 120x40; ./bin/herald --demo; press C" -->
+<!-- HERALD_SCREENSHOT id="compose-main-fields" page="compose" alt="Compose screen with empty message fields" state="demo mode, 120x40, Compose launched from Timeline" desc="Shows To, CC, BCC, Subject, Body, status area, and Compose key hints." capture="tmux demo 120x40; ./bin/herald --demo; press c" -->
 
 ![Compose screen with empty message fields](/screenshots/compose-main-fields.png)
 
@@ -34,8 +34,8 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
 | Plain letters and digits | Compose fields | Any Compose text field is focused. | Inserts text, including `q` and numbers, without switching tabs or quitting. |
-| `F1` / `F2` / `F3` | Compose | Main Compose handler active. | Switches to Timeline, Cleanup, or Contacts without inserting text. |
-| `alt+1` / `alt+2` / `alt+3` | Compose | Main Compose handler active. | Switches to Timeline, Cleanup, or Contacts without inserting text. |
+| `F1` / `F2` / `F3` | Compose | Main Compose handler active. | Switches to Timeline, Contacts, or legacy Contacts without inserting text. |
+| `alt+1` / `alt+2` | Compose | Main Compose handler active. | Switches to Timeline or Contacts without inserting text. |
 | `alt+l` / `alt+c` / `alt+f` / `alt+r` | Compose | Main Compose handler active. | Toggles logs, chat, sidebar, or refresh without inserting text. |
 | `tab` | Compose fields | No autocomplete selection is being accepted and no subject hint is pending. | Moves focus To -> CC -> BCC -> Subject -> Body -> To. |
 | `tab` | Subject hint | AI subject hint is visible. | Accepts the suggested subject. |
@@ -108,7 +108,7 @@ Press `C` from Timeline to open a blank Compose screen. Compose sends through th
 | AI unavailable | The Compose AI toolbar shows a configuration warning; `ctrl+k` and `ctrl+j` report no AI backend configured. |
 | AI loading | The assistant waits for provider output and then displays a response. |
 | Draft saved | Compose auto-saves drafts about every 30 seconds when there is content. |
-| Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `F1-F3` for tabs, with `Alt+1/2/3`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` as secondary global actions while writing. |
+| Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `F1-F3` for Timeline/Contacts switching, with `Alt+1/2`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` as secondary global actions while writing. |
 | Return to origin | `esc` returns from Compose to the Timeline list, preview, or search state that opened it after local Compose transient state is dismissed. |
 | Send success | Fields clear, saved draft is deleted, and status reports send success. |
 | Send error | Draft content remains available so you can fix configuration or message fields. |
@@ -131,19 +131,19 @@ If a send error occurs after attaching files, verify the file still exists and t
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="compose-markdown-preview" page="compose" alt="Compose Markdown preview mode" state="demo mode, 120x40, Compose launched from Timeline, Markdown preview active" desc="Shows the rendered Markdown preview, original compose fields, and preview key state." capture="tmux demo 120x40; ./bin/herald --demo; press C; fill body with markdown; press ctrl+p" -->
+<!-- HERALD_SCREENSHOT id="compose-markdown-preview" page="compose" alt="Compose Markdown preview mode" state="demo mode, 120x40, Compose launched from Timeline, Markdown preview active" desc="Shows the rendered Markdown preview, original compose fields, and preview key state." capture="tmux demo 120x40; ./bin/herald --demo; press c; fill body with markdown; press ctrl+p" -->
 
 ![Compose Markdown preview mode](/screenshots/compose-markdown-preview.png)
 
-<!-- HERALD_SCREENSHOT id="compose-autocomplete" page="compose" alt="Compose address autocomplete dropdown" state="demo mode, 120x40, To field with contact suggestions" desc="Shows recipient suggestions, selected suggestion row, and accept/dismiss behavior." capture="tmux demo 120x40; ./bin/herald --demo; press C; type two or more contact characters in To" -->
+<!-- HERALD_SCREENSHOT id="compose-autocomplete" page="compose" alt="Compose address autocomplete dropdown" state="demo mode, 120x40, To field with contact suggestions" desc="Shows recipient suggestions, selected suggestion row, and accept/dismiss behavior." capture="tmux demo 120x40; ./bin/herald --demo; press c; type two or more contact characters in To" -->
 
 ![Compose address autocomplete dropdown](/screenshots/compose-autocomplete.png)
 
-<!-- HERALD_SCREENSHOT id="compose-ai-assistant" page="compose" alt="Compose AI assistant toolbar" state="demo mode, 120x40, AI configured, Compose AI toolbar visible" desc="Shows the compact Translate and Style controls, quick actions, inline custom instruction input, generated response area, and accept key hint." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press C; enter body text; press ctrl+k" -->
+<!-- HERALD_SCREENSHOT id="compose-ai-assistant" page="compose" alt="Compose AI assistant toolbar" state="demo mode, 120x40, AI configured, Compose AI toolbar visible" desc="Shows the compact Translate and Style controls, quick actions, inline custom instruction input, generated response area, and accept key hint." capture="tmux demo 120x40; ./bin/herald --demo with AI configured; press c; enter body text; press ctrl+k" -->
 
 ![Compose AI assistant panel](/screenshots/compose-ai-assistant.png)
 
-<!-- HERALD_SCREENSHOT id="compose-attachment-input" page="compose" alt="Compose attachment path prompt" state="demo mode, 120x40, attachment input active" desc="Shows the file path input row opened by ctrl+a and the surrounding compose fields." capture="tmux demo 120x40; ./bin/herald --demo; press C; press ctrl+a" -->
+<!-- HERALD_SCREENSHOT id="compose-attachment-input" page="compose" alt="Compose attachment path prompt" state="demo mode, 120x40, attachment input active" desc="Shows the file path input row opened by ctrl+a and the surrounding compose fields." capture="tmux demo 120x40; ./bin/herald --demo; press c; press ctrl+a" -->
 
 ![Compose attachment path prompt](/screenshots/compose-attachment-input.png)
 

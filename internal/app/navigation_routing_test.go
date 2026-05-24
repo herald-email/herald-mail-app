@@ -142,7 +142,7 @@ func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 		want int
 	}{
 		{name: "F1", key: functionKey(1), want: tabTimeline},
-		{name: "F2", key: functionKey(2), want: tabCleanup},
+		{name: "F2", key: functionKey(2), want: tabContacts},
 		{name: "F3", key: functionKey(3), want: tabContacts},
 	}
 
@@ -175,19 +175,38 @@ func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 	}
 }
 
-func TestFunctionKeyF2SwitchesToCleanup(t *testing.T) {
+func TestFunctionKeyF2SwitchesToContacts(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
 
 	model, _ := m.handleKeyMsg(functionKey(2))
 	updated := model.(*Model)
 
-	if updated.activeTab != tabCleanup {
-		t.Fatalf("F2 activeTab=%d, want Cleanup", updated.activeTab)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("F2 activeTab=%d, want Contacts", updated.activeTab)
 	}
 }
 
-func TestTimelineCOpensBlankComposeAndEscapeReturnsTimeline(t *testing.T) {
+func TestRetiredCleanupBrowseShortcutsDoNotOpenManagers(t *testing.T) {
+	for _, key := range []string{"W", "P", "C"} {
+		t.Run(key, func(t *testing.T) {
+			m := makeSizedModel(t, 140, 40)
+			m.activeTab = tabTimeline
+
+			model, _ := m.handleKeyMsg(keyRunes(key))
+			updated := model.(*Model)
+
+			if updated.showRuleEditor || updated.showPromptEditor || updated.showCleanupMgr {
+				t.Fatalf("retired browse shortcut %s opened a manager/editor", key)
+			}
+			if !strings.Contains(updated.statusMessage, "Settings > Sync & Cleanup") {
+				t.Fatalf("expected retired shortcut %s to point to Settings, got %q", key, updated.statusMessage)
+			}
+		})
+	}
+}
+
+func TestTimelineLowercaseCOpensBlankComposeAndEscapeReturnsTimeline(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
 	m.loading = false
@@ -207,10 +226,10 @@ func TestTimelineCOpensBlankComposeAndEscapeReturnsTimeline(t *testing.T) {
 	m.attachmentCompletionIdx = 0
 	m.composeAIInput.SetValue("stale prompt")
 
-	model, cmd := m.handleKeyMsg(keyRunes("C"))
+	model, cmd := m.handleKeyMsg(keyRunes("c"))
 	updated := model.(*Model)
 	if cmd != nil {
-		t.Fatalf("expected Timeline C to open blank Compose synchronously, got command %T", cmd)
+		t.Fatalf("expected Timeline c to open blank Compose synchronously, got command %T", cmd)
 	}
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
@@ -259,7 +278,7 @@ func TestComposeEscapeReturnsToTimelinePreviewOrigin(t *testing.T) {
 	m.timeline.body = &models.EmailBody{TextPlain: "preview body"}
 	m.setFocusedPanel(panelPreview)
 
-	model, _ := m.handleKeyMsg(keyRunes("C"))
+	model, _ := m.handleKeyMsg(keyRunes("c"))
 	updated := model.(*Model)
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
@@ -297,7 +316,7 @@ func TestComposeEscapeReturnsToTimelineSearchResultsOrigin(t *testing.T) {
 	m.updateTimelineTable()
 	m.setFocusedPanel(panelTimeline)
 
-	model, _ := m.handleKeyMsg(keyRunes("C"))
+	model, _ := m.handleKeyMsg(keyRunes("c"))
 	updated := model.(*Model)
 	if updated.activeTab != tabCompose {
 		t.Fatalf("activeTab=%d, want Compose", updated.activeTab)
@@ -319,15 +338,15 @@ func TestComposeEscapeReturnsToTimelineSearchResultsOrigin(t *testing.T) {
 	}
 }
 
-func TestRenumberedTopLevelTabNavigationRoutesCleanupAndContacts(t *testing.T) {
+func TestRenumberedTopLevelTabNavigationRoutesTimelineAndContacts(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
 	m.loading = false
 
 	model, _ := m.handleKeyMsg(functionKey(2))
 	updated := model.(*Model)
-	if updated.activeTab != tabCleanup {
-		t.Fatalf("F2 activeTab=%d, want Cleanup", updated.activeTab)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("F2 activeTab=%d, want Contacts", updated.activeTab)
 	}
 
 	updated.activeTab = tabTimeline
@@ -340,89 +359,27 @@ func TestRenumberedTopLevelTabNavigationRoutesCleanupAndContacts(t *testing.T) {
 	updated.activeTab = tabTimeline
 	model, _ = updated.handleKeyMsg(keyRunes("2"))
 	updated = model.(*Model)
-	if updated.activeTab != tabCleanup {
-		t.Fatalf("2 activeTab=%d, want Cleanup", updated.activeTab)
+	if updated.activeTab != tabContacts {
+		t.Fatalf("2 activeTab=%d, want Contacts", updated.activeTab)
 	}
 
 	updated.activeTab = tabTimeline
 	model, _ = updated.handleKeyMsg(keyRunes("3"))
 	updated = model.(*Model)
-	if updated.activeTab != tabContacts {
-		t.Fatalf("3 activeTab=%d, want Contacts", updated.activeTab)
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("3 activeTab=%d, want no top-level tab switch", updated.activeTab)
 	}
 
 	tabBar := stripANSI(updated.renderTabBar())
-	if strings.Contains(tabBar, "Compose") || strings.Contains(tabBar, "F4") {
-		t.Fatalf("expected top tab bar without Compose/F4, got %q", tabBar)
+	for _, stale := range []string{"Cleanup", "Compose", "F4", "3  Contacts"} {
+		if strings.Contains(tabBar, stale) {
+			t.Fatalf("expected top tab bar to omit %q, got %q", stale, tabBar)
+		}
 	}
-	for _, want := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
+	for _, want := range []string{"1  Timeline", "2  Contacts"} {
 		if !strings.Contains(tabBar, want) {
 			t.Fatalf("expected tab bar to contain %q, got %q", want, tabBar)
 		}
-	}
-}
-
-func TestCleanupFullScreenPlainTabSwitchClosesPreview(t *testing.T) {
-	m := makeSizedModel(t, 100, 30)
-	m.activeTab = tabCleanup
-	m.showCleanupPreview = true
-	m.cleanupFullScreen = true
-	m.cleanupPreviewEmail = &models.EmailData{MessageID: "cleanup-a", Subject: "Cleanup A"}
-	m.cleanupEmailBody = &models.EmailBody{TextPlain: "cleanup body"}
-	m.cleanupPreviewHadSidebar = true
-	m.showSidebar = false
-	m.cleanupPreviewDocLayout = &previewDocumentLayout{TotalRows: 1}
-
-	model, _ := m.handleKeyMsg(keyRunes("1"))
-	updated := model.(*Model)
-
-	if updated.activeTab != tabTimeline {
-		t.Fatalf("activeTab=%d, want Timeline", updated.activeTab)
-	}
-	if updated.cleanupFullScreen {
-		t.Fatal("cleanupFullScreen should be false after switching tabs")
-	}
-	if updated.showCleanupPreview || updated.cleanupPreviewEmail != nil || updated.cleanupEmailBody != nil {
-		t.Fatal("cleanup preview should be closed when switching away")
-	}
-	if !updated.showSidebar {
-		t.Fatal("sidebar should be restored from cleanup preview state")
-	}
-	if updated.cleanupPreviewDocLayout != nil {
-		t.Fatal("cleanup document cache should be cleared")
-	}
-
-	model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
-	afterEsc := model.(*Model)
-	if afterEsc.activeTab != tabTimeline {
-		t.Fatalf("Esc after tab switch should not be trapped, activeTab=%d", afterEsc.activeTab)
-	}
-}
-
-func TestCleanupFullScreenFunctionTabSwitchClosesPreview(t *testing.T) {
-	m := makeSizedModel(t, 100, 30)
-	m.activeTab = tabCleanup
-	m.showCleanupPreview = true
-	m.cleanupFullScreen = true
-	m.cleanupPreviewEmail = &models.EmailData{MessageID: "cleanup-a", Subject: "Cleanup A"}
-	m.cleanupEmailBody = &models.EmailBody{TextPlain: "cleanup body"}
-	m.cleanupPreviewHadSidebar = true
-	m.showSidebar = false
-
-	model, _ := m.handleKeyMsg(functionKey(1))
-	updated := model.(*Model)
-
-	if updated.activeTab != tabTimeline {
-		t.Fatalf("activeTab=%d, want Timeline", updated.activeTab)
-	}
-	if updated.cleanupFullScreen {
-		t.Fatal("cleanupFullScreen should be false after alt tab switch")
-	}
-	if updated.showCleanupPreview || updated.cleanupPreviewEmail != nil || updated.cleanupEmailBody != nil {
-		t.Fatal("cleanup preview should be closed after function-key tab switch")
-	}
-	if !updated.showSidebar {
-		t.Fatal("sidebar should be restored from cleanup preview state")
 	}
 }
 
@@ -586,10 +543,12 @@ func TestRangeFallbackKeysStayInsideTextEntrySurfaces(t *testing.T) {
 
 func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	m.loading = false
 	m.showSidebar = true
-	m.showCleanupPreview = true
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-1", Subject: "Hello"}
+	m.timeline.bodyMessageID = "msg-1"
+	m.timeline.body = &models.EmailBody{TextPlain: "body"}
 	m.focusedPanel = panelSidebar
 
 	m.updateTableDimensions(80, 24)
@@ -598,8 +557,8 @@ func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 	if strings.Contains(hints, "space: expand") {
 		t.Fatalf("expected hidden sidebar hints to disappear, got %q", hints)
 	}
-	if !strings.Contains(hints, "scroll preview") {
-		t.Fatalf("expected cleanup preview hints after focus normalization, got %q", hints)
+	if !strings.Contains(hints, "sender") {
+		t.Fatalf("expected timeline hints to stay on a visible panel after focus normalization, got %q", hints)
 	}
 }
 
@@ -667,31 +626,10 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "cleanup summary",
-			model: func() *Model {
-				m := makeSizedModel(t, 120, 40)
-				m.activeTab = tabCleanup
-				m.stats = makeCleanupStats()
-				m.updateSummaryTable()
-				return m
-			},
-		},
-		{
-			name: "cleanup details",
-			model: func() *Model {
-				m := makeSizedModel(t, 120, 40)
-				m.activeTab = tabCleanup
-				m.stats = makeCleanupStats()
-				m.updateSummaryTable()
-				m.setFocusedPanel(panelDetails)
-				return m
-			},
-		},
-		{
 			name: "sidebar",
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
-				m.activeTab = tabCleanup
+				m.activeTab = tabTimeline
 				m.showSidebar = true
 				m.setFocusedPanel(panelSidebar)
 				return m
@@ -702,10 +640,10 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hints := stripANSI(tc.model().renderKeyHints())
-			if !strings.Contains(hints, "1-3: tabs") {
+			if !strings.Contains(hints, "1-2: tabs") {
 				t.Fatalf("expected primary numbered tab hint, got %q", hints)
 			}
-			for _, stale := range []string{"F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
+			for _, stale := range []string{"1-3: tabs", "F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
 				if strings.Contains(hints, stale) {
 					t.Fatalf("expected no stale tab hint %q, got %q", stale, hints)
 				}
@@ -730,12 +668,12 @@ func TestRenderTabBar_AdvertisesNumberKeys(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	rendered := stripANSI(m.renderTabBar())
 
-	for _, want := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
+	for _, want := range []string{"1  Timeline", "2  Contacts"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected tab bar to include %q, got %q", want, rendered)
 		}
 	}
-	for _, stale := range []string{"F1  Timeline", "F2  Compose", "F4"} {
+	for _, stale := range []string{"2  Cleanup", "3  Contacts", "F1  Timeline", "F2  Compose", "F4"} {
 		if strings.Contains(rendered, stale) {
 			t.Fatalf("expected tab bar not to include stale label %q, got %q", stale, rendered)
 		}
@@ -805,7 +743,7 @@ func TestCtrlITreatedAsTabOutsideSearchMode(t *testing.T) {
 	}
 }
 
-func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
+func TestNumberTabSwitchesToContactsWhileSyncingWithVisibleData(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.loading = true
@@ -814,36 +752,12 @@ func TestNumberTabSwitchesToCleanupWhileSyncingWithVisibleData(t *testing.T) {
 
 	model, _, handled := m.handleTabKey(keyRune('2'))
 	if !handled {
-		t.Fatal("expected cleanup tab key to be handled while syncing with visible data")
+		t.Fatal("expected contacts tab key to be handled while syncing with visible data")
 	}
 
 	updated := model.(*Model)
-	if updated.activeTab != tabCleanup {
-		t.Fatalf("expected active tab to switch to cleanup, got %d", updated.activeTab)
-	}
-}
-
-func TestSelectSidebarFolder_CleanupRestoresSummaryTableFocus(t *testing.T) {
-	b := &layoutBackend{emailsBySender: makeCleanupEmails()}
-	m := New(b, nil, "", nil, false)
-	m.activeTab = tabCleanup
-	m.loading = false
-	m.currentFolder = "INBOX"
-	m.showSidebar = true
-	m.stats = makeCleanupStats()
-	m.folderTree = buildFolderTree([]string{"INBOX", "Archive"})
-	m.updateSummaryTable()
-	m.updateDetailsTable()
-	m.setFocusedPanel(panelSidebar)
-	m.sidebarCursor = 1
-
-	_, _ = m.selectSidebarFolder()
-
-	if m.focusedPanel != panelSummary {
-		t.Fatalf("expected focus to return to cleanup summary, got %d", m.focusedPanel)
-	}
-	if !m.summaryTable.Focused() {
-		t.Fatal("expected cleanup summary table to be focused after selecting a folder from the sidebar")
+	if updated.activeTab != tabContacts {
+		t.Fatalf("expected active tab to switch to contacts, got %d", updated.activeTab)
 	}
 }
 

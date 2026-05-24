@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -141,92 +140,5 @@ func TestHandleTimelineKey_HCreatesHideFutureMailRule(t *testing.T) {
 	}
 	if backend.sender != "Tech Weekly <newsletter@techweekly.example>" {
 		t.Fatalf("expected backend to receive sender, got %q", backend.sender)
-	}
-}
-
-func TestRenderCleanupPreview_ShowsTagsAndActionsRows(t *testing.T) {
-	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
-	m.showCleanupPreview = true
-	m.cleanupPreviewWidth = 48
-	m.cleanupPreviewEmail = &models.EmailData{
-		MessageID: "msg-1",
-		Sender:    "Tech Weekly <newsletter@techweekly.example>",
-		Subject:   "This week in tech",
-	}
-	m.classifications = map[string]string{"msg-1": "news"}
-	m.cleanupEmailBody = &models.EmailBody{
-		TextPlain:       "hello",
-		ListUnsubscribe: "<mailto:leave@example.com>",
-	}
-	m.detailsEmails = []*models.EmailData{m.cleanupPreviewEmail}
-	m.setFocusedPanel(panelDetails)
-
-	rendered := stripANSI(m.renderCleanupPreview())
-	if !strings.Contains(rendered, "Tags: news") {
-		t.Fatalf("expected cleanup preview to show tag row, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "Actions:") {
-		t.Fatalf("expected cleanup preview to show actions row, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "u unsubscribe") {
-		t.Fatalf("expected cleanup preview to advertise unsubscribe action, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "H hide future mail") {
-		t.Fatalf("expected cleanup preview to advertise hide-future action, got:\n%s", rendered)
-	}
-
-	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "u: unsubscribe") {
-		t.Fatalf("expected cleanup preview hints to advertise unsubscribe, got %q", hints)
-	}
-	if !strings.Contains(hints, "H: hide future mail") {
-		t.Fatalf("expected cleanup preview hints to advertise hide-future action, got %q", hints)
-	}
-}
-
-func TestRenderKeyHints_CleanupSummaryAdvertisesHideFutureMailNotUnsubscribe(t *testing.T) {
-	m := makeSizedModel(t, 120, 40)
-	m.activeTab = tabCleanup
-	m.stats = makeCleanupStats()
-	m.updateSummaryTable()
-	m.setFocusedPanel(panelSummary)
-
-	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "H: hide future mail") {
-		t.Fatalf("expected cleanup summary hints to advertise hide-future action, got %q", hints)
-	}
-	if strings.Contains(hints, "u: unsubscribe") {
-		t.Fatalf("expected cleanup summary hints to hide unsubscribe, got %q", hints)
-	}
-}
-
-func TestHandleKeyMsg_CleanupSummaryHCreatesHideFutureMailRule(t *testing.T) {
-	backend := &hideFutureBackend{}
-	m := New(backend, nil, "", nil, false)
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = updated.(*Model)
-	m.backend = backend
-	m.activeTab = tabCleanup
-	m.loading = false
-	m.stats = makeCleanupStats()
-	m.updateSummaryTable()
-	m.setFocusedPanel(panelSummary)
-
-	_, cmd := m.Update(keyRune('h'))
-	if cmd == nil {
-		t.Fatal("expected h on cleanup summary to return a hide-future-mail command")
-	}
-
-	msg := cmd()
-	result, ok := msg.(SoftUnsubResultMsg)
-	if !ok {
-		t.Fatalf("expected SoftUnsubResultMsg, got %T", msg)
-	}
-	if result.Sender == "" {
-		t.Fatal("expected cleanup summary h action to target a sender")
-	}
-	if backend.sender == "" {
-		t.Fatal("expected backend to receive sender for hide-future-mail action")
 	}
 }

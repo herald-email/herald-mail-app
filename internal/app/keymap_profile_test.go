@@ -24,7 +24,6 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "vim right", scope: "timeline", mode: "normal", key: "l", command: CommandPaneRight},
 		{name: "vim left", scope: "timeline", mode: "normal", key: "h", command: CommandPaneLeft},
 		{name: "new compose", scope: "timeline", mode: "normal", key: "c", command: CommandComposeNew},
-		{name: "legacy compose", scope: "timeline", mode: "normal", key: "C", command: CommandComposeNew},
 		{name: "reply all primary", scope: "timeline", mode: "normal", key: "r", command: CommandMailReplyAll},
 		{name: "reply sender primary", scope: "timeline", mode: "normal", key: "R", command: CommandMailReplySender},
 		{name: "forward primary", scope: "timeline", mode: "normal", key: "f", command: CommandMailForward},
@@ -39,8 +38,9 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "sidebar primary", scope: "global", mode: "normal", key: "B", command: CommandSidebarToggle},
 		{name: "logs primary", scope: "global", mode: "normal", key: "L", command: CommandLogsToggle},
 		{name: "refresh primary", scope: "global", mode: "normal", key: "ctrl+r", command: CommandAppRefresh},
-		{name: "tab legacy", scope: "global", mode: "normal", key: "f2", command: CommandTabCleanup},
-		{name: "tab primary", scope: "global", mode: "normal", key: "2", command: CommandTabCleanup},
+		{name: "contacts function alias", scope: "global", mode: "normal", key: "f2", command: CommandTabContacts},
+		{name: "contacts primary", scope: "global", mode: "normal", key: "2", command: CommandTabContacts},
+		{name: "contacts legacy f3", scope: "global", mode: "normal", key: "f3", command: CommandTabContacts},
 	}
 
 	for _, tc := range tests {
@@ -69,6 +69,22 @@ bindings:
 	}
 	if !strings.Contains(err.Error(), "mail.blast_everything") {
 		t.Fatalf("validation error = %v, want unknown command id", err)
+	}
+}
+
+func TestKeyboardResolverCustomKeymapRejectsDeprecatedCleanupTabCommand(t *testing.T) {
+	err := ValidateCustomKeymap([]byte(`
+extends: default
+bindings:
+  global:
+    normal:
+      3: tab.cleanup
+`))
+	if err == nil {
+		t.Fatal("expected validation error for deprecated cleanup tab command")
+	}
+	if !strings.Contains(err.Error(), "tab.cleanup") {
+		t.Fatalf("validation error = %v, want deprecated cleanup command id", err)
 	}
 }
 
@@ -137,8 +153,7 @@ bindings:
       b: sidebar.toggle
       o: logs.toggle
       7: tab.timeline
-      8: tab.cleanup
-      9: tab.contacts
+      8: tab.contacts
   timeline:
     normal:
       n: compose.new
@@ -156,7 +171,7 @@ bindings:
 
 	hints := stripANSI(m.renderKeyHints())
 	requireHintSegments(t, hints,
-		"7-9: tabs",
+		"7-8: tabs",
 		"n: compose",
 		"p: all",
 		"s: sender",
@@ -167,7 +182,7 @@ bindings:
 		"G: re-classify",
 		"b: sidebar",
 	)
-	for _, stale := range []string{"1-3: tabs", "c: compose", "r: all", "R: sender", "f: forward", "a: archive", "T: re-classify", "B: sidebar"} {
+	for _, stale := range []string{"1-2: tabs", "1-3: tabs", "7-9: tabs", "c: compose", "r: all", "R: sender", "f: forward", "a: archive", "T: re-classify", "B: sidebar"} {
 		if strings.Contains(hints, stale) {
 			t.Fatalf("expected custom keymap hints to omit stale %q, got:\n%s", stale, hints)
 		}
@@ -283,8 +298,7 @@ bindings:
   global:
     normal:
       7: tab.timeline
-      8: tab.cleanup
-      9: tab.contacts
+      8: tab.contacts
   timeline:
     normal:
       n: compose.new
@@ -295,12 +309,12 @@ bindings:
 	m.keyboard = resolver
 
 	tabBar := stripANSI(m.renderTabBar())
-	for _, want := range []string{"7  Timeline", "8  Cleanup", "9  Contacts"} {
+	for _, want := range []string{"7  Timeline", "8  Contacts"} {
 		if !strings.Contains(tabBar, want) {
 			t.Fatalf("expected custom tab label %q, got %q", want, tabBar)
 		}
 	}
-	for _, stale := range []string{"1  Timeline", "2  Cleanup", "3  Contacts"} {
+	for _, stale := range []string{"1  Timeline", "2  Contacts", "Cleanup", "9  Contacts"} {
 		if strings.Contains(tabBar, stale) {
 			t.Fatalf("expected tab bar to omit stale %q, got %q", stale, tabBar)
 		}
@@ -308,19 +322,19 @@ bindings:
 
 	updated := pressQuestion(m)
 	help := stripANSI(updated.View().Content)
-	for _, want := range []string{"7-9", "switch tabs", "n", "open a blank Compose", "p", "reply all"} {
+	for _, want := range []string{"7-8", "switch tabs", "n", "open a blank Compose", "p", "reply all"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("expected shortcut help to include %q, got:\n%s", want, help)
 		}
 	}
-	for _, stale := range []string{"1-3", "c              open a blank Compose", "r / R / f"} {
+	for _, stale := range []string{"1-2", "1-3", "7-9", "Cleanup", "c              open a blank Compose", "r / R / f"} {
 		if strings.Contains(help, stale) {
 			t.Fatalf("expected shortcut help to omit stale %q, got:\n%s", stale, help)
 		}
 	}
 }
 
-func TestCustomKeymapBottomHintsUseResolvedComposeCleanupAndContactsKeys(t *testing.T) {
+func TestCustomKeymapBottomHintsUseResolvedComposeTimelineAndContactsKeys(t *testing.T) {
 	resolver := NewKeyboardResolver(&config.Config{})
 	if err := resolver.ApplyCustomKeymap([]byte(`
 extends: default
@@ -328,12 +342,11 @@ bindings:
   global:
     normal:
       7: tab.timeline
-      8: tab.cleanup
-      9: tab.contacts
+      8: tab.contacts
       b: sidebar.toggle
       o: logs.toggle
       y: chat.toggle
-  cleanup:
+  timeline:
     normal:
       x: mail.archive_current
       z: mail.delete_confirm
@@ -355,24 +368,24 @@ bindings:
 		m.activeTab = tabCompose
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-9: tabs", "ctrl+s: send", "ctrl+p: preview")
-		if strings.Contains(hints, "1-3: tabs") || strings.Contains(hints, "?: help") {
+		requireHintSegments(t, hints, "7-8: tabs", "ctrl+s: send", "ctrl+p: preview")
+		if strings.Contains(hints, "1-2: tabs") || strings.Contains(hints, "1-3: tabs") || strings.Contains(hints, "?: help") {
 			t.Fatalf("expected Compose hints to use custom tab keys and avoid browse help, got:\n%s", hints)
 		}
 	})
 
-	t.Run("cleanup", func(t *testing.T) {
-		m := makeSizedModel(t, 180, 40)
+	t.Run("timeline", func(t *testing.T) {
+		m := makeSizedModel(t, 260, 40)
 		m.keyboard = resolver
-		m.activeTab = tabCleanup
-		m.stats = makeCleanupStats()
-		m.updateSummaryTable()
+		m.activeTab = tabTimeline
+		m.timeline.emails = mockEmails()
+		m.updateTimelineTable()
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-9: tabs", "h: hide future mail", "z: delete", "v: delete now", "x: archive", "b: sidebar", "y: chat")
-		for _, stale := range []string{"1-3: tabs", "H: hide future mail", "a: archive", "B: sidebar", "g: chat"} {
+		requireHintSegments(t, hints, "7-8: tabs", "z: delete", "v: delete now", "x: archive", "b: sidebar")
+		for _, stale := range []string{"1-2: tabs", "1-3: tabs", "a: archive", "B: sidebar", "g: chat"} {
 			if strings.Contains(hints, stale) {
-				t.Fatalf("expected Cleanup custom hints to omit stale %q, got:\n%s", stale, hints)
+				t.Fatalf("expected Timeline custom hints to omit stale %q, got:\n%s", stale, hints)
 			}
 		}
 	})
@@ -385,8 +398,8 @@ bindings:
 		m.contactsFiltered = m.contactsList
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-9: tabs", "↑/p ↓/n: nav", ";: search")
-		for _, stale := range []string{"1-3: tabs", "↑/k ↓/j: nav", "/: search"} {
+		requireHintSegments(t, hints, "7-8: tabs", "↑/p ↓/n: nav", ";: search")
+		for _, stale := range []string{"1-2: tabs", "1-3: tabs", "↑/k ↓/j: nav", "/: search"} {
 			if strings.Contains(hints, stale) {
 				t.Fatalf("expected Contacts custom hints to omit stale %q, got:\n%s", stale, hints)
 			}

@@ -263,47 +263,6 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, formatFolderCountsStatus(st.Unseen, st.Total, m.loading && !m.syncCountsSettled, compactChrome))
 	}
 
-	// Mode (cleanup tab only)
-	if m.activeTab == tabCleanup {
-		if m.groupByDomain {
-			parts = append(parts, "Domain mode")
-		} else {
-			parts = append(parts, "Sender mode")
-		}
-	}
-
-	// Selection state is cleanup-local and should not leak into other tabs.
-	if m.activeTab == tabCleanup && len(m.selectedSummaryKeys) > 0 {
-		label := "senders"
-		if m.groupByDomain {
-			label = "domains"
-		}
-		if len(m.selectedSummaryKeys) == 1 {
-			label = strings.TrimSuffix(label, "s")
-		}
-		parts = append(parts, fmt.Sprintf("%d %s selected", len(m.selectedSummaryKeys), label))
-	} else if m.activeTab == tabCleanup && len(m.selectedMessages) > 0 {
-		// Count how many distinct sender/domain keys have selected messages
-		keySet := map[string]bool{}
-		for key, emails := range m.emailsBySender {
-			for _, e := range emails {
-				if m.selectedMessages[e.MessageID] {
-					keySet[key] = true
-					break
-				}
-			}
-		}
-		groupLabel := "sender"
-		if m.groupByDomain {
-			groupLabel = "domain"
-		}
-		if len(keySet) > 1 {
-			parts = append(parts, fmt.Sprintf("%d messages from %d %ss selected", len(m.selectedMessages), len(keySet), groupLabel))
-		} else {
-			parts = append(parts, fmt.Sprintf("%d messages selected", len(m.selectedMessages)))
-		}
-	}
-
 	// Deletion progress
 	if m.deleting {
 		completed := m.deletionsTotal - m.deletionsPending
@@ -316,14 +275,6 @@ func (m *Model) renderStatusBar() string {
 		} else {
 			parts = append(parts, fmt.Sprintf("%s…  %d/%d", status, completed, m.deletionsTotal))
 		}
-	}
-
-	if m.activeTab != tabTimeline && m.stats != nil {
-		total := 0
-		for _, s := range m.stats {
-			total += s.TotalEmails
-		}
-		parts = append(parts, fmt.Sprintf("%d senders  %d emails", len(m.stats), total))
 	}
 
 	parts = m.appendTimelineStatusParts(parts)
@@ -576,31 +527,12 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: detail panel", m.movementHint("contacts", "nav"), "enter: detail", m.commandHint("contacts", CommandHelpSearch, "search"), "?: semantic", "e: enrich", "esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}
-	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
-		hints = joinHintSegments(
-			m.movementHint("cleanup", "scroll preview"),
-			m.previewActionHintText("cleanup", previewHasUnsubscribe(m.cleanupEmailBody)),
-			"enter: scroll down",
-			"z: full-screen",
-			"esc: close preview",
-			m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"),
-			m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"),
-			m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"),
-			m.commandHint("cleanup", CommandMailReclassify, "re-classify"),
-			m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"),
-		)
 	} else {
 		switch chrome.FocusedPanel {
 		case panelSidebar:
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("timeline", "nav"), "space: expand", "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "hide"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
-		case panelDetails:
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next panel", m.movementHint("cleanup", "nav"), "enter: preview", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandLogsToggle, "logs"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
-		default: // panelSummary
-			if m.activeTab == tabCleanup && w <= 80 {
-				hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("cleanup", "nav"), "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide"), "space: select", "W: rule", "C: cleanup", "P: prompt", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
-			} else {
-				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: panel", "enter: details", m.commandHint("cleanup", CommandMailHideFuture, "hide future mail"), "space: select", m.commandHint("cleanup", CommandMailDeleteConfirm, "delete"), m.commandHint("cleanup", CommandMailDeleteImmediate, "delete now"), m.commandHint("cleanup", CommandMailArchiveCurrent, "archive"), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), "W: rule", "C: cleanup", "P: prompt", m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
-			}
+		default:
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}
 	}
 	return hints
@@ -628,44 +560,16 @@ func (m *Model) setFocusedPanel(panel int) {
 
 func (m *Model) updateTableFocusStyles() {
 	switch m.focusedPanel {
-	case panelSummary:
-		m.summaryTable.Focus()
-		m.summaryTable.SetStyles(m.activeTableStyle)
-		m.detailsTable.Blur()
-		m.detailsTable.SetStyles(m.inactiveTableStyle)
-		m.timelineTable.Blur()
-		m.timelineTable.SetStyles(m.inactiveTableStyle)
-		m.chatInput.Blur()
-	case panelDetails:
-		m.detailsTable.Focus()
-		m.detailsTable.SetStyles(m.activeTableStyle)
-		m.summaryTable.Blur()
-		m.summaryTable.SetStyles(m.inactiveTableStyle)
-		m.timelineTable.Blur()
-		m.timelineTable.SetStyles(m.inactiveTableStyle)
-		m.chatInput.Blur()
 	case panelTimeline:
 		m.timelineTable.Focus()
 		m.timelineTable.SetStyles(m.activeTableStyle)
-		m.summaryTable.Blur()
-		m.summaryTable.SetStyles(m.inactiveTableStyle)
-		m.detailsTable.Blur()
-		m.detailsTable.SetStyles(m.inactiveTableStyle)
 		m.chatInput.Blur()
 	case panelChat:
 		m.chatInput.Focus()
 		m.timelineTable.Blur()
 		m.timelineTable.SetStyles(m.inactiveTableStyle)
-		m.summaryTable.Blur()
-		m.summaryTable.SetStyles(m.inactiveTableStyle)
-		m.detailsTable.Blur()
-		m.detailsTable.SetStyles(m.inactiveTableStyle)
 	default:
 		// panelSidebar, panelPreview, or any other non-table panel
-		m.summaryTable.Blur()
-		m.summaryTable.SetStyles(m.inactiveTableStyle)
-		m.detailsTable.Blur()
-		m.detailsTable.SetStyles(m.inactiveTableStyle)
 		m.timelineTable.Blur()
 		m.timelineTable.SetStyles(m.inactiveTableStyle)
 		m.chatInput.Blur()
@@ -687,20 +591,7 @@ func (m *Model) cyclePanel(forward bool) {
 		if plan.ChatVisible {
 			panels = append(panels, panelChat)
 		}
-	} else if m.activeTab == tabCleanup && m.showCleanupPreview {
-		panels = append(panels, panelDetails)
-		if plan.ChatVisible {
-			panels = append(panels, panelChat)
-		}
 	} else {
-		// Cleanup / other tabs
-		if plan.SidebarVisible {
-			panels = append(panels, panelSidebar)
-		}
-		if !(m.activeTab == tabCleanup && m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0) {
-			panels = append(panels, panelSummary)
-		}
-		panels = append(panels, panelDetails)
 		if plan.ChatVisible {
 			panels = append(panels, panelChat)
 		}

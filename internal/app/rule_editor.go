@@ -256,7 +256,7 @@ func (r *RuleEditor) savedRulesSummary() string {
 		return "Saved automation rules: unavailable (" + r.savedErr + ")"
 	}
 	if len(r.savedRules) == 0 {
-		return "Saved automation rules: none yet. Reopen W after saving."
+		return "Saved automation rules: none yet. Reopen Settings > Sync & Cleanup after saving."
 	}
 	const maxShown = 2
 	parts := make([]string, 0, maxShown)

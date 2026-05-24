@@ -2129,9 +2129,6 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.timeline.virtualNotice = msg.Notice
 		if msg.ReadOnly {
 			m.loading = false
-			if isVirtualAllMailOnlyFolder(m.currentFolder) {
-				m.hydrateCleanupFromVirtualFolderEmails(msg.Emails)
-			}
 			unseen := 0
 			for _, email := range msg.Emails {
 				if email != nil && !email.IsRead {
@@ -2624,7 +2621,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "C", "c":
+	case "c":
 		if m.canInteractWithVisibleData() {
 			return m, m.openBlankComposeFromCurrent(), true
 		}
@@ -2977,8 +2974,6 @@ func cloneInlineImageDescs(src map[string]string) map[string]string {
 }
 
 func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
 	if m.focusedPanel == panelSidebar {
 		max := len(m.visibleSidebarItems()) - 1
 		if max < 0 {
@@ -2995,24 +2990,5 @@ func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-
-	if m.summaryTable.Focused() {
-		// Let the table handle navigation properly (including scrolling)
-		if direction > 0 {
-			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-		} else {
-			m.summaryTable, cmd = m.summaryTable.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-		}
-		// Auto-update details table on navigation
-		m.updateDetailsTable()
-	} else if m.detailsTable.Focused() {
-		// Let the table handle navigation properly (including scrolling)
-		if direction > 0 {
-			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-		} else {
-			m.detailsTable, cmd = m.detailsTable.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-		}
-	}
-
-	return m, cmd
+	return m, nil
 }

@@ -507,7 +507,7 @@ echo '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"classify_
 
 **Expect (Ollama running):**
 - Returns `Classified as: <category>`
-- Classification persisted in cache (visible in TUI Cleanup tab)
+- Classification persisted in cache (visible in Timeline tag/grouped cleanup views)
 
 **Expect (Ollama not configured):**
 - Returns: `Ollama not configured — set ollama.host in proton.yaml`

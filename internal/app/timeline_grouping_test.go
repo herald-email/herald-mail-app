@@ -119,6 +119,26 @@ func TestTimelineGroupingKeyCyclesSenderDomainThread(t *testing.T) {
 	}
 }
 
+func TestTimelineGroupedDeleteArchiveCopyUsesSenderAndDomainGroupLabels(t *testing.T) {
+	m := newTimelineGroupingModel(t)
+
+	senderMode := pressTimelineGroupKey(t, m)
+	if desc := senderMode.buildDeleteDesc(); !strings.Contains(desc, "Delete sender group") || strings.Contains(desc, "thread") {
+		t.Fatalf("expected sender grouped delete copy, got %q", desc)
+	}
+	if desc := senderMode.buildArchiveDesc(); !strings.Contains(desc, "Archive sender group") || strings.Contains(desc, "thread") {
+		t.Fatalf("expected sender grouped archive copy, got %q", desc)
+	}
+
+	domainMode := pressTimelineGroupKey(t, senderMode)
+	if desc := domainMode.buildDeleteDesc(); !strings.Contains(desc, "Delete domain group") || strings.Contains(desc, "thread") {
+		t.Fatalf("expected domain grouped delete copy, got %q", desc)
+	}
+	if desc := domainMode.buildArchiveDesc(); !strings.Contains(desc, "Archive domain group") || strings.Contains(desc, "thread") {
+		t.Fatalf("expected domain grouped archive copy, got %q", desc)
+	}
+}
+
 func TestTimelineGroupingSwitchClosesPreviewAndKeepsSelectionByMessageID(t *testing.T) {
 	m := newTimelineGroupingModel(t)
 	m.timeline.selectedEmail = m.timeline.emails[0]

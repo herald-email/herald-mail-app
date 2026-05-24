@@ -1,182 +1,84 @@
 ---
 title: Cleanup
-description: Bulk review, delete, archive, unsubscribe, hide, and automate sender or domain mail cleanup.
+description: Review sender or domain cleanup candidates from Timeline grouping and manage cleanup automation from Settings.
 ---
 
-Cleanup is Herald's high-leverage inbox reduction screen. It groups mail by sender or domain, shows detail rows, previews individual messages, and exposes destructive actions, archive, unsubscribe, hide-future-mail, automation rules, custom prompts, and cleanup rule management.
+Cleanup is no longer a separate top-level tab. The browse workflow now lives in Timeline grouping: press `G` to cycle from thread view to sender groups and domain groups, then use the same Timeline preview, selection, delete, archive, unsubscribe, and hide-future-mail controls.
 
 ## Overview
 
-Press `2` to open Cleanup. Use it when you want to answer questions like "which senders have the most mail?", "what can I archive?", "what can I delete?", and "which future mail should be hidden or automated?" Summary rows, detail rows, and previews also support mouse clicks and wheel scrolling for quick review.
+Press `1` for Timeline, then press `G` until the list is grouped the way you want. Use sender grouping to review high-volume people or services, domain grouping to review organizations, and `Settings > Sync & Cleanup` for automation rules, custom prompts, and saved cleanup rules.
 
 ## Screen Anatomy
 
 | Area | What it shows |
 | --- | --- |
-| Folder sidebar | Folder tree and counts when the terminal is wide enough and no cleanup preview is hiding it. |
-| Summary table | Group rows by sender or domain with columns for selection, Sender/Domain, Count, and Dates. |
-| Detail table | Emails for the focused summary row with columns for selection, Date, Subject, Size, and Att. |
-| Preview panel | Current cleanup email body, header metadata, action hints, unsubscribe visibility, scroll state, delete/archive progress. |
-| Full-screen preview | Cleanup preview expanded across the terminal, including bounded Kitty/Ghostty or iTerm2 inline-image display, or safe fallback links when graphics are unavailable. |
-| Rule editor overlay | Compact centered `Automation Rule` form opened by `W`, with saved-rule context visible in the same modal. |
-| Custom prompt overlay | Compact centered prompt editor opened by `P`, with saved-prompt context visible in the same modal. |
-| Cleanup manager overlay | Compact centered saved cleanup rules manager opened by `C`, with preview and edit entry points. |
+| Timeline list | Thread, sender, or domain groups depending on the current `G` grouping mode. |
+| Preview panel | The selected email body, metadata, actions, attachments, unsubscribe visibility, and scroll state. |
+| Settings Sync & Cleanup | Polling, IMAP IDLE, offline cache, reclaim storage, cleanup schedule, and manager launchers. |
+| Rule editor overlay | Compact centered automation-rule form launched from Settings. |
+| Custom prompt overlay | Compact centered prompt editor launched from Settings. |
+| Cleanup manager overlay | Compact centered saved cleanup rules manager launched from Settings. |
 | Dry-run preview overlay | Compact centered preview of matched messages, folders, categories, and planned actions before a rule can be saved, enabled, or run live. |
-| Status bar | Sender/domain mode, selection counts, deletion/archive progress, dry-run mode, folder counts, and confirmations. |
-
-<!-- HERALD_SCREENSHOT id="cleanup-main-summary" page="cleanup" alt="Cleanup tab sender summary and details" state="demo mode, 120x40, Cleanup tab, sender mode" desc="Shows sender summary rows, detail rows, selection column, sender mode status, and cleanup key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 2" -->
-
-![Cleanup tab sender summary and details](/screenshots/cleanup-main-summary.png)
 
 ## Controls
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `d` / `backspace` | Cleanup | Not loading, not already deleting, target exists. | Opens delete confirmation for the selected or current target. |
-| `D` / `shift+backspace` | Cleanup | Not loading, not already deleting, target exists. | Immediately queues deletion for the selected or current target without confirmation. |
-| `space` | Summary or details | Visible data can be interacted with. | Selects or unselects the focused sender/domain row or message row. |
-| `enter` | Summary | Summary focused. | Loads detail table for the focused sender/domain. |
-| `enter` | Details | Details focused and preview closed. | Opens preview for the focused message. |
-| `enter` | Preview | Cleanup preview open and details focused. | Scrolls preview down one line. |
-| `j` / `down` | Summary/details | Preview not intercepting scroll. | Moves selection down. |
-| `k` / `up` | Summary/details | Preview not intercepting scroll. | Moves selection up. |
-| `j` / `down` | Preview | Cleanup preview open and details focused. | Scrolls body down. |
-| `k` / `up` | Preview | Cleanup preview open and details focused. | Scrolls body up. |
-| `e` | Cleanup | Not loading, not already deleting, target exists. | Opens archive confirmation or directly queues current preview email. |
-| `A` | Cleanup preview | AI configured and preview email exists. | Re-classifies the preview email. |
-| `u` | Cleanup preview | Body includes `List-Unsubscribe`. | Opens unsubscribe confirmation. |
-| `h` / `H` | Cleanup | Focused sender or preview email exists. | Creates hide-future-mail behavior for that sender. |
-| `W` | Cleanup | Rule editor closed. | Opens automation rule editor, prefilled with focused sender or domain. |
-| `P` | Main UI | Rule/prompt/settings overlays are closed. | Opens custom AI prompt editor. |
-| `C` | Cleanup | Cleanup manager closed. | Opens saved cleanup rules manager. |
-| `p` | Cleanup manager list | A cleanup rule exists. | Opens dry-run preview for the selected rule. |
-| `r` | Cleanup manager list | Manager open. | Opens dry-run preview for all enabled cleanup rules. |
-| `s` | Cleanup dry-run preview | Preview was opened from a new or edited cleanup rule. | Saves the staged cleanup rule disabled. |
-| `E` | Cleanup dry-run preview | Preview was opened from a new or edited cleanup rule. | Enables the staged cleanup rule after confirmation for archive/delete rules. |
-| `R` | Cleanup dry-run preview | Preview is visible and Herald is not launched with `--dry-run`. | Prompts before running the previewed archive/delete plan live. |
-| `z` | Cleanup preview | Preview open. | Toggles full-screen cleanup reader. |
-| `esc` | Cleanup preview/overlays | Preview, full-screen, or overlay active. | Closes the active state. |
-| `tab` / `shift+tab` | Cleanup | Visible panels available. | Cycles between sidebar, summary, details, and chat when present. |
-| Click summary row | Summary | Terminal sends mouse events and a summary row is visible. | Selects the sender or domain and refreshes details. |
-| Click detail row | Details | Terminal sends mouse events and a detail row is visible. | Opens that message in the cleanup preview. |
-| Wheel/trackpad scroll | Summary/details | Terminal sends mouse wheel events. | Moves through rows in the hovered panel. |
-| Wheel/trackpad scroll | Preview/full-screen | Preview content is scrollable. | Scrolls the cleanup message body. |
+| `G` | Timeline list | Timeline is focused. | Cycles thread, sender, and domain grouping. |
+| `space` | Timeline list | Visible data can be interacted with. | Selects or unselects the highlighted message or group. |
+| `d` / `backspace` | Timeline list/preview | Target exists, not read-only, not already deleting. | Opens delete confirmation for the highlighted or selected target. |
+| `D` / `shift+backspace` | Timeline list/preview | Target exists, not read-only, not already deleting. | Immediately queues deletion without confirmation. |
+| `a` / `e` | Timeline list/preview | Target exists, not read-only, not already deleting. | Archives the highlighted or selected target. |
+| `enter` | Timeline list | A row is highlighted. | Opens a preview, expands a normal thread, or focuses grouped mail. |
+| `u` | Timeline preview | Body includes `List-Unsubscribe`. | Opens unsubscribe confirmation. |
+| `H` | Timeline list/preview | A current sender exists. | Creates hide-future-mail behavior for that sender. |
+| `S` | Main UI | Settings closed. | Opens Settings; choose `Sync & Cleanup` for automation and cleanup managers. |
 
 ## Workflows
 
-### Review a Sender
+### Review a Sender or Domain
 
-1. Press `2`.
-2. Move through the summary table with `j`/`k`.
-3. Press `enter` to load details.
-4. Press `tab` to focus details, then move through messages.
-5. Press `enter` to preview a message.
+1. Press `1`.
+2. Press `G` until Timeline is grouped by sender or domain.
+3. Move through groups with `j`/`k` or arrows.
+4. Press `enter` or right arrow to preview the highlighted mail.
+5. Press `space` to select a group when you want to act on more than the highlighted row.
 
-Mouse path: click a summary row to refresh details, click a detail row to open its preview, then scroll over the preview to read more of the message body.
+### Delete or Archive Grouped Mail
 
-### Delete or Archive a Group
-
-1. Focus the summary table.
-2. Press `space` on one or more senders or domains.
-3. Press `d` to delete with confirmation or `e` to archive.
-4. Read the confirmation description in the status bar.
+1. Group Timeline by sender or domain with `G`.
+2. Highlight or select one or more groups.
+3. Press `d` to delete with confirmation or `a`/`e` to archive.
+4. Read the confirmation description; it should name a sender group or domain group.
 5. Press `y` to confirm or `n`/`Esc` to cancel.
 
-Use `D` only when you intentionally want to queue deletion immediately without the confirmation step.
+### Manage Automation and Cleanup Rules
 
-### Delete or Archive Individual Messages
-
-1. Load details for a sender or domain.
-2. Press `tab` to focus details.
-3. Press `space` on individual messages.
-4. Press `d` to delete with confirmation or `e` to archive.
-5. Confirm only when the status description matches your selection.
-
-Use `D` only when you intentionally want to queue deletion immediately without the confirmation step.
-
-### Create a Hide-Future-Mail Rule
-
-1. Focus a sender in the summary table or open a message preview.
-2. Press `h`.
-3. Herald creates the backend rule/action used to hide matching future mail.
-
-### Create Automation
-
-1. Focus a sender or domain that should trigger automation.
-2. Press `W`.
-3. Choose trigger type: sender, domain, or AI category.
-4. Enter trigger value.
-5. Select actions: desktop notification, move, archive, delete, webhook, or shell command.
-6. Fill action details such as destination folder, webhook URL/body, shell command, or notification text.
-7. Complete the form to open dry-run preview.
-8. Review matched cached messages, folders, categories, and planned actions.
-9. Save disabled, or enable only after confirming the preview.
-
-### Manage Cleanup Rules
-
-1. Press `C`.
-2. Press `n` to create a cleanup rule, `enter` to edit selected, `d` to delete, `p` to preview selected, or `r` to preview all enabled.
-3. In the edit form, set rule name, match type, match value, action, older-than days, and intended enabled state.
-4. Complete the form to open dry-run preview, then press `s` to save disabled or `E` to enable after confirmation.
-5. From a saved-rule dry-run preview, press `R` and confirm before running archive/delete live.
-6. Press `esc` to leave edit mode, close preview, or close the manager.
+1. Press `S`.
+2. Choose `Sync & Cleanup`.
+3. Use the automation-rule, custom-prompt, or cleanup-rule launcher.
+4. Review any dry-run preview before enabling or running archive/delete rules.
 
 ## States
 
 | State | What happens |
 | --- | --- |
-| Sender mode | Summary groups exact sender addresses. |
-| Domain mode | Summary groups extracted sender domains. |
-| Empty summary | No cleanup groups are available for the folder/cache state. |
-| Selected summary rows | Status reports selected sender/domain count. |
-| Selected detail rows | Status reports selected message count and sender/domain spread. |
-| Delete/archive confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. |
-| Deleting/archive in progress | Requests are queued serially; status shows progress and reconnect messages when needed. |
+| Thread grouping | Timeline behaves as the normal reading list. |
+| Sender grouping | Rows represent senders and destructive confirmation copy names sender groups. |
+| Domain grouping | Rows represent domains and destructive confirmation copy names domain groups. |
+| Selected Timeline rows | Status reports selected message count. Group rows expand to their represented messages for delete/archive. |
 | Rules dry-run preview | Compact overlay lists matched messages with sender/domain/category, folder, subject/date, and planned action without mutating IMAP or SQLite run metadata. |
-| Cleanup preview | Sidebar hides to make room; details panel can scroll the body. |
-| Full-screen preview | Cleanup preview expands and rewraps body lines. |
-| AI unavailable | `A` and category-trigger workflows cannot classify new content. |
-| Dry-run mode | Status shows `[DRY RUN]`; rule previews are available, but live cleanup execution from preview is blocked. |
-| Narrow terminal | Cleanup collapses columns and can hide the sidebar or summary panel while preview is open. Compact overlays fit at `80x24`; at `50x15`, Herald shows the standard minimum-size guard. |
+| Narrow terminal | At `50x15`, Herald shows the standard minimum-size guard. Compact overlays fit at `80x24`. |
 
 ## Data And Privacy
 
-Cleanup reads cached sender statistics, message metadata, message bodies for previews, unsubscribe headers, classifications, and rules. Delete and archive write to the IMAP mailbox and update SQLite cache. Hide-future-mail, automation rules, custom prompts, and cleanup rules are stored through Herald's backend. Webhook and shell-command automation can send or expose email-derived values outside Herald when you configure those actions.
-
-Inline MIME image previews use the same safety rules as Timeline: Kitty-protocol terminals such as Ghostty on macOS or Kitty itself can render bounded images in full-screen, iTerm2-compatible terminals use iTerm2 inline images, local non-raster sessions get short OSC 8 links to random localhost preview URLs, and SSH sessions avoid localhost links that would point at the server machine. Remote HTML image URLs remain external links and are not fetched automatically.
-
-## Troubleshooting
-
-If delete/archive is not available, check whether a deletion is already running or the selected folder is read-only.
-
-If a confirmation describes the wrong target, press `n` or `Esc`, clear selections with `space`, and select again.
-
-If `u` does nothing, the previewed message does not include a usable `List-Unsubscribe` header.
-
-If automation actions do not run, reopen `W` or `C` to verify the rule is enabled and that the match value is precise.
-
-## Screenshot Placeholders
-
-<!-- HERALD_SCREENSHOT id="cleanup-preview" page="cleanup" alt="Cleanup message preview open" state="demo mode, 120x40, Cleanup detail preview" desc="Shows cleanup preview body, hidden sidebar behavior, action hints for unsubscribe/hide/delete/archive, and scroll state." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press enter; press tab; press enter" -->
-
-![Cleanup message preview open](/screenshots/cleanup-preview.png)
-
-<!-- HERALD_SCREENSHOT id="cleanup-delete-confirmation" page="cleanup" alt="Cleanup delete confirmation status bar" state="demo mode, 120x40, delete confirmation active" desc="Shows destructive confirmation text with y confirm and n or Esc cancel controls." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press space; press d" -->
-
-![Cleanup delete confirmation status bar](/screenshots/cleanup-delete-confirmation.png)
-
-<!-- HERALD_SCREENSHOT id="cleanup-rule-editor" page="cleanup" alt="Automation rule editor overlay" state="demo mode, 120x40, rule editor open" desc="Shows trigger fields, action multiselect, action detail fields, saved rules summary, and overlay framing." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press W" -->
-
-![Automation rule editor overlay](/screenshots/cleanup-rule-editor.png)
-
-<!-- HERALD_SCREENSHOT id="cleanup-manager" page="cleanup" alt="Cleanup manager overlay" state="demo mode, 120x40, cleanup manager open" desc="Shows saved cleanup rule list, empty or populated state, run all control, and edit entry points." capture="tmux demo 120x40; ./bin/herald --demo; press 2; press C" -->
-
-![Cleanup manager overlay](/screenshots/cleanup-manager.png)
+Timeline cleanup reads cached message metadata, message bodies for previews, unsubscribe headers, classifications, and rules. Delete and archive write to the IMAP mailbox and update SQLite cache. Hide-future-mail, automation rules, custom prompts, and cleanup rules are stored through Herald's backend. Webhook and shell-command automation can send or expose email-derived values outside Herald when you configure those actions.
 
 ## Related Pages
 
+- [Timeline](/using-herald/timeline/)
 - [Destructive Actions](/features/destructive-actions/)
 - [Rules and Automation](/features/rules-automation/)
-- [AI Features](/features/ai/)
-- [Sync and Status](/features/sync-status/)
-- [Config Reference](/reference/config/)
+- [Settings](/features/settings/)
+- [MCP Server](/advanced/mcp/)

@@ -3,7 +3,6 @@ package app
 import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
-	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 const mouseWheelDelta = 3
@@ -35,9 +34,6 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	if m.timeline.fullScreen {
 		return m.handleTimelinePreviewMouse(mouse)
 	}
-	if m.cleanupFullScreen {
-		return m.handleCleanupPreviewMouse(mouse)
-	}
 	if m.showLogs {
 		return m, nil, false
 	}
@@ -58,8 +54,6 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	switch m.activeTab {
 	case tabTimeline:
 		return m.handleTimelineMouse(mouse, plan, top)
-	case tabCleanup:
-		return m.handleCleanupMouse(mouse, plan, top)
 	}
 	return m, nil, false
 }
@@ -79,10 +73,6 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 			case tabTimeline:
 				if m.activeTab != tabTimeline {
 					return m.switchToTimeline(), true
-				}
-			case tabCleanup:
-				if m.activeTab != tabCleanup {
-					return m.switchToCleanup(), true
 				}
 			case tabContacts:
 				if m.activeTab != tabContacts {
@@ -211,19 +201,6 @@ func (m *Model) scrollTimelinePreview(direction int) {
 	}
 }
 
-func (m *Model) scrollCleanupPreview(direction int) {
-	if direction < 0 {
-		m.cleanupBodyScrollOffset -= mouseWheelDelta
-		if m.cleanupBodyScrollOffset < 0 {
-			m.cleanupBodyScrollOffset = 0
-		}
-		return
-	}
-	if direction > 0 {
-		m.cleanupBodyScrollOffset += mouseWheelDelta
-	}
-}
-
 func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, bool) {
 	if !mouseIsWheel(msg) {
 		m.setFocusedPanel(panelPreview)
@@ -231,16 +208,6 @@ func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, b
 	}
 	m.setFocusedPanel(panelPreview)
 	m.scrollTimelinePreview(mouseWheelDirection(msg))
-	return m, nil, true
-}
-
-func (m *Model) handleCleanupPreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, bool) {
-	if !mouseIsWheel(msg) {
-		m.setFocusedPanel(panelDetails)
-		return m, nil, true
-	}
-	m.setFocusedPanel(panelDetails)
-	m.scrollCleanupPreview(mouseWheelDirection(msg))
 	return m, nil, true
 }
 
@@ -280,83 +247,4 @@ func (m *Model) handleTimelineMouse(msg tea.Mouse, plan LayoutPlan, top int) (te
 		}
 	}
 	return m, nil, false
-}
-
-func (m *Model) handleCleanupMouse(msg tea.Mouse, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
-	x := 0
-	if plan.SidebarVisible {
-		x += sidebarContentWidth + 2 + panelGapWidth
-	}
-
-	if !(m.showCleanupPreview && plan.Cleanup.SummaryWidth == 0) {
-		summaryRect := mouseRect{x: x, y: top, w: m.summaryTable.Width() + 2, h: m.mousePanelHeight()}
-		if summaryRect.contains(msg.X, msg.Y) {
-			m.setFocusedPanel(panelSummary)
-			if mouseIsWheel(msg) {
-				if mouseWheelDirection(msg) > 0 {
-					m.summaryTable.MoveDown(mouseWheelDelta)
-				} else {
-					m.summaryTable.MoveUp(mouseWheelDelta)
-				}
-				m.updateDetailsTable()
-				return m, nil, true
-			}
-			if msg.Button == tea.MouseLeft {
-				if row, ok := mouseTableRowAt(&m.summaryTable, summaryRect, msg.Y); ok {
-					m.summaryTable.SetCursor(row)
-					m.updateDetailsTable()
-				}
-				return m, nil, true
-			}
-		}
-		x += summaryRect.w + panelGapWidth
-	}
-
-	detailsRect := mouseRect{x: x, y: top, w: m.detailsTable.Width() + 2, h: m.mousePanelHeight()}
-	if detailsRect.contains(msg.X, msg.Y) {
-		m.setFocusedPanel(panelDetails)
-		if mouseIsWheel(msg) {
-			if mouseWheelDirection(msg) > 0 {
-				m.detailsTable.MoveDown(mouseWheelDelta)
-			} else {
-				m.detailsTable.MoveUp(mouseWheelDelta)
-			}
-			return m, nil, true
-		}
-		if msg.Button == tea.MouseLeft {
-			if row, ok := mouseTableRowAt(&m.detailsTable, detailsRect, msg.Y); ok {
-				m.detailsTable.SetCursor(row)
-				if row < len(m.detailsEmails) {
-					return m, m.openCleanupPreviewEmail(m.detailsEmails[row]), true
-				}
-			}
-			return m, nil, true
-		}
-	}
-
-	if m.showCleanupPreview {
-		previewRect := mouseRect{x: detailsRect.x + detailsRect.w + panelGapWidth, y: top, w: m.cleanupPreviewWidth, h: m.mousePanelHeight()}
-		if previewRect.contains(msg.X, msg.Y) {
-			return m.handleCleanupPreviewMouse(msg)
-		}
-	}
-	return m, nil, false
-}
-
-func (m *Model) openCleanupPreviewEmail(email *models.EmailData) tea.Cmd {
-	if email == nil {
-		return nil
-	}
-	m.revokeImagePreviews()
-	m.cleanupPreviewEmail = email
-	m.showCleanupPreview = true
-	m.cleanupBodyLoading = true
-	m.cleanupPreviewLoad = previewLoadTelemetry{}
-	m.cleanupEmailBody = nil
-	m.cleanupBodyScrollOffset = 0
-	m.cleanupBodyWrappedLines = nil
-	m.cleanupPreviewHadSidebar = m.showSidebar
-	m.showSidebar = false
-	m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	return fetchCleanupBodyCmd(m.backend, email)
 }

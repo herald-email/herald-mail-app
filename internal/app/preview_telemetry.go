@@ -58,19 +58,6 @@ func previewTelemetryFromEmailBodyMsg(msg EmailBodyMsg) previewLoadTelemetry {
 	}
 }
 
-func previewTelemetryFromCleanupMsg(msg CleanupEmailBodyMsg) previewLoadTelemetry {
-	return previewLoadTelemetry{
-		MessageID:  msg.MessageID,
-		Folder:     msg.Folder,
-		UID:        msg.UID,
-		Source:     msg.LoadSource,
-		StartedAt:  msg.LoadStartedAt,
-		FinishedAt: msg.LoadFinishedAt,
-		Duration:   msg.LoadDuration,
-		Err:        previewLoadErrString(msg.Err),
-	}
-}
-
 func previewLoadErrString(err error) string {
 	if err == nil {
 		return ""

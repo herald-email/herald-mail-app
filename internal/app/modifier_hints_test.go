@@ -175,7 +175,7 @@ func TestModifierHintsDoNotStealTextEntry(t *testing.T) {
 		t.Fatal("question mark in search prompt should not open shortcut help")
 	}
 
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	m.showPromptEditor = true
 	m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
 	_ = m.promptEditor.Init()

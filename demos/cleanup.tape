@@ -10,25 +10,17 @@ Type "./bin/herald --demo"
 Enter
 Sleep 3s
 
-# Switch to Cleanup tab
-Type "2"
+# Switch Timeline into sender grouping
+Type "G"
 Sleep 1s
 
-# Navigate senders
+# Navigate sender groups
 Down
 Sleep 0.4s
 Down
 Sleep 0.4s
 
-# Open sender details, then preview a message
-Enter
-Sleep 0.6s
-
-Tab
-Sleep 0.3s
-Down
-Sleep 0.3s
-
+# Open a grouped preview
 Enter
 Sleep 1s
 
@@ -38,11 +30,11 @@ Sleep 0.4s
 Escape
 Sleep 0.5s
 
-# Toggle domain mode
-Type "d"
+# Toggle domain grouping
+Type "G"
 Sleep 1s
 
-Type "d"
+Type "G"
 Sleep 0.5s
 
 Type "q"

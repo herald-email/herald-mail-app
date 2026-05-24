@@ -92,47 +92,6 @@ func TestTimelineFullScreenPreviewUsesSharedHTMLMarkdownRendering(t *testing.T) 
 	assertRichHTMLPreview(t, m.renderFullScreenEmail())
 }
 
-func TestCleanupSplitPreviewPrefersSharedHTMLMarkdownRendering(t *testing.T) {
-	email := &models.EmailData{
-		MessageID: "rich-html-cleanup",
-		Sender:    "reports@example.test",
-		Subject:   "Rich HTML",
-		Date:      time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-		Folder:    "INBOX",
-	}
-	m := makeSizedModel(t, 140, 50)
-	defer m.cleanup()
-	m.activeTab = tabCleanup
-	m.focusedPanel = panelDetails
-	m.showCleanupPreview = true
-	m.cleanupPreviewEmail = email
-	m.cleanupEmailBody = richHTMLPreviewBody()
-	m.cleanupPreviewWidth = 110
-
-	assertRichHTMLPreview(t, m.renderCleanupPreview())
-}
-
-func TestCleanupFullScreenPreviewUsesSharedHTMLMarkdownRendering(t *testing.T) {
-	email := &models.EmailData{
-		MessageID: "rich-html-cleanup-fullscreen",
-		Sender:    "reports@example.test",
-		Subject:   "Rich HTML",
-		Date:      time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-		Folder:    "INBOX",
-	}
-	m := makeSizedModel(t, 120, 40)
-	defer m.cleanup()
-	m.activeTab = tabCleanup
-	m.focusedPanel = panelDetails
-	m.showCleanupPreview = true
-	m.cleanupFullScreen = true
-	m.cleanupPreviewEmail = email
-	m.cleanupEmailBody = richHTMLPreviewBody()
-	m.cleanupPreviewWidth = 120
-
-	assertRichHTMLPreview(t, m.renderCleanupPreview())
-}
-
 func TestContactsInlinePreviewUsesSharedHTMLMarkdownRendering(t *testing.T) {
 	email := &models.EmailData{
 		MessageID: "rich-html-contact",

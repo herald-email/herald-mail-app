@@ -61,6 +61,11 @@ const (
 	settingsThemeForegroundPickerKey = "theme.foreground_picker"
 	settingsThemeBackgroundKey       = "theme.background"
 	settingsThemeBackgroundPickerKey = "theme.background_picker"
+
+	settingsCleanupToolNone       = ""
+	settingsCleanupToolAutomation = "automation-rules"
+	settingsCleanupToolPrompts    = "custom-prompts"
+	settingsCleanupToolRules      = "cleanup-rules"
 )
 
 func isThemeSelectionSection(section settingsPanelSection) bool {
@@ -86,6 +91,12 @@ type SettingsSavedMsg struct {
 
 // SettingsCancelledMsg is sent when the user presses esc in panel mode.
 type SettingsCancelledMsg struct{}
+
+// SettingsToolRequestedMsg is sent when a Settings category should hand off to
+// a compact manager/editor instead of saving configuration values.
+type SettingsToolRequestedMsg struct {
+	Tool string
+}
 
 // OAuthRequiredMsg is sent when Gmail is selected and OAuth flow needs to run.
 type OAuthRequiredMsg struct {
@@ -145,6 +156,7 @@ type Settings struct {
 	cleanupScheduleStr         string
 	cacheStoragePolicy         string
 	reclaimOfflineCacheStorage bool
+	cleanupToolSelection       string
 
 	// form field backing variables — compose
 	signatureText string
@@ -746,6 +758,15 @@ func (s *Settings) buildForm() {
 		huh.NewConfirm().
 			Title("Enable IMAP IDLE").
 			Value(&s.syncIDLE),
+		huh.NewSelect[string]().
+			Title("Cleanup Tools").
+			Options(
+				huh.NewOption("Keep editing settings", settingsCleanupToolNone),
+				huh.NewOption("Automation rules", settingsCleanupToolAutomation),
+				huh.NewOption("Custom prompts", settingsCleanupToolPrompts),
+				huh.NewOption("Cleanup rules", settingsCleanupToolRules),
+			).
+			Value(&s.cleanupToolSelection),
 		offlineCacheSelect(),
 		huh.NewConfirm().
 			Title("Reclaim offline cache storage").
@@ -1350,7 +1371,7 @@ func (s *Settings) panelLayout() settingsPanelLayout {
 		panelW = 32
 	}
 
-	panelH := shortcutHelpMaxHeight
+	panelH := 36
 	if maxH := h - 4; maxH < panelH {
 		panelH = maxH
 	}
@@ -1425,6 +1446,19 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionSync {
+			switch shortcutKey(msg) {
+			case "W":
+				s.done = true
+				return s, func() tea.Msg { return SettingsToolRequestedMsg{Tool: settingsCleanupToolAutomation} }
+			case "P":
+				s.done = true
+				return s, func() tea.Msg { return SettingsToolRequestedMsg{Tool: settingsCleanupToolPrompts} }
+			case "C":
+				s.done = true
+				return s, func() tea.Msg { return SettingsToolRequestedMsg{Tool: settingsCleanupToolRules} }
+			}
+		}
 		if s.mode == SettingsModeWizard && msg.Code == tea.KeyEscape {
 			return s, s.navigateWizardBack(msg)
 		}
@@ -1474,6 +1508,12 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.done = true
 		if s.mode == SettingsModePanel && !s.saveButton {
 			return s, tea.Batch(cmd, func() tea.Msg { return SettingsCancelledMsg{} })
+		}
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionSync && s.cleanupToolSelection != settingsCleanupToolNone {
+			tool := s.cleanupToolSelection
+			return s, tea.Batch(cmd, func() tea.Msg {
+				return SettingsToolRequestedMsg{Tool: tool}
+			})
 		}
 
 		if s.mode == SettingsModePanel && isThemeSettingsSection(s.panelSection) {

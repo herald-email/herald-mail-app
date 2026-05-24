@@ -60,7 +60,7 @@ Sleep 1.5s
 Type "f"
 Sleep 1s
 
-Type "3"
+Type "2"
 Sleep 1.5s
 
 Down

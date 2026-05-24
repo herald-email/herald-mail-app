@@ -242,7 +242,7 @@ fi
 capture_tui "search-timeline-input" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.6s'
 capture_tui "search-timeline-results" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "invoice"\nSleep 0.2s\nEnter\nSleep 0.8s'
 capture_tui "search-body-query" $'Type "1"\nSleep 0.5s\nType "/"\nSleep 0.2s\nType "/b invoice"\nSleep 0.6s'
-capture_tui "search-contacts-semantic" $'Type "3"\nSleep 0.6s\nType "/"\nSleep 0.2s\nType "? investors"\nSleep 0.6s'
+capture_tui "search-contacts-semantic" $'Type "2"\nSleep 0.6s\nType "/"\nSleep 0.2s\nType "? investors"\nSleep 0.6s'
 
 capture_tui "text-selection-visual-mode" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "v"\nSleep 0.2s\nDown\nSleep 0.5s'
 capture_tui "text-selection-full-screen" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.4s\nType "v"\nSleep 0.2s\nDown 2\nSleep 0.5s'
@@ -250,19 +250,19 @@ capture_tui "text-selection-mouse-mode" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\
 
 capture_tui "attachments-save-prompt" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "s"\nSleep 0.6s'
 
-capture_tui "cleanup-main-summary" $'Type "2"\nSleep 0.8s'
-capture_tui "cleanup-domain-mode" $'Type "2"\nSleep 0.8s\nType "d"\nSleep 0.6s'
-capture_tui "cleanup-preview" $'Type "2"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 1s'
-capture_tui "cleanup-delete-confirmation" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.6s'
+capture_tui "cleanup-main-summary" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.8s'
+capture_tui "cleanup-domain-mode" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.2s\nType "G"\nSleep 0.6s'
+capture_tui "cleanup-preview" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.3s\nEnter\nSleep 0.8s'
+capture_tui "cleanup-delete-confirmation" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.3s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.6s'
 copy_shot "cleanup-delete-confirmation" "destructive-delete-confirm"
-capture_tui "destructive-archive-confirm" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "e"\nSleep 0.6s'
+capture_tui "destructive-archive-confirm" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.3s\nSpace\nSleep 0.2s\nType "e"\nSleep 0.6s'
 capture_tui "destructive-unsubscribe-confirm" $'Type "1"\nSleep 0.5s\nDown 3\nSleep 0.2s\nEnter\nSleep 1s\nType "u"\nSleep 0.6s'
-capture_tui "destructive-progress" $'Type "2"\nSleep 0.8s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.2s\nType "y"\nSleep 0.5s'
-capture_tui "cleanup-rule-editor" $'Type "2"\nSleep 0.8s\nType "W"\nSleep 0.8s'
+capture_tui "destructive-progress" $'Type "1"\nSleep 0.5s\nType "G"\nSleep 0.3s\nSpace\nSleep 0.2s\nType "D"\nSleep 0.2s\nType "y"\nSleep 0.5s'
+capture_tui "cleanup-rule-editor" $'Type "S"\nSleep 0.8s\nDown\nSleep 0.1s\nDown\nSleep 0.1s\nEnter\nSleep 0.5s\nType "W"\nSleep 0.8s'
 copy_shot "cleanup-rule-editor" "automation-rule-editor"
-capture_tui "cleanup-manager" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.8s'
+capture_tui "cleanup-manager" $'Type "S"\nSleep 0.8s\nDown\nSleep 0.1s\nDown\nSleep 0.1s\nEnter\nSleep 0.5s\nType "C"\nSleep 0.8s'
 copy_shot "cleanup-manager" "automation-cleanup-manager-list"
-capture_tui "automation-cleanup-manager-edit" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.4s\nType "n"\nSleep 0.8s'
+capture_tui "automation-cleanup-manager-edit" $'Type "S"\nSleep 0.8s\nDown\nSleep 0.1s\nDown\nSleep 0.1s\nEnter\nSleep 0.5s\nType "C"\nSleep 0.4s\nType "n"\nSleep 0.8s'
 
 capture_tui "automation-prompt-editor" $'Type "P"\nSleep 0.8s'
 copy_shot "automation-prompt-editor" "ai-prompt-editor"
@@ -277,8 +277,8 @@ capture_tui "settings-ai-provider" $'Type "S"\nSleep 0.8s\nTab 8\nSleep 0.5s'
 
 capture_tui_showcase_shot "showcase-settings-dark-pastel" $'Type "S"\nSleep 0.8s' "Dark Pastel"
 capture_tui_showcase_shot "showcase-help-dark-pastel" $'Type "?"\nSleep 0.8s' "Dark Pastel"
-capture_tui_showcase_shot "showcase-cleanup-manager-red-alert" $'Type "2"\nSleep 0.8s\nType "C"\nSleep 0.8s' "Red Alert"
-capture_tui_showcase_shot "showcase-cleanup-rule-editor-red-alert" $'Type "2"\nSleep 0.8s\nType "W"\nSleep 0.8s' "Red Alert"
+capture_tui_showcase_shot "showcase-cleanup-manager-red-alert" $'Type "S"\nSleep 0.8s\nDown\nSleep 0.1s\nDown\nSleep 0.1s\nEnter\nSleep 0.5s\nType "C"\nSleep 0.8s' "Red Alert"
+capture_tui_showcase_shot "showcase-cleanup-rule-editor-red-alert" $'Type "S"\nSleep 0.8s\nDown\nSleep 0.1s\nDown\nSleep 0.1s\nEnter\nSleep 0.5s\nType "W"\nSleep 0.8s' "Red Alert"
 capture_tui_showcase_shot "showcase-range-selection-pastel-dark" $'Type "1"\nSleep 0.5s\nType "V"\nSleep 0.2s\nDown\nSleep 0.3s\nDown\nSleep 0.6s' "Builtin Pastel Dark"
 capture_tui_showcase_shot "showcase-large-preview-pastel-dark" $'Type "1"\nSleep 0.5s\nEnter\nSleep 1s\nType "z"\nSleep 0.8s' "Builtin Pastel Dark"
 
@@ -290,10 +290,10 @@ capture_tui "compose-markdown-preview" $'Type "C"\nSleep 0.8s\nTab 4\nType "# Fo
 capture_tui "compose-ai-assistant" $'Type "C"\nSleep 0.8s\nTab 4\nType "Please make this reply more concise and helpful."\nSleep 0.2s\nCtrl+G\nSleep 1s'
 copy_shot "compose-ai-assistant" "ai-compose-assist"
 
-capture_tui "contacts-main-list" $'Type "3"\nSleep 0.8s'
-capture_tui "contacts-detail" $'Type "3"\nSleep 0.8s\nEnter\nSleep 0.8s'
-capture_tui "contacts-keyword-search" $'Type "3"\nSleep 0.8s\nType "/"\nSleep 0.2s\nType "demo"\nSleep 0.6s'
-capture_tui "contacts-inline-preview" $'Type "3"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 0.8s'
+capture_tui "contacts-main-list" $'Type "2"\nSleep 0.8s'
+capture_tui "contacts-detail" $'Type "2"\nSleep 0.8s\nEnter\nSleep 0.8s'
+capture_tui "contacts-keyword-search" $'Type "2"\nSleep 0.8s\nType "/"\nSleep 0.2s\nType "demo"\nSleep 0.6s'
+capture_tui "contacts-inline-preview" $'Type "2"\nSleep 0.8s\nEnter\nSleep 0.5s\nTab\nSleep 0.2s\nEnter\nSleep 0.8s'
 
 capture_shell "mcp-tools-list-terminal" $'Type "sh demos/mcp-demo.sh tools"\nEnter\nSleep 1.5s'
 capture_shell "demo-gif-vhs-run" $'Type "make docs-media"\nSleep 0.8s'

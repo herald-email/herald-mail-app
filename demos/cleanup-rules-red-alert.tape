@@ -12,9 +12,15 @@ Type "./bin/herald --demo --demo-keys"
 Enter
 Sleep 3s
 
-# Cleanup tab and cleanup manager
-Type "2"
+# Settings Sync & Cleanup and cleanup manager
+Type "S"
 Sleep 1s
+Down
+Sleep 0.2s
+Down
+Sleep 0.2s
+Enter
+Sleep 0.8s
 Type "C"
 Sleep 1.2s
 
@@ -24,8 +30,16 @@ Sleep 1.2s
 Escape
 Sleep 0.5s
 
-# Return to Cleanup and show the automation rule editor too
+# Return to Settings Sync & Cleanup and show the automation rule editor too
 Escape
 Sleep 0.5s
+Type "S"
+Sleep 0.8s
+Down
+Sleep 0.2s
+Down
+Sleep 0.2s
+Enter
+Sleep 0.8s
 Type "W"
 Sleep 1.2s

@@ -44,9 +44,6 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
 	m.clearContactsStatus()
 	m.finishTimelineRangeSelection()
-	if m.activeTab == tabCleanup {
-		m.closeCleanupPreviewForTabSwitch()
-	}
 	m.rememberComposeReturn()
 	m.activeTab = tabCompose
 	m.clearComposeFieldsForBlankMessage()
@@ -73,8 +70,6 @@ func (m *Model) returnFromCompose() tea.Cmd {
 		if targetPanel == panelPreview && m.timeline.selectedEmail == nil {
 			targetPanel = panelTimeline
 		}
-		m.setFocusedPanel(targetPanel)
-	case tabCleanup:
 		m.setFocusedPanel(targetPanel)
 	case tabContacts:
 		m.focusedPanel = panelTimeline

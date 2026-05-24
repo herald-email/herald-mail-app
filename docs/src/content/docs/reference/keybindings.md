@@ -12,9 +12,9 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `q` | Quit Herald from browse contexts. In Compose and search inputs, plain `q` is text. |
 | `ctrl+c` | Quit Herald from any state, including text inputs and overlays. |
 | `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
-| `2` | Switch to Cleanup in browse contexts, or choose quick reply 2 when quick reply picker is open. |
-| `3` | Switch/load Contacts in browse contexts, or choose quick reply 3 when quick reply picker is open. |
-| `F1` / `F2` / `F3` | Legacy aliases for Timeline / Cleanup / Contacts. |
+| `2` | Switch/load Contacts in browse contexts, or choose quick reply 2 when quick reply picker is open. |
+| `3` | Choose quick reply 3 when quick reply picker is open. It is not a top-level tab shortcut. |
+| `F1` / `F2` / `F3` | Aliases for Timeline / Contacts / Contacts legacy. |
 | `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
 | `shift+tab` | Cycle focus backward where supported. |
 | `h` / `j` / `k` / `l` | Navigate left / down / up / right where the active pane supports it. |
@@ -32,14 +32,11 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Mouse action | Result |
 | --- | --- |
-| Click top tab | Switch to Timeline, Cleanup, or Contacts. |
+| Click top tab | Switch to Timeline or Contacts. |
 | Click folder/sidebar row | Select and load that folder. |
 | Click Timeline row | Select the message or thread and open the preview. |
 | Scroll Timeline rows | Move the Timeline cursor by small steps. |
 | Scroll Timeline preview | Scroll the message body. |
-| Click Cleanup summary row | Select the sender or domain and refresh detail rows. |
-| Click Cleanup detail row | Open that message in the Cleanup preview. |
-| Scroll Cleanup summary/detail/preview | Move rows or preview body depending on the hovered panel. |
 | Click OSC 8 email link | Open the target URL through the terminal. |
 | Press `m` in Timeline | Release or restore Herald mouse capture for terminal-native text selection. |
 
@@ -60,6 +57,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `j` / `down` | Move down list, scroll preview, or move quick reply selection depending on focus. |
 | `k` / `up` | Move up list, scroll preview, or move quick reply selection depending on focus. |
 | `space` | Toggle Timeline message or thread selection. |
+| `G` | Cycle Timeline grouping between thread, sender, and domain views. |
 | `shift+up` / `shift+down` | Extend Timeline selection range when supported by the terminal; plain movement finishes the range and keeps selection. |
 | `V`, then `j` / `k` | Use fallback Timeline range selection without shifted-arrow support; press `V` or `esc` when done. |
 | `/` | Open Timeline search. |
@@ -124,25 +122,16 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `enter` / `tab` | Accept autocomplete suggestion when visible. |
 | `esc` | Dismiss autocomplete or attachment prompt when active. |
 
-## Cleanup
+## Cleanup Via Timeline
 
 | Key | Result |
 | --- | --- |
-| `space` | Select summary row or detail message. |
-| `enter` | Load details from summary, open preview from details, or scroll preview. |
-| `j` / `down` | Move rows or scroll preview. |
-| `k` / `up` | Move rows or scroll preview. |
-| `d` / `backspace` | Delete selected/current target after confirmation. |
-| `D` / `shift+backspace` | Delete selected/current target immediately, without confirmation. |
-| `a` | Archive selected/current target. |
-| `T` | Re-classify preview email; `A` remains a legacy alias. |
-| `u` | Unsubscribe when preview body supports it. |
-| `H` | Hide future mail for focused sender. |
-| `W` | Open automation rule editor. |
-| `P` | Open custom prompt editor. |
-| `C` | Open cleanup manager. |
-| `z` | Toggle full-screen cleanup preview. |
-| `esc` | Close preview/full-screen/overlay. |
+| `G` | Cycle Timeline into sender or domain grouping. |
+| `space` | Select the highlighted Timeline group or message. |
+| `d` / `backspace` | Delete highlighted/selected mail after confirmation. |
+| `D` / `shift+backspace` | Delete highlighted/selected mail immediately, without confirmation. |
+| `a` / `e` | Archive highlighted/selected mail. |
+| `S` then `Sync & Cleanup` | Open automation-rule, custom-prompt, and cleanup-rule managers. |
 
 ## Contacts
 
@@ -196,9 +185,9 @@ fields:
 | Logs | `L` or `esc` close, `j`/`k` or arrows scroll, `q` quit. |
 | Chat | `enter` send, `esc` or `tab` close/leave chat, `q` quit. |
 | Shortcut help | `/` search, `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
-| Rule editor | Form navigation, `esc` cancel. |
-| Prompt editor | Form navigation, `esc` cancel. |
-| Cleanup manager | `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |
+| Rule editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
+| Prompt editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
+| Cleanup manager | Launched from Settings Sync & Cleanup; `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |
 | Settings | `enter` opens categories or accepts form controls, `/` filters the menu, `tab` moves fields, and `esc` unwinds filter/category state before closing. |
 | OAuth wait | `enter` opens browser to authorization URL. |
 
@@ -207,5 +196,5 @@ fields:
 - [Global UI](/using-herald/global-ui/)
 - [Timeline](/using-herald/timeline/)
 - [Compose](/using-herald/compose/)
-- [Cleanup](/using-herald/cleanup/)
+- [Cleanup via Timeline](/using-herald/cleanup/)
 - [Contacts](/using-herald/contacts/)

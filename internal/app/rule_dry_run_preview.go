@@ -121,7 +121,7 @@ func (m *Model) handleDryRunPreviewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 			m.statusMessage = "Error saving rule: " + err.Error()
 			return m, nil, true
 		}
-		m.statusMessage = "Rule saved disabled: " + p.pendingRule.Name + ". Reopen W to review it."
+		m.statusMessage = "Rule saved disabled: " + p.pendingRule.Name + ". Review it in Settings > Sync & Cleanup."
 		m.ruleDryRunPreview = nil
 		return m, nil, true
 	case "E":
@@ -157,7 +157,7 @@ func (m *Model) handleDryRunPreviewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 			m.statusMessage = "Error saving rule: " + err.Error()
 			return m, nil, true
 		}
-		m.statusMessage = "Rule enabled: " + p.pendingRule.Name + ". Reopen W to review saved automation rules."
+		m.statusMessage = "Rule enabled: " + p.pendingRule.Name + ". Review saved automation rules in Settings > Sync & Cleanup."
 		m.ruleDryRunPreview = nil
 		return m, nil, true
 	case "R":

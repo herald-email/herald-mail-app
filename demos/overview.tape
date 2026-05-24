@@ -24,18 +24,18 @@ Sleep 0.3s
 Escape
 Sleep 0.5s
 
-# Switch to Cleanup tab
-Type "2"
+# Show Timeline sender grouping for cleanup review
+Type "G"
 Sleep 1s
 
-# Navigate senders
+# Navigate sender groups
 Down
 Sleep 0.4s
 Down
 Sleep 0.4s
 
 # Switch to Contacts tab
-Type "3"
+Type "2"
 Sleep 1s
 
 Down

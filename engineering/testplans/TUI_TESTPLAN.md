@@ -70,7 +70,9 @@ sleep 0.3
 Use `--demo` for repeatable layout, chrome, focus, and navigation checks.
 Demo mode must not require IMAP credentials, SMTP credentials, Ollama, or a
 private cache database. Its synthetic mailbox and AI responses should be stable
-enough that demo tapes can double as lightweight smoke tests.
+enough that demo tapes can double as lightweight smoke tests. Top-level
+navigation should show Timeline and Contacts only; Timeline grouping covers the
+former cleanup browse workflow.
 
 Use `--demo --demo-keys` only for media captures that need a visible keypress
 overlay. Normal demo sessions must keep the overlay hidden and must preserve
@@ -261,13 +263,14 @@ Check these states during every applicable lane:
 **Steps:**
 1. Press `F1`, `F2`, `F3`.
 2. Capture after each switch.
-3. In a non-text browse context, press `1`, `2`, `3` as compatibility aliases.
+3. In a non-text browse context, press `1`, `2`, and then `3`.
 
 **Expect:**
-- Correct tab highlight.
+- `F1`/`1` open Timeline, `F2`/`2` open Contacts, and `F3` remains a legacy Contacts alias.
+- Plain `3` is not a top-level tab switcher outside quick-reply selection.
 - `Herald` and tabs remain on one title row; no separate tab-bar row appears.
 - Tab-specific layout appears.
-- Key hints change with the tab and consistently advertise `1-3: tabs`.
+- Key hints change with the tab and consistently advertise `1-2: tabs`.
 - Key hints consistently include `?: help` when there is room or wrapped hint space.
 - Browse-number aliases keep working but are not the primary tab hint.
 - Compose is not shown as a top-level tab.
@@ -284,7 +287,7 @@ Check these states during every applicable lane:
 3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
 4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
 5. Open Timeline search with the physical `/` key, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
-6. Open Compose from Timeline with the physical `Shift+C` key or Cyrillic fallback uppercase `С`, type native body text, and then leave Compose with `Esc`.
+6. Open Compose from Timeline with the physical `c` key or Cyrillic fallback lowercase `с`, type native body text, and then leave Compose with `Esc`.
 7. Repeat the safe browse-key portion over SSH.
 
 **Expect:**
@@ -1425,16 +1428,17 @@ Check these states during every applicable lane:
 **Sizes:** `80x24`
 
 **Steps:**
-1. Open Cleanup with the sender summary focused.
-2. Verify the hint bar, then move focus to the sidebar, select another folder, and return to the sender summary.
-3. Open the rule editor (`W`) and the prompt editor (`P`) from Cleanup.
-4. From the rule editor, complete a rule far enough to open dry-run preview; from Cleanup manager, open dry-run preview for cleanup rules.
-5. Capture each state.
+1. Open Timeline sender grouping with `G`.
+2. Verify the hint bar, then move focus to the sidebar, select another folder, and return to Timeline.
+3. Open `Settings > Sync & Cleanup`.
+4. Launch the automation rule editor, prompt editor, and cleanup rules manager from that Settings category.
+5. From the rule editor, complete a rule far enough to open dry-run preview; from Cleanup manager, open dry-run preview for cleanup rules.
+6. Capture each state.
 
 **Expect:**
-- The sender summary remains keyboard-navigable after selecting a folder from the sidebar.
-- The narrow Cleanup hint bar still exposes navigation plus `W`, `C`, and `P`.
-- Rule and prompt overlays appear as compact centered modals over the Cleanup view and stay fully inside the viewport instead of clipping off the top or bottom.
+- Timeline grouped rows remain keyboard-navigable after selecting a folder from the sidebar.
+- The narrow hint bar points cleanup managers to Settings rather than `W`, `C`, or `P`.
+- Rule and prompt overlays appear as compact centered modals launched from Settings and stay fully inside the viewport instead of clipping off the top or bottom.
 - Rule, cleanup, and prompt overlays explain what they do, what saving or running them changes, and where the user can come back to review saved items or results.
 - Dry-run preview overlays appear as compact centered modals, stay fully inside the viewport, show `[DRY RUN]`, and keep planned action/message rows readable.
 
@@ -1444,24 +1448,24 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Open Cleanup.
-2. Open the automation rule overlay with `W`.
-3. Open the prompt overlay with `P`.
-4. Open the cleanup rules manager with `C`.
+1. Open `Settings > Sync & Cleanup`.
+2. Launch the automation rule overlay.
+3. Launch the prompt overlay.
+4. Launch the cleanup rules manager.
 5. Capture each overlay.
 
 **Expect:**
-- `W` explains that it creates future-mail automations rather than immediate cleanup.
-- `W` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
-- `W` shows a visible inventory or summary of saved automation rules in the same screen.
+- The automation rule editor explains that it creates future-mail automations rather than immediate cleanup.
+- The automation rule editor appears as a compact centered modal, not a full-screen replacement.
+- The automation rule editor shows a visible inventory or summary of saved automation rules in the same screen.
 - `P` explains that prompts are reusable AI instructions and do nothing until used.
-- `P` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
+- `P` appears as a compact centered modal, not a full-screen replacement.
 - `P` uses otherwise empty space for practical guidance: example prompt ideas, supported template variables, and a clear next step.
-- `P` tells users to attach a prompt with `W` for automation or run one manually through MCP `classify_email_custom`.
+- `P` tells users to attach a prompt from Settings for automation or run one manually through MCP `classify_email_custom`.
 - `P` tells users that prompt results are stored per email in custom category storage/MCP results.
 - `P` shows a visible inventory or summary of saved prompts in the same screen.
 - `C` explains that cleanup rules run on demand or on schedule and that saved cleanup rules live in that manager.
-- `C` appears as a compact centered modal over the current Cleanup screen, not a full-screen replacement.
+- `C` appears as a compact centered modal, not a full-screen replacement.
 
 ### TC-37A — Rules dry-run previews gate live actions
 
@@ -1469,17 +1473,17 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
-1. Start Herald in demo mode and open Cleanup.
-2. Open the automation rule overlay with `W`, create or use a prefilled rule, and open the dry-run preview.
+1. Start Herald in demo mode and open `Settings > Sync & Cleanup`.
+2. Open the automation rule overlay from Settings, create or use a prefilled rule, and open the dry-run preview.
 3. Verify the preview rows, then save disabled with `s` or enable with `E` only after reading the confirmation.
-4. Open the cleanup rules manager with `C`.
+4. Open the cleanup rules manager from `Settings > Sync & Cleanup`.
 5. Press `p` to preview the selected cleanup rule and `r` to preview all enabled cleanup rules.
 6. In normal mode, press `R` from the cleanup dry-run preview and stop at the live-run confirmation.
 7. Repeat with `--dry-run`; press `R` and confirm the UI refuses live execution.
 
 **Expect:**
 - Automation and cleanup dry-run previews show matched messages, count, sender/domain/category, folder, and planned action.
-- Automation and cleanup dry-run previews use the same compact centered modal treatment as Settings and Help, with the current Cleanup screen visible behind them at supported sizes.
+- Automation and cleanup dry-run previews use the same compact centered modal treatment as Settings and Help.
 - Dry-run previews never mutate mail, update `last_run`, write rule action logs, or call external actions.
 - Cleanup archive/delete/move execution is unavailable until a preview is visible and the user explicitly confirms.
 - In global `--dry-run` mode, the preview remains available but live cleanup run is blocked with relaunch guidance.
@@ -1696,23 +1700,24 @@ Check these states during every applicable lane:
 - Virtual-lab assertions do not contact live or external unsubscribe endpoints; they only prove parsed-header availability and visible affordances.
 - A first-time user can identify the available list/sender action from the preview itself without prior knowledge.
 
-### TC-44 — Cleanup summary and preview use the same `u` / `h` semantics
+### TC-44 — Timeline sender/domain groups preserve cleanup actions
 
 **Lane:** A, B, G
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Open Cleanup with the sender summary focused and capture the hint bar.
-2. Confirm the sender summary advertises `H: hide future mail`.
-3. Open a Cleanup preview for an email whose loaded body exposes `List-Unsubscribe` and capture the preview plus the hint bar.
-4. Open a Cleanup preview for an email whose loaded body does not expose `List-Unsubscribe` and capture again.
-5. In automated virtual-lab coverage, use `ScenarioUnsubscribeHeaders` and assert the same `one-click`, `mailto`, and `no-header` availability rules as Timeline.
+1. Open Timeline and press `G` until sender grouping is active.
+2. Capture the grouped list and hint bar.
+3. Press `G` again until domain grouping is active and capture the grouped list.
+4. Open a grouped row preview for an email whose loaded body exposes `List-Unsubscribe` and capture the preview plus the hint bar.
+5. Open a grouped row preview for an email whose loaded body does not expose `List-Unsubscribe` and capture again.
+6. In automated virtual-lab coverage, use `ScenarioUnsubscribeHeaders` and assert the same `one-click`, `mailto`, and `no-header` availability rules as normal Timeline.
 
 **Expect:**
-- Cleanup sender summary advertises `H: hide future mail`.
-- Cleanup sender summary does not advertise `u: unsubscribe`.
-- Cleanup preview includes `Tags:` and `Actions:` rows in the preview header.
-- Cleanup preview uses the same availability rules as Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `h` remains visible in both cases.
+- Sender and domain grouped rows are visible in Timeline without a Cleanup tab.
+- Grouped Timeline previews include `Tags:` and `Actions:` rows in the preview header.
+- Grouped Timeline previews use the same availability rules as normal Timeline preview: `u` appears only when `List-Unsubscribe` exists, while `H` remains visible when a sender exists.
+- Delete/archive confirmations describe sender/domain groups instead of threads.
 - End-user copy does not use `hard unsubscribe` or `soft unsubscribe`.
 - Virtual-lab assertions do not contact live or external unsubscribe endpoints; daemon/MCP one-click execution is covered separately with a local test server.
 
@@ -1743,12 +1748,12 @@ Check these states during every applicable lane:
 1. Launch Herald in demo mode.
 2. Open Timeline and search for `Example: Rich HTML rendering showcase`.
 3. Open the split preview, capture it, then press `z` and capture full-screen mode.
-4. Open Cleanup, locate the same sender/message, open its preview, capture split and full-screen modes.
+4. Press `G` to cycle sender/domain grouping, locate the same sender/message, and capture the grouped Timeline preview.
 5. Open Contacts, select `Preview Lab`, open the `Example: Rich HTML rendering showcase` email inline, and capture the preview.
 6. Resize to `80x24` and `50x15`, then back to `220x50`, capturing the affected preview surface at each size.
 
 **Expect:**
-- Timeline, Cleanup, Contacts, and full-screen previews all show the HTML-derived body rather than stale plain-text fallback.
+- Timeline, grouped Timeline, Contacts, and full-screen previews all show the HTML-derived body rather than stale plain-text fallback.
 - Visible preview text preserves readable structure: `HTML preview quality`, list bullets, `Open dashboard`, and `Remote status chart`.
 - Long tracking URL fragments such as `abcdefghijklmnopqrstuvwxyz0123456789` and `utm_source=email` do not appear in visible preview text.
 - `50x15` shows the minimum-size guard and resizing back restores a clean preview.
@@ -1761,11 +1766,11 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode with mouse capture enabled.
 2. Click each top tab and confirm the active tab changes without typing into Compose fields.
-3. Confirm the top tab row contains Timeline, Cleanup, and Contacts only.
+3. Confirm the top tab row contains Timeline and Contacts only.
 3. In Timeline, click a visible single-message row to open preview, then wheel over the list and the preview.
 4. In Timeline, click a collapsed thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays collapsed. Click the same selected root again; confirm the thread expands.
 5. In Timeline, click an expanded thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays expanded. Click the same selected root again; confirm the thread folds.
-6. In Cleanup, click a sender/domain row, click a details row to open preview, then wheel over the summary, details, and preview regions.
+6. In Timeline sender/domain grouping, click a grouped row and wheel over the list and preview regions.
 7. Click the sidebar when visible, then press `m` in a preview to release mouse capture and press `m` again to restore it.
 8. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
 
@@ -1784,7 +1789,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Build Herald and launch `./bin/herald --demo`; confirm no `Keys:` overlay is visible.
-2. Launch `./bin/herald --demo --demo-keys`, then press `S`, `?`, `/` in help, `2`, `c`, `V`, down-arrow range extension, real shifted down-arrow when the terminal can send it, right arrow, left arrow, and `z` across the Timeline and Cleanup flows.
+2. Launch `./bin/herald --demo --demo-keys`, then press `S`, `?`, `/` in help, `2`, `G`, `c`, `V`, down-arrow range extension, real shifted down-arrow when the terminal can send it, right arrow, left arrow, and `z` across the Timeline and grouped cleanup flows.
 3. Confirm Compose text, Timeline search text, and rule/prompt editor text do not appear in the key overlay.
 4. Run the focused media set with `HERALD_DOC_MEDIA_ONLY=showcase-settings-dark-pastel,showcase-help-dark-pastel,showcase-cleanup-manager-red-alert,showcase-cleanup-rule-editor-red-alert,showcase-range-selection-pastel-dark,showcase-large-preview-pastel-dark demos/generate-doc-media.sh`.
 5. Run `vhs demos/guided-tour-dark-pastel.tape` and `vhs demos/cleanup-rules-red-alert.tape`.
@@ -1792,11 +1797,11 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The overlay is opt-in and appears only when demo media explicitly requests `--demo-keys`.
-- Key labels are compact and normalized, including `S`, `?`, `/`, `2`, `c`, `Shift+Down`, `Right`, `Left`, and `z`.
+- Key labels are compact and normalized, including `S`, `?`, `/`, `2`, `G`, `c`, `Shift+Down`, `Right`, `Left`, and `z`.
 - Text-entry surfaces preserve literal text and do not leak draft/search/editor contents into the overlay.
 - The selected screenshots render with `Dark Pastel`, `Red Alert`, and `Builtin Pastel Dark`; the two GIFs render at high resolution without replacing every existing docs asset.
 - Theme gallery screenshots render through Herald's own `-theme` flag and show readable Timeline and Preview chrome for each refreshed palette.
-- Existing docs media instructions use `1` Timeline, `2` Cleanup, `3` Contacts, and `c` to open Compose.
+- Existing docs media instructions use `1` Timeline, `2` Contacts, `G` Timeline grouping, Settings Sync & Cleanup launchers, and `c` to open Compose.
 
 ### TC-52 — Preview load telemetry and offline cache policy
 
@@ -1806,8 +1811,8 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in demo mode, dismiss onboarding, and open a Timeline preview.
 2. Capture the split preview at `120x40` and `80x24`.
-3. Switch to Cleanup, open an individual email preview, and capture it.
-4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector. Confirm the selector uses compact policy labels without the longer helper paragraph.
+3. Press `G` to cycle sender/domain grouping and capture the grouped Timeline preview.
+4. Open Settings, enter `Sync & Cleanup`, and inspect the `Offline Cache` selector. Confirm the selector uses compact policy labels without the longer helper paragraph and shows cleanup manager launchers.
 5. Save each policy in turn: `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive`.
 6. In `Sync & Cleanup`, enable `Reclaim offline cache storage`, save, and confirm the reclaim prompt shows before/after byte estimates plus the preserved-data explanation.
 7. Press `n`, repeat the action, then press `y` and confirm the status bar reports the reclaimed bytes and compaction result.
@@ -1817,7 +1822,7 @@ Check these states during every applicable lane:
 11. Resize to `50x15`, then recover to `80x24`.
 
 **Expect:**
-- Timeline and Cleanup preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
+- Timeline preview headers include a compact `Load:` row such as `Load: 42ms imap` or `Load: 2ms cache`.
 - The `Load:` row never wraps or pushes body text outside the preview border at supported sizes.
 - Setup wizard and Settings show the compact policy choices `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive` without redundant explanatory copy inside the selector.
 - Setup wizard keeps reclaim, poll interval, IMAP IDLE, and auto-cleanup out of onboarding; those advanced controls remain in Settings.

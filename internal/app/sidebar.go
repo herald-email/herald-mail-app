@@ -178,18 +178,11 @@ func (m *Model) selectSidebarFolder() (tea.Cmd, bool) {
 	m.currentFolder = node.fullPath
 	m.loading = true
 	m.startTime = time.Now()
-	m.resetCleanupSelection()
-	if isVirtualAllMailOnlyFolder(m.currentFolder) {
-		m.clearCleanupData()
-	} else {
-		m.stats = nil
-		m.selectedSender = ""
-	}
 	m.timeline.virtualNotice = ""
 	if m.activeTab == tabTimeline {
 		m.setFocusedPanel(panelTimeline)
 	} else {
-		m.setFocusedPanel(panelSummary)
+		m.setFocusedPanel(panelTimeline)
 	}
 	logger.Info("Switching to folder: %s", m.currentFolder)
 	return nil, false

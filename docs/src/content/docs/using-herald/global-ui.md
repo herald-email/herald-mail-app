@@ -7,20 +7,20 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Most browsing work happens in three tabs: Timeline, Cleanup, or Contacts. Compose is a transient writing screen launched from Timeline, and the common navigation surfaces work with both keys and mouse input.
+Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Browsing happens in Timeline or Contacts; cleanup review is a Timeline grouping mode, and Compose is a transient writing screen launched from Timeline.
 
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
 | --- | --- | --- |
-| Title row | `Herald` plus `F1 Timeline`, `F2 Cleanup`, and `F3 Contacts`. | The active tab is highlighted. `F1-F3` are the primary tab shortcuts; number keys remain browse-context aliases, `Alt+1/2/3` remain secondary aliases, and mouse clicks switch tabs when the terminal sends mouse events. |
+| Title row | `Herald` plus `1 Timeline` and `2 Contacts`. | The active tab is highlighted. `F1` opens Timeline, `F2` opens Contacts, `F3` is a temporary Contacts alias, and mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
-| Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline and Cleanup when the terminal is wide enough. |
-| Main panels | The active tab content. | Timeline and Cleanup can split into list/detail/preview layouts. |
+| Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline when the terminal is wide enough. |
+| Main panels | The active view content. | Timeline can split into list/preview layouts; Contacts uses list/detail panels. |
 | Chat panel | Right-side AI chat input and transcript. | Opens with `c` when AI is configured and the terminal is wide enough. |
-| Status bar | Folder breadcrumb, AI chip, search or cleanup state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
+| Status bar | Folder breadcrumb, AI chip, search/grouping state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
 | Key hints | The currently valid keys for the focused tab, panel, or overlay. | Hints wrap to at most two lines. |
-| Compact overlays | Scrollable or form-based modals opened with `?`, `S`, `W`, `P`, `C`, or rule preview actions. | They stay centered over the current screen at supported sizes; at very small sizes Herald shows the minimum-size guard. |
+| Compact overlays | Scrollable or form-based modals opened with `?`, `S`, Settings Sync & Cleanup launchers, or rule preview actions. | They stay centered over the current screen at supported sizes; at very small sizes Herald shows the minimum-size guard. |
 
 <!-- HERALD_SCREENSHOT id="global-main-layout" page="global-ui" alt="Herald main layout with Timeline and sidebar" state="demo mode, 120x40, Timeline tab, sidebar visible" desc="Shows header, tab bar, folder sidebar, Timeline list, status bar, and key hints together." capture="tmux demo 120x40; ./bin/herald --demo; press F1" -->
 
@@ -30,21 +30,21 @@ Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optio
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `F1` / `F2` / `F3` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Cleanup, or Contacts from any main tab or Compose screen. |
-| `1` / `2` / `3` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches tabs as compatibility aliases. In the quick reply picker, chooses replies 1-3. |
-| `alt+1` / `alt+2` / `alt+3` | Main TUI | Visible data can be interacted with. | Switches tabs as secondary aliases, including when Compose text fields are focused. |
+| `F1` / `F2` / `F3` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Contacts, or Contacts legacy alias from any main tab or Compose screen. |
+| `1` / `2` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches to Timeline or Contacts. In the quick reply picker, chooses replies 1-2. |
+| `3` | Quick reply picker | Quick replies are open. | Chooses quick reply 3. |
 | `q` | Browse contexts | No text input is being edited. | Quits Herald after cleanup. |
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
 | `shift+tab` | Most tabs | Visible data can be interacted with. | Cycles focus backward through visible panels. |
-| `f` / `alt+f` | Timeline/Cleanup | Visible data can be interacted with. | Toggles the folder sidebar when that tab can render it; use `alt+f` while composing. |
+| `f` / `alt+f` | Timeline | Visible data can be interacted with. | Toggles the folder sidebar when Timeline can render it; use `alt+f` while composing. |
 | `c` / `alt+c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input; use `alt+c` while composing. |
 | `l` / `L` / `alt+l` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay; use `alt+l` while composing. |
 | `r` / `alt+r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters; use `alt+r` while composing. |
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a compact centered overlay over the current screen. |
 | `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `?` | Main UI and Herald-owned overlays | Visible data can be interacted with. | Opens context-sensitive shortcut help; pressing `?`, `esc`, or `q` closes it. |
-| `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, cleanup preview, chat filter, Timeline preview, search, Compose AI panel, Compose status message, or the Compose screen itself. |
+| `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, chat filter, Timeline preview, search, Compose AI panel, Compose status message, or the Compose screen itself. |
 
 ## Mouse Controls
 
@@ -52,13 +52,11 @@ Mouse controls are convenience shortcuts over the same model as keyboard focus a
 
 | Mouse action | Context | Result |
 | --- | --- | --- |
-| Click a top tab | Main UI | Switches to Timeline, Cleanup, or Contacts. |
-| Click a folder/sidebar row | Timeline or Cleanup with sidebar visible | Selects the folder and loads it. |
+| Click a top tab | Main UI | Switches to Timeline or Contacts. |
+| Click a folder/sidebar row | Timeline with sidebar visible | Selects the folder and loads it. |
 | Click a Timeline row | Timeline table | Selects the row and opens the split preview. |
 | Scroll over Timeline rows | Timeline table | Moves the Timeline cursor by small steps and refreshes the open preview. |
-| Scroll over an email preview | Timeline or Cleanup preview | Scrolls the message body. |
-| Click a Cleanup summary row | Cleanup summary | Selects the sender or domain and refreshes detail rows. |
-| Click a Cleanup detail row | Cleanup detail table | Opens that message in the Cleanup preview. |
+| Scroll over an email preview | Timeline preview | Scrolls the message body. |
 | Click an OSC 8 email link | Terminal-supported email preview links | Opens the original URL through the terminal. |
 
 Press `m` in Timeline to temporarily release Herald's mouse capture for terminal-native text selection. Press `m` again to restore Herald's clickable and scrollable navigation.
@@ -73,7 +71,7 @@ Press `m` in Timeline to temporarily release Herald's mouse capture for terminal
 2. Watch the tab bar highlight move.
 3. Use the bottom key hints to learn the active tab's controls.
 
-Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a terminal does not send function keys cleanly, `Alt+1`, `Alt+2`, and `Alt+3` remain secondary aliases that keep Compose text entry safe.
+Browse contexts also accept `1` and `2` as visible tab aliases. `F3` remains a temporary Contacts alias; digit `3` is reserved for quick replies when that picker is open.
 
 ### Use Panel Focus
 
@@ -97,7 +95,7 @@ Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a t
 
 ### Open Compact Overlays
 
-1. Press `?` for shortcut help, `S` for settings, or open Cleanup and press `W`, `P`, or `C` for cleanup configuration.
+1. Press `?` for shortcut help, `S` for settings, or choose `Settings > Sync & Cleanup` for cleanup configuration.
 2. Scroll or move through the overlay with its local controls when its content is taller than the modal.
 3. Press `esc` or the documented close key to return to the same tab, panel, or underlying overlay state.
 
@@ -112,7 +110,7 @@ Browse contexts also accept `1`, `2`, and `3` as compatibility aliases. When a t
 | Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `c` again. |
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
 | Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
-| Compact modal | Help, settings, cleanup rule editors, prompt editors, cleanup manager, or dry-run previews are centered over the current screen. | Use the overlay's local keys; at `50x15`, resize until the minimum-size guard clears. |
+| Compact modal | Help, settings, automation rule editors, prompt editors, cleanup manager, or dry-run previews are centered over the current screen. | Use the overlay's local keys; at `50x15`, resize until the minimum-size guard clears. |
 | Confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. | Confirm only if the described action matches your intent. |
 
 ## Data And Privacy
@@ -121,7 +119,7 @@ The global UI reads cached message metadata, folder counts, sync state, deletion
 
 ## Troubleshooting
 
-If a key seems to do nothing, press `?` to open shortcut help or check the bottom key hints and focused panel. Many keys are context-sensitive: for example, `space` expands a folder when the sidebar is focused but selects a cleanup row when Cleanup is focused.
+If a key seems to do nothing, press `?` to open shortcut help or check the bottom key hints and focused panel. Many keys are context-sensitive: for example, `space` expands a folder when the sidebar is focused but selects the highlighted Timeline row when Timeline is focused.
 
 If a panel disappeared, check terminal width. Herald hides the sidebar or refuses to open chat when there is not enough room to render the remaining mail view.
 

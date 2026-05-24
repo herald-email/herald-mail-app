@@ -121,14 +121,8 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabContacts {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "?: semantic", "esc: clear"}
 	}
-	if m.activeTab == tabCleanup {
-		if m.showCleanupPreview {
-			return []string{"shift+tab: prev panel", "H: hide future mail", "D: delete now", "A/T: re-classify", "esc: close preview"}
-		}
-		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "H: hide future mail", "D: delete now", "W/C/P: tools", "S: settings"}
-	}
 	if m.activeTab == tabTimeline {
-		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "C: compose", "S: settings"}
+		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
 			segments = append(segments, "R: sender", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
 		}
@@ -165,9 +159,6 @@ func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 			segments = append(segments, "ctrl+s: send draft")
 		}
 		return segments
-	}
-	if m.activeTab == tabCleanup {
-		return []string{"ctrl+c: quit", "ctrl+r: refresh"}
 	}
 	if m.activeTab == tabContacts {
 		return []string{"ctrl+c: quit", "ctrl+r: refresh"}

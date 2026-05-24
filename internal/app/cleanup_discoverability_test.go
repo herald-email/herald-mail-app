@@ -48,11 +48,12 @@ func TestCleanupRuleOverlay_ExplainsPurposeAndShowsSavedRules(t *testing.T) {
 		},
 	}
 	m := New(b, nil, "", nil, false)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(*Model)
 
-	m = pressKey(t, m, "W")
+	updated, _ = m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolAutomation})
+	m = updated.(*Model)
 	rendered := stripANSI(m.View().Content)
 
 	for _, want := range []string{
@@ -73,18 +74,19 @@ func TestPromptOverlay_ExplainsPurposeAndShowsSavedPrompts(t *testing.T) {
 		},
 	}
 	m := New(b, nil, "", nil, false)
-	m.activeTab = tabCleanup
+	m.activeTab = tabTimeline
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(*Model)
 
-	m = pressKey(t, m, "P")
+	updated, _ = m.Update(SettingsToolRequestedMsg{Tool: settingsCleanupToolPrompts})
+	m = updated.(*Model)
 	rendered := stripANSI(m.View().Content)
 
 	for _, want := range []string{
 		"reusable AI instructions",
 		"Saving does not run",
 		"Example: sender triage",
-		"Use W to attach",
+		"Settings > Sync & Cleanup",
 		"classify_email_custom",
 		"Results are stored per email",
 		"Saved prompts",
@@ -149,7 +151,7 @@ func TestRuleSavedStatus_ExplainsWhereToFindItAgain(t *testing.T) {
 	m = updated.(*Model)
 	m = pressKey(t, m, "s")
 
-	if !strings.Contains(m.statusMessage, "Reopen W") {
+	if !strings.Contains(m.statusMessage, "Settings > Sync & Cleanup") {
 		t.Fatalf("expected rule save status to explain where to find it again, got %q", m.statusMessage)
 	}
 }
@@ -162,7 +164,7 @@ func TestPromptSavedStatus_ExplainsWhereToFindItAgain(t *testing.T) {
 	})
 	m = updated.(*Model)
 
-	if !strings.Contains(m.statusMessage, "Reopen P") {
+	if !strings.Contains(m.statusMessage, "Settings > Sync & Cleanup") {
 		t.Fatalf("expected prompt save status to explain where to find it again, got %q", m.statusMessage)
 	}
 }

@@ -11,17 +11,17 @@ These requirements describe what a user can observe in the main TUI after the ch
 - [x] Plain `q`, letters, and digits type into focused Compose fields instead of quitting, switching tabs, or opening overlays.
 - [x] `Ctrl+C` quits from every state, including Compose, search inputs, chat, and overlays.
 - [x] Plain `q` still quits from browse contexts where no text input is being edited.
-- [x] Plain `1/2/3/4`, `l`, `c`, `f`, and `r` continue to work in browse contexts where they do not conflict with text entry.
-- [x] `F1/F2/F3/F4` switch to Timeline, Compose, Cleanup, and Contacts from anywhere in the main TUI, including Compose.
-- [x] Bottom key hints and the tab bar use `F1-F4` as the primary visible tab-switching annotation across tabs.
-- [x] `Alt+1/2/3/4` remain supported as secondary aliases for terminals that reliably send Alt-modified digits.
+- [x] Plain `1/2`, `l`, `c`, `f`, and `r` continue to work in browse contexts where they do not conflict with text entry; plain `3` is reserved for quick replies.
+- [x] `F1/F2/F3` switch to Timeline, Contacts, and Contacts legacy alias from anywhere in the main TUI, including Compose.
+- [x] Bottom key hints and the tab bar use `1-2` as the primary visible tab-switching annotation across tabs.
+- [x] `Alt+1/2` remain supported as secondary aliases for terminals that reliably send Alt-modified digits.
 - [x] `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` toggle logs, chat, sidebar, and refresh from Compose without inserting text.
 
 ## Routing Rules
 
 The key router should make the most specific text-entry state safe before falling back to browse-mode shortcuts. Overlay and editor forms that already own their own full-screen key handling continue to do so.
 
-- [x] A centralized global command layer handles `Ctrl+C`, `F1/F2/F3/F4`, and Alt chords before tab-specific handlers.
+- [x] A centralized global command layer handles `Ctrl+C`, `F1/F2/F3`, and Alt chords before tab-specific handlers.
 - [x] Text-entry modes such as Compose and Timeline search receive plain printable characters.
 - [x] Logs act like an overlay: they can open from Compose, close with `Alt+L` or plain `l`, and scroll without leaking keys into the underlying draft.
 - [x] Leaving a non-empty Compose draft through `F1/F3/F4` or `Alt+1/3/4` starts the existing draft persistence path.
