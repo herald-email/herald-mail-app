@@ -665,6 +665,8 @@ type Model struct {
 	calendarLoading       bool
 	calendarEvents        []models.CalendarEvent
 	calendarCursor        int
+	calendarView          calendarViewMode
+	calendarDay           time.Time
 	calendarDetailOpen    bool
 	calendarDetailLoading bool
 	calendarDetail        *models.CalendarEvent
@@ -1819,7 +1821,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.calendarCursor < 0 {
 			m.calendarCursor = 0
 		}
-		m.calendarDetail = m.selectedCalendarEvent()
+		if m.calendarView == "" {
+			m.calendarView = calendarViewAgenda
+		}
+		if m.calendarView == calendarViewDay {
+			m.calendarDay = m.selectedCalendarDay()
+			m.selectFirstCalendarEventForDay(m.calendarDay)
+		} else {
+			m.calendarDetail = m.selectedCalendarEvent()
+		}
 		m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
 		return m, nil
 

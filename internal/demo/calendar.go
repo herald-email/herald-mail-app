@@ -29,7 +29,9 @@ func CalendarCollections() []models.CalendarCollection {
 
 func CalendarEvents() []models.CalendarEvent {
 	events := []models.CalendarEvent{
+		calendarEvent("daily-standup", "Daily standup", "Walk the day plan and identify calendar conflicts.", "Huddle room", baseTime.Add(90*time.Minute), 30*time.Minute, "confirmed"),
 		calendarEvent("design-review", "Design review", "Review agenda layout with deterministic demo data.", "Herald planning room", baseTime.Add(2*time.Hour), time.Hour, "confirmed"),
+		calendarEvent("launch-window", "Launch window", "Keep a protected block for release notes and follow-up review.", "", baseTime.Add(4*time.Hour), 75*time.Minute, "busy"),
 		calendarEvent("weekly-planning", "Weekly planning", "Confirm source-platform roadmap sequencing and next actions.", "Video call", baseTime.AddDate(0, 0, 1).Add(time.Hour), time.Hour, "tentative"),
 		calendarEvent("cache-sync", "Calendar cache sync", "Check that read-only event details come from Herald cache rows first.", "Engineering desk", baseTime.AddDate(0, 0, 2).Add(30*time.Minute), 45*time.Minute, "confirmed"),
 		calendarEvent("focus-block", "Focus block", "Protected work time for cleanup rules and source identity notes.", "", baseTime.AddDate(0, 0, 3).Add(3*time.Hour), 90*time.Minute, "busy"),

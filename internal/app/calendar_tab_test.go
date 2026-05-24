@@ -113,7 +113,7 @@ func TestCalendarEventDetailOpensAndEscReturnsToAgenda(t *testing.T) {
 	m.loading = false
 	m.activeTab = tabCalendar
 	m.calendarEvents = b.events
-	m.calendarCursor = 1
+	m.calendarCursor = 2
 
 	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
@@ -137,8 +137,97 @@ func TestCalendarEventDetailOpensAndEscReturnsToAgenda(t *testing.T) {
 	if m.calendarDetailOpen {
 		t.Fatal("expected Esc to return from detail to agenda")
 	}
-	if m.calendarCursor != 1 {
-		t.Fatalf("calendar cursor = %d, want preserved index 1", m.calendarCursor)
+	if m.calendarCursor != 2 {
+		t.Fatalf("calendar cursor = %d, want preserved index 2", m.calendarCursor)
+	}
+}
+
+func TestCalendarDayAgendaSwitchesFromAgendaAndRendersDrawer(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, _ := m.handleKeyMsg(keyRunes("d"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewDay {
+		t.Fatalf("calendarView = %q, want %q", m.calendarView, calendarViewDay)
+	}
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Day Agenda", "Sun May 24", "Design review", "Daily standup", "Day Drawer", "Herald planning room", "Local", "Event TZ", "h/l: day", "a: agenda"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("day agenda missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Weekly planning") {
+		t.Fatalf("day agenda should filter out events from other days:\n%s", rendered)
+	}
+}
+
+func TestCalendarDayAgendaCanReturnToAgendaList(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarView = calendarViewDay
+	m.calendarDay = b.events[0].Start
+
+	model, _ := m.handleKeyMsg(keyRunes("a"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewAgenda {
+		t.Fatalf("calendarView = %q, want %q", m.calendarView, calendarViewAgenda)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Agenda") || strings.Contains(rendered, "Day Drawer") {
+		t.Fatalf("agenda view was not restored:\n%s", rendered)
+	}
+}
+
+func TestCalendarDayAgendaNavigatesBetweenDaysAndPreservesDetailReturn(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarView = calendarViewDay
+	m.calendarDay = b.events[0].Start
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, _ := m.handleKeyMsg(keyRunes("l"))
+	m = model.(*Model)
+	if m.calendarDay.Local().Day() != 25 {
+		t.Fatalf("calendarDay = %s, want May 25", m.calendarDay)
+	}
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Weekly planning" {
+		t.Fatalf("selected event after next day = %#v, want Weekly planning", got)
+	}
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Enter to open full detail from Day view")
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarDetailOpen {
+		t.Fatal("expected Esc to close full detail")
+	}
+	if m.calendarView != calendarViewDay {
+		t.Fatalf("calendarView = %q, want Day view after closing detail", m.calendarView)
 	}
 }
 
@@ -178,12 +267,21 @@ func testCalendarEvents() []models.CalendarEvent {
 			Status:      "confirmed",
 		},
 		{
+			Ref:         models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "daily-standup"}.WithDefaults(),
+			Title:       "Daily standup",
+			Description: "Walk the day plan and identify calendar conflicts.",
+			Location:    "Huddle room",
+			Start:       base.Add(90 * time.Minute),
+			End:         base.Add(2 * time.Hour),
+			Status:      "confirmed",
+		},
+		{
 			Ref:         models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "weekly-planning"}.WithDefaults(),
 			Title:       "Weekly planning",
 			Description: "Read-only detail should preserve the agenda cursor.",
 			Location:    "Video call",
-			Start:       base.Add(2 * time.Hour),
-			End:         base.Add(3 * time.Hour),
+			Start:       base.AddDate(0, 0, 1).Add(2 * time.Hour),
+			End:         base.AddDate(0, 0, 1).Add(3 * time.Hour),
 			Status:      "tentative",
 		},
 	}

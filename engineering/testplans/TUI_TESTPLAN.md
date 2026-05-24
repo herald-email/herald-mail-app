@@ -1585,6 +1585,28 @@ Check these states during every applicable lane:
 - Timeline, Contacts, Compose, account switching, chat, settings, SSH, and MCP behavior remain unchanged.
 - At `50x15`, the minimum-size guard appears instead of clipped calendar chrome, and resizing larger restores the agenda or detail state cleanly.
 
+### TC-38E — Calendar day agenda drawer
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar, then press `d` to switch from Agenda List to Day Agenda.
+3. Capture the Day Agenda with the selected event drawer visible.
+4. Move through events on the current day with `j/k` or arrow keys, then move to the previous/next day with `h/l` or left/right arrows.
+5. Press `a` to return to Agenda List, then press `d` again to confirm the selected event's day is restored.
+6. Press `Enter` from Day Agenda to open the full Event Detail view, then `Esc` to return to the Day Agenda without losing position.
+
+**Expect:**
+- `d` switches to a read-only Day Agenda and `a` returns to Agenda List without changing the Calendar destination.
+- Day Agenda shows only events for the selected day, preserves source/calendar labels through the selected-event drawer, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The drawer shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
+- `h/l` and left/right move between days without invoking mail navigation or mutation behavior.
+- `Enter` opens the existing full Event Detail reader and `Esc` returns to the Day Agenda state.
+- Hints advertise `d: day`, `a: agenda`, and `h/l: day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- At `50x15`, the minimum-size guard appears instead of clipped Day Agenda chrome, and resizing larger restores the Day Agenda or detail state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

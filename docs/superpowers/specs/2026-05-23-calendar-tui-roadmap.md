@@ -8,6 +8,7 @@ Calendar should become a first-class Herald workspace for understanding the day,
 
 - [x] Users can switch into the read-only Calendar Agenda destination with the same confidence they switch between Herald mail tabs today.
 - [x] Users can inspect an event without losing context, using a side detail panel when the surrounding schedule still matters.
+- [x] Users can switch from Agenda List to a read-only Day Agenda with a persistent drawer for the selected event.
 - [ ] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
 - [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
 - [ ] Users can reason about cross-timezone meetings before saving changes.
@@ -36,8 +37,10 @@ These images are reference material only. They sit next to this spec so future p
 The calendar surface should feel like a peer to Timeline, Compose, Cleanup, and Contacts rather than a separate mini-app. It can start as a new top-level mode, then grow into a cross-source command center once the source identity and calendar provider foundation are ready.
 
 - [x] Calendar appears as a durable navigation destination, not a transient overlay.
-- [ ] View switching is explicit and fast: Month, Week, Day, Agenda, and later 3-Day or Search.
-- [ ] The active view owns the center of the screen, while side panels provide context such as mini month, calendar filters, timezone preview, conflicts, and selected event details.
+- [x] View switching is explicit and fast between Agenda List and Day Agenda.
+- [ ] View switching is explicit and fast for Month, Week, 3-Day, and Search.
+- [x] The active Day Agenda owns the center of the screen while a side drawer provides selected-event context and timezone labels.
+- [ ] Future spatial views add side panels for mini month, calendar filters, richer timezone preview, conflicts, and selected event details.
 - [x] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
 - [ ] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
 - [x] The minimum useful calendar experience works in demo mode before any live provider is required.
@@ -74,6 +77,8 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 - [x] Stage 1: Demo-mode calendar shell. Add static/demo events and view-switching prototypes so layout, key hints, and navigation can be judged without provider auth.
 - [x] Stage 2: Agenda-first read-only calendar. Ship a cache-backed Agenda List and Event Detail path because those map cleanly to Herald's existing timeline and reader patterns.
 - [ ] Stage 3: Spatial schedule views. Add Day Agenda + Drawer, then Week Time-Grid, after the event model and render constraints are proven by the list view.
+  - [x] Stage 3A: Add read-only Day Agenda + Drawer with Agenda/Day switching, day navigation, selected-event drawer details, and full detail preservation.
+  - [ ] Stage 3B: Add Week Time-Grid after Day view resize behavior and event selection are proven.
 - [ ] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
 - [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
@@ -84,7 +89,8 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 These gates define what must be true before moving from one evolutionary stage to the next. They are intentionally high-level acceptance signals, not test cases or task steps.
 
 - [x] A read-only stage is acceptable only when users can navigate events, open detail, return without losing position, and understand which calendar each event belongs to.
-- [ ] A spatial-view stage is acceptable only when terminal resize behavior remains understandable at wide, standard, and narrow sizes.
+- [x] The Day Agenda spatial slice is acceptable only when terminal resize behavior remains understandable at wide, standard, and narrow sizes.
+- [ ] The full spatial-view stage is acceptable only when Day Agenda and Week Time-Grid resize behavior remain understandable at wide, standard, and narrow sizes.
 - [ ] A timezone stage is acceptable only when event detail and edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
 - [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.

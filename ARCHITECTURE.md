@@ -210,6 +210,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Keep mail body and preview reads cache-first so callers ask once while the service decides persistent cache, in-flight join, completed replay, or provider fetch.
 - [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.
 - [x] Add an optional cache-backed Calendar Agenda TUI destination with read-only Event Detail; mail-only sessions do not advertise the Calendar tab.
+- [x] Add a read-only Day Agenda + Drawer calendar view that reuses cache-backed agenda rows and preserves the full Event Detail reader.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

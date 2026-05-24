@@ -226,6 +226,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
   - [x] Phase 7A: Add an optional read-only Calendar Agenda and Event Detail TUI foundation backed by demo/cache rows.
+  - [x] Phase 7B: Add a read-only Day Agenda + Drawer view that reuses cache-backed agenda rows and preserves full Event Detail.
   - [ ] Add calendar search and cross-source search over mail plus events.
   - [ ] Add source-aware automation lanes for mail and calendar events.
   - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.

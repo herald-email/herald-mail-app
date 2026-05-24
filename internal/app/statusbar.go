@@ -530,9 +530,15 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		}
 	} else if m.activeTab == tabCalendar {
 		if m.calendarDetailOpen {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "esc: agenda", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			backLabel := "esc: agenda"
+			if m.calendarView == calendarViewDay {
+				backLabel = "esc: day"
+			}
+			hints = joinHintSegments(m.primaryTabShortcutHint(), backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+		} else if m.calendarView == calendarViewDay {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: day", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "d: day", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		}
 	} else {
 		switch chrome.FocusedPanel {
