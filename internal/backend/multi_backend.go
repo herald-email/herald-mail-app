@@ -960,12 +960,10 @@ func configForMailSource(profile *config.Config, configPath string, source confi
 	child.Credentials = source.Credentials
 	child.Server = source.IMAP
 	child.SMTP = source.SMTP
-	child.Gmail = config.GoogleConfig{
-		AccessToken:  source.Google.AccessToken,
-		RefreshToken: source.Google.RefreshToken,
-		TokenExpiry:  source.Google.TokenExpiry,
-		Email:        source.Google.Email,
-	}
+	child.Gmail.AccessToken = source.Google.AccessToken
+	child.Gmail.RefreshToken = source.Google.RefreshToken
+	child.Gmail.TokenExpiry = source.Google.TokenExpiry
+	child.Gmail.Email = source.Google.Email
 	if source.Provider != "" {
 		child.Vendor = source.Provider
 	}

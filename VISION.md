@@ -631,8 +631,9 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 
 Calendar sources extend Herald's source platform beyond mail while keeping provider-specific sync details out of the TUI. The first milestone is read-only calendar collection/event sync and search; mutations come after source identity and cache-first event services are stable.
 
-- [ ] `CalendarSource` capability shared by Google Calendar and CalDAV providers
-- [ ] Source-scoped calendar and event cache with provider freshness metadata such as ETag, revision, or sync token
+- [x] `CalendarSource` capability shared by Google Calendar and CalDAV providers
+- [x] Source-scoped calendar and event cache with provider freshness metadata such as ETag, revision, or sync token
+- [x] Read-only Google Calendar and CalDAV adapters list calendars/events and fetch event details against deterministic local provider harnesses before live-provider checks
 - [ ] Read-only agenda/search view before RSVP, edit, or create flows
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback

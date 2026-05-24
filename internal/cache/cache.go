@@ -269,6 +269,63 @@ func (c *Cache) initDB() error {
 		}
 	}
 
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS calendar_collections (
+			local_id TEXT PRIMARY KEY,
+			source_id TEXT NOT NULL,
+			account_id TEXT NOT NULL,
+			calendar_id TEXT NOT NULL,
+			display_name TEXT,
+			color TEXT,
+			sync_token TEXT,
+			etag TEXT,
+			last_synced DATETIME,
+			updated_at DATETIME NOT NULL
+		)
+	`); err != nil {
+		return err
+	}
+	if _, err := c.db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_collections_scope
+		ON calendar_collections(source_id, account_id, calendar_id)
+	`); err != nil {
+		return err
+	}
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS calendar_events (
+			local_id TEXT PRIMARY KEY,
+			source_id TEXT NOT NULL,
+			account_id TEXT NOT NULL,
+			calendar_id TEXT NOT NULL,
+			event_id TEXT NOT NULL,
+			instance_id TEXT NOT NULL DEFAULT '',
+			provider_uid TEXT,
+			etag TEXT,
+			revision TEXT,
+			title TEXT,
+			description TEXT,
+			location TEXT,
+			starts_at DATETIME,
+			ends_at DATETIME,
+			all_day INTEGER NOT NULL DEFAULT 0,
+			status TEXT,
+			updated_at DATETIME,
+			raw TEXT,
+			cached_at DATETIME NOT NULL,
+			invalidated_at DATETIME
+		)
+	`); err != nil {
+		return err
+	}
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_scope_time ON calendar_events(source_id, account_id, calendar_id, starts_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_invalidated ON calendar_events(invalidated_at)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+
 	// custom_prompts: stores reusable AI prompt templates
 	if _, err := c.db.Exec(`
 		CREATE TABLE IF NOT EXISTS custom_prompts (

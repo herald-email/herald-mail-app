@@ -1,0 +1,181 @@
+package cache
+
+import (
+	"database/sql"
+	"time"
+
+	"github.com/herald-email/herald-mail-app/internal/models"
+)
+
+func calendarCollectionLocalID(ref models.CollectionRef) string {
+	ref.Kind = models.SourceKindCalendar
+	return ref.CacheKey()
+}
+
+func (c *Cache) PutCalendarCollection(collection models.CalendarCollection) error {
+	ref := collection.Ref
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	localID := calendarCollectionLocalID(ref)
+	now := time.Now().UTC()
+	_, err := c.db.Exec(`
+		INSERT OR REPLACE INTO calendar_collections
+		(local_id, source_id, account_id, calendar_id, display_name, color, sync_token, etag, last_synced, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, localID, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, ref.DisplayName, collection.Color, collection.SyncToken, collection.ETag, now, now)
+	return err
+}
+
+func (c *Cache) GetCalendarCollection(ref models.CollectionRef) (*models.CalendarCollection, error) {
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	localID := calendarCollectionLocalID(ref)
+	row := c.db.QueryRow(`
+		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag
+		FROM calendar_collections
+		WHERE local_id = ?
+	`, localID)
+
+	var sourceID, accountID, calendarID, displayName, color, syncToken, etag string
+	if err := row.Scan(&sourceID, &accountID, &calendarID, &displayName, &color, &syncToken, &etag); err != nil {
+		return nil, err
+	}
+	return &models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     models.SourceID(sourceID),
+			AccountID:    models.AccountID(accountID),
+			Kind:         models.SourceKindCalendar,
+			CollectionID: calendarID,
+			DisplayName:  displayName,
+		},
+		Color:     color,
+		SyncToken: syncToken,
+		ETag:      etag,
+	}, nil
+}
+
+func (c *Cache) PutCalendarEvent(event models.CalendarEvent) error {
+	ref := event.Ref.WithDefaults()
+	now := time.Now().UTC()
+	_, err := c.db.Exec(`
+		INSERT OR REPLACE INTO calendar_events
+		(local_id, source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
+		 title, description, location, starts_at, ends_at, all_day, status, updated_at, raw, cached_at, invalidated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+	`, ref.LocalID, string(ref.SourceID), string(ref.AccountID), ref.CalendarID, ref.EventID, ref.InstanceID, event.ProviderUID,
+		ref.ETag, event.Revision, event.Title, event.Description, event.Location, event.Start, event.End,
+		boolToInt(event.AllDay), event.Status, event.UpdatedAt, event.Raw, now)
+	return err
+}
+
+func (c *Cache) GetCalendarEventByRef(ref models.EventRef) (*models.CalendarEvent, error) {
+	ref = ref.WithDefaults()
+	row := c.db.QueryRow(`
+		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
+		       title, description, location, starts_at, ends_at, all_day, status, updated_at, raw, local_id
+		FROM calendar_events
+		WHERE local_id = ? AND invalidated_at IS NULL
+	`, ref.LocalID)
+	return scanCalendarEvent(row)
+}
+
+func (c *Cache) InvalidateCalendarEvent(ref models.EventRef) error {
+	ref = ref.WithDefaults()
+	now := time.Now().UTC()
+	result, err := c.db.Exec(`UPDATE calendar_events SET invalidated_at = ? WHERE local_id = ?`, now, ref.LocalID)
+	if err != nil {
+		return err
+	}
+	if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+		return nil
+	}
+	_, err = c.db.Exec(`
+		UPDATE calendar_events
+		SET invalidated_at = ?
+		WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND event_id = ? AND instance_id = ?
+	`, now, string(ref.SourceID), string(ref.AccountID), ref.CalendarID, ref.EventID, ref.InstanceID)
+	return err
+}
+
+func (c *Cache) ListCalendarEvents(ref models.CollectionRef, start, end time.Time) ([]models.CalendarEvent, error) {
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	if start.IsZero() {
+		start = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+	if end.IsZero() {
+		end = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	}
+	rows, err := c.db.Query(`
+		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
+		       title, description, location, starts_at, ends_at, all_day, status, updated_at, raw, local_id
+		FROM calendar_events
+		WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND invalidated_at IS NULL
+		  AND (starts_at IS NULL OR starts_at < ?)
+		  AND (ends_at IS NULL OR ends_at > ?)
+		ORDER BY starts_at ASC, title ASC
+	`, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, end, start)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.CalendarEvent
+	for rows.Next() {
+		event, err := scanCalendarEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, *event)
+	}
+	return events, rows.Err()
+}
+
+type calendarEventScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanCalendarEvent(scanner calendarEventScanner) (*models.CalendarEvent, error) {
+	var sourceID, accountID, calendarID, eventID, instanceID, providerUID, etag, revision string
+	var title, description, location, status, raw, localID string
+	var start, end, updatedAt sql.NullTime
+	var allDay int
+	if err := scanner.Scan(
+		&sourceID, &accountID, &calendarID, &eventID, &instanceID, &providerUID, &etag, &revision,
+		&title, &description, &location, &start, &end, &allDay, &status, &updatedAt, &raw, &localID,
+	); err != nil {
+		return nil, err
+	}
+	event := &models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   models.SourceID(sourceID),
+			AccountID:  models.AccountID(accountID),
+			CalendarID: calendarID,
+			EventID:    eventID,
+			InstanceID: instanceID,
+			ETag:       etag,
+			LocalID:    localID,
+		}.WithDefaults(),
+		ProviderUID: providerUID,
+		Title:       title,
+		Description: description,
+		Location:    location,
+		AllDay:      allDay != 0,
+		Status:      status,
+		Revision:    revision,
+		Raw:         raw,
+	}
+	if start.Valid {
+		event.Start = start.Time
+	}
+	if end.Valid {
+		event.End = end.Time
+	}
+	if updatedAt.Valid {
+		event.UpdatedAt = updatedAt.Time
+	}
+	return event, nil
+}

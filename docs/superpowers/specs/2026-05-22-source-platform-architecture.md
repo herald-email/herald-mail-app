@@ -10,9 +10,9 @@ The first goal is to introduce durable source identity and work coordination bef
 - [x] Add active-account mail switching in the TUI without enabling cross-account writes or changing single-account behavior.
 - [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
 - [x] Make mail body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
-- [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
+- [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
 - [ ] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
-- [ ] Introduce calendar as a source capability so Google Calendar and CalDAV share Herald-facing models even though their transports differ.
+- [x] Introduce calendar as a source capability so Google Calendar and CalDAV share Herald-facing models even though their transports differ.
 
 ## Non-Goals
 
@@ -31,7 +31,7 @@ Every item shown by Herald needs an identity that says which source owns it, whi
 - [x] `AccountID` identifies the credential/account owner under a source. For most first-party sources, source and account are one-to-one, but keeping both lets shared calendars and future delegated access stay precise.
 - [x] `CollectionRef` identifies a provider collection: IMAP folder, Google calendar, CalDAV calendar, or future contact/address-book collection.
 - [x] `MessageRef` identifies mail by source, account, folder, UID, UIDVALIDITY, message ID, and a Herald local ID.
-- [ ] `EventRef` identifies calendar events by source, account, calendar ID, provider event ID, recurrence instance ID when present, ETag/revision, and a Herald local ID.
+- [x] `EventRef` identifies calendar events by source, account, calendar ID, provider event ID, recurrence instance ID when present, ETag/revision, and a Herald local ID.
 - [x] Legacy message IDs remain displayable and MCP-friendly, but internal writes and cache lookups prefer scoped local IDs.
 
 Example type shape:
@@ -82,7 +82,7 @@ Sources are provider adapters, not mini-apps. They should know how to talk to IM
 
 - [ ] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
 - [x] `MailSource` covers current mail-specific collections, sync, body fetch, mutation, drafts, folder status, and search behind `IMAPMailSource`.
-- [ ] `CalendarSource` covers calendars, event sync, event detail fetch, and later event mutations.
+- [x] `CalendarSource` covers read-only calendars, event listing/sync, and event detail fetch; event mutations remain deferred.
 - [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
 - [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
 
@@ -112,9 +112,8 @@ type MailSource interface {
 
 type CalendarSource interface {
 	ListCalendars(ctx context.Context) ([]CollectionRef, error)
-	SyncCalendar(ctx context.Context, ref CollectionRef) error
+	ListEvents(ctx context.Context, ref CollectionRef) ([]CalendarEvent, error)
 	FetchEvent(ctx context.Context, ref EventRef) (*CalendarEvent, error)
-	UpdateEvent(ctx context.Context, ref EventRef, patch EventPatch) error
 }
 ```
 
@@ -137,7 +136,7 @@ Callers should not decide whether a body, event, or preview comes from cache or 
 - [x] `MessageService.GetMessage(ctx, ref)` checks persistent cache, in-flight work/completed replay, then source fetch.
 - [x] `MessageService.GetMessagePreview(ctx, ref, intent)` follows the same pattern, honors offline cache policy, and applies latest-intent filtering.
 - [x] `MessageService.GetMessageNoCache(ctx, ref)` and `GetMessagePreviewNoCache(ctx, ref)` make deliberate provider bypasses explicit and write through to cache.
-- [ ] `CalendarEventService.GetEvent(ctx, ref)` checks event cache and provider freshness metadata before fetching.
+- [x] `CalendarEventService.GetEvent(ctx, ref)` checks event cache and provider freshness metadata before fetching.
 - [x] Cache keys include source/account/collection identity and freshness metadata where available for mail reads.
 - [x] Context cancellation is useful but not required for correctness; cache hits, in-flight joining, completed replay, and stale-result tokens provide the correctness guarantee.
 
@@ -161,7 +160,7 @@ The preferred long-term storage model is one profile database with source-scoped
 - [x] Existing `cache.database_path` remains valid and points to the profile database.
 - [x] Initial migration adds nullable or defaulted `source_id`, `account_id`, and `local_id` columns while keeping legacy primary keys operational.
 - [ ] Later migration can move from `message_id` primary keys to scoped local IDs once all callers use refs.
-- [ ] Calendar tables use source-scoped primary keys from the start.
+- [x] Calendar tables use source-scoped primary keys from the start.
 - [ ] FTS and embedding tables include source/account scope before unified cross-source search ships.
 
 ## Config Direction
@@ -170,7 +169,7 @@ Config should preserve existing single-account YAML and introduce an additive `s
 
 - [x] Existing single-account config normalizes to one mail source named `default-mail`.
 - [x] Multi-account mail config can add multiple mail sources without requiring users to split config files.
-- [ ] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
+- [x] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
 - [ ] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
 - [ ] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
 
@@ -220,11 +219,11 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 2: Add source identity models and default legacy normalization. Thread IDs through models/events/cache APIs while keeping single-account behavior unchanged.
 - [x] Phase 3: Add cache-first message body and preview services with persistent cache, completed replay, explicit `NoCache` bypasses, and in-flight coalescing.
 - [x] Phase 4: Extract `IMAPMailSource` from `LocalBackend` behind mail capability interfaces.
-- [ ] Phase 5: Add multi-account mail config and active-account switching UI.
+- [x] Phase 5: Add multi-account mail config and active-account switching UI.
   - [x] Phase 5A: Add active-account backend switching, account rail/sidebar, account switcher overlay, and account-aware status chrome.
   - [x] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
   - [x] Phase 5C: Add account-aware Compose `From` selection and route sends/drafts through the selected mail source.
-- [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
+- [x] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
 
 ## Acceptance Criteria
@@ -236,4 +235,4 @@ This refactor is accepted only if it preserves current behavior while making fut
 - [x] Source identity tests prove legacy config normalization and scoped cache key generation.
 - [x] Cache-first service tests prove cache hit, in-flight join, completed replay, source fetch/store, stale-result filtering, and replay result isolation.
 - [x] IMAP mail source tests prove `LocalBackend` routes sync, folder, search, mutation, draft, body, and virtual-folder provider calls through `MailSource`.
-- [ ] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.
+- [x] Calendar abstraction tests use fake Google Calendar and CalDAV sources before live provider tests.

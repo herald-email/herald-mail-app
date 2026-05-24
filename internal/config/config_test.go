@@ -98,6 +98,26 @@ func TestConfigNormalizedSourcesKeepsExplicitSources(t *testing.T) {
 	}
 }
 
+func TestConfigNormalizedSourcesDefaultsCalendarProviders(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{Kind: "calendar", AccountID: "personal"},
+			{ID: "family-caldav", Kind: "calendar", Provider: "caldav", CalDAV: CalDAVConfig{URL: "https://cal.example/cal"}},
+		},
+	}
+
+	sources := cfg.NormalizedSources()
+	if len(sources) != 2 {
+		t.Fatalf("len(sources) = %d, want 2", len(sources))
+	}
+	if sources[0].ID != "default-calendar" || sources[0].Provider != "google_calendar" || sources[0].AccountID != "personal" {
+		t.Fatalf("default calendar source = %#v, want default-calendar/google_calendar/personal", sources[0])
+	}
+	if sources[1].ID != "family-caldav" || sources[1].Provider != "caldav" || sources[1].CalDAV.URL != "https://cal.example/cal" {
+		t.Fatalf("caldav source = %#v, want preserved caldav URL", sources[1])
+	}
+}
+
 func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
@@ -120,7 +140,15 @@ func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 			Provider:    "google_calendar",
 			DisplayName: "Work Calendar",
 			AccountID:   "work",
-			Google:      GoogleConfig{RefreshToken: "refresh-token"},
+			Google:      GoogleConfig{RefreshToken: "refresh-token", APIBaseURL: "https://calendar.test"},
+		},
+		{
+			ID:          "family-calendar",
+			Kind:        "calendar",
+			Provider:    "caldav",
+			DisplayName: "Family Calendar",
+			AccountID:   "family",
+			CalDAV:      CalDAVConfig{URL: "https://caldav.test/calendars/family/", Username: "family", Password: "secret"},
 		},
 	}
 	if err := original.Save(path); err != nil {
@@ -132,14 +160,17 @@ func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 	sources := loaded.NormalizedSources()
-	if len(sources) != 2 {
-		t.Fatalf("len(sources) = %d, want 2", len(sources))
+	if len(sources) != 3 {
+		t.Fatalf("len(sources) = %d, want 3", len(sources))
 	}
 	if sources[0].DisplayName != "Work Mail" || sources[0].IMAP.Host != "imap.example.com" {
 		t.Fatalf("mail source did not roundtrip: %#v", sources[0])
 	}
-	if sources[1].DisplayName != "Work Calendar" || sources[1].Google.RefreshToken != "refresh-token" {
+	if sources[1].DisplayName != "Work Calendar" || sources[1].Google.RefreshToken != "refresh-token" || sources[1].Google.APIBaseURL != "https://calendar.test" {
 		t.Fatalf("calendar source did not roundtrip: %#v", sources[1])
+	}
+	if sources[2].Provider != "caldav" || sources[2].CalDAV.URL != "https://caldav.test/calendars/family/" || sources[2].CalDAV.Username != "family" {
+		t.Fatalf("caldav source did not roundtrip: %#v", sources[2])
 	}
 }
 

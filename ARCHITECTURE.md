@@ -200,15 +200,15 @@ These controls live under `ai:` in config:
 The next refactor layer turns the current single-account backend discipline into a source platform for multi-account mail and calendar integrations. The detailed architecture lives in [docs/superpowers/specs/2026-05-22-source-platform-architecture.md](docs/superpowers/specs/2026-05-22-source-platform-architecture.md), and the first implementation roadmaps live in [docs/superpowers/plans/2026-05-22-work-coordinator-foundation.md](docs/superpowers/plans/2026-05-22-work-coordinator-foundation.md) and [docs/superpowers/plans/2026-05-22-source-identity-foundation.md](docs/superpowers/plans/2026-05-22-source-identity-foundation.md).
 
 - [x] Introduce `SourceID`, `AccountID`, `CollectionRef`, and `MessageRef` before exposing multi-account UI.
-- [ ] Introduce `EventRef` before exposing calendar UI or cross-source event APIs.
-- [ ] Keep source plugins provider-specific but small: IMAP, Google Calendar, and CalDAV handle transport details while Herald owns cache policy, queue policy, stale-result filtering, and UI priority.
+- [x] Introduce `EventRef` before exposing calendar UI or cross-source event APIs.
+- [x] Keep source plugins provider-specific but small: IMAP, Google Calendar, and CalDAV handle transport details while Herald owns cache policy, queue policy, stale-result filtering, and UI priority.
 - [x] Extract current IMAP provider operations from `LocalBackend` into `IMAPMailSource` behind a mail capability interface.
 - [x] Add an active-account backend wrapper so the TUI can switch between configured mail sources while legacy `Backend` callers continue to use folder/message-ID methods.
 - [x] Add an opt-in `All Accounts` TUI scope that aggregates Timeline/search through source backends, renders account badges, and routes selected-message reads/writes by `MessageRef`.
 - [x] Add account-aware Compose routing so blank messages, replies, forwards, drafts, and sends can select a real mail source while single-account sessions keep the legacy Compose surface.
 - [x] Move latest-user-intent, duplicate resource coalescing, serial mutations, and fair background work into reusable coordination primitives before migrating existing queues.
 - [x] Keep mail body and preview reads cache-first so callers ask once while the service decides persistent cache, in-flight join, completed replay, or provider fetch.
-- [ ] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.
+- [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---
