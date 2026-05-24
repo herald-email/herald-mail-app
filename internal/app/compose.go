@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
@@ -25,6 +26,7 @@ const (
 	composeFieldBody
 	composeFieldOriginalMessage
 	composeFieldForwardedAttachments
+	composeFieldFrom
 )
 
 type composePreservedContext struct {
@@ -251,6 +253,9 @@ func (m *Model) composeAIReviewExtraRows() int {
 
 func (m *Model) composeFixedRows() int {
 	fieldRows := 2 * 3 // To and Subject are always visible.
+	if m.composeAccountPickerVisible() {
+		fieldRows += 3
+	}
 	if m.composeCCVisible() {
 		fieldRows += 3
 	}
@@ -493,6 +498,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.composeField == composeFieldOriginalMessage {
 		return m.handleOriginalMessageKey(msg)
+	}
+	if model, cmd, handled := m.handleComposeFromKey(msg); handled {
+		return model, cmd
 	}
 	if model, cmd, handled := m.handleVimFieldKey(msg); handled {
 		return model, cmd
@@ -1150,7 +1158,11 @@ func (m *Model) focusComposeField(field int) {
 }
 
 func (m *Model) visibleComposeFields() []int {
-	fields := []int{composeFieldTo}
+	fields := make([]int, 0, 7)
+	if m.composeAccountPickerVisible() {
+		fields = append(fields, composeFieldFrom)
+	}
+	fields = append(fields, composeFieldTo)
 	if m.composeCCVisible() {
 		fields = append(fields, composeFieldCC)
 	}
@@ -1251,9 +1263,11 @@ func firstNonEmptyString(values ...string) string {
 // embedded as multipart/related parts with cid: references.
 func (m *Model) sendCompose() tea.Cmd {
 	mailer := m.mailer // snapshot before goroutine to avoid data races
-	backend := m.backend
+	b := m.backend
+	accountSender, accountSenderOK := b.(backend.AccountComposeBackend)
 	demoMode := m.demoMode
-	from := m.fromAddress
+	sourceID := m.composeSelectedSourceID()
+	from := m.composeFromAddress()
 	to := m.composeTo.Value()
 	cc := m.composeCC.Value()
 	bcc := m.composeBCC.Value()
@@ -1265,6 +1279,21 @@ func (m *Model) sendCompose() tea.Cmd {
 	if preserved != nil {
 		preservedReq, preservedErr = m.buildPreservedComposeRequest(from, to, subject, attachments)
 	}
+	var preservedPtr *appsmtp.PreservedMessageRequest
+	if preserved != nil {
+		preservedPtr = &preservedReq
+	}
+	req := backend.ComposeSendRequest{
+		SourceID:     sourceID,
+		From:         from,
+		To:           to,
+		CC:           cc,
+		BCC:          bcc,
+		Subject:      subject,
+		MarkdownBody: markdownBody,
+		Attachments:  attachments,
+		Preserved:    preservedPtr,
+	}
 	return func() tea.Msg {
 		if to == "" {
 			return ComposeStatusMsg{Message: "Error: To field is empty"}
@@ -1272,9 +1301,18 @@ func (m *Model) sendCompose() tea.Cmd {
 		if subject == "" {
 			return ComposeStatusMsg{Message: "Error: Subject is empty"}
 		}
+		if accountSenderOK {
+			if preserved != nil && preservedErr != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", preservedErr), Err: preservedErr}
+			}
+			if err := accountSender.SendCompose(req); err != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
+			}
+			return ComposeStatusMsg{Message: "Message sent!"}
+		}
 		if demoMode {
-			if backend != nil {
-				if err := backend.SendEmail(to, subject, markdownBody, from); err != nil {
+			if b != nil {
+				if err := b.SendEmail(to, subject, markdownBody, from); err != nil {
 					return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 				}
 			}
@@ -1327,9 +1365,20 @@ func (m *Model) renderComposeView() string {
 		return style.Width(plan.Compose.FieldInnerWidth).Render(view)
 	}
 
+	if m.composeAccountPickerVisible() {
+		fromStyle := inactiveFieldStyle
+		if m.composeField == composeFieldFrom {
+			fromStyle = activeFieldStyle
+		}
+		sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+			labelStyle.Render("From:"),
+			renderField(fromStyle, m.composeFromPickerValue(plan.Compose.FieldInnerWidth)),
+		) + "\n")
+	}
+
 	// To field
 	toStyle := inactiveFieldStyle
-	if m.composeField == 0 {
+	if m.composeField == composeFieldTo {
 		toStyle = activeFieldStyle
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
@@ -1380,7 +1429,7 @@ func (m *Model) renderComposeView() string {
 
 	// Subject field
 	subStyle := inactiveFieldStyle
-	if m.composeField == 3 {
+	if m.composeField == composeFieldSubject {
 		subStyle = activeFieldStyle
 	}
 	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
@@ -1882,8 +1931,10 @@ func draftFolderIsReplaceable(folder string) bool {
 // saveDraftCmd saves the current compose content as a draft.
 // Snapshots the values before the goroutine to prevent data races.
 func (m *Model) saveDraftCmd() tea.Cmd {
-	backend := m.backend
-	from := m.fromAddress
+	b := m.backend
+	accountSaver, accountSaverOK := b.(backend.AccountComposeBackend)
+	sourceID := m.composeSelectedSourceID()
+	from := m.composeFromAddress()
 	to := m.composeTo.Value()
 	cc := m.composeCC.Value()
 	bcc := m.composeBCC.Value()
@@ -1893,9 +1944,11 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	preserved := m.composePreserved
 	replaceUID := uint32(0)
 	replaceFolder := ""
+	replaceSourceID := models.SourceID("")
 	if m.lastDraftReplaceable {
 		replaceUID = m.lastDraftUID
 		replaceFolder = m.lastDraftFolder
+		replaceSourceID = m.lastDraftSourceID
 	}
 	preservedReq, preservedErr := appsmtp.PreservedMessageRequest{}, error(nil)
 	if preserved != nil {
@@ -1904,25 +1957,45 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	return func() tea.Msg {
 		if preserved != nil {
 			if preservedErr != nil {
-				return DraftSavedMsg{ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: preservedErr}
+				return DraftSavedMsg{SourceID: sourceID, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, ReplaceSourceID: replaceSourceID, Err: preservedErr}
 			}
 			raw, err := appsmtp.BuildPreservedMIMEMessage(preservedReq)
 			if err != nil {
-				return DraftSavedMsg{ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
+				return DraftSavedMsg{SourceID: sourceID, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, ReplaceSourceID: replaceSourceID, Err: err}
 			}
-			uid, folder, err := backend.SaveRawDraft([]byte(raw))
-			return DraftSavedMsg{UID: uid, Folder: folder, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
+			var uid uint32
+			var folder string
+			if accountSaverOK {
+				uid, folder, err = accountSaver.SaveRawDraftForAccount(sourceID, []byte(raw))
+			} else {
+				uid, folder, err = b.SaveRawDraft([]byte(raw))
+			}
+			return DraftSavedMsg{UID: uid, Folder: folder, SourceID: sourceID, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, ReplaceSourceID: replaceSourceID, Err: err}
 		}
-		uid, folder, err := backend.SaveDraft(to, cc, bcc, subject, body)
-		return DraftSavedMsg{UID: uid, Folder: folder, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, Err: err}
+		var uid uint32
+		var folder string
+		var err error
+		if accountSaverOK {
+			uid, folder, err = accountSaver.SaveDraftForAccount(sourceID, to, cc, bcc, subject, body)
+		} else {
+			uid, folder, err = b.SaveDraft(to, cc, bcc, subject, body)
+		}
+		return DraftSavedMsg{UID: uid, Folder: folder, SourceID: sourceID, ReplaceUID: replaceUID, ReplaceFolder: replaceFolder, ReplaceSourceID: replaceSourceID, Err: err}
 	}
 }
 
 // deleteDraftCmd deletes the draft with the given UID from the given folder.
 func (m *Model) deleteDraftCmd(uid uint32, folder string) tea.Cmd {
-	backend := m.backend
+	return m.deleteDraftForSourceCmd(m.lastDraftSourceID, uid, folder)
+}
+
+func (m *Model) deleteDraftForSourceCmd(sourceID models.SourceID, uid uint32, folder string) tea.Cmd {
+	b := m.backend
 	return func() tea.Msg {
-		err := backend.DeleteDraft(uid, folder)
+		if scoped, ok := b.(backend.AccountComposeBackend); ok {
+			return DraftDeletedMsg{Err: scoped.DeleteDraftForAccount(sourceID, uid, folder)}
+		}
+		err := b.DeleteDraft(uid, folder)
 		return DraftDeletedMsg{Err: err}
 	}
 }

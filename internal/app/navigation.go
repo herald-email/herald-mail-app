@@ -12,7 +12,7 @@ func (m *Model) composeExitCmds() []tea.Cmd {
 
 func (m *Model) resetComposeMode() {
 	m.timelineTable.Blur()
-	m.composeField = 0
+	m.composeField = composeFieldTo
 	m.composeCCExpanded = false
 	m.composeBCCExpanded = false
 	m.composeTo.Focus()

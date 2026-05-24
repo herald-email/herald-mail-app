@@ -223,6 +223,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [ ] Phase 5: Add multi-account mail config and active-account switching UI.
   - [x] Phase 5A: Add active-account backend switching, account rail/sidebar, account switcher overlay, and account-aware status chrome.
   - [x] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
+  - [x] Phase 5C: Add account-aware Compose `From` selection and route sends/drafts through the selected mail source.
 - [ ] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
 

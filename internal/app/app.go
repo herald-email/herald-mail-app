@@ -316,11 +316,13 @@ type DraftSaveTickMsg struct{}
 
 // DraftSavedMsg is returned after a SaveDraft call completes.
 type DraftSavedMsg struct {
-	UID           uint32
-	Folder        string
-	ReplaceUID    uint32
-	ReplaceFolder string
-	Err           error
+	UID             uint32
+	Folder          string
+	SourceID        models.SourceID
+	ReplaceUID      uint32
+	ReplaceFolder   string
+	ReplaceSourceID models.SourceID
+	Err             error
 }
 
 // DraftDeletedMsg is returned after a DeleteDraft call completes.
@@ -468,6 +470,7 @@ type Model struct {
 	// Compose
 	mailer             *appsmtp.Client
 	fromAddress        string
+	composeSourceID    models.SourceID
 	composeTo          textinput.Model
 	composeCC          textinput.Model
 	composeBCC         textinput.Model
@@ -516,8 +519,9 @@ type Model struct {
 	// Draft auto-save state
 	lastDraftUID         uint32 // UID of last auto-saved draft; 0 = not saved yet
 	lastDraftFolder      string // folder of last auto-saved draft
-	lastDraftReplaceable bool   // true when lastDraftUID points at a canonical Drafts-folder copy
-	draftSaving          bool   // true while a SaveDraft cmd is in flight (prevents concurrent saves)
+	lastDraftSourceID    models.SourceID
+	lastDraftReplaceable bool // true when lastDraftUID points at a canonical Drafts-folder copy
+	draftSaving          bool // true while a SaveDraft cmd is in flight (prevents concurrent saves)
 
 	// Sidebar
 	folders       []string
@@ -1792,12 +1796,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !m.lastDraftReplaceable {
 					m.lastDraftUID = 0
 					m.lastDraftFolder = ""
+					m.lastDraftSourceID = ""
 					m.lastDraftReplaceable = false
 					return m, nil
 				}
 				cmd := m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder)
 				m.lastDraftUID = 0
 				m.lastDraftFolder = ""
+				m.lastDraftSourceID = ""
 				m.lastDraftReplaceable = false
 				return m, cmd
 			}
@@ -1912,10 +1918,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.lastDraftUID = msg.UID
 			m.lastDraftFolder = msg.Folder
+			m.lastDraftSourceID = msg.SourceID
 			m.lastDraftReplaceable = true
 			m.statusMessage = "Draft saved"
 			if msg.ReplaceUID != 0 && (msg.ReplaceUID != msg.UID || msg.ReplaceFolder != msg.Folder) {
-				return m, m.deleteDraftCmd(msg.ReplaceUID, msg.ReplaceFolder)
+				return m, m.deleteDraftForSourceCmd(msg.ReplaceSourceID, msg.ReplaceUID, msg.ReplaceFolder)
 			}
 		}
 		return m, nil

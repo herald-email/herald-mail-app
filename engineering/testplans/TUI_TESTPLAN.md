@@ -1542,6 +1542,25 @@ Check these states during every applicable lane:
 - [x] Search in the unified scope aggregates the visible account set and preserves account identity on results.
 - [x] Single-account demo does not render account badges, all-account chrome, or changed key hints.
 
+### TC-38C — Multi-account Compose From selection
+
+**Lane:** A
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic multi-account demo mode.
+2. Open blank Compose from an individual account and capture the `From` picker.
+3. Switch to `All Accounts`, open a message from each account, and start reply/forward Compose from those messages.
+4. Focus the `From` picker, change accounts, type literal `A`/`a` in the `To`, `Subject`, and body fields, and capture the result.
+5. Repeat blank Compose in normal single-account demo mode.
+
+**Expect:**
+- [x] Multi-account Compose renders a compact `From` row with the selected account name/address.
+- [x] Blank Compose defaults to the active real account; when browsing `All Accounts`, replies and forwards default to the selected message's source account.
+- [x] Changing `From` routes send and draft operations through that selected source without changing the active browse account.
+- [x] Literal `A`/`a` typed in Compose text fields remains text and does not open account switching or change the sending account.
+- [x] Single-account Compose keeps the existing header layout and does not render account picker chrome.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

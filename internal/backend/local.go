@@ -991,6 +991,29 @@ func (b *LocalBackend) SendEmail(to, subject, body, from string) error {
 	return mailer.Send(from, to, subject, body, "")
 }
 
+func (b *LocalBackend) SendCompose(req ComposeSendRequest) error {
+	from := strings.TrimSpace(req.From)
+	if from == "" {
+		from = strings.TrimSpace(b.cfg.Credentials.Username)
+	}
+	mailer := appsmtp.New(b.cfg)
+	if req.Preserved != nil {
+		preserved := *req.Preserved
+		if strings.TrimSpace(preserved.From) == "" {
+			preserved.From = from
+		}
+		return mailer.SendPreserved(preserved)
+	}
+	htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(req.MarkdownBody)
+	if inlineErr != nil {
+		logger.Warn("inline image embedding failed: %v", inlineErr)
+		htmlBody, _ = appsmtp.MarkdownToHTMLAndPlain(req.MarkdownBody)
+		inlines = nil
+	}
+	_, plainText := appsmtp.MarkdownToHTMLAndPlain(req.MarkdownBody)
+	return mailer.SendWithInlineImages(from, req.To, req.Subject, plainText, htmlBody, req.CC, req.BCC, req.Attachments, inlines)
+}
+
 func (b *LocalBackend) UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost string) error {
 	return b.cache.UpdateUnsubscribeHeaders(messageID, listUnsub, listUnsubPost)
 }
@@ -1448,6 +1471,22 @@ func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, str
 
 func (b *LocalBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
 	return b.mailSource.AppendDraft(context.Background(), raw)
+}
+
+func (b *LocalBackend) SaveDraftForAccount(_ models.SourceID, to, cc, bcc, subject, body string) (uint32, string, error) {
+	return b.SaveDraft(to, cc, bcc, subject, body)
+}
+
+func (b *LocalBackend) SaveRawDraftForAccount(_ models.SourceID, raw []byte) (uint32, string, error) {
+	return b.SaveRawDraft(raw)
+}
+
+func (b *LocalBackend) DeleteDraftForAccount(_ models.SourceID, uid uint32, folder string) error {
+	return b.DeleteDraft(uid, folder)
+}
+
+func (b *LocalBackend) SendDraftForAccount(_ models.SourceID, uid uint32, folder string) error {
+	return b.SendDraft(uid, folder)
 }
 
 func (b *LocalBackend) ListDrafts() ([]*models.Draft, error) {

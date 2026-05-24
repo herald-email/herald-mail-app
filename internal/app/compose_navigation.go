@@ -39,6 +39,8 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 	m.clearAttachmentCompletions()
 	m.lastDraftUID = 0
 	m.lastDraftFolder = ""
+	m.lastDraftSourceID = ""
+	m.lastDraftReplaceable = false
 }
 
 func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
@@ -48,6 +50,7 @@ func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
 	m.activeTab = tabCompose
 	m.clearComposeFieldsForBlankMessage()
 	m.resetComposeMode()
+	m.setComposeSource(m.defaultComposeSourceID())
 	m.applyConfiguredSignatureToComposeBody()
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)

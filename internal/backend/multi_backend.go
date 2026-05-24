@@ -320,6 +320,38 @@ func (m *MultiBackend) activeRealSlot() *accountSlot {
 	return nil
 }
 
+func (m *MultiBackend) slotForCompose(sourceID models.SourceID, from string) (*accountSlot, error) {
+	if strings.TrimSpace(string(sourceID)) != "" {
+		sourceID = models.NormalizeSourceID(sourceID, "")
+	}
+	from = strings.ToLower(strings.TrimSpace(from))
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if sourceID != "" && sourceID != AllAccountsSourceID {
+		if slot := m.slots[sourceID]; slot != nil {
+			return slot, nil
+		}
+		return nil, fmt.Errorf("unknown source id %q", sourceID)
+	}
+	if from != "" {
+		for _, id := range m.order {
+			slot := m.slots[id]
+			if slot != nil && strings.EqualFold(strings.TrimSpace(slot.info.Address), from) {
+				return slot, nil
+			}
+		}
+	}
+	if slot := m.slots[m.active]; slot != nil {
+		return slot, nil
+	}
+	for _, id := range m.order {
+		if slot := m.slots[id]; slot != nil {
+			return slot, nil
+		}
+	}
+	return nil, fmt.Errorf("no mail source available")
+}
+
 func (m *MultiBackend) slotForRef(ref models.MessageRef) (*accountSlot, models.MessageRef, error) {
 	rawSource := ref.SourceID
 	ref = ref.WithDefaults()
@@ -615,6 +647,118 @@ func (m *MultiBackend) UnmarkStarredByRef(ref models.MessageRef) error {
 		return err
 	}
 	return slot.backend.UnmarkStarred(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) SendEmail(to, subject, body, from string) error {
+	slot, err := m.slotForCompose("", from)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(from) == "" {
+		from = slot.info.Address
+	}
+	return slot.backend.SendEmail(to, subject, body, from)
+}
+
+func (m *MultiBackend) SendCompose(req ComposeSendRequest) error {
+	slot, err := m.slotForCompose(req.SourceID, req.From)
+	if err != nil {
+		return err
+	}
+	req.SourceID = slot.info.SourceID
+	if strings.TrimSpace(req.From) == "" {
+		req.From = slot.info.Address
+	}
+	if sender, ok := slot.backend.(interface {
+		SendCompose(ComposeSendRequest) error
+	}); ok {
+		return sender.SendCompose(req)
+	}
+	return slot.backend.SendEmail(req.To, req.Subject, req.MarkdownBody, req.From)
+}
+
+func (m *MultiBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
+	slot, err := m.slotForCompose("", "")
+	if err != nil {
+		return 0, "", err
+	}
+	return slot.backend.SaveDraft(to, cc, bcc, subject, body)
+}
+
+func (m *MultiBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
+	slot, err := m.slotForCompose("", "")
+	if err != nil {
+		return 0, "", err
+	}
+	return slot.backend.SaveRawDraft(raw)
+}
+
+func (m *MultiBackend) DeleteDraft(uid uint32, folder string) error {
+	slot, err := m.slotForCompose("", "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.DeleteDraft(uid, folder)
+}
+
+func (m *MultiBackend) SendDraft(uid uint32, folder string) error {
+	slot, err := m.slotForCompose("", "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.SendDraft(uid, folder)
+}
+
+func (m *MultiBackend) SaveDraftForAccount(sourceID models.SourceID, to, cc, bcc, subject, body string) (uint32, string, error) {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return 0, "", err
+	}
+	if saver, ok := slot.backend.(interface {
+		SaveDraftForAccount(models.SourceID, string, string, string, string, string) (uint32, string, error)
+	}); ok {
+		return saver.SaveDraftForAccount(slot.info.SourceID, to, cc, bcc, subject, body)
+	}
+	return slot.backend.SaveDraft(to, cc, bcc, subject, body)
+}
+
+func (m *MultiBackend) SaveRawDraftForAccount(sourceID models.SourceID, raw []byte) (uint32, string, error) {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return 0, "", err
+	}
+	if saver, ok := slot.backend.(interface {
+		SaveRawDraftForAccount(models.SourceID, []byte) (uint32, string, error)
+	}); ok {
+		return saver.SaveRawDraftForAccount(slot.info.SourceID, raw)
+	}
+	return slot.backend.SaveRawDraft(raw)
+}
+
+func (m *MultiBackend) DeleteDraftForAccount(sourceID models.SourceID, uid uint32, folder string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	if deleter, ok := slot.backend.(interface {
+		DeleteDraftForAccount(models.SourceID, uint32, string) error
+	}); ok {
+		return deleter.DeleteDraftForAccount(slot.info.SourceID, uid, folder)
+	}
+	return slot.backend.DeleteDraft(uid, folder)
+}
+
+func (m *MultiBackend) SendDraftForAccount(sourceID models.SourceID, uid uint32, folder string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	if sender, ok := slot.backend.(interface {
+		SendDraftForAccount(models.SourceID, uint32, string) error
+	}); ok {
+		return sender.SendDraftForAccount(slot.info.SourceID, uid, folder)
+	}
+	return slot.backend.SendDraft(uid, folder)
 }
 
 func (m *MultiBackend) SetGroupByDomain(groupByDomain bool) {

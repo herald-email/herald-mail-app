@@ -619,7 +619,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [x] Current IMAP provider access is isolated behind `IMAPMailSource` before visible account switching
 - [x] Folder sidebar exposes an account rail and account-scoped folder tree when multiple mail sources are configured
 - [x] Status bar shows active account name when multiple mail sources are configured
-- [ ] Compose "From" field lets user pick sending account
+- [x] Compose "From" field lets user pick sending account and routes sends/drafts through that account
 - [x] Unified Timeline and search view across accounts (opt-in) shows account badges and routes selected-message reads/writes by scoped refs
 - [x] Gmail OAuth is experimental first-run onboarding, hidden unless Herald starts with `-experimental`
 - [ ] Outlook OAuth

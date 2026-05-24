@@ -1523,9 +1523,10 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.statusMessage = ""
 	m.replyContextEmail = nil
 	m.composeAIThread = false
+	m.setComposeSourceForEmail(email)
 	m.resetComposeAIBar()
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindForward, email, body, composeStatus)
-	m.composeField = 0
+	m.composeField = composeFieldTo
 	m.composeTo.Focus()
 	m.composeSubject.Blur()
 	m.composeBody.Blur()
@@ -1553,6 +1554,7 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.applyConfiguredSignatureToComposeBody()
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
+	m.setComposeSourceForEmail(email)
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindReply, email, body, composeStatus)
 	m.resetComposeAIBar()
 	m.composeField = composeFieldBody
@@ -1585,6 +1587,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	m.composeSubject.SetValue(subject)
 	m.composeBody.SetValue(body.TextPlain)
 	m.composeAttachments = nil
+	m.setComposeSourceForEmail(email)
 	m.resetComposeAIBar()
 	m.composeStatus = composeStatus
 	if m.composeStatus == "" {
@@ -1594,6 +1597,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	if email != nil {
 		m.lastDraftUID = email.UID
 		m.lastDraftFolder = email.Folder
+		m.lastDraftSourceID = email.SourceID
 		m.lastDraftReplaceable = draftFolderIsReplaceable(email.Folder)
 	}
 	m.draftSaving = false
@@ -1731,7 +1735,12 @@ func (m *Model) sendTimelineDraftCmd(email *models.EmailData) tea.Cmd {
 				Err:       fmt.Errorf("cached draft has no server UID; re-sync the folder to refresh it"),
 			}
 		}
-		err := b.SendDraft(emailCopy.UID, emailCopy.Folder)
+		var err error
+		if scoped, ok := b.(backend.AccountComposeBackend); ok && emailCopy.SourceID != "" {
+			err = scoped.SendDraftForAccount(emailCopy.SourceID, emailCopy.UID, emailCopy.Folder)
+		} else {
+			err = b.SendDraft(emailCopy.UID, emailCopy.Folder)
+		}
 		return TimelineDraftSentMsg{
 			Email:     &emailCopy,
 			MessageID: emailCopy.MessageID,

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 // Backend defines the contract between the UI and email backend logic.
@@ -361,4 +362,30 @@ type Backend interface {
 	// PreviewCleanupRulesDryRun returns structured cleanup-rule matches without
 	// mutating IMAP mail or cleanup rule metadata.
 	PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error)
+}
+
+// ComposeSendRequest carries the full TUI compose payload across an optional
+// backend account boundary. Legacy single-account callers can keep using
+// SendEmail; multi-account callers use SourceID to pick the sending account.
+type ComposeSendRequest struct {
+	SourceID     models.SourceID
+	From         string
+	To           string
+	CC           string
+	BCC          string
+	Subject      string
+	MarkdownBody string
+	Attachments  []models.ComposeAttachment
+	Preserved    *appsmtp.PreservedMessageRequest
+}
+
+// AccountComposeBackend is implemented by backends that can route Compose
+// send and draft operations to a specific source without changing the active
+// browse account.
+type AccountComposeBackend interface {
+	SendCompose(ComposeSendRequest) error
+	SaveDraftForAccount(sourceID models.SourceID, to, cc, bcc, subject, body string) (uint32, string, error)
+	SaveRawDraftForAccount(sourceID models.SourceID, raw []byte) (uint32, string, error)
+	DeleteDraftForAccount(sourceID models.SourceID, uid uint32, folder string) error
+	SendDraftForAccount(sourceID models.SourceID, uid uint32, folder string) error
 }

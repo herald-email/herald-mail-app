@@ -21,6 +21,12 @@ type recordingAccountBackend struct {
 	loadCalls      []string
 	deleteCalls    []string
 	archiveCalls   []string
+	sendCalls      []string
+	composeSends   []ComposeSendRequest
+	saveDraftCalls []string
+	rawDraftCalls  []string
+	draftDeletes   []string
+	draftSends     []string
 	getMessageRefs []models.MessageRef
 	closed         bool
 }
@@ -101,6 +107,36 @@ func (b *recordingAccountBackend) DeleteEmail(messageID, folder string) error {
 
 func (b *recordingAccountBackend) ArchiveEmail(messageID, folder string) error {
 	b.archiveCalls = append(b.archiveCalls, folder+":"+messageID)
+	return nil
+}
+
+func (b *recordingAccountBackend) SendEmail(to, subject, body, from string) error {
+	b.sendCalls = append(b.sendCalls, fmt.Sprintf("%s|%s|%s|%s", from, to, subject, body))
+	return nil
+}
+
+func (b *recordingAccountBackend) SendCompose(req ComposeSendRequest) error {
+	b.composeSends = append(b.composeSends, req)
+	return nil
+}
+
+func (b *recordingAccountBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
+	b.saveDraftCalls = append(b.saveDraftCalls, fmt.Sprintf("%s|%s|%s|%s|%s", to, cc, bcc, subject, body))
+	return 501, "Drafts", nil
+}
+
+func (b *recordingAccountBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
+	b.rawDraftCalls = append(b.rawDraftCalls, string(raw))
+	return 502, "Drafts", nil
+}
+
+func (b *recordingAccountBackend) DeleteDraft(uid uint32, folder string) error {
+	b.draftDeletes = append(b.draftDeletes, fmt.Sprintf("%s:%d", folder, uid))
+	return nil
+}
+
+func (b *recordingAccountBackend) SendDraft(uid uint32, folder string) error {
+	b.draftSends = append(b.draftSends, fmt.Sprintf("%s:%d", folder, uid))
 	return nil
 }
 
@@ -204,6 +240,118 @@ func TestMultiBackendDuplicateFoldersAndMessageIDsStayActiveAccountScoped(t *tes
 	}
 	if got := personal.deleteCalls; !reflect.DeepEqual(got, []string{"INBOX:same-message"}) {
 		t.Fatalf("personal delete calls = %#v", got)
+	}
+}
+
+func TestMultiBackendLegacySendEmailRoutesByFromAddress(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount all accounts: %v", err)
+	}
+
+	if err := mb.SendEmail("friend@example.test", "Hello", "body", "me@example.test"); err != nil {
+		t.Fatalf("SendEmail: %v", err)
+	}
+	if len(work.sendCalls) != 0 {
+		t.Fatalf("work send calls=%#v, want none", work.sendCalls)
+	}
+	if got := personal.sendCalls; !reflect.DeepEqual(got, []string{"me@example.test|friend@example.test|Hello|body"}) {
+		t.Fatalf("personal send calls=%#v", got)
+	}
+}
+
+func TestMultiBackendComposeSendRoutesBySelectedSource(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount all accounts: %v", err)
+	}
+
+	err = mb.SendCompose(ComposeSendRequest{
+		SourceID:     "personal-mail",
+		From:         "me@example.test",
+		To:           "friend@example.test",
+		CC:           "copy@example.test",
+		Subject:      "Selected account",
+		MarkdownBody: "hello",
+	})
+	if err != nil {
+		t.Fatalf("SendCompose: %v", err)
+	}
+	if len(work.composeSends) != 0 {
+		t.Fatalf("work compose sends=%#v, want none", work.composeSends)
+	}
+	if len(personal.composeSends) != 1 {
+		t.Fatalf("personal compose sends=%#v, want one", personal.composeSends)
+	}
+	if got := personal.composeSends[0].SourceID; got != models.SourceID("personal-mail") {
+		t.Fatalf("compose source=%q, want personal-mail", got)
+	}
+}
+
+func TestMultiBackendDraftOperationsRouteBySelectedSource(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	uid, folder, err := mb.SaveDraftForAccount("personal-mail", "to@example.test", "cc@example.test", "", "Draft", "body")
+	if err != nil {
+		t.Fatalf("SaveDraftForAccount: %v", err)
+	}
+	if uid != 501 || folder != "Drafts" {
+		t.Fatalf("saved draft uid/folder=%d/%s, want 501/Drafts", uid, folder)
+	}
+	if len(work.saveDraftCalls) != 0 {
+		t.Fatalf("work save draft calls=%#v, want none", work.saveDraftCalls)
+	}
+	if got := personal.saveDraftCalls; !reflect.DeepEqual(got, []string{"to@example.test|cc@example.test||Draft|body"}) {
+		t.Fatalf("personal save draft calls=%#v", got)
+	}
+
+	if _, _, err := mb.SaveRawDraftForAccount("personal-mail", []byte("raw draft")); err != nil {
+		t.Fatalf("SaveRawDraftForAccount: %v", err)
+	}
+	if err := mb.DeleteDraftForAccount("personal-mail", 501, "Drafts"); err != nil {
+		t.Fatalf("DeleteDraftForAccount: %v", err)
+	}
+	if err := mb.SendDraftForAccount("personal-mail", 501, "Drafts"); err != nil {
+		t.Fatalf("SendDraftForAccount: %v", err)
+	}
+	if len(work.rawDraftCalls) != 0 || len(work.draftDeletes) != 0 || len(work.draftSends) != 0 {
+		t.Fatalf("work draft calls raw=%#v delete=%#v send=%#v, want none", work.rawDraftCalls, work.draftDeletes, work.draftSends)
+	}
+	if got := personal.rawDraftCalls; !reflect.DeepEqual(got, []string{"raw draft"}) {
+		t.Fatalf("personal raw draft calls=%#v", got)
+	}
+	if got := personal.draftDeletes; !reflect.DeepEqual(got, []string{"Drafts:501"}) {
+		t.Fatalf("personal draft deletes=%#v", got)
+	}
+	if got := personal.draftSends; !reflect.DeepEqual(got, []string{"Drafts:501"}) {
+		t.Fatalf("personal draft sends=%#v", got)
 	}
 }
 
