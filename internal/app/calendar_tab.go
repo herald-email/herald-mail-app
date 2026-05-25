@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -1278,7 +1279,7 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Alt TZ rows are preview only; Event TZ saves.", width)))
 	}
 	lines = append(lines, "")
-	lines = append(lines, calendarDetailRow(m, "Scope", "this event", width))
+	lines = append(lines, calendarDetailRow(m, "Scope", models.CalendarMutationScopeLabel(state.Draft.RecurrenceScope), width))
 	lines = append(lines, calendarDetailRow(m, "Mode", "provider save-through, cache after success", width))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("tab: next field  ctrl+s: save  esc: cancel", width)))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
@@ -1302,6 +1303,19 @@ func (m *Model) renderCalendarEditField(label string, field calendarEditField, v
 		return m.theme.Focus.SelectionActive.Style().Render(calendarFit(line, width))
 	}
 	return m.theme.Text.Primary.Style().Render(calendarFit(line, width))
+}
+
+func calendarMutationErrorStatus(prefix string, err error) string {
+	if err == nil {
+		return prefix
+	}
+	if errors.Is(err, models.ErrCalendarMutationConflict) {
+		return prefix + ": provider conflict; refresh calendar and try again"
+	}
+	if errors.Is(err, models.ErrCalendarRecurrenceScopeUnsupported) {
+		return prefix + ": recurrence scope unsupported"
+	}
+	return prefix + ": " + err.Error()
 }
 
 func (m *Model) renderCalendarDayAgenda(width, height int) string {

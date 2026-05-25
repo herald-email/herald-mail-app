@@ -82,7 +82,7 @@ Sources are provider adapters, not mini-apps. They should know how to talk to IM
 
 - [ ] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
 - [x] `MailSource` covers current mail-specific collections, sync, body fetch, mutation, drafts, folder status, and search behind `IMAPMailSource`.
-- [x] `CalendarSource` covers read-only calendars, event listing/sync, and event detail fetch; event mutations remain deferred.
+- [x] `CalendarSource` covers read-only calendars, event listing/sync, and event detail fetch; `MutationSource` covers selected edit/RSVP writes with explicit recurrence-scope and provider-conflict guards.
 - [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
 - [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
 
@@ -114,6 +114,11 @@ type CalendarSource interface {
 	ListCalendars(ctx context.Context) ([]CollectionRef, error)
 	ListEvents(ctx context.Context, ref CollectionRef) ([]CalendarEvent, error)
 	FetchEvent(ctx context.Context, ref EventRef) (*CalendarEvent, error)
+}
+
+type CalendarMutationSource interface {
+	UpdateEvent(ctx context.Context, event CalendarEvent, opts CalendarMutationOptions) (*CalendarEvent, error)
+	RespondToEvent(ctx context.Context, ref EventRef, status string, opts CalendarMutationOptions) (*CalendarEvent, error)
 }
 ```
 
@@ -236,6 +241,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Add a local/cache-backed Calendar Event Edit form with timezone preview and explicit save/cancel state.
   - [x] Add provider-backed Calendar Event Edit save-through with explicit provider failure and cache update semantics.
   - [x] Add provider-backed RSVP response changes with scoped attendee updates.
+  - [x] Add typed provider conflict handling and explicit recurrence-scope validation for selected calendar mutations.
   - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 
 ## Acceptance Criteria

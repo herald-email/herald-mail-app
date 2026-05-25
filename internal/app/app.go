@@ -1959,7 +1959,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Err != nil {
 			m.calendarEdit.Saving = false
-			m.calendarEdit.Error = "Save failed: " + msg.Err.Error()
+			m.calendarEdit.Error = calendarMutationErrorStatus("Save failed", msg.Err)
 			m.calendarStatus = m.calendarEdit.Error
 			return m, nil
 		}
@@ -1981,7 +1981,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Err != nil {
-			m.calendarStatus = "RSVP failed: " + msg.Err.Error()
+			m.calendarStatus = calendarMutationErrorStatus("RSVP failed", msg.Err)
 			return m, nil
 		}
 		if msg.Event != nil {

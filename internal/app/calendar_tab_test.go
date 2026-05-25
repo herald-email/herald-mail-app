@@ -1029,6 +1029,42 @@ func TestCalendarEventEditProviderFailureKeepsEditorOpen(t *testing.T) {
 	}
 }
 
+func TestCalendarEventEditProviderConflictNamesConflictAndKeepsEditorOpen(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}, saveErr: models.ErrCalendarMutationConflict}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	m.calendarEdit.Draft.Title = "Unsaved conflict title"
+	m.calendarEdit.Dirty = true
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatal("expected provider conflict to keep Event Edit open")
+	}
+	if m.calendarEdit.Draft.Title != "Unsaved conflict title" {
+		t.Fatalf("draft title = %q, want unsaved value preserved", m.calendarEdit.Draft.Title)
+	}
+	if m.calendarEvents[0].Title == "Unsaved conflict title" {
+		t.Fatalf("calendar list updated after provider conflict: %#v", m.calendarEvents[0])
+	}
+	if !strings.Contains(strings.ToLower(m.calendarStatus), "conflict") {
+		t.Fatalf("calendar status = %q, want conflict", m.calendarStatus)
+	}
+}
+
 func TestCalendarEventRSVPShortcutUpdatesAttendeeAndDetail(t *testing.T) {
 	rich := richCalendarEventForTest()
 	rich.Attendees[0].RSVP = "needs-action"
@@ -1059,6 +1095,33 @@ func TestCalendarEventRSVPShortcutUpdatesAttendeeAndDetail(t *testing.T) {
 	}
 	if !strings.Contains(m.calendarStatus, "Saved RSVP accepted") {
 		t.Fatalf("calendar status = %q, want RSVP success", m.calendarStatus)
+	}
+}
+
+func TestCalendarEventRSVPConflictLeavesCachedAttendeeUnchanged(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Attendees[0].RSVP = "tentative"
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}, rsvpErr: models.ErrCalendarMutationConflict}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, cmd := m.handleKeyMsg(keyRunes("v"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if m.calendarDetail == nil || len(m.calendarDetail.Attendees) == 0 || m.calendarDetail.Attendees[0].RSVP != "tentative" {
+		t.Fatalf("calendar detail attendees = %#v, want unchanged tentative RSVP", m.calendarDetail)
+	}
+	if !strings.Contains(strings.ToLower(m.calendarStatus), "conflict") {
+		t.Fatalf("calendar status = %q, want conflict", m.calendarStatus)
 	}
 }
 

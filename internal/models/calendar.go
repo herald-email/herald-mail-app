@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -52,11 +53,47 @@ type CalendarAttachment struct {
 
 const (
 	CalendarMutationScopeThisEvent = "this_event"
+	CalendarMutationScopeAllEvents = "all_events"
+)
+
+var (
+	ErrCalendarMutationConflict           = errors.New("calendar mutation conflict")
+	ErrCalendarRecurrenceScopeUnsupported = errors.New("calendar recurrence scope unsupported")
 )
 
 type CalendarMutationOptions struct {
 	RecurrenceScope string
 	IfMatch         string
+}
+
+func NormalizeCalendarMutationOptions(opts CalendarMutationOptions) (CalendarMutationOptions, error) {
+	scope := normalizeCalendarMutationScope(opts.RecurrenceScope)
+	if scope == "" {
+		scope = CalendarMutationScopeThisEvent
+	}
+	opts.RecurrenceScope = scope
+	if scope != CalendarMutationScopeThisEvent {
+		return opts, fmt.Errorf("%w: %s", ErrCalendarRecurrenceScopeUnsupported, CalendarMutationScopeLabel(scope))
+	}
+	return opts, nil
+}
+
+func CalendarMutationScopeLabel(scope string) string {
+	switch normalizeCalendarMutationScope(scope) {
+	case "", CalendarMutationScopeThisEvent:
+		return "this event"
+	case CalendarMutationScopeAllEvents:
+		return "all events"
+	default:
+		return strings.ReplaceAll(strings.TrimSpace(scope), "_", " ")
+	}
+}
+
+func normalizeCalendarMutationScope(scope string) string {
+	scope = strings.TrimSpace(strings.ToLower(scope))
+	scope = strings.ReplaceAll(scope, "-", "_")
+	scope = strings.ReplaceAll(scope, " ", "_")
+	return scope
 }
 
 func (e CalendarEvent) EventRef() EventRef {

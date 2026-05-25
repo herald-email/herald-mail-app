@@ -94,6 +94,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
   - [x] Stage 5B: Add a local/cache-backed Event Edit form with explicit save/cancel state and timezone preview before live provider mutation writes.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
   - [x] Stage 6A: Add provider-backed Event Edit save-through and RSVP response changes with cache update after provider success, explicit failure state, and `this event` recurrence scope only.
+  - [x] Stage 6B: Add typed provider conflict handling and explicit recurrence-scope validation so stale revisions and unsupported broader recurrence edits never rewrite cached event rows.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
 

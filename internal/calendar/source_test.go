@@ -2,6 +2,8 @@ package calendar
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -208,6 +210,90 @@ func TestGoogleCalendarSourceRespondToEventWritesAttendeeRSVP(t *testing.T) {
 	}
 }
 
+func TestGoogleCalendarSourceUpdateEventConflictIsTyped(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:       "conflict-evt",
+			Summary:  "Provider conflict",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+		}),
+	)
+	src, err := NewGoogleCalendarSource(lab.GoogleSourceConfig("work-calendar", "work"))
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	edited := events[0]
+	edited.Title = "Should conflict"
+
+	_, err = src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         `"stale"`,
+	})
+	if !errors.Is(err, models.ErrCalendarMutationConflict) {
+		t.Fatalf("error = %v, want ErrCalendarMutationConflict", err)
+	}
+	if strings.Contains(err.Error(), "/calendar/v3/") || strings.Contains(strings.ToLower(err.Error()), "etag") {
+		t.Fatalf("error leaked provider internals: %v", err)
+	}
+	fetched, err := src.FetchEvent(context.Background(), events[0].Ref)
+	if err != nil {
+		t.Fatalf("FetchEvent: %v", err)
+	}
+	if fetched.Title != events[0].Title {
+		t.Fatalf("provider event title = %q, want unchanged %q", fetched.Title, events[0].Title)
+	}
+}
+
+func TestGoogleCalendarSourceRejectsUnsupportedRecurrenceScopeBeforeProviderWrite(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:         "recurrence-evt",
+			Summary:    "Provider recurrence",
+			Start:      start,
+			End:        start.Add(time.Hour),
+			TimeZone:   "UTC",
+			ETag:       `"g-v1"`,
+			Recurrence: []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"},
+		}),
+	)
+	src, err := NewGoogleCalendarSource(lab.GoogleSourceConfig("work-calendar", "work"))
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	edited := events[0]
+	edited.Title = "Unsupported broad edit"
+
+	_, err = src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeAllEvents,
+		IfMatch:         edited.Ref.ETag,
+	})
+	if !errors.Is(err, models.ErrCalendarRecurrenceScopeUnsupported) {
+		t.Fatalf("error = %v, want ErrCalendarRecurrenceScopeUnsupported", err)
+	}
+	fetched, err := src.FetchEvent(context.Background(), edited.Ref)
+	if err != nil {
+		t.Fatalf("FetchEvent: %v", err)
+	}
+	if fetched.Title != events[0].Title {
+		t.Fatalf("provider event title = %q, want unchanged %q", fetched.Title, events[0].Title)
+	}
+}
+
 func TestCalDAVSourceUsesLocalTestServer(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,
@@ -400,5 +486,49 @@ func TestCalDAVSourceRespondToEventWritesAttendeeRSVP(t *testing.T) {
 	}
 	if len(saved.Attendees) != 1 || saved.Attendees[0].RSVP != "accepted" {
 		t.Fatalf("attendees = %#v, want accepted RSVP", saved.Attendees)
+	}
+}
+
+func TestCalDAVSourceUpdateEventConflictIsTyped(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("team", "Team Calendar", "#0b8043"),
+		testcalendar.WithEvent("team", testcalendar.Event{
+			ID:       "conflict-evt.ics",
+			UID:      "conflict-evt",
+			Summary:  "CalDAV conflict",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"c-v1"`,
+		}),
+	)
+	src, err := NewCalDAVSource(lab.CalDAVSourceConfig("family-caldav", "family"))
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "family-caldav", AccountID: "family", Kind: models.SourceKindCalendar, CollectionID: "team"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	edited := events[0]
+	edited.Title = "Should conflict"
+
+	_, err = src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         `"stale"`,
+	})
+	if !errors.Is(err, models.ErrCalendarMutationConflict) {
+		t.Fatalf("error = %v, want ErrCalendarMutationConflict", err)
+	}
+	if strings.Contains(err.Error(), "/caldav/") || strings.Contains(strings.ToLower(err.Error()), "etag") {
+		t.Fatalf("error leaked provider internals: %v", err)
+	}
+	fetched, err := src.FetchEvent(context.Background(), events[0].Ref)
+	if err != nil {
+		t.Fatalf("FetchEvent: %v", err)
+	}
+	if fetched.Title != events[0].Title {
+		t.Fatalf("provider event title = %q, want unchanged %q", fetched.Title, events[0].Title)
 	}
 }

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -282,6 +283,9 @@ func TestLocalBackendSaveCalendarEventProviderFailureKeepsCachedEvent(t *testing
 	_, err = b.SaveCalendarEvent(edited)
 	if err == nil {
 		t.Fatal("SaveCalendarEvent succeeded with stale provider etag, want provider failure")
+	}
+	if !errors.Is(err, models.ErrCalendarMutationConflict) {
+		t.Fatalf("error = %v, want ErrCalendarMutationConflict", err)
 	}
 	if strings.Contains(strings.ToLower(err.Error()), "etag") || strings.Contains(err.Error(), "/calendar/v3/") {
 		t.Fatalf("error leaked provider internals: %v", err)

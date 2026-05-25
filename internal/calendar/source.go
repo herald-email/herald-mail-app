@@ -126,7 +126,9 @@ func (s *GoogleCalendarSource) FetchEvent(ctx context.Context, ref models.EventR
 }
 
 func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
-	if err := validateCalendarMutationOptions(opts); err != nil {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
 		return nil, err
 	}
 	event.Ref = s.normalizeEvent(event.Ref)
@@ -202,7 +204,7 @@ func (s *GoogleCalendarSource) doJSON(req *http.Request, out any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("google calendar %s %s: %s", req.Method, req.URL.Path, strings.TrimSpace(string(body)))
+		return calendarProviderHTTPError("google calendar", req.Method, resp.StatusCode, body)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
@@ -330,7 +332,9 @@ func (s *CalDAVSource) FetchEvent(ctx context.Context, ref models.EventRef) (*mo
 }
 
 func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
-	if err := validateCalendarMutationOptions(opts); err != nil {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
 		return nil, err
 	}
 	event.Ref.SourceID = models.NormalizeSourceID(event.Ref.SourceID, s.id)
@@ -351,7 +355,7 @@ func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEve
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("caldav PUT %s: %s", req.URL.Path, strings.TrimSpace(string(body)))
+		return nil, calendarProviderHTTPError("caldav", req.Method, resp.StatusCode, body)
 	}
 	freshRef := event.Ref
 	if etag := strings.TrimSpace(resp.Header.Get("ETag")); etag != "" {
@@ -398,7 +402,7 @@ func (s *CalDAVSource) doXML(req *http.Request, out any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("caldav %s %s: %s", req.Method, req.URL.Path, strings.TrimSpace(string(body)))
+		return calendarProviderHTTPError("caldav", req.Method, resp.StatusCode, body)
 	}
 	return xml.NewDecoder(resp.Body).Decode(out)
 }
@@ -898,12 +902,22 @@ func normalizeCalendarStatus(value string) string {
 	return strings.ToLower(value)
 }
 
-func validateCalendarMutationOptions(opts models.CalendarMutationOptions) error {
-	scope := strings.TrimSpace(opts.RecurrenceScope)
-	if scope == "" || scope == models.CalendarMutationScopeThisEvent {
-		return nil
+func validateCalendarMutationOptions(opts models.CalendarMutationOptions) (models.CalendarMutationOptions, error) {
+	return models.NormalizeCalendarMutationOptions(opts)
+}
+
+func calendarProviderHTTPError(provider, method string, status int, body []byte) error {
+	if status == http.StatusConflict || status == http.StatusPreconditionFailed {
+		return fmt.Errorf("%w: provider calendar item changed before %s", models.ErrCalendarMutationConflict, strings.ToLower(method))
 	}
-	return fmt.Errorf("calendar recurrence scope %q is not supported yet", scope)
+	message := strings.TrimSpace(string(body))
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	if message == "" {
+		message = fmt.Sprintf("status %d", status)
+	}
+	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
 }
 
 func setCalendarAttendeeRSVP(event *models.CalendarEvent, attendeeEmail, status string) error {

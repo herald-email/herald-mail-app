@@ -1759,6 +1759,29 @@ This case covers the first provider-backed mutation slice after the local/cache 
 - Event Detail and Event Edit still hide provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, and daemon/MCP mutation APIs.
 - Literal `e` and the RSVP response shortcut typed in Compose, search prompts, and editor-like text fields remain text instead of firing calendar mutations.
 
+### TC-38M — Calendar mutation conflict and recurrence-scope safety
+
+This case covers the next provider-backed mutation hardening slice. It proves stale provider revisions and unsupported recurrence scopes fail visibly without rewriting cached calendar state or silently applying a broader recurrence edit than the user requested.
+
+**Lane:** A, B when calendar provider fixtures are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode and a deterministic provider-backed calendar fixture whose cached event ETag is stale relative to the provider.
+2. Press `3` or `F4` to open Calendar, press `Enter` for Event Detail, then press `e` to open Event Edit.
+3. Change any editable field and press `Ctrl+S`.
+4. Confirm Event Edit stays open, the unsaved values remain visible, the status names a provider conflict, and the cached event row remains unchanged.
+5. Repeat the conflict path for RSVP from Event Detail.
+6. Exercise a recurring event and confirm the only available mutation scope is explicitly labeled `this event`; unsupported wider scopes are rejected instead of being silently downgraded.
+
+**Expect:**
+- Provider `409 Conflict` or `412 Precondition Failed` responses map to a typed calendar mutation conflict that callers can detect without exposing raw provider URLs, ETags, sync tokens, or OAuth details.
+- Conflict failures keep Event Edit open with unsaved values intact and leave cached agenda/detail/search rows unchanged.
+- RSVP conflict failures show a compact conflict status and leave cached attendee response state unchanged.
+- Unsupported recurrence scopes fail before provider mutation and do not update cache.
+- `this event` remains the only advertised recurring-event mutation scope until broader recurrence editing is deliberately implemented.
+- At `50x15`, the minimum-size guard appears instead of clipped conflict or recurrence-scope chrome, and resizing larger restores the edit state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

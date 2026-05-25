@@ -18,6 +18,7 @@ type CalendarEventEditDraft struct {
 	TimeZone           string
 	Status             string
 	AllDay             bool
+	RecurrenceScope    string
 	AlternateTimeZones []string
 }
 
@@ -49,6 +50,7 @@ func NewCalendarEventEditDraft(event CalendarEvent) CalendarEventEditDraft {
 		TimeZone:           event.CanonicalTimeZone(),
 		Status:             event.Status,
 		AllDay:             event.AllDay,
+		RecurrenceScope:    CalendarMutationScopeThisEvent,
 		AlternateTimeZones: append([]string(nil), event.AlternateTimeZones...),
 	}
 }
@@ -87,6 +89,9 @@ func (d CalendarEventEditDraft) Apply(base CalendarEvent) (CalendarEvent, error)
 	updated.AllDay = d.AllDay
 	updated.Status = strings.TrimSpace(d.Status)
 	updated.AlternateTimeZones = cleanCalendarEditTimeZones(d.AlternateTimeZones)
+	if _, err := NormalizeCalendarMutationOptions(CalendarMutationOptions{RecurrenceScope: d.RecurrenceScope}); err != nil {
+		return CalendarEvent{}, err
+	}
 	updated.UpdatedAt = time.Now().UTC()
 	return updated, nil
 }

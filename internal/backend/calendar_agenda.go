@@ -272,7 +272,14 @@ func calendarProviderMutationError(action string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("calendar provider %s failed; cache was not updated", strings.ToLower(strings.TrimSpace(action)))
+	action = strings.ToLower(strings.TrimSpace(action))
+	if errors.Is(err, models.ErrCalendarMutationConflict) {
+		return fmt.Errorf("calendar provider %s conflict; cache was not updated: %w", action, err)
+	}
+	if errors.Is(err, models.ErrCalendarRecurrenceScopeUnsupported) {
+		return fmt.Errorf("calendar provider %s recurrence scope unsupported; cache was not updated: %w", action, err)
+	}
+	return fmt.Errorf("calendar provider %s failed; cache was not updated: %w", action, err)
 }
 
 func (m *MultiBackend) CalendarAgendaAvailable() bool {
