@@ -756,10 +756,35 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
 	if !event.AllDay && !event.Start.IsZero() {
 		lines = append(lines, calendarDetailRow(m, "Local", calendarTimeRangeInLocation(*event, time.Local), width))
-		lines = append(lines, calendarDetailRow(m, "Event TZ", calendarTimeRangeInLocation(*event, event.Start.Location()), width))
+		lines = append(lines, calendarDetailRow(m, "Event TZ", calendarTimeRangeInNamedLocation(*event, event.CanonicalTimeZone()), width))
+		for _, timezone := range calendarAlternateTimeZones(*event) {
+			lines = append(lines, calendarDetailRow(m, "Alt TZ", calendarTimeRangeInNamedLocation(*event, timezone), width))
+		}
 	}
 	if strings.TrimSpace(event.Location) != "" {
 		lines = append(lines, calendarDetailRow(m, "Location", event.Location, width))
+	}
+	if organizer := calendarOrganizerLabel(*event); organizer != "" {
+		lines = append(lines, calendarDetailRow(m, "Organizer", organizer, width))
+	}
+	if len(event.Attendees) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Attendees", width)))
+		for _, attendee := range event.Attendees {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarAttendeeLabel(attendee), width)))
+		}
+	}
+	if recurrence := calendarRecurrenceLabel(*event); recurrence != "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Recurrence", width)))
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(recurrence, width)))
+	}
+	if len(event.Attachments) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Attachments", width)))
+		for _, attachment := range event.Attachments {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarAttachmentLabel(attachment), width)))
+		}
 	}
 	lines = append(lines, calendarDetailRow(m, "Status", calendarStatusLabel(*event), width))
 	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
@@ -933,6 +958,69 @@ func calendarDetailRow(m *Model, label, value string, width int) string {
 	return m.theme.Metadata.Label.Style().Render(label) + " " + m.theme.Text.Primary.Style().Render(calendarFit(value, valueW))
 }
 
+func calendarOrganizerLabel(event models.CalendarEvent) string {
+	name := strings.TrimSpace(event.Organizer)
+	email := strings.TrimSpace(event.OrganizerEmail)
+	if name != "" && email != "" {
+		return name + " <" + email + ">"
+	}
+	return firstNonEmptyString(name, email)
+}
+
+func calendarAttendeeLabel(attendee models.CalendarAttendee) string {
+	name := strings.TrimSpace(attendee.Name)
+	email := strings.TrimSpace(attendee.Email)
+	label := firstNonEmptyString(name, email)
+	if name != "" && email != "" {
+		label = name + " <" + email + ">"
+	}
+	if status := strings.TrimSpace(attendee.RSVP); status != "" {
+		label += " " + strings.ToLower(status)
+	}
+	if attendee.Optional {
+		label += " optional"
+	}
+	return label
+}
+
+func calendarAttachmentLabel(attachment models.CalendarAttachment) string {
+	title := strings.TrimSpace(attachment.Title)
+	if title == "" {
+		title = "Attachment"
+	}
+	if mimeType := strings.TrimSpace(attachment.MIMEType); mimeType != "" {
+		return title + " (" + mimeType + ")"
+	}
+	return title
+}
+
+func calendarRecurrenceLabel(event models.CalendarEvent) string {
+	if summary := strings.TrimSpace(event.RecurrenceSummary); summary != "" {
+		return summary
+	}
+	if len(event.Recurrence) > 0 {
+		return event.Recurrence[0]
+	}
+	return ""
+}
+
+func calendarAlternateTimeZones(event models.CalendarEvent) []string {
+	seen := map[string]bool{
+		event.CanonicalTimeZone(): true,
+		"":                        true,
+	}
+	out := make([]string, 0, len(event.AlternateTimeZones))
+	for _, timezone := range event.AlternateTimeZones {
+		timezone = strings.TrimSpace(timezone)
+		if seen[timezone] {
+			continue
+		}
+		seen[timezone] = true
+		out = append(out, timezone)
+	}
+	return out
+}
+
 func calendarDayTime(event models.CalendarEvent) string {
 	if event.AllDay {
 		return "all day"
@@ -991,6 +1079,21 @@ func calendarTimeRangeInLocation(event models.CalendarEvent, loc *time.Location)
 		return start.Format("Mon Jan 2 15:04") + " - " + end.Format("15:04 MST")
 	}
 	return start.Format("Mon Jan 2 15:04 MST") + " - " + end.Format("Mon Jan 2 15:04 MST")
+}
+
+func calendarTimeRangeInNamedLocation(event models.CalendarEvent, timezone string) string {
+	timezone = strings.TrimSpace(timezone)
+	loc := event.Start.Location()
+	if timezone != "" {
+		if loaded, err := time.LoadLocation(timezone); err == nil {
+			loc = loaded
+		}
+	}
+	label := timezone
+	if label == "" {
+		label = "Local"
+	}
+	return label + "  " + calendarTimeRangeInLocation(event, loc)
 }
 
 func sameCalendarDate(a, b time.Time) bool {

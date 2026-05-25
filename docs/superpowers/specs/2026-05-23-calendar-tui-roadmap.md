@@ -11,7 +11,7 @@ Calendar should become a first-class Herald workspace for understanding the day,
 - [x] Users can switch from Agenda List to a read-only Day Agenda with a persistent drawer for the selected event.
 - [x] Users can switch from Agenda List or Day Agenda to a read-only Week Time-Grid with an inspector for the selected event.
 - [x] Users can switch to a read-only 3-Day Command view that bridges today, tomorrow, and the next day with a command panel.
-- [ ] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
+- [x] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
 - [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
 - [ ] Users can reason about cross-timezone meetings before saving changes.
 - [ ] Calendar remains visually consistent with Herald: dense tables, thin bordered panels, bottom key hints, compact status strips, and theme-aware highlights.
@@ -68,7 +68,7 @@ The first product decision is which views deserve first-class status and which v
 
 Timezone support should be visible, not hidden in a settings corner. Users scheduling across regions need to know what an event means in local time, organizer time, and attendee-relevant time before they accept or save changes.
 
-- [ ] Every event detail view shows the event's canonical timezone and the user's local rendering when they differ.
+- [x] Every event detail view shows the event's canonical timezone and the user's local rendering when they differ.
 - [ ] Event editing includes a primary timezone field near start/end time, not buried under advanced options.
 - [ ] Users can add secondary display timezones such as `Europe/London` and `Asia/Tokyo`.
 - [ ] The edit preview flags date-crossing cases, such as a Tuesday meeting becoming Wednesday in Tokyo.
@@ -87,6 +87,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
   - [x] Stage 3B: Add Week Time-Grid after Day view resize behavior and event selection are proven.
 - [x] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
 - [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
+  - [x] Stage 5A: Prove full read-only Event Detail with attendees, organizer, RSVP state, recurrence, attachments, canonical timezone, and alternate timezone rendering before mutation UI.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
 
@@ -97,7 +98,8 @@ These gates define what must be true before moving from one evolutionary stage t
 - [x] A read-only stage is acceptable only when users can navigate events, open detail, return without losing position, and understand which calendar each event belongs to.
 - [x] The Day Agenda spatial slice is acceptable only when terminal resize behavior remains understandable at wide, standard, and narrow sizes.
 - [x] The full spatial-view stage is acceptable only when Day Agenda and Week Time-Grid resize behavior remain understandable at wide, standard, and narrow sizes.
-- [ ] A timezone stage is acceptable only when event detail and edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
+- [x] A timezone detail foundation is acceptable only when read-only Event Detail renders at least local time, event timezone, and one alternate timezone without ambiguity.
+- [ ] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
 - [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
 - [ ] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.

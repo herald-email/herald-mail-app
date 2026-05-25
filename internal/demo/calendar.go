@@ -36,6 +36,19 @@ func CalendarEvents() []models.CalendarEvent {
 		calendarEvent("cache-sync", "Calendar cache sync", "Check that read-only event details come from Herald cache rows first.", "Engineering desk", baseTime.AddDate(0, 0, 2).Add(30*time.Minute), 45*time.Minute, "confirmed"),
 		calendarEvent("focus-block", "Focus block", "Protected work time for cleanup rules and source identity notes.", "", baseTime.AddDate(0, 0, 3).Add(3*time.Hour), 90*time.Minute, "busy"),
 	}
+	events[0].TimeZone = "America/Los_Angeles"
+	events[0].Organizer = "Mina Park"
+	events[0].OrganizerEmail = "mina@example.com"
+	events[0].Attendees = []models.CalendarAttendee{
+		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
+		{Name: "Noor Patel", Email: "noor@example.com", RSVP: "tentative", Optional: true},
+	}
+	events[0].Recurrence = []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"}
+	events[0].RecurrenceSummary = "Weekly on Monday"
+	events[0].Attachments = []models.CalendarAttachment{
+		{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
+	}
+	events[0].AlternateTimeZones = []string{"Asia/Tokyo"}
 	out := make([]models.CalendarEvent, len(events))
 	copy(out, events)
 	return out

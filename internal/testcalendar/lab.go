@@ -26,9 +26,32 @@ type Event struct {
 	Start       time.Time
 	End         time.Time
 	AllDay      bool
+	TimeZone    string
 	ETag        string
 	Updated     time.Time
 	Status      string
+	Organizer   Person
+	Attendees   []Attendee
+	Recurrence  []string
+	Attachments []Attachment
+}
+
+type Person struct {
+	Name  string
+	Email string
+}
+
+type Attendee struct {
+	Name           string
+	Email          string
+	ResponseStatus string
+	Optional       bool
+}
+
+type Attachment struct {
+	Title    string
+	FileURL  string
+	MIMEType string
 }
 
 type Option func(*options)
@@ -234,13 +257,20 @@ func googleEvent(event Event) map[string]any {
 	endKey := "dateTime"
 	startValue := event.Start.Format(time.RFC3339)
 	endValue := event.End.Format(time.RFC3339)
+	startPayload := map[string]string{startKey: startValue}
+	endPayload := map[string]string{endKey: endValue}
 	if event.AllDay {
 		startKey = "date"
 		endKey = "date"
 		startValue = event.Start.Format("2006-01-02")
 		endValue = event.End.Format("2006-01-02")
+		startPayload = map[string]string{startKey: startValue}
+		endPayload = map[string]string{endKey: endValue}
+	} else if event.TimeZone != "" {
+		startPayload["timeZone"] = event.TimeZone
+		endPayload["timeZone"] = event.TimeZone
 	}
-	return map[string]any{
+	payload := map[string]any{
 		"id":          event.ID,
 		"iCalUID":     event.UID,
 		"etag":        event.ETag,
@@ -249,9 +279,42 @@ func googleEvent(event Event) map[string]any {
 		"location":    event.Location,
 		"status":      event.Status,
 		"updated":     event.Updated.Format(time.RFC3339),
-		"start":       map[string]string{startKey: startValue},
-		"end":         map[string]string{endKey: endValue},
+		"start":       startPayload,
+		"end":         endPayload,
 	}
+	if event.Organizer.Email != "" || event.Organizer.Name != "" {
+		payload["organizer"] = map[string]string{
+			"displayName": event.Organizer.Name,
+			"email":       event.Organizer.Email,
+		}
+	}
+	if len(event.Attendees) > 0 {
+		attendees := make([]map[string]any, 0, len(event.Attendees))
+		for _, attendee := range event.Attendees {
+			attendees = append(attendees, map[string]any{
+				"displayName":    attendee.Name,
+				"email":          attendee.Email,
+				"responseStatus": attendee.ResponseStatus,
+				"optional":       attendee.Optional,
+			})
+		}
+		payload["attendees"] = attendees
+	}
+	if len(event.Recurrence) > 0 {
+		payload["recurrence"] = append([]string(nil), event.Recurrence...)
+	}
+	if len(event.Attachments) > 0 {
+		attachments := make([]map[string]string, 0, len(event.Attachments))
+		for _, attachment := range event.Attachments {
+			attachments = append(attachments, map[string]string{
+				"title":    attachment.Title,
+				"fileUrl":  attachment.FileURL,
+				"mimeType": attachment.MIMEType,
+			})
+		}
+		payload["attachments"] = attachments
+	}
+	return payload
 }
 
 func (l *Lab) handleCalDAV(w http.ResponseWriter, r *http.Request) {
@@ -357,9 +420,37 @@ func ics(event Event) string {
 	if event.AllDay {
 		writeICSLine(&b, "DTSTART;VALUE=DATE", event.Start.Format("20060102"))
 		writeICSLine(&b, "DTEND;VALUE=DATE", event.End.Format("20060102"))
+	} else if event.TimeZone != "" {
+		writeICSLine(&b, "DTSTART;TZID="+event.TimeZone, event.Start.Format("20060102T150405"))
+		writeICSLine(&b, "DTEND;TZID="+event.TimeZone, event.End.Format("20060102T150405"))
 	} else {
 		writeICSLine(&b, "DTSTART", event.Start.UTC().Format("20060102T150405Z"))
 		writeICSLine(&b, "DTEND", event.End.UTC().Format("20060102T150405Z"))
+	}
+	if event.Organizer.Email != "" || event.Organizer.Name != "" {
+		writeICSLine(&b, `ORGANIZER;CN=`+event.Organizer.Name, "mailto:"+event.Organizer.Email)
+	}
+	for _, attendee := range event.Attendees {
+		role := "REQ-PARTICIPANT"
+		if attendee.Optional {
+			role = "OPT-PARTICIPANT"
+		}
+		key := `ATTENDEE;CN=` + attendee.Name + `;PARTSTAT=` + attendee.ResponseStatus + `;ROLE=` + role
+		writeICSLine(&b, key, "mailto:"+attendee.Email)
+	}
+	for _, rule := range event.Recurrence {
+		key, value, ok := strings.Cut(rule, ":")
+		if !ok {
+			continue
+		}
+		writeICSLine(&b, key, value)
+	}
+	for _, attachment := range event.Attachments {
+		key := `ATTACH;FILENAME=` + attachment.Title
+		if attachment.MIMEType != "" {
+			key += `;FMTTYPE=` + attachment.MIMEType
+		}
+		writeICSLine(&b, key, attachment.FileURL)
 	}
 	if !event.Updated.IsZero() {
 		writeICSLine(&b, "LAST-MODIFIED", event.Updated.UTC().Format("20060102T150405Z"))

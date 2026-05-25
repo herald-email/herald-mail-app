@@ -329,24 +329,46 @@ type googleEvents struct {
 }
 
 type googleEventPayload struct {
-	ID          string          `json:"id"`
-	ICalUID     string          `json:"iCalUID"`
-	ETag        string          `json:"etag"`
-	Summary     string          `json:"summary"`
-	Description string          `json:"description"`
-	Location    string          `json:"location"`
-	Status      string          `json:"status"`
-	Updated     string          `json:"updated"`
-	Start       googleEventTime `json:"start"`
-	End         googleEventTime `json:"end"`
-	Sequence    int             `json:"sequence"`
-	Extended    map[string]any  `json:"extendedProperties"`
+	ID          string             `json:"id"`
+	ICalUID     string             `json:"iCalUID"`
+	ETag        string             `json:"etag"`
+	Summary     string             `json:"summary"`
+	Description string             `json:"description"`
+	Location    string             `json:"location"`
+	Status      string             `json:"status"`
+	Updated     string             `json:"updated"`
+	Start       googleEventTime    `json:"start"`
+	End         googleEventTime    `json:"end"`
+	Sequence    int                `json:"sequence"`
+	Organizer   googlePerson       `json:"organizer"`
+	Attendees   []googleAttendee   `json:"attendees"`
+	Recurrence  []string           `json:"recurrence"`
+	Attachments []googleAttachment `json:"attachments"`
+	Extended    map[string]any     `json:"extendedProperties"`
 }
 
 type googleEventTime struct {
 	DateTime string `json:"dateTime"`
 	Date     string `json:"date"`
 	TimeZone string `json:"timeZone"`
+}
+
+type googlePerson struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+}
+
+type googleAttendee struct {
+	DisplayName    string `json:"displayName"`
+	Email          string `json:"email"`
+	ResponseStatus string `json:"responseStatus"`
+	Optional       bool   `json:"optional"`
+}
+
+type googleAttachment struct {
+	Title    string `json:"title"`
+	FileURL  string `json:"fileUrl"`
+	MIMEType string `json:"mimeType"`
 }
 
 func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, calendarID string, item googleEventPayload) models.CalendarEvent {
@@ -361,18 +383,50 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		ETag:       item.ETag,
 	}.WithDefaults()
 	return models.CalendarEvent{
-		Ref:         ref,
-		ProviderUID: item.ICalUID,
-		Title:       item.Summary,
-		Description: item.Description,
-		Location:    item.Location,
-		Start:       start,
-		End:         end,
-		AllDay:      allDay,
-		Status:      item.Status,
-		Revision:    fmt.Sprintf("%d", item.Sequence),
-		UpdatedAt:   updated,
+		Ref:               ref,
+		ProviderUID:       item.ICalUID,
+		Title:             item.Summary,
+		Description:       item.Description,
+		Location:          item.Location,
+		Start:             start,
+		End:               end,
+		AllDay:            allDay,
+		TimeZone:          firstNonEmpty(item.Start.TimeZone, item.End.TimeZone),
+		Status:            item.Status,
+		Organizer:         item.Organizer.DisplayName,
+		OrganizerEmail:    item.Organizer.Email,
+		Attendees:         googleAttendeesToModel(item.Attendees),
+		Recurrence:        append([]string(nil), item.Recurrence...),
+		RecurrenceSummary: summarizeRecurrence(item.Recurrence),
+		Attachments:       googleAttachmentsToModel(item.Attachments),
+		Revision:          fmt.Sprintf("%d", item.Sequence),
+		UpdatedAt:         updated,
 	}
+}
+
+func googleAttendeesToModel(attendees []googleAttendee) []models.CalendarAttendee {
+	out := make([]models.CalendarAttendee, 0, len(attendees))
+	for _, attendee := range attendees {
+		out = append(out, models.CalendarAttendee{
+			Name:     attendee.DisplayName,
+			Email:    attendee.Email,
+			RSVP:     normalizeCalendarStatus(attendee.ResponseStatus),
+			Optional: attendee.Optional,
+		})
+	}
+	return out
+}
+
+func googleAttachmentsToModel(attachments []googleAttachment) []models.CalendarAttachment {
+	out := make([]models.CalendarAttachment, 0, len(attachments))
+	for _, attachment := range attachments {
+		out = append(out, models.CalendarAttachment{
+			Title:    attachment.Title,
+			URI:      attachment.FileURL,
+			MIMEType: attachment.MIMEType,
+		})
+	}
+	return out
 }
 
 func parseGoogleTime(t googleEventTime) (time.Time, bool) {
@@ -426,8 +480,9 @@ func calendarIDFromHref(href string) string {
 
 func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
 	fields := parseICS(data)
-	start, allDay := parseICSTime(fields["DTSTART"])
-	end, _ := parseICSTime(fields["DTEND"])
+	details := parseICSRichDetails(data)
+	start, allDay := parseICSTimeWithZone(fields["DTSTART"], details.TimeZone)
+	end, _ := parseICSTimeWithZone(fields["DTEND"], details.TimeZone)
 	updated, _ := parseICSTime(fields["LAST-MODIFIED"])
 	ref := models.EventRef{
 		SourceID:   sourceID,
@@ -437,18 +492,96 @@ func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 		ETag:       etag,
 	}.WithDefaults()
 	return &models.CalendarEvent{
-		Ref:         ref,
-		ProviderUID: fields["UID"],
-		Title:       fields["SUMMARY"],
-		Description: fields["DESCRIPTION"],
-		Location:    fields["LOCATION"],
-		Start:       start,
-		End:         end,
-		AllDay:      allDay,
-		Status:      fields["STATUS"],
-		UpdatedAt:   updated,
-		Raw:         data,
+		Ref:               ref,
+		ProviderUID:       fields["UID"],
+		Title:             fields["SUMMARY"],
+		Description:       fields["DESCRIPTION"],
+		Location:          fields["LOCATION"],
+		Start:             start,
+		End:               end,
+		AllDay:            allDay,
+		TimeZone:          details.TimeZone,
+		Status:            fields["STATUS"],
+		Organizer:         details.Organizer,
+		OrganizerEmail:    details.OrganizerEmail,
+		Attendees:         details.Attendees,
+		Recurrence:        details.Recurrence,
+		RecurrenceSummary: summarizeRecurrence(details.Recurrence),
+		Attachments:       details.Attachments,
+		UpdatedAt:         updated,
+		Raw:               data,
 	}, nil
+}
+
+type icsRichDetails struct {
+	TimeZone       string
+	Organizer      string
+	OrganizerEmail string
+	Attendees      []models.CalendarAttendee
+	Recurrence     []string
+	Attachments    []models.CalendarAttachment
+}
+
+func parseICSRichDetails(data string) icsRichDetails {
+	var details icsRichDetails
+	for _, line := range unfoldICSLines(data) {
+		nameAndParams, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		parts := strings.Split(nameAndParams, ";")
+		key := strings.ToUpper(strings.TrimSpace(parts[0]))
+		params := parseICSParams(parts[1:])
+		value = unescapeICSValue(value)
+		switch key {
+		case "DTSTART":
+			if details.TimeZone == "" {
+				details.TimeZone = params["TZID"]
+			}
+		case "ORGANIZER":
+			details.Organizer = firstNonEmpty(params["CN"], value)
+			details.OrganizerEmail = calendarMailtoAddress(value)
+		case "ATTENDEE":
+			details.Attendees = append(details.Attendees, models.CalendarAttendee{
+				Name:     params["CN"],
+				Email:    calendarMailtoAddress(value),
+				RSVP:     normalizeCalendarStatus(params["PARTSTAT"]),
+				Optional: strings.EqualFold(params["ROLE"], "OPT-PARTICIPANT"),
+			})
+		case "RRULE", "RDATE", "EXDATE":
+			details.Recurrence = append(details.Recurrence, key+":"+value)
+		case "ATTACH":
+			details.Attachments = append(details.Attachments, models.CalendarAttachment{
+				Title:    firstNonEmpty(params["FILENAME"], params["X-FILENAME"], "Attachment"),
+				URI:      value,
+				MIMEType: params["FMTTYPE"],
+			})
+		}
+	}
+	return details
+}
+
+func parseICSParams(parts []string) map[string]string {
+	params := make(map[string]string, len(parts))
+	for _, part := range parts {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		params[strings.ToUpper(strings.TrimSpace(key))] = strings.Trim(strings.TrimSpace(unescapeICSValue(value)), `"`)
+	}
+	return params
+}
+
+func calendarMailtoAddress(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(value), "mailto:") {
+		return strings.TrimSpace(value[len("mailto:"):])
+	}
+	if strings.Contains(value, "@") {
+		return value
+	}
+	return ""
 }
 
 func parseICS(data string) map[string]string {
@@ -482,6 +615,10 @@ func unfoldICSLines(data string) []string {
 }
 
 func parseICSTime(value string) (time.Time, bool) {
+	return parseICSTimeWithZone(value, "")
+}
+
+func parseICSTimeWithZone(value, timezone string) (time.Time, bool) {
 	if strings.TrimSpace(value) == "" {
 		return time.Time{}, false
 	}
@@ -492,6 +629,12 @@ func parseICSTime(value string) (time.Time, bool) {
 	if strings.HasSuffix(value, "Z") {
 		parsed, _ := time.Parse("20060102T150405Z", value)
 		return parsed, false
+	}
+	if timezone != "" {
+		if loc, err := time.LoadLocation(timezone); err == nil {
+			parsed, _ := time.ParseInLocation("20060102T150405", value, loc)
+			return parsed, false
+		}
 	}
 	parsed, _ := time.Parse("20060102T150405", value)
 	return parsed, false
@@ -516,4 +659,81 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeCalendarStatus(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.ReplaceAll(value, "_", "-")
+	return strings.ToLower(value)
+}
+
+func summarizeRecurrence(rules []string) string {
+	if len(rules) == 0 {
+		return ""
+	}
+	for _, rule := range rules {
+		key, value, ok := strings.Cut(rule, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "RRULE") {
+			continue
+		}
+		parts := strings.Split(value, ";")
+		attrs := make(map[string]string, len(parts))
+		for _, part := range parts {
+			k, v, ok := strings.Cut(part, "=")
+			if !ok {
+				continue
+			}
+			attrs[strings.ToUpper(strings.TrimSpace(k))] = strings.ToUpper(strings.TrimSpace(v))
+		}
+		switch attrs["FREQ"] {
+		case "DAILY":
+			return "Daily"
+		case "WEEKLY":
+			if days := summarizeRecurrenceDays(attrs["BYDAY"]); days != "" {
+				return "Weekly on " + days
+			}
+			return "Weekly"
+		case "MONTHLY":
+			return "Monthly"
+		case "YEARLY":
+			return "Yearly"
+		}
+	}
+	return rules[0]
+}
+
+func summarizeRecurrenceDays(byDay string) string {
+	if byDay == "" {
+		return ""
+	}
+	labels := map[string]string{
+		"MO": "Monday",
+		"TU": "Tuesday",
+		"WE": "Wednesday",
+		"TH": "Thursday",
+		"FR": "Friday",
+		"SA": "Saturday",
+		"SU": "Sunday",
+	}
+	parts := strings.Split(byDay, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimLeft(strings.TrimSpace(part), "+-0123456789")
+		if label := labels[part]; label != "" {
+			out = append(out, label)
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	if len(out) == 1 {
+		return out[0]
+	}
+	if len(out) == 2 {
+		return out[0] + " and " + out[1]
+	}
+	return strings.Join(out[:len(out)-1], ", ") + ", and " + out[len(out)-1]
 }

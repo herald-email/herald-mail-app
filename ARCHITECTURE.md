@@ -213,6 +213,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add a read-only Day Agenda + Drawer calendar view that reuses cache-backed agenda rows and preserves the full Event Detail reader.
 - [x] Add a read-only Week Time-Grid calendar view that reuses cache-backed agenda rows and preserves the full Event Detail reader.
 - [x] Add a read-only 3-Day Command calendar view that reuses cache-backed agenda rows and preserves the full Event Detail reader.
+- [x] Enrich the read-only Event Detail reader with attendees, RSVP state, recurrence, attachments, and explicit local/event/alternate timezone rows before calendar mutation UI.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

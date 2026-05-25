@@ -18,7 +18,7 @@ func TestCalendarCacheTablesAreSourceScoped(t *testing.T) {
 	}
 
 	eventCols := tableColumns(t, c.db, "calendar_events")
-	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "invalidated_at"} {
+	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "timezone", "organizer", "attendees_json", "recurrence_json", "attachments_json", "alternate_timezones_json", "invalidated_at"} {
 		if !eventCols[name] {
 			t.Fatalf("calendar_events missing column %s", name)
 		}
@@ -94,5 +94,57 @@ func TestCacheCalendarEventRoundTripAndInvalidate(t *testing.T) {
 	}
 	if _, err := c.GetCalendarEventByRef(event.Ref); err == nil {
 		t.Fatal("GetCalendarEventByRef succeeded after invalidation, want miss")
+	}
+}
+
+func TestCacheCalendarEventRichDetailRoundTrip(t *testing.T) {
+	c := newTestCache(t)
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.FixedZone("PDT", -7*60*60))
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   models.SourceID("work-calendar"),
+			AccountID:  models.AccountID("work"),
+			CalendarID: "primary",
+			EventID:    "event-rich",
+		}.WithDefaults(),
+		Title:              "Timezone planning",
+		Start:              start,
+		End:                start.Add(time.Hour),
+		TimeZone:           "America/Los_Angeles",
+		Organizer:          "Mina Park",
+		OrganizerEmail:     "mina@example.com",
+		Recurrence:         []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"},
+		RecurrenceSummary:  "Weekly on Monday",
+		AlternateTimeZones: []string{"Asia/Tokyo"},
+		Attendees: []models.CalendarAttendee{
+			{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
+			{Name: "Noor Patel", Email: "noor@example.com", RSVP: "tentative", Optional: true},
+		},
+		Attachments: []models.CalendarAttachment{
+			{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
+		},
+	}
+
+	if err := c.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	got, err := c.GetCalendarEventByRef(event.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if got.TimeZone != "America/Los_Angeles" || got.Organizer != "Mina Park" || got.OrganizerEmail != "mina@example.com" {
+		t.Fatalf("rich identity fields = %#v", got)
+	}
+	if got.RecurrenceSummary != "Weekly on Monday" || len(got.Recurrence) != 1 || got.Recurrence[0] != event.Recurrence[0] {
+		t.Fatalf("recurrence = %#v / %q", got.Recurrence, got.RecurrenceSummary)
+	}
+	if len(got.Attendees) != 2 || got.Attendees[0].RSVP != "accepted" || !got.Attendees[1].Optional {
+		t.Fatalf("attendees = %#v", got.Attendees)
+	}
+	if len(got.Attachments) != 1 || got.Attachments[0].Title != "Agenda" || got.Attachments[0].MIMEType != "application/pdf" {
+		t.Fatalf("attachments = %#v", got.Attachments)
+	}
+	if len(got.AlternateTimeZones) != 1 || got.AlternateTimeZones[0] != "Asia/Tokyo" {
+		t.Fatalf("alternate zones = %#v", got.AlternateTimeZones)
 	}
 }

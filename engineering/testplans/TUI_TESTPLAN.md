@@ -1651,6 +1651,25 @@ Check these states during every applicable lane:
 - Hints advertise `t: 3-day`, `w: week`, `d: day`, `a: agenda`, and `h/l: 3-day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
 - At `50x15`, the minimum-size guard appears instead of clipped 3-Day chrome, and resizing larger restores the 3-Day Command or detail state cleanly.
 
+### TC-38H — Calendar full Event Detail and timezone foundation
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar, then press `Enter` from Agenda, Day, Week, or 3-Day to open full Event Detail.
+3. Capture the full Event Detail at wide and standard sizes.
+4. Move back with `Esc`, switch to another Calendar spatial view, and open the same selected event again.
+5. Repeat with a mail-only session and confirm Calendar remains hidden.
+
+**Expect:**
+- Full Event Detail is read-only and shows event title, local time, canonical event timezone, at least one alternate timezone, location, status, calendar/source, organizer, attendees with RSVP state, recurrence, attachments, and notes where data is available.
+- The detail view summarizes recurrence and attachment metadata without exposing provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, or edit/RSVP/create actions.
+- Event detail opened from Agenda, Day, Week, or 3-Day returns to the originating view without losing the selected event.
+- Timezone rows make local time and event timezone distinct when they differ, and the alternate timezone row makes date-crossing cases visible.
+- At `50x15`, the minimum-size guard appears instead of clipped Event Detail chrome, and resizing larger restores the full detail state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

@@ -638,6 +638,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Read-only Day Agenda + Drawer view with Agenda/Day switching and selected-event context before Week view or mutations
 - [x] Read-only Week Time-Grid view with selected-event inspector before calendar search or mutations
 - [x] Read-only 3-Day Command view with next-up, conflict, and open-slot summaries before calendar search or mutations
+- [x] Full read-only Event Detail shows attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone before calendar search or mutations
 - [ ] Calendar search view before RSVP, edit, or create flows
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback

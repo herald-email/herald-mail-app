@@ -404,6 +404,50 @@ func TestCalendarThreeDayCommandSlidesWindowAndPreservesDetailReturn(t *testing.
 	}
 }
 
+func TestCalendarFullEventDetailRendersRichMetadataAndTimezones(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"Event Detail",
+		"Timezone planning",
+		"Local",
+		"Event TZ",
+		"America/Los_Angeles",
+		"Asia/Tokyo",
+		"Organizer",
+		"Mina Park <mina@example.com>",
+		"Attendees",
+		"Rae Stone <rae@example.com> accepted",
+		"Noor Patel <noor@example.com> tentative optional",
+		"Recurrence",
+		"Weekly on Monday",
+		"Attachments",
+		"Agenda (application/pdf)",
+		"Mode",
+		"read-only",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rich event detail missing %q:\n%s", want, rendered)
+		}
+	}
+	lower := strings.ToLower(rendered)
+	for _, forbidden := range []string{"etag", "oauth", "caldav", "sync token", "https://calendar.example"} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("rich event detail leaked provider internals %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
 func TestCalendarWeekShortcutDoesNotStealTextEntry(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 
@@ -593,6 +637,38 @@ func testCalendarEvents() []models.CalendarEvent {
 			Start:       base.AddDate(0, 0, 7).Add(time.Hour),
 			End:         base.AddDate(0, 0, 7).Add(2 * time.Hour),
 			Status:      "confirmed",
+		},
+	}
+}
+
+func richCalendarEventForTest() models.CalendarEvent {
+	loc := time.FixedZone("PDT", -7*60*60)
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, loc)
+	return models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "demo-calendar",
+			AccountID:  "default",
+			CalendarID: "work",
+			EventID:    "timezone-planning",
+		}.WithDefaults(),
+		Title:              "Timezone planning",
+		Description:        "Review attendee status before editing is enabled.",
+		Location:           "Video call",
+		Start:              start,
+		End:                start.Add(time.Hour),
+		TimeZone:           "America/Los_Angeles",
+		Status:             "confirmed",
+		Organizer:          "Mina Park",
+		OrganizerEmail:     "mina@example.com",
+		Recurrence:         []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"},
+		RecurrenceSummary:  "Weekly on Monday",
+		AlternateTimeZones: []string{"Asia/Tokyo"},
+		Attendees: []models.CalendarAttendee{
+			{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
+			{Name: "Noor Patel", Email: "noor@example.com", RSVP: "tentative", Optional: true},
+		},
+		Attachments: []models.CalendarAttachment{
+			{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 		},
 	}
 }

@@ -325,6 +325,20 @@ func (c *Cache) initDB() error {
 			return err
 		}
 	}
+	for _, stmt := range []string{
+		`ALTER TABLE calendar_events ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN organizer_email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN attendees_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE calendar_events ADD COLUMN recurrence_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE calendar_events ADD COLUMN recurrence_summary TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE calendar_events ADD COLUMN alternate_timezones_json TEXT NOT NULL DEFAULT '[]'`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("calendar event migration might already be applied: %v", err)
+		}
+	}
 
 	// custom_prompts: stores reusable AI prompt templates
 	if _, err := c.db.Exec(`
