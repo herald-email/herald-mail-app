@@ -10,6 +10,7 @@ Calendar should become a first-class Herald workspace for understanding the day,
 - [x] Users can inspect an event without losing context, using a side detail panel when the surrounding schedule still matters.
 - [x] Users can switch from Agenda List to a read-only Day Agenda with a persistent drawer for the selected event.
 - [x] Users can switch from Agenda List or Day Agenda to a read-only Week Time-Grid with an inspector for the selected event.
+- [x] Users can switch to a read-only 3-Day Command view that bridges today, tomorrow, and the next day with a command panel.
 - [ ] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
 - [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
 - [ ] Users can reason about cross-timezone meetings before saving changes.
@@ -40,9 +41,11 @@ The calendar surface should feel like a peer to Timeline, Compose, Cleanup, and 
 - [x] Calendar appears as a durable navigation destination, not a transient overlay.
 - [x] View switching is explicit and fast between Agenda List and Day Agenda.
 - [x] View switching is explicit and fast between Agenda List, Day Agenda, and Week Time-Grid.
+- [x] View switching is explicit and fast between Agenda List, Day Agenda, Week Time-Grid, and 3-Day Command.
 - [ ] View switching is explicit and fast for Month, Week, 3-Day, and Search.
 - [x] The active Day Agenda owns the center of the screen while a side drawer provides selected-event context and timezone labels.
 - [x] The active Week Time-Grid owns the center of the screen while a side inspector provides selected-event context and timezone labels.
+- [x] The active 3-Day Command view owns the center of the screen while a side command panel summarizes selected event, next-up, conflicts, and open slots.
 - [ ] Future spatial views add side panels for mini month, calendar filters, richer timezone preview, conflicts, and selected event details.
 - [x] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
 - [ ] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
@@ -82,7 +85,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 - [x] Stage 3: Spatial schedule views. Add Day Agenda + Drawer, then Week Time-Grid, after the event model and render constraints are proven by the list view.
   - [x] Stage 3A: Add read-only Day Agenda + Drawer with Agenda/Day switching, day navigation, selected-event drawer details, and full detail preservation.
   - [x] Stage 3B: Add Week Time-Grid after Day view resize behavior and event selection are proven.
-- [ ] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
+- [x] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
 - [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.

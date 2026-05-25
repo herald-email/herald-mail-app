@@ -319,6 +319,91 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	}
 }
 
+func TestCalendarThreeDayCommandSwitchesFromAgendaAndRendersPanel(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, _ := m.handleKeyMsg(keyRunes("t"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewThreeDay {
+		t.Fatalf("calendarView = %q, want %q", m.calendarView, calendarViewThreeDay)
+	}
+	if m.calendarThreeDayStart.Local().Day() != 24 {
+		t.Fatalf("calendarThreeDayStart = %s, want May 24", m.calendarThreeDayStart)
+	}
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"3-Day Command", "Sun May 24", "Mon May 25", "Tue May 26", "Design review", "Weekly planning", "Command Panel", "Next Up", "Open Slots", "Conflicts", "Mode", "read-only", "h/l: 3-day", "w: week", "d: day", "a: agenda"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("3-day command missing %q:\n%s", want, rendered)
+		}
+	}
+	if lower := strings.ToLower(rendered); strings.Contains(lower, "etag") || strings.Contains(lower, "oauth") || strings.Contains(lower, "caldav") {
+		t.Fatalf("3-day command exposed provider internals:\n%s", rendered)
+	}
+}
+
+func TestCalendarThreeDayCommandSlidesWindowAndPreservesDetailReturn(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, _ := m.handleKeyMsg(keyRunes("t"))
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(keyRunes("l"))
+	m = model.(*Model)
+	if m.calendarThreeDayStart.Local().Day() != 25 {
+		t.Fatalf("calendarThreeDayStart = %s, want May 25", m.calendarThreeDayStart)
+	}
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Weekly planning" {
+		t.Fatalf("selected event after sliding 3-day window = %#v, want Weekly planning", got)
+	}
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Enter to open full detail from 3-Day view")
+	}
+	detail := stripANSI(m.renderMainView())
+	if !strings.Contains(detail, "Event Detail") || !strings.Contains(detail, "Weekly planning") {
+		t.Fatalf("detail view missing selected 3-day event:\n%s", detail)
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarDetailOpen {
+		t.Fatal("expected Esc to close full detail")
+	}
+	if m.calendarView != calendarViewThreeDay {
+		t.Fatalf("calendarView = %q, want 3-Day view after closing detail", m.calendarView)
+	}
+
+	model, _ = m.handleKeyMsg(keyRunes("w"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewWeek {
+		t.Fatalf("calendarView = %q, want Week view", m.calendarView)
+	}
+	model, _ = m.handleKeyMsg(keyRunes("t"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewThreeDay || m.calendarThreeDayStart.Local().Day() != 25 {
+		t.Fatalf("3-day view did not restore selected event window, view=%q start=%s", m.calendarView, m.calendarThreeDayStart)
+	}
+}
+
 func TestCalendarWeekShortcutDoesNotStealTextEntry(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 
@@ -379,6 +464,70 @@ func TestCalendarWeekShortcutDoesNotStealTextEntry(t *testing.T) {
 		}
 		if got := m.promptEditor.name; got != "w" {
 			t.Fatalf("prompt editor name=%q, want literal w", got)
+		}
+	})
+}
+
+func TestCalendarThreeDayShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("t"))
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("activeTab = %d, want Compose", m.activeTab)
+		}
+		if got := m.composeBody.Value(); got != "t" {
+			t.Fatalf("compose body=%q, want literal t", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("t"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "t" {
+			t.Fatalf("timeline search=%q, want literal t", got)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("t"))
+		m = model.(*Model)
+		if !m.showPromptEditor {
+			t.Fatal("prompt editor should remain active after typing t")
+		}
+		if got := m.promptEditor.name; got != "t" {
+			t.Fatalf("prompt editor name=%q, want literal t", got)
 		}
 	})
 }

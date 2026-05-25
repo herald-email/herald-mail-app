@@ -15,9 +15,10 @@ import (
 type calendarViewMode string
 
 const (
-	calendarViewAgenda calendarViewMode = "agenda"
-	calendarViewDay    calendarViewMode = "day"
-	calendarViewWeek   calendarViewMode = "week"
+	calendarViewAgenda   calendarViewMode = "agenda"
+	calendarViewDay      calendarViewMode = "day"
+	calendarViewWeek     calendarViewMode = "week"
+	calendarViewThreeDay calendarViewMode = "three-day"
 )
 
 type indexedCalendarEvent struct {
@@ -34,6 +35,7 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarView = calendarViewAgenda
 		m.calendarDay = time.Time{}
 		m.calendarWeekStart = time.Time{}
+		m.calendarThreeDayStart = time.Time{}
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -92,6 +94,13 @@ func (m *Model) selectedCalendarWeekStart() time.Time {
 	return calendarWeekStartFor(m.selectedCalendarDay())
 }
 
+func (m *Model) selectedCalendarThreeDayStart() time.Time {
+	if !m.calendarThreeDayStart.IsZero() {
+		return m.calendarThreeDayStart
+	}
+	return calendarDayStartFor(m.selectedCalendarDay())
+}
+
 func (m *Model) setCalendarView(view calendarViewMode) {
 	if view == "" {
 		view = calendarViewAgenda
@@ -104,6 +113,9 @@ func (m *Model) setCalendarView(view calendarViewMode) {
 	case calendarViewWeek:
 		m.calendarWeekStart = calendarWeekStartFor(m.selectedCalendarDay())
 		m.selectFirstCalendarEventForWeek(m.calendarWeekStart)
+	case calendarViewThreeDay:
+		m.calendarThreeDayStart = calendarDayStartFor(m.selectedCalendarDay())
+		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 	default:
 		m.calendarDetail = m.selectedCalendarEvent()
 	}
@@ -124,6 +136,28 @@ func (m *Model) selectFirstCalendarEventForWeek(start time.Time) {
 	if len(events) == 0 {
 		m.calendarDetail = nil
 		return
+	}
+	for _, item := range events {
+		if item.index == m.calendarCursor {
+			m.calendarDetail = &item.event
+			return
+		}
+	}
+	m.calendarCursor = events[0].index
+	m.calendarDetail = &events[0].event
+}
+
+func (m *Model) selectFirstCalendarEventForThreeDay(start time.Time) {
+	events := m.calendarEventsForThreeDay(start)
+	if len(events) == 0 {
+		m.calendarDetail = nil
+		return
+	}
+	for _, item := range events {
+		if item.index == m.calendarCursor {
+			m.calendarDetail = &item.event
+			return
+		}
 	}
 	m.calendarCursor = events[0].index
 	m.calendarDetail = &events[0].event
@@ -149,6 +183,19 @@ func (m *Model) calendarEventsForWeek(start time.Time) []indexedCalendarEvent {
 	out := make([]indexedCalendarEvent, 0)
 	for i, event := range m.calendarEvents {
 		if eventOccursInCalendarWeek(event, start) {
+			out = append(out, indexedCalendarEvent{index: i, event: event})
+		}
+	}
+	return out
+}
+
+func (m *Model) calendarEventsForThreeDay(start time.Time) []indexedCalendarEvent {
+	if start.IsZero() {
+		start = m.selectedCalendarThreeDayStart()
+	}
+	out := make([]indexedCalendarEvent, 0)
+	for i, event := range m.calendarEvents {
+		if eventOccursInCalendarRange(event, start, start.AddDate(0, 0, 3)) {
 			out = append(out, indexedCalendarEvent{index: i, event: event})
 		}
 	}
@@ -183,6 +230,8 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDaySelection(1)
 			} else if m.calendarView == calendarViewWeek {
 				m.moveCalendarWeekSelection(1)
+			} else if m.calendarView == calendarViewThreeDay {
+				m.moveCalendarThreeDaySelection(1)
 			} else if m.calendarCursor < len(m.calendarEvents)-1 {
 				m.calendarCursor++
 				m.calendarDetail = m.selectedCalendarEvent()
@@ -195,6 +244,8 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDaySelection(-1)
 			} else if m.calendarView == calendarViewWeek {
 				m.moveCalendarWeekSelection(-1)
+			} else if m.calendarView == calendarViewThreeDay {
+				m.moveCalendarThreeDaySelection(-1)
 			} else if m.calendarCursor > 0 {
 				m.calendarCursor--
 				m.calendarDetail = m.selectedCalendarEvent()
@@ -216,6 +267,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.setCalendarView(calendarViewWeek)
 		}
 		return m, nil
+	case "t":
+		if !m.calendarDetailOpen {
+			m.setCalendarView(calendarViewThreeDay)
+		}
+		return m, nil
 	case "h", "left":
 		if !m.calendarDetailOpen && m.calendarView == calendarViewDay {
 			m.calendarDay = m.selectedCalendarDay().AddDate(0, 0, -1)
@@ -223,6 +279,9 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else if !m.calendarDetailOpen && m.calendarView == calendarViewWeek {
 			m.calendarWeekStart = m.selectedCalendarWeekStart().AddDate(0, 0, -7)
 			m.selectFirstCalendarEventForWeek(m.calendarWeekStart)
+		} else if !m.calendarDetailOpen && m.calendarView == calendarViewThreeDay {
+			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart().AddDate(0, 0, -1)
+			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 		}
 		return m, nil
 	case "l", "right":
@@ -232,6 +291,9 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else if !m.calendarDetailOpen && m.calendarView == calendarViewWeek {
 			m.calendarWeekStart = m.selectedCalendarWeekStart().AddDate(0, 0, 7)
 			m.selectFirstCalendarEventForWeek(m.calendarWeekStart)
+		} else if !m.calendarDetailOpen && m.calendarView == calendarViewThreeDay {
+			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart().AddDate(0, 0, 1)
+			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 		}
 		return m, nil
 	case "enter":
@@ -269,6 +331,9 @@ func (m *Model) renderCalendarView() string {
 	}
 	if m.calendarView == calendarViewWeek {
 		return m.renderCalendarWeekView()
+	}
+	if m.calendarView == calendarViewThreeDay {
+		return m.renderCalendarThreeDayView()
 	}
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
@@ -330,6 +395,27 @@ func (m *Model) renderCalendarWeekView() string {
 
 	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCalendarWeekGrid(leftW-4, contentH-2))
 	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCalendarWeekInspector(rightW-4, contentH-2))
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
+}
+
+func (m *Model) renderCalendarThreeDayView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	available := clamp(contentW-panelGapWidth, 40)
+	leftW, rightW := splitWidth(available, 0, 30, 30, available*58/100)
+	contentH := plan.ContentHeight
+	if contentH < 4 {
+		contentH = 4
+	}
+
+	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCalendarThreeDayLanes(leftW-4, contentH-2))
+	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCalendarThreeDayCommandPanel(rightW-4, contentH-2))
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
 }
 
@@ -530,6 +616,124 @@ func (m *Model) renderCalendarWeekInspector(width, height int) string {
 	return m.renderCalendarEventDetailWithHeader(width, height, false, "Week Inspector")
 }
 
+func (m *Model) renderCalendarThreeDayLanes(width, height int) string {
+	if width < 10 {
+		width = 10
+	}
+	start := m.selectedCalendarThreeDayStart()
+	events := m.calendarEventsForThreeDay(start)
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("3-Day Command", width)))
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarThreeDayRange(start), width)))
+	if strings.TrimSpace(m.calendarStatus) != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	}
+
+	rows, selectedOffset := m.calendarThreeDayRows(start, width)
+	if len(events) == 0 {
+		rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit("No events in this 3-day window", width)))
+		rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit("h/l: slide 3-day window", width)))
+	}
+	maxRows := height - len(lines)
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	if selectedOffset < 0 {
+		selectedOffset = 0
+	}
+	startRow := 0
+	if selectedOffset >= maxRows {
+		startRow = selectedOffset - maxRows + 1
+	}
+	endRow := startRow + maxRows
+	if endRow > len(rows) {
+		endRow = len(rows)
+	}
+	lines = append(lines, rows[startRow:endRow]...)
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) calendarThreeDayRows(start time.Time, width int) ([]string, int) {
+	rows := make([]string, 0, 12)
+	selectedOffset := -1
+	for i := 0; i < 3; i++ {
+		day := start.AddDate(0, 0, i)
+		label := day.Local().Format("Mon Jan 2")
+		if i == 0 {
+			label += "  today"
+		} else if i == 1 {
+			label += "  tomorrow"
+		}
+		rows = append(rows, m.theme.Metadata.Label.Style().Render(calendarFit(label, width)))
+		events := m.calendarEventsForDay(day)
+		if len(events) == 0 {
+			rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit("  open day", width)))
+			continue
+		}
+		for _, item := range events {
+			line := calendarThreeDayEventLine(item.event, width)
+			if item.index == m.calendarCursor {
+				selectedOffset = len(rows)
+				line = m.theme.Focus.SelectionActive.Style().Render(calendarFit("> "+line, width))
+			} else {
+				line = "  " + line
+			}
+			rows = append(rows, line)
+		}
+	}
+	return rows, selectedOffset
+}
+
+func (m *Model) renderCalendarThreeDayCommandPanel(width, height int) string {
+	if width < 12 {
+		width = 12
+	}
+	start := m.selectedCalendarThreeDayStart()
+	events := m.calendarEventsForThreeDay(start)
+	event := m.calendarDetail
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Command Panel", width)))
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("read-only 3-day planning", width)))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Selected", width)))
+	if event == nil {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No event selected", width)))
+	} else {
+		lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, width)))
+		lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
+		lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
+		lines = append(lines, calendarDetailRow(m, "Mode", "read-only", width))
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Next Up", width)))
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(m.calendarNextUpSummary(events), width)))
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Open Slots", width)))
+	for _, slot := range calendarOpenSlotSummaries(start, events, width) {
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(slot, width)))
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Conflicts", width)))
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarConflictSummary(events), width)))
+
+	if event != nil && strings.TrimSpace(event.Description) != "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Notes", width)))
+		for _, line := range wrapText(event.Description, width) {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(line, width)))
+		}
+	}
+
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
 func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool, header string) string {
 	if width < 12 {
 		width = 12
@@ -616,6 +820,49 @@ func (m *Model) moveCalendarWeekSelection(delta int) {
 	m.calendarDetail = &events[selectedOffset].event
 }
 
+func (m *Model) moveCalendarThreeDaySelection(delta int) {
+	events := m.calendarEventsForThreeDay(m.selectedCalendarThreeDayStart())
+	if len(events) == 0 {
+		return
+	}
+	selectedOffset := 0
+	for i, item := range events {
+		if item.index == m.calendarCursor {
+			selectedOffset = i
+			break
+		}
+	}
+	selectedOffset += delta
+	if selectedOffset < 0 {
+		selectedOffset = 0
+	}
+	if selectedOffset >= len(events) {
+		selectedOffset = len(events) - 1
+	}
+	m.calendarCursor = events[selectedOffset].index
+	m.calendarDetail = &events[selectedOffset].event
+}
+
+func (m *Model) calendarNextUpSummary(events []indexedCalendarEvent) string {
+	if len(events) == 0 {
+		return "No events in window"
+	}
+	selectedOffset := -1
+	for i, item := range events {
+		if item.index == m.calendarCursor {
+			selectedOffset = i
+			break
+		}
+	}
+	if selectedOffset < 0 {
+		return calendarCompactEventSummary(events[0].event)
+	}
+	if selectedOffset+1 < len(events) {
+		return calendarCompactEventSummary(events[selectedOffset+1].event)
+	}
+	return "No later events in window"
+}
+
 func calendarAgendaLine(event models.CalendarEvent, width int) string {
 	timeText := calendarShortTime(event)
 	source := calendarSourceLabel(event)
@@ -657,6 +904,24 @@ func calendarWeekEventLine(event models.CalendarEvent, width int) string {
 	}
 	prefix := calendarFit(timeText, prefixW)
 	return calendarFit(prefix+"  "+ansi.Truncate(event.Title+" - "+calendarSourceLabel(event), titleW, "..."), width-2)
+}
+
+func calendarThreeDayEventLine(event models.CalendarEvent, width int) string {
+	timeText := calendarDayTime(event)
+	prefixW := 13
+	if width < 44 {
+		prefixW = 9
+	}
+	titleW := width - prefixW - 2
+	if titleW < 8 {
+		titleW = 8
+	}
+	prefix := calendarFit(timeText, prefixW)
+	return calendarFit(prefix+"  "+ansi.Truncate(event.Title+" - "+calendarSourceLabel(event), titleW, "..."), width-2)
+}
+
+func calendarCompactEventSummary(event models.CalendarEvent) string {
+	return event.Start.Local().Format("Mon 15:04") + " " + event.Title
 }
 
 func calendarDetailRow(m *Model, label, value string, width int) string {
@@ -734,12 +999,19 @@ func sameCalendarDate(a, b time.Time) bool {
 	return ay == by && am == bm && ad == bd
 }
 
-func calendarWeekStartFor(day time.Time) time.Time {
+func calendarDayStartFor(day time.Time) time.Time {
 	if day.IsZero() {
 		day = time.Now()
 	}
 	day = day.Local()
-	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	return time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+}
+
+func calendarWeekStartFor(day time.Time) time.Time {
+	if day.IsZero() {
+		day = time.Now()
+	}
+	dayStart := calendarDayStartFor(day)
 	return dayStart.AddDate(0, 0, -int(dayStart.Weekday()))
 }
 
@@ -750,6 +1022,15 @@ func calendarWeekRange(start time.Time) string {
 		if start.Month() == end.Month() {
 			return start.Format("Mon Jan 2") + " - " + end.Format("Mon Jan 2, 2006")
 		}
+		return start.Format("Mon Jan 2") + " - " + end.Format("Mon Jan 2, 2006")
+	}
+	return start.Format("Mon Jan 2, 2006") + " - " + end.Format("Mon Jan 2, 2006")
+}
+
+func calendarThreeDayRange(start time.Time) string {
+	start = calendarDayStartFor(start)
+	end := start.AddDate(0, 0, 2)
+	if start.Year() == end.Year() {
 		return start.Format("Mon Jan 2") + " - " + end.Format("Mon Jan 2, 2006")
 	}
 	return start.Format("Mon Jan 2, 2006") + " - " + end.Format("Mon Jan 2, 2006")
@@ -777,17 +1058,91 @@ func eventOccursOnCalendarDate(event models.CalendarEvent, day time.Time) bool {
 }
 
 func eventOccursInCalendarWeek(event models.CalendarEvent, start time.Time) bool {
+	start = calendarWeekStartFor(start)
+	return eventOccursInCalendarRange(event, start, start.AddDate(0, 0, 7))
+}
+
+func eventOccursInCalendarRange(event models.CalendarEvent, start, end time.Time) bool {
 	if event.Start.IsZero() {
 		return false
 	}
-	start = calendarWeekStartFor(start)
-	weekEnd := start.AddDate(0, 0, 7)
+	start = calendarDayStartFor(start)
+	end = calendarDayStartFor(end)
 	eventStart := event.Start.Local()
 	eventEnd := event.End.Local()
 	if event.End.IsZero() {
 		eventEnd = eventStart
 	}
-	return eventStart.Before(weekEnd) && eventEnd.After(start)
+	return eventStart.Before(end) && eventEnd.After(start)
+}
+
+func calendarOpenSlotSummaries(start time.Time, events []indexedCalendarEvent, width int) []string {
+	start = calendarDayStartFor(start)
+	summaries := make([]string, 0, 3)
+	for i := 0; i < 3; i++ {
+		day := start.AddDate(0, 0, i)
+		dayEvents := make([]models.CalendarEvent, 0)
+		for _, item := range events {
+			if eventOccursOnCalendarDate(item.event, day) {
+				dayEvents = append(dayEvents, item.event)
+			}
+		}
+		label := day.Format("Mon")
+		if len(dayEvents) == 0 {
+			summaries = append(summaries, label+": open day")
+			continue
+		}
+		dayStart := time.Date(day.Year(), day.Month(), day.Day(), 9, 0, 0, 0, day.Location())
+		dayEnd := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, day.Location())
+		lastEnd := dayStart
+		found := ""
+		for _, event := range dayEvents {
+			eventStart := event.Start.Local()
+			eventEnd := event.End.Local()
+			if eventStart.After(lastEnd) {
+				found = lastEnd.Format("15:04") + "-" + eventStart.Format("15:04")
+				break
+			}
+			if eventEnd.After(lastEnd) {
+				lastEnd = eventEnd
+			}
+		}
+		if found == "" && lastEnd.Before(dayEnd) {
+			found = lastEnd.Format("15:04") + "-" + dayEnd.Format("15:04")
+		}
+		if found == "" {
+			found = "packed"
+		}
+		summaries = append(summaries, calendarFit(label+": "+found, width))
+	}
+	return summaries
+}
+
+func calendarConflictSummary(events []indexedCalendarEvent) string {
+	for i := 0; i < len(events); i++ {
+		a := events[i].event
+		if a.Start.IsZero() {
+			continue
+		}
+		aEnd := a.End
+		if aEnd.IsZero() {
+			aEnd = a.Start
+		}
+		for j := i + 1; j < len(events); j++ {
+			b := events[j].event
+			if b.Start.IsZero() {
+				continue
+			}
+			bEnd := b.End
+			if bEnd.IsZero() {
+				bEnd = b.Start
+			}
+			if a.Start.Before(bEnd) && b.Start.Before(aEnd) {
+				return a.Title + " overlaps " + b.Title
+			}
+		}
+	}
+	return "No conflicts"
 }
 
 func calendarStatusLabel(event models.CalendarEvent) string {

@@ -668,6 +668,7 @@ type Model struct {
 	calendarView          calendarViewMode
 	calendarDay           time.Time
 	calendarWeekStart     time.Time
+	calendarThreeDayStart time.Time
 	calendarDetailOpen    bool
 	calendarDetailLoading bool
 	calendarDetail        *models.CalendarEvent
@@ -1831,6 +1832,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.calendarView == calendarViewWeek {
 			m.calendarWeekStart = m.selectedCalendarWeekStart()
 			m.selectFirstCalendarEventForWeek(m.calendarWeekStart)
+		} else if m.calendarView == calendarViewThreeDay {
+			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart()
+			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 		} else {
 			m.calendarDetail = m.selectedCalendarEvent()
 		}

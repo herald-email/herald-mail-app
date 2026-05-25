@@ -1629,6 +1629,28 @@ Check these states during every applicable lane:
 - Hints advertise `w: week`, `d: day`, `a: agenda`, and `h/l: week` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
 - At `50x15`, the minimum-size guard appears instead of clipped Week Time-Grid chrome, and resizing larger restores the Week Time-Grid or detail state cleanly.
 
+### TC-38G — Calendar 3-Day Command view
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar, then press `t` to switch from Agenda List to 3-Day Command.
+3. Capture the 3-Day Command view with the right command panel visible.
+4. Move through visible events with `j/k` or arrow keys, then slide the three-day window with `h/l` or left/right arrows.
+5. Press `w`, `d`, and `a` to confirm Week Time-Grid, Day Agenda, and Agenda List are still reachable, then press `t` to return to 3-Day Command.
+6. Press `Enter` from 3-Day Command to open the full Event Detail view, then `Esc` to return without losing position.
+
+**Expect:**
+- `t` switches to a read-only 3-Day Command view and `a` returns to Agenda List without changing the Calendar destination.
+- 3-Day Command shows today, tomorrow, and the next day as compact lanes with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The command panel shows the selected event, next-up event, open-slot summary, conflict summary, mode, and notes where available.
+- `h/l` and left/right slide the three-day window without invoking mail navigation or mutation behavior.
+- `Enter` opens the existing full Event Detail reader and `Esc` returns to the 3-Day Command state.
+- Hints advertise `t: 3-day`, `w: week`, `d: day`, `a: agenda`, and `h/l: 3-day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- At `50x15`, the minimum-size guard appears instead of clipped 3-Day chrome, and resizing larger restores the 3-Day Command or detail state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

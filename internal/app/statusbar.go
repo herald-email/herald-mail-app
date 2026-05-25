@@ -535,14 +535,18 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 				backLabel = "esc: day"
 			} else if m.calendarView == calendarViewWeek {
 				backLabel = "esc: week"
+			} else if m.calendarView == calendarViewThreeDay {
+				backLabel = "esc: 3-day"
 			}
 			hints = joinHintSegments(m.primaryTabShortcutHint(), backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else if m.calendarView == calendarViewDay {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: day", "w: week", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: day", "t: 3-day", "w: week", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else if m.calendarView == calendarViewWeek {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: week", "d: day", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: week", "t: 3-day", "d: day", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+		} else if m.calendarView == calendarViewThreeDay {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "h/l: 3-day", "w: week", "d: day", "a: agenda", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "d: day", "w: week", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("calendar", "events"), "d: day", "w: week", "t: 3-day", "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		}
 	} else {
 		switch chrome.FocusedPanel {
