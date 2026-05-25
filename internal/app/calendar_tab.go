@@ -556,10 +556,32 @@ func (m *Model) saveCalendarEdit() tea.Cmd {
 	m.calendarEdit.Ref = ref
 	m.calendarEdit.Saving = true
 	m.calendarEdit.Error = ""
-	m.calendarStatus = "Saving cached calendar edit..."
+	m.calendarStatus = "Saving calendar event..."
 	return func() tea.Msg {
 		saved, err := mutation.SaveCalendarEvent(updated)
 		return CalendarEventSavedMsg{Ref: ref, Event: saved, Err: err}
+	}
+}
+
+func (m *Model) saveCalendarRSVP() tea.Cmd {
+	event := m.calendarDetail
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	if event == nil {
+		return nil
+	}
+	mutation, ok := m.calendarMutationBackend()
+	if !ok {
+		m.calendarStatus = "RSVP failed: calendar mutation backend unavailable"
+		return nil
+	}
+	ref := event.Ref.WithDefaults()
+	status := models.NextCalendarRSVP(firstCalendarAttendeeRSVP(*event))
+	m.calendarStatus = "Saving RSVP " + status + "..."
+	return func() tea.Msg {
+		saved, err := mutation.RespondCalendarEvent(ref, status)
+		return CalendarEventRSVPMsg{Ref: ref, Status: status, Event: saved, Err: err}
 	}
 }
 
@@ -794,6 +816,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		if m.calendarDetailOpen {
 			m.openCalendarEdit()
+		}
+		return m, nil
+	case "v":
+		if m.calendarDetailOpen {
+			return m, m.saveCalendarRSVP()
 		}
 		return m, nil
 	case "esc":
@@ -1214,12 +1241,12 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	state := m.calendarEdit
 	var lines []string
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Event Edit", width)))
-	subtitle := "local/cache-backed edit"
+	subtitle := "provider save-through when available"
 	if state.Dirty {
 		subtitle += " - unsaved"
 	}
 	if state.Saving {
-		subtitle = "saving cached calendar edit..."
+		subtitle = "saving calendar event..."
 	}
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)))
 	lines = append(lines, "")
@@ -1251,7 +1278,8 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Alt TZ rows are preview only; Event TZ saves.", width)))
 	}
 	lines = append(lines, "")
-	lines = append(lines, calendarDetailRow(m, "Mode", "cache-backed local edit", width))
+	lines = append(lines, calendarDetailRow(m, "Scope", "this event", width))
+	lines = append(lines, calendarDetailRow(m, "Mode", "provider save-through, cache after success", width))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("tab: next field  ctrl+s: save  esc: cancel", width)))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
@@ -1568,7 +1596,8 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	}
 	lines = append(lines, calendarDetailRow(m, "Status", calendarStatusLabel(*event), width))
 	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
-	lines = append(lines, calendarDetailRow(m, "Mode", "read-only", width))
+	lines = append(lines, calendarDetailRow(m, "Scope", "this event", width))
+	lines = append(lines, calendarDetailRow(m, "Mode", "provider-backed edit/RSVP", width))
 	if strings.TrimSpace(event.Description) != "" {
 		lines = append(lines, "")
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Notes", width)))
@@ -1867,6 +1896,13 @@ func calendarAttendeeLabel(attendee models.CalendarAttendee) string {
 		label += " optional"
 	}
 	return label
+}
+
+func firstCalendarAttendeeRSVP(event models.CalendarEvent) string {
+	if len(event.Attendees) == 0 {
+		return ""
+	}
+	return event.Attendees[0].RSVP
 }
 
 func calendarAttachmentLabel(attachment models.CalendarAttachment) string {

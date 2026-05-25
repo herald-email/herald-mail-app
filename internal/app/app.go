@@ -91,6 +91,14 @@ type CalendarEventSavedMsg struct {
 	Err   error
 }
 
+// CalendarEventRSVPMsg carries a provider-backed calendar RSVP result.
+type CalendarEventRSVPMsg struct {
+	Ref    models.EventRef
+	Status string
+	Event  *models.CalendarEvent
+	Err    error
+}
+
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
 // the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
@@ -1961,7 +1969,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarEdit = calendarEventEditState{}
 		m.calendarDetailOpen = true
 		m.calendarDetailLoading = false
-		m.calendarStatus = "Saved cached calendar edit"
+		m.calendarStatus = "Saved calendar event"
+		return m, nil
+
+	case CalendarEventRSVPMsg:
+		selected := m.calendarDetail
+		if selected == nil {
+			selected = m.selectedCalendarEvent()
+		}
+		if selected != nil && msg.Ref.WithDefaults().LocalID != selected.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.calendarStatus = "RSVP failed: " + msg.Err.Error()
+			return m, nil
+		}
+		if msg.Event != nil {
+			m.applySavedCalendarEvent(*msg.Event)
+		}
+		m.calendarDetailOpen = true
+		m.calendarDetailLoading = false
+		m.calendarStatus = "Saved RSVP " + msg.Status
 		return m, nil
 
 	case ComposeStatusMsg:

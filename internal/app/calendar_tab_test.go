@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ type calendarAgendaStubBackend struct {
 	crossSearchCalls []string
 	savedEvents      []models.CalendarEvent
 	saveErr          error
+	rsvpEvents       []models.EventRef
+	rsvpStatuses     []string
+	rsvpErr          error
 }
 
 func (b *calendarAgendaStubBackend) CalendarAgendaAvailable() bool {
@@ -120,6 +124,29 @@ func (b *calendarAgendaStubBackend) SaveCalendarEvent(event models.CalendarEvent
 	saved := event
 	b.events = append(b.events, event)
 	return &saved, nil
+}
+
+func (b *calendarAgendaStubBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
+	if b.rsvpErr != nil {
+		return nil, b.rsvpErr
+	}
+	ref = ref.WithDefaults()
+	b.rsvpEvents = append(b.rsvpEvents, ref)
+	b.rsvpStatuses = append(b.rsvpStatuses, status)
+	for i := range b.events {
+		if b.events[i].Ref.WithDefaults().LocalID != ref.LocalID {
+			continue
+		}
+		event := b.events[i]
+		if len(event.Attendees) == 0 {
+			event.Attendees = []models.CalendarAttendee{{Name: "Me", Email: "me@example.com"}}
+		}
+		event.Attendees[0].RSVP = status
+		b.events[i] = event
+		saved := event
+		return &saved, nil
+	}
+	return nil, errors.New("event not found")
 }
 
 func TestCalendarTabHiddenForMailOnlyBackend(t *testing.T) {
@@ -858,8 +885,10 @@ func TestCalendarFullEventDetailRendersRichMetadataAndTimezones(t *testing.T) {
 		"Weekly on Monday",
 		"Attachments",
 		"Agenda (application/pdf)",
+		"Scope",
+		"this event",
 		"Mode",
-		"read-only",
+		"provider-backed edit/RSVP",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rich event detail missing %q:\n%s", want, rendered)
@@ -964,6 +993,75 @@ func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T)
 	}
 }
 
+func TestCalendarEventEditProviderFailureKeepsEditorOpen(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}, saveErr: errors.New("provider save failed")}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	m.calendarEdit.Draft.Title = "Unsaved provider title"
+	m.calendarEdit.Dirty = true
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatal("expected provider failure to keep Event Edit open")
+	}
+	if m.calendarEdit.Draft.Title != "Unsaved provider title" {
+		t.Fatalf("draft title = %q, want unsaved value preserved", m.calendarEdit.Draft.Title)
+	}
+	if m.calendarEvents[0].Title == "Unsaved provider title" {
+		t.Fatalf("calendar list updated after provider failure: %#v", m.calendarEvents[0])
+	}
+	if !strings.Contains(m.calendarEdit.Error, "Save failed") {
+		t.Fatalf("calendar edit error = %q, want save failure", m.calendarEdit.Error)
+	}
+}
+
+func TestCalendarEventRSVPShortcutUpdatesAttendeeAndDetail(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Attendees[0].RSVP = "needs-action"
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, cmd := m.handleKeyMsg(keyRunes("v"))
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected RSVP shortcut to produce mutation command")
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.rsvpEvents) != 1 || len(b.rsvpStatuses) != 1 || b.rsvpStatuses[0] != "accepted" {
+		t.Fatalf("RSVP calls refs=%#v statuses=%#v, want accepted response", b.rsvpEvents, b.rsvpStatuses)
+	}
+	if m.calendarDetail == nil || len(m.calendarDetail.Attendees) == 0 || m.calendarDetail.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("calendar detail attendees = %#v, want accepted RSVP", m.calendarDetail)
+	}
+	if !strings.Contains(m.calendarStatus, "Saved RSVP accepted") {
+		t.Fatalf("calendar status = %q, want RSVP success", m.calendarStatus)
+	}
+}
+
 func TestCalendarEventEditValidationKeepsEditorOpen(t *testing.T) {
 	rich := richCalendarEventForTest()
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
@@ -1057,6 +1155,70 @@ func TestCalendarEditShortcutDoesNotStealTextEntry(t *testing.T) {
 		}
 		if got := m.promptEditor.name; got != "e" {
 			t.Fatalf("prompt editor name=%q, want literal e", got)
+		}
+	})
+}
+
+func TestCalendarRSVPShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("v"))
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("activeTab = %d, want Compose", m.activeTab)
+		}
+		if got := m.composeBody.Value(); got != "v" {
+			t.Fatalf("compose body=%q, want literal v", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("v"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "v" {
+			t.Fatalf("timeline search=%q, want literal v", got)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("v"))
+		m = model.(*Model)
+		if !m.showPromptEditor {
+			t.Fatal("prompt editor should remain active after typing v")
+		}
+		if got := m.promptEditor.name; got != "v" {
+			t.Fatalf("prompt editor name=%q, want literal v", got)
 		}
 	})
 }

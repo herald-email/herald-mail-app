@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -225,6 +226,10 @@ func (l *Lab) handleGoogleCalendarEvents(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if len(parts) == 2 {
+		if r.Method != http.MethodGet {
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
 		l.writeGoogleEvents(w, calendarID)
 		return
 	}
@@ -238,7 +243,19 @@ func (l *Lab) handleGoogleCalendarEvents(w http.ResponseWriter, r *http.Request,
 		http.NotFound(w, r)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(googleEvent(event))
+	switch r.Method {
+	case http.MethodGet:
+		_ = json.NewEncoder(w).Encode(googleEvent(event))
+	case http.MethodPatch:
+		updated, err := l.updateGoogleEvent(calendarID, eventID, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusPreconditionFailed)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(googleEvent(updated))
+	default:
+		http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+	}
 }
 
 func (l *Lab) writeGoogleEvents(w http.ResponseWriter, calendarID string) {
@@ -317,6 +334,71 @@ func googleEvent(event Event) map[string]any {
 	return payload
 }
 
+type googleEventPatch struct {
+	Summary     string           `json:"summary"`
+	Description string           `json:"description"`
+	Location    string           `json:"location"`
+	Status      string           `json:"status"`
+	Start       googlePatchTime  `json:"start"`
+	End         googlePatchTime  `json:"end"`
+	Attendees   []googleAttendee `json:"attendees"`
+	Recurrence  []string         `json:"recurrence"`
+}
+
+type googlePatchTime struct {
+	DateTime string `json:"dateTime"`
+	Date     string `json:"date"`
+	TimeZone string `json:"timeZone"`
+}
+
+type googleAttendee struct {
+	DisplayName    string `json:"displayName"`
+	Email          string `json:"email"`
+	ResponseStatus string `json:"responseStatus"`
+	Optional       bool   `json:"optional"`
+}
+
+func applyGooglePatch(event Event, patch googleEventPatch) Event {
+	event.Summary = patch.Summary
+	event.Description = patch.Description
+	event.Location = patch.Location
+	event.Status = patch.Status
+	if start, allDay, timezone := parseGooglePatchTime(patch.Start); !start.IsZero() {
+		event.Start = start
+		event.AllDay = allDay
+		event.TimeZone = timezone
+	}
+	if end, _, timezone := parseGooglePatchTime(patch.End); !end.IsZero() {
+		event.End = end
+		if event.TimeZone == "" {
+			event.TimeZone = timezone
+		}
+	}
+	event.Attendees = event.Attendees[:0]
+	for _, attendee := range patch.Attendees {
+		event.Attendees = append(event.Attendees, Attendee{
+			Name:           attendee.DisplayName,
+			Email:          attendee.Email,
+			ResponseStatus: attendee.ResponseStatus,
+			Optional:       attendee.Optional,
+		})
+	}
+	event.Recurrence = append([]string(nil), patch.Recurrence...)
+	return event
+}
+
+func parseGooglePatchTime(value googlePatchTime) (time.Time, bool, string) {
+	if strings.TrimSpace(value.Date) != "" {
+		parsed, _ := time.Parse("2006-01-02", value.Date)
+		return parsed, true, value.TimeZone
+	}
+	if strings.TrimSpace(value.DateTime) == "" {
+		return time.Time{}, false, value.TimeZone
+	}
+	parsed, _ := time.Parse(time.RFC3339, value.DateTime)
+	return parsed, false, value.TimeZone
+}
+
 func (l *Lab) handleCalDAV(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "PROPFIND":
@@ -334,6 +416,15 @@ func (l *Lab) handleCalDAV(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 		w.Header().Set("ETag", event.ETag)
 		_, _ = w.Write([]byte(ics(event)))
+	case "PUT":
+		calendarID, eventID := splitCalDAVEventPath(r.URL.Path)
+		updated, err := l.updateCalDAVEvent(calendarID, eventID, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusPreconditionFailed)
+			return
+		}
+		w.Header().Set("ETag", updated.ETag)
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
 	}
@@ -390,6 +481,54 @@ func (l *Lab) findEvent(calendarID, eventID string) (Event, bool) {
 		}
 	}
 	return Event{}, false
+}
+
+func (l *Lab) updateGoogleEvent(calendarID, eventID string, r *http.Request) (Event, error) {
+	var patch googleEventPatch
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		return Event{}, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	events := l.events[calendarID]
+	for i := range events {
+		if events[i].ID != eventID && strings.TrimSuffix(events[i].ID, ".ics") != eventID && events[i].UID != eventID {
+			continue
+		}
+		if ifMatch := strings.TrimSpace(r.Header.Get("If-Match")); ifMatch != "" && ifMatch != events[i].ETag {
+			return Event{}, fmt.Errorf("etag mismatch")
+		}
+		events[i] = applyGooglePatch(events[i], patch)
+		events[i].ETag = nextETag(events[i])
+		events[i].Updated = time.Now().UTC()
+		l.events[calendarID] = events
+		return events[i], nil
+	}
+	return Event{}, fmt.Errorf("event not found")
+}
+
+func (l *Lab) updateCalDAVEvent(calendarID, eventID string, r *http.Request) (Event, error) {
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return Event{}, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	events := l.events[calendarID]
+	for i := range events {
+		if events[i].ID != eventID && strings.TrimSuffix(events[i].ID, ".ics") != eventID && events[i].UID != eventID {
+			continue
+		}
+		if ifMatch := strings.TrimSpace(r.Header.Get("If-Match")); ifMatch != "" && ifMatch != events[i].ETag {
+			return Event{}, fmt.Errorf("etag mismatch")
+		}
+		events[i] = applyICSPatch(events[i], string(data))
+		events[i].ETag = nextETag(events[i])
+		events[i].Updated = time.Now().UTC()
+		l.events[calendarID] = events
+		return events[i], nil
+	}
+	return Event{}, fmt.Errorf("event not found")
 }
 
 func splitCalDAVEventPath(p string) (string, string) {
@@ -457,6 +596,125 @@ func ics(event Event) string {
 	}
 	b.WriteString("END:VEVENT\r\nEND:VCALENDAR\r\n")
 	return b.String()
+}
+
+func applyICSPatch(event Event, data string) Event {
+	seenAttendee := false
+	for _, line := range unfoldICSLines(data) {
+		nameAndParams, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		parts := strings.Split(nameAndParams, ";")
+		key := strings.ToUpper(strings.TrimSpace(parts[0]))
+		params := parseICSParams(parts[1:])
+		value = unescapeICSValue(value)
+		switch key {
+		case "UID":
+			event.UID = value
+		case "SUMMARY":
+			event.Summary = value
+		case "DESCRIPTION":
+			event.Description = value
+		case "LOCATION":
+			event.Location = value
+		case "STATUS":
+			event.Status = value
+		case "DTSTART":
+			start, allDay := parseICSTime(value, params["TZID"])
+			event.Start = start
+			event.AllDay = allDay
+			if params["TZID"] != "" {
+				event.TimeZone = params["TZID"]
+			}
+		case "DTEND":
+			end, _ := parseICSTime(value, params["TZID"])
+			event.End = end
+			if event.TimeZone == "" && params["TZID"] != "" {
+				event.TimeZone = params["TZID"]
+			}
+		case "ATTENDEE":
+			if !seenAttendee {
+				event.Attendees = nil
+				seenAttendee = true
+			}
+			event.Attendees = append(event.Attendees, Attendee{
+				Name:           params["CN"],
+				Email:          calendarMailtoAddress(value),
+				ResponseStatus: params["PARTSTAT"],
+				Optional:       strings.EqualFold(params["ROLE"], "OPT-PARTICIPANT"),
+			})
+		}
+	}
+	return event
+}
+
+func unfoldICSLines(data string) []string {
+	raw := strings.Split(strings.ReplaceAll(data, "\r\n", "\n"), "\n")
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			if len(lines) > 0 {
+				lines[len(lines)-1] += strings.TrimLeft(line, " \t")
+			}
+			continue
+		}
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func parseICSParams(parts []string) map[string]string {
+	params := make(map[string]string, len(parts))
+	for _, part := range parts {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		params[strings.ToUpper(strings.TrimSpace(key))] = strings.Trim(strings.TrimSpace(unescapeICSValue(value)), `"`)
+	}
+	return params
+}
+
+func parseICSTime(value, timezone string) (time.Time, bool) {
+	if len(value) == len("20060102") {
+		parsed, _ := time.Parse("20060102", value)
+		return parsed, true
+	}
+	if strings.HasSuffix(value, "Z") {
+		parsed, _ := time.Parse("20060102T150405Z", value)
+		return parsed, false
+	}
+	if timezone != "" {
+		if loc, err := time.LoadLocation(timezone); err == nil {
+			parsed, _ := time.ParseInLocation("20060102T150405", value, loc)
+			return parsed, false
+		}
+	}
+	parsed, _ := time.Parse("20060102T150405", value)
+	return parsed, false
+}
+
+func calendarMailtoAddress(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(value), "mailto:") {
+		return strings.TrimSpace(value[len("mailto:"):])
+	}
+	return value
+}
+
+func unescapeICSValue(value string) string {
+	return strings.NewReplacer(`\n`, "\n", `\N`, "\n", `\,`, ",", `\;`, ";", `\\`, `\`).Replace(value)
+}
+
+func nextETag(event Event) string {
+	id := strings.TrimSuffix(event.ID, ".ics")
+	if id == "" {
+		id = event.UID
+	}
+	return fmt.Sprintf(`"%s-v%d"`, id, time.Now().UnixNano())
 }
 
 func writeICSLine(b *strings.Builder, key, value string) {

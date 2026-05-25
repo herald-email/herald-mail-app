@@ -644,6 +644,8 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Calendar search view before RSVP, edit, or create flows
 - [x] Cross-source search view blends cached mail and calendar event results before command-center summaries or mutations
 - [x] Local/cache-backed Event Edit form with explicit save/cancel state, timezone preview, and no live provider mutation writes
+- [x] Provider-backed Event Edit saves write through Google Calendar/CalDAV before updating cache, and provider failures keep unsaved edits visible
+- [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
 

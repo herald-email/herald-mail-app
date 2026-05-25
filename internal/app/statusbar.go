@@ -546,7 +546,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			} else if m.calendarView == calendarViewSearch {
 				backLabel = "esc: search"
 			}
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "e: edit", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "e: edit", "v: RSVP", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarView == calendarViewSearch {
 			query := strings.TrimSpace(m.calendarSearchQuery)
 			if query == "" {

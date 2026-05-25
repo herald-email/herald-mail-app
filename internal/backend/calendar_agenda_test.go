@@ -1,14 +1,17 @@
 package backend
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/calendar"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/testcalendar"
 )
 
 func TestDemoBackendCalendarAgendaIsSortedAndFetchesDetail(t *testing.T) {
@@ -174,6 +177,173 @@ func TestLocalBackendSaveCalendarEventWritesScopedCache(t *testing.T) {
 	}
 	if got.Title != edited.Title || got.Location != edited.Location || got.TimeZone != edited.TimeZone {
 		t.Fatalf("cached event = %#v, want edited event", got)
+	}
+}
+
+func TestLocalBackendSaveCalendarEventWritesProviderBeforeCache(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:          "planning",
+			UID:         "planning",
+			Summary:     "Provider planning",
+			Description: "Original provider event.",
+			Location:    "Room A",
+			Start:       start,
+			End:         start.Add(time.Hour),
+			TimeZone:    "UTC",
+			ETag:        `"g-v1"`,
+			Status:      "confirmed",
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	provider, err := calendar.NewGoogleCalendarSource(sourceCfg)
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	sourceEvents, err := provider.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.PutCalendarEvent(sourceEvents[0]); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+
+	edited := sourceEvents[0]
+	edited.Title = "Provider planning moved"
+	edited.Location = "Room B"
+	saved, err := b.SaveCalendarEvent(edited)
+	if err != nil {
+		t.Fatalf("SaveCalendarEvent: %v", err)
+	}
+	if saved.Title != edited.Title || saved.Ref.ETag == edited.Ref.ETag {
+		t.Fatalf("saved = %#v, want provider-updated event with fresh etag", saved)
+	}
+
+	providerFresh, err := provider.FetchEvent(context.Background(), saved.Ref)
+	if err != nil {
+		t.Fatalf("FetchEvent provider: %v", err)
+	}
+	if providerFresh.Title != edited.Title || providerFresh.Location != edited.Location {
+		t.Fatalf("providerFresh = %#v, want edited provider event", providerFresh)
+	}
+	cached, err := store.GetCalendarEventByRef(saved.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if cached.Title != edited.Title || cached.Ref.ETag != saved.Ref.ETag {
+		t.Fatalf("cached = %#v, want provider-saved event", cached)
+	}
+}
+
+func TestLocalBackendSaveCalendarEventProviderFailureKeepsCachedEvent(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:       "planning",
+			UID:      "planning",
+			Summary:  "Provider planning",
+			Location: "Room A",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			ETag:     `"g-v1"`,
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	event := models.CalendarEvent{
+		Ref:      models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning", ETag: `"stale"`}.WithDefaults(),
+		Title:    "Provider planning",
+		Location: "Room A",
+		Start:    start,
+		End:      start.Add(time.Hour),
+	}
+
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+
+	edited := event
+	edited.Title = "Should not reach cache"
+	_, err = b.SaveCalendarEvent(edited)
+	if err == nil {
+		t.Fatal("SaveCalendarEvent succeeded with stale provider etag, want provider failure")
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "etag") || strings.Contains(err.Error(), "/calendar/v3/") {
+		t.Fatalf("error leaked provider internals: %v", err)
+	}
+	cached, err := store.GetCalendarEventByRef(event.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if cached.Title != event.Title || cached.Location != event.Location {
+		t.Fatalf("cached = %#v, want original cached event after provider failure", cached)
+	}
+}
+
+func TestLocalBackendRespondCalendarEventWritesProviderAndCache(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:      "rsvp",
+			UID:     "rsvp",
+			Summary: "Provider RSVP",
+			Start:   start,
+			End:     start.Add(time.Hour),
+			ETag:    `"g-v1"`,
+			Attendees: []testcalendar.Attendee{
+				{Name: "Rae Stone", Email: "rae@example.com", ResponseStatus: "tentative"},
+			},
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	sourceCfg.Google.Email = "rae@example.com"
+	provider, err := calendar.NewGoogleCalendarSource(sourceCfg)
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	sourceEvents, err := provider.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.PutCalendarEvent(sourceEvents[0]); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+
+	saved, err := b.RespondCalendarEvent(sourceEvents[0].Ref, "accepted")
+	if err != nil {
+		t.Fatalf("RespondCalendarEvent: %v", err)
+	}
+	if len(saved.Attendees) != 1 || saved.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("saved attendees = %#v, want accepted", saved.Attendees)
+	}
+	cached, err := store.GetCalendarEventByRef(saved.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if len(cached.Attendees) != 1 || cached.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("cached attendees = %#v, want accepted", cached.Attendees)
 	}
 }
 

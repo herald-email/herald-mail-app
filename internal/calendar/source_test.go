@@ -113,6 +113,101 @@ func TestGoogleCalendarSourceParsesRichEventDetail(t *testing.T) {
 	}
 }
 
+func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:          "update-evt",
+			UID:         "update-evt",
+			Summary:     "Provider planning",
+			Description: "Original notes",
+			Location:    "Room A",
+			Start:       start,
+			End:         start.Add(time.Hour),
+			TimeZone:    "UTC",
+			ETag:        `"g-v1"`,
+			Status:      "confirmed",
+		}),
+	)
+	src, err := NewGoogleCalendarSource(lab.GoogleSourceConfig("work-calendar", "work"))
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	edited := events[0]
+	edited.Title = "Provider planning moved"
+	edited.Description = "Updated through PATCH"
+	edited.Location = "Room B"
+	edited.Start = start.Add(2 * time.Hour)
+	edited.End = start.Add(3 * time.Hour)
+	edited.TimeZone = "America/Los_Angeles"
+
+	saved, err := src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         edited.Ref.ETag,
+	})
+	if err != nil {
+		t.Fatalf("UpdateEvent: %v", err)
+	}
+	if saved.Title != edited.Title || saved.Location != edited.Location || saved.TimeZone != edited.TimeZone {
+		t.Fatalf("saved = %#v, want edited fields", saved)
+	}
+	if saved.Ref.ETag == edited.Ref.ETag {
+		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)
+	}
+
+	fetched, err := src.FetchEvent(context.Background(), saved.Ref)
+	if err != nil {
+		t.Fatalf("FetchEvent: %v", err)
+	}
+	if fetched.Title != edited.Title || fetched.Location != edited.Location {
+		t.Fatalf("fetched = %#v, want provider-updated event", fetched)
+	}
+}
+
+func TestGoogleCalendarSourceRespondToEventWritesAttendeeRSVP(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:       "rsvp-evt",
+			Summary:  "Provider RSVP",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+			Attendees: []testcalendar.Attendee{
+				{Name: "Rae Stone", Email: "rae@example.com", ResponseStatus: "tentative"},
+			},
+		}),
+	)
+	cfg := lab.GoogleSourceConfig("work-calendar", "work")
+	cfg.Google.Email = "rae@example.com"
+	src, err := NewGoogleCalendarSource(cfg)
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+
+	saved, err := src.RespondToEvent(context.Background(), events[0].Ref, "accepted", models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         events[0].Ref.ETag,
+	})
+	if err != nil {
+		t.Fatalf("RespondToEvent: %v", err)
+	}
+	if len(saved.Attendees) != 1 || saved.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("attendees = %#v, want accepted RSVP", saved.Attendees)
+	}
+}
+
 func TestCalDAVSourceUsesLocalTestServer(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,
@@ -217,5 +312,93 @@ func TestCalDAVSourceParsesRichEventDetail(t *testing.T) {
 	}
 	if len(got.Attachments) != 1 || got.Attachments[0].Title != "Agenda" || got.Attachments[0].MIMEType != "application/pdf" {
 		t.Fatalf("attachments = %#v", got.Attachments)
+	}
+}
+
+func TestCalDAVSourceUpdateEventWritesThroughProvider(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("team", "Team Calendar", "#0b8043"),
+		testcalendar.WithEvent("team", testcalendar.Event{
+			ID:          "update-evt.ics",
+			UID:         "update-evt",
+			Summary:     "CalDAV planning",
+			Description: "Original notes",
+			Location:    "Room A",
+			Start:       start,
+			End:         start.Add(time.Hour),
+			TimeZone:    "UTC",
+			ETag:        `"c-v1"`,
+			Status:      "CONFIRMED",
+		}),
+	)
+	src, err := NewCalDAVSource(lab.CalDAVSourceConfig("family-caldav", "family"))
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "family-caldav", AccountID: "family", Kind: models.SourceKindCalendar, CollectionID: "team"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	edited := events[0]
+	edited.Title = "CalDAV planning moved"
+	edited.Description = "Updated through PUT"
+	edited.Location = "Room B"
+	edited.Start = start.Add(2 * time.Hour)
+	edited.End = start.Add(3 * time.Hour)
+	edited.TimeZone = "America/Los_Angeles"
+
+	saved, err := src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         edited.Ref.ETag,
+	})
+	if err != nil {
+		t.Fatalf("UpdateEvent: %v", err)
+	}
+	if saved.Title != edited.Title || saved.Location != edited.Location || saved.TimeZone != edited.TimeZone {
+		t.Fatalf("saved = %#v, want edited fields", saved)
+	}
+	if saved.Ref.ETag == edited.Ref.ETag {
+		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)
+	}
+}
+
+func TestCalDAVSourceRespondToEventWritesAttendeeRSVP(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("team", "Team Calendar", "#0b8043"),
+		testcalendar.WithEvent("team", testcalendar.Event{
+			ID:       "rsvp-evt.ics",
+			UID:      "rsvp-evt",
+			Summary:  "CalDAV RSVP",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"c-v1"`,
+			Attendees: []testcalendar.Attendee{
+				{Name: "Rae Stone", Email: "rae@example.com", ResponseStatus: "TENTATIVE"},
+			},
+		}),
+	)
+	cfg := lab.CalDAVSourceConfig("family-caldav", "family")
+	cfg.CalDAV.Username = "rae@example.com"
+	src, err := NewCalDAVSource(cfg)
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "family-caldav", AccountID: "family", Kind: models.SourceKindCalendar, CollectionID: "team"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+
+	saved, err := src.RespondToEvent(context.Background(), events[0].Ref, "accepted", models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         events[0].Ref.ETag,
+	})
+	if err != nil {
+		t.Fatalf("RespondToEvent: %v", err)
+	}
+	if len(saved.Attendees) != 1 || saved.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("attendees = %#v, want accepted RSVP", saved.Attendees)
 	}
 }

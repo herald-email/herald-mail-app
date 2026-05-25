@@ -27,13 +27,19 @@ type Source interface {
 	Close() error
 }
 
+type MutationSource interface {
+	UpdateEvent(context.Context, models.CalendarEvent, models.CalendarMutationOptions) (*models.CalendarEvent, error)
+	RespondToEvent(context.Context, models.EventRef, string, models.CalendarMutationOptions) (*models.CalendarEvent, error)
+}
+
 type GoogleCalendarSource struct {
-	id          models.SourceID
-	accountID   models.AccountID
-	displayName string
-	accessToken string
-	baseURL     string
-	client      *http.Client
+	id            models.SourceID
+	accountID     models.AccountID
+	displayName   string
+	accessToken   string
+	attendeeEmail string
+	baseURL       string
+	client        *http.Client
 }
 
 func NewGoogleCalendarSource(cfg config.SourceConfig) (*GoogleCalendarSource, error) {
@@ -44,12 +50,13 @@ func NewGoogleCalendarSource(cfg config.SourceConfig) (*GoogleCalendarSource, er
 		baseURL = "https://www.googleapis.com/calendar/v3"
 	}
 	return &GoogleCalendarSource{
-		id:          id,
-		accountID:   accountID,
-		displayName: cfg.DisplayName,
-		accessToken: strings.TrimSpace(cfg.Google.AccessToken),
-		baseURL:     baseURL,
-		client:      http.DefaultClient,
+		id:            id,
+		accountID:     accountID,
+		displayName:   cfg.DisplayName,
+		accessToken:   strings.TrimSpace(cfg.Google.AccessToken),
+		attendeeEmail: strings.TrimSpace(cfg.Google.Email),
+		baseURL:       baseURL,
+		client:        http.DefaultClient,
 	}, nil
 }
 
@@ -118,6 +125,51 @@ func (s *GoogleCalendarSource) FetchEvent(ctx context.Context, ref models.EventR
 	return &event, nil
 }
 
+func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	if err := validateCalendarMutationOptions(opts); err != nil {
+		return nil, err
+	}
+	event.Ref = s.normalizeEvent(event.Ref)
+	payload := googleEventFromModel(event)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	u := s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events/" + url.PathEscape(event.Ref.EventID) + "?sendUpdates=none"
+	req, err := s.newRequest(ctx, http.MethodPatch, u, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	if ifMatch := firstNonEmpty(opts.IfMatch, event.Ref.ETag); ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	var updated googleEventPayload
+	if err := s.doJSON(req, &updated); err != nil {
+		return nil, err
+	}
+	out := googleEventToModel(s.id, s.accountID, event.Ref.CalendarID, updated)
+	return &out, nil
+}
+
+func (s *GoogleCalendarSource) RespondToEvent(ctx context.Context, ref models.EventRef, status string, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	normalized, err := models.NormalizeCalendarRSVP(status)
+	if err != nil {
+		return nil, err
+	}
+	event, err := s.FetchEvent(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if opts.IfMatch == "" {
+		opts.IfMatch = event.Ref.ETag
+	}
+	if err := setCalendarAttendeeRSVP(event, s.attendeeEmail, normalized); err != nil {
+		return nil, err
+	}
+	return s.UpdateEvent(ctx, *event, opts)
+}
+
 func (s *GoogleCalendarSource) normalizeCollection(ref models.CollectionRef) models.CollectionRef {
 	ref.Kind = models.SourceKindCalendar
 	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.id)
@@ -156,13 +208,14 @@ func (s *GoogleCalendarSource) doJSON(req *http.Request, out any) error {
 }
 
 type CalDAVSource struct {
-	id          models.SourceID
-	accountID   models.AccountID
-	displayName string
-	baseURL     string
-	username    string
-	password    string
-	client      *http.Client
+	id            models.SourceID
+	accountID     models.AccountID
+	displayName   string
+	baseURL       string
+	username      string
+	password      string
+	attendeeEmail string
+	client        *http.Client
 }
 
 func NewCalDAVSource(cfg config.SourceConfig) (*CalDAVSource, error) {
@@ -174,13 +227,14 @@ func NewCalDAVSource(cfg config.SourceConfig) (*CalDAVSource, error) {
 		baseURL += "/"
 	}
 	return &CalDAVSource{
-		id:          models.NormalizeSourceID(models.SourceID(cfg.ID), models.DefaultCalendarSourceID),
-		accountID:   models.NormalizeAccountID(models.AccountID(cfg.AccountID)),
-		displayName: cfg.DisplayName,
-		baseURL:     baseURL,
-		username:    cfg.CalDAV.Username,
-		password:    cfg.CalDAV.Password,
-		client:      http.DefaultClient,
+		id:            models.NormalizeSourceID(models.SourceID(cfg.ID), models.DefaultCalendarSourceID),
+		accountID:     models.NormalizeAccountID(models.AccountID(cfg.AccountID)),
+		displayName:   cfg.DisplayName,
+		baseURL:       baseURL,
+		username:      cfg.CalDAV.Username,
+		password:      cfg.CalDAV.Password,
+		attendeeEmail: strings.TrimSpace(cfg.CalDAV.Username),
+		client:        http.DefaultClient,
 	}, nil
 }
 
@@ -273,6 +327,55 @@ func (s *CalDAVSource) FetchEvent(ctx context.Context, ref models.EventRef) (*mo
 		return nil, err
 	}
 	return eventFromICS(s.id, s.accountID, ref.CalendarID, ref.EventID, resp.Header.Get("ETag"), string(data))
+}
+
+func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	if err := validateCalendarMutationOptions(opts); err != nil {
+		return nil, err
+	}
+	event.Ref.SourceID = models.NormalizeSourceID(event.Ref.SourceID, s.id)
+	event.Ref.AccountID = models.NormalizeAccountID(event.Ref.AccountID)
+	event.Ref = event.Ref.WithDefaults()
+	req, err := s.newRequest(ctx, http.MethodPut, s.eventURL(event.Ref.CalendarID, event.Ref.EventID), strings.NewReader(eventToICS(event)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "text/calendar; charset=utf-8")
+	if ifMatch := firstNonEmpty(opts.IfMatch, event.Ref.ETag); ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("caldav PUT %s: %s", req.URL.Path, strings.TrimSpace(string(body)))
+	}
+	freshRef := event.Ref
+	if etag := strings.TrimSpace(resp.Header.Get("ETag")); etag != "" {
+		freshRef.ETag = etag
+	}
+	return s.FetchEvent(ctx, freshRef)
+}
+
+func (s *CalDAVSource) RespondToEvent(ctx context.Context, ref models.EventRef, status string, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	normalized, err := models.NormalizeCalendarRSVP(status)
+	if err != nil {
+		return nil, err
+	}
+	event, err := s.FetchEvent(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if opts.IfMatch == "" {
+		opts.IfMatch = event.Ref.ETag
+	}
+	if err := setCalendarAttendeeRSVP(event, s.attendeeEmail, normalized); err != nil {
+		return nil, err
+	}
+	return s.UpdateEvent(ctx, *event, opts)
 }
 
 func (s *CalDAVSource) newRequest(ctx context.Context, method, u string, body io.Reader) (*http.Request, error) {
@@ -404,6 +507,57 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 	}
 }
 
+func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
+	payload := googleEventPayload{
+		ID:          event.Ref.EventID,
+		ICalUID:     event.ProviderUID,
+		ETag:        event.Ref.ETag,
+		Summary:     event.Title,
+		Description: event.Description,
+		Location:    event.Location,
+		Status:      event.Status,
+		Sequence:    0,
+		Recurrence:  append([]string(nil), event.Recurrence...),
+	}
+	payload.Start = googleTimeFromModel(event.Start, event.TimeZone, event.AllDay)
+	payload.End = googleTimeFromModel(event.End, event.TimeZone, event.AllDay)
+	if event.Organizer != "" || event.OrganizerEmail != "" {
+		payload.Organizer = googlePerson{DisplayName: event.Organizer, Email: event.OrganizerEmail}
+	}
+	for _, attendee := range event.Attendees {
+		payload.Attendees = append(payload.Attendees, googleAttendee{
+			DisplayName:    attendee.Name,
+			Email:          attendee.Email,
+			ResponseStatus: googleRSVPStatus(attendee.RSVP),
+			Optional:       attendee.Optional,
+		})
+	}
+	for _, attachment := range event.Attachments {
+		payload.Attachments = append(payload.Attachments, googleAttachment{
+			Title:    attachment.Title,
+			FileURL:  attachment.URI,
+			MIMEType: attachment.MIMEType,
+		})
+	}
+	return payload
+}
+
+func googleTimeFromModel(value time.Time, timezone string, allDay bool) googleEventTime {
+	if value.IsZero() {
+		return googleEventTime{}
+	}
+	if allDay {
+		return googleEventTime{Date: value.Format("2006-01-02")}
+	}
+	timezone = strings.TrimSpace(timezone)
+	if timezone != "" {
+		if loc, err := time.LoadLocation(timezone); err == nil {
+			return googleEventTime{DateTime: value.In(loc).Format(time.RFC3339), TimeZone: timezone}
+		}
+	}
+	return googleEventTime{DateTime: value.Format(time.RFC3339), TimeZone: timezone}
+}
+
 func googleAttendeesToModel(attendees []googleAttendee) []models.CalendarAttendee {
 	out := make([]models.CalendarAttendee, 0, len(attendees))
 	for _, attendee := range attendees {
@@ -511,6 +665,80 @@ func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 		UpdatedAt:         updated,
 		Raw:               data,
 	}, nil
+}
+
+func eventToICS(event models.CalendarEvent) string {
+	event.Ref = event.Ref.WithDefaults()
+	uid := firstNonEmpty(event.ProviderUID, event.Ref.EventID)
+	status := strings.ToUpper(strings.TrimSpace(event.Status))
+	if status == "" {
+		status = "CONFIRMED"
+	}
+	var b strings.Builder
+	b.WriteString("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Herald//Calendar Mutation//EN\r\nBEGIN:VEVENT\r\n")
+	writeCalendarICSLine(&b, "UID", uid)
+	writeCalendarICSLine(&b, "SUMMARY", event.Title)
+	writeCalendarICSLine(&b, "DESCRIPTION", event.Description)
+	writeCalendarICSLine(&b, "LOCATION", event.Location)
+	writeCalendarICSLine(&b, "STATUS", status)
+	if event.AllDay {
+		writeCalendarICSLine(&b, "DTSTART;VALUE=DATE", event.Start.Format("20060102"))
+		writeCalendarICSLine(&b, "DTEND;VALUE=DATE", event.End.Format("20060102"))
+	} else if timezone := strings.TrimSpace(event.TimeZone); timezone != "" {
+		loc := event.Start.Location()
+		if loaded, err := time.LoadLocation(timezone); err == nil {
+			loc = loaded
+		}
+		writeCalendarICSLine(&b, "DTSTART;TZID="+timezone, event.Start.In(loc).Format("20060102T150405"))
+		writeCalendarICSLine(&b, "DTEND;TZID="+timezone, event.End.In(loc).Format("20060102T150405"))
+	} else {
+		writeCalendarICSLine(&b, "DTSTART", event.Start.UTC().Format("20060102T150405Z"))
+		writeCalendarICSLine(&b, "DTEND", event.End.UTC().Format("20060102T150405Z"))
+	}
+	if event.Organizer != "" || event.OrganizerEmail != "" {
+		writeCalendarICSLine(&b, "ORGANIZER;CN="+event.Organizer, "mailto:"+event.OrganizerEmail)
+	}
+	for _, attendee := range event.Attendees {
+		role := "REQ-PARTICIPANT"
+		if attendee.Optional {
+			role = "OPT-PARTICIPANT"
+		}
+		key := "ATTENDEE;CN=" + attendee.Name + ";PARTSTAT=" + icsRSVPStatus(attendee.RSVP) + ";ROLE=" + role
+		writeCalendarICSLine(&b, key, "mailto:"+attendee.Email)
+	}
+	for _, rule := range event.Recurrence {
+		key, value, ok := strings.Cut(rule, ":")
+		if !ok {
+			continue
+		}
+		writeCalendarICSLine(&b, key, value)
+	}
+	for _, attachment := range event.Attachments {
+		key := "ATTACH;FILENAME=" + attachment.Title
+		if attachment.MIMEType != "" {
+			key += ";FMTTYPE=" + attachment.MIMEType
+		}
+		writeCalendarICSLine(&b, key, attachment.URI)
+	}
+	if !event.UpdatedAt.IsZero() {
+		writeCalendarICSLine(&b, "LAST-MODIFIED", event.UpdatedAt.UTC().Format("20060102T150405Z"))
+	}
+	b.WriteString("END:VEVENT\r\nEND:VCALENDAR\r\n")
+	return b.String()
+}
+
+func writeCalendarICSLine(b *strings.Builder, key, value string) {
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+	b.WriteString(key)
+	b.WriteString(":")
+	b.WriteString(escapeICSValue(value))
+	b.WriteString("\r\n")
+}
+
+func escapeICSValue(value string) string {
+	return strings.NewReplacer(`\`, `\\`, "\n", `\n`, "\r", "", ",", `\,`, ";", `\;`).Replace(value)
 }
 
 type icsRichDetails struct {
@@ -668,6 +896,51 @@ func normalizeCalendarStatus(value string) string {
 	}
 	value = strings.ReplaceAll(value, "_", "-")
 	return strings.ToLower(value)
+}
+
+func validateCalendarMutationOptions(opts models.CalendarMutationOptions) error {
+	scope := strings.TrimSpace(opts.RecurrenceScope)
+	if scope == "" || scope == models.CalendarMutationScopeThisEvent {
+		return nil
+	}
+	return fmt.Errorf("calendar recurrence scope %q is not supported yet", scope)
+}
+
+func setCalendarAttendeeRSVP(event *models.CalendarEvent, attendeeEmail, status string) error {
+	if event == nil {
+		return fmt.Errorf("calendar event is nil")
+	}
+	attendeeEmail = strings.TrimSpace(strings.ToLower(attendeeEmail))
+	if attendeeEmail == "" {
+		return fmt.Errorf("calendar attendee identity is not configured")
+	}
+	for i := range event.Attendees {
+		if strings.EqualFold(strings.TrimSpace(event.Attendees[i].Email), attendeeEmail) {
+			event.Attendees[i].RSVP = status
+			event.UpdatedAt = time.Now().UTC()
+			return nil
+		}
+	}
+	return fmt.Errorf("calendar attendee %s is not on this event", attendeeEmail)
+}
+
+func googleRSVPStatus(value string) string {
+	normalized, err := models.NormalizeCalendarRSVP(value)
+	if err != nil {
+		return strings.TrimSpace(value)
+	}
+	if normalized == "needs-action" {
+		return "needsAction"
+	}
+	return normalized
+}
+
+func icsRSVPStatus(value string) string {
+	normalized, err := models.NormalizeCalendarRSVP(value)
+	if err != nil {
+		return strings.ToUpper(strings.TrimSpace(value))
+	}
+	return strings.ToUpper(normalized)
 }
 
 func summarizeRecurrence(rules []string) string {

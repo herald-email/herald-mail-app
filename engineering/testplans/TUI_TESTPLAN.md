@@ -1735,6 +1735,30 @@ Check these states during every applicable lane:
 - Literal `e` typed in Compose, search prompts, and editor-like text fields remains text instead of opening Event Edit.
 - At `50x15`, the minimum-size guard appears instead of clipped Event Edit chrome, and resizing larger restores the edit state cleanly.
 
+### TC-38L — Calendar provider save and RSVP foundation
+
+This case covers the first provider-backed mutation slice after the local/cache Event Edit model is stable. It proves edited events and RSVP responses write through the selected calendar provider before updating Herald's cache, while keeping failure and recurrence scope visible.
+
+**Lane:** A, B when calendar provider fixtures are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode and a deterministic provider-backed calendar fixture using the local Google Calendar and CalDAV test harnesses.
+2. Press `3` or `F4` to open Calendar, then press `Enter` to open full Event Detail.
+3. Press `e`, change title/location/timezone fields, and press `Ctrl+S`.
+4. Confirm the provider mutation succeeds before the cached event detail/list/search rows update.
+5. Repeat with a fixture that forces a provider failure; confirm Event Edit stays open, the unsaved changes remain visible, and cached event rows do not change.
+6. From Event Detail, press the RSVP response key and confirm the selected attendee response updates through the provider and then the cache.
+7. Repeat text-entry checks in Compose, search prompts, and editor-like fields to confirm literal RSVP/edit shortcut keys remain text there.
+
+**Expect:**
+- Successful Event Edit saves call the provider mutation boundary first, refresh the cached scoped event only after success, and show a compact success status.
+- Provider failures are explicit to the user, keep the edit open with unsaved values intact, and do not overwrite cached event rows.
+- RSVP changes update attendee response state through the provider, then repaint Event Detail and source-scoped search rows from the saved event.
+- Recurring events show an explicit `this event` recurrence-scope label for the first mutation slice; broader recurrence editing remains unavailable.
+- Event Detail and Event Edit still hide provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, and daemon/MCP mutation APIs.
+- Literal `e` and the RSVP response shortcut typed in Compose, search prompts, and editor-like text fields remain text instead of firing calendar mutations.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

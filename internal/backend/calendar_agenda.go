@@ -1,12 +1,15 @@
 package backend
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/calendar"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -25,6 +28,7 @@ type CalendarAgendaBackend interface {
 // later provider-write stage enables them explicitly.
 type CalendarEventMutationBackend interface {
 	SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
+	RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error)
 }
 
 func (d *DemoBackend) CalendarAgendaAvailable() bool {
@@ -78,6 +82,29 @@ func (d *DemoBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Cal
 	return nil, sql.ErrNoRows
 }
 
+func (d *DemoBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
+	normalized, err := models.NormalizeCalendarRSVP(status)
+	if err != nil {
+		return nil, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ref = ref.WithDefaults()
+	for i := range d.calendarEvents {
+		if d.calendarEvents[i].Ref.WithDefaults().LocalID != ref.LocalID {
+			continue
+		}
+		if len(d.calendarEvents[i].Attendees) == 0 {
+			return nil, fmt.Errorf("calendar event has no attendee response to update")
+		}
+		d.calendarEvents[i].Attendees[0].RSVP = normalized
+		d.calendarEvents[i].UpdatedAt = time.Now().UTC()
+		saved := d.calendarEvents[i]
+		return &saved, nil
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (d *DemoBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -127,7 +154,63 @@ func (b *LocalBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 	if event.UpdatedAt.IsZero() {
 		event.UpdatedAt = time.Now().UTC()
 	}
+	if source, ok, err := b.calendarMutationSourceForRef(event.Ref); err != nil {
+		return nil, err
+	} else if ok {
+		saved, err := source.UpdateEvent(context.Background(), event, models.CalendarMutationOptions{
+			RecurrenceScope: models.CalendarMutationScopeThisEvent,
+			IfMatch:         event.Ref.ETag,
+		})
+		if err != nil {
+			return nil, calendarProviderMutationError("save", err)
+		}
+		if err := b.cache.PutCalendarEvent(*saved); err != nil {
+			return nil, err
+		}
+		return b.cache.GetCalendarEventByRef(saved.Ref)
+	}
 	if err := b.cache.PutCalendarEvent(event); err != nil {
+		return nil, err
+	}
+	return b.cache.GetCalendarEventByRef(event.Ref)
+}
+
+func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
+	if b == nil || b.cache == nil {
+		return nil, sql.ErrNoRows
+	}
+	ref = ref.WithDefaults()
+	source, ok, err := b.calendarMutationSourceForRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		saved, err := source.RespondToEvent(context.Background(), ref, status, models.CalendarMutationOptions{
+			RecurrenceScope: models.CalendarMutationScopeThisEvent,
+			IfMatch:         ref.ETag,
+		})
+		if err != nil {
+			return nil, calendarProviderMutationError("RSVP", err)
+		}
+		if err := b.cache.PutCalendarEvent(*saved); err != nil {
+			return nil, err
+		}
+		return b.cache.GetCalendarEventByRef(saved.Ref)
+	}
+	event, err := b.cache.GetCalendarEventByRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	normalized, err := models.NormalizeCalendarRSVP(status)
+	if err != nil {
+		return nil, err
+	}
+	if len(event.Attendees) == 0 {
+		return nil, fmt.Errorf("calendar event has no attendee response to update")
+	}
+	event.Attendees[0].RSVP = normalized
+	event.UpdatedAt = time.Now().UTC()
+	if err := b.cache.PutCalendarEvent(*event); err != nil {
 		return nil, err
 	}
 	return b.cache.GetCalendarEventByRef(event.Ref)
@@ -160,6 +243,36 @@ func (b *LocalBackend) configuredCalendarSources() []config.SourceConfig {
 		}
 	}
 	return sources
+}
+
+func (b *LocalBackend) calendarMutationSourceForRef(ref models.EventRef) (calendar.MutationSource, bool, error) {
+	for _, source := range b.configuredCalendarSources() {
+		if models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID) != ref.SourceID {
+			continue
+		}
+		if source.Provider == "google_calendar" && (strings.TrimSpace(source.Google.AccessToken) != "" || strings.TrimSpace(source.Google.APIBaseURL) != "") {
+			src, err := calendar.NewGoogleCalendarSource(source)
+			if err != nil {
+				return nil, false, calendarProviderMutationError("open", err)
+			}
+			return src, true, nil
+		}
+		if source.Provider == "caldav" && strings.TrimSpace(source.CalDAV.URL) != "" {
+			src, err := calendar.NewCalDAVSource(source)
+			if err != nil {
+				return nil, false, calendarProviderMutationError("open", err)
+			}
+			return src, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func calendarProviderMutationError(action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("calendar provider %s failed; cache was not updated", strings.ToLower(strings.TrimSpace(action)))
 }
 
 func (m *MultiBackend) CalendarAgendaAvailable() bool {
@@ -216,6 +329,31 @@ func (m *MultiBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 			}
 		}
 		saved, err := backend.SaveCalendarEvent(event)
+		if err == nil {
+			return saved, nil
+		}
+		lastErr = err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+func (m *MultiBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
+	ref = ref.WithDefaults()
+	var lastErr error = sql.ErrNoRows
+	for _, backend := range m.calendarMutationBackendsForRef(ref) {
+		if agenda, ok := backend.(CalendarAgendaBackend); ok {
+			if _, err := agenda.GetCalendarEvent(ref); err != nil {
+				lastErr = err
+				if !errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				continue
+			}
+		}
+		saved, err := backend.RespondCalendarEvent(ref, status)
 		if err == nil {
 			return saved, nil
 		}

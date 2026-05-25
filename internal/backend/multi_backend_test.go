@@ -33,6 +33,8 @@ type recordingAccountBackend struct {
 	calendarEvents      []models.CalendarEvent
 	calendarSearch      []string
 	savedCalendarEvents []models.CalendarEvent
+	rsvpCalendarRefs    []models.EventRef
+	rsvpCalendarStatus  []string
 	closed              bool
 }
 
@@ -218,6 +220,24 @@ func (b *recordingAccountBackend) SaveCalendarEvent(event models.CalendarEvent) 
 		}
 	}
 	return nil, fmt.Errorf("missing calendar event %s", event.Ref.LocalID)
+}
+
+func (b *recordingAccountBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
+	ref = ref.WithDefaults()
+	b.rsvpCalendarRefs = append(b.rsvpCalendarRefs, ref)
+	b.rsvpCalendarStatus = append(b.rsvpCalendarStatus, status)
+	for i := range b.calendarEvents {
+		if b.calendarEvents[i].Ref.WithDefaults().LocalID != ref.LocalID {
+			continue
+		}
+		if len(b.calendarEvents[i].Attendees) == 0 {
+			b.calendarEvents[i].Attendees = []models.CalendarAttendee{{Name: "Me", Email: "me@example.com"}}
+		}
+		b.calendarEvents[i].Attendees[0].RSVP = status
+		saved := b.calendarEvents[i]
+		return &saved, nil
+	}
+	return nil, fmt.Errorf("missing calendar event %s", ref.LocalID)
 }
 
 func (b *recordingAccountBackend) Close() error {

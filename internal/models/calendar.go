@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -47,6 +48,15 @@ type CalendarAttachment struct {
 	Title    string
 	URI      string
 	MIMEType string
+}
+
+const (
+	CalendarMutationScopeThisEvent = "this_event"
+)
+
+type CalendarMutationOptions struct {
+	RecurrenceScope string
+	IfMatch         string
 }
 
 func (e CalendarEvent) EventRef() EventRef {
@@ -97,4 +107,37 @@ func CalendarEventSearchText(event CalendarEvent) string {
 		parts = append(parts, attachment.Title, attachment.MIMEType)
 	}
 	return strings.ToLower(strings.Join(parts, " "))
+}
+
+func NormalizeCalendarRSVP(value string) (string, error) {
+	value = strings.TrimSpace(strings.ToLower(strings.ReplaceAll(value, "_", "-")))
+	switch value {
+	case "accepted", "accept", "yes":
+		return "accepted", nil
+	case "tentative", "maybe":
+		return "tentative", nil
+	case "declined", "decline", "no":
+		return "declined", nil
+	case "needs-action", "needsaction", "none", "":
+		return "needs-action", nil
+	default:
+		return "", fmt.Errorf("unsupported RSVP status %q", value)
+	}
+}
+
+func NextCalendarRSVP(value string) string {
+	normalized, err := NormalizeCalendarRSVP(value)
+	if err != nil {
+		return "accepted"
+	}
+	switch normalized {
+	case "accepted":
+		return "tentative"
+	case "tentative":
+		return "declined"
+	case "declined":
+		return "needs-action"
+	default:
+		return "accepted"
+	}
 }
