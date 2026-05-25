@@ -17,7 +17,7 @@ func makeAutoClassifyModel(classifier ai.AIClient) *Model {
 		classifications: make(map[string]string),
 		backend:         &stubBackend{},
 		classifier:      classifier,
-		ruleRequestCh:   make(chan models.RuleRequest, 20),
+		ruleRequestCh:   make(chan models.AutomationEvent, 20),
 		ruleResultCh:    make(chan models.RuleResult, 50),
 	}
 	m.timeline.emails = []*models.EmailData{
@@ -95,6 +95,9 @@ func TestAutoClassifyTriggersRule(t *testing.T) {
 
 	select {
 	case req := <-m.ruleRequestCh:
+		if req.Kind != models.AutomationEventMailMessageReceived {
+			t.Errorf("rule request kind = %q, want mail message", req.Kind)
+		}
 		if req.Email.MessageID != "msg-new" {
 			t.Errorf("rule request email ID = %q, want %q", req.Email.MessageID, "msg-new")
 		}
@@ -124,6 +127,9 @@ func TestAutoClassifyTriggersRule_Error(t *testing.T) {
 	// Rule engine should still receive the email with empty category.
 	select {
 	case req := <-m.ruleRequestCh:
+		if req.Kind != models.AutomationEventMailMessageReceived {
+			t.Errorf("rule request kind = %q, want mail message", req.Kind)
+		}
 		if req.Email.MessageID != "msg-new" {
 			t.Errorf("rule request email ID = %q, want %q", req.Email.MessageID, "msg-new")
 		}
@@ -178,6 +184,9 @@ func TestAutoClassifyNilClassifier(t *testing.T) {
 	// The pre-classified email should have been sent to the rule engine directly.
 	select {
 	case req := <-m.ruleRequestCh:
+		if req.Kind != models.AutomationEventMailMessageReceived {
+			t.Errorf("rule request kind = %q, want mail message", req.Kind)
+		}
 		if req.Email.MessageID != "msg-pre" {
 			t.Errorf("rule request email ID = %q, want %q", req.Email.MessageID, "msg-pre")
 		}

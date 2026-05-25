@@ -457,7 +457,7 @@ type Model struct {
 	deletionResultCh  chan models.DeletionResult
 
 	// Rule engine channels
-	ruleRequestCh   chan models.RuleRequest
+	ruleRequestCh   chan models.AutomationEvent
 	ruleResultCh    chan models.RuleResult
 	rulesFiredCount int // total rules fired across session
 
@@ -787,7 +787,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	deletionResultCh := make(chan models.DeletionResult, 10)
 
 	// Create rule engine channels
-	ruleRequestCh := make(chan models.RuleRequest, 20)
+	ruleRequestCh := make(chan models.AutomationEvent, 20)
 	ruleResultCh := make(chan models.RuleResult, 50)
 
 	searchInput := textinput.New()
@@ -1982,7 +1982,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, e := range m.timeline.emails {
 			if e.MessageID == msg.MessageID {
 				select {
-				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: msg.Category}:
+				case m.ruleRequestCh <- models.NewMailAutomationEvent(e, msg.Category):
 				default:
 				}
 				break
@@ -2421,7 +2421,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, e := range m.timeline.emails {
 			if e.MessageID == msg.MessageID {
 				select {
-				case m.ruleRequestCh <- models.RuleRequest{Email: e, Category: cat}:
+				case m.ruleRequestCh <- models.NewMailAutomationEvent(e, cat):
 				default:
 				}
 				break

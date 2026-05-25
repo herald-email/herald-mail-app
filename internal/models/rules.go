@@ -45,6 +45,124 @@ type Rule struct {
 	LastTriggered  *time.Time
 }
 
+type AutomationEventKind string
+
+const (
+	AutomationEventMailMessageReceived  AutomationEventKind = "mail_message_received"
+	AutomationEventCalendarEventChanged AutomationEventKind = "calendar_event_changed"
+)
+
+type AutomationEvent struct {
+	Kind       AutomationEventKind `json:"kind"`
+	SourceID   SourceID            `json:"source_id,omitempty"`
+	AccountID  AccountID           `json:"account_id,omitempty"`
+	Collection CollectionRef       `json:"collection,omitempty"`
+
+	Email      *EmailData     `json:"email,omitempty"`
+	MessageRef MessageRef     `json:"message_ref,omitempty"`
+	Category   string         `json:"category,omitempty"`
+	Event      *CalendarEvent `json:"event,omitempty"`
+	EventRef   EventRef       `json:"event_ref,omitempty"`
+}
+
+func NewMailAutomationEvent(email *EmailData, category string) AutomationEvent {
+	return AutomationEvent{
+		Kind:     AutomationEventMailMessageReceived,
+		Email:    email,
+		Category: category,
+	}.WithDefaults()
+}
+
+func NewCalendarAutomationEvent(event CalendarEvent) AutomationEvent {
+	return AutomationEvent{
+		Kind:  AutomationEventCalendarEventChanged,
+		Event: &event,
+	}.WithDefaults()
+}
+
+func (e AutomationEvent) WithDefaults() AutomationEvent {
+	if e.Kind == "" {
+		if e.Event != nil || e.EventRef.EventID != "" || e.EventRef.LocalID != "" {
+			e.Kind = AutomationEventCalendarEventChanged
+		} else {
+			e.Kind = AutomationEventMailMessageReceived
+		}
+	}
+
+	switch e.Kind {
+	case AutomationEventCalendarEventChanged:
+		ref := e.EventRef
+		if e.Event != nil {
+			ref = e.Event.EventRef()
+		}
+		if e.SourceID != "" {
+			ref.SourceID = e.SourceID
+		}
+		if e.AccountID != "" {
+			ref.AccountID = e.AccountID
+		}
+		ref = ref.WithDefaults()
+		e.EventRef = ref
+		e.SourceID = ref.SourceID
+		e.AccountID = ref.AccountID
+		if e.Collection.Kind == "" {
+			e.Collection = CollectionRef{
+				SourceID:     ref.SourceID,
+				AccountID:    ref.AccountID,
+				Kind:         SourceKindCalendar,
+				CollectionID: ref.CalendarID,
+				DisplayName:  ref.CalendarID,
+			}
+		}
+	default:
+		ref := e.MessageRef
+		if e.Email != nil {
+			ref = e.Email.MessageRef()
+		}
+		if e.SourceID != "" {
+			ref.SourceID = e.SourceID
+		}
+		if e.AccountID != "" {
+			ref.AccountID = e.AccountID
+		}
+		ref = ref.WithDefaults()
+		e.MessageRef = ref
+		e.SourceID = ref.SourceID
+		e.AccountID = ref.AccountID
+		if e.Collection.Kind == "" {
+			e.Collection = CollectionRef{
+				SourceID:     ref.SourceID,
+				AccountID:    ref.AccountID,
+				Kind:         SourceKindMail,
+				CollectionID: ref.Folder,
+				DisplayName:  ref.Folder,
+			}
+		}
+	}
+	return e
+}
+
+func (e AutomationEvent) ItemID() string {
+	e = e.WithDefaults()
+	switch e.Kind {
+	case AutomationEventCalendarEventChanged:
+		if e.EventRef.LocalID != "" {
+			return e.EventRef.LocalID
+		}
+		return e.EventRef.EventID
+	default:
+		if e.MessageRef.LocalID != "" {
+			return e.MessageRef.LocalID
+		}
+		return e.MessageRef.MessageID
+	}
+}
+
+func (e AutomationEvent) SourceKey() string {
+	e = e.WithDefaults()
+	return string(e.SourceID)
+}
+
 type CustomPrompt struct {
 	ID           int64
 	Name         string
@@ -64,13 +182,15 @@ type RuleContext struct {
 	Folder       string
 }
 
-type RuleRequest struct {
-	Email    *EmailData
-	Category string
-}
+type RuleRequest = AutomationEvent
 
 type RuleResult struct {
+	Kind       AutomationEventKind
+	SourceID   SourceID
+	AccountID  AccountID
+	ItemID     string
 	MessageID  string
+	EventID    string
 	FiredCount int
 	Err        error
 }
@@ -120,6 +240,9 @@ type RuleDryRunReport struct {
 type RuleDryRunRow struct {
 	RuleID    int64     `json:"rule_id"`
 	RuleName  string    `json:"rule_name"`
+	SourceID  SourceID  `json:"source_id,omitempty"`
+	AccountID AccountID `json:"account_id,omitempty"`
+	LocalID   string    `json:"local_id,omitempty"`
 	MessageID string    `json:"message_id"`
 	Sender    string    `json:"sender"`
 	Domain    string    `json:"domain"`

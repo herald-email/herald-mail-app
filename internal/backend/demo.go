@@ -1042,10 +1042,14 @@ func (d *DemoBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*
 			if !email.Date.Before(olderThan) || !demoCleanupRuleMatches(rule, email) {
 				continue
 			}
+			ref := email.MessageRef()
 			matches[email.MessageID] = true
 			report.Rows = append(report.Rows, models.RuleDryRunRow{
 				RuleID:    rule.ID,
 				RuleName:  cleanupRuleName(rule),
+				SourceID:  ref.SourceID,
+				AccountID: ref.AccountID,
+				LocalID:   ref.LocalID,
 				MessageID: email.MessageID,
 				Sender:    email.Sender,
 				Domain:    extractDemoEmailDomain(email.Sender),

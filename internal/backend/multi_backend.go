@@ -609,6 +609,14 @@ func (m *MultiBackend) ArchiveEmailByRef(ref models.MessageRef) error {
 	return slot.backend.ArchiveEmail(ref.MessageID, ref.Folder)
 }
 
+func (m *MultiBackend) MoveEmailByRef(ref models.MessageRef, to string) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.MoveEmail(ref.MessageID, ref.Folder, to)
+}
+
 func (m *MultiBackend) DeleteEmailByRef(ref models.MessageRef) error {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

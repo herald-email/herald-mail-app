@@ -1800,10 +1800,14 @@ func (b *LocalBackend) PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (
 			if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
 				continue
 			}
+			ref := email.MessageRef()
 			matches[email.MessageID] = true
 			report.Rows = append(report.Rows, models.RuleDryRunRow{
 				RuleID:    rule.ID,
 				RuleName:  cleanupRuleName(rule),
+				SourceID:  ref.SourceID,
+				AccountID: ref.AccountID,
+				LocalID:   ref.LocalID,
 				MessageID: email.MessageID,
 				Sender:    email.Sender,
 				Domain:    backendSenderDomain(email.Sender),

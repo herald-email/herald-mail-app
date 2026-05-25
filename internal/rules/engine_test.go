@@ -78,6 +78,39 @@ func (m *mockExecutor) DeleteEmail(messageID, folder string) error {
 	return nil
 }
 
+type scopedMockExecutor struct {
+	legacyMoved int
+	movedRef    models.MessageRef
+	movedTo     string
+}
+
+func (m *scopedMockExecutor) MoveEmail(messageID, from, to string) error {
+	m.legacyMoved++
+	return nil
+}
+
+func (m *scopedMockExecutor) ArchiveEmail(messageID, folder string) error {
+	return nil
+}
+
+func (m *scopedMockExecutor) DeleteEmail(messageID, folder string) error {
+	return nil
+}
+
+func (m *scopedMockExecutor) MoveEmailByRef(ref models.MessageRef, to string) error {
+	m.movedRef = ref
+	m.movedTo = to
+	return nil
+}
+
+func (m *scopedMockExecutor) ArchiveEmailByRef(ref models.MessageRef) error {
+	return nil
+}
+
+func (m *scopedMockExecutor) DeleteEmailByRef(ref models.MessageRef) error {
+	return nil
+}
+
 // --- helpers ---
 
 func makeEmail(sender, subject, folder, messageID string) *models.EmailData {
@@ -207,6 +240,38 @@ func TestEvaluateEmail_FiresMatchingRule(t *testing.T) {
 	}
 	if store.log[0].Status != "ok" {
 		t.Errorf("expected log status ok, got %s", store.log[0].Status)
+	}
+}
+
+func TestEvaluateEmailUsesScopedExecutorWhenAvailable(t *testing.T) {
+	store := &mockStore{
+		rules: []*models.Rule{
+			makeRule(1, models.TriggerSender, "alice@example.com",
+				models.RuleAction{Type: models.ActionMove, DestFolder: "Archive"}),
+		},
+	}
+	exec := &scopedMockExecutor{}
+	engine := New(store, exec, nil)
+
+	email := makeEmail("alice@example.com", "Hello", "INBOX", "msg-1")
+	email.SourceID = "mail-work"
+	email.AccountID = "work"
+
+	fired, err := engine.EvaluateEmail(email, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fired != 1 {
+		t.Fatalf("fired = %d, want 1", fired)
+	}
+	if exec.legacyMoved != 0 {
+		t.Fatalf("legacy move called %d time(s), want scoped move only", exec.legacyMoved)
+	}
+	if exec.movedRef.SourceID != "mail-work" || exec.movedRef.AccountID != "work" || exec.movedRef.MessageID != "msg-1" {
+		t.Fatalf("movedRef = %#v, want scoped msg-1", exec.movedRef)
+	}
+	if exec.movedTo != "Archive" {
+		t.Fatalf("movedTo = %q, want Archive", exec.movedTo)
 	}
 }
 
@@ -432,6 +497,8 @@ func TestDryRunRulesEngine(t *testing.T) {
 
 func TestPlanDryRunBuildsStructuredAutomationRows(t *testing.T) {
 	email := makeEmail("Packet Press <newsletter@packetpress.example>", "Weekly systems digest", "INBOX", "msg-newsletter")
+	email.SourceID = "mail-work"
+	email.AccountID = "work"
 	email.Date = time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
 
 	rules := []*models.Rule{
@@ -465,6 +532,9 @@ func TestPlanDryRunBuildsStructuredAutomationRows(t *testing.T) {
 	for _, row := range report.Rows {
 		if row.MessageID != "msg-newsletter" {
 			t.Errorf("row MessageID = %q, want msg-newsletter", row.MessageID)
+		}
+		if row.SourceID != "mail-work" || row.AccountID != "work" || row.LocalID == "" {
+			t.Errorf("row scope = %q/%q local=%q, want mail-work/work with local id", row.SourceID, row.AccountID, row.LocalID)
 		}
 		if row.Sender != email.Sender {
 			t.Errorf("row Sender = %q, want %q", row.Sender, email.Sender)

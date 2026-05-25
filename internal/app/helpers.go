@@ -116,17 +116,23 @@ func (m *Model) listenForDeletionResults() tea.Cmd {
 func (m *Model) ruleWorker() {
 	engine := rules.New(m.backend, m.backend, m.classifier)
 	engine.DryRun = m.dryRun
-	for req := range m.ruleRequestCh {
-		fired, err := engine.EvaluateEmail(req.Email, req.Category)
-		select {
-		case m.ruleResultCh <- models.RuleResult{
-			MessageID:  req.Email.MessageID,
-			FiredCount: fired,
-			Err:        err,
-		}:
-		default:
-			// result dropped if channel full — rule fired but UI won't see the count
-		}
+	lane := rules.NewAutomationLane(engine)
+	defer lane.Close()
+	for event := range m.ruleRequestCh {
+		result := lane.Submit(context.Background(), event)
+		go m.forwardRuleResult(result)
+	}
+}
+
+func (m *Model) forwardRuleResult(result rules.AutomationResult) {
+	ruleResult, err := result.Await(context.Background())
+	if err != nil && ruleResult.Err == nil {
+		ruleResult.Err = err
+	}
+	select {
+	case m.ruleResultCh <- ruleResult:
+	default:
+		// result dropped if channel full — rule fired but UI won't see the count
 	}
 }
 

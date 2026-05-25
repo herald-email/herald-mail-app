@@ -29,6 +29,12 @@ type Executor interface {
 	DeleteEmail(messageID, folder string) error
 }
 
+type ScopedExecutor interface {
+	MoveEmailByRef(ref models.MessageRef, to string) error
+	ArchiveEmailByRef(ref models.MessageRef) error
+	DeleteEmailByRef(ref models.MessageRef) error
+}
+
 // Engine evaluates rules against incoming emails and executes their actions.
 type Engine struct {
 	store    Store
@@ -115,6 +121,18 @@ func (e *Engine) EvaluateEmail(email *models.EmailData, category string) (int, e
 }
 
 func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData, ctx models.RuleContext) error {
+	ref := email.MessageRef()
+	if scoped, ok := e.executor.(ScopedExecutor); ok && ref.LocalID != "" {
+		switch action.Type {
+		case models.ActionMove:
+			return scoped.MoveEmailByRef(ref, action.DestFolder)
+		case models.ActionArchive:
+			return scoped.ArchiveEmailByRef(ref)
+		case models.ActionDelete:
+			return scoped.DeleteEmailByRef(ref)
+		}
+	}
+
 	switch action.Type {
 	case models.ActionMove:
 		return e.executor.MoveEmail(email.MessageID, email.Folder, action.DestFolder)
@@ -187,6 +205,7 @@ func PlanDryRun(req models.RuleDryRunRequest, rules []*models.Rule, emails []*mo
 		if req.Folder != "" && !req.AllFolders && email.Folder != req.Folder {
 			continue
 		}
+		ref := email.MessageRef()
 		category := classifications[email.MessageID]
 		for _, rule := range selected {
 			if !MatchRule(rule, email, category) {
@@ -197,6 +216,9 @@ func PlanDryRun(req models.RuleDryRunRequest, rules []*models.Rule, emails []*mo
 				report.Rows = append(report.Rows, models.RuleDryRunRow{
 					RuleID:    rule.ID,
 					RuleName:  ruleName(rule),
+					SourceID:  ref.SourceID,
+					AccountID: ref.AccountID,
+					LocalID:   ref.LocalID,
 					MessageID: email.MessageID,
 					Sender:    email.Sender,
 					Domain:    extractDomain(email.Sender),

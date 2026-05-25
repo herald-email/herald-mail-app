@@ -22,6 +22,7 @@ type recordingAccountBackend struct {
 	loadCalls      []string
 	deleteCalls    []string
 	archiveCalls   []string
+	moveCalls      []string
 	sendCalls      []string
 	composeSends   []ComposeSendRequest
 	saveDraftCalls []string
@@ -110,6 +111,11 @@ func (b *recordingAccountBackend) DeleteEmail(messageID, folder string) error {
 
 func (b *recordingAccountBackend) ArchiveEmail(messageID, folder string) error {
 	b.archiveCalls = append(b.archiveCalls, folder+":"+messageID)
+	return nil
+}
+
+func (b *recordingAccountBackend) MoveEmail(messageID, from, to string) error {
+	b.moveCalls = append(b.moveCalls, from+":"+messageID+":"+to)
 	return nil
 }
 
@@ -499,6 +505,16 @@ func TestMultiBackendScopedMessageReadAndMutationRouteToSource(t *testing.T) {
 	}
 	if len(work.archiveCalls) != 0 {
 		t.Fatalf("work archive calls=%#v, want none", work.archiveCalls)
+	}
+
+	if err := mb.MoveEmailByRef(personalEmail.MessageRef(), "Later"); err != nil {
+		t.Fatalf("MoveEmailByRef personal: %v", err)
+	}
+	if got := personal.moveCalls; !reflect.DeepEqual(got, []string{"INBOX:same-message:Later"}) {
+		t.Fatalf("personal move calls=%#v", got)
+	}
+	if len(work.moveCalls) != 0 {
+		t.Fatalf("work move calls=%#v, want none", work.moveCalls)
 	}
 
 	if err := mb.DeleteEmailByRef(workEmail.MessageRef()); err != nil {

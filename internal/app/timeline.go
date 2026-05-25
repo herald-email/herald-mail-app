@@ -2477,7 +2477,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				cmds = append(cmds, m.autoClassifyEmailCmd(email))
 			} else if cat := m.classifications[email.MessageID]; cat != "" {
 				select {
-				case m.ruleRequestCh <- models.RuleRequest{Email: email, Category: cat}:
+				case m.ruleRequestCh <- models.NewMailAutomationEvent(email, cat):
 				default:
 				}
 			}

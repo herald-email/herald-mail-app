@@ -146,7 +146,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 
 - [ ] `latestWinsLoadCoordinator` migrates first into a reusable `internal/work` policy for active collection sync.
 - [ ] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
-- [ ] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
+- [x] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
 - [ ] `classifyCh` remains mail-only at first but stores results under scoped message identity.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
@@ -232,7 +232,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 7E: Add full read-only Event Detail metadata and timezone rendering so attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone are proven before mutations.
   - [x] Phase 7F: Add read-only cache-backed Calendar Search over scoped event rows before mutation UI.
   - [x] Phase 7G: Add cross-source search over mail plus events.
-  - [ ] Add source-aware automation lanes for mail and calendar events.
+  - [x] Add source-aware automation lanes for mail and calendar events.
   - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 
 ## Acceptance Criteria

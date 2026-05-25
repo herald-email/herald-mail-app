@@ -259,6 +259,7 @@ When an email matches a category, the system can trigger an action automatically
 - [x] Dry-run mode: `--dry-run` flag logs what actions would fire without executing them
 - [x] Rule overlay explains that automation rules handle future matching mail, shows saved rules in the same compact centered overlay, and tells the user where the action results surface
 - [x] Rule editor dry-run preview shows matched cached messages and planned actions before users save or enable move/archive/delete automation
+- [x] Automation events carry source/account identity so mail rules stay scoped per source and future calendar change events can enter the lane without enabling calendar mutations
 
 #### Example configuration
 
