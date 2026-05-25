@@ -11,10 +11,12 @@ import (
 
 type calendarAgendaStubBackend struct {
 	stubBackend
-	available   bool
-	events      []models.CalendarEvent
-	getCalls    int
-	searchCalls []string
+	available        bool
+	events           []models.CalendarEvent
+	crossResults     []models.CrossSourceSearchResult
+	getCalls         int
+	searchCalls      []string
+	crossSearchCalls []string
 }
 
 func (b *calendarAgendaStubBackend) CalendarAgendaAvailable() bool {
@@ -76,6 +78,25 @@ func (b *calendarAgendaStubBackend) SearchCalendarEvents(query string, start, en
 		}
 		if query != "" && strings.Contains(haystack, query) {
 			out = append(out, event)
+		}
+	}
+	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) CrossSourceSearch(query string) ([]models.CrossSourceSearchResult, error) {
+	b.crossSearchCalls = append(b.crossSearchCalls, query)
+	query = strings.ToLower(strings.TrimSpace(query))
+	out := make([]models.CrossSourceSearchResult, 0, len(b.crossResults))
+	for _, result := range b.crossResults {
+		haystack := strings.ToLower(result.MatchHint + " ")
+		if result.Email != nil {
+			haystack += strings.ToLower(result.Email.Sender + " " + result.Email.Subject + " " + result.Email.Folder)
+		}
+		if result.Event != nil {
+			haystack += models.CalendarEventSearchText(*result.Event)
+		}
+		if query != "" && strings.Contains(haystack, query) {
+			out = append(out, result)
 		}
 	}
 	return out, nil
@@ -210,6 +231,245 @@ func TestCalendarSearchNoMatchesAndProviderInternalsHidden(t *testing.T) {
 			t.Fatalf("no-match search leaked or advertised %q:\n%s", forbidden, rendered)
 		}
 	}
+}
+
+func TestCrossSourceSearchViewBlendsMailAndCalendarResults(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	event := richCalendarEventForTest()
+	event.Title = "Launch planning"
+	event.Description = "Discuss the product launch plan."
+	event.Start = start
+	event.End = start.Add(time.Hour)
+	event.ProviderUID = "provider-secret"
+	event.Ref.ETag = `"provider-etag"`
+	event.Raw = `{"syncToken":"secret"}`
+	mail := &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "mail-planning",
+		UID:       42,
+		Folder:    "INBOX",
+		Sender:    "mina@example.com",
+		Subject:   "Launch planning memo",
+		Date:      start.Add(-time.Hour),
+	}
+	b := &calendarAgendaStubBackend{
+		available: true,
+		events:    []models.CalendarEvent{event},
+		crossResults: []models.CrossSourceSearchResult{
+			{Kind: models.CrossSourceResultMail, Email: mail, When: mail.Date, MatchHint: "subject"},
+			{Kind: models.CrossSourceResultEvent, Event: &event, When: event.Start, MatchHint: "title"},
+		},
+	}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, cmd := m.handleKeyMsg(keyRunes("x"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewCrossSearch {
+		t.Fatalf("calendarView = %q, want cross-source search", m.calendarView)
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+
+	model, cmd = m.handleKeyMsg(keyRunes("planning"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.crossSearchCalls) == 0 || b.crossSearchCalls[len(b.crossSearchCalls)-1] != "planning" {
+		t.Fatalf("cross search calls = %#v, want planning", b.crossSearchCalls)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Cross-Source Search", "mail", "event", "Launch planning memo", "Launch planning", "mina@example.com", "read-only"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("cross-source search missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Edit"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("cross-source search leaked or advertised %q:\n%s", forbidden, rendered)
+		}
+	}
+
+	model, _ = m.handleKeyMsg(keyRunes("j"))
+	m = model.(*Model)
+	moved := stripANSI(m.renderMainView())
+	if moved == rendered {
+		t.Fatalf("expected j to move cross-source detail selection:\n%s", moved)
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarView != calendarViewAgenda || m.crossSourceSearchQuery != "" {
+		t.Fatalf("Esc should clear cross-source search to agenda, view=%q query=%q", m.calendarView, m.crossSourceSearchQuery)
+	}
+}
+
+func TestCrossSourceSearchDoesNotReplaceCalendarSearchOrAcceptStaleResults(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	event := richCalendarEventForTest()
+	event.Title = "Launch planning"
+	event.Start = start
+	mail := &models.EmailData{
+		MessageID: "mail-planning",
+		Folder:    "INBOX",
+		Sender:    "mina@example.com",
+		Subject:   "Launch planning memo",
+		Date:      start.Add(-time.Hour),
+	}
+	b := &calendarAgendaStubBackend{
+		available: true,
+		events:    []models.CalendarEvent{event},
+		crossResults: []models.CrossSourceSearchResult{
+			{Kind: models.CrossSourceResultMail, Email: mail, When: mail.Date, MatchHint: "subject"},
+			{Kind: models.CrossSourceResultEvent, Event: &event, When: event.Start, MatchHint: "title"},
+		},
+	}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+
+	model, cmd := m.handleKeyMsg(keyRunes("/"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	model, cmd = m.handleKeyMsg(keyRunes("planning"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if m.calendarView != calendarViewSearch {
+		t.Fatalf("calendar search view = %q, want event-only search", m.calendarView)
+	}
+	if len(m.calendarSearchResults) != 1 {
+		t.Fatalf("calendar search results = %#v, want one event-only result", m.calendarSearchResults)
+	}
+	if len(b.crossSearchCalls) != 0 {
+		t.Fatalf("calendar search should not call cross-source search: %#v", b.crossSearchCalls)
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	model, cmd = m.handleKeyMsg(keyRunes("x"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	m.crossSourceSearchQuery = "newer"
+	stale := CrossSourceSearchLoadedMsg{
+		Query: "older",
+		Results: []models.CrossSourceSearchResult{
+			{Kind: models.CrossSourceResultMail, Email: mail, When: mail.Date},
+		},
+	}
+	model, _ = m.Update(stale)
+	m = model.(*Model)
+	if len(m.crossSourceSearchResults) != 0 {
+		t.Fatalf("stale cross-source results repainted newer query: %#v", m.crossSourceSearchResults)
+	}
+}
+
+func TestCrossSourceSearchShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("x"))
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("activeTab = %d, want Compose", m.activeTab)
+		}
+		if got := m.composeBody.Value(); got != "x" {
+			t.Fatalf("compose body=%q, want literal x", got)
+		}
+	})
+
+	t.Run("timeline prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("x"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "x" {
+			t.Fatalf("timeline search=%q, want literal x", got)
+		}
+	})
+
+	t.Run("calendar search", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarEvents = b.events
+		m.openCalendarSearch()
+
+		model, cmd := m.handleKeyMsg(keyRunes("x"))
+		m = model.(*Model)
+		for _, msg := range calendarImmediateMessagesForTest(cmd) {
+			model, _ = m.Update(msg)
+			m = model.(*Model)
+		}
+		if m.calendarView != calendarViewSearch {
+			t.Fatalf("calendarView = %q, want Calendar Search", m.calendarView)
+		}
+		if m.calendarSearchQuery != "x" {
+			t.Fatalf("calendar search query=%q, want literal x", m.calendarSearchQuery)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("x"))
+		m = model.(*Model)
+		if !m.showPromptEditor {
+			t.Fatal("prompt editor should remain active after typing x")
+		}
+		if got := m.promptEditor.name; got != "x" {
+			t.Fatalf("prompt editor name=%q, want literal x", got)
+		}
+	})
 }
 
 func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {

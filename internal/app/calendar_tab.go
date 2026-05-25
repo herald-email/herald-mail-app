@@ -15,11 +15,12 @@ import (
 type calendarViewMode string
 
 const (
-	calendarViewAgenda   calendarViewMode = "agenda"
-	calendarViewDay      calendarViewMode = "day"
-	calendarViewWeek     calendarViewMode = "week"
-	calendarViewThreeDay calendarViewMode = "three-day"
-	calendarViewSearch   calendarViewMode = "search"
+	calendarViewAgenda      calendarViewMode = "agenda"
+	calendarViewDay         calendarViewMode = "day"
+	calendarViewWeek        calendarViewMode = "week"
+	calendarViewThreeDay    calendarViewMode = "three-day"
+	calendarViewSearch      calendarViewMode = "search"
+	calendarViewCrossSearch calendarViewMode = "cross-search"
 )
 
 type indexedCalendarEvent struct {
@@ -41,6 +42,10 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarSearchResults = nil
 		m.calendarSearchCursor = 0
 		m.calendarSearchLoading = false
+		m.crossSourceSearchQuery = ""
+		m.crossSourceSearchResults = nil
+		m.crossSourceSearchCursor = 0
+		m.crossSourceSearchLoading = false
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -53,6 +58,19 @@ func (m *Model) calendarAgendaBackend() (backend.CalendarAgendaBackend, bool) {
 		return nil, false
 	}
 	return agenda, true
+}
+
+func (m *Model) crossSourceSearchBackend() (backend.CrossSourceSearchBackend, bool) {
+	search, ok := m.backend.(backend.CrossSourceSearchBackend)
+	if !ok {
+		return nil, false
+	}
+	return search, true
+}
+
+func (m *Model) crossSourceSearchAvailable() bool {
+	_, ok := m.crossSourceSearchBackend()
+	return ok
 }
 
 func (m *Model) loadCalendarAgenda() tea.Cmd {
@@ -90,7 +108,34 @@ func (m *Model) loadCalendarSearch() tea.Cmd {
 	}
 }
 
+func (m *Model) loadCrossSourceSearch() tea.Cmd {
+	query := m.crossSourceSearchQuery
+	if strings.TrimSpace(query) == "" {
+		return func() tea.Msg {
+			return CrossSourceSearchLoadedMsg{Query: query}
+		}
+	}
+	search, ok := m.crossSourceSearchBackend()
+	if !ok {
+		return func() tea.Msg {
+			return CrossSourceSearchLoadedMsg{Query: query, Err: fmt.Errorf("cross-source search unavailable")}
+		}
+	}
+	return func() tea.Msg {
+		results, err := search.CrossSourceSearch(query)
+		return CrossSourceSearchLoadedMsg{Query: query, Results: results, Err: err}
+	}
+}
+
 func (m *Model) selectedCalendarEvent() *models.CalendarEvent {
+	if m.calendarView == calendarViewCrossSearch {
+		result := m.selectedCrossSourceSearchResult()
+		if result == nil || result.Event == nil {
+			return nil
+		}
+		event := *result.Event
+		return &event
+	}
 	if m.calendarView == calendarViewSearch {
 		if m.calendarSearchCursor < 0 || m.calendarSearchCursor >= len(m.calendarSearchResults) {
 			return nil
@@ -149,6 +194,8 @@ func (m *Model) setCalendarView(view calendarViewMode) {
 		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 	case calendarViewSearch:
 		m.calendarDetail = m.selectedCalendarEvent()
+	case calendarViewCrossSearch:
+		m.selectCrossSourceSearchResult()
 	default:
 		m.calendarDetail = m.selectedCalendarEvent()
 	}
@@ -266,11 +313,33 @@ func (m *Model) openCalendarSearch() {
 	m.calendarStatus = "Type to search cached calendar events"
 }
 
+func (m *Model) openCrossSourceSearch() {
+	m.calendarView = calendarViewCrossSearch
+	m.calendarDetailOpen = false
+	m.calendarDetailLoading = false
+	m.crossSourceSearchQuery = ""
+	m.crossSourceSearchResults = nil
+	m.crossSourceSearchCursor = 0
+	m.crossSourceSearchLoading = false
+	m.calendarDetail = nil
+	m.calendarStatus = "Type to search cached mail and calendar events"
+}
+
 func (m *Model) clearCalendarSearch() {
 	m.calendarSearchQuery = ""
 	m.calendarSearchResults = nil
 	m.calendarSearchCursor = 0
 	m.calendarSearchLoading = false
+	m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+	m.setCalendarView(calendarViewAgenda)
+}
+
+func (m *Model) clearCrossSourceSearch() {
+	m.crossSourceSearchQuery = ""
+	m.crossSourceSearchResults = nil
+	m.crossSourceSearchCursor = 0
+	m.crossSourceSearchLoading = false
+	m.calendarDetail = m.selectedCalendarEvent()
 	m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
 	m.setCalendarView(calendarViewAgenda)
 }
@@ -328,10 +397,91 @@ func (m *Model) handleCalendarSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+func (m *Model) selectedCrossSourceSearchResult() *models.CrossSourceSearchResult {
+	if m.crossSourceSearchCursor < 0 || m.crossSourceSearchCursor >= len(m.crossSourceSearchResults) {
+		return nil
+	}
+	result := m.crossSourceSearchResults[m.crossSourceSearchCursor]
+	return &result
+}
+
+func (m *Model) selectCrossSourceSearchResult() {
+	result := m.selectedCrossSourceSearchResult()
+	if result == nil || result.Event == nil {
+		m.calendarDetail = nil
+		return
+	}
+	event := *result.Event
+	m.calendarDetail = &event
+}
+
+func (m *Model) handleCrossSourceSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := shortcutKey(msg)
+	switch key {
+	case "j", "down":
+		if m.crossSourceSearchCursor < len(m.crossSourceSearchResults)-1 {
+			m.crossSourceSearchCursor++
+			m.selectCrossSourceSearchResult()
+		}
+		return m, nil
+	case "k", "up":
+		if m.crossSourceSearchCursor > 0 {
+			m.crossSourceSearchCursor--
+			m.selectCrossSourceSearchResult()
+		}
+		return m, nil
+	case "enter":
+		if result := m.selectedCrossSourceSearchResult(); result != nil && result.Event != nil {
+			return m, m.openCalendarDetail()
+		}
+		if result := m.selectedCrossSourceSearchResult(); result != nil && result.Email != nil {
+			m.calendarStatus = "Mail results are shown read-only in this cross-source slice"
+		}
+		return m, nil
+	case "esc":
+		m.clearCrossSourceSearch()
+		return m, nil
+	case "backspace":
+		runes := []rune(m.crossSourceSearchQuery)
+		if len(runes) > 0 {
+			m.crossSourceSearchQuery = string(runes[:len(runes)-1])
+			m.crossSourceSearchCursor = 0
+			m.crossSourceSearchLoading = true
+			m.calendarStatus = "Searching cached mail and calendar events..."
+			return m, m.loadCrossSourceSearch()
+		}
+		return m, nil
+	case "ctrl+u":
+		m.crossSourceSearchQuery = ""
+		m.crossSourceSearchResults = nil
+		m.crossSourceSearchCursor = 0
+		m.crossSourceSearchLoading = false
+		m.calendarDetail = nil
+		m.calendarStatus = "Type to search cached mail and calendar events"
+		return m, nil
+	case "ctrl+r":
+		m.crossSourceSearchLoading = true
+		m.calendarStatus = "Searching cached mail and calendar events..."
+		return m, m.loadCrossSourceSearch()
+	}
+
+	if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt) == 0 {
+		m.crossSourceSearchQuery += msg.Text
+		m.crossSourceSearchCursor = 0
+		m.crossSourceSearchLoading = true
+		m.calendarStatus = "Searching cached mail and calendar events..."
+		return m, m.loadCrossSourceSearch()
+	}
+	return m, nil
+}
+
 func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
 	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
 		return m.handleCalendarSearchKey(msg)
+	}
+	if m.calendarView == calendarViewCrossSearch && !m.calendarDetailOpen {
+		return m.handleCrossSourceSearchKey(msg)
 	}
 	switch key {
 	case "j", "down":
@@ -385,6 +535,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		if !m.calendarDetailOpen {
 			m.openCalendarSearch()
+		}
+		return m, nil
+	case "x":
+		if !m.calendarDetailOpen && m.crossSourceSearchAvailable() {
+			m.openCrossSourceSearch()
 		}
 		return m, nil
 	case "h", "left":
@@ -453,6 +608,9 @@ func (m *Model) renderCalendarView() string {
 	if m.calendarView == calendarViewSearch {
 		return m.renderCalendarSearchView()
 	}
+	if m.calendarView == calendarViewCrossSearch {
+		return m.renderCrossSourceSearchView()
+	}
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	contentW := m.windowWidth
@@ -492,6 +650,27 @@ func (m *Model) renderCalendarSearchView() string {
 
 	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCalendarSearchResults(leftW-4, contentH-2))
 	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCalendarEventDetailWithHeader(rightW-4, contentH-2, false, "Search Detail"))
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
+}
+
+func (m *Model) renderCrossSourceSearchView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	available := clamp(contentW-panelGapWidth, 40)
+	leftW, rightW := splitWidth(available, 0, 30, 30, available*50/100)
+	contentH := plan.ContentHeight
+	if contentH < 4 {
+		contentH = 4
+	}
+
+	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCrossSourceSearchResults(leftW-4, contentH-2))
+	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCrossSourceSearchDetail(rightW-4, contentH-2))
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
 }
 
@@ -679,6 +858,103 @@ func (m *Model) renderCalendarSearchResults(width, height int) string {
 		}
 		lines = append(lines, line)
 	}
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCrossSourceSearchResults(width, height int) string {
+	if width < 10 {
+		width = 10
+	}
+	var lines []string
+	title := fmt.Sprintf("Cross-Source Search (%d)", len(m.crossSourceSearchResults))
+	if m.crossSourceSearchLoading {
+		title = "Cross-Source Search (loading)"
+	}
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)))
+	queryLine := "x " + m.crossSourceSearchQuery
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(queryLine, width)))
+	if strings.TrimSpace(m.calendarStatus) != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	}
+	if strings.TrimSpace(m.crossSourceSearchQuery) == "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Type to search cached mail and events", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+	if len(m.crossSourceSearchResults) == 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached mail or event matches", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+
+	maxRows := height - len(lines)
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	start := 0
+	if m.crossSourceSearchCursor >= maxRows {
+		start = m.crossSourceSearchCursor - maxRows + 1
+	}
+	end := start + maxRows
+	if end > len(m.crossSourceSearchResults) {
+		end = len(m.crossSourceSearchResults)
+	}
+	for i := start; i < end; i++ {
+		result := m.crossSourceSearchResults[i]
+		line := m.crossSourceSearchLine(result, width)
+		if i == m.crossSourceSearchCursor {
+			line = m.theme.Focus.SelectionActive.Style().Render(calendarFit("> "+line, width))
+		} else {
+			line = "  " + line
+		}
+		lines = append(lines, line)
+	}
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCrossSourceSearchDetail(width, height int) string {
+	if width < 12 {
+		width = 12
+	}
+	result := m.selectedCrossSourceSearchResult()
+	if result == nil {
+		return fitPanelContentHeight(m.theme.Text.Dim.Style().Render("No result selected"), height)
+	}
+	if result.Event != nil {
+		m.selectCrossSourceSearchResult()
+		return m.renderCalendarEventDetailWithHeader(width, height, false, "Event Detail")
+	}
+	if result.Email == nil {
+		return fitPanelContentHeight(m.theme.Text.Dim.Style().Render("No result selected"), height)
+	}
+	email := result.Email
+	account := m.accountBadgeForEmail(email)
+	if strings.TrimSpace(account) == "" {
+		account = string(email.SourceID)
+	}
+	if strings.TrimSpace(account) == "" {
+		account = string(email.AccountID)
+	}
+	if strings.TrimSpace(account) == "" {
+		account = "mail"
+	}
+	match := result.MatchHint
+	if strings.TrimSpace(match) == "" {
+		match = models.EmailSearchMatchHint(email, m.crossSourceSearchQuery)
+	}
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Mail Detail", width)))
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("read-only cached mail result", width)))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(email.Subject, width)))
+	lines = append(lines, calendarDetailRow(m, "From", email.Sender, width))
+	lines = append(lines, calendarDetailRow(m, "When", email.Date.Local().Format("Mon Jan 2 15:04"), width))
+	lines = append(lines, calendarDetailRow(m, "Folder", email.Folder, width))
+	lines = append(lines, calendarDetailRow(m, "Account", account, width))
+	if strings.TrimSpace(match) != "" {
+		lines = append(lines, calendarDetailRow(m, "Match", match, width))
+	}
+	lines = append(lines, calendarDetailRow(m, "Mode", "read-only", width))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -1113,6 +1389,48 @@ func calendarSearchLine(event models.CalendarEvent, query string, width int) str
 	return calendarFit(prefix+"  "+ansi.Truncate(summary, titleW, "..."), width-2)
 }
 
+func (m *Model) crossSourceSearchLine(result models.CrossSourceSearchResult, width int) string {
+	timeText := crossSourceShortTime(result.When)
+	kind := string(result.Kind)
+	summary := ""
+	hint := strings.TrimSpace(result.MatchHint)
+	switch result.Kind {
+	case models.CrossSourceResultMail:
+		if result.Email != nil {
+			summary = result.Email.Sender + " - " + result.Email.Subject
+			if account := m.accountBadgeForEmail(result.Email); strings.TrimSpace(account) != "" {
+				summary += " - " + account
+			}
+			if hint == "" {
+				hint = models.EmailSearchMatchHint(result.Email, m.crossSourceSearchQuery)
+			}
+		}
+	case models.CrossSourceResultEvent:
+		if result.Event != nil {
+			summary = result.Event.Title + " - " + calendarSourceLabel(*result.Event)
+			if hint == "" {
+				hint = models.CalendarEventSearchMatchHint(*result.Event, m.crossSourceSearchQuery)
+			}
+		}
+	}
+	if summary == "" {
+		summary = "Untitled result"
+	}
+	if hint != "" {
+		summary += " [" + hint + "]"
+	}
+	prefixW := 24
+	if width < 56 {
+		prefixW = 18
+	}
+	titleW := width - prefixW - 2
+	if titleW < 8 {
+		titleW = 8
+	}
+	prefix := calendarFit(kind+" "+timeText, prefixW)
+	return calendarFit(prefix+"  "+ansi.Truncate(summary, titleW, "..."), width-2)
+}
+
 func calendarSearchMatchHint(event models.CalendarEvent, query string) string {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "" {
@@ -1297,6 +1615,13 @@ func calendarShortTime(event models.CalendarEvent) string {
 		return "unscheduled"
 	}
 	return event.Start.Local().Format("Mon 15:04")
+}
+
+func crossSourceShortTime(when time.Time) string {
+	if when.IsZero() {
+		return "unscheduled"
+	}
+	return when.Local().Format("Mon 15:04")
 }
 
 func calendarTimeRange(event models.CalendarEvent) string {

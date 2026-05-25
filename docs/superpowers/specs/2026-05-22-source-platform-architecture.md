@@ -231,7 +231,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 7D: Add a read-only 3-Day Command view that reuses cache-backed agenda rows and preserves full Event Detail.
   - [x] Phase 7E: Add full read-only Event Detail metadata and timezone rendering so attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone are proven before mutations.
   - [x] Phase 7F: Add read-only cache-backed Calendar Search over scoped event rows before mutation UI.
-  - [ ] Phase 7G: Add cross-source search over mail plus events.
+  - [x] Phase 7G: Add cross-source search over mail plus events.
   - [ ] Add source-aware automation lanes for mail and calendar events.
   - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 

@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -206,4 +208,215 @@ func TestMultiBackendCalendarSearchAggregatesVisibleAccounts(t *testing.T) {
 	if len(results) != 1 || results[0].Ref.SourceID != "personal-calendar" {
 		t.Fatalf("active-account results = %#v, want personal only", results)
 	}
+}
+
+func TestLocalBackendCrossSourceSearchReadsMailAndCalendarCache(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", Provider: "imap", AccountID: "default"},
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+	}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	if err := store.CacheEmail(&models.EmailData{
+		SourceID:  "default-mail",
+		AccountID: "default",
+		MessageID: "mail-planning",
+		UID:       41,
+		Folder:    "INBOX",
+		Sender:    "mina@example.com",
+		Subject:   "Launch planning memo",
+		Date:      start.Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "work-calendar",
+			AccountID:  "work",
+			CalendarID: "primary",
+			EventID:    "planning",
+		}.WithDefaults(),
+		Title:       "Launch planning",
+		Description: "Cached calendar event.",
+		Start:       start,
+		End:         start.Add(time.Hour),
+		Attachments: []models.CalendarAttachment{{
+			Title: "Agenda",
+			URI:   "https://calendar.example/private.pdf",
+		}},
+		Raw: `{"syncToken":"secret"}`,
+	}
+	if err := store.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+
+	results, err := b.CrossSourceSearch("planning")
+	if err != nil {
+		t.Fatalf("CrossSourceSearch: %v", err)
+	}
+	if got := crossSourceKinds(results); got != "event,mail" && got != "mail,event" {
+		t.Fatalf("result kinds = %q, want mail and event: %#v", got, results)
+	}
+	for _, result := range results {
+		switch result.Kind {
+		case models.CrossSourceResultMail:
+			if result.Email == nil || result.Email.MessageID != "mail-planning" {
+				t.Fatalf("mail result = %#v, want cached planning mail", result)
+			}
+		case models.CrossSourceResultEvent:
+			if result.Event == nil || result.Event.Ref.SourceID != "work-calendar" {
+				t.Fatalf("event result = %#v, want scoped cached event", result)
+			}
+		default:
+			t.Fatalf("unexpected result kind %q", result.Kind)
+		}
+	}
+
+	providerResults, err := b.CrossSourceSearch("calendar.example")
+	if err != nil {
+		t.Fatalf("CrossSourceSearch provider internals: %v", err)
+	}
+	if len(providerResults) != 0 {
+		t.Fatalf("provider-internal results = %#v, want none", providerResults)
+	}
+}
+
+func TestMultiBackendCrossSourceSearchAggregatesVisibleAccounts(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "shared-id",
+		UID:       11,
+		Folder:    "INBOX",
+		Sender:    "work@example.test",
+		Subject:   "planning",
+		Date:      start.Add(-time.Hour),
+	}, "")
+	work.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Planning event",
+		Description: "Scoped work calendar result.",
+		Start:       start,
+		End:         start.Add(time.Hour),
+	}}
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, &models.EmailData{
+		SourceID:  "personal-mail",
+		AccountID: "personal",
+		MessageID: "shared-id",
+		UID:       22,
+		Folder:    "INBOX",
+		Sender:    "personal@example.test",
+		Subject:   "planning",
+		Date:      start.Add(-2 * time.Hour),
+	}, "")
+	personal.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "personal-calendar", AccountID: "personal", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Personal planning",
+		Description: "Scoped personal calendar result.",
+		Start:       start.Add(30 * time.Minute),
+		End:         start.Add(90 * time.Minute),
+	}}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	results, err := mb.CrossSourceSearch("planning")
+	if err != nil {
+		t.Fatalf("CrossSourceSearch all: %v", err)
+	}
+	if len(results) != 4 {
+		t.Fatalf("all-account results = %#v, want two mail and two event results", results)
+	}
+	seenMailSources := map[models.SourceID]bool{}
+	seenEventSources := map[models.SourceID]bool{}
+	for _, result := range results {
+		if result.Email != nil {
+			seenMailSources[result.Email.SourceID] = true
+		}
+		if result.Event != nil {
+			seenEventSources[result.Event.Ref.SourceID] = true
+		}
+	}
+	if !seenMailSources["work-mail"] || !seenMailSources["personal-mail"] {
+		t.Fatalf("mail sources = %#v, want work and personal", seenMailSources)
+	}
+	if !seenEventSources["work-calendar"] || !seenEventSources["personal-calendar"] {
+		t.Fatalf("event sources = %#v, want work and personal calendars", seenEventSources)
+	}
+
+	if err := mb.SwitchAccount("personal-mail"); err != nil {
+		t.Fatalf("SwitchAccount(personal): %v", err)
+	}
+	results, err = mb.CrossSourceSearch("planning")
+	if err != nil {
+		t.Fatalf("CrossSourceSearch active: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("active-account results = %#v, want personal mail and event", results)
+	}
+	for _, result := range results {
+		if result.Email != nil && result.Email.SourceID != "personal-mail" {
+			t.Fatalf("active mail result = %#v, want personal-mail", result)
+		}
+		if result.Event != nil && result.Event.Ref.AccountID != "personal" {
+			t.Fatalf("active event result = %#v, want personal account", result)
+		}
+	}
+}
+
+func crossSourceKinds(results []models.CrossSourceSearchResult) string {
+	kinds := make([]string, 0, len(results))
+	for _, result := range results {
+		kinds = append(kinds, string(result.Kind))
+	}
+	sort.Strings(kinds)
+	return strings.Join(kinds, ",")
+}
+
+func (b *recordingAccountBackend) CrossSourceSearch(query string) ([]models.CrossSourceSearchResult, error) {
+	emails, err := b.SearchEmails("INBOX", query, false)
+	if err != nil {
+		return nil, err
+	}
+	events, err := b.SearchCalendarEvents(query, time.Time{}, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]models.CrossSourceSearchResult, 0, len(emails)+len(events))
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		results = append(results, models.CrossSourceSearchResult{
+			Kind:      models.CrossSourceResultMail,
+			Email:     email,
+			When:      email.Date,
+			MatchHint: models.EmailSearchMatchHint(email, query),
+		})
+	}
+	for _, event := range events {
+		eventCopy := event
+		results = append(results, models.CrossSourceSearchResult{
+			Kind:      models.CrossSourceResultEvent,
+			Event:     &eventCopy,
+			When:      event.Start,
+			MatchHint: models.CalendarEventSearchMatchHint(event, query),
+		})
+	}
+	return results, nil
 }

@@ -47,6 +47,7 @@ The calendar surface should feel like a peer to Timeline, Compose, Cleanup, and 
 - [x] The active Week Time-Grid owns the center of the screen while a side inspector provides selected-event context and timezone labels.
 - [x] The active 3-Day Command view owns the center of the screen while a side command panel summarizes selected event, next-up, conflicts, and open slots.
 - [x] Calendar Search filters cached calendar events across configured calendar sources while keeping selected-event detail and provider internals hidden.
+- [x] Cross-source Search blends cached mail and calendar event results in a read-only command-center foundation while keeping Calendar Search event-only.
 - [ ] Future spatial views add side panels for mini month, calendar filters, richer timezone preview, conflicts, and selected event details.
 - [x] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
 - [ ] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
@@ -92,6 +93,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
   - [x] Stage 5A: Prove full read-only Event Detail with attendees, organizer, RSVP state, recurrence, attachments, canonical timezone, and alternate timezone rendering before mutation UI.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
+  - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
 
 ## Stage Gates
 
@@ -105,7 +107,7 @@ These gates define what must be true before moving from one evolutionary stage t
 - [ ] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
 - [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
-- [ ] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.
+- [x] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.
 
 ## Product Dependencies
 

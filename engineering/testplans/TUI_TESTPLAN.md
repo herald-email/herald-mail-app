@@ -1692,6 +1692,28 @@ Check these states during every applicable lane:
 - Hints advertise `/ search`, `esc: clear search`, and read-only Calendar navigation only in Calendar contexts; literal `/`, query text, and `s` typed in Compose/search/editor text-entry surfaces remain text.
 - At `50x15`, the minimum-size guard appears instead of clipped Search chrome, and resizing larger restores the Search state cleanly.
 
+### TC-38J — Cross-source Search foundation
+
+**Lane:** A, B when mail and calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode or a deterministic multi-source fixture with at least one cached email and one cached calendar event sharing a search term.
+2. Press `3` or `F4` to open Calendar, then press `x` to open Cross-Source Search.
+3. Type a query that matches both a mail row and an event row.
+4. Capture the Cross-Source Search view with blended results and the selected-result detail visible.
+5. Move through results with `j/k`; confirm the detail pane switches between mail metadata and event metadata without exposing provider IDs.
+6. Press `/` from the normal Calendar view and confirm Calendar Search remains event-only.
+7. Repeat in a mail-only session and confirm the Calendar tab and cross-source search entry point are not advertised.
+
+**Expect:**
+- Cross-Source Search is read-only and cache-backed; it searches cached/demo mail and calendar metadata without direct IMAP, Google Calendar, or CalDAV provider fetches.
+- Results include both `mail` and `event` typed rows when both caches match, with source/account context preserved.
+- Event results keep the existing Event Detail reader pattern; mail results show sender, subject, folder, account/source, time, and match context without provider UIDs, raw event IDs, CalDAV URLs, sync tokens, raw ETags, OAuth details, or mutation controls.
+- Stale search responses cannot repaint a newer query.
+- Existing Timeline `/`, `/*`, `/b`, `?`, and Calendar `/` search behavior remains unchanged.
+- At `50x15`, the minimum-size guard appears instead of clipped cross-source search chrome, and resizing larger restores the search state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

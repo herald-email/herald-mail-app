@@ -69,6 +69,14 @@ type CalendarSearchLoadedMsg struct {
 	Err    error
 }
 
+// CrossSourceSearchLoadedMsg carries blended cache-backed mail/event search
+// results for the Calendar command-center foundation.
+type CrossSourceSearchLoadedMsg struct {
+	Query   string
+	Results []models.CrossSourceSearchResult
+	Err     error
+}
+
 // CalendarEventDetailMsg carries a selected read-only event detail.
 type CalendarEventDetailMsg struct {
 	Ref   models.EventRef
@@ -668,22 +676,26 @@ type Model struct {
 
 	// Calendar tab. Calendar is additive and appears only when the backend
 	// advertises a cache-backed read-only agenda surface.
-	calendarAvailable     bool
-	calendarLoading       bool
-	calendarEvents        []models.CalendarEvent
-	calendarCursor        int
-	calendarView          calendarViewMode
-	calendarSearchQuery   string
-	calendarSearchResults []models.CalendarEvent
-	calendarSearchCursor  int
-	calendarSearchLoading bool
-	calendarDay           time.Time
-	calendarWeekStart     time.Time
-	calendarThreeDayStart time.Time
-	calendarDetailOpen    bool
-	calendarDetailLoading bool
-	calendarDetail        *models.CalendarEvent
-	calendarStatus        string
+	calendarAvailable        bool
+	calendarLoading          bool
+	calendarEvents           []models.CalendarEvent
+	calendarCursor           int
+	calendarView             calendarViewMode
+	calendarSearchQuery      string
+	calendarSearchResults    []models.CalendarEvent
+	calendarSearchCursor     int
+	calendarSearchLoading    bool
+	crossSourceSearchQuery   string
+	crossSourceSearchResults []models.CrossSourceSearchResult
+	crossSourceSearchCursor  int
+	crossSourceSearchLoading bool
+	calendarDay              time.Time
+	calendarWeekStart        time.Time
+	calendarThreeDayStart    time.Time
+	calendarDetailOpen       bool
+	calendarDetailLoading    bool
+	calendarDetail           *models.CalendarEvent
+	calendarStatus           string
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -1846,7 +1858,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.calendarView == calendarViewThreeDay {
 			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart()
 			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
-		} else if m.calendarView == calendarViewSearch {
+		} else if m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch {
 			m.calendarDetail = m.selectedCalendarEvent()
 		} else {
 			m.calendarDetail = m.selectedCalendarEvent()
@@ -1880,6 +1892,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.calendarDetail = m.selectedCalendarEvent()
 		m.calendarStatus = fmt.Sprintf("Search found %d cached event(s)", len(m.calendarSearchResults))
+		return m, nil
+
+	case CrossSourceSearchLoadedMsg:
+		if msg.Query != m.crossSourceSearchQuery || m.calendarView != calendarViewCrossSearch {
+			return m, nil
+		}
+		m.crossSourceSearchLoading = false
+		if strings.TrimSpace(msg.Query) == "" {
+			m.crossSourceSearchResults = nil
+			m.calendarDetail = nil
+			m.calendarStatus = "Type to search cached mail and calendar events"
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.crossSourceSearchResults = nil
+			m.calendarDetail = nil
+			m.calendarStatus = "Cross-source search failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.crossSourceSearchResults = msg.Results
+		if m.crossSourceSearchCursor >= len(m.crossSourceSearchResults) {
+			m.crossSourceSearchCursor = len(m.crossSourceSearchResults) - 1
+		}
+		if m.crossSourceSearchCursor < 0 {
+			m.crossSourceSearchCursor = 0
+		}
+		m.selectCrossSourceSearchResult()
+		m.calendarStatus = fmt.Sprintf("Search found %d cached mail/event result(s)", len(m.crossSourceSearchResults))
 		return m, nil
 
 	case CalendarEventDetailMsg:

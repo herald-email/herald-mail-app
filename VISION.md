@@ -479,6 +479,7 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ### Cross-folder search
 - [x] Searches all locally cached folders in one query
+- [x] Cross-source search blends cached mail and calendar event results in one read-only view while preserving Timeline and Calendar Search behavior
 - [ ] Results grouped by folder with breadcrumb per row
 - [ ] Selecting a result switches folder and highlights the email
 
@@ -640,6 +641,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Read-only 3-Day Command view with next-up, conflict, and open-slot summaries before calendar search or mutations
 - [x] Full read-only Event Detail shows attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone before calendar search or mutations
 - [x] Calendar search view before RSVP, edit, or create flows
+- [x] Cross-source search view blends cached mail and calendar event results before command-center summaries or mutations
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
 
