@@ -643,6 +643,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Full read-only Event Detail shows attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone before calendar search or mutations
 - [x] Calendar search view before RSVP, edit, or create flows
 - [x] Cross-source search view blends cached mail and calendar event results before command-center summaries or mutations
+- [x] Local/cache-backed Event Edit form with explicit save/cancel state, timezone preview, and no live provider mutation writes
 - [ ] Google Calendar source using OAuth and provider sync tokens
 - [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
 

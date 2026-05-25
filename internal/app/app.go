@@ -84,6 +84,13 @@ type CalendarEventDetailMsg struct {
 	Err   error
 }
 
+// CalendarEventSavedMsg carries a local/cache-backed calendar edit result.
+type CalendarEventSavedMsg struct {
+	Ref   models.EventRef
+	Event *models.CalendarEvent
+	Err   error
+}
+
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
 // the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
@@ -695,6 +702,7 @@ type Model struct {
 	calendarDetailOpen       bool
 	calendarDetailLoading    bool
 	calendarDetail           *models.CalendarEvent
+	calendarEdit             calendarEventEditState
 	calendarStatus           string
 
 	// Styles
@@ -1935,6 +1943,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.calendarDetail = msg.Event
 		}
 		m.calendarDetailOpen = true
+		return m, nil
+
+	case CalendarEventSavedMsg:
+		if msg.Ref.WithDefaults().LocalID != m.calendarEdit.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.calendarEdit.Saving = false
+			m.calendarEdit.Error = "Save failed: " + msg.Err.Error()
+			m.calendarStatus = m.calendarEdit.Error
+			return m, nil
+		}
+		if msg.Event != nil {
+			m.applySavedCalendarEvent(*msg.Event)
+		}
+		m.calendarEdit = calendarEventEditState{}
+		m.calendarDetailOpen = true
+		m.calendarDetailLoading = false
+		m.calendarStatus = "Saved cached calendar edit"
 		return m, nil
 
 	case ComposeStatusMsg:

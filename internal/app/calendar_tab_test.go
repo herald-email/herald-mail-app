@@ -17,6 +17,8 @@ type calendarAgendaStubBackend struct {
 	getCalls         int
 	searchCalls      []string
 	crossSearchCalls []string
+	savedEvents      []models.CalendarEvent
+	saveErr          error
 }
 
 func (b *calendarAgendaStubBackend) CalendarAgendaAvailable() bool {
@@ -100,6 +102,24 @@ func (b *calendarAgendaStubBackend) CrossSourceSearch(query string) ([]models.Cr
 		}
 	}
 	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	if b.saveErr != nil {
+		return nil, b.saveErr
+	}
+	event.Ref = event.Ref.WithDefaults()
+	b.savedEvents = append(b.savedEvents, event)
+	for i := range b.events {
+		if b.events[i].Ref.WithDefaults().LocalID == event.Ref.LocalID {
+			b.events[i] = event
+			saved := event
+			return &saved, nil
+		}
+	}
+	saved := event
+	b.events = append(b.events, event)
+	return &saved, nil
 }
 
 func TestCalendarTabHiddenForMailOnlyBackend(t *testing.T) {
@@ -851,6 +871,194 @@ func TestCalendarFullEventDetailRendersRichMetadataAndTimezones(t *testing.T) {
 			t.Fatalf("rich event detail leaked provider internals %q:\n%s", forbidden, rendered)
 		}
 	}
+}
+
+func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	if !m.calendarEdit.Active {
+		t.Fatal("expected e from Event Detail to open Event Edit")
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"Event Edit",
+		"Title",
+		"Timezone planning",
+		"Start",
+		"End",
+		"Event TZ",
+		"America/Los_Angeles",
+		"Alt TZ",
+		"Asia/Tokyo",
+		"Preview",
+		"Alt TZ rows are preview only; Event TZ saves.",
+		"ctrl+s: save",
+		"esc: cancel",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("event edit missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-etag", "syncToken", "RSVP", "Create event"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("event edit leaked or advertised %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	m.calendarEdit.Draft.Title = "Timezone planning moved"
+	m.calendarEdit.Draft.Location = "Tokyo room"
+	m.calendarEdit.Draft.StartText = "2026-05-24 19:30"
+	m.calendarEdit.Draft.EndText = "2026-05-24 20:30"
+	m.calendarEdit.Draft.TimeZone = "America/Los_Angeles"
+	m.calendarEdit.Dirty = true
+
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if m.calendarEdit.Active {
+		t.Fatal("expected successful save to close Event Edit")
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected successful save to return to Event Detail")
+	}
+	if len(b.savedEvents) != 1 {
+		t.Fatalf("saved events = %#v, want one cache-backed save", b.savedEvents)
+	}
+	if m.calendarDetail == nil || m.calendarDetail.Title != "Timezone planning moved" || m.calendarDetail.Location != "Tokyo room" {
+		t.Fatalf("calendar detail = %#v, want saved event", m.calendarDetail)
+	}
+	if got := m.calendarEvents[0].Title; got != "Timezone planning moved" {
+		t.Fatalf("calendar list title = %q, want saved title", got)
+	}
+	if !strings.Contains(m.calendarStatus, "Saved") {
+		t.Fatalf("calendar status = %q, want save success", m.calendarStatus)
+	}
+}
+
+func TestCalendarEventEditValidationKeepsEditorOpen(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	m.calendarEdit.Draft.StartText = "2026-05-24 21:00"
+	m.calendarEdit.Draft.EndText = "2026-05-24 20:00"
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("invalid edit produced command %T, want local validation only", cmd)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatal("expected validation failure to keep Event Edit open")
+	}
+	if !strings.Contains(m.calendarEdit.Error, "end") {
+		t.Fatalf("calendar edit error = %q, want end-time validation", m.calendarEdit.Error)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Validation") || !strings.Contains(rendered, "end") {
+		t.Fatalf("event edit validation not rendered:\n%s", rendered)
+	}
+}
+
+func TestCalendarEditShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("e"))
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("activeTab = %d, want Compose", m.activeTab)
+		}
+		if got := m.composeBody.Value(); got != "e" {
+			t.Fatalf("compose body=%q, want literal e", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("e"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "e" {
+			t.Fatalf("timeline search=%q, want literal e", got)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("e"))
+		m = model.(*Model)
+		if !m.showPromptEditor {
+			t.Fatal("prompt editor should remain active after typing e")
+		}
+		if got := m.promptEditor.name; got != "e" {
+			t.Fatalf("prompt editor name=%q, want literal e", got)
+		}
+	})
 }
 
 func TestCalendarWeekShortcutDoesNotStealTextEntry(t *testing.T) {

@@ -233,6 +233,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 7F: Add read-only cache-backed Calendar Search over scoped event rows before mutation UI.
   - [x] Phase 7G: Add cross-source search over mail plus events.
   - [x] Add source-aware automation lanes for mail and calendar events.
+  - [x] Add a local/cache-backed Calendar Event Edit form with timezone preview and explicit save/cancel state.
   - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 
 ## Acceptance Criteria

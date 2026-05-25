@@ -13,26 +13,27 @@ import (
 
 type recordingAccountBackend struct {
 	*DemoBackend
-	name           string
-	folders        []string
-	status         map[string]models.FolderStatus
-	timeline       map[string][]*models.EmailData
-	bodies         map[string]*models.EmailBody
-	search         map[string][]*models.EmailData
-	loadCalls      []string
-	deleteCalls    []string
-	archiveCalls   []string
-	moveCalls      []string
-	sendCalls      []string
-	composeSends   []ComposeSendRequest
-	saveDraftCalls []string
-	rawDraftCalls  []string
-	draftDeletes   []string
-	draftSends     []string
-	getMessageRefs []models.MessageRef
-	calendarEvents []models.CalendarEvent
-	calendarSearch []string
-	closed         bool
+	name                string
+	folders             []string
+	status              map[string]models.FolderStatus
+	timeline            map[string][]*models.EmailData
+	bodies              map[string]*models.EmailBody
+	search              map[string][]*models.EmailData
+	loadCalls           []string
+	deleteCalls         []string
+	archiveCalls        []string
+	moveCalls           []string
+	sendCalls           []string
+	composeSends        []ComposeSendRequest
+	saveDraftCalls      []string
+	rawDraftCalls       []string
+	draftDeletes        []string
+	draftSends          []string
+	getMessageRefs      []models.MessageRef
+	calendarEvents      []models.CalendarEvent
+	calendarSearch      []string
+	savedCalendarEvents []models.CalendarEvent
+	closed              bool
 }
 
 func newRecordingAccountBackend(name string, folders []string, email *models.EmailData, body string) *recordingAccountBackend {
@@ -204,6 +205,19 @@ func (b *recordingAccountBackend) SearchCalendarEvents(query string, start, end 
 	}
 	sortCalendarEvents(out)
 	return out, nil
+}
+
+func (b *recordingAccountBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	event.Ref = event.Ref.WithDefaults()
+	b.savedCalendarEvents = append(b.savedCalendarEvents, event)
+	for i := range b.calendarEvents {
+		if b.calendarEvents[i].Ref.WithDefaults().LocalID == event.Ref.LocalID {
+			b.calendarEvents[i] = event
+			saved := event
+			return &saved, nil
+		}
+	}
+	return nil, fmt.Errorf("missing calendar event %s", event.Ref.LocalID)
 }
 
 func (b *recordingAccountBackend) Close() error {

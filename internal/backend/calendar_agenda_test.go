@@ -47,6 +47,38 @@ func TestDemoBackendCalendarAgendaIsSortedAndFetchesDetail(t *testing.T) {
 	}
 }
 
+func TestDemoBackendSaveCalendarEventUpdatesMemory(t *testing.T) {
+	b := NewDemoBackend()
+	start := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC)
+	events, err := b.ListCalendarAgenda(start, start.AddDate(0, 0, 14))
+	if err != nil {
+		t.Fatalf("ListCalendarAgenda: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("demo backend returned no events")
+	}
+	edited := events[0]
+	edited.Title = "Edited cache-backed event"
+	edited.Location = "Timezone lab"
+	edited.TimeZone = "America/Los_Angeles"
+
+	saved, err := b.SaveCalendarEvent(edited)
+	if err != nil {
+		t.Fatalf("SaveCalendarEvent: %v", err)
+	}
+	if saved.Title != edited.Title || saved.Location != edited.Location {
+		t.Fatalf("saved = %#v, want edited title/location", saved)
+	}
+
+	detail, err := b.GetCalendarEvent(edited.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEvent: %v", err)
+	}
+	if detail.Title != edited.Title || detail.Location != edited.Location {
+		t.Fatalf("detail = %#v, want saved event", detail)
+	}
+}
+
 func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 	store, err := cache.New(":memory:")
 	if err != nil {
@@ -95,6 +127,53 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 	}
 	if detail.Title != event.Title {
 		t.Fatalf("detail title = %q, want %q", detail.Title, event.Title)
+	}
+}
+
+func TestLocalBackendSaveCalendarEventWritesScopedCache(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+	}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	event := models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Launch planning",
+		Description: "Initial cached event.",
+		Location:    "Room A",
+		Start:       start,
+		End:         start.Add(time.Hour),
+		TimeZone:    "UTC",
+		Status:      "confirmed",
+	}
+	if err := store.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+
+	edited := event
+	edited.Title = "Launch planning moved"
+	edited.Location = "Room B"
+	edited.TimeZone = "America/Los_Angeles"
+	saved, err := b.SaveCalendarEvent(edited)
+	if err != nil {
+		t.Fatalf("SaveCalendarEvent: %v", err)
+	}
+	if saved.Ref.LocalID != event.Ref.LocalID {
+		t.Fatalf("saved ref = %#v, want same scoped local id %q", saved.Ref, event.Ref.LocalID)
+	}
+
+	got, err := store.GetCalendarEventByRef(event.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if got.Title != edited.Title || got.Location != edited.Location || got.TimeZone != edited.TimeZone {
+		t.Fatalf("cached event = %#v, want edited event", got)
 	}
 }
 
@@ -207,6 +286,52 @@ func TestMultiBackendCalendarSearchAggregatesVisibleAccounts(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].Ref.SourceID != "personal-calendar" {
 		t.Fatalf("active-account results = %#v, want personal only", results)
+	}
+}
+
+func TestMultiBackendSaveCalendarEventRoutesByScopedRef(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	work.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Work planning",
+		Description: "Scoped work calendar result.",
+		Start:       start,
+		End:         start.Add(time.Hour),
+	}}
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	personal.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "personal-calendar", AccountID: "personal", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Personal planning",
+		Description: "Scoped personal calendar result.",
+		Start:       start,
+		End:         start.Add(time.Hour),
+	}}
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-calendar", AccountID: "work", DisplayName: "Work Calendar", Provider: "google_calendar"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-calendar", AccountID: "personal", DisplayName: "Personal Calendar", Provider: "caldav"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	edited := personal.calendarEvents[0]
+	edited.Title = "Personal planning moved"
+	saved, err := mb.SaveCalendarEvent(edited)
+	if err != nil {
+		t.Fatalf("SaveCalendarEvent: %v", err)
+	}
+	if saved.Title != edited.Title {
+		t.Fatalf("saved = %#v, want edited personal event", saved)
+	}
+	if len(work.savedCalendarEvents) != 0 {
+		t.Fatalf("work saved events = %#v, want no cross-account write", work.savedCalendarEvents)
+	}
+	if len(personal.savedCalendarEvents) != 1 || personal.savedCalendarEvents[0].Ref.SourceID != "personal-calendar" {
+		t.Fatalf("personal saved events = %#v, want one scoped save", personal.savedCalendarEvents)
 	}
 }
 

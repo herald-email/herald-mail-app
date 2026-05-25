@@ -217,6 +217,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add a read-only Calendar Search view that searches cached, scoped event rows without exposing provider identifiers or mutation controls.
 - [x] Add a read-only Cross-Source Search view that blends cached mail and calendar event rows without changing Timeline search, Calendar Search, or mutation surfaces.
 - [x] Add source-aware automation event lanes so existing mail rules run with scoped message identity while calendar change events can enter the lane as read-only groundwork.
+- [x] Add a local/cache-backed Calendar Event Edit boundary that proves timezone-safe save/cancel UI before live provider mutation adapters are enabled.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

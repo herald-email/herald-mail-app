@@ -20,6 +20,13 @@ type CalendarAgendaBackend interface {
 	GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error)
 }
 
+// CalendarEventMutationBackend is the local/cache-backed calendar edit
+// boundary. Live provider mutation adapters stay behind this interface until a
+// later provider-write stage enables them explicitly.
+type CalendarEventMutationBackend interface {
+	SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
+}
+
 func (d *DemoBackend) CalendarAgendaAvailable() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -49,6 +56,23 @@ func (d *DemoBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEve
 		if event.Ref.LocalID == ref.LocalID {
 			got := event
 			return &got, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (d *DemoBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	event.Ref = event.Ref.WithDefaults()
+	if event.UpdatedAt.IsZero() {
+		event.UpdatedAt = time.Now().UTC()
+	}
+	for i := range d.calendarEvents {
+		if d.calendarEvents[i].Ref.WithDefaults().LocalID == event.Ref.LocalID {
+			d.calendarEvents[i] = event
+			saved := event
+			return &saved, nil
 		}
 	}
 	return nil, sql.ErrNoRows
@@ -93,6 +117,20 @@ func (b *LocalBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEv
 		return nil, sql.ErrNoRows
 	}
 	return b.cache.GetCalendarEventByRef(ref)
+}
+
+func (b *LocalBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	if b == nil || b.cache == nil {
+		return nil, sql.ErrNoRows
+	}
+	event.Ref = event.Ref.WithDefaults()
+	if event.UpdatedAt.IsZero() {
+		event.UpdatedAt = time.Now().UTC()
+	}
+	if err := b.cache.PutCalendarEvent(event); err != nil {
+		return nil, err
+	}
+	return b.cache.GetCalendarEventByRef(event.Ref)
 }
 
 func (b *LocalBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
@@ -164,6 +202,31 @@ func (m *MultiBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEv
 	return nil, lastErr
 }
 
+func (m *MultiBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	ref := event.Ref.WithDefaults()
+	var lastErr error = sql.ErrNoRows
+	for _, backend := range m.calendarMutationBackendsForRef(ref) {
+		if agenda, ok := backend.(CalendarAgendaBackend); ok {
+			if _, err := agenda.GetCalendarEvent(ref); err != nil {
+				lastErr = err
+				if !errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				continue
+			}
+		}
+		saved, err := backend.SaveCalendarEvent(event)
+		if err == nil {
+			return saved, nil
+		}
+		lastErr = err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
 func (m *MultiBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
 	var out []models.CalendarEvent
 	for _, backend := range m.calendarAgendaBackends() {
@@ -209,6 +272,51 @@ func (m *MultiBackend) calendarAgendaBackends() []CalendarAgendaBackend {
 		return []CalendarAgendaBackend{backend}
 	}
 	return nil
+}
+
+func (m *MultiBackend) calendarMutationBackendsForRef(ref models.EventRef) []CalendarEventMutationBackend {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	active := m.active
+	slots := make([]*accountSlot, 0, len(m.order))
+	if active == AllAccountsSourceID {
+		for _, id := range m.order {
+			slots = append(slots, m.slots[id])
+		}
+	} else if slot := m.slots[active]; slot != nil {
+		slots = append(slots, slot)
+	}
+	if active != AllAccountsSourceID {
+		for _, id := range m.order {
+			slot := m.slots[id]
+			if slot != nil && slot.info.SourceID == ref.SourceID {
+				alreadyIncluded := false
+				for _, existing := range slots {
+					if existing == slot {
+						alreadyIncluded = true
+						break
+					}
+				}
+				if !alreadyIncluded {
+					slots = append(slots, slot)
+				}
+			}
+		}
+	}
+	m.mu.RUnlock()
+
+	out := make([]CalendarEventMutationBackend, 0, len(slots))
+	for _, slot := range slots {
+		if slot == nil {
+			continue
+		}
+		if backend, ok := slot.backend.(CalendarEventMutationBackend); ok {
+			out = append(out, backend)
+		}
+	}
+	return out
 }
 
 func calendarEventInRange(event models.CalendarEvent, start, end time.Time) bool {

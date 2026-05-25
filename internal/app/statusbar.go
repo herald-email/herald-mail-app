@@ -533,7 +533,9 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		if m.crossSourceSearchAvailable() {
 			crossSearchHint = "x: all search"
 		}
-		if m.calendarDetailOpen {
+		if m.calendarEdit.Active {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "backspace: edit", "ctrl+u: clear", "ctrl+s: save", "esc: cancel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "cache-backed")
+		} else if m.calendarDetailOpen {
 			backLabel := "esc: agenda"
 			if m.calendarView == calendarViewDay {
 				backLabel = "esc: day"
@@ -544,7 +546,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			} else if m.calendarView == calendarViewSearch {
 				backLabel = "esc: search"
 			}
-			hints = joinHintSegments(m.primaryTabShortcutHint(), backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "e: edit", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else if m.calendarView == calendarViewSearch {
 			query := strings.TrimSpace(m.calendarSearchQuery)
 			if query == "" {

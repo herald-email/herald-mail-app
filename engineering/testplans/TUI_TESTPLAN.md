@@ -1665,7 +1665,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Full Event Detail is read-only and shows event title, local time, canonical event timezone, at least one alternate timezone, location, status, calendar/source, organizer, attendees with RSVP state, recurrence, attachments, and notes where data is available.
-- The detail view summarizes recurrence and attachment metadata without exposing provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, or edit/RSVP/create actions.
+- The detail view summarizes recurrence and attachment metadata without exposing provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, or RSVP/create/provider-mutation actions.
 - Event detail opened from Agenda, Day, Week, or 3-Day returns to the originating view without losing the selected event.
 - Timezone rows make local time and event timezone distinct when they differ, and the alternate timezone row makes date-crossing cases visible.
 - At `50x15`, the minimum-size guard appears instead of clipped Event Detail chrome, and resizing larger restores the full detail state cleanly.
@@ -1713,6 +1713,27 @@ Check these states during every applicable lane:
 - Stale search responses cannot repaint a newer query.
 - Existing Timeline `/`, `/*`, `/b`, `?`, and Calendar `/` search behavior remains unchanged.
 - At `50x15`, the minimum-size guard appears instead of clipped cross-source search chrome, and resizing larger restores the search state cleanly.
+
+### TC-38K — Calendar Event Edit timezone foundation
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode or a cache-backed calendar fixture.
+2. Press `3` or `F4` to open Calendar, then press `Enter` to open full Event Detail.
+3. Press `e` to open Event Edit, change title, location, start/end, and event timezone fields, then capture the edit view.
+4. Confirm the preview shows local time, event timezone, at least one alternate timezone, and a visible date-crossing note when applicable.
+5. Press `Esc` to cancel once, then reopen Event Edit and press `Ctrl+S` to save.
+6. Confirm the updated cached event appears in the Calendar list/detail without requiring a provider fetch.
+
+**Expect:**
+- Event Edit uses Herald's form/settings pattern with focused fields, validation rows, compact controls, and a live timezone preview.
+- The primary event timezone field is near the start/end fields and saving a timezone is explicit; alternate display timezones are preview-only.
+- Unsaved changes, validation errors, cancel, and cache-backed save success are visible to the user.
+- The edit boundary writes to demo/cache state only in this stage; it does not advertise RSVP, recurrence-provider writes, create-event, Google Calendar mutation, CalDAV mutation, or daemon/MCP mutation APIs.
+- Literal `e` typed in Compose, search prompts, and editor-like text fields remains text instead of opening Event Edit.
+- At `50x15`, the minimum-size guard appears instead of clipped Event Edit chrome, and resizing larger restores the edit state cleanly.
 
 ### TC-39 — First-run wizard chrome and size guard
 

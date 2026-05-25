@@ -13,7 +13,7 @@ Calendar should become a first-class Herald workspace for understanding the day,
 - [x] Users can switch to a read-only 3-Day Command view that bridges today, tomorrow, and the next day with a command panel.
 - [x] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
 - [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
-- [ ] Users can reason about cross-timezone meetings before saving changes.
+- [x] Users can reason about cross-timezone meetings before saving changes.
 - [ ] Calendar remains visually consistent with Herald: dense tables, thin bordered panels, bottom key hints, compact status strips, and theme-aware highlights.
 
 ## Reference Mockups
@@ -50,7 +50,7 @@ The calendar surface should feel like a peer to Timeline, Compose, Cleanup, and 
 - [x] Cross-source Search blends cached mail and calendar event results in a read-only command-center foundation while keeping Calendar Search event-only.
 - [ ] Future spatial views add side panels for mini month, calendar filters, richer timezone preview, conflicts, and selected event details.
 - [x] Event detail uses Herald's reader pattern: nearby items on one side, the selected record in a structured detail surface.
-- [ ] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
+- [x] Event editing uses Herald's form/settings pattern: focused fields, compact controls, validation rows, and a live preview.
 - [x] The minimum useful calendar experience works in demo mode before any live provider is required.
 
 ## Core Views
@@ -71,11 +71,11 @@ The first product decision is which views deserve first-class status and which v
 Timezone support should be visible, not hidden in a settings corner. Users scheduling across regions need to know what an event means in local time, organizer time, and attendee-relevant time before they accept or save changes.
 
 - [x] Every event detail view shows the event's canonical timezone and the user's local rendering when they differ.
-- [ ] Event editing includes a primary timezone field near start/end time, not buried under advanced options.
+- [x] Event editing includes a primary timezone field near start/end time, not buried under advanced options.
 - [ ] Users can add secondary display timezones such as `Europe/London` and `Asia/Tokyo`.
-- [ ] The edit preview flags date-crossing cases, such as a Tuesday meeting becoming Wednesday in Tokyo.
-- [ ] Timezone changes update start/end interpretation clearly so users do not accidentally shift an event by changing display timezone.
-- [ ] The UI distinguishes timezone display from event mutation: viewing another timezone is safe, saving a new event timezone is explicit.
+- [x] The edit preview flags date-crossing cases, such as a Tuesday meeting becoming Wednesday in Tokyo.
+- [x] Timezone changes update start/end interpretation clearly so users do not accidentally shift an event by changing display timezone.
+- [x] The UI distinguishes timezone display from event mutation: viewing another timezone is safe, saving a new event timezone is explicit.
 
 ## Evolutionary Stages
 
@@ -91,6 +91,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 - [x] Stage 4A: Calendar Search foundation. Add read-only cache-backed event search across title, notes, location, organizer, attendee, recurrence, attachment, and source labels before mutation UI.
 - [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
   - [x] Stage 5A: Prove full read-only Event Detail with attendees, organizer, RSVP state, recurrence, attachments, canonical timezone, and alternate timezone rendering before mutation UI.
+  - [x] Stage 5B: Add a local/cache-backed Event Edit form with explicit save/cancel state and timezone preview before live provider mutation writes.
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
@@ -104,7 +105,7 @@ These gates define what must be true before moving from one evolutionary stage t
 - [x] The full spatial-view stage is acceptable only when Day Agenda and Week Time-Grid resize behavior remain understandable at wide, standard, and narrow sizes.
 - [x] A timezone detail foundation is acceptable only when read-only Event Detail renders at least local time, event timezone, and one alternate timezone without ambiguity.
 - [x] A calendar search stage is acceptable only when results are cache-backed, source-scoped, detail-preserving, and free of provider internals.
-- [ ] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
+- [x] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
 - [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
 - [x] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.
@@ -113,12 +114,12 @@ These gates define what must be true before moving from one evolutionary stage t
 
 Calendar will be easier and safer if it builds on the source identity and cache-first direction already described in the source platform architecture spec. The calendar UI should not get ahead of the identity and provider foundations that make multi-source data safe.
 
-- [ ] Reuse the source/account/collection direction from `docs/superpowers/specs/2026-05-22-source-platform-architecture.md`.
-- [ ] Treat `EventRef` as the calendar equivalent of a scoped message reference before live provider reads become user-visible.
-- [ ] Keep provider details such as Google event IDs, CalDAV URLs, ETags, sync tokens, recurrence IDs, and revisions out of the TUI.
-- [ ] Let Herald own cache-first reads, in-flight coalescing, stale-result filtering, and visible-work priority.
+- [x] Reuse the source/account/collection direction from `docs/superpowers/specs/2026-05-22-source-platform-architecture.md`.
+- [x] Treat `EventRef` as the calendar equivalent of a scoped message reference before live provider reads become user-visible.
+- [x] Keep provider details such as Google event IDs, CalDAV URLs, ETags, sync tokens, recurrence IDs, and revisions out of the TUI.
+- [x] Let Herald own cache-first reads, in-flight coalescing, stale-result filtering, and visible-work priority.
 - [x] Preserve demo mode as the design lab for calendar UI, just as it already supports mail screenshots and tapes.
-- [ ] Defer live event mutation until source identity, cache freshness, timezone rendering, and detail surfaces are all proven.
+- [x] Defer live event mutation until source identity, cache freshness, timezone rendering, and detail surfaces are all proven.
 
 ## Design Principles
 
@@ -128,7 +129,7 @@ The calendar should use terminal-native interaction instead of pretending to be 
 - [ ] Prefer side drawers for contextual inspection and full-screen detail for complete event reading.
 - [ ] Prefer visible keyboard hints over hidden command discovery.
 - [ ] Prefer explicit state labels such as `Accepted`, `Tentative`, `Conflict`, `Local`, and `Event TZ`.
-- [ ] Prefer deterministic text renderings of recurrence and timezone changes before introducing richer visual shortcuts.
+- [x] Prefer deterministic text renderings of recurrence and timezone changes before introducing richer visual shortcuts.
 - [ ] Prefer graceful minimum-size behavior over trying to preserve every column in tiny terminals.
 
 ## Non-Goals
