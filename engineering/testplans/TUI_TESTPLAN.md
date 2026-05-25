@@ -1607,6 +1607,28 @@ Check these states during every applicable lane:
 - Hints advertise `d: day`, `a: agenda`, and `h/l: day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
 - At `50x15`, the minimum-size guard appears instead of clipped Day Agenda chrome, and resizing larger restores the Day Agenda or detail state cleanly.
 
+### TC-38F — Calendar week time-grid
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar, then press `w` to switch from Agenda List to Week Time-Grid.
+3. Capture the Week Time-Grid with the selected event inspector visible.
+4. Move through visible week events with `j/k` or arrow keys, then move to the previous/next week with `h/l` or left/right arrows.
+5. Press `d` to switch to Day Agenda for the selected event, then press `w` again to return to the selected event's week.
+6. Press `Enter` from Week Time-Grid to open the full Event Detail view, then `Esc` to return to the Week Time-Grid without losing position.
+
+**Expect:**
+- `w` switches to a read-only Week Time-Grid and `a` returns to Agenda List without changing the Calendar destination.
+- Week Time-Grid shows weekday columns or compact day bands with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The inspector shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
+- `h/l` and left/right move between weeks without invoking mail navigation or mutation behavior.
+- `Enter` opens the existing full Event Detail reader and `Esc` returns to the Week Time-Grid state.
+- Hints advertise `w: week`, `d: day`, `a: agenda`, and `h/l: week` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- At `50x15`, the minimum-size guard appears instead of clipped Week Time-Grid chrome, and resizing larger restores the Week Time-Grid or detail state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F
