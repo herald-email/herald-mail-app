@@ -19,6 +19,7 @@ const (
 	calendarViewDay      calendarViewMode = "day"
 	calendarViewWeek     calendarViewMode = "week"
 	calendarViewThreeDay calendarViewMode = "three-day"
+	calendarViewSearch   calendarViewMode = "search"
 )
 
 type indexedCalendarEvent struct {
@@ -36,6 +37,10 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarDay = time.Time{}
 		m.calendarWeekStart = time.Time{}
 		m.calendarThreeDayStart = time.Time{}
+		m.calendarSearchQuery = ""
+		m.calendarSearchResults = nil
+		m.calendarSearchCursor = 0
+		m.calendarSearchLoading = false
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -66,7 +71,33 @@ func (m *Model) loadCalendarAgenda() tea.Cmd {
 	}
 }
 
+func (m *Model) loadCalendarSearch() tea.Cmd {
+	query := m.calendarSearchQuery
+	if strings.TrimSpace(query) == "" {
+		return func() tea.Msg {
+			return CalendarSearchLoadedMsg{Query: query}
+		}
+	}
+	agenda, ok := m.calendarAgendaBackend()
+	if !ok {
+		return func() tea.Msg {
+			return CalendarSearchLoadedMsg{Query: query, Err: fmt.Errorf("calendar search unavailable")}
+		}
+	}
+	return func() tea.Msg {
+		events, err := agenda.SearchCalendarEvents(query, time.Time{}, time.Time{})
+		return CalendarSearchLoadedMsg{Query: query, Events: events, Err: err}
+	}
+}
+
 func (m *Model) selectedCalendarEvent() *models.CalendarEvent {
+	if m.calendarView == calendarViewSearch {
+		if m.calendarSearchCursor < 0 || m.calendarSearchCursor >= len(m.calendarSearchResults) {
+			return nil
+		}
+		event := m.calendarSearchResults[m.calendarSearchCursor]
+		return &event
+	}
 	if m.calendarCursor < 0 || m.calendarCursor >= len(m.calendarEvents) {
 		return nil
 	}
@@ -116,6 +147,8 @@ func (m *Model) setCalendarView(view calendarViewMode) {
 	case calendarViewThreeDay:
 		m.calendarThreeDayStart = calendarDayStartFor(m.selectedCalendarDay())
 		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
+	case calendarViewSearch:
+		m.calendarDetail = m.selectedCalendarEvent()
 	default:
 		m.calendarDetail = m.selectedCalendarEvent()
 	}
@@ -221,8 +254,85 @@ func (m *Model) openCalendarDetail() tea.Cmd {
 	}
 }
 
+func (m *Model) openCalendarSearch() {
+	m.calendarView = calendarViewSearch
+	m.calendarDetailOpen = false
+	m.calendarDetailLoading = false
+	m.calendarSearchQuery = ""
+	m.calendarSearchResults = nil
+	m.calendarSearchCursor = 0
+	m.calendarSearchLoading = false
+	m.calendarDetail = nil
+	m.calendarStatus = "Type to search cached calendar events"
+}
+
+func (m *Model) clearCalendarSearch() {
+	m.calendarSearchQuery = ""
+	m.calendarSearchResults = nil
+	m.calendarSearchCursor = 0
+	m.calendarSearchLoading = false
+	m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+	m.setCalendarView(calendarViewAgenda)
+}
+
+func (m *Model) handleCalendarSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := shortcutKey(msg)
+	switch key {
+	case "j", "down":
+		if m.calendarSearchCursor < len(m.calendarSearchResults)-1 {
+			m.calendarSearchCursor++
+			m.calendarDetail = m.selectedCalendarEvent()
+		}
+		return m, nil
+	case "k", "up":
+		if m.calendarSearchCursor > 0 {
+			m.calendarSearchCursor--
+			m.calendarDetail = m.selectedCalendarEvent()
+		}
+		return m, nil
+	case "enter":
+		return m, m.openCalendarDetail()
+	case "esc":
+		m.clearCalendarSearch()
+		return m, nil
+	case "backspace":
+		runes := []rune(m.calendarSearchQuery)
+		if len(runes) > 0 {
+			m.calendarSearchQuery = string(runes[:len(runes)-1])
+			m.calendarSearchCursor = 0
+			m.calendarSearchLoading = true
+			return m, m.loadCalendarSearch()
+		}
+		return m, nil
+	case "ctrl+u":
+		m.calendarSearchQuery = ""
+		m.calendarSearchResults = nil
+		m.calendarSearchCursor = 0
+		m.calendarSearchLoading = false
+		m.calendarDetail = nil
+		m.calendarStatus = "Type to search cached calendar events"
+		return m, nil
+	case "ctrl+r":
+		m.calendarSearchLoading = true
+		m.calendarStatus = "Searching cached calendar events..."
+		return m, m.loadCalendarSearch()
+	}
+
+	if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt) == 0 {
+		m.calendarSearchQuery += msg.Text
+		m.calendarSearchCursor = 0
+		m.calendarSearchLoading = true
+		m.calendarStatus = "Searching cached calendar events..."
+		return m, m.loadCalendarSearch()
+	}
+	return m, nil
+}
+
 func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
+	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
+		return m.handleCalendarSearchKey(msg)
+	}
 	switch key {
 	case "j", "down":
 		if !m.calendarDetailOpen {
@@ -270,6 +380,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "t":
 		if !m.calendarDetailOpen {
 			m.setCalendarView(calendarViewThreeDay)
+		}
+		return m, nil
+	case "/":
+		if !m.calendarDetailOpen {
+			m.openCalendarSearch()
 		}
 		return m, nil
 	case "h", "left":
@@ -335,6 +450,9 @@ func (m *Model) renderCalendarView() string {
 	if m.calendarView == calendarViewThreeDay {
 		return m.renderCalendarThreeDayView()
 	}
+	if m.calendarView == calendarViewSearch {
+		return m.renderCalendarSearchView()
+	}
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	contentW := m.windowWidth
@@ -353,6 +471,27 @@ func (m *Model) renderCalendarView() string {
 
 	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCalendarAgendaList(leftW-4, contentH-2))
 	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCalendarEventDetail(rightW-4, contentH-2, false))
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
+}
+
+func (m *Model) renderCalendarSearchView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	available := clamp(contentW-panelGapWidth, 40)
+	leftW, rightW := splitWidth(available, 0, 28, 28, available*50/100)
+	contentH := plan.ContentHeight
+	if contentH < 4 {
+		contentH = 4
+	}
+
+	leftPanel := m.calendarPanel(leftW, contentH, true).Render(m.renderCalendarSearchResults(leftW-4, contentH-2))
+	rightPanel := m.calendarPanel(rightW, contentH, false).Render(m.renderCalendarEventDetailWithHeader(rightW-4, contentH-2, false, "Search Detail"))
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
 }
 
@@ -483,6 +622,57 @@ func (m *Model) renderCalendarAgendaList(width, height int) string {
 		event := m.calendarEvents[i]
 		line := calendarAgendaLine(event, width)
 		if i == m.calendarCursor {
+			line = m.theme.Focus.SelectionActive.Style().Render(calendarFit("> "+line, width))
+		} else {
+			line = "  " + line
+		}
+		lines = append(lines, line)
+	}
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCalendarSearchResults(width, height int) string {
+	if width < 10 {
+		width = 10
+	}
+	var lines []string
+	title := fmt.Sprintf("Calendar Search (%d)", len(m.calendarSearchResults))
+	if m.calendarSearchLoading {
+		title = "Calendar Search (loading)"
+	}
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)))
+	queryLine := "/ " + m.calendarSearchQuery
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(queryLine, width)))
+	if strings.TrimSpace(m.calendarStatus) != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	}
+	if strings.TrimSpace(m.calendarSearchQuery) == "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Type to search cached calendar events", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+	if len(m.calendarSearchResults) == 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached event matches", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+
+	maxRows := height - len(lines)
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	start := 0
+	if m.calendarSearchCursor >= maxRows {
+		start = m.calendarSearchCursor - maxRows + 1
+	}
+	end := start + maxRows
+	if end > len(m.calendarSearchResults) {
+		end = len(m.calendarSearchResults)
+	}
+	for i := start; i < end; i++ {
+		event := m.calendarSearchResults[i]
+		line := calendarSearchLine(event, m.calendarSearchQuery, width)
+		if i == m.calendarSearchCursor {
 			line = m.theme.Focus.SelectionActive.Style().Render(calendarFit("> "+line, width))
 		} else {
 			line = "  " + line
@@ -901,6 +1091,70 @@ func calendarAgendaLine(event models.CalendarEvent, width int) string {
 	}
 	prefix := calendarFit(timeText, prefixW)
 	return calendarFit(prefix+"  "+ansi.Truncate(event.Title+" - "+source, titleW, "..."), width-2)
+}
+
+func calendarSearchLine(event models.CalendarEvent, query string, width int) string {
+	timeText := calendarShortTime(event)
+	source := calendarSourceLabel(event)
+	hint := calendarSearchMatchHint(event, query)
+	prefixW := 18
+	if width < 48 {
+		prefixW = 12
+	}
+	titleW := width - prefixW - 2
+	if titleW < 8 {
+		titleW = 8
+	}
+	summary := event.Title + " - " + source
+	if hint != "" {
+		summary += " [" + hint + "]"
+	}
+	prefix := calendarFit(timeText, prefixW)
+	return calendarFit(prefix+"  "+ansi.Truncate(summary, titleW, "..."), width-2)
+}
+
+func calendarSearchMatchHint(event models.CalendarEvent, query string) string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return ""
+	}
+	fieldContains := func(values ...string) bool {
+		for _, value := range values {
+			if strings.Contains(strings.ToLower(value), query) {
+				return true
+			}
+		}
+		return false
+	}
+	if fieldContains(event.Title) {
+		return "title"
+	}
+	if fieldContains(event.Location) {
+		return "location"
+	}
+	if fieldContains(event.Organizer, event.OrganizerEmail) {
+		return "organizer"
+	}
+	for _, attendee := range event.Attendees {
+		if fieldContains(attendee.Name, attendee.Email, attendee.RSVP) {
+			return "attendee"
+		}
+	}
+	if fieldContains(event.Description) {
+		return "notes"
+	}
+	if fieldContains(event.RecurrenceSummary) || fieldContains(event.Recurrence...) {
+		return "recurrence"
+	}
+	for _, attachment := range event.Attachments {
+		if fieldContains(attachment.Title, attachment.MIMEType) {
+			return "attachment"
+		}
+	}
+	if fieldContains(calendarSourceLabel(event), string(event.Ref.WithDefaults().AccountID)) {
+		return "calendar"
+	}
+	return ""
 }
 
 func calendarDayAgendaLine(event models.CalendarEvent, width int) string {

@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type CalendarCollection struct {
 	Ref       CollectionRef
@@ -58,4 +61,40 @@ func (e CalendarEvent) CanonicalTimeZone() string {
 		return e.Start.Location().String()
 	}
 	return "Local"
+}
+
+func CalendarEventMatchesQuery(event CalendarEvent, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return false
+	}
+	return strings.Contains(CalendarEventSearchText(event), query)
+}
+
+func CalendarEventSearchText(event CalendarEvent) string {
+	ref := event.Ref.WithDefaults()
+	parts := []string{
+		event.Title,
+		event.Description,
+		event.Location,
+		event.TimeZone,
+		event.Status,
+		event.Organizer,
+		event.OrganizerEmail,
+		event.RecurrenceSummary,
+		string(ref.SourceID),
+		string(ref.AccountID),
+		ref.CalendarID,
+	}
+	parts = append(parts, event.Recurrence...)
+	for _, attendee := range event.Attendees {
+		parts = append(parts, attendee.Name, attendee.Email, attendee.RSVP)
+		if attendee.Optional {
+			parts = append(parts, "optional")
+		}
+	}
+	for _, attachment := range event.Attachments {
+		parts = append(parts, attachment.Title, attachment.MIMEType)
+	}
+	return strings.ToLower(strings.Join(parts, " "))
 }

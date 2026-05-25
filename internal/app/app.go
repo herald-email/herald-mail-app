@@ -62,6 +62,13 @@ type CalendarAgendaLoadedMsg struct {
 	Err    error
 }
 
+// CalendarSearchLoadedMsg carries cache-backed search results for the Calendar tab.
+type CalendarSearchLoadedMsg struct {
+	Query  string
+	Events []models.CalendarEvent
+	Err    error
+}
+
 // CalendarEventDetailMsg carries a selected read-only event detail.
 type CalendarEventDetailMsg struct {
 	Ref   models.EventRef
@@ -666,6 +673,10 @@ type Model struct {
 	calendarEvents        []models.CalendarEvent
 	calendarCursor        int
 	calendarView          calendarViewMode
+	calendarSearchQuery   string
+	calendarSearchResults []models.CalendarEvent
+	calendarSearchCursor  int
+	calendarSearchLoading bool
 	calendarDay           time.Time
 	calendarWeekStart     time.Time
 	calendarThreeDayStart time.Time
@@ -1835,13 +1846,46 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.calendarView == calendarViewThreeDay {
 			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart()
 			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
+		} else if m.calendarView == calendarViewSearch {
+			m.calendarDetail = m.selectedCalendarEvent()
 		} else {
 			m.calendarDetail = m.selectedCalendarEvent()
 		}
 		m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
 		return m, nil
 
+	case CalendarSearchLoadedMsg:
+		if msg.Query != m.calendarSearchQuery || m.calendarView != calendarViewSearch {
+			return m, nil
+		}
+		m.calendarSearchLoading = false
+		if strings.TrimSpace(msg.Query) == "" {
+			m.calendarSearchResults = nil
+			m.calendarDetail = nil
+			m.calendarStatus = "Type to search cached calendar events"
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.calendarSearchResults = nil
+			m.calendarDetail = nil
+			m.calendarStatus = "Calendar search failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.calendarSearchResults = msg.Events
+		if m.calendarSearchCursor >= len(m.calendarSearchResults) {
+			m.calendarSearchCursor = len(m.calendarSearchResults) - 1
+		}
+		if m.calendarSearchCursor < 0 {
+			m.calendarSearchCursor = 0
+		}
+		m.calendarDetail = m.selectedCalendarEvent()
+		m.calendarStatus = fmt.Sprintf("Search found %d cached event(s)", len(m.calendarSearchResults))
+		return m, nil
+
 	case CalendarEventDetailMsg:
+		if selected := m.selectedCalendarEvent(); selected == nil || selected.Ref.WithDefaults().LocalID != msg.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
 		m.calendarDetailLoading = false
 		if msg.Err != nil {
 			m.calendarStatus = "Calendar detail failed: " + msg.Err.Error()

@@ -148,3 +148,72 @@ func TestCacheCalendarEventRichDetailRoundTrip(t *testing.T) {
 		t.Fatalf("alternate zones = %#v", got.AlternateTimeZones)
 	}
 }
+
+func TestCacheSearchCalendarEventsMatchesScopedMetadata(t *testing.T) {
+	c := newTestCache(t)
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   models.SourceID("work-calendar"),
+			AccountID:  models.AccountID("work"),
+			CalendarID: "primary",
+			EventID:    "event-search",
+			ETag:       `"provider-etag"`,
+		}.WithDefaults(),
+		ProviderUID:       "provider-secret",
+		Title:             "Timezone planning",
+		Description:       "Discuss follow-up notes for launch readiness.",
+		Location:          "Video call",
+		Start:             start,
+		End:               start.Add(time.Hour),
+		Organizer:         "Mina Park",
+		OrganizerEmail:    "mina@example.com",
+		RecurrenceSummary: "Weekly on Monday",
+		Attendees: []models.CalendarAttendee{
+			{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
+		},
+		Attachments: []models.CalendarAttachment{
+			{Title: "Agenda", URI: "https://calendar.example/private/agenda.pdf", MIMEType: "application/pdf"},
+		},
+		Raw: `{"syncToken":"secret-sync-token"}`,
+	}
+	if err := c.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	otherScope := event
+	otherScope.Ref = models.EventRef{SourceID: "personal-calendar", AccountID: "personal", CalendarID: "primary", EventID: "event-search"}.WithDefaults()
+	if err := c.PutCalendarEvent(otherScope); err != nil {
+		t.Fatalf("PutCalendarEvent other scope: %v", err)
+	}
+
+	for _, query := range []string{"mina", "rae@example.com", "weekly", "agenda", "work-calendar"} {
+		results, err := c.SearchCalendarEvents("work-calendar", "work", query, start.Add(-time.Hour), start.Add(2*time.Hour))
+		if err != nil {
+			t.Fatalf("SearchCalendarEvents(%q): %v", query, err)
+		}
+		if len(results) != 1 || results[0].Ref.SourceID != "work-calendar" || results[0].Title != "Timezone planning" {
+			t.Fatalf("SearchCalendarEvents(%q) = %#v, want scoped match", query, results)
+		}
+	}
+
+	for _, query := range []string{"provider-secret", "secret-sync-token", "calendar.example"} {
+		results, err := c.SearchCalendarEvents("work-calendar", "work", query, start.Add(-time.Hour), start.Add(2*time.Hour))
+		if err != nil {
+			t.Fatalf("SearchCalendarEvents(%q): %v", query, err)
+		}
+		if len(results) != 0 {
+			t.Fatalf("SearchCalendarEvents(%q) = %#v, want provider internals excluded", query, results)
+		}
+	}
+
+	if err := c.InvalidateCalendarEvent(event.Ref); err != nil {
+		t.Fatalf("InvalidateCalendarEvent: %v", err)
+	}
+	results, err := c.SearchCalendarEvents("work-calendar", "work", "timezone", start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("SearchCalendarEvents after invalidate: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("invalidated results = %#v, want none", results)
+	}
+}

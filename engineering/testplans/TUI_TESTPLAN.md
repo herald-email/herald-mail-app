@@ -1670,6 +1670,28 @@ Check these states during every applicable lane:
 - Timezone rows make local time and event timezone distinct when they differ, and the alternate timezone row makes date-crossing cases visible.
 - At `50x15`, the minimum-size guard appears instead of clipped Event Detail chrome, and resizing larger restores the full detail state cleanly.
 
+### TC-38I — Calendar Search foundation
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode and dismiss the welcome overlay.
+2. Press `3` or `F4` to open Calendar, then press `/` to switch to Calendar Search.
+3. Type a query that matches an event title, location, attendee, organizer, notes, or recurrence text.
+4. Capture the Search view with filtered results and the selected-event detail visible.
+5. Move through results with `j/k`, press `Enter` to open full Event Detail, then `Esc` to return to the same Search result.
+6. Press `Esc` again to clear Search and confirm Agenda List returns without losing the calendar destination.
+7. Repeat in a mail-only session and confirm Calendar Search is not advertised.
+
+**Expect:**
+- Calendar Search is read-only, cache-backed, and source-scoped; it searches cached/demo calendar event metadata without direct provider fetches.
+- Search results include matching event title, time, calendar/source label, and a compact matched-field hint without exposing provider event IDs, CalDAV URLs, sync tokens, raw ETags, OAuth details, or mutation controls.
+- Searches match title, location, notes, organizer, attendee email/name, recurrence summary, attachment title, and calendar/source labels.
+- `Enter` opens the existing full Event Detail reader and `Esc` returns to Search first, then clears Search back to Agenda List.
+- Hints advertise `/ search`, `esc: clear search`, and read-only Calendar navigation only in Calendar contexts; literal `/`, query text, and `s` typed in Compose/search/editor text-entry surfaces remain text.
+- At `50x15`, the minimum-size guard appears instead of clipped Search chrome, and resizing larger restores the Search state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

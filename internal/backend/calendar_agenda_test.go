@@ -95,3 +95,115 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 		t.Fatalf("detail title = %q, want %q", detail.Title, event.Title)
 	}
 }
+
+func TestLocalBackendCalendarSearchReadsScopedCache(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+		{ID: "personal-calendar", Kind: "calendar", Provider: "caldav", AccountID: "personal"},
+	}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	workEvent := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "work-calendar",
+			AccountID:  "work",
+			CalendarID: "primary",
+			EventID:    "planning",
+		}.WithDefaults(),
+		Title:          "Launch planning",
+		Description:    "Bring notes for the cache-first calendar slice.",
+		Start:          start,
+		End:            start.Add(time.Hour),
+		Organizer:      "Mina Park",
+		OrganizerEmail: "mina@example.com",
+		Attendees:      []models.CalendarAttendee{{Name: "Rae Stone", Email: "rae@example.com"}},
+		Attachments:    []models.CalendarAttachment{{Title: "Agenda", URI: "https://calendar.example/private.pdf"}},
+		Raw:            `{"syncToken":"secret"}`,
+	}
+	personalEvent := workEvent
+	personalEvent.Ref = models.EventRef{SourceID: "personal-calendar", AccountID: "personal", CalendarID: "primary", EventID: "planning"}.WithDefaults()
+	personalEvent.Title = "Personal planning"
+	for _, event := range []models.CalendarEvent{workEvent, personalEvent} {
+		if err := store.PutCalendarEvent(event); err != nil {
+			t.Fatalf("PutCalendarEvent: %v", err)
+		}
+	}
+
+	results, err := b.SearchCalendarEvents("rae@example.com", start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("SearchCalendarEvents: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %#v, want both configured calendar source matches", results)
+	}
+
+	results, err = b.SearchCalendarEvents("calendar.example", start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("SearchCalendarEvents provider internals: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("provider-internal search results = %#v, want none", results)
+	}
+}
+
+func TestMultiBackendCalendarSearchAggregatesVisibleAccounts(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	work.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Launch planning",
+		Description: "Scoped work calendar result.",
+		Start:       start,
+		End:         start.Add(time.Hour),
+	}}
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	personal.calendarEvents = []models.CalendarEvent{{
+		Ref:         models.EventRef{SourceID: "personal-calendar", AccountID: "personal", CalendarID: "primary", EventID: "planning"}.WithDefaults(),
+		Title:       "Travel planning",
+		Description: "Scoped personal calendar result.",
+		Start:       start.Add(30 * time.Minute),
+		End:         start.Add(90 * time.Minute),
+	}}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-calendar", AccountID: "work", DisplayName: "Work Calendar", Provider: "google_calendar"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-calendar", AccountID: "personal", DisplayName: "Personal Calendar", Provider: "caldav"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	results, err := mb.SearchCalendarEvents("planning", start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("SearchCalendarEvents all: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("all-account results = %#v, want work and personal", results)
+	}
+	if results[0].Ref.LocalID == results[1].Ref.LocalID {
+		t.Fatalf("duplicate provider event IDs should stay scoped, got %#v", results)
+	}
+	if len(work.calendarSearch) != 1 || len(personal.calendarSearch) != 1 {
+		t.Fatalf("search calls work=%v personal=%v, want both accounts searched", work.calendarSearch, personal.calendarSearch)
+	}
+
+	if err := mb.SwitchAccount("personal-calendar"); err != nil {
+		t.Fatalf("SwitchAccount(personal): %v", err)
+	}
+	results, err = mb.SearchCalendarEvents("planning", start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("SearchCalendarEvents active: %v", err)
+	}
+	if len(results) != 1 || results[0].Ref.SourceID != "personal-calendar" {
+		t.Fatalf("active-account results = %#v, want personal only", results)
+	}
+}

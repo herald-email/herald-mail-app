@@ -195,6 +195,20 @@ func (c *Cache) ListCalendarAgendaEvents(sourceID models.SourceID, accountID mod
 	return events, rows.Err()
 }
 
+func (c *Cache) SearchCalendarEvents(sourceID models.SourceID, accountID models.AccountID, query string, start, end time.Time) ([]models.CalendarEvent, error) {
+	events, err := c.ListCalendarAgendaEvents(sourceID, accountID, start, end)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.CalendarEvent, 0, len(events))
+	for _, event := range events {
+		if models.CalendarEventMatchesQuery(event, query) {
+			out = append(out, event)
+		}
+	}
+	return out, nil
+}
+
 type calendarEventScanner interface {
 	Scan(dest ...any) error
 }

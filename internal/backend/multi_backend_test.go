@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,8 @@ type recordingAccountBackend struct {
 	draftDeletes   []string
 	draftSends     []string
 	getMessageRefs []models.MessageRef
+	calendarEvents []models.CalendarEvent
+	calendarSearch []string
 	closed         bool
 }
 
@@ -154,6 +157,47 @@ func (b *recordingAccountBackend) GetMessage(ctx context.Context, ref models.Mes
 		return MessageReadResult{}, fmt.Errorf("missing message for %s:%d", ref.Folder, ref.UID)
 	}
 	return MessageReadResult{Body: body, Source: MessageReadSourceProvider}, nil
+}
+
+func (b *recordingAccountBackend) CalendarAgendaAvailable() bool {
+	return len(b.calendarEvents) > 0
+}
+
+func (b *recordingAccountBackend) ListCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
+	out := make([]models.CalendarEvent, 0, len(b.calendarEvents))
+	for _, event := range b.calendarEvents {
+		if !calendarEventInRange(event, start, end) {
+			continue
+		}
+		out = append(out, event)
+	}
+	sortCalendarEvents(out)
+	return out, nil
+}
+
+func (b *recordingAccountBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error) {
+	ref = ref.WithDefaults()
+	for _, event := range b.calendarEvents {
+		if event.Ref.WithDefaults().LocalID == ref.LocalID {
+			got := event
+			return &got, nil
+		}
+	}
+	return nil, fmt.Errorf("missing calendar event %s", ref.LocalID)
+}
+
+func (b *recordingAccountBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
+	b.calendarSearch = append(b.calendarSearch, query)
+	query = strings.ToLower(strings.TrimSpace(query))
+	out := make([]models.CalendarEvent, 0, len(b.calendarEvents))
+	for _, event := range b.calendarEvents {
+		haystack := strings.ToLower(event.Title + " " + event.Description + " " + event.Location + " " + string(event.Ref.SourceID))
+		if query != "" && strings.Contains(haystack, query) && calendarEventInRange(event, start, end) {
+			out = append(out, event)
+		}
+	}
+	sortCalendarEvents(out)
+	return out, nil
 }
 
 func (b *recordingAccountBackend) Close() error {

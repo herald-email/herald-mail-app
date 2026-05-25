@@ -11,9 +11,10 @@ import (
 
 type calendarAgendaStubBackend struct {
 	stubBackend
-	available bool
-	events    []models.CalendarEvent
-	getCalls  int
+	available   bool
+	events      []models.CalendarEvent
+	getCalls    int
+	searchCalls []string
 }
 
 func (b *calendarAgendaStubBackend) CalendarAgendaAvailable() bool {
@@ -46,6 +47,40 @@ func (b *calendarAgendaStubBackend) GetCalendarEvent(ref models.EventRef) (*mode
 	return nil, nil
 }
 
+func (b *calendarAgendaStubBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
+	b.searchCalls = append(b.searchCalls, query)
+	query = strings.ToLower(strings.TrimSpace(query))
+	out := make([]models.CalendarEvent, 0, len(b.events))
+	for _, event := range b.events {
+		if !start.IsZero() && !event.End.IsZero() && !event.End.After(start) {
+			continue
+		}
+		if !end.IsZero() && !event.Start.IsZero() && !event.Start.Before(end) {
+			continue
+		}
+		haystack := strings.ToLower(strings.Join([]string{
+			event.Title,
+			event.Description,
+			event.Location,
+			event.Organizer,
+			event.OrganizerEmail,
+			event.RecurrenceSummary,
+			string(event.Ref.SourceID),
+			event.Ref.CalendarID,
+		}, " "))
+		for _, attendee := range event.Attendees {
+			haystack += " " + strings.ToLower(attendee.Name+" "+attendee.Email+" "+attendee.RSVP)
+		}
+		for _, attachment := range event.Attachments {
+			haystack += " " + strings.ToLower(attachment.Title+" "+attachment.MIMEType)
+		}
+		if query != "" && strings.Contains(haystack, query) {
+			out = append(out, event)
+		}
+	}
+	return out, nil
+}
+
 func TestCalendarTabHiddenForMailOnlyBackend(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
@@ -64,6 +99,116 @@ func TestCalendarTabHiddenForMailOnlyBackend(t *testing.T) {
 	}
 	if model.(*Model).activeTab != tabTimeline {
 		t.Fatalf("active tab changed to %d, want Timeline", model.(*Model).activeTab)
+	}
+}
+
+func TestCalendarSearchViewFiltersAndPreservesDetailReturn(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.ProviderUID = "provider-secret"
+	rich.Ref.ETag = `"provider-etag"`
+	rich.Raw = `{"syncToken":"secret"}`
+	events := append(testCalendarEvents(), rich)
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = events
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	model, cmd := m.handleKeyMsg(keyRunes("/"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewSearch {
+		t.Fatalf("calendarView = %q, want search", m.calendarView)
+	}
+	if cmd != nil {
+		for _, msg := range calendarImmediateMessagesForTest(cmd) {
+			model, _ = m.Update(msg)
+			m = model.(*Model)
+		}
+	}
+
+	model, cmd = m.handleKeyMsg(keyRunes("Mina"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.searchCalls) == 0 || b.searchCalls[len(b.searchCalls)-1] != "Mina" {
+		t.Fatalf("search calls = %#v, want Mina", b.searchCalls)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Calendar Search", "/ Mina", "Timezone planning", "Mina Park", "read-only"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("calendar search missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "calendar.example"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("calendar search leaked provider internals %q:\n%s", forbidden, rendered)
+		}
+	}
+
+	model, cmd = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Enter to open full event detail from search")
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarDetailOpen {
+		t.Fatal("expected first Esc to close detail")
+	}
+	if m.calendarView != calendarViewSearch || m.calendarSearchQuery != "Mina" {
+		t.Fatalf("search state after detail Esc view=%q query=%q", m.calendarView, m.calendarSearchQuery)
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarView != calendarViewAgenda || m.calendarSearchQuery != "" {
+		t.Fatalf("second Esc should clear search to agenda, view=%q query=%q", m.calendarView, m.calendarSearchQuery)
+	}
+}
+
+func TestCalendarSearchNoMatchesAndProviderInternalsHidden(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Raw = `{"syncToken":"secret"}`
+	rich.Ref.ETag = `"provider-etag"`
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+
+	model, cmd := m.handleKeyMsg(keyRunes("/"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	model, cmd = m.handleKeyMsg(keyRunes("Atlantis"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Calendar Search", "/ Atlantis", "No cached event matches"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("no-match search missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-etag", "syncToken", "https://calendar.example", "RSVP", "Edit"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("no-match search leaked or advertised %q:\n%s", forbidden, rendered)
+		}
 	}
 }
 
@@ -572,6 +717,70 @@ func TestCalendarThreeDayShortcutDoesNotStealTextEntry(t *testing.T) {
 		}
 		if got := m.promptEditor.name; got != "t" {
 			t.Fatalf("prompt editor name=%q, want literal t", got)
+		}
+	})
+}
+
+func TestCalendarSearchShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("/"))
+		m = model.(*Model)
+		if m.activeTab != tabCompose {
+			t.Fatalf("activeTab = %d, want Compose", m.activeTab)
+		}
+		if got := m.composeBody.Value(); got != "/" {
+			t.Fatalf("compose body=%q, want literal /", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("/"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "/" {
+			t.Fatalf("timeline search=%q, want literal /", got)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("/"))
+		m = model.(*Model)
+		if !m.showPromptEditor {
+			t.Fatal("prompt editor should remain active after typing /")
+		}
+		if got := m.promptEditor.name; got != "/" {
+			t.Fatalf("prompt editor name=%q, want literal /", got)
 		}
 	})
 }
