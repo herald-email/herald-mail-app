@@ -2,11 +2,16 @@ package calendar
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/testcalendar"
 )
@@ -55,6 +60,142 @@ func TestGoogleCalendarSourceUsesLocalTestServer(t *testing.T) {
 	}
 	if got.Ref.LocalID != events[0].Ref.LocalID || got.Ref.ETag != `"g-v1"` {
 		t.Fatalf("FetchEvent = %#v, want same scoped event with etag", got)
+	}
+}
+
+func TestGoogleCalendarSourceRefreshesExpiredOAuthTokenBeforeListCalendars(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "calendar-client-id")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "calendar-client-secret")
+
+	var tokenRefreshes int
+	var calendarAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			tokenRefreshes++
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm: %v", err)
+			}
+			if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "calendar-refresh-token" {
+				t.Fatalf("refresh form = %s, want refresh_token grant", r.Form.Encode())
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "fresh-calendar-token",
+				"expires_in":   3600,
+				"token_type":   "Bearer",
+			})
+		case "/calendar/v3/users/me/calendarList":
+			calendarAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]string{{"id": "primary", "summary": "Work"}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken:  "expired-calendar-token",
+			RefreshToken: "calendar-refresh-token",
+			TokenExpiry:  time.Now().Add(-time.Hour).UTC().Format(time.RFC3339),
+			APIBaseURL:   server.URL + "/calendar/v3",
+			TokenURL:     server.URL + "/token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	collections, err := src.ListCalendars(context.Background())
+	if err != nil {
+		t.Fatalf("ListCalendars: %v", err)
+	}
+	if len(collections) != 1 || collections[0].Ref.CollectionID != "primary" {
+		t.Fatalf("collections = %#v, want refreshed calendar list", collections)
+	}
+	if tokenRefreshes != 1 {
+		t.Fatalf("token refreshes = %d, want 1", tokenRefreshes)
+	}
+	if calendarAuth != "Bearer fresh-calendar-token" {
+		t.Fatalf("calendar Authorization = %q, want refreshed bearer token", calendarAuth)
+	}
+}
+
+func TestGoogleCalendarSourceListEventsWithSyncTokenExposesNextAndDeletedRefs(t *testing.T) {
+	var eventQuery url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/calendar/v3/calendars/primary/events" {
+			http.NotFound(w, r)
+			return
+		}
+		eventQuery = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"nextSyncToken": "sync-primary-v2",
+			"items": []map[string]any{
+				{
+					"id":      "active-event",
+					"etag":    `"active-v2"`,
+					"summary": "Updated planning",
+					"status":  "confirmed",
+					"start":   map[string]string{"dateTime": "2026-05-25T10:00:00Z"},
+					"end":     map[string]string{"dateTime": "2026-05-25T11:00:00Z"},
+				},
+				{
+					"id":     "deleted-event",
+					"etag":   `"deleted-v2"`,
+					"status": "cancelled",
+					"start":  map[string]string{"dateTime": "2026-05-25T12:00:00Z"},
+					"end":    map[string]string{"dateTime": "2026-05-25T13:00:00Z"},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "local-token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	result, err := src.ListEventsWithSyncToken(context.Background(), models.CollectionRef{
+		SourceID:     "work-calendar",
+		AccountID:    "work",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "primary",
+	}, "sync-primary-v1")
+	if err != nil {
+		t.Fatalf("ListEventsWithSyncToken: %v", err)
+	}
+	if eventQuery.Get("syncToken") != "sync-primary-v1" {
+		t.Fatalf("syncToken query = %q, want cached token", eventQuery.Get("syncToken"))
+	}
+	if eventQuery.Get("showDeleted") != "true" {
+		t.Fatalf("showDeleted query = %q, want true for incremental sync", eventQuery.Get("showDeleted"))
+	}
+	if result.NextSyncToken != "sync-primary-v2" {
+		t.Fatalf("NextSyncToken = %q, want provider token", result.NextSyncToken)
+	}
+	if len(result.Events) != 1 || result.Events[0].Ref.EventID != "active-event" {
+		t.Fatalf("Events = %#v, want only active event", result.Events)
+	}
+	if len(result.DeletedRefs) != 1 || result.DeletedRefs[0].EventID != "deleted-event" {
+		t.Fatalf("DeletedRefs = %#v, want deleted-event ref", result.DeletedRefs)
 	}
 }
 

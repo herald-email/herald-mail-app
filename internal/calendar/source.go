@@ -15,6 +15,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
 type Source interface {
@@ -32,11 +33,21 @@ type MutationSource interface {
 	RespondToEvent(context.Context, models.EventRef, string, models.CalendarMutationOptions) (*models.CalendarEvent, error)
 }
 
+type SyncTokenSource interface {
+	ListEventsWithSyncToken(context.Context, models.CollectionRef, string) (CalendarSyncResult, error)
+}
+
+type CalendarSyncResult struct {
+	Events        []models.CalendarEvent
+	DeletedRefs   []models.EventRef
+	NextSyncToken string
+}
+
 type GoogleCalendarSource struct {
 	id            models.SourceID
 	accountID     models.AccountID
 	displayName   string
-	accessToken   string
+	google        config.GoogleConfig
 	attendeeEmail string
 	baseURL       string
 	client        *http.Client
@@ -53,7 +64,7 @@ func NewGoogleCalendarSource(cfg config.SourceConfig) (*GoogleCalendarSource, er
 		id:            id,
 		accountID:     accountID,
 		displayName:   cfg.DisplayName,
-		accessToken:   strings.TrimSpace(cfg.Google.AccessToken),
+		google:        cfg.Google,
 		attendeeEmail: strings.TrimSpace(cfg.Google.Email),
 		baseURL:       baseURL,
 		client:        http.DefaultClient,
@@ -93,21 +104,57 @@ func (s *GoogleCalendarSource) ListCalendars(ctx context.Context) ([]models.Cale
 }
 
 func (s *GoogleCalendarSource) ListEvents(ctx context.Context, ref models.CollectionRef) ([]models.CalendarEvent, error) {
-	ref = s.normalizeCollection(ref)
-	u := s.baseURL + "/calendars/" + url.PathEscape(ref.CollectionID) + "/events?singleEvents=true&showDeleted=false"
-	req, err := s.newRequest(ctx, http.MethodGet, u, nil)
+	result, err := s.ListEventsWithSyncToken(ctx, ref, "")
 	if err != nil {
 		return nil, err
 	}
-	var payload googleEvents
-	if err := s.doJSON(req, &payload); err != nil {
-		return nil, err
+	return result.Events, nil
+}
+
+func (s *GoogleCalendarSource) ListEventsWithSyncToken(ctx context.Context, ref models.CollectionRef, syncToken string) (CalendarSyncResult, error) {
+	ref = s.normalizeCollection(ref)
+	endpoint := s.baseURL + "/calendars/" + url.PathEscape(ref.CollectionID) + "/events"
+	values := url.Values{}
+	if strings.TrimSpace(syncToken) != "" {
+		values.Set("syncToken", strings.TrimSpace(syncToken))
+		values.Set("showDeleted", "true")
+	} else {
+		values.Set("singleEvents", "true")
+		values.Set("showDeleted", "false")
 	}
-	out := make([]models.CalendarEvent, 0, len(payload.Items))
-	for _, item := range payload.Items {
-		out = append(out, googleEventToModel(s.id, s.accountID, ref.CollectionID, item))
+	var result CalendarSyncResult
+	for {
+		requestURL := endpoint + "?" + values.Encode()
+		req, err := s.newRequest(ctx, http.MethodGet, requestURL, nil)
+		if err != nil {
+			return CalendarSyncResult{}, err
+		}
+		var payload googleEvents
+		if err := s.doJSON(req, &payload); err != nil {
+			return CalendarSyncResult{}, err
+		}
+		if payload.NextSyncToken != "" {
+			result.NextSyncToken = payload.NextSyncToken
+		}
+		for _, item := range payload.Items {
+			if strings.TrimSpace(syncToken) != "" && normalizeCalendarStatus(item.Status) == "cancelled" {
+				result.DeletedRefs = append(result.DeletedRefs, models.EventRef{
+					SourceID:   s.id,
+					AccountID:  s.accountID,
+					CalendarID: ref.CollectionID,
+					EventID:    item.ID,
+					ETag:       item.ETag,
+				}.WithDefaults())
+				continue
+			}
+			result.Events = append(result.Events, googleEventToModel(s.id, s.accountID, ref.CollectionID, item))
+		}
+		if payload.NextPageToken == "" {
+			break
+		}
+		values.Set("pageToken", payload.NextPageToken)
 	}
-	return out, nil
+	return result, nil
 }
 
 func (s *GoogleCalendarSource) FetchEvent(ctx context.Context, ref models.EventRef) (*models.CalendarEvent, error) {
@@ -190,8 +237,12 @@ func (s *GoogleCalendarSource) newRequest(ctx context.Context, method, u string,
 	if err != nil {
 		return nil, err
 	}
-	if s.accessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+s.accessToken)
+	token, err := oauth.RefreshGoogleConfigIfNeeded(ctx, &s.google)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	return req, nil
 }
@@ -432,6 +483,7 @@ type googleCalendarList struct {
 
 type googleEvents struct {
 	Items         []googleEventPayload `json:"items"`
+	NextPageToken string               `json:"nextPageToken"`
 	NextSyncToken string               `json:"nextSyncToken"`
 }
 

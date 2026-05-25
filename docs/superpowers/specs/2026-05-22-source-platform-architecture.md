@@ -84,6 +84,7 @@ Sources are provider adapters, not mini-apps. They should know how to talk to IM
 - [x] `MailSource` covers current mail-specific collections, sync, body fetch, mutation, drafts, folder status, and search behind `IMAPMailSource`.
 - [x] `CalendarSource` covers read-only calendars, event listing/sync, and event detail fetch; `MutationSource` covers selected edit/RSVP writes with explicit recurrence-scope and provider-conflict guards.
 - [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
+- [x] Google Calendar source refreshes source-scoped OAuth tokens, sends cached provider sync tokens on incremental event sync, and returns next sync tokens to Herald-owned cache services.
 - [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
 
 Example capability shape:
@@ -229,6 +230,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 5B: Add opt-in unified inbox/search and account badges after scoped list/write paths are complete.
   - [x] Phase 5C: Add account-aware Compose `From` selection and route sends/drafts through the selected mail source.
 - [x] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
+  - [x] Phase 6A: Add Google Calendar OAuth refresh and provider sync-token persistence for cache-backed source reads.
 - [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
   - [x] Phase 7A: Add an optional read-only Calendar Agenda and Event Detail TUI foundation backed by demo/cache rows.
   - [x] Phase 7B: Add a read-only Day Agenda + Drawer view that reuses cache-backed agenda rows and preserves full Event Detail.

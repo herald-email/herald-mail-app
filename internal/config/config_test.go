@@ -140,7 +140,7 @@ func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 			Provider:    "google_calendar",
 			DisplayName: "Work Calendar",
 			AccountID:   "work",
-			Google:      GoogleConfig{RefreshToken: "refresh-token", APIBaseURL: "https://calendar.test"},
+			Google:      GoogleConfig{RefreshToken: "refresh-token", APIBaseURL: "https://calendar.test", TokenURL: "https://oauth.test/token"},
 		},
 		{
 			ID:          "family-calendar",
@@ -166,7 +166,7 @@ func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 	if sources[0].DisplayName != "Work Mail" || sources[0].IMAP.Host != "imap.example.com" {
 		t.Fatalf("mail source did not roundtrip: %#v", sources[0])
 	}
-	if sources[1].DisplayName != "Work Calendar" || sources[1].Google.RefreshToken != "refresh-token" || sources[1].Google.APIBaseURL != "https://calendar.test" {
+	if sources[1].DisplayName != "Work Calendar" || sources[1].Google.RefreshToken != "refresh-token" || sources[1].Google.APIBaseURL != "https://calendar.test" || sources[1].Google.TokenURL != "https://oauth.test/token" {
 		t.Fatalf("calendar source did not roundtrip: %#v", sources[1])
 	}
 	if sources[2].Provider != "caldav" || sources[2].CalDAV.URL != "https://caldav.test/calendars/family/" || sources[2].CalDAV.Username != "family" {

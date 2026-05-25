@@ -42,6 +42,7 @@ type GoogleConfig struct {
 	TokenExpiry  string `yaml:"token_expiry,omitempty"`
 	Email        string `yaml:"email,omitempty"`
 	APIBaseURL   string `yaml:"api_base_url,omitempty"`
+	TokenURL     string `yaml:"token_url,omitempty"`
 }
 
 type CalDAVConfig struct {

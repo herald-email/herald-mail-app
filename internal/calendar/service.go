@@ -121,14 +121,65 @@ func (s *EventService) SyncCollectionNoCache(ctx context.Context, ref models.Col
 	ref.Kind = models.SourceKindCalendar
 	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.source.ID())
 	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
-	events, err := s.source.ListEvents(ctx, ref)
-	if err != nil {
-		return nil, err
+	var existingCollection *models.CalendarCollection
+	var syncToken string
+	if s.cache != nil {
+		if collection, err := s.cache.GetCalendarCollection(ref); err == nil {
+			existingCollection = collection
+			syncToken = collection.SyncToken
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	var events []models.CalendarEvent
+	var deletedRefs []models.EventRef
+	var nextSyncToken string
+	if syncSource, ok := s.source.(SyncTokenSource); ok {
+		result, err := syncSource.ListEventsWithSyncToken(ctx, ref, syncToken)
+		if err != nil {
+			return nil, err
+		}
+		events = result.Events
+		deletedRefs = result.DeletedRefs
+		nextSyncToken = result.NextSyncToken
+	} else {
+		var err error
+		events, err = s.source.ListEvents(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if s.cache != nil {
 		for _, event := range events {
 			event.Ref = s.normalizeRef(event.Ref)
 			if err := s.cache.PutCalendarEvent(event); err != nil {
+				return nil, err
+			}
+		}
+		for _, deletedRef := range deletedRefs {
+			deletedRef.SourceID = models.NormalizeSourceID(deletedRef.SourceID, ref.SourceID)
+			if deletedRef.AccountID == "" {
+				deletedRef.AccountID = ref.AccountID
+			}
+			if deletedRef.CalendarID == "" {
+				deletedRef.CalendarID = ref.CollectionID
+			}
+			if err := s.cache.InvalidateCalendarEvent(deletedRef.WithDefaults()); err != nil {
+				return nil, err
+			}
+		}
+		if nextSyncToken != "" {
+			collection := models.CalendarCollection{Ref: ref, SyncToken: nextSyncToken}
+			if existingCollection != nil {
+				collection = *existingCollection
+				collection.Ref = ref
+				if collection.Ref.DisplayName == "" {
+					collection.Ref.DisplayName = existingCollection.Ref.DisplayName
+				}
+				collection.SyncToken = nextSyncToken
+			}
+			if err := s.cache.PutCalendarCollection(collection); err != nil {
 				return nil, err
 			}
 		}

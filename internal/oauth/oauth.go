@@ -7,10 +7,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -223,4 +227,103 @@ func RefreshIfNeeded(ctx context.Context, cfg *config.Config) (string, error) {
 	}
 
 	return cfg.Gmail.AccessToken, nil
+}
+
+// RefreshGoogleConfigIfNeeded returns a usable Google access token for a
+// source-level Google config. It refreshes expired calendar/source tokens using
+// the same Herald Google OAuth credentials as Gmail OAuth, while preserving the
+// existing static-token path used by deterministic provider tests.
+func RefreshGoogleConfigIfNeeded(ctx context.Context, googleCfg *config.GoogleConfig) (string, error) {
+	if googleCfg == nil {
+		return "", fmt.Errorf("Google OAuth config is nil")
+	}
+	if !googleAccessTokenNeedsRefresh(googleCfg.AccessToken, googleCfg.TokenExpiry) {
+		return strings.TrimSpace(googleCfg.AccessToken), nil
+	}
+	if strings.TrimSpace(googleCfg.RefreshToken) == "" {
+		if strings.TrimSpace(googleCfg.AccessToken) != "" && strings.TrimSpace(googleCfg.TokenExpiry) == "" {
+			return strings.TrimSpace(googleCfg.AccessToken), nil
+		}
+		return "", fmt.Errorf("no OAuth2 refresh token stored; please re-authenticate")
+	}
+
+	clientID, clientSecret, err := credentials()
+	if err != nil {
+		return "", err
+	}
+	tokenURL := strings.TrimSpace(googleCfg.TokenURL)
+	if tokenURL == "" {
+		tokenURL = google.Endpoint.TokenURL
+	}
+
+	form := url.Values{
+		"client_id":     {clientID},
+		"client_secret": {clientSecret},
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {strings.TrimSpace(googleCfg.RefreshToken)},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to refresh OAuth2 token: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", fmt.Errorf("failed to read OAuth2 token response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("failed to refresh OAuth2 token: %s", strings.TrimSpace(string(body)))
+	}
+
+	var payload struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int64  `json:"expires_in"`
+		Error        string `json:"error"`
+		ErrorDesc    string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", fmt.Errorf("failed to decode OAuth2 token response: %w", err)
+	}
+	if payload.Error != "" {
+		message := strings.TrimSpace(payload.ErrorDesc)
+		if message == "" {
+			message = payload.Error
+		}
+		return "", fmt.Errorf("failed to refresh OAuth2 token: %s", message)
+	}
+	if strings.TrimSpace(payload.AccessToken) == "" {
+		return "", fmt.Errorf("failed to refresh OAuth2 token: response did not include an access token")
+	}
+
+	googleCfg.AccessToken = strings.TrimSpace(payload.AccessToken)
+	if strings.TrimSpace(payload.RefreshToken) != "" {
+		googleCfg.RefreshToken = strings.TrimSpace(payload.RefreshToken)
+	}
+	if payload.ExpiresIn > 0 {
+		googleCfg.TokenExpiry = time.Now().Add(time.Duration(payload.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+	}
+	return googleCfg.AccessToken, nil
+}
+
+func googleAccessTokenNeedsRefresh(accessToken, tokenExpiry string) bool {
+	if strings.TrimSpace(accessToken) == "" {
+		return true
+	}
+	tokenExpiry = strings.TrimSpace(tokenExpiry)
+	if tokenExpiry == "" {
+		return false
+	}
+	expiry, err := time.Parse(time.RFC3339, tokenExpiry)
+	if err != nil {
+		return true
+	}
+	return time.Until(expiry) < 5*time.Minute
 }

@@ -219,6 +219,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add source-aware automation event lanes so existing mail rules run with scoped message identity while calendar change events can enter the lane as read-only groundwork.
 - [x] Add a local/cache-backed Calendar Event Edit boundary that proves timezone-safe save/cancel UI before live provider mutation adapters are enabled.
 - [x] Add provider-backed Calendar Event Edit and RSVP mutation boundaries that write through Google Calendar/CalDAV before cache updates and leave daemon/MCP mutation APIs deferred.
+- [x] Add Google Calendar source OAuth refresh and provider sync-token persistence so cache-backed event sync can use incremental provider reads without exposing provider tokens to the TUI.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

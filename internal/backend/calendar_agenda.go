@@ -250,7 +250,7 @@ func (b *LocalBackend) calendarMutationSourceForRef(ref models.EventRef) (calend
 		if models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID) != ref.SourceID {
 			continue
 		}
-		if source.Provider == "google_calendar" && (strings.TrimSpace(source.Google.AccessToken) != "" || strings.TrimSpace(source.Google.APIBaseURL) != "") {
+		if source.Provider == "google_calendar" && (strings.TrimSpace(source.Google.AccessToken) != "" || strings.TrimSpace(source.Google.RefreshToken) != "" || strings.TrimSpace(source.Google.APIBaseURL) != "") {
 			src, err := calendar.NewGoogleCalendarSource(source)
 			if err != nil {
 				return nil, false, calendarProviderMutationError("open", err)
