@@ -647,6 +647,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Provider-backed Event Edit saves write through Google Calendar/CalDAV before updating cache, and provider failures keep unsaved edits visible
 - [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [x] Provider mutation conflicts and unsupported recurrence scopes fail visibly without rewriting cached event rows
+- [x] Event Edit can mutate attendee lists and this-event recurrence rules through the existing provider save-through flow
 - [x] Google Calendar source using OAuth and provider sync tokens
 - [x] CalDAV source using discovery, ETag, and sync-token or polling fallback
 

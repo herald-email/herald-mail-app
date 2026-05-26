@@ -16,6 +16,8 @@ type CalendarEventEditDraft struct {
 	StartText          string
 	EndText            string
 	TimeZone           string
+	AttendeesText      string
+	RecurrenceText     string
 	Status             string
 	AllDay             bool
 	RecurrenceScope    string
@@ -48,6 +50,8 @@ func NewCalendarEventEditDraft(event CalendarEvent) CalendarEventEditDraft {
 		StartText:          formatCalendarEditTime(start),
 		EndText:            formatCalendarEditTime(end),
 		TimeZone:           event.CanonicalTimeZone(),
+		AttendeesText:      formatCalendarEditAttendees(event.Attendees),
+		RecurrenceText:     formatCalendarEditRecurrence(event.Recurrence),
 		Status:             event.Status,
 		AllDay:             event.AllDay,
 		RecurrenceScope:    CalendarMutationScopeThisEvent,
@@ -89,6 +93,14 @@ func (d CalendarEventEditDraft) Apply(base CalendarEvent) (CalendarEvent, error)
 	updated.AllDay = d.AllDay
 	updated.Status = strings.TrimSpace(d.Status)
 	updated.AlternateTimeZones = cleanCalendarEditTimeZones(d.AlternateTimeZones)
+	attendees, err := parseCalendarEditAttendees(d.AttendeesText)
+	if err != nil {
+		return CalendarEvent{}, err
+	}
+	recurrence := parseCalendarEditRecurrence(d.RecurrenceText)
+	updated.Attendees = attendees
+	updated.Recurrence = recurrence
+	updated.RecurrenceSummary = summarizeCalendarEditRecurrence(recurrence)
 	if _, err := NormalizeCalendarMutationOptions(CalendarMutationOptions{RecurrenceScope: d.RecurrenceScope}); err != nil {
 		return CalendarEvent{}, err
 	}
@@ -221,6 +233,183 @@ func cleanCalendarEditTimeZones(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func formatCalendarEditAttendees(attendees []CalendarAttendee) string {
+	parts := make([]string, 0, len(attendees))
+	for _, attendee := range attendees {
+		email := strings.TrimSpace(attendee.Email)
+		if email == "" {
+			continue
+		}
+		var b strings.Builder
+		if name := strings.TrimSpace(attendee.Name); name != "" {
+			b.WriteString(name)
+			b.WriteString(" <")
+			b.WriteString(email)
+			b.WriteString(">")
+		} else {
+			b.WriteString(email)
+		}
+		if rsvp := strings.TrimSpace(attendee.RSVP); rsvp != "" {
+			b.WriteString(" ")
+			b.WriteString(rsvp)
+		}
+		if attendee.Optional {
+			b.WriteString(" optional")
+		}
+		parts = append(parts, b.String())
+	}
+	return strings.Join(parts, "; ")
+}
+
+func parseCalendarEditAttendees(value string) ([]CalendarAttendee, error) {
+	value = strings.ReplaceAll(value, "\n", ";")
+	value = strings.ReplaceAll(value, "\r", ";")
+	entries := strings.Split(value, ";")
+	attendees := make([]CalendarAttendee, 0, len(entries))
+	for _, entry := range entries {
+		attendee, ok, err := parseCalendarEditAttendee(entry)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			attendees = append(attendees, attendee)
+		}
+	}
+	return attendees, nil
+}
+
+func parseCalendarEditAttendee(entry string) (CalendarAttendee, bool, error) {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return CalendarAttendee{}, false, nil
+	}
+	var attendee CalendarAttendee
+	rest := ""
+	if open := strings.LastIndex(entry, "<"); open >= 0 {
+		if close := strings.Index(entry[open:], ">"); close >= 0 {
+			close += open
+			attendee.Name = strings.TrimSpace(entry[:open])
+			attendee.Email = strings.TrimSpace(entry[open+1 : close])
+			rest = strings.TrimSpace(entry[close+1:])
+		}
+	}
+	if attendee.Email == "" {
+		fields := strings.Fields(entry)
+		if len(fields) == 0 {
+			return CalendarAttendee{}, false, nil
+		}
+		attendee.Email = strings.TrimSpace(fields[0])
+		if len(fields) > 1 {
+			rest = strings.Join(fields[1:], " ")
+		}
+	}
+	if attendee.Email == "" {
+		return CalendarAttendee{}, false, fmt.Errorf("attendee is missing an email address")
+	}
+	for _, token := range strings.Fields(rest) {
+		if strings.EqualFold(token, "optional") {
+			attendee.Optional = true
+			continue
+		}
+		rsvp, err := NormalizeCalendarRSVP(token)
+		if err != nil {
+			return CalendarAttendee{}, false, fmt.Errorf("attendee %s: %w", attendee.Email, err)
+		}
+		attendee.RSVP = rsvp
+	}
+	if attendee.RSVP == "" {
+		attendee.RSVP = "needs-action"
+	}
+	return attendee, true, nil
+}
+
+func formatCalendarEditRecurrence(rules []string) string {
+	out := cleanCalendarEditRecurrence(rules)
+	return strings.Join(out, " | ")
+}
+
+func parseCalendarEditRecurrence(value string) []string {
+	value = strings.ReplaceAll(value, "\n", "|")
+	value = strings.ReplaceAll(value, "\r", "|")
+	return cleanCalendarEditRecurrence(strings.Split(value, "|"))
+}
+
+func cleanCalendarEditRecurrence(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{"": true}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func summarizeCalendarEditRecurrence(rules []string) string {
+	for _, rule := range rules {
+		key, value, ok := strings.Cut(rule, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "RRULE") {
+			continue
+		}
+		attrs := calendarEditRecurrenceAttrs(value)
+		switch attrs["FREQ"] {
+		case "DAILY":
+			return "Daily"
+		case "WEEKLY":
+			if days := summarizeCalendarEditRecurrenceDays(attrs["BYDAY"]); days != "" {
+				return "Weekly on " + days
+			}
+			return "Weekly"
+		case "MONTHLY":
+			return "Monthly"
+		case "YEARLY":
+			return "Yearly"
+		}
+	}
+	if len(rules) > 0 {
+		return rules[0]
+	}
+	return ""
+}
+
+func calendarEditRecurrenceAttrs(value string) map[string]string {
+	attrs := map[string]string{}
+	for _, part := range strings.Split(value, ";") {
+		key, val, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		attrs[strings.ToUpper(strings.TrimSpace(key))] = strings.ToUpper(strings.TrimSpace(val))
+	}
+	return attrs
+}
+
+func summarizeCalendarEditRecurrenceDays(byDay string) string {
+	if byDay == "" {
+		return ""
+	}
+	labels := map[string]string{
+		"MO": "Monday",
+		"TU": "Tuesday",
+		"WE": "Wednesday",
+		"TH": "Thursday",
+		"FR": "Friday",
+		"SA": "Saturday",
+		"SU": "Sunday",
+	}
+	parts := strings.Split(byDay, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if label := labels[strings.TrimSpace(part)]; label != "" {
+			out = append(out, label)
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 func firstEventRef(primary, fallback EventRef) EventRef {

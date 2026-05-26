@@ -246,7 +246,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Add provider-backed Calendar Event Edit save-through with explicit provider failure and cache update semantics.
   - [x] Add provider-backed RSVP response changes with scoped attendee updates.
   - [x] Add typed provider conflict handling and explicit recurrence-scope validation for selected calendar mutations.
-  - [ ] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
+  - [x] Add selected calendar mutations only after read-only detail, timezone display, and recurrence display are proven.
 
 ## Acceptance Criteria
 

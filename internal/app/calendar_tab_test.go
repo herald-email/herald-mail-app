@@ -928,6 +928,10 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 		"End",
 		"Event TZ",
 		"America/Los_Angeles",
+		"Attendees",
+		"Rae Stone <rae@example.com> accepted",
+		"Recurrence",
+		"RRULE:FREQ=WEEKLY;BYDAY=MO",
 		"Alt TZ",
 		"Asia/Tokyo",
 		"Preview",
@@ -965,6 +969,8 @@ func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T)
 	m.calendarEdit.Draft.StartText = "2026-05-24 19:30"
 	m.calendarEdit.Draft.EndText = "2026-05-24 20:30"
 	m.calendarEdit.Draft.TimeZone = "America/Los_Angeles"
+	m.calendarEdit.Draft.AttendeesText = "Mina Park <mina@example.com> accepted; ops@example.com tentative optional"
+	m.calendarEdit.Draft.RecurrenceText = "RRULE:FREQ=WEEKLY;BYDAY=TU,TH"
 	m.calendarEdit.Dirty = true
 
 	model, cmd := m.handleKeyMsg(keyCtrl('s'))
@@ -984,6 +990,12 @@ func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T)
 	}
 	if m.calendarDetail == nil || m.calendarDetail.Title != "Timezone planning moved" || m.calendarDetail.Location != "Tokyo room" {
 		t.Fatalf("calendar detail = %#v, want saved event", m.calendarDetail)
+	}
+	if len(m.calendarDetail.Attendees) != 2 || m.calendarDetail.Attendees[0].Email != "mina@example.com" || !m.calendarDetail.Attendees[1].Optional {
+		t.Fatalf("calendar detail attendees = %#v, want edited attendees", m.calendarDetail.Attendees)
+	}
+	if got := m.calendarDetail.RecurrenceSummary; got != "Weekly on Tuesday, Thursday" {
+		t.Fatalf("recurrence summary = %q, want edited recurrence summary", got)
 	}
 	if got := m.calendarEvents[0].Title; got != "Timezone planning moved" {
 		t.Fatalf("calendar list title = %q, want saved title", got)

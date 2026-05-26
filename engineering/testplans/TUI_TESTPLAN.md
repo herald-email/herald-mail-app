@@ -1782,6 +1782,30 @@ This case covers the next provider-backed mutation hardening slice. It proves st
 - `this event` remains the only advertised recurring-event mutation scope until broader recurrence editing is deliberately implemented.
 - At `50x15`, the minimum-size guard appears instead of clipped conflict or recurrence-scope chrome, and resizing larger restores the edit state cleanly.
 
+### TC-38N — Calendar selected attendee and recurrence edits
+
+This case covers the selected calendar mutation slice that extends Event Edit beyond title, time, timezone, location, and notes. It proves attendee-list and this-event recurrence-rule edits stay visible, provider-backed, cache-safe, and bounded.
+
+**Lane:** A, B when calendar provider fixtures are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one event that has attendees and an `RRULE`.
+2. Press `3` or `F4` to open Calendar, press `Enter` for Event Detail, then press `e` to open Event Edit.
+3. Confirm Event Edit shows editable `Attendees` and `Recurrence` fields without exposing provider IDs, ETags, CalDAV URLs, raw sync tokens, OAuth details, or daemon/MCP mutation APIs.
+4. Change the attendees field using semicolon-separated entries such as `Mina Park <mina@example.com> accepted; ops@example.com tentative optional`.
+5. Change the recurrence field using provider-style recurrence lines such as `RRULE:FREQ=WEEKLY;BYDAY=TU,TH`, then press `Ctrl+S`.
+6. Confirm the saved Event Detail, Calendar list/search rows, and provider-backed cache state reflect the edited attendee list and recurrence summary only after provider success.
+7. Repeat with provider failure or stale revision and confirm unsaved attendee/recurrence edits remain visible while cached rows stay unchanged.
+
+**Expect:**
+- Event Edit renders attendee and recurrence fields in the same compact form language as the existing title/time/timezone fields.
+- Attendee edits preserve name, email, RSVP state, and optional markers in a keyboard-editable text format.
+- Recurrence edits are limited to this-event recurrence rules; broader recurrence-scope edits and reminder editing remain deferred.
+- Save success, provider failure, recurrence scope, and timezone preview remain explicit to the user.
+- Literal attendee/recurrence text typed in Compose, search prompts, and editor-like text fields remains text instead of firing calendar edit actions.
+- At `50x15`, the minimum-size guard appears instead of clipped selected-mutation chrome, and resizing larger restores the edit state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

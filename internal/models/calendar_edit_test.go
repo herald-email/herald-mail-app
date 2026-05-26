@@ -84,3 +84,50 @@ func TestCalendarEventEditDraftValidatesTimeAndTimezone(t *testing.T) {
 		t.Fatalf("Apply invalid range err=%v, want end-after-start validation", err)
 	}
 }
+
+func TestCalendarEventEditDraftAppliesAttendeesAndRecurrence(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	event := CalendarEvent{
+		Ref:      EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "selected-mutations"}.WithDefaults(),
+		Title:    "Selected mutations",
+		Start:    start,
+		End:      start.Add(time.Hour),
+		TimeZone: "UTC",
+		Attendees: []CalendarAttendee{
+			{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
+			{Name: "Noor Patel", Email: "noor@example.com", RSVP: "tentative", Optional: true},
+		},
+		Recurrence:        []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"},
+		RecurrenceSummary: "Weekly on Monday",
+	}
+
+	draft := NewCalendarEventEditDraft(event)
+	if !strings.Contains(draft.AttendeesText, "Rae Stone <rae@example.com> accepted") {
+		t.Fatalf("AttendeesText = %q, want existing attendee rendered for editing", draft.AttendeesText)
+	}
+	if draft.RecurrenceText != "RRULE:FREQ=WEEKLY;BYDAY=MO" {
+		t.Fatalf("RecurrenceText = %q, want existing recurrence rule", draft.RecurrenceText)
+	}
+
+	draft.AttendeesText = "Mina Park <mina@example.com> accepted; ops@example.com tentative optional"
+	draft.RecurrenceText = "RRULE:FREQ=WEEKLY;BYDAY=TU,TH"
+	updated, err := draft.Apply(event)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(updated.Attendees) != 2 {
+		t.Fatalf("attendees = %#v, want two edited attendees", updated.Attendees)
+	}
+	if updated.Attendees[0].Name != "Mina Park" || updated.Attendees[0].Email != "mina@example.com" || updated.Attendees[0].RSVP != "accepted" {
+		t.Fatalf("first attendee = %#v, want parsed name/email/rsvp", updated.Attendees[0])
+	}
+	if updated.Attendees[1].Name != "" || updated.Attendees[1].Email != "ops@example.com" || updated.Attendees[1].RSVP != "tentative" || !updated.Attendees[1].Optional {
+		t.Fatalf("second attendee = %#v, want optional bare-email attendee", updated.Attendees[1])
+	}
+	if len(updated.Recurrence) != 1 || updated.Recurrence[0] != "RRULE:FREQ=WEEKLY;BYDAY=TU,TH" {
+		t.Fatalf("recurrence = %#v, want edited rule", updated.Recurrence)
+	}
+	if updated.RecurrenceSummary != "Weekly on Tuesday, Thursday" {
+		t.Fatalf("recurrence summary = %q, want updated summary", updated.RecurrenceSummary)
+	}
+}

@@ -95,6 +95,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 - [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
   - [x] Stage 6A: Add provider-backed Event Edit save-through and RSVP response changes with cache update after provider success, explicit failure state, and `this event` recurrence scope only.
   - [x] Stage 6B: Add typed provider conflict handling and explicit recurrence-scope validation so stale revisions and unsupported broader recurrence edits never rewrite cached event rows.
+  - [x] Stage 6C: Add selected attendee-list and this-event recurrence-rule edits to Event Edit while reminders and broader recurrence-scope edits stay deferred.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
 
@@ -108,7 +109,7 @@ These gates define what must be true before moving from one evolutionary stage t
 - [x] A timezone detail foundation is acceptable only when read-only Event Detail renders at least local time, event timezone, and one alternate timezone without ambiguity.
 - [x] A calendar search stage is acceptable only when results are cache-backed, source-scoped, detail-preserving, and free of provider internals.
 - [x] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
-- [ ] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
+- [x] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
 - [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
 - [x] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.
 

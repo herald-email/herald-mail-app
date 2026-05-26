@@ -37,6 +37,8 @@ const (
 	calendarEditFieldStart
 	calendarEditFieldEnd
 	calendarEditFieldTimeZone
+	calendarEditFieldAttendees
+	calendarEditFieldRecurrence
 	calendarEditFieldDescription
 )
 
@@ -57,6 +59,8 @@ var calendarEditFields = []calendarEditField{
 	calendarEditFieldStart,
 	calendarEditFieldEnd,
 	calendarEditFieldTimeZone,
+	calendarEditFieldAttendees,
+	calendarEditFieldRecurrence,
 	calendarEditFieldDescription,
 }
 
@@ -666,6 +670,10 @@ func (m *Model) calendarEditFieldValue() string {
 		return m.calendarEdit.Draft.EndText
 	case calendarEditFieldTimeZone:
 		return m.calendarEdit.Draft.TimeZone
+	case calendarEditFieldAttendees:
+		return m.calendarEdit.Draft.AttendeesText
+	case calendarEditFieldRecurrence:
+		return m.calendarEdit.Draft.RecurrenceText
 	case calendarEditFieldDescription:
 		return m.calendarEdit.Draft.Description
 	default:
@@ -685,6 +693,10 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 		m.calendarEdit.Draft.EndText = value
 	case calendarEditFieldTimeZone:
 		m.calendarEdit.Draft.TimeZone = value
+	case calendarEditFieldAttendees:
+		m.calendarEdit.Draft.AttendeesText = value
+	case calendarEditFieldRecurrence:
+		m.calendarEdit.Draft.RecurrenceText = value
 	case calendarEditFieldDescription:
 		m.calendarEdit.Draft.Description = value
 	}
@@ -1256,6 +1268,8 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	lines = append(lines, m.renderCalendarEditField("Start", calendarEditFieldStart, state.Draft.StartText, width))
 	lines = append(lines, m.renderCalendarEditField("End", calendarEditFieldEnd, state.Draft.EndText, width))
 	lines = append(lines, m.renderCalendarEditField("Event TZ", calendarEditFieldTimeZone, state.Draft.TimeZone, width))
+	lines = append(lines, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, width))
+	lines = append(lines, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, width))
 	lines = append(lines, m.renderCalendarEditField("Notes", calendarEditFieldDescription, state.Draft.Description, width))
 	if strings.TrimSpace(state.Error) != "" {
 		lines = append(lines, "")
