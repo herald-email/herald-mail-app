@@ -648,7 +648,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [x] Provider mutation conflicts and unsupported recurrence scopes fail visibly without rewriting cached event rows
 - [x] Google Calendar source using OAuth and provider sync tokens
-- [ ] CalDAV source using discovery, ETag, and sync-token or polling fallback
+- [x] CalDAV source using discovery, ETag, and sync-token or polling fallback
 
 ---
 

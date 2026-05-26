@@ -220,6 +220,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add a local/cache-backed Calendar Event Edit boundary that proves timezone-safe save/cancel UI before live provider mutation adapters are enabled.
 - [x] Add provider-backed Calendar Event Edit and RSVP mutation boundaries that write through Google Calendar/CalDAV before cache updates and leave daemon/MCP mutation APIs deferred.
 - [x] Add Google Calendar source OAuth refresh and provider sync-token persistence so cache-backed event sync can use incremental provider reads without exposing provider tokens to the TUI.
+- [x] Add CalDAV principal/home-set discovery plus sync-collection incremental reads with calendar-query polling fallback when a provider does not support sync tokens.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

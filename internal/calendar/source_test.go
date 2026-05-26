@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +16,14 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/testcalendar"
 )
+
+func xmlEscapeForTest(value string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(value)
+}
+
+func testCalDAVICS(uid, summary string, start time.Time) string {
+	return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:" + uid + "\r\nSUMMARY:" + summary + "\r\nDTSTART:" + start.UTC().Format("20060102T150405Z") + "\r\nDTEND:" + start.Add(time.Hour).UTC().Format("20060102T150405Z") + "\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+}
 
 func TestGoogleCalendarSourceUsesLocalTestServer(t *testing.T) {
 	start := time.Date(2026, 5, 24, 17, 0, 0, 0, time.UTC)
@@ -480,6 +489,175 @@ func TestCalDAVSourceUsesLocalTestServer(t *testing.T) {
 	}
 	if got.Ref.LocalID != events[0].Ref.LocalID || got.Ref.ETag != `"c-v1"` {
 		t.Fatalf("FetchEvent = %#v, want same scoped event with etag", got)
+	}
+}
+
+func TestCalDAVSourceDiscoversCalendarHomeSetAndCollectionSyncToken(t *testing.T) {
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		if r.Method != "PROPFIND" {
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/</d:href><d:propstat><d:prop><d:current-user-principal><d:href>/principals/rae/</d:href></d:current-user-principal></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/principals/rae/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/principals/rae/</d:href><d:propstat><d:prop><cal:calendar-home-set><d:href>/caldav/rae/</d:href></cal:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/caldav/rae/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/"><d:response><d:href>/caldav/rae/</d:href><d:propstat><d:prop><d:displayname>Calendar Home</d:displayname></d:prop></d:propstat></d:response><d:response><d:href>/caldav/rae/team/</d:href><d:propstat><d:prop><d:displayname>Team</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype><cs:calendar-color>#0b8043</cs:calendar-color><d:sync-token>sync-team-v1</d:sync-token></d:prop></d:propstat></d:response></d:multistatus>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "family-caldav",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "family",
+		CalDAV: config.CalDAVConfig{
+			URL:      server.URL + "/",
+			Username: "rae@example.com",
+			Password: "secret",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	collections, err := src.ListCalendars(context.Background())
+	if err != nil {
+		t.Fatalf("ListCalendars: %v", err)
+	}
+	if len(collections) != 1 {
+		t.Fatalf("collections = %#v, want discovered team calendar only", collections)
+	}
+	if got := collections[0]; got.Ref.CollectionID != "team" || got.Ref.DisplayName != "Team" || got.Color != "#0b8043" || got.SyncToken != "sync-team-v1" {
+		t.Fatalf("collection = %#v, want discovered scoped calendar with sync token", got)
+	}
+	joined := strings.Join(seen, ",")
+	for _, want := range []string{"PROPFIND /", "PROPFIND /principals/rae/", "PROPFIND /caldav/rae/"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("seen requests = %v, missing %q", seen, want)
+		}
+	}
+}
+
+func TestCalDAVSourceListEventsWithSyncTokenUsesSyncCollection(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	var reportBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "REPORT" || r.URL.Path != "/caldav/team/" {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll: %v", err)
+		}
+		reportBody = string(data)
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:sync-token>sync-team-v2</d:sync-token><d:response><d:href>/caldav/team/updated.ics</d:href><d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop><d:getetag>"updated-v2"</d:getetag><cal:calendar-data>` + xmlEscapeForTest(testCalDAVICS("updated", "Updated planning", start)) + `</cal:calendar-data></d:prop></d:propstat></d:response><d:response><d:href>/caldav/team/deleted.ics</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response></d:multistatus>`))
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "family-caldav",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "family",
+		CalDAV: config.CalDAVConfig{
+			URL:      server.URL + "/caldav/",
+			Username: "local",
+			Password: "password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	result, err := src.ListEventsWithSyncToken(context.Background(), models.CollectionRef{
+		SourceID:     "family-caldav",
+		AccountID:    "family",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "team",
+	}, "sync-team-v1")
+	if err != nil {
+		t.Fatalf("ListEventsWithSyncToken: %v", err)
+	}
+	if !strings.Contains(reportBody, "sync-collection") || !strings.Contains(reportBody, "sync-team-v1") {
+		t.Fatalf("sync REPORT body = %q, want sync-collection with cached token", reportBody)
+	}
+	if result.NextSyncToken != "sync-team-v2" {
+		t.Fatalf("NextSyncToken = %q, want sync-team-v2", result.NextSyncToken)
+	}
+	if len(result.Events) != 1 || result.Events[0].Ref.EventID != "updated.ics" || result.Events[0].Title != "Updated planning" {
+		t.Fatalf("Events = %#v, want updated event", result.Events)
+	}
+	if len(result.DeletedRefs) != 1 || result.DeletedRefs[0].EventID != "deleted.ics" {
+		t.Fatalf("DeletedRefs = %#v, want deleted.ics", result.DeletedRefs)
+	}
+}
+
+func TestCalDAVSourceListEventsWithSyncTokenFallsBackToCalendarQueryWhenUnsupported(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	var reportBodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "REPORT" || r.URL.Path != "/caldav/team/" {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll: %v", err)
+		}
+		body := string(data)
+		reportBodies = append(reportBodies, body)
+		if strings.Contains(body, "sync-collection") {
+			http.Error(w, "sync-collection unsupported", http.StatusNotImplemented)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/caldav/team/full.ics</d:href><d:propstat><d:prop><d:getetag>"full-v1"</d:getetag><cal:calendar-data>` + xmlEscapeForTest(testCalDAVICS("full", "Full polling event", start)) + `</cal:calendar-data></d:prop></d:propstat></d:response></d:multistatus>`))
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "family-caldav",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "family",
+		CalDAV: config.CalDAVConfig{
+			URL:      server.URL + "/caldav/",
+			Username: "local",
+			Password: "password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	result, err := src.ListEventsWithSyncToken(context.Background(), models.CollectionRef{
+		SourceID:     "family-caldav",
+		AccountID:    "family",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "team",
+	}, "sync-team-v1")
+	if err != nil {
+		t.Fatalf("ListEventsWithSyncToken fallback: %v", err)
+	}
+	if len(reportBodies) != 2 || !strings.Contains(reportBodies[0], "sync-collection") || !strings.Contains(reportBodies[1], "calendar-query") {
+		t.Fatalf("report bodies = %#v, want sync attempt then calendar-query fallback", reportBodies)
+	}
+	if result.NextSyncToken != "" {
+		t.Fatalf("NextSyncToken = %q, want empty token for polling fallback", result.NextSyncToken)
+	}
+	if len(result.Events) != 1 || result.Events[0].Title != "Full polling event" {
+		t.Fatalf("Events = %#v, want polling fallback event", result.Events)
 	}
 }
 

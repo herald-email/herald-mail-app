@@ -261,14 +261,15 @@ func (s *GoogleCalendarSource) doJSON(req *http.Request, out any) error {
 }
 
 type CalDAVSource struct {
-	id            models.SourceID
-	accountID     models.AccountID
-	displayName   string
-	baseURL       string
-	username      string
-	password      string
-	attendeeEmail string
-	client        *http.Client
+	id             models.SourceID
+	accountID      models.AccountID
+	displayName    string
+	baseURL        string
+	discoveredHome string
+	username       string
+	password       string
+	attendeeEmail  string
+	client         *http.Client
 }
 
 func NewCalDAVSource(cfg config.SourceConfig) (*CalDAVSource, error) {
@@ -297,22 +298,28 @@ func (s *CalDAVSource) DisplayName() string         { return s.displayName }
 func (s *CalDAVSource) Close() error                { return nil }
 
 func (s *CalDAVSource) ListCalendars(ctx context.Context) ([]models.CalendarCollection, error) {
-	req, err := s.newRequest(ctx, "PROPFIND", s.baseURL, strings.NewReader(`<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/></d:prop></d:propfind>`))
+	homeURL, err := s.calendarHomeURL(ctx)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Depth", "1")
-	var ms davMultiStatus
-	if err := s.doXML(req, &ms); err != nil {
+	ms, err := s.propfind(ctx, homeURL, "1", caldavCalendarListPropfind)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]models.CalendarCollection, 0, len(ms.Responses))
 	for _, response := range ms.Responses {
+		prop := response.FirstProp()
+		if prop.ResourceType.IsSet() && !prop.ResourceType.IsCalendar() {
+			continue
+		}
+		responseURL := resolveCalDAVHref(homeURL, response.Href)
+		if sameCalDAVURL(responseURL, homeURL) && !prop.ResourceType.IsCalendar() {
+			continue
+		}
 		calendarID := calendarIDFromHref(response.Href)
 		if calendarID == "" {
 			continue
 		}
-		prop := response.FirstProp()
 		ref := models.CollectionRef{
 			SourceID:     s.id,
 			AccountID:    s.accountID,
@@ -321,19 +328,75 @@ func (s *CalDAVSource) ListCalendars(ctx context.Context) ([]models.CalendarColl
 			DisplayName:  firstNonEmpty(prop.DisplayName, calendarID),
 		}
 		out = append(out, models.CalendarCollection{
-			Ref:   ref,
-			Color: prop.CalendarColor,
-			ETag:  prop.GetETag,
+			Ref:       ref,
+			Color:     prop.CalendarColor,
+			SyncToken: prop.SyncToken,
+			ETag:      prop.GetETag,
 		})
 	}
 	return out, nil
 }
 
 func (s *CalDAVSource) ListEvents(ctx context.Context, ref models.CollectionRef) ([]models.CalendarEvent, error) {
+	events, err := s.listEventsByCalendarQuery(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (s *CalDAVSource) ListEventsWithSyncToken(ctx context.Context, ref models.CollectionRef, syncToken string) (CalendarSyncResult, error) {
+	syncToken = strings.TrimSpace(syncToken)
+	if syncToken == "" {
+		events, err := s.listEventsByCalendarQuery(ctx, ref)
+		if err != nil {
+			return CalendarSyncResult{}, err
+		}
+		return CalendarSyncResult{Events: events}, nil
+	}
 	ref.Kind = models.SourceKindCalendar
 	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.id)
 	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
-	req, err := s.newRequest(ctx, "REPORT", s.collectionURL(ref.CollectionID), bytes.NewBufferString(caldavCalendarQuery))
+	collectionURL, err := s.collectionURL(ctx, ref.CollectionID)
+	if err != nil {
+		return CalendarSyncResult{}, err
+	}
+	req, err := s.newRequest(ctx, "REPORT", collectionURL, bytes.NewBufferString(caldavSyncCollectionReport(syncToken)))
+	if err != nil {
+		return CalendarSyncResult{}, err
+	}
+	req.Header.Set("Depth", "1")
+	var ms davMultiStatus
+	if err := s.doXML(req, &ms); err != nil {
+		if isCalDAVSyncUnsupported(err) {
+			events, fallbackErr := s.listEventsByCalendarQuery(ctx, ref)
+			if fallbackErr != nil {
+				return CalendarSyncResult{}, fallbackErr
+			}
+			return CalendarSyncResult{Events: events}, nil
+		}
+		return CalendarSyncResult{}, err
+	}
+	events, deletedRefs, err := s.eventsFromMultiStatus(ref, ms)
+	if err != nil {
+		return CalendarSyncResult{}, err
+	}
+	return CalendarSyncResult{
+		Events:        events,
+		DeletedRefs:   deletedRefs,
+		NextSyncToken: strings.TrimSpace(ms.SyncToken),
+	}, nil
+}
+
+func (s *CalDAVSource) listEventsByCalendarQuery(ctx context.Context, ref models.CollectionRef) ([]models.CalendarEvent, error) {
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.id)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	collectionURL, err := s.collectionURL(ctx, ref.CollectionID)
+	if err != nil {
+		return nil, err
+	}
+	req, err := s.newRequest(ctx, "REPORT", collectionURL, bytes.NewBufferString(caldavCalendarQuery))
 	if err != nil {
 		return nil, err
 	}
@@ -342,27 +405,46 @@ func (s *CalDAVSource) ListEvents(ctx context.Context, ref models.CollectionRef)
 	if err := s.doXML(req, &ms); err != nil {
 		return nil, err
 	}
+	events, _, err := s.eventsFromMultiStatus(ref, ms)
+	return events, err
+}
+
+func (s *CalDAVSource) eventsFromMultiStatus(ref models.CollectionRef, ms davMultiStatus) ([]models.CalendarEvent, []models.EventRef, error) {
 	out := make([]models.CalendarEvent, 0, len(ms.Responses))
+	deleted := make([]models.EventRef, 0)
 	for _, response := range ms.Responses {
+		eventID := path.Base(strings.TrimRight(response.Href, "/"))
+		if response.IsNotFound() {
+			deleted = append(deleted, models.EventRef{
+				SourceID:   s.id,
+				AccountID:  s.accountID,
+				CalendarID: ref.CollectionID,
+				EventID:    eventID,
+			}.WithDefaults())
+			continue
+		}
 		prop := response.FirstProp()
 		if strings.TrimSpace(prop.CalendarData) == "" {
 			continue
 		}
-		eventID := path.Base(strings.TrimRight(response.Href, "/"))
 		event, err := eventFromICS(s.id, s.accountID, ref.CollectionID, eventID, prop.GetETag, prop.CalendarData)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, *event)
 	}
-	return out, nil
+	return out, deleted, nil
 }
 
 func (s *CalDAVSource) FetchEvent(ctx context.Context, ref models.EventRef) (*models.CalendarEvent, error) {
 	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.id)
 	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
 	ref = ref.WithDefaults()
-	req, err := s.newRequest(ctx, http.MethodGet, s.eventURL(ref.CalendarID, ref.EventID), nil)
+	eventURL, err := s.eventURL(ctx, ref.CalendarID, ref.EventID)
+	if err != nil {
+		return nil, err
+	}
+	req, err := s.newRequest(ctx, http.MethodGet, eventURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +473,11 @@ func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEve
 	event.Ref.SourceID = models.NormalizeSourceID(event.Ref.SourceID, s.id)
 	event.Ref.AccountID = models.NormalizeAccountID(event.Ref.AccountID)
 	event.Ref = event.Ref.WithDefaults()
-	req, err := s.newRequest(ctx, http.MethodPut, s.eventURL(event.Ref.CalendarID, event.Ref.EventID), strings.NewReader(eventToICS(event)))
+	eventURL, err := s.eventURL(ctx, event.Ref.CalendarID, event.Ref.EventID)
+	if err != nil {
+		return nil, err
+	}
+	req, err := s.newRequest(ctx, http.MethodPut, eventURL, strings.NewReader(eventToICS(event)))
 	if err != nil {
 		return nil, err
 	}
@@ -445,6 +531,66 @@ func (s *CalDAVSource) newRequest(ctx context.Context, method, u string, body io
 	return req, nil
 }
 
+func (s *CalDAVSource) calendarHomeURL(ctx context.Context) (string, error) {
+	if strings.TrimSpace(s.discoveredHome) != "" {
+		return s.discoveredHome, nil
+	}
+	homeURL, err := s.discoverCalendarHome(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(homeURL) == "" {
+		homeURL = s.baseURL
+	}
+	if !strings.HasSuffix(homeURL, "/") {
+		homeURL += "/"
+	}
+	s.discoveredHome = homeURL
+	return homeURL, nil
+}
+
+func (s *CalDAVSource) discoverCalendarHome(ctx context.Context) (string, error) {
+	ms, err := s.propfind(ctx, s.baseURL, "0", caldavDiscoveryPropfind)
+	if err != nil {
+		if isCalDAVDiscoveryOptionalError(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, response := range ms.Responses {
+		prop := response.FirstProp()
+		if href := strings.TrimSpace(prop.CalendarHomeSet.Href); href != "" {
+			return resolveCalDAVHref(s.baseURL, href), nil
+		}
+		if href := strings.TrimSpace(prop.CurrentUserPrincipal.Href); href != "" {
+			principalURL := resolveCalDAVHref(s.baseURL, href)
+			principal, err := s.propfind(ctx, principalURL, "0", caldavDiscoveryPropfind)
+			if err != nil {
+				return "", err
+			}
+			for _, principalResponse := range principal.Responses {
+				if homeHref := strings.TrimSpace(principalResponse.FirstProp().CalendarHomeSet.Href); homeHref != "" {
+					return resolveCalDAVHref(principalURL, homeHref), nil
+				}
+			}
+		}
+	}
+	return "", nil
+}
+
+func (s *CalDAVSource) propfind(ctx context.Context, targetURL, depth, body string) (davMultiStatus, error) {
+	req, err := s.newRequest(ctx, "PROPFIND", targetURL, strings.NewReader(body))
+	if err != nil {
+		return davMultiStatus{}, err
+	}
+	req.Header.Set("Depth", depth)
+	var ms davMultiStatus
+	if err := s.doXML(req, &ms); err != nil {
+		return davMultiStatus{}, err
+	}
+	return ms, nil
+}
+
 func (s *CalDAVSource) doXML(req *http.Request, out any) error {
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -458,19 +604,46 @@ func (s *CalDAVSource) doXML(req *http.Request, out any) error {
 	return xml.NewDecoder(resp.Body).Decode(out)
 }
 
-func (s *CalDAVSource) collectionURL(calendarID string) string {
-	return s.baseURL + url.PathEscape(calendarID) + "/"
+func (s *CalDAVSource) collectionURL(ctx context.Context, calendarID string) (string, error) {
+	homeURL, err := s.calendarHomeURL(ctx)
+	if err != nil {
+		return "", err
+	}
+	return homeURL + url.PathEscape(calendarID) + "/", nil
 }
 
-func (s *CalDAVSource) eventURL(calendarID, eventID string) string {
-	return s.collectionURL(calendarID) + url.PathEscape(eventID)
+func (s *CalDAVSource) eventURL(ctx context.Context, calendarID, eventID string) (string, error) {
+	collectionURL, err := s.collectionURL(ctx, calendarID)
+	if err != nil {
+		return "", err
+	}
+	return collectionURL + url.PathEscape(eventID), nil
 }
+
+const caldavDiscoveryPropfind = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:current-user-principal/><cal:calendar-home-set/></d:prop>
+</d:propfind>`
+
+const caldavCalendarListPropfind = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
+  <d:prop><d:displayname/><d:resourcetype/><cs:calendar-color/><d:getetag/><d:sync-token/></d:prop>
+</d:propfind>`
 
 const caldavCalendarQuery = `<?xml version="1.0" encoding="utf-8"?>
 <cal:calendar-query xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
   <d:prop><d:getetag/><cal:calendar-data/></d:prop>
   <cal:filter><cal:comp-filter name="VCALENDAR"><cal:comp-filter name="VEVENT"/></cal:comp-filter></cal:filter>
 </cal:calendar-query>`
+
+func caldavSyncCollectionReport(syncToken string) string {
+	return `<?xml version="1.0" encoding="utf-8"?>
+<d:sync-collection xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:sync-token>` + escapeXML(syncToken) + `</d:sync-token>
+  <d:sync-level>1</d:sync-level>
+  <d:prop><d:getetag/><cal:calendar-data/></d:prop>
+</d:sync-collection>`
+}
 
 type googleCalendarList struct {
 	Items []struct {
@@ -650,22 +823,46 @@ func parseGoogleTime(t googleEventTime) (time.Time, bool) {
 
 type davMultiStatus struct {
 	Responses []davResponse `xml:"response"`
+	SyncToken string        `xml:"sync-token"`
 }
 
 type davResponse struct {
 	Href     string        `xml:"href"`
+	Status   string        `xml:"status"`
 	Propstat []davPropstat `xml:"propstat"`
 }
 
 type davPropstat struct {
-	Prop davProp `xml:"prop"`
+	Prop   davProp `xml:"prop"`
+	Status string  `xml:"status"`
 }
 
 type davProp struct {
-	DisplayName   string `xml:"displayname"`
-	CalendarColor string `xml:"calendar-color"`
-	GetETag       string `xml:"getetag"`
-	CalendarData  string `xml:"calendar-data"`
+	DisplayName          string          `xml:"displayname"`
+	CalendarColor        string          `xml:"calendar-color"`
+	GetETag              string          `xml:"getetag"`
+	SyncToken            string          `xml:"sync-token"`
+	CalendarData         string          `xml:"calendar-data"`
+	ResourceType         davResourceType `xml:"resourcetype"`
+	CurrentUserPrincipal davHref         `xml:"current-user-principal"`
+	CalendarHomeSet      davHref         `xml:"calendar-home-set"`
+}
+
+type davHref struct {
+	Href string `xml:"href"`
+}
+
+type davResourceType struct {
+	Collection *struct{} `xml:"collection"`
+	Calendar   *struct{} `xml:"calendar"`
+}
+
+func (r davResourceType) IsSet() bool {
+	return r.Collection != nil || r.Calendar != nil
+}
+
+func (r davResourceType) IsCalendar() bool {
+	return r.Calendar != nil
 }
 
 func (r davResponse) FirstProp() davProp {
@@ -675,7 +872,23 @@ func (r davResponse) FirstProp() davProp {
 	return r.Propstat[0].Prop
 }
 
+func (r davResponse) IsNotFound() bool {
+	if strings.Contains(r.Status, "404") {
+		return true
+	}
+	for _, propstat := range r.Propstat {
+		if strings.Contains(propstat.Status, "404") {
+			return true
+		}
+	}
+	return false
+}
+
 func calendarIDFromHref(href string) string {
+	parsed, err := url.Parse(href)
+	if err == nil && parsed.Path != "" {
+		href = parsed.Path
+	}
 	trimmed := strings.Trim(href, "/")
 	if trimmed == "" {
 		return ""
@@ -686,6 +899,26 @@ func calendarIDFromHref(href string) string {
 		return ""
 	}
 	return id
+}
+
+func resolveCalDAVHref(baseURL, href string) string {
+	href = strings.TrimSpace(href)
+	if href == "" {
+		return ""
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return href
+	}
+	ref, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	return base.ResolveReference(ref).String()
+}
+
+func sameCalDAVURL(a, b string) bool {
+	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
 }
 
 func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
@@ -945,6 +1178,10 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func escapeXML(value string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(value)
+}
+
 func normalizeCalendarStatus(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -970,6 +1207,27 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 		message = fmt.Sprintf("status %d", status)
 	}
 	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
+}
+
+func isCalDAVSyncUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unsupported") ||
+		strings.Contains(message, "not implemented") ||
+		strings.Contains(message, "method not allowed")
+}
+
+func isCalDAVDiscoveryOptionalError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "404") ||
+		strings.Contains(message, "not found") ||
+		strings.Contains(message, "method not allowed") ||
+		strings.Contains(message, "not implemented")
 }
 
 func setCalendarAttendeeRSVP(event *models.CalendarEvent, attendeeEmail, status string) error {
