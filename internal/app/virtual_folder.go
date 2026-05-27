@@ -38,10 +38,14 @@ func (m *Model) selectedSidebarFolderPath() string {
 	if m.sidebarCursor < 0 || m.sidebarCursor >= len(items) {
 		return ""
 	}
-	if items[m.sidebarCursor].kind != sidebarItemFolder {
+	item := items[m.sidebarCursor]
+	if item.kind == sidebarItemAccountFolder || item.kind == sidebarItemAggregate {
+		return item.fullPath
+	}
+	if item.kind != sidebarItemFolder {
 		return ""
 	}
-	return items[m.sidebarCursor].node.fullPath
+	return item.node.fullPath
 }
 
 func (m *Model) activateCurrentFolder() tea.Cmd {

@@ -35,6 +35,15 @@ type AccountStatus struct {
 	Total    int
 }
 
+// AccountFolderSnapshot is a sidebar-oriented view of one mail source's
+// folders and counts. It is additive so legacy folder APIs stay unchanged.
+type AccountFolderSnapshot struct {
+	Account AccountInfo
+	Folders []string
+	Status  map[string]models.FolderStatus
+	Error   string
+}
+
 // AccountBackend pairs account identity with a legacy Backend implementation.
 type AccountBackend struct {
 	Info    AccountInfo
@@ -50,6 +59,10 @@ type AccountAwareBackend interface {
 	HasMultipleAccounts() bool
 	SwitchAccount(models.SourceID) error
 	AccountStatuses() map[models.SourceID]AccountStatus
+}
+
+type AccountFolderSnapshotBackend interface {
+	ListAccountFolderSnapshots() ([]AccountFolderSnapshot, error)
 }
 
 type scopedEmbeddingBackend interface {
@@ -83,6 +96,7 @@ type MultiBackend struct {
 }
 
 var _ AccountAwareBackend = (*MultiBackend)(nil)
+var _ AccountFolderSnapshotBackend = (*MultiBackend)(nil)
 
 func allAccountsInfo() AccountInfo {
 	return AccountInfo{
@@ -313,6 +327,34 @@ func (m *MultiBackend) AccountStatuses() map[models.SourceID]AccountStatus {
 		statuses[slot.info.SourceID] = status
 	}
 	return statuses
+}
+
+func (m *MultiBackend) ListAccountFolderSnapshots() ([]AccountFolderSnapshot, error) {
+	slots := m.snapshotSlots()
+	snapshots := make([]AccountFolderSnapshot, 0, len(slots))
+	for _, slot := range slots {
+		snapshot := AccountFolderSnapshot{
+			Account: slot.info,
+			Status:  map[string]models.FolderStatus{},
+		}
+		folders, err := slot.backend.ListFolders()
+		if err != nil {
+			snapshot.Error = err.Error()
+			snapshots = append(snapshots, snapshot)
+			continue
+		}
+		snapshot.Folders = append([]string(nil), folders...)
+		status, err := slot.backend.GetFolderStatus(folders)
+		if err != nil {
+			snapshot.Error = err.Error()
+		} else {
+			for folder, st := range status {
+				snapshot.Status[folder] = st
+			}
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, nil
 }
 
 func (m *MultiBackend) Progress() <-chan models.ProgressInfo { return m.progress }

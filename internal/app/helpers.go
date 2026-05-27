@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/render"
@@ -226,14 +227,23 @@ func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
 	logger.Debug("loadFoldersCmd: scheduled delay=%s", delay)
 	load := func() tea.Msg {
 		logger.Debug("loadFoldersCmd: requesting folders")
+		var snapshots []backend.AccountFolderSnapshot
+		if snapshotter, ok := m.backend.(backend.AccountFolderSnapshotBackend); ok {
+			loaded, err := snapshotter.ListAccountFolderSnapshots()
+			if err != nil {
+				logger.Warn("Failed to list account folder snapshots: %v", err)
+			} else {
+				snapshots = loaded
+			}
+		}
 		folders, err := m.backend.ListFolders()
 		if err != nil {
 			logger.Warn("Failed to list folders: %v", err)
-			return FoldersLoadedMsg{}
+			folders = foldersFromAccountSnapshots(snapshots)
 		}
 		logger.Info("Loaded %d folders", len(folders))
 		logger.Debug("loadFoldersCmd: loaded %d folders", len(folders))
-		return FoldersLoadedMsg{Folders: folders}
+		return FoldersLoadedMsg{Folders: folders, AccountSnapshots: snapshots}
 	}
 	if delay <= 0 {
 		return load
@@ -241,6 +251,21 @@ func (m *Model) loadFoldersCmd(delay time.Duration) tea.Cmd {
 	return tea.Tick(delay, func(time.Time) tea.Msg {
 		return load()
 	})
+}
+
+func foldersFromAccountSnapshots(snapshots []backend.AccountFolderSnapshot) []string {
+	seen := make(map[string]bool)
+	var folders []string
+	for _, snapshot := range snapshots {
+		for _, folder := range snapshot.Folders {
+			if folder == "" || seen[folder] {
+				continue
+			}
+			seen[folder] = true
+			folders = append(folders, folder)
+		}
+	}
+	return folders
 }
 
 func (m *Model) loadFolderStatusCmd(folders []string, delay time.Duration) tea.Cmd {

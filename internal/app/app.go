@@ -48,7 +48,8 @@ type LoadingMsg struct {
 
 // FoldersLoadedMsg carries the folder list fetched after connect
 type FoldersLoadedMsg struct {
-	Folders []string
+	Folders          []string
+	AccountSnapshots []backend.AccountFolderSnapshot
 }
 
 // FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
@@ -662,12 +663,14 @@ type Model struct {
 	draftSaving          bool // true while a SaveDraft cmd is in flight (prevents concurrent saves)
 
 	// Sidebar
-	folders       []string
-	folderTree    []*folderNode
-	folderStatus  map[string]models.FolderStatus
-	showSidebar   bool
-	sidebarCursor int
-	focusedPanel  int // panelSidebar, panelSummary, panelDetails
+	folders                []string
+	folderTree             []*folderNode
+	folderStatus           map[string]models.FolderStatus
+	accountFolderSnapshots []backend.AccountFolderSnapshot
+	sidebarExpanded        map[string]bool
+	showSidebar            bool
+	sidebarCursor          int
+	focusedPanel           int // panelSidebar, panelSummary, panelDetails
 
 	// Multi-account chrome. These fields are populated only when the backend
 	// implements backend.AccountAwareBackend; single-account sessions hide them.
@@ -932,6 +935,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		folders:         []string{"INBOX"},
 		folderTree:      buildFolderTree([]string{"INBOX"}),
 		folderStatus:    make(map[string]models.FolderStatus),
+		sidebarExpanded: make(map[string]bool),
 		showSidebar:     true,
 		focusedPanel:    panelTimeline,
 		accountStatuses: make(map[models.SourceID]backend.AccountStatus),
@@ -1991,6 +1995,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FoldersLoadedMsg:
 		logger.Debug("FoldersLoadedMsg: folders=%d currentFolder=%s", len(msg.Folders), m.currentFolder)
+		m.accountFolderSnapshots = msg.AccountSnapshots
 		if len(msg.Folders) == 0 {
 			logger.Debug("FoldersLoadedMsg: empty result; existing folders=%d", len(m.folders))
 			if len(m.folders) <= 1 {
@@ -2007,7 +2012,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		items := m.visibleSidebarItems()
 		m.sidebarCursor = 0
 		for i, item := range items {
-			if item.kind == sidebarItemFolder && item.node.fullPath == m.currentFolder {
+			if m.sidebarItemMatchesCurrentFolder(item) {
 				m.sidebarCursor = i
 				break
 			}

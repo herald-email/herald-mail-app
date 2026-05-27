@@ -206,6 +206,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add an active-account backend wrapper so the TUI can switch between configured mail sources while legacy `Backend` callers continue to use folder/message-ID methods.
 - [x] Add an opt-in `All Accounts` TUI scope that aggregates Timeline/search through source backends, renders account badges, and routes selected-message reads/writes by `MessageRef`.
 - [x] Add account-aware Compose routing so blank messages, replies, forwards, drafts, and sends can select a real mail source while single-account sessions keep the legacy Compose surface.
+- [x] Add an additive account-folder snapshot API so the TUI sidebar can render Mail.app-style Favorites and per-account folder sections without changing legacy folder methods.
 - [x] Move latest-user-intent, duplicate resource coalescing, serial mutations, and fair background work into reusable coordination primitives before migrating existing queues.
 - [x] Keep mail body and preview reads cache-first so callers ask once while the service decides persistent cache, in-flight join, completed replay, or provider fetch.
 - [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache storage exist.

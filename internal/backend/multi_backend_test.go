@@ -304,6 +304,45 @@ func TestMultiBackendAccountsAndActiveSwitching(t *testing.T) {
 	}
 }
 
+func TestMultiBackendAccountFolderSnapshotsKeepSameNamedFoldersScoped(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX", "Drafts", "Clients"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX", "Sent", "Travel"}, nil, "")
+	work.status["INBOX"] = models.FolderStatus{Unseen: 7, Total: 23}
+	personal.status["INBOX"] = models.FolderStatus{Unseen: 4, Total: 31}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Provider: "imap"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Provider: "imap"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	snapshots, err := mb.ListAccountFolderSnapshots()
+	if err != nil {
+		t.Fatalf("ListAccountFolderSnapshots: %v", err)
+	}
+	if len(snapshots) != 2 {
+		t.Fatalf("snapshots=%d, want 2", len(snapshots))
+	}
+	if snapshots[0].Account.SourceID != "work-mail" || !reflect.DeepEqual(snapshots[0].Folders, []string{"INBOX", "Drafts", "Clients"}) {
+		t.Fatalf("work snapshot = %#v", snapshots[0])
+	}
+	if got := snapshots[0].Status["INBOX"]; got.Unseen != 7 || got.Total != 23 {
+		t.Fatalf("work INBOX status = %+v, want 7/23", got)
+	}
+	if snapshots[1].Account.SourceID != "personal-mail" || !reflect.DeepEqual(snapshots[1].Folders, []string{"INBOX", "Sent", "Travel"}) {
+		t.Fatalf("personal snapshot = %#v", snapshots[1])
+	}
+	if got := snapshots[1].Status["INBOX"]; got.Unseen != 4 || got.Total != 31 {
+		t.Fatalf("personal INBOX status = %+v, want 4/31", got)
+	}
+
+	if folders, _ := mb.ListFolders(); !reflect.DeepEqual(folders, []string{"INBOX", "Drafts", "Clients"}) {
+		t.Fatalf("legacy active folders changed = %#v", folders)
+	}
+}
+
 func TestAccountInfoFromSourceCarriesComposeSignature(t *testing.T) {
 	source := config.SourceConfig{
 		ID:          "work-mail",

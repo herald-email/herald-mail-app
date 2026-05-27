@@ -176,6 +176,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Auto-hides with a hint when terminal is too narrow
 - [x] Current folder remains visibly selected even when the sidebar is not focused
 - [x] Folder tree appears promptly during startup and does not collapse to a partial list while the active folder is still loading
+- [x] Multi-account sessions show Mail.app-style Favorites plus per-account folder sections, with single-account sessions keeping the legacy folder tree
 
 ### Chat Panel
 

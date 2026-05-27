@@ -14,6 +14,7 @@ type accountAwareStubBackend struct {
 	stubBackend
 	accounts     []backend.AccountInfo
 	statuses     map[models.SourceID]backend.AccountStatus
+	snapshots    []backend.AccountFolderSnapshot
 	activeSource models.SourceID
 	switchCalls  []models.SourceID
 }
@@ -66,6 +67,12 @@ func (b *accountAwareStubBackend) AccountStatuses() map[models.SourceID]backend.
 	return out
 }
 
+func (b *accountAwareStubBackend) ListAccountFolderSnapshots() ([]backend.AccountFolderSnapshot, error) {
+	out := make([]backend.AccountFolderSnapshot, len(b.snapshots))
+	copy(out, b.snapshots)
+	return out, nil
+}
+
 func accountSwitcherTestModel(b *accountAwareStubBackend) *Model {
 	m := New(b, nil, "", nil, false)
 	m.loading = false
@@ -76,7 +83,52 @@ func accountSwitcherTestModel(b *accountAwareStubBackend) *Model {
 	m.folderTree = buildFolderTree(m.folders)
 	m.folderStatus = map[string]models.FolderStatus{"INBOX": {Unseen: 7, Total: 23}}
 	m.syncAccountsFromBackend()
+	if len(b.snapshots) > 0 {
+		m.accountFolderSnapshots = b.snapshots
+	}
 	return m
+}
+
+func accountSwitcherSnapshots(accounts []backend.AccountInfo) []backend.AccountFolderSnapshot {
+	snapshots := make([]backend.AccountFolderSnapshot, 0, len(accounts))
+	for _, account := range accounts {
+		snapshots = append(snapshots, backend.AccountFolderSnapshot{
+			Account: account,
+			Folders: []string{
+				"INBOX",
+				"Drafts",
+				"Sent",
+				"Receipts",
+				"Projects/Launch",
+			},
+			Status: map[string]models.FolderStatus{
+				"INBOX":           {Unseen: 7, Total: 23},
+				"Drafts":          {Unseen: 0, Total: 2},
+				"Sent":            {Unseen: 0, Total: 5},
+				"Receipts":        {Unseen: 1, Total: 4},
+				"Projects/Launch": {Unseen: 0, Total: 8},
+			},
+		})
+	}
+	return snapshots
+}
+
+func findSidebarItem(t *testing.T, m *Model, label string, account models.SourceID, folder string) int {
+	t.Helper()
+	for i, item := range m.visibleSidebarItems() {
+		if item.label != label {
+			continue
+		}
+		if account != "" && item.account != account {
+			continue
+		}
+		if folder != "" && item.fullPath != folder {
+			continue
+		}
+		return i
+	}
+	t.Fatalf("sidebar item label=%q account=%q folder=%q not found in %#v", label, account, folder, m.visibleSidebarItems())
+	return -1
 }
 
 func scopedAppEmail(email *models.EmailData) *models.EmailData {
@@ -111,16 +163,18 @@ func TestSingleAccountSidebarDoesNotRenderAccountRail(t *testing.T) {
 }
 
 func TestMultiAccountSidebarStatusAndSwitcherRenderAccountIdentity(t *testing.T) {
-	b := newAccountAwareStubBackend([]backend.AccountInfo{
+	accounts := []backend.AccountInfo{
 		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Provider: "imap", Address: "work@example.test"},
 		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Provider: "imap", Address: "me@example.test"},
-	})
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
 	b.statuses["work-mail"] = backend.AccountStatus{State: "live", Unread: 7, Total: 23}
 	b.statuses["personal-mail"] = backend.AccountStatus{State: "auth", Error: "needs sign-in", Unread: 4, Total: 31}
 	m := accountSwitcherTestModel(b)
 
 	sidebar := stripANSI(m.renderSidebar())
-	for _, want := range []string{"Accounts", "Work Mail", "Personal", "Folders - Work Mail"} {
+	for _, want := range []string{"Favorites", "All Inboxes", "All Drafts", "All Sent", "Work Mail", "Personal", "Folders", "Receipts"} {
 		if !strings.Contains(sidebar, want) {
 			t.Fatalf("sidebar missing %q:\n%s", want, sidebar)
 		}
@@ -180,55 +234,90 @@ func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T
 }
 
 func TestAccountRailEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T) {
-	b := newAccountAwareStubBackend([]backend.AccountInfo{
+	accounts := []backend.AccountInfo{
 		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
 		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
-	})
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
 	m := accountSwitcherTestModel(b)
 	m.currentFolder = "Clients"
 	m.accountSelectedFolders["work-mail"] = "Clients"
 	m.accountSelectedFolders["personal-mail"] = "Travel"
 	m.focusedPanel = panelSidebar
-	m.sidebarCursor = 2
+	m.sidebarCursor = findSidebarItem(t, m, "Personal", "personal-mail", "INBOX")
 
 	cmd, handledAccount := m.selectSidebarFolder()
 	if !handledAccount {
-		t.Fatal("expected account rail row to be handled as an account switch")
+		t.Fatal("expected account child folder row to be handled as an account switch")
 	}
 	if cmd == nil {
-		t.Fatal("expected account rail switch to schedule reload commands")
+		t.Fatal("expected account folder switch to schedule reload commands")
 	}
 	if !strings.EqualFold(string(b.activeSource), "personal-mail") {
 		t.Fatalf("active source=%q, want personal-mail", b.activeSource)
 	}
-	if m.currentFolder != "Travel" {
-		t.Fatalf("currentFolder=%q, want restored Travel", m.currentFolder)
+	if m.currentFolder != "INBOX" {
+		t.Fatalf("currentFolder=%q, want selected INBOX", m.currentFolder)
+	}
+}
+
+func TestActiveAccountSidebarChildSelectionLoadsSelectedFolder(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
+	m := accountSwitcherTestModel(b)
+	m.currentFolder = "INBOX"
+	m.accountSelectedFolders["work-mail"] = "INBOX"
+	m.focusedPanel = panelSidebar
+	m.sidebarCursor = findSidebarItem(t, m, "Drafts", "work-mail", "Drafts")
+
+	cmd, handledAccount := m.selectSidebarFolder()
+	if !handledAccount {
+		t.Fatal("expected active account child folder row to be handled directly")
+	}
+	if cmd == nil {
+		t.Fatal("expected active account folder selection to schedule reload commands")
+	}
+	if !strings.EqualFold(string(b.activeSource), "work-mail") {
+		t.Fatalf("active source=%q, want work-mail", b.activeSource)
+	}
+	if m.currentFolder != "Drafts" {
+		t.Fatalf("currentFolder=%q, want selected Drafts", m.currentFolder)
+	}
+	if got := m.accountSelectedFolders["work-mail"]; got != "Drafts" {
+		t.Fatalf("remembered work-mail folder=%q, want Drafts", got)
 	}
 }
 
 func TestAllAccountsRailAndSwitcherEntrySwitchUnifiedScope(t *testing.T) {
-	b := newAccountAwareStubBackend([]backend.AccountInfo{
+	accounts := []backend.AccountInfo{
 		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
 		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
-	})
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
 	m := accountSwitcherTestModel(b)
 	m.currentFolder = "Clients"
 	m.accountSelectedFolders["work-mail"] = "Clients"
 	m.accountSelectedFolders["personal-mail"] = "Travel"
 	m.focusedPanel = panelSidebar
-	m.sidebarCursor = 0
+	m.sidebarCursor = findSidebarItem(t, m, "All Inboxes", backend.AllAccountsSourceID, "INBOX")
 
 	sidebar := stripANSI(m.renderSidebar())
-	if !strings.Contains(sidebar, "All Accounts") {
-		t.Fatalf("multi-account sidebar missing All Accounts row:\n%s", sidebar)
+	if !strings.Contains(sidebar, "All Inboxes") {
+		t.Fatalf("multi-account sidebar missing All Inboxes row:\n%s", sidebar)
 	}
 
 	cmd, handledAccount := m.selectSidebarFolder()
 	if !handledAccount {
-		t.Fatal("expected All Accounts rail row to be handled as an account switch")
+		t.Fatal("expected All Inboxes row to be handled as an account switch")
 	}
 	if cmd == nil {
-		t.Fatal("expected All Accounts switch to schedule reload commands")
+		t.Fatal("expected All Inboxes switch to schedule reload commands")
 	}
 	if b.activeSource != backend.AllAccountsSourceID {
 		t.Fatalf("active source=%q, want all accounts", b.activeSource)

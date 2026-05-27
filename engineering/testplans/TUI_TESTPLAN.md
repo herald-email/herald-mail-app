@@ -1541,16 +1541,20 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch Herald in deterministic multi-account demo mode.
 2. Capture the Timeline with the sidebar visible.
-3. Press `A` to open the account switcher overlay.
-4. Move to another account, press `Enter`, and capture the reloaded account folder tree.
-5. Repeat in normal single-account demo mode.
+3. Expand/collapse the Favorites rows for `All Inboxes`, `All Drafts`, and `All Sent`.
+4. Move into a per-account child folder such as an account Inbox or Drafts row, press `Enter`, and capture the reloaded account-scoped folder.
+5. Press `A` to open the account switcher overlay.
+6. Move to another account, press `Enter`, and capture the reloaded account folder tree.
+7. Repeat in normal single-account demo mode.
 
 **Expect:**
-- Multi-account demo shows an `Accounts` rail above folders and the active account in title/status chrome.
+- Multi-account demo shows a `Favorites` section with aggregate rows plus account children, followed by per-account folder sections.
+- Per-account child folder rows switch to that concrete source and mailbox; same-named folders remain isolated by account.
+- `All Inboxes` selects the existing All Accounts `INBOX` scope; ambiguous aggregate parents such as `All Drafts` and `All Sent` expand/collapse unless they can safely map to one concrete path.
 - The switcher overlay names each source, shows status/error state, and `Esc` closes it without changing accounts.
 - `Enter` switches the active account, restores that account's selected folder, and keeps same-named folders isolated.
 - Single-account demo keeps the existing sidebar/status chrome and does not advertise account switching.
-- At `50x15`, the minimum-size guard appears and resizing larger restores the account rail or switcher state cleanly.
+- At `50x15`, the minimum-size guard appears and resizing larger restores the multi-account sidebar or switcher state cleanly.
 
 ### TC-38B — Unified inbox/search and account badges
 
