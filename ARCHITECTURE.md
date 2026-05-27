@@ -228,6 +228,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add selected Calendar Event Edit mutations for reminder overrides while preserving provider save-through/cache-after-success behavior.
 - [x] Add optional source/account scoped daemon read filters and MCP listing refs while preserving legacy folder/message-ID compatibility.
 - [x] Add source/account/collection/item identity to daemon progress, sync, valid-ID, new-email, and mutation events while preserving legacy event names.
+- [x] Add read-only scoped calendar MCP tools for cached agenda, search, and event detail results.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

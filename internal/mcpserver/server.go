@@ -281,6 +281,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 		buildversion.Version,
 		server.WithToolCapabilities(false),
 	)
+	addCalendarTools(s, c)
 
 	// Tool: list_recent_emails
 	s.AddTool(

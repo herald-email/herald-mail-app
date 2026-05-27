@@ -215,7 +215,7 @@ The daemon and MCP layers must stop treating `folder` plus `message_id` as globa
 - [ ] Mutating endpoints require scoped refs once multi-account writes are enabled.
 - [x] MCP listing outputs include both human-readable message IDs and scoped refs suitable for follow-up calls.
 - [x] Daemon event streams include source/account/collection fields on progress, new item, valid ID, sync, and mutation events.
-- [ ] Calendar MCP tools are read-only at first and use the same scoped reference style as mail.
+- [x] Calendar MCP tools are read-only at first and use the same scoped reference style as mail.
 
 ## Phased Roadmap
 
@@ -233,7 +233,7 @@ The work should land in small slices that each preserve current behavior. Multi-
 - [x] Phase 6: Add calendar source abstraction plus read-only Google Calendar and CalDAV source implementations.
   - [x] Phase 6A: Add Google Calendar OAuth refresh and provider sync-token persistence for cache-backed source reads.
   - [x] Phase 6B: Add CalDAV discovery, ETag/sync-token handling, and calendar-query polling fallback.
-- [ ] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
+- [x] Phase 7: Add unified timeline/agenda, cross-source search, source-aware automation, and selected calendar mutations.
   - [x] Phase 7A: Add an optional read-only Calendar Agenda and Event Detail TUI foundation backed by demo/cache rows.
   - [x] Phase 7B: Add a read-only Day Agenda + Drawer view that reuses cache-backed agenda rows and preserves full Event Detail.
   - [x] Phase 7C: Add a read-only Week Time-Grid view that reuses cache-backed agenda rows and preserves full Event Detail.
