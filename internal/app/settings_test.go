@@ -618,6 +618,53 @@ func TestSettingsPanelTopLevelMenuShowsAccountsInsteadOfAccountSetup(t *testing.
 	}
 }
 
+func TestSettingsPanelTopLevelMenuReturnKeysOpenSelectedCategory(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  tea.KeyPressMsg
+	}{
+		{name: "return", msg: tea.KeyPressMsg{Code: tea.KeyReturn}},
+		{name: "keypad enter", msg: tea.KeyPressMsg{Code: tea.KeyKpEnter}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSettings(SettingsModePanel, nil)
+
+			s, _ = updateAndPumpSettingsForTest(t, s, tc.msg)
+
+			if s.panelSection != settingsPanelSectionAccounts {
+				t.Fatalf("panelSection = %q, want Accounts after %s", s.panelSection, tc.name)
+			}
+			rendered := renderSettingsViewForTest(t, s, 100, 32)
+			if !strings.Contains(stripANSI(rendered), "Add account") {
+				t.Fatalf("expected Accounts category after %s, got:\n%s", tc.name, rendered)
+			}
+		})
+	}
+}
+
+func TestModelSettingsPanelProcessesFormCommandMessages(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.cfg = &config.Config{}
+	m.showSettings = true
+	m.settingsPanel = NewSettings(SettingsModePanel, m.cfg)
+	m.settingsPanel.setSize(80, 24)
+
+	model, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	updated := model.(*Model)
+	updated, _ = pumpModelCommandForTest(t, updated, cmd, 0)
+
+	if updated.settingsPanel == nil {
+		t.Fatal("expected settings panel to remain open")
+	}
+	if updated.settingsPanel.panelSection != settingsPanelSectionAccounts {
+		t.Fatalf("panelSection = %q, want Accounts after parent model pumps Settings form command", updated.settingsPanel.panelSection)
+	}
+	rendered := renderSettingsViewForTest(t, updated.settingsPanel, 100, 32)
+	if !strings.Contains(stripANSI(rendered), "Add account") {
+		t.Fatalf("expected Accounts category after parent model pumps Settings form command, got:\n%s", rendered)
+	}
+}
+
 func TestSettingsAccountsListRendersSourceGroupsAndAddAccount(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{
@@ -1457,6 +1504,36 @@ func settingsImmediateMessagesForTest(cmd tea.Cmd) []tea.Msg {
 		return messages
 	}
 	return []tea.Msg{msg}
+}
+
+func pumpModelCommandForTest(t *testing.T, m *Model, cmd tea.Cmd, depth int) (*Model, []tea.Msg) {
+	t.Helper()
+	if depth > 10 {
+		t.Fatal("model command pump exceeded depth limit")
+	}
+	if cmd == nil {
+		return m, nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var messages []tea.Msg
+		for _, child := range batch {
+			var childMessages []tea.Msg
+			m, childMessages = pumpModelCommandForTest(t, m, child, depth+1)
+			messages = append(messages, childMessages...)
+		}
+		return m, messages
+	}
+	if msg == nil {
+		return m, nil
+	}
+	updated, nextCmd := m.Update(msg)
+	nextModel := updated.(*Model)
+	messages := []tea.Msg{msg}
+	var nextMessages []tea.Msg
+	nextModel, nextMessages = pumpModelCommandForTest(t, nextModel, nextCmd, depth+1)
+	messages = append(messages, nextMessages...)
+	return nextModel, messages
 }
 
 func settingsMessagesContainCancel(messages []tea.Msg) bool {

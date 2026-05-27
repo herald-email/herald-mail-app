@@ -1855,23 +1855,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		_, isKey := msg.(tea.KeyPressMsg)
-		_, isWindow := msg.(tea.WindowSizeMsg)
-		if isKey || isWindow {
-			prevSection := m.settingsPanel.panelSection
-			if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
-				m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
-				m.chatWrappedLines = nil
-			}
-			newModel, cmd := m.settingsPanel.Update(msg)
-			m.settingsPanel = newModel.(*Settings)
-			if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
-				m.applyThemeConfig(m.cfg)
-			} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
-				m.applyThemeConfig(m.settingsPanel.buildConfig())
-			}
-			if _, ok := msg.(tea.WindowSizeMsg); ok {
-				return m, tea.Batch(cmd, tea.ClearScreen)
-			}
+		prevSection := m.settingsPanel.panelSection
+		prevDone := m.settingsPanel.done
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+			m.chatWrappedLines = nil
+		}
+		newModel, cmd := m.settingsPanel.Update(msg)
+		m.settingsPanel = newModel.(*Settings)
+		if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
+			m.applyThemeConfig(m.cfg)
+		} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
+			m.applyThemeConfig(m.settingsPanel.buildConfig())
+		}
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			return m, tea.Batch(cmd, tea.ClearScreen)
+		}
+		if isKey || cmd != nil || prevSection != m.settingsPanel.panelSection || prevDone != m.settingsPanel.done {
 			return m, cmd
 		}
 		// Background app messages, especially sync completion after an account
