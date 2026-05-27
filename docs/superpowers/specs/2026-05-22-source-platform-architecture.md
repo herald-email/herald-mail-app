@@ -11,7 +11,7 @@ The first goal is to introduce durable source identity and work coordination bef
 - [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
 - [x] Make mail body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
 - [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
-- [ ] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
+- [x] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
 - [x] Introduce calendar as a source capability so Google Calendar and CalDAV share Herald-facing models even though their transports differ.
 
 ## Non-Goals
@@ -80,7 +80,7 @@ type EventRef struct {
 
 Sources are provider adapters, not mini-apps. They should know how to talk to IMAP, Google Calendar, or CalDAV, but they should not decide UI priority, cache eviction, background fairness, or stale-result behavior.
 
-- [ ] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
+- [x] `SourcePlugin` opens configured sources and reports source kind plus capabilities.
 - [x] `MailSource` covers current mail-specific collections, sync, body fetch, mutation, drafts, folder status, and search behind `IMAPMailSource`.
 - [x] `CalendarSource` covers read-only calendars, event listing/sync, and event detail fetch; `MutationSource` covers selected edit/RSVP writes with explicit recurrence-scope and provider-conflict guards.
 - [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.

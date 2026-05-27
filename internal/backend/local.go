@@ -214,7 +214,26 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 
 	progressCh := make(chan models.ProgressInfo, 100)
 	rawProgressCh := make(chan models.ProgressInfo, 100)
-	mailSource := NewIMAPMailSource(cfg, configPath, c, rawProgressCh)
+	sourceCfg, ok := firstConfiguredMailSource(cfg)
+	if !ok {
+		_ = c.Close()
+		return nil, fmt.Errorf("no mail sources configured")
+	}
+	openedSource, err := DefaultSourceRegistry().Open(context.Background(), sourceCfg, SourceDeps{
+		ProfileConfig: cfg,
+		ConfigPath:    configPath,
+		Cache:         c,
+		ProgressCh:    rawProgressCh,
+	})
+	if err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("failed to open mail source %s: %w", sourceCfg.ID, err)
+	}
+	mailSource := openedSource.Mail
+	if mailSource == nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("configured source %s is not a mail source", sourceCfg.ID)
+	}
 	b := &LocalBackend{
 		mailSource:       mailSource,
 		cache:            c,

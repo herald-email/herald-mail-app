@@ -250,19 +250,15 @@ func (b *LocalBackend) calendarMutationSourceForRef(ref models.EventRef) (calend
 		if models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID) != ref.SourceID {
 			continue
 		}
-		if source.Provider == "google_calendar" && (strings.TrimSpace(source.Google.AccessToken) != "" || strings.TrimSpace(source.Google.RefreshToken) != "" || strings.TrimSpace(source.Google.APIBaseURL) != "") {
-			src, err := calendar.NewGoogleCalendarSource(source)
-			if err != nil {
-				return nil, false, calendarProviderMutationError("open", err)
-			}
-			return src, true, nil
+		if !calendarSourceHasProviderConfig(source) {
+			continue
 		}
-		if source.Provider == "caldav" && strings.TrimSpace(source.CalDAV.URL) != "" {
-			src, err := calendar.NewCalDAVSource(source)
-			if err != nil {
-				return nil, false, calendarProviderMutationError("open", err)
-			}
-			return src, true, nil
+		opened, err := DefaultSourceRegistry().Open(context.Background(), source, SourceDeps{ProfileConfig: b.cfg})
+		if err != nil {
+			return nil, false, calendarProviderMutationError("open", err)
+		}
+		if opened.CalendarMutation != nil {
+			return opened.CalendarMutation, true, nil
 		}
 	}
 	return nil, false, nil
