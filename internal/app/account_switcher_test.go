@@ -199,6 +199,158 @@ func TestMultiAccountSidebarStatusAndSwitcherRenderAccountIdentity(t *testing.T)
 	}
 }
 
+func TestMultiAccountSidebarLabelsIncludeKnownAddress(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
+	m := accountSwitcherTestModel(b)
+
+	foundSection := false
+	foundFavoriteChild := false
+	for _, item := range m.visibleSidebarItems() {
+		if item.label == "Work Mail (work@example.test)" && item.account == "work-mail" {
+			foundSection = true
+		}
+		if item.label == "Personal (me@example.test)" && item.account == "personal-mail" && item.fullPath == "INBOX" {
+			foundFavoriteChild = true
+		}
+	}
+	if !foundSection {
+		t.Fatalf("expected account section label to include address; items=%#v", m.visibleSidebarItems())
+	}
+	if !foundFavoriteChild {
+		t.Fatalf("expected favorite account child label to include address; items=%#v", m.visibleSidebarItems())
+	}
+}
+
+func TestSidebarNavigationSkipsNonSelectableHeaders(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
+	m := accountSwitcherTestModel(b)
+	m.focusedPanel = panelSidebar
+	m.sidebarCursor = 0
+
+	model, _ := m.handleNavigation(1)
+	moved := model.(*Model)
+	items := moved.visibleSidebarItems()
+	if items[moved.sidebarCursor].kind == sidebarItemHeader {
+		t.Fatalf("sidebar cursor landed on non-selectable header at %d: %#v", moved.sidebarCursor, items[moved.sidebarCursor])
+	}
+	if items[moved.sidebarCursor].label != "All Inboxes" {
+		t.Fatalf("sidebar cursor label=%q, want first selectable All Inboxes", items[moved.sidebarCursor].label)
+	}
+}
+
+func TestAccountSidebarSectionsCollapse(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
+	m := accountSwitcherTestModel(b)
+	m.focusedPanel = panelSidebar
+	m.sidebarCursor = -1
+	for i, item := range m.visibleSidebarItems() {
+		if item.kind == sidebarItemGroup && item.label == "Work Mail (work@example.test)" && item.account == "work-mail" {
+			m.sidebarCursor = i
+			break
+		}
+	}
+	if m.sidebarCursor < 0 {
+		t.Fatalf("work account section not found in %#v", m.visibleSidebarItems())
+	}
+	before := len(m.visibleSidebarItems())
+
+	m.toggleSidebarNode()
+
+	after := len(m.visibleSidebarItems())
+	if after >= before {
+		t.Fatalf("collapsing account section did not reduce visible items: before=%d after=%d", before, after)
+	}
+	for _, item := range m.visibleSidebarItems() {
+		if item.account == "work-mail" && item.fullPath == "Receipts" {
+			t.Fatalf("collapsed account section still shows child folder: %#v", item)
+		}
+	}
+}
+
+func TestRenderSidebarUsesLayoutContentHeight(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	b.snapshots = accountSwitcherSnapshots(accounts)
+	m := accountSwitcherTestModel(b)
+	m.windowWidth = 120
+	m.windowHeight = 24
+	m.loading = true
+	m.syncCountsSettled = false
+	m.progressInfo.Message = "Checking sync state in INBOX (23 messages on server)..."
+	m.timeline.emails = mockEmails()
+
+	sidebarLines := strings.Split(stripANSI(m.renderSidebar()), "\n")
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	if len(sidebarLines) > plan.ContentHeight {
+		t.Fatalf("sidebar rendered %d rows, content height is %d:\n%s", len(sidebarLines), plan.ContentHeight, strings.Join(sidebarLines, "\n"))
+	}
+}
+
+func TestStaleScopedFolderMessagesDoNotRepaintCurrentAccount(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	m := accountSwitcherTestModel(b)
+	m.activeSourceID = "personal-mail"
+	m.currentFolder = "INBOX"
+	m.folders = []string{"INBOX", "Travel"}
+	m.folderTree = buildFolderTree(m.folders)
+
+	model, _ := m.Update(FoldersLoadedMsg{
+		SourceID: backend.AllAccountsSourceID,
+		Folders:  []string{"INBOX", "Archive"},
+	})
+	updated := model.(*Model)
+	if strings.Join(updated.folders, ",") != "INBOX,Travel" {
+		t.Fatalf("stale all-account folders repainted current account folders: %#v", updated.folders)
+	}
+}
+
+func TestStaleScopedTimelineLoadedMsgIgnored(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	})
+	m := accountSwitcherTestModel(b)
+	m.activeSourceID = "personal-mail"
+	m.currentFolder = "INBOX"
+	personal := []*models.EmailData{{MessageID: "personal", Sender: "me@example.test", Subject: "Personal", Folder: "INBOX", Date: time.Now()}}
+	m.timeline.emails = personal
+
+	model, _, handled := m.handleTimelineMsg(TimelineLoadedMsg{
+		SourceID: backend.AllAccountsSourceID,
+		Folder:   "INBOX",
+		Emails:   []*models.EmailData{{MessageID: "all", Sender: "work@example.test", Subject: "All", Folder: "INBOX", Date: time.Now()}},
+	})
+	if !handled {
+		t.Fatal("expected TimelineLoadedMsg to be handled")
+	}
+	updated := model.(*Model)
+	if len(updated.timeline.emails) != 1 || updated.timeline.emails[0].MessageID != "personal" {
+		t.Fatalf("stale all-account timeline repainted current account: %#v", updated.timeline.emails)
+	}
+}
+
 func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T) {
 	b := newAccountAwareStubBackend([]backend.AccountInfo{
 		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},

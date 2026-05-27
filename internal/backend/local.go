@@ -247,6 +247,9 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 		newEmailsCh:      make(chan models.NewEmailsNotification, 10),
 		validIDsScopedCh: make(chan models.ValidIDsNotification, 10),
 	}
+	if err := b.primeCachedFoldersFromCache(); err != nil {
+		logger.Warn("Failed to prime cached folders from SQLite: %v", err)
+	}
 	b.messageService = NewMessageService(MessageServiceOptions{
 		Cache:         c,
 		Source:        mailSource,
@@ -463,6 +466,9 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		b.foldersMu.Lock()
 		b.cachedFolders = append(b.cachedFolders[:0], folders...)
 		b.foldersMu.Unlock()
+		if err := b.cache.StoreFolderList(folders); err != nil {
+			logger.Warn("Failed to persist folder list cache: %v", err)
+		}
 		logger.Info("Primed %d folders after connect", len(folders))
 		b.tracef("folder cache primed: folder=%s generation=%d count=%d", req.Folder, req.Generation, len(folders))
 	}
@@ -622,7 +628,38 @@ func (b *LocalBackend) ListFolders() ([]string, error) {
 	}
 	b.foldersMu.RUnlock()
 
-	return b.mailSource.ListFolders(context.Background())
+	folders, err := b.mailSource.ListFolders(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(folders) > 0 {
+		b.foldersMu.Lock()
+		b.cachedFolders = append(b.cachedFolders[:0], folders...)
+		b.foldersMu.Unlock()
+		if b.cache != nil {
+			if err := b.cache.StoreFolderList(folders); err != nil {
+				logger.Warn("Failed to persist folder list cache: %v", err)
+			}
+		}
+	}
+	return folders, nil
+}
+
+func (b *LocalBackend) primeCachedFoldersFromCache() error {
+	if b == nil || b.cache == nil {
+		return nil
+	}
+	folders, err := b.cache.GetCachedFolderList()
+	if err != nil {
+		return err
+	}
+	if len(folders) == 0 {
+		return nil
+	}
+	b.foldersMu.Lock()
+	b.cachedFolders = append(b.cachedFolders[:0], folders...)
+	b.foldersMu.Unlock()
+	return nil
 }
 
 func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {

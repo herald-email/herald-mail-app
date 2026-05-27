@@ -269,6 +269,15 @@ func (c *Cache) initDB() error {
 		return err
 	}
 
+	if _, err := c.db.Exec(`
+		CREATE TABLE IF NOT EXISTS folder_list_cache (
+			folder     TEXT PRIMARY KEY,
+			updated_at DATETIME NOT NULL
+		)
+	`); err != nil {
+		return err
+	}
+
 	// folder_sync_state: persists UIDVALIDITY and UIDNEXT per folder for incremental sync
 	if _, err := c.db.Exec(`
 		CREATE TABLE IF NOT EXISTS folder_sync_state (
@@ -2245,6 +2254,65 @@ func (c *Cache) GetCachedFolders() ([]string, error) {
 		folders = append(folders, f)
 	}
 	return folders, rows.Err()
+}
+
+func (c *Cache) StoreFolderList(folders []string) error {
+	seen := make(map[string]bool, len(folders))
+	cleaned := make([]string, 0, len(folders))
+	for _, folder := range folders {
+		folder = strings.TrimSpace(folder)
+		if folder == "" || seen[folder] {
+			continue
+		}
+		seen[folder] = true
+		cleaned = append(cleaned, folder)
+	}
+	sort.Strings(cleaned)
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM folder_list_cache`); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for _, folder := range cleaned {
+		if _, err := tx.Exec(
+			`INSERT INTO folder_list_cache (folder, updated_at) VALUES (?, ?)`,
+			folder,
+			now,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (c *Cache) GetCachedFolderList() ([]string, error) {
+	rows, err := c.db.Query(`SELECT folder FROM folder_list_cache WHERE folder != '' ORDER BY folder`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var folders []string
+	for rows.Next() {
+		var folder string
+		if err := rows.Scan(&folder); err != nil {
+			return nil, err
+		}
+		folders = append(folders, folder)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(folders) > 0 {
+		return folders, nil
+	}
+	return c.GetCachedFolders()
 }
 
 // normalizeSubjectSQL is a SQL expression that strips Re:, Fwd:, Fw:, AW: prefixes

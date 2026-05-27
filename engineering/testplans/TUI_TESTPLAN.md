@@ -216,6 +216,7 @@ Check these states during every applicable lane:
 - Folder switches should be latest-wins: stale sync results from an older folder request must not repaint the newly selected folder.
 - The active folder visible bundle settles together: rows, unread/total counts, folder label, and folder tree presence become coherent within a 2-5 second window under normal startup conditions.
 - Visible folder counts come from live IMAP folder status only; hydrated cache rows must not synthesize or overwrite sidebar, status-bar, or cleanup counts.
+- Cached last-known folder names may seed the sidebar before live IMAP listing completes, but cached folder names must not seed unread/total counts.
 - Timeline unread dots reflect live IMAP `\Seen` flags after refresh/sync, including messages read externally in Gmail when no new mail arrived.
 - The top sync strip reflects only unsettled active-folder work and disappears once the active folder bundle is settled.
 - Startup must show the full folder tree as soon as the server folder list is known; loading the active folder must not collapse the sidebar to only a partial tree.
@@ -330,6 +331,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Focused row styling uses one consistent visual language.
 - Inactive selected rows use a subdued variant.
+- Folder sidebar navigation skips non-selectable section headers or gives selectable section rows the same active/inactive highlight language.
 - No list uses a conflicting selection pattern.
 
 ### TC-05 — Timeline preview geometry
@@ -1433,6 +1435,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The folder tree appears early and stays stable while the active folder sync continues.
+- If a previous cache contains a last-known folder list, the sidebar may show that complete cached tree immediately while live IMAP status is still unsettled.
 - Starting a heavy `INBOX` sync does not temporarily collapse the sidebar to only the active folder and virtual entries.
 
 ### TC-35 — Sync strip honesty and disappearance
@@ -1549,10 +1552,13 @@ Check these states during every applicable lane:
 
 **Expect:**
 - Multi-account demo shows a `Favorites` section with aggregate rows plus account children, followed by per-account folder sections.
+- Account rows and favorite child rows render as `Name (email)` when the source address is known, truncating without losing the display name first.
+- Favorites, per-account sections, and custom folder groups are collapsible, and navigating up/down never leaves the cursor on an unhighlighted header row.
 - Per-account child folder rows switch to that concrete source and mailbox; same-named folders remain isolated by account.
 - `All Inboxes` selects the existing All Accounts `INBOX` scope; ambiguous aggregate parents such as `All Drafts` and `All Sent` expand/collapse unless they can safely map to one concrete path.
 - The switcher overlay names each source, shows status/error state, and `Esc` closes it without changing accounts.
 - `Enter` switches the active account, restores that account's selected folder, and keeps same-named folders isolated.
+- Stale async folder, status, and Timeline responses from a previous All Accounts or concrete-account scope cannot repaint the newly selected scope.
 - Single-account demo keeps the existing sidebar/status chrome and does not advertise account switching.
 - At `50x15`, the minimum-size guard appears and resizing larger restores the multi-account sidebar or switcher state cleanly.
 

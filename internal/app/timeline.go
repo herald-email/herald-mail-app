@@ -111,11 +111,14 @@ type timelineRowRef struct {
 
 func (m *Model) loadTimelineEmails() tea.Cmd {
 	folder := m.currentFolder
+	sourceID := m.activeSourceID
 	return func() tea.Msg {
 		if isVirtualAllMailOnlyFolder(folder) {
 			view, err := m.backend.GetAllMailOnlyView()
 			if err != nil {
 				return TimelineLoadedMsg{
+					SourceID: sourceID,
+					Folder:   folder,
 					Emails:   []*models.EmailData{},
 					Notice:   "All Mail only inspection failed: " + err.Error(),
 					ReadOnly: true,
@@ -123,6 +126,8 @@ func (m *Model) loadTimelineEmails() tea.Cmd {
 			}
 			if view == nil {
 				return TimelineLoadedMsg{
+					SourceID: sourceID,
+					Folder:   folder,
 					Emails:   []*models.EmailData{},
 					Notice:   "All Mail only inspector returned no data",
 					ReadOnly: true,
@@ -133,6 +138,8 @@ func (m *Model) loadTimelineEmails() tea.Cmd {
 				emails = []*models.EmailData{}
 			}
 			return TimelineLoadedMsg{
+				SourceID: sourceID,
+				Folder:   folder,
 				Emails:   emails,
 				Notice:   view.Reason,
 				ReadOnly: true,
@@ -141,9 +148,9 @@ func (m *Model) loadTimelineEmails() tea.Cmd {
 		emails, err := m.backend.GetTimelineEmails(folder)
 		if err != nil {
 			logger.Error("Failed to load timeline emails: %v", err)
-			return TimelineLoadedMsg{Emails: nil}
+			return TimelineLoadedMsg{SourceID: sourceID, Folder: folder, Emails: nil}
 		}
-		return TimelineLoadedMsg{Emails: emails}
+		return TimelineLoadedMsg{SourceID: sourceID, Folder: folder, Emails: emails}
 	}
 }
 
@@ -2235,6 +2242,10 @@ func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case TimelineLoadedMsg:
+		if !m.scopedResultMatchesActive(msg.SourceID) || (msg.Folder != "" && msg.Folder != m.currentFolder) {
+			logger.Debug("TimelineLoadedMsg: ignoring stale source=%s active=%s folder=%s current=%s", msg.SourceID, m.activeSourceID, msg.Folder, m.currentFolder)
+			return m, nil, true
+		}
 		m.finishTimelineRangeSelection()
 		m.timeline.emails = msg.Emails
 		m.timeline.virtualNotice = msg.Notice
@@ -3052,6 +3063,7 @@ func (m *Model) timelineHalfPageScroll(down bool) tea.Cmd {
 				m.sidebarCursor = 0
 			}
 		}
+		m.normalizeSidebarCursor(step)
 		return nil
 	}
 	if step > 0 {
@@ -3099,6 +3111,7 @@ func (m *Model) handleNavigation(direction int) (tea.Model, tea.Cmd) {
 				m.sidebarCursor--
 			}
 		}
+		m.normalizeSidebarCursor(direction)
 		return m, nil
 	}
 	return m, nil

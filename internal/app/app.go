@@ -48,13 +48,15 @@ type LoadingMsg struct {
 
 // FoldersLoadedMsg carries the folder list fetched after connect
 type FoldersLoadedMsg struct {
+	SourceID         models.SourceID
 	Folders          []string
 	AccountSnapshots []backend.AccountFolderSnapshot
 }
 
 // FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
 type FolderStatusMsg struct {
-	Status map[string]models.FolderStatus
+	SourceID models.SourceID
+	Status   map[string]models.FolderStatus
 }
 
 // CalendarAgendaLoadedMsg carries cache-backed events for the Calendar tab.
@@ -127,6 +129,8 @@ type CalendarEventRSVPMsg struct {
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
 // the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
+	SourceID      models.SourceID
+	Folder        string
 	Emails        []*models.EmailData
 	Err           error
 	FinishLoading bool
@@ -135,6 +139,8 @@ type StartupHydratedMsg struct {
 
 // TimelineLoadedMsg carries emails sorted by date for the timeline tab
 type TimelineLoadedMsg struct {
+	SourceID models.SourceID
+	Folder   string
 	Emails   []*models.EmailData
 	Notice   string
 	ReadOnly bool
@@ -1995,6 +2001,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FoldersLoadedMsg:
 		logger.Debug("FoldersLoadedMsg: folders=%d currentFolder=%s", len(msg.Folders), m.currentFolder)
+		if !m.scopedResultMatchesActive(msg.SourceID) {
+			logger.Debug("FoldersLoadedMsg: ignoring stale source=%s active=%s", msg.SourceID, m.activeSourceID)
+			return m, nil
+		}
 		m.accountFolderSnapshots = msg.AccountSnapshots
 		if len(msg.Folders) == 0 {
 			logger.Debug("FoldersLoadedMsg: empty result; existing folders=%d", len(m.folders))
@@ -2017,16 +2027,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
+		m.normalizeSidebarCursor(1)
 		// Only fetch counts on first load to avoid flickering on every folder switch
 		if len(m.folderStatus) == 0 {
 			folders := msg.Folders
+			sourceID := m.activeSourceID
 			loadCounts := func() tea.Msg {
 				status, err := m.backend.GetFolderStatus(folders)
 				if err != nil {
 					logger.Warn("Failed to get folder status: %v", err)
-					return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+					return FolderStatusMsg{SourceID: sourceID, Status: map[string]models.FolderStatus{}}
 				}
-				return FolderStatusMsg{Status: status}
+				return FolderStatusMsg{SourceID: sourceID, Status: status}
 			}
 			if !isVirtualAllMailOnlyFolder(m.currentFolder) && m.syncStatusMode == "" {
 				return m, tea.Batch(loadCounts, m.startSync(m.currentFolder))
@@ -2040,6 +2052,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FolderStatusMsg:
 		logger.Debug("FolderStatusMsg: merging %d folder statuses", len(msg.Status))
+		if !m.scopedResultMatchesActive(msg.SourceID) {
+			logger.Debug("FolderStatusMsg: ignoring stale source=%s active=%s", msg.SourceID, m.activeSourceID)
+			return m, nil
+		}
 		// Merge rather than replace so partial results don't wipe existing counts
 		for folder, st := range msg.Status {
 			logger.Debug("FolderStatusMsg: folder=%s total=%d unseen=%d", folder, st.Total, st.Unseen)
@@ -2408,6 +2424,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StartupHydratedMsg:
+		if !m.scopedResultMatchesActive(msg.SourceID) || (msg.Folder != "" && msg.Folder != m.currentFolder) {
+			logger.Debug("StartupHydratedMsg: ignoring stale source=%s active=%s folder=%s current=%s", msg.SourceID, m.activeSourceID, msg.Folder, m.currentFolder)
+			return m, nil
+		}
 		if msg.Err != nil {
 			logger.Warn("startup snapshot hydrate failed: %v", msg.Err)
 			return m, nil
@@ -2489,6 +2509,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SyncEventMsg:
 		event := msg.Event
 		logger.Debug("SyncEventMsg: folder=%s generation=%d phase=%s current=%d total=%d delta=%d message=%q", event.Folder, event.Generation, event.Phase, event.Current, event.Total, event.EventCount, strings.TrimSpace(event.Message))
+		if !m.syncEventMatchesActive(event.SourceID) {
+			logger.Debug("SyncEventMsg: ignoring stale source=%s active=%s", event.SourceID, m.activeSourceID)
+			return m, m.listenForSyncEvents()
+		}
 		if event.Generation < m.syncGeneration {
 			logger.Debug("SyncEventMsg: ignoring stale generation=%d current=%d", event.Generation, m.syncGeneration)
 			return m, m.listenForSyncEvents()
@@ -2568,6 +2592,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.loadSyncSnapshotCmd(msg.Folder, msg.Generation, false, "")
 
 	case SyncHydratedMsg:
+		if !m.scopedResultMatchesActive(msg.SourceID) {
+			logger.Debug("SyncHydratedMsg: ignoring stale source=%s active=%s folder=%s", msg.SourceID, m.activeSourceID, msg.Folder)
+			return m, nil
+		}
 		if msg.Generation != 0 && msg.Generation != m.syncGeneration {
 			logger.Debug("SyncHydratedMsg: ignoring stale generation=%d current=%d folder=%s", msg.Generation, m.syncGeneration, msg.Folder)
 			return m, nil
@@ -2701,13 +2729,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Reload data after all deletions complete to sync with server
 			// Also refresh timeline and sidebar folder counts
 			folders := m.folders
+			sourceID := m.activeSourceID
 			refreshCounts := func() tea.Msg {
 				status, err := m.backend.GetFolderStatus(folders)
 				if err != nil {
 					logger.Warn("Failed to refresh folder status: %v", err)
-					return FolderStatusMsg{Status: map[string]models.FolderStatus{}}
+					return FolderStatusMsg{SourceID: sourceID, Status: map[string]models.FolderStatus{}}
 				}
-				return FolderStatusMsg{Status: status}
+				return FolderStatusMsg{SourceID: sourceID, Status: status}
 			}
 			return m, tea.Batch(m.loadTimelineEmails(), refreshCounts)
 		}

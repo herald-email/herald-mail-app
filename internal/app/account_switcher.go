@@ -77,6 +77,23 @@ func (m *Model) allAccountsScopeActive() bool {
 	return m.hasMultipleAccounts() && m.activeSourceID == backend.AllAccountsSourceID
 }
 
+func (m *Model) scopedResultMatchesActive(sourceID models.SourceID) bool {
+	if sourceID == "" || m.activeSourceID == "" {
+		return true
+	}
+	return sourceID == m.activeSourceID
+}
+
+func (m *Model) syncEventMatchesActive(sourceID models.SourceID) bool {
+	if sourceID == "" || m.activeSourceID == "" {
+		return true
+	}
+	if m.activeSourceID == backend.AllAccountsSourceID {
+		return true
+	}
+	return sourceID == m.activeSourceID
+}
+
 func (m *Model) activeAccountInfo() backend.AccountInfo {
 	if !m.hasMultipleAccounts() {
 		return backend.AccountInfo{}
@@ -241,7 +258,7 @@ func (m *Model) renderAccountSwitcherPanel() string {
 		if status.Total > 0 {
 			counts = fmt.Sprintf(" %d/%d", status.Unread, status.Total)
 		}
-		line := fmt.Sprintf("%s%s %-18s %-8s%s", cursor, active, truncateVisual(account.DisplayName, 18), state, counts)
+		line := fmt.Sprintf("%s%s %-18s %-8s%s", cursor, active, truncateSidebarLabel(formatAccountLabel(account), 18), state, counts)
 		line = safeChromeLine(line, contentW)
 		if i == m.accountSwitcherCursor {
 			line = m.theme.Focus.SelectionActive.Style().Render(line)

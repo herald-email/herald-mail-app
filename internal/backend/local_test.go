@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,31 @@ func makeEmail(id string) *models.EmailData {
 		Subject:   "test",
 		Date:      time.Now(),
 		Folder:    "INBOX",
+	}
+}
+
+func TestLocalBackendPrimesFolderCacheFromPersistedFolderList(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := c.StoreFolderList([]string{"INBOX", "Sent", "Projects/Launch"}); err != nil {
+		t.Fatalf("StoreFolderList: %v", err)
+	}
+
+	b := &LocalBackend{cache: c}
+	if err := b.primeCachedFoldersFromCache(); err != nil {
+		t.Fatalf("primeCachedFoldersFromCache: %v", err)
+	}
+
+	got, err := b.ListFolders()
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	want := []string{"INBOX", "Projects/Launch", "Sent"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListFolders from cached folder list = %#v, want %#v", got, want)
 	}
 }
 

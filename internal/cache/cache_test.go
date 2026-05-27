@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -27,6 +28,34 @@ func encodeTestEmbedding(vec []float32) []byte {
 		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 	}
 	return buf
+}
+
+func TestFolderListCacheRoundTripReplacesStaleNames(t *testing.T) {
+	c := newTestCache(t)
+
+	if err := c.StoreFolderList([]string{"Sent", "INBOX", "Projects/Launch", "INBOX"}); err != nil {
+		t.Fatalf("StoreFolderList: %v", err)
+	}
+	got, err := c.GetCachedFolderList()
+	if err != nil {
+		t.Fatalf("GetCachedFolderList: %v", err)
+	}
+	want := []string{"INBOX", "Projects/Launch", "Sent"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("cached folders = %#v, want %#v", got, want)
+	}
+
+	if err := c.StoreFolderList([]string{"Archive"}); err != nil {
+		t.Fatalf("StoreFolderList replace: %v", err)
+	}
+	got, err = c.GetCachedFolderList()
+	if err != nil {
+		t.Fatalf("GetCachedFolderList after replace: %v", err)
+	}
+	want = []string{"Archive"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("cached folders after replace = %#v, want %#v", got, want)
+	}
 }
 
 func tableColumns(t *testing.T, db *sql.DB, table string) map[string]bool {

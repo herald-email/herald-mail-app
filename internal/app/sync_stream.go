@@ -22,6 +22,7 @@ type SyncFlushMsg struct {
 }
 
 type SyncHydratedMsg struct {
+	SourceID      models.SourceID
 	Folder        string
 	Generation    int64
 	Emails        []*models.EmailData

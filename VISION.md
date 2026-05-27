@@ -177,6 +177,8 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Current folder remains visibly selected even when the sidebar is not focused
 - [x] Folder tree appears promptly during startup and does not collapse to a partial list while the active folder is still loading
 - [x] Multi-account sessions show Mail.app-style Favorites plus per-account folder sections, with single-account sessions keeping the legacy folder tree
+- [x] Multi-account folder navigation keeps a bounded, scrollable sidebar, skips non-selectable section headers, preserves visible selection styling, and labels account rows as `Name (email)` where the address is known
+- [x] Startup recovers the last known per-account folder tree from the cache before live IMAP folder listing completes, while live IMAP status remains the only source of unread/total counts
 
 ### Chat Panel
 

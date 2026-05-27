@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -207,15 +208,17 @@ func (m *Model) accountSidebarItems() []sidebarItem {
 		}
 	}
 	for _, snapshot := range m.accountFolderSnapshots {
-		accountLabel := strings.TrimSpace(snapshot.Account.DisplayName)
-		if accountLabel == "" {
-			accountLabel = string(snapshot.Account.SourceID)
-		}
+		accountLabel := formatAccountLabel(snapshot.Account)
+		accountKey := "account:" + string(snapshot.Account.SourceID)
 		items = append(items, sidebarItem{
-			kind:    sidebarItemHeader,
-			label:   accountLabel,
-			account: snapshot.Account.SourceID,
+			kind:         sidebarItemGroup,
+			label:        accountLabel,
+			account:      snapshot.Account.SourceID,
+			syntheticKey: accountKey,
 		})
+		if !m.sidebarExpandedState(accountKey, true) {
+			continue
+		}
 		used := make(map[string]bool)
 		for _, role := range sidebarStandardRoles {
 			path := matchFolderRole(snapshot.Folders, role.key)
@@ -223,13 +226,14 @@ func (m *Model) accountSidebarItems() []sidebarItem {
 				continue
 			}
 			used[path] = true
-			items = append(items, m.accountFolderSidebarItem(snapshot, role.label, path, 0))
+			items = append(items, m.accountFolderSidebarItem(snapshot, role.label, path, 1))
 		}
 		items = append(items, sidebarItem{
 			kind:     sidebarItemAccountFolder,
 			label:    "All Mail only",
 			account:  snapshot.Account.SourceID,
 			fullPath: virtualFolderAllMailOnly,
+			depth:    1,
 		})
 		custom := customSidebarFolders(snapshot.Folders, used)
 		if len(custom) == 0 {
@@ -241,10 +245,11 @@ func (m *Model) accountSidebarItems() []sidebarItem {
 			label:        "Folders",
 			account:      snapshot.Account.SourceID,
 			syntheticKey: groupKey,
+			depth:        1,
 		})
 		if m.sidebarExpandedState(groupKey, true) {
 			for _, folder := range custom {
-				items = append(items, m.accountFolderSidebarItem(snapshot, folderDisplayName(folder), folder, 1+folderDepth(folder)))
+				items = append(items, m.accountFolderSidebarItem(snapshot, folderDisplayName(folder), folder, 2+folderDepth(folder)))
 			}
 		}
 	}
@@ -258,13 +263,42 @@ func (m *Model) favoriteAccountFolderItems(role string) []sidebarItem {
 		if path == "" {
 			continue
 		}
-		label := strings.TrimSpace(snapshot.Account.DisplayName)
-		if label == "" {
-			label = string(snapshot.Account.SourceID)
-		}
+		label := formatAccountLabel(snapshot.Account)
 		children = append(children, m.accountFolderSidebarItem(snapshot, label, path, 1))
 	}
 	return children
+}
+
+func formatAccountLabel(account backend.AccountInfo) string {
+	name := strings.TrimSpace(account.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(string(account.SourceID))
+	}
+	address := strings.TrimSpace(account.Address)
+	if address == "" || strings.Contains(name, "("+address+")") {
+		return name
+	}
+	return fmt.Sprintf("%s (%s)", name, address)
+}
+
+func truncateSidebarLabel(label string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(label) <= width {
+		return label
+	}
+	start := strings.LastIndex(label, " (")
+	if start > 0 && strings.HasSuffix(label, ")") {
+		name := label[:start]
+		address := strings.TrimSuffix(label[start+2:], ")")
+		nameWidth := ansi.StringWidth(name)
+		if nameWidth+4 < width {
+			addressWidth := width - nameWidth - 3
+			return name + " (" + truncateVisual(address, addressWidth) + ")"
+		}
+	}
+	return truncateVisual(label, width)
 }
 
 func (m *Model) accountFolderSidebarItem(snapshot backend.AccountFolderSnapshot, label, path string, depth int) sidebarItem {
@@ -445,6 +479,11 @@ func (m *Model) toggleSidebarNode() {
 	if m.sidebarCursor >= len(items) {
 		return
 	}
+	m.normalizeSidebarCursor(1)
+	items = m.visibleSidebarItems()
+	if m.sidebarCursor < 0 || m.sidebarCursor >= len(items) {
+		return
+	}
 	item := items[m.sidebarCursor]
 	switch item.kind {
 	case sidebarItemFolder:
@@ -465,11 +504,49 @@ func (m *Model) toggleSidebarNode() {
 	if m.sidebarCursor >= newLen {
 		m.sidebarCursor = newLen - 1
 	}
+	m.normalizeSidebarCursor(-1)
+}
+
+func (m *Model) sidebarItemSelectable(item sidebarItem) bool {
+	return item.kind != sidebarItemHeader
+}
+
+func (m *Model) normalizeSidebarCursor(direction int) {
+	items := m.visibleSidebarItems()
+	if len(items) == 0 {
+		m.sidebarCursor = 0
+		return
+	}
+	if m.sidebarCursor < 0 {
+		m.sidebarCursor = 0
+	}
+	if m.sidebarCursor >= len(items) {
+		m.sidebarCursor = len(items) - 1
+	}
+	if m.sidebarItemSelectable(items[m.sidebarCursor]) {
+		return
+	}
+	if direction == 0 {
+		direction = 1
+	}
+	for i := m.sidebarCursor + direction; i >= 0 && i < len(items); i += direction {
+		if m.sidebarItemSelectable(items[i]) {
+			m.sidebarCursor = i
+			return
+		}
+	}
+	for i := m.sidebarCursor - direction; i >= 0 && i < len(items); i -= direction {
+		if m.sidebarItemSelectable(items[i]) {
+			m.sidebarCursor = i
+			return
+		}
+	}
 }
 
 // selectSidebarFolder switches to the folder at sidebarCursor. It returns a
 // command when the selected row performs an account-scoped switch directly.
 func (m *Model) selectSidebarFolder() (tea.Cmd, bool) {
+	m.normalizeSidebarCursor(1)
 	items := m.visibleSidebarItems()
 	if m.sidebarCursor < 0 || m.sidebarCursor >= len(items) {
 		return nil, false
@@ -558,7 +635,7 @@ func (m *Model) renderSidebar() string {
 	var sb strings.Builder
 
 	// Limit rendered rows to tableHeight to prevent overflow at small terminal heights
-	maxRows := m.windowHeight - 7
+	maxRows := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
 	if maxRows < 5 {
 		maxRows = 5
 	}
@@ -615,14 +692,7 @@ func (m *Model) renderSidebarItemLine(index int, item sidebarItem) string {
 	}
 
 	name := m.sidebarItemLabel(item)
-	runes := []rune(name)
-	if len(runes) > available {
-		if available > 3 {
-			name = string(runes[:available-3]) + "..."
-		} else {
-			name = string(runes[:available])
-		}
-	}
+	name = truncateSidebarLabel(name, available)
 	line := fmt.Sprintf("%s%s%s%-*s%s", indent, selectionMarker, icon, available, name, countSuffix)
 
 	if index == m.sidebarCursor {
@@ -677,7 +747,7 @@ func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) st
 	}
 	for _, account := range m.accounts {
 		if account.SourceID == sourceID {
-			accountName = account.DisplayName
+			accountName = formatAccountLabel(account)
 			break
 		}
 	}
@@ -703,14 +773,7 @@ func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) st
 		available = 1
 	}
 	label := accountName
-	runes := []rune(label)
-	if len(runes) > available {
-		if available > 3 {
-			label = string(runes[:available-3]) + "..."
-		} else {
-			label = string(runes[:available])
-		}
-	}
+	label = truncateSidebarLabel(label, available)
 	line := fmt.Sprintf("%s%s %-*s%s", selectionMarker, activeMarker, available, label, countSuffix)
 	if index == m.sidebarCursor {
 		if m.focusedPanel == panelSidebar {
