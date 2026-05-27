@@ -28,6 +28,18 @@ type SourceCapabilities struct {
 	CalendarEvents    bool
 	CalendarMutations bool
 	SyncTokens        bool
+
+	Freshness ProviderFreshnessMetadata
+}
+
+// ProviderFreshnessMetadata names the provider fields a source returns so
+// Herald-owned cache services can decide whether cached rows are still fresh.
+type ProviderFreshnessMetadata struct {
+	UIDValidity bool
+	ModSeq      bool
+	ETag        bool
+	SyncToken   bool
+	Revision    bool
 }
 
 // SourceDeps are Herald-owned dependencies a plugin may need when adapting a
@@ -290,6 +302,9 @@ func (IMAPSourcePlugin) Open(ctx context.Context, source config.SourceConfig, de
 			MailMutations:    true,
 			Drafts:           true,
 			CacheBypassReads: true,
+			Freshness: ProviderFreshnessMetadata{
+				UIDValidity: true,
+			},
 		},
 		Mail: mailSource,
 	}, nil
@@ -345,6 +360,11 @@ func openedCalendarSource(source config.SourceConfig, src calendar.Source, syncT
 			CalendarEvents:    true,
 			CalendarMutations: mutation != nil,
 			SyncTokens:        syncTokens,
+			Freshness: ProviderFreshnessMetadata{
+				ETag:      true,
+				SyncToken: syncTokens,
+				Revision:  true,
+			},
 		},
 	}
 }

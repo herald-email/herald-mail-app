@@ -86,7 +86,7 @@ Sources are provider adapters, not mini-apps. They should know how to talk to IM
 - [x] Mail source methods accept `context.Context` so future HTTP-based providers can cancel requests and IMAP providers can at least check cancellation before starting and before returning.
 - [x] Google Calendar source refreshes source-scoped OAuth tokens, sends cached provider sync tokens on incremental event sync, and returns next sync tokens to Herald-owned cache services.
 - [x] CalDAV source discovers calendar home sets, returns collection ETags/sync tokens, uses sync-collection for incremental reads, and falls back to full calendar-query polling when sync tokens are unsupported.
-- [ ] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
+- [x] Plugins return provider metadata needed for freshness, such as UIDVALIDITY, MODSEQ, ETag, sync token, or revision.
 
 Example capability shape:
 

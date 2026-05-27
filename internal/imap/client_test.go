@@ -3,6 +3,7 @@ package imap
 import (
 	"errors"
 	"testing"
+	"time"
 
 	goimap "github.com/emersion/go-imap"
 )
@@ -113,6 +114,33 @@ func TestMessageFlagStateFromIMAPDetectsDraftFlagAndCanonicalDraftFolder(t *test
 					got.IsRead, got.IsStarred, got.IsDraft, tt.wantRead, tt.wantStar, tt.wantDraft)
 			}
 		})
+	}
+}
+
+func TestEmailDataFromIMAPMessageCarriesUIDValidity(t *testing.T) {
+	msg := &goimap.Message{
+		Uid:  42,
+		Size: 2048,
+		Envelope: &goimap.Envelope{
+			MessageId: "<fresh@example.test>",
+			Subject:   "Fresh provider metadata",
+			Date:      time.Date(2026, 5, 26, 9, 30, 0, 0, time.UTC),
+			From: []*goimap.Address{{
+				MailboxName: "sender",
+				HostName:    "example.test",
+			}},
+		},
+	}
+
+	email, ok := emailDataFromIMAPMessage(msg, "INBOX", 777)
+	if !ok {
+		t.Fatal("emailDataFromIMAPMessage returned !ok")
+	}
+	if email.UIDValidity != 777 {
+		t.Fatalf("UIDValidity = %d, want 777", email.UIDValidity)
+	}
+	if ref := email.MessageRef(); ref.UIDValidity != 777 || ref.UID != 42 || ref.Folder != "INBOX" {
+		t.Fatalf("MessageRef = %#v, want UID 42 in INBOX with UIDVALIDITY 777", ref)
 	}
 }
 

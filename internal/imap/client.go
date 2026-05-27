@@ -68,6 +68,42 @@ func messageFlagStateFromIMAP(uid uint32, flags []string, folder string, labels 
 	return state
 }
 
+func emailDataFromIMAPMessage(msg *imap.Message, folder string, uidValidity uint32) (*models.EmailData, bool) {
+	if msg == nil || msg.Envelope == nil {
+		return nil, false
+	}
+	sender := ""
+	if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
+		addr := msg.Envelope.From[0]
+		if addr.MailboxName != "" && addr.HostName != "" {
+			sender = addr.MailboxName + "@" + addr.HostName
+		}
+	}
+	messageID := msg.Envelope.MessageId
+	if messageID == "" && msg.Uid > 0 {
+		messageID = fmt.Sprintf("uid-%d", msg.Uid)
+	}
+	hasAttach := false
+	if msg.BodyStructure != nil {
+		hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
+	}
+	flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...)
+	return &models.EmailData{
+		MessageID:      messageID,
+		UID:            msg.Uid,
+		UIDValidity:    uidValidity,
+		Sender:         sender,
+		Subject:        msg.Envelope.Subject,
+		Date:           msg.Envelope.Date,
+		Size:           int(msg.Size),
+		HasAttachments: hasAttach,
+		IsRead:         flagState.IsRead,
+		IsStarred:      flagState.IsStarred,
+		IsDraft:        flagState.IsDraft,
+		Folder:         folder,
+	}, true
+}
+
 func gmailLabelsFromMessage(msg *imap.Message) []string {
 	if msg == nil || msg.Items == nil {
 		return nil
@@ -545,7 +581,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 			}
 		}
 		if totalMessages > 0 {
-			if err := c.fetchAndCacheRange(folder, 1, uint32(totalMessages), totalMessages); err != nil {
+			if err := c.fetchAndCacheRange(folder, 1, uint32(totalMessages), totalMessages, mbox.UidValidity); err != nil {
 				return err
 			}
 		}
@@ -559,7 +595,7 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 			Message: fmt.Sprintf("Checking for new mail in %s...", folder),
 		})
 		if totalMessages > 0 {
-			if err := c.fetchAndCacheUIDRange(folder, storedNext, totalMessages); err != nil {
+			if err := c.fetchAndCacheUIDRange(folder, storedNext, totalMessages, mbox.UidValidity); err != nil {
 				return err
 			}
 		}
@@ -594,7 +630,7 @@ func (c *Client) refreshCachedFlags(folder string, totalMessages int) error {
 
 // fetchAndCacheRange fetches sequence numbers start:end and caches each message.
 // Reuses the existing processMessage path.
-func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int) error {
+func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int, uidValidity uint32) error {
 	logger.Debug("fetchAndCacheRange: folder=%s seq=%d:%d serverTotal=%d", folder, start, end, total)
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(start, end)
@@ -644,7 +680,7 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 		chunks := chunkUint32s(newSeqNums, fetchCacheBatchSize)
 		for i, chunk := range chunks {
 			logger.Debug("fetchAndCacheRange: chunk %d/%d folder=%s size=%d seq=%d..%d", i+1, len(chunks), folder, len(chunk), chunk[0], chunk[len(chunk)-1])
-			if err := c.batchFetchDetails(chunk, folder); err != nil {
+			if err := c.batchFetchDetails(chunk, folder, uidValidity); err != nil {
 				return err
 			}
 			cachedCount += len(chunk)
@@ -663,7 +699,7 @@ func (c *Client) fetchAndCacheRange(folder string, start, end uint32, total int)
 }
 
 // fetchAndCacheUIDRange fetches messages with UID >= startUID using UidFetch.
-func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int) error {
+func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int, uidValidity uint32) error {
 	logger.Debug("fetchAndCacheUIDRange: folder=%s startUID=%d serverTotal=%d", folder, startUID, total)
 	seqset := new(imap.SeqSet)
 	// AddRange(start, 0) means start:* in go-imap (0 = *)
@@ -704,7 +740,7 @@ func (c *Client) fetchAndCacheUIDRange(folder string, startUID uint32, total int
 		chunks := chunkUint32s(newSeqNums, fetchCacheBatchSize)
 		for i, chunk := range chunks {
 			logger.Debug("fetchAndCacheUIDRange: chunk %d/%d folder=%s size=%d seq=%d..%d", i+1, len(chunks), folder, len(chunk), chunk[0], chunk[len(chunk)-1])
-			if err := c.batchFetchDetails(chunk, folder); err != nil {
+			if err := c.batchFetchDetails(chunk, folder, uidValidity); err != nil {
 				return err
 			}
 			cachedCount += len(chunk)
@@ -934,7 +970,7 @@ func (c *Client) ProcessEmails(folder string) error {
 		// Process new messages
 		for i, seqNum := range newMessages {
 			logger.Debug("Processing message %d/%d (seqNum: %d)", i+1, newCount, seqNum)
-			if err := c.processMessage(seqNum, folder); err != nil {
+			if err := c.processMessage(seqNum, folder, mbox.UidValidity); err != nil {
 				logger.Warn("Error processing message %d: %v", seqNum, err)
 				continue
 			}
@@ -961,7 +997,7 @@ func (c *Client) ProcessEmails(folder string) error {
 // batchFetchDetails fetches Envelope, UID, Flags, Size, and BodyStructure for
 // all seqNums in a single IMAP round trip, then persists results in one SQLite
 // transaction. This replaces serial processMessage calls for large batches.
-func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
+func (c *Client) batchFetchDetails(seqNums []uint32, folder string, uidValidity uint32) error {
 	if len(seqNums) == 0 {
 		return nil
 	}
@@ -998,43 +1034,15 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 			return nil
 		}
 
-		sender := ""
-		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
-			addr := msg.Envelope.From[0]
-			if addr.MailboxName != "" && addr.HostName != "" {
-				sender = addr.MailboxName + "@" + addr.HostName
-			}
+		emailData, ok := emailDataFromIMAPMessage(msg, folder, uidValidity)
+		if !ok {
+			return nil
 		}
-		if sender == "" {
+		if emailData.Sender == "" {
 			logger.Warn("batchFetchDetails: empty sender for seq %d, skipping", msg.SeqNum)
 			return nil
 		}
-
-		messageID := msg.Envelope.MessageId
-		if messageID == "" && msg.Uid > 0 {
-			messageID = fmt.Sprintf("uid-%d", msg.Uid)
-		}
-
-		hasAttach := false
-		if msg.BodyStructure != nil {
-			hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
-		}
-
-		flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...)
-
-		emails = append(emails, &models.EmailData{
-			MessageID:      messageID,
-			UID:            msg.Uid,
-			Sender:         sender,
-			Subject:        msg.Envelope.Subject,
-			Date:           msg.Envelope.Date,
-			Size:           int(msg.Size),
-			HasAttachments: hasAttach,
-			IsRead:         flagState.IsRead,
-			IsStarred:      flagState.IsStarred,
-			IsDraft:        flagState.IsDraft,
-			Folder:         folder,
-		})
+		emails = append(emails, emailData)
 
 		allFrom = append(allFrom, extractEnvelopeAddrs(msg.Envelope.From)...)
 		var toAddrs []models.ContactAddr
@@ -1068,7 +1076,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string) error {
 }
 
 // processMessage processes a single message using Envelope (avoids parsing errors)
-func (c *Client) processMessage(seqNum uint32, folder string) error {
+func (c *Client) processMessage(seqNum uint32, folder string, uidValidity uint32) error {
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(seqNum)
 
@@ -1093,48 +1101,13 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 		return nil
 	}
 
-	// Extract sender from envelope
-	sender := ""
-	if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
-		addr := msg.Envelope.From[0]
-		if addr.MailboxName != "" && addr.HostName != "" {
-			sender = addr.MailboxName + "@" + addr.HostName
-		}
-	}
-
-	if sender == "" {
-		logger.Warn("Empty sender for message %d, skipping", seqNum)
+	emailData, ok := emailDataFromIMAPMessage(msg, folder, uidValidity)
+	if !ok {
 		return nil
 	}
-
-	// Check for attachments from body structure
-	hasAttach := false
-	if msg.BodyStructure != nil {
-		hasAttach = checkBodyStructureForAttachments(msg.BodyStructure)
-	}
-
-	// Use UID as MessageID if envelope MessageId is empty
-	// UID is guaranteed to be unique within a folder
-	messageID := msg.Envelope.MessageId
-	if messageID == "" && msg.Uid > 0 {
-		messageID = fmt.Sprintf("uid-%d", msg.Uid)
-	}
-
-	flagState := messageFlagStateFromIMAP(msg.Uid, msg.Flags, folder, gmailLabelsFromMessage(msg)...)
-
-	// Extract email data from Envelope
-	emailData := &models.EmailData{
-		MessageID:      messageID,
-		UID:            msg.Uid,
-		Sender:         sender,
-		Subject:        msg.Envelope.Subject,
-		Date:           msg.Envelope.Date,
-		Size:           int(msg.Size),
-		HasAttachments: hasAttach,
-		IsRead:         flagState.IsRead,
-		IsStarred:      flagState.IsStarred,
-		IsDraft:        flagState.IsDraft,
-		Folder:         folder,
+	if emailData.Sender == "" {
+		logger.Warn("Empty sender for message %d, skipping", seqNum)
+		return nil
 	}
 
 	// Cache the email
@@ -1145,7 +1118,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	// Upsert contacts from envelope headers
 	fromAddrs := extractEnvelopeAddrs(msg.Envelope.From)
 	if err := c.cache.UpsertContacts(fromAddrs, "from"); err != nil {
-		logger.Warn("UpsertContacts (from) for message %s: %v", messageID, err)
+		logger.Warn("UpsertContacts (from) for message %s: %v", emailData.MessageID, err)
 	}
 
 	var toAddrs []models.ContactAddr
@@ -1153,7 +1126,7 @@ func (c *Client) processMessage(seqNum uint32, folder string) error {
 	toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Cc)...)
 	toAddrs = append(toAddrs, extractEnvelopeAddrs(msg.Envelope.Bcc)...)
 	if err := c.cache.UpsertContacts(toAddrs, "to"); err != nil {
-		logger.Warn("UpsertContacts (to) for message %s: %v", messageID, err)
+		logger.Warn("UpsertContacts (to) for message %s: %v", emailData.MessageID, err)
 	}
 
 	return nil
@@ -1226,7 +1199,8 @@ func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
-	if _, err := c.client.Select(folder, true); err != nil {
+	mbox, err := c.client.Select(folder, true)
+	if err != nil {
 		return nil, fmt.Errorf("failed to select folder: %w", err)
 	}
 
@@ -1250,29 +1224,11 @@ func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
 
 	var emails []*models.EmailData
 	for msg := range messages {
-		if msg.Envelope == nil {
+		emailData, ok := emailDataFromIMAPMessage(msg, folder, mbox.UidValidity)
+		if !ok {
 			continue
 		}
-		sender := ""
-		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
-			addr := msg.Envelope.From[0]
-			if addr.MailboxName != "" && addr.HostName != "" {
-				sender = addr.MailboxName + "@" + addr.HostName
-			}
-		}
-		msgID := msg.Envelope.MessageId
-		if msgID == "" {
-			msgID = fmt.Sprintf("uid-%d", msg.Uid)
-		}
-		emails = append(emails, &models.EmailData{
-			MessageID: msgID,
-			UID:       msg.Uid,
-			Sender:    sender,
-			Subject:   msg.Envelope.Subject,
-			Date:      msg.Envelope.Date,
-			Size:      int(msg.Size),
-			Folder:    folder,
-		})
+		emails = append(emails, emailData)
 	}
 	if err := <-done; err != nil {
 		return nil, err
@@ -1288,7 +1244,8 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 	if c.client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
-	if _, err := c.client.Select(folder, true); err != nil {
+	mbox, err := c.client.Select(folder, true)
+	if err != nil {
 		return nil, fmt.Errorf("failed to select folder: %w", err)
 	}
 
@@ -1312,29 +1269,11 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 
 	var emails []*models.EmailData
 	for msg := range messages {
-		if msg.Envelope == nil {
+		emailData, ok := emailDataFromIMAPMessage(msg, folder, mbox.UidValidity)
+		if !ok {
 			continue
 		}
-		sender := ""
-		if len(msg.Envelope.From) > 0 && msg.Envelope.From[0] != nil {
-			addr := msg.Envelope.From[0]
-			if addr.MailboxName != "" && addr.HostName != "" {
-				sender = addr.MailboxName + "@" + addr.HostName
-			}
-		}
-		msgID := msg.Envelope.MessageId
-		if msgID == "" {
-			msgID = fmt.Sprintf("uid-%d", msg.Uid)
-		}
-		emails = append(emails, &models.EmailData{
-			MessageID: msgID,
-			UID:       msg.Uid,
-			Sender:    sender,
-			Subject:   msg.Envelope.Subject,
-			Date:      msg.Envelope.Date,
-			Size:      int(msg.Size),
-			Folder:    folder,
-		})
+		emails = append(emails, emailData)
 	}
 	if err := <-done; err != nil {
 		return nil, err

@@ -56,6 +56,9 @@ func TestDefaultSourceRegistryOpensConfiguredSourcesAndReportsCapabilities(t *te
 	if !mailCaps.Mail || !mailCaps.MailSync || !mailCaps.MailMutations || !mailCaps.Drafts || !mailCaps.CacheBypassReads {
 		t.Fatalf("mail capabilities = %#v", mailCaps)
 	}
+	if !mailCaps.Freshness.UIDValidity {
+		t.Fatalf("mail freshness metadata = %#v, want UIDVALIDITY support", mailCaps.Freshness)
+	}
 	if mailCaps.Calendar || mailCaps.CalendarMutations || mailCaps.SyncTokens {
 		t.Fatalf("mail reported calendar capabilities: %#v", mailCaps)
 	}
@@ -70,6 +73,9 @@ func TestDefaultSourceRegistryOpensConfiguredSourcesAndReportsCapabilities(t *te
 	calCaps := cal.Capabilities()
 	if !calCaps.Calendar || !calCaps.CalendarEvents || !calCaps.CalendarMutations || !calCaps.SyncTokens {
 		t.Fatalf("calendar capabilities = %#v", calCaps)
+	}
+	if !calCaps.Freshness.ETag || !calCaps.Freshness.SyncToken || !calCaps.Freshness.Revision {
+		t.Fatalf("calendar freshness metadata = %#v, want ETag, sync token, and revision support", calCaps.Freshness)
 	}
 	if calCaps.Mail || calCaps.MailMutations || calCaps.Drafts {
 		t.Fatalf("calendar reported mail capabilities: %#v", calCaps)
