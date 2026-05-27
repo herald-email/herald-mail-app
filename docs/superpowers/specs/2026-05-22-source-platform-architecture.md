@@ -158,7 +158,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
 - [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
-- [ ] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
+- [x] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
 
 ## Storage Direction
 
@@ -214,7 +214,7 @@ The daemon and MCP layers must stop treating `folder` plus `message_id` as globa
 - [x] Read endpoints accept optional `source_id` and `account_id`; default values preserve legacy clients.
 - [ ] Mutating endpoints require scoped refs once multi-account writes are enabled.
 - [x] MCP listing outputs include both human-readable message IDs and scoped refs suitable for follow-up calls.
-- [ ] Daemon event streams include source/account/collection fields on progress, new item, valid ID, sync, and mutation events.
+- [x] Daemon event streams include source/account/collection fields on progress, new item, valid ID, sync, and mutation events.
 - [ ] Calendar MCP tools are read-only at first and use the same scoped reference style as mail.
 
 ## Phased Roadmap

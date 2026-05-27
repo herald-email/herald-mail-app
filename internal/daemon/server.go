@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -154,18 +155,149 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) startPumps() {
 	go func() {
 		for p := range s.backend.Progress() {
-			s.broadcastJSON("progress", p)
+			s.broadcastProgress(p)
 		}
 	}()
 	go func() {
 		for n := range s.backend.NewEmailsCh() {
-			s.broadcastJSON("new_emails", n)
+			s.broadcastNewEmails(n)
 		}
 	}()
+	if ch := s.backend.SyncEvents(); ch != nil {
+		go func() {
+			for event := range ch {
+				s.broadcastSyncEvent(event)
+			}
+		}()
+	}
+	if provider, ok := s.backend.(scopedValidIDsProvider); ok {
+		if ch := provider.ScopedValidIDsCh(); ch != nil {
+			go func() {
+				for notification := range ch {
+					s.broadcastValidIDsNotification(notification)
+				}
+			}()
+			return
+		}
+	}
+	if ch := s.backend.ValidIDsCh(); ch != nil {
+		go func() {
+			for ids := range ch {
+				s.broadcastValidIDs(ids)
+			}
+		}()
+	}
+}
+
+type scopedItemsEvent struct {
+	SourceID     models.SourceID  `json:"source_id,omitempty"`
+	AccountID    models.AccountID `json:"account_id,omitempty"`
+	CollectionID string           `json:"collection_id,omitempty"`
+	ItemID       string           `json:"item_id,omitempty"`
+	ItemIDs      []string         `json:"item_ids,omitempty"`
+}
+
+type mutationEvent struct {
+	Operation      string           `json:"operation"`
+	SourceID       models.SourceID  `json:"source_id,omitempty"`
+	AccountID      models.AccountID `json:"account_id,omitempty"`
+	CollectionID   string           `json:"collection_id,omitempty"`
+	ToCollectionID string           `json:"to_collection_id,omitempty"`
+	ItemID         string           `json:"item_id,omitempty"`
+	MessageID      string           `json:"message_id,omitempty"`
+	LocalID        string           `json:"local_id,omitempty"`
+}
+
+func scopedSourceID(sourceID models.SourceID) models.SourceID {
+	return models.NormalizeSourceID(sourceID, models.DefaultMailSourceID)
+}
+
+func scopedAccountID(accountID models.AccountID) models.AccountID {
+	return models.NormalizeAccountID(accountID)
+}
+
+func (s *Server) broadcastProgress(p models.ProgressInfo) {
+	p.SourceID = scopedSourceID(p.SourceID)
+	p.AccountID = scopedAccountID(p.AccountID)
+	s.broadcastJSON("progress", p)
+}
+
+func (s *Server) broadcastNewEmails(n models.NewEmailsNotification) {
+	n.SourceID = scopedSourceID(n.SourceID)
+	n.AccountID = scopedAccountID(n.AccountID)
+	if n.CollectionID == "" {
+		n.CollectionID = n.Folder
+	}
+	itemIDs := make([]string, 0, len(n.Emails))
+	for _, email := range n.Emails {
+		if email == nil {
+			continue
+		}
+		if email.SourceID == "" {
+			email.SourceID = n.SourceID
+		}
+		if email.AccountID == "" {
+			email.AccountID = n.AccountID
+		}
+		if email.Folder == "" {
+			email.Folder = n.Folder
+		}
+		ref := email.MessageRef()
+		email.SourceID = ref.SourceID
+		email.AccountID = ref.AccountID
+		email.LocalID = ref.LocalID
+		itemIDs = append(itemIDs, ref.LocalID)
+	}
+	s.broadcastJSON("new_emails", n)
+	s.broadcastJSON("new_emails_scoped", scopedItemsEvent{
+		SourceID:     n.SourceID,
+		AccountID:    n.AccountID,
+		CollectionID: n.CollectionID,
+		ItemIDs:      itemIDs,
+	})
+}
+
+func (s *Server) broadcastSyncEvent(event models.FolderSyncEvent) {
+	event.SourceID = scopedSourceID(event.SourceID)
+	event.AccountID = scopedAccountID(event.AccountID)
+	if event.CollectionID == "" {
+		event.CollectionID = event.Folder
+	}
+	s.broadcastJSON("sync", event)
+}
+
+func (s *Server) broadcastValidIDs(ids map[string]bool) {
+	s.broadcastValidIDsNotification(models.ValidIDsNotification{
+		SourceID:  models.DefaultMailSourceID,
+		AccountID: models.DefaultAccountID,
+		IDs:       ids,
+	})
+}
+
+func (s *Server) broadcastValidIDsNotification(notification models.ValidIDsNotification) {
+	notification.SourceID = scopedSourceID(notification.SourceID)
+	notification.AccountID = scopedAccountID(notification.AccountID)
+	s.broadcastJSON("valid_ids", notification.IDs)
+	itemIDs := make([]string, 0, len(notification.IDs))
+	for id, valid := range notification.IDs {
+		if valid {
+			itemIDs = append(itemIDs, id)
+		}
+	}
+	sort.Strings(itemIDs)
+	s.broadcastJSON("valid_ids_scoped", scopedItemsEvent{
+		SourceID:     notification.SourceID,
+		AccountID:    notification.AccountID,
+		CollectionID: notification.CollectionID,
+		ItemIDs:      itemIDs,
+	})
 }
 
 // broadcastJSON marshals v and sends it as an SSE event.
 func (s *Server) broadcastJSON(event string, v any) {
+	if s.broadcaster == nil {
+		return
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		logger.Error("daemon: broadcast marshal: %v", err)
@@ -188,6 +320,10 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 
 type scopedEmailGetter interface {
 	GetEmailByRef(models.MessageRef) (*models.EmailData, error)
+}
+
+type scopedValidIDsProvider interface {
+	ScopedValidIDsCh() <-chan models.ValidIDsNotification
 }
 
 type readScope struct {
@@ -256,6 +392,36 @@ func filterEmailsByReadScope(emails []*models.EmailData, scope readScope) []*mod
 		}
 	}
 	return out
+}
+
+func (s *Server) mutationRefForRequest(r *http.Request, messageID, folder string) models.MessageRef {
+	scope := readScopeFromRequest(r)
+	if scope.folder == "" {
+		scope.folder = folder
+	}
+	if getter, ok := s.backend.(scopedEmailGetter); ok && (scope.hasIdentityScope() || messageID != "") {
+		if email, err := getter.GetEmailByRef(scope.messageRef(messageID)); err == nil && email != nil {
+			return email.MessageRef()
+		}
+	}
+	if email, err := s.backend.GetEmailByID(messageID); err == nil && email != nil && emailMatchesReadScope(email, scope) {
+		return email.MessageRef()
+	}
+	return scope.messageRef(messageID)
+}
+
+func (s *Server) broadcastMutation(operation string, ref models.MessageRef, toCollectionID string) {
+	ref = ref.WithDefaults()
+	s.broadcastJSON("mutation", mutationEvent{
+		Operation:      operation,
+		SourceID:       ref.SourceID,
+		AccountID:      ref.AccountID,
+		CollectionID:   ref.Folder,
+		ToCollectionID: toCollectionID,
+		ItemID:         ref.LocalID,
+		MessageID:      ref.MessageID,
+		LocalID:        ref.LocalID,
+	})
 }
 
 // statusResponse is the body of GET /v1/status.
@@ -401,10 +567,12 @@ func (s *Server) handleDeleteEmail(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.DeleteEmail(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("delete", ref, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -415,10 +583,12 @@ func (s *Server) handleArchiveEmail(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.ArchiveEmail(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("archive", ref, "Archive")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -440,10 +610,12 @@ func (s *Server) handleMoveEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "fromFolder and toFolder are required")
 		return
 	}
+	ref := s.mutationRefForRequest(r, id, req.FromFolder)
 	if err := s.backend.MoveEmail(id, req.FromFolder, req.ToFolder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("move", ref, req.ToFolder)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -478,10 +650,12 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.MarkRead(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("mark_read", ref, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -682,10 +856,12 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.MarkUnread(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("mark_unread", ref, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -696,10 +872,12 @@ func (s *Server) handleMarkStarred(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.MarkStarred(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("mark_starred", ref, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -710,10 +888,12 @@ func (s *Server) handleUnmarkStarred(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	ref := s.mutationRefForRequest(r, id, folder)
 	if err := s.backend.UnmarkStarred(id, folder); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.broadcastMutation("unmark_starred", ref, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 

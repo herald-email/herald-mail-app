@@ -53,6 +53,7 @@ type LocalBackend struct {
 	validIDsMu       sync.RWMutex
 	validIDsByFolder map[string]map[string]bool
 	validIDsChSt     chan map[string]bool // channel returned by ValidIDsCh()
+	validIDsScopedCh chan models.ValidIDsNotification
 
 	// In-memory email body cache to avoid redundant IMAP fetches when
 	// the user navigates back-and-forth through the same emails.
@@ -112,7 +113,17 @@ func (b *LocalBackend) prepareValidIDsChannelForFolder(folder string) chan map[s
 			return
 		}
 		b.setValidIDsForFolder(folder, ids)
-		publicCh <- cloneValidIDSet(ids)
+		cloned := cloneValidIDSet(ids)
+		publicCh <- cloned
+		select {
+		case b.validIDsScopedCh <- models.ValidIDsNotification{
+			SourceID:     models.DefaultMailSourceID,
+			AccountID:    models.DefaultAccountID,
+			CollectionID: folder,
+			IDs:          cloned,
+		}:
+		default:
+		}
 		for range internalCh {
 		}
 	}()
@@ -179,6 +190,12 @@ func (b *LocalBackend) ValidIDsCh() <-chan map[string]bool {
 	return ch
 }
 
+// ScopedValidIDsCh returns a stable scoped valid-ID notification channel for
+// daemon consumers that need source/account/collection identity.
+func (b *LocalBackend) ScopedValidIDsCh() <-chan models.ValidIDsNotification {
+	return b.validIDsScopedCh
+}
+
 // NewLocal creates a LocalBackend. configPath is the path to the config file on disk;
 // it is used to persist refreshed OAuth tokens. The caller must call Close() when done.
 func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*LocalBackend, error) {
@@ -209,6 +226,7 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 		loadCoordinator:  newLatestWinsLoadCoordinator(),
 		lastFetchCurrent: make(map[int64]int),
 		newEmailsCh:      make(chan models.NewEmailsNotification, 10),
+		validIDsScopedCh: make(chan models.ValidIDsNotification, 10),
 	}
 	b.messageService = NewMessageService(MessageServiceOptions{
 		Cache:         c,
@@ -313,12 +331,20 @@ func (b *LocalBackend) fanoutProgressLoop() {
 		if b.closed.Load() {
 			return
 		}
-		b.sendProgress(info)
 		req, ok := b.currentActiveLoad()
 		if !ok {
+			info.SourceID = models.NormalizeSourceID(info.SourceID, models.DefaultMailSourceID)
+			info.AccountID = models.NormalizeAccountID(info.AccountID)
+			b.sendProgress(info)
 			b.tracef("raw progress had no active load: phase=%s current=%d total=%d message=%q", info.Phase, info.Current, info.Total, summarizeTraceMessage(info.Message))
 			continue
 		}
+		info.SourceID = models.NormalizeSourceID(info.SourceID, models.DefaultMailSourceID)
+		info.AccountID = models.NormalizeAccountID(info.AccountID)
+		if info.CollectionID == "" {
+			info.CollectionID = req.Folder
+		}
+		b.sendProgress(info)
 		if event, ok := b.syncEventFromProgress(req, info); ok {
 			b.emitSyncEvent(event)
 		}
@@ -327,11 +353,17 @@ func (b *LocalBackend) fanoutProgressLoop() {
 
 func (b *LocalBackend) syncEventFromProgress(req folderLoadRequest, info models.ProgressInfo) (models.FolderSyncEvent, bool) {
 	event := models.FolderSyncEvent{
-		Folder:     req.Folder,
-		Generation: req.Generation,
-		Message:    info.Message,
-		Current:    info.Current,
-		Total:      info.Total,
+		SourceID:     models.NormalizeSourceID(info.SourceID, models.DefaultMailSourceID),
+		AccountID:    models.NormalizeAccountID(info.AccountID),
+		CollectionID: info.CollectionID,
+		Folder:       req.Folder,
+		Generation:   req.Generation,
+		Message:      info.Message,
+		Current:      info.Current,
+		Total:        info.Total,
+	}
+	if event.CollectionID == "" {
+		event.CollectionID = req.Folder
 	}
 
 	switch info.Phase {

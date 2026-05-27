@@ -48,6 +48,11 @@ type SenderStats struct {
 
 // ProgressInfo represents the current processing state
 type ProgressInfo struct {
+	SourceID     SourceID  `json:"source_id,omitempty"`
+	AccountID    AccountID `json:"account_id,omitempty"`
+	CollectionID string    `json:"collection_id,omitempty"`
+	ItemID       string    `json:"item_id,omitempty"`
+
 	Phase           string
 	Current         int
 	Total           int
@@ -72,14 +77,15 @@ type FolderSyncEvent struct {
 	SourceID  SourceID
 	AccountID AccountID
 
-	Folder     string
-	Generation int64
-	Phase      string
-	Message    string
-	Current    int
-	Total      int
-	EventCount int
-	Error      string
+	CollectionID string `json:"collection_id,omitempty"`
+	Folder       string
+	Generation   int64
+	Phase        string
+	Message      string
+	Current      int
+	Total        int
+	EventCount   int
+	Error        string
 }
 
 type DeletionResult struct {
@@ -264,10 +270,18 @@ type DeletionRequest struct {
 
 // NewEmailsNotification carries new emails found by background polling
 type NewEmailsNotification struct {
-	SourceID  SourceID
-	AccountID AccountID
-	Emails    []*EmailData
-	Folder    string
+	SourceID     SourceID
+	AccountID    AccountID
+	CollectionID string `json:"collection_id,omitempty"`
+	Emails       []*EmailData
+	Folder       string
+}
+
+type ValidIDsNotification struct {
+	SourceID     SourceID  `json:"source_id,omitempty"`
+	AccountID    AccountID `json:"account_id,omitempty"`
+	CollectionID string    `json:"collection_id,omitempty"`
+	IDs          map[string]bool
 }
 
 // SavedSearch represents a user-saved search query

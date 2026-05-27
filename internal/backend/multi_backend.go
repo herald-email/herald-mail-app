@@ -68,6 +68,7 @@ type MultiBackend struct {
 	progress  chan models.ProgressInfo
 	syncs     chan models.FolderSyncEvent
 	newEmails chan models.NewEmailsNotification
+	validIDs  chan models.ValidIDsNotification
 	closed    bool
 	groupBy   bool
 }
@@ -92,6 +93,7 @@ func NewMultiBackend(accounts []AccountBackend) (*MultiBackend, error) {
 		progress:  make(chan models.ProgressInfo, 100),
 		syncs:     make(chan models.FolderSyncEvent, 256),
 		newEmails: make(chan models.NewEmailsNotification, 20),
+		validIDs:  make(chan models.ValidIDsNotification, 20),
 	}
 	for _, account := range accounts {
 		if account.Backend == nil {
@@ -130,6 +132,8 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 	if ch := slot.backend.Progress(); ch != nil {
 		go func() {
 			for p := range ch {
+				p.SourceID = slot.info.SourceID
+				p.AccountID = slot.info.AccountID
 				if m.isActive(slot.info.SourceID) {
 					m.sendProgress(p)
 				}
@@ -141,6 +145,9 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 			for event := range ch {
 				event.SourceID = slot.info.SourceID
 				event.AccountID = slot.info.AccountID
+				if event.CollectionID == "" {
+					event.CollectionID = event.Folder
+				}
 				if m.isActive(slot.info.SourceID) {
 					m.sendSyncEvent(event)
 				}
@@ -152,11 +159,29 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 			for notification := range ch {
 				notification.SourceID = slot.info.SourceID
 				notification.AccountID = slot.info.AccountID
+				if notification.CollectionID == "" {
+					notification.CollectionID = notification.Folder
+				}
 				if m.isActive(slot.info.SourceID) {
 					m.sendNewEmails(notification)
 				}
 			}
 		}()
+	}
+	if provider, ok := slot.backend.(interface {
+		ScopedValidIDsCh() <-chan models.ValidIDsNotification
+	}); ok {
+		if ch := provider.ScopedValidIDsCh(); ch != nil {
+			go func() {
+				for notification := range ch {
+					notification.SourceID = slot.info.SourceID
+					notification.AccountID = slot.info.AccountID
+					if m.isActive(slot.info.SourceID) {
+						m.sendValidIDs(notification)
+					}
+				}
+			}()
+		}
 	}
 }
 
@@ -186,6 +211,14 @@ func (m *MultiBackend) sendNewEmails(notification models.NewEmailsNotification) 
 	defer func() { _ = recover() }()
 	select {
 	case m.newEmails <- notification:
+	default:
+	}
+}
+
+func (m *MultiBackend) sendValidIDs(notification models.ValidIDsNotification) {
+	defer func() { _ = recover() }()
+	select {
+	case m.validIDs <- notification:
 	default:
 	}
 }
@@ -286,6 +319,10 @@ func (m *MultiBackend) ValidIDsCh() <-chan map[string]bool {
 		return nil
 	}
 	return active.ValidIDsCh()
+}
+
+func (m *MultiBackend) ScopedValidIDsCh() <-chan models.ValidIDsNotification {
+	return m.validIDs
 }
 
 func (m *MultiBackend) allAccountsActive() bool {
@@ -825,6 +862,7 @@ func (m *MultiBackend) Close() error {
 	close(m.progress)
 	close(m.syncs)
 	close(m.newEmails)
+	close(m.validIDs)
 	return firstErr
 }
 
