@@ -256,6 +256,40 @@ func TestGetEmailByRefUsesScopedLocalID(t *testing.T) {
 	}
 }
 
+func TestScopedListAndSearchPreserveSourceIdentity(t *testing.T) {
+	c := newTestCache(t)
+	email := &models.EmailData{
+		SourceID:  models.SourceID("work-mail"),
+		AccountID: models.AccountID("work"),
+		MessageID: "scoped-list-search@example.test",
+		UID:       42,
+		Sender:    "Roadmap <roadmap@example.test>",
+		Subject:   "Scoped list search",
+		Date:      time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC),
+		Folder:    "INBOX",
+	}
+	email.LocalID = email.MessageRef().LocalID
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	listed, err := c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(listed) != 1 || listed[0].SourceID != "work-mail" || listed[0].AccountID != "work" || listed[0].LocalID != email.LocalID {
+		t.Fatalf("GetEmailsSortedByDate scope = %#v", listed)
+	}
+
+	searched, err := c.SearchEmails("INBOX", "Scoped")
+	if err != nil {
+		t.Fatalf("SearchEmails: %v", err)
+	}
+	if len(searched) != 1 || searched[0].SourceID != "work-mail" || searched[0].AccountID != "work" || searched[0].LocalID != email.LocalID {
+		t.Fatalf("SearchEmails scope = %#v", searched)
+	}
+}
+
 func TestBatchUpdateEmailFlagsByUID_BackfillsDraftFlag(t *testing.T) {
 	c := newTestCache(t)
 

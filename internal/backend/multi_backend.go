@@ -573,6 +573,27 @@ func (m *MultiBackend) SearchSemanticChunked(folder string, queryVec []float32, 
 	return out, nil
 }
 
+func (m *MultiBackend) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if getter, ok := slot.backend.(interface {
+		GetEmailByRef(models.MessageRef) (*models.EmailData, error)
+	}); ok {
+		email, err := getter.GetEmailByRef(ref)
+		if err != nil || email == nil {
+			return email, err
+		}
+		return emailForAccountSlot(slot, email), nil
+	}
+	email, err := slot.backend.GetEmailByID(ref.MessageID)
+	if err != nil || email == nil {
+		return email, err
+	}
+	return emailForAccountSlot(slot, email), nil
+}
+
 func (m *MultiBackend) GetMessage(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

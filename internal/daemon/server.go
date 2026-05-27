@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
@@ -185,6 +186,78 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+type scopedEmailGetter interface {
+	GetEmailByRef(models.MessageRef) (*models.EmailData, error)
+}
+
+type readScope struct {
+	sourceID  models.SourceID
+	accountID models.AccountID
+	localID   string
+	folder    string
+}
+
+func readScopeFromRequest(r *http.Request) readScope {
+	query := r.URL.Query()
+	return readScope{
+		sourceID:  models.SourceID(strings.TrimSpace(query.Get("source_id"))),
+		accountID: models.AccountID(strings.TrimSpace(query.Get("account_id"))),
+		localID:   strings.TrimSpace(query.Get("local_id")),
+		folder:    strings.TrimSpace(query.Get("folder")),
+	}
+}
+
+func (s readScope) hasScope() bool {
+	return s.sourceID != "" || s.accountID != "" || s.localID != "" || s.folder != ""
+}
+
+func (s readScope) hasIdentityScope() bool {
+	return s.sourceID != "" || s.accountID != "" || s.localID != ""
+}
+
+func (s readScope) messageRef(messageID string) models.MessageRef {
+	return models.MessageRef{
+		SourceID:  s.sourceID,
+		AccountID: s.accountID,
+		LocalID:   s.localID,
+		Folder:    s.folder,
+		MessageID: messageID,
+	}.WithDefaults()
+}
+
+func emailMatchesReadScope(email *models.EmailData, scope readScope) bool {
+	if email == nil {
+		return false
+	}
+	ref := email.MessageRef()
+	if scope.sourceID != "" && ref.SourceID != scope.sourceID {
+		return false
+	}
+	if scope.accountID != "" && ref.AccountID != scope.accountID {
+		return false
+	}
+	if scope.localID != "" && ref.LocalID != scope.localID {
+		return false
+	}
+	if scope.folder != "" && ref.Folder != scope.folder {
+		return false
+	}
+	return true
+}
+
+func filterEmailsByReadScope(emails []*models.EmailData, scope readScope) []*models.EmailData {
+	if !scope.hasScope() {
+		return emails
+	}
+	out := emails[:0]
+	for _, email := range emails {
+		if emailMatchesReadScope(email, scope) {
+			out = append(out, email)
+		}
+	}
+	return out
+}
+
 // statusResponse is the body of GET /v1/status.
 type statusResponse struct {
 	PID     int    `json:"pid"`
@@ -237,7 +310,8 @@ func (s *Server) handleListFolders(w http.ResponseWriter, _ *http.Request) {
 
 // handleGetEmails returns timeline emails for a folder.
 func (s *Server) handleGetEmails(w http.ResponseWriter, r *http.Request) {
-	folder := r.URL.Query().Get("folder")
+	scope := readScopeFromRequest(r)
+	folder := scope.folder
 	if folder == "" {
 		folder = "INBOX"
 	}
@@ -246,15 +320,37 @@ func (s *Server) handleGetEmails(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	emails = filterEmailsByReadScope(emails, scope)
 	writeJSON(w, http.StatusOK, emails)
 }
 
 // handleGetEmail returns a single email by message ID.
 func (s *Server) handleGetEmail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	email, err := s.backend.GetEmailByID(id)
+	scope := readScopeFromRequest(r)
+	var email *models.EmailData
+	var err error
+	if scope.hasIdentityScope() {
+		if getter, ok := s.backend.(scopedEmailGetter); ok {
+			email, err = getter.GetEmailByRef(scope.messageRef(id))
+		} else {
+			email, err = s.backend.GetEmailByID(id)
+			if err == nil && !emailMatchesReadScope(email, scope) {
+				email = nil
+			}
+		}
+	} else {
+		email, err = s.backend.GetEmailByID(id)
+		if err == nil && scope.hasScope() && !emailMatchesReadScope(email, scope) {
+			email = nil
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if email == nil {
+		writeError(w, http.StatusNotFound, "email not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, email)
@@ -264,7 +360,24 @@ func (s *Server) handleGetEmail(w http.ResponseWriter, r *http.Request) {
 // It requires the email to be in the cache to look up its UID and folder.
 func (s *Server) handleGetEmailBody(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	email, err := s.backend.GetEmailByID(id)
+	scope := readScopeFromRequest(r)
+	var email *models.EmailData
+	var err error
+	if scope.hasIdentityScope() {
+		if getter, ok := s.backend.(scopedEmailGetter); ok {
+			email, err = getter.GetEmailByRef(scope.messageRef(id))
+		} else {
+			email, err = s.backend.GetEmailByID(id)
+			if err == nil && !emailMatchesReadScope(email, scope) {
+				email = nil
+			}
+		}
+	} else {
+		email, err = s.backend.GetEmailByID(id)
+		if err == nil && scope.hasScope() && !emailMatchesReadScope(email, scope) {
+			email = nil
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return

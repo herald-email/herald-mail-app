@@ -619,6 +619,17 @@ func (b *LocalBackend) GetEmailByID(messageID string) (*models.EmailData, error)
 	return email, nil
 }
 
+func (b *LocalBackend) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {
+	email, err := b.cache.GetEmailByRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if email != nil && !b.isValidID(email.Folder, email.MessageID) {
+		return nil, fmt.Errorf("email %s not in valid set", email.MessageID)
+	}
+	return email, nil
+}
+
 func (b *LocalBackend) GetMessage(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
 	return b.ensureMessageService().GetMessage(ctx, ref)
 }

@@ -226,6 +226,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add CalDAV principal/home-set discovery plus sync-collection incremental reads with calendar-query polling fallback when a provider does not support sync tokens.
 - [x] Add selected Calendar Event Edit mutations for attendee lists and this-event recurrence rules while preserving explicit provider conflict and recurrence-scope failures.
 - [x] Add selected Calendar Event Edit mutations for reminder overrides while preserving provider save-through/cache-after-success behavior.
+- [x] Add optional source/account scoped daemon read filters and MCP listing refs while preserving legacy folder/message-ID compatibility.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

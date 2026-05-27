@@ -377,6 +377,39 @@ func (d *DemoBackend) GetEmailByID(messageID string) (*models.EmailData, error) 
 	return nil, nil
 }
 
+func (d *DemoBackend) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {
+	ref = ref.WithDefaults()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, email := range d.emails {
+		if d.deletedIDs[email.MessageID] {
+			continue
+		}
+		emailRef := email.MessageRef()
+		if ref.LocalID != "" && emailRef.LocalID != ref.LocalID {
+			continue
+		}
+		if ref.MessageID != "" && emailRef.MessageID != ref.MessageID {
+			continue
+		}
+		if ref.SourceID != "" && emailRef.SourceID != ref.SourceID {
+			continue
+		}
+		if ref.AccountID != "" && emailRef.AccountID != ref.AccountID {
+			continue
+		}
+		if ref.Folder != "" && emailRef.Folder != ref.Folder {
+			continue
+		}
+		if ref.UID != 0 && emailRef.UID != ref.UID {
+			continue
+		}
+		return email, nil
+	}
+	return nil, nil
+}
+
 // FetchEmailBody returns a synthetic email body.
 func (d *DemoBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailBody, error) {
 	d.mu.Lock()

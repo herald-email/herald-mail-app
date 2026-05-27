@@ -1774,7 +1774,8 @@ func escapeLike(s string) string {
 func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) {
 	like := "%" + escapeLike(query) + "%"
 	rows, err := c.db.Query(`
-		SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
+		SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
+		       message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 		FROM emails
 		WHERE folder = ? AND (sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\')
 		ORDER BY date DESC LIMIT 100`, folder, like, like)
@@ -1785,13 +1786,19 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 	var emails []*models.EmailData
 	for rows.Next() {
 		var msgID, sender, subject string
+		var sourceID, accountID, localID string
 		var uid uint32
+		var uidValidity uint32
 		var date time.Time
 		var size, hasAtt, isRead, isStarred, isDraft int
-		if err := rows.Scan(&msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred, &isDraft); err != nil {
+		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
 		email := normalizeEmailScope(&models.EmailData{
+			SourceID:       models.SourceID(sourceID),
+			AccountID:      models.AccountID(accountID),
+			LocalID:        localID,
+			UIDValidity:    uidValidity,
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sender,
@@ -1842,6 +1849,10 @@ func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
 }
 
 func (c *Cache) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {
+	rawLocalID := strings.TrimSpace(ref.LocalID)
+	rawSourceID := strings.TrimSpace(string(ref.SourceID))
+	rawAccountID := strings.TrimSpace(string(ref.AccountID))
+	rawFolder := strings.TrimSpace(ref.Folder)
 	ref = ref.WithDefaults()
 	if ref.LocalID != "" {
 		row := c.db.QueryRow(`SELECT message_id FROM emails WHERE local_id = ?`, ref.LocalID)
@@ -1851,9 +1862,34 @@ func (c *Cache) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) 
 		} else if err != sql.ErrNoRows {
 			return nil, err
 		}
+		if rawLocalID != "" {
+			return nil, sql.ErrNoRows
+		}
 	}
 	if ref.MessageID == "" {
 		return nil, sql.ErrNoRows
+	}
+	if rawSourceID != "" || rawAccountID != "" || rawFolder != "" {
+		conds := []string{"message_id = ?"}
+		args := []any{ref.MessageID}
+		if rawSourceID != "" {
+			conds = append(conds, "COALESCE(source_id, 'default-mail') = ?")
+			args = append(args, string(ref.SourceID))
+		}
+		if rawAccountID != "" {
+			conds = append(conds, "COALESCE(account_id, 'default') = ?")
+			args = append(args, string(ref.AccountID))
+		}
+		if rawFolder != "" {
+			conds = append(conds, "folder = ?")
+			args = append(args, ref.Folder)
+		}
+		row := c.db.QueryRow(`SELECT message_id FROM emails WHERE `+strings.Join(conds, " AND ")+` LIMIT 1`, args...)
+		var messageID string
+		if err := row.Scan(&messageID); err != nil {
+			return nil, err
+		}
+		return c.GetEmailByID(messageID)
 	}
 	return c.GetEmailByID(ref.MessageID)
 }
@@ -1872,7 +1908,8 @@ func (c *Cache) GetEmailByFolderUID(folder string, uid uint32) (*models.EmailDat
 
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending
 func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error) {
-	query := `SELECT message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
+	query := `SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
+	                 message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 	          FROM emails WHERE folder = ? ORDER BY date DESC`
 	rows, err := c.db.Query(query, folder)
 	if err != nil {
@@ -1883,13 +1920,19 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 	var emails []*models.EmailData
 	for rows.Next() {
 		var messageID, sender, subject string
+		var sourceID, accountID, localID string
 		var uid uint32
+		var uidValidity uint32
 		var date time.Time
 		var size, hasAttachments, isRead, isStarred, isDraft int
-		if err := rows.Scan(&messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred, &isDraft); err != nil {
+		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
 		email := normalizeEmailScope(&models.EmailData{
+			SourceID:       models.SourceID(sourceID),
+			AccountID:      models.AccountID(accountID),
+			LocalID:        localID,
+			UIDValidity:    uidValidity,
 			MessageID:      messageID,
 			UID:            uid,
 			Sender:         sender,
