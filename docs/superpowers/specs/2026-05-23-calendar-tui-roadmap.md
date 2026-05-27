@@ -100,6 +100,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
   - [x] Stage 7B: Add read-only Meeting Prep from Calendar Event Detail using related cached mail and nearby cached events before travel buffers or AI summaries.
+  - [x] Stage 7C: Add read-only Travel Buffer from Calendar Event Detail using cached travel-related mail and nearby event gaps before AI summaries or automatic calendar mutations.
 
 ## Stage Gates
 

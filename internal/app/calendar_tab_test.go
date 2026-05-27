@@ -17,6 +17,8 @@ type calendarAgendaStubBackend struct {
 	crossResults     []models.CrossSourceSearchResult
 	meetingPrep      *models.CalendarMeetingPrep
 	meetingPrepCalls []models.EventRef
+	travelBuffer     *models.CalendarTravelBuffer
+	travelCalls      []models.EventRef
 	getCalls         int
 	searchCalls      []string
 	crossSearchCalls []string
@@ -119,6 +121,17 @@ func (b *calendarAgendaStubBackend) BuildCalendarMeetingPrep(event models.Calend
 		return prep, nil
 	}
 	return models.CalendarMeetingPrep{Event: event, QueryTerms: models.CalendarMeetingPrepQueries(event)}, nil
+}
+
+func (b *calendarAgendaStubBackend) BuildCalendarTravelBuffer(event models.CalendarEvent) (models.CalendarTravelBuffer, error) {
+	event.Ref = event.Ref.WithDefaults()
+	b.travelCalls = append(b.travelCalls, event.Ref)
+	if b.travelBuffer != nil {
+		buffer := *b.travelBuffer
+		buffer.Event.Ref = buffer.Event.Ref.WithDefaults()
+		return buffer, nil
+	}
+	return models.CalendarTravelBuffer{Event: event, QueryTerms: models.CalendarTravelBufferQueries(event)}, nil
 }
 
 func (b *calendarAgendaStubBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
@@ -590,6 +603,163 @@ func TestCalendarMeetingPrepShortcutDoesNotStealTextEntry(t *testing.T) {
 		m = model.(*Model)
 		if got := m.promptEditor.name; got != "p" {
 			t.Fatalf("prompt editor name=%q, want literal p", got)
+		}
+	})
+}
+
+func TestCalendarTravelBufferOpensFromDetailWithCachedTravelMail(t *testing.T) {
+	start := time.Date(2026, 5, 24, 14, 0, 0, 0, time.UTC)
+	event := richCalendarEventForTest()
+	event.Title = "Partner onsite"
+	event.Description = "Discuss partner rollout."
+	event.Location = "SFO Terminal 2"
+	event.Start = start
+	event.End = start.Add(time.Hour)
+	event.ProviderUID = "provider-secret"
+	event.Ref.ETag = `"provider-etag"`
+	event.Raw = `{"syncToken":"secret"}`
+	mail := &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "flight-itinerary",
+		UID:       42,
+		Folder:    "Travel",
+		Sender:    "airline@example.com",
+		Subject:   "Flight itinerary for SFO",
+		Date:      start.Add(-24 * time.Hour),
+	}
+	nearby := event
+	nearby.Title = "Team sync"
+	nearby.Location = "Downtown office"
+	nearby.Ref.EventID = "team-sync"
+	nearby.Ref.LocalID = ""
+	nearby.Ref = nearby.Ref.WithDefaults()
+	nearby.Start = start.Add(-45 * time.Minute)
+	nearby.End = start.Add(-15 * time.Minute)
+	buffer := &models.CalendarTravelBuffer{
+		Event:        event,
+		QueryTerms:   []string{"Partner onsite", "SFO Terminal 2", "flight"},
+		RelatedMail:  []*models.EmailData{mail},
+		NearbyEvents: []models.CalendarEvent{nearby},
+		Recommendations: []models.CalendarTravelBufferRecommendation{
+			{Label: "Arrive early", Window: "90 min before", Reason: "Flight itinerary for SFO"},
+			{Label: "Tight nearby gap", Window: "15 min", Reason: "Team sync ends before this event"},
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event, nearby}, travelBuffer: buffer}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &event
+	m.calendarDetailOpen = true
+
+	model, cmd := m.handleKeyMsg(keyRunes("b"))
+	m = model.(*Model)
+	if !m.calendarTravelBufferOpen || !m.calendarTravelBufferLoading {
+		t.Fatalf("travel buffer state open=%v loading=%v, want open loading", m.calendarTravelBufferOpen, m.calendarTravelBufferLoading)
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.travelCalls) != 1 || b.travelCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
+		t.Fatalf("travel buffer calls = %#v, want selected event ref", b.travelCalls)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"Travel Buffer",
+		"read-only cached travel context",
+		"Partner onsite",
+		"Buffer Suggestions",
+		"Arrive early",
+		"Flight itinerary for SFO",
+		"Travel Mail",
+		"airline@example.com",
+		"Nearby Gaps",
+		"Team sync",
+		"Query Terms",
+		"SFO Terminal 2",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("travel buffer missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("travel buffer leaked or advertised %q:\n%s", forbidden, rendered)
+		}
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarTravelBufferOpen {
+		t.Fatal("expected Esc to close travel buffer")
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Esc from travel buffer to return to Event Detail")
+	}
+}
+
+func TestCalendarTravelBufferShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("b"))
+		m = model.(*Model)
+		if got := m.composeBody.Value(); got != "b" {
+			t.Fatalf("compose body=%q, want literal b", got)
+		}
+	})
+
+	t.Run("calendar search", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarEvents = b.events
+		m.openCalendarSearch()
+
+		model, cmd := m.handleKeyMsg(keyRunes("b"))
+		m = model.(*Model)
+		for _, msg := range calendarImmediateMessagesForTest(cmd) {
+			model, _ = m.Update(msg)
+			m = model.(*Model)
+		}
+		if m.calendarSearchQuery != "b" {
+			t.Fatalf("calendar search query=%q, want literal b", m.calendarSearchQuery)
+		}
+		if m.calendarTravelBufferOpen {
+			t.Fatal("travel buffer should not open while typing in calendar search")
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("b"))
+		m = model.(*Model)
+		if got := m.promptEditor.name; got != "b" {
+			t.Fatalf("prompt editor name=%q, want literal b", got)
 		}
 	})
 }

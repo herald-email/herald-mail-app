@@ -1852,6 +1852,30 @@ This case covers the first read-only command-center slice after Cross-Source Sea
 - Literal `p` typed in Compose, search prompts, and editor-like text fields remains text instead of firing Meeting Prep.
 - At `50x15`, the minimum-size guard appears instead of clipped Meeting Prep chrome, and resizing larger restores the prep state cleanly.
 
+### TC-38Q — Calendar Travel Buffer command-center foundation
+
+This case covers the next read-only command-center slice after Meeting Prep. It proves Event Detail can open a Travel Buffer view that blends selected-event context with cached travel-related mail and nearby event gaps without direct provider reads or calendar mutations.
+
+**Lane:** A, B when mail and calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic fixture with a calendar event that has a real location plus cached travel mail such as itinerary, train, hotel, airport, or rideshare context.
+2. Press `3` or `F4` to open Calendar, then press `Enter` for Event Detail.
+3. Press `b` to open Travel Buffer and capture the view.
+4. Confirm the view lists the selected event, buffer suggestions, travel-related cached mail, nearby event gaps, and the visible query terms used for matching.
+5. Press `Esc` and confirm Herald returns to Event Detail without losing the selected event.
+6. Type literal `b` in Compose, Calendar Search, and editor-like prompts and confirm it stays text.
+
+**Expect:**
+- Travel Buffer is read-only and cache-backed; it does not directly call IMAP, Google Calendar, or CalDAV providers.
+- Buffer suggestions name the reason for extra time, such as travel mail signals or tight nearby-event gaps, without silently changing the calendar.
+- Related mail shows sender, subject, folder/account context, and time without exposing provider UIDs, raw event IDs, CalDAV URLs, sync tokens, raw ETags, OAuth details, or mutation controls.
+- Nearby events show event title, time, and calendar/source labels without exposing provider internals.
+- `Esc` returns to Event Detail, and `r` refreshes Travel Buffer context for the same selected event.
+- Literal `b` typed in Compose, search prompts, and editor-like text fields remains text instead of firing Travel Buffer.
+- At `50x15`, the minimum-size guard appears instead of clipped Travel Buffer chrome, and resizing larger restores the buffer state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

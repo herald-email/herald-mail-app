@@ -85,6 +85,14 @@ type CalendarMeetingPrepMsg struct {
 	Err  error
 }
 
+// CalendarTravelBufferMsg carries read-only cached travel context for the
+// selected calendar event.
+type CalendarTravelBufferMsg struct {
+	Ref    models.EventRef
+	Buffer models.CalendarTravelBuffer
+	Err    error
+}
+
 // CalendarEventDetailMsg carries a selected read-only event detail.
 type CalendarEventDetailMsg struct {
 	Ref   models.EventRef
@@ -699,30 +707,33 @@ type Model struct {
 
 	// Calendar tab. Calendar is additive and appears only when the backend
 	// advertises a cache-backed read-only agenda surface.
-	calendarAvailable          bool
-	calendarLoading            bool
-	calendarEvents             []models.CalendarEvent
-	calendarCursor             int
-	calendarView               calendarViewMode
-	calendarSearchQuery        string
-	calendarSearchResults      []models.CalendarEvent
-	calendarSearchCursor       int
-	calendarSearchLoading      bool
-	crossSourceSearchQuery     string
-	crossSourceSearchResults   []models.CrossSourceSearchResult
-	crossSourceSearchCursor    int
-	crossSourceSearchLoading   bool
-	calendarDay                time.Time
-	calendarWeekStart          time.Time
-	calendarThreeDayStart      time.Time
-	calendarDetailOpen         bool
-	calendarDetailLoading      bool
-	calendarDetail             *models.CalendarEvent
-	calendarMeetingPrepOpen    bool
-	calendarMeetingPrepLoading bool
-	calendarMeetingPrep        *models.CalendarMeetingPrep
-	calendarEdit               calendarEventEditState
-	calendarStatus             string
+	calendarAvailable           bool
+	calendarLoading             bool
+	calendarEvents              []models.CalendarEvent
+	calendarCursor              int
+	calendarView                calendarViewMode
+	calendarSearchQuery         string
+	calendarSearchResults       []models.CalendarEvent
+	calendarSearchCursor        int
+	calendarSearchLoading       bool
+	crossSourceSearchQuery      string
+	crossSourceSearchResults    []models.CrossSourceSearchResult
+	crossSourceSearchCursor     int
+	crossSourceSearchLoading    bool
+	calendarDay                 time.Time
+	calendarWeekStart           time.Time
+	calendarThreeDayStart       time.Time
+	calendarDetailOpen          bool
+	calendarDetailLoading       bool
+	calendarDetail              *models.CalendarEvent
+	calendarMeetingPrepOpen     bool
+	calendarMeetingPrepLoading  bool
+	calendarMeetingPrep         *models.CalendarMeetingPrep
+	calendarTravelBufferOpen    bool
+	calendarTravelBufferLoading bool
+	calendarTravelBuffer        *models.CalendarTravelBuffer
+	calendarEdit                calendarEventEditState
+	calendarStatus              string
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -1969,6 +1980,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarMeetingPrepOpen = true
 		m.calendarDetailOpen = false
 		m.calendarStatus = fmt.Sprintf("Meeting prep found %d cached mail and %d nearby event(s)", len(prep.RelatedMail), len(prep.RelatedEvents))
+		return m, nil
+
+	case CalendarTravelBufferMsg:
+		selected := m.calendarDetail
+		if selected == nil {
+			selected = m.selectedCalendarEvent()
+		}
+		if selected == nil || selected.Ref.WithDefaults().LocalID != msg.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		m.calendarTravelBufferLoading = false
+		if msg.Err != nil {
+			m.calendarTravelBuffer = nil
+			m.calendarStatus = "Travel buffer failed: " + msg.Err.Error()
+			return m, nil
+		}
+		buffer := msg.Buffer
+		buffer.Event.Ref = buffer.Event.Ref.WithDefaults()
+		m.calendarTravelBuffer = &buffer
+		m.calendarTravelBufferOpen = true
+		m.calendarDetailOpen = false
+		m.calendarStatus = fmt.Sprintf("Travel buffer found %d cached mail, %d nearby event(s), and %d suggestion(s)", len(buffer.RelatedMail), len(buffer.NearbyEvents), len(buffer.Recommendations))
 		return m, nil
 
 	case CalendarEventDetailMsg:

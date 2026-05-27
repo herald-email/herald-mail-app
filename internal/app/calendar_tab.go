@@ -90,6 +90,9 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarMeetingPrepOpen = false
 		m.calendarMeetingPrepLoading = false
 		m.calendarMeetingPrep = nil
+		m.calendarTravelBufferOpen = false
+		m.calendarTravelBufferLoading = false
+		m.calendarTravelBuffer = nil
 		m.calendarEdit = calendarEventEditState{}
 	}
 }
@@ -123,6 +126,11 @@ func (m *Model) crossSourceSearchAvailable() bool {
 func (m *Model) calendarMeetingPrepBackend() (backend.CalendarMeetingPrepBackend, bool) {
 	prep, ok := m.backend.(backend.CalendarMeetingPrepBackend)
 	return prep, ok
+}
+
+func (m *Model) calendarTravelBufferBackend() (backend.CalendarTravelBufferBackend, bool) {
+	buffer, ok := m.backend.(backend.CalendarTravelBufferBackend)
+	return buffer, ok
 }
 
 func (m *Model) loadCalendarAgenda() tea.Cmd {
@@ -343,6 +351,9 @@ func (m *Model) openCalendarDetail() tea.Cmd {
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
 	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
 	m.calendarDetailOpen = true
 	m.calendarDetailLoading = true
 	m.calendarDetail = event
@@ -365,6 +376,9 @@ func (m *Model) openCalendarSearch() {
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
 	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
 	m.calendarSearchQuery = ""
 	m.calendarSearchResults = nil
 	m.calendarSearchCursor = 0
@@ -381,6 +395,9 @@ func (m *Model) openCrossSourceSearch() {
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
 	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
 	m.crossSourceSearchQuery = ""
 	m.crossSourceSearchResults = nil
 	m.crossSourceSearchCursor = 0
@@ -558,6 +575,9 @@ func (m *Model) openCalendarEdit() {
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
 	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
 	m.calendarDetailOpen = true
 	m.calendarDetailLoading = false
 	m.calendarStatus = "Editing cached calendar event"
@@ -582,6 +602,9 @@ func (m *Model) openCalendarMeetingPrep() tea.Cmd {
 	m.calendarMeetingPrepOpen = true
 	m.calendarMeetingPrepLoading = true
 	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
 	m.calendarDetailOpen = false
 	m.calendarStatus = "Preparing cached meeting context..."
 	return func() tea.Msg {
@@ -600,6 +623,50 @@ func (m *Model) handleCalendarMeetingPrepKey(msg tea.KeyPressMsg) (tea.Model, te
 		return m, nil
 	case "r", "ctrl+r":
 		return m, m.openCalendarMeetingPrep()
+	}
+	return m, nil
+}
+
+func (m *Model) openCalendarTravelBuffer() tea.Cmd {
+	event := m.calendarDetail
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	if event == nil {
+		return nil
+	}
+	buffer, ok := m.calendarTravelBufferBackend()
+	if !ok {
+		m.calendarStatus = "Travel buffer unavailable for this backend"
+		return nil
+	}
+	ref := event.Ref.WithDefaults()
+	selected := *event
+	selected.Ref = ref
+	m.calendarTravelBufferOpen = true
+	m.calendarTravelBufferLoading = true
+	m.calendarTravelBuffer = nil
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
+	m.calendarDetailOpen = false
+	m.calendarStatus = "Preparing cached travel context..."
+	return func() tea.Msg {
+		result, err := buffer.BuildCalendarTravelBuffer(selected)
+		return CalendarTravelBufferMsg{Ref: ref, Buffer: result, Err: err}
+	}
+}
+
+func (m *Model) handleCalendarTravelBufferKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch shortcutKey(msg) {
+	case "esc":
+		m.calendarTravelBufferOpen = false
+		m.calendarTravelBufferLoading = false
+		m.calendarDetailOpen = true
+		m.calendarStatus = "Returned to event detail"
+		return m, nil
+	case "r", "ctrl+r":
+		return m, m.openCalendarTravelBuffer()
 	}
 	return m, nil
 }
@@ -802,6 +869,9 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.calendarMeetingPrepOpen {
 		return m.handleCalendarMeetingPrepKey(msg)
 	}
+	if m.calendarTravelBufferOpen {
+		return m.handleCalendarTravelBufferKey(msg)
+	}
 	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
 		return m.handleCalendarSearchKey(msg)
 	}
@@ -906,6 +976,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.openCalendarMeetingPrep()
 		}
 		return m, nil
+	case "b":
+		if m.calendarDetailOpen {
+			return m, m.openCalendarTravelBuffer()
+		}
+		return m, nil
 	case "v":
 		if m.calendarDetailOpen {
 			return m, m.saveCalendarRSVP()
@@ -936,6 +1011,9 @@ func (m *Model) renderCalendarView() string {
 	}
 	if m.calendarMeetingPrepOpen {
 		return m.renderCalendarMeetingPrepFullView()
+	}
+	if m.calendarTravelBufferOpen {
+		return m.renderCalendarTravelBufferFullView()
 	}
 	if m.calendarDetailOpen {
 		return m.renderCalendarDetailFullView()
@@ -1130,6 +1208,22 @@ func (m *Model) renderCalendarMeetingPrepFullView() string {
 		contentH = 4
 	}
 	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarMeetingPrep(clamp(contentW-4, 20), contentH-2))
+}
+
+func (m *Model) renderCalendarTravelBufferFullView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	contentH := plan.ContentHeight
+	if contentH < 4 {
+		contentH = 4
+	}
+	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarTravelBuffer(clamp(contentW-4, 20), contentH-2))
 }
 
 func (m *Model) calendarPanel(width, height int, active bool) lipgloss.Style {
@@ -1460,6 +1554,86 @@ func (m *Model) renderCalendarMeetingPrep(width, height int) string {
 	lines = append(lines, "")
 	lines = append(lines, calendarDetailRow(m, "Mode", "read-only cached context", width))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("esc: event detail  r: refresh prep", width)))
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCalendarTravelBuffer(width, height int) string {
+	if width < 12 {
+		width = 12
+	}
+	event := m.calendarDetail
+	if m.calendarTravelBuffer != nil {
+		event = &m.calendarTravelBuffer.Event
+	}
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Travel Buffer", width)))
+	subtitle := "read-only cached travel context"
+	if m.calendarTravelBufferLoading {
+		subtitle = "loading cached travel context..."
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)))
+	lines = append(lines, "")
+	if event == nil {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No event selected", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Selected Event", width)))
+	lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, width)))
+	lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
+	lines = append(lines, calendarDetailRow(m, "Location", event.Location, width))
+	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
+
+	buffer := m.calendarTravelBuffer
+	if buffer == nil {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached travel context loaded yet", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Buffer Suggestions", width)))
+	if len(buffer.Recommendations) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached buffer suggestions found", width)))
+	} else {
+		for _, rec := range buffer.Recommendations {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarTravelBufferRecommendationLine(rec, width), width)))
+		}
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Travel Mail", width)))
+	if len(buffer.RelatedMail) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached travel mail found", width)))
+	} else {
+		for _, email := range buffer.RelatedMail {
+			if email == nil {
+				continue
+			}
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarMeetingPrepMailLine(m, email, width), width)))
+		}
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Nearby Gaps", width)))
+	if len(buffer.NearbyEvents) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached nearby events found", width)))
+	} else {
+		for _, related := range buffer.NearbyEvents {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarMeetingPrepEventLine(related, width), width)))
+		}
+	}
+
+	if len(buffer.QueryTerms) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Query Terms", width)))
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(strings.Join(buffer.QueryTerms, ", "), width)))
+	}
+	lines = append(lines, "")
+	lines = append(lines, calendarDetailRow(m, "Mode", "read-only cached travel context", width))
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("esc: event detail  r: refresh buffer", width)))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -1998,6 +2172,17 @@ func calendarMeetingPrepMailLine(m *Model, email *models.EmailData, width int) s
 
 func calendarMeetingPrepEventLine(event models.CalendarEvent, width int) string {
 	summary := calendarShortTime(event) + "  " + event.Title + " - " + calendarSourceLabel(event)
+	return ansi.Truncate(summary, width, "...")
+}
+
+func calendarTravelBufferRecommendationLine(rec models.CalendarTravelBufferRecommendation, width int) string {
+	summary := rec.Label
+	if strings.TrimSpace(rec.Window) != "" {
+		summary += " - " + rec.Window
+	}
+	if strings.TrimSpace(rec.Reason) != "" {
+		summary += " (" + rec.Reason + ")"
+	}
 	return ansi.Truncate(summary, width, "...")
 }
 
