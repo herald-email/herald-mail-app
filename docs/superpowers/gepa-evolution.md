@@ -29,7 +29,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
 - [x] Post-publish self-reflection suggestions can now sync into a visible pending-approval queue with stable queue keys and batch-approval commands.
-- [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `demo-key-overlay`, `user-repro-after-commit`, and `degradation-review`.
+- [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `demo-key-overlay`, `user-repro-after-commit`, `degradation-review`, `user-review-followup-settings-hints`, and `commit-hook-make-test`.
 - [x] Docs, SSH, and media-heavy runs can now execute a first-class preflight step that records prerequisites and prepared resources before baseline verification starts.
 - [x] Run metadata and evidence manifests now use serialized helper writes so nearby workflow steps do not clobber each other.
 - [x] TUI-facing runs can now close a first-class visual-evidence gate that requires matched before/after PNG plus ANSI captures at `220x50`, `80x24`, and `50x15`.
@@ -62,6 +62,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Added a scored degradation-review gate so future runs must ask whether degradation is part of the plan and convert preserved behavior into regression checks.
 - [x] Incorporated the first approved pending-approval batch by promoting the backlog decisions and adding a reusable user-reproduced post-handoff failure template for missed real-world repro paths.
 - [x] Incorporated the approved demo key overlay GEPA item by adding a reusable template for package-boundary, demo launch, media-regeneration, and text-entry evidence checks.
+- [x] Incorporated the approved user-review/settings-hints and commit-hook `make test` GEPA items as reusable remediation templates.
 
 ## Run Patterns Observed
 
@@ -78,13 +79,13 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-18T20:16:59+00:00.
+- [x] Auto snapshot generated at 2026-05-27T14:55:44+00:00.
 - [x] Recent runs analyzed: 30.
-- [x] Frontier members available: 8.
-- [x] Most repeated failing evidence: `app-package-tests` (2 occurrences).
-- [x] Current top recommended experiment: `template-user-review-followup-settings-hints-feedback` (medium value, low risk).
-- [x] Degradation-review gate: 20/20 required run(s) ready (100%).
-- [x] Pending-approval queue: 1 pending, 0 approved, 7 implemented.
+- [x] Frontier members available: 9.
+- [x] Most repeated failing evidence: `commit hook make test` (1 occurrences).
+- [x] Current top recommended experiment: `measure-remediation-template-adoption` (medium value, low risk).
+- [x] Degradation-review gate: 30/30 required run(s) ready (100%).
+- [x] Pending-approval queue: 0 pending, 0 approved, 9 implemented.
 - [x] Phase-impact report: 15 post-Phase 1 real bug/feature run(s) measured so far.
 <!-- AUTOGEN:END -->
 
@@ -117,6 +118,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [x] Learned and codified reusable feedback templates for the most repeated current verification failures.
 - [x] Added a user-reproduced post-handoff failure template so exact user repro commands become first-class retry gates after an automated handoff misses reality.
 - [x] Added a demo key overlay remediation template so demo-key and media-heavy overlay retries reuse focused import, launch, regeneration, and text-entry checks.
+- [x] Added user-review settings/hints and commit-hook `make test` remediation templates so approved follow-up lessons become reusable workflow behavior.
 - [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
 - [x] Added a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
 - [x] Added a first phase-impact report so retry, skip, and clarification trends are at least measured before more autonomy is added.

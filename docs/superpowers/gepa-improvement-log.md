@@ -9,6 +9,7 @@ This document is the durable history of changes to the Herald autopilot workflow
 
 | Logged At | Title | Status | Runs | Avg Score | Grounding | Failed Runs | Frontier |
 |---|---|---:|---:|---:|---:|---:|---:|
+| 2026-05-27T14:55:44 | Approved GEPA remediation templates incorporation | applied | 30 | 96.36363636363636 | 100% | 0 | 9 |
 | 2026-05-18T20:17:13 | Demo key overlay remediation template | applied | 30 | 86.55172413793103 | 100% | 0 | 8 |
 | 2026-05-07T18:43:05 | Approved pending-approval batch incorporation | applied | 30 | 88.44827586206897 | 100% | 0 | 2 |
 | 2026-05-06T15:18:30 | Degradation review gate for explicit regression guardrails | applied | 30 | 87.42857142857143 | 100% | 0 | 2 |
@@ -26,6 +27,73 @@ This document is the durable history of changes to the Herald autopilot workflow
 | 2026-04-23T18:42:12 | Herald Autopilot foundation | reconstructed | 4 | 85.66666666666667 | n/a | 1 | 2 |
 
 ## Entries
+
+### Approved GEPA remediation templates incorporation
+
+- Logged at: 2026-05-27T14:55:44+00:00
+- Status: applied
+- Kind: workflow-improvement
+- Bottleneck: Approved GEPA queue items were no longer pending, but they were not yet represented as reusable workflow behavior.
+- Summary: Implemented the two approved GEPA queue items by adding reusable remediation templates for user-review settings and bottom-hint follow-ups plus commit-hook make test environment failures.
+
+Metrics at log time:
+- Recent runs: 30
+- Average score: 96.36363636363636
+- Average retries: 0.03333333333333333
+- Failed runs: 0
+- Frontier members: 9
+- Product-truth required runs: 30
+- Product-truth grounding rate: 1.0
+- Product-truth updated-first runs: 13
+- Preflight required runs: 30
+- Preflight ready runs: 30
+- Preflight readiness rate: 1.0
+- Degradation-review required runs: 30
+- Degradation-review ready runs: 30
+- Degradation-review readiness rate: 1.0
+- Visual-required runs: 10
+- Visual-ready runs: 10
+- Visual readiness rate: 1.0
+- Input-routing required runs: 10
+- Input-routing ready runs: 10
+- Input-routing readiness rate: 1.0
+- Pending approval items: 0
+- Approved approval items: 0
+- Implemented approval items: 9
+Delta from previous entry:
+- recent_run_count: +0
+- average_score: +9.811912225705328
+- average_retry_count: -0.3
+- failed_run_count: +0
+- frontier_count: +1
+- product_truth_required_runs: +2
+- product_truth_grounding_rate: +0.0
+- product_truth_updated_first_runs: -3
+- preflight_required_runs: +7
+- preflight_ready_runs: +7
+- preflight_readiness_rate: +0.0
+- degradation_review_required_runs: +10
+- degradation_review_ready_runs: +10
+- degradation_review_readiness_rate: +0.0
+- visual_required_runs: -17
+- visual_ready_runs: -17
+- visual_readiness_rate: +0.0
+- input_routing_required_runs: +1
+- input_routing_ready_runs: +1
+- input_routing_readiness_rate: +0.0
+- pending_approval_items: +0
+- approved_approval_items: +0
+- implemented_approval_items: +2
+Changes:
+- Added the user-review-followup-settings-hints remediation template with aliases for the approved queue key and settings/bottom-hint review evidence.
+- Added the commit-hook-make-test remediation template for PATH, staged-diff preservation, and local loopback test reruns during pre-commit.
+- Extended template matcher tests and Herald Autopilot references so future reflections can use the new checklists.
+Recommended experiment at log time:
+- `measure-remediation-template-adoption` (medium value, low risk)
+Article notes:
+- The approval queue now has a crisp promotion path: approved ideas become tested templates, not just status changes.
+Follow-ups:
+- Measure whether future user-review and commit-hook failures match these templates before requiring another approval.
 
 ### Demo key overlay remediation template
 

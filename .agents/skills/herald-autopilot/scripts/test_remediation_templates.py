@@ -42,6 +42,30 @@ class RemediationTemplateTests(unittest.TestCase):
         self.assertIn("--demo --demo-keys", checklist)
         self.assertIn("text-entry", checklist)
 
+    def test_user_review_followup_settings_hints_alias_matches_template(self) -> None:
+        templates = load_remediation_templates(REPO_ROOT)
+
+        key, template = match_remediation_template("template-user-review-followup-settings-hints-feedback", templates)
+
+        self.assertEqual(key, "user-review-followup-settings-hints")
+        self.assertIsNotNone(template)
+        checklist = " ".join(template["checklist"])
+        self.assertIn("user follow-up", checklist)
+        self.assertIn("settings", checklist)
+        self.assertIn("bottom hints", checklist)
+
+    def test_commit_hook_make_test_alias_matches_template(self) -> None:
+        templates = load_remediation_templates(REPO_ROOT)
+
+        key, template = match_remediation_template("commit hook make test", templates)
+
+        self.assertEqual(key, "commit-hook-make-test")
+        self.assertIsNotNone(template)
+        checklist = " ".join(template["checklist"])
+        self.assertIn("pre-commit", checklist)
+        self.assertIn("PATH", checklist)
+        self.assertIn("local loopback", checklist)
+
 
 if __name__ == "__main__":
     unittest.main()

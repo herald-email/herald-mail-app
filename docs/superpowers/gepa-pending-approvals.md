@@ -4,13 +4,13 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-27T14:48:48+00:00
+- Updated at: 2026-05-27T14:55:15+00:00
 - Published runs analyzed: 41
 - Total queue items: 9
 - Pending: 0
-- Approved: 2
+- Approved: 0
 - Rejected: 0
-- Implemented: 7
+- Implemented: 9
 
 ## How To Update
 
@@ -24,45 +24,32 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Approved Items
 
-### template-user-review-followup-settings-hints-feedback
-
-- Queue key: `template-user-review-followup-settings-hints-feedback-11020dbda5`
-- Status: approved
-- Seen in runs: 27
-- First seen: 2026-05-18T23:21:53+00:00
-- Last seen: 2026-05-27T06:17:12+00:00
-- Publish actions: commit, commit 033eeb0 Add read-only calendar MCP tools, commit 0592cfb Expose provider freshness metadata, commit 1aae509 Scope FTS mail search rows, commit 219b926 Tag contact enrichment AI work by source, commit 3ce59df Make cleanup scheduling source aware, commit 3d2a98c Migrate deletion lane to source serial work, commit 4c2cf4c Add calendar full event detail timezone foundation, commit 588d668 Store classifications with scoped message refs, commit 68299d4 Migrate active sync coordinator to internal work, commit 69019c7 Add source plugin registry, commit 80ab68d Scope background mail embeddings, commit 853fe85 Add calendar search foundation, commit 8587d56 Add account-level compose signatures, commit f359845 Reconcile source platform roadmap markers, commit fec3a24 Add source-fair AI budget scheduling, deleted branch codex/autopilot-account-aware-compose-sending-20260523-220633, deleted branch codex/autopilot-account-signatures-20260526-224222, deleted branch codex/autopilot-active-collection-sync-work-coordinator-20260526-210426, deleted branch codex/autopilot-ai-global-budget-20260526-225307, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311, deleted branch codex/autopilot-contact-enrichment-source-tags-20260526-230806, deleted branch codex/autopilot-fts-source-scope-20260526-222846, deleted branch codex/autopilot-roadmap-checkbox-reconciliation-20260526-231712, deleted branch codex/autopilot-scoped-ai-indexing-20260526-214024, deleted branch codex/autopilot-scoped-classification-results-20260526-212551, deleted branch codex/autopilot-source-aware-cleanup-20260526-215720, deleted branch codex/autopilot-source-freshness-metadata-20260526-221911, deleted branch codex/autopilot-source-plugin-registry-20260526-220729, deleted branch codex/autopilot-source-serial-deletion-lane-20260526-211454, fast-forward merged to local main, fast-forward merged to main, left in local worktree for review/finish-development, local commit 0e42abc on codex/autopilot-account-aware-compose-sending-20260523-220633, local commits only, merge, merge main fast-forward to 1aae509, merge main fast-forward to 8587d56, merged to local main at 0e42abc, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260523-220633-account-aware-compose-sending, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-210426-active-collection-sync-work-coordinator, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-211454-source-serial-deletion-lane, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-212551-scoped-classification-results, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-214024-scoped-ai-indexing, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-215720-source-aware-cleanup, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-220729-source-plugin-registry, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-221911-source-freshness-metadata, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-222846-fts-source-scope, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-224222-account-signatures, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-225307-ai-global-budget, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-230806-contact-enrichment-source-tags, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-231712-roadmap-checkbox-reconciliation
-- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
-- Approval prompt: Approve exploring `template-user-review-followup-settings-hints-feedback` as the next explicit GEPA improvement pass.
-- Decision: approved at 2026-05-27T14:48:48+00:00
-- Note: Approved by user: approve both and commit
-- Source runs:
-- `20260526-231712-reconcile-source-platform-roadmap-checkboxes` at 2026-05-27T06:17:12+00:00 via commit f359845 Reconcile source platform roadmap markers, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-231712-roadmap-checkbox-reconciliation, deleted branch codex/autopilot-roadmap-checkbox-reconciliation-20260526-231712
-- `20260526-230806-source-tag-contact-enrichment-ai-work` at 2026-05-27T06:08:06+00:00 via commit 219b926 Tag contact enrichment AI work by source, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-230806-contact-enrichment-source-tags, deleted branch codex/autopilot-contact-enrichment-source-tags-20260526-230806
-- `20260526-225307-add-global-ai-budget-source-fairness` at 2026-05-27T05:53:07+00:00 via commit fec3a24 Add source-fair AI budget scheduling, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-225307-ai-global-budget, deleted branch codex/autopilot-ai-global-budget-20260526-225307
-- `20260526-224222-add-account-level-compose-signatures-for-mail-sources` at 2026-05-27T05:42:22+00:00 via commit 8587d56 Add account-level compose signatures, merge main fast-forward to 8587d56, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-224222-account-signatures, deleted branch codex/autopilot-account-signatures-20260526-224222
-- `20260526-222846-scope-fts-mail-search-rows` at 2026-05-27T05:28:46+00:00 via commit 1aae509 Scope FTS mail search rows, merge main fast-forward to 1aae509, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-222846-fts-source-scope, deleted branch codex/autopilot-fts-source-scope-20260526-222846
-
-### Template `commit hook make test` remediation guidance
-
-- Queue key: `template-commit-hook-make-test-remediation-guidance-a04c85775e`
-- Status: approved
-- Seen in runs: 1
-- First seen: 2026-05-27T03:13:11+00:00
-- Last seen: 2026-05-27T03:13:11+00:00
-- Publish actions: commit 033eeb0 Add read-only calendar MCP tools, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311, fast-forward merged to main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly
-- Why: This run needed retries or explicit feedback that could become reusable autopilot guidance.
-- Approval prompt: Approve turning the `commit hook make test` lesson from this run into a reusable GEPA workflow template.
-- Decision: approved at 2026-05-27T14:48:48+00:00
-- Note: Approved by user: approve both and commit
-- Source runs:
-- `20260526-201311-implement-read-only-scoped-calendar-mcp-tools` at 2026-05-27T03:13:11+00:00 via commit 033eeb0 Add read-only calendar MCP tools, fast-forward merged to main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311
+- No approved items.
 
 ## Rejected Items
 
 - No rejected items.
 
 ## Implemented Items
+
+### template-user-review-followup-settings-hints-feedback
+
+- Queue key: `template-user-review-followup-settings-hints-feedback-11020dbda5`
+- Status: implemented
+- Seen in runs: 27
+- First seen: 2026-05-18T23:21:53+00:00
+- Last seen: 2026-05-27T06:17:12+00:00
+- Publish actions: commit, commit 033eeb0 Add read-only calendar MCP tools, commit 0592cfb Expose provider freshness metadata, commit 1aae509 Scope FTS mail search rows, commit 219b926 Tag contact enrichment AI work by source, commit 3ce59df Make cleanup scheduling source aware, commit 3d2a98c Migrate deletion lane to source serial work, commit 4c2cf4c Add calendar full event detail timezone foundation, commit 588d668 Store classifications with scoped message refs, commit 68299d4 Migrate active sync coordinator to internal work, commit 69019c7 Add source plugin registry, commit 80ab68d Scope background mail embeddings, commit 853fe85 Add calendar search foundation, commit 8587d56 Add account-level compose signatures, commit f359845 Reconcile source platform roadmap markers, commit fec3a24 Add source-fair AI budget scheduling, deleted branch codex/autopilot-account-aware-compose-sending-20260523-220633, deleted branch codex/autopilot-account-signatures-20260526-224222, deleted branch codex/autopilot-active-collection-sync-work-coordinator-20260526-210426, deleted branch codex/autopilot-ai-global-budget-20260526-225307, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311, deleted branch codex/autopilot-contact-enrichment-source-tags-20260526-230806, deleted branch codex/autopilot-fts-source-scope-20260526-222846, deleted branch codex/autopilot-roadmap-checkbox-reconciliation-20260526-231712, deleted branch codex/autopilot-scoped-ai-indexing-20260526-214024, deleted branch codex/autopilot-scoped-classification-results-20260526-212551, deleted branch codex/autopilot-source-aware-cleanup-20260526-215720, deleted branch codex/autopilot-source-freshness-metadata-20260526-221911, deleted branch codex/autopilot-source-plugin-registry-20260526-220729, deleted branch codex/autopilot-source-serial-deletion-lane-20260526-211454, fast-forward merged to local main, fast-forward merged to main, left in local worktree for review/finish-development, local commit 0e42abc on codex/autopilot-account-aware-compose-sending-20260523-220633, local commits only, merge, merge main fast-forward to 1aae509, merge main fast-forward to 8587d56, merged to local main at 0e42abc, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260523-220633-account-aware-compose-sending, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-210426-active-collection-sync-work-coordinator, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-211454-source-serial-deletion-lane, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-212551-scoped-classification-results, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-214024-scoped-ai-indexing, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-215720-source-aware-cleanup, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-220729-source-plugin-registry, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-221911-source-freshness-metadata, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-222846-fts-source-scope, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-224222-account-signatures, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-225307-ai-global-budget, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-230806-contact-enrichment-source-tags, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-231712-roadmap-checkbox-reconciliation
+- Why: The next best improvement is to extend template coverage to the next repeated failure class instead of re-implementing an existing template.
+- Approval prompt: Approve exploring `template-user-review-followup-settings-hints-feedback` as the next explicit GEPA improvement pass.
+- Decision: implemented at 2026-05-27T14:55:15+00:00
+- Note: Implemented by user request: added reusable remediation templates for user-review settings hints and commit-hook make test failures.
+- Source runs:
+- `20260526-231712-reconcile-source-platform-roadmap-checkboxes` at 2026-05-27T06:17:12+00:00 via commit f359845 Reconcile source platform roadmap markers, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-231712-roadmap-checkbox-reconciliation, deleted branch codex/autopilot-roadmap-checkbox-reconciliation-20260526-231712
+- `20260526-230806-source-tag-contact-enrichment-ai-work` at 2026-05-27T06:08:06+00:00 via commit 219b926 Tag contact enrichment AI work by source, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-230806-contact-enrichment-source-tags, deleted branch codex/autopilot-contact-enrichment-source-tags-20260526-230806
+- `20260526-225307-add-global-ai-budget-source-fairness` at 2026-05-27T05:53:07+00:00 via commit fec3a24 Add source-fair AI budget scheduling, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-225307-ai-global-budget, deleted branch codex/autopilot-ai-global-budget-20260526-225307
+- `20260526-224222-add-account-level-compose-signatures-for-mail-sources` at 2026-05-27T05:42:22+00:00 via commit 8587d56 Add account-level compose signatures, merge main fast-forward to 8587d56, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-224222-account-signatures, deleted branch codex/autopilot-account-signatures-20260526-224222
+- `20260526-222846-scope-fts-mail-search-rows` at 2026-05-27T05:28:46+00:00 via commit 1aae509 Scope FTS mail search rows, merge main fast-forward to 1aae509, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-222846-fts-source-scope, deleted branch codex/autopilot-fts-source-scope-20260526-222846
 
 ### Require doc-first feature grounding
 
@@ -181,3 +168,18 @@ This document is the visible approval backlog for workflow suggestions recovered
 - Note: Implemented by user request: final handoffs now require runnable cd/build/launch commands.
 - Source runs:
 - `20260515-160024-modifier-aware-key-hints` at 2026-05-15T23:00:24+00:00 via commit, merge, worktree-delete, branch-delete
+
+### Template `commit hook make test` remediation guidance
+
+- Queue key: `template-commit-hook-make-test-remediation-guidance-a04c85775e`
+- Status: implemented
+- Seen in runs: 1
+- First seen: 2026-05-27T03:13:11+00:00
+- Last seen: 2026-05-27T03:13:11+00:00
+- Publish actions: commit 033eeb0 Add read-only calendar MCP tools, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311, fast-forward merged to main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly
+- Why: This run needed retries or explicit feedback that could become reusable autopilot guidance.
+- Approval prompt: Approve turning the `commit hook make test` lesson from this run into a reusable GEPA workflow template.
+- Decision: implemented at 2026-05-27T14:55:15+00:00
+- Note: Implemented by user request: added reusable remediation templates for user-review settings hints and commit-hook make test failures.
+- Source runs:
+- `20260526-201311-implement-read-only-scoped-calendar-mcp-tools` at 2026-05-27T03:13:11+00:00 via commit 033eeb0 Add read-only calendar MCP tools, fast-forward merged to main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260526-201311-calendar-mcp-readonly, deleted branch codex/autopilot-calendar-mcp-readonly-20260526-201311
