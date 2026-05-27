@@ -132,7 +132,7 @@ The queue abstraction should preserve the product rule that UI intent is more im
 - [x] `CoalesceByResource` joins duplicate in-flight work for the same provider resource, such as fetching the same email body twice.
 - [x] `SerialBySource` preserves mutation order per source and never drops confirmed user actions.
 - [x] `FairBySource` prevents one account or calendar from monopolizing background sync or indexing.
-- [ ] `GlobalBudget` preserves the current AI scheduler idea: interactive AI beats background AI, and local Ollama capacity is shared across all sources.
+- [x] `GlobalBudget` preserves the current AI scheduler idea: interactive AI beats background AI, and local Ollama capacity is shared across all sources.
 
 The canonical preview sequence is `email1 -> email2 -> email1`. If the first `email1` body completed, the second `email1` returns from cache. If it is in flight, the second request joins it. If `email2` finishes after the user returned to `email1`, its result is stale and cannot repaint the preview.
 

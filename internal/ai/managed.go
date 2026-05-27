@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -22,6 +23,8 @@ const (
 
 const priorityUnset Priority = -1
 
+const defaultSourceID = "__default__"
+
 type ManagedConfig struct {
 	MaxConcurrency                  int
 	QueueLimit                      int
@@ -36,9 +39,14 @@ type taskKindClient interface {
 	withTaskKind(kind TaskKind) AIClient
 }
 
+type sourceScopedClient interface {
+	withSourceID(sourceID string) AIClient
+}
+
 type managedTask struct {
 	priority Priority
 	kind     TaskKind
+	sourceID string
 	seq      int64
 	run      func() error
 	done     chan error
@@ -81,6 +89,7 @@ type managedScheduler struct {
 	activePriority    map[TaskKind]Priority
 	activeInteractive int
 	activeBackground  int
+	lastBackgroundSrc string
 	lastDeferred      bool
 	lastUnavailable   bool
 }
@@ -157,6 +166,22 @@ func (s *managedScheduler) popNextLocked() *managedTask {
 	if bestIdx == -1 {
 		return nil
 	}
+	if s.queue[bestIdx].priority == PriorityBackground {
+		for i, queued := range s.queue {
+			if queued.priority != PriorityBackground {
+				continue
+			}
+			if s.cfg.PauseBackgroundWhileInteractive && interactivePending {
+				continue
+			}
+			if queued.sourceID == s.lastBackgroundSrc {
+				continue
+			}
+			if s.queue[bestIdx].sourceID == s.lastBackgroundSrc || queued.seq < s.queue[bestIdx].seq {
+				bestIdx = i
+			}
+		}
+	}
 	return heap.Remove(&s.queue, bestIdx).(*managedTask)
 }
 
@@ -168,6 +193,7 @@ func (s *managedScheduler) markActiveLocked(task *managedTask) {
 		s.activeInteractive++
 	} else if task.priority == PriorityBackground {
 		s.activeBackground++
+		s.lastBackgroundSrc = task.sourceID
 	}
 }
 
@@ -228,9 +254,14 @@ func (s *managedScheduler) status() SchedulerStatus {
 }
 
 func (s *managedScheduler) submit(priority Priority, kind TaskKind, run func() error) error {
+	return s.submitWithSource(priority, kind, "", run)
+}
+
+func (s *managedScheduler) submitWithSource(priority Priority, kind TaskKind, sourceID string, run func() error) error {
 	task := &managedTask{
 		priority: priority,
 		kind:     kind,
+		sourceID: normalizeSourceID(sourceID),
 		seq:      atomic.AddInt64(&s.seq, 1),
 		run:      run,
 		done:     make(chan error, 1),
@@ -255,11 +286,20 @@ func (s *managedScheduler) submit(priority Priority, kind TaskKind, run func() e
 	return <-task.done
 }
 
+func normalizeSourceID(sourceID string) string {
+	sourceID = strings.TrimSpace(sourceID)
+	if sourceID == "" {
+		return defaultSourceID
+	}
+	return sourceID
+}
+
 type ManagedClient struct {
 	base      AIClient
 	scheduler *managedScheduler
 	priority  Priority
 	taskKind  TaskKind
+	sourceID  string
 }
 
 func NewManagedClient(base AIClient, cfg ManagedConfig) *ManagedClient {
@@ -268,6 +308,7 @@ func NewManagedClient(base AIClient, cfg ManagedConfig) *ManagedClient {
 		scheduler: newManagedScheduler(cfg),
 		priority:  priorityUnset,
 		taskKind:  TaskKindUnknown,
+		sourceID:  defaultSourceID,
 	}
 }
 
@@ -277,6 +318,7 @@ func (c *ManagedClient) withPriority(priority Priority) AIClient {
 		scheduler: c.scheduler,
 		priority:  priority,
 		taskKind:  c.taskKind,
+		sourceID:  c.sourceID,
 	}
 }
 
@@ -286,6 +328,17 @@ func (c *ManagedClient) withTaskKind(kind TaskKind) AIClient {
 		scheduler: c.scheduler,
 		priority:  c.priority,
 		taskKind:  kind,
+		sourceID:  c.sourceID,
+	}
+}
+
+func (c *ManagedClient) withSourceID(sourceID string) AIClient {
+	return &ManagedClient{
+		base:      c.base,
+		scheduler: c.scheduler,
+		priority:  c.priority,
+		taskKind:  c.taskKind,
+		sourceID:  normalizeSourceID(sourceID),
 	}
 }
 
@@ -309,6 +362,16 @@ func WithTaskKind(client AIClient, kind TaskKind) AIClient {
 	return client
 }
 
+func WithSourceID(client AIClient, sourceID string) AIClient {
+	if client == nil {
+		return nil
+	}
+	if p, ok := client.(sourceScopedClient); ok {
+		return p.withSourceID(sourceID)
+	}
+	return client
+}
+
 func (c *ManagedClient) effectivePriority(defaultPriority Priority) Priority {
 	if c.priority != priorityUnset {
 		return c.priority
@@ -327,7 +390,7 @@ func (c *ManagedClient) do(priority Priority, kind TaskKind, fn func() error) er
 	if c == nil || c.base == nil || c.scheduler == nil {
 		return nil
 	}
-	return c.scheduler.submit(c.effectivePriority(priority), c.effectiveKind(kind), fn)
+	return c.scheduler.submitWithSource(c.effectivePriority(priority), c.effectiveKind(kind), c.sourceID, fn)
 }
 
 func (c *ManagedClient) AIStatus() SchedulerStatus {

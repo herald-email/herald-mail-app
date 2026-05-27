@@ -151,6 +151,13 @@ func warnBackgroundAIOnce(format string, args ...any) {
 	logger.Warn("%s", msg)
 }
 
+func backgroundAIForEmail(base ai.AIClient, email *models.EmailData) ai.AIClient {
+	if email == nil {
+		return base
+	}
+	return ai.WithSourceID(base, string(email.MessageRef().SourceID))
+}
+
 // runEmbeddingBatch processes one batch of emails for semantic search embedding.
 // Pass 1 embeds emails with cached body text.
 // Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
@@ -179,7 +186,7 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 					if err != nil || bodyText == "" {
 						continue
 					}
-					chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAI)
+					chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAIForEmail(backgroundAI, email))
 					if len(chunks) > 0 {
 						if err := scoped.StoreEmbeddingChunksByRef(email.MessageRef(), chunks); err != nil {
 							logger.Warn("StoreEmbeddingChunksByRef %s: %v", email.MessageRef().LocalID, err)
@@ -208,7 +215,7 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 				if err != nil || bodyText == "" {
 					continue
 				}
-				chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAI)
+				chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAIForEmail(backgroundAI, email))
 				if len(chunks) > 0 {
 					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
 						logger.Warn("StoreEmbeddingChunks %s: %v", id, err)
@@ -237,7 +244,7 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 					if err != nil || body == nil || body.TextPlain == "" {
 						continue
 					}
-					chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAI)
+					chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAIForEmail(backgroundAI, email))
 					if len(chunks) > 0 {
 						if err := scoped.StoreEmbeddingChunksByRef(email.MessageRef(), chunks); err != nil {
 							logger.Warn("StoreEmbeddingChunksByRef (lazy) %s: %v", email.MessageRef().LocalID, err)
@@ -263,7 +270,7 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 				if err != nil || body == nil || body.TextPlain == "" {
 					continue
 				}
-				chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAI)
+				chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAIForEmail(backgroundAI, email))
 				if len(chunks) > 0 {
 					if err := m.backend.StoreEmbeddingChunks(id, chunks); err != nil {
 						logger.Warn("StoreEmbeddingChunks (lazy) %s: %v", id, err)

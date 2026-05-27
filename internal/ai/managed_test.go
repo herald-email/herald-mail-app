@@ -137,6 +137,75 @@ func TestManagedClient_PrioritizesInteractiveWorkAheadOfQueuedBackground(t *test
 	}
 }
 
+func TestManagedSchedulerRoundRobinsBackgroundSources(t *testing.T) {
+	started := make(chan string, 4)
+	releaseFirst := make(chan struct{})
+	scheduler := newManagedScheduler(ManagedConfig{
+		MaxConcurrency:                  1,
+		QueueLimit:                      8,
+		PauseBackgroundWhileInteractive: true,
+	})
+
+	done1 := make(chan struct{})
+	go func() {
+		_ = scheduler.submitWithSource(PriorityBackground, TaskKindEmbedding, "work-mail", func() error {
+			started <- "work-1"
+			<-releaseFirst
+			return nil
+		})
+		close(done1)
+	}()
+	if first := <-started; first != "work-1" {
+		t.Fatalf("first started = %q, want work-1", first)
+	}
+
+	submit := func(sourceID, label string) <-chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			_ = scheduler.submitWithSource(PriorityBackground, TaskKindEmbedding, sourceID, func() error {
+				started <- label
+				return nil
+			})
+			close(done)
+		}()
+		return done
+	}
+	waitQueued := func(want int) {
+		t.Helper()
+		deadline := time.Now().Add(time.Second)
+		for time.Now().Before(deadline) {
+			scheduler.mu.Lock()
+			got := len(scheduler.queue)
+			scheduler.mu.Unlock()
+			if got >= want {
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatalf("queued tasks did not reach %d", want)
+	}
+	done2 := submit("work-mail", "work-2")
+	waitQueued(1)
+	done3 := submit("personal-mail", "personal-1")
+	waitQueued(2)
+	done4 := submit("personal-mail", "personal-2")
+	waitQueued(3)
+
+	close(releaseFirst)
+	<-done1
+	<-done2
+	<-done3
+	<-done4
+
+	got := []string{<-started, <-started, <-started}
+	want := []string{"personal-1", "work-2", "personal-2"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("started order = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestManagedClient_BackgroundQueueLimitFailsOpen(t *testing.T) {
 	release := make(chan struct{})
 	base := &managedStubAI{
