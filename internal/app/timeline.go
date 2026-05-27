@@ -36,6 +36,123 @@ const (
 	timelineGroupingDomain
 )
 
+type timelineSortCriterion int
+
+const (
+	timelineSortCriterionWhen timelineSortCriterion = iota
+	timelineSortCriterionSender
+	timelineSortCriterionCount
+)
+
+type timelineSortMode int
+
+const (
+	timelineSortWhenDesc timelineSortMode = iota
+	timelineSortWhenAsc
+	timelineSortSenderAsc
+	timelineSortSenderDesc
+	timelineSortCountDesc
+	timelineSortCountAsc
+)
+
+func (mode timelineSortMode) criterion() timelineSortCriterion {
+	switch mode {
+	case timelineSortSenderAsc, timelineSortSenderDesc:
+		return timelineSortCriterionSender
+	case timelineSortCountDesc, timelineSortCountAsc:
+		return timelineSortCriterionCount
+	default:
+		return timelineSortCriterionWhen
+	}
+}
+
+func (mode timelineSortMode) ascending() bool {
+	switch mode {
+	case timelineSortWhenAsc, timelineSortSenderAsc, timelineSortCountAsc:
+		return true
+	default:
+		return false
+	}
+}
+
+func (mode timelineSortMode) directionIndicator() string {
+	if mode.ascending() {
+		return "↑"
+	}
+	return "↓"
+}
+
+func (mode timelineSortMode) directionLabel() string {
+	if mode.ascending() {
+		return "ascending"
+	}
+	return "descending"
+}
+
+func (mode timelineSortMode) criterionLabel() string {
+	switch mode.criterion() {
+	case timelineSortCriterionSender:
+		return "Sender"
+	case timelineSortCriterionCount:
+		return "Count"
+	default:
+		return "When"
+	}
+}
+
+func (mode timelineSortMode) shortLabel() string {
+	return mode.criterionLabel() + " " + mode.directionIndicator()
+}
+
+func (mode timelineSortMode) statusLabel() string {
+	return strings.ToLower(mode.criterionLabel()) + " " + mode.directionLabel()
+}
+
+func (mode timelineSortMode) next() timelineSortMode {
+	switch mode {
+	case timelineSortWhenDesc:
+		return timelineSortWhenAsc
+	case timelineSortWhenAsc:
+		return timelineSortSenderAsc
+	case timelineSortSenderAsc:
+		return timelineSortSenderDesc
+	case timelineSortSenderDesc:
+		return timelineSortCountDesc
+	case timelineSortCountDesc:
+		return timelineSortCountAsc
+	default:
+		return timelineSortWhenDesc
+	}
+}
+
+func (mode timelineSortMode) flipped() timelineSortMode {
+	switch mode {
+	case timelineSortWhenDesc:
+		return timelineSortWhenAsc
+	case timelineSortWhenAsc:
+		return timelineSortWhenDesc
+	case timelineSortSenderAsc:
+		return timelineSortSenderDesc
+	case timelineSortSenderDesc:
+		return timelineSortSenderAsc
+	case timelineSortCountDesc:
+		return timelineSortCountAsc
+	default:
+		return timelineSortCountDesc
+	}
+}
+
+func defaultTimelineSortModeForCriterion(criterion timelineSortCriterion) timelineSortMode {
+	switch criterion {
+	case timelineSortCriterionSender:
+		return timelineSortSenderAsc
+	case timelineSortCriterionCount:
+		return timelineSortCountDesc
+	default:
+		return timelineSortWhenDesc
+	}
+}
+
 func (mode timelineGroupingMode) Label() string {
 	switch mode {
 	case timelineGroupingSender:
@@ -792,6 +909,89 @@ func timelineCollapsedGroupLabel(theme Theme, g *threadGroup, fromAddress string
 	return styledThreadParticipants(theme, threadParticipantLabels(g.emails, fromAddress), maxWidth)
 }
 
+func timelineGroupStarred(g *threadGroup) bool {
+	return g != nil && len(g.emails) > 0 && g.emails[0] != nil && g.emails[0].IsStarred
+}
+
+func timelineGroupNewestDate(g *threadGroup) time.Time {
+	if g == nil || len(g.emails) == 0 || g.emails[0] == nil {
+		return time.Time{}
+	}
+	return g.emails[0].Date
+}
+
+func timelineGroupSortSenderLabel(g *threadGroup, fromAddress string) string {
+	if g == nil {
+		return ""
+	}
+	if g.groupingMode == timelineGroupingSender || g.groupingMode == timelineGroupingDomain {
+		label := sanitizeText(g.label)
+		if label != "" {
+			return label
+		}
+		return "(unknown)"
+	}
+	return strings.Join(threadParticipantLabels(g.emails, fromAddress), ", ")
+}
+
+func compareTimelineGroupStrings(a, b string, ascending bool) bool {
+	a = strings.ToLower(strings.TrimSpace(a))
+	b = strings.ToLower(strings.TrimSpace(b))
+	if a == b {
+		return false
+	}
+	if ascending {
+		return a < b
+	}
+	return a > b
+}
+
+func compareTimelineGroupTimes(a, b time.Time, ascending bool) bool {
+	if a.Equal(b) {
+		return false
+	}
+	if ascending {
+		return a.Before(b)
+	}
+	return a.After(b)
+}
+
+func compareTimelineGroupCounts(a, b int, ascending bool) bool {
+	if a == b {
+		return false
+	}
+	if ascending {
+		return a < b
+	}
+	return a > b
+}
+
+func (m *Model) sortTimelineGroups(groups []threadGroup) {
+	sortMode := m.timeline.sortMode
+	sort.SliceStable(groups, func(i, j int) bool {
+		left := &groups[i]
+		right := &groups[j]
+		leftStarred := timelineGroupStarred(left)
+		rightStarred := timelineGroupStarred(right)
+		if leftStarred != rightStarred {
+			return leftStarred
+		}
+		ascending := sortMode.ascending()
+		switch sortMode.criterion() {
+		case timelineSortCriterionSender:
+			return compareTimelineGroupStrings(
+				timelineGroupSortSenderLabel(left, m.fromAddress),
+				timelineGroupSortSenderLabel(right, m.fromAddress),
+				ascending,
+			)
+		case timelineSortCriterionCount:
+			return compareTimelineGroupCounts(len(left.emails), len(right.emails), ascending)
+		default:
+			return compareTimelineGroupTimes(timelineGroupNewestDate(left), timelineGroupNewestDate(right), ascending)
+		}
+	})
+}
+
 func timelineExpandedRowPrefix(g *threadGroup, email *models.EmailData, idx int) string {
 	if g == nil || g.groupingMode == timelineGroupingThread {
 		if idx == 0 {
@@ -890,13 +1090,7 @@ func (m *Model) updateTimelineTable() {
 	// subject-based behavior; sender/domain modes reuse the same row machinery.
 	m.timeline.threadGroups = buildTimelineGroups(displayEmails, m.timeline.groupingMode)
 	m.timeline.threadRowMap = m.timeline.threadRowMap[:0]
-
-	// Sort starred threads to the top, preserving date order within each bucket.
-	sort.SliceStable(m.timeline.threadGroups, func(i, j int) bool {
-		iStarred := len(m.timeline.threadGroups[i].emails) > 0 && m.timeline.threadGroups[i].emails[0].IsStarred
-		jStarred := len(m.timeline.threadGroups[j].emails) > 0 && m.timeline.threadGroups[j].emails[0].IsStarred
-		return iStarred && !jStarred
-	})
+	m.sortTimelineGroups(m.timeline.threadGroups)
 
 	var rows []table.Row
 	for gi := range m.timeline.threadGroups {
@@ -1073,6 +1267,13 @@ func (m *Model) renderTimelineGroupingNotice(view string) string {
 	return strings.Join(lines, "\n")
 }
 
+func (m *Model) timelineSortColumnTitle(title string, criterion timelineSortCriterion) string {
+	if m.timeline.sortMode.criterion() != criterion {
+		return title
+	}
+	return title + " " + m.timeline.sortMode.directionIndicator()
+}
+
 func (m *Model) clearTimelineSearch() {
 	m.finishTimelineRangeSelection()
 	m.timeline.searchToken++
@@ -1169,6 +1370,79 @@ func (m *Model) cycleTimelineGrouping() {
 		m.timelineTable.SetCursor(0)
 	}
 	m.statusMessage = "Grouped by " + strings.ToLower(m.timeline.groupingMode.Label())
+}
+
+func (m *Model) timelineSortAnchor() string {
+	if m.timeline.selectedEmail != nil {
+		if key := timelineSelectionKey(m.timeline.selectedEmail); key != "" {
+			return "email:" + key
+		}
+	}
+	cursor := m.timelineTable.Cursor()
+	if cursor < 0 || cursor >= len(m.timeline.threadRowMap) {
+		return ""
+	}
+	ref := m.timeline.threadRowMap[cursor]
+	if ref.kind == rowKindThread && ref.group != nil {
+		return "group:" + ref.group.normalizedSubject
+	}
+	for _, email := range m.timelineRowEmails(ref) {
+		if key := timelineSelectionKey(email); key != "" {
+			return "email:" + key
+		}
+	}
+	return ""
+}
+
+func (m *Model) restoreTimelineSortAnchor(anchor string) {
+	if anchor == "" {
+		return
+	}
+	groupKey, wantGroup := strings.CutPrefix(anchor, "group:")
+	emailKey, wantEmail := strings.CutPrefix(anchor, "email:")
+	for idx, ref := range m.timeline.threadRowMap {
+		if wantGroup && ref.group != nil && ref.group.normalizedSubject == groupKey {
+			m.timelineTable.SetCursor(idx)
+			return
+		}
+		if wantEmail {
+			for _, email := range m.timelineRowEmails(ref) {
+				if timelineEmailMatchesSelectionKey(email, emailKey) {
+					m.timelineTable.SetCursor(idx)
+					return
+				}
+			}
+		}
+	}
+}
+
+func (m *Model) refreshTimelineSort(anchor string) {
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	} else {
+		m.updateTimelineTable()
+	}
+	m.restoreTimelineSortAnchor(anchor)
+}
+
+func (m *Model) cycleTimelineSort() {
+	m.finishTimelineRangeSelection()
+	anchor := m.timelineSortAnchor()
+	m.timeline.sortMode = m.timeline.sortMode.next()
+	m.refreshTimelineSort(anchor)
+	m.statusMessage = "Sorted by " + m.timeline.sortMode.statusLabel()
+}
+
+func (m *Model) setTimelineSortCriterion(criterion timelineSortCriterion) {
+	m.finishTimelineRangeSelection()
+	anchor := m.timelineSortAnchor()
+	if m.timeline.sortMode.criterion() == criterion {
+		m.timeline.sortMode = m.timeline.sortMode.flipped()
+	} else {
+		m.timeline.sortMode = defaultTimelineSortModeForCriterion(criterion)
+	}
+	m.refreshTimelineSort(anchor)
+	m.statusMessage = "Sorted by " + m.timeline.sortMode.statusLabel()
 }
 
 func (m *Model) clearTimelineChatFilter() {
@@ -2019,6 +2293,7 @@ func (m *Model) appendTimelineStatusParts(parts []string) []string {
 	if m.activeTab == tabTimeline {
 		if !(m.windowWidth <= 80 && m.sidebarTooWide) {
 			parts = append(parts, "Group: "+m.timeline.groupingMode.Label())
+			parts = append(parts, "Sort: "+m.timeline.sortMode.shortLabel())
 		}
 		if m.timelineIsReadOnlyDiagnostic() {
 			parts = append(parts, fmt.Sprintf("%d emails", len(m.timeline.emails)))
@@ -2107,7 +2382,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(m.timelinePanelSwitchHint(), m.movementHint("timeline", "navigate"), "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timelineIsReadOnlyDiagnostic() {
-		return joinHintSegments(m.primaryTabShortcutHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
+		return joinHintSegments(m.primaryTabShortcutHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
 		segments := []string{m.rangeExtendHint("timeline"), "V/Esc: done"}
@@ -2143,7 +2418,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
@@ -2178,7 +2453,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	} else {
 		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
 	}
-	segments = append(segments, m.foldersFocusHint("timeline"), m.timelineOpenPreviewHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, m.foldersFocusHint("timeline"), m.timelineOpenPreviewHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, m.commandHint("timeline", CommandHelpSearch, "hybrid search"))
 	}
@@ -2669,6 +2944,14 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		if m.canInteractWithVisibleData() {
 			m.cycleTimelineGrouping()
+		}
+		return m, nil, true
+	case "O":
+		if m.timeline.quickReplyOpen {
+			return m, nil, false
+		}
+		if m.canInteractWithVisibleData() {
+			m.cycleTimelineSort()
 		}
 		return m, nil, true
 	case "esc":

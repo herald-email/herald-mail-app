@@ -35,6 +35,7 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "delete immediate primary", scope: "timeline", mode: "normal", key: "D", command: CommandMailDeleteImmediate},
 		{name: "delete immediate shift backspace", scope: "timeline", mode: "normal", key: "shift+backspace", command: CommandMailDeleteImmediate},
 		{name: "classify relocated", scope: "timeline", mode: "normal", key: "T", command: CommandMailReclassify},
+		{name: "sort cycle primary", scope: "timeline", mode: "normal", key: "O", command: CommandTimelineSortCycle},
 		{name: "sidebar primary", scope: "global", mode: "normal", key: "B", command: CommandSidebarToggle},
 		{name: "logs primary", scope: "global", mode: "normal", key: "L", command: CommandLogsToggle},
 		{name: "refresh primary", scope: "global", mode: "normal", key: "ctrl+r", command: CommandAppRefresh},
@@ -179,6 +180,7 @@ bindings:
 		"z: delete",
 		"y: delete now",
 		"x: archive",
+		"O: sort",
 		"G: re-classify",
 		"b: sidebar",
 	)
@@ -210,6 +212,7 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 		{scope: "timeline", command: CommandMailDeleteConfirm, hint: "delete", help: "after confirmation"},
 		{scope: "timeline", command: CommandMailDeleteImmediate, hint: "delete now", help: "immediately"},
 		{scope: "timeline", command: CommandMailArchiveCurrent, hint: "archive", help: "after confirmation"},
+		{scope: "timeline", command: CommandTimelineSortCycle, hint: "sort", help: "cycle Timeline sorting"},
 		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, hint: "sidebar", help: "toggle sidebar"},
 	} {
 		t.Run(tc.command, func(t *testing.T) {

@@ -323,7 +323,7 @@ func tableColumnTitles(cols []table.Column) []string {
 	titles := make([]string, 0, len(cols))
 	for _, col := range cols {
 		if col.Width > 0 {
-			titles = append(titles, col.Title)
+			titles = append(titles, normalizedTableColumnTitle(col.Title))
 		}
 	}
 	return titles
@@ -331,11 +331,18 @@ func tableColumnTitles(cols []table.Column) []string {
 
 func hasColumnTitle(cols []table.Column, title string) bool {
 	for _, col := range cols {
-		if col.Width > 0 && col.Title == title {
+		if col.Width > 0 && normalizedTableColumnTitle(col.Title) == title {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizedTableColumnTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.TrimSuffix(title, " ↑")
+	title = strings.TrimSuffix(title, " ↓")
+	return title
 }
 
 func TestTimelineReadingFirstColumnsPrioritizeSenderAndSubject(t *testing.T) {

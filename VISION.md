@@ -138,6 +138,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [x] Reading-first Timeline rows hide spreadsheet-only size/attachment columns, show attachments in the subject cell, use local human dates, and keep Sender/Subject dominant at `80x24`, `120x40`, and `220x50`
 - [x] Timeline grouping switch cycles the reading list between default thread, sender, and domain grouping with `G`, preserving Timeline actions and fully covering the cleanup browse workflow
+- [x] Timeline sorting cycles with `O` and sortable `Sender` / `Subject` count / `When` headers, showing direction indicators while preserving starred pinning
 - [ ] `All Mail only` means mail present in `All Mail` with no other real folder assignment; `Sent`, `Archive`, and nested folders are excluded rather than treated as acceptable matches
 - [ ] Unified list highlight language shared with the folder sidebar and other list-like panels
 - [ ] Active border shown only on the currently focused Timeline region (sidebar, list, or preview)

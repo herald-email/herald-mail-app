@@ -396,6 +396,29 @@ Check these states during every applicable lane:
 - Literal `G` remains text in Compose and other editable fields.
 - At `50x15`, the minimum-size guard appears instead of clipped grouping UI, and resizing back restores a clean Timeline.
 
+### TC-05E — Timeline sorting modes
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Open Timeline with demo data and confirm the default `When ↓` order is newest-first.
+2. Press `O` repeatedly and capture the visible order and active column header for `When ↑`, `Sender ↑`, `Sender ↓`, `Subject ↓`, `Subject ↑`, and back to `When ↓`.
+3. Press `G` into sender and domain grouping, then repeat enough sort changes to prove grouped rows sort by sender/domain label, group count through the `Subject` header, and newest message date through `When`.
+4. Click the `Sender`, `Subject`, and `When` headers. Click the active sorted header a second time to flip the direction.
+5. Open Compose from Timeline, type a literal `O` in an editable field, then cancel back to Timeline.
+6. Resize to `50x15`, then back to `80x24`.
+
+**Expect:**
+- `O` cycles `When ↓ -> When ↑ -> Sender ↑ -> Sender ↓ -> Count ↓ -> Count ↑ -> When ↓` without switching grouping modes.
+- The active sorted column header shows `↑` or `↓`; `Subject` is the visible click target and indicator for count sorting because group counts appear as `[N]` in that cell.
+- Clicking an unsorted supported header selects its default direction: `Sender ↑`, `Subject ↓`, or `When ↓`; clicking the active sorted header flips direction.
+- Starred or pinned groups remain above unstarred groups, with sorting applied inside each bucket.
+- Sorting preserves message selections, expanded groups, and any open preview whenever the selected email remains visible.
+- Hints and shortcut help advertise `O: sort` where Timeline browse shortcuts are valid.
+- Literal `O` remains text in Compose, Timeline search, prompt, and editor fields.
+- At `50x15`, the minimum-size guard appears instead of clipped sorting UI, and resizing back restores clean headers and rows.
+
 ### TC-05B — Timeline horizontal reading movement
 
 **Lane:** A, B

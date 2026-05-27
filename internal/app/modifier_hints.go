@@ -122,7 +122,7 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "?: semantic", "esc: clear"}
 	}
 	if m.activeTab == tabTimeline {
-		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
+		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
 			segments = append(segments, "R: sender", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
 		}

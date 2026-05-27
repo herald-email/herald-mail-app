@@ -486,9 +486,9 @@ func (m *Model) updateTableDimensions(width, height int) {
 		columns = append(columns, table.Column{Title: "Acct", Width: tAcctW})
 	}
 	columns = append(columns,
-		table.Column{Title: "Sender", Width: tSenderWidth},
-		table.Column{Title: "Subject", Width: tSubjectWidth},
-		table.Column{Title: "When", Width: tWhenW},
+		table.Column{Title: m.timelineSortColumnTitle("Sender", timelineSortCriterionSender), Width: tSenderWidth},
+		table.Column{Title: m.timelineSortColumnTitle("Subject", timelineSortCriterionCount), Width: tSubjectWidth},
+		table.Column{Title: m.timelineSortColumnTitle("When", timelineSortCriterionWhen), Width: tWhenW},
 		table.Column{Title: "Tag", Width: tTagW},
 	)
 	savedTimelineCursor := m.timelineTable.Cursor()

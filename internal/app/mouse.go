@@ -1,8 +1,11 @@
 package app
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const mouseWheelDelta = 3
@@ -136,6 +139,39 @@ func mouseTableRowAt(t *table.Model, rect mouseRect, y int) (int, bool) {
 	return row, true
 }
 
+func mouseTableHeaderAt(rect mouseRect, y int) bool {
+	return y == rect.y+1
+}
+
+func mouseTimelineSortCriterionAt(t *table.Model, rect mouseRect, x int) (timelineSortCriterion, bool) {
+	contentX := x - (rect.x + 1)
+	if contentX < 0 || contentX >= t.Width() {
+		return 0, false
+	}
+	offset := 0
+	for _, col := range t.Columns() {
+		if col.Width <= 0 {
+			continue
+		}
+		cellWidth := col.Width + 2
+		if contentX >= offset && contentX < offset+cellWidth {
+			title := ansi.Strip(col.Title)
+			switch {
+			case strings.HasPrefix(title, "Sender"):
+				return timelineSortCriterionSender, true
+			case strings.HasPrefix(title, "Subject"):
+				return timelineSortCriterionCount, true
+			case strings.HasPrefix(title, "When"):
+				return timelineSortCriterionWhen, true
+			default:
+				return 0, false
+			}
+		}
+		offset += cellWidth
+	}
+	return 0, false
+}
+
 func (m *Model) handleSidebarMouse(msg tea.Mouse, rect mouseRect) (tea.Model, tea.Cmd, bool) {
 	if msg.Button != tea.MouseLeft {
 		return m, nil, true
@@ -232,6 +268,12 @@ func (m *Model) handleTimelineMouse(msg tea.Mouse, plan LayoutPlan, top int) (te
 			return m, m.maybeUpdatePreview(), true
 		}
 		if msg.Button == tea.MouseLeft {
+			if mouseTableHeaderAt(tableRect, msg.Y) {
+				if criterion, ok := mouseTimelineSortCriterionAt(&m.timelineTable, tableRect, msg.X); ok {
+					m.setTimelineSortCriterion(criterion)
+				}
+				return m, nil, true
+			}
 			if row, ok := mouseTableRowAt(&m.timelineTable, tableRect, msg.Y); ok {
 				m.timelineTable.SetCursor(row)
 				return m, m.activateCurrentTimelineRowFromMouse(), true

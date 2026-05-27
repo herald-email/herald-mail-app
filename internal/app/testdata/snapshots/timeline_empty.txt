@@ -1,9 +1,9 @@
 [7m [m[1;7mHerald[m[7m [m [7m  [m[1;7m1  Timeline[m[7m  [m  2  Contacts
 [90m┌──────────────────────────┐[m [36m┌─────────────────────────────────────────────────────[m Grouped by: Thread (G to change) [36m─┐[m
-[90m│[m[4;4m›[m[4m [m[4m [m[4;4mI[m[4;4mN[m[4;4mB[m[4;4mO[m[4;4mX[m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[90m│[m [36m│[m [1m✓[m  [1mSender[m              [1mSubject[m                                  [1mWhen[m          [1mTag[m      [36m│[m
+[90m│[m[4;4m›[m[4m [m[4m [m[4;4mI[m[4;4mN[m[4;4mB[m[4;4mO[m[4;4mX[m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[90m│[m [36m│[m [1m✓[m  [1mSender[m              [1mSubject[m                                  [1mWhen ↓[m        [1mTag[m      [36m│[m
 [90m│[m   All Mail only          [90m│[m [36m└────────────────────────────────────────────────────────────────────────────────────────┘[m
 [90m└──────────────────────────┘[m
-[7m [m[7mINBOX  │  AI: off  │  Group: Thread  │  0 emails[m[7m [m[7m                                                                      [m
+[7m [m[7mINBOX  │  AI: off  │  Group: Thread  │  Sort: When ↓  │  0 emails[m[7m [m[7m                                                     [m
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ?: help  │  1-2: tabs  │  tab/shift+tab: panels  │  c: compose  │  S: settings  │  h/left/[: folders
- l/right/]: preview  │  G: group  │  ↑/k ↓/j: navigate  │  ctrl+d/u: half-page  │  space: select  │  shift+↑/↓: range
+ l/right/]: preview  │  G: group  │  O: sort  │  ↑/k ↓/j: navigate  │  ctrl+d/u: half-page  │  space: select

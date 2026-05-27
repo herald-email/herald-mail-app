@@ -50,6 +50,7 @@ type TimelineState struct {
 	accountColumnVisible bool
 	virtualNotice        string
 	groupingMode         timelineGroupingMode
+	sortMode             timelineSortMode
 	selectedMessageIDs   map[string]bool
 	rangeMode            bool
 	rangeShiftMode       bool
