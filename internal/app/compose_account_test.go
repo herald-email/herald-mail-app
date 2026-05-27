@@ -45,8 +45,8 @@ func (b *composeAccountStubBackend) SendDraftForAccount(sourceID models.SourceID
 
 func newComposeAccountTestModel(active models.SourceID) (*Model, *composeAccountStubBackend) {
 	base := newAccountAwareStubBackend([]backend.AccountInfo{
-		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"},
-		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"},
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test", Signature: "-- \nWork Signature"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test", Signature: "-- \nPersonal Signature"},
 	})
 	if active != "" {
 		base.activeSource = active
@@ -59,6 +59,16 @@ func newComposeAccountTestModel(active models.SourceID) (*Model, *composeAccount
 	m.currentFolder = "INBOX"
 	m.syncAccountsFromBackend()
 	return m, b
+}
+
+func TestMultiAccountBlankComposeUsesActiveAccountSignature(t *testing.T) {
+	m, _ := newComposeAccountTestModel("personal-mail")
+
+	m.openBlankComposeFromCurrent()
+
+	if got := m.composeBody.Value(); got != "\n\n-- \nPersonal Signature" {
+		t.Fatalf("compose body = %q, want personal signature", got)
+	}
 }
 
 func TestMultiAccountBlankComposeShowsFromPickerAndDefaultsToActiveAccount(t *testing.T) {
@@ -108,10 +118,37 @@ func TestReplyAndForwardComposeUseSelectedMessageAccountForFrom(t *testing.T) {
 	if got := m.composeSourceID; got != models.SourceID("personal-mail") {
 		t.Fatalf("reply composeSourceID=%q, want personal-mail", got)
 	}
+	if got := m.composeBody.Value(); got != "\n\n-- \nPersonal Signature" {
+		t.Fatalf("reply body = %q, want personal signature", got)
+	}
 
 	m.openTimelineForwardCompose(email, body, "")
 	if got := m.composeSourceID; got != models.SourceID("personal-mail") {
 		t.Fatalf("forward composeSourceID=%q, want personal-mail", got)
+	}
+	if got := m.composeBody.Value(); got != "\n\n-- \nPersonal Signature" {
+		t.Fatalf("forward body = %q, want personal signature", got)
+	}
+}
+
+func TestQuickReplyUsesSelectedMessageAccountSignature(t *testing.T) {
+	m, _ := newComposeAccountTestModel(backend.AllAccountsSourceID)
+	m.timeline.selectedEmail = scopedAppEmail(&models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "msg-quick",
+		Sender:    "friend@example.test",
+		Subject:   "hello",
+	})
+
+	model, cmd := m.openQuickReply("Sounds good.")
+	updated := model.(*Model)
+
+	if cmd != nil {
+		t.Fatalf("expected quick reply open to be synchronous, got %T", cmd)
+	}
+	if got := updated.composeBody.Value(); got != "Sounds good.\n\n\n-- \nWork Signature" {
+		t.Fatalf("quick reply body = %q, want work signature", got)
 	}
 }
 

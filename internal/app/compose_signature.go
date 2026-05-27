@@ -3,7 +3,13 @@ package app
 import "strings"
 
 func (m *Model) configuredSignature() string {
-	if m == nil || m.cfg == nil {
+	if m == nil {
+		return ""
+	}
+	if account := m.composeSelectedAccount(); strings.TrimSpace(account.Signature) != "" {
+		return normalizeSignatureText(account.Signature)
+	}
+	if m.cfg == nil {
 		return ""
 	}
 	return normalizeSignatureText(m.cfg.Compose.Signature.Text)

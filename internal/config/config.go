@@ -63,6 +63,15 @@ type SourceConfig struct {
 	SMTP        ServerConfig      `yaml:"smtp,omitempty"`
 	Google      GoogleConfig      `yaml:"google,omitempty"`
 	CalDAV      CalDAVConfig      `yaml:"caldav,omitempty"`
+	Compose     ComposeConfig     `yaml:"compose,omitempty"`
+}
+
+type SignatureConfig struct {
+	Text string `yaml:"text,omitempty"`
+}
+
+type ComposeConfig struct {
+	Signature SignatureConfig `yaml:"signature,omitempty"`
 }
 
 // Config represents the application configuration
@@ -72,11 +81,7 @@ type Config struct {
 		DatabasePath  string `yaml:"database_path,omitempty"`
 		StoragePolicy string `yaml:"storage_policy,omitempty"` // lightweight | no_attachments | preserve_all
 	} `yaml:"cache,omitempty"`
-	Compose struct {
-		Signature struct {
-			Text string `yaml:"text,omitempty"`
-		} `yaml:"signature,omitempty"`
-	} `yaml:"compose,omitempty"`
+	Compose  ComposeConfig `yaml:"compose,omitempty"`
 	Keyboard struct {
 		Profile      string `yaml:"profile,omitempty"`
 		CustomKeymap string `yaml:"custom_keymap,omitempty"`
@@ -254,12 +259,12 @@ func (c *Config) EffectiveEmbeddingModel() string {
 
 func (c Config) NormalizedSources() []SourceConfig {
 	if len(c.Sources) > 0 {
-		return normalizeExplicitSources(c.Sources)
+		return normalizeExplicitSources(c.Sources, c.Compose.Signature.Text)
 	}
 	return []SourceConfig{legacyDefaultMailSource(c)}
 }
 
-func normalizeExplicitSources(sources []SourceConfig) []SourceConfig {
+func normalizeExplicitSources(sources []SourceConfig, defaultSignature string) []SourceConfig {
 	normalized := make([]SourceConfig, 0, len(sources))
 	for _, source := range sources {
 		source.ID = strings.TrimSpace(source.ID)
@@ -286,6 +291,9 @@ func normalizeExplicitSources(sources []SourceConfig) []SourceConfig {
 				source.ID = string(models.DefaultMailSourceID)
 			}
 		}
+		if source.Kind == string(models.SourceKindMail) && strings.TrimSpace(source.Compose.Signature.Text) == "" {
+			source.Compose.Signature.Text = defaultSignature
+		}
 		normalized = append(normalized, source)
 	}
 	return normalized
@@ -307,6 +315,7 @@ func legacyDefaultMailSource(c Config) SourceConfig {
 			TokenExpiry:  c.Gmail.TokenExpiry,
 			Email:        c.Gmail.Email,
 		},
+		Compose: c.Compose,
 	}
 }
 

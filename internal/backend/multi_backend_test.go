@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -300,6 +301,23 @@ func TestMultiBackendAccountsAndActiveSwitching(t *testing.T) {
 	}
 	if folders, _ := mb.ListFolders(); !reflect.DeepEqual(folders, []string{"INBOX", "Travel"}) {
 		t.Fatalf("switched folders = %#v, want personal folders", folders)
+	}
+}
+
+func TestAccountInfoFromSourceCarriesComposeSignature(t *testing.T) {
+	source := config.SourceConfig{
+		ID:          "work-mail",
+		Kind:        "mail",
+		Provider:    "imap",
+		DisplayName: "Work Mail",
+		AccountID:   "work",
+		Credentials: config.CredentialsConfig{Username: "work@example.test"},
+		Compose:     config.ComposeConfig{Signature: config.SignatureConfig{Text: "-- \nWork Signature\n\n"}},
+	}
+
+	info := accountInfoFromSource(source)
+	if got := info.Signature; got != "-- \nWork Signature" {
+		t.Fatalf("signature = %q, want trimmed work signature", got)
 	}
 }
 

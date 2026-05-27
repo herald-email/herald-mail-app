@@ -180,7 +180,7 @@ Config should preserve existing single-account YAML and introduce an additive `s
 - [x] Multi-account mail config can add multiple mail sources without requiring users to split config files.
 - [x] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
 - [ ] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
-- [ ] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
+- [x] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
 
 Sketch:
 
@@ -200,6 +200,9 @@ sources:
     smtp:
       host: smtp.example.com
       port: 587
+    compose:
+      signature:
+        text: "-- \nWork signature"
   - id: work-calendar
     kind: calendar
     provider: google_calendar

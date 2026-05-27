@@ -1514,12 +1514,12 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.composeTo.SetValue("")
 	m.composeSubject.SetValue(buildForwardSubject(email.Subject))
 	m.composeBody.SetValue("")
+	m.setComposeSourceForEmail(email)
 	m.applyConfiguredSignatureToComposeBody()
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
 	m.replyContextEmail = nil
 	m.composeAIThread = false
-	m.setComposeSourceForEmail(email)
 	m.resetComposeAIBar()
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindForward, email, body, composeStatus)
 	m.composeField = composeFieldTo
@@ -1547,10 +1547,10 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeBCC.SetValue("")
 	m.composeSubject.SetValue(buildReplySubject(email.Subject))
 	m.composeBody.SetValue("")
+	m.setComposeSourceForEmail(email)
 	m.applyConfiguredSignatureToComposeBody()
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
-	m.setComposeSourceForEmail(email)
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindReply, email, body, composeStatus)
 	m.resetComposeAIBar()
 	m.composeField = composeFieldBody

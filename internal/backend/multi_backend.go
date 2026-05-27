@@ -23,6 +23,7 @@ type AccountInfo struct {
 	DisplayName string
 	Provider    string
 	Address     string
+	Signature   string
 }
 
 // AccountStatus is cached account state suitable for compact UI display.
@@ -133,6 +134,7 @@ func normalizeAccountInfo(info AccountInfo) AccountInfo {
 		info.Provider = "imap"
 	}
 	info.Address = strings.TrimSpace(info.Address)
+	info.Signature = strings.TrimRight(strings.ReplaceAll(strings.ReplaceAll(info.Signature, "\r\n", "\n"), "\r", "\n"), " \t\n")
 	return info
 }
 
@@ -1306,5 +1308,6 @@ func accountInfoFromSource(source config.SourceConfig) AccountInfo {
 		DisplayName: source.DisplayName,
 		Provider:    source.Provider,
 		Address:     address,
+		Signature:   source.Compose.Signature.Text,
 	})
 }

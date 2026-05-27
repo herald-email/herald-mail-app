@@ -65,6 +65,7 @@ func TestConfigNormalizedSourcesFromLegacyMailConfig(t *testing.T) {
 	cfg.Server.Port = 1143
 	cfg.SMTP.Host = "127.0.0.1"
 	cfg.SMTP.Port = 1025
+	cfg.Compose.Signature.Text = "-- \nLegacy Signature"
 
 	sources := cfg.NormalizedSources()
 	if len(sources) != 1 {
@@ -76,12 +77,21 @@ func TestConfigNormalizedSourcesFromLegacyMailConfig(t *testing.T) {
 	if sources[0].Credentials.Username != "user@example.com" || sources[0].IMAP.Host != "127.0.0.1" || sources[0].SMTP.Port != 1025 {
 		t.Fatalf("legacy fields were not copied into source: %#v", sources[0])
 	}
+	if got := sources[0].Compose.Signature.Text; got != cfg.Compose.Signature.Text {
+		t.Fatalf("legacy source signature = %q, want %q", got, cfg.Compose.Signature.Text)
+	}
 }
 
 func TestConfigNormalizedSourcesKeepsExplicitSources(t *testing.T) {
 	cfg := Config{
 		Sources: []SourceConfig{
-			{ID: "work-mail", Kind: "mail", Provider: "imap", AccountID: "work"},
+			{
+				ID:        "work-mail",
+				Kind:      "mail",
+				Provider:  "imap",
+				AccountID: "work",
+				Compose:   ComposeConfig{Signature: SignatureConfig{Text: "-- \nWork Signature"}},
+			},
 			{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
 		},
 	}
@@ -93,8 +103,34 @@ func TestConfigNormalizedSourcesKeepsExplicitSources(t *testing.T) {
 	if sources[0].ID != "work-mail" || sources[0].Kind != "mail" || sources[0].Provider != "imap" || sources[0].AccountID != "work" {
 		t.Fatalf("first source = %#v, want explicit work mail source", sources[0])
 	}
+	if got := sources[0].Compose.Signature.Text; got != "-- \nWork Signature" {
+		t.Fatalf("explicit mail source signature = %q, want work signature", got)
+	}
 	if sources[1].ID != "work-calendar" || sources[1].Kind != "calendar" || sources[1].Provider != "google_calendar" || sources[1].AccountID != "work" {
 		t.Fatalf("second source = %#v, want explicit work calendar source", sources[1])
+	}
+}
+
+func TestConfigNormalizedSourcesUsesLegacySignatureAsExplicitMailFallback(t *testing.T) {
+	var cfg Config
+	cfg.Compose.Signature.Text = "-- \nDefault Signature"
+	cfg.Sources = []SourceConfig{
+		{ID: "work-mail", Kind: "mail", Provider: "imap", AccountID: "work"},
+		{
+			ID:        "personal-mail",
+			Kind:      "mail",
+			Provider:  "imap",
+			AccountID: "personal",
+			Compose:   ComposeConfig{Signature: SignatureConfig{Text: "-- \nPersonal Signature"}},
+		},
+	}
+
+	sources := cfg.NormalizedSources()
+	if got := sources[0].Compose.Signature.Text; got != cfg.Compose.Signature.Text {
+		t.Fatalf("fallback signature = %q, want legacy default %q", got, cfg.Compose.Signature.Text)
+	}
+	if got := sources[1].Compose.Signature.Text; got != "-- \nPersonal Signature" {
+		t.Fatalf("explicit signature = %q, want personal signature", got)
 	}
 }
 
