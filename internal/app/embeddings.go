@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -158,6 +159,18 @@ func backgroundAIForEmail(base ai.AIClient, email *models.EmailData) ai.AIClient
 	return ai.WithSourceID(base, string(email.MessageRef().SourceID))
 }
 
+func backgroundAIForActiveAccount(base ai.AIClient, b backend.Backend) ai.AIClient {
+	accountAware, ok := b.(backend.AccountAwareBackend)
+	if !ok {
+		return base
+	}
+	info := accountAware.ActiveAccount()
+	if info.SourceID == "" || info.SourceID == backend.AllAccountsSourceID {
+		return base
+	}
+	return ai.WithSourceID(base, string(info.SourceID))
+}
+
 // runEmbeddingBatch processes one batch of emails for semantic search embedding.
 // Pass 1 embeds emails with cached body text.
 // Pass 2 lazily fetches bodies for emails not yet cached (rate-limited to 5 per call).
@@ -305,6 +318,7 @@ func (m *Model) runContactEnrichment(generation int64) tea.Cmd {
 	}
 	return func() tea.Msg {
 		backgroundAI := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindContactEnrich)
+		backgroundAI = backgroundAIForActiveAccount(backgroundAI, m.backend)
 		if backgroundAI == nil {
 			return ContactEnrichedMsg{Count: 0, Background: true, Generation: generation}
 		}

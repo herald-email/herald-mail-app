@@ -156,7 +156,8 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [x] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
 - [x] `classifyCh` remains mail-only at first but stores results under scoped message identity.
 - [x] Background mail embedding uses scoped `MessageRef` store/query helpers and all-account source tagging while continuing to run through background AI priority.
-- [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
+- [x] Background mail embedding and contact enrichment use global AI budget plus fair source/account tagging.
+- [ ] Future event indexing uses global AI budget plus fair source/account tagging once event indexing exists.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
 - [x] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
 - [x] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
