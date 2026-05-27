@@ -553,6 +553,7 @@ type Model struct {
 	progressInfo              models.ProgressInfo
 	syncAccumulator           syncAccumulator
 	syncGeneration            int64
+	syncSourceGenerations     map[models.SourceID]int64
 	syncingFolder             string
 	syncCountsSettled         bool
 	showLogs                  bool
@@ -961,6 +962,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		},
 		classifyCh:              make(chan ClassifyProgressMsg, 50),
 		syncAccumulator:         newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
+		syncSourceGenerations:   make(map[models.SourceID]int64),
 		mailer:                  mailer,
 		fromAddress:             fromAddress,
 		composeTo:               composeTo,
@@ -1374,6 +1376,7 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 		folder = "INBOX"
 	}
 	m.syncGeneration = 0
+	m.syncSourceGenerations = make(map[models.SourceID]int64)
 	m.syncAccumulator.reset("", 0)
 	m.syncCountsSettled = false
 	m.syncingFolder = ""
@@ -2513,21 +2516,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Debug("SyncEventMsg: ignoring stale source=%s active=%s", event.SourceID, m.activeSourceID)
 			return m, m.listenForSyncEvents()
 		}
-		if event.Generation < m.syncGeneration {
-			logger.Debug("SyncEventMsg: ignoring stale generation=%d current=%d", event.Generation, m.syncGeneration)
+		currentSourceGeneration := m.syncGenerationForSource(event.SourceID)
+		if event.Generation < currentSourceGeneration {
+			logger.Debug("SyncEventMsg: ignoring stale generation=%d current=%d source=%s", event.Generation, currentSourceGeneration, event.SourceID)
 			return m, m.listenForSyncEvents()
 		}
 		if event.Folder != "" && event.Folder != m.currentFolder {
 			// Keep listening, but do not let an older folder repaint the visible one.
-			if event.Generation > m.syncGeneration {
-				m.syncGeneration = event.Generation
+			if event.Generation > currentSourceGeneration {
+				m.setSyncGenerationForSource(event.SourceID, event.Generation)
 			}
 			logger.Debug("SyncEventMsg: ignoring event for non-current folder=%s currentFolder=%s generation=%d", event.Folder, m.currentFolder, event.Generation)
 			return m, m.listenForSyncEvents()
 		}
 
-		if event.Generation > m.syncGeneration {
-			m.syncGeneration = event.Generation
+		if event.Generation > currentSourceGeneration {
+			m.setSyncGenerationForSource(event.SourceID, event.Generation)
+		}
+		if event.Generation > m.syncAccumulator.generation {
 			m.syncAccumulator.reset(event.Folder, event.Generation)
 			logger.Debug("SyncEventMsg: advanced sync generation to %d for folder=%s", m.syncGeneration, event.Folder)
 		}
@@ -2554,7 +2560,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Debug("SyncEventMsg: accumulator action folder=%s generation=%d armTimer=%v flushNow=%v", event.Folder, event.Generation, action.ArmTimer, action.FlushNow)
 		cmds := []tea.Cmd{m.listenForSyncEvents()}
 		if action.ArmTimer {
-			cmds = append(cmds, scheduleSyncFlush(event.Folder, event.Generation, m.syncAccumulator.flushDelay))
+			cmds = append(cmds, scheduleSyncFlush(event.SourceID, event.Folder, event.Generation, m.syncAccumulator.flushDelay))
 		}
 		if action.FlushNow {
 			finish := event.Phase == models.SyncPhaseComplete || event.Phase == models.SyncPhaseError
@@ -2562,7 +2568,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Phase == models.SyncPhaseComplete {
 				status = strings.TrimSpace(event.Message)
 			}
-			cmds = append(cmds, m.loadSyncSnapshotCmd(event.Folder, event.Generation, finish, status))
+			cmds = append(cmds, m.loadSyncSnapshotForSourceCmd(event.SourceID, event.Folder, event.Generation, finish, status))
 		}
 		if event.Phase == models.SyncPhaseComplete {
 			m.validIDsCh = m.backend.ValidIDsCh()
@@ -2589,14 +2595,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		logger.Debug("SyncFlushMsg: flushing folder=%s generation=%d", msg.Folder, msg.Generation)
-		return m, m.loadSyncSnapshotCmd(msg.Folder, msg.Generation, false, "")
+		return m, m.loadSyncSnapshotForSourceCmd(msg.SourceID, msg.Folder, msg.Generation, false, "")
 
 	case SyncHydratedMsg:
 		if !m.scopedResultMatchesActive(msg.SourceID) {
 			logger.Debug("SyncHydratedMsg: ignoring stale source=%s active=%s folder=%s", msg.SourceID, m.activeSourceID, msg.Folder)
 			return m, nil
 		}
-		if msg.Generation != 0 && msg.Generation != m.syncGeneration {
+		if !m.syncHydratedGenerationMatches(msg.SyncSourceID, msg.Generation) {
 			logger.Debug("SyncHydratedMsg: ignoring stale generation=%d current=%d folder=%s", msg.Generation, m.syncGeneration, msg.Folder)
 			return m, nil
 		}

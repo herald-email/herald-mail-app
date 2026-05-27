@@ -181,16 +181,21 @@ func (m *Model) loadCachedStartupCmd() tea.Cmd {
 }
 
 func (m *Model) loadSyncSnapshotCmd(folder string, generation int64, finishLoading bool, status string) tea.Cmd {
+	return m.loadSyncSnapshotForSourceCmd("", folder, generation, finishLoading, status)
+}
+
+func (m *Model) loadSyncSnapshotForSourceCmd(syncSourceID models.SourceID, folder string, generation int64, finishLoading bool, status string) tea.Cmd {
 	sourceID := m.activeSourceID
 	return func() tea.Msg {
 		logger.Debug("loadSyncSnapshotCmd: folder=%s generation=%d finish=%v status=%q", folder, generation, finishLoading, strings.TrimSpace(status))
 		emails, emailsErr := m.backend.GetTimelineEmails(folder)
 		if emailsErr != nil {
-			return SyncHydratedMsg{SourceID: sourceID, Folder: folder, Generation: generation, Err: emailsErr, FinishLoading: finishLoading, StatusMessage: status}
+			return SyncHydratedMsg{SourceID: sourceID, SyncSourceID: syncSourceID, Folder: folder, Generation: generation, Err: emailsErr, FinishLoading: finishLoading, StatusMessage: status}
 		}
 		logger.Debug("loadSyncSnapshotCmd: hydrated folder=%s generation=%d emails=%d", folder, generation, len(emails))
 		return SyncHydratedMsg{
 			SourceID:      sourceID,
+			SyncSourceID:  syncSourceID,
 			Folder:        folder,
 			Generation:    generation,
 			Emails:        emails,

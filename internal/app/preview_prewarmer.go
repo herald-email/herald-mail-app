@@ -16,6 +16,9 @@ type previewPrewarmTarget struct {
 	MessageID string
 	Folder    string
 	UID       uint32
+	SourceID  models.SourceID
+	AccountID models.AccountID
+	LocalID   string
 }
 
 func previewPrewarmTargets(emails []*models.EmailData, folder string, limit int) []previewPrewarmTarget {
@@ -31,19 +34,29 @@ func previewPrewarmTargets(emails []*models.EmailData, folder string, limit int)
 		if email.Folder != "" && folder != "" && email.Folder != folder {
 			continue
 		}
-		if seen[email.MessageID] {
-			continue
-		}
 		targetFolder := email.Folder
 		if targetFolder == "" {
 			targetFolder = folder
+		}
+		ref := email.MessageRef()
+		ref.Folder = targetFolder
+		ref = ref.WithDefaults()
+		seenKey := ref.LocalID
+		if seenKey == "" {
+			seenKey = string(ref.SourceID) + "\x00" + ref.Folder + "\x00" + ref.MessageID
+		}
+		if seen[seenKey] {
+			continue
 		}
 		targets = append(targets, previewPrewarmTarget{
 			MessageID: email.MessageID,
 			Folder:    targetFolder,
 			UID:       email.UID,
+			SourceID:  ref.SourceID,
+			AccountID: ref.AccountID,
+			LocalID:   ref.LocalID,
 		})
-		seen[email.MessageID] = true
+		seen[seenKey] = true
 		if len(targets) >= limit {
 			break
 		}
@@ -96,6 +109,9 @@ func (m *Model) runPreviewPrewarmNext(targets []previewPrewarmTarget, folder str
 
 		if serviceOK {
 			result, fetchErr := serviceBackend.GetMessagePreview(context.Background(), models.MessageRef{
+				SourceID:  target.SourceID,
+				AccountID: target.AccountID,
+				LocalID:   target.LocalID,
 				MessageID: target.MessageID,
 				Folder:    target.Folder,
 				UID:       target.UID,

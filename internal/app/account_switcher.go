@@ -94,6 +94,55 @@ func (m *Model) syncEventMatchesActive(sourceID models.SourceID) bool {
 	return sourceID == m.activeSourceID
 }
 
+func (m *Model) syncGenerationScope(sourceID models.SourceID) models.SourceID {
+	if sourceID != "" {
+		return sourceID
+	}
+	if m.activeSourceID != "" {
+		return m.activeSourceID
+	}
+	return models.DefaultMailSourceID
+}
+
+func (m *Model) syncGenerationForSource(sourceID models.SourceID) int64 {
+	key := m.syncGenerationScope(sourceID)
+	if m.syncSourceGenerations != nil {
+		if generation, ok := m.syncSourceGenerations[key]; ok {
+			return generation
+		}
+	}
+	if m.allAccountsScopeActive() && sourceID != "" {
+		return 0
+	}
+	return m.syncGeneration
+}
+
+func (m *Model) setSyncGenerationForSource(sourceID models.SourceID, generation int64) {
+	if generation <= 0 {
+		return
+	}
+	if m.syncSourceGenerations == nil {
+		m.syncSourceGenerations = make(map[models.SourceID]int64)
+	}
+	key := m.syncGenerationScope(sourceID)
+	if generation > m.syncSourceGenerations[key] {
+		m.syncSourceGenerations[key] = generation
+	}
+	if generation > m.syncGeneration {
+		m.syncGeneration = generation
+	}
+}
+
+func (m *Model) syncHydratedGenerationMatches(sourceID models.SourceID, generation int64) bool {
+	if generation == 0 {
+		return true
+	}
+	if m.allAccountsScopeActive() && sourceID != "" {
+		return generation == m.syncGenerationForSource(sourceID)
+	}
+	return generation == m.syncGeneration
+}
+
 func (m *Model) activeAccountInfo() backend.AccountInfo {
 	if !m.hasMultipleAccounts() {
 		return backend.AccountInfo{}

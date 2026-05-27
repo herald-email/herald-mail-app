@@ -512,6 +512,39 @@ func TestAccountSettingsReturnToMenuContinuesStartupSync(t *testing.T) {
 	}
 }
 
+func TestAllAccountsSyncEventAcceptsSourceScopedGeneration(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.currentFolder = "INBOX"
+	m.accounts = []backend.AccountInfo{
+		{SourceID: models.SourceID("default-mail"), AccountID: models.AccountID("default"), DisplayName: "Default"},
+		{SourceID: models.SourceID("gmail"), AccountID: models.AccountID("gmail"), DisplayName: "Gmail"},
+	}
+	m.activeSourceID = backend.AllAccountsSourceID
+	m.activeAccountID = models.AccountID("all")
+	m.syncGeneration = 2
+	m.syncAccumulator.reset("INBOX", 2)
+
+	updatedModel, _ := m.Update(SyncEventMsg{Event: models.FolderSyncEvent{
+		SourceID:   models.SourceID("default-mail"),
+		AccountID:  models.AccountID("default"),
+		Folder:     "INBOX",
+		Generation: 1,
+		Phase:      models.SyncPhaseComplete,
+		Message:    "Found 524 senders",
+	}})
+	updated := updatedModel.(*Model)
+
+	if !updated.syncCountsSettled {
+		t.Fatal("all-account sync should accept a current source event even when another source has a higher generation")
+	}
+	if got := updated.progressInfo.Message; got != "Found 524 senders" {
+		t.Fatalf("progress message = %q, want source completion message", got)
+	}
+	if got := updated.syncingFolder; got != "INBOX" {
+		t.Fatalf("syncingFolder = %q, want INBOX", got)
+	}
+}
+
 func TestCalendarSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
 	oldValidate := validateCalendarConfig
 	validateCalendarConfig = func(context.Context, *config.Config, []models.SourceID) error {

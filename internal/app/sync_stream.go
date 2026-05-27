@@ -17,12 +17,14 @@ type SyncEventMsg struct {
 }
 
 type SyncFlushMsg struct {
+	SourceID   models.SourceID
 	Folder     string
 	Generation int64
 }
 
 type SyncHydratedMsg struct {
 	SourceID      models.SourceID
+	SyncSourceID  models.SourceID
 	Folder        string
 	Generation    int64
 	Emails        []*models.EmailData
@@ -117,11 +119,11 @@ func (a *syncAccumulator) shouldFlush(msg SyncFlushMsg) bool {
 	return true
 }
 
-func scheduleSyncFlush(folder string, generation int64, delay time.Duration) tea.Cmd {
+func scheduleSyncFlush(sourceID models.SourceID, folder string, generation int64, delay time.Duration) tea.Cmd {
 	if delay <= 0 {
 		delay = defaultSyncFlushDelay
 	}
 	return tea.Tick(delay, func(time.Time) tea.Msg {
-		return SyncFlushMsg{Folder: folder, Generation: generation}
+		return SyncFlushMsg{SourceID: sourceID, Folder: folder, Generation: generation}
 	})
 }

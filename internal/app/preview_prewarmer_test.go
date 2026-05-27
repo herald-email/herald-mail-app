@@ -161,6 +161,36 @@ func TestPreviewPrewarmUsesCacheFirstServiceWhenAvailable(t *testing.T) {
 	}
 }
 
+func TestPreviewPrewarmPreservesEmailSourceScope(t *testing.T) {
+	backend := &previewPrewarmServiceBackend{}
+	m := New(backend, nil, "", nil, false)
+	m.currentFolder = "INBOX"
+	m.backgroundWorkGeneration = 18
+	m.timeline.emails = []*models.EmailData{
+		{
+			SourceID:  models.SourceID("work-mail"),
+			AccountID: models.AccountID("work"),
+			MessageID: "shared-message-id",
+			Folder:    "INBOX",
+			UID:       42,
+		},
+	}
+
+	cmd := m.startPreviewPrewarmerIfNeeded()
+	if cmd == nil {
+		t.Fatal("expected service-backed preview prewarmer command")
+	}
+	_ = cmd().(previewPrewarmMsg)
+
+	if len(backend.serviceRefScope) != 1 {
+		t.Fatalf("service refs = %d, want 1", len(backend.serviceRefScope))
+	}
+	got := backend.serviceRefScope[0]
+	if got.SourceID != models.SourceID("work-mail") || got.AccountID != models.AccountID("work") {
+		t.Fatalf("service ref scope = %s/%s, want work-mail/work", got.SourceID, got.AccountID)
+	}
+}
+
 func TestPreviewPrewarmerIgnoresStaleFolderGeneration(t *testing.T) {
 	backend := &previewPrewarmBackend{}
 	m := New(backend, nil, "", nil, false)
