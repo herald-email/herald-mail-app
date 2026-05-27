@@ -232,6 +232,10 @@ func TestGoogleCalendarSourceParsesRichEventDetail(t *testing.T) {
 			Attachments: []testcalendar.Attachment{
 				{Title: "Agenda", FileURL: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 			},
+			Reminders: []testcalendar.Reminder{
+				{Method: "popup", MinutesBefore: 10},
+				{Method: "email", MinutesBefore: 60},
+			},
 		}),
 	)
 
@@ -262,6 +266,9 @@ func TestGoogleCalendarSourceParsesRichEventDetail(t *testing.T) {
 	}
 	if len(got.Attachments) != 1 || got.Attachments[0].Title != "Agenda" || got.Attachments[0].MIMEType != "application/pdf" {
 		t.Fatalf("attachments = %#v", got.Attachments)
+	}
+	if len(got.Reminders) != 2 || got.Reminders[0].Method != "popup" || got.Reminders[0].MinutesBefore != 10 || got.Reminders[1].Method != "email" || got.Reminders[1].MinutesBefore != 60 {
+		t.Fatalf("reminders = %#v", got.Reminders)
 	}
 }
 
@@ -297,6 +304,7 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	edited.Start = start.Add(2 * time.Hour)
 	edited.End = start.Add(3 * time.Hour)
 	edited.TimeZone = "America/Los_Angeles"
+	edited.Reminders = []models.CalendarReminder{{Method: "popup", MinutesBefore: 15}}
 
 	saved, err := src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
 		RecurrenceScope: models.CalendarMutationScopeThisEvent,
@@ -308,6 +316,9 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	if saved.Title != edited.Title || saved.Location != edited.Location || saved.TimeZone != edited.TimeZone {
 		t.Fatalf("saved = %#v, want edited fields", saved)
 	}
+	if len(saved.Reminders) != 1 || saved.Reminders[0].Method != "popup" || saved.Reminders[0].MinutesBefore != 15 {
+		t.Fatalf("saved reminders = %#v, want edited reminder override", saved.Reminders)
+	}
 	if saved.Ref.ETag == edited.Ref.ETag {
 		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)
 	}
@@ -318,6 +329,9 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 	if fetched.Title != edited.Title || fetched.Location != edited.Location {
 		t.Fatalf("fetched = %#v, want provider-updated event", fetched)
+	}
+	if len(fetched.Reminders) != 1 || fetched.Reminders[0].MinutesBefore != 15 {
+		t.Fatalf("fetched reminders = %#v, want provider-updated reminder", fetched.Reminders)
 	}
 }
 
@@ -687,6 +701,10 @@ func TestCalDAVSourceParsesRichEventDetail(t *testing.T) {
 			Attachments: []testcalendar.Attachment{
 				{Title: "Agenda", FileURL: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 			},
+			Reminders: []testcalendar.Reminder{
+				{Method: "popup", MinutesBefore: 10},
+				{Method: "email", MinutesBefore: 60},
+			},
 		}),
 	)
 
@@ -717,6 +735,9 @@ func TestCalDAVSourceParsesRichEventDetail(t *testing.T) {
 	}
 	if len(got.Attachments) != 1 || got.Attachments[0].Title != "Agenda" || got.Attachments[0].MIMEType != "application/pdf" {
 		t.Fatalf("attachments = %#v", got.Attachments)
+	}
+	if len(got.Reminders) != 2 || got.Reminders[0].Method != "popup" || got.Reminders[0].MinutesBefore != 10 || got.Reminders[1].Method != "email" || got.Reminders[1].MinutesBefore != 60 {
+		t.Fatalf("reminders = %#v", got.Reminders)
 	}
 }
 
@@ -752,6 +773,7 @@ func TestCalDAVSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	edited.Start = start.Add(2 * time.Hour)
 	edited.End = start.Add(3 * time.Hour)
 	edited.TimeZone = "America/Los_Angeles"
+	edited.Reminders = []models.CalendarReminder{{Method: "popup", MinutesBefore: 15}}
 
 	saved, err := src.UpdateEvent(context.Background(), edited, models.CalendarMutationOptions{
 		RecurrenceScope: models.CalendarMutationScopeThisEvent,
@@ -762,6 +784,9 @@ func TestCalDAVSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 	if saved.Title != edited.Title || saved.Location != edited.Location || saved.TimeZone != edited.TimeZone {
 		t.Fatalf("saved = %#v, want edited fields", saved)
+	}
+	if len(saved.Reminders) != 1 || saved.Reminders[0].Method != "popup" || saved.Reminders[0].MinutesBefore != 15 {
+		t.Fatalf("saved reminders = %#v, want edited reminder override", saved.Reminders)
 	}
 	if saved.Ref.ETag == edited.Ref.ETag {
 		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)

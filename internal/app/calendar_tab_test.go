@@ -932,6 +932,8 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 		"Rae Stone <rae@example.com> accepted",
 		"Recurrence",
 		"RRULE:FREQ=WEEKLY;BYDAY=MO",
+		"Reminders",
+		"popup 30m",
 		"Alt TZ",
 		"Asia/Tokyo",
 		"Preview",
@@ -971,6 +973,7 @@ func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T)
 	m.calendarEdit.Draft.TimeZone = "America/Los_Angeles"
 	m.calendarEdit.Draft.AttendeesText = "Mina Park <mina@example.com> accepted; ops@example.com tentative optional"
 	m.calendarEdit.Draft.RecurrenceText = "RRULE:FREQ=WEEKLY;BYDAY=TU,TH"
+	m.calendarEdit.Draft.RemindersText = "popup 10m; email 1h"
 	m.calendarEdit.Dirty = true
 
 	model, cmd := m.handleKeyMsg(keyCtrl('s'))
@@ -996,6 +999,9 @@ func TestCalendarEventEditSaveUpdatesCachedEventAndReturnsToDetail(t *testing.T)
 	}
 	if got := m.calendarDetail.RecurrenceSummary; got != "Weekly on Tuesday, Thursday" {
 		t.Fatalf("recurrence summary = %q, want edited recurrence summary", got)
+	}
+	if len(m.calendarDetail.Reminders) != 2 || m.calendarDetail.Reminders[0].MinutesBefore != 10 || m.calendarDetail.Reminders[1].Method != "email" {
+		t.Fatalf("calendar detail reminders = %#v, want edited reminders", m.calendarDetail.Reminders)
 	}
 	if got := m.calendarEvents[0].Title; got != "Timezone planning moved" {
 		t.Fatalf("calendar list title = %q, want saved title", got)
@@ -1583,6 +1589,9 @@ func richCalendarEventForTest() models.CalendarEvent {
 		},
 		Attachments: []models.CalendarAttachment{
 			{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
+		},
+		Reminders: []models.CalendarReminder{
+			{Method: "popup", MinutesBefore: 30},
 		},
 	}
 }

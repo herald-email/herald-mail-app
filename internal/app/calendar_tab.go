@@ -39,6 +39,7 @@ const (
 	calendarEditFieldTimeZone
 	calendarEditFieldAttendees
 	calendarEditFieldRecurrence
+	calendarEditFieldReminders
 	calendarEditFieldDescription
 )
 
@@ -61,6 +62,7 @@ var calendarEditFields = []calendarEditField{
 	calendarEditFieldTimeZone,
 	calendarEditFieldAttendees,
 	calendarEditFieldRecurrence,
+	calendarEditFieldReminders,
 	calendarEditFieldDescription,
 }
 
@@ -674,6 +676,8 @@ func (m *Model) calendarEditFieldValue() string {
 		return m.calendarEdit.Draft.AttendeesText
 	case calendarEditFieldRecurrence:
 		return m.calendarEdit.Draft.RecurrenceText
+	case calendarEditFieldReminders:
+		return m.calendarEdit.Draft.RemindersText
 	case calendarEditFieldDescription:
 		return m.calendarEdit.Draft.Description
 	default:
@@ -697,6 +701,8 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 		m.calendarEdit.Draft.AttendeesText = value
 	case calendarEditFieldRecurrence:
 		m.calendarEdit.Draft.RecurrenceText = value
+	case calendarEditFieldReminders:
+		m.calendarEdit.Draft.RemindersText = value
 	case calendarEditFieldDescription:
 		m.calendarEdit.Draft.Description = value
 	}
@@ -1270,6 +1276,7 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	lines = append(lines, m.renderCalendarEditField("Event TZ", calendarEditFieldTimeZone, state.Draft.TimeZone, width))
 	lines = append(lines, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, width))
 	lines = append(lines, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, width))
+	lines = append(lines, m.renderCalendarEditField("Reminders", calendarEditFieldReminders, state.Draft.RemindersText, width))
 	lines = append(lines, m.renderCalendarEditField("Notes", calendarEditFieldDescription, state.Draft.Description, width))
 	if strings.TrimSpace(state.Error) != "" {
 		lines = append(lines, "")
@@ -1615,6 +1622,13 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Recurrence", width)))
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(recurrence, width)))
 	}
+	if len(event.Reminders) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Reminders", width)))
+		for _, reminder := range event.Reminders {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarReminderLabel(reminder), width)))
+		}
+	}
 	if len(event.Attachments) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Attachments", width)))
@@ -1952,6 +1966,24 @@ func calendarRecurrenceLabel(event models.CalendarEvent) string {
 		return event.Recurrence[0]
 	}
 	return ""
+}
+
+func calendarReminderLabel(reminder models.CalendarReminder) string {
+	method := strings.TrimSpace(strings.ToLower(reminder.Method))
+	if method == "" {
+		method = "popup"
+	}
+	minutes := reminder.MinutesBefore
+	if minutes < 0 {
+		minutes = 0
+	}
+	if minutes%1440 == 0 && minutes != 0 {
+		return fmt.Sprintf("%s %dd before", method, minutes/1440)
+	}
+	if minutes%60 == 0 && minutes != 0 {
+		return fmt.Sprintf("%s %dh before", method, minutes/60)
+	}
+	return fmt.Sprintf("%s %dm before", method, minutes)
 }
 
 func calendarAlternateTimeZones(event models.CalendarEvent) []string {

@@ -131,3 +131,37 @@ func TestCalendarEventEditDraftAppliesAttendeesAndRecurrence(t *testing.T) {
 		t.Fatalf("recurrence summary = %q, want updated summary", updated.RecurrenceSummary)
 	}
 }
+
+func TestCalendarEventEditDraftAppliesReminders(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	event := CalendarEvent{
+		Ref:      EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "reminder-mutations"}.WithDefaults(),
+		Title:    "Reminder mutations",
+		Start:    start,
+		End:      start.Add(time.Hour),
+		TimeZone: "UTC",
+		Reminders: []CalendarReminder{
+			{Method: "popup", MinutesBefore: 30},
+		},
+	}
+
+	draft := NewCalendarEventEditDraft(event)
+	if draft.RemindersText != "popup 30m" {
+		t.Fatalf("RemindersText = %q, want existing reminder rendered for editing", draft.RemindersText)
+	}
+
+	draft.RemindersText = "popup 10m; email 1h"
+	updated, err := draft.Apply(event)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(updated.Reminders) != 2 {
+		t.Fatalf("reminders = %#v, want two edited reminders", updated.Reminders)
+	}
+	if updated.Reminders[0] != (CalendarReminder{Method: "popup", MinutesBefore: 10}) {
+		t.Fatalf("first reminder = %#v, want popup 10m", updated.Reminders[0])
+	}
+	if updated.Reminders[1] != (CalendarReminder{Method: "email", MinutesBefore: 60}) {
+		t.Fatalf("second reminder = %#v, want email 60m", updated.Reminders[1])
+	}
+}

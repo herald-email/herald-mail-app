@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -35,6 +36,7 @@ type Event struct {
 	Attendees   []Attendee
 	Recurrence  []string
 	Attachments []Attachment
+	Reminders   []Reminder
 }
 
 type Person struct {
@@ -53,6 +55,11 @@ type Attachment struct {
 	Title    string
 	FileURL  string
 	MIMEType string
+}
+
+type Reminder struct {
+	Method        string
+	MinutesBefore int
 }
 
 type Option func(*options)
@@ -331,6 +338,16 @@ func googleEvent(event Event) map[string]any {
 		}
 		payload["attachments"] = attachments
 	}
+	if len(event.Reminders) > 0 {
+		overrides := make([]map[string]any, 0, len(event.Reminders))
+		for _, reminder := range event.Reminders {
+			overrides = append(overrides, map[string]any{
+				"method":  reminder.Method,
+				"minutes": reminder.MinutesBefore,
+			})
+		}
+		payload["reminders"] = map[string]any{"useDefault": false, "overrides": overrides}
+	}
 	return payload
 }
 
@@ -343,6 +360,7 @@ type googleEventPatch struct {
 	End         googlePatchTime  `json:"end"`
 	Attendees   []googleAttendee `json:"attendees"`
 	Recurrence  []string         `json:"recurrence"`
+	Reminders   *googleReminders `json:"reminders,omitempty"`
 }
 
 type googlePatchTime struct {
@@ -356,6 +374,16 @@ type googleAttendee struct {
 	Email          string `json:"email"`
 	ResponseStatus string `json:"responseStatus"`
 	Optional       bool   `json:"optional"`
+}
+
+type googleReminders struct {
+	UseDefault bool             `json:"useDefault"`
+	Overrides  []googleReminder `json:"overrides"`
+}
+
+type googleReminder struct {
+	Method  string `json:"method"`
+	Minutes int    `json:"minutes"`
 }
 
 func applyGooglePatch(event Event, patch googleEventPatch) Event {
@@ -384,6 +412,15 @@ func applyGooglePatch(event Event, patch googleEventPatch) Event {
 		})
 	}
 	event.Recurrence = append([]string(nil), patch.Recurrence...)
+	if patch.Reminders != nil {
+		event.Reminders = event.Reminders[:0]
+		for _, reminder := range patch.Reminders.Overrides {
+			event.Reminders = append(event.Reminders, Reminder{
+				Method:        reminder.Method,
+				MinutesBefore: reminder.Minutes,
+			})
+		}
+	}
 	return event
 }
 
@@ -591,6 +628,20 @@ func ics(event Event) string {
 		}
 		writeICSLine(&b, key, attachment.FileURL)
 	}
+	for _, reminder := range event.Reminders {
+		action := "DISPLAY"
+		if strings.EqualFold(reminder.Method, "email") {
+			action = "EMAIL"
+		}
+		b.WriteString("BEGIN:VALARM\r\n")
+		writeICSLine(&b, "ACTION", action)
+		writeICSLine(&b, "TRIGGER", formatICSReminderTrigger(reminder.MinutesBefore))
+		if action == "EMAIL" {
+			writeICSLine(&b, "SUMMARY", event.Summary)
+			writeICSLine(&b, "DESCRIPTION", event.Description)
+		}
+		b.WriteString("END:VALARM\r\n")
+	}
 	if !event.Updated.IsZero() {
 		writeICSLine(&b, "LAST-MODIFIED", event.Updated.UTC().Format("20060102T150405Z"))
 	}
@@ -600,6 +651,10 @@ func ics(event Event) string {
 
 func applyICSPatch(event Event, data string) Event {
 	seenAttendee := false
+	inAlarm := false
+	alarmAction := ""
+	alarmTrigger := ""
+	seenAlarm := false
 	for _, line := range unfoldICSLines(data) {
 		nameAndParams, value, ok := strings.Cut(line, ":")
 		if !ok {
@@ -609,6 +664,32 @@ func applyICSPatch(event Event, data string) Event {
 		key := strings.ToUpper(strings.TrimSpace(parts[0]))
 		params := parseICSParams(parts[1:])
 		value = unescapeICSValue(value)
+		if key == "BEGIN" && strings.EqualFold(value, "VALARM") {
+			inAlarm = true
+			alarmAction = ""
+			alarmTrigger = ""
+			if !seenAlarm {
+				event.Reminders = nil
+				seenAlarm = true
+			}
+			continue
+		}
+		if key == "END" && strings.EqualFold(value, "VALARM") {
+			if reminder, ok := reminderFromAlarm(alarmAction, alarmTrigger); ok {
+				event.Reminders = append(event.Reminders, reminder)
+			}
+			inAlarm = false
+			continue
+		}
+		if inAlarm {
+			switch key {
+			case "ACTION":
+				alarmAction = value
+			case "TRIGGER":
+				alarmTrigger = value
+			}
+			continue
+		}
 		switch key {
 		case "UID":
 			event.UID = value
@@ -647,6 +728,60 @@ func applyICSPatch(event Event, data string) Event {
 		}
 	}
 	return event
+}
+
+func reminderFromAlarm(action, trigger string) (Reminder, bool) {
+	minutes, ok := parseICSReminderTrigger(trigger)
+	if !ok {
+		return Reminder{}, false
+	}
+	method := "popup"
+	if strings.EqualFold(action, "EMAIL") {
+		method = "email"
+	}
+	return Reminder{Method: method, MinutesBefore: minutes}, true
+}
+
+func formatICSReminderTrigger(minutes int) string {
+	if minutes < 0 {
+		minutes = 0
+	}
+	if minutes%1440 == 0 && minutes != 0 {
+		return fmt.Sprintf("-P%dD", minutes/1440)
+	}
+	if minutes%60 == 0 && minutes != 0 {
+		return fmt.Sprintf("-PT%dH", minutes/60)
+	}
+	return fmt.Sprintf("-PT%dM", minutes)
+}
+
+func parseICSReminderTrigger(trigger string) (int, bool) {
+	trigger = strings.TrimSpace(strings.ToUpper(trigger))
+	if !strings.HasPrefix(trigger, "-P") {
+		return 0, false
+	}
+	trigger = strings.TrimPrefix(trigger, "-P")
+	if strings.HasPrefix(trigger, "T") {
+		trigger = strings.TrimPrefix(trigger, "T")
+	}
+	multiplier := 1
+	switch {
+	case strings.HasSuffix(trigger, "M"):
+		trigger = strings.TrimSuffix(trigger, "M")
+	case strings.HasSuffix(trigger, "H"):
+		trigger = strings.TrimSuffix(trigger, "H")
+		multiplier = 60
+	case strings.HasSuffix(trigger, "D"):
+		trigger = strings.TrimSuffix(trigger, "D")
+		multiplier = 24 * 60
+	default:
+		return 0, false
+	}
+	value, err := strconv.Atoi(trigger)
+	if err != nil || value < 0 {
+		return 0, false
+	}
+	return value * multiplier, true
 }
 
 func unfoldICSLines(data string) []string {

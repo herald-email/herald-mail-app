@@ -72,6 +72,10 @@ func (c *Cache) PutCalendarEvent(event models.CalendarEvent) error {
 	if err != nil {
 		return err
 	}
+	remindersJSON, err := json.Marshal(event.Reminders)
+	if err != nil {
+		return err
+	}
 	alternateTimeZonesJSON, err := json.Marshal(event.AlternateTimeZones)
 	if err != nil {
 		return err
@@ -80,13 +84,13 @@ func (c *Cache) PutCalendarEvent(event models.CalendarEvent) error {
 		INSERT OR REPLACE INTO calendar_events
 		(local_id, source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
 		 title, description, location, starts_at, ends_at, all_day, timezone, status, organizer, organizer_email,
-		 attendees_json, recurrence_json, recurrence_summary, attachments_json, alternate_timezones_json,
+		 attendees_json, recurrence_json, recurrence_summary, attachments_json, reminders_json, alternate_timezones_json,
 		 updated_at, raw, cached_at, invalidated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`, ref.LocalID, string(ref.SourceID), string(ref.AccountID), ref.CalendarID, ref.EventID, ref.InstanceID, event.ProviderUID,
 		ref.ETag, event.Revision, event.Title, event.Description, event.Location, event.Start, event.End,
 		boolToInt(event.AllDay), event.TimeZone, event.Status, event.Organizer, event.OrganizerEmail,
-		string(attendeesJSON), string(recurrenceJSON), event.RecurrenceSummary, string(attachmentsJSON), string(alternateTimeZonesJSON),
+		string(attendeesJSON), string(recurrenceJSON), event.RecurrenceSummary, string(attachmentsJSON), string(remindersJSON), string(alternateTimeZonesJSON),
 		event.UpdatedAt, event.Raw, now)
 	return err
 }
@@ -96,7 +100,7 @@ func (c *Cache) GetCalendarEventByRef(ref models.EventRef) (*models.CalendarEven
 	row := c.db.QueryRow(`
 		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
 		       title, description, location, starts_at, ends_at, all_day, timezone, status, organizer, organizer_email,
-		       attendees_json, recurrence_json, recurrence_summary, attachments_json, alternate_timezones_json,
+		       attendees_json, recurrence_json, recurrence_summary, attachments_json, reminders_json, alternate_timezones_json,
 		       updated_at, raw, local_id
 		FROM calendar_events
 		WHERE local_id = ? AND invalidated_at IS NULL
@@ -135,7 +139,7 @@ func (c *Cache) ListCalendarEvents(ref models.CollectionRef, start, end time.Tim
 	rows, err := c.db.Query(`
 		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
 		       title, description, location, starts_at, ends_at, all_day, timezone, status, organizer, organizer_email,
-		       attendees_json, recurrence_json, recurrence_summary, attachments_json, alternate_timezones_json,
+		       attendees_json, recurrence_json, recurrence_summary, attachments_json, reminders_json, alternate_timezones_json,
 		       updated_at, raw, local_id
 		FROM calendar_events
 		WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND invalidated_at IS NULL
@@ -171,7 +175,7 @@ func (c *Cache) ListCalendarAgendaEvents(sourceID models.SourceID, accountID mod
 	rows, err := c.db.Query(`
 		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
 		       title, description, location, starts_at, ends_at, all_day, timezone, status, organizer, organizer_email,
-		       attendees_json, recurrence_json, recurrence_summary, attachments_json, alternate_timezones_json,
+		       attendees_json, recurrence_json, recurrence_summary, attachments_json, reminders_json, alternate_timezones_json,
 		       updated_at, raw, local_id
 		FROM calendar_events
 		WHERE source_id = ? AND account_id = ? AND invalidated_at IS NULL
@@ -216,13 +220,13 @@ type calendarEventScanner interface {
 func scanCalendarEvent(scanner calendarEventScanner) (*models.CalendarEvent, error) {
 	var sourceID, accountID, calendarID, eventID, instanceID, providerUID, etag, revision string
 	var title, description, location, timeZone, status, organizer, organizerEmail, raw, localID string
-	var attendeesJSON, recurrenceJSON, recurrenceSummary, attachmentsJSON, alternateTimeZonesJSON string
+	var attendeesJSON, recurrenceJSON, recurrenceSummary, attachmentsJSON, remindersJSON, alternateTimeZonesJSON string
 	var start, end, updatedAt sql.NullTime
 	var allDay int
 	if err := scanner.Scan(
 		&sourceID, &accountID, &calendarID, &eventID, &instanceID, &providerUID, &etag, &revision,
 		&title, &description, &location, &start, &end, &allDay, &timeZone, &status, &organizer, &organizerEmail,
-		&attendeesJSON, &recurrenceJSON, &recurrenceSummary, &attachmentsJSON, &alternateTimeZonesJSON,
+		&attendeesJSON, &recurrenceJSON, &recurrenceSummary, &attachmentsJSON, &remindersJSON, &alternateTimeZonesJSON,
 		&updatedAt, &raw, &localID,
 	); err != nil {
 		return nil, err
@@ -233,6 +237,8 @@ func scanCalendarEvent(scanner calendarEventScanner) (*models.CalendarEvent, err
 	_ = json.Unmarshal([]byte(recurrenceJSON), &recurrence)
 	var attachments []models.CalendarAttachment
 	_ = json.Unmarshal([]byte(attachmentsJSON), &attachments)
+	var reminders []models.CalendarReminder
+	_ = json.Unmarshal([]byte(remindersJSON), &reminders)
 	var alternateTimeZones []string
 	_ = json.Unmarshal([]byte(alternateTimeZonesJSON), &alternateTimeZones)
 	event := &models.CalendarEvent{
@@ -258,6 +264,7 @@ func scanCalendarEvent(scanner calendarEventScanner) (*models.CalendarEvent, err
 		Recurrence:         recurrence,
 		RecurrenceSummary:  recurrenceSummary,
 		Attachments:        attachments,
+		Reminders:          reminders,
 		AlternateTimeZones: alternateTimeZones,
 		Revision:           revision,
 		Raw:                raw,

@@ -18,7 +18,7 @@ func TestCalendarCacheTablesAreSourceScoped(t *testing.T) {
 	}
 
 	eventCols := tableColumns(t, c.db, "calendar_events")
-	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "timezone", "organizer", "attendees_json", "recurrence_json", "attachments_json", "alternate_timezones_json", "invalidated_at"} {
+	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "timezone", "organizer", "attendees_json", "recurrence_json", "attachments_json", "reminders_json", "alternate_timezones_json", "invalidated_at"} {
 		if !eventCols[name] {
 			t.Fatalf("calendar_events missing column %s", name)
 		}
@@ -123,6 +123,10 @@ func TestCacheCalendarEventRichDetailRoundTrip(t *testing.T) {
 		Attachments: []models.CalendarAttachment{
 			{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 		},
+		Reminders: []models.CalendarReminder{
+			{Method: "popup", MinutesBefore: 10},
+			{Method: "email", MinutesBefore: 60},
+		},
 	}
 
 	if err := c.PutCalendarEvent(event); err != nil {
@@ -143,6 +147,9 @@ func TestCacheCalendarEventRichDetailRoundTrip(t *testing.T) {
 	}
 	if len(got.Attachments) != 1 || got.Attachments[0].Title != "Agenda" || got.Attachments[0].MIMEType != "application/pdf" {
 		t.Fatalf("attachments = %#v", got.Attachments)
+	}
+	if len(got.Reminders) != 2 || got.Reminders[0].Method != "popup" || got.Reminders[0].MinutesBefore != 10 || got.Reminders[1].Method != "email" || got.Reminders[1].MinutesBefore != 60 {
+		t.Fatalf("reminders = %#v", got.Reminders)
 	}
 	if len(got.AlternateTimeZones) != 1 || got.AlternateTimeZones[0] != "Asia/Tokyo" {
 		t.Fatalf("alternate zones = %#v", got.AlternateTimeZones)

@@ -32,6 +32,7 @@ type CalendarEvent struct {
 	Recurrence         []string
 	RecurrenceSummary  string
 	Attachments        []CalendarAttachment
+	Reminders          []CalendarReminder
 	AlternateTimeZones []string
 	Revision           string
 	UpdatedAt          time.Time
@@ -49,6 +50,11 @@ type CalendarAttachment struct {
 	Title    string
 	URI      string
 	MIMEType string
+}
+
+type CalendarReminder struct {
+	Method        string
+	MinutesBefore int
 }
 
 const (
@@ -142,6 +148,9 @@ func CalendarEventSearchText(event CalendarEvent) string {
 	}
 	for _, attachment := range event.Attachments {
 		parts = append(parts, attachment.Title, attachment.MIMEType)
+	}
+	for _, reminder := range event.Reminders {
+		parts = append(parts, reminder.Method, fmt.Sprintf("%dm", reminder.MinutesBefore))
 	}
 	return strings.ToLower(strings.Join(parts, " "))
 }

@@ -48,6 +48,9 @@ func CalendarEvents() []models.CalendarEvent {
 	events[0].Attachments = []models.CalendarAttachment{
 		{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 	}
+	events[0].Reminders = []models.CalendarReminder{
+		{Method: "popup", MinutesBefore: 30},
+	}
 	events[0].AlternateTimeZones = []string{"Asia/Tokyo"}
 	out := make([]models.CalendarEvent, len(events))
 	copy(out, events)

@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ type CalendarEventEditDraft struct {
 	TimeZone           string
 	AttendeesText      string
 	RecurrenceText     string
+	RemindersText      string
 	Status             string
 	AllDay             bool
 	RecurrenceScope    string
@@ -52,6 +54,7 @@ func NewCalendarEventEditDraft(event CalendarEvent) CalendarEventEditDraft {
 		TimeZone:           event.CanonicalTimeZone(),
 		AttendeesText:      formatCalendarEditAttendees(event.Attendees),
 		RecurrenceText:     formatCalendarEditRecurrence(event.Recurrence),
+		RemindersText:      formatCalendarEditReminders(event.Reminders),
 		Status:             event.Status,
 		AllDay:             event.AllDay,
 		RecurrenceScope:    CalendarMutationScopeThisEvent,
@@ -98,9 +101,14 @@ func (d CalendarEventEditDraft) Apply(base CalendarEvent) (CalendarEvent, error)
 		return CalendarEvent{}, err
 	}
 	recurrence := parseCalendarEditRecurrence(d.RecurrenceText)
+	reminders, err := parseCalendarEditReminders(d.RemindersText)
+	if err != nil {
+		return CalendarEvent{}, err
+	}
 	updated.Attendees = attendees
 	updated.Recurrence = recurrence
 	updated.RecurrenceSummary = summarizeCalendarEditRecurrence(recurrence)
+	updated.Reminders = reminders
 	if _, err := NormalizeCalendarMutationOptions(CalendarMutationOptions{RecurrenceScope: d.RecurrenceScope}); err != nil {
 		return CalendarEvent{}, err
 	}
@@ -410,6 +418,108 @@ func summarizeCalendarEditRecurrenceDays(byDay string) string {
 		}
 	}
 	return strings.Join(out, ", ")
+}
+
+func formatCalendarEditReminders(reminders []CalendarReminder) string {
+	parts := make([]string, 0, len(reminders))
+	for _, reminder := range reminders {
+		method := strings.TrimSpace(strings.ToLower(reminder.Method))
+		if method == "" {
+			method = "popup"
+		}
+		if reminder.MinutesBefore < 0 {
+			continue
+		}
+		parts = append(parts, method+" "+formatCalendarEditReminderOffset(reminder.MinutesBefore))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func parseCalendarEditReminders(value string) ([]CalendarReminder, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	value = strings.ReplaceAll(value, "\n", ";")
+	value = strings.ReplaceAll(value, "\r", ";")
+	entries := strings.Split(value, ";")
+	reminders := make([]CalendarReminder, 0, len(entries))
+	for _, entry := range entries {
+		reminder, ok, err := parseCalendarEditReminder(entry)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			reminders = append(reminders, reminder)
+		}
+	}
+	return reminders, nil
+}
+
+func parseCalendarEditReminder(entry string) (CalendarReminder, bool, error) {
+	entry = strings.TrimSpace(entry)
+	if entry == "" || strings.EqualFold(entry, "none") {
+		return CalendarReminder{}, false, nil
+	}
+	fields := strings.Fields(entry)
+	if len(fields) == 0 {
+		return CalendarReminder{}, false, nil
+	}
+	reminder := CalendarReminder{Method: "popup"}
+	offsetText := fields[0]
+	if !calendarEditLooksLikeReminderOffset(fields[0]) {
+		reminder.Method = strings.ToLower(strings.TrimSpace(fields[0]))
+		if len(fields) < 2 {
+			return CalendarReminder{}, false, fmt.Errorf("reminder %q is missing an offset like 10m or 1h", entry)
+		}
+		offsetText = fields[1]
+	}
+	if reminder.Method != "popup" && reminder.Method != "email" {
+		return CalendarReminder{}, false, fmt.Errorf("reminder method %q must be popup or email", reminder.Method)
+	}
+	minutes, err := parseCalendarEditReminderOffset(offsetText)
+	if err != nil {
+		return CalendarReminder{}, false, fmt.Errorf("reminder %q: %w", entry, err)
+	}
+	reminder.MinutesBefore = minutes
+	return reminder, true, nil
+}
+
+func calendarEditLooksLikeReminderOffset(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	return strings.HasSuffix(value, "m") || strings.HasSuffix(value, "h") || strings.HasSuffix(value, "d")
+}
+
+func parseCalendarEditReminderOffset(value string) (int, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return 0, fmt.Errorf("offset is empty")
+	}
+	multiplier := 1
+	switch {
+	case strings.HasSuffix(value, "m"):
+		value = strings.TrimSuffix(value, "m")
+	case strings.HasSuffix(value, "h"):
+		value = strings.TrimSuffix(value, "h")
+		multiplier = 60
+	case strings.HasSuffix(value, "d"):
+		value = strings.TrimSuffix(value, "d")
+		multiplier = 24 * 60
+	}
+	number, err := strconv.Atoi(value)
+	if err != nil || number < 0 {
+		return 0, fmt.Errorf("use a non-negative offset like 10m, 1h, or 1d")
+	}
+	return number * multiplier, nil
+}
+
+func formatCalendarEditReminderOffset(minutes int) string {
+	if minutes%1440 == 0 && minutes != 0 {
+		return fmt.Sprintf("%dd", minutes/1440)
+	}
+	if minutes%60 == 0 && minutes != 0 {
+		return fmt.Sprintf("%dh", minutes/60)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func firstEventRef(primary, fallback EventRef) EventRef {

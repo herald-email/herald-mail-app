@@ -1801,10 +1801,33 @@ This case covers the selected calendar mutation slice that extends Event Edit be
 **Expect:**
 - Event Edit renders attendee and recurrence fields in the same compact form language as the existing title/time/timezone fields.
 - Attendee edits preserve name, email, RSVP state, and optional markers in a keyboard-editable text format.
-- Recurrence edits are limited to this-event recurrence rules; broader recurrence-scope edits and reminder editing remain deferred.
+- Recurrence edits are limited to this-event recurrence rules; broader recurrence-scope edits and create-event flows remain deferred.
 - Save success, provider failure, recurrence scope, and timezone preview remain explicit to the user.
 - Literal attendee/recurrence text typed in Compose, search prompts, and editor-like text fields remains text instead of firing calendar edit actions.
 - At `50x15`, the minimum-size guard appears instead of clipped selected-mutation chrome, and resizing larger restores the edit state cleanly.
+
+### TC-38O — Calendar selected reminder edits
+
+This case covers the selected reminder mutation slice in Event Edit. It proves reminder override edits use the same provider-backed, cache-after-success path as other calendar mutations without introducing create-event UI or broader recurrence editing.
+
+**Lane:** A, B when calendar provider fixtures are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one event that has reminder overrides.
+2. Press `3` or `F4` to open Calendar, press `Enter` for Event Detail, then press `e` to open Event Edit.
+3. Confirm Event Edit shows an editable `Reminders` field without exposing provider IDs, ETags, CalDAV URLs, raw sync tokens, OAuth details, or daemon/MCP mutation APIs.
+4. Change the reminders field using semicolon-separated entries such as `popup 10m; email 1h`, then press `Ctrl+S`.
+5. Confirm the saved Event Detail, Calendar list/search rows, and provider-backed cache state reflect the edited reminder overrides only after provider success.
+6. Repeat with provider failure or stale revision and confirm unsaved reminder edits remain visible while cached rows stay unchanged.
+
+**Expect:**
+- Event Edit renders reminder overrides in the same compact form language as title/time/timezone/attendee/recurrence fields.
+- Reminder edits preserve method and minutes-before-event in a keyboard-editable text format.
+- Reminder editing stays scoped to existing events; create-event flows and broader recurrence-scope edits remain deferred.
+- Save success, provider failure, recurrence scope, and timezone preview remain explicit to the user.
+- Literal reminder text typed in Compose, search prompts, and editor-like text fields remains text instead of firing calendar edit actions.
+- At `50x15`, the minimum-size guard appears instead of clipped reminder-edit chrome, and resizing larger restores the edit state cleanly.
 
 ### TC-39 — First-run wizard chrome and size guard
 

@@ -333,6 +333,7 @@ func (c *Cache) initDB() error {
 		`ALTER TABLE calendar_events ADD COLUMN recurrence_json TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE calendar_events ADD COLUMN recurrence_summary TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE calendar_events ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE calendar_events ADD COLUMN reminders_json TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE calendar_events ADD COLUMN alternate_timezones_json TEXT NOT NULL DEFAULT '[]'`,
 	} {
 		if _, err := c.db.Exec(stmt); err != nil {

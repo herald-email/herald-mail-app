@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -676,6 +677,7 @@ type googleEventPayload struct {
 	Attendees   []googleAttendee   `json:"attendees"`
 	Recurrence  []string           `json:"recurrence"`
 	Attachments []googleAttachment `json:"attachments"`
+	Reminders   *googleReminders   `json:"reminders,omitempty"`
 	Extended    map[string]any     `json:"extendedProperties"`
 }
 
@@ -701,6 +703,16 @@ type googleAttachment struct {
 	Title    string `json:"title"`
 	FileURL  string `json:"fileUrl"`
 	MIMEType string `json:"mimeType"`
+}
+
+type googleReminders struct {
+	UseDefault bool             `json:"useDefault"`
+	Overrides  []googleReminder `json:"overrides"`
+}
+
+type googleReminder struct {
+	Method  string `json:"method"`
+	Minutes int    `json:"minutes"`
 }
 
 func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, calendarID string, item googleEventPayload) models.CalendarEvent {
@@ -731,6 +743,7 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		Recurrence:        append([]string(nil), item.Recurrence...),
 		RecurrenceSummary: summarizeRecurrence(item.Recurrence),
 		Attachments:       googleAttachmentsToModel(item.Attachments),
+		Reminders:         googleRemindersToModel(item.Reminders),
 		Revision:          fmt.Sprintf("%d", item.Sequence),
 		UpdatedAt:         updated,
 	}
@@ -747,6 +760,7 @@ func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
 		Status:      event.Status,
 		Sequence:    0,
 		Recurrence:  append([]string(nil), event.Recurrence...),
+		Reminders:   googleRemindersFromModel(event.Reminders),
 	}
 	payload.Start = googleTimeFromModel(event.Start, event.TimeZone, event.AllDay)
 	payload.End = googleTimeFromModel(event.End, event.TimeZone, event.AllDay)
@@ -810,6 +824,44 @@ func googleAttachmentsToModel(attachments []googleAttachment) []models.CalendarA
 		})
 	}
 	return out
+}
+
+func googleRemindersToModel(reminders *googleReminders) []models.CalendarReminder {
+	if reminders == nil {
+		return nil
+	}
+	out := make([]models.CalendarReminder, 0, len(reminders.Overrides))
+	for _, reminder := range reminders.Overrides {
+		if reminder.Minutes < 0 {
+			continue
+		}
+		out = append(out, models.CalendarReminder{
+			Method:        strings.TrimSpace(strings.ToLower(reminder.Method)),
+			MinutesBefore: reminder.Minutes,
+		})
+	}
+	return out
+}
+
+func googleRemindersFromModel(reminders []models.CalendarReminder) *googleReminders {
+	if reminders == nil {
+		return nil
+	}
+	out := googleReminders{UseDefault: false}
+	for _, reminder := range reminders {
+		if reminder.MinutesBefore < 0 {
+			continue
+		}
+		method := strings.TrimSpace(strings.ToLower(reminder.Method))
+		if method == "" {
+			method = "popup"
+		}
+		out.Overrides = append(out.Overrides, googleReminder{
+			Method:  method,
+			Minutes: reminder.MinutesBefore,
+		})
+	}
+	return &out
 }
 
 func parseGoogleTime(t googleEventTime) (time.Time, bool) {
@@ -951,6 +1003,7 @@ func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 		Recurrence:        details.Recurrence,
 		RecurrenceSummary: summarizeRecurrence(details.Recurrence),
 		Attachments:       details.Attachments,
+		Reminders:         details.Reminders,
 		UpdatedAt:         updated,
 		Raw:               data,
 	}, nil
@@ -1009,6 +1062,21 @@ func eventToICS(event models.CalendarEvent) string {
 		}
 		writeCalendarICSLine(&b, key, attachment.URI)
 	}
+	for _, reminder := range event.Reminders {
+		method := strings.TrimSpace(strings.ToLower(reminder.Method))
+		action := "DISPLAY"
+		if method == "email" {
+			action = "EMAIL"
+		}
+		b.WriteString("BEGIN:VALARM\r\n")
+		writeCalendarICSLine(&b, "ACTION", action)
+		writeCalendarICSLine(&b, "TRIGGER", formatICSReminderTrigger(reminder.MinutesBefore))
+		if action == "EMAIL" {
+			writeCalendarICSLine(&b, "SUMMARY", event.Title)
+			writeCalendarICSLine(&b, "DESCRIPTION", event.Description)
+		}
+		b.WriteString("END:VALARM\r\n")
+	}
 	if !event.UpdatedAt.IsZero() {
 		writeCalendarICSLine(&b, "LAST-MODIFIED", event.UpdatedAt.UTC().Format("20060102T150405Z"))
 	}
@@ -1037,10 +1105,14 @@ type icsRichDetails struct {
 	Attendees      []models.CalendarAttendee
 	Recurrence     []string
 	Attachments    []models.CalendarAttachment
+	Reminders      []models.CalendarReminder
 }
 
 func parseICSRichDetails(data string) icsRichDetails {
 	var details icsRichDetails
+	inAlarm := false
+	alarmAction := ""
+	alarmTrigger := ""
 	for _, line := range unfoldICSLines(data) {
 		nameAndParams, value, ok := strings.Cut(line, ":")
 		if !ok {
@@ -1050,6 +1122,28 @@ func parseICSRichDetails(data string) icsRichDetails {
 		key := strings.ToUpper(strings.TrimSpace(parts[0]))
 		params := parseICSParams(parts[1:])
 		value = unescapeICSValue(value)
+		if key == "BEGIN" && strings.EqualFold(value, "VALARM") {
+			inAlarm = true
+			alarmAction = ""
+			alarmTrigger = ""
+			continue
+		}
+		if key == "END" && strings.EqualFold(value, "VALARM") {
+			if reminder, ok := calendarReminderFromAlarm(alarmAction, alarmTrigger); ok {
+				details.Reminders = append(details.Reminders, reminder)
+			}
+			inAlarm = false
+			continue
+		}
+		if inAlarm {
+			switch key {
+			case "ACTION":
+				alarmAction = value
+			case "TRIGGER":
+				alarmTrigger = value
+			}
+			continue
+		}
 		switch key {
 		case "DTSTART":
 			if details.TimeZone == "" {
@@ -1076,6 +1170,60 @@ func parseICSRichDetails(data string) icsRichDetails {
 		}
 	}
 	return details
+}
+
+func calendarReminderFromAlarm(action, trigger string) (models.CalendarReminder, bool) {
+	minutes, ok := parseICSReminderTrigger(trigger)
+	if !ok {
+		return models.CalendarReminder{}, false
+	}
+	method := "popup"
+	if strings.EqualFold(strings.TrimSpace(action), "EMAIL") {
+		method = "email"
+	}
+	return models.CalendarReminder{Method: method, MinutesBefore: minutes}, true
+}
+
+func parseICSReminderTrigger(trigger string) (int, bool) {
+	trigger = strings.TrimSpace(strings.ToUpper(trigger))
+	if !strings.HasPrefix(trigger, "-P") {
+		return 0, false
+	}
+	trigger = strings.TrimPrefix(trigger, "-P")
+	if strings.HasPrefix(trigger, "T") {
+		trigger = strings.TrimPrefix(trigger, "T")
+	}
+	multiplier := 1
+	switch {
+	case strings.HasSuffix(trigger, "M"):
+		trigger = strings.TrimSuffix(trigger, "M")
+	case strings.HasSuffix(trigger, "H"):
+		trigger = strings.TrimSuffix(trigger, "H")
+		multiplier = 60
+	case strings.HasSuffix(trigger, "D"):
+		trigger = strings.TrimSuffix(trigger, "D")
+		multiplier = 24 * 60
+	default:
+		return 0, false
+	}
+	value, err := strconv.Atoi(trigger)
+	if err != nil || value < 0 {
+		return 0, false
+	}
+	return value * multiplier, true
+}
+
+func formatICSReminderTrigger(minutes int) string {
+	if minutes < 0 {
+		minutes = 0
+	}
+	if minutes%1440 == 0 && minutes != 0 {
+		return fmt.Sprintf("-P%dD", minutes/1440)
+	}
+	if minutes%60 == 0 && minutes != 0 {
+		return fmt.Sprintf("-PT%dH", minutes/60)
+	}
+	return fmt.Sprintf("-PT%dM", minutes)
 }
 
 func parseICSParams(parts []string) map[string]string {

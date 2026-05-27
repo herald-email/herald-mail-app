@@ -12,7 +12,7 @@ Calendar should become a first-class Herald workspace for understanding the day,
 - [x] Users can switch from Agenda List or Day Agenda to a read-only Week Time-Grid with an inspector for the selected event.
 - [x] Users can switch to a read-only 3-Day Command view that bridges today, tomorrow, and the next day with a command panel.
 - [x] Users can open a full event detail view when they need the whole record: attendees, location, notes, RSVP state, recurrence, attachments, and timezone conversions.
-- [ ] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
+- [x] Users can edit event time, timezone, attendees, reminders, recurrence, and location without leaving the TUI.
 - [x] Users can reason about cross-timezone meetings before saving changes.
 - [ ] Calendar remains visually consistent with Herald: dense tables, thin bordered panels, bottom key hints, compact status strips, and theme-aware highlights.
 
@@ -96,6 +96,7 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
   - [x] Stage 6A: Add provider-backed Event Edit save-through and RSVP response changes with cache update after provider success, explicit failure state, and `this event` recurrence scope only.
   - [x] Stage 6B: Add typed provider conflict handling and explicit recurrence-scope validation so stale revisions and unsupported broader recurrence edits never rewrite cached event rows.
   - [x] Stage 6C: Add selected attendee-list and this-event recurrence-rule edits to Event Edit while reminders and broader recurrence-scope edits stay deferred.
+  - [x] Stage 6D: Add selected reminder override edits to Event Edit while create-event flows and broader recurrence-scope edits stay deferred.
 - [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
 
