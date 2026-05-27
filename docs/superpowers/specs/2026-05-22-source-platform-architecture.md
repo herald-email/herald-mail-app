@@ -170,7 +170,7 @@ The preferred long-term storage model is one profile database with source-scoped
 - [ ] Later migration can move from `message_id` primary keys to scoped local IDs once all callers use refs.
 - [x] Calendar tables use source-scoped primary keys from the start.
 - [x] Email embedding rows and chunk rows carry source/account/local identity while legacy message-ID embedding APIs remain operational.
-- [ ] FTS and embedding tables include source/account scope before unified cross-source search ships.
+- [x] FTS and embedding tables include source/account scope before unified cross-source search ships.
 
 ## Config Direction
 

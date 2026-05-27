@@ -1172,7 +1172,7 @@ func (b *LocalBackend) FetchAndCacheBodyByRef(ref models.MessageRef) (*models.Em
 	}
 	body := result.Body
 	if body != nil && result.Source != MessageReadSourceUnavailable && body.TextPlain != "" {
-		if err := b.cache.CacheBodyText(ref.MessageID, body.TextPlain); err != nil {
+		if err := b.cache.CacheBodyTextByRef(ref, body.TextPlain); err != nil {
 			logger.Warn("FetchAndCacheBodyByRef CacheBodyText %s: %v", ref.LocalID, err)
 		}
 	}

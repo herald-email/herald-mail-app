@@ -179,45 +179,42 @@ func (c *Cache) initDB() error {
 		logger.Debug("list_unsubscribe_post column might already exist: %v", err)
 	}
 
-	// FTS5 virtual table for full-text search over sender + subject + body
-	ftsQuery := `
-		CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
-			sender, subject, body_text,
-			content=emails,
-			content_rowid=rowid
-		)
-	`
 	ftsAvailable := true
-	if _, err := c.db.Exec(ftsQuery); err != nil {
+	ftsNeedsRebuild, err := c.ensureScopedFTSIndex()
+	if err != nil {
 		logger.Warn("Failed to create FTS5 table (SQLite might lack FTS5 support): %v", err)
 		ftsAvailable = false
 		// Drop any stale FTS triggers left from a previous run when FTS5 was available.
 		// If these triggers exist they will fire on INSERT and fail with "no such table: emails_fts".
-		for _, trig := range []string{"emails_ai", "emails_ad", "emails_au"} {
-			c.db.Exec("DROP TRIGGER IF EXISTS " + trig)
-		}
+		c.dropFTSTriggers()
 	}
 
 	// Triggers to keep FTS index in sync with emails table — only when FTS5 is available.
 	if ftsAvailable {
+		c.dropFTSTriggers()
 		for _, trigSQL := range []string{
-			`CREATE TRIGGER IF NOT EXISTS emails_ai AFTER INSERT ON emails BEGIN
-				INSERT INTO emails_fts(rowid, sender, subject, body_text)
-				VALUES (new.rowid, new.sender, new.subject, new.body_text);
+			`CREATE TRIGGER emails_ai AFTER INSERT ON emails BEGIN
+				INSERT INTO emails_fts(rowid, sender, subject, body_text, source_id, account_id, local_id)
+				VALUES (new.rowid, new.sender, new.subject, new.body_text, new.source_id, new.account_id, new.local_id);
 			END`,
-			`CREATE TRIGGER IF NOT EXISTS emails_ad AFTER DELETE ON emails BEGIN
-				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
-				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
+			`CREATE TRIGGER emails_ad AFTER DELETE ON emails BEGIN
+				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text, source_id, account_id, local_id)
+				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text, old.source_id, old.account_id, old.local_id);
 			END`,
-			`CREATE TRIGGER IF NOT EXISTS emails_au AFTER UPDATE ON emails BEGIN
-				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text)
-				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text);
-				INSERT INTO emails_fts(rowid, sender, subject, body_text)
-				VALUES (new.rowid, new.sender, new.subject, new.body_text);
+			`CREATE TRIGGER emails_au AFTER UPDATE ON emails BEGIN
+				INSERT INTO emails_fts(emails_fts, rowid, sender, subject, body_text, source_id, account_id, local_id)
+				VALUES ('delete', old.rowid, old.sender, old.subject, old.body_text, old.source_id, old.account_id, old.local_id);
+				INSERT INTO emails_fts(rowid, sender, subject, body_text, source_id, account_id, local_id)
+				VALUES (new.rowid, new.sender, new.subject, new.body_text, new.source_id, new.account_id, new.local_id);
 			END`,
 		} {
 			if _, err := c.db.Exec(trigSQL); err != nil {
 				logger.Debug("FTS trigger creation: %v", err)
+			}
+		}
+		if ftsNeedsRebuild {
+			if _, err := c.db.Exec(`INSERT INTO emails_fts(emails_fts) VALUES('rebuild')`); err != nil {
+				logger.Debug("FTS rebuild after source-scope migration failed: %v", err)
 			}
 		}
 	}
@@ -518,6 +515,80 @@ func (c *Cache) initDB() error {
 	}
 
 	return nil
+}
+
+func (c *Cache) ensureScopedFTSIndex() (bool, error) {
+	const createScopedFTS = `
+		CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
+			sender, subject, body_text,
+			source_id UNINDEXED,
+			account_id UNINDEXED,
+			local_id UNINDEXED,
+			content=emails,
+			content_rowid=rowid
+		)
+	`
+	existed, err := c.tableExists("emails_fts")
+	if err != nil {
+		return false, err
+	}
+	if _, err := c.db.Exec(createScopedFTS); err != nil {
+		return false, err
+	}
+	cols, err := c.tableColumns("emails_fts")
+	if err != nil {
+		return false, err
+	}
+	for _, name := range []string{"source_id", "account_id", "local_id"} {
+		if !cols[name] {
+			c.dropFTSTriggers()
+			if _, err := c.db.Exec(`DROP TABLE IF EXISTS emails_fts`); err != nil {
+				return false, err
+			}
+			if _, err := c.db.Exec(createScopedFTS); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	return !existed, nil
+}
+
+func (c *Cache) tableExists(name string) (bool, error) {
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?`, name).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (c *Cache) tableColumns(name string) (map[string]bool, error) {
+	rows, err := c.db.Query(`PRAGMA table_info(` + name + `)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var colName, typ string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &colName, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return nil, err
+		}
+		cols[colName] = true
+	}
+	return cols, rows.Err()
+}
+
+func (c *Cache) dropFTSTriggers() {
+	for _, trig := range []string{"emails_ai", "emails_ad", "emails_au"} {
+		if _, err := c.db.Exec("DROP TRIGGER IF EXISTS " + trig); err != nil {
+			logger.Debug("FTS trigger drop %s: %v", trig, err)
+		}
+	}
 }
 
 func (c *Cache) backfillDraftFolderFlags() error {
@@ -1127,7 +1198,7 @@ func (c *Cache) PutMessageBodyByRef(ref models.MessageRef, body *models.EmailBod
 		return err
 	}
 	if body != nil && strings.TrimSpace(ref.MessageID) != "" && strings.TrimSpace(body.TextPlain) != "" {
-		if err := c.CacheBodyText(ref.MessageID, body.TextPlain); err != nil {
+		if err := c.CacheBodyTextByRef(ref, body.TextPlain); err != nil {
 			return err
 		}
 	}
@@ -2064,20 +2135,64 @@ func (c *Cache) CacheBodyText(messageID, bodyText string) error {
 	return err
 }
 
+// CacheBodyTextByRef stores plain-text body content for the scoped message row.
+func (c *Cache) CacheBodyTextByRef(ref models.MessageRef, bodyText string) error {
+	rawSourceID := strings.TrimSpace(string(ref.SourceID))
+	rawAccountID := strings.TrimSpace(string(ref.AccountID))
+	rawFolder := strings.TrimSpace(ref.Folder)
+	rawLocalID := strings.TrimSpace(ref.LocalID)
+	ref = ref.WithDefaults()
+	if ref.LocalID != "" {
+		result, err := c.db.Exec(`UPDATE emails SET body_text = ? WHERE local_id = ?`, bodyText, ref.LocalID)
+		if err != nil {
+			return err
+		}
+		if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+			return nil
+		}
+		if rawLocalID != "" {
+			return nil
+		}
+	}
+	if strings.TrimSpace(ref.MessageID) == "" {
+		return nil
+	}
+	conds := []string{"message_id = ?"}
+	args := []any{bodyText, ref.MessageID}
+	if rawSourceID != "" {
+		conds = append(conds, "COALESCE(source_id, 'default-mail') = ?")
+		args = append(args, string(ref.SourceID))
+	}
+	if rawAccountID != "" {
+		conds = append(conds, "COALESCE(account_id, 'default') = ?")
+		args = append(args, string(ref.AccountID))
+	}
+	if rawFolder != "" {
+		conds = append(conds, "folder = ?")
+		args = append(args, ref.Folder)
+	}
+	_, err := c.db.Exec(`UPDATE emails SET body_text = ? WHERE `+strings.Join(conds, " AND "), args...)
+	return err
+}
+
 // SearchEmailsFTS uses the FTS5 index to search sender, subject, and body
 func (c *Cache) SearchEmailsFTS(folder, query string) ([]*models.EmailData, error) {
 	var rows *sql.Rows
 	var err error
 	if folder == "" {
 		rows, err = c.db.Query(`
-			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0), COALESCE(e.is_starred,0), COALESCE(e.is_draft,0)
+			SELECT COALESCE(e.source_id, 'default-mail'), COALESCE(e.account_id, 'default'), COALESCE(e.local_id, ''), COALESCE(e.uid_validity, 0),
+			       e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder,
+			       COALESCE(e.is_read,0), COALESCE(e.is_starred,0), COALESCE(e.is_draft,0)
 			FROM emails_fts f
 			JOIN emails e ON e.rowid = f.rowid
 			WHERE emails_fts MATCH ?
 			ORDER BY e.date DESC LIMIT 100`, query)
 	} else {
 		rows, err = c.db.Query(`
-			SELECT e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder, COALESCE(e.is_read,0), COALESCE(e.is_starred,0), COALESCE(e.is_draft,0)
+			SELECT COALESCE(e.source_id, 'default-mail'), COALESCE(e.account_id, 'default'), COALESCE(e.local_id, ''), COALESCE(e.uid_validity, 0),
+			       e.message_id, COALESCE(e.uid,0), e.sender, e.subject, e.date, e.size, e.has_attachments, e.folder,
+			       COALESCE(e.is_read,0), COALESCE(e.is_starred,0), COALESCE(e.is_draft,0)
 			FROM emails_fts f
 			JOIN emails e ON e.rowid = f.rowid
 			WHERE emails_fts MATCH ? AND e.folder = ?
@@ -2088,7 +2203,7 @@ func (c *Cache) SearchEmailsFTS(folder, query string) ([]*models.EmailData, erro
 		return nil, fmt.Errorf("FTS search failed: %w", err)
 	}
 	defer rows.Close()
-	return scanEmailRows(rows)
+	return scanScopedEmailRows(rows)
 }
 
 // SearchEmailsCrossFolder searches across all folders via FTS or LIKE fallback
@@ -2101,7 +2216,9 @@ func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, erro
 	// Fallback to LIKE across all folders
 	like := "%" + escapeLike(query) + "%"
 	rows, err := c.db.Query(`
-		SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
+		SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
+		       message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder,
+		       COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
 		FROM emails
 		WHERE sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\'
 		ORDER BY date DESC LIMIT 100`, like, like)
@@ -2109,7 +2226,7 @@ func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, erro
 		return nil, err
 	}
 	defer rows.Close()
-	return scanEmailRows(rows)
+	return scanScopedEmailRows(rows)
 }
 
 // GetCachedFolders returns the distinct set of folder names present in the emails cache.
@@ -2182,6 +2299,40 @@ func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 			return nil, err
 		}
 		email := normalizeEmailScope(&models.EmailData{
+			MessageID:      msgID,
+			UID:            uid,
+			Sender:         sender,
+			Subject:        subject,
+			Date:           date,
+			Size:           size,
+			HasAttachments: hasAtt == 1,
+			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
+			IsDraft:        isDraft == 1,
+			Folder:         folder,
+		})
+		emails = append(emails, email)
+	}
+	return emails, rows.Err()
+}
+
+func scanScopedEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
+	var emails []*models.EmailData
+	for rows.Next() {
+		var sourceID, accountID, localID string
+		var msgID, sender, subject, folder string
+		var uid uint32
+		var uidValidity uint32
+		var date time.Time
+		var size, hasAtt, isRead, isStarred, isDraft int
+		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
+			return nil, err
+		}
+		email := normalizeEmailScope(&models.EmailData{
+			SourceID:       models.SourceID(sourceID),
+			AccountID:      models.AccountID(accountID),
+			LocalID:        localID,
+			UIDValidity:    uidValidity,
 			MessageID:      msgID,
 			UID:            uid,
 			Sender:         sender,
