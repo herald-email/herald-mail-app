@@ -16,6 +16,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/oauth"
 	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
@@ -107,11 +108,19 @@ type SettingsToolRequestedMsg struct {
 	Tool string
 }
 
-// OAuthRequiredMsg is sent when Gmail is selected and OAuth flow needs to run.
+// OAuthRequiredMsg is sent when a Google mail or calendar source needs OAuth.
 type OAuthRequiredMsg struct {
-	Email  string
-	Config *config.Config // partially-built config with vendor presets applied
+	Email                      string
+	Config                     *config.Config // partially-built config with vendor presets applied
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	ValidateAccount            bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
+	SourceIDs                  []models.SourceID
 }
+
+var googleOAuthCredentialsConfigured = oauth.Configured
 
 // Settings is a self-contained huh-based settings form component.
 type Settings struct {
@@ -576,6 +585,7 @@ func (s *Settings) buildForm() {
 		s.buildAddAccountForm()
 		return
 	}
+	s.normalizeCalendarProviderChoice()
 
 	// Group 1 — Account type selection
 	accountGroup := huh.NewGroup(
@@ -991,10 +1001,7 @@ func (s *Settings) buildForm() {
 	calendarProviderGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Calendar Provider").
-			Options(
-				huh.NewOption("Google Calendar", "google_calendar"),
-				huh.NewOption("CalDAV", "caldav"),
-			).
+			Options(s.calendarProviderOptions()...).
 			Value(&s.calendarProvider),
 	).WithHideFunc(func() bool { return !s.accountDetailShowsCalendar() })
 
@@ -1525,6 +1532,59 @@ func (s *Settings) accountDetailHasCalendar() bool {
 	return ok && len(group.CalendarSourceIDs) > 0
 }
 
+func (s *Settings) googleCalendarSetupAvailable() bool {
+	return s != nil && s.showExperimentalEmailServices && googleOAuthCredentialsConfigured()
+}
+
+func (s *Settings) editingExistingGoogleCalendar() bool {
+	if s == nil || s.accountEditMode != settingsAccountEditExisting {
+		return false
+	}
+	group, ok := s.selectedAccountGroup()
+	if !ok {
+		return false
+	}
+	for _, source := range group.Sources {
+		if strings.TrimSpace(source.Kind) == string(models.SourceKindCalendar) &&
+			strings.TrimSpace(source.Provider) == "google_calendar" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Settings) showGoogleCalendarProviderOption() bool {
+	return s.googleCalendarSetupAvailable() || s.editingExistingGoogleCalendar()
+}
+
+func (s *Settings) defaultCalendarProvider() string {
+	if s.showGoogleCalendarProviderOption() {
+		return "google_calendar"
+	}
+	return "caldav"
+}
+
+func (s *Settings) normalizeCalendarProviderChoice() {
+	if s == nil {
+		return
+	}
+	if strings.TrimSpace(s.calendarProvider) == "" {
+		s.calendarProvider = s.defaultCalendarProvider()
+	}
+	if strings.TrimSpace(s.calendarProvider) == "google_calendar" && !s.showGoogleCalendarProviderOption() {
+		s.calendarProvider = "caldav"
+	}
+}
+
+func (s *Settings) calendarProviderOptions() []huh.Option[string] {
+	options := make([]huh.Option[string], 0, 2)
+	if s.showGoogleCalendarProviderOption() {
+		options = append(options, huh.NewOption("Google Calendar", "google_calendar"))
+	}
+	options = append(options, huh.NewOption("CalDAV", "caldav"))
+	return options
+}
+
 func (s *Settings) accountDetailCapability() string {
 	hasMail := s.accountDetailShowsMail()
 	hasCalendar := s.accountDetailShowsCalendar()
@@ -1560,6 +1620,7 @@ func (s *Settings) resetAddAccountFields() {
 	s.caldavURL = ""
 	s.caldavUsername = ""
 	s.caldavPassword = ""
+	s.calendarProvider = s.defaultCalendarProvider()
 	s.alsoAddCalendar = false
 	s.deleteAccount = false
 	s.provider = "imap"
@@ -1924,7 +1985,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.accountEditMode = s.addAccountChoice
 			s.resetAddAccountFields()
 			if s.accountEditMode == settingsAccountEditAddCalendar {
-				s.calendarProvider = "google_calendar"
+				s.calendarProvider = s.defaultCalendarProvider()
 			}
 			if s.accountEditMode == settingsAccountEditAddMail {
 				s.syncProviderDefaults("", s.provider)
@@ -1957,11 +2018,9 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		cfg := s.buildConfig()
-		if s.provider == "gmail-oauth" {
-			// OAuth flow will handle saving after tokens received.
-			builtCfg := cfg
+		if oauthMsg, ok := s.oauthRequiredMsg(cfg); ok {
 			return s, tea.Batch(cmd, func() tea.Msg {
-				return OAuthRequiredMsg{Email: s.email, Config: builtCfg}
+				return oauthMsg
 			})
 		}
 		// Non-Gmail: signal done; the caller is responsible for saving.
@@ -2376,14 +2435,93 @@ func (s *Settings) requiresCalendarValidation() bool {
 		s.accountDetailShowsCalendar()
 }
 
+func (s *Settings) oauthRequiredMsg(candidate *config.Config) (OAuthRequiredMsg, bool) {
+	if s == nil || candidate == nil || s.deleteAccount {
+		return OAuthRequiredMsg{}, false
+	}
+	if s.mode == SettingsModePanel && s.panelSection != settingsPanelSectionAccount {
+		return OAuthRequiredMsg{}, false
+	}
+	if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly {
+		return OAuthRequiredMsg{}, false
+	}
+
+	validateAccount := s.requiresAccountValidation()
+	validateCalendar := s.requiresCalendarValidation()
+	includeConfigured := s.provider == "gmail-oauth"
+	sourceIDs := s.googleOAuthSourceIDsForCurrentAccount(candidate, includeConfigured)
+	needsCalendarOAuth := !includeConfigured && len(sourceIDs) > 0
+	if !includeConfigured && !needsCalendarOAuth {
+		return OAuthRequiredMsg{}, false
+	}
+
+	email := strings.TrimSpace(s.email)
+	if email == "" && needsCalendarOAuth {
+		email = strings.TrimSpace(s.calendarEmail)
+	}
+	return OAuthRequiredMsg{
+		Email:                      email,
+		Config:                     candidate,
+		ReturnToMenu:               s.mode == SettingsModePanel,
+		ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
+		ValidateAccount:            validateAccount,
+		ValidateCalendar:           validateCalendar,
+		CalendarSourceIDs:          s.calendarSourceIDsForValidation(candidate),
+		SourceIDs:                  sourceIDs,
+	}, true
+}
+
+func (s *Settings) googleOAuthSourceIDsForCurrentAccount(candidate *config.Config, includeConfigured bool) []models.SourceID {
+	if s == nil || candidate == nil {
+		return nil
+	}
+	accountID := s.currentAccountIDForSettings()
+	var ids []models.SourceID
+	for _, source := range candidate.NormalizedSources() {
+		if accountID != "" && strings.TrimSpace(source.AccountID) != accountID {
+			continue
+		}
+		if !settingsSourceUsesGoogleOAuth(source) {
+			continue
+		}
+		if includeConfigured || googleOAuthSourceNeedsToken(source) {
+			ids = append(ids, settingsSourceIDForSource(source))
+		}
+	}
+	return ids
+}
+
+func settingsSourceIDForSource(source config.SourceConfig) models.SourceID {
+	kind := models.SourceKind(strings.TrimSpace(source.Kind))
+	if kind == "" {
+		kind = models.SourceKindMail
+	}
+	return models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultSourceIDForKind(kind))
+}
+
+func settingsSourceUsesGoogleOAuth(source config.SourceConfig) bool {
+	kind := strings.TrimSpace(source.Kind)
+	provider := strings.TrimSpace(source.Provider)
+	switch kind {
+	case "", string(models.SourceKindMail):
+		return provider == "gmail" && strings.TrimSpace(source.Google.Email) != ""
+	case string(models.SourceKindCalendar):
+		return provider == "google_calendar"
+	default:
+		return false
+	}
+}
+
+func googleOAuthSourceNeedsToken(source config.SourceConfig) bool {
+	return strings.TrimSpace(source.Google.AccessToken) == "" &&
+		strings.TrimSpace(source.Google.RefreshToken) == ""
+}
+
 func (s *Settings) calendarSourceIDsForValidation(candidate *config.Config) []models.SourceID {
 	if !s.requiresCalendarValidation() || candidate == nil {
 		return nil
 	}
-	accountID := strings.TrimSpace(s.selectedAccountID)
-	if accountID == "" {
-		accountID = settingsSlug(firstNonEmptyString(s.accountDisplayName, s.email, s.calendarEmail, s.caldavUsername, "account"))
-	}
+	accountID := s.currentAccountIDForSettings()
 	var ids []models.SourceID
 	for _, source := range candidate.NormalizedSources() {
 		if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) {
@@ -2395,6 +2533,17 @@ func (s *Settings) calendarSourceIDsForValidation(candidate *config.Config) []mo
 		ids = append(ids, models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID))
 	}
 	return ids
+}
+
+func (s *Settings) currentAccountIDForSettings() string {
+	if s == nil {
+		return ""
+	}
+	accountID := strings.TrimSpace(s.selectedAccountID)
+	if accountID == "" {
+		accountID = settingsSlug(firstNonEmptyString(s.accountDisplayName, s.email, s.calendarEmail, s.caldavUsername, "account"))
+	}
+	return accountID
 }
 
 func (s *Settings) hasAIModelWarning() bool {

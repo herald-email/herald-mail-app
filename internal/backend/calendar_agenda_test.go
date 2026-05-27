@@ -92,7 +92,7 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 
 	cfg := &config.Config{Sources: []config.SourceConfig{
 		{ID: "default-mail", Kind: "mail", Provider: "imap", AccountID: "default"},
-		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work", Google: config.GoogleConfig{RefreshToken: "refresh-token"}},
 	}}
 	b := &LocalBackend{cache: store, cfg: cfg}
 	if !b.CalendarAgendaAvailable() {
@@ -131,6 +131,30 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 	}
 	if detail.Title != event.Title {
 		t.Fatalf("detail title = %q, want %q", detail.Title, event.Title)
+	}
+}
+
+func TestLocalBackendCalendarAgendaHiddenForGoogleCalendarWithoutOAuth(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", Provider: "imap", AccountID: "default"},
+		{
+			ID:        "work-calendar",
+			Kind:      "calendar",
+			Provider:  "google_calendar",
+			AccountID: "work",
+			Google:    config.GoogleConfig{Email: "work@example.test"},
+		},
+	}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+
+	if b.CalendarAgendaAvailable() {
+		t.Fatal("Google Calendar without OAuth tokens should not advertise the Calendar tab")
 	}
 }
 
@@ -359,8 +383,8 @@ func TestLocalBackendCalendarSearchReadsScopedCache(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	cfg := &config.Config{Sources: []config.SourceConfig{
-		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
-		{ID: "personal-calendar", Kind: "calendar", Provider: "caldav", AccountID: "personal"},
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work", Google: config.GoogleConfig{RefreshToken: "refresh-token"}},
+		{ID: "personal-calendar", Kind: "calendar", Provider: "caldav", AccountID: "personal", CalDAV: config.CalDAVConfig{URL: "https://caldav.example/personal"}},
 	}}
 	b := &LocalBackend{cache: store, cfg: cfg}
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
@@ -518,7 +542,7 @@ func TestLocalBackendCrossSourceSearchReadsMailAndCalendarCache(t *testing.T) {
 
 	cfg := &config.Config{Sources: []config.SourceConfig{
 		{ID: "default-mail", Kind: "mail", Provider: "imap", AccountID: "default"},
-		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+		{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work", Google: config.GoogleConfig{RefreshToken: "refresh-token"}},
 	}}
 	b := &LocalBackend{cache: store, cfg: cfg}
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)

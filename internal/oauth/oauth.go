@@ -53,6 +53,13 @@ func credentials() (string, string, error) {
 	return id, secret, nil
 }
 
+// Configured reports whether Herald has Google OAuth application credentials
+// available for starting a desktop OAuth flow.
+func Configured() bool {
+	_, _, err := credentials()
+	return err == nil
+}
+
 // NewGmailConfig returns an OAuth2 config for Gmail using the provided
 // client ID and secret. The redirect URL should be a localhost callback
 // for the desktop auth flow.

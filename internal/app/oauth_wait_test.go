@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
 	"golang.org/x/oauth2"
 )
@@ -259,6 +260,59 @@ func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("OAuth success must wait for parent validation before saving config, stat err=%v", err)
+	}
+}
+
+func TestOAuthWaitModel_CodeSuccessAppliesTokensToTargetGoogleSources(t *testing.T) {
+	originalExchange := exchangeOAuthCodeFn
+	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+		return &oauth2.Token{
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+			Expiry:       time.Now().Add(time.Hour),
+		}, nil
+	}
+	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:        "work-calendar",
+			Kind:      "calendar",
+			Provider:  "google_calendar",
+			AccountID: "work",
+			Google:    config.GoogleConfig{Email: "work@example.test"},
+		},
+		{
+			ID:        "personal-calendar",
+			Kind:      "calendar",
+			Provider:  "google_calendar",
+			AccountID: "personal",
+			Google:    config.GoogleConfig{Email: "me@example.test"},
+		},
+	}}
+	m := &OAuthWaitModel{
+		email:       "work@example.test",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		sourceIDs:   []models.SourceID{"work-calendar"},
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	_, cmd := m.Update(oauthCodeReceivedMsg{result: oauth.Result{Code: "code"}})
+	if cmd == nil {
+		t.Fatal("expected OAuthDoneMsg command")
+	}
+	if _, ok := cmd().(OAuthDoneMsg); !ok {
+		t.Fatalf("expected OAuthDoneMsg, got %T", cmd())
+	}
+
+	if cfg.Sources[0].Google.RefreshToken != "refresh-token" || cfg.Sources[0].Google.AccessToken != "access-token" {
+		t.Fatalf("target calendar source tokens = %#v, want OAuth tokens", cfg.Sources[0].Google)
+	}
+	if cfg.Sources[1].Google.RefreshToken != "" || cfg.Sources[1].Google.AccessToken != "" {
+		t.Fatalf("untargeted calendar source was overwritten: %#v", cfg.Sources[1].Google)
 	}
 }
 

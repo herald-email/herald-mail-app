@@ -11,30 +11,43 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
+	"golang.org/x/oauth2"
 )
 
 // OAuthWaitModel is a tea.Model for the OAuth waiting screen.
 type OAuthWaitModel struct {
-	email       string
-	authURL     string
-	redirectURI string
-	codeCh      <-chan oauth.Result
-	cfg         *config.Config
-	configPath  string
-	spinner     spinner.Model
-	browserOpen bool
-	cancel      context.CancelFunc
-	timeout     time.Duration
-	done        bool
-	err         error
-	width       int
-	height      int
+	email                      string
+	authURL                    string
+	redirectURI                string
+	codeCh                     <-chan oauth.Result
+	cfg                        *config.Config
+	configPath                 string
+	spinner                    spinner.Model
+	browserOpen                bool
+	cancel                     context.CancelFunc
+	timeout                    time.Duration
+	done                       bool
+	err                        error
+	width                      int
+	height                     int
+	returnToMenu               bool
+	reclaimOfflineCacheStorage bool
+	validateAccount            bool
+	validateCalendar           bool
+	calendarSourceIDs          []models.SourceID
+	sourceIDs                  []models.SourceID
 }
 
 // OAuthDoneMsg is sent when OAuth completes successfully.
 type OAuthDoneMsg struct {
-	Config *config.Config
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	ValidateAccount            bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
 }
 
 // OAuthErrorMsg is sent when OAuth fails.
@@ -48,6 +61,15 @@ type oauthCodeReceivedMsg struct{ result oauth.Result }
 
 type oauthWaitTimeoutMsg struct{}
 
+type OAuthWaitOptions struct {
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	ValidateAccount            bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
+	SourceIDs                  []models.SourceID
+}
+
 var (
 	ErrOAuthCancelled = errors.New("OAuth authorization cancelled")
 	ErrOAuthTimeout   = errors.New("OAuth authorization timed out")
@@ -59,6 +81,10 @@ var (
 // NewOAuthWaitModel creates an OAuthWaitModel. It calls oauth.StartFlow to begin the
 // authorization code flow, then returns the model ready to use.
 func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OAuthWaitModel, error) {
+	return NewOAuthWaitModelWithOptions(email, cfg, configPath, OAuthWaitOptions{})
+}
+
+func NewOAuthWaitModelWithOptions(email string, cfg *config.Config, configPath string, opts OAuthWaitOptions) (*OAuthWaitModel, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	authURL, codeCh, err := oauth.StartFlow(ctx, email)
 	if err != nil {
@@ -76,15 +102,21 @@ func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OA
 	sp.Style = defaultTheme.Setup.Spinner.Style()
 
 	return &OAuthWaitModel{
-		email:       email,
-		authURL:     authURL,
-		redirectURI: redirectURI,
-		codeCh:      codeCh,
-		cfg:         cfg,
-		configPath:  configPath,
-		spinner:     sp,
-		cancel:      cancel,
-		timeout:     oauthWaitTimeout,
+		email:                      email,
+		authURL:                    authURL,
+		redirectURI:                redirectURI,
+		codeCh:                     codeCh,
+		cfg:                        cfg,
+		configPath:                 configPath,
+		spinner:                    sp,
+		cancel:                     cancel,
+		timeout:                    oauthWaitTimeout,
+		returnToMenu:               opts.ReturnToMenu,
+		reclaimOfflineCacheStorage: opts.ReclaimOfflineCacheStorage,
+		validateAccount:            opts.ValidateAccount,
+		validateCalendar:           opts.ValidateCalendar,
+		calendarSourceIDs:          append([]models.SourceID(nil), opts.CalendarSourceIDs...),
+		sourceIDs:                  append([]models.SourceID(nil), opts.SourceIDs...),
 	}, nil
 }
 
@@ -174,18 +206,61 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
 		}
 
-		m.cfg.Gmail.Email = m.email
-		m.cfg.Gmail.AccessToken = token.AccessToken
-		m.cfg.Gmail.RefreshToken = token.RefreshToken
-		if !token.Expiry.IsZero() {
-			m.cfg.Gmail.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
-		}
+		applyGoogleOAuthToken(m.cfg, m.email, token, m.sourceIDs)
 
 		cfg := m.cfg
-		return m, func() tea.Msg { return OAuthDoneMsg{Config: cfg} }
+		return m, func() tea.Msg {
+			return OAuthDoneMsg{
+				Config:                     cfg,
+				ReturnToMenu:               m.returnToMenu,
+				ReclaimOfflineCacheStorage: m.reclaimOfflineCacheStorage,
+				ValidateAccount:            m.validateAccount,
+				ValidateCalendar:           m.validateCalendar,
+				CalendarSourceIDs:          append([]models.SourceID(nil), m.calendarSourceIDs...),
+			}
+		}
 	}
 
 	return m, nil
+}
+
+func applyGoogleOAuthToken(cfg *config.Config, email string, token *oauth2.Token, sourceIDs []models.SourceID) {
+	if cfg == nil || token == nil {
+		return
+	}
+	email = strings.TrimSpace(email)
+	cfg.Gmail.Email = email
+	cfg.Gmail.AccessToken = token.AccessToken
+	cfg.Gmail.RefreshToken = token.RefreshToken
+	if !token.Expiry.IsZero() {
+		cfg.Gmail.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
+	}
+
+	targets := make(map[models.SourceID]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		normalized := models.NormalizeSourceID(id, "")
+		if normalized != "" {
+			targets[normalized] = true
+		}
+	}
+	targetAll := len(targets) == 0
+	for i := range cfg.Sources {
+		source := cfg.Sources[i]
+		if !settingsSourceUsesGoogleOAuth(source) {
+			continue
+		}
+		if !targetAll && !targets[settingsSourceIDForSource(source)] {
+			continue
+		}
+		if strings.TrimSpace(cfg.Sources[i].Google.Email) == "" {
+			cfg.Sources[i].Google.Email = email
+		}
+		cfg.Sources[i].Google.AccessToken = token.AccessToken
+		cfg.Sources[i].Google.RefreshToken = token.RefreshToken
+		if !token.Expiry.IsZero() {
+			cfg.Sources[i].Google.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
+		}
+	}
 }
 
 // View implements tea.Model.

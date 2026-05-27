@@ -201,7 +201,14 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cfg == nil {
 			cfg = &config.Config{}
 		}
-		oauthModel, err := app.NewOAuthWaitModel(msg.Email, cfg, m.configPath)
+		oauthModel, err := app.NewOAuthWaitModelWithOptions(msg.Email, cfg, m.configPath, app.OAuthWaitOptions{
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+			ValidateAccount:            msg.ValidateAccount,
+			ValidateCalendar:           msg.ValidateCalendar,
+			CalendarSourceIDs:          msg.CalendarSourceIDs,
+			SourceIDs:                  msg.SourceIDs,
+		})
 		if err != nil {
 			m.validationMessage = setupOAuthStartFailureMessage(err)
 			logger.Error("Setup OAuth start failed: %v", err)

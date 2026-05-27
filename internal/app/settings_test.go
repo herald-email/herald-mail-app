@@ -840,6 +840,92 @@ func TestSettingsAddCalendarFlowSkipsMailAccountType(t *testing.T) {
 	}
 }
 
+func TestSettingsCalendarProviderOptionsHideGoogleCalendarUnlessOAuthAndExperimental(t *testing.T) {
+	originalOAuthConfigured := googleOAuthCredentialsConfigured
+	t.Cleanup(func() { googleOAuthCredentialsConfigured = originalOAuthConfigured })
+
+	tests := []struct {
+		name         string
+		experimental bool
+		oauth        bool
+		wantGoogle   bool
+	}{
+		{name: "experimental off", experimental: false, oauth: true, wantGoogle: false},
+		{name: "oauth credentials missing", experimental: true, oauth: false, wantGoogle: false},
+		{name: "enabled", experimental: true, oauth: true, wantGoogle: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			googleOAuthCredentialsConfigured = func() bool { return tt.oauth }
+			s := NewSettingsWithOptions(SettingsModePanel, nil, SettingsOptions{ShowExperimentalEmailServices: tt.experimental})
+			s.panelSection = settingsPanelSectionAccount
+			s.accountEditMode = settingsAccountEditAddCalendar
+			s.calendarProvider = "google_calendar"
+			s.buildForm()
+
+			var labels []string
+			for _, option := range s.calendarProviderOptions() {
+				labels = append(labels, option.Key)
+			}
+			rendered := strings.Join(labels, "\n")
+
+			if strings.Contains(rendered, "Google Calendar") != tt.wantGoogle {
+				t.Fatalf("Google Calendar visible = %v, want %v; options:\n%s", strings.Contains(rendered, "Google Calendar"), tt.wantGoogle, rendered)
+			}
+			if !strings.Contains(rendered, "CalDAV") {
+				t.Fatalf("expected CalDAV fallback option, got:\n%s", rendered)
+			}
+			if !tt.wantGoogle && s.calendarProvider != "caldav" {
+				t.Fatalf("calendarProvider = %q, want caldav when Google Calendar is hidden", s.calendarProvider)
+			}
+		})
+	}
+}
+
+func TestSettingsGoogleCalendarWithoutEmailRequestsOAuth(t *testing.T) {
+	originalOAuthConfigured := googleOAuthCredentialsConfigured
+	googleOAuthCredentialsConfigured = func() bool { return true }
+	t.Cleanup(func() { googleOAuthCredentialsConfigured = originalOAuthConfigured })
+
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "imap",
+			DisplayName: "Work Mail",
+			AccountID:   "work",
+			Credentials: config.CredentialsConfig{Username: "work@example.test", Password: "secret"},
+			IMAP:        config.ServerConfig{Host: "imap.example.test", Port: 993},
+			SMTP:        config.ServerConfig{Host: "smtp.example.test", Port: 587},
+		},
+	}}
+	s := NewSettingsWithOptions(SettingsModePanel, existing, SettingsOptions{ShowExperimentalEmailServices: true})
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddCalendar
+	s.accountDisplayName = "Work Calendar"
+	s.calendarProvider = "google_calendar"
+	s.calendarEmail = ""
+
+	cfg := s.buildConfig()
+	msg, ok := s.oauthRequiredMsg(cfg)
+	if !ok {
+		t.Fatal("expected Google Calendar without tokens to require OAuth")
+	}
+	if msg.Email != "" {
+		t.Fatalf("OAuthRequiredMsg.Email = %q, want empty so Google prompts for account choice", msg.Email)
+	}
+	if msg.ValidateAccount {
+		t.Fatal("standalone calendar OAuth should not request IMAP/SMTP validation")
+	}
+	if !msg.ValidateCalendar {
+		t.Fatal("standalone calendar OAuth should validate the calendar source after authorization")
+	}
+	if len(msg.SourceIDs) != 1 || msg.SourceIDs[0] == "" {
+		t.Fatalf("OAuth source IDs = %#v, want the new calendar source", msg.SourceIDs)
+	}
+}
+
 func TestSettingsExistingCalendarOnlyAccountSkipsMailAccountType(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{

@@ -239,7 +239,9 @@ func (b *LocalBackend) configuredCalendarSources() []config.SourceConfig {
 	var sources []config.SourceConfig
 	for _, source := range b.cfg.NormalizedSources() {
 		if strings.TrimSpace(source.Kind) == string(models.SourceKindCalendar) {
-			sources = append(sources, source)
+			if calendarSourceHasProviderConfig(source) {
+				sources = append(sources, source)
+			}
 		}
 	}
 	return sources

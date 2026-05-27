@@ -1744,7 +1744,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Gmail chosen in the settings panel — launch the OAuth wait overlay.
 		m.showSettings = false
 		m.settingsPanel = nil
-		oauthModel, err := NewOAuthWaitModel(msg.Email, msg.Config, m.configPath)
+		oauthModel, err := NewOAuthWaitModelWithOptions(msg.Email, msg.Config, m.configPath, OAuthWaitOptions{
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+			ValidateAccount:            msg.ValidateAccount,
+			ValidateCalendar:           msg.ValidateCalendar,
+			CalendarSourceIDs:          msg.CalendarSourceIDs,
+			SourceIDs:                  msg.SourceIDs,
+		})
 		if err != nil {
 			m.accountValidation = &accountValidationState{
 				Checking: false,
@@ -1758,7 +1765,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.oauthWait.Init()
 
 	case OAuthDoneMsg:
-		return m, m.beginAccountValidation(msg.Config, true, false, false, nil)
+		if msg.ValidateAccount {
+			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.ValidateCalendar, msg.CalendarSourceIDs)
+		}
+		if msg.ValidateCalendar {
+			return m, m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
+		}
+		return m, m.applySettingsSaved(SettingsSavedMsg{
+			Config:                     msg.Config,
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+		})
 
 	case OAuthErrorMsg:
 		m.oauthWait = nil
