@@ -164,6 +164,22 @@ func emailDaemonPath(messageID, suffix string, values url.Values) string {
 	return urlPath + "?" + values.Encode()
 }
 
+func addMessageScopeArgs(values url.Values, req mcp.CallToolRequest) url.Values {
+	if values == nil {
+		values = url.Values{}
+	}
+	for _, key := range []string{"source_id", "account_id", "local_id"} {
+		if value := req.GetString(key, ""); value != "" {
+			values.Set(key, value)
+		}
+	}
+	return values
+}
+
+func scopedEmailDaemonPath(req mcp.CallToolRequest, messageID, suffix string, values url.Values) string {
+	return emailDaemonPath(messageID, suffix, addMessageScopeArgs(values, req))
+}
+
 func emailDaemonFolderPath(messageID, suffix, folder string) string {
 	values := url.Values{}
 	if folder != "" {
@@ -1110,6 +1126,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
 			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			msgID, err := req.RequireString("message_id")
@@ -1117,7 +1136,11 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/read", folder), nil)
+			values := url.Values{}
+			if folder != "" {
+				values.Set("folder", folder)
+			}
+			_, status, err := daemonPost(scopedEmailDaemonPath(req, msgID, "/read", values), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1136,6 +1159,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
 			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			msgID, err := req.RequireString("message_id")
@@ -1143,7 +1169,11 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/unread", folder), nil)
+			values := url.Values{}
+			if folder != "" {
+				values.Set("folder", folder)
+			}
+			_, status, err := daemonPost(scopedEmailDaemonPath(req, msgID, "/unread", values), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1162,6 +1192,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(true),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
 			mcp.WithString("folder", mcp.Description("Folder name (default: INBOX)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			msgID, err := req.RequireString("message_id")
@@ -1169,7 +1202,11 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			status, err := daemonDelete(emailDaemonFolderPath(msgID, "", folder))
+			values := url.Values{}
+			if folder != "" {
+				values.Set("folder", folder)
+			}
+			status, err := daemonDelete(scopedEmailDaemonPath(req, msgID, "", values))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1188,6 +1225,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
 			mcp.WithString("folder", mcp.Description("Source folder (default: INBOX)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			msgID, err := req.RequireString("message_id")
@@ -1195,7 +1235,11 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			_, status, err := daemonPost(emailDaemonFolderPath(msgID, "/archive", folder), nil)
+			values := url.Values{}
+			if folder != "" {
+				values.Set("folder", folder)
+			}
+			_, status, err := daemonPost(scopedEmailDaemonPath(req, msgID, "/archive", values), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1215,6 +1259,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID")),
 			mcp.WithString("from_folder", mcp.Required(), mcp.Description("Source folder")),
 			mcp.WithString("to_folder", mcp.Required(), mcp.Description("Destination folder")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			msgID, err := req.RequireString("message_id")
@@ -1229,7 +1276,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			_, status, err := daemonPost(emailDaemonPath(msgID, "/move", nil), map[string]string{
+			_, status, err := daemonPost(scopedEmailDaemonPath(req, msgID, "/move", nil), map[string]string{
 				"fromFolder": fromFolder,
 				"toFolder":   toFolder,
 			})
@@ -1819,6 +1866,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to reply to")),
 			mcp.WithString("body", mcp.Required(), mcp.Description("Reply body (Markdown supported)")),
 			mcp.WithString("preservation_mode", mcp.Description("HTML preservation mode: safe, fidelity, or privacy (default: safe)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			messageID, err := req.RequireString("message_id")
@@ -1833,7 +1883,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if mode := req.GetString("preservation_mode", ""); mode != "" {
 				payload["preservation_mode"] = mode
 			}
-			respBody, status, err := daemonPost("/v1/emails/"+url.PathEscape(messageID)+"/reply", payload)
+			respBody, status, err := daemonPost(scopedEmailDaemonPath(req, messageID, "/reply", nil), payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1856,6 +1906,9 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithString("preservation_mode", mcp.Description("HTML preservation mode: safe, fidelity, or privacy (default: safe)")),
 			mcp.WithString("omit_original_attachments", mcp.Description("Set to true to omit all original file attachments from the forward")),
 			mcp.WithString("omitted_original_attachment_names", mcp.Description("Comma-separated original attachment filenames to omit")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			messageID, err := req.RequireString("message_id")
@@ -1881,7 +1934,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if omitted := req.GetString("omitted_original_attachment_names", ""); omitted != "" {
 				payload["omitted_original_attachment_names"] = splitCommaList(omitted)
 			}
-			respBody, status, err := daemonPost(emailDaemonPath(messageID, "/forward", nil), payload)
+			respBody, status, err := daemonPost(scopedEmailDaemonPath(req, messageID, "/forward", nil), payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2135,13 +2188,16 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithReadOnlyHintAnnotation(false),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_id", mcp.Required(), mcp.Description("Message ID of the email to unsubscribe from")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID from scoped MCP listing output")),
+			mcp.WithString("account_id", mcp.Description("Account ID from scoped MCP listing output")),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald message local ID from listing output")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			messageID, err := req.RequireString("message_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			body, status, err := daemonPost("/v1/emails/"+url.PathEscape(messageID)+"/unsubscribe", nil)
+			body, status, err := daemonPost(scopedEmailDaemonPath(req, messageID, "/unsubscribe", nil), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

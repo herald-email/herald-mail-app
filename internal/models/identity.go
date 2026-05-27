@@ -96,6 +96,20 @@ func (r MessageRef) WithDefaults() MessageRef {
 	return r
 }
 
+func MessageRefFromLocalID(localID string) (MessageRef, bool) {
+	parts := strings.SplitN(strings.TrimSpace(localID), ":", 5)
+	if len(parts) != 5 || parts[0] != string(SourceKindMail) || parts[1] == "" || parts[2] == "" {
+		return MessageRef{}, false
+	}
+	return MessageRef{
+		SourceID:  SourceID(parts[1]),
+		AccountID: AccountID(parts[2]),
+		Folder:    parts[3],
+		MessageID: parts[4],
+		LocalID:   strings.TrimSpace(localID),
+	}, true
+}
+
 func (r EventRef) WithDefaults() EventRef {
 	r.SourceID = NormalizeSourceID(r.SourceID, DefaultCalendarSourceID)
 	r.AccountID = NormalizeAccountID(r.AccountID)

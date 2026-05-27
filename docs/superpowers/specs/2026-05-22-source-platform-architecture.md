@@ -213,6 +213,7 @@ The daemon and MCP layers must stop treating `folder` plus `message_id` as globa
 
 - [x] Read endpoints accept optional `source_id` and `account_id`; default values preserve legacy clients.
 - [ ] Mutating endpoints require scoped refs once multi-account writes are enabled.
+- [x] Single-message daemon and MCP mail mutation paths accept scoped message refs, reject ambiguous multi-account writes, and keep single-account legacy message-ID calls working.
 - [x] MCP listing outputs include both human-readable message IDs and scoped refs suitable for follow-up calls.
 - [x] Daemon event streams include source/account/collection fields on progress, new item, valid ID, sync, and mutation events.
 - [x] Calendar MCP tools are read-only at first and use the same scoped reference style as mail.

@@ -391,7 +391,12 @@ func (m *MultiBackend) slotForCompose(sourceID models.SourceID, from string) (*a
 
 func (m *MultiBackend) slotForRef(ref models.MessageRef) (*accountSlot, models.MessageRef, error) {
 	rawSource := ref.SourceID
+	hadLocalID := strings.TrimSpace(ref.LocalID) != ""
+	hadCollectionID := strings.TrimSpace(ref.Folder) != ""
 	ref = ref.WithDefaults()
+	if !hadLocalID && (!hadCollectionID || strings.TrimSpace(ref.MessageID) == "") {
+		ref.LocalID = ""
+	}
 	m.mu.RLock()
 	slot := m.slots[ref.SourceID]
 	if slot == nil && rawSource == "" {
@@ -713,6 +718,30 @@ func (m *MultiBackend) UnmarkStarredByRef(ref models.MessageRef) error {
 		return err
 	}
 	return slot.backend.UnmarkStarred(ref.MessageID, ref.Folder)
+}
+
+func (m *MultiBackend) ReplyToEmailByRef(ref models.MessageRef, opts models.ReplyEmailOptions) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.ReplyToEmailWithOptions(ref.MessageID, opts)
+}
+
+func (m *MultiBackend) ForwardEmailByRef(ref models.MessageRef, opts models.ForwardEmailOptions) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.ForwardEmailWithOptions(ref.MessageID, opts)
+}
+
+func (m *MultiBackend) UnsubscribeSenderByRef(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	return slot.backend.UnsubscribeSender(ref.MessageID)
 }
 
 func (m *MultiBackend) SendEmail(to, subject, body, from string) error {

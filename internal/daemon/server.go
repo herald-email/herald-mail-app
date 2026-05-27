@@ -326,6 +326,19 @@ type scopedValidIDsProvider interface {
 	ScopedValidIDsCh() <-chan models.ValidIDsNotification
 }
 
+type scopedMutationBackend interface {
+	ArchiveEmailByRef(models.MessageRef) error
+	DeleteEmailByRef(models.MessageRef) error
+	ForwardEmailByRef(models.MessageRef, models.ForwardEmailOptions) error
+	MarkReadByRef(models.MessageRef) error
+	MarkUnreadByRef(models.MessageRef) error
+	MarkStarredByRef(models.MessageRef) error
+	MoveEmailByRef(models.MessageRef, string) error
+	ReplyToEmailByRef(models.MessageRef, models.ReplyEmailOptions) error
+	UnsubscribeSenderByRef(models.MessageRef) error
+	UnmarkStarredByRef(models.MessageRef) error
+}
+
 type readScope struct {
 	sourceID  models.SourceID
 	accountID models.AccountID
@@ -351,14 +364,41 @@ func (s readScope) hasIdentityScope() bool {
 	return s.sourceID != "" || s.accountID != "" || s.localID != ""
 }
 
+func (s readScope) hasMutationIdentityScope() bool {
+	if s.localID != "" {
+		return true
+	}
+	return s.sourceID != "" && s.accountID != ""
+}
+
 func (s readScope) messageRef(messageID string) models.MessageRef {
-	return models.MessageRef{
+	ref := models.MessageRef{
 		SourceID:  s.sourceID,
 		AccountID: s.accountID,
 		LocalID:   s.localID,
 		Folder:    s.folder,
 		MessageID: messageID,
-	}.WithDefaults()
+	}
+	if parsed, ok := models.MessageRefFromLocalID(s.localID); ok {
+		if ref.SourceID == "" {
+			ref.SourceID = parsed.SourceID
+		}
+		if ref.AccountID == "" {
+			ref.AccountID = parsed.AccountID
+		}
+		if ref.Folder == "" {
+			ref.Folder = parsed.Folder
+		}
+		if ref.MessageID == "" {
+			ref.MessageID = parsed.MessageID
+		}
+	}
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultMailSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	if ref.LocalID == "" && ref.Folder != "" && ref.MessageID != "" {
+		ref = ref.WithDefaults()
+	}
+	return ref
 }
 
 func emailMatchesReadScope(email *models.EmailData, scope readScope) bool {
@@ -394,20 +434,32 @@ func filterEmailsByReadScope(emails []*models.EmailData, scope readScope) []*mod
 	return out
 }
 
-func (s *Server) mutationRefForRequest(r *http.Request, messageID, folder string) models.MessageRef {
+func (s *Server) scopedMutationRequired() bool {
+	aware, ok := s.backend.(backend.AccountAwareBackend)
+	return ok && aware.HasMultipleAccounts()
+}
+
+func (s *Server) mutationRefForRequest(r *http.Request, messageID, folder string) (models.MessageRef, error) {
 	scope := readScopeFromRequest(r)
 	if scope.folder == "" {
 		scope.folder = folder
 	}
+	if s.scopedMutationRequired() && !scope.hasMutationIdentityScope() {
+		return scope.messageRef(messageID), fmt.Errorf("scoped mutation ref required for multi-account writes: pass local_id or source_id plus account_id")
+	}
 	if getter, ok := s.backend.(scopedEmailGetter); ok && (scope.hasIdentityScope() || messageID != "") {
 		if email, err := getter.GetEmailByRef(scope.messageRef(messageID)); err == nil && email != nil {
-			return email.MessageRef()
+			return email.MessageRef(), nil
 		}
 	}
 	if email, err := s.backend.GetEmailByID(messageID); err == nil && email != nil && emailMatchesReadScope(email, scope) {
-		return email.MessageRef()
+		return email.MessageRef(), nil
 	}
-	return scope.messageRef(messageID)
+	return scope.messageRef(messageID), nil
+}
+
+func (s *Server) shouldUseScopedMutation(r *http.Request) bool {
+	return s.scopedMutationRequired() || readScopeFromRequest(r).hasIdentityScope()
 }
 
 func (s *Server) broadcastMutation(operation string, ref models.MessageRef, toCollectionID string) {
@@ -567,8 +619,17 @@ func (s *Server) handleDeleteEmail(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.DeleteEmail(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.DeleteEmailByRef(ref)
+	} else {
+		err = s.backend.DeleteEmail(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -583,8 +644,17 @@ func (s *Server) handleArchiveEmail(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.ArchiveEmail(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.ArchiveEmailByRef(ref)
+	} else {
+		err = s.backend.ArchiveEmail(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -610,8 +680,17 @@ func (s *Server) handleMoveEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "fromFolder and toFolder are required")
 		return
 	}
-	ref := s.mutationRefForRequest(r, id, req.FromFolder)
-	if err := s.backend.MoveEmail(id, req.FromFolder, req.ToFolder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, req.FromFolder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.MoveEmailByRef(ref, req.ToFolder)
+	} else {
+		err = s.backend.MoveEmail(id, req.FromFolder, req.ToFolder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -650,8 +729,17 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.MarkRead(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.MarkReadByRef(ref)
+	} else {
+		err = s.backend.MarkRead(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -856,8 +944,17 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.MarkUnread(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.MarkUnreadByRef(ref)
+	} else {
+		err = s.backend.MarkUnread(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -872,8 +969,17 @@ func (s *Server) handleMarkStarred(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.MarkStarred(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.MarkStarredByRef(ref)
+	} else {
+		err = s.backend.MarkStarred(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -888,8 +994,17 @@ func (s *Server) handleUnmarkStarred(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	ref := s.mutationRefForRequest(r, id, folder)
-	if err := s.backend.UnmarkStarred(id, folder); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.UnmarkStarredByRef(ref)
+	} else {
+		err = s.backend.UnmarkStarred(id, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1205,10 +1320,21 @@ func (s *Server) handleReplyEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := s.backend.ReplyToEmailWithOptions(id, models.ReplyEmailOptions{
+	opts := models.ReplyEmailOptions{
 		Body:             req.Body,
 		PreservationMode: models.NormalizePreservationMode(req.PreservationMode),
-	}); err != nil {
+	}
+	ref, err := s.mutationRefForRequest(r, id, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.ReplyToEmailByRef(ref, opts)
+	} else {
+		err = s.backend.ReplyToEmailWithOptions(id, opts)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1233,13 +1359,24 @@ func (s *Server) handleForwardEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "to is required")
 		return
 	}
-	if err := s.backend.ForwardEmailWithOptions(id, models.ForwardEmailOptions{
+	opts := models.ForwardEmailOptions{
 		To:                             req.To,
 		Body:                           req.Body,
 		PreservationMode:               models.NormalizePreservationMode(req.PreservationMode),
 		OmitOriginalAttachments:        req.OmitOriginalAttachments,
 		OmittedOriginalAttachmentNames: req.OmittedOriginalAttachmentNames,
-	}); err != nil {
+	}
+	ref, err := s.mutationRefForRequest(r, id, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.ForwardEmailByRef(ref, opts)
+	} else {
+		err = s.backend.ForwardEmailWithOptions(id, opts)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1404,7 +1541,17 @@ func (s *Server) handleBulkMove(w http.ResponseWriter, r *http.Request) {
 // handleUnsubscribeSender fires the unsubscribe action for a message's sender.
 func (s *Server) handleUnsubscribeSender(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := s.backend.UnsubscribeSender(id); err != nil {
+	ref, err := s.mutationRefForRequest(r, id, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mutator, ok := s.backend.(scopedMutationBackend); ok && s.shouldUseScopedMutation(r) {
+		err = mutator.UnsubscribeSenderByRef(ref)
+	} else {
+		err = s.backend.UnsubscribeSender(id)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
