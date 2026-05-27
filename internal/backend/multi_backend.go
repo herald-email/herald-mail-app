@@ -664,11 +664,31 @@ func (m *MultiBackend) GetMessagePreview(ctx context.Context, ref models.Message
 	return getter.GetMessagePreview(ctx, ref, intent)
 }
 
+func resolveMessageRefForSlot(slot *accountSlot, ref models.MessageRef) models.MessageRef {
+	if slot == nil || strings.TrimSpace(ref.Folder) != "" {
+		return ref
+	}
+	if getter, ok := slot.backend.(interface {
+		GetEmailByRef(models.MessageRef) (*models.EmailData, error)
+	}); ok {
+		if email, err := getter.GetEmailByRef(ref); err == nil && email != nil {
+			return emailForAccountSlot(slot, email).MessageRef()
+		}
+	}
+	if strings.TrimSpace(ref.MessageID) != "" {
+		if email, err := slot.backend.GetEmailByID(ref.MessageID); err == nil && email != nil {
+			return emailForAccountSlot(slot, email).MessageRef()
+		}
+	}
+	return ref
+}
+
 func (m *MultiBackend) ArchiveEmailByRef(ref models.MessageRef) error {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.ArchiveEmail(ref.MessageID, ref.Folder)
 }
 
@@ -677,6 +697,7 @@ func (m *MultiBackend) MoveEmailByRef(ref models.MessageRef, to string) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.MoveEmail(ref.MessageID, ref.Folder, to)
 }
 
@@ -685,6 +706,7 @@ func (m *MultiBackend) DeleteEmailByRef(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.DeleteEmail(ref.MessageID, ref.Folder)
 }
 
@@ -693,6 +715,7 @@ func (m *MultiBackend) MarkReadByRef(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.MarkRead(ref.MessageID, ref.Folder)
 }
 
@@ -701,6 +724,7 @@ func (m *MultiBackend) MarkUnreadByRef(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.MarkUnread(ref.MessageID, ref.Folder)
 }
 
@@ -709,6 +733,7 @@ func (m *MultiBackend) MarkStarredByRef(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.MarkStarred(ref.MessageID, ref.Folder)
 }
 
@@ -717,6 +742,7 @@ func (m *MultiBackend) UnmarkStarredByRef(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.UnmarkStarred(ref.MessageID, ref.Folder)
 }
 
@@ -742,6 +768,46 @@ func (m *MultiBackend) UnsubscribeSenderByRef(ref models.MessageRef) error {
 		return err
 	}
 	return slot.backend.UnsubscribeSender(ref.MessageID)
+}
+
+func (m *MultiBackend) DeleteThreadForSource(sourceID models.SourceID, folder, subject string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.DeleteThread(folder, subject)
+}
+
+func (m *MultiBackend) ArchiveThreadForSource(sourceID models.SourceID, folder, subject string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.ArchiveThread(folder, subject)
+}
+
+func (m *MultiBackend) DeleteSenderEmailsForSource(sourceID models.SourceID, sender, folder string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.DeleteSenderEmails(sender, folder)
+}
+
+func (m *MultiBackend) ArchiveSenderEmailsForSource(sourceID models.SourceID, sender, folder string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.ArchiveSenderEmails(sender, folder)
+}
+
+func (m *MultiBackend) SoftUnsubscribeSenderForSource(sourceID models.SourceID, sender, toFolder string) error {
+	slot, err := m.slotForCompose(sourceID, "")
+	if err != nil {
+		return err
+	}
+	return slot.backend.SoftUnsubscribeSender(sender, toFolder)
 }
 
 func (m *MultiBackend) SendEmail(to, subject, body, from string) error {

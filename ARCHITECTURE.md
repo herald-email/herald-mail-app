@@ -230,6 +230,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add source/account/collection/item identity to daemon progress, sync, valid-ID, new-email, and mutation events while preserving legacy event names.
 - [x] Add read-only scoped calendar MCP tools for cached agenda, search, and event detail results.
 - [x] Add scoped single-message daemon/MCP mail mutation refs so multi-account writes cannot silently target the wrong account while legacy single-account calls still work.
+- [x] Add scoped bulk/thread/sender/draft daemon/MCP mail mutation guards so multi-account writes fail clearly without source refs or per-message local IDs.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.
 
 ---

@@ -339,6 +339,14 @@ type scopedMutationBackend interface {
 	UnmarkStarredByRef(models.MessageRef) error
 }
 
+type scopedCollectionMutationBackend interface {
+	ArchiveSenderEmailsForSource(models.SourceID, string, string) error
+	ArchiveThreadForSource(models.SourceID, string, string) error
+	DeleteSenderEmailsForSource(models.SourceID, string, string) error
+	DeleteThreadForSource(models.SourceID, string, string) error
+	SoftUnsubscribeSenderForSource(models.SourceID, string, string) error
+}
+
 type readScope struct {
 	sourceID  models.SourceID
 	accountID models.AccountID
@@ -460,6 +468,50 @@ func (s *Server) mutationRefForRequest(r *http.Request, messageID, folder string
 
 func (s *Server) shouldUseScopedMutation(r *http.Request) bool {
 	return s.scopedMutationRequired() || readScopeFromRequest(r).hasIdentityScope()
+}
+
+func (s *Server) requireSourceForCollectionMutation(sourceID models.SourceID) error {
+	if s.scopedMutationRequired() && strings.TrimSpace(string(sourceID)) == "" {
+		return fmt.Errorf("source_id required for multi-account mutation")
+	}
+	return nil
+}
+
+func messageRefsFromBulkArgs(messageIDs, localIDs []string, sourceID models.SourceID, accountID models.AccountID, folder string) ([]models.MessageRef, error) {
+	if len(localIDs) > 0 && len(localIDs) != len(messageIDs) {
+		return nil, fmt.Errorf("local_ids must match message_ids length")
+	}
+	if len(localIDs) == 0 && strings.TrimSpace(string(sourceID)) == "" {
+		return nil, fmt.Errorf("scoped bulk mutation refs required: pass local_ids or source_id")
+	}
+	refs := make([]models.MessageRef, 0, len(messageIDs))
+	for i, messageID := range messageIDs {
+		ref := models.MessageRef{
+			SourceID:  sourceID,
+			AccountID: accountID,
+			Folder:    folder,
+			MessageID: messageID,
+		}
+		if len(localIDs) > 0 {
+			ref.LocalID = localIDs[i]
+			if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+				if ref.SourceID == "" {
+					ref.SourceID = parsed.SourceID
+				}
+				if ref.AccountID == "" {
+					ref.AccountID = parsed.AccountID
+				}
+				if ref.Folder == "" {
+					ref.Folder = parsed.Folder
+				}
+				if ref.MessageID == "" {
+					ref.MessageID = parsed.MessageID
+				}
+			}
+		}
+		refs = append(refs, ref.WithDefaults())
+	}
+	return refs, nil
 }
 
 func (s *Server) broadcastMutation(operation string, ref models.MessageRef, toCollectionID string) {
@@ -754,7 +806,18 @@ func (s *Server) handleDeleteSender(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "INBOX"
 	}
-	if err := s.backend.DeleteSenderEmails(sender, folder); err != nil {
+	sourceID := models.SourceID(strings.TrimSpace(r.URL.Query().Get("source_id")))
+	if err := s.requireSourceForCollectionMutation(sourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if mutator, ok := s.backend.(scopedCollectionMutationBackend); ok && s.scopedMutationRequired() {
+		err = mutator.DeleteSenderEmailsForSource(sourceID, sender, folder)
+	} else {
+		err = s.backend.DeleteSenderEmails(sender, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1280,7 +1343,17 @@ func (s *Server) handleDeleteDraft(w http.ResponseWriter, r *http.Request) {
 	if folder == "" {
 		folder = "Drafts"
 	}
-	if err := s.backend.DeleteDraft(uint32(uid64), folder); err != nil {
+	sourceID := models.SourceID(strings.TrimSpace(r.URL.Query().Get("source_id")))
+	if err := s.requireSourceForCollectionMutation(sourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if compose, ok := s.backend.(backend.AccountComposeBackend); ok && (s.scopedMutationRequired() || sourceID != "") {
+		err = compose.DeleteDraftForAccount(sourceID, uint32(uid64), folder)
+	} else {
+		err = s.backend.DeleteDraft(uint32(uid64), folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1301,7 +1374,17 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request) {
 		folder = "Drafts"
 	}
 
-	if err := s.backend.SendDraft(uid, folder); err != nil {
+	sourceID := models.SourceID(strings.TrimSpace(r.URL.Query().Get("source_id")))
+	if err := s.requireSourceForCollectionMutation(sourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if compose, ok := s.backend.(backend.AccountComposeBackend); ok && (s.scopedMutationRequired() || sourceID != "") {
+		err = compose.SendDraftForAccount(sourceID, uid, folder)
+	} else {
+		err = s.backend.SendDraft(uid, folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1449,8 +1532,10 @@ func (s *Server) handleGetAttachment(w http.ResponseWriter, r *http.Request) {
 // --- Bulk operation handlers ---
 
 type threadRequest struct {
-	Folder  string `json:"folder"`
-	Subject string `json:"subject"`
+	SourceID  models.SourceID  `json:"source_id"`
+	AccountID models.AccountID `json:"account_id"`
+	Folder    string           `json:"folder"`
+	Subject   string           `json:"subject"`
 }
 
 // handleDeleteThread deletes all emails in a thread (by subject in folder).
@@ -1464,7 +1549,17 @@ func (s *Server) handleDeleteThread(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "folder and subject are required")
 		return
 	}
-	if err := s.backend.DeleteThread(req.Folder, req.Subject); err != nil {
+	if err := s.requireSourceForCollectionMutation(req.SourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if mutator, ok := s.backend.(scopedCollectionMutationBackend); ok && s.scopedMutationRequired() {
+		err = mutator.DeleteThreadForSource(req.SourceID, req.Folder, req.Subject)
+	} else {
+		err = s.backend.DeleteThread(req.Folder, req.Subject)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1482,7 +1577,17 @@ func (s *Server) handleArchiveThread(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "folder and subject are required")
 		return
 	}
-	if err := s.backend.ArchiveThread(req.Folder, req.Subject); err != nil {
+	if err := s.requireSourceForCollectionMutation(req.SourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if mutator, ok := s.backend.(scopedCollectionMutationBackend); ok && s.scopedMutationRequired() {
+		err = mutator.ArchiveThreadForSource(req.SourceID, req.Folder, req.Subject)
+	} else {
+		err = s.backend.ArchiveThread(req.Folder, req.Subject)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1490,7 +1595,15 @@ func (s *Server) handleArchiveThread(w http.ResponseWriter, r *http.Request) {
 }
 
 type bulkDeleteRequest struct {
-	MessageIDs []string `json:"message_ids"`
+	SourceID   models.SourceID  `json:"source_id"`
+	AccountID  models.AccountID `json:"account_id"`
+	Folder     string           `json:"folder"`
+	MessageIDs []string         `json:"message_ids"`
+	LocalIDs   []string         `json:"local_ids"`
+}
+
+func (r bulkDeleteRequest) messageRefs() ([]models.MessageRef, error) {
+	return messageRefsFromBulkArgs(r.MessageIDs, r.LocalIDs, r.SourceID, r.AccountID, r.Folder)
 }
 
 // handleBulkDelete deletes multiple emails by message ID.
@@ -1504,7 +1617,27 @@ func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "message_ids is required and must not be empty")
 		return
 	}
-	if err := s.backend.BulkDelete(req.MessageIDs); err != nil {
+	var err error
+	if s.scopedMutationRequired() {
+		refs, refErr := req.messageRefs()
+		if refErr != nil {
+			writeError(w, http.StatusBadRequest, refErr.Error())
+			return
+		}
+		mutator, ok := s.backend.(scopedMutationBackend)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "backend does not support scoped bulk delete")
+			return
+		}
+		for _, ref := range refs {
+			if err = mutator.DeleteEmailByRef(ref); err != nil {
+				break
+			}
+		}
+	} else {
+		err = s.backend.BulkDelete(req.MessageIDs)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1514,8 +1647,16 @@ func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 type bulkMoveRequest struct {
-	MessageIDs []string `json:"message_ids"`
-	ToFolder   string   `json:"to_folder"`
+	SourceID   models.SourceID  `json:"source_id"`
+	AccountID  models.AccountID `json:"account_id"`
+	Folder     string           `json:"folder"`
+	MessageIDs []string         `json:"message_ids"`
+	LocalIDs   []string         `json:"local_ids"`
+	ToFolder   string           `json:"to_folder"`
+}
+
+func (r bulkMoveRequest) messageRefs() ([]models.MessageRef, error) {
+	return messageRefsFromBulkArgs(r.MessageIDs, r.LocalIDs, r.SourceID, r.AccountID, r.Folder)
 }
 
 // handleBulkMove moves multiple emails to a target folder.
@@ -1529,7 +1670,27 @@ func (s *Server) handleBulkMove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "message_ids and to_folder are required")
 		return
 	}
-	if err := s.backend.BulkMove(req.MessageIDs, req.ToFolder); err != nil {
+	var err error
+	if s.scopedMutationRequired() {
+		refs, refErr := req.messageRefs()
+		if refErr != nil {
+			writeError(w, http.StatusBadRequest, refErr.Error())
+			return
+		}
+		mutator, ok := s.backend.(scopedMutationBackend)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "backend does not support scoped bulk move")
+			return
+		}
+		for _, ref := range refs {
+			if err = mutator.MoveEmailByRef(ref, req.ToFolder); err != nil {
+				break
+			}
+		}
+	} else {
+		err = s.backend.BulkMove(req.MessageIDs, req.ToFolder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1559,7 +1720,9 @@ func (s *Server) handleUnsubscribeSender(w http.ResponseWriter, r *http.Request)
 }
 
 type archiveSenderRequest struct {
-	Folder string `json:"folder"`
+	SourceID  models.SourceID  `json:"source_id"`
+	AccountID models.AccountID `json:"account_id"`
+	Folder    string           `json:"folder"`
 }
 
 // handleArchiveSender archives all emails from a sender.
@@ -1569,7 +1732,17 @@ func (s *Server) handleArchiveSender(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Folder == "" {
 		req.Folder = "INBOX"
 	}
-	if err := s.backend.ArchiveSenderEmails(sender, req.Folder); err != nil {
+	if err := s.requireSourceForCollectionMutation(req.SourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if mutator, ok := s.backend.(scopedCollectionMutationBackend); ok && s.scopedMutationRequired() {
+		err = mutator.ArchiveSenderEmailsForSource(req.SourceID, sender, req.Folder)
+	} else {
+		err = s.backend.ArchiveSenderEmails(sender, req.Folder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1577,7 +1750,9 @@ func (s *Server) handleArchiveSender(w http.ResponseWriter, r *http.Request) {
 }
 
 type softUnsubscribeRequest struct {
-	ToFolder string `json:"to_folder"`
+	SourceID  models.SourceID  `json:"source_id"`
+	AccountID models.AccountID `json:"account_id"`
+	ToFolder  string           `json:"to_folder"`
 }
 
 // handleSoftUnsubscribeSender creates an auto-move rule for a sender.
@@ -1585,7 +1760,17 @@ func (s *Server) handleSoftUnsubscribeSender(w http.ResponseWriter, r *http.Requ
 	sender := r.PathValue("sender")
 	var req softUnsubscribeRequest
 	_ = json.NewDecoder(r.Body).Decode(&req) // body is optional
-	if err := s.backend.SoftUnsubscribeSender(sender, req.ToFolder); err != nil {
+	if err := s.requireSourceForCollectionMutation(req.SourceID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if mutator, ok := s.backend.(scopedCollectionMutationBackend); ok && s.scopedMutationRequired() {
+		err = mutator.SoftUnsubscribeSenderForSource(req.SourceID, sender, req.ToFolder)
+	} else {
+		err = s.backend.SoftUnsubscribeSender(sender, req.ToFolder)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

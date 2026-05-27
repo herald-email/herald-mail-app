@@ -176,6 +176,30 @@ func addMessageScopeArgs(values url.Values, req mcp.CallToolRequest) url.Values 
 	return values
 }
 
+func addScopeBodyArgs(body map[string]any, req mcp.CallToolRequest) map[string]any {
+	if body == nil {
+		body = map[string]any{}
+	}
+	for _, key := range []string{"source_id", "account_id"} {
+		if value := req.GetString(key, ""); value != "" {
+			body[key] = value
+		}
+	}
+	return body
+}
+
+func addScopeStringBodyArgs(body map[string]string, req mcp.CallToolRequest) map[string]string {
+	if body == nil {
+		body = map[string]string{}
+	}
+	for _, key := range []string{"source_id", "account_id"} {
+		if value := req.GetString(key, ""); value != "" {
+			body[key] = value
+		}
+	}
+	return body
+}
+
 func scopedEmailDaemonPath(req mcp.CallToolRequest, messageID, suffix string, values url.Values) string {
 	return emailDaemonPath(messageID, suffix, addMessageScopeArgs(values, req))
 }
@@ -1840,13 +1864,23 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				mcp.Required(),
 				mcp.Description("The UID of the draft to send (from list_drafts)"),
 			),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when multiple accounts are configured")),
+			mcp.WithString("account_id", mcp.Description("Account ID when multiple accounts are configured")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			uid := req.GetInt("uid", 0)
 			if uid == 0 {
 				return mcp.NewToolResultError("uid is required and must be non-zero"), nil
 			}
-			respBody, status, err := daemonPost(fmt.Sprintf("/v1/drafts/%d/send?folder=Drafts", uid), nil)
+			values := url.Values{}
+			values.Set("folder", "Drafts")
+			if sourceID := req.GetString("source_id", ""); sourceID != "" {
+				values.Set("source_id", sourceID)
+			}
+			if accountID := req.GetString("account_id", ""); accountID != "" {
+				values.Set("account_id", accountID)
+			}
+			respBody, status, err := daemonPost(fmt.Sprintf("/v1/drafts/%d/send?%s", uid, values.Encode()), nil)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2038,6 +2072,8 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(true),
 			mcp.WithString("folder", mcp.Required(), mcp.Description("IMAP folder name")),
 			mcp.WithString("subject", mcp.Required(), mcp.Description("Thread subject to match")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when multiple accounts are configured")),
+			mcp.WithString("account_id", mcp.Description("Account ID when multiple accounts are configured")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			folder, err := req.RequireString("folder")
@@ -2048,7 +2084,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			body, status, err := daemonPost("/v1/threads/delete", map[string]string{"folder": folder, "subject": subject})
+			body, status, err := daemonPost("/v1/threads/delete", addScopeStringBodyArgs(map[string]string{"folder": folder, "subject": subject}, req))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2067,6 +2103,8 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder", mcp.Required(), mcp.Description("IMAP folder name")),
 			mcp.WithString("subject", mcp.Required(), mcp.Description("Thread subject to match")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when multiple accounts are configured")),
+			mcp.WithString("account_id", mcp.Description("Account ID when multiple accounts are configured")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			folder, err := req.RequireString("folder")
@@ -2077,7 +2115,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			body, status, err := daemonPost("/v1/threads/archive", map[string]string{"folder": folder, "subject": subject})
+			body, status, err := daemonPost("/v1/threads/archive", addScopeStringBodyArgs(map[string]string{"folder": folder, "subject": subject}, req))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2095,6 +2133,10 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithReadOnlyHintAnnotation(false),
 			mcp.WithDestructiveHintAnnotation(true),
 			mcp.WithString("message_ids", mcp.Required(), mcp.Description("JSON array of message IDs, e.g. [\"id1\",\"id2\"]")),
+			mcp.WithString("local_ids", mcp.Description("JSON array of scoped Herald local IDs matching message_ids")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when all message_ids belong to one source")),
+			mcp.WithString("account_id", mcp.Description("Account ID when all message_ids belong to one account")),
+			mcp.WithString("folder", mcp.Description("Folder hint when all message_ids belong to one folder")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			idsJSON, err := req.RequireString("message_ids")
@@ -2108,7 +2150,18 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if len(ids) == 0 {
 				return mcp.NewToolResultError("message_ids must not be empty"), nil
 			}
-			body, status, err := daemonPost("/v1/emails/bulk-delete", map[string]any{"message_ids": ids})
+			payload := addScopeBodyArgs(map[string]any{"message_ids": ids}, req)
+			if localIDsRaw := req.GetString("local_ids", ""); localIDsRaw != "" {
+				var localIDs []string
+				if err := json.Unmarshal([]byte(localIDsRaw), &localIDs); err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid local_ids JSON: %v", err)), nil
+				}
+				payload["local_ids"] = localIDs
+			}
+			if folder := req.GetString("folder", ""); folder != "" {
+				payload["folder"] = folder
+			}
+			body, status, err := daemonPost("/v1/emails/bulk-delete", payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2127,6 +2180,8 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("sender", mcp.Required(), mcp.Description("Sender email address")),
 			mcp.WithString("folder", mcp.Description("Source folder (default: INBOX)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when multiple accounts are configured")),
+			mcp.WithString("account_id", mcp.Description("Account ID when multiple accounts are configured")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			sender, err := req.RequireString("sender")
@@ -2134,7 +2189,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			folder := req.GetString("folder", "INBOX")
-			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/archive", map[string]string{"folder": folder})
+			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/archive", addScopeStringBodyArgs(map[string]string{"folder": folder}, req))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2153,6 +2208,10 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("message_ids", mcp.Required(), mcp.Description("JSON array of message IDs")),
 			mcp.WithString("to_folder", mcp.Required(), mcp.Description("Destination folder name")),
+			mcp.WithString("local_ids", mcp.Description("JSON array of scoped Herald local IDs matching message_ids")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when all message_ids belong to one source")),
+			mcp.WithString("account_id", mcp.Description("Account ID when all message_ids belong to one account")),
+			mcp.WithString("folder", mcp.Description("Folder hint when all message_ids belong to one folder")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			idsJSON, err := req.RequireString("message_ids")
@@ -2170,7 +2229,18 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			body, status, err := daemonPost("/v1/emails/bulk-move", map[string]any{"message_ids": ids, "to_folder": toFolder})
+			payload := addScopeBodyArgs(map[string]any{"message_ids": ids, "to_folder": toFolder}, req)
+			if localIDsRaw := req.GetString("local_ids", ""); localIDsRaw != "" {
+				var localIDs []string
+				if err := json.Unmarshal([]byte(localIDsRaw), &localIDs); err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid local_ids JSON: %v", err)), nil
+				}
+				payload["local_ids"] = localIDs
+			}
+			if folder := req.GetString("folder", ""); folder != "" {
+				payload["folder"] = folder
+			}
+			body, status, err := daemonPost("/v1/emails/bulk-move", payload)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2216,6 +2286,8 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("sender", mcp.Required(), mcp.Description("Sender email address to create rule for")),
 			mcp.WithString("to_folder", mcp.Description("Destination folder (default: Disabled Subscriptions)")),
+			mcp.WithString("source_id", mcp.Description("Mail source ID when multiple accounts are configured")),
+			mcp.WithString("account_id", mcp.Description("Account ID when multiple accounts are configured")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			sender, err := req.RequireString("sender")
@@ -2223,7 +2295,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			toFolder := req.GetString("to_folder", "")
-			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/soft-unsubscribe", map[string]string{"to_folder": toFolder})
+			body, status, err := daemonPost("/v1/senders/"+url.PathEscape(sender)+"/soft-unsubscribe", addScopeStringBodyArgs(map[string]string{"to_folder": toFolder}, req))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
