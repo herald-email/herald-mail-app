@@ -410,6 +410,108 @@ func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsValidationSuccessResetsSyncGenerationForNewBackend(t *testing.T) {
+	oldValidate := validateAccountConfig
+	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP"},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateAccountConfig = oldValidate }()
+
+	oldFactory := newValidatedLocalBackend
+	newValidatedLocalBackend = func(*config.Config, string, ai.AIClient) (backend.Backend, error) {
+		return &stubBackend{}, nil
+	}
+	defer func() { newValidatedLocalBackend = oldFactory }()
+
+	original := &config.Config{}
+	original.Credentials.Username = "old@example.test"
+	next := &config.Config{}
+	next.Credentials.Username = "new@example.test"
+	next.Credentials.Password = "secret"
+	next.Server.Host = "imap.example.test"
+	next.Server.Port = 993
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+	m.currentFolder = "INBOX"
+	m.syncGeneration = 42
+	m.syncAccumulator.reset("INBOX", 42)
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ValidateAccount: true})
+	updated := updatedModel.(*Model)
+	msg := cmd().(AccountValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if updated.syncGeneration != 0 {
+		t.Fatalf("syncGeneration after backend swap = %d, want reset to 0", updated.syncGeneration)
+	}
+
+	updatedModel, _ = updated.Update(SyncEventMsg{Event: models.FolderSyncEvent{
+		Folder:     "INBOX",
+		Generation: 1,
+		Phase:      models.SyncPhaseComplete,
+		Message:    "Found 0 senders",
+	}})
+	updated = updatedModel.(*Model)
+	if updated.syncGeneration != 1 {
+		t.Fatalf("new backend generation was not accepted; syncGeneration = %d, want 1", updated.syncGeneration)
+	}
+}
+
+func TestAccountSettingsReturnToMenuContinuesStartupSync(t *testing.T) {
+	oldValidate := validateAccountConfig
+	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP"},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateAccountConfig = oldValidate }()
+
+	oldFactory := newValidatedLocalBackend
+	newValidatedLocalBackend = func(*config.Config, string, ai.AIClient) (backend.Backend, error) {
+		return &stubBackend{}, nil
+	}
+	defer func() { newValidatedLocalBackend = oldFactory }()
+
+	next := &config.Config{}
+	next.Credentials.Username = "new@example.test"
+	next.Credentials.Password = "secret"
+	next.Server.Host = "imap.example.test"
+	next.Server.Port = 993
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(&config.Config{})
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+	m.currentFolder = "INBOX"
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ReturnToMenu: true, ValidateAccount: true})
+	updated := updatedModel.(*Model)
+	msg := cmd().(AccountValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if !updated.showSettings || updated.settingsPanel == nil {
+		t.Fatal("expected account settings menu to reopen after validated save")
+	}
+
+	updatedModel, _ = updated.Update(SyncEventMsg{Event: models.FolderSyncEvent{
+		Folder:     "INBOX",
+		Generation: 1,
+		Phase:      models.SyncPhaseComplete,
+		Message:    "Found 0 senders",
+	}})
+	updated = updatedModel.(*Model)
+	if updated.syncGeneration != 1 {
+		t.Fatalf("settings overlay swallowed startup sync event; syncGeneration = %d, want 1", updated.syncGeneration)
+	}
+}
+
 func TestCalendarSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
 	oldValidate := validateCalendarConfig
 	validateCalendarConfig = func(context.Context, *config.Config, []models.SourceID) error {

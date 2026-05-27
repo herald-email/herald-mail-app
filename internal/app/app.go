@@ -1363,6 +1363,12 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	m.syncGeneration = 0
+	m.syncAccumulator.reset("", 0)
+	m.syncCountsSettled = false
+	m.syncingFolder = ""
+	m.progressInfo = models.ProgressInfo{}
+	m.validIDsCh = nil
 	m.currentFolder = folder
 	m.folders = []string{folder}
 	m.folderTree = buildFolderTree(m.folders)
@@ -1824,22 +1830,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward all messages to the settings panel when it is active (intercepts
 	// key presses and window-size events so the panel handles them exclusively).
 	if m.showSettings && m.settingsPanel != nil {
-		prevSection := m.settingsPanel.panelSection
-		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
-			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
-			m.chatWrappedLines = nil
+		if _, isMouse := msg.(tea.MouseMsg); isMouse {
+			return m, nil
 		}
-		newModel, cmd := m.settingsPanel.Update(msg)
-		m.settingsPanel = newModel.(*Settings)
-		if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
-			m.applyThemeConfig(m.cfg)
-		} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
-			m.applyThemeConfig(m.settingsPanel.buildConfig())
+		_, isKey := msg.(tea.KeyPressMsg)
+		_, isWindow := msg.(tea.WindowSizeMsg)
+		if isKey || isWindow {
+			prevSection := m.settingsPanel.panelSection
+			if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+				m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
+				m.chatWrappedLines = nil
+			}
+			newModel, cmd := m.settingsPanel.Update(msg)
+			m.settingsPanel = newModel.(*Settings)
+			if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
+				m.applyThemeConfig(m.cfg)
+			} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
+				m.applyThemeConfig(m.settingsPanel.buildConfig())
+			}
+			if _, ok := msg.(tea.WindowSizeMsg); ok {
+				return m, tea.Batch(cmd, tea.ClearScreen)
+			}
+			return m, cmd
 		}
-		if _, ok := msg.(tea.WindowSizeMsg); ok {
-			return m, tea.Batch(cmd, tea.ClearScreen)
-		}
-		return m, cmd
+		// Background app messages, especially sync completion after an account
+		// save, must still reach the main model while settings is open.
 	}
 
 	// Forward all messages to the rule editor when it is active.
