@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
@@ -49,7 +50,9 @@ const (
 	customModelChoice     = "custom"
 
 	settingsPanelSectionMenu           settingsPanelSection = ""
+	settingsPanelSectionAccounts       settingsPanelSection = "accounts"
 	settingsPanelSectionAccount        settingsPanelSection = "account"
+	settingsPanelSectionAddAccount     settingsPanelSection = "add-account"
 	settingsPanelSectionAI             settingsPanelSection = "ai"
 	settingsPanelSectionSync           settingsPanelSection = "sync-cleanup"
 	settingsPanelSectionKeyboard       settingsPanelSection = "keyboard"
@@ -66,6 +69,10 @@ const (
 	settingsCleanupToolAutomation = "automation-rules"
 	settingsCleanupToolPrompts    = "custom-prompts"
 	settingsCleanupToolRules      = "cleanup-rules"
+
+	settingsAccountEditExisting    = "existing"
+	settingsAccountEditAddMail     = "add-mail"
+	settingsAccountEditAddCalendar = "add-calendar"
 )
 
 func isThemeSelectionSection(section settingsPanelSection) bool {
@@ -86,6 +93,8 @@ type SettingsSavedMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
 	ValidateOllamaModels       bool
 }
 
@@ -121,6 +130,19 @@ type Settings struct {
 	panelSection                  settingsPanelSection
 	panelMenuChoice               string
 	panelStatus                   string
+	accountsMenuChoice            string
+	selectedAccountID             string
+	addAccountChoice              string
+	accountEditMode               string
+	accountDisplayName            string
+	calendarProvider              string
+	calendarDisplayName           string
+	calendarEmail                 string
+	caldavURL                     string
+	caldavUsername                string
+	caldavPassword                string
+	alsoAddCalendar               bool
+	deleteAccount                 bool
 	aiModelWarning                *aicheck.Result
 	disableAIFromWarning          bool
 
@@ -326,7 +348,11 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		configPath:                    configPath,
 		syncIDLE:                      true, // sensible default
 		saveButton:                    true,
-		panelMenuChoice:               string(settingsPanelSectionAccount),
+		panelMenuChoice:               string(settingsPanelSectionAccounts),
+		accountsMenuChoice:            "add",
+		addAccountChoice:              settingsAccountEditAddMail,
+		accountEditMode:               settingsAccountEditExisting,
+		calendarProvider:              "google_calendar",
 		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
 		firstRunAccountOnly:           opts.FirstRunAccountOnly,
 		firstRunPreferencesOnly:       opts.FirstRunPreferencesOnly,
@@ -533,13 +559,21 @@ func (s *Settings) requiresAccountValidation() bool {
 	if s.mode == SettingsModeWizard {
 		return !s.firstRunPreferencesOnly
 	}
-	return s.panelSection == settingsPanelSectionAccount
+	return s.panelSection == settingsPanelSectionAccount && s.accountDetailShowsMail()
 }
 
 // buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
 func (s *Settings) buildForm() {
 	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
 		s.buildPanelMenuForm()
+		return
+	}
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccounts {
+		s.buildAccountsListForm()
+		return
+	}
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAddAccount {
+		s.buildAddAccountForm()
 		return
 	}
 
@@ -550,7 +584,7 @@ func (s *Settings) buildForm() {
 			Description(s.accountTypeDescription()).
 			Options(s.accountTypeOptions()...).
 			Value(&s.provider),
-	)
+	).WithHideFunc(func() bool { return s.mailSettingsHidden() })
 
 	credentialsIntro := huh.NewNote().
 		TitleFunc(func() string {
@@ -606,7 +640,7 @@ func (s *Settings) buildForm() {
 				}
 				return nil
 			}),
-	).WithHideFunc(func() bool { return s.provider == "gmail" || s.provider == "gmail-oauth" })
+	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider == "gmail" || s.provider == "gmail-oauth" })
 
 	// Group 2b — Gmail IMAP fallback guidance and credentials
 	gmailGroup := huh.NewGroup(
@@ -618,7 +652,7 @@ func (s *Settings) buildForm() {
 		huh.NewConfirm().
 			Title("Edit advanced Gmail server settings").
 			Value(&s.editGmailAdvanced),
-	).WithHideFunc(func() bool { return s.provider != "gmail" })
+	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider != "gmail" })
 
 	gmailAdvancedGroup := huh.NewGroup(
 		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost).Placeholder("imap.gmail.com"),
@@ -645,7 +679,7 @@ func (s *Settings) buildForm() {
 				}
 				return nil
 			}),
-	).WithHideFunc(func() bool { return s.provider != "gmail" || !s.editGmailAdvanced })
+	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider != "gmail" || !s.editGmailAdvanced })
 
 	// Group 2c — Gmail OAuth notice
 	gmailOAuthGroup := huh.NewGroup(
@@ -653,7 +687,7 @@ func (s *Settings) buildForm() {
 			Title("Gmail OAuth").
 			Description("Experimental browser-based Gmail setup. Source builds need Google OAuth env vars or make build-release-local."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
-	).WithHideFunc(func() bool { return s.provider != "gmail-oauth" })
+	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider != "gmail-oauth" })
 
 	// Group 3 — AI provider selection
 	aiProviderGroup := huh.NewGroup(
@@ -907,6 +941,101 @@ func (s *Settings) buildForm() {
 			Value(&s.saveButton),
 	).Title("Signature")
 
+	accountHeaderGroup := huh.NewGroup(
+		huh.NewNote().
+			TitleFunc(func() string {
+				name := strings.TrimSpace(s.accountDisplayName)
+				if name == "" {
+					name = "Account"
+				}
+				return name
+			}, &s.accountDisplayName).
+			DescriptionFunc(func() string {
+				capability := s.accountDetailCapability()
+				if capability == "" {
+					capability = "Mail"
+				}
+				return capability + ". Disconnect removes Herald settings only; it does not delete provider mail or calendars."
+			}, []any{&s.provider, &s.calendarProvider, &s.alsoAddCalendar}),
+		huh.NewInput().
+			TitleFunc(func() string {
+				if s.accountEditMode == settingsAccountEditAddMail || s.accountEditMode == settingsAccountEditAddCalendar {
+					return "Account Name"
+				}
+				return "Display Name"
+			}, &s.accountEditMode).
+			Inline(true).
+			PlaceholderFunc(func() string {
+				if s.accountEditMode == settingsAccountEditAddMail || s.accountEditMode == settingsAccountEditAddCalendar {
+					return ""
+				}
+				if s.accountDetailShowsCalendar() && !s.accountDetailShowsMail() {
+					return "Family Calendar"
+				}
+				return "Work Gmail"
+			}, []any{&s.accountEditMode, &s.provider, &s.calendarProvider, &s.alsoAddCalendar}).
+			Value(&s.accountDisplayName),
+	).Title("Account")
+
+	alsoCalendarGroup := huh.NewGroup(
+		huh.NewConfirm().
+			Title("Also add calendar").
+			Description("Adds a paired calendar source for supported providers. Calendar details stay editable before save.").
+			Affirmative("Add calendar").
+			Negative("Mail only").
+			Value(&s.alsoAddCalendar),
+	).WithHideFunc(func() bool {
+		return !s.accountDetailShowsMail() || s.accountDetailHasCalendar() || !calendarPairingSupportedProvider(s.provider)
+	})
+
+	calendarProviderGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Calendar Provider").
+			Options(
+				huh.NewOption("Google Calendar", "google_calendar"),
+				huh.NewOption("CalDAV", "caldav"),
+			).
+			Value(&s.calendarProvider),
+	).WithHideFunc(func() bool { return !s.accountDetailShowsCalendar() })
+
+	googleCalendarGroup := huh.NewGroup(
+		huh.NewInput().
+			Title("Google Calendar identity").
+			Inline(true).
+			Placeholder("you@gmail.com").
+			Value(&s.calendarEmail),
+	).WithHideFunc(func() bool {
+		return !s.accountDetailShowsCalendar() || s.calendarProvider != "google_calendar"
+	})
+
+	caldavGroup := huh.NewGroup(
+		huh.NewInput().
+			Title("CalDAV URL").
+			Inline(true).
+			Placeholder("https://caldav.example.com/").
+			Value(&s.caldavURL),
+		huh.NewInput().
+			Title("CalDAV Username").
+			Inline(true).
+			Value(&s.caldavUsername),
+		huh.NewInput().
+			Title("CalDAV Password").
+			Inline(true).
+			EchoMode(huh.EchoModePassword).
+			Value(&s.caldavPassword),
+	).WithHideFunc(func() bool {
+		return !s.accountDetailShowsCalendar() || s.calendarProvider != "caldav"
+	})
+
+	deleteAccountGroup := huh.NewGroup(
+		huh.NewConfirm().
+			Title("Delete account").
+			Description("Disconnects this account from Herald only. Provider mail and calendars are not deleted.").
+			Affirmative("Disconnect").
+			Negative("Keep").
+			Value(&s.deleteAccount),
+	).WithHideFunc(func() bool { return s.accountEditMode != settingsAccountEditExisting })
+
 	saveGroup := huh.NewGroup(
 		huh.NewConfirm().
 			Title("Save changes").
@@ -943,12 +1072,18 @@ func (s *Settings) buildForm() {
 		switch s.panelSection {
 		case settingsPanelSectionAccount:
 			groups = []*huh.Group{
+				accountHeaderGroup,
 				accountGroup,
 				credentialsGroup,
 				gmailGroup,
 				gmailAdvancedGroup,
 				gmailOAuthGroup,
-				saveGroup.Title("Account setup"),
+				alsoCalendarGroup,
+				calendarProviderGroup,
+				googleCalendarGroup,
+				caldavGroup,
+				deleteAccountGroup,
+				saveGroup.Title("Account"),
 			}
 		case settingsPanelSectionAI:
 			groups = []*huh.Group{
@@ -1029,7 +1164,7 @@ func (s *Settings) buildPanelMenuForm() {
 			Title("Settings").
 			Description(description).
 			Options(
-				huh.NewOption("Account setup", string(settingsPanelSectionAccount)),
+				huh.NewOption("Accounts", string(settingsPanelSectionAccounts)),
 				huh.NewOption("AI", string(settingsPanelSectionAI)),
 				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
 				huh.NewOption("Keyboard", string(settingsPanelSectionKeyboard)),
@@ -1040,6 +1175,87 @@ func (s *Settings) buildPanelMenuForm() {
 			Value(&s.panelMenuChoice),
 	)
 	s.form = huh.NewForm(huh.NewGroup(fields...).Title("Settings")).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
+		WithShowHelp(true).
+		WithShowErrors(true).
+		WithKeyMap(settingsPanelMenuKeyMap())
+
+	if s.width > 0 {
+		s.form = s.form.WithWidth(s.formWidth())
+	}
+	if s.height > 0 {
+		s.form = s.form.WithHeight(s.formHeight())
+	}
+	s.prepareFormForView()
+}
+
+func (s *Settings) buildAccountsListForm() {
+	options := s.accountListOptions()
+	if s.accountsMenuChoice == "" && len(options) > 0 {
+		s.accountsMenuChoice = options[0].Value
+	}
+	description := "Choose an account or source to edit. Disconnecting removes Herald settings only."
+	if status := strings.TrimSpace(s.panelStatus); status != "" {
+		description = status + "\n" + description
+	}
+	s.form = huh.NewForm(huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Accounts").
+			Description(description).
+			Options(options...).
+			Value(&s.accountsMenuChoice),
+	).Title("Accounts")).
+		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
+		WithShowHelp(true).
+		WithShowErrors(true).
+		WithKeyMap(settingsPanelMenuKeyMap())
+
+	if s.width > 0 {
+		s.form = s.form.WithWidth(s.formWidth())
+	}
+	if s.height > 0 {
+		s.form = s.form.WithHeight(s.formHeight())
+	}
+	s.prepareFormForView()
+}
+
+func (s *Settings) accountListOptions() []huh.Option[string] {
+	var options []huh.Option[string]
+	if s.cfg != nil {
+		for _, group := range s.cfg.AccountGroups() {
+			label := strings.TrimSpace(group.DisplayName)
+			if label == "" {
+				label = group.AccountID
+			}
+			meta := []string{group.Capability}
+			if address := strings.TrimSpace(group.Address); address != "" {
+				meta = append(meta, address)
+			}
+			if provider := strings.TrimSpace(group.Provider); provider != "" {
+				meta = append(meta, provider)
+			}
+			options = append(options, huh.NewOption(label+" · "+strings.Join(meta, " · "), "account:"+group.AccountID))
+		}
+	}
+	options = append(options, huh.NewOption("Add account", "add"))
+	return options
+}
+
+func (s *Settings) buildAddAccountForm() {
+	description := "Choose whether to add a mail source or a standalone calendar source."
+	if status := strings.TrimSpace(s.panelStatus); status != "" {
+		description = status + "\n" + description
+	}
+	s.form = huh.NewForm(huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Add account").
+			Description(description).
+			Options(
+				huh.NewOption("Add Mail", settingsAccountEditAddMail),
+				huh.NewOption("Add Calendar", settingsAccountEditAddCalendar),
+			).
+			Value(&s.addAccountChoice),
+	).Title("Add account")).
 		WithTheme(huh.ThemeFunc(heraldHuhTheme)).
 		WithShowHelp(true).
 		WithShowErrors(true).
@@ -1270,6 +1486,149 @@ func (s *Settings) shouldOpenThemePickerFromManualInput(msg tea.KeyPressMsg) boo
 	}
 }
 
+func (s *Settings) mailSettingsHidden() bool {
+	return s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccount && !s.accountDetailShowsMail()
+}
+
+func (s *Settings) accountDetailShowsMail() bool {
+	if s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount {
+		return true
+	}
+	switch s.accountEditMode {
+	case settingsAccountEditAddCalendar:
+		return false
+	case settingsAccountEditAddMail:
+		return true
+	default:
+		group, ok := s.selectedAccountGroup()
+		return !ok || group.MailSourceID != ""
+	}
+}
+
+func (s *Settings) accountDetailShowsCalendar() bool {
+	if s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount {
+		return false
+	}
+	switch s.accountEditMode {
+	case settingsAccountEditAddCalendar:
+		return true
+	case settingsAccountEditAddMail:
+		return s.alsoAddCalendar
+	default:
+		group, ok := s.selectedAccountGroup()
+		return ok && len(group.CalendarSourceIDs) > 0
+	}
+}
+
+func (s *Settings) accountDetailHasCalendar() bool {
+	group, ok := s.selectedAccountGroup()
+	return ok && len(group.CalendarSourceIDs) > 0
+}
+
+func (s *Settings) accountDetailCapability() string {
+	hasMail := s.accountDetailShowsMail()
+	hasCalendar := s.accountDetailShowsCalendar()
+	switch {
+	case hasMail && hasCalendar:
+		return "Mail + Calendar"
+	case hasCalendar:
+		return "Calendar"
+	case hasMail:
+		return "Mail"
+	default:
+		return ""
+	}
+}
+
+func (s *Settings) selectedAccountGroup() (config.AccountGroup, bool) {
+	if s == nil || s.cfg == nil {
+		return config.AccountGroup{}, false
+	}
+	for _, group := range s.cfg.AccountGroups() {
+		if group.AccountID == s.selectedAccountID {
+			return group, true
+		}
+	}
+	return config.AccountGroup{}, false
+}
+
+func (s *Settings) resetAddAccountFields() {
+	s.selectedAccountID = ""
+	s.accountDisplayName = ""
+	s.calendarDisplayName = ""
+	s.calendarEmail = ""
+	s.caldavURL = ""
+	s.caldavUsername = ""
+	s.caldavPassword = ""
+	s.alsoAddCalendar = false
+	s.deleteAccount = false
+	s.provider = "imap"
+	s.email = ""
+	s.password = ""
+	s.imapHost = ""
+	s.imapPort = ""
+	s.smtpHost = ""
+	s.smtpPort = ""
+	s.editGmailAdvanced = false
+}
+
+func calendarPairingSupportedProvider(provider string) bool {
+	switch strings.TrimSpace(provider) {
+	case "gmail-oauth", "fastmail", "icloud":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Settings) loadSelectedAccountFields() {
+	group, ok := s.selectedAccountGroup()
+	if !ok {
+		return
+	}
+	s.accountDisplayName = group.DisplayName
+	for _, source := range group.Sources {
+		switch strings.TrimSpace(source.Kind) {
+		case "", string(models.SourceKindMail):
+			s.provider = source.Provider
+			if s.provider == "" {
+				s.provider = "imap"
+			}
+			if source.Provider == "gmail" && source.Google.RefreshToken != "" {
+				s.provider = "gmail-oauth"
+			}
+			s.email = sourceAddressForSettings(source)
+			s.password = source.Credentials.Password
+			s.imapHost = source.IMAP.Host
+			s.imapPort = portToString(source.IMAP.Port)
+			s.smtpHost = source.SMTP.Host
+			s.smtpPort = portToString(source.SMTP.Port)
+		case string(models.SourceKindCalendar):
+			s.calendarProvider = source.Provider
+			if s.calendarProvider == "" {
+				s.calendarProvider = "google_calendar"
+			}
+			s.calendarDisplayName = source.DisplayName
+			s.calendarEmail = source.Google.Email
+			s.caldavURL = source.CalDAV.URL
+			s.caldavUsername = source.CalDAV.Username
+			s.caldavPassword = source.CalDAV.Password
+		}
+	}
+	if s.accountDisplayName == "" {
+		s.accountDisplayName = group.AccountID
+	}
+}
+
+func sourceAddressForSettings(source config.SourceConfig) string {
+	for _, value := range []string{source.Credentials.Username, source.Google.Email, source.CalDAV.Username} {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
 func (s *Settings) consumeFormNavigationCmd(cmd tea.Cmd, depth int) {
 	if cmd == nil || depth > 8 {
 		return
@@ -1321,6 +1680,15 @@ func (s *Settings) keyHints() string {
 			return "↑/↓: move  │  enter: open category  │  /: filter  │  esc: exit settings"
 		}
 	}
+	if s.panelSection == settingsPanelSectionAccounts {
+		return "↑/↓: accounts  │  enter: open account  │  /: filter  │  esc: back to settings menu"
+	}
+	if s.panelSection == settingsPanelSectionAddAccount {
+		return "↑/↓: move  │  enter: choose  │  esc: back to accounts"
+	}
+	if s.panelSection == settingsPanelSectionAccount {
+		return "tab: fields  │  enter: edit/select  │  esc: back to accounts"
+	}
 	if escHelp == "exit filter" {
 		return "type: filter  │  esc: exit filter  │  enter: select"
 	}
@@ -1345,6 +1713,32 @@ func (s *Settings) returnToPanelMenu() tea.Cmd {
 	next.height = s.height
 	next.panelMenuChoice = choice
 	next.panelStatus = ""
+	next.buildForm()
+	*s = *next
+	return s.form.Init()
+}
+
+func (s *Settings) returnToAccountsList() tea.Cmd {
+	next := NewSettingsWithPathAndOptions(
+		SettingsModePanel,
+		s.cfg,
+		s.configPath,
+		SettingsOptions{ShowExperimentalEmailServices: s.showExperimentalEmailServices},
+	)
+	next.width = s.width
+	next.height = s.height
+	next.panelSection = settingsPanelSectionAccounts
+	next.panelMenuChoice = string(settingsPanelSectionAccounts)
+	next.accountsMenuChoice = s.accountsMenuChoice
+	if s.panelSection == settingsPanelSectionAddAccount && next.accountsMenuChoice == "add" {
+		for _, option := range next.accountListOptions() {
+			if option.Value != "add" {
+				next.accountsMenuChoice = option.Value
+				break
+			}
+		}
+	}
+	next.panelStatus = s.panelStatus
 	next.buildForm()
 	*s = *next
 	return s.form.Init()
@@ -1468,6 +1862,12 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// In panel mode, esc cancels if the active field has no local esc action.
 		if s.mode == SettingsModePanel && msg.Code == tea.KeyEscape {
 			if s.form.State != huh.StateCompleted && !s.focusedFieldHandlesKey(msg) {
+				if s.panelSection == settingsPanelSectionAccount || s.panelSection == settingsPanelSectionAddAccount {
+					return s, s.returnToAccountsList()
+				}
+				if s.panelSection == settingsPanelSectionAccounts {
+					return s, s.returnToPanelMenu()
+				}
 				if s.panelSection != settingsPanelSectionMenu {
 					return s, s.returnToPanelMenu()
 				}
@@ -1501,6 +1901,36 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.panelSection = settingsPanelSection(s.panelMenuChoice)
 			s.panelStatus = ""
 			s.saveButton = true
+			s.buildForm()
+			return s, tea.Batch(cmd, s.form.Init())
+		}
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccounts {
+			if s.accountsMenuChoice == "add" {
+				s.panelSection = settingsPanelSectionAddAccount
+				s.panelStatus = ""
+				s.buildForm()
+				return s, tea.Batch(cmd, s.form.Init())
+			}
+			s.selectedAccountID = strings.TrimPrefix(s.accountsMenuChoice, "account:")
+			s.accountEditMode = settingsAccountEditExisting
+			s.deleteAccount = false
+			s.loadSelectedAccountFields()
+			s.panelSection = settingsPanelSectionAccount
+			s.panelStatus = ""
+			s.buildForm()
+			return s, tea.Batch(cmd, s.form.Init())
+		}
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAddAccount {
+			s.accountEditMode = s.addAccountChoice
+			s.resetAddAccountFields()
+			if s.accountEditMode == settingsAccountEditAddCalendar {
+				s.calendarProvider = "google_calendar"
+			}
+			if s.accountEditMode == settingsAccountEditAddMail {
+				s.syncProviderDefaults("", s.provider)
+			}
+			s.panelSection = settingsPanelSectionAccount
+			s.panelStatus = ""
 			s.buildForm()
 			return s, tea.Batch(cmd, s.form.Init())
 		}
@@ -1541,6 +1971,8 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ReturnToMenu:               s.mode == SettingsModePanel,
 				ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
 				ValidateAccount:            s.requiresAccountValidation(),
+				ValidateCalendar:           s.requiresCalendarValidation(),
+				CalendarSourceIDs:          s.calendarSourceIDsForValidation(cfg),
 				ValidateOllamaModels:       s.requiresOllamaModelValidation(cfg),
 			}
 		})
@@ -1670,6 +2102,9 @@ func (s *Settings) buildConfig() *config.Config {
 	// this form does not modify are left pointing at the same underlying data
 	// (safe because we never mutate them — we only overwrite scalar fields below).
 	cfg := *s.cfg
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccount {
+		cfg = s.buildAccountSourcesConfig(cfg)
+	}
 	if s.requiresAccountValidation() {
 		cfg.Vendor = configVendorForProvider(s.provider)
 		cfg.Gmail.AccessToken = ""
@@ -1754,6 +2189,173 @@ func (s *Settings) buildConfig() *config.Config {
 	return &cfg
 }
 
+func (s *Settings) buildAccountSourcesConfig(cfg config.Config) config.Config {
+	if s.deleteAccount && s.accountEditMode == settingsAccountEditExisting {
+		next, err := cfg.RemoveAccountSources(s.selectedAccountID)
+		if err != nil {
+			s.panelStatus = err.Error()
+			return cfg
+		}
+		return next
+	}
+
+	sources := editableSourcesForSettings(cfg)
+	accountID := strings.TrimSpace(s.selectedAccountID)
+	if accountID == "" {
+		accountID = settingsSlug(firstNonEmptyString(s.accountDisplayName, s.email, s.calendarEmail, s.caldavUsername, "account"))
+	}
+	if accountID == "" {
+		accountID = "account"
+	}
+	if s.accountEditMode == settingsAccountEditExisting {
+		var kept []config.SourceConfig
+		for _, source := range sources {
+			sourceAccountID := strings.TrimSpace(source.AccountID)
+			if sourceAccountID == "" {
+				sourceAccountID = string(models.DefaultAccountID)
+			}
+			if sourceAccountID != accountID {
+				kept = append(kept, source)
+			}
+		}
+		sources = kept
+	}
+
+	if s.accountDetailShowsMail() {
+		sources = append(sources, s.mailSourceConfig(accountID, sources))
+	}
+	if s.accountDetailShowsCalendar() {
+		sources = append(sources, s.calendarSourceConfig(accountID, sources))
+	}
+	cfg.Sources = sources
+	syncLegacyMailFieldsForSettings(&cfg)
+	return cfg
+}
+
+func editableSourcesForSettings(cfg config.Config) []config.SourceConfig {
+	if len(cfg.Sources) > 0 {
+		return cfg.ExplicitSourcesForEdit()
+	}
+	if strings.TrimSpace(cfg.Credentials.Username) == "" && strings.TrimSpace(cfg.Server.Host) == "" && strings.TrimSpace(cfg.SMTP.Host) == "" && strings.TrimSpace(cfg.Gmail.Email) == "" {
+		return nil
+	}
+	return cfg.ExplicitSourcesForEdit()
+}
+
+func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceConfig) config.SourceConfig {
+	provider := configVendorForProvider(s.provider)
+	id := settingsUniqueSourceID(existing, firstNonEmptyString(s.accountDisplayName, s.email, accountID), "mail")
+	source := config.SourceConfig{
+		ID:          id,
+		Kind:        string(models.SourceKindMail),
+		Provider:    provider,
+		DisplayName: strings.TrimSpace(firstNonEmptyString(s.accountDisplayName, s.email, accountID)),
+		AccountID:   accountID,
+		IMAP:        config.ServerConfig{Host: strings.TrimSpace(s.imapHost), Port: parsePort(s.imapPort)},
+		SMTP:        config.ServerConfig{Host: strings.TrimSpace(s.smtpHost), Port: parsePort(s.smtpPort)},
+		Compose:     s.cfg.Compose,
+	}
+	if s.provider == "gmail-oauth" {
+		source.Google.Email = strings.TrimSpace(s.email)
+		source.Google.AccessToken = s.cfg.Gmail.AccessToken
+		source.Google.RefreshToken = s.cfg.Gmail.RefreshToken
+		source.Google.TokenExpiry = s.cfg.Gmail.TokenExpiry
+	} else {
+		source.Credentials.Username = strings.TrimSpace(s.email)
+		source.Credentials.Password = s.password
+	}
+	return source
+}
+
+func (s *Settings) calendarSourceConfig(accountID string, existing []config.SourceConfig) config.SourceConfig {
+	provider := strings.TrimSpace(s.calendarProvider)
+	if provider == "" {
+		provider = "google_calendar"
+	}
+	name := firstNonEmptyString(s.calendarDisplayName, s.accountDisplayName+" Calendar", s.calendarEmail, s.caldavUsername, accountID+" Calendar")
+	source := config.SourceConfig{
+		ID:          settingsUniqueSourceID(existing, name, "calendar"),
+		Kind:        string(models.SourceKindCalendar),
+		Provider:    provider,
+		DisplayName: strings.TrimSpace(name),
+		AccountID:   accountID,
+	}
+	switch provider {
+	case "caldav":
+		source.CalDAV.URL = strings.TrimSpace(s.caldavURL)
+		source.CalDAV.Username = strings.TrimSpace(firstNonEmptyString(s.caldavUsername, s.email))
+		source.CalDAV.Password = s.caldavPassword
+	default:
+		source.Google.Email = strings.TrimSpace(firstNonEmptyString(s.calendarEmail, s.email))
+		source.Google.AccessToken = s.cfg.Gmail.AccessToken
+		source.Google.RefreshToken = s.cfg.Gmail.RefreshToken
+		source.Google.TokenExpiry = s.cfg.Gmail.TokenExpiry
+	}
+	return source
+}
+
+func settingsUniqueSourceID(existing []config.SourceConfig, base, suffix string) string {
+	stem := settingsSlug(base)
+	if stem == "" {
+		stem = suffix
+	}
+	if !strings.HasSuffix(stem, "-"+suffix) {
+		stem += "-" + suffix
+	}
+	used := make(map[string]bool, len(existing))
+	for _, source := range existing {
+		used[source.ID] = true
+	}
+	if !used[stem] {
+		return stem
+	}
+	for i := 2; ; i++ {
+		candidate := fmt.Sprintf("%s-%d", stem, i)
+		if !used[candidate] {
+			return candidate
+		}
+	}
+}
+
+func settingsSlug(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range value {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if ok {
+			b.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if !prevDash {
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func syncLegacyMailFieldsForSettings(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	for _, source := range cfg.ExplicitSourcesForEdit() {
+		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
+			continue
+		}
+		cfg.Vendor = source.Provider
+		cfg.Credentials = source.Credentials
+		cfg.Server = source.IMAP
+		cfg.SMTP = source.SMTP
+		cfg.Gmail.AccessToken = source.Google.AccessToken
+		cfg.Gmail.RefreshToken = source.Google.RefreshToken
+		cfg.Gmail.TokenExpiry = source.Google.TokenExpiry
+		cfg.Gmail.Email = source.Google.Email
+		return
+	}
+}
+
 func (s *Settings) requiresOllamaModelValidation(candidate *config.Config) bool {
 	if candidate == nil || s.disableAIFromWarning {
 		return false
@@ -1765,6 +2367,34 @@ func (s *Settings) requiresOllamaModelValidation(candidate *config.Config) bool 
 		return aicheck.RequiresOllamaModelValidation(s.cfg, candidate)
 	}
 	return false
+}
+
+func (s *Settings) requiresCalendarValidation() bool {
+	return s.mode == SettingsModePanel &&
+		s.panelSection == settingsPanelSectionAccount &&
+		!s.deleteAccount &&
+		s.accountDetailShowsCalendar()
+}
+
+func (s *Settings) calendarSourceIDsForValidation(candidate *config.Config) []models.SourceID {
+	if !s.requiresCalendarValidation() || candidate == nil {
+		return nil
+	}
+	accountID := strings.TrimSpace(s.selectedAccountID)
+	if accountID == "" {
+		accountID = settingsSlug(firstNonEmptyString(s.accountDisplayName, s.email, s.calendarEmail, s.caldavUsername, "account"))
+	}
+	var ids []models.SourceID
+	for _, source := range candidate.NormalizedSources() {
+		if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) {
+			continue
+		}
+		if accountID != "" && strings.TrimSpace(source.AccountID) != accountID {
+			continue
+		}
+		ids = append(ids, models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID))
+	}
+	return ids
 }
 
 func (s *Settings) hasAIModelWarning() bool {

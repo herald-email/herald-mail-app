@@ -154,6 +154,99 @@ func TestConfigNormalizedSourcesDefaultsCalendarProviders(t *testing.T) {
 	}
 }
 
+func TestValidateExplicitSourcesDoesNotRequireLegacyMailFields(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{
+				ID:          "work-mail",
+				Kind:        "mail",
+				Provider:    "imap",
+				DisplayName: "Work Mail",
+				AccountID:   "work",
+				Credentials: CredentialsConfig{Username: "user@example.com", Password: "secret"},
+				IMAP:        ServerConfig{Host: "imap.example.com", Port: 993},
+				SMTP:        ServerConfig{Host: "smtp.example.com", Port: 587},
+			},
+			{
+				ID:          "work-calendar",
+				Kind:        "calendar",
+				Provider:    "google_calendar",
+				DisplayName: "Work Calendar",
+				AccountID:   "work",
+				Google:      GoogleConfig{RefreshToken: "refresh-token", Email: "user@example.com"},
+			},
+		},
+	}
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("explicit source config should validate without legacy credentials/server fields: %v", err)
+	}
+}
+
+func TestAccountGroupsGroupMailAndCalendarByAccountID(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{
+				ID:          "work-mail",
+				Kind:        "mail",
+				Provider:    "gmail",
+				DisplayName: "Work Gmail",
+				AccountID:   "work",
+				Credentials: CredentialsConfig{Username: "work@example.com"},
+			},
+			{
+				ID:          "work-calendar",
+				Kind:        "calendar",
+				Provider:    "google_calendar",
+				DisplayName: "Work Calendar",
+				AccountID:   "work",
+				Google:      GoogleConfig{Email: "work@example.com"},
+			},
+			{
+				ID:          "family-calendar",
+				Kind:        "calendar",
+				Provider:    "caldav",
+				DisplayName: "Family CalDAV",
+				AccountID:   "family",
+				CalDAV:      CalDAVConfig{URL: "https://caldav.example/family"},
+			},
+		},
+	}
+
+	groups := cfg.AccountGroups()
+	if len(groups) != 2 {
+		t.Fatalf("len(groups) = %d, want 2: %#v", len(groups), groups)
+	}
+	if groups[0].AccountID != "family" || groups[0].Capability != "Calendar" || groups[0].DisplayName != "Family CalDAV" {
+		t.Fatalf("first group = %#v, want family calendar-only group", groups[0])
+	}
+	if groups[1].AccountID != "work" || groups[1].Capability != "Mail + Calendar" || groups[1].Address != "work@example.com" {
+		t.Fatalf("second group = %#v, want work mail+calendar group", groups[1])
+	}
+}
+
+func TestRemoveAccountSourcesBlocksLastMailSourceAndPreservesOtherSources(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{ID: "work-mail", Kind: "mail", AccountID: "work", Credentials: CredentialsConfig{Username: "work@example.com"}, IMAP: ServerConfig{Host: "imap.example.com", Port: 993}, SMTP: ServerConfig{Host: "smtp.example.com", Port: 587}},
+			{ID: "work-calendar", Kind: "calendar", Provider: "google_calendar", AccountID: "work"},
+			{ID: "personal-mail", Kind: "mail", AccountID: "personal", Credentials: CredentialsConfig{Username: "me@example.com"}, IMAP: ServerConfig{Host: "imap.example.com", Port: 993}, SMTP: ServerConfig{Host: "smtp.example.com", Port: 587}},
+		},
+	}
+
+	updated, err := cfg.RemoveAccountSources("work")
+	if err != nil {
+		t.Fatalf("RemoveAccountSources(work) returned error: %v", err)
+	}
+	if len(updated.Sources) != 1 || updated.Sources[0].ID != "personal-mail" {
+		t.Fatalf("updated sources = %#v, want only personal-mail", updated.Sources)
+	}
+
+	if _, err := updated.RemoveAccountSources("personal"); err == nil || !strings.Contains(err.Error(), "last mail") {
+		t.Fatalf("expected deleting final mail source to be blocked, got %v", err)
+	}
+}
+
 func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

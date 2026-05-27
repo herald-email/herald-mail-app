@@ -241,7 +241,7 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	for _, want := range []string{"Account setup", "AI", "Sync & Cleanup", "Keyboard", "Theme Selection", "Theme Editor", "Signature"} {
+	for _, want := range []string{"Accounts", "AI", "Sync & Cleanup", "Keyboard", "Theme Selection", "Theme Editor", "Signature"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
 		}
@@ -502,7 +502,7 @@ func TestSettingsWizardDoesNotShowPanelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	if strings.Contains(rendered, "Account setup") || strings.Contains(rendered, "Sync & Cleanup") {
+	if strings.Contains(rendered, "Accounts") || strings.Contains(rendered, "Sync & Cleanup") {
 		t.Fatalf("expected first-run wizard to remain linear without panel category menu, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "Account Type") {
@@ -594,7 +594,7 @@ func TestSettingsPanelRendersCompactCenteredModalOverCurrentView(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected current view to remain visible behind settings, got first line %q", lines[0])
 	}
-	titleRow, titleCol := findRenderedText(lines, "Account setup")
+	titleRow, titleCol := findRenderedText(lines, "Accounts")
 	if titleRow < 8 {
 		t.Fatalf("expected settings content to be vertically centered in a compact modal, row=%d:\n%s", titleRow, stripANSI(rendered))
 	}
@@ -643,7 +643,7 @@ func TestSettingsPanelFitsAt80ColsAsModal(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected settings modal to keep the current view visible at 80x24, got first line %q", lines[0])
 	}
-	titleRow, _ := findRenderedText(lines, "Account setup")
+	titleRow, _ := findRenderedText(lines, "Accounts")
 	if titleRow < 2 {
 		t.Fatalf("expected settings modal to leave a vertical margin at 80x24, row=%d:\n%s", titleRow, stripANSI(rendered))
 	}
@@ -737,7 +737,7 @@ func TestSettingsPanelResizeKeepsBackdropAndModalInSync(t *testing.T) {
 	if !strings.Contains(lines[0], "Herald") {
 		t.Fatalf("expected resized settings modal to keep backdrop aligned, got first line %q", lines[0])
 	}
-	if !strings.Contains(stripANSI(rendered), "Account setup") {
+	if !strings.Contains(stripANSI(rendered), "Accounts") {
 		t.Fatalf("expected settings content after resize, got:\n%s", stripANSI(rendered))
 	}
 }

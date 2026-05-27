@@ -77,6 +77,7 @@ type ThemeChromeRoles struct {
 	TabInactive  ThemeStyle
 	StatusBar    ThemeStyle
 	HintBar      ThemeStyle
+	FormHelp     ThemeStyle
 	TopSyncStrip ThemeStyle
 	TableHeader  ThemeStyle
 	Loading      ThemeStyle
@@ -205,6 +206,7 @@ var inheritedTheme = Theme{
 		TabInactive:  ThemeStyle{},
 		StatusBar:    ThemeStyle{Reverse: true},
 		HintBar:      ThemeStyle{},
+		FormHelp:     ThemeStyle{Foreground: lipgloss.Color("8"), Faint: true},
 		TopSyncStrip: ThemeStyle{Foreground: lipgloss.Color("3"), Bold: true},
 		TableHeader:  ThemeStyle{Bold: true, Reverse: true},
 		Loading:      ThemeStyle{Foreground: lipgloss.Color("6"), Bold: true, Reverse: true},
@@ -306,6 +308,7 @@ var heraldDarkTheme = Theme{
 		TabInactive:  ThemeStyle{Foreground: lipgloss.Color("245")},
 		StatusBar:    ThemeStyle{Foreground: lipgloss.Color("252"), Background: lipgloss.Color("0")},
 		HintBar:      ThemeStyle{Foreground: lipgloss.Color("243"), Background: lipgloss.Color("235")},
+		FormHelp:     ThemeStyle{Foreground: lipgloss.Color("243"), Faint: true},
 		TopSyncStrip: ThemeStyle{Foreground: lipgloss.Color("214"), Background: lipgloss.Color("0")},
 		TableHeader:  ThemeStyle{Foreground: lipgloss.Color("205"), Background: lipgloss.Color("235"), Bold: true},
 		Loading:      ThemeStyle{Foreground: lipgloss.Color("86"), Background: lipgloss.Color("235"), Bold: true},
@@ -407,6 +410,7 @@ var heraldLightTheme = Theme{
 		TabInactive:  ThemeStyle{Foreground: lipgloss.Color("240")},
 		StatusBar:    ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("254")},
 		HintBar:      ThemeStyle{Foreground: lipgloss.Color("240"), Background: lipgloss.Color("255")},
+		FormHelp:     ThemeStyle{Foreground: lipgloss.Color("244"), Faint: true},
 		TopSyncStrip: ThemeStyle{Foreground: lipgloss.Color("130"), Background: lipgloss.Color("255"), Bold: true},
 		TableHeader:  ThemeStyle{Foreground: lipgloss.Color("25"), Background: lipgloss.Color("254"), Bold: true},
 		Loading:      ThemeStyle{Foreground: lipgloss.Color("25"), Background: lipgloss.Color("255"), Bold: true},
@@ -561,6 +565,7 @@ func terminalTheme(p terminalThemePalette) Theme {
 			TabInactive:  themeStyle(p.Muted, ""),
 			StatusBar:    themeStyle(p.Text, p.SurfaceStrong),
 			HintBar:      themeStyle(p.Muted, p.Surface),
+			FormHelp:     themeStyle(p.Dim, "", "faint"),
 			TopSyncStrip: themeStyle(p.Warning, p.SurfaceStrong, "bold"),
 			TableHeader:  themeStyle(p.Accent, p.Surface, "bold"),
 			Loading:      themeStyle(p.Accent2, p.Surface, "bold"),
@@ -1058,6 +1063,7 @@ func themeRoleMap(t *Theme) map[string]*ThemeStyle {
 		"chrome.tab_inactive":        &t.Chrome.TabInactive,
 		"chrome.status_bar":          &t.Chrome.StatusBar,
 		"chrome.hint_bar":            &t.Chrome.HintBar,
+		"chrome.form_help":           &t.Chrome.FormHelp,
 		"chrome.top_sync_strip":      &t.Chrome.TopSyncStrip,
 		"chrome.table_header":        &t.Chrome.TableHeader,
 		"chrome.loading":             &t.Chrome.Loading,

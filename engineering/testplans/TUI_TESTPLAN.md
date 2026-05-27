@@ -977,7 +977,7 @@ Check these states during every applicable lane:
 **Steps:**
 1. From Timeline, press `S` to open settings.
 2. Repeat from Compose, Cleanup, and Contacts to confirm the current screen remains visible behind the panel.
-3. At `220x50`, capture the settings menu, confirm it lists `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, then close it with `Esc`.
+3. At `220x50`, capture the settings menu, confirm it lists `Accounts`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, then close it with `Esc`.
 4. At `80x24`, reopen settings and confirm the modal footer says `enter open` and `esc exit`, while the bottom hint bar says `enter: open category`, `/: filter`, and `esc: exit settings`.
 5. Reopen settings, enter `Signature`, edit the multiline field, save, and confirm the menu returns without requiring account or AI fields.
 6. Reopen settings, enter `Signature`, press `Esc`, and confirm Settings returns to the top-level menu before a second `Esc` exits.
@@ -987,7 +987,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - At `220x50`, settings appears as a compact centered modal over the current view, not a full-screen replacement.
-- The first panel state is the top-level settings menu, not the first account form field.
+- The first panel state is the top-level settings menu, not the first account/source form field.
 - Category selection opens only the chosen settings area.
 - Menu-level hints describe `enter` as opening a category and `Esc` as exiting Settings; bottom screen hints switch away from the underlying tab while Settings is open.
 - Saving a category writes settings, applies supported runtime updates, and returns to the top-level settings menu.
@@ -997,6 +997,33 @@ Check these states during every applicable lane:
 - `Esc` exits or clears an active settings-menu filter before it exits Settings; from a category, `Esc` returns to the top-level menu without saving unsaved edits, and the next menu-level `Esc` exits Settings.
 - First-run setup remains a linear fullscreen wizard and does not show the top-level settings menu.
 - First-run setup's Theme step shows only the current theme picker with all available themes; local YAML install stays exclusive to in-app Theme Selection, while semantic theme roles, foreground/background fields, live preview, reset controls, and save-as-new-theme stay exclusive to in-app Theme Editor.
+
+### TC-18C — Settings Accounts source manager
+
+**Lane:** A, B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald with a deterministic multi-source config containing at least one mail source and one calendar source.
+2. Press `S`, open `Accounts`, and capture the account/source list.
+3. Select a mail account, press `Enter`, and capture the account detail form.
+4. Return to `Accounts`, select a calendar-only account, press `Enter`, and capture the calendar detail form.
+5. Return to `Accounts`, choose `Add account`, confirm it shows `Add Mail` and `Add Calendar`, then open each path without saving.
+6. On a mail provider that supports calendar pairing, confirm the mail form includes `Also add calendar`; repeat on a mail-only provider and confirm the option is absent.
+7. Attempt to delete a calendar-only account and confirm Herald asks for disconnect confirmation without provider-deletion language.
+8. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
+9. Resize the open Accounts list or detail view to `50x15`, then resize back to `80x24`.
+
+**Expect:**
+- The Settings top-level menu uses `Accounts` instead of `Account setup`.
+- `Settings > Accounts` groups configured sources by `account_id`, shows display name/provider/identity, and uses compact capability badges such as `Mail`, `Calendar`, or `Mail + Calendar`.
+- The final Accounts row is `Add account`.
+- Mail-capable account detail preserves the existing account setup fields and validates IMAP plus SMTP before saving.
+- Calendar-capable account detail shows Google Calendar or CalDAV configuration fields and validates by listing calendars before saving.
+- `Add Mail` creates a mail source and offers `Also add calendar` only for supported paired providers; `Add Calendar` creates a standalone Google Calendar or CalDAV source.
+- Disconnecting an account removes Herald config sources only; it does not delete provider mail, provider calendars, or cached/server content.
+- Herald blocks deletion of the last configured mail source.
+- At `50x15`, the standard minimum-size guard appears and resizing larger restores the same Accounts state cleanly.
 
 ### TC-24A — Theme selection and custom theme editing
 

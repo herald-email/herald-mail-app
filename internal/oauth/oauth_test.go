@@ -76,6 +76,26 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 	}
 }
 
+func TestGoogleOAuthScopesIncludeMailAndCalendarSources(t *testing.T) {
+	want := []string{
+		"https://mail.google.com/",
+		"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+		"https://www.googleapis.com/auth/calendar.events",
+	}
+	for _, scope := range want {
+		found := false
+		for _, got := range Scopes {
+			if got == scope {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("Scopes missing %q; got %#v", scope, Scopes)
+		}
+	}
+}
+
 func TestStartFlow_AuthorizeRedirectsToGoogleURL(t *testing.T) {
 	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")

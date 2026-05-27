@@ -26,6 +26,8 @@ import (
 // Scopes required for Gmail IMAP access.
 var Scopes = []string{
 	"https://mail.google.com/",
+	"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+	"https://www.googleapis.com/auth/calendar.events",
 }
 
 // clientID and clientSecret are the OAuth2 application credentials.

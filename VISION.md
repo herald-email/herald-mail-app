@@ -776,7 +776,10 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact
 - [x] Theme Selection switches between inherited, Herald dark, Herald light, and installed YAML themes and installs local YAML files; Theme Editor edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
-- [ ] Account list for multi-account (add / remove / reorder)
+- [x] `Settings > Accounts` lists configured mail/calendar accounts and opens account-scoped detail forms
+- [x] `Settings > Accounts` can add mail accounts, add standalone calendar sources, and optionally pair supported mail providers with calendars
+- [x] `Settings > Accounts` can disconnect configured accounts/sources without deleting provider-side mail or calendars
+- [ ] Account reorder remains planned after add/remove/account detail management
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
 - [x] Account setup saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
 - [x] Passwords always hidden; "reveal" button toggles visibility

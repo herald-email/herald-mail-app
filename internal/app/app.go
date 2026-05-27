@@ -424,7 +424,17 @@ type AccountValidationMsg struct {
 	Config                     *config.Config
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
 	Result                     accountcheck.Result
+}
+
+type CalendarValidationMsg struct {
+	Config                     *config.Config
+	ReturnToMenu               bool
+	ReclaimOfflineCacheStorage bool
+	SourceIDs                  []models.SourceID
+	Err                        error
 }
 
 type OllamaModelValidationMsg struct {
@@ -442,6 +452,8 @@ type accountValidationState struct {
 	Config                     *config.Config
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
+	ValidateCalendar           bool
+	CalendarSourceIDs          []models.SourceID
 	Checking                   bool
 	Message                    string
 }
@@ -455,10 +467,65 @@ type aiModelValidationState struct {
 }
 
 var validateAccountConfig = accountcheck.Validate
+var validateCalendarConfig = validateCalendarSources
 var validateOllamaModels = aicheck.ValidateOllamaModels
 
 var newValidatedLocalBackend = func(cfg *config.Config, configPath string, classifier ai.AIClient) (backend.Backend, error) {
+	mailSources := 0
+	if cfg != nil {
+		for _, source := range cfg.NormalizedSources() {
+			if strings.TrimSpace(source.Kind) == "" || source.Kind == string(models.SourceKindMail) {
+				mailSources++
+			}
+		}
+	}
+	if mailSources > 1 {
+		return backend.NewMultiLocal(cfg, configPath, classifier)
+	}
 	return backend.NewLocal(cfg, configPath, classifier)
+}
+
+func validateCalendarSources(ctx context.Context, cfg *config.Config, sourceIDs []models.SourceID) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+	want := make(map[models.SourceID]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		if id != "" {
+			want[id] = true
+		}
+	}
+	checked := 0
+	for _, source := range cfg.NormalizedSources() {
+		if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) {
+			continue
+		}
+		sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+		if len(want) > 0 && !want[sourceID] {
+			continue
+		}
+		opened, err := backend.DefaultSourceRegistry().Open(ctx, source, backend.SourceDeps{ProfileConfig: cfg})
+		if err != nil {
+			return fmt.Errorf("calendar source %s failed to open: %w", source.ID, err)
+		}
+		if opened.Calendar == nil {
+			_ = opened.Close()
+			return fmt.Errorf("calendar source %s did not provide a calendar adapter", source.ID)
+		}
+		if _, err := opened.Calendar.ListCalendars(ctx); err != nil {
+			_ = opened.Close()
+			return fmt.Errorf("calendar source %s failed validation: %w", source.ID, err)
+		}
+		_ = opened.Close()
+		checked++
+	}
+	if checked == 0 {
+		return fmt.Errorf("no calendar sources to validate")
+	}
+	return nil
 }
 
 // Model represents the main application state
@@ -944,14 +1011,28 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyThemeConfig(cfg)
 }
 
-func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToMenu, reclaimOfflineCache, validateCalendar bool, calendarSourceIDs []models.SourceID) tea.Cmd {
 	return func() tea.Msg {
 		result := validateAccountConfig(context.Background(), cfg, configPath)
 		return AccountValidationMsg{
 			Config:                     cfg,
 			ReturnToMenu:               returnToMenu,
 			ReclaimOfflineCacheStorage: reclaimOfflineCache,
+			ValidateCalendar:           validateCalendar,
+			CalendarSourceIDs:          calendarSourceIDs,
 			Result:                     result,
+		}
+	}
+}
+
+func validateCalendarSettingsCmd(cfg *config.Config, returnToMenu, reclaimOfflineCache bool, sourceIDs []models.SourceID) tea.Cmd {
+	return func() tea.Msg {
+		return CalendarValidationMsg{
+			Config:                     cfg,
+			ReturnToMenu:               returnToMenu,
+			ReclaimOfflineCacheStorage: reclaimOfflineCache,
+			SourceIDs:                  sourceIDs,
+			Err:                        validateCalendarConfig(context.Background(), cfg, sourceIDs),
 		}
 	}
 }
@@ -1034,7 +1115,7 @@ func (m *Model) refreshAIClientForConfig(previous, next *config.Config) error {
 	return nil
 }
 
-func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
+func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache, validateCalendar bool, calendarSourceIDs []models.SourceID) tea.Cmd {
 	m.showSettings = false
 	m.settingsPanel = nil
 	m.oauthWait = nil
@@ -1042,12 +1123,31 @@ func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaim
 		Config:                     cfg,
 		ReturnToMenu:               returnToMenu,
 		ReclaimOfflineCacheStorage: reclaimOfflineCache,
+		ValidateCalendar:           validateCalendar,
+		CalendarSourceIDs:          calendarSourceIDs,
 		Checking:                   true,
 		Message:                    "Checking IMAP and SMTP before saving account settings...",
 	}
 	m.statusMessage = "Validating account settings..."
 	logger.Info("Validating account settings before applying config")
-	return validateAccountSettingsCmd(cfg, m.configPath, returnToMenu, reclaimOfflineCache)
+	return validateAccountSettingsCmd(cfg, m.configPath, returnToMenu, reclaimOfflineCache, validateCalendar, calendarSourceIDs)
+}
+
+func (m *Model) beginCalendarValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool, sourceIDs []models.SourceID) tea.Cmd {
+	m.showSettings = false
+	m.settingsPanel = nil
+	m.oauthWait = nil
+	m.accountValidation = &accountValidationState{
+		Config:                     cfg,
+		ReturnToMenu:               returnToMenu,
+		ReclaimOfflineCacheStorage: reclaimOfflineCache,
+		CalendarSourceIDs:          sourceIDs,
+		Checking:                   true,
+		Message:                    "Checking calendar source before saving settings...",
+	}
+	m.statusMessage = "Validating calendar settings..."
+	logger.Info("Validating calendar source settings before applying config")
+	return validateCalendarSettingsCmd(cfg, returnToMenu, reclaimOfflineCache, sourceIDs)
 }
 
 func (m *Model) beginOllamaModelValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
@@ -1078,6 +1178,27 @@ func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
 		m.accountValidation.Message = msg.Result.UserMessage(logger.Path(), m.configPath)
 		m.statusMessage = "Account settings were not saved."
 		logger.Error("Account settings validation failed: %v", err)
+		return nil
+	}
+	if msg.ValidateCalendar {
+		return m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
+	}
+	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+}
+
+func (m *Model) finishCalendarValidation(msg CalendarValidationMsg) tea.Cmd {
+	if m.accountValidation == nil {
+		m.accountValidation = &accountValidationState{}
+	}
+	m.accountValidation.Checking = false
+	m.accountValidation.Config = msg.Config
+	m.accountValidation.ReturnToMenu = msg.ReturnToMenu
+	m.accountValidation.ReclaimOfflineCacheStorage = msg.ReclaimOfflineCacheStorage
+	m.accountValidation.CalendarSourceIDs = msg.SourceIDs
+	if msg.Err != nil {
+		m.accountValidation.Message = fmt.Sprintf("Calendar settings were not saved. %v", msg.Err)
+		m.statusMessage = "Calendar settings were not saved."
+		logger.Error("Calendar settings validation failed: %v", msg.Err)
 		return nil
 	}
 	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
@@ -1527,6 +1648,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AccountValidationMsg:
 		return m, m.finishAccountValidation(msg)
 
+	case CalendarValidationMsg:
+		return m, m.finishCalendarValidation(msg)
+
 	case OllamaModelValidationMsg:
 		return m, m.finishOllamaModelValidation(msg)
 
@@ -1544,7 +1668,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SettingsSavedMsg:
 		if msg.ValidateAccount {
-			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
+			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.ValidateCalendar, msg.CalendarSourceIDs)
+		}
+		if msg.ValidateCalendar {
+			return m, m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
 		}
 		if msg.ValidateOllamaModels {
 			return m, m.beginOllamaModelValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
@@ -1625,7 +1752,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.oauthWait.Init()
 
 	case OAuthDoneMsg:
-		return m, m.beginAccountValidation(msg.Config, true, false)
+		return m, m.beginAccountValidation(msg.Config, true, false, false, nil)
 
 	case OAuthErrorMsg:
 		m.oauthWait = nil

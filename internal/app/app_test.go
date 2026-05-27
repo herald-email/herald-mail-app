@@ -410,6 +410,49 @@ func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
 	}
 }
 
+func TestCalendarSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
+	oldValidate := validateCalendarConfig
+	validateCalendarConfig = func(context.Context, *config.Config, []models.SourceID) error {
+		return errors.New("calendar refused")
+	}
+	defer func() { validateCalendarConfig = oldValidate }()
+
+	original := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", Credentials: config.CredentialsConfig{Username: "old@example.test"}},
+	}}
+	next := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", Credentials: config.CredentialsConfig{Username: "new@example.test"}},
+		{ID: "work-calendar", Kind: "calendar", Provider: "caldav", AccountID: "work", CalDAV: config.CalDAVConfig{URL: "https://caldav.example/work"}},
+	}}
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ReturnToMenu: true, ValidateCalendar: true, CalendarSourceIDs: []models.SourceID{"work-calendar"}})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected calendar validation command")
+	}
+	if updated.cfg != original {
+		t.Fatal("candidate config should not be applied before calendar validation passes")
+	}
+
+	msg, ok := cmd().(CalendarValidationMsg)
+	if !ok {
+		t.Fatalf("expected CalendarValidationMsg, got %T", cmd())
+	}
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if updated.cfg != original || len(updated.cfg.Sources) != 1 {
+		t.Fatalf("failed calendar validation replaced config: %#v", updated.cfg)
+	}
+	if updated.accountValidation == nil || !strings.Contains(updated.accountValidation.Message, "Calendar settings were not saved") {
+		t.Fatalf("expected visible calendar validation message, got %#v", updated.accountValidation)
+	}
+}
+
 func TestAISettingsOllamaValidationFailureKeepsPreviousConfig(t *testing.T) {
 	oldValidate := validateOllamaModels
 	validateOllamaModels = func(context.Context, *config.Config) aicheck.Result {

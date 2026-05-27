@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,6 +73,17 @@ type SignatureConfig struct {
 
 type ComposeConfig struct {
 	Signature SignatureConfig `yaml:"signature,omitempty"`
+}
+
+type AccountGroup struct {
+	AccountID         string
+	DisplayName       string
+	Provider          string
+	Address           string
+	Capability        string
+	Sources           []SourceConfig
+	MailSourceID      string
+	CalendarSourceIDs []string
 }
 
 // Config represents the application configuration
@@ -264,6 +276,118 @@ func (c Config) NormalizedSources() []SourceConfig {
 	return []SourceConfig{legacyDefaultMailSource(c)}
 }
 
+func (c Config) ExplicitSourcesForEdit() []SourceConfig {
+	sources := c.Sources
+	if len(sources) == 0 {
+		sources = c.NormalizedSources()
+	}
+	return normalizeExplicitSources(sources, c.Compose.Signature.Text)
+}
+
+func (c Config) AccountGroups() []AccountGroup {
+	sources := c.ExplicitSourcesForEdit()
+	byID := make(map[string]*AccountGroup)
+	var order []string
+	for _, source := range sources {
+		accountID := strings.TrimSpace(source.AccountID)
+		if accountID == "" {
+			accountID = string(models.DefaultAccountID)
+		}
+		group := byID[accountID]
+		if group == nil {
+			group = &AccountGroup{AccountID: accountID}
+			byID[accountID] = group
+			order = append(order, accountID)
+		}
+		group.Sources = append(group.Sources, source)
+		if group.DisplayName == "" {
+			group.DisplayName = strings.TrimSpace(source.DisplayName)
+		}
+		if group.Provider == "" {
+			group.Provider = strings.TrimSpace(source.Provider)
+		}
+		if group.Address == "" {
+			group.Address = sourceAddress(source)
+		}
+		switch strings.TrimSpace(source.Kind) {
+		case "", string(models.SourceKindMail):
+			if group.MailSourceID == "" {
+				group.MailSourceID = source.ID
+			}
+		case string(models.SourceKindCalendar):
+			group.CalendarSourceIDs = append(group.CalendarSourceIDs, source.ID)
+		}
+	}
+	sort.Strings(order)
+	groups := make([]AccountGroup, 0, len(order))
+	for _, id := range order {
+		group := *byID[id]
+		if group.DisplayName == "" {
+			group.DisplayName = id
+		}
+		hasMail := group.MailSourceID != ""
+		hasCalendar := len(group.CalendarSourceIDs) > 0
+		switch {
+		case hasMail && hasCalendar:
+			group.Capability = "Mail + Calendar"
+		case hasCalendar:
+			group.Capability = "Calendar"
+		default:
+			group.Capability = "Mail"
+		}
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func (c Config) RemoveAccountSources(accountID string) (Config, error) {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		accountID = string(models.DefaultAccountID)
+	}
+	next := c
+	var kept []SourceConfig
+	for _, source := range c.ExplicitSourcesForEdit() {
+		sourceAccountID := strings.TrimSpace(source.AccountID)
+		if sourceAccountID == "" {
+			sourceAccountID = string(models.DefaultAccountID)
+		}
+		if sourceAccountID == accountID {
+			continue
+		}
+		kept = append(kept, source)
+	}
+	if len(kept) == len(c.ExplicitSourcesForEdit()) {
+		return next, fmt.Errorf("account %q is not configured", accountID)
+	}
+	if !hasMailSource(kept) {
+		return next, fmt.Errorf("cannot remove the last mail source")
+	}
+	next.Sources = kept
+	next.syncLegacyFieldsFromFirstMailSource()
+	return next, nil
+}
+
+func (c *Config) syncLegacyFieldsFromFirstMailSource() {
+	if c == nil {
+		return
+	}
+	for _, source := range c.ExplicitSourcesForEdit() {
+		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
+			continue
+		}
+		c.Vendor = source.Provider
+		c.Credentials = source.Credentials
+		c.Server = source.IMAP
+		c.SMTP = source.SMTP
+		c.Gmail.AccessToken = source.Google.AccessToken
+		c.Gmail.RefreshToken = source.Google.RefreshToken
+		c.Gmail.TokenExpiry = source.Google.TokenExpiry
+		c.Gmail.Email = source.Google.Email
+		return
+	}
+}
+
 func normalizeExplicitSources(sources []SourceConfig, defaultSignature string) []SourceConfig {
 	normalized := make([]SourceConfig, 0, len(sources))
 	for _, source := range sources {
@@ -297,6 +421,28 @@ func normalizeExplicitSources(sources []SourceConfig, defaultSignature string) [
 		normalized = append(normalized, source)
 	}
 	return normalized
+}
+
+func sourceAddress(source SourceConfig) string {
+	for _, value := range []string{
+		source.Credentials.Username,
+		source.Google.Email,
+		source.CalDAV.Username,
+	} {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func hasMailSource(sources []SourceConfig) bool {
+	for _, source := range sources {
+		if strings.TrimSpace(source.Kind) == "" || source.Kind == string(models.SourceKindMail) {
+			return true
+		}
+	}
+	return false
 }
 
 func legacyDefaultMailSource(c Config) SourceConfig {
@@ -565,6 +711,9 @@ func Load(configPath string) (*Config, error) {
 
 // validate checks that all required configuration fields are present
 func (c *Config) validate() error {
+	if len(c.Sources) > 0 {
+		return c.validateExplicitSources()
+	}
 	// Gmail OAuth users authenticate via token; skip username/password checks.
 	if !c.IsGmailOAuth() {
 		if c.Credentials.Username == "" {
@@ -579,6 +728,39 @@ func (c *Config) validate() error {
 	}
 	if c.Server.Port == 0 {
 		return fmt.Errorf("missing server.port")
+	}
+	return nil
+}
+
+func (c *Config) validateExplicitSources() error {
+	sources := c.NormalizedSources()
+	if !hasMailSource(sources) {
+		return fmt.Errorf("missing mail source")
+	}
+	for _, source := range sources {
+		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
+			continue
+		}
+		if strings.TrimSpace(source.Google.RefreshToken) == "" {
+			if strings.TrimSpace(source.Credentials.Username) == "" {
+				return fmt.Errorf("mail source %q missing credentials.username", source.ID)
+			}
+			if strings.TrimSpace(source.Credentials.Password) == "" {
+				return fmt.Errorf("mail source %q missing credentials.password", source.ID)
+			}
+		}
+		if strings.TrimSpace(source.IMAP.Host) == "" {
+			return fmt.Errorf("mail source %q missing imap.host", source.ID)
+		}
+		if source.IMAP.Port == 0 {
+			return fmt.Errorf("mail source %q missing imap.port", source.ID)
+		}
+		if strings.TrimSpace(source.SMTP.Host) == "" {
+			return fmt.Errorf("mail source %q missing smtp.host", source.ID)
+		}
+		if source.SMTP.Port == 0 {
+			return fmt.Errorf("mail source %q missing smtp.port", source.ID)
+		}
 	}
 	return nil
 }

@@ -10,14 +10,17 @@ func heraldHuhTheme(isDark bool) *huh.Styles {
 	unsetForeground := func(style lipgloss.Style) lipgloss.Style {
 		return style.UnsetForeground().Faint(false)
 	}
+	dimHelp := func(style lipgloss.Style) lipgloss.Style {
+		return defaultTheme.Chrome.FormHelp.Apply(style)
+	}
 
-	styles.Help.Ellipsis = unsetForeground(styles.Help.Ellipsis)
-	styles.Help.ShortKey = unsetForeground(styles.Help.ShortKey)
-	styles.Help.ShortDesc = unsetForeground(styles.Help.ShortDesc)
-	styles.Help.ShortSeparator = unsetForeground(styles.Help.ShortSeparator)
-	styles.Help.FullKey = unsetForeground(styles.Help.FullKey)
-	styles.Help.FullDesc = unsetForeground(styles.Help.FullDesc)
-	styles.Help.FullSeparator = unsetForeground(styles.Help.FullSeparator)
+	styles.Help.Ellipsis = dimHelp(styles.Help.Ellipsis)
+	styles.Help.ShortKey = dimHelp(styles.Help.ShortKey)
+	styles.Help.ShortDesc = dimHelp(styles.Help.ShortDesc)
+	styles.Help.ShortSeparator = dimHelp(styles.Help.ShortSeparator)
+	styles.Help.FullKey = dimHelp(styles.Help.FullKey)
+	styles.Help.FullDesc = dimHelp(styles.Help.FullDesc)
+	styles.Help.FullSeparator = dimHelp(styles.Help.FullSeparator)
 
 	styles.Focused.Description = unsetForeground(styles.Focused.Description)
 	styles.Blurred.Description = unsetForeground(styles.Blurred.Description)
