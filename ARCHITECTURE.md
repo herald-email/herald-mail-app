@@ -445,9 +445,25 @@ CREATE TABLE email_preview_bodies (
 
 CREATE TABLE email_embeddings (
     message_id  TEXT PRIMARY KEY,
+    source_id   TEXT NOT NULL DEFAULT 'default-mail',
+    account_id  TEXT NOT NULL DEFAULT 'default',
+    local_id    TEXT,
     embedding   BLOB NOT NULL,   -- float32 array, little-endian
     body_hash   TEXT NOT NULL,
     created_at  DATETIME NOT NULL
+);
+
+CREATE TABLE email_embedding_chunks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id   TEXT NOT NULL,
+    source_id    TEXT NOT NULL DEFAULT 'default-mail',
+    account_id   TEXT NOT NULL DEFAULT 'default',
+    local_id     TEXT,
+    chunk_index  INTEGER NOT NULL DEFAULT 0,
+    embedding    BLOB NOT NULL,
+    content_hash TEXT NOT NULL,
+    embedded_at  DATETIME NOT NULL,
+    UNIQUE(message_id, chunk_index)
 );
 
 CREATE TABLE cache_metadata (

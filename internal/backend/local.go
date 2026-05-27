@@ -1077,8 +1077,16 @@ func (b *LocalBackend) GetUnembeddedIDsWithBody(folder string) ([]string, error)
 	return b.cache.GetUnembeddedIDsWithBody(folder)
 }
 
+func (b *LocalBackend) GetUnembeddedRefsWithBody(folder string) ([]models.MessageRef, error) {
+	return b.cache.GetUnembeddedRefsWithBody(folder)
+}
+
 func (b *LocalBackend) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
 	return b.cache.GetUncachedBodyIDs(folder, limit)
+}
+
+func (b *LocalBackend) GetUncachedBodyRefs(folder string, limit int) ([]models.MessageRef, error) {
+	return b.cache.GetUncachedBodyRefs(folder, limit)
 }
 
 func (b *LocalBackend) GetEmbeddingProgress(folder string) (done, total int, err error) {
@@ -1087,6 +1095,10 @@ func (b *LocalBackend) GetEmbeddingProgress(folder string) (done, total int, err
 
 func (b *LocalBackend) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
 	return b.cache.StoreEmbeddingChunks(messageID, chunks)
+}
+
+func (b *LocalBackend) StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error {
+	return b.cache.StoreEmbeddingChunksByRef(ref, chunks)
 }
 
 func (b *LocalBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
@@ -1099,6 +1111,10 @@ func (b *LocalBackend) SearchSemanticChunked(folder string, queryVec []float32, 
 
 func (b *LocalBackend) GetBodyText(messageID string) (string, error) {
 	return b.cache.GetBodyText(messageID)
+}
+
+func (b *LocalBackend) GetBodyTextByRef(ref models.MessageRef) (string, error) {
+	return b.cache.GetBodyTextByRef(ref)
 }
 
 func (b *LocalBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, error) {
@@ -1117,6 +1133,28 @@ func (b *LocalBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, e
 	if body != nil && result.Source != MessageReadSourceUnavailable && body.TextPlain != "" {
 		if err := b.cache.CacheBodyText(messageID, body.TextPlain); err != nil {
 			logger.Warn("FetchAndCacheBody CacheBodyText %s: %v", messageID, err)
+		}
+	}
+	return body, nil
+}
+
+func (b *LocalBackend) FetchAndCacheBodyByRef(ref models.MessageRef) (*models.EmailBody, error) {
+	email, err := b.cache.GetEmailByRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if email == nil {
+		return nil, fmt.Errorf("FetchAndCacheBodyByRef: message %s not found in cache", ref.WithDefaults().LocalID)
+	}
+	ref = email.MessageRef()
+	result, err := b.GetMessage(context.Background(), ref)
+	if err != nil {
+		return nil, err
+	}
+	body := result.Body
+	if body != nil && result.Source != MessageReadSourceUnavailable && body.TextPlain != "" {
+		if err := b.cache.CacheBodyText(ref.MessageID, body.TextPlain); err != nil {
+			logger.Warn("FetchAndCacheBodyByRef CacheBodyText %s: %v", ref.LocalID, err)
 		}
 	}
 	return body, nil

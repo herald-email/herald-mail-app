@@ -226,6 +226,9 @@ func (c *Cache) initDB() error {
 	embQuery := `
 		CREATE TABLE IF NOT EXISTS email_embeddings (
 			message_id  TEXT PRIMARY KEY,
+			source_id   TEXT NOT NULL DEFAULT 'default-mail',
+			account_id  TEXT NOT NULL DEFAULT 'default',
+			local_id    TEXT,
 			embedding   BLOB NOT NULL,
 			hash        TEXT NOT NULL,
 			embedded_at DATETIME NOT NULL
@@ -233,6 +236,16 @@ func (c *Cache) initDB() error {
 	`
 	if _, err := c.db.Exec(embQuery); err != nil {
 		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE email_embeddings ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE email_embeddings ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`ALTER TABLE email_embeddings ADD COLUMN local_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_email_embeddings_scope ON email_embeddings(source_id, account_id, local_id)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity embedding migration might already be applied: %v", err)
+		}
 	}
 
 	// Saved searches table
@@ -402,6 +415,9 @@ func (c *Cache) initDB() error {
 		CREATE TABLE IF NOT EXISTS email_embedding_chunks (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			message_id   TEXT NOT NULL,
+			source_id    TEXT NOT NULL DEFAULT 'default-mail',
+			account_id   TEXT NOT NULL DEFAULT 'default',
+			local_id     TEXT,
 			chunk_index  INTEGER NOT NULL DEFAULT 0,
 			embedding    BLOB NOT NULL,
 			content_hash TEXT NOT NULL,
@@ -410,6 +426,16 @@ func (c *Cache) initDB() error {
 		)
 	`); err != nil {
 		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE email_embedding_chunks ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE email_embedding_chunks ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`ALTER TABLE email_embedding_chunks ADD COLUMN local_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_email_embedding_chunks_scope ON email_embedding_chunks(source_id, account_id, local_id)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity embedding chunk migration might already be applied: %v", err)
+		}
 	}
 
 	// contacts: enriched contact book built from email headers
@@ -994,6 +1020,30 @@ func (c *Cache) GetBodyText(messageID string) (string, error) {
 		return text.String, nil
 	}
 	preview, err := c.GetPreviewBody(messageID)
+	if err != nil || preview == nil {
+		return "", err
+	}
+	return preview.TextPlain, nil
+}
+
+// GetBodyTextByRef returns cached plain text for a scoped message ref.
+func (c *Cache) GetBodyTextByRef(ref models.MessageRef) (string, error) {
+	ref = ref.WithDefaults()
+	if strings.TrimSpace(ref.LocalID) == "" {
+		return c.GetBodyText(ref.MessageID)
+	}
+	var text sql.NullString
+	err := c.db.QueryRow(`SELECT body_text FROM emails WHERE local_id=?`, ref.LocalID).Scan(&text)
+	if err == sql.ErrNoRows {
+		return c.GetBodyText(ref.MessageID)
+	}
+	if err != nil {
+		return "", err
+	}
+	if text.Valid && strings.TrimSpace(text.String) != "" {
+		return text.String, nil
+	}
+	preview, err := c.GetPreviewBodyByRef(ref)
 	if err != nil || preview == nil {
 		return "", err
 	}
@@ -2140,13 +2190,29 @@ func scanEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
 
 // StoreEmbedding saves a float32 embedding vector for a message
 func (c *Cache) StoreEmbedding(messageID string, embedding []float32, hash string) error {
+	ref := models.MessageRef{MessageID: messageID}.WithDefaults()
+	if email, err := c.GetEmailByID(messageID); err == nil && email != nil {
+		ref = email.MessageRef()
+	}
+	return c.StoreEmbeddingByRef(ref, embedding, hash)
+}
+
+// StoreEmbeddingByRef saves a float32 embedding vector for a scoped message.
+func (c *Cache) StoreEmbeddingByRef(ref models.MessageRef, embedding []float32, hash string) error {
+	ref = ref.WithDefaults()
+	if strings.TrimSpace(ref.MessageID) == "" && strings.TrimSpace(ref.LocalID) != "" {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			ref = parsed
+		}
+	}
 	buf := make([]byte, len(embedding)*4)
 	for i, v := range embedding {
 		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 	}
 	_, err := c.db.Exec(
-		`INSERT OR REPLACE INTO email_embeddings (message_id, embedding, hash, embedded_at) VALUES (?, ?, ?, ?)`,
-		messageID, buf, hash, time.Now().Format(time.RFC3339),
+		`INSERT OR REPLACE INTO email_embeddings (message_id, source_id, account_id, local_id, embedding, hash, embedded_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		ref.MessageID, string(ref.SourceID), string(ref.AccountID), ref.LocalID, buf, hash, time.Now().Format(time.RFC3339),
 	)
 	return err
 }
@@ -2201,6 +2267,73 @@ func (c *Cache) GetUnembeddedIDs(folder string) ([]string, error) {
 	return ids, rows.Err()
 }
 
+// GetUnembeddedRefsWithBody returns scoped message refs in a folder that have
+// body_text cached but no embedding chunks. Ordered newest-first.
+func (c *Cache) GetUnembeddedRefsWithBody(folder string) ([]models.MessageRef, error) {
+	rows, err := c.db.Query(`
+		SELECT e.source_id, e.account_id, e.folder, COALESCE(e.uid, 0), COALESCE(e.uid_validity, 0), e.message_id, COALESCE(e.local_id, '')
+		FROM emails e
+		WHERE e.folder = ?
+		  AND e.body_text IS NOT NULL
+		  AND e.body_text != ''
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM email_embedding_chunks eec
+			WHERE eec.message_id = e.message_id
+			   OR (e.local_id != '' AND eec.local_id = e.local_id)
+		  )
+		ORDER BY e.date DESC`, folder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMessageRefs(rows)
+}
+
+// GetUncachedBodyRefs returns scoped message refs in a folder that have neither
+// body_text nor embedding chunks. Ordered newest-first.
+func (c *Cache) GetUncachedBodyRefs(folder string, limit int) ([]models.MessageRef, error) {
+	rows, err := c.db.Query(`
+		SELECT e.source_id, e.account_id, e.folder, COALESCE(e.uid, 0), COALESCE(e.uid_validity, 0), e.message_id, COALESCE(e.local_id, '')
+		FROM emails e
+		WHERE e.folder = ?
+		  AND (e.body_text IS NULL OR e.body_text = '')
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM email_embedding_chunks eec
+			WHERE eec.message_id = e.message_id
+			   OR (e.local_id != '' AND eec.local_id = e.local_id)
+		  )
+		ORDER BY e.date DESC
+		LIMIT ?`, folder, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMessageRefs(rows)
+}
+
+func scanMessageRefs(rows *sql.Rows) ([]models.MessageRef, error) {
+	var refs []models.MessageRef
+	for rows.Next() {
+		var sourceID, accountID, folder, messageID, localID string
+		var uid, uidValidity uint32
+		if err := rows.Scan(&sourceID, &accountID, &folder, &uid, &uidValidity, &messageID, &localID); err != nil {
+			return nil, err
+		}
+		refs = append(refs, models.MessageRef{
+			SourceID:    models.SourceID(sourceID),
+			AccountID:   models.AccountID(accountID),
+			Folder:      folder,
+			UID:         uid,
+			UIDValidity: uidValidity,
+			MessageID:   messageID,
+			LocalID:     localID,
+		}.WithDefaults())
+	}
+	return refs, rows.Err()
+}
+
 // SearchSemantic finds emails in a folder using cosine similarity against queryVec
 func (c *Cache) SearchSemantic(folder string, queryVec []float32, limit int, minScore float64) ([]*models.EmailData, error) {
 	embeddings, err := c.GetAllEmbeddings(folder)
@@ -2253,13 +2386,32 @@ func cosineSimilarity(a, b []float32) float64 {
 // StoreEmbeddingChunks replaces all existing chunks for messageID with the provided chunks.
 // Uses a transaction: deletes old chunks first, then inserts all new ones.
 func (c *Cache) StoreEmbeddingChunks(messageID string, chunks []models.EmbeddingChunk) error {
+	ref := models.MessageRef{MessageID: messageID}.WithDefaults()
+	if email, err := c.GetEmailByID(messageID); err == nil && email != nil {
+		ref = email.MessageRef()
+	}
+	return c.StoreEmbeddingChunksByRef(ref, chunks)
+}
+
+// StoreEmbeddingChunksByRef replaces all existing chunks for the scoped message.
+func (c *Cache) StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error {
+	ref = ref.WithDefaults()
+	if strings.TrimSpace(ref.MessageID) == "" && strings.TrimSpace(ref.LocalID) != "" {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			ref = parsed
+		}
+	}
 	tx, err := c.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if _, err := tx.Exec(`DELETE FROM email_embedding_chunks WHERE message_id = ?`, messageID); err != nil {
+	if strings.TrimSpace(ref.LocalID) != "" {
+		if _, err := tx.Exec(`DELETE FROM email_embedding_chunks WHERE local_id = ?`, ref.LocalID); err != nil {
+			return err
+		}
+	} else if _, err := tx.Exec(`DELETE FROM email_embedding_chunks WHERE message_id = ?`, ref.MessageID); err != nil {
 		return err
 	}
 	for _, chunk := range chunks {
@@ -2268,8 +2420,9 @@ func (c *Cache) StoreEmbeddingChunks(messageID string, chunks []models.Embedding
 			binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO email_embedding_chunks (message_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?)`,
-			messageID, chunk.ChunkIndex, buf, chunk.ContentHash, time.Now().Format(time.RFC3339),
+			`INSERT INTO email_embedding_chunks (message_id, source_id, account_id, local_id, chunk_index, embedding, content_hash, embedded_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			ref.MessageID, string(ref.SourceID), string(ref.AccountID), ref.LocalID, chunk.ChunkIndex, buf, chunk.ContentHash, time.Now().Format(time.RFC3339),
 		); err != nil {
 			return err
 		}
@@ -2280,55 +2433,29 @@ func (c *Cache) StoreEmbeddingChunks(messageID string, chunks []models.Embedding
 // GetUnembeddedIDsWithBody returns message IDs in a folder that have body_text cached
 // but have no rows in email_embedding_chunks. Ordered newest-first.
 func (c *Cache) GetUnembeddedIDsWithBody(folder string) ([]string, error) {
-	rows, err := c.db.Query(`
-		SELECT e.message_id
-		FROM emails e
-		LEFT JOIN email_embedding_chunks eec ON eec.message_id = e.message_id
-		WHERE e.folder = ?
-		  AND e.body_text IS NOT NULL
-		  AND e.body_text != ''
-		  AND eec.message_id IS NULL
-		ORDER BY e.date DESC`, folder)
+	refs, err := c.GetUnembeddedRefsWithBody(folder)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.MessageID)
 	}
-	return ids, rows.Err()
+	return ids, nil
 }
 
 // GetUncachedBodyIDs returns up to limit message IDs in a folder that have
 // neither body_text nor any embedding chunks. Ordered newest-first.
 func (c *Cache) GetUncachedBodyIDs(folder string, limit int) ([]string, error) {
-	rows, err := c.db.Query(`
-		SELECT e.message_id
-		FROM emails e
-		LEFT JOIN email_embedding_chunks eec ON eec.message_id = e.message_id
-		WHERE e.folder = ?
-		  AND (e.body_text IS NULL OR e.body_text = '')
-		  AND eec.message_id IS NULL
-		ORDER BY e.date DESC
-		LIMIT ?`, folder, limit)
+	refs, err := c.GetUncachedBodyRefs(folder, limit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.MessageID)
 	}
-	return ids, rows.Err()
+	return ids, nil
 }
 
 // GetEmbeddingProgress returns the number of emails with at least one embedding chunk
@@ -2351,9 +2478,12 @@ func (c *Cache) GetEmbeddingProgress(folder string) (done, total int, err error)
 // paired with their similarity scores.
 func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
 	rows, err := c.db.Query(`
-		SELECT eec.message_id, eec.embedding
+		SELECT COALESCE(NULLIF(e.local_id, ''), eec.message_id),
+		       eec.message_id,
+		       eec.embedding
 		FROM email_embedding_chunks eec
-		JOIN emails e ON e.message_id = eec.message_id
+		JOIN emails e ON (e.local_id != '' AND eec.local_id = e.local_id)
+		              OR e.message_id = eec.message_id
 		WHERE e.folder = ?`, folder)
 	if err != nil {
 		return nil, err
@@ -2361,10 +2491,11 @@ func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit i
 	defer rows.Close()
 
 	bestScore := make(map[string]float64)
+	messageIDByKey := make(map[string]string)
 	for rows.Next() {
-		var msgID string
+		var key, msgID string
 		var buf []byte
-		if err := rows.Scan(&msgID, &buf); err != nil {
+		if err := rows.Scan(&key, &msgID, &buf); err != nil {
 			return nil, err
 		}
 		if len(buf)%4 != 0 {
@@ -2376,8 +2507,9 @@ func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit i
 			chunkVec[i] = math.Float32frombits(binary.LittleEndian.Uint32(buf[i*4:]))
 		}
 		score := cosineSimilarity(queryVec, chunkVec)
-		if score > bestScore[msgID] {
-			bestScore[msgID] = score
+		if score > bestScore[key] {
+			bestScore[key] = score
+			messageIDByKey[key] = msgID
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -2385,13 +2517,14 @@ func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit i
 	}
 
 	type scored struct {
+		key       string
 		messageID string
 		score     float64
 	}
 	var candidates []scored
-	for msgID, score := range bestScore {
+	for key, score := range bestScore {
 		if score >= minScore {
-			candidates = append(candidates, scored{msgID, score})
+			candidates = append(candidates, scored{key: key, messageID: messageIDByKey[key], score: score})
 		}
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
@@ -2401,7 +2534,11 @@ func (c *Cache) SearchSemanticChunked(folder string, queryVec []float32, limit i
 
 	var results []*models.SemanticSearchResult
 	for _, r := range candidates {
-		email, err := c.GetEmailByID(r.messageID)
+		ref := models.MessageRef{MessageID: r.messageID}
+		if r.key != r.messageID {
+			ref.LocalID = r.key
+		}
+		email, err := c.GetEmailByRef(ref)
 		if err != nil {
 			logger.Debug("SearchSemanticChunked: GetEmailByID %s: %v", r.messageID, err)
 			continue

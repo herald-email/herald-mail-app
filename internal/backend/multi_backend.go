@@ -51,6 +51,14 @@ type AccountAwareBackend interface {
 	AccountStatuses() map[models.SourceID]AccountStatus
 }
 
+type scopedEmbeddingBackend interface {
+	GetUnembeddedRefsWithBody(folder string) ([]models.MessageRef, error)
+	GetUncachedBodyRefs(folder string, limit int) ([]models.MessageRef, error)
+	GetBodyTextByRef(ref models.MessageRef) (string, error)
+	FetchAndCacheBodyByRef(ref models.MessageRef) (*models.EmailBody, error)
+	StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error
+}
+
 type accountSlot struct {
 	info    AccountInfo
 	backend Backend
@@ -613,6 +621,91 @@ func (m *MultiBackend) SearchSemanticChunked(folder string, queryVec []float32, 
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func (m *MultiBackend) GetUnembeddedRefsWithBody(folder string) ([]models.MessageRef, error) {
+	return m.aggregateEmbeddingRefs(folder, func(scoped scopedEmbeddingBackend) ([]models.MessageRef, error) {
+		return scoped.GetUnembeddedRefsWithBody(folder)
+	}, func(legacy Backend) ([]string, error) {
+		return legacy.GetUnembeddedIDsWithBody(folder)
+	})
+}
+
+func (m *MultiBackend) GetUncachedBodyRefs(folder string, limit int) ([]models.MessageRef, error) {
+	return m.aggregateEmbeddingRefs(folder, func(scoped scopedEmbeddingBackend) ([]models.MessageRef, error) {
+		return scoped.GetUncachedBodyRefs(folder, limit)
+	}, func(legacy Backend) ([]string, error) {
+		return legacy.GetUncachedBodyIDs(folder, limit)
+	})
+}
+
+func (m *MultiBackend) aggregateEmbeddingRefs(folder string, scopedFn func(scopedEmbeddingBackend) ([]models.MessageRef, error), legacyFn func(Backend) ([]string, error)) ([]models.MessageRef, error) {
+	slots := m.snapshotSlots()
+	if !m.allAccountsActive() {
+		if slot := m.activeRealSlot(); slot != nil {
+			slots = []*accountSlot{slot}
+		}
+	}
+	var refs []models.MessageRef
+	for _, slot := range slots {
+		if scoped, ok := slot.backend.(scopedEmbeddingBackend); ok {
+			slotRefs, err := scopedFn(scoped)
+			if err != nil {
+				return refs, err
+			}
+			for _, ref := range slotRefs {
+				ref.SourceID = slot.info.SourceID
+				ref.AccountID = slot.info.AccountID
+				refs = append(refs, ref.WithDefaults())
+			}
+			continue
+		}
+		ids, err := legacyFn(slot.backend)
+		if err != nil {
+			return refs, err
+		}
+		for _, id := range ids {
+			email, err := slot.backend.GetEmailByID(id)
+			if err != nil || email == nil {
+				continue
+			}
+			refs = append(refs, emailForAccountSlot(slot, email).MessageRef())
+		}
+	}
+	return refs, nil
+}
+
+func (m *MultiBackend) GetBodyTextByRef(ref models.MessageRef) (string, error) {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return "", err
+	}
+	if scoped, ok := slot.backend.(scopedEmbeddingBackend); ok {
+		return scoped.GetBodyTextByRef(ref)
+	}
+	return slot.backend.GetBodyText(ref.MessageID)
+}
+
+func (m *MultiBackend) FetchAndCacheBodyByRef(ref models.MessageRef) (*models.EmailBody, error) {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if scoped, ok := slot.backend.(scopedEmbeddingBackend); ok {
+		return scoped.FetchAndCacheBodyByRef(ref)
+	}
+	return slot.backend.FetchAndCacheBody(ref.MessageID)
+}
+
+func (m *MultiBackend) StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	if scoped, ok := slot.backend.(scopedEmbeddingBackend); ok {
+		return scoped.StoreEmbeddingChunksByRef(ref, chunks)
+	}
+	return slot.backend.StoreEmbeddingChunks(ref.MessageID, chunks)
 }
 
 func (m *MultiBackend) GetEmailByRef(ref models.MessageRef) (*models.EmailData, error) {

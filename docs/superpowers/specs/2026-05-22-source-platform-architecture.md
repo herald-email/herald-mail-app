@@ -155,6 +155,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [x] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
 - [x] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
 - [x] `classifyCh` remains mail-only at first but stores results under scoped message identity.
+- [x] Background mail embedding uses scoped `MessageRef` store/query helpers and all-account source tagging while continuing to run through background AI priority.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
 - [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
@@ -168,6 +169,7 @@ The preferred long-term storage model is one profile database with source-scoped
 - [x] Initial migration adds nullable or defaulted `source_id`, `account_id`, and `local_id` columns while keeping legacy primary keys operational.
 - [ ] Later migration can move from `message_id` primary keys to scoped local IDs once all callers use refs.
 - [x] Calendar tables use source-scoped primary keys from the start.
+- [x] Email embedding rows and chunk rows carry source/account/local identity while legacy message-ID embedding APIs remain operational.
 - [ ] FTS and embedding tables include source/account scope before unified cross-source search ships.
 
 ## Config Direction

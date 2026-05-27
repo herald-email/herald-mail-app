@@ -16,6 +16,15 @@ import (
 
 var backgroundAIWarnings sync.Map
 
+type scopedEmbeddingBackend interface {
+	GetUnembeddedRefsWithBody(folder string) ([]models.MessageRef, error)
+	GetUncachedBodyRefs(folder string, limit int) ([]models.MessageRef, error)
+	GetEmailByRef(ref models.MessageRef) (*models.EmailData, error)
+	GetBodyTextByRef(ref models.MessageRef) (string, error)
+	FetchAndCacheBodyByRef(ref models.MessageRef) (*models.EmailBody, error)
+	StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error
+}
+
 func (m *Model) backgroundSemanticEnabled() bool {
 	return m != nil &&
 		!m.demoMode &&
@@ -156,7 +165,37 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 		}
 		notice := ""
 		// Pass 1: embed emails that already have body_text in cache
-		if ids, err := m.backend.GetUnembeddedIDsWithBody(folder); err == nil && len(ids) > 0 {
+		if scoped, ok := m.backend.(scopedEmbeddingBackend); ok {
+			if refs, err := scoped.GetUnembeddedRefsWithBody(folder); err == nil && len(refs) > 0 {
+				if len(refs) > 5 {
+					refs = refs[:5]
+				}
+				for _, ref := range refs {
+					email, err := scoped.GetEmailByRef(ref)
+					if err != nil || email == nil {
+						continue
+					}
+					bodyText, err := scoped.GetBodyTextByRef(ref)
+					if err != nil || bodyText == "" {
+						continue
+					}
+					chunks, embErr := embedChunksForEmail(email, bodyText, backgroundAI)
+					if len(chunks) > 0 {
+						if err := scoped.StoreEmbeddingChunksByRef(email.MessageRef(), chunks); err != nil {
+							logger.Warn("StoreEmbeddingChunksByRef %s: %v", email.MessageRef().LocalID, err)
+						}
+					} else if embErr != nil {
+						warnBackgroundAIOnce("runEmbeddingBatch: embeddings deferred or unavailable: %v", embErr)
+						if notice == "" && (ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred) {
+							notice = aiGuidanceNotice(embErr)
+						}
+						if ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred {
+							break
+						}
+					}
+				}
+			}
+		} else if ids, err := m.backend.GetUnembeddedIDsWithBody(folder); err == nil && len(ids) > 0 {
 			if len(ids) > 5 {
 				ids = ids[:5]
 			}
@@ -187,7 +226,34 @@ func (m *Model) runEmbeddingBatch(folder string, generation int64) tea.Cmd {
 		}
 
 		// Pass 2: lazily fetch bodies for emails with neither body_text nor chunks
-		if uncached, err := m.backend.GetUncachedBodyIDs(folder, 2); err == nil {
+		if scoped, ok := m.backend.(scopedEmbeddingBackend); ok {
+			if uncached, err := scoped.GetUncachedBodyRefs(folder, 2); err == nil {
+				for _, ref := range uncached {
+					email, err := scoped.GetEmailByRef(ref)
+					if err != nil || email == nil {
+						continue
+					}
+					body, err := scoped.FetchAndCacheBodyByRef(ref)
+					if err != nil || body == nil || body.TextPlain == "" {
+						continue
+					}
+					chunks, embErr := embedChunksForEmail(email, body.TextPlain, backgroundAI)
+					if len(chunks) > 0 {
+						if err := scoped.StoreEmbeddingChunksByRef(email.MessageRef(), chunks); err != nil {
+							logger.Warn("StoreEmbeddingChunksByRef (lazy) %s: %v", email.MessageRef().LocalID, err)
+						}
+					} else if embErr != nil {
+						warnBackgroundAIOnce("runEmbeddingBatch: lazy embeddings deferred or unavailable: %v", embErr)
+						if notice == "" && (ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred) {
+							notice = aiGuidanceNotice(embErr)
+						}
+						if ai.IsUnavailableError(embErr) || embErr == ai.ErrDeferred {
+							break
+						}
+					}
+				}
+			}
+		} else if uncached, err := m.backend.GetUncachedBodyIDs(folder, 2); err == nil {
 			for _, id := range uncached {
 				email, err := m.backend.GetEmailByID(id)
 				if err != nil || email == nil {

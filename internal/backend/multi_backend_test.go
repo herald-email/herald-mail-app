@@ -30,6 +30,8 @@ type recordingAccountBackend struct {
 	draftDeletes        []string
 	draftSends          []string
 	getMessageRefs      []models.MessageRef
+	embeddingRefs       []models.MessageRef
+	storedEmbeddingRefs []models.MessageRef
 	calendarEvents      []models.CalendarEvent
 	calendarSearch      []string
 	savedCalendarEvents []models.CalendarEvent
@@ -105,6 +107,29 @@ func (b *recordingAccountBackend) SearchEmails(folder, query string, bodySearch 
 		}
 	}
 	return out, nil
+}
+
+func (b *recordingAccountBackend) GetUnembeddedRefsWithBody(string) ([]models.MessageRef, error) {
+	out := make([]models.MessageRef, len(b.embeddingRefs))
+	copy(out, b.embeddingRefs)
+	return out, nil
+}
+
+func (b *recordingAccountBackend) GetUncachedBodyRefs(string, int) ([]models.MessageRef, error) {
+	return nil, nil
+}
+
+func (b *recordingAccountBackend) GetBodyTextByRef(models.MessageRef) (string, error) {
+	return "body", nil
+}
+
+func (b *recordingAccountBackend) FetchAndCacheBodyByRef(models.MessageRef) (*models.EmailBody, error) {
+	return nil, nil
+}
+
+func (b *recordingAccountBackend) StoreEmbeddingChunksByRef(ref models.MessageRef, _ []models.EmbeddingChunk) error {
+	b.storedEmbeddingRefs = append(b.storedEmbeddingRefs, ref)
+	return nil
 }
 
 func (b *recordingAccountBackend) DeleteEmail(messageID, folder string) error {
@@ -578,5 +603,46 @@ func TestMultiBackendCloseClosesAllAccountBackends(t *testing.T) {
 	}
 	if !work.closed || !personal.closed {
 		t.Fatalf("Close did not close all accounts: work=%v personal=%v", work.closed, personal.closed)
+	}
+}
+
+func TestMultiBackendAggregatesScopedEmbeddingRefsAcrossAllAccounts(t *testing.T) {
+	workRef := models.MessageRef{SourceID: "work-mail", AccountID: "work", Folder: "INBOX", MessageID: "work-embed"}.WithDefaults()
+	personalRef := models.MessageRef{SourceID: "personal-mail", AccountID: "personal", Folder: "INBOX", MessageID: "personal-embed"}.WithDefaults()
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	work.embeddingRefs = []models.MessageRef{workRef}
+	personal.embeddingRefs = []models.MessageRef{personalRef}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	refs, err := mb.GetUnembeddedRefsWithBody("INBOX")
+	if err != nil {
+		t.Fatalf("GetUnembeddedRefsWithBody: %v", err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("refs len = %d, want 2: %#v", len(refs), refs)
+	}
+	if refs[0].SourceID != "work-mail" || refs[1].SourceID != "personal-mail" {
+		t.Fatalf("refs not tagged by source: %#v", refs)
+	}
+
+	if err := mb.StoreEmbeddingChunksByRef(personalRef, []models.EmbeddingChunk{{ChunkIndex: 0, Embedding: []float32{1}}}); err != nil {
+		t.Fatalf("StoreEmbeddingChunksByRef: %v", err)
+	}
+	if len(personal.storedEmbeddingRefs) != 1 || personal.storedEmbeddingRefs[0].LocalID != personalRef.LocalID {
+		t.Fatalf("personal stored refs = %#v, want %s", personal.storedEmbeddingRefs, personalRef.LocalID)
+	}
+	if len(work.storedEmbeddingRefs) != 0 {
+		t.Fatalf("work stored refs = %#v, want none", work.storedEmbeddingRefs)
 	}
 }
