@@ -636,6 +636,19 @@ func (m *MultiBackend) GetEmailByRef(ref models.MessageRef) (*models.EmailData, 
 	return emailForAccountSlot(slot, email), nil
 }
 
+func (m *MultiBackend) SetClassificationByRef(ref models.MessageRef, category string) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	if scoped, ok := slot.backend.(interface {
+		SetClassificationByRef(models.MessageRef, string) error
+	}); ok {
+		return scoped.SetClassificationByRef(ref, category)
+	}
+	return slot.backend.SetClassification(ref.MessageID, category)
+}
+
 func (m *MultiBackend) GetMessage(ctx context.Context, ref models.MessageRef) (MessageReadResult, error) {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

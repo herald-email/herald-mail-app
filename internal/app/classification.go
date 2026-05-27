@@ -33,12 +33,14 @@ func (m *Model) startClassification() tea.Cmd {
 				logger.Warn("Classification failed for %s: %v", id, err)
 				continue
 			}
-			_ = m.backend.SetClassification(id, cat)
+			ref := email.MessageRef()
+			setClassification(m.backend, ref, id, cat)
 			ch <- ClassifyProgressMsg{
-				MessageID: id,
-				Category:  cat,
-				Done:      i + 1,
-				Total:     total,
+				MessageRef: ref,
+				MessageID:  id,
+				Category:   cat,
+				Done:       i + 1,
+				Total:      total,
 			}
 		}
 		return ClassifyDoneMsg{}
@@ -61,6 +63,7 @@ func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
 	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityUserAction), ai.TaskKindClassification) // snapshot before goroutine
 	b := m.backend
 	messageID := email.MessageID
+	ref := email.MessageRef()
 	sender := email.Sender
 	subject := email.Subject
 	return func() tea.Msg {
@@ -69,12 +72,12 @@ func (m *Model) reclassifyEmailCmd(email *models.EmailData) tea.Cmd {
 		}
 		cat, err := classifier.Classify(sender, subject)
 		if err != nil {
-			return ReclassifyResultMsg{MessageID: messageID, Err: err}
+			return ReclassifyResultMsg{MessageRef: ref, MessageID: messageID, Err: err}
 		}
-		if setErr := b.SetClassification(messageID, cat); setErr != nil {
-			return ReclassifyResultMsg{MessageID: messageID, Err: setErr}
+		if setErr := setClassification(b, ref, messageID, cat); setErr != nil {
+			return ReclassifyResultMsg{MessageRef: ref, MessageID: messageID, Err: setErr}
 		}
-		return ReclassifyResultMsg{MessageID: messageID, Category: cat}
+		return ReclassifyResultMsg{MessageRef: ref, MessageID: messageID, Category: cat}
 	}
 }
 
@@ -86,19 +89,70 @@ func (m *Model) autoClassifyEmailCmd(email *models.EmailData) tea.Cmd {
 	classifier := ai.WithTaskKind(ai.WithPriority(m.classifier, ai.PriorityBackground), ai.TaskKindClassification) // snapshot
 	b := m.backend
 	messageID := email.MessageID
+	ref := email.MessageRef()
 	sender := email.Sender
 	subject := email.Subject
 	return func() tea.Msg {
 		if classifier == nil {
-			return AutoClassifyResultMsg{MessageID: messageID, Err: errors.New("no AI classifier configured")}
+			return AutoClassifyResultMsg{MessageRef: ref, MessageID: messageID, Err: errors.New("no AI classifier configured")}
 		}
 		cat, err := classifier.Classify(sender, subject)
 		if err != nil {
-			return AutoClassifyResultMsg{MessageID: messageID, Err: err}
+			return AutoClassifyResultMsg{MessageRef: ref, MessageID: messageID, Err: err}
 		}
-		_ = b.SetClassification(messageID, cat)
-		return AutoClassifyResultMsg{MessageID: messageID, Category: string(cat)}
+		_ = setClassification(b, ref, messageID, cat)
+		return AutoClassifyResultMsg{MessageRef: ref, MessageID: messageID, Category: string(cat)}
 	}
+}
+
+func setClassification(b interface {
+	SetClassification(string, string) error
+}, ref models.MessageRef, messageID, category string) error {
+	if scoped, ok := b.(interface {
+		SetClassificationByRef(models.MessageRef, string) error
+	}); ok && (ref.MessageID != "" || ref.LocalID != "") {
+		return scoped.SetClassificationByRef(ref, category)
+	}
+	return b.SetClassification(messageID, category)
+}
+
+func classificationKeys(ref models.MessageRef, messageID string) []string {
+	if ref.MessageID == "" {
+		ref.MessageID = messageID
+	}
+	if ref.MessageID != "" || ref.LocalID != "" {
+		ref = ref.WithDefaults()
+	}
+	keys := make([]string, 0, 2)
+	if ref.LocalID != "" {
+		keys = append(keys, ref.LocalID)
+	}
+	if ref.MessageID != "" && ref.MessageID != ref.LocalID {
+		keys = append(keys, ref.MessageID)
+	}
+	return keys
+}
+
+func (m *Model) setClassificationKeys(ref models.MessageRef, messageID, category string) {
+	if m.classifications == nil {
+		m.classifications = make(map[string]string)
+	}
+	for _, key := range classificationKeys(ref, messageID) {
+		m.classifications[key] = category
+	}
+}
+
+func (m *Model) classificationForEmail(email *models.EmailData) string {
+	if m.classifications == nil || email == nil {
+		return ""
+	}
+	ref := email.MessageRef()
+	if ref.LocalID != "" {
+		if category := m.classifications[ref.LocalID]; category != "" {
+			return category
+		}
+	}
+	return m.classifications[email.MessageID]
 }
 
 // listenForClassification waits for the next classification result.

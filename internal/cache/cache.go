@@ -100,6 +100,16 @@ func (c *Cache) initDB() error {
 	if _, err := c.db.Exec(classQuery); err != nil {
 		return err
 	}
+	for _, stmt := range []string{
+		`ALTER TABLE email_classifications ADD COLUMN source_id TEXT NOT NULL DEFAULT 'default-mail'`,
+		`ALTER TABLE email_classifications ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
+		`ALTER TABLE email_classifications ADD COLUMN local_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_email_classifications_scope ON email_classifications(source_id, account_id, local_id)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity classification migration might already be applied: %v", err)
+		}
+	}
 
 	// body_text column for FTS search (added lazily — ignore error if already exists)
 	if _, err := c.db.Exec(`ALTER TABLE emails ADD COLUMN body_text TEXT`); err != nil {
@@ -702,9 +712,21 @@ func (c *Cache) DeleteEmailsByMessageIDs(folder string, messageIDs []string) err
 
 // SetClassification stores or updates an AI classification for a message
 func (c *Cache) SetClassification(messageID, category string) error {
+	return c.SetClassificationByRef(models.MessageRef{MessageID: messageID}, category)
+}
+
+// SetClassificationByRef stores or updates an AI classification with scoped identity.
+func (c *Cache) SetClassificationByRef(ref models.MessageRef, category string) error {
+	if strings.TrimSpace(ref.MessageID) == "" && strings.TrimSpace(ref.LocalID) != "" {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			ref = parsed
+		}
+	}
+	ref = ref.WithDefaults()
 	_, err := c.db.Exec(
-		`INSERT OR REPLACE INTO email_classifications (message_id, category, classified_at) VALUES (?, ?, ?)`,
-		messageID, category, time.Now().Format(time.RFC3339),
+		`INSERT OR REPLACE INTO email_classifications (message_id, source_id, account_id, local_id, category, classified_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		ref.MessageID, string(ref.SourceID), string(ref.AccountID), ref.LocalID, category, time.Now().Format(time.RFC3339),
 	)
 	return err
 }
@@ -712,7 +734,7 @@ func (c *Cache) SetClassification(messageID, category string) error {
 // GetClassifications returns a map of message_id → category for a folder
 func (c *Cache) GetClassifications(folder string) (map[string]string, error) {
 	rows, err := c.db.Query(`
-		SELECT ec.message_id, ec.category
+		SELECT ec.message_id, COALESCE(ec.local_id, ''), ec.category
 		FROM email_classifications ec
 		JOIN emails e ON e.message_id = ec.message_id
 		WHERE e.folder = ?`, folder)
@@ -723,11 +745,14 @@ func (c *Cache) GetClassifications(folder string) (map[string]string, error) {
 
 	result := make(map[string]string)
 	for rows.Next() {
-		var id, cat string
-		if err := rows.Scan(&id, &cat); err != nil {
+		var id, localID, cat string
+		if err := rows.Scan(&id, &localID, &cat); err != nil {
 			return nil, err
 		}
 		result[id] = cat
+		if strings.TrimSpace(localID) != "" {
+			result[localID] = cat
+		}
 	}
 	return result, rows.Err()
 }

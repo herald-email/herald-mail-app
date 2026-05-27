@@ -865,9 +865,7 @@ func (m *Model) updateTimelineTable() {
 		}
 		sender := unreadDot + starDot + senderPrefix + styledSenderWithTheme(m.theme, email.Sender, senderAvail)
 		tag := ""
-		if m.classifications != nil {
-			tag = m.classifications[email.MessageID]
-		}
+		tag = m.classificationForEmail(email)
 		row := table.Row{
 			m.timelineSelectionMark([]*models.EmailData{email}),
 		}
@@ -918,9 +916,7 @@ func (m *Model) updateTimelineTable() {
 				}
 			}
 			tag := ""
-			if m.classifications != nil {
-				tag = m.classifications[newest.MessageID]
-			}
+			tag = m.classificationForEmail(newest)
 			threadSubj := timelineSubjectText(fmt.Sprintf("[%d] %s", len(g.emails), sanitizeText(newest.Subject)), anyAtt)
 			if drafts := threadDraftCount(g.emails); drafts > 0 {
 				threadSubj = draftLabel(drafts) + " " + threadSubj
@@ -2473,9 +2469,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var cmds []tea.Cmd
 		cmds = append(cmds, m.listenForNewEmails())
 		for _, email := range msg.Emails {
-			if m.classifier != nil && m.classifications[email.MessageID] == "" {
+			if m.classifier != nil && m.classificationForEmail(email) == "" {
 				cmds = append(cmds, m.autoClassifyEmailCmd(email))
-			} else if cat := m.classifications[email.MessageID]; cat != "" {
+			} else if cat := m.classificationForEmail(email); cat != "" {
 				select {
 				case m.ruleRequestCh <- models.NewMailAutomationEvent(email, cat):
 				default:

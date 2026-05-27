@@ -1242,14 +1242,15 @@ func (s *Server) handleClassifyFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Count total emails in folder to compute skipped
-	allClassifications, err := s.cache.GetClassifications(req.Folder)
+	// Count folder emails directly. GetClassifications may include both legacy
+	// message IDs and scoped local IDs for the same row.
+	allEmails, err := s.cache.GetEmailsSortedByDate(req.Folder)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	skipped := len(allClassifications)
-	total := len(ids) + skipped
+	total := len(allEmails)
+	skipped := total - len(ids)
 
 	classified := 0
 	for _, msgID := range ids {

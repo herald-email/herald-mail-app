@@ -154,7 +154,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [x] `latestWinsLoadCoordinator` migrates first into a reusable `internal/work` policy for active collection sync.
 - [x] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
 - [x] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
-- [ ] `classifyCh` remains mail-only at first but stores results under scoped message identity.
+- [x] `classifyCh` remains mail-only at first but stores results under scoped message identity.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
 - [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.

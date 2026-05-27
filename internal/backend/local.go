@@ -626,6 +626,10 @@ func (b *LocalBackend) SetClassification(messageID, category string) error {
 	return b.cache.SetClassification(messageID, category)
 }
 
+func (b *LocalBackend) SetClassificationByRef(ref models.MessageRef, category string) error {
+	return b.cache.SetClassificationByRef(ref, category)
+}
+
 func (b *LocalBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
 	ids, err := b.cache.GetUnclassifiedIDs(folder)
 	if err != nil {

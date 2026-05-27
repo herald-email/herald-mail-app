@@ -147,10 +147,11 @@ type ComposeStatusMsg struct {
 
 // ClassifyProgressMsg carries a single classification result
 type ClassifyProgressMsg struct {
-	MessageID string
-	Category  string
-	Done      int
-	Total     int
+	MessageRef models.MessageRef
+	MessageID  string
+	Category   string
+	Done       int
+	Total      int
 }
 
 // ClassifyDoneMsg signals classification is complete
@@ -158,9 +159,10 @@ type ClassifyDoneMsg struct{}
 
 // ReclassifyResultMsg carries the result of re-classifying a single email.
 type ReclassifyResultMsg struct {
-	MessageID string
-	Category  string
-	Err       error
+	MessageRef models.MessageRef
+	MessageID  string
+	Category   string
+	Err        error
 }
 
 // ValidIDsMsg is sent when background reconciliation has determined the live
@@ -338,9 +340,10 @@ type RuleResultMsg struct{ Result models.RuleResult }
 
 // AutoClassifyResultMsg carries the result of auto-classifying a newly arrived email.
 type AutoClassifyResultMsg struct {
-	MessageID string
-	Category  string
-	Err       error
+	MessageRef models.MessageRef
+	MessageID  string
+	Category   string
+	Err        error
 }
 
 // SoftUnsubResultMsg carries the result of a Hide Future Mail request.
@@ -2126,15 +2129,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ClassifyProgressMsg:
 		m.classifyDone = msg.Done
 		m.classifyTotal = msg.Total
-		if m.classifications == nil {
-			m.classifications = make(map[string]string)
-		}
-		m.classifications[msg.MessageID] = msg.Category
+		m.setClassificationKeys(msg.MessageRef, msg.MessageID, msg.Category)
 		// Refresh tables to show updated tags
 		m.updateTimelineTable()
 		// Push newly classified email to rule engine (non-blocking)
 		for _, e := range m.timeline.emails {
-			if e.MessageID == msg.MessageID {
+			if e.MessageID == msg.MessageID || e.MessageRef().LocalID == msg.MessageRef.LocalID {
 				select {
 				case m.ruleRequestCh <- models.NewMailAutomationEvent(e, msg.Category):
 				default:
@@ -2155,10 +2155,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Reclassify failed: " + msg.Err.Error()
 			return m, nil
 		}
-		if m.classifications == nil {
-			m.classifications = make(map[string]string)
-		}
-		m.classifications[msg.MessageID] = msg.Category
+		m.setClassificationKeys(msg.MessageRef, msg.MessageID, msg.Category)
 		m.statusMessage = "Reclassified: " + msg.Category
 		m.updateTimelineTable()
 		return m, nil
@@ -2563,17 +2560,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AutoClassifyResultMsg:
 		if msg.Err == nil {
-			if m.classifications == nil {
-				m.classifications = make(map[string]string)
-			}
-			m.classifications[msg.MessageID] = msg.Category
+			m.setClassificationKeys(msg.MessageRef, msg.MessageID, msg.Category)
 			m.updateTimelineTable()
 		}
 		// Send to rule engine regardless; use empty category on error so rules
 		// that don't require a category can still fire.
 		cat := msg.Category
 		for _, e := range m.timeline.emails {
-			if e.MessageID == msg.MessageID {
+			if e.MessageID == msg.MessageID || e.MessageRef().LocalID == msg.MessageRef.LocalID {
 				select {
 				case m.ruleRequestCh <- models.NewMailAutomationEvent(e, cat):
 				default:

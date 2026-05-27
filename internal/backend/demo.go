@@ -540,6 +540,18 @@ func (d *DemoBackend) SetClassification(messageID, category string) error {
 	return nil
 }
 
+func (d *DemoBackend) SetClassificationByRef(ref models.MessageRef, category string) error {
+	ref = ref.WithDefaults()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.classifications[ref.MessageID] = category
+	if ref.LocalID != "" {
+		d.classifications[ref.LocalID] = category
+	}
+	return nil
+}
+
 // GetUnclassifiedIDs returns message IDs without a classification.
 func (d *DemoBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
 	d.mu.Lock()
