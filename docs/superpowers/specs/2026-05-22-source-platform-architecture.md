@@ -243,6 +243,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 7G: Add cross-source search over mail plus events.
   - [x] Phase 7H: Add a read-only Calendar Meeting Prep view that uses cached cross-source context for related mail and nearby events.
   - [x] Phase 7I: Add a read-only Calendar Travel Buffer view that uses cached cross-source context for travel-related mail, nearby event gaps, and buffer suggestions.
+  - [x] Phase 7J: Add a read-only Calendar AI Summary view that uses cached cross-source context plus the configured AI client when available, with deterministic fallback and no provider fetches or mutations.
   - [x] Add source-aware automation lanes for mail and calendar events.
   - [x] Add a local/cache-backed Calendar Event Edit form with timezone preview and explicit save/cancel state.
   - [x] Add provider-backed Calendar Event Edit save-through with explicit provider failure and cache update semantics.

@@ -19,6 +19,8 @@ type calendarAgendaStubBackend struct {
 	meetingPrepCalls []models.EventRef
 	travelBuffer     *models.CalendarTravelBuffer
 	travelCalls      []models.EventRef
+	aiSummary        *models.CalendarAISummary
+	aiSummaryCalls   []models.EventRef
 	getCalls         int
 	searchCalls      []string
 	crossSearchCalls []string
@@ -132,6 +134,17 @@ func (b *calendarAgendaStubBackend) BuildCalendarTravelBuffer(event models.Calen
 		return buffer, nil
 	}
 	return models.CalendarTravelBuffer{Event: event, QueryTerms: models.CalendarTravelBufferQueries(event)}, nil
+}
+
+func (b *calendarAgendaStubBackend) BuildCalendarAISummary(event models.CalendarEvent) (models.CalendarAISummary, error) {
+	event.Ref = event.Ref.WithDefaults()
+	b.aiSummaryCalls = append(b.aiSummaryCalls, event.Ref)
+	if b.aiSummary != nil {
+		summary := *b.aiSummary
+		summary.Event.Ref = summary.Event.Ref.WithDefaults()
+		return summary, nil
+	}
+	return models.CalendarAISummary{Event: event, QueryTerms: models.CalendarAISummaryQueries(event)}, nil
 }
 
 func (b *calendarAgendaStubBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
@@ -760,6 +773,163 @@ func TestCalendarTravelBufferShortcutDoesNotStealTextEntry(t *testing.T) {
 		m = model.(*Model)
 		if got := m.promptEditor.name; got != "b" {
 			t.Fatalf("prompt editor name=%q, want literal b", got)
+		}
+	})
+}
+
+func TestCalendarAISummaryOpensFromDetailWithCachedContext(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	event := richCalendarEventForTest()
+	event.Title = "Launch planning"
+	event.Description = "Discuss the product launch plan."
+	event.Start = start
+	event.End = start.Add(time.Hour)
+	event.ProviderUID = "provider-secret"
+	event.Ref.ETag = `"provider-etag"`
+	event.Raw = `{"syncToken":"secret"}`
+	mail := &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "mail-planning",
+		UID:       42,
+		Folder:    "INBOX",
+		Sender:    "mina@example.com",
+		Subject:   "Launch planning risks",
+		Date:      start.Add(-time.Hour),
+	}
+	nearby := event
+	nearby.Title = "Launch retro"
+	nearby.Ref.EventID = "launch-retro"
+	nearby.Ref.LocalID = ""
+	nearby.Ref = nearby.Ref.WithDefaults()
+	nearby.Start = start.Add(2 * time.Hour)
+	nearby.End = nearby.Start.Add(time.Hour)
+	summary := &models.CalendarAISummary{
+		Event:        event,
+		QueryTerms:   []string{"Launch planning", "mina@example.com"},
+		RelatedMail:  []*models.EmailData{mail},
+		NearbyEvents: []models.CalendarEvent{nearby},
+		Bullets: []string{
+			"Mina flagged launch risk in cached mail.",
+			"Launch retro follows this event.",
+		},
+		ActionItems: []string{"Review Launch planning risks before the event."},
+		GeneratedBy: models.CalendarAISummaryGeneratedByAI,
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event, nearby}, aiSummary: summary}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &event
+	m.calendarDetailOpen = true
+
+	model, cmd := m.handleKeyMsg(keyRunes("s"))
+	m = model.(*Model)
+	if !m.calendarAISummaryOpen || !m.calendarAISummaryLoading {
+		t.Fatalf("AI summary state open=%v loading=%v, want open loading", m.calendarAISummaryOpen, m.calendarAISummaryLoading)
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.aiSummaryCalls) != 1 || b.aiSummaryCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
+		t.Fatalf("AI summary calls = %#v, want selected event ref", b.aiSummaryCalls)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"AI Summary",
+		"read-only cached AI summary",
+		"Launch planning",
+		"Summary Bullets",
+		"Mina flagged launch risk",
+		"Action Items",
+		"Review Launch planning risks",
+		"Related Sources",
+		"1 cached mail",
+		"1 nearby event",
+		"Query Terms",
+		"mina@example.com",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("AI summary missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("AI summary leaked or advertised %q:\n%s", forbidden, rendered)
+		}
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarAISummaryOpen {
+		t.Fatal("expected Esc to close AI summary")
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Esc from AI summary to return to Event Detail")
+	}
+}
+
+func TestCalendarAISummaryShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("s"))
+		m = model.(*Model)
+		if got := m.composeBody.Value(); got != "s" {
+			t.Fatalf("compose body=%q, want literal s", got)
+		}
+	})
+
+	t.Run("calendar search", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarEvents = b.events
+		m.openCalendarSearch()
+
+		model, cmd := m.handleKeyMsg(keyRunes("s"))
+		m = model.(*Model)
+		for _, msg := range calendarImmediateMessagesForTest(cmd) {
+			model, _ = m.Update(msg)
+			m = model.(*Model)
+		}
+		if m.calendarSearchQuery != "s" {
+			t.Fatalf("calendar search query=%q, want literal s", m.calendarSearchQuery)
+		}
+		if m.calendarAISummaryOpen {
+			t.Fatal("AI summary should not open while typing in calendar search")
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("s"))
+		m = model.(*Model)
+		if got := m.promptEditor.name; got != "s" {
+			t.Fatalf("prompt editor name=%q, want literal s", got)
 		}
 	})
 }

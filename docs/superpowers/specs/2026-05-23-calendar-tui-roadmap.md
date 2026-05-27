@@ -89,18 +89,19 @@ The roadmap should evolve from useful read-only surfaces toward confident event 
   - [x] Stage 3B: Add Week Time-Grid after Day view resize behavior and event selection are proven.
 - [x] Stage 4: 3-Day Command view. Introduce the more distinctive planning surface once Day and Week data are reliable and conflict/open-slot summaries have a real backing model.
 - [x] Stage 4A: Calendar Search foundation. Add read-only cache-backed event search across title, notes, location, organizer, attendee, recurrence, attachment, and source labels before mutation UI.
-- [ ] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
+- [x] Stage 5: Event editing with timezone safety. Add create/edit flows only after read-only detail, recurrence display, attendee display, and timezone rendering are trustworthy.
   - [x] Stage 5A: Prove full read-only Event Detail with attendees, organizer, RSVP state, recurrence, attachments, canonical timezone, and alternate timezone rendering before mutation UI.
   - [x] Stage 5B: Add a local/cache-backed Event Edit form with explicit save/cancel state and timezone preview before live provider mutation writes.
-- [ ] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
+- [x] Stage 6: Provider mutations and RSVP. Enable live updates, RSVP changes, recurrence edits, and provider-specific conflict handling after the local edit model is stable.
   - [x] Stage 6A: Add provider-backed Event Edit save-through and RSVP response changes with cache update after provider success, explicit failure state, and `this event` recurrence scope only.
   - [x] Stage 6B: Add typed provider conflict handling and explicit recurrence-scope validation so stale revisions and unsupported broader recurrence edits never rewrite cached event rows.
   - [x] Stage 6C: Add selected attendee-list and this-event recurrence-rule edits to Event Edit while reminders and broader recurrence-scope edits stay deferred.
   - [x] Stage 6D: Add selected reminder override edits to Event Edit while create-event flows and broader recurrence-scope edits stay deferred.
-- [ ] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
+- [x] Stage 7: Cross-source command center. Blend mail and calendar context: meeting prep from related emails, travel buffers from messages, and AI summaries over calendar plus inbox.
   - [x] Stage 7A: Add read-only Cross-Source Search over cached mail and calendar event rows before command-center summaries or mutations.
   - [x] Stage 7B: Add read-only Meeting Prep from Calendar Event Detail using related cached mail and nearby cached events before travel buffers or AI summaries.
   - [x] Stage 7C: Add read-only Travel Buffer from Calendar Event Detail using cached travel-related mail and nearby event gaps before AI summaries or automatic calendar mutations.
+  - [x] Stage 7D: Add read-only AI Summary from Calendar Event Detail using cached related mail and nearby events, with no provider fetches or automatic calendar mutations.
 
 ## Stage Gates
 
@@ -113,7 +114,7 @@ These gates define what must be true before moving from one evolutionary stage t
 - [x] A calendar search stage is acceptable only when results are cache-backed, source-scoped, detail-preserving, and free of provider internals.
 - [x] A timezone edit stage is acceptable only when event edit views render at least local time, event timezone, and one alternate timezone without ambiguity.
 - [x] A mutation stage is acceptable only when unsaved changes, save success, provider failure, recurrence scope, and timezone shifts are explicit to the user.
-- [ ] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
+- [x] A provider stage is acceptable only when cache-first behavior, stale-result protection, and source/account identity are already boring.
 - [x] A cross-source stage is acceptable only when calendar work does not degrade core mail timeline, compose, cleanup, contact, SSH, or MCP behavior.
 
 ## Product Dependencies
@@ -158,4 +159,4 @@ These are the product choices to make before the next planning pass. They should
 - [x] Decide whether Google Calendar, CalDAV, or demo-only data should be the first provider-backed surface.
 - [x] Decide how calendar keybindings coexist with Timeline, Compose, Cleanup, Contacts, chat, folders, and settings.
 - [ ] Decide how much recurrence editing belongs in the first mutation stage.
-- [ ] Decide whether meeting-prep features should live in Calendar, AI Chat, or a later unified command view.
+- [x] Decide whether meeting-prep features should live in Calendar, AI Chat, or a later unified command view.

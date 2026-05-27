@@ -1876,6 +1876,29 @@ This case covers the next read-only command-center slice after Meeting Prep. It 
 - Literal `b` typed in Compose, search prompts, and editor-like text fields remains text instead of firing Travel Buffer.
 - At `50x15`, the minimum-size guard appears instead of clipped Travel Buffer chrome, and resizing larger restores the buffer state cleanly.
 
+### TC-38R — Calendar AI Summary command-center foundation
+
+This case covers the final read-only command-center slice after Travel Buffer. It proves Event Detail can open an AI Summary view that blends selected-event context with cached related mail and nearby cached events without direct provider reads or calendar mutations.
+
+**Lane:** A, B when mail and calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic fixture with a calendar event, cached related mail, and nearby cached events.
+2. Press `3` or `F4` to open Calendar, then press `Enter` for Event Detail.
+3. Press `s` to open AI Summary and capture the view.
+4. Confirm the view lists the selected event, summary bullets, action items, source counts, and the visible query terms used for matching.
+5. Press `Esc` and confirm Herald returns to Event Detail without losing the selected event.
+6. Type literal `s` in Compose, Calendar Search, and editor-like prompts and confirm it stays text.
+
+**Expect:**
+- AI Summary is read-only and cache-backed; it may use the configured AI client to summarize cached context, but it does not directly call IMAP, Google Calendar, or CalDAV providers.
+- When AI is unavailable or errors, the deterministic cached fallback still renders bounded summary bullets instead of leaving the view blank.
+- Summary bullets and action items reference cached mail/event context without exposing provider UIDs, raw event IDs, CalDAV URLs, sync tokens, raw ETags, OAuth details, or mutation controls.
+- `Esc` returns to Event Detail, and `r` refreshes AI Summary context for the same selected event.
+- Literal `s` typed in Compose, search prompts, and editor-like text fields remains text instead of firing AI Summary.
+- At `50x15`, the minimum-size guard appears instead of clipped AI Summary chrome, and resizing larger restores the summary state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

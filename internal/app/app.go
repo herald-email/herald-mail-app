@@ -93,6 +93,14 @@ type CalendarTravelBufferMsg struct {
 	Err    error
 }
 
+// CalendarAISummaryMsg carries read-only cached AI summary context for the
+// selected calendar event.
+type CalendarAISummaryMsg struct {
+	Ref     models.EventRef
+	Summary models.CalendarAISummary
+	Err     error
+}
+
 // CalendarEventDetailMsg carries a selected read-only event detail.
 type CalendarEventDetailMsg struct {
 	Ref   models.EventRef
@@ -732,6 +740,9 @@ type Model struct {
 	calendarTravelBufferOpen    bool
 	calendarTravelBufferLoading bool
 	calendarTravelBuffer        *models.CalendarTravelBuffer
+	calendarAISummaryOpen       bool
+	calendarAISummaryLoading    bool
+	calendarAISummary           *models.CalendarAISummary
 	calendarEdit                calendarEventEditState
 	calendarStatus              string
 
@@ -2002,6 +2013,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarTravelBufferOpen = true
 		m.calendarDetailOpen = false
 		m.calendarStatus = fmt.Sprintf("Travel buffer found %d cached mail, %d nearby event(s), and %d suggestion(s)", len(buffer.RelatedMail), len(buffer.NearbyEvents), len(buffer.Recommendations))
+		return m, nil
+
+	case CalendarAISummaryMsg:
+		selected := m.calendarDetail
+		if selected == nil {
+			selected = m.selectedCalendarEvent()
+		}
+		if selected == nil || selected.Ref.WithDefaults().LocalID != msg.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		m.calendarAISummaryLoading = false
+		if msg.Err != nil {
+			m.calendarAISummary = nil
+			m.calendarStatus = "AI summary failed: " + msg.Err.Error()
+			return m, nil
+		}
+		summary := msg.Summary
+		summary.Event.Ref = summary.Event.Ref.WithDefaults()
+		m.calendarAISummary = &summary
+		m.calendarAISummaryOpen = true
+		m.calendarDetailOpen = false
+		m.calendarStatus = fmt.Sprintf("AI summary used %d cached mail and %d nearby event(s)", len(summary.RelatedMail), len(summary.NearbyEvents))
 		return m, nil
 
 	case CalendarEventDetailMsg:

@@ -539,6 +539,8 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "esc: event detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only cached")
 		} else if m.calendarTravelBufferOpen {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "esc: event detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only cached")
+		} else if m.calendarAISummaryOpen {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "esc: event detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only cached")
 		} else if m.calendarDetailOpen {
 			backLabel := "esc: agenda"
 			if m.calendarView == calendarViewDay {
@@ -550,7 +552,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			} else if m.calendarView == calendarViewSearch {
 				backLabel = "esc: search"
 			}
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "p: prep", "b: buffer", "e: edit", "v: RSVP", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "p: prep", "b: buffer", "s: summary", "e: edit", "v: RSVP", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarView == calendarViewSearch {
 			query := strings.TrimSpace(m.calendarSearchQuery)
 			if query == "" {
