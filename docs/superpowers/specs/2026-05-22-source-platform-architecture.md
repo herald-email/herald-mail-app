@@ -158,7 +158,7 @@ Existing background lanes should migrate gradually. Each lane keeps the semantic
 - [x] Background mail embedding uses scoped `MessageRef` store/query helpers and all-account source tagging while continuing to run through background AI priority.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.
 - [x] Preview prewarming remains active-view-scoped mail work and uses cache-first preview services.
-- [ ] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
+- [x] Cleanup scheduling becomes source-aware, but destructive execution remains serialized per source.
 - [x] Daemon SSE events carry source/account/collection/item references so TUI, SSH, and MCP can filter or route safely.
 
 ## Storage Direction

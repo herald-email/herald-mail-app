@@ -7,6 +7,8 @@ import "time"
 type CleanupRule struct {
 	ID            int64
 	Name          string
+	SourceID      SourceID
+	AccountID     AccountID
 	MatchType     string // "sender" | "domain"
 	MatchValue    string
 	Action        string // "delete" | "archive"

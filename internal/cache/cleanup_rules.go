@@ -14,9 +14,11 @@ func (c *Cache) SaveCleanupRule(rule *models.CleanupRule) error {
 	if rule.ID == 0 {
 		// INSERT
 		res, err := c.db.Exec(`
-			INSERT INTO cleanup_rules (name, match_type, match_value, action, older_than_days, enabled, last_run, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO cleanup_rules (name, source_id, account_id, match_type, match_value, action, older_than_days, enabled, last_run, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			rule.Name,
+			string(rule.SourceID),
+			string(rule.AccountID),
 			rule.MatchType,
 			rule.MatchValue,
 			rule.Action,
@@ -39,9 +41,11 @@ func (c *Cache) SaveCleanupRule(rule *models.CleanupRule) error {
 	// UPDATE
 	_, err := c.db.Exec(`
 		UPDATE cleanup_rules
-		SET name=?, match_type=?, match_value=?, action=?, older_than_days=?, enabled=?, last_run=?
+		SET name=?, source_id=?, account_id=?, match_type=?, match_value=?, action=?, older_than_days=?, enabled=?, last_run=?
 		WHERE id=?`,
 		rule.Name,
+		string(rule.SourceID),
+		string(rule.AccountID),
 		rule.MatchType,
 		rule.MatchValue,
 		rule.Action,
@@ -56,7 +60,7 @@ func (c *Cache) SaveCleanupRule(rule *models.CleanupRule) error {
 // GetCleanupRule returns a single cleanup rule by ID.
 func (c *Cache) GetCleanupRule(id int64) (*models.CleanupRule, error) {
 	row := c.db.QueryRow(`
-		SELECT id, name, match_type, match_value, action, older_than_days, enabled, last_run, created_at
+		SELECT id, name, COALESCE(source_id, ''), COALESCE(account_id, ''), match_type, match_value, action, older_than_days, enabled, last_run, created_at
 		FROM cleanup_rules WHERE id=?`, id)
 	return scanCleanupRule(row)
 }
@@ -64,7 +68,7 @@ func (c *Cache) GetCleanupRule(id int64) (*models.CleanupRule, error) {
 // GetAllCleanupRules returns all cleanup rules ordered by id.
 func (c *Cache) GetAllCleanupRules() ([]*models.CleanupRule, error) {
 	rows, err := c.db.Query(`
-		SELECT id, name, match_type, match_value, action, older_than_days, enabled, last_run, created_at
+		SELECT id, name, COALESCE(source_id, ''), COALESCE(account_id, ''), match_type, match_value, action, older_than_days, enabled, last_run, created_at
 		FROM cleanup_rules ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -98,7 +102,8 @@ func (c *Cache) UpdateCleanupRuleLastRun(id int64, t time.Time) error {
 // FindEmailsMatchingCleanupRule returns emails that match the rule's criteria.
 // It filters by sender or domain and restricts to emails older than OlderThanDays.
 func (c *Cache) FindEmailsMatchingCleanupRule(rule *models.CleanupRule) ([]*models.EmailData, error) {
-	baseSelect := `SELECT message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
+	baseSelect := `SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
+		message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
 		FROM emails
 		WHERE date < datetime('now', ? || ' days')`
 
@@ -107,12 +112,23 @@ func (c *Cache) FindEmailsMatchingCleanupRule(rule *models.CleanupRule) ([]*mode
 		return nil, fmt.Errorf("unknown match_type: %s", rule.MatchType)
 	}
 
-	rows, err := c.db.Query(baseSelect+` ORDER BY date DESC`, olderThan)
+	var args []any
+	args = append(args, olderThan)
+	if rule.SourceID != "" {
+		baseSelect += ` AND COALESCE(source_id, 'default-mail') = ?`
+		args = append(args, string(rule.SourceID))
+	}
+	if rule.AccountID != "" {
+		baseSelect += ` AND COALESCE(account_id, 'default') = ?`
+		args = append(args, string(rule.AccountID))
+	}
+
+	rows, err := c.db.Query(baseSelect+` ORDER BY date DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	emails, err := scanEmailRows(rows)
+	emails, err := scanScopedCleanupEmailRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +148,37 @@ func (c *Cache) FindEmailsMatchingCleanupRule(rule *models.CleanupRule) ([]*mode
 		}
 	}
 	return filtered, nil
+}
+
+func scanScopedCleanupEmailRows(rows *sql.Rows) ([]*models.EmailData, error) {
+	var emails []*models.EmailData
+	for rows.Next() {
+		var sourceID, accountID, localID, msgID, sender, subject, folder string
+		var uid, uidValidity uint32
+		var date time.Time
+		var size, hasAtt, isRead, isStarred, isDraft int
+		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
+			return nil, err
+		}
+		emails = append(emails, &models.EmailData{
+			SourceID:       models.SourceID(sourceID),
+			AccountID:      models.AccountID(accountID),
+			LocalID:        localID,
+			UIDValidity:    uidValidity,
+			MessageID:      msgID,
+			UID:            uid,
+			Sender:         sender,
+			Subject:        subject,
+			Date:           date,
+			Size:           size,
+			HasAttachments: hasAtt == 1,
+			IsRead:         isRead == 1,
+			IsStarred:      isStarred == 1,
+			IsDraft:        isDraft == 1,
+			Folder:         folder,
+		})
+	}
+	return emails, rows.Err()
 }
 
 // --- helpers ---
@@ -172,6 +219,8 @@ func scanCleanupRule(row *sql.Row) (*models.CleanupRule, error) {
 	err := row.Scan(
 		&rule.ID,
 		&rule.Name,
+		&rule.SourceID,
+		&rule.AccountID,
 		&rule.MatchType,
 		&rule.MatchValue,
 		&rule.Action,
@@ -205,6 +254,8 @@ func scanCleanupRuleRow(rows *sql.Rows) (*models.CleanupRule, error) {
 	err := rows.Scan(
 		&rule.ID,
 		&rule.Name,
+		&rule.SourceID,
+		&rule.AccountID,
 		&rule.MatchType,
 		&rule.MatchValue,
 		&rule.Action,

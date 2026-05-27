@@ -481,6 +481,8 @@ func (c *Cache) initDB() error {
 		CREATE TABLE IF NOT EXISTS cleanup_rules (
 			id              INTEGER PRIMARY KEY AUTOINCREMENT,
 			name            TEXT NOT NULL,
+			source_id       TEXT NOT NULL DEFAULT '',
+			account_id      TEXT NOT NULL DEFAULT '',
 			match_type      TEXT NOT NULL CHECK(match_type IN ('sender','domain')),
 			match_value     TEXT NOT NULL,
 			action          TEXT NOT NULL CHECK(action IN ('delete','archive')),
@@ -491,6 +493,15 @@ func (c *Cache) initDB() error {
 		)
 	`); err != nil {
 		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE cleanup_rules ADD COLUMN source_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE cleanup_rules ADD COLUMN account_id TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_cleanup_rules_scope ON cleanup_rules(source_id, account_id)`,
+	} {
+		if _, err := c.db.Exec(stmt); err != nil {
+			logger.Debug("source identity cleanup rule migration might already be applied: %v", err)
+		}
 	}
 
 	// unsubscribed_senders: tracks senders the user has unsubscribed from

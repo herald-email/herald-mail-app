@@ -12,8 +12,10 @@ import (
 // mockBackend is a minimal Backend stub for engine tests.
 // It records DeleteEmail / MoveEmail calls.
 type mockBackend struct {
-	deleted []string // message IDs passed to DeleteEmail
-	moved   []string // message IDs passed to MoveEmail
+	deleted     []string // message IDs passed to DeleteEmail
+	moved       []string // message IDs passed to MoveEmail
+	deletedRefs []models.MessageRef
+	movedRefs   []models.MessageRef
 	// embed the no-op stub for all unneeded interface methods
 	noopBackend
 }
@@ -25,6 +27,16 @@ func (m *mockBackend) DeleteEmail(messageID, folder string) error {
 
 func (m *mockBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
 	m.moved = append(m.moved, messageID)
+	return nil
+}
+
+func (m *mockBackend) DeleteEmailByRef(ref models.MessageRef) error {
+	m.deletedRefs = append(m.deletedRefs, ref.WithDefaults())
+	return nil
+}
+
+func (m *mockBackend) ArchiveEmailByRef(ref models.MessageRef) error {
+	m.movedRefs = append(m.movedRefs, ref.WithDefaults())
 	return nil
 }
 
@@ -49,6 +61,23 @@ func seedEmail(t *testing.T, c *cache.Cache, msgID, sender, folder string, date 
 	}); err != nil {
 		t.Fatalf("CacheEmail %s: %v", msgID, err)
 	}
+}
+
+func seedScopedEmail(t *testing.T, c *cache.Cache, sourceID, accountID, msgID, sender, folder string, date time.Time) models.MessageRef {
+	t.Helper()
+	email := &models.EmailData{
+		SourceID:  models.SourceID(sourceID),
+		AccountID: models.AccountID(accountID),
+		MessageID: msgID,
+		Sender:    sender,
+		Subject:   "test",
+		Date:      date,
+		Folder:    folder,
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail %s: %v", msgID, err)
+	}
+	return email.MessageRef()
 }
 
 func TestRunRule(t *testing.T) {
@@ -186,6 +215,80 @@ func TestPlanDryRunBuildsStructuredCleanupRows(t *testing.T) {
 	}
 	if row.Folder != "INBOX" {
 		t.Fatalf("Folder = %q, want INBOX", row.Folder)
+	}
+}
+
+func TestPlanDryRunFiltersCleanupRuleBySourceAndIncludesScopedRows(t *testing.T) {
+	c := newTestCache(t)
+	old := time.Now().AddDate(0, 0, -45)
+	workRef := seedScopedEmail(t, c, "work-mail", "work", "work-old", "Packet Press <newsletter@packetpress.example>", "INBOX", old)
+	seedScopedEmail(t, c, "personal-mail", "personal", "personal-old", "Packet Press <newsletter@packetpress.example>", "INBOX", old)
+
+	rule := &models.CleanupRule{
+		ID:            7,
+		Name:          "Archive old work Packet Press",
+		SourceID:      "work-mail",
+		AccountID:     "work",
+		MatchType:     "sender",
+		MatchValue:    "newsletter@packetpress.example",
+		Action:        "archive",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+
+	report, err := PlanDryRun(c, models.RuleDryRunRequest{
+		Kind:       models.RuleDryRunKindCleanup,
+		RuleID:     rule.ID,
+		AllFolders: true,
+	}, []*models.CleanupRule{rule})
+	if err != nil {
+		t.Fatalf("PlanDryRun: %v", err)
+	}
+	if report.MatchCount != 1 || len(report.Rows) != 1 {
+		t.Fatalf("report matches = %d rows=%d, want one work-scoped match: %#v", report.MatchCount, len(report.Rows), report.Rows)
+	}
+	row := report.Rows[0]
+	if row.SourceID != "work-mail" || row.AccountID != "work" || row.LocalID != workRef.LocalID {
+		t.Fatalf("row scope = (%q,%q,%q), want (%q,%q,%q)", row.SourceID, row.AccountID, row.LocalID, workRef.SourceID, workRef.AccountID, workRef.LocalID)
+	}
+}
+
+func TestRunRuleUsesScopedCleanupMutationWhenAvailable(t *testing.T) {
+	c := newTestCache(t)
+	mb := &mockBackend{}
+	engine := NewEngine(c, mb, nil)
+
+	old := time.Now().AddDate(0, 0, -45)
+	ref := seedScopedEmail(t, c, "work-mail", "work", "work-delete", "spam@example.com", "INBOX", old)
+	rule := &models.CleanupRule{
+		ID:            8,
+		Name:          "Delete old work spam",
+		SourceID:      "work-mail",
+		AccountID:     "work",
+		MatchType:     "sender",
+		MatchValue:    "spam@example.com",
+		Action:        "delete",
+		OlderThanDays: 30,
+		Enabled:       true,
+		CreatedAt:     time.Now(),
+	}
+	if err := c.SaveCleanupRule(rule); err != nil {
+		t.Fatalf("SaveCleanupRule: %v", err)
+	}
+
+	count, err := engine.RunRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("RunRule: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+	if len(mb.deletedRefs) != 1 || mb.deletedRefs[0].LocalID != ref.LocalID {
+		t.Fatalf("deleted refs = %#v, want %s", mb.deletedRefs, ref.LocalID)
+	}
+	if len(mb.deleted) != 0 {
+		t.Fatalf("legacy DeleteEmail calls = %#v, want none", mb.deleted)
 	}
 }
 

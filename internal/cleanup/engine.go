@@ -21,6 +21,11 @@ type Engine struct {
 	dryRun  bool // when true, log actions without executing destructive ones
 }
 
+type scopedCleanupBackend interface {
+	DeleteEmailByRef(models.MessageRef) error
+	ArchiveEmailByRef(models.MessageRef) error
+}
+
 // NewEngine creates a new cleanup Engine.
 func NewEngine(c *cache.Cache, b backend.Backend, l *logger.Logger) *Engine {
 	return &Engine{cache: c, backend: b, log: l}
@@ -73,8 +78,12 @@ func (e *Engine) runPlanned(ctx context.Context, req models.RuleDryRunRequest, r
 		if rule == nil {
 			continue
 		}
-		if processedMessages[row.MessageID] {
-			e.log.Info("cleanup rule %d: skipped email %s because an earlier previewed action already handled it", rule.ID, row.MessageID)
+		itemID := row.LocalID
+		if itemID == "" {
+			itemID = row.MessageID
+		}
+		if processedMessages[itemID] {
+			e.log.Info("cleanup rule %d: skipped email %s because an earlier previewed action already handled it", rule.ID, itemID)
 			continue
 		}
 		if e.dryRun {
@@ -83,7 +92,23 @@ func (e *Engine) runPlanned(ctx context.Context, req models.RuleDryRunRequest, r
 			continue
 		}
 		var actionErr error
-		if rule.Action == "delete" {
+		useScopedMutation := row.LocalID != "" &&
+			(row.SourceID != "" && row.SourceID != models.DefaultMailSourceID ||
+				row.AccountID != "" && row.AccountID != models.DefaultAccountID)
+		if scoped, ok := e.backend.(scopedCleanupBackend); ok && useScopedMutation {
+			ref := models.MessageRef{
+				SourceID:  row.SourceID,
+				AccountID: row.AccountID,
+				Folder:    row.Folder,
+				MessageID: row.MessageID,
+				LocalID:   row.LocalID,
+			}.WithDefaults()
+			if rule.Action == "delete" {
+				actionErr = scoped.DeleteEmailByRef(ref)
+			} else {
+				actionErr = scoped.ArchiveEmailByRef(ref)
+			}
+		} else if rule.Action == "delete" {
 			actionErr = e.backend.DeleteEmail(row.MessageID, row.Folder)
 		} else {
 			actionErr = e.backend.MoveEmail(row.MessageID, row.Folder, "Archive")
@@ -92,7 +117,7 @@ func (e *Engine) runPlanned(ctx context.Context, req models.RuleDryRunRequest, r
 			e.log.Debug("cleanup rule %d: failed to %s email %s: %v", rule.ID, rule.Action, row.MessageID, actionErr)
 			continue
 		}
-		processedMessages[row.MessageID] = true
+		processedMessages[itemID] = true
 		results[rule.ID]++
 	}
 
@@ -159,9 +184,13 @@ func PlanDryRun(c cleanupPlannerCache, req models.RuleDryRunRequest, rules []*mo
 				continue
 			}
 			matches[email.MessageID] = true
+			ref := email.MessageRef()
 			report.Rows = append(report.Rows, models.RuleDryRunRow{
 				RuleID:    rule.ID,
 				RuleName:  cleanupRuleName(rule),
+				SourceID:  ref.SourceID,
+				AccountID: ref.AccountID,
+				LocalID:   ref.LocalID,
 				MessageID: email.MessageID,
 				Sender:    email.Sender,
 				Domain:    senderDomain(email.Sender),
