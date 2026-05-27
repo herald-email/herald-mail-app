@@ -87,6 +87,9 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
+		m.calendarMeetingPrepOpen = false
+		m.calendarMeetingPrepLoading = false
+		m.calendarMeetingPrep = nil
 		m.calendarEdit = calendarEventEditState{}
 	}
 }
@@ -115,6 +118,11 @@ func (m *Model) crossSourceSearchBackend() (backend.CrossSourceSearchBackend, bo
 func (m *Model) crossSourceSearchAvailable() bool {
 	_, ok := m.crossSourceSearchBackend()
 	return ok
+}
+
+func (m *Model) calendarMeetingPrepBackend() (backend.CalendarMeetingPrepBackend, bool) {
+	prep, ok := m.backend.(backend.CalendarMeetingPrepBackend)
+	return prep, ok
 }
 
 func (m *Model) loadCalendarAgenda() tea.Cmd {
@@ -332,6 +340,9 @@ func (m *Model) openCalendarDetail() tea.Cmd {
 		return nil
 	}
 	m.calendarEdit = calendarEventEditState{}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
 	m.calendarDetailOpen = true
 	m.calendarDetailLoading = true
 	m.calendarDetail = event
@@ -351,6 +362,9 @@ func (m *Model) openCalendarSearch() {
 	m.calendarDetailOpen = false
 	m.calendarDetailLoading = false
 	m.calendarEdit = calendarEventEditState{}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
 	m.calendarSearchQuery = ""
 	m.calendarSearchResults = nil
 	m.calendarSearchCursor = 0
@@ -364,6 +378,9 @@ func (m *Model) openCrossSourceSearch() {
 	m.calendarDetailOpen = false
 	m.calendarDetailLoading = false
 	m.calendarEdit = calendarEventEditState{}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
 	m.crossSourceSearchQuery = ""
 	m.crossSourceSearchResults = nil
 	m.crossSourceSearchCursor = 0
@@ -538,9 +555,53 @@ func (m *Model) openCalendarEdit() {
 		Draft:  draft,
 		Field:  calendarEditFieldTitle,
 	}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
 	m.calendarDetailOpen = true
 	m.calendarDetailLoading = false
 	m.calendarStatus = "Editing cached calendar event"
+}
+
+func (m *Model) openCalendarMeetingPrep() tea.Cmd {
+	event := m.calendarDetail
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	if event == nil {
+		return nil
+	}
+	prep, ok := m.calendarMeetingPrepBackend()
+	if !ok {
+		m.calendarStatus = "Meeting prep unavailable for this backend"
+		return nil
+	}
+	ref := event.Ref.WithDefaults()
+	selected := *event
+	selected.Ref = ref
+	m.calendarMeetingPrepOpen = true
+	m.calendarMeetingPrepLoading = true
+	m.calendarMeetingPrep = nil
+	m.calendarDetailOpen = false
+	m.calendarStatus = "Preparing cached meeting context..."
+	return func() tea.Msg {
+		result, err := prep.BuildCalendarMeetingPrep(selected)
+		return CalendarMeetingPrepMsg{Ref: ref, Prep: result, Err: err}
+	}
+}
+
+func (m *Model) handleCalendarMeetingPrepKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch shortcutKey(msg) {
+	case "esc":
+		m.calendarMeetingPrepOpen = false
+		m.calendarMeetingPrepLoading = false
+		m.calendarDetailOpen = true
+		m.calendarStatus = "Returned to event detail"
+		return m, nil
+	case "r", "ctrl+r":
+		return m, m.openCalendarMeetingPrep()
+	}
+	return m, nil
 }
 
 func (m *Model) saveCalendarEdit() tea.Cmd {
@@ -738,6 +799,9 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.calendarEdit.Active {
 		return m.handleCalendarEditKey(msg)
 	}
+	if m.calendarMeetingPrepOpen {
+		return m.handleCalendarMeetingPrepKey(msg)
+	}
 	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
 		return m.handleCalendarSearchKey(msg)
 	}
@@ -837,6 +901,11 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.openCalendarEdit()
 		}
 		return m, nil
+	case "p":
+		if m.calendarDetailOpen {
+			return m, m.openCalendarMeetingPrep()
+		}
+		return m, nil
 	case "v":
 		if m.calendarDetailOpen {
 			return m, m.saveCalendarRSVP()
@@ -864,6 +933,9 @@ func (m *Model) renderCalendarView() string {
 	}
 	if m.calendarEdit.Active {
 		return m.renderCalendarEditFullView()
+	}
+	if m.calendarMeetingPrepOpen {
+		return m.renderCalendarMeetingPrepFullView()
 	}
 	if m.calendarDetailOpen {
 		return m.renderCalendarDetailFullView()
@@ -1042,6 +1114,22 @@ func (m *Model) renderCalendarEditFullView() string {
 		contentH = 4
 	}
 	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarEventEdit(clamp(contentW-4, 20), contentH-2))
+}
+
+func (m *Model) renderCalendarMeetingPrepFullView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	contentH := plan.ContentHeight
+	if contentH < 4 {
+		contentH = 4
+	}
+	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarMeetingPrep(clamp(contentW-4, 20), contentH-2))
 }
 
 func (m *Model) calendarPanel(width, height int, active bool) lipgloss.Style {
@@ -1303,6 +1391,75 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	lines = append(lines, calendarDetailRow(m, "Scope", models.CalendarMutationScopeLabel(state.Draft.RecurrenceScope), width))
 	lines = append(lines, calendarDetailRow(m, "Mode", "provider save-through, cache after success", width))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("tab: next field  ctrl+s: save  esc: cancel", width)))
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCalendarMeetingPrep(width, height int) string {
+	if width < 12 {
+		width = 12
+	}
+	event := m.calendarDetail
+	if m.calendarMeetingPrep != nil {
+		event = &m.calendarMeetingPrep.Event
+	}
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Meeting Prep", width)))
+	subtitle := "read-only cached context"
+	if m.calendarMeetingPrepLoading {
+		subtitle = "loading cached mail and event context..."
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)))
+	lines = append(lines, "")
+	if event == nil {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No event selected", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Selected Event", width)))
+	lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, width)))
+	lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
+	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
+
+	prep := m.calendarMeetingPrep
+	if prep == nil {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached meeting context loaded yet", width)))
+		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Related Mail", width)))
+	if len(prep.RelatedMail) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached related mail found", width)))
+	} else {
+		for _, email := range prep.RelatedMail {
+			if email == nil {
+				continue
+			}
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarMeetingPrepMailLine(m, email, width), width)))
+		}
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Nearby Events", width)))
+	if len(prep.RelatedEvents) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached nearby events found", width)))
+	} else {
+		for _, related := range prep.RelatedEvents {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarMeetingPrepEventLine(related, width), width)))
+		}
+	}
+
+	if len(prep.QueryTerms) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Query Terms", width)))
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(strings.Join(prep.QueryTerms, ", "), width)))
+	}
+	lines = append(lines, "")
+	lines = append(lines, calendarDetailRow(m, "Mode", "read-only cached context", width))
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("esc: event detail  r: refresh prep", width)))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -1814,6 +1971,34 @@ func (m *Model) crossSourceSearchLine(result models.CrossSourceSearchResult, wid
 	}
 	prefix := calendarFit(kind+" "+timeText, prefixW)
 	return calendarFit(prefix+"  "+ansi.Truncate(summary, titleW, "..."), width-2)
+}
+
+func calendarMeetingPrepMailLine(m *Model, email *models.EmailData, width int) string {
+	if email == nil {
+		return ""
+	}
+	account := m.accountBadgeForEmail(email)
+	if strings.TrimSpace(account) == "" {
+		account = string(email.SourceID)
+	}
+	if strings.TrimSpace(account) == "" {
+		account = "mail"
+	}
+	when := ""
+	if !email.Date.IsZero() {
+		when = email.Date.Local().Format("Mon 15:04")
+	}
+	prefix := strings.TrimSpace(when + " " + account)
+	summary := email.Sender + " - " + email.Subject
+	if prefix == "" {
+		return ansi.Truncate(summary, width, "...")
+	}
+	return ansi.Truncate(prefix+"  "+summary, width, "...")
+}
+
+func calendarMeetingPrepEventLine(event models.CalendarEvent, width int) string {
+	summary := calendarShortTime(event) + "  " + event.Title + " - " + calendarSourceLabel(event)
+	return ansi.Truncate(summary, width, "...")
 }
 
 func calendarSearchMatchHint(event models.CalendarEvent, query string) string {

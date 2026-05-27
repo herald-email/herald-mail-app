@@ -1829,6 +1829,29 @@ This case covers the selected reminder mutation slice in Event Edit. It proves r
 - Literal reminder text typed in Compose, search prompts, and editor-like text fields remains text instead of firing calendar edit actions.
 - At `50x15`, the minimum-size guard appears instead of clipped reminder-edit chrome, and resizing larger restores the edit state cleanly.
 
+### TC-38P — Calendar Meeting Prep command-center foundation
+
+This case covers the first read-only command-center slice after Cross-Source Search. It proves Event Detail can open a Meeting Prep view that blends selected-event context with related cached mail and nearby cached events without direct provider reads or mutations.
+
+**Lane:** A, B when mail and calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic fixture with a calendar event and at least one cached email sharing the event title, organizer, attendee, or location.
+2. Press `3` or `F4` to open Calendar, then press `Enter` for Event Detail.
+3. Press `p` to open Meeting Prep and capture the view.
+4. Confirm the view lists the selected event, related cached mail, nearby cached events, and the visible query terms used for matching.
+5. Press `Esc` and confirm Herald returns to Event Detail without losing the selected event.
+6. Type literal `p` in Compose, Calendar Search, and editor-like prompts and confirm it stays text.
+
+**Expect:**
+- Meeting Prep is read-only and cache-backed; it does not directly call IMAP, Google Calendar, or CalDAV providers.
+- Related mail shows sender, subject, folder/account context, and time without exposing provider UIDs, raw event IDs, CalDAV URLs, sync tokens, raw ETags, OAuth details, or mutation controls.
+- Nearby events show event title, time, and calendar/source labels without exposing provider internals.
+- `Esc` returns to Event Detail, and `r` refreshes Meeting Prep context for the same selected event.
+- Literal `p` typed in Compose, search prompts, and editor-like text fields remains text instead of firing Meeting Prep.
+- At `50x15`, the minimum-size guard appears instead of clipped Meeting Prep chrome, and resizing larger restores the prep state cleanly.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

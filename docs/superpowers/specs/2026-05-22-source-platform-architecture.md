@@ -241,6 +241,7 @@ The work should land in small slices that each preserve current behavior. Multi-
   - [x] Phase 7E: Add full read-only Event Detail metadata and timezone rendering so attendees, RSVP state, recurrence, attachments, local time, event timezone, and an alternate timezone are proven before mutations.
   - [x] Phase 7F: Add read-only cache-backed Calendar Search over scoped event rows before mutation UI.
   - [x] Phase 7G: Add cross-source search over mail plus events.
+  - [x] Phase 7H: Add a read-only Calendar Meeting Prep view that uses cached cross-source context for related mail and nearby events.
   - [x] Add source-aware automation lanes for mail and calendar events.
   - [x] Add a local/cache-backed Calendar Event Edit form with timezone preview and explicit save/cancel state.
   - [x] Add provider-backed Calendar Event Edit save-through with explicit provider failure and cache update semantics.

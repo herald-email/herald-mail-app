@@ -77,6 +77,14 @@ type CrossSourceSearchLoadedMsg struct {
 	Err     error
 }
 
+// CalendarMeetingPrepMsg carries read-only cached context for the selected
+// calendar event.
+type CalendarMeetingPrepMsg struct {
+	Ref  models.EventRef
+	Prep models.CalendarMeetingPrep
+	Err  error
+}
+
 // CalendarEventDetailMsg carries a selected read-only event detail.
 type CalendarEventDetailMsg struct {
 	Ref   models.EventRef
@@ -691,27 +699,30 @@ type Model struct {
 
 	// Calendar tab. Calendar is additive and appears only when the backend
 	// advertises a cache-backed read-only agenda surface.
-	calendarAvailable        bool
-	calendarLoading          bool
-	calendarEvents           []models.CalendarEvent
-	calendarCursor           int
-	calendarView             calendarViewMode
-	calendarSearchQuery      string
-	calendarSearchResults    []models.CalendarEvent
-	calendarSearchCursor     int
-	calendarSearchLoading    bool
-	crossSourceSearchQuery   string
-	crossSourceSearchResults []models.CrossSourceSearchResult
-	crossSourceSearchCursor  int
-	crossSourceSearchLoading bool
-	calendarDay              time.Time
-	calendarWeekStart        time.Time
-	calendarThreeDayStart    time.Time
-	calendarDetailOpen       bool
-	calendarDetailLoading    bool
-	calendarDetail           *models.CalendarEvent
-	calendarEdit             calendarEventEditState
-	calendarStatus           string
+	calendarAvailable          bool
+	calendarLoading            bool
+	calendarEvents             []models.CalendarEvent
+	calendarCursor             int
+	calendarView               calendarViewMode
+	calendarSearchQuery        string
+	calendarSearchResults      []models.CalendarEvent
+	calendarSearchCursor       int
+	calendarSearchLoading      bool
+	crossSourceSearchQuery     string
+	crossSourceSearchResults   []models.CrossSourceSearchResult
+	crossSourceSearchCursor    int
+	crossSourceSearchLoading   bool
+	calendarDay                time.Time
+	calendarWeekStart          time.Time
+	calendarThreeDayStart      time.Time
+	calendarDetailOpen         bool
+	calendarDetailLoading      bool
+	calendarDetail             *models.CalendarEvent
+	calendarMeetingPrepOpen    bool
+	calendarMeetingPrepLoading bool
+	calendarMeetingPrep        *models.CalendarMeetingPrep
+	calendarEdit               calendarEventEditState
+	calendarStatus             string
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -1936,6 +1947,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.selectCrossSourceSearchResult()
 		m.calendarStatus = fmt.Sprintf("Search found %d cached mail/event result(s)", len(m.crossSourceSearchResults))
+		return m, nil
+
+	case CalendarMeetingPrepMsg:
+		selected := m.calendarDetail
+		if selected == nil {
+			selected = m.selectedCalendarEvent()
+		}
+		if selected == nil || selected.Ref.WithDefaults().LocalID != msg.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		m.calendarMeetingPrepLoading = false
+		if msg.Err != nil {
+			m.calendarMeetingPrep = nil
+			m.calendarStatus = "Meeting prep failed: " + msg.Err.Error()
+			return m, nil
+		}
+		prep := msg.Prep
+		prep.Event.Ref = prep.Event.Ref.WithDefaults()
+		m.calendarMeetingPrep = &prep
+		m.calendarMeetingPrepOpen = true
+		m.calendarDetailOpen = false
+		m.calendarStatus = fmt.Sprintf("Meeting prep found %d cached mail and %d nearby event(s)", len(prep.RelatedMail), len(prep.RelatedEvents))
 		return m, nil
 
 	case CalendarEventDetailMsg:

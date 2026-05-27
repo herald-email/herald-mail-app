@@ -15,6 +15,8 @@ type calendarAgendaStubBackend struct {
 	available        bool
 	events           []models.CalendarEvent
 	crossResults     []models.CrossSourceSearchResult
+	meetingPrep      *models.CalendarMeetingPrep
+	meetingPrepCalls []models.EventRef
 	getCalls         int
 	searchCalls      []string
 	crossSearchCalls []string
@@ -106,6 +108,17 @@ func (b *calendarAgendaStubBackend) CrossSourceSearch(query string) ([]models.Cr
 		}
 	}
 	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) BuildCalendarMeetingPrep(event models.CalendarEvent) (models.CalendarMeetingPrep, error) {
+	event.Ref = event.Ref.WithDefaults()
+	b.meetingPrepCalls = append(b.meetingPrepCalls, event.Ref)
+	if b.meetingPrep != nil {
+		prep := *b.meetingPrep
+		prep.Event.Ref = prep.Event.Ref.WithDefaults()
+		return prep, nil
+	}
+	return models.CalendarMeetingPrep{Event: event, QueryTerms: models.CalendarMeetingPrepQueries(event)}, nil
 }
 
 func (b *calendarAgendaStubBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
@@ -361,6 +374,94 @@ func TestCrossSourceSearchViewBlendsMailAndCalendarResults(t *testing.T) {
 	}
 }
 
+func TestCalendarMeetingPrepOpensFromDetailWithRelatedCachedMail(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	event := richCalendarEventForTest()
+	event.Title = "Launch planning"
+	event.Description = "Discuss the product launch plan."
+	event.Start = start
+	event.End = start.Add(time.Hour)
+	event.ProviderUID = "provider-secret"
+	event.Ref.ETag = `"provider-etag"`
+	event.Raw = `{"syncToken":"secret"}`
+	mail := &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		MessageID: "mail-planning",
+		UID:       42,
+		Folder:    "INBOX",
+		Sender:    "mina@example.com",
+		Subject:   "Launch planning memo",
+		Date:      start.Add(-time.Hour),
+	}
+	nearby := event
+	nearby.Title = "Launch retro"
+	nearby.Ref.EventID = "launch-retro"
+	nearby.Ref.LocalID = ""
+	nearby.Ref = nearby.Ref.WithDefaults()
+	nearby.Start = start.Add(2 * time.Hour)
+	nearby.End = nearby.Start.Add(time.Hour)
+	prep := &models.CalendarMeetingPrep{
+		Event:         event,
+		QueryTerms:    []string{"Launch planning", "mina@example.com"},
+		RelatedMail:   []*models.EmailData{mail},
+		RelatedEvents: []models.CalendarEvent{nearby},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event, nearby}, meetingPrep: prep}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &event
+	m.calendarDetailOpen = true
+
+	model, cmd := m.handleKeyMsg(keyRunes("p"))
+	m = model.(*Model)
+	if !m.calendarMeetingPrepOpen || !m.calendarMeetingPrepLoading {
+		t.Fatalf("meeting prep state open=%v loading=%v, want open loading", m.calendarMeetingPrepOpen, m.calendarMeetingPrepLoading)
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.meetingPrepCalls) != 1 || b.meetingPrepCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
+		t.Fatalf("meeting prep calls = %#v, want selected event ref", b.meetingPrepCalls)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{
+		"Meeting Prep",
+		"read-only cached context",
+		"Launch planning",
+		"Related Mail",
+		"Launch planning memo",
+		"mina@example.com",
+		"Nearby Events",
+		"Launch retro",
+		"Query Terms",
+		"Launch planning",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("meeting prep missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("meeting prep leaked or advertised %q:\n%s", forbidden, rendered)
+		}
+	}
+
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = model.(*Model)
+	if m.calendarMeetingPrepOpen {
+		t.Fatal("expected Esc to close meeting prep")
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected Esc from meeting prep to return to Event Detail")
+	}
+}
+
 func TestCrossSourceSearchDoesNotReplaceCalendarSearchOrAcceptStaleResults(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	event := richCalendarEventForTest()
@@ -430,6 +531,67 @@ func TestCrossSourceSearchDoesNotReplaceCalendarSearchOrAcceptStaleResults(t *te
 	if len(m.crossSourceSearchResults) != 0 {
 		t.Fatalf("stale cross-source results repainted newer query: %#v", m.crossSourceSearchResults)
 	}
+}
+
+func TestCalendarMeetingPrepShortcutDoesNotStealTextEntry(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("p"))
+		m = model.(*Model)
+		if got := m.composeBody.Value(); got != "p" {
+			t.Fatalf("compose body=%q, want literal p", got)
+		}
+	})
+
+	t.Run("calendar search", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarEvents = b.events
+		m.openCalendarSearch()
+
+		model, cmd := m.handleKeyMsg(keyRunes("p"))
+		m = model.(*Model)
+		for _, msg := range calendarImmediateMessagesForTest(cmd) {
+			model, _ = m.Update(msg)
+			m = model.(*Model)
+		}
+		if m.calendarSearchQuery != "p" {
+			t.Fatalf("calendar search query=%q, want literal p", m.calendarSearchQuery)
+		}
+		if m.calendarMeetingPrepOpen {
+			t.Fatal("meeting prep should not open while typing in calendar search")
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+		_ = m.promptEditor.Init()
+
+		model, _ := m.Update(keyRunes("p"))
+		m = model.(*Model)
+		if got := m.promptEditor.name; got != "p" {
+			t.Fatalf("prompt editor name=%q, want literal p", got)
+		}
+	})
 }
 
 func TestCrossSourceSearchShortcutDoesNotStealTextEntry(t *testing.T) {
