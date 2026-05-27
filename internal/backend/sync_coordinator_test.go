@@ -1,6 +1,10 @@
 package backend
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/herald-email/herald-mail-app/internal/work"
+)
 
 func TestLatestWinsLoadCoordinator_ReplacesPendingRequests(t *testing.T) {
 	c := newLatestWinsLoadCoordinator()
@@ -70,5 +74,24 @@ func TestLatestWinsLoadCoordinator_RepeatedFolderStillAdvancesGeneration(t *test
 	}
 	if got.Folder != "INBOX" || got.Generation != third.Generation {
 		t.Fatalf("pending = %#v, want latest INBOX generation %d", got, third.Generation)
+	}
+}
+
+func TestLatestWinsLoadCoordinator_UsesWorkLatestIntentQueue(t *testing.T) {
+	c := newLatestWinsLoadCoordinator()
+
+	if c.intentKey != (work.IntentKey{ViewID: "active-collection-sync"}) {
+		t.Fatalf("intent key = %#v, want active collection sync intent", c.intentKey)
+	}
+	if c.queue == nil {
+		t.Fatal("expected latest-wins load coordinator to wrap internal/work latest intent queue")
+	}
+	req := c.Submit("INBOX")
+	got, ok := c.DrainPending()
+	if !ok {
+		t.Fatal("expected pending request")
+	}
+	if got != req {
+		t.Fatalf("pending = %#v, want submitted request %#v", got, req)
 	}
 }

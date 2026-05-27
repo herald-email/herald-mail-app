@@ -2,9 +2,9 @@ package backend
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/work"
 )
 
 type folderLoadRequest struct {
@@ -16,53 +16,47 @@ type folderLoadRequest struct {
 // One worker drains requests serially; newer submissions replace older queued
 // ones instead of preserving stale work.
 type latestWinsLoadCoordinator struct {
-	mu      sync.Mutex
-	nextGen int64
-	pending *folderLoadRequest
-	wakeCh  chan struct{}
+	intentKey work.IntentKey
+	queue     *work.LatestIntentQueue[string]
 }
 
 func newLatestWinsLoadCoordinator() *latestWinsLoadCoordinator {
 	return &latestWinsLoadCoordinator{
-		wakeCh: make(chan struct{}, 1),
+		intentKey: work.IntentKey{ViewID: "active-collection-sync"},
+		queue:     work.NewLatestIntentQueue[string](),
 	}
 }
 
 func (c *latestWinsLoadCoordinator) Submit(folder string) folderLoadRequest {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.nextGen++
+	replaced := "none"
+	if pending, ok := c.queue.Pending(c.intentKey); ok {
+		replaced = fmt.Sprintf("%s#%d", pending.Value, pending.Generation)
+	}
+	item := c.queue.Submit(c.intentKey, work.ResourceKey{
+		CollectionID: folder,
+		Operation:    "active-collection-sync",
+	}, folder)
 	req := folderLoadRequest{
 		Folder:     folder,
-		Generation: c.nextGen,
+		Generation: item.Generation,
 	}
-	replaced := "none"
-	if c.pending != nil {
-		replaced = fmt.Sprintf("%s#%d", c.pending.Folder, c.pending.Generation)
-	}
-	c.pending = &req
 	logger.Debug("LoadCoordinator.Submit: folder=%s generation=%d replaces=%s", folder, req.Generation, replaced)
-	select {
-	case c.wakeCh <- struct{}{}:
-	default:
-	}
 	return req
 }
 
 func (c *latestWinsLoadCoordinator) DrainPending() (folderLoadRequest, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.pending == nil {
+	item, ok := c.queue.DrainPending()
+	if !ok {
 		return folderLoadRequest{}, false
 	}
-	req := *c.pending
-	c.pending = nil
+	req := folderLoadRequest{
+		Folder:     item.Value,
+		Generation: item.Generation,
+	}
 	logger.Debug("LoadCoordinator.DrainPending: folder=%s generation=%d", req.Folder, req.Generation)
 	return req, true
 }
 
 func (c *latestWinsLoadCoordinator) Wake() <-chan struct{} {
-	return c.wakeCh
+	return c.queue.Wake()
 }
