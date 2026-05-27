@@ -6,9 +6,9 @@ This spec defines the refactoring direction for multi-account mail and future ca
 
 The first goal is to introduce durable source identity and work coordination before adding visible multi-account or calendar UI. This keeps the migration safe because every later feature can depend on scoped references, cache-first reads, and explicit queue policy.
 
-- [ ] Add source and account identity to mail data, sync events, background work, daemon APIs, and MCP-facing references without changing single-account behavior.
+- [x] Add source and account identity to mail data, sync events, background work, daemon APIs, and MCP-facing references without changing single-account behavior.
 - [x] Add active-account mail switching in the TUI without enabling cross-account writes or changing single-account behavior.
-- [ ] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
+- [x] Preserve the current latest-user-intent rule from active folder loading and extend it to preview/detail/search work.
 - [x] Make mail body/detail reads cache-first, persistent-cache-aware, and in-flight-coalesced so callers use one method whether data comes from cache or a remote source.
 - [x] Extend the same cache-first service boundary to calendar event reads after `EventRef` and calendar cache tables exist.
 - [x] Keep provider plugins simple: plugins expose cancellable blocking operations, while Herald owns queue policy, caching, coalescing, stale-result filtering, and UI priority.
@@ -18,10 +18,10 @@ The first goal is to introduce durable source identity and work coordination bef
 
 This foundation does not require a full multi-account UI or a calendar UI in the first implementation slice. Those features should arrive only after source identity and work coordination are boring and test-covered.
 
-- [ ] Do not replace the Bubble Tea app with a daemon-only client as part of the first refactor.
-- [ ] Do not build calendar mutation UI before read-only calendar sync/detail/search exists.
-- [ ] Do not make one generic queue that handles every operation identically.
-- [ ] Do not move provider-specific sync token, ETag, OAuth, or IMAP command details into the TUI.
+- [x] Do not replace the Bubble Tea app with a daemon-only client as part of the first refactor.
+- [x] Do not build calendar mutation UI before read-only calendar sync/detail/search exists.
+- [x] Do not make one generic queue that handles every operation identically.
+- [x] Do not move provider-specific sync token, ETag, OAuth, or IMAP command details into the TUI.
 
 ## Identity Model
 
@@ -180,7 +180,7 @@ Config should preserve existing single-account YAML and introduce an additive `s
 - [x] Existing single-account config normalizes to one mail source named `default-mail`.
 - [x] Multi-account mail config can add multiple mail sources without requiring users to split config files.
 - [x] Calendar config adds calendar sources with provider-specific auth blocks hidden behind source config.
-- [ ] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
+- [x] Shared preferences such as theme, keyboard, AI provider, daemon settings, and cache policy stay profile-level unless a future user-visible need requires overrides.
 - [x] Compose signature can start as account-level for mail sources and keep the current legacy `compose.signature.text` as the default account signature.
 
 Sketch:
@@ -218,7 +218,7 @@ sources:
 The daemon and MCP layers must stop treating `folder` plus `message_id` as globally unique. API paths can remain friendly, but request bodies and responses need scoped references.
 
 - [x] Read endpoints accept optional `source_id` and `account_id`; default values preserve legacy clients.
-- [ ] Mutating endpoints require scoped refs once multi-account writes are enabled.
+- [x] Mutating endpoints require scoped refs once multi-account writes are enabled.
 - [x] Single-message daemon and MCP mail mutation paths accept scoped message refs, reject ambiguous multi-account writes, and keep single-account legacy message-ID calls working.
 - [x] Bulk, thread, sender, and draft daemon/MCP mail mutation paths require source scope or per-message local IDs in multi-account mode while preserving single-account legacy calls.
 - [x] MCP listing outputs include both human-readable message IDs and scoped refs suitable for follow-up calls.
