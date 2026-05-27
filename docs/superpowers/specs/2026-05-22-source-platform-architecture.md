@@ -152,7 +152,7 @@ Callers should not decide whether a body, event, or preview comes from cache or 
 Existing background lanes should migrate gradually. Each lane keeps the semantics that currently make it safe, but the work keys become source-scoped.
 
 - [x] `latestWinsLoadCoordinator` migrates first into a reusable `internal/work` policy for active collection sync.
-- [ ] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
+- [x] `deletionRequestCh` becomes a source mutation lane carrying `MessageRef` and using `SerialBySource`.
 - [x] `ruleRequestCh` becomes an automation event lane that can later handle `MailMessageReceived` and `CalendarEventChanged`.
 - [ ] `classifyCh` remains mail-only at first but stores results under scoped message identity.
 - [ ] Embedding, contact enrichment, and future event indexing use global AI budget plus fair source/account tagging.

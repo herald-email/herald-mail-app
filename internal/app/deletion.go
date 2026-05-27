@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/work"
 )
 
 // deletionThrottle is the minimum pause between consecutive IMAP delete
@@ -197,6 +200,7 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		go func() {
 			for _, t := range targets {
 				ch <- models.DeletionRequest{
+					MessageRef:         t.ref,
 					SourceID:           t.ref.SourceID,
 					AccountID:          t.ref.AccountID,
 					LocalID:            t.ref.LocalID,
@@ -219,22 +223,16 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 // executeDeletion runs a single deletion/archive request and returns the error.
 func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
 	if req.MessageID != "" {
-		ref := models.MessageRef{
-			SourceID:  req.SourceID,
-			AccountID: req.AccountID,
-			LocalID:   req.LocalID,
-			MessageID: req.MessageID,
-			Folder:    req.Folder,
-		}.WithDefaults()
+		ref := deletionRequestMessageRef(req)
 		if req.IsArchive {
 			logger.Info("Archiving message: %s", req.MessageID)
-			if scoped, ok := m.backend.(interface{ ArchiveEmailByRef(models.MessageRef) error }); ok && req.SourceID != "" {
+			if scoped, ok := m.backend.(interface{ ArchiveEmailByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
 				return 1, scoped.ArchiveEmailByRef(ref)
 			}
 			return 1, m.backend.ArchiveEmail(req.MessageID, req.Folder)
 		}
 		logger.Info("Deleting message: %s", req.MessageID)
-		if scoped, ok := m.backend.(interface{ DeleteEmailByRef(models.MessageRef) error }); ok && req.SourceID != "" {
+		if scoped, ok := m.backend.(interface{ DeleteEmailByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
 			return 1, scoped.DeleteEmailByRef(ref)
 		}
 		return 1, m.backend.DeleteEmail(req.MessageID, req.Folder)
@@ -258,67 +256,157 @@ func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
 // It throttles operations to avoid overwhelming the IMAP backend and
 // retries with exponential backoff when the connection drops.
 func (m *Model) deletionWorker(requestCh <-chan models.DeletionRequest, resultCh chan<- models.DeletionResult) {
-	backoff := deletionRetryBackoff
+	coordinator := work.NewCoordinator()
+	var wg sync.WaitGroup
 
 	for req := range requestCh {
-		result := models.DeletionResult{
-			SourceID:           req.SourceID,
-			AccountID:          req.AccountID,
-			LocalID:            req.LocalID,
-			MessageID:          req.MessageID,
-			Sender:             req.Sender,
-			Folder:             req.Folder,
-			IsDomain:           req.IsDomain,
-			IsArchive:          req.IsArchive,
-			AffectedMessageIDs: append([]string(nil), req.AffectedMessageIDs...),
-		}
-		if result.MessageID != "" && len(result.AffectedMessageIDs) == 0 {
-			result.AffectedMessageIDs = []string{result.MessageID}
-		}
-
-		// Try the deletion, retrying on connection errors with backoff.
-		// The IMAP layer already reconnects once per call; retries here
-		// handle the case where reconnect itself fails (e.g. port exhaustion
-		// that needs time to clear).
-		for attempt := 0; attempt <= deletionMaxRetries; attempt++ {
-			count, err := m.executeDeletion(req)
-			result.DeletedCount = count
-			result.Error = err
-
-			if err == nil {
-				backoff = deletionRetryBackoff // reset on success
-				break
-			}
-
-			// Non-connection errors are not retryable
-			if !isConnectionErrorStr(err.Error()) {
-				break
-			}
-
-			result.ConnectionLost = true
-
-			if attempt < deletionMaxRetries {
-				logger.Warn("Deletion failed (attempt %d/%d), retrying in %v: %v",
-					attempt+1, deletionMaxRetries+1, backoff, err)
-				time.Sleep(backoff)
-				backoff *= 2
-				if backoff > deletionMaxBackoff {
-					backoff = deletionMaxBackoff
+		req := req
+		result := coordinator.Submit(context.Background(), work.Spec{
+			SourceID:    deletionWorkSourceID(req),
+			ResourceKey: deletionWorkResourceKey(req),
+			Policy:      work.PolicySerialBySource,
+			Priority:    work.PriorityUserAction,
+			Run: func(context.Context) (any, error) {
+				result := m.runDeletionRequest(req)
+				if req.Response != nil {
+					req.Response <- result
 				}
-			} else {
-				logger.Error("Deletion failed after %d attempts, moving to next: %v",
-					deletionMaxRetries+1, err)
+				resultCh <- result
+				// Throttle between operations on the same source to let Proton
+				// Bridge / upstream APIs release sockets and sync state.
+				time.Sleep(deletionThrottle)
+				return result, nil
+			},
+		})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = result.Await(context.Background())
+		}()
+	}
+	wg.Wait()
+	coordinator.Close()
+}
+
+func (m *Model) runDeletionRequest(req models.DeletionRequest) models.DeletionResult {
+	result := deletionResultFromRequest(req)
+	backoff := deletionRetryBackoff
+
+	// Try the deletion, retrying on connection errors with backoff. The IMAP
+	// layer already reconnects once per call; retries here handle the case
+	// where reconnect itself fails, such as port exhaustion that needs time to
+	// clear.
+	for attempt := 0; attempt <= deletionMaxRetries; attempt++ {
+		count, err := m.executeDeletion(req)
+		result.DeletedCount = count
+		result.Error = err
+
+		if err == nil {
+			break
+		}
+
+		// Non-connection errors are not retryable.
+		if !isConnectionErrorStr(err.Error()) {
+			break
+		}
+
+		result.ConnectionLost = true
+
+		if attempt < deletionMaxRetries {
+			logger.Warn("Deletion failed (attempt %d/%d), retrying in %v: %v",
+				attempt+1, deletionMaxRetries+1, backoff, err)
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > deletionMaxBackoff {
+				backoff = deletionMaxBackoff
 			}
+		} else {
+			logger.Error("Deletion failed after %d attempts, moving to next: %v",
+				deletionMaxRetries+1, err)
 		}
+	}
+	return result
+}
 
-		if req.Response != nil {
-			req.Response <- result
-		}
-		resultCh <- result
+func deletionResultFromRequest(req models.DeletionRequest) models.DeletionResult {
+	ref := deletionRequestMessageRef(req)
+	result := models.DeletionResult{
+		MessageRef:         ref,
+		SourceID:           ref.SourceID,
+		AccountID:          ref.AccountID,
+		LocalID:            ref.LocalID,
+		MessageID:          req.MessageID,
+		Sender:             req.Sender,
+		Folder:             req.Folder,
+		IsDomain:           req.IsDomain,
+		IsArchive:          req.IsArchive,
+		AffectedMessageIDs: append([]string(nil), req.AffectedMessageIDs...),
+	}
+	if result.MessageID == "" {
+		result.MessageID = ref.MessageID
+	}
+	if result.Folder == "" {
+		result.Folder = ref.Folder
+	}
+	if result.MessageID != "" && len(result.AffectedMessageIDs) == 0 {
+		result.AffectedMessageIDs = []string{result.MessageID}
+	}
+	return result
+}
 
-		// Throttle between operations to let Proton Bridge / upstream API
-		// release sockets and sync state.
-		time.Sleep(deletionThrottle)
+func deletionRequestMessageRef(req models.DeletionRequest) models.MessageRef {
+	ref := req.MessageRef
+	if ref.MessageID == "" {
+		ref.MessageID = req.MessageID
+	}
+	if ref.Folder == "" {
+		ref.Folder = req.Folder
+	}
+	if ref.SourceID == "" {
+		ref.SourceID = req.SourceID
+	}
+	if ref.AccountID == "" {
+		ref.AccountID = req.AccountID
+	}
+	if ref.LocalID == "" {
+		ref.LocalID = req.LocalID
+	}
+	if ref.MessageID == "" && ref.LocalID == "" {
+		return ref
+	}
+	return ref.WithDefaults()
+}
+
+func deletionWorkSourceID(req models.DeletionRequest) work.SourceID {
+	ref := deletionRequestMessageRef(req)
+	if ref.SourceID != "" {
+		return work.SourceID(ref.SourceID)
+	}
+	if req.Sender != "" {
+		return work.SourceID(models.DefaultMailSourceID)
+	}
+	return work.SourceID(models.DefaultMailSourceID)
+}
+
+func deletionWorkResourceKey(req models.DeletionRequest) work.ResourceKey {
+	ref := deletionRequestMessageRef(req)
+	operation := "delete"
+	if req.IsArchive {
+		operation = "archive"
+	}
+	itemID := ref.LocalID
+	if itemID == "" {
+		itemID = ref.MessageID
+	}
+	if itemID == "" {
+		itemID = req.Sender
+	}
+	return work.ResourceKey{
+		SourceID:     string(deletionWorkSourceID(req)),
+		AccountID:    string(ref.AccountID),
+		CollectionID: ref.Folder,
+		ItemID:       itemID,
+		Operation:    operation,
 	}
 }
 

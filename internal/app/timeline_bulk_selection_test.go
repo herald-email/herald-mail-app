@@ -266,6 +266,40 @@ func TestQueueRequests_TimelineSelectionTakesPriorityOverCursor(t *testing.T) {
 	}
 }
 
+func TestQueueRequests_CarriesScopedMessageRef(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.currentFolder = "INBOX"
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
+	email := &models.EmailData{
+		SourceID:  "work-mail",
+		AccountID: "work",
+		LocalID:   "mail:work-mail:work:INBOX:scoped-msg",
+		MessageID: "scoped-msg",
+		Sender:    "alice@example.com",
+		Subject:   "Scoped",
+		Folder:    "INBOX",
+	}
+	m.timeline.emails = []*models.EmailData{email}
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+
+	cmd := m.queueRequests(false)
+	if cmd == nil {
+		t.Fatal("expected queueRequests to return deletion listener command")
+	}
+
+	req := <-m.deletionRequestCh
+	want := email.MessageRef()
+	if req.MessageRef != want {
+		t.Fatalf("MessageRef = %#v, want %#v", req.MessageRef, want)
+	}
+	if req.SourceID != want.SourceID || req.AccountID != want.AccountID || req.LocalID != want.LocalID {
+		t.Fatalf("legacy scope fields = (%q,%q,%q), want (%q,%q,%q)", req.SourceID, req.AccountID, req.LocalID, want.SourceID, want.AccountID, want.LocalID)
+	}
+}
+
 func TestTimelineDeleteKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
