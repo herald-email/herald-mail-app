@@ -272,6 +272,36 @@ func TestGoogleCalendarSourceParsesRichEventDetail(t *testing.T) {
 	}
 }
 
+func TestCalDAVSourceParsesICSDateVariantsWithoutZeroTime(t *testing.T) {
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:offset-event\r\nSUMMARY:Offset event\r\nDTSTART;TZID=/freeassociation.sourceforge.net/America/Los_Angeles:20260524T1830\r\nDTEND:20260524T194500-0700\r\nLAST-MODIFIED:20260524T1200Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	event, err := eventFromICS("work-calendar", "work", "primary", "offset-event.ics", `"etag"`, ics)
+	if err != nil {
+		t.Fatalf("eventFromICS: %v", err)
+	}
+	if event.Start.IsZero() || event.End.IsZero() || event.UpdatedAt.IsZero() {
+		t.Fatalf("parsed times should not be zero: start=%v end=%v updated=%v", event.Start, event.End, event.UpdatedAt)
+	}
+	if event.TimeZone != "/freeassociation.sourceforge.net/America/Los_Angeles" {
+		t.Fatalf("TimeZone = %q, want raw provider TZID preserved", event.TimeZone)
+	}
+	if got := event.Start.In(time.FixedZone("PDT", -7*60*60)).Format("2006-01-02 15:04"); got != "2026-05-24 18:30" {
+		t.Fatalf("start = %s, want 2026-05-24 18:30 PDT", got)
+	}
+	if got := event.End.In(time.FixedZone("PDT", -7*60*60)).Format("2006-01-02 15:04"); got != "2026-05-24 19:45" {
+		t.Fatalf("end = %s, want 2026-05-24 19:45 PDT", got)
+	}
+	if got := event.UpdatedAt.UTC().Format("2006-01-02 15:04"); got != "2026-05-24 12:00" {
+		t.Fatalf("updated = %s, want 2026-05-24 12:00 UTC", got)
+	}
+}
+
+func TestCalDAVSourceRejectsInvalidICSStart(t *testing.T) {
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:bad-event\r\nSUMMARY:Bad event\r\nDTSTART:THIS-IS-NOT-A-DATE\r\nDTEND:20260524T194500Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	if _, err := eventFromICS("work-calendar", "work", "primary", "bad-event.ics", `"etag"`, ics); err == nil {
+		t.Fatal("eventFromICS succeeded with invalid DTSTART, want error")
+	}
+}
+
 func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,

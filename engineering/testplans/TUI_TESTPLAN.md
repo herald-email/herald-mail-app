@@ -1643,6 +1643,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
 - The Agenda List is sorted by start time, shows each event's calendar/source label, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The Agenda List uses a deliberate local 30-day range, falls back to the nearest valid event window when today's range is empty, and never renders malformed, zero-time, or absurdly long stale provider spans as historical rows such as `Dec 31` or `1950`.
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
 - `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
 - Calendar hints are read-only and do not advertise RSVP, edit, create, or provider mutation actions.

@@ -53,7 +53,8 @@ The date bugs should be fixed as a foundation before the screen work, because ev
 - [x] Normalize all visible event rows into local display intervals with start day, end day, all-day flag, event timezone label, and stable source/calendar identity before sorting.
 - [x] Sort timed events by local start time, then local end time, then all-day status, then title, then scoped event ref for deterministic ties.
 - [ ] Sort all-day and multi-day events into predictable top rows or day-spanning rows instead of mixing them into timed rows by midnight artifacts.
-- [ ] Make Agenda List use a deliberate range, such as today through the next 30 days by default, with explicit previous/next range movement.
+- [x] Make Agenda List use a deliberate local 30-day range, defaulting to today when that window has events and otherwise falling back to the nearest valid event window.
+- [x] Reject or hide calendar events with invalid or missing start timestamps, including stale cache rows with absurdly long historic spans, so parser failures never render as zero-time historical dates.
 - [ ] Make Week Time-Grid default to the week containing today or the selected event, not the first cached event when that produces surprising historical windows.
 - [ ] Make Day Agenda default to today when possible, then nearest upcoming event, then first cached event only as a final fallback.
 - [x] Preserve selected-event identity across refresh and filter changes when the same scoped event is still in the visible set.

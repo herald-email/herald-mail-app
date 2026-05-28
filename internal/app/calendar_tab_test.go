@@ -1050,7 +1050,7 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar events = %d, want %d", len(m.calendarEvents), len(events))
 	}
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendar", "Agenda", "Design review", "Event Detail", "Herald planning room", "read-only"} {
+	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "Event Detail", "Planning call", "read-only"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar view missing %q:\n%s", want, rendered)
 		}
@@ -1059,10 +1059,133 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar view exposed provider internals:\n%s", rendered)
 	}
 
+	cursorBefore := m.calendarCursor
 	model, _ = m.handleKeyMsg(keyRunes("j"))
 	m = model.(*Model)
-	if m.calendarCursor != 1 {
-		t.Fatalf("calendar cursor = %d, want 1", m.calendarCursor)
+	if m.calendarCursor != cursorBefore {
+		t.Fatalf("calendar cursor = %d, want unchanged %d when only one event is visible", m.calendarCursor, cursorBefore)
+	}
+}
+
+func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	old := today.AddDate(0, 0, -45).Add(9 * time.Hour)
+	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
+	current := today.Add(10 * time.Hour)
+	future := today.AddDate(0, 0, 10).Add(11 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "zero-start"}.WithDefaults(),
+			Title:  "Zero start should stay hidden",
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "old-event"}.WithDefaults(),
+			Title:  "Old event outside window",
+			Start:  old,
+			End:    old.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "malformed-span"}.WithDefaults(),
+			Title:  "Malformed historic span",
+			Start:  malformedSpan,
+			End:    today.AddDate(0, 0, 10).Add(17 * time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "current-event"}.WithDefaults(),
+			Title:  "Current window event",
+			Start:  current,
+			End:    current.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "future-event"}.WithDefaults(),
+			Title:  "Future window event",
+			Start:  future,
+			End:    future.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	for _, msg := range calendarImmediateMessagesForTest(m.loadCalendarAgenda()) {
+		model, _ := m.Update(msg)
+		m = model.(*Model)
+	}
+
+	if len(m.calendarEvents) != 4 {
+		t.Fatalf("calendar events = %d, want zero-start row filtered from model", len(m.calendarEvents))
+	}
+	if !sameCalendarDate(m.calendarAgendaStart, today) || !sameCalendarDate(m.calendarAgendaEnd.AddDate(0, 0, -1), today.AddDate(0, 0, 29)) {
+		t.Fatalf("agenda range = %v..%v, want local 30-day window from today", m.calendarAgendaStart, m.calendarAgendaEnd)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Agenda", "Current window event", "Future window event"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("agenda missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"Zero start should stay hidden", "Old event outside window", "Malformed historic span", "Dec 31", "1950"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("agenda rendered forbidden %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestCalendarAgendaFallsBackToNearestValidEventWindow(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
+	nearFuture := today.AddDate(0, 0, 45).Add(9 * time.Hour)
+	farFuture := today.AddDate(0, 0, 80).Add(9 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "malformed-span"}.WithDefaults(),
+			Title:  "Malformed span should not anchor today",
+			Start:  malformedSpan,
+			End:    today.AddDate(0, 0, 10).Add(17 * time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "near-future"}.WithDefaults(),
+			Title:  "Nearest future event",
+			Start:  nearFuture,
+			End:    nearFuture.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "far-future"}.WithDefaults(),
+			Title:  "Far future event",
+			Start:  farFuture,
+			End:    farFuture.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	for _, msg := range calendarImmediateMessagesForTest(m.loadCalendarAgenda()) {
+		model, _ := m.Update(msg)
+		m = model.(*Model)
+	}
+
+	if !sameCalendarDate(m.calendarAgendaStart, calendarDayStartFor(nearFuture)) {
+		t.Fatalf("agenda start = %v, want nearest future event day %v", m.calendarAgendaStart, nearFuture)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Nearest future event") {
+		t.Fatalf("agenda did not render nearest future event:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Malformed span should not anchor today") {
+		t.Fatalf("agenda rendered malformed historic span:\n%s", rendered)
 	}
 }
 
@@ -2036,7 +2159,7 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendars", "[x] Work", "Agenda for", "<-/->/h/l to switch", "! Timezone planning"} {
+	for _, want := range []string{"Calendars", "[x] Work", "Agenda for", "<-/->/h/l", "! Timezone planning"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar render missing %q:\n%s", want, rendered)
 		}

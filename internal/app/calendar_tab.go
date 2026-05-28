@@ -35,6 +35,9 @@ const (
 	calendarFocusDetail
 )
 
+const calendarAgendaDefaultDays = 30
+const calendarAgendaMaxSpanningEventDays = 45
+
 var (
 	calendarHTMLBreakPattern    = regexp.MustCompile(`(?i)<\s*(br|/p|/div|/li|/h[1-6])[^>]*>`)
 	calendarHTMLListItemPattern = regexp.MustCompile(`(?i)<\s*li[^>]*>`)
@@ -105,6 +108,8 @@ func (m *Model) refreshCalendarAvailability() {
 		m.crossSourceSearchResults = nil
 		m.crossSourceSearchCursor = 0
 		m.crossSourceSearchLoading = false
+		m.calendarAgendaStart = time.Time{}
+		m.calendarAgendaEnd = time.Time{}
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -250,6 +255,9 @@ func (m *Model) selectedCalendarDay() time.Time {
 	if !m.calendarDay.IsZero() {
 		return m.calendarDay
 	}
+	if m.calendarView == calendarViewAgenda && !m.calendarAgendaStart.IsZero() {
+		return m.calendarAgendaStart
+	}
 	if event := m.selectedCalendarEvent(); event != nil && !event.Start.IsZero() {
 		return event.Start
 	}
@@ -293,7 +301,10 @@ func (m *Model) setCalendarView(view calendarViewMode) {
 	case calendarViewCrossSearch:
 		m.selectCrossSourceSearchResult()
 	default:
-		m.calendarDetail = m.selectedCalendarEvent()
+		if m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero() {
+			m.setDefaultCalendarAgendaRange(time.Now())
+		}
+		m.ensureCalendarSelectionVisible()
 	}
 }
 
@@ -1450,7 +1461,8 @@ func (m *Model) renderCalendarAgendaList(width, height int) string {
 	}
 	var lines []string
 	visibleEvents := m.indexedVisibleCalendarEvents()
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRangeHeader("Agenda", m.selectedCalendarDay(), m.selectedCalendarDay(), width)))
+	rangeStart, rangeEnd := m.calendarAgendaDisplayRange()
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRangeHeader("Agenda", rangeStart, rangeEnd, width)))
 	title := fmt.Sprintf("Agenda (%d)", len(visibleEvents))
 	if m.calendarLoading {
 		title = "Agenda (loading)"
@@ -2471,9 +2483,14 @@ func (m *Model) moveCalendarRange(delta int) {
 		m.calendarThreeDayStart = m.selectedCalendarThreeDayStart().AddDate(0, 0, delta)
 		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 	default:
-		target := m.selectedCalendarDay().AddDate(0, 0, delta)
-		m.calendarDay = target
-		m.selectFirstCalendarEventForDay(target)
+		start, end := m.calendarAgendaWindow()
+		days := int(end.Sub(start).Hours() / 24)
+		if days < 1 {
+			days = calendarAgendaDefaultDays
+		}
+		m.calendarAgendaStart = start.AddDate(0, 0, days*delta)
+		m.calendarAgendaEnd = m.calendarAgendaStart.AddDate(0, 0, days)
+		m.ensureCalendarSelectionVisible()
 	}
 }
 
@@ -2528,15 +2545,65 @@ func (m *Model) calendarActiveRange() (time.Time, time.Time, string) {
 		end := start.AddDate(0, 0, 2)
 		return start, end, calendarCompactDateRange(start, end)
 	default:
-		visible := m.indexedVisibleCalendarEvents()
-		if len(visible) > 0 {
-			start := calendarDayStartFor(visible[0].event.Start)
-			end := calendarDayStartFor(visible[len(visible)-1].event.Start)
-			return start, end, calendarCompactDateRange(start, end)
-		}
-		day := m.selectedCalendarDay()
-		return day, day, day.Local().Format("Jan 2, 2006")
+		start, end := m.calendarAgendaDisplayRange()
+		return start, end, calendarCompactDateRange(start, end)
 	}
+}
+
+func (m *Model) setDefaultCalendarAgendaRange(now time.Time) {
+	start := calendarDefaultAgendaStart(m.calendarEvents, now)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(start)
+}
+
+func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) time.Time {
+	today := calendarDayStartFor(now)
+	defaultStart, defaultEnd := calendarAgendaWindowFor(today)
+	for _, event := range events {
+		if calendarEventOccursInAgendaWindow(event, defaultStart, defaultEnd) {
+			return defaultStart
+		}
+	}
+	var nearestFuture time.Time
+	var latestPast time.Time
+	for _, event := range events {
+		if event.Start.IsZero() {
+			continue
+		}
+		day := calendarDayStartFor(event.Start)
+		if !day.Before(today) {
+			if nearestFuture.IsZero() || day.Before(nearestFuture) {
+				nearestFuture = day
+			}
+			continue
+		}
+		if latestPast.IsZero() || day.After(latestPast) {
+			latestPast = day
+		}
+	}
+	if !nearestFuture.IsZero() {
+		return nearestFuture
+	}
+	if !latestPast.IsZero() {
+		return latestPast
+	}
+	return today
+}
+
+func calendarAgendaWindowFor(day time.Time) (time.Time, time.Time) {
+	start := calendarDayStartFor(day)
+	return start, start.AddDate(0, 0, calendarAgendaDefaultDays)
+}
+
+func (m *Model) calendarAgendaWindow() (time.Time, time.Time) {
+	if m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero() || !m.calendarAgendaEnd.After(m.calendarAgendaStart) {
+		return calendarAgendaWindowFor(time.Now())
+	}
+	return calendarDayStartFor(m.calendarAgendaStart), calendarDayStartFor(m.calendarAgendaEnd)
+}
+
+func (m *Model) calendarAgendaDisplayRange() (time.Time, time.Time) {
+	start, end := m.calendarAgendaWindow()
+	return start, end.AddDate(0, 0, -1)
 }
 
 func calendarCompactDateRange(start, end time.Time) string {
@@ -3234,6 +3301,29 @@ func eventOccursInCalendarRange(event models.CalendarEvent, start, end time.Time
 	return eventStart.Before(end) && eventEnd.After(start)
 }
 
+func calendarEventOccursInAgendaWindow(event models.CalendarEvent, start, end time.Time) bool {
+	if event.Start.IsZero() {
+		return false
+	}
+	start = calendarDayStartFor(start)
+	end = calendarDayStartFor(end)
+	eventStart := event.Start.Local()
+	eventEnd := event.End.Local()
+	if event.End.IsZero() {
+		eventEnd = eventStart
+	}
+	if !eventStart.Before(end) || !eventEnd.After(start) {
+		return false
+	}
+	if !eventStart.Before(start) {
+		return true
+	}
+	if eventEnd.Sub(eventStart) > calendarAgendaMaxSpanningEventDays*24*time.Hour {
+		return false
+	}
+	return true
+}
+
 func calendarOpenSlotSummaries(start time.Time, events []indexedCalendarEvent, width int) []string {
 	start = calendarDayStartFor(start)
 	summaries := make([]string, 0, 3)
@@ -3328,6 +3418,9 @@ func calendarSourceLabel(event models.CalendarEvent) string {
 func normalizeCalendarEventsForDisplay(events []models.CalendarEvent) []models.CalendarEvent {
 	out := make([]models.CalendarEvent, 0, len(events))
 	for _, event := range events {
+		if event.Start.IsZero() {
+			continue
+		}
 		event.Ref = event.Ref.WithDefaults()
 		if !event.Start.IsZero() && !event.End.IsZero() && event.End.Before(event.Start) {
 			event.End = event.Start
@@ -3421,8 +3514,15 @@ func (m *Model) pruneCalendarCollectionState() {
 
 func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
 	out := make([]indexedCalendarEvent, 0, len(m.calendarEvents))
+	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	for i, event := range m.calendarEvents {
 		if m.calendarEventHidden(event) {
+			continue
+		}
+		if event.Start.IsZero() {
+			continue
+		}
+		if m.calendarView == calendarViewAgenda && !calendarEventOccursInAgendaWindow(event, agendaStart, agendaEnd) {
 			continue
 		}
 		out = append(out, indexedCalendarEvent{index: i, event: event})
