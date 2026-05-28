@@ -2237,7 +2237,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.ensureCalendarSelectionVisible()
 		}
-		m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+		m.calendarStatus = ""
 		return m, nil
 
 	case CalendarSearchLoadedMsg:

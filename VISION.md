@@ -108,7 +108,7 @@ The TUI uses a title-row tab strip beside the `Herald` title, a collapsible fold
 - [x] Delete shortcuts use a safe/fast split: `d` or `Backspace` asks for confirmation, while `D` or `Shift+Backspace` deletes immediately in browse contexts
 
 ### Tabs (top-level navigation)
-Keyboard (`1`-`2` as the primary visible shortcuts, with `F1`-`F2` as visible function aliases and `F3` as a temporary Contacts alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
+Keyboard (`1`-`2` as the primary visible shortcuts, with `F1`-`F2` supported as legacy function aliases and `F3` as a temporary Contacts alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
 - [x] `1` — Timeline: chronological email list with body preview split
 - [x] `2` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment

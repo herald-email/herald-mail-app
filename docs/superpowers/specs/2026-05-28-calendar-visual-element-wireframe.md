@@ -6,16 +6,16 @@ This companion spec breaks the rejected calendar visual-parity pass into indepen
 
 The calendar surface needs calendar-specific chrome while preserving Herald's global shell behavior. This chrome should make the current calendar mode obvious and reserve the bottom rows for state and key hints like the reference.
 
-- [x] Render a calendar title row with `Herald Cal`, function-key style view names, the active view highlighted, and right-aligned `t: Today`, `z: Timezone`, and `q: Quit`.
+- [x] Render Calendar inside the shared Herald title-row tab strip with numbered top-level tab labels; do not advertise calendar-only `F1`-`F5` view tabs.
 - [x] Render a calendar status row with active range, timezone, update time, and visible-event count.
 - [x] Render a calendar hint row with pane cycling, navigation, open/detail, edit/new, today, timezone, and quit hints.
 - [x] Keep global quit, logs, chat, settings, and text-entry routing behavior compatible with the rest of Herald.
 
 ## Left Panel
 
-The left panel is the anchor for screens `01` through `04`. It should no longer be only a flat calendar list: it needs view context, range movement, a mini month, colored calendar toggles, and a filter footer.
+The left panel is the anchor for screens `01` through `04`. It should no longer be only a flat calendar list: it needs a border-level date range, range movement, a mini month, colored calendar toggles, and a filter footer.
 
-- [x] Show the active view name and normalized range at the top of the left panel.
+- [x] Show the normalized date range as the left panel border title, without duplicating the range or view name in the body.
 - [x] Show `<  Today  >` movement affordance below the range.
 - [x] Render a mini month grid with weekday headers and highlight the active day, week, or 3-day window depending on the current screen.
 - [x] Render calendar toggles with visible colored checkboxes or swatches, grouped by account/provider when multiple accounts are present.
@@ -53,9 +53,11 @@ The 3-Day screen should expose three adjacent command lanes. It should feel rela
 
 The Agenda screen is the compact list version of the same model. It should share the rail and inspector while making date grouping and source colors obvious.
 
+- [x] Render `Agenda (N) for <date/range>` as the main panel border title with the range-switch hint right-aligned in dim text.
 - [x] Render local date separators in the list.
 - [x] Render colored source markers and RSVP-needed markers on every row.
-- [x] Keep the preview/detail panel readable at standard width and fall back cleanly at the minimum guard size.
+- [x] Keep the preview/detail panel readable at standard width, with `Event Detail` on the panel border instead of repeated as a body heading.
+- [x] Fall back cleanly at the minimum guard size.
 
 ## Evidence
 
