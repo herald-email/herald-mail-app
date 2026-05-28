@@ -4,13 +4,13 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-27T14:55:15+00:00
-- Published runs analyzed: 41
-- Total queue items: 9
+- Updated at: 2026-05-28T17:36:23+00:00
+- Published runs analyzed: 44
+- Total queue items: 10
 - Pending: 0
 - Approved: 0
 - Rejected: 0
-- Implemented: 9
+- Implemented: 10
 
 ## How To Update
 
@@ -106,6 +106,23 @@ This document is the visible approval backlog for workflow suggestions recovered
 - `20260506-073508-add-timeline-c-compose-discoverability-with-bottom-hint-guard-rails` at 2026-05-06T14:35:08+00:00 via commit, merge
 - `20260505-111520-make-cleanup-rules-configuration-windows-compact-centered-overlays-like-settings-and-help` at 2026-05-05T18:15:20+00:00 via commit, merge, worktree-delete, branch-delete
 - `20260504-212203-implement-timeline-reading-first-redesign-remove-size-kb-and-att-columns-add-subject-attachment-marker-human-local-dates-improved-sender-subject-allocation-and-distinct-table-headers` at 2026-05-05T04:22:03+00:00 via commit, merge, worktree-delete
+
+### measure-remediation-template-adoption
+
+- Queue key: `measure-remediation-template-adoption-64aca1bc95`
+- Status: implemented
+- Seen in runs: 3
+- First seen: 2026-05-27T18:39:07+00:00
+- Last seen: 2026-05-28T16:49:06+00:00
+- Publish actions: commit 9fe638c Align calendar timeframes to calendar ranges, deleted branch codex/autopilot-calendar-timeframe-ranges-20260528-094906, fast-forward merged to main, local branch/worktree left for handoff, local commit 46f3f94, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260528-094906-calendar-timeframe-ranges
+- Why: Once the main repeated failure classes have templates, the next leverage comes from checking whether runs actually use them and whether retries decline.
+- Approval prompt: Approve exploring `measure-remediation-template-adoption` as the next explicit GEPA improvement pass.
+- Decision: implemented at 2026-05-28T17:36:23+00:00
+- Note: Implemented by user request: added remediation-template adoption measurement report and optimizer evidence.
+- Source runs:
+- `20260528-094906-fix-calendar-timeframe-ranges-so-month-windows-use-calendar-months-and-week-windows-use-monday-sunday` at 2026-05-28T16:49:06+00:00 via commit 9fe638c Align calendar timeframes to calendar ranges, fast-forward merged to main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260528-094906-calendar-timeframe-ranges, deleted branch codex/autopilot-calendar-timeframe-ranges-20260528-094906
+- `20260527-235216-implement-calendar-design-parity-roadmap-screens-01-04-plus-notes-rsvp-invitation-settings-hardening` at 2026-05-28T06:52:16+00:00 via local commit 46f3f94
+- `20260527-113907-implement-mail-app-style-multi-account-folder-sidebar` at 2026-05-27T18:39:07+00:00 via local branch/worktree left for handoff
 
 ### template-red-compose-comma-alias-feedback
 

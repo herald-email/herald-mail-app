@@ -92,6 +92,15 @@ def main() -> int:
                     f"- Implemented approval items: {metrics.get('implemented_approval_items', 'n/a')}",
                 ]
             )
+            if "template_adoption_eligible_runs" in metrics:
+                lines.extend(
+                    [
+                        f"- Template-adoption eligible runs: {metrics.get('template_adoption_eligible_runs', 'n/a')}",
+                        f"- Template-adoption eligible rate: {metrics.get('template_adoption_eligible_rate', 'n/a')}",
+                        f"- Template-adoption unmatched eligible runs: {metrics.get('template_adoption_unmatched_eligible_runs', 'n/a')}",
+                        f"- Template-adoption retry delta with templates: {metrics.get('template_adoption_retry_delta_with_templates', 'n/a')}",
+                    ]
+                )
             if delta:
                 lines.append("Delta from previous entry:")
                 lines.extend([f"- {key}: {value:+}" for key, value in delta.items()])
@@ -113,6 +122,8 @@ def main() -> int:
     else:
         lines.append("No entries yet.")
 
+    while lines and lines[-1] == "":
+        lines.pop()
     save_text(markdown_path, "\n".join(lines) + "\n")
     print(str(markdown_path))
     return 0

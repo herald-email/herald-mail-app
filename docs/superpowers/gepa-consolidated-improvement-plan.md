@@ -31,6 +31,7 @@ This section ranks the workflow changes that would pay down the most repeated fr
 - [x] Promoted native-terminal repro paths, small-terminal guards, and canonical before/after capture requirements into an explicit visual-evidence gate for TUI-facing work.
 - [x] Added an input-routing safety gate that requires shortcut and alias changes to prove they do not steal text entry on compose, prompt, or editor surfaces.
 - [x] Built a pending-approval queue that collects post-publish self-reflection suggestions across runs so the user can review and batch-approve GEPA changes.
+- [x] Added remediation-template adoption measurement so the workflow can see whether published self-reflections actually use reusable templates and how matched runs compare on retries.
 
 ## Execution Order
 
@@ -41,6 +42,7 @@ This section sequences the backlog into a practical rollout. The idea is to stab
 - [x] Phase 3: finished the scored TUI-safety gate set by pairing the completed visual-evidence gate with the input-routing safety gate.
 - [x] Phase 4: added the pending-approval queue so post-publish self-reflection becomes a reviewable backlog instead of scattered report text.
 - [x] Phase 5: measured the current effect of the first four phases on retry count, skipped gates, and clarification load, while explicitly recording that the post-improvement sample is still validation-heavy and lacks post-Phase 1 bug/feature runs.
+- [x] Phase 6: measured remediation-template adoption across published self-reflections so template usefulness is visible before adding stricter enforcement.
 
 ## Approval Prompts
 
@@ -52,3 +54,4 @@ This section converts the plan into direct asks that future sessions can execute
 - [x] Approved and completed an input-routing safety gate pass focused on compose, prompt, and editor text-entry proof for shortcut-sensitive TUI work.
 - [x] Approved and completed a visibility pass that adds a pending-approval queue for post-publish reflection suggestions.
 - [x] Approved and completed a measurement pass that compares retry counts and follow-up load before and after the first four improvements.
+- [x] Approved and completed a remediation-template adoption pass that reports eligible adoption rate, unmatched eligible runs, and retry deltas.

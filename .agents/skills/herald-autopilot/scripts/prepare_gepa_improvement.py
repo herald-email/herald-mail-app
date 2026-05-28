@@ -21,6 +21,8 @@ def main() -> int:
     templates = load_remediation_templates(repo_root)
     queue_path = out_dir / "pending-approvals.json"
     queue = load_json(queue_path) if queue_path.exists() else {"summary": {}}
+    template_adoption_path = out_dir / "template-adoption.json"
+    template_adoption = load_json(template_adoption_path) if template_adoption_path.exists() else {"summary": {}}
 
     total_runs = int(summary.get("total_runs", 0))
     failed_runs = int(summary.get("status_counts", {}).get("failed", 0))
@@ -44,6 +46,12 @@ def main() -> int:
     queue_pending = int(queue_summary.get("pending", 0))
     queue_approved = int(queue_summary.get("approved", 0))
     queue_implemented = int(queue_summary.get("implemented", 0))
+    template_adoption_summary = template_adoption.get("summary", {})
+    template_adoption_measured = template_adoption_path.exists()
+    template_adoption_eligible_runs = int(template_adoption_summary.get("eligible_runs", 0))
+    template_adoption_eligible_rate = template_adoption_summary.get("eligible_adoption_rate")
+    template_adoption_unmatched = int(template_adoption_summary.get("unmatched_eligible_runs", 0))
+    template_adoption_retry_delta = template_adoption_summary.get("eligible_retry_delta_with_templates")
     real_task_gap = total_runs < 5
     top_failure = patterns.get("top_failing_evidence", [])
     top_failure_name = top_failure[0]["name"] if top_failure else ""
@@ -103,11 +111,33 @@ def main() -> int:
             "risk": "low",
             "value": "medium",
         }
-    elif top_failure_name and top_failure_template_key:
+    elif top_failure_name and top_failure_template_key and not template_adoption_measured:
         bottleneck = f"The most repeated failure `{top_failure_name}` already has a reusable template, so the next step is to measure and enforce template adoption consistently."
         recommendation = {
             "name": "measure-remediation-template-adoption",
             "why": "Once the main repeated failure classes have templates, the next leverage comes from checking whether runs actually use them and whether retries decline.",
+            "risk": "low",
+            "value": "medium",
+        }
+    elif (
+        top_failure_name
+        and top_failure_template_key
+        and template_adoption_eligible_runs >= 3
+        and template_adoption_eligible_rate is not None
+        and template_adoption_eligible_rate < 0.8
+    ):
+        bottleneck = f"Template adoption is now measured, but only {template_adoption_eligible_rate:.0%} of eligible published reflections matched a reusable template."
+        recommendation = {
+            "name": "enforce-remediation-template-adoption",
+            "why": "The measurement pass found eligible runs without template matches, so the next leverage is to nudge self-reflection toward existing templates before proposing new queue items.",
+            "risk": "low",
+            "value": "medium",
+        }
+    elif top_failure_name and top_failure_template_key:
+        bottleneck = "Reusable remediation templates are now measured and sufficiently visible, so the next workflow gain should come from verification-cost measurement."
+        recommendation = {
+            "name": "measure-verification-cost-by-surface",
+            "why": "With template adoption visible, the next practical improvement is measuring which verification surfaces consume the most time so future runs can right-size their gates.",
             "risk": "low",
             "value": "medium",
         }
@@ -159,6 +189,11 @@ def main() -> int:
             "pending_approval_items": queue_pending,
             "approved_approval_items": queue_approved,
             "implemented_approval_items": queue_implemented,
+            "template_adoption_measured": template_adoption_measured,
+            "template_adoption_eligible_runs": template_adoption_eligible_runs,
+            "template_adoption_eligible_rate": template_adoption_eligible_rate,
+            "template_adoption_unmatched_eligible_runs": template_adoption_unmatched,
+            "template_adoption_retry_delta_with_templates": template_adoption_retry_delta,
             "top_failing_evidence": patterns.get("top_failing_evidence", []),
             "top_risks": patterns.get("top_risks", []),
         },
@@ -216,6 +251,11 @@ def main() -> int:
             f"- Pending approval items: {brief['evidence']['pending_approval_items']}",
             f"- Approved approval items: {brief['evidence']['approved_approval_items']}",
             f"- Implemented approval items: {brief['evidence']['implemented_approval_items']}",
+            f"- Template-adoption measured: {'yes' if brief['evidence']['template_adoption_measured'] else 'no'}",
+            f"- Template-adoption eligible runs: {brief['evidence']['template_adoption_eligible_runs']}",
+            f"- Template-adoption eligible rate: {brief['evidence']['template_adoption_eligible_rate'] if brief['evidence']['template_adoption_eligible_rate'] is not None else 'n/a'}",
+            f"- Template-adoption unmatched eligible runs: {brief['evidence']['template_adoption_unmatched_eligible_runs']}",
+            f"- Template-adoption retry delta with templates: {brief['evidence']['template_adoption_retry_delta_with_templates'] if brief['evidence']['template_adoption_retry_delta_with_templates'] is not None else 'n/a'}",
         ]
         + [f"- Top failing evidence: {item['name']} ({item['count']})" for item in brief["evidence"]["top_failing_evidence"][:3]]
         + [""]
