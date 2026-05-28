@@ -586,6 +586,7 @@ func (s *Settings) buildForm() {
 		return
 	}
 	s.normalizeCalendarProviderChoice()
+	s.syncCalendarProviderDefaults("", s.calendarProvider)
 
 	// Group 1 — Account type selection
 	accountGroup := huh.NewGroup(
@@ -1019,19 +1020,27 @@ func (s *Settings) buildForm() {
 		huh.NewInput().
 			Title("CalDAV URL").
 			Inline(true).
-			Placeholder("https://caldav.example.com/").
+			PlaceholderFunc(func() string {
+				return calendarProviderURLPlaceholder(s.effectiveCalendarProvider())
+			}, []any{&s.calendarProvider, &s.provider, &s.alsoAddCalendar}).
 			Value(&s.caldavURL),
 		huh.NewInput().
 			Title("CalDAV Username").
 			Inline(true).
+			PlaceholderFunc(func() string {
+				return calendarProviderUsernamePlaceholder(s.effectiveCalendarProvider())
+			}, []any{&s.calendarProvider, &s.provider, &s.alsoAddCalendar}).
 			Value(&s.caldavUsername),
 		huh.NewInput().
 			Title("CalDAV Password").
 			Inline(true).
+			PlaceholderFunc(func() string {
+				return calendarProviderPasswordPlaceholder(s.effectiveCalendarProvider())
+			}, []any{&s.calendarProvider, &s.provider, &s.alsoAddCalendar}).
 			EchoMode(huh.EchoModePassword).
 			Value(&s.caldavPassword),
 	).WithHideFunc(func() bool {
-		return !s.accountDetailShowsCalendar() || s.calendarProvider != "caldav"
+		return !s.accountDetailShowsCalendar() || !calendarProviderUsesCalDAV(s.effectiveCalendarProvider())
 	})
 
 	deleteAccountGroup := huh.NewGroup(
@@ -1577,12 +1586,146 @@ func (s *Settings) normalizeCalendarProviderChoice() {
 }
 
 func (s *Settings) calendarProviderOptions() []huh.Option[string] {
-	options := make([]huh.Option[string], 0, 2)
+	options := make([]huh.Option[string], 0, 4)
 	if s.showGoogleCalendarProviderOption() {
 		options = append(options, huh.NewOption("Google Calendar", "google_calendar"))
 	}
-	options = append(options, huh.NewOption("CalDAV", "caldav"))
+	for _, preset := range calendarCalDAVPresets() {
+		label := preset.OptionLabel
+		if label == "" {
+			label = preset.Label
+		}
+		options = append(options, huh.NewOption(label, preset.Provider))
+	}
+	options = append(options, huh.NewOption("Custom CalDAV", "caldav"))
 	return options
+}
+
+type calendarCalDAVPreset struct {
+	Provider            string
+	Label               string
+	OptionLabel         string
+	URL                 string
+	UsernamePlaceholder string
+	PasswordPlaceholder string
+}
+
+func calendarCalDAVPresets() []calendarCalDAVPreset {
+	return []calendarCalDAVPreset{
+		{
+			Provider:            "fastmail",
+			Label:               "Fastmail Calendar",
+			OptionLabel:         "Fastmail Calendar (app password)",
+			URL:                 "https://caldav.fastmail.com/",
+			UsernamePlaceholder: "you@fastmail.com",
+			PasswordPlaceholder: "Fastmail app password",
+		},
+		{
+			Provider:            "icloud",
+			Label:               "iCloud Calendar",
+			OptionLabel:         "iCloud Calendar (Apple app-specific password)",
+			URL:                 "https://caldav.icloud.com/",
+			UsernamePlaceholder: "you@icloud.com",
+			PasswordPlaceholder: "Apple app-specific password",
+		},
+	}
+}
+
+func calendarCalDAVPresetForProvider(provider string) (calendarCalDAVPreset, bool) {
+	provider = strings.TrimSpace(provider)
+	for _, preset := range calendarCalDAVPresets() {
+		if preset.Provider == provider {
+			return preset, true
+		}
+	}
+	return calendarCalDAVPreset{}, false
+}
+
+func calendarProviderUsesCalDAV(provider string) bool {
+	if strings.TrimSpace(provider) == "caldav" {
+		return true
+	}
+	_, ok := calendarCalDAVPresetForProvider(provider)
+	return ok
+}
+
+func calendarProviderSourceProvider(provider string) string {
+	if calendarProviderUsesCalDAV(provider) {
+		return "caldav"
+	}
+	return strings.TrimSpace(provider)
+}
+
+func calendarProviderTitle(provider string) string {
+	if strings.TrimSpace(provider) == "google_calendar" {
+		return "Google Calendar"
+	}
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		return preset.Label
+	}
+	return "Custom CalDAV"
+}
+
+func calendarProviderURLPlaceholder(provider string) string {
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		return preset.URL
+	}
+	return "https://caldav.example.com/"
+}
+
+func calendarProviderUsernamePlaceholder(provider string) string {
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		return preset.UsernamePlaceholder
+	}
+	return "you@example.com"
+}
+
+func calendarProviderPasswordPlaceholder(provider string) string {
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		return preset.PasswordPlaceholder
+	}
+	return "provider password or app password"
+}
+
+func (s *Settings) effectiveCalendarProvider() string {
+	provider := strings.TrimSpace(s.calendarProvider)
+	if provider == "" {
+		provider = s.defaultCalendarProvider()
+	}
+	if s.accountDetailShowsMail() && s.alsoAddCalendar {
+		if paired := pairedCalendarProviderForMailProvider(s.provider); paired != "" && provider == "caldav" && strings.TrimSpace(s.caldavURL) == "" {
+			return paired
+		}
+	}
+	return provider
+}
+
+func pairedCalendarProviderForMailProvider(provider string) string {
+	switch strings.TrimSpace(provider) {
+	case "fastmail", "icloud":
+		return strings.TrimSpace(provider)
+	case "gmail-oauth":
+		return "google_calendar"
+	default:
+		return ""
+	}
+}
+
+func (s *Settings) syncCalendarProviderDefaults(oldProvider, newProvider string) {
+	if s == nil {
+		return
+	}
+	oldPreset, oldOK := calendarCalDAVPresetForProvider(oldProvider)
+	newPreset, newOK := calendarCalDAVPresetForProvider(newProvider)
+	if !newOK {
+		if oldOK && strings.TrimSpace(s.caldavURL) == oldPreset.URL {
+			s.caldavURL = ""
+		}
+		return
+	}
+	if strings.TrimSpace(s.caldavURL) == "" || (oldOK && strings.TrimSpace(s.caldavURL) == oldPreset.URL) {
+		s.caldavURL = newPreset.URL
+	}
 }
 
 func (s *Settings) accountDetailCapability() string {
@@ -1943,6 +2086,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward to the form.
 	prevProvider := s.provider
+	prevCalendarProvider := s.calendarProvider
 	prevThemeRole := s.themeRole
 	prevThemeFG := s.themeFG
 	prevThemeBG := s.themeBG
@@ -1952,6 +2096,9 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if prevProvider != s.provider {
 		s.syncProviderDefaults(prevProvider, s.provider)
+	}
+	if prevCalendarProvider != s.calendarProvider {
+		s.syncCalendarProviderDefaults(prevCalendarProvider, s.calendarProvider)
 	}
 	s.syncAIDefaults()
 	s.syncThemeRoleFields(prevThemeRole, prevThemeFG, prevThemeBG)
@@ -1986,6 +2133,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.resetAddAccountFields()
 			if s.accountEditMode == settingsAccountEditAddCalendar {
 				s.calendarProvider = s.defaultCalendarProvider()
+				s.syncCalendarProviderDefaults("", s.calendarProvider)
 			}
 			if s.accountEditMode == settingsAccountEditAddMail {
 				s.syncProviderDefaults("", s.provider)
@@ -2327,11 +2475,12 @@ func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceCo
 }
 
 func (s *Settings) calendarSourceConfig(accountID string, existing []config.SourceConfig) config.SourceConfig {
-	provider := strings.TrimSpace(s.calendarProvider)
+	providerChoice := s.effectiveCalendarProvider()
+	provider := calendarProviderSourceProvider(providerChoice)
 	if provider == "" {
 		provider = "google_calendar"
 	}
-	name := firstNonEmptyString(s.calendarDisplayName, s.accountDisplayName+" Calendar", s.calendarEmail, s.caldavUsername, accountID+" Calendar")
+	name := firstNonEmptyString(s.calendarDisplayName, s.accountDisplayName+" Calendar", s.calendarEmail, s.caldavUsername, calendarProviderTitle(providerChoice), accountID+" Calendar")
 	source := config.SourceConfig{
 		ID:          settingsUniqueSourceID(existing, name, "calendar"),
 		Kind:        string(models.SourceKindCalendar),
@@ -2342,6 +2491,11 @@ func (s *Settings) calendarSourceConfig(accountID string, existing []config.Sour
 	switch provider {
 	case "caldav":
 		source.CalDAV.URL = strings.TrimSpace(s.caldavURL)
+		if source.CalDAV.URL == "" {
+			if preset, ok := calendarCalDAVPresetForProvider(providerChoice); ok {
+				source.CalDAV.URL = preset.URL
+			}
+		}
 		source.CalDAV.Username = strings.TrimSpace(firstNonEmptyString(s.caldavUsername, s.email))
 		source.CalDAV.Password = s.caldavPassword
 	default:

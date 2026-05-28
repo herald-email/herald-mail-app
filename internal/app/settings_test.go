@@ -930,6 +930,90 @@ func TestSettingsCalendarProviderOptionsHideGoogleCalendarUnlessOAuthAndExperime
 	}
 }
 
+func TestSettingsCalendarProviderOptionsIncludeCalDAVVendorPresets(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddCalendar
+	s.calendarProvider = "caldav"
+	s.buildForm()
+
+	var labels []string
+	for _, option := range s.calendarProviderOptions() {
+		labels = append(labels, option.Key)
+	}
+	rendered := strings.Join(labels, "\n")
+
+	for _, want := range []string{"Fastmail Calendar", "iCloud Calendar", "Custom CalDAV"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected calendar provider options to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestBuildConfigCalendarVendorPresetCreatesCalDAVSource(t *testing.T) {
+	tests := []struct {
+		provider string
+		email    string
+		url      string
+	}{
+		{provider: "fastmail", email: "me@fastmail.com", url: "https://caldav.fastmail.com/"},
+		{provider: "icloud", email: "me@icloud.com", url: "https://caldav.icloud.com/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			s := NewSettings(SettingsModePanel, nil)
+			s.panelSection = settingsPanelSectionAccount
+			s.accountEditMode = settingsAccountEditAddCalendar
+			s.calendarProvider = tt.provider
+			s.caldavUsername = tt.email
+			s.caldavPassword = "app-password"
+
+			cfg := s.buildConfig()
+
+			if len(cfg.Sources) != 1 {
+				t.Fatalf("len(sources) = %d, want 1: %#v", len(cfg.Sources), cfg.Sources)
+			}
+			source := cfg.Sources[0]
+			if source.Provider != "caldav" {
+				t.Fatalf("source.Provider = %q, want caldav: %#v", source.Provider, source)
+			}
+			if source.CalDAV.URL != tt.url {
+				t.Fatalf("CalDAV URL = %q, want %q: %#v", source.CalDAV.URL, tt.url, source)
+			}
+			if source.CalDAV.Username != tt.email {
+				t.Fatalf("CalDAV username = %q, want %q", source.CalDAV.Username, tt.email)
+			}
+		})
+	}
+}
+
+func TestSettingsCalendarVendorPresetRendersURLAndGuidance(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddCalendar
+	s.calendarProvider = "icloud"
+	s.buildForm()
+
+	rendered := ""
+	var views []string
+	for i := 0; i < 6; i++ {
+		rendered = renderSettingsViewForTest(t, s, 100, 32)
+		views = append(views, rendered)
+		if strings.Contains(rendered, "CalDAV URL") {
+			break
+		}
+		s.form.NextGroup()
+	}
+	allViews := strings.Join(views, "\n--- next group ---\n")
+
+	for _, want := range []string{"CalDAV URL", "https://caldav.icloud.com/", "Apple app-specific password"} {
+		if !strings.Contains(allViews, want) {
+			t.Fatalf("expected iCloud CalDAV guidance to include %q, got:\n%s", want, allViews)
+		}
+	}
+}
+
 func TestSettingsGoogleCalendarWithoutEmailRequestsOAuth(t *testing.T) {
 	originalOAuthConfigured := googleOAuthCredentialsConfigured
 	googleOAuthCredentialsConfigured = func() bool { return true }
@@ -1063,6 +1147,35 @@ func TestBuildConfigAddMailWithCalendarCreatesExplicitSources(t *testing.T) {
 	}
 	if cal.Kind != "calendar" || cal.AccountID != mail.AccountID || cal.Provider != "google_calendar" || cal.Google.Email != "work@example.com" {
 		t.Fatalf("calendar source = %#v, want paired google calendar source", cal)
+	}
+}
+
+func TestBuildConfigAddMailWithVendorCalendarUsesCalDAVPreset(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddMail
+	s.accountDisplayName = "Personal iCloud"
+	s.provider = "icloud"
+	s.email = "me@icloud.com"
+	s.password = "mail-app-password"
+	s.imapHost = "imap.mail.me.com"
+	s.imapPort = "993"
+	s.smtpHost = "smtp.mail.me.com"
+	s.smtpPort = "587"
+	s.alsoAddCalendar = true
+	s.calendarProvider = "caldav"
+	s.caldavPassword = "calendar-app-password"
+
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(sources) = %d, want mail+calendar sources: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	cal := cfg.Sources[1]
+	if cal.Kind != "calendar" || cal.Provider != "caldav" || cal.CalDAV.URL != "https://caldav.icloud.com/" {
+		t.Fatalf("calendar source = %#v, want paired iCloud CalDAV preset", cal)
+	}
+	if cal.CalDAV.Username != "me@icloud.com" || cal.CalDAV.Password != "calendar-app-password" {
+		t.Fatalf("calendar credentials = %#v, want mail email plus calendar password", cal.CalDAV)
 	}
 }
 
