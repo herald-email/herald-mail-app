@@ -135,6 +135,48 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 	}
 }
 
+func TestLocalBackendCalendarAgendaSyncsProviderWhenCacheEmpty(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("family", "Family", "#63da38"),
+		testcalendar.WithEvent("family", testcalendar.Event{
+			ID:       "lesson",
+			UID:      "lesson",
+			Summary:  "Family lesson",
+			Location: "Music room",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+			Status:   "confirmed",
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("family-calendar", "family")
+
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+	events, err := b.ListCalendarAgenda(start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("ListCalendarAgenda: %v", err)
+	}
+	if len(events) != 1 || events[0].Title != "Family lesson" {
+		t.Fatalf("events = %#v, want synced provider event", events)
+	}
+
+	cached, err := store.GetCalendarEventByRef(events[0].Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if cached.Title != "Family lesson" {
+		t.Fatalf("cached = %#v, want synced provider event in cache", cached)
+	}
+}
+
 func TestLocalBackendCalendarAgendaHiddenForGoogleCalendarWithoutOAuth(t *testing.T) {
 	store, err := cache.New(":memory:")
 	if err != nil {

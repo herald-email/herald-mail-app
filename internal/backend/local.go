@@ -62,6 +62,9 @@ type LocalBackend struct {
 
 	messageService   *MessageService
 	messageServiceMu sync.Mutex
+
+	calendarSyncMu   sync.Mutex
+	calendarLastSync map[models.SourceID]time.Time
 }
 
 func summarizeTraceMessage(message string) string {

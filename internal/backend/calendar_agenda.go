@@ -14,6 +14,11 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
+const (
+	calendarAgendaSyncTTL     = 5 * time.Minute
+	calendarAgendaSyncTimeout = 45 * time.Second
+)
+
 // CalendarAgendaBackend is an additive read-only calendar surface used by the
 // TUI. Legacy mail backends do not need to implement it.
 type CalendarAgendaBackend interface {
@@ -127,6 +132,20 @@ func (b *LocalBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 	if b == nil || b.cache == nil {
 		return nil, nil
 	}
+	cached, err := b.listCachedCalendarAgenda(start, end)
+	if err != nil {
+		return nil, err
+	}
+	if len(cached) > 0 {
+		return cached, nil
+	}
+	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		return nil, err
+	}
+	return b.listCachedCalendarAgenda(start, end)
+}
+
+func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
 	var out []models.CalendarEvent
 	for _, source := range b.configuredCalendarSources() {
 		events, err := b.cache.ListCalendarAgendaEvents(models.SourceID(source.ID), models.AccountID(source.AccountID), start, end)
@@ -220,6 +239,27 @@ func (b *LocalBackend) SearchCalendarEvents(query string, start, end time.Time) 
 	if b == nil || b.cache == nil {
 		return nil, nil
 	}
+	results, err := b.searchCachedCalendarEvents(query, start, end)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) > 0 || strings.TrimSpace(query) == "" {
+		return results, nil
+	}
+	cachedAgenda, err := b.listCachedCalendarAgenda(start, end)
+	if err != nil {
+		return nil, err
+	}
+	if len(cachedAgenda) > 0 {
+		return results, nil
+	}
+	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		return nil, err
+	}
+	return b.searchCachedCalendarEvents(query, start, end)
+}
+
+func (b *LocalBackend) searchCachedCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
 	var out []models.CalendarEvent
 	for _, source := range b.configuredCalendarSources() {
 		events, err := b.cache.SearchCalendarEvents(models.SourceID(source.ID), models.AccountID(source.AccountID), query, start, end)
@@ -230,6 +270,68 @@ func (b *LocalBackend) SearchCalendarEvents(query string, start, end time.Time) 
 	}
 	sortCalendarEvents(out)
 	return out, nil
+}
+
+func (b *LocalBackend) syncConfiguredCalendarSources(ctx context.Context) error {
+	if b == nil || b.cache == nil {
+		return nil
+	}
+	sources := b.configuredCalendarSources()
+	if len(sources) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, calendarAgendaSyncTimeout)
+	defer cancel()
+
+	b.calendarSyncMu.Lock()
+	defer b.calendarSyncMu.Unlock()
+
+	if b.calendarLastSync == nil {
+		b.calendarLastSync = make(map[models.SourceID]time.Time)
+	}
+	now := time.Now()
+	for _, source := range sources {
+		sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+		if last := b.calendarLastSync[sourceID]; !last.IsZero() && now.Sub(last) < calendarAgendaSyncTTL {
+			continue
+		}
+		opened, err := DefaultSourceRegistry().Open(ctx, source, SourceDeps{ProfileConfig: b.cfg})
+		if err != nil {
+			return fmt.Errorf("calendar source %s failed to open: %w", source.ID, err)
+		}
+		if opened.Calendar == nil {
+			_ = opened.Close()
+			return fmt.Errorf("calendar source %s did not provide a calendar adapter", source.ID)
+		}
+		collections, err := opened.Calendar.ListCalendars(ctx)
+		if err != nil {
+			_ = opened.Close()
+			return fmt.Errorf("calendar source %s failed to list calendars: %w", source.ID, err)
+		}
+		service := calendar.NewEventService(b.cache, opened.Calendar)
+		for _, collection := range collections {
+			if _, err := service.SyncCollectionNoCache(ctx, collection.Ref); err != nil {
+				service.Close()
+				_ = opened.Close()
+				return fmt.Errorf("calendar source %s failed to sync collection %s: %w", source.ID, collection.Ref.CollectionID, err)
+			}
+			if stored, err := b.cache.GetCalendarCollection(collection.Ref); err == nil && stored.SyncToken != "" {
+				collection.SyncToken = stored.SyncToken
+			}
+			if err := b.cache.PutCalendarCollection(collection); err != nil {
+				service.Close()
+				_ = opened.Close()
+				return err
+			}
+		}
+		service.Close()
+		_ = opened.Close()
+		b.calendarLastSync[sourceID] = now
+	}
+	return nil
 }
 
 func (b *LocalBackend) configuredCalendarSources() []config.SourceConfig {
