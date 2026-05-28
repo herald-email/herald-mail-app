@@ -995,6 +995,24 @@ func TestBuildConfigCalendarVendorPresetCreatesCalDAVSource(t *testing.T) {
 	}
 }
 
+func TestBuildConfigCalendarVendorPresetUsesCalendarEmailWhenUsernameBlank(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddCalendar
+	s.calendarProvider = "icloud"
+	s.calendarEmail = "me@icloud.com"
+	s.caldavPassword = "app-password"
+
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("len(sources) = %d, want 1: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	source := cfg.Sources[0]
+	if source.CalDAV.Username != "me@icloud.com" {
+		t.Fatalf("CalDAV username = %q, want calendar email fallback", source.CalDAV.Username)
+	}
+}
+
 func TestSettingsCalendarVendorPresetRendersURLAndGuidance(t *testing.T) {
 	tests := []struct {
 		provider       string

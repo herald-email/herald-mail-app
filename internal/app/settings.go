@@ -2616,7 +2616,7 @@ func (s *Settings) calendarSourceConfig(accountID string, existing []config.Sour
 				source.CalDAV.URL = preset.URL
 			}
 		}
-		source.CalDAV.Username = strings.TrimSpace(firstNonEmptyString(s.caldavUsername, s.email))
+		source.CalDAV.Username = strings.TrimSpace(firstNonEmptyString(s.caldavUsername, s.calendarEmail, s.email))
 		source.CalDAV.Password = s.caldavPassword
 	default:
 		source.Google.Email = strings.TrimSpace(firstNonEmptyString(s.calendarEmail, s.email))

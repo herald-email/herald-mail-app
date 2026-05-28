@@ -392,29 +392,47 @@ func (m *MultiBackend) calendarAgendaBackends() []CalendarAgendaBackend {
 	}
 	m.mu.RLock()
 	active := m.active
-	if active == AllAccountsSourceID {
-		slots := make([]*accountSlot, 0, len(m.order))
-		for _, id := range m.order {
-			slots = append(slots, m.slots[id])
-		}
-		m.mu.RUnlock()
-		out := make([]CalendarAgendaBackend, 0, len(slots))
-		for _, slot := range slots {
-			if backend, ok := slot.backend.(CalendarAgendaBackend); ok {
-				out = append(out, backend)
-			}
-		}
-		return out
+	slots := make([]*accountSlot, 0, len(m.order))
+	for _, id := range m.order {
+		slots = append(slots, m.slots[id])
 	}
 	slot := m.slots[active]
 	m.mu.RUnlock()
+
+	if active == AllAccountsSourceID {
+		return calendarAgendaBackendsFromSlots(slots, false)
+	}
 	if slot == nil {
-		return nil
+		return calendarAgendaBackendsFromSlots(slots, true)
 	}
 	if backend, ok := slot.backend.(CalendarAgendaBackend); ok {
+		if backend.CalendarAgendaAvailable() {
+			return []CalendarAgendaBackend{backend}
+		}
+		if fallback := calendarAgendaBackendsFromSlots(slots, true); len(fallback) > 0 {
+			return fallback
+		}
 		return []CalendarAgendaBackend{backend}
 	}
-	return nil
+	return calendarAgendaBackendsFromSlots(slots, true)
+}
+
+func calendarAgendaBackendsFromSlots(slots []*accountSlot, requireAvailable bool) []CalendarAgendaBackend {
+	out := make([]CalendarAgendaBackend, 0, len(slots))
+	for _, slot := range slots {
+		if slot == nil {
+			continue
+		}
+		backend, ok := slot.backend.(CalendarAgendaBackend)
+		if !ok {
+			continue
+		}
+		if requireAvailable && !backend.CalendarAgendaAvailable() {
+			continue
+		}
+		out = append(out, backend)
+	}
+	return out
 }
 
 func (m *MultiBackend) calendarMutationBackendsForRef(ref models.EventRef) []CalendarEventMutationBackend {

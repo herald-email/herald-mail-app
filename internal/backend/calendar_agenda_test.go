@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -155,6 +156,63 @@ func TestLocalBackendCalendarAgendaHiddenForGoogleCalendarWithoutOAuth(t *testin
 
 	if b.CalendarAgendaAvailable() {
 		t.Fatal("Google Calendar without OAuth tokens should not advertise the Calendar tab")
+	}
+}
+
+func TestNewMultiLocalKeepsStandaloneCalendarSourceAvailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Sources: []config.SourceConfig{
+			{
+				ID:          "default-mail",
+				Kind:        string(models.SourceKindMail),
+				Provider:    "imap",
+				DisplayName: "Default Mail",
+				AccountID:   "default",
+				Credentials: config.CredentialsConfig{Username: "default@example.test", Password: "mail-pass"},
+				IMAP:        config.ServerConfig{Host: "127.0.0.1", Port: 1143},
+				SMTP:        config.ServerConfig{Host: "127.0.0.1", Port: 1025},
+			},
+			{
+				ID:          "proton-mail",
+				Kind:        string(models.SourceKindMail),
+				Provider:    "protonmail",
+				DisplayName: "Proton Mail",
+				AccountID:   "proton",
+				Credentials: config.CredentialsConfig{Username: "proton@example.test", Password: "mail-pass"},
+				IMAP:        config.ServerConfig{Host: "127.0.0.1", Port: 1143},
+				SMTP:        config.ServerConfig{Host: "127.0.0.1", Port: 1025},
+			},
+			{
+				ID:          "icloud-calendar",
+				Kind:        string(models.SourceKindCalendar),
+				Provider:    "caldav",
+				DisplayName: "iCloud Calendar",
+				AccountID:   "icloud",
+				CalDAV: config.CalDAVConfig{
+					URL:      "https://caldav.icloud.com",
+					Username: "icloud@example.test",
+					Password: "app-specific-pass",
+				},
+			},
+		},
+	}
+	cfg.Cache.DatabasePath = filepath.Join(tmpDir, "herald.db")
+
+	b, err := NewMultiLocal(cfg, filepath.Join(tmpDir, "conf.yaml"), nil)
+	if err != nil {
+		t.Fatalf("NewMultiLocal: %v", err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+
+	if !b.CalendarAgendaAvailable() {
+		t.Fatal("standalone calendar source should make the Calendar tab available after startup")
+	}
+	if err := b.SwitchAccount("proton-mail"); err != nil {
+		t.Fatalf("SwitchAccount(proton-mail): %v", err)
+	}
+	if !b.CalendarAgendaAvailable() {
+		t.Fatal("standalone calendar source should remain available when a mail-only account is active")
 	}
 }
 

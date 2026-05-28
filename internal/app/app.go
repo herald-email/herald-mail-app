@@ -516,6 +516,7 @@ func validateCalendarSources(ctx context.Context, cfg *config.Config, sourceIDs 
 		if len(want) > 0 && !want[sourceID] {
 			continue
 		}
+		logCalendarValidationSource(source)
 		opened, err := backend.DefaultSourceRegistry().Open(ctx, source, backend.SourceDeps{ProfileConfig: cfg})
 		if err != nil {
 			return fmt.Errorf("calendar source %s failed to open: %w", source.ID, err)
@@ -535,6 +536,42 @@ func validateCalendarSources(ctx context.Context, cfg *config.Config, sourceIDs 
 		return fmt.Errorf("no calendar sources to validate")
 	}
 	return nil
+}
+
+func logCalendarValidationSource(source config.SourceConfig) {
+	if strings.TrimSpace(source.Provider) != "caldav" {
+		logger.Debug("Calendar validation source: id=%s provider=%s account=%s", source.ID, source.Provider, source.AccountID)
+		return
+	}
+	host, pathPresent := sanitizedCalendarValidationHostAndPath(source.CalDAV.URL)
+	username := strings.TrimSpace(source.CalDAV.Username)
+	logger.Debug(
+		"Calendar validation source: id=%s provider=%s account=%s caldav_host=%s caldav_path_present=%t username_present=%t username_has_at=%t password_present=%t",
+		source.ID,
+		source.Provider,
+		source.AccountID,
+		host,
+		pathPresent,
+		username != "",
+		strings.Contains(username, "@"),
+		source.CalDAV.Password != "",
+	)
+}
+
+func sanitizedCalendarValidationHostAndPath(rawURL string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "invalid", false
+	}
+	host := strings.TrimSpace(strings.ToLower(parsed.Host))
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.TrimSuffix(host, ".")
+	if host == "" {
+		host = "empty"
+	}
+	return host, strings.Trim(parsed.EscapedPath(), "/") != ""
 }
 
 // Model represents the main application state
@@ -1347,6 +1384,7 @@ func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu boo
 	m.mailer = appsmtp.New(cfg)
 	m.fromAddress = accountEmailAddress(cfg)
 	m.resetMailboxStateForAccountSwitch()
+	m.refreshCalendarAvailability()
 	m.accountValidation = nil
 	m.statusMessage = "Account settings validated and saved. Reconnecting..."
 

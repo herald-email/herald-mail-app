@@ -630,6 +630,63 @@ func TestCalendarSettingsICloudUnauthorizedShowsAppPasswordGuidance(t *testing.T
 	}
 }
 
+type settingsCalendarAvailableBackend struct {
+	stubBackend
+}
+
+func (b *settingsCalendarAvailableBackend) CalendarAgendaAvailable() bool {
+	return true
+}
+
+func (b *settingsCalendarAvailableBackend) ListCalendarAgenda(time.Time, time.Time) ([]models.CalendarEvent, error) {
+	return nil, nil
+}
+
+func (b *settingsCalendarAvailableBackend) SearchCalendarEvents(string, time.Time, time.Time) ([]models.CalendarEvent, error) {
+	return nil, nil
+}
+
+func (b *settingsCalendarAvailableBackend) GetCalendarEvent(models.EventRef) (*models.CalendarEvent, error) {
+	return nil, errors.New("not found")
+}
+
+func TestCalendarSettingsValidationSuccessRefreshesVisibleCalendarTab(t *testing.T) {
+	oldNewBackend := newValidatedLocalBackend
+	newValidatedLocalBackend = func(*config.Config, string, ai.AIClient) (backend.Backend, error) {
+		return &settingsCalendarAvailableBackend{}, nil
+	}
+	defer func() { newValidatedLocalBackend = oldNewBackend }()
+
+	original := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", AccountID: "default", Credentials: config.CredentialsConfig{Username: "old@example.test"}},
+	}}
+	next := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", AccountID: "default", Credentials: config.CredentialsConfig{Username: "old@example.test"}},
+		{ID: "icloud-calendar", Kind: "calendar", Provider: "caldav", AccountID: "icloud", CalDAV: config.CalDAVConfig{URL: "https://caldav.icloud.com/", Username: "me@icloud.com", Password: "calendar-app-password"}},
+	}}
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	if m.calendarAvailable {
+		t.Fatal("test setup expected mail-only model before settings save")
+	}
+
+	updatedModel, _ := m.Update(CalendarValidationMsg{
+		Config:       next,
+		ReturnToMenu: true,
+		SourceIDs:    []models.SourceID{"icloud-calendar"},
+	})
+	updated := updatedModel.(*Model)
+
+	if !updated.calendarAvailable {
+		t.Fatal("calendarAvailable stayed false after applying a validated calendar backend")
+	}
+	rendered := stripANSI(updated.renderTabBar())
+	if !strings.Contains(rendered, "Calendar") {
+		t.Fatalf("tab bar did not show Calendar after validated calendar save:\n%s", rendered)
+	}
+}
+
 func TestAISettingsOllamaValidationFailureKeepsPreviousConfig(t *testing.T) {
 	oldValidate := validateOllamaModels
 	validateOllamaModels = func(context.Context, *config.Config) aicheck.Result {

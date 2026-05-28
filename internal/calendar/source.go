@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
@@ -625,10 +627,34 @@ func (s *CalDAVSource) doXML(req *http.Request, out any) error {
 func (s *CalDAVSource) doDAVXMLRequest(req *http.Request) (*http.Response, *http.Request, error) {
 	current := req
 	for redirects := 0; ; redirects++ {
+		logger.Debug(
+			"CalDAV XML request: source=%s method=%s host=%s path_kind=%s auth_present=%t",
+			s.id,
+			current.Method,
+			normalizedCalDAVHost(current.URL.Host),
+			caldavDebugPathKind(current.URL.Path),
+			current.Header.Get("Authorization") != "",
+		)
 		resp, err := s.noRedirectClient().Do(current)
 		if err != nil {
+			logger.Debug(
+				"CalDAV XML request error: source=%s method=%s host=%s error=%s",
+				s.id,
+				current.Method,
+				normalizedCalDAVHost(current.URL.Host),
+				err,
+			)
 			return nil, current, err
 		}
+		logger.Debug(
+			"CalDAV XML response: source=%s method=%s host=%s status=%d auth_challenges=%s redirect_host=%s",
+			s.id,
+			current.Method,
+			normalizedCalDAVHost(current.URL.Host),
+			resp.StatusCode,
+			caldavAuthChallengeSchemes(resp.Header),
+			caldavRedirectHost(current.URL, resp.Header.Get("Location")),
+		)
 		if !isCalDAVRedirect(resp.StatusCode) || resp.Header.Get("Location") == "" {
 			return resp, current, nil
 		}
@@ -641,6 +667,14 @@ func (s *CalDAVSource) doDAVXMLRequest(req *http.Request) (*http.Response, *http
 		if err != nil {
 			return nil, current, err
 		}
+		logger.Debug(
+			"CalDAV XML redirect: source=%s method=%s from_host=%s to_host=%s auth_forwarded=%t",
+			s.id,
+			current.Method,
+			normalizedCalDAVHost(current.URL.Host),
+			normalizedCalDAVHost(next.URL.Host),
+			next.Header.Get("Authorization") != "",
+		)
 		current = next
 	}
 }
@@ -727,6 +761,69 @@ func normalizedCalDAVHost(host string) string {
 func isTrustedICloudCalDAVHost(host string) bool {
 	host = normalizedCalDAVHost(host)
 	return host == "caldav.icloud.com" || strings.HasSuffix(host, ".icloud.com")
+}
+
+func caldavDebugPathKind(rawPath string) string {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" || rawPath == "/" {
+		return "root"
+	}
+	segments := strings.Split(strings.Trim(rawPath, "/"), "/")
+	for _, segment := range segments {
+		switch strings.ToLower(segment) {
+		case "principal":
+			return "principal"
+		case "calendars":
+			return "calendars"
+		}
+	}
+	return "other"
+}
+
+func caldavAuthChallengeSchemes(header http.Header) string {
+	values := header.Values("WWW-Authenticate")
+	if len(values) == 0 {
+		return "none"
+	}
+	seen := make(map[string]bool, len(values))
+	var schemes []string
+	for _, value := range values {
+		scheme := strings.TrimSpace(value)
+		if scheme == "" {
+			continue
+		}
+		if fields := strings.Fields(scheme); len(fields) > 0 {
+			scheme = fields[0]
+		}
+		scheme = strings.Trim(strings.ToLower(scheme), `"'`)
+		if scheme != "" && !seen[scheme] {
+			seen[scheme] = true
+			schemes = append(schemes, scheme)
+		}
+	}
+	if len(schemes) == 0 {
+		return "none"
+	}
+	sort.Strings(schemes)
+	return strings.Join(schemes, ",")
+}
+
+func caldavRedirectHost(base *url.URL, location string) string {
+	if strings.TrimSpace(location) == "" {
+		return "none"
+	}
+	ref, err := url.Parse(location)
+	if err != nil {
+		return "invalid"
+	}
+	if base != nil {
+		ref = base.ResolveReference(ref)
+	}
+	host := normalizedCalDAVHost(ref.Host)
+	if host == "" {
+		return "none"
+	}
+	return host
 }
 
 func (s *CalDAVSource) collectionURL(ctx context.Context, calendarID string) (string, error) {

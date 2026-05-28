@@ -679,6 +679,28 @@ func TestCalDAVSourceDoesNotForwardBasicAuthToUntrustedRedirect(t *testing.T) {
 	}
 }
 
+func TestCalDAVDebugHelpersDoNotExposeSensitivePathOrAuthValues(t *testing.T) {
+	if got := caldavDebugPathKind("/123456789/principal/"); got != "principal" {
+		t.Fatalf("path kind = %q, want principal", got)
+	}
+	if got := caldavDebugPathKind("/123456789/calendars/private-calendar/event.ics"); got != "calendars" {
+		t.Fatalf("path kind = %q, want calendars", got)
+	}
+	header := http.Header{}
+	header.Add("WWW-Authenticate", `x-mobileme-authtoken realm="MMCalDav"`)
+	header.Add("WWW-Authenticate", `Basic realm="MMCalDav"`)
+	if got := caldavAuthChallengeSchemes(header); got != "basic,x-mobileme-authtoken" {
+		t.Fatalf("auth challenge schemes = %q, want sanitized schemes", got)
+	}
+	base, err := url.Parse("https://caldav.icloud.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := caldavRedirectHost(base, "https://p123-caldav.icloud.com/private/path"); got != "p123-caldav.icloud.com" {
+		t.Fatalf("redirect host = %q, want host only", got)
+	}
+}
+
 func rewriteHostTransportForTest(t *testing.T, target string) http.RoundTripper {
 	t.Helper()
 	targetURL, err := url.Parse(target)

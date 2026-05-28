@@ -1234,12 +1234,25 @@ func NewMultiLocal(cfg *config.Config, configPath string, classifier ai.AIClient
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
-	var accounts []AccountBackend
-	for _, source := range cfg.NormalizedSources() {
+	sources := cfg.NormalizedSources()
+	var mailSources []config.SourceConfig
+	var calendarSources []config.SourceConfig
+	mailAccountIDs := make(map[models.AccountID]bool)
+	for _, source := range sources {
+		if strings.TrimSpace(source.Kind) == string(models.SourceKindCalendar) {
+			calendarSources = append(calendarSources, source)
+			continue
+		}
 		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
 			continue
 		}
-		childCfg := configForMailSource(cfg, configPath, source)
+		mailSources = append(mailSources, source)
+		mailAccountIDs[models.NormalizeAccountID(models.AccountID(source.AccountID))] = true
+	}
+
+	var accounts []AccountBackend
+	for i, source := range mailSources {
+		childCfg := configForMailSource(cfg, configPath, source, calendarSourcesForMailSource(source, calendarSources, mailAccountIDs, i == 0)...)
 		if path := strings.TrimSpace(childCfg.Cache.DatabasePath); path != "" {
 			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				for _, account := range accounts {
@@ -1266,9 +1279,29 @@ func NewMultiLocal(cfg *config.Config, configPath string, classifier ai.AIClient
 	return NewMultiBackend(accounts)
 }
 
-func configForMailSource(profile *config.Config, configPath string, source config.SourceConfig) *config.Config {
+func calendarSourcesForMailSource(source config.SourceConfig, calendarSources []config.SourceConfig, mailAccountIDs map[models.AccountID]bool, includeStandalone bool) []config.SourceConfig {
+	if len(calendarSources) == 0 {
+		return nil
+	}
+	accountID := models.NormalizeAccountID(models.AccountID(source.AccountID))
+	var out []config.SourceConfig
+	for _, calendarSource := range calendarSources {
+		calendarAccountID := models.NormalizeAccountID(models.AccountID(calendarSource.AccountID))
+		if calendarAccountID == accountID || (includeStandalone && !mailAccountIDs[calendarAccountID]) {
+			out = append(out, calendarSource)
+		}
+	}
+	return out
+}
+
+func configForMailSource(profile *config.Config, configPath string, source config.SourceConfig, calendarSources ...config.SourceConfig) *config.Config {
 	child := *profile
 	child.Sources = nil
+	if len(calendarSources) > 0 {
+		child.Sources = make([]config.SourceConfig, 0, len(calendarSources)+1)
+		child.Sources = append(child.Sources, source)
+		child.Sources = append(child.Sources, calendarSources...)
+	}
 	child.Credentials = source.Credentials
 	child.Server = source.IMAP
 	child.SMTP = source.SMTP
