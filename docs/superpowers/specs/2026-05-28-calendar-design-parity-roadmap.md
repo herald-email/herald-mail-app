@@ -37,12 +37,12 @@ Screens `01` through `04` need the same left-side calendar source rail before an
 
 ## Range Header
 
-Every calendar screen needs a clear range row above the schedule body so the user knows what window is being shown and how to move it. This row should replace ambiguous panel subtitles and must be visible even when the detail/inspector panel is open.
+Every calendar screen needs a clear range cue above the schedule body so the user knows what window is being shown and how to move it. This cue should be integrated into panel borders, matching Timeline's framed grouping treatment, and must be visible even when the detail/inspector panel is open.
 
-- [x] Use a centered or full-width header format such as `------- Agenda for Tue May 28, 2026 (h/l or <-/-> to switch) -------`.
-- [x] Use week wording for week views, such as `------- Week of Mon May 25 - Sun May 31, 2026 (h/l or <-/-> to switch) -------`.
-- [x] Use 3-day wording for the command view, such as `------- 3-Day Window: Tue May 28 - Thu May 30, 2026 (h/l or <-/-> to switch) -------`.
-- [x] Keep the header independent of provider sync status; loading and error messages belong in a compact status row below it.
+- [x] Use a main-panel frame title such as `Agenda (4) for Tue May 28, 2026`, with `(<-/->/h/l to switch)` right-aligned in dim text.
+- [x] Use week wording for week views, such as `Week Agenda for Mon May 25 - Sun May 31, 2026`, with range movement kept in the right-side frame hint.
+- [x] Use 3-day wording for the command view, such as `3-Day Window for Tue May 28 - Thu May 30, 2026`, with range movement kept in the right-side frame hint.
+- [x] Keep the header independent of provider sync status; loading and error messages belong in a compact status row below it, while successful load counts are represented in the frame title rather than a body status row.
 - [x] Format dates from normalized local calendar days, not raw provider timestamps, so ranges never render as obviously wrong windows like the current 1997 example unless the underlying event data is genuinely from 1997.
 - [ ] Include enabled-calendar scope in compact form when filtering is active, such as `4 calendars` or `Work + Family`.
 
@@ -53,7 +53,8 @@ The date bugs should be fixed as a foundation before the screen work, because ev
 - [x] Normalize all visible event rows into local display intervals with start day, end day, all-day flag, event timezone label, and stable source/calendar identity before sorting.
 - [x] Sort timed events by local start time, then local end time, then all-day status, then title, then scoped event ref for deterministic ties.
 - [ ] Sort all-day and multi-day events into predictable top rows or day-spanning rows instead of mixing them into timed rows by midnight artifacts.
-- [ ] Make Agenda List use a deliberate range, such as today through the next 30 days by default, with explicit previous/next range movement.
+- [x] Make Agenda List use a deliberate local 30-day range, defaulting to today when that window has events and otherwise falling back to the nearest valid event window.
+- [x] Reject or hide calendar events with invalid or missing start timestamps, including stale cache rows with absurdly long historic spans, so parser failures never render as zero-time historical dates.
 - [ ] Make Week Time-Grid default to the week containing today or the selected event, not the first cached event when that produces surprising historical windows.
 - [ ] Make Day Agenda default to today when possible, then nearest upcoming event, then first cached event only as a final fallback.
 - [x] Preserve selected-event identity across refresh and filter changes when the same scoped event is still in the visible set.
@@ -89,7 +90,7 @@ Week Time-Grid is the first implementation target because it exposes the largest
 Day Agenda should be the fast daily command view, with the shared rail on the left and a persistent drawer on the right. This slice should refine day-boundary navigation and prove that event notes can be read without opening full detail.
 
 - [x] Layout the screen as calendar rail, day agenda, and day drawer at wide and standard sizes.
-- [x] Use the range header format `Agenda for <day>` and keep previous/next day movement visible in the header.
+- [x] Use the frame-title range format `Day Agenda for <day>` and keep previous/next day movement visible as the right-side frame hint.
 - [ ] Render selected-day events in chronological order with all-day/multi-day events separated from timed events.
 - [x] Let `up/down` move across day boundaries when the user reaches the first or last event for the current day.
 - [x] Show pending invitations and RSVP-needed events inline in the day list with an explicit marker such as `RSVP`.
@@ -101,7 +102,7 @@ Day Agenda should be the fast daily command view, with the shared rail on the le
 The 3-Day Command view should be Herald's terminal-native differentiator rather than another list. It should help the user bridge today, tomorrow, and the next day with conflicts, next-up context, and open slots.
 
 - [x] Layout the screen as calendar rail, three day lanes, and command panel.
-- [x] Use the range header format `3-Day Window: <start> - <end>` and let `h/l` or left/right slide the window by one day.
+- [x] Use the frame-title range format `3-Day Window for <start> - <end>` and let `h/l` or left/right slide the window by one day.
 - [x] Render three visible day lanes with stable day labels, per-calendar color/source markers, and visible selected-event focus.
 - [x] Traverse all visible events chronologically with `up/down`, skipping empty days but preserving the lane context.
 - [ ] Show pending RSVP events in the command panel as a first-class action group when any are visible.
@@ -113,7 +114,7 @@ The 3-Day Command view should be Herald's terminal-native differentiator rather 
 Agenda List should become the compact chronological calendar timeline once the spatial views are reliable. It should reuse the same rail and range header while behaving like Timeline where possible.
 
 - [x] Layout the screen as calendar rail, agenda list, and event preview/detail panel.
-- [x] Use the range header format `Agenda: <start> - <end>` with explicit previous/next range movement.
+- [x] Use the frame-title range format `Agenda (N) for <start> - <end>` with explicit previous/next range movement in the right-side frame hint.
 - [ ] Group events by local date with readable date separators and stable chronological sorting inside each group.
 - [x] Include calendar color/source markers, RSVP-needed markers, and account badges without leaking provider internals.
 - [x] Support page movement with `ctrl+u/ctrl+d` in the agenda list.

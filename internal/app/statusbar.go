@@ -141,48 +141,12 @@ func (m *Model) renderTitleBar(width int) string {
 	if width <= 0 {
 		width = 80
 	}
-	if m.activeTab == tabCalendar {
-		return m.renderCalendarTitleBar(width)
-	}
 	title := m.headerStyle.Render("Herald")
 	prefix := title + titleTabGap
 	if account := m.activeAccountLabel(); account != "" {
 		prefix += m.theme.Chrome.TabInactive.Style().Padding(0, 1).Render(account) + titleTabGap
 	}
 	line := truncateVisual(prefix+m.renderTabBar(), width)
-	if missing := width - ansi.StringWidth(line); missing > 0 {
-		line += strings.Repeat(" ", missing)
-	}
-	return line
-}
-
-func (m *Model) renderCalendarTitleBar(width int) string {
-	active := m.theme.Chrome.TabActive.Style().Padding(0, 1)
-	inactive := m.theme.Chrome.TabInactive.Style().Padding(0, 1)
-	title := m.theme.Chrome.TitleBar.Style().Padding(0, 1).Render("Herald Cal")
-	item := func(view calendarViewMode, label string) string {
-		if m.calendarView == view || (m.calendarView == "" && view == calendarViewAgenda) {
-			return active.Render(label)
-		}
-		return inactive.Render(label)
-	}
-	left := lipgloss.JoinHorizontal(lipgloss.Top,
-		title,
-		inactive.Render("F1 Month"),
-		item(calendarViewWeek, "F2 Week"),
-		item(calendarViewDay, "F3 Day"),
-		item(calendarViewAgenda, "F4 Agenda"),
-		item(calendarViewSearch, "F5 Search"),
-	)
-	right := "t: Today  z: Timezone  q: Quit"
-	gap := width - ansi.StringWidth(left) - ansi.StringWidth(right)
-	line := left
-	if gap > 1 {
-		line += strings.Repeat(" ", gap) + right
-	} else {
-		line += " " + right
-	}
-	line = truncateVisual(line, width)
 	if missing := width - ansi.StringWidth(line); missing > 0 {
 		line += strings.Repeat(" ", missing)
 	}

@@ -36,6 +36,8 @@ def main() -> int:
     queue = load_json(queue_path) if queue_path.exists() else None
     phase_impact_path = out_dir / "phase-impact.json"
     phase_impact = load_json(phase_impact_path) if phase_impact_path.exists() else None
+    template_adoption_path = out_dir / "template-adoption.json"
+    template_adoption = load_json(template_adoption_path) if template_adoption_path.exists() else None
     ledger_path = repo_root / "docs" / "superpowers" / "gepa-evolution.md"
     content = ledger_path.read_text(encoding="utf-8")
 
@@ -69,6 +71,13 @@ def main() -> int:
         current_real = phase_impact.get("real_task_current_vs_baseline", {}).get("current_metrics", {})
         lines.append(
             f"- [x] Phase-impact report: {current_real.get('run_count', 0)} post-Phase 1 real bug/feature run(s) measured so far."
+        )
+    if template_adoption:
+        adoption_summary = template_adoption.get("summary", {})
+        rate = adoption_summary.get("eligible_adoption_rate")
+        rate_display = f"{rate:.0%}" if isinstance(rate, (int, float)) else "n/a"
+        lines.append(
+            f"- [x] Remediation-template adoption: {adoption_summary.get('eligible_runs_with_templates', 0)}/{adoption_summary.get('eligible_runs', 0)} eligible published reflection(s) matched a template ({rate_display})."
         )
 
     updated = replace_block(content, "\n".join(lines))

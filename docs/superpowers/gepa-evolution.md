@@ -8,6 +8,7 @@ Related docs:
 - Consolidated improvement plan: [gepa-consolidated-improvement-plan.md](gepa-consolidated-improvement-plan.md)
 - Pending approvals: [gepa-pending-approvals.md](gepa-pending-approvals.md)
 - Phase impact: [gepa-phase-impact.md](gepa-phase-impact.md)
+- Template adoption: [gepa-template-adoption.md](gepa-template-adoption.md)
 - Product truth snapshot: `.superpowers/autopilot/state/product-truth.md`
 
 ## Current Workflow
@@ -35,6 +36,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] TUI-facing runs can now close a first-class visual-evidence gate that requires matched before/after PNG plus ANSI captures at `220x50`, `80x24`, and `50x15`.
 - [x] Shortcut-sensitive TUI runs can now close a first-class input-routing safety gate that proves text entry still works on `compose`, `prompt`, and `editor` surfaces.
 - [x] A dedicated phase-impact report can now compare baseline runs with post-improvement cohorts, while separating workflow-validation evidence from real bug/feature evidence.
+- [x] A dedicated remediation-template adoption report can now measure which published self-reflections matched templates and how retry counts compare for matched versus unmatched eligible runs.
 - [x] Final handoffs for autopilot and finish-development now require copy-paste runnable test instructions, including the correct checkout path, build command, and candidate launch command.
 
 ## What Changed In This Version
@@ -63,6 +65,7 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Incorporated the first approved pending-approval batch by promoting the backlog decisions and adding a reusable user-reproduced post-handoff failure template for missed real-world repro paths.
 - [x] Incorporated the approved demo key overlay GEPA item by adding a reusable template for package-boundary, demo launch, media-regeneration, and text-entry evidence checks.
 - [x] Incorporated the approved user-review/settings-hints and commit-hook `make test` GEPA items as reusable remediation templates.
+- [x] Incorporated the approved remediation-template adoption measurement by adding a durable JSON/Markdown report plus optimizer brief, ledger, and improvement-log evidence.
 
 ## Run Patterns Observed
 
@@ -79,14 +82,15 @@ This section should summarize recurring themes across recent runs. At bootstrap 
 This section is generated from the optimizer state under `.superpowers/autopilot/state/`. It should stay machine-updated so future sessions can see the current run picture and top recommendation without reading every raw artifact.
 
 <!-- AUTOGEN:BEGIN -->
-- [x] Auto snapshot generated at 2026-05-27T14:55:44+00:00.
+- [x] Auto snapshot generated at 2026-05-28T17:36:34+00:00.
 - [x] Recent runs analyzed: 30.
-- [x] Frontier members available: 9.
-- [x] Most repeated failing evidence: `commit hook make test` (1 occurrences).
-- [x] Current top recommended experiment: `measure-remediation-template-adoption` (medium value, low risk).
+- [x] Frontier members available: 5.
+- [ ] No repeated failing evidence has been observed yet.
+- [x] Current top recommended experiment: `two-candidate-worktree-trial` (high value, medium risk).
 - [x] Degradation-review gate: 30/30 required run(s) ready (100%).
-- [x] Pending-approval queue: 0 pending, 0 approved, 9 implemented.
-- [x] Phase-impact report: 15 post-Phase 1 real bug/feature run(s) measured so far.
+- [x] Pending-approval queue: 0 pending, 0 approved, 10 implemented.
+- [x] Phase-impact report: 106 post-Phase 1 real bug/feature run(s) measured so far.
+- [x] Remediation-template adoption: 3/4 eligible published reflection(s) matched a template (75%).
 <!-- AUTOGEN:END -->
 
 ## Known Weaknesses And Pain Points
@@ -119,6 +123,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [x] Added a user-reproduced post-handoff failure template so exact user repro commands become first-class retry gates after an automated handoff misses reality.
 - [x] Added a demo key overlay remediation template so demo-key and media-heavy overlay retries reuse focused import, launch, regeneration, and text-entry checks.
 - [x] Added user-review settings/hints and commit-hook `make test` remediation templates so approved follow-up lessons become reusable workflow behavior.
+- [x] Added remediation-template adoption measurement so GEPA can see which eligible published reflections matched reusable templates and which retry-bearing runs still did not.
 - [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
 - [x] Added a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
 - [x] Added a first phase-impact report so retry, skip, and clarification trends are at least measured before more autonomy is added.

@@ -39,6 +39,10 @@ def compute_metrics(summary: dict, frontier: dict, brief: dict) -> dict:
         "pending_approval_items": int(queue.get("pending_approval_items", 0)),
         "approved_approval_items": int(queue.get("approved_approval_items", 0)),
         "implemented_approval_items": int(queue.get("implemented_approval_items", 0)),
+        "template_adoption_eligible_runs": int(queue.get("template_adoption_eligible_runs", 0)),
+        "template_adoption_eligible_rate": queue.get("template_adoption_eligible_rate"),
+        "template_adoption_unmatched_eligible_runs": int(queue.get("template_adoption_unmatched_eligible_runs", 0)),
+        "template_adoption_retry_delta_with_templates": queue.get("template_adoption_retry_delta_with_templates"),
         "top_recommendation": brief.get("recommended_experiment", {}).get("name", ""),
     }
 
@@ -71,6 +75,10 @@ def metric_delta(previous: dict | None, current: dict) -> dict:
         "pending_approval_items",
         "approved_approval_items",
         "implemented_approval_items",
+        "template_adoption_eligible_runs",
+        "template_adoption_eligible_rate",
+        "template_adoption_unmatched_eligible_runs",
+        "template_adoption_retry_delta_with_templates",
     ):
         prev_value = previous.get(key)
         curr_value = current.get(key)
@@ -128,6 +136,7 @@ def main() -> int:
             "feedback_patterns": str(out_dir / "feedback-patterns.json"),
             "improvement_brief": str(out_dir / "improvement-brief.json"),
             "product_truth": str(out_dir / "product-truth.json"),
+            "template_adoption": str(out_dir / "template-adoption.json"),
         },
     }
 

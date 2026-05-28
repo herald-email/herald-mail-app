@@ -45,6 +45,7 @@ These scripts are additive and safe to run repeatedly:
 - `append_improvement_log.py`
 - `render_improvement_log.py`
 - `measure_phase_impact.py`
+- `measure_template_adoption.py`
 - `sync_evolution_ledger.py`
 
 ## v2 Scope

@@ -1643,6 +1643,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
 - The Agenda List is sorted by start time, shows each event's calendar/source label, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- The Agenda List uses a deliberate local calendar-month range, such as `May 1 - May 31`, falls back to the nearest valid event's calendar month when the current month is empty, and never renders malformed, zero-time, or absurdly long stale provider spans as historical rows such as `Dec 31` or `1950`.
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
 - `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
 - Calendar hints are read-only and do not advertise RSVP, edit, create, or provider mutation actions.
@@ -1687,6 +1688,7 @@ Check these states during every applicable lane:
 **Expect:**
 - `w` switches to a read-only Week Time-Grid and `a` returns to Agenda List without changing the Calendar destination.
 - Week Time-Grid shows weekday columns or compact day bands with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- Week Time-Grid uses Monday-Sunday calendar-week windows, such as `Mon May 25 - Sun May 31`, rather than a rolling seven-day range from the selected day.
 - The inspector shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between weeks without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Week Time-Grid state.

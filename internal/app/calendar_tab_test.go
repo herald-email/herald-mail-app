@@ -1051,7 +1051,7 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar events = %d, want %d", len(m.calendarEvents), len(events))
 	}
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendar", "Agenda", "Design review", "Event Detail", "Herald planning room", "read-only"} {
+	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "Event Detail", "Herald planning room", "read-only"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar view missing %q:\n%s", want, rendered)
 		}
@@ -1060,10 +1060,188 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar view exposed provider internals:\n%s", rendered)
 	}
 
+	cursorBefore := m.calendarCursor
 	model, _ = m.handleKeyMsg(keyRunes("j"))
 	m = model.(*Model)
-	if m.calendarCursor != 1 {
-		t.Fatalf("calendar cursor = %d, want 1", m.calendarCursor)
+	if m.calendarCursor != cursorBefore+1 {
+		t.Fatalf("calendar cursor = %d, want next event after %d", m.calendarCursor, cursorBefore)
+	}
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Daily standup" {
+		t.Fatalf("selected event after j = %#v, want Daily standup", got)
+	}
+}
+
+func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	nextMonth := monthStart.AddDate(0, 1, 0)
+	old := today.AddDate(0, 0, -45).Add(9 * time.Hour)
+	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
+	current := monthStart.AddDate(0, 0, 10).Add(10 * time.Hour)
+	future := nextMonth.AddDate(0, 0, -1).Add(11 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "zero-start"}.WithDefaults(),
+			Title:  "Zero start should stay hidden",
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "old-event"}.WithDefaults(),
+			Title:  "Old event outside window",
+			Start:  old,
+			End:    old.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "malformed-span"}.WithDefaults(),
+			Title:  "Malformed historic span",
+			Start:  malformedSpan,
+			End:    today.AddDate(0, 0, 10).Add(17 * time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "current-event"}.WithDefaults(),
+			Title:  "Current window event",
+			Start:  current,
+			End:    current.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "future-event"}.WithDefaults(),
+			Title:  "Future window event",
+			Start:  future,
+			End:    future.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	for _, msg := range calendarImmediateMessagesForTest(m.loadCalendarAgenda()) {
+		model, _ := m.Update(msg)
+		m = model.(*Model)
+	}
+
+	if len(m.calendarEvents) != 4 {
+		t.Fatalf("calendar events = %d, want zero-start row filtered from model", len(m.calendarEvents))
+	}
+	if !sameCalendarDate(m.calendarAgendaStart, monthStart) || !sameCalendarDate(m.calendarAgendaEnd, nextMonth) {
+		t.Fatalf("agenda range = %v..%v, want local calendar month %v..%v", m.calendarAgendaStart, m.calendarAgendaEnd, monthStart, nextMonth)
+	}
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Agenda", "Current window event", "Future window event"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("agenda missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"Zero start should stay hidden", "Old event outside window", "Malformed historic span", "Dec 31", "1950"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("agenda rendered forbidden %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestCalendarAgendaWindowUsesCalendarMonth(t *testing.T) {
+	loc := time.Local
+	start, end := calendarAgendaWindowFor(time.Date(2026, 5, 27, 14, 30, 0, 0, loc))
+
+	wantStart := time.Date(2026, 5, 1, 0, 0, 0, 0, loc)
+	wantEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, loc)
+	if !start.Equal(wantStart) || !end.Equal(wantEnd) {
+		t.Fatalf("calendarAgendaWindowFor = %v..%v, want %v..%v", start, end, wantStart, wantEnd)
+	}
+}
+
+func TestCalendarAgendaRangeNavigationMovesByCalendarMonth(t *testing.T) {
+	loc := time.Local
+	m := &Model{
+		calendarView:        calendarViewAgenda,
+		calendarAgendaStart: time.Date(2026, 5, 1, 0, 0, 0, 0, loc),
+		calendarAgendaEnd:   time.Date(2026, 6, 1, 0, 0, 0, 0, loc),
+	}
+
+	m.moveCalendarRange(1)
+	if want := time.Date(2026, 6, 1, 0, 0, 0, 0, loc); !m.calendarAgendaStart.Equal(want) {
+		t.Fatalf("next agenda start = %v, want %v", m.calendarAgendaStart, want)
+	}
+	if want := time.Date(2026, 7, 1, 0, 0, 0, 0, loc); !m.calendarAgendaEnd.Equal(want) {
+		t.Fatalf("next agenda end = %v, want %v", m.calendarAgendaEnd, want)
+	}
+
+	m.moveCalendarRange(-1)
+	if want := time.Date(2026, 5, 1, 0, 0, 0, 0, loc); !m.calendarAgendaStart.Equal(want) {
+		t.Fatalf("previous agenda start = %v, want %v", m.calendarAgendaStart, want)
+	}
+	if want := time.Date(2026, 6, 1, 0, 0, 0, 0, loc); !m.calendarAgendaEnd.Equal(want) {
+		t.Fatalf("previous agenda end = %v, want %v", m.calendarAgendaEnd, want)
+	}
+}
+
+func TestCalendarWeekStartForUsesMonday(t *testing.T) {
+	loc := time.Local
+	wednesday := time.Date(2026, 5, 27, 15, 0, 0, 0, loc)
+	start := calendarWeekStartFor(wednesday)
+	want := time.Date(2026, 5, 25, 0, 0, 0, 0, loc)
+	if !start.Equal(want) {
+		t.Fatalf("calendarWeekStartFor(%v) = %v, want Monday %v", wednesday, start, want)
+	}
+	if got := calendarWeekRange(wednesday); got != "Mon May 25 - Sun May 31, 2026" {
+		t.Fatalf("calendarWeekRange = %q, want Monday-Sunday range", got)
+	}
+}
+
+func TestCalendarAgendaFallsBackToNearestValidEventWindow(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
+	nearFuture := today.AddDate(0, 0, 45).Add(9 * time.Hour)
+	farFuture := today.AddDate(0, 0, 80).Add(9 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "malformed-span"}.WithDefaults(),
+			Title:  "Malformed span should not anchor today",
+			Start:  malformedSpan,
+			End:    today.AddDate(0, 0, 10).Add(17 * time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "near-future"}.WithDefaults(),
+			Title:  "Nearest future event",
+			Start:  nearFuture,
+			End:    nearFuture.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "far-future"}.WithDefaults(),
+			Title:  "Far future event",
+			Start:  farFuture,
+			End:    farFuture.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	for _, msg := range calendarImmediateMessagesForTest(m.loadCalendarAgenda()) {
+		model, _ := m.Update(msg)
+		m = model.(*Model)
+	}
+
+	nearFutureMonth := time.Date(nearFuture.Year(), nearFuture.Month(), 1, 0, 0, 0, 0, nearFuture.Location())
+	if !sameCalendarDate(m.calendarAgendaStart, nearFutureMonth) {
+		t.Fatalf("agenda start = %v, want nearest future event month %v", m.calendarAgendaStart, nearFutureMonth)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Nearest future event") {
+		t.Fatalf("agenda did not render nearest future event:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Malformed span should not anchor today") {
+		t.Fatalf("agenda rendered malformed historic span:\n%s", rendered)
 	}
 }
 
@@ -1208,12 +1386,12 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	if m.calendarView != calendarViewWeek {
 		t.Fatalf("calendarView = %q, want %q", m.calendarView, calendarViewWeek)
 	}
-	if m.calendarWeekStart.Local().Day() != 24 {
-		t.Fatalf("calendarWeekStart = %s, want week starting May 24", m.calendarWeekStart)
+	if m.calendarWeekStart.Local().Day() != 18 {
+		t.Fatalf("calendarWeekStart = %s, want week starting May 18", m.calendarWeekStart)
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Week Time-Grid", "Sun May 24", "Mon May 25", "Design review", "Weekly planning", "Week Inspector", "Herald planning room", "Local", "Event TZ", "h/l: week", "d: day", "a: agenda"} {
+	for _, want := range []string{"Week Time-Grid", "Mon May 18", "Sun May 24", "Design review", "Daily standup", "Week Inspector", "Herald planning room", "Local", "Event TZ", "h/l: week", "d: day", "a: agenda"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("week grid missing %q:\n%s", want, rendered)
 		}
@@ -1237,11 +1415,11 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	m = model.(*Model)
 	model, _ = m.handleKeyMsg(keyRunes("l"))
 	m = model.(*Model)
-	if m.calendarWeekStart.Local().Day() != 31 {
-		t.Fatalf("calendarWeekStart = %s, want May 31", m.calendarWeekStart)
+	if m.calendarWeekStart.Local().Day() != 25 {
+		t.Fatalf("calendarWeekStart = %s, want May 25", m.calendarWeekStart)
 	}
-	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Roadmap sync" {
-		t.Fatalf("selected event after next week = %#v, want Roadmap sync", got)
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Weekly planning" {
+		t.Fatalf("selected event after next week = %#v, want Weekly planning", got)
 	}
 
 	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -1254,7 +1432,7 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 		t.Fatal("expected Enter to open full detail from Week view")
 	}
 	detail := stripANSI(m.renderMainView())
-	if !strings.Contains(detail, "Event Detail") || !strings.Contains(detail, "Roadmap sync") {
+	if !strings.Contains(detail, "Event Detail") || !strings.Contains(detail, "Weekly planning") {
 		t.Fatalf("detail view missing selected week event:\n%s", detail)
 	}
 	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -1271,12 +1449,12 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	if m.calendarView != calendarViewDay {
 		t.Fatalf("calendarView = %q, want Day view", m.calendarView)
 	}
-	if m.calendarDay.Local().Day() != 31 {
-		t.Fatalf("calendarDay = %s, want selected event day May 31", m.calendarDay)
+	if m.calendarDay.Local().Day() != 25 {
+		t.Fatalf("calendarDay = %s, want selected event day May 25", m.calendarDay)
 	}
 	model, _ = m.handleKeyMsg(keyRunes("w"))
 	m = model.(*Model)
-	if m.calendarView != calendarViewWeek || m.calendarWeekStart.Local().Day() != 31 {
+	if m.calendarView != calendarViewWeek || m.calendarWeekStart.Local().Day() != 25 {
 		t.Fatalf("week view did not restore selected event week, view=%q start=%s", m.calendarView, m.calendarWeekStart)
 	}
 }
@@ -2037,7 +2215,7 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendars", "[x] Work", "Agenda for", "<-/->/h/l to switch", "! Timezone planning"} {
+	for _, want := range []string{"Calendars", "[x] Work", "Agenda (1) for", "<-/->/h/l to switch", "! Timezone planning"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar render missing %q:\n%s", want, rendered)
 		}
@@ -2052,6 +2230,152 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 	if strings.Contains(detail, "<strong>") || strings.Contains(detail, "</p>") {
 		t.Fatalf("detail leaked raw HTML:\n%s", detail)
 	}
+}
+
+func TestCalendarTitleBarUsesSharedTopLevelTabs(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+
+	title := stripANSI(m.renderTitleBar(140))
+	for _, want := range []string{"Herald", "1  Timeline", "2  Contacts", "3  Calendar"} {
+		if !strings.Contains(title, want) {
+			t.Fatalf("calendar title bar missing shared tab %q:\n%s", want, title)
+		}
+	}
+	for _, stale := range []string{"Herald Cal", "F1 Month", "F2 Week", "F3 Day", "F4 Agenda", "F5 Search", "t: Today", "z: Timezone"} {
+		if strings.Contains(title, stale) {
+			t.Fatalf("calendar title bar kept stale calendar-only chrome %q:\n%s", stale, title)
+		}
+	}
+}
+
+func TestCalendarAgendaRangeTitleLivesOnPanelFrame(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	rendered := stripANSI(m.renderMainView())
+	var titleLine string
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "Agenda (4) for") {
+			titleLine = line
+			break
+		}
+	}
+	if titleLine == "" {
+		t.Fatalf("calendar agenda render missing range title:\n%s", rendered)
+	}
+	if !strings.Contains(titleLine, "┌") || !strings.Contains(titleLine, "─") {
+		t.Fatalf("agenda range title should be integrated into the panel frame, got:\n%s", titleLine)
+	}
+	if strings.Contains(titleLine, "---") {
+		t.Fatalf("agenda range title should not use the old dashed content row:\n%s", titleLine)
+	}
+}
+
+func TestCalendarAgendaFrameChromePromotesCountAndRemovesLoadedStatus(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+	m.calendarDetail = m.selectedCalendarEvent()
+	m.calendarStatus = "Loaded 4 calendar event(s)"
+
+	rendered := stripANSI(m.renderMainView())
+	titleLine := calendarFirstFrameLineForTest(rendered)
+	for _, want := range []string{"Agenda (4) for Fri May 1 - Sun May 31, 2026", "(<-/->/h/l to switch)"} {
+		if !strings.Contains(titleLine, want) {
+			t.Fatalf("calendar agenda frame missing %q in:\n%s\n\nrendered:\n%s", want, titleLine, rendered)
+		}
+	}
+	body := calendarAfterFirstFrameLineForTest(rendered)
+	for _, stale := range []string{"Agenda (4)", "Loaded 4 calendar event(s)"} {
+		if strings.Contains(body, stale) {
+			t.Fatalf("calendar agenda body kept stale %q:\n%s", stale, rendered)
+		}
+	}
+}
+
+func TestCalendarDetailBorderContainsTitleWithoutBodyDuplicate(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	rendered := stripANSI(m.renderMainView())
+	titleLine := calendarFirstFrameLineForTest(rendered)
+	if !strings.Contains(titleLine, "Event Detail") {
+		t.Fatalf("calendar detail frame missing title:\n%s", rendered)
+	}
+	body := calendarAfterFirstFrameLineForTest(rendered)
+	if strings.Contains(body, "Event Detail") {
+		t.Fatalf("calendar detail body duplicated frame title:\n%s", rendered)
+	}
+}
+
+func TestCalendarRailBorderContainsDateRangeWithoutBodyDuplicate(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+	m.calendarDetail = m.selectedCalendarEvent()
+
+	rendered := stripANSI(m.renderMainView())
+	titleLine := calendarFirstFrameLineForTest(rendered)
+	if !strings.Contains(titleLine, "May 1-31, 2026") {
+		t.Fatalf("calendar rail frame missing date range:\n%s", rendered)
+	}
+	body := calendarAfterFirstFrameLineForTest(rendered)
+	if strings.Contains(body, "May 1-31, 2026") {
+		t.Fatalf("calendar rail body duplicated date range:\n%s", rendered)
+	}
+}
+
+func calendarFirstFrameLineForTest(rendered string) string {
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "┌") {
+			return line
+		}
+	}
+	return ""
+}
+
+func calendarAfterFirstFrameLineForTest(rendered string) string {
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "┌") {
+			end := len(lines)
+			for j := i + 1; j < len(lines); j++ {
+				if strings.Contains(lines[j], "└") {
+					end = j
+					break
+				}
+			}
+			return strings.Join(lines[i+1:end], "\n")
+		}
+	}
+	return rendered
 }
 
 func TestCalendarDayNavigationCrossesDayBoundary(t *testing.T) {

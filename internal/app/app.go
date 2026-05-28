@@ -859,6 +859,8 @@ type Model struct {
 	crossSourceSearchResults    []models.CrossSourceSearchResult
 	crossSourceSearchCursor     int
 	crossSourceSearchLoading    bool
+	calendarAgendaStart         time.Time
+	calendarAgendaEnd           time.Time
 	calendarDay                 time.Time
 	calendarWeekStart           time.Time
 	calendarThreeDayStart       time.Time
@@ -2203,6 +2205,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.calendarView == "" {
 			m.calendarView = calendarViewAgenda
 		}
+		if m.calendarView == calendarViewAgenda && (m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero()) {
+			m.setDefaultCalendarAgendaRange(time.Now())
+		}
 		if m.calendarView == calendarViewDay {
 			m.calendarDay = m.selectedCalendarDay()
 			if len(m.calendarEventsForDay(m.calendarDay)) == 0 {
@@ -2230,9 +2235,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch {
 			m.calendarDetail = m.selectedCalendarEvent()
 		} else {
-			m.calendarDetail = m.selectedCalendarEvent()
+			m.ensureCalendarSelectionVisible()
 		}
-		m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+		m.calendarStatus = ""
 		return m, nil
 
 	case CalendarSearchLoadedMsg:
@@ -2252,7 +2257,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.calendarStatus = "Calendar search failed: " + msg.Err.Error()
 			return m, nil
 		}
-		m.calendarSearchResults = msg.Events
+		m.calendarSearchResults = normalizeCalendarEventsForDisplay(msg.Events)
 		if m.calendarSearchCursor >= len(m.calendarSearchResults) {
 			m.calendarSearchCursor = len(m.calendarSearchResults) - 1
 		}

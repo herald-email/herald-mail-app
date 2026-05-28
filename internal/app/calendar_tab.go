@@ -35,6 +35,14 @@ const (
 	calendarFocusDetail
 )
 
+const calendarAgendaMaxSpanningEventDays = 45
+const calendarFrameSwitchHint = "(<-/->/h/l to switch)"
+
+type calendarPanelFrameChrome struct {
+	LeftTitle string
+	RightHint string
+}
+
 var (
 	calendarHTMLBreakPattern    = regexp.MustCompile(`(?i)<\s*(br|/p|/div|/li|/h[1-6])[^>]*>`)
 	calendarHTMLListItemPattern = regexp.MustCompile(`(?i)<\s*li[^>]*>`)
@@ -105,6 +113,8 @@ func (m *Model) refreshCalendarAvailability() {
 		m.crossSourceSearchResults = nil
 		m.crossSourceSearchCursor = 0
 		m.crossSourceSearchLoading = false
+		m.calendarAgendaStart = time.Time{}
+		m.calendarAgendaEnd = time.Time{}
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -250,6 +260,9 @@ func (m *Model) selectedCalendarDay() time.Time {
 	if !m.calendarDay.IsZero() {
 		return m.calendarDay
 	}
+	if m.calendarView == calendarViewAgenda && !m.calendarAgendaStart.IsZero() {
+		return m.calendarAgendaStart
+	}
 	if event := m.selectedCalendarEvent(); event != nil && !event.Start.IsZero() {
 		return event.Start
 	}
@@ -293,7 +306,10 @@ func (m *Model) setCalendarView(view calendarViewMode) {
 	case calendarViewCrossSearch:
 		m.selectCrossSourceSearchResult()
 	default:
-		m.calendarDetail = m.selectedCalendarEvent()
+		if m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero() {
+			m.setDefaultCalendarAgendaRange(time.Now())
+		}
+		m.ensureCalendarSelectionVisible()
 	}
 }
 
@@ -456,7 +472,7 @@ func (m *Model) clearCalendarSearch() {
 	m.calendarSearchResults = nil
 	m.calendarSearchCursor = 0
 	m.calendarSearchLoading = false
-	m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+	m.calendarStatus = ""
 	m.setCalendarView(calendarViewAgenda)
 }
 
@@ -466,7 +482,7 @@ func (m *Model) clearCrossSourceSearch() {
 	m.crossSourceSearchCursor = 0
 	m.crossSourceSearchLoading = false
 	m.calendarDetail = m.selectedCalendarEvent()
-	m.calendarStatus = fmt.Sprintf("Loaded %d calendar event(s)", len(m.calendarEvents))
+	m.calendarStatus = ""
 	m.setCalendarView(calendarViewAgenda)
 }
 
@@ -1192,6 +1208,7 @@ func (m *Model) renderCalendarView() string {
 		func(width, height int) string { return m.renderCalendarAgendaList(width, height) },
 		func(width, height int) string { return m.renderCalendarEventDetail(width, height, false) },
 		26,
+		"Event Detail",
 	)
 }
 
@@ -1202,6 +1219,7 @@ func (m *Model) renderCalendarSearchView() string {
 			return m.renderCalendarEventDetailWithHeader(width, height, false, "Search Detail")
 		},
 		28,
+		"Search Detail",
 	)
 }
 
@@ -1210,6 +1228,7 @@ func (m *Model) renderCrossSourceSearchView() string {
 		func(width, height int) string { return m.renderCrossSourceSearchResults(width, height) },
 		func(width, height int) string { return m.renderCrossSourceSearchDetail(width, height) },
 		30,
+		m.crossSourceSearchDetailFrameTitle(),
 	)
 }
 
@@ -1218,6 +1237,7 @@ func (m *Model) renderCalendarDayView() string {
 		func(width, height int) string { return m.renderCalendarDayAgenda(width, height) },
 		func(width, height int) string { return m.renderCalendarDayDrawer(width, height) },
 		26,
+		"Day Drawer",
 	)
 }
 
@@ -1226,6 +1246,7 @@ func (m *Model) renderCalendarWeekView() string {
 		func(width, height int) string { return m.renderCalendarWeekGrid(width, height) },
 		func(width, height int) string { return m.renderCalendarWeekInspector(width, height) },
 		28,
+		"Week Inspector",
 	)
 }
 
@@ -1234,10 +1255,11 @@ func (m *Model) renderCalendarThreeDayView() string {
 		func(width, height int) string { return m.renderCalendarThreeDayLanes(width, height) },
 		func(width, height int) string { return m.renderCalendarThreeDayCommandPanel(width, height) },
 		30,
+		"Command Panel",
 	)
 }
 
-func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, mainMin int) string {
+func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, mainMin int, detailTitle string) string {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	contentW := m.windowWidth
 	if contentW <= 0 {
@@ -1272,15 +1294,155 @@ func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, 
 	mainInnerW, detailInnerW, innerH := clamp(mainW-4, 1), clamp(detailW-4, 1), clamp(contentH-2, 1)
 	mainPanel := m.calendarPanel(mainW, contentH, m.calendarFocus == calendarFocusMain).
 		Render(fitCalendarPanelContent(mainFn(mainInnerW, innerH), mainInnerW, innerH))
+	mainPanel = m.renderCalendarPanelFrameChrome(mainPanel, m.calendarMainPanelFrameChrome())
 	detailPanel := m.calendarPanel(detailW, contentH, m.calendarFocus == calendarFocusDetail).
 		Render(fitCalendarPanelContent(detailFn(detailInnerW, innerH), detailInnerW, innerH))
+	detailPanel = m.renderCalendarPanelFrameChrome(detailPanel, calendarPanelFrameChrome{LeftTitle: detailTitle})
 	if railW <= 0 {
 		return lipgloss.JoinHorizontal(lipgloss.Top, mainPanel, panelGap, detailPanel)
 	}
 	railInnerW := clamp(railW-4, 1)
 	railPanel := m.calendarPanel(railW, contentH, m.calendarFocus == calendarFocusRail).
 		Render(fitCalendarPanelContent(m.renderCalendarLeftPanel(railInnerW, innerH), railInnerW, innerH))
+	railPanel = m.renderCalendarPanelFrameChrome(railPanel, m.calendarRailPanelFrameChrome())
 	return lipgloss.JoinHorizontal(lipgloss.Top, railPanel, panelGap, mainPanel, panelGap, detailPanel)
+}
+
+func (m *Model) calendarMainPanelFrameChrome() calendarPanelFrameChrome {
+	title := m.calendarMainPanelFrameTitle()
+	if title == "" {
+		return calendarPanelFrameChrome{}
+	}
+	return calendarPanelFrameChrome{
+		LeftTitle: title,
+		RightHint: calendarFrameSwitchHint,
+	}
+}
+
+func (m *Model) calendarMainPanelFrameTitle() string {
+	switch m.calendarView {
+	case "", calendarViewAgenda:
+		visible := m.indexedVisibleCalendarEvents()
+		count := fmt.Sprintf("%d", len(visible))
+		if m.calendarLoading {
+			count = "loading"
+		}
+		start, end := m.calendarAgendaDisplayRange()
+		return fmt.Sprintf("Agenda (%s) for %s", count, calendarFrameDateRange(start, end))
+	case calendarViewDay:
+		day := m.selectedCalendarDay()
+		return fmt.Sprintf("Day Agenda for %s", calendarFrameDateRange(day, day))
+	case calendarViewWeek:
+		start := m.selectedCalendarWeekStart()
+		return fmt.Sprintf("Week Agenda for %s", calendarFrameDateRange(start, start.AddDate(0, 0, 6)))
+	case calendarViewThreeDay:
+		start := m.selectedCalendarThreeDayStart()
+		return fmt.Sprintf("3-Day Window for %s", calendarFrameDateRange(start, start.AddDate(0, 0, 2)))
+	default:
+		return ""
+	}
+}
+
+func (m *Model) calendarRailPanelFrameChrome() calendarPanelFrameChrome {
+	_, _, rangeLabel := m.calendarActiveRange()
+	return calendarPanelFrameChrome{LeftTitle: rangeLabel}
+}
+
+func (m *Model) crossSourceSearchDetailFrameTitle() string {
+	result := m.selectedCrossSourceSearchResult()
+	if result == nil {
+		return "Search Detail"
+	}
+	if result.Event != nil {
+		return "Event Detail"
+	}
+	if result.Email != nil {
+		return "Mail Detail"
+	}
+	return "Search Detail"
+}
+
+func (m *Model) renderCalendarPanelFrameChrome(view string, chrome calendarPanelFrameChrome) string {
+	leftTitle := strings.TrimSpace(chrome.LeftTitle)
+	rightHint := strings.TrimSpace(chrome.RightHint)
+	if leftTitle == "" && rightHint == "" {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) == 0 {
+		return view
+	}
+	lineWidth := ansi.StringWidth(lines[0])
+	if lineWidth < 8 {
+		return view
+	}
+
+	leftStart := 1
+	rightEnd := lineWidth - 1
+	var rightNotice string
+	rightWidth := 0
+	if rightHint != "" {
+		rightMax := lineWidth - leftStart - 3
+		if leftTitle != "" {
+			const reservedLeftTitleWidth = 12
+			if maxRightWithLeft := lineWidth - leftStart - reservedLeftTitleWidth - 2; maxRightWithLeft < rightMax {
+				rightMax = maxRightWithLeft
+			}
+		}
+		if rightMax >= 8 {
+			rightText := ansi.Truncate(rightHint, rightMax-2, "...")
+			rightNotice = m.theme.Text.Dim.Style().Render(" " + rightText + " ")
+			rightWidth = ansi.StringWidth(rightNotice)
+			if rightWidth > rightMax {
+				rightWidth = 0
+				rightNotice = ""
+			}
+		}
+	}
+
+	rightStart := rightEnd - rightWidth
+	if rightWidth > 0 && rightStart < leftStart+6 {
+		rightWidth = 0
+		rightNotice = ""
+		rightStart = rightEnd
+	}
+
+	var leftNotice string
+	leftWidth := 0
+	if leftTitle != "" {
+		leftMax := rightEnd - leftStart
+		if rightWidth > 0 {
+			leftMax = rightStart - leftStart - 1
+		}
+		if leftMax >= 5 {
+			leftText := ansi.Truncate(leftTitle, leftMax-2, "...")
+			leftNotice = m.theme.Text.Primary.Style().Bold(true).Render(" " + leftText + " ")
+			leftWidth = ansi.StringWidth(leftNotice)
+		}
+	}
+
+	line := lines[0]
+	if leftWidth > 0 {
+		line = overlayCalendarFrameText(line, lineWidth, leftStart, leftNotice, leftWidth)
+	}
+	if rightWidth > 0 {
+		line = overlayCalendarFrameText(line, lineWidth, rightStart, rightNotice, rightWidth)
+	}
+	lines[0] = ansi.Cut(line, 0, lineWidth)
+	return strings.Join(lines, "\n")
+}
+
+func overlayCalendarFrameText(line string, lineWidth, start int, text string, textWidth int) string {
+	if start < 0 || textWidth <= 0 || start >= lineWidth {
+		return line
+	}
+	if start+textWidth > lineWidth {
+		textWidth = lineWidth - start
+		text = ansi.Cut(text, 0, textWidth)
+	}
+	left := padANSIToWidth(ansi.Cut(line, 0, start), start)
+	right := ansi.Cut(line, start+textWidth, lineWidth)
+	return ansi.Cut(left+text+right, 0, lineWidth)
 }
 
 func (m *Model) renderCalendarDetailFullView() string {
@@ -1297,7 +1459,9 @@ func (m *Model) renderCalendarDetailFullView() string {
 		contentH = 4
 	}
 	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
-	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarEventDetail(innerW, innerH, true), innerW, innerH))
+	panel := m.calendarPanel(panelW, contentH, true).
+		Render(fitCalendarPanelContent(m.renderCalendarEventDetail(innerW, innerH, true), innerW, innerH))
+	return m.renderCalendarPanelFrameChrome(panel, calendarPanelFrameChrome{LeftTitle: "Event Detail"})
 }
 
 func (m *Model) renderCalendarEditFullView() string {
@@ -1415,12 +1579,7 @@ func (m *Model) renderCalendarLeftPanel(width, height int) string {
 		collections = m.mergeCalendarCollections(nil)
 	}
 	var lines []string
-	start, end, rangeLabel := m.calendarActiveRange()
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(m.calendarViewTitle(), width)))
-	for _, line := range wrapText(rangeLabel, width) {
-		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(line, width)))
-	}
-	lines = append(lines, "")
+	start, end, _ := m.calendarActiveRange()
 	lines = append(lines, m.theme.Severity.Success.Style().Render(calendarFit("<     Today     >", width)))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRule(width)))
 	lines = append(lines, m.renderCalendarMiniMonth(width, start, end)...)
@@ -1478,14 +1637,8 @@ func (m *Model) renderCalendarAgendaList(width, height int) string {
 	}
 	var lines []string
 	visibleEvents := m.indexedVisibleCalendarEvents()
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRangeHeader("Agenda", m.selectedCalendarDay(), m.selectedCalendarDay(), width)))
-	title := fmt.Sprintf("Agenda (%d)", len(visibleEvents))
-	if m.calendarLoading {
-		title = "Agenda (loading)"
-	}
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)))
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 	if len(visibleEvents) == 0 {
 		lines = append(lines, "")
@@ -1524,6 +1677,17 @@ func (m *Model) renderCalendarAgendaList(width, height int) string {
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
+func (m *Model) visibleCalendarStatus() string {
+	status := strings.TrimSpace(m.calendarStatus)
+	if status == "" {
+		return ""
+	}
+	if strings.HasPrefix(status, "Loaded ") && strings.Contains(status, "calendar event") {
+		return ""
+	}
+	return status
+}
+
 func (m *Model) renderCalendarSearchResults(width, height int) string {
 	if width < 10 {
 		width = 10
@@ -1536,8 +1700,8 @@ func (m *Model) renderCalendarSearchResults(width, height int) string {
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)))
 	queryLine := "/ " + m.calendarSearchQuery
 	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(queryLine, width)))
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 	if strings.TrimSpace(m.calendarSearchQuery) == "" {
 		lines = append(lines, "")
@@ -1587,8 +1751,8 @@ func (m *Model) renderCrossSourceSearchResults(width, height int) string {
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)))
 	queryLine := "x " + m.crossSourceSearchQuery
 	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(queryLine, width)))
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 	if strings.TrimSpace(m.crossSourceSearchQuery) == "" {
 		lines = append(lines, "")
@@ -1991,11 +2155,10 @@ func (m *Model) renderCalendarDayAgenda(width, height int) string {
 	day := m.selectedCalendarDay()
 	events := m.calendarEventsForDay(day)
 	var lines []string
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRangeHeader("Day Agenda", day, day, width)))
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Day Agenda", width)))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(day.Local().Format("Mon Jan 2, 2006"), width)))
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 	if len(events) == 0 {
 		lines = append(lines, "")
@@ -2035,15 +2198,14 @@ func (m *Model) renderCalendarWeekGrid(width, height int) string {
 	}
 	start := m.selectedCalendarWeekStart()
 	var lines []string
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRangeHeader("Week Agenda", start, start.AddDate(0, 0, 6), width)))
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Week Time-Grid", width)))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarWeekRange(start), width)))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarWeekDaySummary(start), width)))
 	if summary := m.calendarWeekEventSummary(start, width); summary != "" {
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(summary, width)))
 	}
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 	maxRows := height - len(lines)
 	if maxRows < 1 {
@@ -2173,8 +2335,8 @@ func (m *Model) renderCalendarThreeDayLanes(width, height int) string {
 	var lines []string
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("3-Day Command", width)))
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarThreeDayRange(start), width)))
-	if strings.TrimSpace(m.calendarStatus) != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarStatus, width)))
+	if status := m.visibleCalendarStatus(); status != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
 
 	rows, selectedOffset := m.calendarThreeDayRows(start, width)
@@ -2310,12 +2472,12 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	}
 
 	var lines []string
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(header, width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRule(width)))
 	if m.calendarDetailLoading {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Loading latest cached detail...", width)))
 	}
-	lines = append(lines, "")
+	if len(lines) > 0 {
+		lines = append(lines, "")
+	}
 	swatch := dynamicCalendarBlockStyle("#181819", m.calendarEventColor(*event)).Render("  ")
 	titleW := width - ansi.StringWidth(swatch) - 1
 	lines = append(lines, swatch+" "+m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, titleW)))
@@ -2499,9 +2661,9 @@ func (m *Model) moveCalendarRange(delta int) {
 		m.calendarThreeDayStart = m.selectedCalendarThreeDayStart().AddDate(0, 0, delta)
 		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 	default:
-		target := m.selectedCalendarDay().AddDate(0, 0, delta)
-		m.calendarDay = target
-		m.selectFirstCalendarEventForDay(target)
+		start, _ := m.calendarAgendaWindow()
+		m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(start.AddDate(0, delta, 0))
+		m.ensureCalendarSelectionVisible()
 	}
 }
 
@@ -2556,15 +2718,66 @@ func (m *Model) calendarActiveRange() (time.Time, time.Time, string) {
 		end := start.AddDate(0, 0, 2)
 		return start, end, calendarCompactDateRange(start, end)
 	default:
-		visible := m.indexedVisibleCalendarEvents()
-		if len(visible) > 0 {
-			start := calendarDayStartFor(visible[0].event.Start)
-			end := calendarDayStartFor(visible[len(visible)-1].event.Start)
-			return start, end, calendarCompactDateRange(start, end)
-		}
-		day := m.selectedCalendarDay()
-		return day, day, day.Local().Format("Jan 2, 2006")
+		start, end := m.calendarAgendaDisplayRange()
+		return start, end, calendarCompactDateRange(start, end)
 	}
+}
+
+func (m *Model) setDefaultCalendarAgendaRange(now time.Time) {
+	start := calendarDefaultAgendaStart(m.calendarEvents, now)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(start)
+}
+
+func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) time.Time {
+	today := calendarDayStartFor(now)
+	defaultStart, defaultEnd := calendarAgendaWindowFor(today)
+	for _, event := range events {
+		if calendarEventOccursInAgendaWindow(event, defaultStart, defaultEnd) {
+			return defaultStart
+		}
+	}
+	var nearestFuture time.Time
+	var latestPast time.Time
+	for _, event := range events {
+		if event.Start.IsZero() {
+			continue
+		}
+		day := calendarDayStartFor(event.Start)
+		if !day.Before(today) {
+			if nearestFuture.IsZero() || day.Before(nearestFuture) {
+				nearestFuture = day
+			}
+			continue
+		}
+		if latestPast.IsZero() || day.After(latestPast) {
+			latestPast = day
+		}
+	}
+	if !nearestFuture.IsZero() {
+		return nearestFuture
+	}
+	if !latestPast.IsZero() {
+		return latestPast
+	}
+	return today
+}
+
+func calendarAgendaWindowFor(day time.Time) (time.Time, time.Time) {
+	day = calendarDayStartFor(day)
+	start := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, day.Location())
+	return start, start.AddDate(0, 1, 0)
+}
+
+func (m *Model) calendarAgendaWindow() (time.Time, time.Time) {
+	if m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero() || !m.calendarAgendaEnd.After(m.calendarAgendaStart) {
+		return calendarAgendaWindowFor(time.Now())
+	}
+	return calendarDayStartFor(m.calendarAgendaStart), calendarDayStartFor(m.calendarAgendaEnd)
+}
+
+func (m *Model) calendarAgendaDisplayRange() (time.Time, time.Time) {
+	start, end := m.calendarAgendaWindow()
+	return start, end.AddDate(0, 0, -1)
 }
 
 func calendarCompactDateRange(start, end time.Time) string {
@@ -2593,7 +2806,7 @@ func (m *Model) renderCalendarMiniMonth(width int, start, end time.Time) []strin
 	start = calendarDayStartFor(start)
 	end = calendarDayStartFor(end)
 	month := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, start.Location())
-	gridStart := month.AddDate(0, 0, -int(month.Weekday()))
+	gridStart := calendarWeekStartFor(month)
 	header := month.Format("Jan 2006")
 	leftPad := (width - ansi.StringWidth(header)) / 2
 	if leftPad < 0 {
@@ -2601,7 +2814,7 @@ func (m *Model) renderCalendarMiniMonth(width int, start, end time.Time) []strin
 	}
 	lines := []string{
 		m.theme.Text.Primary.Style().Render(calendarFit(strings.Repeat(" ", leftPad)+header, width)),
-		m.theme.Text.Dim.Style().Render(calendarFit("Su Mo Tu We Th Fr Sa", width)),
+		m.theme.Text.Dim.Style().Render(calendarFit("Mo Tu We Th Fr Sa Su", width)),
 	}
 	for week := 0; week < 6; week++ {
 		var row strings.Builder
@@ -3139,7 +3352,8 @@ func calendarWeekStartFor(day time.Time) time.Time {
 		day = time.Now()
 	}
 	dayStart := calendarDayStartFor(day)
-	return dayStart.AddDate(0, 0, -int(dayStart.Weekday()))
+	daysSinceMonday := (int(dayStart.Weekday()) + 6) % 7
+	return dayStart.AddDate(0, 0, -daysSinceMonday)
 }
 
 func calendarWeekRange(start time.Time) string {
@@ -3262,6 +3476,29 @@ func eventOccursInCalendarRange(event models.CalendarEvent, start, end time.Time
 	return eventStart.Before(end) && eventEnd.After(start)
 }
 
+func calendarEventOccursInAgendaWindow(event models.CalendarEvent, start, end time.Time) bool {
+	if event.Start.IsZero() {
+		return false
+	}
+	start = calendarDayStartFor(start)
+	end = calendarDayStartFor(end)
+	eventStart := event.Start.Local()
+	eventEnd := event.End.Local()
+	if event.End.IsZero() {
+		eventEnd = eventStart
+	}
+	if !eventStart.Before(end) || !eventEnd.After(start) {
+		return false
+	}
+	if !eventStart.Before(start) {
+		return true
+	}
+	if eventEnd.Sub(eventStart) > calendarAgendaMaxSpanningEventDays*24*time.Hour {
+		return false
+	}
+	return true
+}
+
 func calendarOpenSlotSummaries(start time.Time, events []indexedCalendarEvent, width int) []string {
 	start = calendarDayStartFor(start)
 	summaries := make([]string, 0, 3)
@@ -3356,6 +3593,9 @@ func calendarSourceLabel(event models.CalendarEvent) string {
 func normalizeCalendarEventsForDisplay(events []models.CalendarEvent) []models.CalendarEvent {
 	out := make([]models.CalendarEvent, 0, len(events))
 	for _, event := range events {
+		if event.Start.IsZero() {
+			continue
+		}
 		event.Ref = event.Ref.WithDefaults()
 		if !event.Start.IsZero() && !event.End.IsZero() && event.End.Before(event.Start) {
 			event.End = event.Start
@@ -3449,8 +3689,15 @@ func (m *Model) pruneCalendarCollectionState() {
 
 func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
 	out := make([]indexedCalendarEvent, 0, len(m.calendarEvents))
+	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	for i, event := range m.calendarEvents {
 		if m.calendarEventHidden(event) {
+			continue
+		}
+		if event.Start.IsZero() {
+			continue
+		}
+		if m.calendarView == calendarViewAgenda && !calendarEventOccursInAgendaWindow(event, agendaStart, agendaEnd) {
 			continue
 		}
 		out = append(out, indexedCalendarEvent{index: i, event: event})
@@ -3610,25 +3857,14 @@ func calendarCollectionColor(collection models.CalendarCollection, idx int) stri
 	return palette[idx%len(palette)]
 }
 
-func calendarRangeHeader(label string, start, end time.Time, width int) string {
-	if width < 12 {
-		width = 12
-	}
+func calendarFrameDateRange(start, end time.Time) string {
 	start = calendarDayStartFor(start)
 	end = calendarDayStartFor(end)
 	rangeText := start.Format("Mon Jan 2, 2006")
 	if !sameCalendarDate(start, end) {
 		rangeText = start.Format("Mon Jan 2") + " - " + end.Format("Mon Jan 2, 2006")
 	}
-	text := fmt.Sprintf(" %s for %s (<-/->/h/l to switch) ", label, rangeText)
-	textW := ansi.StringWidth(text)
-	if textW >= width {
-		return calendarFit(text, width)
-	}
-	fill := width - textW
-	left := fill / 2
-	right := fill - left
-	return strings.Repeat("-", left) + text + strings.Repeat("-", right)
+	return rangeText
 }
 
 func calendarRenderedNotes(value string) string {

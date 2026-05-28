@@ -151,7 +151,12 @@ func (s *GoogleCalendarSource) ListEventsWithSyncToken(ctx context.Context, ref 
 				}.WithDefaults())
 				continue
 			}
-			result.Events = append(result.Events, googleEventToModel(s.id, s.accountID, ref.CollectionID, item))
+			event, err := googleEventToModel(s.id, s.accountID, ref.CollectionID, item)
+			if err != nil {
+				logger.Warn("Skipping Google calendar event %q from %s: %v", item.ID, ref.CollectionID, err)
+				continue
+			}
+			result.Events = append(result.Events, event)
 		}
 		if payload.NextPageToken == "" {
 			break
@@ -172,7 +177,10 @@ func (s *GoogleCalendarSource) FetchEvent(ctx context.Context, ref models.EventR
 	if err := s.doJSON(req, &payload); err != nil {
 		return nil, err
 	}
-	event := googleEventToModel(s.id, s.accountID, ref.CalendarID, payload)
+	event, err := googleEventToModel(s.id, s.accountID, ref.CalendarID, payload)
+	if err != nil {
+		return nil, err
+	}
 	return &event, nil
 }
 
@@ -201,7 +209,10 @@ func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.Cal
 	if err := s.doJSON(req, &updated); err != nil {
 		return nil, err
 	}
-	out := googleEventToModel(s.id, s.accountID, event.Ref.CalendarID, updated)
+	out, err := googleEventToModel(s.id, s.accountID, event.Ref.CalendarID, updated)
+	if err != nil {
+		return nil, err
+	}
 	return &out, nil
 }
 
@@ -436,7 +447,8 @@ func (s *CalDAVSource) eventsFromMultiStatus(ref models.CollectionRef, ms davMul
 		}
 		event, err := eventFromICS(s.id, s.accountID, ref.CollectionID, eventID, prop.GetETag, prop.CalendarData)
 		if err != nil {
-			return nil, nil, err
+			logger.Warn("Skipping CalDAV calendar event %q from %s: %v", eventID, ref.CollectionID, err)
+			continue
 		}
 		out = append(out, *event)
 	}
@@ -939,9 +951,19 @@ type googleReminder struct {
 	Minutes int    `json:"minutes"`
 }
 
-func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, calendarID string, item googleEventPayload) models.CalendarEvent {
-	start, allDay := parseGoogleTime(item.Start)
-	end, _ := parseGoogleTime(item.End)
+func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, calendarID string, item googleEventPayload) (models.CalendarEvent, error) {
+	start, allDay, ok := parseGoogleTime(item.Start)
+	if !ok {
+		return models.CalendarEvent{}, fmt.Errorf("calendar event %s has invalid start time", firstNonEmpty(item.ID, item.ICalUID, "(unknown)"))
+	}
+	var end time.Time
+	if !googleTimeEmpty(item.End) {
+		var endOK bool
+		end, _, endOK = parseGoogleTime(item.End)
+		if !endOK {
+			return models.CalendarEvent{}, fmt.Errorf("calendar event %s has invalid end time", firstNonEmpty(item.ID, item.ICalUID, "(unknown)"))
+		}
+	}
 	updated, _ := parseRFC3339(item.Updated)
 	ref := models.EventRef{
 		SourceID:   sourceID,
@@ -970,7 +992,7 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		Reminders:         googleRemindersToModel(item.Reminders),
 		Revision:          fmt.Sprintf("%d", item.Sequence),
 		UpdatedAt:         updated,
-	}
+	}, nil
 }
 
 func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
@@ -1088,13 +1110,17 @@ func googleRemindersFromModel(reminders []models.CalendarReminder) *googleRemind
 	return &out
 }
 
-func parseGoogleTime(t googleEventTime) (time.Time, bool) {
+func googleTimeEmpty(t googleEventTime) bool {
+	return strings.TrimSpace(t.Date) == "" && strings.TrimSpace(t.DateTime) == ""
+}
+
+func parseGoogleTime(t googleEventTime) (time.Time, bool, bool) {
 	if strings.TrimSpace(t.Date) != "" {
-		parsed, _ := time.Parse("2006-01-02", t.Date)
-		return parsed, true
+		parsed, err := time.Parse("2006-01-02", strings.TrimSpace(t.Date))
+		return parsed, true, err == nil
 	}
-	parsed, _ := parseRFC3339(t.DateTime)
-	return parsed, false
+	parsed, ok := parseRFC3339(t.DateTime)
+	return parsed, false, ok
 }
 
 type davMultiStatus struct {
@@ -1226,8 +1252,17 @@ func sameCalDAVURL(a, b string) bool {
 func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
 	fields := parseICS(data)
 	details := parseICSRichDetails(data)
-	start, allDay := parseICSTimeWithZone(fields["DTSTART"], details.TimeZone)
-	end, _ := parseICSTimeWithZone(fields["DTEND"], details.TimeZone)
+	start, allDay, err := parseICSTimeWithZone(fields["DTSTART"], details.TimeZone)
+	if err != nil {
+		return nil, fmt.Errorf("calendar event %s has invalid DTSTART %q: %w", firstNonEmpty(eventID, fields["UID"], "(unknown)"), fields["DTSTART"], err)
+	}
+	var end time.Time
+	if strings.TrimSpace(fields["DTEND"]) != "" {
+		end, _, err = parseICSTimeWithZone(fields["DTEND"], details.TimeZone)
+		if err != nil {
+			return nil, fmt.Errorf("calendar event %s has invalid DTEND %q: %w", firstNonEmpty(eventID, fields["UID"], "(unknown)"), fields["DTEND"], err)
+		}
+	}
 	updated, _ := parseICSTime(fields["LAST-MODIFIED"])
 	ref := models.EventRef{
 		SourceID:   sourceID,
@@ -1539,29 +1574,100 @@ func unfoldICSLines(data string) []string {
 }
 
 func parseICSTime(value string) (time.Time, bool) {
-	return parseICSTimeWithZone(value, "")
+	parsed, _, err := parseICSTimeWithZone(value, "")
+	return parsed, err == nil
 }
 
-func parseICSTimeWithZone(value, timezone string) (time.Time, bool) {
-	if strings.TrimSpace(value) == "" {
-		return time.Time{}, false
+func parseICSTimeWithZone(value, timezone string) (time.Time, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false, fmt.Errorf("empty timestamp")
 	}
 	if len(value) == len("20060102") {
-		parsed, _ := time.Parse("20060102", value)
-		return parsed, true
+		parsed, err := time.Parse("20060102", value)
+		if err != nil {
+			return time.Time{}, false, err
+		}
+		return parsed, true, nil
 	}
-	if strings.HasSuffix(value, "Z") {
-		parsed, _ := time.Parse("20060102T150405Z", value)
-		return parsed, false
+	if parsed, ok := parseICSTimeWithOffset(value); ok {
+		return parsed, false, nil
 	}
 	if timezone != "" {
-		if loc, err := time.LoadLocation(timezone); err == nil {
-			parsed, _ := time.ParseInLocation("20060102T150405", value, loc)
-			return parsed, false
+		if loc, ok := loadICSTimeLocation(timezone); ok {
+			if parsed, ok := parseICSFloatingTimeInLocation(value, loc); ok {
+				return parsed, false, nil
+			}
 		}
 	}
-	parsed, _ := time.Parse("20060102T150405", value)
-	return parsed, false
+	if parsed, ok := parseICSFloatingTimeInLocation(value, time.UTC); ok {
+		return parsed, false, nil
+	}
+	return time.Time{}, false, fmt.Errorf("unsupported timestamp format")
+}
+
+func parseICSTimeWithOffset(value string) (time.Time, bool) {
+	for _, layout := range []string{
+		"20060102T150405Z",
+		"20060102T1504Z",
+		"20060102T150405-0700",
+		"20060102T1504-0700",
+		"20060102T150405-07:00",
+		"20060102T1504-07:00",
+	} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func parseICSFloatingTimeInLocation(value string, loc *time.Location) (time.Time, bool) {
+	if loc == nil {
+		loc = time.UTC
+	}
+	for _, layout := range []string{"20060102T150405", "20060102T1504"} {
+		if parsed, err := time.ParseInLocation(layout, value, loc); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func loadICSTimeLocation(timezone string) (*time.Location, bool) {
+	timezone = strings.Trim(strings.TrimSpace(timezone), `"`)
+	if timezone == "" {
+		return nil, false
+	}
+	for _, prefix := range []string{
+		"/freeassociation.sourceforge.net/",
+		"/mozilla.org/20050126_1/",
+	} {
+		timezone = strings.TrimPrefix(timezone, prefix)
+	}
+	timezone = strings.TrimPrefix(timezone, "/")
+	if loc, err := time.LoadLocation(timezone); err == nil {
+		return loc, true
+	}
+	for _, marker := range []string{
+		"Africa/",
+		"America/",
+		"Antarctica/",
+		"Asia/",
+		"Atlantic/",
+		"Australia/",
+		"Europe/",
+		"Indian/",
+		"Pacific/",
+		"Etc/",
+	} {
+		if idx := strings.Index(timezone, marker); idx >= 0 {
+			if loc, err := time.LoadLocation(timezone[idx:]); err == nil {
+				return loc, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func parseRFC3339(value string) (time.Time, bool) {
