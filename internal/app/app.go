@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -1208,12 +1210,73 @@ func (m *Model) finishCalendarValidation(msg CalendarValidationMsg) tea.Cmd {
 	m.accountValidation.ReclaimOfflineCacheStorage = msg.ReclaimOfflineCacheStorage
 	m.accountValidation.CalendarSourceIDs = msg.SourceIDs
 	if msg.Err != nil {
-		m.accountValidation.Message = fmt.Sprintf("Calendar settings were not saved. %v", msg.Err)
+		m.accountValidation.Message = fmt.Sprintf("Calendar settings were not saved. %s", calendarValidationFailureMessage(msg.Config, msg.SourceIDs, msg.Err))
 		m.statusMessage = "Calendar settings were not saved."
 		logger.Error("Calendar settings validation failed: %v", msg.Err)
 		return nil
 	}
 	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+}
+
+func calendarValidationFailureMessage(cfg *config.Config, sourceIDs []models.SourceID, err error) string {
+	message := strings.TrimSpace(err.Error())
+	if message == "" {
+		message = "validation failed"
+	}
+	if calendarValidationNeedsICloudGuidance(cfg, sourceIDs, message) && !strings.Contains(strings.ToLower(message), "apple app-specific password") {
+		message += ". " + iCloudCalDAVSettingsGuidance()
+	}
+	return message
+}
+
+func calendarValidationNeedsICloudGuidance(cfg *config.Config, sourceIDs []models.SourceID, message string) bool {
+	if cfg == nil || !looksLikeCalendarAuthFailure(message) {
+		return false
+	}
+	want := make(map[models.SourceID]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		if id != "" {
+			want[id] = true
+		}
+	}
+	for _, source := range cfg.NormalizedSources() {
+		if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) || strings.TrimSpace(source.Provider) != "caldav" {
+			continue
+		}
+		sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+		if len(want) > 0 && !want[sourceID] {
+			continue
+		}
+		if isICloudCalDAVSettingsURL(source.CalDAV.URL) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeCalendarAuthFailure(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "unauthorized") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "401") ||
+		strings.Contains(message, "403")
+}
+
+func isICloudCalDAVSettingsURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return false
+	}
+	host := strings.TrimSpace(strings.ToLower(parsed.Host))
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.TrimSuffix(host, ".")
+	return host == "caldav.icloud.com" || strings.HasSuffix(host, ".icloud.com")
+}
+
+func iCloudCalDAVSettingsGuidance() string {
+	return "For iCloud Calendar, use your Apple Account email and an Apple app-specific password. If you changed your Apple Account password, generate a new app-specific password. Apple Account two-factor authentication must be enabled."
 }
 
 func (m *Model) finishOllamaModelValidation(msg OllamaModelValidationMsg) tea.Cmd {

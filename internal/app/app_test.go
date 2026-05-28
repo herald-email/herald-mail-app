@@ -588,6 +588,48 @@ func TestCalendarSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
 	}
 }
 
+func TestCalendarSettingsICloudUnauthorizedShowsAppPasswordGuidance(t *testing.T) {
+	original := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", AccountID: "default", Credentials: config.CredentialsConfig{Username: "old@example.test"}},
+	}}
+	next := &config.Config{Sources: []config.SourceConfig{
+		{ID: "default-mail", Kind: "mail", AccountID: "default", Credentials: config.CredentialsConfig{Username: "new@example.test"}},
+		{ID: "icloud-calendar", Kind: "calendar", Provider: "caldav", AccountID: "icloud", CalDAV: config.CalDAVConfig{URL: "https://caldav.icloud.com/", Username: "me@icloud.com", Password: "calendar-app-password"}},
+	}}
+
+	m := New(&stubBackend{}, nil, "old@example.test", nil, false)
+	m.SetConfig(original)
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ReturnToMenu: true, ValidateCalendar: true, CalendarSourceIDs: []models.SourceID{"icloud-calendar"}})
+	updated := updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("expected calendar validation command")
+	}
+	updatedModel, _ = updated.Update(CalendarValidationMsg{
+		Config:                     next,
+		ReturnToMenu:               true,
+		ReclaimOfflineCacheStorage: false,
+		SourceIDs:                  []models.SourceID{"icloud-calendar"},
+		Err:                        errors.New("calendar source icloud-calendar failed validation: caldav propfind failed: Unauthorized"),
+	})
+	updated = updatedModel.(*Model)
+
+	if updated.cfg != original || len(updated.cfg.Sources) != 1 {
+		t.Fatalf("failed iCloud calendar validation replaced config: %#v", updated.cfg)
+	}
+	rendered := stripANSI(updated.renderAccountValidationPanel())
+	message := updated.accountValidation.Message
+	for _, want := range []string{"Calendar settings were not saved", "Apple Account email", "Apple app-specific password", "generate a new app-specific password", "two-factor authentication"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("expected iCloud Unauthorized guidance to include %q, got message %q and rendered:\n%s", want, message, rendered)
+		}
+	}
+	if strings.Contains(message, "calendar-app-password") || strings.Contains(rendered, "calendar-app-password") {
+		t.Fatalf("validation overlay exposed saved password, message %q rendered:\n%s", message, rendered)
+	}
+}
+
 func TestAISettingsOllamaValidationFailureKeepsPreviousConfig(t *testing.T) {
 	oldValidate := validateOllamaModels
 	validateOllamaModels = func(context.Context, *config.Config) aicheck.Result {

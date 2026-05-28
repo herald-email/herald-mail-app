@@ -561,6 +561,145 @@ func TestCalDAVSourceDiscoversCalendarHomeSetAndCollectionSyncToken(t *testing.T
 	}
 }
 
+func TestCalDAVSourceICloudRedirectPreservesBasicAuth(t *testing.T) {
+	var redirectedRequests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PROPFIND" {
+			t.Fatalf("method = %q, want PROPFIND", r.Method)
+		}
+		if r.Header.Get("Depth") == "" {
+			t.Fatal("redirected CalDAV request dropped Depth header")
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll body: %v", err)
+		}
+		if !strings.Contains(string(body), "<d:propfind") {
+			t.Fatalf("redirected body = %q, want propfind XML", string(body))
+		}
+		switch r.Host {
+		case "caldav.icloud.com":
+			if r.Header.Get("Authorization") == "" {
+				t.Fatal("initial iCloud CalDAV request missing Basic Auth")
+			}
+			w.Header().Set("Location", "https://p123-caldav.icloud.com/caldav/user/")
+			w.WriteHeader(http.StatusFound)
+		case "p123-caldav.icloud.com":
+			redirectedRequests++
+			if got := r.Header.Get("Authorization"); got == "" {
+				t.Fatal("trusted iCloud redirect dropped Basic Auth")
+			}
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.WriteHeader(http.StatusMultiStatus)
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/caldav/user/work/</d:href><d:propstat><d:prop><d:displayname>Work</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>`))
+		default:
+			t.Fatalf("unexpected host %q", r.Host)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "icloud-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "icloud",
+		CalDAV: config.CalDAVConfig{
+			URL:      "https://caldav.icloud.com/",
+			Username: "me@icloud.com",
+			Password: "app-specific-password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	src.client = &http.Client{Transport: rewriteHostTransportForTest(t, server.URL)}
+
+	collections, err := src.ListCalendars(context.Background())
+	if err != nil {
+		t.Fatalf("ListCalendars: %v", err)
+	}
+	if len(collections) != 1 || collections[0].Ref.CollectionID != "work" {
+		t.Fatalf("collections = %#v, want redirected iCloud calendar", collections)
+	}
+	if redirectedRequests == 0 {
+		t.Fatal("expected at least one trusted iCloud redirect request")
+	}
+}
+
+func TestCalDAVSourceDoesNotForwardBasicAuthToUntrustedRedirect(t *testing.T) {
+	var untrustedAuthorization string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PROPFIND" {
+			t.Fatalf("method = %q, want PROPFIND", r.Method)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll body: %v", err)
+		}
+		if !strings.Contains(string(body), "<d:propfind") {
+			t.Fatalf("redirected body = %q, want propfind XML", string(body))
+		}
+		switch r.Host {
+		case "caldav.icloud.com":
+			if r.Header.Get("Authorization") == "" {
+				t.Fatal("initial iCloud CalDAV request missing Basic Auth")
+			}
+			w.Header().Set("Location", "https://calendar.attacker.test/caldav/")
+			w.WriteHeader(http.StatusFound)
+		case "calendar.attacker.test":
+			untrustedAuthorization = r.Header.Get("Authorization")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		default:
+			t.Fatalf("unexpected host %q", r.Host)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "icloud-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "icloud",
+		CalDAV: config.CalDAVConfig{
+			URL:      "https://caldav.icloud.com/",
+			Username: "me@icloud.com",
+			Password: "app-specific-password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	src.client = &http.Client{Transport: rewriteHostTransportForTest(t, server.URL)}
+
+	if _, err := src.ListCalendars(context.Background()); err == nil {
+		t.Fatal("ListCalendars succeeded after untrusted redirect, want auth failure")
+	}
+	if untrustedAuthorization != "" {
+		t.Fatalf("untrusted redirect Authorization = %q, want empty", untrustedAuthorization)
+	}
+}
+
+func rewriteHostTransportForTest(t *testing.T, target string) http.RoundTripper {
+	t.Helper()
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		t.Fatalf("Parse target URL: %v", err)
+	}
+	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		clone := req.Clone(req.Context())
+		clone.Host = req.URL.Host
+		clone.URL.Scheme = targetURL.Scheme
+		clone.URL.Host = targetURL.Host
+		return http.DefaultTransport.RoundTrip(clone)
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
 func TestCalDAVSourceListEventsWithSyncTokenUsesSyncCollection(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	var reportBody string

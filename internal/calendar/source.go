@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -521,9 +522,25 @@ func (s *CalDAVSource) RespondToEvent(ctx context.Context, ref models.EventRef, 
 }
 
 func (s *CalDAVSource) newRequest(ctx context.Context, method, u string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	var bodyReader io.Reader
+	var bodyBytes []byte
+	if body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = bytes.NewReader(bodyBytes)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
 	if err != nil {
 		return nil, err
+	}
+	if bodyBytes != nil {
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
+		req.ContentLength = int64(len(bodyBytes))
 	}
 	if s.username != "" || s.password != "" {
 		req.SetBasicAuth(s.username, s.password)
@@ -593,16 +610,123 @@ func (s *CalDAVSource) propfind(ctx context.Context, targetURL, depth, body stri
 }
 
 func (s *CalDAVSource) doXML(req *http.Request, out any) error {
-	resp, err := s.client.Do(req)
+	resp, finalReq, err := s.doDAVXMLRequest(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return calendarProviderHTTPError("caldav", req.Method, resp.StatusCode, body)
+		return s.calendarHTTPError(finalReq.Method, resp.StatusCode, body)
 	}
 	return xml.NewDecoder(resp.Body).Decode(out)
+}
+
+func (s *CalDAVSource) doDAVXMLRequest(req *http.Request) (*http.Response, *http.Request, error) {
+	current := req
+	for redirects := 0; ; redirects++ {
+		resp, err := s.noRedirectClient().Do(current)
+		if err != nil {
+			return nil, current, err
+		}
+		if !isCalDAVRedirect(resp.StatusCode) || resp.Header.Get("Location") == "" {
+			return resp, current, nil
+		}
+		if redirects >= 10 {
+			_ = resp.Body.Close()
+			return nil, current, fmt.Errorf("caldav %s failed: stopped after 10 redirects", strings.ToLower(current.Method))
+		}
+		next, err := redirectedCalDAVRequest(current, resp.Header.Get("Location"))
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, current, err
+		}
+		current = next
+	}
+}
+
+func (s *CalDAVSource) noRedirectClient() *http.Client {
+	base := http.DefaultClient
+	if s.client != nil {
+		base = s.client
+	}
+	next := *base
+	next.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &next
+}
+
+func redirectedCalDAVRequest(previous *http.Request, location string) (*http.Request, error) {
+	ref, err := url.Parse(location)
+	if err != nil {
+		return nil, err
+	}
+	nextURL := previous.URL.ResolveReference(ref)
+	var bodyBytes []byte
+	if previous.GetBody != nil {
+		body, err := previous.GetBody()
+		if err != nil {
+			return nil, err
+		}
+		bodyBytes, err = io.ReadAll(body)
+		_ = body.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	next, err := http.NewRequestWithContext(previous.Context(), previous.Method, nextURL.String(), bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	if previous.GetBody != nil {
+		next.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
+		next.ContentLength = int64(len(bodyBytes))
+	}
+	next.Header = previous.Header.Clone()
+	if !shouldForwardCalDAVAuthorization(previous.URL.Host, nextURL.Host) {
+		next.Header.Del("Authorization")
+	}
+	return next, nil
+}
+
+func isCalDAVRedirect(status int) bool {
+	switch status {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldForwardCalDAVAuthorization(fromHost, toHost string) bool {
+	fromHost = normalizedCalDAVHost(fromHost)
+	toHost = normalizedCalDAVHost(toHost)
+	if fromHost == "" || toHost == "" {
+		return false
+	}
+	if fromHost == toHost {
+		return true
+	}
+	return isTrustedICloudCalDAVHost(fromHost) && isTrustedICloudCalDAVHost(toHost)
+}
+
+func normalizedCalDAVHost(host string) string {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return ""
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	return strings.TrimSuffix(host, ".")
+}
+
+func isTrustedICloudCalDAVHost(host string) bool {
+	host = normalizedCalDAVHost(host)
+	return host == "caldav.icloud.com" || strings.HasSuffix(host, ".icloud.com")
 }
 
 func (s *CalDAVSource) collectionURL(ctx context.Context, calendarID string) (string, error) {
@@ -1343,6 +1467,14 @@ func validateCalendarMutationOptions(opts models.CalendarMutationOptions) (model
 	return models.NormalizeCalendarMutationOptions(opts)
 }
 
+func (s *CalDAVSource) calendarHTTPError(method string, status int, body []byte) error {
+	err := calendarProviderHTTPError("caldav", method, status, body)
+	if s != nil && isCalDAVAuthStatus(status) && isTrustedICloudCalDAVURL(s.baseURL) {
+		return fmt.Errorf("%w. %s", err, iCloudCalDAVAuthGuidance())
+	}
+	return err
+}
+
 func calendarProviderHTTPError(provider, method string, status int, body []byte) error {
 	if status == http.StatusConflict || status == http.StatusPreconditionFailed {
 		return fmt.Errorf("%w: provider calendar item changed before %s", models.ErrCalendarMutationConflict, strings.ToLower(method))
@@ -1355,6 +1487,22 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 		message = fmt.Sprintf("status %d", status)
 	}
 	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
+}
+
+func isCalDAVAuthStatus(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden
+}
+
+func isTrustedICloudCalDAVURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return false
+	}
+	return isTrustedICloudCalDAVHost(parsed.Host)
+}
+
+func iCloudCalDAVAuthGuidance() string {
+	return "For iCloud Calendar, use your Apple Account email and an Apple app-specific password. If you changed your Apple Account password, generate a new app-specific password. Apple Account two-factor authentication must be enabled."
 }
 
 func isCalDAVSyncUnsupported(err error) bool {
