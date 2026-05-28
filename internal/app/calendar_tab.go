@@ -35,7 +35,6 @@ const (
 	calendarFocusDetail
 )
 
-const calendarAgendaDefaultDays = 30
 const calendarAgendaMaxSpanningEventDays = 45
 
 var (
@@ -2483,13 +2482,8 @@ func (m *Model) moveCalendarRange(delta int) {
 		m.calendarThreeDayStart = m.selectedCalendarThreeDayStart().AddDate(0, 0, delta)
 		m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 	default:
-		start, end := m.calendarAgendaWindow()
-		days := int(end.Sub(start).Hours() / 24)
-		if days < 1 {
-			days = calendarAgendaDefaultDays
-		}
-		m.calendarAgendaStart = start.AddDate(0, 0, days*delta)
-		m.calendarAgendaEnd = m.calendarAgendaStart.AddDate(0, 0, days)
+		start, _ := m.calendarAgendaWindow()
+		m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(start.AddDate(0, delta, 0))
 		m.ensureCalendarSelectionVisible()
 	}
 }
@@ -2590,8 +2584,9 @@ func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) ti
 }
 
 func calendarAgendaWindowFor(day time.Time) (time.Time, time.Time) {
-	start := calendarDayStartFor(day)
-	return start, start.AddDate(0, 0, calendarAgendaDefaultDays)
+	day = calendarDayStartFor(day)
+	start := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, day.Location())
+	return start, start.AddDate(0, 1, 0)
 }
 
 func (m *Model) calendarAgendaWindow() (time.Time, time.Time) {
@@ -2632,7 +2627,7 @@ func (m *Model) renderCalendarMiniMonth(width int, start, end time.Time) []strin
 	start = calendarDayStartFor(start)
 	end = calendarDayStartFor(end)
 	month := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, start.Location())
-	gridStart := month.AddDate(0, 0, -int(month.Weekday()))
+	gridStart := calendarWeekStartFor(month)
 	header := month.Format("Jan 2006")
 	leftPad := (width - ansi.StringWidth(header)) / 2
 	if leftPad < 0 {
@@ -2640,7 +2635,7 @@ func (m *Model) renderCalendarMiniMonth(width int, start, end time.Time) []strin
 	}
 	lines := []string{
 		m.theme.Text.Primary.Style().Render(calendarFit(strings.Repeat(" ", leftPad)+header, width)),
-		m.theme.Text.Dim.Style().Render(calendarFit("Su Mo Tu We Th Fr Sa", width)),
+		m.theme.Text.Dim.Style().Render(calendarFit("Mo Tu We Th Fr Sa Su", width)),
 	}
 	for week := 0; week < 6; week++ {
 		var row strings.Builder
@@ -3178,7 +3173,8 @@ func calendarWeekStartFor(day time.Time) time.Time {
 		day = time.Now()
 	}
 	dayStart := calendarDayStartFor(day)
-	return dayStart.AddDate(0, 0, -int(dayStart.Weekday()))
+	daysSinceMonday := (int(dayStart.Weekday()) + 6) % 7
+	return dayStart.AddDate(0, 0, -daysSinceMonday)
 }
 
 func calendarWeekRange(start time.Time) string {

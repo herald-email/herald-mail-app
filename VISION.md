@@ -662,6 +662,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Calendar screens `01` through `04` match the reference mockups closely enough to require side-by-side real-app Sonokai Signal screenshots in implementation reports.
 - [x] Calendar Week, Day, 3-Day, Agenda, Search, and invitation picker surfaces share an Apple Calendar-style multi-account calendar rail with colored calendar toggles.
 - [x] Calendar range headers clearly state the active day, week, 3-day window, or agenda range and advertise `h/l` plus arrow movement.
+- [x] Calendar Agenda uses whole calendar-month windows, and Week uses Monday-Sunday windows, instead of rolling ranges from the current day.
 - [x] Calendar notes render HTML and Markdown into readable terminal text instead of exposing raw tags.
 - [x] Calendar RSVP is explicit through accept, tentative, and decline actions, and events requiring a response are visibly highlighted.
 - [x] Emails with `text/calendar` parts or `.ics` attachments expose an Add to Calendar flow that asks which writable calendar should receive the invitation.

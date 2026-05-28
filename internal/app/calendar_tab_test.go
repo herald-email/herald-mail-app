@@ -1050,7 +1050,7 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar events = %d, want %d", len(m.calendarEvents), len(events))
 	}
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "Event Detail", "Planning call", "read-only"} {
+	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "Event Detail", "Herald planning room", "read-only"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar view missing %q:\n%s", want, rendered)
 		}
@@ -1062,17 +1062,22 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 	cursorBefore := m.calendarCursor
 	model, _ = m.handleKeyMsg(keyRunes("j"))
 	m = model.(*Model)
-	if m.calendarCursor != cursorBefore {
-		t.Fatalf("calendar cursor = %d, want unchanged %d when only one event is visible", m.calendarCursor, cursorBefore)
+	if m.calendarCursor != cursorBefore+1 {
+		t.Fatalf("calendar cursor = %d, want next event after %d", m.calendarCursor, cursorBefore)
+	}
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Daily standup" {
+		t.Fatalf("selected event after j = %#v, want Daily standup", got)
 	}
 }
 
 func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 	today := calendarDayStartFor(time.Now())
+	monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	nextMonth := monthStart.AddDate(0, 1, 0)
 	old := today.AddDate(0, 0, -45).Add(9 * time.Hour)
 	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
-	current := today.Add(10 * time.Hour)
-	future := today.AddDate(0, 0, 10).Add(11 * time.Hour)
+	current := monthStart.AddDate(0, 0, 10).Add(10 * time.Hour)
+	future := nextMonth.AddDate(0, 0, -1).Add(11 * time.Hour)
 	events := []models.CalendarEvent{
 		{
 			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "zero-start"}.WithDefaults(),
@@ -1122,8 +1127,8 @@ func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 	if len(m.calendarEvents) != 4 {
 		t.Fatalf("calendar events = %d, want zero-start row filtered from model", len(m.calendarEvents))
 	}
-	if !sameCalendarDate(m.calendarAgendaStart, today) || !sameCalendarDate(m.calendarAgendaEnd.AddDate(0, 0, -1), today.AddDate(0, 0, 29)) {
-		t.Fatalf("agenda range = %v..%v, want local 30-day window from today", m.calendarAgendaStart, m.calendarAgendaEnd)
+	if !sameCalendarDate(m.calendarAgendaStart, monthStart) || !sameCalendarDate(m.calendarAgendaEnd, nextMonth) {
+		t.Fatalf("agenda range = %v..%v, want local calendar month %v..%v", m.calendarAgendaStart, m.calendarAgendaEnd, monthStart, nextMonth)
 	}
 	rendered := stripANSI(m.renderMainView())
 	for _, want := range []string{"Agenda", "Current window event", "Future window event"} {
@@ -1135,6 +1140,55 @@ func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("agenda rendered forbidden %q:\n%s", forbidden, rendered)
 		}
+	}
+}
+
+func TestCalendarAgendaWindowUsesCalendarMonth(t *testing.T) {
+	loc := time.Local
+	start, end := calendarAgendaWindowFor(time.Date(2026, 5, 27, 14, 30, 0, 0, loc))
+
+	wantStart := time.Date(2026, 5, 1, 0, 0, 0, 0, loc)
+	wantEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, loc)
+	if !start.Equal(wantStart) || !end.Equal(wantEnd) {
+		t.Fatalf("calendarAgendaWindowFor = %v..%v, want %v..%v", start, end, wantStart, wantEnd)
+	}
+}
+
+func TestCalendarAgendaRangeNavigationMovesByCalendarMonth(t *testing.T) {
+	loc := time.Local
+	m := &Model{
+		calendarView:        calendarViewAgenda,
+		calendarAgendaStart: time.Date(2026, 5, 1, 0, 0, 0, 0, loc),
+		calendarAgendaEnd:   time.Date(2026, 6, 1, 0, 0, 0, 0, loc),
+	}
+
+	m.moveCalendarRange(1)
+	if want := time.Date(2026, 6, 1, 0, 0, 0, 0, loc); !m.calendarAgendaStart.Equal(want) {
+		t.Fatalf("next agenda start = %v, want %v", m.calendarAgendaStart, want)
+	}
+	if want := time.Date(2026, 7, 1, 0, 0, 0, 0, loc); !m.calendarAgendaEnd.Equal(want) {
+		t.Fatalf("next agenda end = %v, want %v", m.calendarAgendaEnd, want)
+	}
+
+	m.moveCalendarRange(-1)
+	if want := time.Date(2026, 5, 1, 0, 0, 0, 0, loc); !m.calendarAgendaStart.Equal(want) {
+		t.Fatalf("previous agenda start = %v, want %v", m.calendarAgendaStart, want)
+	}
+	if want := time.Date(2026, 6, 1, 0, 0, 0, 0, loc); !m.calendarAgendaEnd.Equal(want) {
+		t.Fatalf("previous agenda end = %v, want %v", m.calendarAgendaEnd, want)
+	}
+}
+
+func TestCalendarWeekStartForUsesMonday(t *testing.T) {
+	loc := time.Local
+	wednesday := time.Date(2026, 5, 27, 15, 0, 0, 0, loc)
+	start := calendarWeekStartFor(wednesday)
+	want := time.Date(2026, 5, 25, 0, 0, 0, 0, loc)
+	if !start.Equal(want) {
+		t.Fatalf("calendarWeekStartFor(%v) = %v, want Monday %v", wednesday, start, want)
+	}
+	if got := calendarWeekRange(wednesday); got != "Mon May 25 - Sun May 31, 2026" {
+		t.Fatalf("calendarWeekRange = %q, want Monday-Sunday range", got)
 	}
 }
 
@@ -1177,8 +1231,9 @@ func TestCalendarAgendaFallsBackToNearestValidEventWindow(t *testing.T) {
 		m = model.(*Model)
 	}
 
-	if !sameCalendarDate(m.calendarAgendaStart, calendarDayStartFor(nearFuture)) {
-		t.Fatalf("agenda start = %v, want nearest future event day %v", m.calendarAgendaStart, nearFuture)
+	nearFutureMonth := time.Date(nearFuture.Year(), nearFuture.Month(), 1, 0, 0, 0, 0, nearFuture.Location())
+	if !sameCalendarDate(m.calendarAgendaStart, nearFutureMonth) {
+		t.Fatalf("agenda start = %v, want nearest future event month %v", m.calendarAgendaStart, nearFutureMonth)
 	}
 	rendered := stripANSI(m.renderMainView())
 	if !strings.Contains(rendered, "Nearest future event") {
@@ -1330,12 +1385,12 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	if m.calendarView != calendarViewWeek {
 		t.Fatalf("calendarView = %q, want %q", m.calendarView, calendarViewWeek)
 	}
-	if m.calendarWeekStart.Local().Day() != 24 {
-		t.Fatalf("calendarWeekStart = %s, want week starting May 24", m.calendarWeekStart)
+	if m.calendarWeekStart.Local().Day() != 18 {
+		t.Fatalf("calendarWeekStart = %s, want week starting May 18", m.calendarWeekStart)
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Week Time-Grid", "Sun May 24", "Mon May 25", "Design review", "Weekly planning", "Week Inspector", "Herald planning room", "Local", "Event TZ", "h/l: week", "d: day", "a: agenda"} {
+	for _, want := range []string{"Week Time-Grid", "Mon May 18", "Sun May 24", "Design review", "Daily standup", "Week Inspector", "Herald planning room", "Local", "Event TZ", "h/l: week", "d: day", "a: agenda"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("week grid missing %q:\n%s", want, rendered)
 		}
@@ -1359,11 +1414,11 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	m = model.(*Model)
 	model, _ = m.handleKeyMsg(keyRunes("l"))
 	m = model.(*Model)
-	if m.calendarWeekStart.Local().Day() != 31 {
-		t.Fatalf("calendarWeekStart = %s, want May 31", m.calendarWeekStart)
+	if m.calendarWeekStart.Local().Day() != 25 {
+		t.Fatalf("calendarWeekStart = %s, want May 25", m.calendarWeekStart)
 	}
-	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Roadmap sync" {
-		t.Fatalf("selected event after next week = %#v, want Roadmap sync", got)
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Weekly planning" {
+		t.Fatalf("selected event after next week = %#v, want Weekly planning", got)
 	}
 
 	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -1376,7 +1431,7 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 		t.Fatal("expected Enter to open full detail from Week view")
 	}
 	detail := stripANSI(m.renderMainView())
-	if !strings.Contains(detail, "Event Detail") || !strings.Contains(detail, "Roadmap sync") {
+	if !strings.Contains(detail, "Event Detail") || !strings.Contains(detail, "Weekly planning") {
 		t.Fatalf("detail view missing selected week event:\n%s", detail)
 	}
 	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -1393,12 +1448,12 @@ func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	if m.calendarView != calendarViewDay {
 		t.Fatalf("calendarView = %q, want Day view", m.calendarView)
 	}
-	if m.calendarDay.Local().Day() != 31 {
-		t.Fatalf("calendarDay = %s, want selected event day May 31", m.calendarDay)
+	if m.calendarDay.Local().Day() != 25 {
+		t.Fatalf("calendarDay = %s, want selected event day May 25", m.calendarDay)
 	}
 	model, _ = m.handleKeyMsg(keyRunes("w"))
 	m = model.(*Model)
-	if m.calendarView != calendarViewWeek || m.calendarWeekStart.Local().Day() != 31 {
+	if m.calendarView != calendarViewWeek || m.calendarWeekStart.Local().Day() != 25 {
 		t.Fatalf("week view did not restore selected event week, view=%q start=%s", m.calendarView, m.calendarWeekStart)
 	}
 }
