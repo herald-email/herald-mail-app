@@ -14,6 +14,7 @@ type calendarAgendaStubBackend struct {
 	stubBackend
 	available        bool
 	events           []models.CalendarEvent
+	collections      []models.CalendarCollection
 	crossResults     []models.CrossSourceSearchResult
 	meetingPrep      *models.CalendarMeetingPrep
 	meetingPrepCalls []models.EventRef
@@ -46,6 +47,12 @@ func (b *calendarAgendaStubBackend) ListCalendarAgenda(start, end time.Time) ([]
 		}
 		out = append(out, event)
 	}
+	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
+	out := make([]models.CalendarCollection, len(b.collections))
+	copy(out, b.collections)
 	return out, nil
 }
 
@@ -1996,6 +2003,270 @@ func TestCalendarSearchShortcutDoesNotStealTextEntry(t *testing.T) {
 			t.Fatalf("prompt editor name=%q, want literal /", got)
 		}
 	})
+}
+
+func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Description = `<p>Before the meeting</p><ul><li><strong>Read</strong> brief</li><li>Bring notes</li></ul>`
+	rich.Attendees[0].RSVP = "needs-action"
+	b := &calendarAgendaStubBackend{
+		available: true,
+		events:    []models.CalendarEvent{rich},
+		collections: []models.CalendarCollection{
+			{
+				Ref: models.CollectionRef{
+					SourceID:     "demo-calendar",
+					AccountID:    "default",
+					Kind:         models.SourceKindCalendar,
+					CollectionID: "work",
+					DisplayName:  "Work",
+				},
+				Color: "#5fd7ff",
+			},
+		},
+	}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	for _, msg := range calendarImmediateMessagesForTest(m.switchToCalendar()) {
+		model, _ := m.Update(msg)
+		m = model.(*Model)
+	}
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Calendars", "[x] Work", "Agenda for", "<-/->/h/l to switch", "! Timezone planning"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("calendar render missing %q:\n%s", want, rendered)
+		}
+	}
+	m.calendarDetail = &rich
+	detail := stripANSI(m.renderCalendarEventDetail(70, 60, false))
+	for _, want := range []string{"Before the meeting", "- Read brief", "- Bring notes", "RSVP", "needs response"} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("rendered notes/detail missing %q:\n%s", want, detail)
+		}
+	}
+	if strings.Contains(detail, "<strong>") || strings.Contains(detail, "</p>") {
+		t.Fatalf("detail leaked raw HTML:\n%s", detail)
+	}
+}
+
+func TestCalendarDayNavigationCrossesDayBoundary(t *testing.T) {
+	events := testCalendarEvents()
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarView = calendarViewDay
+	m.calendarDay = calendarDayStartFor(events[0].Start)
+	m.calendarCursor = 1
+	m.calendarDetail = &m.calendarEvents[1]
+
+	m.moveCalendarDaySelection(1)
+	if m.calendarDetail == nil || m.calendarDetail.Title != "Weekly planning" {
+		t.Fatalf("day navigation selected %#v, want next-day Weekly planning", m.calendarDetail)
+	}
+	if !sameCalendarDate(m.calendarDay, events[2].Start) {
+		t.Fatalf("calendarDay=%v, want next event day %v", m.calendarDay, events[2].Start)
+	}
+}
+
+func TestCalendarExplicitRSVPKeys(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Attendees[0].RSVP = "needs-action"
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+
+	model, cmd := m.handleKeyMsg(keyRunes("n"))
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected decline key to produce RSVP command")
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.rsvpStatuses) != 1 || b.rsvpStatuses[0] != "declined" {
+		t.Fatalf("RSVP statuses=%#v, want declined", b.rsvpStatuses)
+	}
+	if m.calendarDetail == nil || m.calendarDetail.Attendees[0].RSVP != "declined" {
+		t.Fatalf("calendar detail = %#v, want declined attendee", m.calendarDetail)
+	}
+}
+
+func TestCalendarPlainQQuitsWithoutStealingComposeText(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+
+	_, cmd := m.handleKeyMsg(keyRunes("q"))
+	if !commandIsQuit(cmd) {
+		t.Fatal("expected q to quit from calendar")
+	}
+
+	m = New(b, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCompose
+	m.focusComposeField(composeFieldBody)
+	model, cmd := m.handleKeyMsg(keyRunes("q"))
+	m = model.(*Model)
+	if commandIsQuit(cmd) {
+		t.Fatal("plain q should remain text input in compose")
+	}
+	if got := m.composeBody.Value(); got != "q" {
+		t.Fatalf("compose body = %q, want q", got)
+	}
+}
+
+func TestTimelineInvitationPromptSavesToSelectedCalendar(t *testing.T) {
+	events := testCalendarEvents()
+	collections := []models.CalendarCollection{
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "demo-calendar",
+				AccountID:    "default",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "work",
+				DisplayName:  "Work",
+			},
+		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "demo-calendar",
+				AccountID:    "default",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "family",
+				DisplayName:  "Family",
+			},
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events, collections: collections}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	m.calendarAvailable = true
+	m.calendarCollections = collections
+	m.timeline.body = &models.EmailBody{
+		TextPlain: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:invite-1",
+			"SUMMARY:Imported planning",
+			"DTSTART:20260530T170000Z",
+			"DTEND:20260530T180000Z",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}
+
+	if cmd := m.openCalendarInvitationPrompt(); cmd != nil {
+		t.Fatalf("open prompt returned command %T, want prompt-only", cmd)
+	}
+	if !m.calendarInvitation.Active || len(m.calendarInvitation.Collections) != 2 {
+		t.Fatalf("invitation prompt = %#v, want two collection choices", m.calendarInvitation)
+	}
+	m.calendarInvitation.Cursor = 1
+	model, cmd, handled := m.handleCalendarInvitationPromptKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !handled {
+		t.Fatal("expected invitation prompt to handle enter")
+	}
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected invitation save command")
+	}
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.savedEvents) != 1 {
+		t.Fatalf("saved events=%d, want 1", len(b.savedEvents))
+	}
+	if b.savedEvents[0].Ref.CalendarID != "family" || b.savedEvents[0].Title != "Imported planning" {
+		t.Fatalf("saved event=%#v, want imported event in family calendar", b.savedEvents[0])
+	}
+	if m.calendarInvitation.Active {
+		t.Fatalf("invitation prompt stayed active after save: %#v", m.calendarInvitation)
+	}
+}
+
+func TestTimelineInvitationImportUpdatesDuplicateUID(t *testing.T) {
+	existing := testCalendarEvents()[0]
+	existing.ProviderUID = "invite-1"
+	existing.Ref.CalendarID = "work"
+	existing.Ref.EventID = "existing-event"
+	existing.Ref.LocalID = ""
+	existing.Ref = existing.Ref.WithDefaults()
+	collections := []models.CalendarCollection{
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "demo-calendar",
+				AccountID:    "default",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "work",
+				DisplayName:  "Work",
+			},
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{existing}, collections: collections}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	m.calendarAvailable = true
+	m.calendarCollections = collections
+	m.calendarEvents = []models.CalendarEvent{existing}
+	m.timeline.body = &models.EmailBody{TextPlain: strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"BEGIN:VEVENT",
+		"UID:invite-1",
+		"SUMMARY:Updated imported planning",
+		"DTSTART:20260530T170000Z",
+		"DTEND:20260530T180000Z",
+		"END:VEVENT",
+		"END:VCALENDAR",
+	}, "\r\n")}
+
+	m.openCalendarInvitationPrompt()
+	model, cmd, handled := m.handleCalendarInvitationPromptKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !handled || cmd == nil {
+		t.Fatalf("expected handled save command, handled=%v cmd=%T", handled, cmd)
+	}
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.savedEvents) != 1 {
+		t.Fatalf("saved events=%d, want one update", len(b.savedEvents))
+	}
+	if got, want := b.savedEvents[0].Ref.EventID, "existing-event"; got != want {
+		t.Fatalf("saved EventID=%q, want duplicate UID to update %q", got, want)
+	}
+	if len(b.events) != 1 {
+		t.Fatalf("backend events=%d, want duplicate UID update without append", len(b.events))
+	}
 }
 
 func calendarImmediateMessagesForTest(cmd tea.Cmd) []tea.Msg {

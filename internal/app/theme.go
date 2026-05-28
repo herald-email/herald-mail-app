@@ -50,6 +50,14 @@ func (s ThemeStyle) Style() lipgloss.Style {
 	return s.Apply(lipgloss.NewStyle())
 }
 
+func dynamicForegroundStyle(value string) lipgloss.Style {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(value))
+}
+
 func (s ThemeStyle) ForegroundColor() color.Color {
 	if s.Foreground != nil {
 		return s.Foreground

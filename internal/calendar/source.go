@@ -1230,6 +1230,15 @@ func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 	}, nil
 }
 
+func EventFromInvitationICS(sourceID models.SourceID, accountID models.AccountID, calendarID, data string) (*models.CalendarEvent, error) {
+	fields := parseICS(data)
+	eventID := strings.TrimSpace(fields["UID"])
+	if eventID == "" {
+		eventID = fmt.Sprintf("invitation-%d", time.Now().UnixNano())
+	}
+	return eventFromICS(sourceID, accountID, calendarID, eventID, "", data)
+}
+
 func eventToICS(event models.CalendarEvent) string {
 	event.Ref = event.Ref.WithDefaults()
 	uid := firstNonEmpty(event.ProviderUID, event.Ref.EventID)

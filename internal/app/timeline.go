@@ -2426,6 +2426,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			}
 			segments = append(segments, "s: save attachment")
 		}
+		if calendarBodyHasInvitation(m.timeline.body) {
+			segments = append(segments, "i: add to calendar")
+		}
 		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
 		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
@@ -3124,6 +3127,14 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			m.timeline.attachmentSaveWarning = warning
 			m.timeline.attachmentSaveInput.Focus()
 			m.timeline.attachmentSavePrompt = true
+		}
+		return m, nil, true
+	case "i":
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) && m.timeline.body != nil {
+			return m, m.openCalendarInvitationPrompt(), true
 		}
 		return m, nil, true
 	case "U":

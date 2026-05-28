@@ -63,8 +63,9 @@ type FolderStatusMsg struct {
 
 // CalendarAgendaLoadedMsg carries cache-backed events for the Calendar tab.
 type CalendarAgendaLoadedMsg struct {
-	Events []models.CalendarEvent
-	Err    error
+	Events      []models.CalendarEvent
+	Collections []models.CalendarCollection
+	Err         error
 }
 
 // CalendarSearchLoadedMsg carries cache-backed search results for the Calendar tab.
@@ -126,6 +127,13 @@ type CalendarEventRSVPMsg struct {
 	Status string
 	Event  *models.CalendarEvent
 	Err    error
+}
+
+// CalendarInvitationSavedMsg carries an event imported from a mail invitation.
+type CalendarInvitationSavedMsg struct {
+	Ref   models.EventRef
+	Event *models.CalendarEvent
+	Err   error
 }
 
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
@@ -836,8 +844,12 @@ type Model struct {
 	// advertises a cache-backed read-only agenda surface.
 	calendarAvailable           bool
 	calendarLoading             bool
+	calendarCollections         []models.CalendarCollection
 	calendarEvents              []models.CalendarEvent
 	calendarCursor              int
+	calendarRailCursor          int
+	calendarFocus               calendarFocusPanel
+	calendarHiddenCollections   map[string]bool
 	calendarView                calendarViewMode
 	calendarSearchQuery         string
 	calendarSearchResults       []models.CalendarEvent
@@ -863,6 +875,7 @@ type Model struct {
 	calendarAISummaryLoading    bool
 	calendarAISummary           *models.CalendarAISummary
 	calendarEdit                calendarEventEditState
+	calendarInvitation          calendarInvitationPromptState
 	calendarStatus              string
 
 	// Styles
@@ -999,37 +1012,39 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 			searchInput:         searchInput,
 			attachmentSaveInput: attachmentSaveInput,
 		},
-		classifyCh:              make(chan ClassifyProgressMsg, 50),
-		syncAccumulator:         newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
-		syncSourceGenerations:   make(map[models.SourceID]int64),
-		mailer:                  mailer,
-		fromAddress:             fromAddress,
-		composeTo:               composeTo,
-		composeCC:               composeCC,
-		composeBCC:              composeBCC,
-		composeSubject:          composeSubject,
-		composeBody:             composeBody,
-		suggestionIdx:           -1,
-		composeAIPanel:          true,
-		composeAIInput:          composeAIInput,
-		composeAIResponse:       composeAIResponse,
-		attachmentCompletionIdx: -1,
-		localImageLinks:         true,
-		previewImageMode:        previewImageModeAuto,
-		imagePreviewLinks:       newImagePreviewServer(),
-		theme:                   theme,
-		baseStyle:               baseStyle,
-		headerStyle:             headerStyle,
-		loadingStyle:            loadingStyle,
-		progressStyle:           progressStyle,
-		activeTableStyle:        activeStyle,
-		inactiveTableStyle:      inactiveStyle,
-		deletionRequestCh:       deletionRequestCh,
-		deletionResultCh:        deletionResultCh,
-		ruleRequestCh:           ruleRequestCh,
-		ruleResultCh:            ruleResultCh,
-		attachmentPathInput:     attachmentPathInput,
-		keyboard:                NewKeyboardResolver(nil),
+		calendarFocus:             calendarFocusMain,
+		calendarHiddenCollections: make(map[string]bool),
+		classifyCh:                make(chan ClassifyProgressMsg, 50),
+		syncAccumulator:           newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
+		syncSourceGenerations:     make(map[models.SourceID]int64),
+		mailer:                    mailer,
+		fromAddress:               fromAddress,
+		composeTo:                 composeTo,
+		composeCC:                 composeCC,
+		composeBCC:                composeBCC,
+		composeSubject:            composeSubject,
+		composeBody:               composeBody,
+		suggestionIdx:             -1,
+		composeAIPanel:            true,
+		composeAIInput:            composeAIInput,
+		composeAIResponse:         composeAIResponse,
+		attachmentCompletionIdx:   -1,
+		localImageLinks:           true,
+		previewImageMode:          previewImageModeAuto,
+		imagePreviewLinks:         newImagePreviewServer(),
+		theme:                     theme,
+		baseStyle:                 baseStyle,
+		headerStyle:               headerStyle,
+		loadingStyle:              loadingStyle,
+		progressStyle:             progressStyle,
+		activeTableStyle:          activeStyle,
+		inactiveTableStyle:        inactiveStyle,
+		deletionRequestCh:         deletionRequestCh,
+		deletionResultCh:          deletionResultCh,
+		ruleRequestCh:             ruleRequestCh,
+		ruleResultCh:              ruleResultCh,
+		attachmentPathInput:       attachmentPathInput,
+		keyboard:                  NewKeyboardResolver(nil),
 	}
 
 	m.syncAccountsFromBackend()
@@ -2170,12 +2185,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CalendarAgendaLoadedMsg:
 		m.calendarLoading = false
 		if msg.Err != nil {
+			m.calendarCollections = nil
 			m.calendarEvents = nil
 			m.calendarDetail = nil
 			m.calendarStatus = "Calendar agenda failed: " + msg.Err.Error()
 			return m, nil
 		}
-		m.calendarEvents = msg.Events
+		m.calendarEvents = normalizeCalendarEventsForDisplay(msg.Events)
+		m.calendarCollections = m.mergeCalendarCollections(msg.Collections)
+		m.pruneCalendarCollectionState()
 		if m.calendarCursor >= len(m.calendarEvents) {
 			m.calendarCursor = len(m.calendarEvents) - 1
 		}
@@ -2376,6 +2394,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarDetailOpen = true
 		m.calendarDetailLoading = false
 		m.calendarStatus = "Saved RSVP " + msg.Status
+		return m, nil
+
+	case CalendarInvitationSavedMsg:
+		m.calendarInvitation.Saving = false
+		if msg.Err != nil {
+			m.calendarInvitation.Error = calendarMutationErrorStatus("Invitation import failed", msg.Err)
+			m.calendarStatus = m.calendarInvitation.Error
+			return m, nil
+		}
+		if msg.Event != nil {
+			m.applySavedCalendarEvent(*msg.Event)
+			m.calendarEvents = normalizeCalendarEventsForDisplay(m.calendarEvents)
+		}
+		m.calendarInvitation = calendarInvitationPromptState{}
+		m.calendarStatus = "Added invitation to calendar"
 		return m, nil
 
 	case ComposeStatusMsg:

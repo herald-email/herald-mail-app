@@ -87,9 +87,6 @@ func NewScopedDemoBackend(info AccountInfo) *DemoBackend {
 	for i := range d.calendarCollections {
 		d.calendarCollections[i].Ref.SourceID = calendarSourceID
 		d.calendarCollections[i].Ref.AccountID = info.AccountID
-		if info.DisplayName != "" {
-			d.calendarCollections[i].Ref.DisplayName = info.DisplayName + " Calendar"
-		}
 	}
 	for i := range d.calendarEvents {
 		d.calendarEvents[i].Ref.SourceID = calendarSourceID

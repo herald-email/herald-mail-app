@@ -28,6 +28,11 @@ type CalendarAgendaBackend interface {
 	GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error)
 }
 
+// CalendarCollectionBackend exposes user-facing calendar lists for the TUI rail.
+type CalendarCollectionBackend interface {
+	ListCalendarCollections() ([]models.CalendarCollection, error)
+}
+
 // CalendarEventMutationBackend is the local/cache-backed calendar edit
 // boundary. Live provider mutation adapters stay behind this interface until a
 // later provider-write stage enables them explicitly.
@@ -53,6 +58,15 @@ func (d *DemoBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calenda
 		}
 	}
 	sortCalendarEvents(out)
+	return out, nil
+}
+
+func (d *DemoBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]models.CalendarCollection, len(d.calendarCollections))
+	copy(out, d.calendarCollections)
+	sortCalendarCollections(out)
 	return out, nil
 }
 
@@ -155,6 +169,36 @@ func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.
 		out = append(out, events...)
 	}
 	sortCalendarEvents(out)
+	return out, nil
+}
+
+func (b *LocalBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
+	if b == nil || b.cache == nil {
+		return nil, nil
+	}
+	cached, err := b.listCachedCalendarCollections()
+	if err != nil {
+		return nil, err
+	}
+	if len(cached) > 0 {
+		return cached, nil
+	}
+	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		return nil, err
+	}
+	return b.listCachedCalendarCollections()
+}
+
+func (b *LocalBackend) listCachedCalendarCollections() ([]models.CalendarCollection, error) {
+	var out []models.CalendarCollection
+	for _, source := range b.configuredCalendarSources() {
+		collections, err := b.cache.ListCalendarCollections(models.SourceID(source.ID), models.AccountID(source.AccountID))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, collections...)
+	}
+	sortCalendarCollections(out)
 	return out, nil
 }
 
@@ -407,6 +451,23 @@ func (m *MultiBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 	return out, nil
 }
 
+func (m *MultiBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
+	var out []models.CalendarCollection
+	for _, agenda := range m.calendarAgendaBackends() {
+		collections, ok := agenda.(CalendarCollectionBackend)
+		if !ok {
+			continue
+		}
+		items, err := collections.ListCalendarCollections()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+	}
+	sortCalendarCollections(out)
+	return out, nil
+}
+
 func (m *MultiBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error) {
 	var lastErr error = sql.ErrNoRows
 	for _, backend := range m.calendarAgendaBackends() {
@@ -602,12 +663,46 @@ func calendarEventInRange(event models.CalendarEvent, start, end time.Time) bool
 
 func sortCalendarEvents(events []models.CalendarEvent) {
 	sort.SliceStable(events, func(i, j int) bool {
-		if !events[i].Start.Equal(events[j].Start) {
-			return events[i].Start.Before(events[j].Start)
+		leftStart, leftEnd := normalizedCalendarSortRange(events[i])
+		rightStart, rightEnd := normalizedCalendarSortRange(events[j])
+		if !leftStart.Equal(rightStart) {
+			return leftStart.Before(rightStart)
+		}
+		if !leftEnd.Equal(rightEnd) {
+			return leftEnd.Before(rightEnd)
 		}
 		if events[i].Title != events[j].Title {
 			return events[i].Title < events[j].Title
 		}
 		return events[i].Ref.LocalID < events[j].Ref.LocalID
+	})
+}
+
+func normalizedCalendarSortRange(event models.CalendarEvent) (time.Time, time.Time) {
+	start := event.Start
+	end := event.End
+	if start.IsZero() {
+		start = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	}
+	if end.IsZero() || end.Before(start) {
+		end = start
+	}
+	return start, end
+}
+
+func sortCalendarCollections(collections []models.CalendarCollection) {
+	sort.SliceStable(collections, func(i, j int) bool {
+		left := collections[i].Ref
+		right := collections[j].Ref
+		if left.AccountID != right.AccountID {
+			return left.AccountID < right.AccountID
+		}
+		if left.SourceID != right.SourceID {
+			return left.SourceID < right.SourceID
+		}
+		if left.DisplayName != right.DisplayName {
+			return left.DisplayName < right.DisplayName
+		}
+		return left.CollectionID < right.CollectionID
 	})
 }

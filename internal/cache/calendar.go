@@ -57,6 +57,42 @@ func (c *Cache) GetCalendarCollection(ref models.CollectionRef) (*models.Calenda
 	}, nil
 }
 
+func (c *Cache) ListCalendarCollections(sourceID models.SourceID, accountID models.AccountID) ([]models.CalendarCollection, error) {
+	sourceID = models.NormalizeSourceID(sourceID, models.DefaultCalendarSourceID)
+	accountID = models.NormalizeAccountID(accountID)
+	rows, err := c.db.Query(`
+		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag
+		FROM calendar_collections
+		WHERE source_id = ? AND account_id = ?
+		ORDER BY display_name ASC, calendar_id ASC
+	`, string(sourceID), string(accountID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.CalendarCollection
+	for rows.Next() {
+		var sourceIDValue, accountIDValue, calendarID, displayName, color, syncToken, etag string
+		if err := rows.Scan(&sourceIDValue, &accountIDValue, &calendarID, &displayName, &color, &syncToken, &etag); err != nil {
+			return nil, err
+		}
+		out = append(out, models.CalendarCollection{
+			Ref: models.CollectionRef{
+				SourceID:     models.SourceID(sourceIDValue),
+				AccountID:    models.AccountID(accountIDValue),
+				Kind:         models.SourceKindCalendar,
+				CollectionID: calendarID,
+				DisplayName:  displayName,
+			},
+			Color:     color,
+			SyncToken: syncToken,
+			ETag:      etag,
+		})
+	}
+	return out, rows.Err()
+}
+
 func (c *Cache) PutCalendarEvent(event models.CalendarEvent) error {
 	ref := event.Ref.WithDefaults()
 	now := time.Now().UTC()

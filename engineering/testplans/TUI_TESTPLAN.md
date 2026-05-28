@@ -1963,6 +1963,56 @@ This case covers the final read-only command-center slice after Travel Buffer. I
 - Literal `s` typed in Compose, search prompts, and editor-like text fields remains text instead of firing AI Summary.
 - At `50x15`, the minimum-size guard appears instead of clipped AI Summary chrome, and resizing larger restores the summary state cleanly.
 
+### TC-38S — Calendar design parity rail, range headers, and screen comparisons
+
+This case covers the design-parity pass for the Calendar reference screens `01` through `04`. It proves the real Herald app visually tracks the reference mockups closely enough to compare side-by-side while preserving Herald terminal constraints and source-platform redaction.
+
+**Lane:** A, B when calendar cache rows are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in deterministic demo mode with `HERALD_THEME=sonokai-signal`.
+2. Press `3` or `F4` to open Calendar, then capture Agenda List, Week Time-Grid, Day Agenda, and 3-Day Command.
+3. For each screen, capture a real app PNG and place it beside the corresponding reference mockup from `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/`.
+4. In each view, confirm the left calendar rail groups calendars by account/provider, shows colored calendar markers, and allows toggling visible calendars without exposing provider internals.
+5. In each view, confirm the top range header states the active day, week, 3-day window, or agenda range and advertises `h/l` plus left/right movement.
+6. Press `h/l`, left/right, `tab`, `shift+tab`, `ctrl+u`, and `ctrl+d` in the main schedule and inspector/drawer panels.
+7. Resize to `50x15`, then back to `80x24` and `220x50`.
+
+**Expect:**
+- Side-by-side report evidence shows the real Sonokai Signal app is visually close to the reference mock in layout, density, panel proportions, source rail, range header, and color-marker treatment.
+- Intentional differences are limited to terminal constraints, Herald navigation conventions, available provider data, and accessibility/readability requirements.
+- Calendar rails never expose provider event IDs, CalDAV URLs, sync tokens, ETags, OAuth details, or raw scoped refs.
+- `up/down` and `j/k` traverse visible events across day boundaries where the active screen shows multiple days; Day Agenda can move to the next or previous day with visible events from the boundary row.
+- `ctrl+u/ctrl+d` page the focused panel, and optional PageUp/PageDown aliases behave the same when the terminal reports them.
+- `q`, `ctrl+c`, settings, logs, chat, help, and tab switching keep the global Herald behavior from Calendar focus.
+- At `50x15`, the minimum-size guard or compact fallback appears instead of clipped calendar chrome, and resizing larger restores the same Calendar view.
+
+### TC-38T — Calendar notes, RSVP, and invitation actions
+
+This case covers the interaction polish required after the design-parity screens are visible. It proves HTML notes are readable, RSVP is explicit, pending events are highlighted, and email invitations can be routed into a chosen writable calendar.
+
+**Lane:** A, B when calendar cache rows and invitation mail fixtures are available
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic fixture with HTML calendar notes, Markdown notes, a pending RSVP event, and an email containing `text/calendar` or an `.ics` attachment.
+2. Open Calendar and navigate through Week, Day, 3-Day, Agenda, full Event Detail, Search, and Cross-Source Search.
+3. Confirm the event with attendee RSVP `needs-action` is visibly marked in every calendar list/detail surface.
+4. Open the RSVP action picker and choose accept, tentative, and decline against the deterministic provider or demo mutation boundary.
+5. Open the event with HTML notes and confirm notes render as readable terminal text with paragraphs, lists, links, meeting URLs, dial-in numbers, and emphasis.
+6. Return to Timeline, open the invitation email, and trigger Add to Calendar.
+7. Choose a writable calendar from the calendar picker and confirm duplicate ICS UIDs offer update or skip instead of silently duplicating events.
+
+**Expect:**
+- Raw HTML tags do not appear in completed calendar notes surfaces.
+- RSVP actions are explicit, provider-backed where available, and update cached state only after provider/demo success.
+- Read-only calendars show RSVP state but disable response actions with a visible reason.
+- Invitation emails expose Add to Calendar only when a parseable invitation exists, and mail-only or no-writable-calendar sessions explain why the action is unavailable.
+- ICS parsing preserves summary, description, location, start/end, timezone, organizer, attendees, recurrence, attachments, reminders, UID, and sequence/revision where present.
+- Literal RSVP and invitation shortcut characters typed in Compose, search prompts, and editor-like text fields remain text instead of firing calendar actions.
+- At `50x15`, RSVP and invitation modals or pickers show the minimum-size guard or compact fallback instead of clipped controls.
+
 ### TC-39 — First-run wizard chrome and size guard
 
 **Lane:** F

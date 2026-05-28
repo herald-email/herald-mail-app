@@ -8,6 +8,10 @@ import (
 )
 
 func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if model, cmd, handled := m.handleCalendarInvitationPromptKey(msg); handled {
+		return model, cmd, true
+	}
+
 	if m.pendingDeleteConfirm {
 		switch shortcutKey(msg) {
 		case "y", "Y":

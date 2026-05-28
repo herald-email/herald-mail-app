@@ -393,6 +393,19 @@ func (m *Model) renderEmailPreview() string {
 			imageLines++
 		}
 
+		if calendarBodyHasInvitation(m.timeline.body) {
+			label := "[i] Add invitation to calendar"
+			if !m.calendarAvailable {
+				label = "Calendar invitation detected - configure a calendar to add"
+			}
+			sb.WriteString(m.theme.Severity.Info.Style().Render(truncate(label, innerW)) + "\n")
+			imageLines++
+		}
+		for _, line := range m.renderCalendarInvitationPrompt(innerW) {
+			sb.WriteString(line + "\n")
+			imageLines++
+		}
+
 		// Save-path prompt
 		if m.timeline.attachmentSavePrompt {
 			promptStyle := m.theme.Severity.Info.Style()
