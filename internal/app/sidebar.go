@@ -604,6 +604,7 @@ func (m *Model) switchSidebarAccountFolder(sourceID models.SourceID, folder stri
 	m.accountSelectedFolders[sourceID] = folder
 	if sourceID == m.activeSourceID {
 		m.resetMailboxStateForFolder(folder)
+		m.hydrateCachedTimelineForCurrentFolder()
 		m.statusMessage = fmt.Sprintf("Switched to %s", m.activeAccountLabel())
 		return tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForSyncEvents())
 	}

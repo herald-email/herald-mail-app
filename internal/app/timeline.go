@@ -271,6 +271,24 @@ func (m *Model) loadTimelineEmails() tea.Cmd {
 	}
 }
 
+func (m *Model) hydrateCachedTimelineForCurrentFolder() bool {
+	if m.backend == nil || isVirtualAllMailOnlyFolder(m.currentFolder) {
+		m.reflowCurrentLayout()
+		return false
+	}
+	emails, err := m.backend.GetTimelineEmails(m.currentFolder)
+	if err != nil {
+		logger.Warn("Failed to hydrate cached timeline for %s: %v", m.currentFolder, err)
+		m.reflowCurrentLayout()
+		return false
+	}
+	m.timeline.emails = emails
+	m.timeline.virtualNotice = ""
+	m.loadClassifications()
+	m.reflowCurrentLayout()
+	return true
+}
+
 // normalizeSubject strips common reply/forward prefixes (case-insensitive) so that
 // "Re: Re: Hello" and "Fwd: Hello" both map to "hello".
 func normalizeSubject(s string) string {
@@ -2534,7 +2552,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			m.folderStatus[m.currentFolder] = models.FolderStatus{Unseen: unseen, Total: len(msg.Emails)}
 		}
-		m.updateTimelineTable()
+		m.reflowCurrentLayout()
 		if m.timeline.selectedEmail != nil {
 			targetID := m.timeline.selectedEmail.MessageID
 			for rowIdx, ref := range m.timeline.threadRowMap {

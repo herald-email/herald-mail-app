@@ -330,6 +330,20 @@ func (m *Model) hasTopSyncStrip() bool {
 	return m.loading && !m.syncCountsSettled && m.hasVisibleStartupData()
 }
 
+func (m *Model) reflowCurrentLayout() {
+	if m.windowWidth > 0 {
+		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+		return
+	}
+	m.updateTimelineTable()
+}
+
+func (m *Model) reflowIfTopSyncStripChanged(wasVisible bool) {
+	if wasVisible != m.hasTopSyncStrip() {
+		m.reflowCurrentLayout()
+	}
+}
+
 func (m *Model) contentHeightForLayout(width, height int, plan LayoutPlan) int {
 	if height <= 0 {
 		return 5

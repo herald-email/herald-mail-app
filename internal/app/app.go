@@ -2439,12 +2439,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
-			m.updateTimelineTable()
+			m.reflowCurrentLayout()
 		}
 		m.loadClassifications()
 		if msg.FinishLoading {
+			hadTopSyncStrip := m.hasTopSyncStrip()
 			m.loading = false
 			m.statusMessage = msg.StatusMessage
+			m.reflowIfTopSyncStripChanged(hadTopSyncStrip)
 		}
 		return m, nil
 
@@ -2548,6 +2550,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.progressInfo.Current = event.Current
 			m.progressInfo.Total = event.Total
 		}
+		hadTopSyncStrip := m.hasTopSyncStrip()
 		m.syncingFolder = event.Folder
 		m.loading = true
 		if event.Phase == models.SyncPhaseComplete {
@@ -2555,6 +2558,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if event.Phase != models.SyncPhaseReconcileStarted {
 			m.syncCountsSettled = false
 		}
+		m.reflowIfTopSyncStripChanged(hadTopSyncStrip)
 
 		action := m.syncAccumulator.observe(event)
 		logger.Debug("SyncEventMsg: accumulator action folder=%s generation=%d armTimer=%v flushNow=%v", event.Folder, event.Generation, action.ArmTimer, action.FlushNow)
@@ -2621,14 +2625,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
-			m.updateTimelineTable()
+			m.reflowCurrentLayout()
 		}
 		m.loadClassifications()
 		cmds := make([]tea.Cmd, 0, 1)
 		if msg.FinishLoading {
+			hadTopSyncStrip := m.hasTopSyncStrip()
 			m.loading = false
 			m.progressInfo = models.ProgressInfo{}
 			m.statusMessage = msg.StatusMessage
+			m.reflowIfTopSyncStripChanged(hadTopSyncStrip)
 			logger.Debug("SyncHydratedMsg: loading finished folder=%s generation=%d", msg.Folder, msg.Generation)
 			if cmd := m.startPreviewPrewarmerIfNeeded(); cmd != nil {
 				cmds = append(cmds, cmd)

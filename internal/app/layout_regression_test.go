@@ -171,6 +171,33 @@ func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
 	assertFitsWidth(t, 80, rendered)
 }
 
+func TestChromeHeightBudget_TopSyncStripReflowsTimelineWithoutResize(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTableDimensions(80, 24)
+
+	model, _ := m.Update(SyncEventMsg{Event: models.FolderSyncEvent{
+		Folder:     "INBOX",
+		Generation: 1,
+		Phase:      models.SyncPhaseSyncStarted,
+		Message:    "Syncing INBOX...",
+		Current:    3,
+		Total:      10,
+	}})
+	updated := model.(*Model)
+
+	rendered := updated.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected sync strip view to still fill 80x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	assertFitsWidth(t, 80, rendered)
+	if !strings.Contains(stripANSI(rendered), "Live sync in progress") {
+		t.Fatalf("expected top sync strip to render, got:\n%s", stripANSI(rendered))
+	}
+}
+
 func TestBottomChromeDividerSeparatesStatusAndKeyHints(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline

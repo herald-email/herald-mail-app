@@ -13,6 +13,14 @@ import (
 const accountSwitcherMaxWidth = 76
 
 func (m *Model) syncAccountsFromBackend() {
+	m.syncAccountsFromBackendWithStatus(true)
+}
+
+func (m *Model) syncAccountIdentityFromBackend() {
+	m.syncAccountsFromBackendWithStatus(false)
+}
+
+func (m *Model) syncAccountsFromBackendWithStatus(refreshStatuses bool) {
 	aware, ok := m.backend.(backend.AccountAwareBackend)
 	if !ok {
 		m.accounts = nil
@@ -29,13 +37,17 @@ func (m *Model) syncAccountsFromBackend() {
 		m.accountSelectedFolders = make(map[models.SourceID]string)
 	}
 	if m.activeSourceID != "" && strings.TrimSpace(m.accountSelectedFolders[m.activeSourceID]) == "" {
-		if strings.TrimSpace(m.currentFolder) != "" {
+		if refreshStatuses && strings.TrimSpace(m.currentFolder) != "" {
 			m.accountSelectedFolders[m.activeSourceID] = m.currentFolder
 		} else {
 			m.accountSelectedFolders[m.activeSourceID] = "INBOX"
 		}
 	}
-	m.accountStatuses = aware.AccountStatuses()
+	if refreshStatuses {
+		m.accountStatuses = aware.AccountStatuses()
+	} else if m.accountStatuses == nil {
+		m.accountStatuses = make(map[models.SourceID]backend.AccountStatus)
+	}
 	if len(m.accounts) == 0 {
 		m.showAccountSwitcher = false
 		m.accountSwitcherCursor = 0
@@ -241,15 +253,14 @@ func (m *Model) switchActiveAccount(sourceID models.SourceID) tea.Cmd {
 		m.showAccountSwitcher = false
 		return nil
 	}
-	m.syncAccountsFromBackend()
+	m.syncAccountIdentityFromBackend()
 	m.refreshCalendarAvailability()
 	if m.activeTab == tabCalendar && !m.calendarAvailable {
 		m.activeTab = tabTimeline
 	}
-	if m.windowWidth > 0 {
-		m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	}
+	m.accountSelectedFolders[sourceID] = targetFolder
 	m.resetMailboxStateForFolder(targetFolder)
+	m.hydrateCachedTimelineForCurrentFolder()
 	m.showAccountSwitcher = false
 	m.statusMessage = fmt.Sprintf("Switched to %s", m.activeAccountLabel())
 	return tea.Batch(m.startLoading(), m.tickSpinner(), m.listenForSyncEvents())

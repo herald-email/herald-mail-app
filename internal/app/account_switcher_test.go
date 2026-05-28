@@ -12,11 +12,14 @@ import (
 
 type accountAwareStubBackend struct {
 	stubBackend
-	accounts     []backend.AccountInfo
-	statuses     map[models.SourceID]backend.AccountStatus
-	snapshots    []backend.AccountFolderSnapshot
-	activeSource models.SourceID
-	switchCalls  []models.SourceID
+	accounts      []backend.AccountInfo
+	statuses      map[models.SourceID]backend.AccountStatus
+	snapshots     []backend.AccountFolderSnapshot
+	timeline      map[string][]*models.EmailData
+	activeSource  models.SourceID
+	switchCalls   []models.SourceID
+	statusCalls   int
+	timelineCalls int
 }
 
 func newAccountAwareStubBackend(accounts []backend.AccountInfo) *accountAwareStubBackend {
@@ -60,11 +63,20 @@ func (b *accountAwareStubBackend) SwitchAccount(sourceID models.SourceID) error 
 }
 
 func (b *accountAwareStubBackend) AccountStatuses() map[models.SourceID]backend.AccountStatus {
+	b.statusCalls++
 	out := make(map[models.SourceID]backend.AccountStatus, len(b.statuses))
 	for id, st := range b.statuses {
 		out[id] = st
 	}
 	return out
+}
+
+func (b *accountAwareStubBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
+	b.timelineCalls++
+	if b.timeline == nil {
+		return nil, nil
+	}
+	return b.timeline[folder], nil
 }
 
 func (b *accountAwareStubBackend) ListAccountFolderSnapshots() ([]backend.AccountFolderSnapshot, error) {
@@ -382,6 +394,71 @@ func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T
 	}
 	if cmd == nil {
 		t.Fatal("expected switch to schedule reload commands")
+	}
+}
+
+func TestAccountSwitchShowsCachedTimelineWithoutRefreshingStatuses(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"},
+		{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+	cached := []*models.EmailData{{
+		MessageID: "personal-inbox",
+		SourceID:  "personal-mail",
+		Sender:    "friend@example.test",
+		Subject:   "Cached personal inbox",
+		Folder:    "INBOX",
+		Date:      time.Date(2026, 5, 27, 9, 0, 0, 0, time.UTC),
+	}}
+	b.timeline = map[string][]*models.EmailData{"INBOX": cached}
+	m := accountSwitcherTestModel(b)
+	b.activeSource = backend.AllAccountsSourceID
+	m.activeSourceID = backend.AllAccountsSourceID
+	m.timeline.emails = []*models.EmailData{{
+		MessageID: "work-client",
+		SourceID:  "work-mail",
+		Sender:    "client@example.test",
+		Subject:   "Work client",
+		Folder:    "Clients",
+		Date:      time.Date(2026, 5, 27, 8, 0, 0, 0, time.UTC),
+	}, {
+		MessageID: "personal-old",
+		SourceID:  "personal-mail",
+		Sender:    "old@example.test",
+		Subject:   "Old personal",
+		Folder:    "Clients",
+		Date:      time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC),
+	}}
+	m.updateTableDimensions(120, 40)
+	if !hasColumnTitle(m.timelineTable.Columns(), "Acct") {
+		t.Fatal("test setup expected unified timeline to show Acct column")
+	}
+	m.currentFolder = "Clients"
+	m.accountSelectedFolders[backend.AllAccountsSourceID] = "Clients"
+	m.accountSelectedFolders["personal-mail"] = "INBOX"
+	b.statusCalls = 0
+	b.timelineCalls = 0
+
+	cmd := m.switchActiveAccount("personal-mail")
+
+	if cmd == nil {
+		t.Fatal("expected account switch to still schedule background sync")
+	}
+	if b.statusCalls != 0 {
+		t.Fatalf("account switch synchronously refreshed account statuses %d time(s)", b.statusCalls)
+	}
+	if b.timelineCalls != 1 {
+		t.Fatalf("account switch should hydrate one cached timeline slice, got %d calls", b.timelineCalls)
+	}
+	if len(m.timeline.emails) != 1 || m.timeline.emails[0].MessageID != "personal-inbox" {
+		t.Fatalf("expected cached personal timeline immediately after switch, got %#v", m.timeline.emails)
+	}
+	if hasColumnTitle(m.timelineTable.Columns(), "Acct") {
+		t.Fatalf("specific-account cached timeline kept stale Acct column: %#v", tableColumnTitles(m.timelineTable.Columns()))
+	}
+	if m.timelineTable.Cursor() != 0 {
+		t.Fatalf("expected timeline cursor reset to first cached row, got %d", m.timelineTable.Cursor())
 	}
 }
 

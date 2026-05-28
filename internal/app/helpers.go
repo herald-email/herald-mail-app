@@ -147,23 +147,26 @@ func (m *Model) listenForRuleResult() tea.Cmd {
 
 // startLoading kicks off the backend's load sequence for the current folder.
 func (m *Model) startLoading() tea.Cmd {
+	hadTopSyncStrip := m.hasTopSyncStrip()
+	folder := m.currentFolder
 	m.cancelBackgroundWork()
 	m.loading = true
 	m.startTime = time.Now()
 	m.syncCountsSettled = false
-	m.syncingFolder = m.currentFolder
-	logger.Debug("startLoading: folder=%s visibleData=%t syncGeneration=%d", m.currentFolder, m.hasVisibleStartupData(), m.syncGeneration)
+	m.syncingFolder = folder
+	m.reflowIfTopSyncStripChanged(hadTopSyncStrip)
+	logger.Debug("startLoading: folder=%s visibleData=%t syncGeneration=%d", folder, m.hasVisibleStartupData(), m.syncGeneration)
 	loadCmd := func() tea.Msg {
-		logger.Debug("startLoading: dispatching backend.Load for folder=%s", m.currentFolder)
-		m.backend.Load(m.currentFolder)
+		logger.Debug("startLoading: dispatching backend.Load for folder=%s", folder)
+		m.backend.Load(folder)
 		return nil
 	}
-	if isVirtualAllMailOnlyFolder(m.currentFolder) {
+	if isVirtualAllMailOnlyFolder(folder) {
 		return loadCmd
 	}
 	return tea.Batch(
 		loadCmd,
-		m.loadFolderStatusCmd([]string{m.currentFolder}, 0),
+		m.loadFolderStatusCmd([]string{folder}, 0),
 		m.loadFoldersCmd(500*time.Millisecond),
 	)
 }
