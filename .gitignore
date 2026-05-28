@@ -23,6 +23,7 @@ config.yaml
 !docs/public/examples/themes/*.yaml
 .herald-release.env
 .ssh
+.env
 
 # Go build cache
 .cache/
