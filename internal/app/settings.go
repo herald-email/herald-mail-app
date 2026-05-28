@@ -1608,6 +1608,13 @@ type calendarCalDAVPreset struct {
 	URL                 string
 	UsernamePlaceholder string
 	PasswordPlaceholder string
+	HelpSummary         string
+	HelpLinks           []calendarProviderHelpLink
+}
+
+type calendarProviderHelpLink struct {
+	Label string
+	URL   string
 }
 
 func calendarCalDAVPresets() []calendarCalDAVPreset {
@@ -1619,6 +1626,11 @@ func calendarCalDAVPresets() []calendarCalDAVPreset {
 			URL:                 "https://caldav.fastmail.com/",
 			UsernamePlaceholder: "you@fastmail.com",
 			PasswordPlaceholder: "Fastmail app password",
+			HelpSummary:         "Use your full Fastmail email address and a Fastmail app password with Mail, Contacts & Calendar access.",
+			HelpLinks: []calendarProviderHelpLink{
+				{Label: "App password", URL: "https://app.fastmail.com/settings/security"},
+				{Label: "Server settings", URL: "https://www.fastmail.help/hc/en-us/articles/1500000278342"},
+			},
 		},
 		{
 			Provider:            "icloud",
@@ -1627,6 +1639,23 @@ func calendarCalDAVPresets() []calendarCalDAVPreset {
 			URL:                 "https://caldav.icloud.com/",
 			UsernamePlaceholder: "you@icloud.com",
 			PasswordPlaceholder: "Apple app-specific password",
+			HelpSummary:         "Use your Apple Account email address and an Apple app-specific password for third-party calendar access.",
+			HelpLinks: []calendarProviderHelpLink{
+				{Label: "App password", URL: "https://support.apple.com/en-us/102654"},
+			},
+		},
+		{
+			Provider:            "yahoo",
+			Label:               "Yahoo Calendar",
+			OptionLabel:         "Yahoo Calendar (app password)",
+			URL:                 "https://caldav.calendar.yahoo.com",
+			UsernamePlaceholder: "Yahoo ID or email",
+			PasswordPlaceholder: "Yahoo app password",
+			HelpSummary:         "Use your Yahoo ID and a Yahoo app password with the Yahoo CalDAV server.",
+			HelpLinks: []calendarProviderHelpLink{
+				{Label: "App password", URL: "https://help.yahoo.com/kb/account/confirm-delete-password-sln15241.html"},
+				{Label: "CalDAV setup", URL: "https://ca.help.yahoo.com/kb/new-mail-for-desktop/sync-access-calendar-multiple-devices-applications-sln4707.html"},
+			},
 		},
 	}
 }
@@ -1685,6 +1714,40 @@ func calendarProviderPasswordPlaceholder(provider string) string {
 		return preset.PasswordPlaceholder
 	}
 	return "provider password or app password"
+}
+
+func calendarProviderHelpTitle(provider string) string {
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		return preset.Label + " setup"
+	}
+	return "Custom CalDAV setup"
+}
+
+func calendarProviderHelpDescription(provider string) string {
+	if preset, ok := calendarCalDAVPresetForProvider(provider); ok {
+		lines := []string{preset.HelpSummary}
+		for _, link := range preset.HelpLinks {
+			lines = append(lines, settingsDocLink(link.Label, link.URL))
+		}
+		return strings.Join(lines, "\n")
+	}
+	return "Use this for providers that publish a basic CalDAV endpoint. Google uses Herald's OAuth path; Proton Calendar and Microsoft Calendar are not basic CalDAV presets here."
+}
+
+func calendarProviderPanelHelpLines(provider string, width int) []string {
+	var out []string
+	for _, line := range strings.Split(calendarProviderHelpTitle(provider)+"\n"+calendarProviderHelpDescription(provider), "\n") {
+		for _, wrapped := range render.WrapLines(line, width) {
+			if strings.TrimSpace(ansi.Strip(wrapped)) != "" {
+				out = append(out, wrapped)
+			}
+		}
+	}
+	return out
+}
+
+func settingsDocLink(label, rawURL string) string {
+	return "[click] " + label
 }
 
 func (s *Settings) effectiveCalendarProvider() string {
@@ -2259,7 +2322,7 @@ func (s *Settings) renderPanel() string {
 	for i, line := range lines {
 		lines[i] = ansi.Cut(line, 0, layout.panelWidth)
 	}
-	return strings.Join(lines, "\n")
+	return s.panelFormViewLinkifyCalendarProviderHelp(strings.Join(lines, "\n"))
 }
 
 func (s *Settings) panelFormView() string {
@@ -2267,7 +2330,64 @@ func (s *Settings) panelFormView() string {
 	if s.panelSection == settingsPanelSectionMenu {
 		formView = strings.Replace(formView, "enter submit", "enter open • esc exit", 1)
 	}
+	formView = s.panelFormViewWithCalendarProviderHelp(formView)
 	return s.panelFormViewWithFooterDivider(formView)
+}
+
+func (s *Settings) panelFormViewWithCalendarProviderHelp(formView string) string {
+	if s == nil || s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount || !s.accountDetailShowsCalendar() {
+		return formView
+	}
+	if !strings.Contains(ansi.Strip(formView), "CalDAV URL>") {
+		return formView
+	}
+	provider := s.effectiveCalendarProvider()
+	if !calendarProviderUsesCalDAV(provider) {
+		return formView
+	}
+	lines := strings.Split(formView, "\n")
+	insertAt := -1
+	for i, line := range lines {
+		if strings.Contains(ansi.Strip(line), "CalDAV URL>") {
+			insertAt = i + 1
+			break
+		}
+	}
+	if insertAt < 0 {
+		return formView
+	}
+	helpWidth := s.formWidth() - 6
+	if helpWidth < 24 {
+		helpWidth = 24
+	}
+	var help []string
+	for _, line := range calendarProviderPanelHelpLines(provider, helpWidth) {
+		help = append(help, "  "+line)
+	}
+	out := make([]string, 0, len(lines)+len(help))
+	out = append(out, lines[:insertAt]...)
+	out = append(out, help...)
+	out = append(out, lines[insertAt:]...)
+	return strings.Join(out, "\n")
+}
+
+func (s *Settings) panelFormViewLinkifyCalendarProviderHelp(rendered string) string {
+	if s == nil || s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount || !s.accountDetailShowsCalendar() {
+		return rendered
+	}
+	provider := s.effectiveCalendarProvider()
+	if !calendarProviderUsesCalDAV(provider) {
+		return rendered
+	}
+	preset, ok := calendarCalDAVPresetForProvider(provider)
+	if !ok {
+		return rendered
+	}
+	for _, link := range preset.HelpLinks {
+		visible := "[click] " + link.Label
+		rendered = strings.ReplaceAll(rendered, visible, wizardHyperlink("[click]", link.URL)+" "+link.Label)
+	}
+	return rendered
 }
 
 func (s *Settings) panelFormViewWithFooterDivider(formView string) string {

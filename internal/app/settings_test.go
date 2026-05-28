@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -943,9 +944,14 @@ func TestSettingsCalendarProviderOptionsIncludeCalDAVVendorPresets(t *testing.T)
 	}
 	rendered := strings.Join(labels, "\n")
 
-	for _, want := range []string{"Fastmail Calendar", "iCloud Calendar", "Custom CalDAV"} {
+	for _, want := range []string{"Fastmail Calendar", "iCloud Calendar", "Yahoo Calendar", "Custom CalDAV"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected calendar provider options to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Proton", "Microsoft", "Outlook"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected calendar provider options to omit %q as a basic CalDAV preset, got:\n%s", notWant, rendered)
 		}
 	}
 }
@@ -958,6 +964,7 @@ func TestBuildConfigCalendarVendorPresetCreatesCalDAVSource(t *testing.T) {
 	}{
 		{provider: "fastmail", email: "me@fastmail.com", url: "https://caldav.fastmail.com/"},
 		{provider: "icloud", email: "me@icloud.com", url: "https://caldav.icloud.com/"},
+		{provider: "yahoo", email: "me@yahoo.com", url: "https://caldav.calendar.yahoo.com"},
 	}
 
 	for _, tt := range tests {
@@ -989,28 +996,66 @@ func TestBuildConfigCalendarVendorPresetCreatesCalDAVSource(t *testing.T) {
 }
 
 func TestSettingsCalendarVendorPresetRendersURLAndGuidance(t *testing.T) {
-	s := NewSettings(SettingsModePanel, nil)
-	s.panelSection = settingsPanelSectionAccount
-	s.accountEditMode = settingsAccountEditAddCalendar
-	s.calendarProvider = "icloud"
-	s.buildForm()
-
-	rendered := ""
-	var views []string
-	for i := 0; i < 6; i++ {
-		rendered = renderSettingsViewForTest(t, s, 100, 32)
-		views = append(views, rendered)
-		if strings.Contains(rendered, "CalDAV URL") {
-			break
-		}
-		s.form.NextGroup()
+	tests := []struct {
+		provider       string
+		url            string
+		passwordHint   string
+		appPasswordURL string
+	}{
+		{
+			provider:       "fastmail",
+			url:            "https://caldav.fastmail.com/",
+			passwordHint:   "Fastmail app password",
+			appPasswordURL: "https://app.fastmail.com/settings/security",
+		},
+		{
+			provider:       "icloud",
+			url:            "https://caldav.icloud.com/",
+			passwordHint:   "Apple app-specific password",
+			appPasswordURL: "https://support.apple.com/en-us/102654",
+		},
+		{
+			provider:       "yahoo",
+			url:            "https://caldav.calendar.yahoo.com",
+			passwordHint:   "Yahoo app password",
+			appPasswordURL: "https://help.yahoo.com/kb/account/confirm-delete-password-sln15241.html",
+		},
 	}
-	allViews := strings.Join(views, "\n--- next group ---\n")
 
-	for _, want := range []string{"CalDAV URL", "https://caldav.icloud.com/", "Apple app-specific password"} {
-		if !strings.Contains(allViews, want) {
-			t.Fatalf("expected iCloud CalDAV guidance to include %q, got:\n%s", want, allViews)
-		}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			s := NewSettings(SettingsModePanel, nil)
+			s.panelSection = settingsPanelSectionAccount
+			s.accountEditMode = settingsAccountEditAddCalendar
+			s.calendarProvider = tt.provider
+			s.buildForm()
+
+			raw := ""
+			plain := ""
+			var plainViews []string
+			for i := 0; i < 6; i++ {
+				raw = renderSettingsRawViewForTest(t, s, 100, 32)
+				plain = ansi.Strip(raw)
+				plainViews = append(plainViews, plain)
+				if strings.Contains(plain, "CalDAV URL") {
+					break
+				}
+				s.form.NextGroup()
+			}
+			allViews := strings.Join(plainViews, "\n--- next group ---\n")
+
+			for _, want := range []string{"CalDAV URL", tt.url, tt.passwordHint, "[click] App password"} {
+				if !strings.Contains(allViews, want) {
+					t.Fatalf("expected %s CalDAV guidance to include %q, got:\n%s", tt.provider, want, allViews)
+				}
+			}
+			if !strings.Contains(raw, "\x1b]8;;"+tt.appPasswordURL) {
+				t.Fatalf("expected OSC 8 app-password link for %s, got raw view:\n%q", tt.provider, raw)
+			}
+			if strings.Contains(allViews, tt.appPasswordURL) {
+				t.Fatalf("expected raw app-password URL to stay hidden behind [click] label, got:\n%s", allViews)
+			}
+		})
 	}
 }
 

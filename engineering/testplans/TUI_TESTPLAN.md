@@ -1034,10 +1034,11 @@ Check these states during every applicable lane:
 3. Select a mail account, press `Enter`, and capture the account detail form.
 4. Return to `Accounts`, select a calendar-only account, press `Enter`, and capture the calendar detail form.
 5. Return to `Accounts`, choose `Add account`, confirm it shows `Add Mail` and `Add Calendar`, then open each path without saving.
-6. On a mail provider that supports calendar pairing, confirm the mail form includes `Also add calendar`; repeat on a mail-only provider and confirm the option is absent.
-7. Attempt to delete a calendar-only account and confirm Herald asks for disconnect confirmation without provider-deletion language.
-8. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
-9. Resize the open Accounts list or detail view to `50x15`, then resize back to `80x24`.
+6. In `Add Calendar`, confirm the CalDAV provider picker includes Fastmail, iCloud, Yahoo, and Custom CalDAV, and that Fastmail/iCloud/Yahoo show short clickable app-password guidance near the CalDAV fields.
+7. On a mail provider that supports calendar pairing, confirm the mail form includes `Also add calendar`; repeat on a mail-only provider and confirm the option is absent.
+8. Attempt to delete a calendar-only account and confirm Herald asks for disconnect confirmation without provider-deletion language.
+9. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
+10. Resize the open Accounts list or detail view to `50x15`, then resize back to `80x24`.
 
 **Expect:**
 - The Settings top-level menu uses `Accounts` instead of `Account setup`.
@@ -1046,6 +1047,7 @@ Check these states during every applicable lane:
 - Mail-capable account detail preserves the existing account setup fields and validates IMAP plus SMTP before saving.
 - Calendar-capable account detail shows Google Calendar or CalDAV configuration fields and validates by listing calendars before saving.
 - `Add Mail` creates a mail source and offers `Also add calendar` only for supported paired providers; `Add Calendar` creates a standalone Google Calendar or CalDAV source.
+- CalDAV presets cover Fastmail, iCloud, and Yahoo with provider URL placeholders and app-password guidance links; Proton Calendar and Microsoft Calendar are documented but not shown as basic CalDAV presets.
 - Disconnecting an account removes Herald config sources only; it does not delete provider mail, provider calendars, or cached/server content.
 - Herald blocks deletion of the last configured mail source.
 - At `50x15`, the standard minimum-size guard appears and resizing larger restores the same Accounts state cleanly.

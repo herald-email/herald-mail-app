@@ -21,6 +21,20 @@ Choose the narrowest supported path that matches your account. Gmail users shoul
 | Custom IMAP | Your provider value | Your provider value | Provider-specific |
 | Gmail OAuth (Experimental) | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
 
+## Calendar Provider Matrix
+
+Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's OAuth path when experimental Google services are enabled, while CalDAV providers use a URL, username, and provider-specific password.
+
+| Provider path | Calendar URL or API | Credential type |
+| --- | --- | --- |
+| Google Calendar | Google Calendar OAuth/API | Browser OAuth |
+| Fastmail Calendar | `https://caldav.fastmail.com/` | Fastmail app password |
+| iCloud Calendar | `https://caldav.icloud.com/` | Apple app-specific password |
+| Yahoo Calendar | `https://caldav.calendar.yahoo.com` | Yahoo app-generated password |
+| Custom CalDAV | Your provider value | Provider-specific |
+
+Microsoft Calendar is not shown as a CalDAV preset because the live integration path is Microsoft Graph/OAuth or read-only ICS subscription work, not a basic CalDAV username/password setup. Proton Calendar is also not shown as a live CalDAV preset; Proton documents ICS import, export, and subscription flows, and subscribed calendars are view-only.
+
 ## Workflows
 
 ### Gmail OAuth
@@ -55,6 +69,27 @@ Choose the narrowest supported path that matches your account. Gmail users shoul
 2. Choose standard IMAP in the wizard or edit YAML directly.
 3. Use provider-specific app passwords when required.
 4. Launch Herald with `herald -config path/to/conf.yaml` or `./bin/herald -config path/to/conf.yaml` from a source checkout.
+
+### CalDAV calendars
+
+1. Open `Settings > Accounts > Add account > Add Calendar`.
+2. Choose Fastmail, iCloud, Yahoo, or Custom CalDAV.
+3. Use the prefilled CalDAV URL or enter your provider's value.
+4. Enter the provider username and app password or app-specific password shown in that provider's help.
+5. Save and let Herald validate the source by listing calendars before writing the config.
+
+Helpful references:
+
+- [Fastmail server names and CalDAV settings](https://www.fastmail.help/hc/en-us/articles/1500000278342)
+- [Apple app-specific passwords](https://support.apple.com/en-us/102654)
+- [Yahoo Calendar CalDAV setup](https://ca.help.yahoo.com/kb/new-mail-for-desktop/sync-access-calendar-multiple-devices-applications-sln4707.html)
+- [Yahoo app passwords](https://help.yahoo.com/kb/account/confirm-delete-password-sln15241.html)
+- [Google Calendar CalDAV OAuth requirements](https://developers.google.com/workspace/calendar/caldav/v2/guide)
+- [Microsoft Graph calendar events](https://learn.microsoft.com/en-us/graph/api/calendar-list-events?view=graph-rest-1.0)
+- [Outlook ICS import and subscription](https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c)
+- [Proton external calendar subscriptions](https://proton.me/support/subscribe-to-external-calendar)
+- [Proton Calendar ICS import](https://proton.me/support/how-to-import-calendar-to-proton-calendar)
+- [Proton Calendar ICS export](https://proton.me/support/protoncalendar-calendars)
 
 ## Data And Privacy
 

@@ -658,6 +658,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Event Edit can mutate reminder overrides through the existing provider save-through flow
 - [x] Google Calendar source using OAuth and provider sync tokens
 - [x] CalDAV source using discovery, ETag, and sync-token or polling fallback
+- [x] CalDAV account setup offers provider-specific guidance for Fastmail, iCloud, and Yahoo app-password flows while keeping Proton Calendar and Microsoft Calendar out of the basic CalDAV preset list.
 
 ---
 
@@ -782,6 +783,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Theme Selection switches between inherited, Herald dark, Herald light, and installed YAML themes and installs local YAML files; Theme Editor edits semantic color roles with swatches, xterm-256/hex inputs, xterm-grid and RGB color pickers, live preview, reset controls, and save-as-new-theme support
 - [x] `Settings > Accounts` lists configured mail/calendar accounts and opens account-scoped detail forms
 - [x] `Settings > Accounts` can add mail accounts, add standalone calendar sources, and optionally pair supported mail providers with calendars
+- [x] `Settings > Accounts` shows short clickable setup links for provider-specific CalDAV app passwords without exposing saved calendar passwords.
 - [x] `Settings > Accounts` can disconnect configured accounts/sources without deleting provider-side mail or calendars
 - [ ] Account reorder remains planned after add/remove/account detail management
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
