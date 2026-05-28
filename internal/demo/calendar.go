@@ -21,7 +21,7 @@ func CalendarCollections() []models.CalendarCollection {
 				CollectionID: "work",
 				DisplayName:  "Work",
 			},
-			Color: "#5fd7ff",
+			Color: "#a7df78",
 			ETag:  `"demo-calendar-v1"`,
 		},
 		{
@@ -29,10 +29,10 @@ func CalendarCollections() []models.CalendarCollection {
 				SourceID:     CalendarSourceID,
 				AccountID:    CalendarAccountID,
 				Kind:         models.SourceKindCalendar,
-				CollectionID: "home",
-				DisplayName:  "Home",
+				CollectionID: "personal",
+				DisplayName:  "Personal",
 			},
-			Color: "#ff5f87",
+			Color: "#76cce0",
 			ETag:  `"demo-calendar-home-v1"`,
 		},
 		{
@@ -40,10 +40,10 @@ func CalendarCollections() []models.CalendarCollection {
 				SourceID:     CalendarSourceID,
 				AccountID:    CalendarAccountID,
 				Kind:         models.SourceKindCalendar,
-				CollectionID: "family",
-				DisplayName:  "Family",
+				CollectionID: "birthdays",
+				DisplayName:  "Birthdays",
 			},
-			Color: "#87d75f",
+			Color: "#e2b86b",
 			ETag:  `"demo-calendar-family-v1"`,
 		},
 		{
@@ -51,43 +51,67 @@ func CalendarCollections() []models.CalendarCollection {
 				SourceID:     CalendarSourceID,
 				AccountID:    CalendarAccountID,
 				Kind:         models.SourceKindCalendar,
-				CollectionID: "holidays",
-				DisplayName:  "Holidays",
+				CollectionID: "travel",
+				DisplayName:  "Travel",
 			},
-			Color: "#ffd75f",
+			Color: "#b39df3",
 			ETag:  `"demo-calendar-holidays-v1"`,
 		},
 	}
 }
 
 func CalendarEvents() []models.CalendarEvent {
+	week := time.Date(2026, 4, 20, 7, 0, 0, 0, time.Local)
+	at := func(day, hour, minute int) time.Time {
+		return week.AddDate(0, 0, day).Add(time.Duration(hour-7)*time.Hour + time.Duration(minute)*time.Minute)
+	}
 	events := []models.CalendarEvent{
-		calendarEvent("work", "daily-standup", "Daily standup", "<p>Walk the day plan and identify <strong>calendar conflicts</strong>.</p><ul><li>Confirm owners</li><li>Call out blockers</li></ul>", "Huddle room", baseTime.Add(90*time.Minute), 30*time.Minute, "confirmed"),
-		calendarEvent("work", "design-review", "Design review", "Review agenda layout with deterministic demo data.", "Herald planning room", baseTime.Add(2*time.Hour), time.Hour, "confirmed"),
-		calendarEvent("work", "launch-window", "Launch window", "Keep a protected block for release notes and follow-up review.", "", baseTime.Add(4*time.Hour), 75*time.Minute, "busy"),
-		calendarEvent("home", "weekly-planning", "Weekly planning", "Confirm source-platform roadmap sequencing and next actions.", "Video call", baseTime.AddDate(0, 0, 1).Add(time.Hour), time.Hour, "tentative"),
-		calendarEvent("family", "school-pickup", "School pickup", "Bring the signed field trip form.", "North gate", baseTime.AddDate(0, 0, 1).Add(6*time.Hour), 30*time.Minute, "confirmed"),
-		calendarEvent("work", "cache-sync", "Calendar cache sync", "Check that read-only event details come from Herald cache rows first.", "Engineering desk", baseTime.AddDate(0, 0, 2).Add(30*time.Minute), 45*time.Minute, "confirmed"),
-		calendarEvent("holidays", "regional-holiday", "Regional holiday", "Public holiday shown from the subscribed calendar.", "", baseTime.AddDate(0, 0, 2), 24*time.Hour, "confirmed"),
-		calendarEvent("home", "focus-block", "Focus block", "Protected work time for cleanup rules and source identity notes.", "", baseTime.AddDate(0, 0, 3).Add(3*time.Hour), 90*time.Minute, "busy"),
+		calendarEvent("work", "mon-standup", "Standup", "Daily team standup.", "Huddle room", at(0, 8, 0), 30*time.Minute, "confirmed"),
+		calendarEvent("work", "tue-standup", "Standup", "Daily team standup.", "Huddle room", at(1, 8, 0), 30*time.Minute, "confirmed"),
+		calendarEvent("work", "wed-standup", "Standup", "Daily team standup.", "Huddle room", at(2, 8, 0), 30*time.Minute, "confirmed"),
+		calendarEvent("work", "thu-standup", "Standup", "Daily team standup.", "Huddle room", at(3, 8, 0), 30*time.Minute, "confirmed"),
+		calendarEvent("work", "fri-standup", "Standup", "Daily team standup.", "Huddle room", at(4, 8, 0), 30*time.Minute, "confirmed"),
+		calendarEvent("work", "tue-design-review", "Design Review", "<p>Weekly design review of ongoing projects and feedback.</p><ul><li>Prototype alignment</li><li>Accessibility notes</li></ul>", "Design Lab", at(1, 10, 0), time.Hour, "confirmed"),
+		calendarEvent("work", "mon-design-review", "Design Review", "Review agenda layout with deterministic demo data.", "Design Lab", at(0, 10, 0), time.Hour, "confirmed"),
+		calendarEvent("personal", "wed-focus-block", "Focus Block", "Deep work block.", "", at(2, 10, 0), 2*time.Hour, "busy"),
+		calendarEvent("work", "thu-planning", "Planning", "Roadmap and launch sequencing.", "Planning room", at(3, 10, 0), time.Hour, "confirmed"),
+		calendarEvent("personal", "fri-design-review", "Design Review", "Personal project review.", "", at(4, 10, 0), time.Hour, "confirmed"),
+		calendarEvent("birthdays", "mon-lunch", "Lunch", "Lunch break.", "Cafe", at(0, 12, 0), time.Hour, "confirmed"),
+		calendarEvent("birthdays", "tue-lunch", "Lunch", "Lunch break.", "Cafe", at(1, 12, 0), time.Hour, "confirmed"),
+		calendarEvent("birthdays", "wed-lunch", "Lunch", "Lunch break.", "Cafe", at(2, 12, 0), time.Hour, "confirmed"),
+		calendarEvent("birthdays", "thu-lunch", "Lunch", "Lunch break.", "Cafe", at(3, 12, 0), time.Hour, "confirmed"),
+		calendarEvent("birthdays", "fri-lunch", "Lunch", "Lunch break.", "Cafe", at(4, 12, 0), time.Hour, "confirmed"),
+		calendarEvent("personal", "mon-focus", "Focus Block", "Heads-down implementation time.", "", at(0, 13, 0), 2*time.Hour, "busy"),
+		calendarEvent("work", "tue-project-sync", "Project Sync", "Status, blockers, decisions.", "Project room", at(1, 13, 0), time.Hour, "confirmed"),
+		calendarEvent("personal", "thu-focus", "Focus Block", "Deep work block.", "", at(3, 13, 0), 2*time.Hour, "busy"),
+		calendarEvent("work", "fri-one-one", "1:1 Alex", "Weekly check-in.", "Video", at(4, 13, 0), time.Hour, "confirmed"),
+		calendarEvent("travel", "tue-travel-prep", "Travel Prep", "Confirm tickets, hotel, and packing list.", "", at(1, 14, 0), 2*time.Hour, "tentative"),
+		calendarEvent("work", "thu-planning-pm", "Planning", "Implementation review.", "Planning room", at(3, 15, 0), time.Hour, "confirmed"),
+		calendarEvent("work", "mon-ship-review", "Ship Review", "Release check.", "Ops room", at(0, 16, 0), time.Hour, "confirmed"),
+		calendarEvent("work", "wed-ship-review", "Ship Review", "Release check.", "Ops room", at(2, 16, 0), time.Hour, "confirmed"),
+		calendarEvent("work", "fri-ship-review", "Ship Review", "Release check.", "Ops room", at(4, 16, 0), time.Hour, "confirmed"),
 	}
-	events[0].TimeZone = "America/Los_Angeles"
-	events[0].Organizer = "Mina Park"
-	events[0].OrganizerEmail = "mina@example.com"
-	events[0].Attendees = []models.CalendarAttendee{
+	events[5].TimeZone = "America/Los_Angeles"
+	events[5].Organizer = "Mina Park"
+	events[5].OrganizerEmail = "mina@example.com"
+	events[5].Attendees = []models.CalendarAttendee{
 		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
-		{Name: "Noor Patel", Email: "noor@example.com", RSVP: "tentative", Optional: true},
+		{Name: "Alex Chen", Email: "alex@example.com", RSVP: "accepted"},
+		{Name: "Jordan Lee", Email: "jordan@example.com", RSVP: "needs-action"},
+		{Name: "Sam Patel", Email: "sam@example.com", RSVP: "accepted"},
+		{Name: "Taylor Fox", Email: "taylor@example.com", RSVP: "tentative"},
+		{Name: "You", Email: "you@example.com", RSVP: "accepted"},
 	}
-	events[0].Recurrence = []string{"RRULE:FREQ=WEEKLY;BYDAY=MO"}
-	events[0].RecurrenceSummary = "Weekly on Monday"
-	events[0].Attachments = []models.CalendarAttachment{
+	events[5].Recurrence = []string{"RRULE:FREQ=WEEKLY;BYDAY=TU"}
+	events[5].RecurrenceSummary = "Weekly on Tuesday"
+	events[5].Attachments = []models.CalendarAttachment{
 		{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 	}
-	events[0].Reminders = []models.CalendarReminder{
+	events[5].Reminders = []models.CalendarReminder{
 		{Method: "popup", MinutesBefore: 30},
 	}
-	events[0].AlternateTimeZones = []string{"Asia/Tokyo"}
-	events[1].Attendees = []models.CalendarAttendee{
+	events[5].AlternateTimeZones = []string{"Europe/London"}
+	events[6].Attendees = []models.CalendarAttendee{
 		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "needs-action"},
 		{Name: "Mina Park", Email: "mina@example.com", RSVP: "accepted"},
 	}

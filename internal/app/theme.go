@@ -58,6 +58,17 @@ func dynamicForegroundStyle(value string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(value))
 }
 
+func dynamicCalendarBlockStyle(foreground, background string) lipgloss.Style {
+	style := lipgloss.NewStyle()
+	if strings.TrimSpace(foreground) != "" {
+		style = style.Foreground(lipgloss.Color(foreground))
+	}
+	if strings.TrimSpace(background) != "" {
+		style = style.Background(lipgloss.Color(background))
+	}
+	return style
+}
+
 func (s ThemeStyle) ForegroundColor() color.Color {
 	if s.Foreground != nil {
 		return s.Foreground
