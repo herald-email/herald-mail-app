@@ -561,6 +561,62 @@ func TestCalDAVSourceDiscoversCalendarHomeSetAndCollectionSyncToken(t *testing.T
 	}
 }
 
+func TestCalDAVSourceSkipsCollectionsThatDoNotSupportEvents(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PROPFIND" {
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusMultiStatus)
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/</d:href><d:propstat><d:prop><d:current-user-principal><d:href>/principals/rae/</d:href></d:current-user-principal></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/principals/rae/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/principals/rae/</d:href><d:propstat><d:prop><cal:calendar-home-set><d:href>/caldav/rae/</d:href></cal:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/caldav/rae/":
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/"><d:response><d:href>/caldav/rae/team/</d:href><d:propstat><d:prop><d:displayname>Team</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype><cal:supported-calendar-component-set><cal:comp name="VEVENT"/></cal:supported-calendar-component-set><cs:calendar-color>#0b8043</cs:calendar-color></d:prop></d:propstat></d:response><d:response><d:href>/caldav/rae/reminders/</d:href><d:propstat><d:prop><d:displayname>Reminders ⚠</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype><cal:supported-calendar-component-set><cal:comp name="VTODO"/></cal:supported-calendar-component-set><cs:calendar-color>#ffcc00</cs:calendar-color></d:prop></d:propstat></d:response><d:response><d:href>/caldav/rae/legacy/</d:href><d:propstat><d:prop><d:displayname>Legacy</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "icloud-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "icloud",
+		CalDAV: config.CalDAVConfig{
+			URL:      server.URL + "/",
+			Username: "rae@example.com",
+			Password: "secret",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+
+	collections, err := src.ListCalendars(context.Background())
+	if err != nil {
+		t.Fatalf("ListCalendars: %v", err)
+	}
+	if len(collections) != 2 {
+		t.Fatalf("collections = %#v, want only VEVENT-capable and legacy calendars", collections)
+	}
+	if got := collections[0].Ref.DisplayName; got != "Team" {
+		t.Fatalf("first collection = %q, want Team", got)
+	}
+	if got := collections[1].Ref.DisplayName; got != "Legacy" {
+		t.Fatalf("second collection = %q, want Legacy", got)
+	}
+	for _, collection := range collections {
+		if strings.Contains(collection.Ref.DisplayName, "Reminders") {
+			t.Fatalf("collections include non-event reminder artifact: %#v", collections)
+		}
+	}
+}
+
 func TestCalDAVSourceICloudRedirectPreservesBasicAuth(t *testing.T) {
 	var redirectedRequests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

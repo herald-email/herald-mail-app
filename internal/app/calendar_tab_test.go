@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -2205,6 +2206,27 @@ func TestTimelineInvitationPromptSavesToSelectedCalendar(t *testing.T) {
 	}
 	if m.calendarInvitation.Active {
 		t.Fatalf("invitation prompt stayed active after save: %#v", m.calendarInvitation)
+	}
+}
+
+func TestCalendarPanelContentFitsWarningCollectionLabels(t *testing.T) {
+	raw := strings.Join([]string{
+		"  \x1b[36m[x]\x1b[0m \x1b[36mFamily ⚠ with a provider label that used to widen the rail\x1b[0m",
+		"  \x1b[35m[x]\x1b[0m \x1b[35mReminders ⚠ with a provider label that used to widen the rail\x1b[0m",
+	}, "\n")
+	rendered := fitCalendarPanelContent(raw, 18, 4)
+	lines := strings.Split(rendered, "\n")
+	if len(lines) != 4 {
+		t.Fatalf("lines=%d, want padded height 4:\n%s", len(lines), rendered)
+	}
+	for i, line := range lines {
+		if got := ansi.StringWidth(line); got > 18 {
+			t.Fatalf("line %d width=%d, want <=18: %q", i, got, line)
+		}
+	}
+	visible := ansi.Strip(rendered)
+	if !strings.Contains(visible, "Family") || !strings.Contains(visible, "Reminders") {
+		t.Fatalf("guard dropped collection labels:\n%s", visible)
 	}
 }
 

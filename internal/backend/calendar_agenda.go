@@ -150,10 +150,10 @@ func (b *LocalBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 	if err != nil {
 		return nil, err
 	}
-	if len(cached) > 0 {
-		return cached, nil
-	}
 	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		if len(cached) > 0 {
+			return cached, nil
+		}
 		return nil, err
 	}
 	return b.listCachedCalendarAgenda(start, end)
@@ -180,10 +180,10 @@ func (b *LocalBackend) ListCalendarCollections() ([]models.CalendarCollection, e
 	if err != nil {
 		return nil, err
 	}
-	if len(cached) > 0 {
-		return cached, nil
-	}
 	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		if len(cached) > 0 {
+			return cached, nil
+		}
 		return nil, err
 	}
 	return b.listCachedCalendarCollections()
@@ -339,6 +339,7 @@ func (b *LocalBackend) syncConfiguredCalendarSources(ctx context.Context) error 
 	now := time.Now()
 	for _, source := range sources {
 		sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+		accountID := models.NormalizeAccountID(models.AccountID(source.AccountID))
 		if last := b.calendarLastSync[sourceID]; !last.IsZero() && now.Sub(last) < calendarAgendaSyncTTL {
 			continue
 		}
@@ -354,6 +355,17 @@ func (b *LocalBackend) syncConfiguredCalendarSources(ctx context.Context) error 
 		if err != nil {
 			_ = opened.Close()
 			return fmt.Errorf("calendar source %s failed to list calendars: %w", source.ID, err)
+		}
+		keepRefs := make([]models.CollectionRef, 0, len(collections))
+		for i := range collections {
+			collections[i].Ref.Kind = models.SourceKindCalendar
+			collections[i].Ref.SourceID = sourceID
+			collections[i].Ref.AccountID = accountID
+			keepRefs = append(keepRefs, collections[i].Ref)
+		}
+		if _, err := b.cache.PruneCalendarCollections(sourceID, accountID, keepRefs); err != nil {
+			_ = opened.Close()
+			return fmt.Errorf("calendar source %s failed to reconcile cached calendars: %w", source.ID, err)
 		}
 		service := calendar.NewEventService(b.cache, opened.Calendar)
 		for _, collection := range collections {

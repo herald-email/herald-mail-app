@@ -320,6 +320,9 @@ func (s *CalDAVSource) ListCalendars(ctx context.Context) ([]models.CalendarColl
 		if sameCalDAVURL(responseURL, homeURL) && !prop.ResourceType.IsCalendar() {
 			continue
 		}
+		if prop.SupportedComponents.IsSet() && !prop.SupportedComponents.Supports("VEVENT") {
+			continue
+		}
 		calendarID := calendarIDFromHref(response.Href)
 		if calendarID == "" {
 			continue
@@ -849,7 +852,7 @@ const caldavDiscoveryPropfind = `<?xml version="1.0" encoding="utf-8"?>
 
 const caldavCalendarListPropfind = `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
-  <d:prop><d:displayname/><d:resourcetype/><cs:calendar-color/><d:getetag/><d:sync-token/></d:prop>
+  <d:prop><d:displayname/><d:resourcetype/><cal:supported-calendar-component-set/><cs:calendar-color/><d:getetag/><d:sync-token/></d:prop>
 </d:propfind>`
 
 const caldavCalendarQuery = `<?xml version="1.0" encoding="utf-8"?>
@@ -1111,14 +1114,15 @@ type davPropstat struct {
 }
 
 type davProp struct {
-	DisplayName          string          `xml:"displayname"`
-	CalendarColor        string          `xml:"calendar-color"`
-	GetETag              string          `xml:"getetag"`
-	SyncToken            string          `xml:"sync-token"`
-	CalendarData         string          `xml:"calendar-data"`
-	ResourceType         davResourceType `xml:"resourcetype"`
-	CurrentUserPrincipal davHref         `xml:"current-user-principal"`
-	CalendarHomeSet      davHref         `xml:"calendar-home-set"`
+	DisplayName          string                           `xml:"displayname"`
+	CalendarColor        string                           `xml:"calendar-color"`
+	GetETag              string                           `xml:"getetag"`
+	SyncToken            string                           `xml:"sync-token"`
+	CalendarData         string                           `xml:"calendar-data"`
+	ResourceType         davResourceType                  `xml:"resourcetype"`
+	SupportedComponents  davSupportedCalendarComponentSet `xml:"supported-calendar-component-set"`
+	CurrentUserPrincipal davHref                          `xml:"current-user-principal"`
+	CalendarHomeSet      davHref                          `xml:"calendar-home-set"`
 }
 
 type davHref struct {
@@ -1136,6 +1140,31 @@ func (r davResourceType) IsSet() bool {
 
 func (r davResourceType) IsCalendar() bool {
 	return r.Calendar != nil
+}
+
+type davSupportedCalendarComponentSet struct {
+	Components []davCalendarComponent `xml:"comp"`
+}
+
+type davCalendarComponent struct {
+	Name string `xml:"name,attr"`
+}
+
+func (s davSupportedCalendarComponentSet) IsSet() bool {
+	return len(s.Components) > 0
+}
+
+func (s davSupportedCalendarComponentSet) Supports(name string) bool {
+	name = strings.ToUpper(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
+	for _, component := range s.Components {
+		if strings.EqualFold(strings.TrimSpace(component.Name), name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r davResponse) FirstProp() davProp {

@@ -93,6 +93,62 @@ func (c *Cache) ListCalendarCollections(sourceID models.SourceID, accountID mode
 	return out, rows.Err()
 }
 
+func (c *Cache) PruneCalendarCollections(sourceID models.SourceID, accountID models.AccountID, keep []models.CollectionRef) ([]models.CollectionRef, error) {
+	sourceID = models.NormalizeSourceID(sourceID, models.DefaultCalendarSourceID)
+	accountID = models.NormalizeAccountID(accountID)
+	keepLocalIDs := make(map[string]struct{}, len(keep))
+	for _, ref := range keep {
+		ref.Kind = models.SourceKindCalendar
+		ref.SourceID = sourceID
+		ref.AccountID = accountID
+		keepLocalIDs[calendarCollectionLocalID(ref)] = struct{}{}
+	}
+
+	existing, err := c.ListCalendarCollections(sourceID, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) == 0 {
+		return nil, nil
+	}
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	now := time.Now().UTC()
+	removed := make([]models.CollectionRef, 0)
+	for _, collection := range existing {
+		ref := collection.Ref
+		ref.Kind = models.SourceKindCalendar
+		ref.SourceID = sourceID
+		ref.AccountID = accountID
+		localID := calendarCollectionLocalID(ref)
+		if _, ok := keepLocalIDs[localID]; ok {
+			continue
+		}
+		if _, err := tx.Exec(`DELETE FROM calendar_collections WHERE local_id = ?`, localID); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(`
+			UPDATE calendar_events
+			SET invalidated_at = ?
+			WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND invalidated_at IS NULL
+		`, now, string(sourceID), string(accountID), ref.CollectionID); err != nil {
+			return nil, err
+		}
+		removed = append(removed, ref)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return removed, nil
+}
+
 func (c *Cache) PutCalendarEvent(event models.CalendarEvent) error {
 	ref := event.Ref.WithDefaults()
 	now := time.Now().UTC()

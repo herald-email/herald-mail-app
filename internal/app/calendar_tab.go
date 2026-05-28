@@ -1269,15 +1269,17 @@ func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, 
 		railW = 0
 	}
 	mainW, detailW := splitWidth(remaining, 0, mainMin, 24, remaining*56/100)
+	mainInnerW, detailInnerW, innerH := clamp(mainW-4, 1), clamp(detailW-4, 1), clamp(contentH-2, 1)
 	mainPanel := m.calendarPanel(mainW, contentH, m.calendarFocus == calendarFocusMain).
-		Render(mainFn(mainW-4, contentH-2))
+		Render(fitCalendarPanelContent(mainFn(mainInnerW, innerH), mainInnerW, innerH))
 	detailPanel := m.calendarPanel(detailW, contentH, m.calendarFocus == calendarFocusDetail).
-		Render(detailFn(detailW-4, contentH-2))
+		Render(fitCalendarPanelContent(detailFn(detailInnerW, innerH), detailInnerW, innerH))
 	if railW <= 0 {
 		return lipgloss.JoinHorizontal(lipgloss.Top, mainPanel, panelGap, detailPanel)
 	}
+	railInnerW := clamp(railW-4, 1)
 	railPanel := m.calendarPanel(railW, contentH, m.calendarFocus == calendarFocusRail).
-		Render(m.renderCalendarLeftPanel(railW-4, contentH-2))
+		Render(fitCalendarPanelContent(m.renderCalendarLeftPanel(railInnerW, innerH), railInnerW, innerH))
 	return lipgloss.JoinHorizontal(lipgloss.Top, railPanel, panelGap, mainPanel, panelGap, detailPanel)
 }
 
@@ -1294,7 +1296,8 @@ func (m *Model) renderCalendarDetailFullView() string {
 	if contentH < 4 {
 		contentH = 4
 	}
-	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarEventDetail(clamp(contentW-4, 20), contentH-2, true))
+	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarEventDetail(innerW, innerH, true), innerW, innerH))
 }
 
 func (m *Model) renderCalendarEditFullView() string {
@@ -1310,7 +1313,8 @@ func (m *Model) renderCalendarEditFullView() string {
 	if contentH < 4 {
 		contentH = 4
 	}
-	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarEventEdit(clamp(contentW-4, 20), contentH-2))
+	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarEventEdit(innerW, innerH), innerW, innerH))
 }
 
 func (m *Model) renderCalendarMeetingPrepFullView() string {
@@ -1326,7 +1330,8 @@ func (m *Model) renderCalendarMeetingPrepFullView() string {
 	if contentH < 4 {
 		contentH = 4
 	}
-	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarMeetingPrep(clamp(contentW-4, 20), contentH-2))
+	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarMeetingPrep(innerW, innerH), innerW, innerH))
 }
 
 func (m *Model) renderCalendarTravelBufferFullView() string {
@@ -1342,7 +1347,8 @@ func (m *Model) renderCalendarTravelBufferFullView() string {
 	if contentH < 4 {
 		contentH = 4
 	}
-	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarTravelBuffer(clamp(contentW-4, 20), contentH-2))
+	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarTravelBuffer(innerW, innerH), innerW, innerH))
 }
 
 func (m *Model) renderCalendarAISummaryFullView() string {
@@ -1358,7 +1364,8 @@ func (m *Model) renderCalendarAISummaryFullView() string {
 	if contentH < 4 {
 		contentH = 4
 	}
-	return m.calendarPanel(clamp(contentW, 40), contentH, true).Render(m.renderCalendarAISummary(clamp(contentW-4, 20), contentH-2))
+	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarAISummary(innerW, innerH), innerW, innerH))
 }
 
 func (m *Model) calendarPanel(width, height int, active bool) lipgloss.Style {
@@ -1376,6 +1383,27 @@ func (m *Model) calendarPanel(width, height int, active bool) lipgloss.Style {
 
 func (m *Model) renderCalendarRail(width, height int) string {
 	return m.renderCalendarLeftPanel(width, height)
+}
+
+func fitCalendarPanelContent(content string, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	for i, line := range lines {
+		line = ansi.Cut(line, 0, width)
+		if missing := width - ansi.StringWidth(line); missing > 0 {
+			line += strings.Repeat(" ", missing)
+		}
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m *Model) renderCalendarLeftPanel(width, height int) string {

@@ -177,6 +177,70 @@ func TestLocalBackendCalendarAgendaSyncsProviderWhenCacheEmpty(t *testing.T) {
 	}
 }
 
+func TestLocalBackendCalendarAgendaRefreshesCachedRowsWhenSyncTTLAllows(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("family", "Family", "#63da38"),
+		testcalendar.WithEvent("family", testcalendar.Event{
+			ID:       "lesson",
+			UID:      "lesson",
+			Summary:  "Family lesson",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+			Status:   "confirmed",
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("icloud-calendar", "icloud")
+
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	staleCollection := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "icloud-calendar",
+			AccountID:    "icloud",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "reminders",
+			DisplayName:  "Reminders ⚠",
+		},
+		Color:     "#7e57c2",
+		SyncToken: "stale-sync-token",
+	}
+	if err := store.PutCalendarCollection(staleCollection); err != nil {
+		t.Fatalf("PutCalendarCollection(stale): %v", err)
+	}
+	staleEvent := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "icloud-calendar", AccountID: "icloud", CalendarID: "reminders", EventID: "task-artifact"}.WithDefaults(),
+		Title:  "Reminder task artifact",
+		Start:  start,
+		End:    start.Add(time.Hour),
+		Status: "confirmed",
+	}
+	if err := store.PutCalendarEvent(staleEvent); err != nil {
+		t.Fatalf("PutCalendarEvent(stale): %v", err)
+	}
+
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+	events, err := b.ListCalendarAgenda(start.Add(-time.Hour), start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("ListCalendarAgenda: %v", err)
+	}
+	if len(events) != 1 || events[0].Title != "Family lesson" || events[0].Ref.CalendarID != "family" {
+		t.Fatalf("events = %#v, want provider-refreshed family event only", events)
+	}
+	if _, err := store.GetCalendarCollection(staleCollection.Ref); err == nil {
+		t.Fatal("stale reminder collection remained cached after provider refresh")
+	}
+	if _, err := store.GetCalendarEventByRef(staleEvent.Ref); err == nil {
+		t.Fatal("stale reminder event remained cached after provider refresh")
+	}
+}
+
 func TestLocalBackendCalendarAgendaHiddenForGoogleCalendarWithoutOAuth(t *testing.T) {
 	store, err := cache.New(":memory:")
 	if err != nil {

@@ -56,6 +56,101 @@ func TestCacheCalendarCollectionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPruneCalendarCollectionsRemovesStaleCollectionsAndInvalidatesEvents(t *testing.T) {
+	c := newTestCache(t)
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+
+	kept := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "icloud-calendar",
+			AccountID:    "icloud",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "family",
+			DisplayName:  "Family",
+		},
+		Color:     "#63da38",
+		SyncToken: "keep-sync-token",
+	}
+	stale := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "icloud-calendar",
+			AccountID:    "icloud",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "reminders",
+			DisplayName:  "Reminders ⚠",
+		},
+		Color:     "#7e57c2",
+		SyncToken: "stale-sync-token",
+	}
+	otherAccount := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "work-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "work",
+			DisplayName:  "Work",
+		},
+		Color: "#ff7043",
+	}
+	for _, collection := range []models.CalendarCollection{kept, stale, otherAccount} {
+		if err := c.PutCalendarCollection(collection); err != nil {
+			t.Fatalf("PutCalendarCollection(%s): %v", collection.Ref.CollectionID, err)
+		}
+	}
+
+	keptEvent := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "icloud-calendar", AccountID: "icloud", CalendarID: "family", EventID: "lesson"}.WithDefaults(),
+		Title:  "Family lesson",
+		Start:  start,
+		End:    start.Add(time.Hour),
+		Status: "confirmed",
+	}
+	staleEvent := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "icloud-calendar", AccountID: "icloud", CalendarID: "reminders", EventID: "task-artifact"}.WithDefaults(),
+		Title:  "Reminder task artifact",
+		Start:  start,
+		End:    start.Add(time.Hour),
+		Status: "confirmed",
+	}
+	otherEvent := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "work", EventID: "standup"}.WithDefaults(),
+		Title:  "Work standup",
+		Start:  start,
+		End:    start.Add(time.Hour),
+		Status: "confirmed",
+	}
+	for _, event := range []models.CalendarEvent{keptEvent, staleEvent, otherEvent} {
+		if err := c.PutCalendarEvent(event); err != nil {
+			t.Fatalf("PutCalendarEvent(%s): %v", event.Ref.EventID, err)
+		}
+	}
+
+	removed, err := c.PruneCalendarCollections("icloud-calendar", "icloud", []models.CollectionRef{kept.Ref})
+	if err != nil {
+		t.Fatalf("PruneCalendarCollections: %v", err)
+	}
+	if len(removed) != 1 || removed[0].CollectionID != "reminders" {
+		t.Fatalf("removed = %#v, want only reminders", removed)
+	}
+
+	collections, err := c.ListCalendarCollections("icloud-calendar", "icloud")
+	if err != nil {
+		t.Fatalf("ListCalendarCollections: %v", err)
+	}
+	if len(collections) != 1 || collections[0].Ref.CollectionID != "family" || collections[0].SyncToken != "keep-sync-token" {
+		t.Fatalf("collections = %#v, want retained family with sync token", collections)
+	}
+	if _, err := c.GetCalendarEventByRef(staleEvent.Ref); err == nil {
+		t.Fatal("stale reminder event remained readable after collection prune")
+	}
+	if _, err := c.GetCalendarEventByRef(keptEvent.Ref); err != nil {
+		t.Fatalf("kept event missing after prune: %v", err)
+	}
+	if _, err := c.GetCalendarEventByRef(otherEvent.Ref); err != nil {
+		t.Fatalf("other account event missing after scoped prune: %v", err)
+	}
+}
+
 func TestCacheCalendarEventRoundTripAndInvalidate(t *testing.T) {
 	c := newTestCache(t)
 	start := time.Date(2026, 5, 24, 16, 0, 0, 0, time.UTC)
