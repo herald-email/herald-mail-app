@@ -75,11 +75,12 @@ If validation fails, read which check failed. IMAP failures usually mean the hos
 
 If Gmail OAuth is missing from the first-run choices, relaunch with `-experimental`. On Google's test-app warning page, choose `Continue` to reach the real consent screen; `Back to safety` does not authorize Herald. If you choose `Cancel` on the consent screen, Herald reports that authorization was cancelled and does not save settings. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
 
-If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary. Homebrew and release binaries include OAuth defaults for the experimental path. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching `herald -experimental`, or rebuild with `make build-release-local` after filling `.herald-release.env`. Plain `make build` does not embed OAuth defaults.
+If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary without build-time or runtime OAuth credentials. Homebrew and release binaries include OAuth defaults for the experimental path. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching `herald -experimental`, or place both values in `.herald-dev.env` before running `make build`. Release-style local builds use `.herald-release.env` with `make build-release-local` and fail early if either value is missing. See [Local OAuth Builds](/development/local-oauth-builds/) for the full source-build contract.
 
 ## Related Pages
 
 - [Provider Setup](/provider-setup/)
 - [Gmail Setup](/gmail-setup/)
+- [Local OAuth Builds](/development/local-oauth-builds/)
 - [Custom IMAP](/custom-imap/)
 - [Config Reference](/reference/config/)

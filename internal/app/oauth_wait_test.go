@@ -426,3 +426,28 @@ func TestOAuthWaitModel_ViewShowsGmailOAuthTitle(t *testing.T) {
 		t.Fatalf("expected OAuth wait view to avoid experimental marker, got:\n%s", view)
 	}
 }
+
+func TestOAuthWaitModel_ViewShowsCalendarOAuthTitle(t *testing.T) {
+	cfg := &config.Config{}
+	codeCh := make(chan oauth.Result, 1)
+	m := &OAuthWaitModel{
+		email:        "test@gmail.com",
+		serviceLabel: "Google Calendar OAuth",
+		authURL:      "https://accounts.google.com/o/oauth2/auth?client_id=test",
+		redirectURI:  "http://localhost:12345/callback",
+		codeCh:       codeCh,
+		cfg:          cfg,
+		configPath:   "/tmp/test-herald-conf.yaml",
+		width:        80,
+		height:       24,
+		spinner:      spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	view := stripANSI(m.View().Content)
+	if !strings.Contains(view, "Google Calendar OAuth") {
+		t.Fatalf("expected Google Calendar OAuth title in OAuth wait view, got:\n%s", view)
+	}
+	if strings.Contains(view, "Gmail OAuth") {
+		t.Fatalf("expected calendar-only OAuth wait view to avoid Gmail title, got:\n%s", view)
+	}
+}

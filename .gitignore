@@ -21,6 +21,7 @@ config.yaml
 !docs/public/examples/
 !docs/public/examples/themes/
 !docs/public/examples/themes/*.yaml
+.herald-dev.env
 .herald-release.env
 .ssh
 .env

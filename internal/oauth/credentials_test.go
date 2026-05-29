@@ -67,6 +67,9 @@ func TestCredentialsErrorWhenNoCredentialSourceIsConfigured(t *testing.T) {
 		t.Fatal("credentials() returned nil error, want missing credential error")
 	}
 	if !strings.Contains(err.Error(), "HERALD_GOOGLE_CLIENT_ID") {
-		t.Fatalf("error = %q, want it to mention missing GitHub/env credential names", err)
+		t.Fatalf("error = %q, want it to mention missing Google OAuth env credential names", err)
+	}
+	if !strings.Contains(err.Error(), ".herald-dev.env") {
+		t.Fatalf("error = %q, want it to mention the development env file", err)
 	}
 }

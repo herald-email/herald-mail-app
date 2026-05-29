@@ -115,6 +115,7 @@ export default defineConfig({
         {
           label: 'Development',
           items: [
+            { label: 'Local OAuth Builds', slug: 'development/local-oauth-builds' },
             { label: 'Regenerate Screenshots', slug: 'development/regenerate-screenshots' },
           ],
         },

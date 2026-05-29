@@ -57,7 +57,7 @@ OAuth desktop client secrets are convenience defaults, not a protection boundary
 
 ## Source builds with OAuth
 
-Plain `make build` intentionally does not embed OAuth defaults from `.herald-release.env`; it creates a normal development binary. If you run `make build && ./bin/herald -experimental` without exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
+Plain `make build` embeds OAuth defaults when both `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` are available in the environment or `.herald-dev.env`; otherwise it creates a normal development binary that still builds successfully. If you run `make build && ./bin/herald -experimental` without build-time defaults or exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
 
 For a one-off local run, export credentials in the same shell that launches Herald:
 
@@ -67,14 +67,16 @@ export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
 ./bin/herald -experimental -config ~/.herald/conf.yaml
 ```
 
-For a local binary with OAuth defaults built in:
+For a local development binary with OAuth defaults built in:
 
 ```sh
-cp .herald-release.env.example .herald-release.env
-$EDITOR .herald-release.env
-make build-release-local
+cp .herald-dev.env.example .herald-dev.env
+$EDITOR .herald-dev.env
+make build
 ./bin/herald -experimental -config ~/.herald/conf.yaml
 ```
+
+For release-style local builds, custom env file paths, and troubleshooting details, see [Local OAuth Builds](/development/local-oauth-builds/).
 
 ## Helpful Google references
 

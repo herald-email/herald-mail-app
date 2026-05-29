@@ -1881,7 +1881,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case OAuthRequiredMsg:
-		// Gmail chosen in the settings panel — launch the OAuth wait overlay.
+		// A Google OAuth-backed mail or calendar source was chosen in settings.
 		m.showSettings = false
 		m.settingsPanel = nil
 		oauthModel, err := NewOAuthWaitModelWithOptions(msg.Email, msg.Config, m.configPath, OAuthWaitOptions{
@@ -1891,6 +1891,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ValidateCalendar:           msg.ValidateCalendar,
 			CalendarSourceIDs:          msg.CalendarSourceIDs,
 			SourceIDs:                  msg.SourceIDs,
+			ServiceLabel:               msg.ServiceLabel,
 		})
 		if err != nil {
 			m.accountValidation = &accountValidationState{

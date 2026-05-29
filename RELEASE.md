@@ -43,7 +43,7 @@ The release workflow fails before building if either OAuth secret is missing, an
 
 ## Homebrew Install
 
-Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow. Gmail OAuth remains experimental in first-run onboarding and is shown only when launched with `-experimental`.
+Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow. Gmail OAuth remains experimental in first-run onboarding and is shown only when launched with `-experimental`; Google Calendar setup uses the same experimental Google OAuth credentials from in-app account settings.
 
 ```bash
 brew tap herald-email/herald
@@ -66,16 +66,19 @@ make build-release-local
 
 `.herald-release.env` is ignored by git. Do not commit real OAuth credentials.
 
-Plain `make build` does not embed OAuth defaults from `.herald-release.env`; it builds a normal development binary. If you run `make build && ./bin/herald -experimental` and choose Gmail OAuth without exported runtime credentials, Herald will fail with `Google OAuth credentials are not configured`.
+Plain `make build` embeds OAuth defaults when both Google OAuth variables are available in the environment or `.herald-dev.env`; if they are absent, it still builds a normal development binary without OAuth defaults. If you run a binary without build-time defaults or exported runtime credentials and choose Gmail OAuth or Google Calendar OAuth, Herald will fail with `Google OAuth credentials are not configured`.
 
 Use one of these local paths instead:
 
 ```bash
-# Embed defaults into the local binary.
-make build-release-local
+# Embed defaults into a normal local binary from .herald-dev.env or environment.
+make build
 ./bin/herald -config ~/.herald/conf.yaml
 
-# Or keep a development binary and provide credentials at runtime.
+# Or require release-style OAuth defaults from .herald-release.env or environment.
+make build-release-local
+
+# Or provide credentials at runtime instead of embedding them.
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
 make build

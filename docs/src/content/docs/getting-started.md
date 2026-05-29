@@ -23,7 +23,7 @@ herald
 Homebrew installs the primary `herald` CLI. Use `herald mcp` for MCP and
 `herald ssh` for SSH mode; the package also includes `herald-mcp-server` and
 `herald-ssh-server` as compatibility wrappers for older configs and scripts.
-Release builds include the Gmail OAuth defaults used only when experimental
+Release builds include the Google OAuth defaults used only when experimental
 OAuth onboarding is enabled.
 
 Update and upgrade:
@@ -59,6 +59,8 @@ cd herald-mail-app
 make build
 ./bin/herald
 ```
+
+If you need experimental Gmail OAuth or Google Calendar OAuth from a source checkout, prepare local OAuth defaults before building. See [Local OAuth Builds](/development/local-oauth-builds/) for `.herald-dev.env`, runtime variables, and release-style local builds.
 
 For development, you can also run:
 

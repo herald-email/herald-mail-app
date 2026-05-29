@@ -888,7 +888,7 @@ func TestSettingsAddCalendarFlowSkipsMailAccountType(t *testing.T) {
 	}
 }
 
-func TestSettingsCalendarProviderOptionsHideGoogleCalendarUnlessOAuthAndExperimental(t *testing.T) {
+func TestSettingsCalendarProviderOptionsShowGoogleCalendarWithExperimentalFlag(t *testing.T) {
 	originalOAuthConfigured := googleOAuthCredentialsConfigured
 	t.Cleanup(func() { googleOAuthCredentialsConfigured = originalOAuthConfigured })
 
@@ -899,7 +899,7 @@ func TestSettingsCalendarProviderOptionsHideGoogleCalendarUnlessOAuthAndExperime
 		wantGoogle   bool
 	}{
 		{name: "experimental off", experimental: false, oauth: true, wantGoogle: false},
-		{name: "oauth credentials missing", experimental: true, oauth: false, wantGoogle: false},
+		{name: "oauth credentials missing", experimental: true, oauth: false, wantGoogle: true},
 		{name: "enabled", experimental: true, oauth: true, wantGoogle: true},
 	}
 
@@ -1108,6 +1108,9 @@ func TestSettingsGoogleCalendarWithoutEmailRequestsOAuth(t *testing.T) {
 	}
 	if msg.Email != "" {
 		t.Fatalf("OAuthRequiredMsg.Email = %q, want empty so Google prompts for account choice", msg.Email)
+	}
+	if msg.ServiceLabel != "Google Calendar OAuth" {
+		t.Fatalf("OAuthRequiredMsg.ServiceLabel = %q, want Google Calendar OAuth", msg.ServiceLabel)
 	}
 	if msg.ValidateAccount {
 		t.Fatal("standalone calendar OAuth should not request IMAP/SMTP validation")

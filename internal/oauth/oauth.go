@@ -23,7 +23,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
-// Scopes required for Gmail IMAP access.
+// Scopes required for Google mail and calendar access.
 var Scopes = []string{
 	"https://mail.google.com/",
 	"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
@@ -31,7 +31,7 @@ var Scopes = []string{
 }
 
 // clientID and clientSecret are the OAuth2 application credentials.
-// Release builds set defaultClientID and defaultClientSecret with -ldflags -X.
+// Builds can set defaultClientID and defaultClientSecret with -ldflags -X.
 // Runtime environment variables still take precedence for local testing.
 var (
 	defaultClientID     = ""
@@ -48,7 +48,7 @@ func credentials() (string, string, error) {
 		secret = defaultClientSecret
 	}
 	if id == "" || secret == "" {
-		return "", "", fmt.Errorf("Google OAuth credentials are not configured; set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET or build with OAuth defaults")
+		return "", "", fmt.Errorf("Google OAuth credentials are not configured; set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET or build with OAuth defaults from .herald-dev.env")
 	}
 	return id, secret, nil
 }

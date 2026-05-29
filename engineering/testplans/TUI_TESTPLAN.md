@@ -1034,7 +1034,7 @@ Check these states during every applicable lane:
 3. Select a mail account, press `Enter`, and capture the account detail form.
 4. Return to `Accounts`, select a calendar-only account, press `Enter`, and capture the calendar detail form.
 5. Return to `Accounts`, choose `Add account`, confirm it shows `Add Mail` and `Add Calendar`, then open each path without saving.
-6. In `Add Calendar`, confirm the CalDAV provider picker includes Fastmail, iCloud, Yahoo, and Custom CalDAV, and that Fastmail/iCloud/Yahoo show short clickable app-password guidance near the CalDAV fields.
+6. In `Add Calendar`, confirm the provider picker includes Google Calendar when experimental Google services are enabled, plus Fastmail, iCloud, Yahoo, and Custom CalDAV; confirm Fastmail/iCloud/Yahoo show short clickable app-password guidance near the CalDAV fields.
 7. On a mail provider that supports calendar pairing, confirm the mail form includes `Also add calendar`; repeat on a mail-only provider and confirm the option is absent.
 8. Attempt to delete a calendar-only account and confirm Herald asks for disconnect confirmation without provider-deletion language.
 9. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
@@ -1046,8 +1046,9 @@ Check these states during every applicable lane:
 - `Settings > Accounts` groups configured sources by `account_id`, shows display name/provider/identity, and uses compact capability badges such as `Mail`, `Calendar`, or `Mail + Calendar`.
 - The final Accounts row is `Add account`.
 - Mail-capable account detail preserves the existing account setup fields and validates IMAP plus SMTP before saving.
-- Calendar-capable account detail shows Google Calendar or CalDAV configuration fields and validates by listing calendars before saving.
-- `Add Mail` creates a mail source and offers `Also add calendar` only for supported paired providers; `Add Calendar` creates a standalone Google Calendar or CalDAV source.
+- Calendar-capable account detail shows Google Calendar OAuth or CalDAV configuration fields and validates by listing calendars before saving.
+- `Add Mail` creates a mail source and offers `Also add calendar` only for supported paired providers; `Add Calendar` creates a standalone Google Calendar OAuth or CalDAV source.
+- Google Calendar setup starts Herald's OAuth flow instead of asking for Google's CalDAV endpoint, and missing Google OAuth client credentials produce a bounded OAuth configuration error without saving settings.
 - CalDAV presets cover Fastmail, iCloud, and Yahoo with provider URL placeholders and app-password guidance links; Proton Calendar and Microsoft Calendar are documented but not shown as basic CalDAV presets.
 - iCloud CalDAV Unauthorized validation failures keep the previous config active and explain Apple Account email, Apple app-specific password, password-reset regeneration, and two-factor authentication without exposing saved passwords.
 - Disconnecting an account removes Herald config sources only; it does not delete provider mail, provider calendars, or cached/server content.

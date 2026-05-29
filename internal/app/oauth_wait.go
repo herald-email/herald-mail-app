@@ -19,6 +19,7 @@ import (
 // OAuthWaitModel is a tea.Model for the OAuth waiting screen.
 type OAuthWaitModel struct {
 	email                      string
+	serviceLabel               string
 	authURL                    string
 	redirectURI                string
 	codeCh                     <-chan oauth.Result
@@ -68,6 +69,7 @@ type OAuthWaitOptions struct {
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
 	SourceIDs                  []models.SourceID
+	ServiceLabel               string
 }
 
 var (
@@ -103,6 +105,7 @@ func NewOAuthWaitModelWithOptions(email string, cfg *config.Config, configPath s
 
 	return &OAuthWaitModel{
 		email:                      email,
+		serviceLabel:               strings.TrimSpace(opts.ServiceLabel),
 		authURL:                    authURL,
 		redirectURI:                redirectURI,
 		codeCh:                     codeCh,
@@ -306,7 +309,7 @@ func (m *OAuthWaitModel) View() tea.View {
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(defaultTheme.Setup.Title.ForegroundColor()).
-		Render("Herald Setup — Gmail OAuth")
+		Render("Herald Setup — " + m.oauthServiceLabel())
 
 	rendered := lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -317,6 +320,13 @@ func (m *OAuthWaitModel) View() tea.View {
 		return newHeraldView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, rendered))
 	}
 	return newHeraldView(rendered)
+}
+
+func (m *OAuthWaitModel) oauthServiceLabel() string {
+	if m != nil && strings.TrimSpace(m.serviceLabel) != "" {
+		return strings.TrimSpace(m.serviceLabel)
+	}
+	return "Gmail OAuth"
 }
 
 func oauthFailureMessage(err error) string {

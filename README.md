@@ -116,7 +116,7 @@ Homebrew is the default macOS install path. The formula installs `herald`,
 whose `mcp` and `ssh` subcommands are the primary MCP and SSH entrypoints. It
 also installs the compatibility wrappers `herald-mcp-server` and
 `herald-ssh-server` for existing MCP configs and scripts. Release binaries
-include the bundled Gmail OAuth defaults used when experimental OAuth
+include the bundled Google OAuth defaults used when experimental OAuth
 onboarding is explicitly enabled.
 
 Update Homebrew metadata and upgrade Herald:
@@ -185,7 +185,7 @@ Helpful references:
 - [Gmail Help: Add Gmail to another email client](https://support.google.com/mail/answer/75726?hl=en)
 - [Gmail Help: Sign in with app passwords](https://support.google.com/mail/answer/185833?hl=en)
 
-Homebrew and release binaries include the desktop OAuth defaults used by the experimental Gmail OAuth wizard. Source builds do not embed those defaults unless you opt in.
+Homebrew and release binaries include the desktop OAuth defaults used by experimental Google OAuth. Source builds embed development OAuth defaults from `.herald-dev.env` when both Google OAuth variables are present, and otherwise keep building without OAuth defaults.
 
 For a one-off local run, export the credentials before launching Herald:
 
@@ -194,7 +194,7 @@ export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
 ```
 
-For a local binary with OAuth defaults built in, copy `.herald-release.env.example` to `.herald-release.env`, fill it in, and run `make build-release-local`. Plain `make build` intentionally does not embed `.herald-release.env`; it creates a normal development binary.
+For a local binary with OAuth defaults built in, copy `.herald-dev.env.example` to `.herald-dev.env`, fill it in, and run `make build`. Use `.herald-release.env` plus `make build-release-local` when you want release-style strictness; it fails early if either OAuth value is missing.
 
 ---
 

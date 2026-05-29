@@ -59,6 +59,21 @@ If import progress stops, include the latest log lines containing `IMAP command 
 
 Verify `smtp.host`, `smtp.port`, username, and password. Herald tries TLS-first behavior and can fall back to STARTTLS for providers that expect it.
 
+## Google OAuth credentials are not configured
+
+This message means Herald could not find the Google OAuth client ID and client secret needed to start the experimental browser consent flow. Homebrew and release binaries include release defaults. Source builds need either runtime `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` variables, or a local build made with `.herald-dev.env`.
+
+For source checkouts, the normal development path is:
+
+```sh
+cp .herald-dev.env.example .herald-dev.env
+$EDITOR .herald-dev.env
+make build
+./bin/herald -experimental
+```
+
+The general `.env` file is not read by `make build` for OAuth defaults. See [Local OAuth Builds](/development/local-oauth-builds/) for runtime-only credentials, release-style local builds, and custom env file paths.
+
 ## AI unavailable
 
 For Ollama, check that the server is running:

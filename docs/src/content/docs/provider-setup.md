@@ -23,7 +23,7 @@ Choose the narrowest supported path that matches your account. Gmail users shoul
 
 ## Calendar Provider Matrix
 
-Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's OAuth path when experimental Google services are enabled, while CalDAV providers use a URL, username, and provider-specific password.
+Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's experimental OAuth path, while CalDAV providers use a URL, username, and provider-specific password.
 
 | Provider path | Calendar URL or API | Credential type |
 | --- | --- | --- |
@@ -39,12 +39,24 @@ Microsoft Calendar is not shown as a CalDAV preset because the live integration 
 
 ### Gmail OAuth
 
-1. Install with Homebrew or another release binary.
+1. Install with Homebrew or another release binary. For source builds, prepare OAuth defaults with [Local OAuth Builds](/development/local-oauth-builds/) first.
 2. Run `herald -experimental`.
 3. Choose `Gmail OAuth (Experimental)`.
 4. Complete browser authorization and return to Herald.
 5. Wait for Herald to validate Gmail IMAP and SMTP XOAUTH2 before it continues to optional preferences.
 6. Save the generated config and let Herald sync.
+
+### Google Calendar OAuth
+
+1. Open `Settings > Accounts > Add account > Add Calendar`.
+2. Choose `Google Calendar`.
+3. Enter the Google Calendar identity if you want Google to preselect an account.
+4. Complete browser authorization and return to Herald.
+5. Wait for Herald to validate the calendar source by listing calendars before it saves settings.
+
+Do not use Google's CalDAV URL with an app password in Herald. Google Calendar requires OAuth for CalDAV access, and Herald's supported Google Calendar path uses the Google Calendar API plus the same desktop OAuth credentials as Gmail OAuth.
+
+Source-built Google Calendar OAuth uses the same local build options as Gmail OAuth. See [Local OAuth Builds](/development/local-oauth-builds/) if OAuth fails before Herald shows an authorization URL.
 
 ### Gmail with an App Password
 
@@ -103,5 +115,6 @@ If setup validation fails, fix the IMAP or SMTP section named in the error and t
 
 - [First-run Wizard](/first-run-wizard/)
 - [Gmail Setup](/gmail-setup/)
+- [Local OAuth Builds](/development/local-oauth-builds/)
 - [Custom IMAP](/custom-imap/)
 - [Privacy and Security](/security-privacy/)

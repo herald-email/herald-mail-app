@@ -112,6 +112,7 @@ type SettingsToolRequestedMsg struct {
 // OAuthRequiredMsg is sent when a Google mail or calendar source needs OAuth.
 type OAuthRequiredMsg struct {
 	Email                      string
+	ServiceLabel               string
 	Config                     *config.Config // partially-built config with vendor presets applied
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
@@ -1564,7 +1565,7 @@ func (s *Settings) accountDetailHasCalendar() bool {
 }
 
 func (s *Settings) googleCalendarSetupAvailable() bool {
-	return s != nil && s.showExperimentalEmailServices && googleOAuthCredentialsConfigured()
+	return s != nil && s.showExperimentalEmailServices
 }
 
 func (s *Settings) editingExistingGoogleCalendar() bool {
@@ -2756,8 +2757,13 @@ func (s *Settings) oauthRequiredMsg(candidate *config.Config) (OAuthRequiredMsg,
 	if email == "" && needsCalendarOAuth {
 		email = strings.TrimSpace(s.calendarEmail)
 	}
+	serviceLabel := "Gmail OAuth"
+	if !includeConfigured && needsCalendarOAuth {
+		serviceLabel = "Google Calendar OAuth"
+	}
 	return OAuthRequiredMsg{
 		Email:                      email,
+		ServiceLabel:               serviceLabel,
 		Config:                     candidate,
 		ReturnToMenu:               s.mode == SettingsModePanel,
 		ReclaimOfflineCacheStorage: s.reclaimOfflineCacheStorage,
@@ -3135,7 +3141,7 @@ func (s *Settings) wizardSummaryLines() []string {
 			wizardSummaryLine("Experimental:", "Gmail OAuth in a browser."),
 			wizardSummaryLine("Visible with:", "-experimental during first-run setup, or from in-app settings."),
 			wizardSummaryLine("Best with:", "Homebrew or release binaries, which include OAuth defaults."),
-			wizardSummaryLine("Source builds:", "set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
+			wizardSummaryLine("Source builds:", "use .herald-dev.env or set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
 		}
 	case "protonmail":
 		return []string{

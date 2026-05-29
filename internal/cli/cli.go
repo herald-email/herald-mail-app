@@ -208,6 +208,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ValidateCalendar:           msg.ValidateCalendar,
 			CalendarSourceIDs:          msg.CalendarSourceIDs,
 			SourceIDs:                  msg.SourceIDs,
+			ServiceLabel:               msg.ServiceLabel,
 		})
 		if err != nil {
 			m.validationMessage = setupOAuthStartFailureMessage(err)

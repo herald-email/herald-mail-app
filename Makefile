@@ -1,9 +1,15 @@
 # Makefile for Herald
 
+DEV_ENV ?= .herald-dev.env
 RELEASE_ENV ?= .herald-release.env
+ifeq ($(HERALD_BUILD_OAUTH),release)
 ifneq (,$(wildcard $(RELEASE_ENV)))
 include $(RELEASE_ENV)
-export
+endif
+else
+ifneq (,$(wildcard $(DEV_ENV)))
+include $(DEV_ENV)
+endif
 endif
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -11,7 +17,13 @@ COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 VERSION_LDFLAGS := -X github.com/herald-email/herald-mail-app/internal/version.Version=$(VERSION) -X github.com/herald-email/herald-mail-app/internal/version.Commit=$(COMMIT) -X github.com/herald-email/herald-mail-app/internal/version.Date=$(DATE)
 OAUTH_LDFLAGS := -X github.com/herald-email/herald-mail-app/internal/oauth.defaultClientID=$(HERALD_GOOGLE_CLIENT_ID) -X github.com/herald-email/herald-mail-app/internal/oauth.defaultClientSecret=$(HERALD_GOOGLE_CLIENT_SECRET)
-GO_LDFLAGS := -s -w $(VERSION_LDFLAGS) $(EXTRA_LDFLAGS)
+GOOGLE_OAUTH_LDFLAGS :=
+ifneq (,$(strip $(HERALD_GOOGLE_CLIENT_ID)))
+ifneq (,$(strip $(HERALD_GOOGLE_CLIENT_SECRET)))
+GOOGLE_OAUTH_LDFLAGS := $(OAUTH_LDFLAGS)
+endif
+endif
+GO_LDFLAGS := -s -w $(VERSION_LDFLAGS) $(GOOGLE_OAUTH_LDFLAGS) $(EXTRA_LDFLAGS)
 
 .PHONY: build build-ssh build-mcp build-release-local docs-media run clean test deps fmt vet install-hooks
 
@@ -30,14 +42,17 @@ build-mcp:
 	@mkdir -p bin
 	@go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/herald-mcp-server ./cmd/herald-mcp-server
 
-# Build all local binaries with OAuth defaults from .herald-release.env.
+# Build all local binaries with release OAuth defaults from .herald-release.env.
 build-release-local:
-	@if [ -z "$$HERALD_GOOGLE_CLIENT_ID" ] || [ -z "$$HERALD_GOOGLE_CLIENT_SECRET" ]; then \
+	@set -a; \
+	if [ -f "$(RELEASE_ENV)" ]; then . "$(RELEASE_ENV)"; fi; \
+	set +a; \
+	if [ -z "$$HERALD_GOOGLE_CLIENT_ID" ] || [ -z "$$HERALD_GOOGLE_CLIENT_SECRET" ]; then \
 		echo "Missing HERALD_GOOGLE_CLIENT_ID or HERALD_GOOGLE_CLIENT_SECRET."; \
 		echo "Copy .herald-release.env.example to $(RELEASE_ENV) and fill in local values."; \
 		exit 1; \
-	fi
-	@$(MAKE) build build-mcp build-ssh EXTRA_LDFLAGS="$(OAUTH_LDFLAGS)"
+	fi; \
+	$(MAKE) build build-mcp build-ssh HERALD_BUILD_OAUTH=release HERALD_GOOGLE_CLIENT_ID="$$HERALD_GOOGLE_CLIENT_ID" HERALD_GOOGLE_CLIENT_SECRET="$$HERALD_GOOGLE_CLIENT_SECRET"
 
 # Regenerate documentation screenshots and demo GIFs.
 docs-media: build build-mcp
