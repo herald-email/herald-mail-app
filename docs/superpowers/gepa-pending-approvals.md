@@ -4,8 +4,8 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-29T16:16:36+00:00
-- Published runs analyzed: 46
+- Updated at: 2026-05-29T18:42:32+00:00
+- Published runs analyzed: 47
 - Total queue items: 12
 - Pending: 2
 - Approved: 0
@@ -24,13 +24,14 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `two-candidate-worktree-trial-f38557be73`
 - Status: pending
-- Seen in runs: 2
+- Seen in runs: 3
 - First seen: 2026-05-29T05:46:13+00:00
-- Last seen: 2026-05-29T16:00:15+00:00
+- Last seen: 2026-05-29T18:25:14+00:00
 - Publish actions: commit, merge, worktree-remove
 - Why: A narrow challenger-worktree experiment is the next step toward true GEPA-style search once the baseline is trustworthy.
 - Approval prompt: Approve exploring `two-candidate-worktree-trial` as the next explicit GEPA improvement pass.
 - Source runs:
+- `20260529-112514-check-changes-since-last-release-update-docs-and-add-colorful-screenshots-showing-new-functionality` at 2026-05-29T18:25:14+00:00 via commit, merge
 - `20260529-090015-fix-calendar-detail-rsvp-actions-collision` at 2026-05-29T16:00:15+00:00 via commit, merge
 - `20260528-224613-improve-calendar-week-time-grid-density-on-tall-screens-and-keep-long-event-blocks-uninterrupted-by-guide-dots` at 2026-05-29T05:46:13+00:00 via commit, merge, worktree-remove
 
