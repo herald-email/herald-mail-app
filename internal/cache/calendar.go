@@ -235,8 +235,12 @@ func (c *Cache) ListCalendarEvents(ref models.CollectionRef, start, end time.Tim
 		       updated_at, raw, local_id
 		FROM calendar_events
 		WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND invalidated_at IS NULL
-		  AND (starts_at IS NULL OR starts_at < ?)
-		  AND (ends_at IS NULL OR ends_at > ?)
+		  AND (
+		    ((starts_at IS NULL OR starts_at < ?) AND (ends_at IS NULL OR ends_at > ?))
+		    OR COALESCE(recurrence_json, '[]') NOT IN ('[]', 'null', '')
+		    OR raw LIKE '%RRULE%'
+		    OR raw LIKE '%RDATE%'
+		  )
 		ORDER BY starts_at ASC, title ASC
 	`, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, end, start)
 	if err != nil {
@@ -271,8 +275,12 @@ func (c *Cache) ListCalendarAgendaEvents(sourceID models.SourceID, accountID mod
 		       updated_at, raw, local_id
 		FROM calendar_events
 		WHERE source_id = ? AND account_id = ? AND invalidated_at IS NULL
-		  AND (starts_at IS NULL OR starts_at < ?)
-		  AND (ends_at IS NULL OR ends_at > ?)
+		  AND (
+		    ((starts_at IS NULL OR starts_at < ?) AND (ends_at IS NULL OR ends_at > ?))
+		    OR COALESCE(recurrence_json, '[]') NOT IN ('[]', 'null', '')
+		    OR raw LIKE '%RRULE%'
+		    OR raw LIKE '%RDATE%'
+		  )
 		ORDER BY starts_at ASC, title ASC
 	`, string(sourceID), string(accountID), end, start)
 	if err != nil {

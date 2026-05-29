@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -412,6 +413,61 @@ func TestLoadKeyboardConfigDefaultsAndRoundTrip(t *testing.T) {
 	if got := loadedDefault.Keyboard.Profile; got != "default" {
 		t.Fatalf("default Keyboard.Profile = %q, want default", got)
 	}
+}
+
+func TestLoadCalendarWeekStartDefaultsAndRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "calendar.yaml")
+	body := []byte(strings.Join([]string{
+		"vendor: gmail",
+		"server:",
+		"  host: imap.gmail.com",
+		"  port: 993",
+		"gmail:",
+		"  refresh_token: rt-token",
+		"  email: user@gmail.com",
+		"calendar:",
+		"  week_start: sunday",
+		"",
+	}, "\n"))
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if got := calendarWeekStartForConfigTest(t, loaded); got != "sunday" {
+		t.Fatalf("Calendar.WeekStart = %q, want sunday", got)
+	}
+
+	defaultPath := filepath.Join(dir, "default.yaml")
+	defaultConfig := minimalOAuthConfig()
+	if err := defaultConfig.Save(defaultPath); err != nil {
+		t.Fatalf("Save(default) failed: %v", err)
+	}
+	loadedDefault, err := Load(defaultPath)
+	if err != nil {
+		t.Fatalf("Load(default) failed: %v", err)
+	}
+	if got := calendarWeekStartForConfigTest(t, loadedDefault); got != "monday" {
+		t.Fatalf("default Calendar.WeekStart = %q, want monday", got)
+	}
+}
+
+func calendarWeekStartForConfigTest(t *testing.T, cfg *Config) string {
+	t.Helper()
+	root := reflect.ValueOf(cfg).Elem()
+	calendarField := root.FieldByName("Calendar")
+	if !calendarField.IsValid() {
+		t.Fatal("Config is missing Calendar settings")
+	}
+	weekStart := calendarField.FieldByName("WeekStart")
+	if !weekStart.IsValid() {
+		t.Fatal("Config.Calendar is missing WeekStart")
+	}
+	return weekStart.String()
 }
 
 func TestNormalizeCacheStoragePolicyDefaultsToNoAttachments(t *testing.T) {

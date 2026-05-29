@@ -1645,6 +1645,8 @@ Check these states during every applicable lane:
 - Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
 - The Agenda List is sorted by start time, shows each event's calendar/source label, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
 - The Agenda List uses a deliberate local calendar-month range, such as `May 1 - May 31`, falls back to the nearest valid event's calendar month when the current month is empty, and never renders malformed, zero-time, or absurdly long stale provider spans as historical rows such as `Dec 31` or `1950`.
+- Google and CalDAV date-only/all-day provider events appear on their intended local calendar date, and exclusive all-day end dates do not duplicate the event on the following day.
+- Switching from Agenda to Day, Week, or 3-Day anchors on the selected/current date instead of jumping to the first cached event; returning to Agenda uses the anchor's calendar month.
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
 - `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
 - `S` opens Settings from Calendar, Settings hints replace the Calendar hints while the overlay is open, and closing Settings preserves the active Calendar view and selected event.
@@ -1668,6 +1670,7 @@ Check these states during every applicable lane:
 **Expect:**
 - `d` switches to a read-only Day Agenda and `a` returns to Agenda List without changing the Calendar destination.
 - Day Agenda shows only events for the selected day, preserves source/calendar labels through the selected-event drawer, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- All-day and multi-day events stay separate from the hourly timed grid so they do not paint every hour of the day.
 - The drawer shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between days without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Day Agenda state.
@@ -1691,6 +1694,8 @@ Check these states during every applicable lane:
 - `w` switches to a read-only Week Time-Grid and `a` returns to Agenda List without changing the Calendar destination.
 - Week Time-Grid shows weekday columns or compact day bands with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
 - Week Time-Grid uses Monday-Sunday calendar-week windows, such as `Mon May 25 - Sun May 31`, rather than a rolling seven-day range from the selected day.
+- Settings can switch Week Time-Grid to Sunday-Saturday windows while Monday-Sunday remains the default.
+- All-day and multi-day events render in a compact top row or summary, not as repeated hourly blocks across every day.
 - The inspector shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between weeks without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Week Time-Grid state.

@@ -295,6 +295,78 @@ func TestCalDAVSourceParsesICSDateVariantsWithoutZeroTime(t *testing.T) {
 	}
 }
 
+func TestCalDAVSourceParsesVEVENTFieldsWithoutTrailingTimezoneOverwrite(t *testing.T) {
+	ics := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"BEGIN:VEVENT",
+		"UID:phantom",
+		"SUMMARY:Phantom",
+		"DTSTART;TZID=America/Los_Angeles:20260530T193000",
+		"DTEND;TZID=America/Los_Angeles:20260530T223000",
+		"END:VEVENT",
+		"BEGIN:VTIMEZONE",
+		"TZID:America/Los_Angeles",
+		"BEGIN:STANDARD",
+		"DTSTART:20071104T020000",
+		"RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+		"END:STANDARD",
+		"END:VTIMEZONE",
+		"END:VCALENDAR",
+	}, "\r\n") + "\r\n"
+
+	event, err := eventFromICS("icloud-calendar", "icloud", "home", "phantom.ics", `"etag"`, ics)
+	if err != nil {
+		t.Fatalf("eventFromICS: %v", err)
+	}
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	if got := event.Start.In(loc).Format("2006-01-02 15:04 MST"); got != "2026-05-30 19:30 PDT" {
+		t.Fatalf("start = %s, want VEVENT DTSTART 2026-05-30 19:30 PDT", got)
+	}
+	if got := event.End.In(loc).Format("2006-01-02 15:04 MST"); got != "2026-05-30 22:30 PDT" {
+		t.Fatalf("end = %s, want VEVENT DTEND 2026-05-30 22:30 PDT", got)
+	}
+}
+
+func TestCalendarDateOnlyProviderTimesUseLocalCalendarDate(t *testing.T) {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	oldLocal := time.Local
+	time.Local = loc
+	defer func() { time.Local = oldLocal }()
+
+	googleStart, allDay, ok := parseGoogleTime(googleEventTime{Date: "2026-05-25"})
+	if !ok {
+		t.Fatal("parseGoogleTime failed")
+	}
+	if !allDay {
+		t.Fatal("parseGoogleTime date should be all-day")
+	}
+	if got := googleStart.Local().Format("2006-01-02 15:04 MST"); got != "2026-05-25 00:00 PDT" {
+		t.Fatalf("Google date parsed as %s, want 2026-05-25 00:00 PDT", got)
+	}
+
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:all-day\r\nSUMMARY:No school\r\nDTSTART;VALUE=DATE:20260525\r\nDTEND;VALUE=DATE:20260526\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	event, err := eventFromICS("icloud-calendar", "icloud", "home", "all-day.ics", `"etag"`, ics)
+	if err != nil {
+		t.Fatalf("eventFromICS: %v", err)
+	}
+	if !event.AllDay {
+		t.Fatal("ICS VALUE=DATE should be all-day")
+	}
+	if got := event.Start.Local().Format("2006-01-02 15:04 MST"); got != "2026-05-25 00:00 PDT" {
+		t.Fatalf("ICS DTSTART parsed as %s, want 2026-05-25 00:00 PDT", got)
+	}
+	if got := event.End.Local().Format("2006-01-02 15:04 MST"); got != "2026-05-26 00:00 PDT" {
+		t.Fatalf("ICS exclusive DTEND parsed as %s, want 2026-05-26 00:00 PDT", got)
+	}
+}
+
 func TestCalDAVSourceRejectsInvalidICSStart(t *testing.T) {
 	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:bad-event\r\nSUMMARY:Bad event\r\nDTSTART:THIS-IS-NOT-A-DATE\r\nDTEND:20260524T194500Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
 	if _, err := eventFromICS("work-calendar", "work", "primary", "bad-event.ics", `"etag"`, ics); err == nil {

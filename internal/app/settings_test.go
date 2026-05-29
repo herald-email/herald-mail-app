@@ -1364,6 +1364,22 @@ func TestSettingsPanelSyncCleanupUsesCompactOfflineCachePolicyLabels(t *testing.
 	}
 }
 
+func TestSettingsPanelCalendarWeekStartOption(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	menu := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	if !strings.Contains(menu, "Calendar") {
+		t.Fatalf("settings menu missing Calendar category:\n%s", menu)
+	}
+
+	s = openSettingsPanelCategoryForTest(t, s, "Calendar")
+	rendered := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	for _, want := range []string{"Calendar", "Week starts on", "Monday", "Sunday"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("calendar settings missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestSettingsSaved_ReclaimOfflineCacheSchedulesEstimateAndShowsConfirmation(t *testing.T) {
 	backend := &stubBackend{
 		reclaimEstimateResult: models.PreviewCacheStorageEstimate{
@@ -1727,10 +1743,11 @@ func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *
 		"Accounts":        0,
 		"AI":              1,
 		"Sync & Cleanup":  2,
-		"Keyboard":        3,
-		"Theme Selection": 4,
-		"Theme Editor":    5,
-		"Signature":       6,
+		"Calendar":        3,
+		"Keyboard":        4,
+		"Theme Selection": 5,
+		"Theme Editor":    6,
+		"Signature":       7,
 	}
 	downCount, ok := steps[label]
 	if !ok {

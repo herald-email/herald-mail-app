@@ -663,6 +663,9 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Calendar Week, Day, 3-Day, Agenda, Search, and invitation picker surfaces share an Apple Calendar-style multi-account calendar rail with colored calendar toggles.
 - [x] Calendar range headers clearly state the active day, week, 3-day window, or agenda range and advertise `h/l` plus arrow movement.
 - [x] Calendar Agenda uses whole calendar-month windows, and Week uses Monday-Sunday windows, instead of rolling ranges from the current day.
+- [x] Calendar date-only and all-day provider events render on their intended local calendar dates, with exclusive all-day end dates kept out of the following day.
+- [x] Calendar view switching preserves the selected/current date across Agenda, Day, Week, and 3-Day instead of jumping to the first cached event.
+- [x] Calendar week start can be changed in Settings, with Monday as the default and Sunday available for Apple Calendar-style US layouts.
 - [x] Calendar notes render HTML and Markdown into readable terminal text instead of exposing raw tags.
 - [x] Calendar RSVP is explicit through accept, tentative, and decline actions, and events requiring a response are visibly highlighted.
 - [x] Emails with `text/calendar` parts or `.ics` attachments expose an Add to Calendar flow that asks which writable calendar should receive the invitation.

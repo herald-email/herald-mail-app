@@ -56,6 +56,7 @@ const (
 	settingsPanelSectionAddAccount     settingsPanelSection = "add-account"
 	settingsPanelSectionAI             settingsPanelSection = "ai"
 	settingsPanelSectionSync           settingsPanelSection = "sync-cleanup"
+	settingsPanelSectionCalendar       settingsPanelSection = "calendar"
 	settingsPanelSectionKeyboard       settingsPanelSection = "keyboard"
 	settingsPanelSectionThemeSelection settingsPanelSection = "theme-selection"
 	settingsPanelSectionThemeEditor    settingsPanelSection = "theme-editor"
@@ -188,6 +189,9 @@ type Settings struct {
 	cacheStoragePolicy         string
 	reclaimOfflineCacheStorage bool
 	cleanupToolSelection       string
+
+	// form field backing variables — calendar
+	calendarWeekStart string
 
 	// form field backing variables — compose
 	signatureText string
@@ -394,6 +398,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.syncIDLE = existing.Sync.IDLEEnabled
 		s.cleanupScheduleStr = strconv.Itoa(existing.Cleanup.ScheduleHours)
 		s.cacheStoragePolicy = config.NormalizeCacheStoragePolicy(existing.Cache.StoragePolicy)
+		s.calendarWeekStart = config.NormalizeCalendarWeekStart(existing.Calendar.WeekStart)
 		s.signatureText = existing.Compose.Signature.Text
 		s.keyboardProfile = existing.Keyboard.Profile
 		s.customKeymap = existing.Keyboard.CustomKeymap
@@ -427,6 +432,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	if s.cacheStoragePolicy == "" {
 		s.cacheStoragePolicy = config.CacheStoragePolicyNoAttachments
 	}
+	s.calendarWeekStart = config.NormalizeCalendarWeekStart(s.calendarWeekStart)
 	if s.keyboardProfile == "" {
 		s.keyboardProfile = keyboardProfileDefault
 	}
@@ -834,6 +840,16 @@ func (s *Settings) buildForm() {
 			}),
 	).Title("Sync & Cleanup")
 
+	calendarGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Week starts on").
+			Options(
+				huh.NewOption("Monday", config.CalendarWeekStartMonday),
+				huh.NewOption("Sunday", config.CalendarWeekStartSunday),
+			).
+			Value(&s.calendarWeekStart),
+	).Title("Calendar")
+
 	composeGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
@@ -1118,6 +1134,11 @@ func (s *Settings) buildForm() {
 				syncGroup,
 				saveGroup.Title("Sync & Cleanup"),
 			}
+		case settingsPanelSectionCalendar:
+			groups = []*huh.Group{
+				calendarGroup,
+				saveGroup.Title("Calendar"),
+			}
 		case settingsPanelSectionKeyboard:
 			groups = []*huh.Group{
 				keyboardGroup,
@@ -1183,6 +1204,7 @@ func (s *Settings) buildPanelMenuForm() {
 				huh.NewOption("Accounts", string(settingsPanelSectionAccounts)),
 				huh.NewOption("AI", string(settingsPanelSectionAI)),
 				huh.NewOption("Sync & Cleanup", string(settingsPanelSectionSync)),
+				huh.NewOption("Calendar", string(settingsPanelSectionCalendar)),
 				huh.NewOption("Keyboard", string(settingsPanelSectionKeyboard)),
 				huh.NewOption("Theme Selection", string(settingsPanelSectionThemeSelection)),
 				huh.NewOption("Theme Editor", string(settingsPanelSectionThemeEditor)),
@@ -2493,6 +2515,7 @@ func (s *Settings) buildConfig() *config.Config {
 	if n, err := strconv.Atoi(s.cleanupScheduleStr); err == nil {
 		cfg.Cleanup.ScheduleHours = n
 	}
+	cfg.Calendar.WeekStart = config.NormalizeCalendarWeekStart(s.calendarWeekStart)
 	cfg.Compose.Signature.Text = s.signatureText
 	cfg.Keyboard.Profile = s.keyboardProfile
 	cfg.Keyboard.CustomKeymap = strings.TrimSpace(s.customKeymap)

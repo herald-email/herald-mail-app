@@ -2218,27 +2218,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setDefaultCalendarAgendaRange(time.Now())
 		}
 		if m.calendarView == calendarViewDay {
-			m.calendarDay = m.selectedCalendarDay()
-			if len(m.calendarEventsForDay(m.calendarDay)) == 0 {
-				if selected := m.selectedCalendarEvent(); selected != nil && !selected.Start.IsZero() {
-					m.calendarDay = calendarDayStartFor(selected.Start)
-				}
+			if m.calendarDay.IsZero() {
+				m.calendarDay = calendarDayStartFor(m.calendarAnchorDate())
 			}
 			m.selectFirstCalendarEventForDay(m.calendarDay)
 		} else if m.calendarView == calendarViewWeek {
-			m.calendarWeekStart = m.selectedCalendarWeekStart()
-			if len(m.calendarEventsForWeek(m.calendarWeekStart)) == 0 {
-				if selected := m.selectedCalendarEvent(); selected != nil && !selected.Start.IsZero() {
-					m.calendarWeekStart = calendarWeekStartFor(selected.Start)
-				}
+			if m.calendarWeekStart.IsZero() {
+				m.calendarWeekStart = m.calendarWeekStartFor(m.calendarAnchorDate())
 			}
 			m.selectFirstCalendarEventForWeek(m.calendarWeekStart)
 		} else if m.calendarView == calendarViewThreeDay {
-			m.calendarThreeDayStart = m.selectedCalendarThreeDayStart()
-			if len(m.calendarEventsForThreeDay(m.calendarThreeDayStart)) == 0 {
-				if selected := m.selectedCalendarEvent(); selected != nil && !selected.Start.IsZero() {
-					m.calendarThreeDayStart = calendarDayStartFor(selected.Start)
-				}
+			if m.calendarThreeDayStart.IsZero() {
+				m.calendarThreeDayStart = calendarDayStartFor(m.calendarAnchorDate())
 			}
 			m.selectFirstCalendarEventForThreeDay(m.calendarThreeDayStart)
 		} else if m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch {
