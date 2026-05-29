@@ -2404,6 +2404,46 @@ func TestCalendarEventDetailLinkifiesEventURLs(t *testing.T) {
 	}
 }
 
+func TestCalendarEventDetailSeparatesRSVPFromRunnableActions(t *testing.T) {
+	rich := richCalendarEventForTest()
+	rich.Attendees[0].RSVP = "needs-action"
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	rendered := stripANSI(m.renderCalendarEventDetail(70, 60, false))
+	for _, want := range []string{
+		"RSVP",
+		"needs response",
+		"y: accept  m: maybe  n: decline",
+		"Actions",
+		"e: edit event",
+		"p: meeting prep",
+		"b: travel buffer",
+		"s: AI summary",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("event detail missing %q:\n%s", want, rendered)
+		}
+	}
+	rsvpAt := strings.Index(rendered, "y: accept  m: maybe  n: decline")
+	actionsAt := strings.Index(rendered, "Actions")
+	if rsvpAt == -1 || actionsAt == -1 || rsvpAt > actionsAt {
+		t.Fatalf("RSVP controls should render before runnable actions:\n%s", rendered)
+	}
+	for _, forbidden := range []string{"n: new event", "d: delete event", "r: reply", "a: add reminder"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("event detail advertised stale/conflicting action %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
 func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T) {
 	rich := richCalendarEventForTest()
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
