@@ -59,7 +59,7 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
-            { label: "What's new", slug: 'whats-new-since-v0-4-1' },
+            { label: "What's new", slug: 'whats-new-in-v0-5' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
             { label: 'Run without email', slug: 'demo-mode' },

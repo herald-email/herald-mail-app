@@ -35,9 +35,9 @@ Source-built OAuth flows need local Google OAuth defaults or runtime variables. 
 
 On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
 
-## New since v0.4.1-beta.1
+## New in v0.5
 
-The current `main` branch adds a top-level Calendar workspace, multi-source account identity, account-aware mail behavior, source-scoped MCP/daemon safety, and updated demo evidence. See [What's New Since v0.4.1-beta.1](/whats-new-since-v0-4-1/) for the release-delta checklist and colorful screenshots.
+The `v0.5.0-beta.1` release adds a top-level Calendar workspace, multi-source account identity, account-aware mail behavior, source-scoped MCP/daemon safety, and updated demo evidence. See [What's New in v0.5](/whats-new-in-v0-5/) for the release-delta checklist and colorful screenshots.
 
 ![Calendar week time-grid with source rail and inspector](/screenshots/calendar-week-time-grid.png)
 

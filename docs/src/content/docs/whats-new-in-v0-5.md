@@ -1,9 +1,9 @@
 ---
-title: What's New Since v0.4.1-beta.1
-description: User-facing changes currently in main after the v0.4.1-beta.1 release.
+title: What's New in v0.5
+description: User-facing changes in the v0.5 beta release.
 ---
 
-This page summarizes the user-visible work currently in `main` after the `v0.4.1-beta.1` release tag. It is a docs checkpoint for testers and maintainers before the next beta is cut.
+This page summarizes the user-visible work in the `v0.5.0-beta.1` release, including the broad Calendar and multi-account feature wave that landed after `v0.4.1-beta.1`.
 
 ## Release Delta
 
