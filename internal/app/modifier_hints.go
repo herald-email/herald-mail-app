@@ -163,6 +163,18 @@ func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabContacts {
 		return []string{"ctrl+c: quit", "ctrl+r: refresh"}
 	}
+	if m.activeTab == tabCalendar {
+		if m.calendarEdit.Active {
+			return []string{"ctrl+c: quit", "ctrl+s: save", "ctrl+u: clear"}
+		}
+		if (m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch) && !m.calendarDetailOpen {
+			return []string{"ctrl+c: quit", "ctrl+r: search", "ctrl+u: clear"}
+		}
+		if m.calendarDetailOpen || m.calendarMeetingPrepOpen || m.calendarTravelBufferOpen || m.calendarAISummaryOpen {
+			return []string{"ctrl+c: quit", "ctrl+r: refresh"}
+		}
+		return []string{"ctrl+c: quit", "ctrl+r: refresh", "ctrl+u/d: page"}
+	}
 	return []string{"ctrl+c: quit"}
 }
 

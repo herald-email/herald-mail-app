@@ -171,6 +171,44 @@ func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
 	assertFitsWidth(t, 80, rendered)
 }
 
+func TestChromeHeightBudget_CalendarModeSwitchingFillsBottomChrome(t *testing.T) {
+	for _, size := range []struct {
+		width  int
+		height int
+	}{
+		{width: 220, height: 50},
+		{width: 80, height: 24},
+	} {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+			m := New(b, nil, "", nil, false)
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			m = updated.(*Model)
+			m.loading = false
+			m.activeTab = tabCalendar
+			m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+			m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+			m.calendarDetail = m.selectedCalendarEvent()
+
+			for _, key := range []string{"w", "d", "a", "w"} {
+				model, _ := m.handleKeyMsg(keyRunes(key))
+				m = model.(*Model)
+			}
+
+			rendered := m.renderMainView()
+			lines := strings.Split(stripANSI(rendered), "\n")
+			if len(lines) != size.height {
+				t.Fatalf("expected calendar view to fill %dx%d exactly, got %d lines:\n%s", size.width, size.height, len(lines), stripANSI(rendered))
+			}
+			assertFitsWidth(t, size.width, rendered)
+			if size.width >= 120 {
+				hints := stripANSI(m.renderKeyHints())
+				requireHintSegments(t, hints, "h/l: week", "d: day", "a: agenda", "enter: detail")
+			}
+		})
+	}
+}
+
 func TestChromeHeightBudget_TopSyncStripReflowsTimelineWithoutResize(t *testing.T) {
 	m := makeSizedModel(t, 80, 24)
 	m.activeTab = tabTimeline
