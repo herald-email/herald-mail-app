@@ -22,6 +22,7 @@ Use this skill to audit terminal UIs through tmux. It is generic by default, wit
 - Before every scenario: reset, confirm reset, then capture the baseline.
 - Build the action inventory from the visible hint bar first. Use docs or code only to supplement missing or suspicious actions.
 - Use both text and PNG evidence. Text is for grep and diffs; PNG is for real visual judgment.
+- For colored or themed screenshots, do not inherit the agent shell's color suppression. Launch the app through `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor ...` for tmux, and launch ttyd through `env -u NO_COLOR COLORTERM=truecolor ttyd ...`. If two theme captures look identical, check `env | rg 'NO_COLOR|TERM|COLORTERM'` and inspect raw ANSI before trusting the PNG.
 - For terminal raster images, use tmux for layout/escape evidence, the ttyd custom harness for browser-visible pixels, and native iTerm2/Ghostty/Kitty when exact terminal placement matters. Stock ttyd alone is not authoritative for placement.
 - Treat these as first-class bugs:
   - missing header or tab bar
@@ -52,7 +53,7 @@ For Herald in this repo, use this default profile:
   go build -o /tmp/herald ./main.go
   tmux kill-session -t test 2>/dev/null || true
   tmux new-session -d -s test -x 220 -y 50
-  tmux send-keys -t test '/tmp/herald -config ~/.herald/conf.yaml' Enter
+  tmux send-keys -t test 'env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor /tmp/herald -config ~/.herald/conf.yaml' Enter
   sleep 10
   ```
 - Launch demo:
@@ -60,7 +61,7 @@ For Herald in this repo, use this default profile:
   go build -o /tmp/herald ./main.go
   tmux kill-session -t test 2>/dev/null || true
   tmux new-session -d -s test -x 220 -y 50
-  tmux send-keys -t test '/tmp/herald --demo' Enter
+  tmux send-keys -t test 'env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor /tmp/herald --demo' Enter
   sleep 5
   ```
 - Launch against deterministic realistic mail:
@@ -133,7 +134,17 @@ For Herald inline image previews, run the custom ttyd browser-raster probe from 
 
 ```bash
 make build
-PORT=7682 EVIDENCE_DIR="$ROOT/reports/ttyd-custom-image-preview_$(date +%F_%H%M%S)" \
+env -u NO_COLOR COLORTERM=truecolor \
+  PORT=7682 EVIDENCE_DIR="$ROOT/reports/ttyd-custom-image-preview_$(date +%F_%H%M%S)" \
+  tools/ttyd-image-harness/probe.sh
+```
+
+For app theme screenshots through ttyd, pass Herald's theme flag or `HERALD_THEME`, and keep `NO_COLOR` unset:
+
+```bash
+make build
+env -u NO_COLOR COLORTERM=truecolor \
+  HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR="$ROOT/reports/ttyd-themed-image-preview_$(date +%F_%H%M%S)" \
   tools/ttyd-image-harness/probe.sh
 ```
 
@@ -141,7 +152,8 @@ Run the stock ttyd smoke only when you need to compare against the manual ttyd f
 
 ```bash
 make build
-TTYD_MODE=stock PORT=7683 EVIDENCE_DIR="$ROOT/reports/ttyd-stock-image-preview_$(date +%F_%H%M%S)" \
+env -u NO_COLOR COLORTERM=truecolor \
+  TTYD_MODE=stock PORT=7683 EVIDENCE_DIR="$ROOT/reports/ttyd-stock-image-preview_$(date +%F_%H%M%S)" \
   tools/ttyd-image-harness/probe.sh
 ```
 
