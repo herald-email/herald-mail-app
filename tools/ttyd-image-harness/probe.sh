@@ -20,6 +20,7 @@ Environment:
   RENDERER_TYPE    ttyd renderer for stock mode (default: canvas)
   IMAGE_PROTOCOL   Herald image protocol (default: iterm2)
   HERALD_THEME     Optional Herald app theme, e.g. jade-signal
+  HERALD_PRESERVE_NO_COLOR  Set to 1 only when intentionally testing NO_COLOR
   EVIDENCE_DIR     output directory under reports/
   HERALD_BIN       Herald binary path (default: ./bin/herald)
   CHROME_BIN       Chrome/Chromium executable path
@@ -147,9 +148,14 @@ if [ -n "$HERALD_THEME" ]; then
   herald_args+=(-theme "$HERALD_THEME")
 fi
 
+herald_env=(env)
+if [ "${HERALD_PRESERVE_NO_COLOR:-0}" != "1" ]; then
+  herald_env+=(-u NO_COLOR COLORTERM="${COLORTERM:-truecolor}")
+fi
+
 "$TTYD_BIN" \
   "${ttyd_args[@]}" \
-  "$HERALD_BIN" "${herald_args[@]}" \
+  "${herald_env[@]}" "$HERALD_BIN" "${herald_args[@]}" \
   >"$TTYD_LOG" 2>&1 &
 TTYD_PID=$!
 

@@ -122,7 +122,7 @@ go build -o /tmp/herald-test .
 tmux new-session -d -s test -x 220 -y 50
 
 # 3. Launch the app inside it
-tmux send-keys -t test '/tmp/herald-test -config proton.yaml' Enter
+tmux send-keys -t test 'env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor /tmp/herald-test -config proton.yaml' Enter
 sleep 5   # wait for IMAP connect + initial load
 
 # 4. Capture a screenshot (plain text, ANSI escape codes included with -e)
@@ -179,6 +179,7 @@ tmux kill-session -t test
 - **Empty states**: blank areas where a helpful message should appear
 - **Loading indicators**: panels that stay blank while an async fetch is in progress
 - **Key hints**: status bar correctly reflects available keys for the active tab/panel
+- **Theme color**: if colored/theme screenshots are requested, launch with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor ...`; the Codex agent shell may set `NO_COLOR=1`, which makes different themes render identically.
 
 ### Configuration
 `proton.yaml` (all sections):
@@ -283,8 +284,8 @@ If the change touches themes, full-screen preview, inline images, terminal graph
 
 ```bash
 make build
-PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh
-HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh
+env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh
+env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh
 ```
 
 Save the report as `reports/TEST_REPORT_<YYYY-MM-DD>_<short-description>.md`.

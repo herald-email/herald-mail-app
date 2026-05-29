@@ -206,7 +206,7 @@ capture_theme_view() {
 
   session="herald-theme-${view}-${theme//[^a-zA-Z0-9]/-}"
   tmux kill-session -t "$session" 2>/dev/null || true
-  launch_cmd="$(printf "%q --demo -theme %q" "$BIN" "$theme")"
+  launch_cmd="$(printf "env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor %q --demo -theme %q" "$BIN" "$theme")"
   tmux new-session -d -s "$session" -x "$WIDTH" -y "$HEIGHT" "$launch_cmd"
   wait_for_pane_text "$session" "Welcome to Herald Demo" "$DELAY" || sleep 0.5
   tmux send-keys -t "$session" " "

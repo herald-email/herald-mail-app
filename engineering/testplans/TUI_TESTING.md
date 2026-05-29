@@ -1150,6 +1150,8 @@ tmux list-sessions 2>/dev/null | grep '^test-' | cut -d: -f1 | xargs -I{} tmux k
 
 **Terminal raster image protocols.** tmux captures are still required for layout, key routing, fallback links, and escape-sequence checks, but tmux cannot prove actual raster placement for protocols such as iTerm2 OSC 1337, Kitty graphics, or Sixel. For changes that affect inline raster images, run the demo in a real compatible terminal as well, capture screenshots, record the terminal app/version and selected graphics mode, and verify native scrollback does not show images displacing pinned preview chrome.
 
+**Colored and themed screenshots.** Agent shells may set `NO_COLOR=1` and `TERM=dumb`. Do not inherit that environment when capturing app themes. Launch the app with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor ...` for tmux, and launch browser-terminal captures with `env -u NO_COLOR COLORTERM=truecolor ttyd ...` or the same prefix before the repo ttyd probe. If two theme screenshots look identical, compare the raw ANSI first; a capture that contains only reset/bold SGR is not valid theme evidence.
+
 **Browser raster image repro with ttyd + xterm.js.** ttyd is the agent-friendly raster lane for Herald image previews. It is not an exact substitute for iTerm2, Kitty, or Ghostty, but it can prove that terminal image bytes survive Bubble Tea, reach a browser terminal, and paint visible raster regions. Use three tiers:
 
 - tmux: layout, resize, key routing, ANSI/escape presence; cannot prove raster pixels.
@@ -1160,7 +1162,8 @@ Run the automated custom-harness probe from the repo root. This is the default b
 
 ```bash
 make build
-PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview \
+env -u NO_COLOR COLORTERM=truecolor \
+  PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
@@ -1168,7 +1171,8 @@ Run the same browser-raster probe with an app-level theme whenever preview, rast
 
 ```bash
 make build
-HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview \
+env -u NO_COLOR COLORTERM=truecolor \
+  HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
@@ -1176,7 +1180,8 @@ Run the stock-ttyd smoke only when you need to compare against the manual ttyd f
 
 ```bash
 make build
-TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview \
+env -u NO_COLOR COLORTERM=truecolor \
+  TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview \
   tools/ttyd-image-harness/probe.sh
 ```
 
@@ -1190,7 +1195,7 @@ ttyd -W -p 7682 \
   -I tools/ttyd-image-harness/index.html \
   -t disableLeaveAlert=true \
   -t disableResizeOverlay=true \
-  ./bin/herald -debug -demo -image-protocol=iterm2 -theme jade-signal
+  env -u NO_COLOR COLORTERM=truecolor ./bin/herald -debug -demo -image-protocol=iterm2 -theme jade-signal
 ```
 
 The repository-managed harness uses Solarized Dark colors and loads xterm.js, `@xterm/addon-fit`, and `@xterm/addon-image` from CDN, with image addon options such as `iipSupport: true` and `sixelSupport: true`. It fetches `/token`, connects to `/ws` with the `tty` subprotocol, and sends the first websocket frame as raw JSON:
@@ -1210,7 +1215,7 @@ ttyd -i 127.0.0.1 -p 7681 -W \
   -t rendererType=canvas \
   -t disableLeaveAlert=true \
   -t disableResizeOverlay=true \
-  ./bin/herald -debug -demo -image-protocol=iterm2
+  env -u NO_COLOR COLORTERM=truecolor ./bin/herald -debug -demo -image-protocol=iterm2
 ```
 
 Stock ttyd 1.7.7 can paint iTerm2 inline images, but it may miss or relocate images compared with the custom harness and native terminals. The scripted default is custom mode so the one-command probe avoids stock ttyd's known gaps; do not use stock ttyd alone as the acceptance test for inline-image placement.

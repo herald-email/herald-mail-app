@@ -1064,7 +1064,7 @@ Check these states during every applicable lane:
 1. Start `/tmp/herald --demo`.
 2. Press `S`, open `Theme Selection`, and capture the Theme Selection category.
 3. Switch between `Inherited`, `Herald dark`, `Herald light`, `Jade Signal`, `Amber Furnace`, `Solar Paper`, and `Tokyo Dusk`; save each and confirm the visible chrome changes without leaving Settings.
-4. Launch `/tmp/herald --demo -theme jade-signal` and `/tmp/herald --demo -theme <valid-theme-file.yaml>`; confirm both start in the requested theme without writing config.
+4. Launch `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor /tmp/herald --demo -theme jade-signal` and the same command shape with `-theme <valid-theme-file.yaml>`; confirm both start in the requested theme without writing config.
 5. In `Theme Selection`, enter a valid local theme YAML path, save, reopen Theme Selection, and confirm the installed theme appears in the selector.
 6. Open `Theme Editor`, edit one semantic role foreground with a hex value and one background with an `xterm:N` value, then use the foreground/background color pickers to try an xterm-grid value and an RGB value with instant preview, observe swatches/live preview, save as a new theme, then reopen Theme Editor.
 7. Repeat with an invalid install path and invalid `-theme` value and confirm the bounded error stays inside Settings or fails launch loudly for the explicit CLI override.
@@ -1073,7 +1073,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Missing or inherited config keeps terminal-default foreground/background behavior.
 - `Herald dark`, `Herald light`, and the diverse built-in themes visibly differ while preserving readable focused panel, status bar, hint bar, selection contrast, and full-screen background contrast.
-- `scripts/regenerate-theme-screenshots.sh` refreshes both Timeline and Preview docs theme screenshots from `--demo -theme <name>` launches; `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh` remains available for a preview-only refresh, and both PNG sets are visually inspected rather than assumed good.
+- `scripts/regenerate-theme-screenshots.sh` refreshes both Timeline and Preview docs theme screenshots from `--demo -theme <name>` launches with `NO_COLOR` unset; `HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh` remains available for a preview-only refresh, and both PNG sets are visually inspected rather than assumed good.
 - Theme role text fields preserve literal `#`, `:`, digits, and letters; no browse shortcut fires while editing theme values.
 - Theme color pickers update the same foreground/background values immediately: `/` from a manual color field opens that field's picker, xterm-grid moves emit `xterm:N`, RGB edits emit `#RRGGBB`, `m` switches picker mode, `i` restores `inherit`, and the selected swatch is marked with a contrasting in-cell marker without leaking ANSI text.
 - Invalid installed themes and invalid install paths do not crash, overwrite config, or close Settings.
@@ -1170,9 +1170,9 @@ Check these states during every applicable lane:
 3. Press `z` to enter full-screen and capture the top of the document.
 4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
 5. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
-6. Repeat with the repo custom ttyd harness: `PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
-7. Repeat the custom ttyd harness with a full-screen app theme: `HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
-8. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
+6. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
+7. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
+8. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
 9. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
 10. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
 11. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
@@ -1187,7 +1187,7 @@ Check these states during every applicable lane:
 - Kitty-compatible terminals, including Ghostty, render bounded inline images using Kitty graphics protocol when selected or auto-detected.
 - Kitty/Ghostty scrolling does not leave stale image placements over text or unrelated images.
 - Custom ttyd + xterm image-addon mode reproduces browser-visible iTerm2 OSC 1337 image behavior more strictly and records screenshot plus pixel metrics for color-chart evidence and large raster image area.
-- Custom ttyd with `HERALD_THEME=jade-signal` preserves real raster images while the app-level theme background is active; native image overlay escape tails are not styled, padded, or split by theme rendering.
+- Custom ttyd with `HERALD_THEME=jade-signal` and `NO_COLOR` unset preserves real raster images while the app-level theme background is active; native image overlay escape tails are not styled, padded, or split by theme rendering.
 - Stock ttyd smoke records screenshot plus pixel metrics for color-chart cells and at least one large photo region; its placement is not authoritative for acceptance.
 - Non-raster local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH auto mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs; forced `-image-protocol=iterm2` or `-image-protocol=kitty` emits the selected raster protocol.
