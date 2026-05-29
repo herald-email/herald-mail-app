@@ -2954,7 +2954,6 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 		for _, attendee := range event.Attendees {
 			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarAttendeeLabel(attendee), width)))
 		}
-		lines = append(lines, calendarDetailRow(m, "RSVP", calendarRSVPActionLabel(*event), width))
 	}
 	if recurrence := calendarRecurrenceLabel(*event); recurrence != "" {
 		lines = append(lines, "")
@@ -2980,11 +2979,12 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	lines = append(lines, calendarDetailRow(m, "Scope", "this event", width))
 	lines = append(lines, calendarDetailRow(m, "Mode", "read-only list / provider-backed edit/RSVP", width))
 	if len(event.Attendees) > 0 {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("y: accept  m: maybe  n: decline", width)))
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("RSVP", width)))
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarRSVPActionLabel(*event)+"  y: accept  m: maybe  n: decline", width)))
 	}
 	lines = append(lines, "")
 	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Actions", width)))
-	for _, action := range []string{"e: edit event", "n: new event", "d: delete event", "r: reply", "a: add reminder"} {
+	for _, action := range []string{"e: edit event", "p: meeting prep", "b: travel buffer", "s: AI summary"} {
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(action, width)))
 	}
 	if strings.TrimSpace(calendarRenderedNotes(event.Description)) != "" {
