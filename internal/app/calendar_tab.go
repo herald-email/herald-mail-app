@@ -2506,7 +2506,7 @@ func (m *Model) renderCalendarWeekGrid(width, height int) string {
 	if maxRows < 1 {
 		maxRows = 1
 	}
-	rows := m.calendarWeekGridRows(start, width)
+	rows := m.calendarWeekGridRows(start, width, maxRows)
 	if len(rows) > maxRows {
 		rows = rows[:maxRows]
 	}
@@ -2514,7 +2514,7 @@ func (m *Model) renderCalendarWeekGrid(width, height int) string {
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
-func (m *Model) calendarWeekGridRows(start time.Time, width int) []string {
+func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []string {
 	timeW := 7
 	dayW := (width - timeW - 7) / 7
 	if dayW < 4 {
@@ -2539,15 +2539,32 @@ func (m *Model) calendarWeekGridRows(start time.Time, width int) []string {
 	rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("─", width), width)))
 	events := m.calendarEventsForWeek(start)
 	startHour, endHour := calendarVisibleHourRange(events)
+	showHalfHours := calendarWeekGridShouldShowHalfHours(maxRows, startHour, endHour)
 	for hour := startHour; hour <= endHour; hour++ {
-		rows = append(rows, m.calendarWeekGridHourRow(start, hour, timeW, dayW, width))
+		rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 0, timeW, dayW, width))
+		if hour >= endHour {
+			continue
+		}
 		if hour == 9 {
 			rows = append(rows, m.theme.Severity.Error.Style().Render(calendarFit(" 09:30 ◀"+strings.Repeat("─", clamp(width-9, 1)), width)))
-		} else if hour < endHour {
-			rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", width), width)))
+			continue
+		}
+		if showHalfHours {
+			rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 30, timeW, dayW, width))
+		} else {
+			rows = append(rows, m.calendarWeekGridGuideRow(start, hour, timeW, dayW, width))
 		}
 	}
 	return rows
+}
+
+func calendarWeekGridShouldShowHalfHours(maxRows, startHour, endHour int) bool {
+	if maxRows <= 0 || endHour < startHour {
+		return false
+	}
+	const headerRows = 2
+	slotRows := ((endHour - startHour) * 2) + 1
+	return maxRows >= headerRows+slotRows
 }
 
 func (m *Model) calendarWeekEventSummary(start time.Time, width int) string {
@@ -2621,15 +2638,17 @@ func calendarAllDayAndSpanningSummary(events []indexedCalendarEvent, width int) 
 	return calendarFit(strings.Join(parts, "  "), width)
 }
 
-func (m *Model) calendarWeekGridHourRow(start time.Time, hour, timeW, dayW, width int) string {
+func (m *Model) calendarWeekGridSlotRow(start time.Time, hour, minute, timeW, dayW, width int) string {
 	var row strings.Builder
-	row.WriteString(m.theme.Text.Primary.Style().Render(calendarFit(fmt.Sprintf("%02d:00", hour), timeW)))
+	row.WriteString(m.theme.Text.Primary.Style().Render(calendarFit(fmt.Sprintf("%02d:%02d", hour, minute), timeW)))
 	for dayIdx := 0; dayIdx < 7; dayIdx++ {
 		day := start.AddDate(0, 0, dayIdx)
-		event, continuation := m.calendarEventInHour(day, hour)
+		event, continuation := m.calendarEventInSlot(day, hour, minute)
 		cell := m.calendarGridCell(event, dayW)
 		if continuation {
 			cell = m.calendarGridContinuationCell(event, dayW)
+		} else if event == nil && minute > 0 {
+			cell = m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", dayW), dayW))
 		}
 		row.WriteString(cell)
 		if dayIdx < 6 {
@@ -2637,6 +2656,57 @@ func (m *Model) calendarWeekGridHourRow(start time.Time, hour, timeW, dayW, widt
 		}
 	}
 	return calendarFit(row.String(), width)
+}
+
+func (m *Model) calendarWeekGridGuideRow(start time.Time, hour, timeW, dayW, width int) string {
+	var row strings.Builder
+	row.WriteString(m.theme.Text.Dim.Style().Render(calendarFit("", timeW)))
+	for dayIdx := 0; dayIdx < 7; dayIdx++ {
+		day := start.AddDate(0, 0, dayIdx)
+		event, continuation := m.calendarEventInSlot(day, hour, 30)
+		if event != nil {
+			if continuation {
+				row.WriteString(m.calendarGridContinuationCell(event, dayW))
+			} else {
+				row.WriteString(m.calendarGridCell(event, dayW))
+			}
+		} else {
+			row.WriteString(m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", dayW), dayW)))
+		}
+		if dayIdx < 6 {
+			row.WriteString(m.theme.Text.Dim.Style().Render("│"))
+		}
+	}
+	return calendarFit(row.String(), width)
+}
+
+func (m *Model) calendarEventInSlot(day time.Time, hour, minute int) (*models.CalendarEvent, bool) {
+	slotStart := calendarDayStartFor(day).Add(time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute)
+	slotEnd := slotStart.Add(30 * time.Minute)
+	var continuation *models.CalendarEvent
+	for _, item := range m.calendarEventsForDay(day) {
+		event := item.event
+		if event.AllDay || event.Start.IsZero() || calendarEventSpansMultipleDates(event) {
+			continue
+		}
+		start := event.Start.Local()
+		end := event.End.Local()
+		if event.End.IsZero() {
+			end = start
+		}
+		if !start.Before(slotStart) && start.Before(slotEnd) {
+			candidate := event
+			return &candidate, false
+		}
+		if start.Before(slotEnd) && end.After(slotStart) && continuation == nil {
+			candidate := event
+			continuation = &candidate
+		}
+	}
+	if continuation != nil {
+		return continuation, true
+	}
+	return nil, false
 }
 
 func (m *Model) calendarEventInHour(day time.Time, hour int) (*models.CalendarEvent, bool) {
