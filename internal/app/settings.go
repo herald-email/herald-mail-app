@@ -2295,7 +2295,7 @@ func (s *Settings) View() tea.View {
 	formView := strings.TrimRight(currentFormView, "\n")
 
 	if s.mode == SettingsModePanel {
-		rendered := s.renderPanel()
+		rendered := s.renderPanelWithFormView(formView)
 		return newHeraldView(strings.TrimRight(lipgloss.Place(s.width, s.height, lipgloss.Center, lipgloss.Center, rendered), "\n"))
 	}
 
@@ -2328,7 +2328,11 @@ func (s *Settings) View() tea.View {
 }
 
 func (s *Settings) renderPanel() string {
-	formView := s.panelFormView()
+	return s.renderPanelWithFormView(strings.TrimRight(s.form.View(), "\n"))
+}
+
+func (s *Settings) renderPanelWithFormView(currentFormView string) string {
+	formView := s.panelFormViewFrom(currentFormView)
 	layout := s.panelLayout()
 	box := lipgloss.NewStyle().
 		Width(layout.formWidth).
@@ -2349,7 +2353,10 @@ func (s *Settings) renderPanel() string {
 }
 
 func (s *Settings) panelFormView() string {
-	formView := strings.TrimRight(s.form.View(), "\n")
+	return s.panelFormViewFrom(strings.TrimRight(s.form.View(), "\n"))
+}
+
+func (s *Settings) panelFormViewFrom(formView string) string {
 	if s.panelSection == settingsPanelSectionMenu {
 		formView = strings.Replace(formView, "enter submit", "enter open • esc exit", 1)
 	}

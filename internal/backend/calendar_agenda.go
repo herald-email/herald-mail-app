@@ -28,6 +28,14 @@ type CalendarAgendaBackend interface {
 	GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error)
 }
 
+// CalendarAgendaCacheBackend lets the TUI show cached calendar rows immediately
+// while a provider refresh runs in the background.
+type CalendarAgendaCacheBackend interface {
+	ListCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error)
+	ListCachedCalendarCollections() ([]models.CalendarCollection, error)
+	RefreshCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, []models.CalendarCollection, error)
+}
+
 // CalendarCollectionBackend exposes user-facing calendar lists for the TUI rail.
 type CalendarCollectionBackend interface {
 	ListCalendarCollections() ([]models.CalendarCollection, error)
@@ -146,7 +154,7 @@ func (b *LocalBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 	if b == nil || b.cache == nil {
 		return nil, nil
 	}
-	cached, err := b.listCachedCalendarAgenda(start, end)
+	cached, err := b.ListCachedCalendarAgenda(start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -156,10 +164,10 @@ func (b *LocalBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 		}
 		return nil, err
 	}
-	return b.listCachedCalendarAgenda(start, end)
+	return b.ListCachedCalendarAgenda(start, end)
 }
 
-func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
+func (b *LocalBackend) ListCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
 	var out []models.CalendarEvent
 	for _, source := range b.configuredCalendarSources() {
 		events, err := b.cache.ListCalendarAgendaEvents(models.SourceID(source.ID), models.AccountID(source.AccountID), start, end)
@@ -174,11 +182,15 @@ func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.
 	return out, nil
 }
 
+func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
+	return b.ListCachedCalendarAgenda(start, end)
+}
+
 func (b *LocalBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
 	if b == nil || b.cache == nil {
 		return nil, nil
 	}
-	cached, err := b.listCachedCalendarCollections()
+	cached, err := b.ListCachedCalendarCollections()
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +200,10 @@ func (b *LocalBackend) ListCalendarCollections() ([]models.CalendarCollection, e
 		}
 		return nil, err
 	}
-	return b.listCachedCalendarCollections()
+	return b.ListCachedCalendarCollections()
 }
 
-func (b *LocalBackend) listCachedCalendarCollections() ([]models.CalendarCollection, error) {
+func (b *LocalBackend) ListCachedCalendarCollections() ([]models.CalendarCollection, error) {
 	var out []models.CalendarCollection
 	for _, source := range b.configuredCalendarSources() {
 		collections, err := b.cache.ListCalendarCollections(models.SourceID(source.ID), models.AccountID(source.AccountID))
@@ -202,6 +214,39 @@ func (b *LocalBackend) listCachedCalendarCollections() ([]models.CalendarCollect
 	}
 	sortCalendarCollections(out)
 	return out, nil
+}
+
+func (b *LocalBackend) listCachedCalendarCollections() ([]models.CalendarCollection, error) {
+	return b.ListCachedCalendarCollections()
+}
+
+func (b *LocalBackend) RefreshCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, []models.CalendarCollection, error) {
+	if b == nil || b.cache == nil {
+		return nil, nil, nil
+	}
+	cachedEvents, cacheErr := b.ListCachedCalendarAgenda(start, end)
+	cachedCollections, collectionsErr := b.ListCachedCalendarCollections()
+	if cacheErr != nil {
+		return nil, nil, cacheErr
+	}
+	if collectionsErr != nil {
+		return nil, nil, collectionsErr
+	}
+	if err := b.syncConfiguredCalendarSources(context.Background()); err != nil {
+		if len(cachedEvents) > 0 || len(cachedCollections) > 0 {
+			return cachedEvents, cachedCollections, nil
+		}
+		return nil, nil, err
+	}
+	events, err := b.ListCachedCalendarAgenda(start, end)
+	if err != nil {
+		return nil, nil, err
+	}
+	collections, err := b.ListCachedCalendarCollections()
+	if err != nil {
+		return nil, nil, err
+	}
+	return events, collections, nil
 }
 
 func (b *LocalBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error) {
@@ -465,6 +510,30 @@ func (m *MultiBackend) ListCalendarAgenda(start, end time.Time) ([]models.Calend
 	return out, nil
 }
 
+func (m *MultiBackend) ListCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
+	var out []models.CalendarEvent
+	for _, backend := range m.calendarAgendaBackends() {
+		if !backend.CalendarAgendaAvailable() {
+			continue
+		}
+		if cached, ok := backend.(CalendarAgendaCacheBackend); ok {
+			events, err := cached.ListCachedCalendarAgenda(start, end)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, events...)
+			continue
+		}
+		events, err := backend.ListCalendarAgenda(start, end)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, events...)
+	}
+	sortCalendarEvents(out)
+	return out, nil
+}
+
 func (m *MultiBackend) ListCalendarCollections() ([]models.CalendarCollection, error) {
 	var out []models.CalendarCollection
 	for _, agenda := range m.calendarAgendaBackends() {
@@ -480,6 +549,65 @@ func (m *MultiBackend) ListCalendarCollections() ([]models.CalendarCollection, e
 	}
 	sortCalendarCollections(out)
 	return out, nil
+}
+
+func (m *MultiBackend) ListCachedCalendarCollections() ([]models.CalendarCollection, error) {
+	var out []models.CalendarCollection
+	for _, agenda := range m.calendarAgendaBackends() {
+		if cached, ok := agenda.(CalendarAgendaCacheBackend); ok {
+			items, err := cached.ListCachedCalendarCollections()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, items...)
+			continue
+		}
+		collections, ok := agenda.(CalendarCollectionBackend)
+		if !ok {
+			continue
+		}
+		items, err := collections.ListCalendarCollections()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+	}
+	sortCalendarCollections(out)
+	return out, nil
+}
+
+func (m *MultiBackend) RefreshCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, []models.CalendarCollection, error) {
+	var events []models.CalendarEvent
+	var collections []models.CalendarCollection
+	for _, agenda := range m.calendarAgendaBackends() {
+		if !agenda.CalendarAgendaAvailable() {
+			continue
+		}
+		if cached, ok := agenda.(CalendarAgendaCacheBackend); ok {
+			items, cols, err := cached.RefreshCalendarAgenda(start, end)
+			if err != nil {
+				return nil, nil, err
+			}
+			events = append(events, items...)
+			collections = append(collections, cols...)
+			continue
+		}
+		items, err := agenda.ListCalendarAgenda(start, end)
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, items...)
+		if collectionBackend, ok := agenda.(CalendarCollectionBackend); ok {
+			cols, err := collectionBackend.ListCalendarCollections()
+			if err != nil {
+				return nil, nil, err
+			}
+			collections = append(collections, cols...)
+		}
+	}
+	sortCalendarEvents(events)
+	sortCalendarCollections(collections)
+	return events, collections, nil
 }
 
 func (m *MultiBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error) {

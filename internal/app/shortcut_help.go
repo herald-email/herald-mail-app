@@ -256,9 +256,41 @@ func (m *Model) renderSettingsOverlayView() string {
 		h = 24
 	}
 
-	backdrop := m.renderShortcutHelpBackdropView()
+	backdrop := m.cachedSettingsBackdropView()
 	panel := m.settingsPanel.renderPanel()
 	return overlayCentered(backdrop, panel, w, h)
+}
+
+func (m *Model) cachedSettingsBackdropView() string {
+	key := m.settingsBackdropKey()
+	if m.settingsBackdrop.Valid && m.settingsBackdrop.Key == key && m.settingsBackdrop.Content != "" {
+		return m.settingsBackdrop.Content
+	}
+	content := m.renderShortcutHelpBackdropView()
+	m.settingsBackdrop = settingsBackdropCache{
+		Valid:   true,
+		Key:     key,
+		Content: content,
+	}
+	return content
+}
+
+func (m *Model) invalidateSettingsBackdrop() {
+	m.settingsBackdrop = settingsBackdropCache{}
+}
+
+func (m *Model) settingsBackdropKey() string {
+	return fmt.Sprintf(
+		"%dx%d|tab:%d|logs:%t|full:%t|loading:%t|events:%d|filters:%d",
+		m.windowWidth,
+		m.windowHeight,
+		m.activeTab,
+		m.showLogs,
+		m.timeline.fullScreen,
+		m.loading && !m.hasVisibleStartupData(),
+		m.calendarEventsVersion,
+		m.calendarFiltersVersion,
+	)
 }
 
 func (m *Model) renderCompactOverlayView(panel string) string {

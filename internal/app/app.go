@@ -66,6 +66,8 @@ type CalendarAgendaLoadedMsg struct {
 	Events      []models.CalendarEvent
 	Collections []models.CalendarCollection
 	Err         error
+	Cached      bool
+	Refreshing  bool
 }
 
 // CalendarSearchLoadedMsg carries cache-backed search results for the Calendar tab.
@@ -73,6 +75,12 @@ type CalendarSearchLoadedMsg struct {
 	Query  string
 	Events []models.CalendarEvent
 	Err    error
+}
+
+type settingsBackdropCache struct {
+	Valid   bool
+	Key     string
+	Content string
 }
 
 // CrossSourceSearchLoadedMsg carries blended cache-backed mail/event search
@@ -796,8 +804,9 @@ type Model struct {
 	themeWarn    string
 
 	// Settings panel overlay
-	showSettings  bool
-	settingsPanel *Settings
+	showSettings     bool
+	settingsPanel    *Settings
+	settingsBackdrop settingsBackdropCache
 
 	// Rule editor overlay
 	showRuleEditor    bool
@@ -846,6 +855,9 @@ type Model struct {
 	calendarLoading             bool
 	calendarCollections         []models.CalendarCollection
 	calendarEvents              []models.CalendarEvent
+	calendarEventsVersion       uint64
+	calendarFiltersVersion      uint64
+	calendarDerived             calendarDerivedCache
 	calendarCursor              int
 	calendarRailCursor          int
 	calendarFocus               calendarFocusPanel
@@ -1447,6 +1459,7 @@ func (m *Model) openSettingsPanel() tea.Cmd {
 	}
 	m.showSettings = true
 	m.settingsPanel = m.newSettingsPanel("", "")
+	m.invalidateSettingsBackdrop()
 	return m.settingsPanel.Init()
 }
 
@@ -1998,13 +2011,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
 			m.updateTableDimensions(sizeMsg.Width, sizeMsg.Height)
 			m.chatWrappedLines = nil
+			m.invalidateSettingsBackdrop()
 		}
 		newModel, cmd := m.settingsPanel.Update(msg)
 		m.settingsPanel = newModel.(*Settings)
 		if isThemeSettingsSection(prevSection) && !isThemeSettingsSection(m.settingsPanel.panelSection) {
 			m.applyThemeConfig(m.cfg)
+			m.invalidateSettingsBackdrop()
 		} else if isThemeSettingsSection(m.settingsPanel.panelSection) {
 			m.applyThemeConfig(m.settingsPanel.buildConfig())
+			m.invalidateSettingsBackdrop()
 		}
 		if _, ok := msg.(tea.WindowSizeMsg); ok {
 			return m, tea.Batch(cmd, tea.ClearScreen)
@@ -2196,16 +2212,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CalendarAgendaLoadedMsg:
-		m.calendarLoading = false
 		if msg.Err != nil {
-			m.calendarCollections = nil
-			m.calendarEvents = nil
-			m.calendarDetail = nil
+			m.calendarLoading = msg.Cached && msg.Refreshing
+			if len(m.calendarEvents) > 0 {
+				if msg.Cached {
+					m.calendarStatus = "Calendar cache read failed; refreshing provider..."
+				} else {
+					m.calendarStatus = "Calendar refresh failed; showing cached events: " + msg.Err.Error()
+				}
+				return m, nil
+			}
+			m.setCalendarCollections(nil)
+			m.setCalendarEventsForDisplay(nil)
 			m.calendarStatus = "Calendar agenda failed: " + msg.Err.Error()
 			return m, nil
 		}
-		m.calendarEvents = normalizeCalendarEventsForDisplay(msg.Events)
-		m.calendarCollections = m.mergeCalendarCollections(msg.Collections)
+		if msg.Cached && len(msg.Events) == 0 && len(m.calendarEvents) > 0 {
+			m.calendarLoading = msg.Refreshing
+			m.calendarStatus = "Refreshing calendar agenda..."
+			return m, nil
+		}
+		m.calendarLoading = msg.Refreshing
+		m.setCalendarEventsForDisplay(msg.Events)
+		m.setCalendarCollections(m.mergeCalendarCollections(msg.Collections))
 		m.pruneCalendarCollectionState()
 		if m.calendarCursor >= len(m.calendarEvents) {
 			m.calendarCursor = len(m.calendarEvents) - 1
@@ -2239,7 +2268,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.ensureCalendarSelectionVisible()
 		}
-		m.calendarStatus = ""
+		if msg.Refreshing {
+			m.calendarStatus = "Refreshing calendar agenda..."
+		} else {
+			m.calendarStatus = ""
+		}
 		return m, nil
 
 	case CalendarSearchLoadedMsg:
@@ -2427,7 +2460,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Event != nil {
 			m.applySavedCalendarEvent(*msg.Event)
-			m.calendarEvents = normalizeCalendarEventsForDisplay(m.calendarEvents)
+			m.setCalendarEventsForDisplay(m.calendarEvents)
 		}
 		m.calendarInvitation = calendarInvitationPromptState{}
 		m.calendarStatus = "Added invitation to calendar"
