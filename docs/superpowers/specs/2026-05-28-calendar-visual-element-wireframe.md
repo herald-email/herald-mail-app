@@ -22,6 +22,8 @@ The left panel is the anchor for screens `01` through `04`. It should no longer 
 - [x] Render calendar toggles with visible colored checkboxes or swatches, grouped by account/provider when multiple accounts are present.
 - [x] Render a filter footer with the current filter label such as `All Events`.
 - [x] Preserve non-Latin calendar names and avoid exposing provider IDs.
+- [x] Mouse clicks on mini-month days select the clicked day/range, and mouse clicks on calendar toggles show/hide that calendar using the same filter model as keyboard `space`.
+- [x] Calendar toggle state persists in YAML as `calendar.selected_calendars`, without surfacing a Settings field or storing provider secrets.
 
 ## Week Body
 

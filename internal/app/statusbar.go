@@ -602,6 +602,20 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}
 	}
+	if m.activeTab == tabCalendar &&
+		!m.showSettings &&
+		!m.showHelp &&
+		!m.showAccountSwitcher &&
+		!m.pendingDeleteConfirm &&
+		!m.pendingUnsubscribe &&
+		!chrome.ShowLogs &&
+		!(chrome.FocusedPanel == panelChat && chrome.ShowChat) {
+		mouseHint := "m: mouse mode"
+		if m.mouseSelectionMode {
+			mouseHint = "[mouse] select mode - m: restore TUI"
+		}
+		hints = joinHintSegments(hints, mouseHint)
+	}
 	return hints
 }
 

@@ -896,6 +896,9 @@ type Model struct {
 	calendarEdit                calendarEventEditState
 	calendarInvitation          calendarInvitationPromptState
 	calendarStatus              string
+	mouseSelectionMode          bool
+	calendarLastClickEventKey   string
+	calendarLastClickAt         time.Time
 
 	// Styles
 	baseStyle          lipgloss.Style
@@ -1095,6 +1098,7 @@ func (m *Model) SetConfigPath(path string) {
 func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyKeyboardConfig(cfg)
 	m.applyThemeConfig(cfg)
+	m.applyCalendarConfig(cfg)
 }
 
 func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToMenu, reclaimOfflineCache, validateCalendar bool, calendarSourceIDs []models.SourceID) tea.Cmd {
@@ -3183,7 +3187,7 @@ func (m *Model) buildView(content string) tea.View {
 		content = m.theme.RenderScreen(content, m.windowWidth, m.windowHeight)
 	}
 	v := newHeraldView(content)
-	if !m.timeline.mouseMode {
+	if !m.mouseSelectionMode {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v

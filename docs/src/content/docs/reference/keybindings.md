@@ -32,13 +32,16 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 | Mouse action | Result |
 | --- | --- |
-| Click top tab | Switch to Timeline or Contacts. |
+| Click top tab | Switch to Timeline, Contacts, or Calendar when available. |
 | Click folder/sidebar row | Select and load that folder. |
 | Click Timeline row | Select the message or thread and open the preview. |
 | Scroll Timeline rows | Move the Timeline cursor by small steps. |
 | Scroll Timeline preview | Scroll the message body. |
+| Click Calendar mini-month day | Select that calendar day or range. |
+| Click Calendar event | Select the event. Double-click the same event to open its full detail. |
+| Click Calendar checkbox | Show or hide that calendar and persist the visible-calendar selection in YAML. |
 | Click OSC 8 email link | Open the target URL through the terminal. |
-| Press `m` in Timeline | Release or restore Herald mouse capture for terminal-native text selection. |
+| Press `m` in Timeline or Calendar | Release or restore Herald mouse capture for terminal-native text selection. |
 
 ## Sidebar
 

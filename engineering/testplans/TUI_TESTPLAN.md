@@ -2279,14 +2279,18 @@ This case covers the interaction polish required after the design-parity screens
 4. In Timeline, click a collapsed thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays collapsed. Click the same selected root again; confirm the thread expands.
 5. In Timeline, click an expanded thread root whose top email is not selected; confirm the preview opens for the top email and the thread stays expanded. Click the same selected root again; confirm the thread folds.
 6. In Timeline sender/domain grouping, click a grouped row and wheel over the list and preview regions.
-7. Click the sidebar when visible, then press `m` in a preview to release mouse capture and press `m` again to restore it.
-8. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
+7. Open Calendar, click a mini-month day, click an agenda/day/week/3-day event, then double-click the same selected event to open detail.
+8. Click a Calendar rail checkbox to hide a calendar, restart with the same config, and confirm the visible-calendar selection is restored from `calendar.selected_calendars`.
+9. Click the sidebar when visible, then press `m` in Timeline and Calendar to release mouse capture and press `m` again to restore it.
+10. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
 
 **Expect:**
 - Mouse click and wheel behavior matches the equivalent keyboard actions and never changes hidden state outside the clicked region.
 - Timeline thread-root mouse clicks use two-step semantics: select/update preview first, then fold/unfold only when the top thread email is already selected.
 - Preview wheel events scroll the body without moving the underlying list cursor.
 - List wheel events move the focused list cursor and refresh an open preview when applicable.
+- Calendar mouse clicks match keyboard parity: mini-month clicks move the active date/range, event clicks select rows without leaking provider IDs, double-clicking the same selected event opens detail, and rail checkbox clicks show/hide calendars.
+- Calendar rail visibility persists in YAML as selected calendar keys and does not expose provider URLs, OAuth tokens, sync tokens, ETags, or event IDs.
 - The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.
 - The minimum-size guard still appears at `50x15` and recovery restores normal mouse-capable layouts.
 

@@ -456,6 +456,28 @@ func TestLoadCalendarWeekStartDefaultsAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCalendarSelectedCalendarsConfigRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "calendar-selected.yaml")
+	original := minimalOAuthConfig()
+	original.Calendar.SelectedCalendars = []string{
+		"demo-calendar|default|work",
+		"family-calendar|family|home",
+	}
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if !reflect.DeepEqual(loaded.Calendar.SelectedCalendars, original.Calendar.SelectedCalendars) {
+		t.Fatalf("Calendar.SelectedCalendars = %#v, want %#v", loaded.Calendar.SelectedCalendars, original.Calendar.SelectedCalendars)
+	}
+}
+
 func calendarWeekStartForConfigTest(t *testing.T, cfg *Config) string {
 	t.Helper()
 	root := reflect.ValueOf(cfg).Elem()

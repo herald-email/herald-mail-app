@@ -76,7 +76,8 @@ type ComposeConfig struct {
 }
 
 type CalendarConfig struct {
-	WeekStart string `yaml:"week_start,omitempty"` // monday | sunday
+	WeekStart         string   `yaml:"week_start,omitempty"` // monday | sunday
+	SelectedCalendars []string `yaml:"selected_calendars,omitempty"`
 }
 
 type AccountGroup struct {

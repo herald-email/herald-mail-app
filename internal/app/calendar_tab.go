@@ -151,6 +151,13 @@ func (m *Model) refreshCalendarAvailability() {
 	}
 }
 
+func (m *Model) applyCalendarConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	m.applySelectedCalendarConfig()
+}
+
 func (m *Model) setCalendarEventsForDisplay(events []models.CalendarEvent) {
 	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
 	m.calendarEventsVersion++
@@ -375,6 +382,9 @@ func (m *Model) calendarAnchorDate() time.Time {
 	if event := m.selectedCalendarEventForAnchor(); event != nil && !event.Start.IsZero() {
 		return event.Start
 	}
+	if day := m.calendarDayAnchorInActiveRange(); !day.IsZero() {
+		return day
+	}
 	if start := m.calendarActiveRangeStartForAnchor(); !start.IsZero() {
 		return start
 	}
@@ -389,6 +399,44 @@ func (m *Model) calendarAnchorDate() time.Time {
 		return event.Start
 	}
 	return today
+}
+
+func (m *Model) calendarDayAnchorInActiveRange() time.Time {
+	if m.calendarDay.IsZero() {
+		return time.Time{}
+	}
+	day := calendarDayStartFor(m.calendarDay)
+	switch m.calendarView {
+	case calendarViewDay:
+		return day
+	case calendarViewWeek:
+		start := m.calendarWeekStart
+		if start.IsZero() {
+			start = m.calendarWeekStartFor(day)
+		}
+		start = calendarDayStartFor(start)
+		if !day.Before(start) && day.Before(start.AddDate(0, 0, 7)) {
+			return day
+		}
+	case calendarViewThreeDay:
+		start := m.calendarThreeDayStart
+		if start.IsZero() {
+			start = day
+		}
+		start = calendarDayStartFor(start)
+		if !day.Before(start) && day.Before(start.AddDate(0, 0, 3)) {
+			return day
+		}
+	case calendarViewAgenda:
+		if !m.calendarAgendaStart.IsZero() && !m.calendarAgendaEnd.IsZero() {
+			start := calendarDayStartFor(m.calendarAgendaStart)
+			end := calendarDayStartFor(m.calendarAgendaEnd)
+			if !day.Before(start) && day.Before(end) {
+				return day
+			}
+		}
+	}
+	return time.Time{}
 }
 
 func (m *Model) selectedCalendarEventForAnchor() *models.CalendarEvent {
@@ -1281,6 +1329,8 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		m.cleanup()
 		return m, tea.Quit
+	case "m":
+		return m, m.toggleMouseCaptureMode()
 	case "tab":
 		if !m.calendarDetailOpen {
 			m.cycleCalendarFocus(1)
@@ -4197,6 +4247,7 @@ func (m *Model) pruneCalendarCollectionState() {
 			delete(m.calendarHiddenCollections, key)
 		}
 	}
+	m.applySelectedCalendarConfig()
 	if m.calendarRailCursor >= len(m.calendarCollections) {
 		m.calendarRailCursor = len(m.calendarCollections) - 1
 	}
@@ -4402,6 +4453,73 @@ func (m *Model) toggleFocusedCalendarCollection() {
 	}
 	m.invalidateCalendarFilterDerivations()
 	m.ensureCalendarSelectionVisible()
+	m.persistSelectedCalendarConfig()
+}
+
+func (m *Model) applySelectedCalendarConfig() {
+	if m.cfg == nil || len(m.calendarCollections) == 0 {
+		return
+	}
+	selected := make(map[string]bool, len(m.cfg.Calendar.SelectedCalendars))
+	for _, key := range m.cfg.Calendar.SelectedCalendars {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			selected[key] = true
+		}
+	}
+	if len(selected) == 0 {
+		return
+	}
+	if m.calendarHiddenCollections == nil {
+		m.calendarHiddenCollections = make(map[string]bool)
+	}
+	known := make(map[string]bool, len(m.calendarCollections))
+	matchedKnownSelection := false
+	for _, collection := range m.calendarCollections {
+		key := calendarCollectionRefKey(collection.Ref)
+		known[key] = true
+		if selected[key] {
+			matchedKnownSelection = true
+		}
+	}
+	if !matchedKnownSelection {
+		return
+	}
+	for key := range known {
+		if selected[key] {
+			delete(m.calendarHiddenCollections, key)
+		} else {
+			m.calendarHiddenCollections[key] = true
+		}
+	}
+	for key := range m.calendarHiddenCollections {
+		if !known[key] {
+			delete(m.calendarHiddenCollections, key)
+		}
+	}
+	m.invalidateCalendarFilterDerivations()
+}
+
+func (m *Model) persistSelectedCalendarConfig() {
+	if m.cfg == nil || len(m.calendarCollections) == 0 {
+		return
+	}
+	selected := make([]string, 0, len(m.calendarCollections))
+	for _, collection := range m.calendarCollections {
+		key := calendarCollectionRefKey(collection.Ref)
+		if !m.calendarHiddenCollections[key] {
+			selected = append(selected, key)
+		}
+	}
+	sort.Strings(selected)
+	m.cfg.Calendar.SelectedCalendars = selected
+	if strings.TrimSpace(m.configPath) == "" {
+		return
+	}
+	if err := m.cfg.Save(m.configPath); err != nil {
+		m.calendarStatus = "Calendar selection save failed: " + err.Error()
+		return
+	}
 }
 
 func (m *Model) calendarCollectionPendingCount(ref models.CollectionRef) int {
