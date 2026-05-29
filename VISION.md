@@ -666,6 +666,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Calendar date-only and all-day provider events render on their intended local calendar dates, with exclusive all-day end dates kept out of the following day.
 - [x] Calendar view switching preserves the selected/current date across Agenda, Day, Week, and 3-Day instead of jumping to the first cached event.
 - [x] Calendar week start can be changed in Settings, with Monday as the default and Sunday available for Apple Calendar-style US layouts.
+- [x] Calendar rail mini-month bolds days with visible events while leaving empty days at regular weight.
 - [x] Calendar notes render HTML and Markdown into readable terminal text instead of exposing raw tags.
 - [x] Calendar RSVP is explicit through accept, tentative, and decline actions, and events requiring a response are visibly highlighted.
 - [x] Emails with `text/calendar` parts or `.ics` attachments expose an Add to Calendar flow that asks which writable calendar should receive the invitation.

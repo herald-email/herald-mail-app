@@ -3011,22 +3011,7 @@ func (m *Model) renderCalendarMiniMonth(width int, start, end time.Time) []strin
 		var row strings.Builder
 		for dayIdx := 0; dayIdx < 7; dayIdx++ {
 			day := gridStart.AddDate(0, 0, week*7+dayIdx)
-			cellText := fmt.Sprintf("%2d", day.Day())
-			cell := cellText
-			inMonth := day.Month() == month.Month()
-			inRange := !day.Before(start) && !day.After(end)
-			selected := sameCalendarDate(day, m.selectedCalendarDay())
-			switch {
-			case selected:
-				cell = m.theme.Focus.SelectionActive.Style().Render(cellText)
-			case inRange:
-				cell = m.theme.Focus.VisualSelection.Style().Render(cellText)
-			case !inMonth:
-				cell = m.theme.Text.Dim.Style().Render(cellText)
-			default:
-				cell = m.theme.Text.Primary.Style().Render(cellText)
-			}
-			row.WriteString(cell)
+			row.WriteString(m.renderCalendarMiniMonthDayCell(day, month, start, end))
 			if dayIdx < 6 {
 				row.WriteByte(' ')
 			}
@@ -3041,6 +3026,46 @@ func (m *Model) calendarMiniMonthWeekdayHeader() string {
 		return "Su Mo Tu We Th Fr Sa"
 	}
 	return "Mo Tu We Th Fr Sa Su"
+}
+
+func (m *Model) renderCalendarMiniMonthDayCell(day, month, start, end time.Time) string {
+	cellText := fmt.Sprintf("%2d", day.Day())
+	inMonth := day.Month() == month.Month()
+	inRange := !day.Before(start) && !day.After(end)
+	selected := sameCalendarDate(day, m.selectedCalendarDay())
+	_, hasEvent := m.calendarMiniMonthEventForDay(day)
+	switch {
+	case selected:
+		style := m.theme.Focus.SelectionActive.Style()
+		if hasEvent {
+			style = style.Bold(true)
+		}
+		return style.Render(cellText)
+	case hasEvent:
+		style := m.theme.Text.Primary.Style().Bold(true)
+		if !inMonth || !inRange {
+			style = m.theme.Text.Dim.Style().Bold(true)
+		}
+		return style.Render(cellText)
+	case !inMonth:
+		return m.theme.Text.Dim.Style().Render(cellText)
+	default:
+		return m.theme.Text.Primary.Style().Render(cellText)
+	}
+}
+
+func (m *Model) calendarMiniMonthEventForDay(day time.Time) (*models.CalendarEvent, bool) {
+	day = calendarDayStartFor(day)
+	for _, event := range m.calendarEvents {
+		if event.Start.IsZero() || m.calendarEventHidden(event) {
+			continue
+		}
+		if eventOccursOnCalendarDate(event, day) {
+			visible := event
+			return &visible, true
+		}
+	}
+	return nil, false
 }
 
 func (m *Model) calendarStatusLine() string {

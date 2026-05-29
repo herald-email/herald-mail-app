@@ -1157,6 +1157,78 @@ func TestCalendarAgendaWindowUsesCalendarMonth(t *testing.T) {
 	}
 }
 
+func TestCalendarMiniMonthBoldsEventDaysDifferentlyFromEmptyDays(t *testing.T) {
+	loc := time.Local
+	workRef := models.CollectionRef{
+		SourceID:     "demo-calendar",
+		AccountID:    "default",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "work",
+		DisplayName:  "Work",
+	}
+	personalRef := models.CollectionRef{
+		SourceID:     "demo-calendar",
+		AccountID:    "default",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "personal",
+		DisplayName:  "Personal",
+	}
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "planning"}.WithDefaults(),
+			Title:  "Planning",
+			Start:  time.Date(2026, 5, 4, 10, 0, 0, 0, loc),
+			End:    time.Date(2026, 5, 4, 11, 0, 0, 0, loc),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "personal", EventID: "hidden"}.WithDefaults(),
+			Title:  "Hidden personal event",
+			Start:  time.Date(2026, 5, 5, 10, 0, 0, 0, loc),
+			End:    time.Date(2026, 5, 5, 11, 0, 0, 0, loc),
+			Status: "confirmed",
+		},
+	}
+	m := New(&calendarAgendaStubBackend{available: true, events: events}, nil, "", nil, false)
+	m.calendarEvents = events
+	m.calendarCollections = []models.CalendarCollection{
+		{Ref: workRef, Color: "#ff5f87"},
+		{Ref: personalRef, Color: "#87d75f"},
+	}
+	m.calendarHiddenCollections = map[string]bool{calendarCollectionRefKey(personalRef): true}
+
+	month := time.Date(2026, 5, 1, 0, 0, 0, 0, loc)
+	rangeStart, rangeEndExclusive := calendarAgendaWindowFor(month)
+	m.calendarView = calendarViewAgenda
+	m.calendarCursor = -1
+	m.calendarAgendaStart = rangeStart
+	m.calendarAgendaEnd = rangeEndExclusive
+	rangeEnd := rangeEndExclusive.AddDate(0, 0, -1)
+	eventCell := m.renderCalendarMiniMonthDayCell(time.Date(2026, 5, 4, 0, 0, 0, 0, loc), month, rangeStart, rangeEnd)
+	emptyCell := m.renderCalendarMiniMonthDayCell(time.Date(2026, 5, 6, 0, 0, 0, 0, loc), month, rangeStart, rangeEnd)
+	hiddenCell := m.renderCalendarMiniMonthDayCell(time.Date(2026, 5, 5, 0, 0, 0, 0, loc), month, rangeStart, rangeEnd)
+
+	if eventCell == emptyCell {
+		t.Fatalf("event day and empty day rendered the same: %q", eventCell)
+	}
+	if !hasBoldANSI(eventCell) {
+		t.Fatalf("event day did not use bold day text: %q", eventCell)
+	}
+	if hasBoldANSI(emptyCell) {
+		t.Fatalf("empty day used bold day text: %q", emptyCell)
+	}
+	if hasBoldANSI(hiddenCell) {
+		t.Fatalf("hidden calendar event still bolded the mini month day: %q", hiddenCell)
+	}
+	if ansi.StringWidth(eventCell) != 2 || ansi.StringWidth(emptyCell) != 2 || ansi.StringWidth(hiddenCell) != 2 {
+		t.Fatalf("mini-month cells should stay two columns wide, got event=%d empty=%d hidden=%d", ansi.StringWidth(eventCell), ansi.StringWidth(emptyCell), ansi.StringWidth(hiddenCell))
+	}
+}
+
+func hasBoldANSI(value string) bool {
+	return strings.Contains(value, "[1m") || strings.Contains(value, "[1;") || strings.Contains(value, ";1m") || strings.Contains(value, ";1;")
+}
+
 func TestCalendarAgendaRangeNavigationMovesByCalendarMonth(t *testing.T) {
 	loc := time.Local
 	m := &Model{

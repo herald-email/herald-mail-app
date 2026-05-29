@@ -18,6 +18,7 @@ The left panel is the anchor for screens `01` through `04`. It should no longer 
 - [x] Show the normalized date range as the left panel border title, without duplicating the range or view name in the body.
 - [x] Show `<  Today  >` movement affordance below the range.
 - [x] Render a mini month grid with weekday headers and highlight the active day, week, or 3-day window depending on the current screen.
+- [x] Bold mini month days with visible events differently from regular-weight empty days, while keeping the selected day readable.
 - [x] Render calendar toggles with visible colored checkboxes or swatches, grouped by account/provider when multiple accounts are present.
 - [x] Render a filter footer with the current filter label such as `All Events`.
 - [x] Preserve non-Latin calendar names and avoid exposing provider IDs.

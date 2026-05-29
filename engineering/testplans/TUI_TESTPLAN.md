@@ -1984,14 +1984,16 @@ This case covers the design-parity pass for the Calendar reference screens `01` 
 2. Press `3` or `F4` to open Calendar, then capture Agenda List, Week Time-Grid, Day Agenda, and 3-Day Command.
 3. For each screen, capture a real app PNG and place it beside the corresponding reference mockup from `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/`.
 4. In each view, confirm the left calendar rail groups calendars by account/provider, shows colored calendar markers, and allows toggling visible calendars without exposing provider internals.
-5. In each view, confirm the top range header states the active day, week, 3-day window, or agenda range and advertises `h/l` plus left/right movement.
-6. Press `h/l`, left/right, `tab`, `shift+tab`, `ctrl+u`, and `ctrl+d` in the main schedule and inspector/drawer panels.
-7. Resize to `50x15`, then back to `80x24` and `220x50`.
+5. In each view, confirm the mini month bolds days with visible events while empty days stay regular weight and the selected day remains readable.
+6. In each view, confirm the top range header states the active day, week, 3-day window, or agenda range and advertises `h/l` plus left/right movement.
+7. Press `h/l`, left/right, `tab`, `shift+tab`, `ctrl+u`, and `ctrl+d` in the main schedule and inspector/drawer panels.
+8. Resize to `50x15`, then back to `80x24` and `220x50`.
 
 **Expect:**
 - Side-by-side report evidence shows the real Sonokai Signal app is visually close to the reference mock in layout, density, panel proportions, source rail, range header, and color-marker treatment.
 - Intentional differences are limited to terminal constraints, Herald navigation conventions, available provider data, and accessibility/readability requirements.
 - Calendar rails never expose provider event IDs, CalDAV URLs, sync tokens, ETags, OAuth details, or raw scoped refs.
+- The mini month bolds event-bearing days, keeps no-event days at regular weight, and hidden calendar filters remove their event-day emphasis.
 - `up/down` and `j/k` traverse visible events across day boundaries where the active screen shows multiple days; Day Agenda can move to the next or previous day with visible events from the boundary row.
 - `ctrl+u/ctrl+d` page the focused panel, and optional PageUp/PageDown aliases behave the same when the terminal reports them.
 - `q`, `ctrl+c`, settings, logs, chat, help, and tab switching keep the global Herald behavior from Calendar focus.
