@@ -2,12 +2,14 @@ package app
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -1401,6 +1403,283 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	}
 }
 
+func TestCalendarViewSwitchingUsesSelectedDateInsteadOfAgendaMonthStart(t *testing.T) {
+	events := dateAnchorCalendarEventsForTest()
+	b := &calendarAgendaStubBackend{available: true, events: events}
+
+	for _, tc := range []struct {
+		name      string
+		key       string
+		wantView  calendarViewMode
+		wantStart string
+	}{
+		{name: "day", key: "d", wantView: calendarViewDay, wantStart: "2026-05-28"},
+		{name: "week", key: "w", wantView: calendarViewWeek, wantStart: "2026-05-25"},
+		{name: "three-day", key: "t", wantView: calendarViewThreeDay, wantStart: "2026-05-28"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := New(b, nil, "", nil, false)
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+			m = updated.(*Model)
+			m.loading = false
+			m.activeTab = tabCalendar
+			m.calendarView = calendarViewAgenda
+			m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+			m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(events[0].Start)
+			m.calendarCursor = 1
+			m.calendarDetail = &m.calendarEvents[1]
+
+			model, _ := m.handleKeyMsg(keyRunes(tc.key))
+			m = model.(*Model)
+			if m.calendarView != tc.wantView {
+				t.Fatalf("calendarView = %q, want %q", m.calendarView, tc.wantView)
+			}
+			start, _, _ := m.calendarActiveRange()
+			if got := calendarDayStartFor(start).Format("2006-01-02"); got != tc.wantStart {
+				t.Fatalf("active range starts %s, want %s", got, tc.wantStart)
+			}
+		})
+	}
+}
+
+func TestCalendarAgendaReturnsToSelectedEventMonth(t *testing.T) {
+	events := dateAnchorCalendarEventsForTest()
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewDay
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(events[0].Start)
+	m.calendarCursor = 2
+	m.calendarDetail = &m.calendarEvents[2]
+	m.calendarDay = calendarDayStartFor(events[2].Start)
+
+	model, _ := m.handleKeyMsg(keyRunes("a"))
+	m = model.(*Model)
+	if m.calendarView != calendarViewAgenda {
+		t.Fatalf("calendarView = %q, want agenda", m.calendarView)
+	}
+	start, end := m.calendarAgendaWindow()
+	if got := calendarCompactDateRange(start, end.AddDate(0, 0, -1)); got != "Jun 1-30, 2026" {
+		t.Fatalf("agenda range = %s, want Jun 1-30, 2026", got)
+	}
+}
+
+func TestCalendarAllDayExclusiveEndDoesNotDuplicateNextDay(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
+	event := models.CalendarEvent{
+		Title:  "No school",
+		Start:  time.Date(2026, 5, 25, 0, 0, 0, 0, loc),
+		End:    time.Date(2026, 5, 26, 0, 0, 0, 0, loc),
+		AllDay: true,
+	}
+	if !eventOccursOnCalendarDate(event, event.Start) {
+		t.Fatal("all-day event should occur on its start date")
+	}
+	if eventOccursOnCalendarDate(event, event.End) {
+		t.Fatal("exclusive all-day end date should not render as another event day")
+	}
+}
+
+func TestCalendarAgendaDoesNotShowEventStartingBeforeDisplayedMonth(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
+	agendaStart, agendaEnd := calendarAgendaWindowFor(time.Date(2026, 5, 20, 12, 0, 0, 0, loc))
+	event := models.CalendarEvent{
+		Title:  "Intersession",
+		Start:  time.Date(2026, 4, 27, 0, 0, 0, 0, loc),
+		End:    time.Date(2026, 5, 9, 0, 0, 0, 0, loc),
+		AllDay: true,
+	}
+	if calendarEventOccursInAgendaWindow(event, agendaStart, agendaEnd) {
+		t.Fatal("May agenda should not include an all-day event whose displayed start date is in April")
+	}
+}
+
+func TestNormalizeCalendarEventsForDisplayRepairsLegacyUTCAllDayCache(t *testing.T) {
+	oldLocal := time.Local
+	loc := time.FixedZone("PDT", -7*60*60)
+	time.Local = loc
+	t.Cleanup(func() { time.Local = oldLocal })
+
+	events := normalizeCalendarEventsForDisplay([]models.CalendarEvent{{
+		Ref:    models.EventRef{SourceID: "icloud-calendar", AccountID: "icloud", CalendarID: "family", EventID: "no-school"}.WithDefaults(),
+		Title:  "No school",
+		Start:  time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC),
+		End:    time.Date(2026, 5, 26, 0, 0, 0, 0, time.UTC),
+		AllDay: true,
+	}})
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+	if got := events[0].Start; got.Format("2006-01-02 15:04 MST") != "2026-05-25 00:00 PDT" {
+		t.Fatalf("normalized all-day start = %s, want provider date at local midnight", got.Format("2006-01-02 15:04 MST"))
+	}
+	if !eventOccursOnCalendarDate(events[0], time.Date(2026, 5, 25, 12, 0, 0, 0, loc)) {
+		t.Fatal("normalized all-day event should occur on provider start date")
+	}
+	if eventOccursOnCalendarDate(events[0], time.Date(2026, 5, 24, 12, 0, 0, 0, loc)) {
+		t.Fatal("normalized all-day event should not leak to the previous local date")
+	}
+}
+
+func TestNormalizeCalendarEventsForDisplayRepairsCachedCalDAVTimezoneStart(t *testing.T) {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	raw := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"BEGIN:VEVENT",
+		"UID:phantom",
+		"SUMMARY:Phantom",
+		"DTSTART;TZID=America/Los_Angeles:20260530T193000",
+		"DTEND;TZID=America/Los_Angeles:20260530T223000",
+		"END:VEVENT",
+		"BEGIN:VTIMEZONE",
+		"TZID:America/Los_Angeles",
+		"BEGIN:STANDARD",
+		"DTSTART:20071104T020000",
+		"END:STANDARD",
+		"END:VTIMEZONE",
+		"END:VCALENDAR",
+	}, "\r\n") + "\r\n"
+
+	events := normalizeCalendarEventsForDisplay([]models.CalendarEvent{{
+		Ref:      models.EventRef{SourceID: "icloud-calendar", AccountID: "icloud", CalendarID: "home", EventID: "phantom.ics", ETag: `"etag"`}.WithDefaults(),
+		Title:    "Phantom",
+		Start:    time.Date(2007, 11, 4, 2, 0, 0, 0, loc),
+		End:      time.Date(2026, 5, 30, 22, 30, 0, 0, loc),
+		TimeZone: "America/Los_Angeles",
+		Raw:      raw,
+	}})
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+	if got := events[0].Start.In(loc).Format("2006-01-02 15:04 MST"); got != "2026-05-30 19:30 PDT" {
+		t.Fatalf("normalized cached CalDAV start = %s, want VEVENT DTSTART", got)
+	}
+	if got := events[0].End.In(loc).Format("2006-01-02 15:04 MST"); got != "2026-05-30 22:30 PDT" {
+		t.Fatalf("normalized cached CalDAV end = %s, want VEVENT DTEND", got)
+	}
+}
+
+func TestNormalizeCalendarEventsForDisplayKeepsExpandedRecurringOccurrence(t *testing.T) {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	raw := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"BEGIN:VEVENT",
+		"UID:rsm-alg-sofia",
+		"SUMMARY:RSM Alg Sofia",
+		"DTSTART;TZID=America/Los_Angeles:20250825T153500",
+		"DTEND;TZID=America/Los_Angeles:20250825T180500",
+		"RRULE:FREQ=WEEKLY;UNTIL=20260602T065959Z",
+		"END:VEVENT",
+		"END:VCALENDAR",
+	}, "\r\n") + "\r\n"
+
+	events := normalizeCalendarEventsForDisplay([]models.CalendarEvent{{
+		Ref: models.EventRef{
+			SourceID:   "icloud-calendar",
+			AccountID:  "icloud",
+			CalendarID: "home",
+			EventID:    "rsm-alg-sofia.ics",
+			InstanceID: "20260525T223500Z",
+		}.WithDefaults(),
+		Title: "RSM Alg Sofia",
+		Start: time.Date(2026, 5, 25, 15, 35, 0, 0, loc),
+		End:   time.Date(2026, 5, 25, 18, 5, 0, 0, loc),
+		Raw:   raw,
+	}})
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+	if got := events[0].Start.In(loc).Format("2006-01-02 15:04"); got != "2026-05-25 15:35" {
+		t.Fatalf("expanded occurrence start = %s, want May occurrence preserved", got)
+	}
+}
+
+func TestCalendarWeekStartCanUseSundayFromConfig(t *testing.T) {
+	events := dateAnchorCalendarEventsForTest()
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	cfg := &config.Config{}
+	setCalendarWeekStartForTest(t, cfg, "sunday")
+	m.SetConfig(cfg)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewAgenda
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarCursor = 1
+	m.calendarDetail = &m.calendarEvents[1]
+
+	model, _ := m.handleKeyMsg(keyRunes("w"))
+	m = model.(*Model)
+	if got := m.calendarWeekStart.Format("2006-01-02"); got != "2026-05-24" {
+		t.Fatalf("Sunday week start = %s, want 2026-05-24", got)
+	}
+	rendered := stripANSI(m.renderMainView())
+	if !strings.Contains(rendered, "Sun May 24") || !strings.Contains(rendered, "Sat May 30") {
+		t.Fatalf("Sunday-start week range missing from render:\n%s", rendered)
+	}
+}
+
+func TestCalendarTimedMultiDayEventDoesNotFillEveryWeekHour(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
+	event := models.CalendarEvent{
+		Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "travel", EventID: "flight-week"}.WithDefaults(),
+		Title: "Flight hold",
+		Start: time.Date(2026, 5, 25, 2, 0, 0, 0, loc),
+		End:   time.Date(2026, 5, 31, 22, 0, 0, 0, loc),
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event}}
+	m := New(b, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewWeek
+	m.calendarEvents = normalizeCalendarEventsForDisplay([]models.CalendarEvent{event})
+
+	got, continuation := m.calendarEventInHour(time.Date(2026, 5, 27, 0, 0, 0, 0, loc), 10)
+	if got != nil || continuation {
+		t.Fatalf("multi-day timed event occupied a normal hour cell: event=%#v continuation=%v", got, continuation)
+	}
+}
+
+func TestCalendarWeekVisibleEventsAreScopedToActiveWeek(t *testing.T) {
+	loc := time.FixedZone("PDT", -7*60*60)
+	inWeek := models.CalendarEvent{
+		Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "in-week"}.WithDefaults(),
+		Title: "In week",
+		Start: time.Date(2026, 5, 25, 9, 0, 0, 0, loc),
+		End:   time.Date(2026, 5, 25, 10, 0, 0, 0, loc),
+	}
+	nextWeek := models.CalendarEvent{
+		Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "next-week"}.WithDefaults(),
+		Title: "Next week",
+		Start: time.Date(2026, 6, 1, 9, 0, 0, 0, loc),
+		End:   time.Date(2026, 6, 1, 10, 0, 0, 0, loc),
+	}
+	m := &Model{
+		calendarView:      calendarViewWeek,
+		calendarWeekStart: time.Date(2026, 5, 24, 0, 0, 0, 0, loc),
+		calendarEvents:    []models.CalendarEvent{inWeek, nextWeek},
+	}
+
+	events := m.indexedCalendarEventsForActiveAnchorRange()
+	if len(events) != 1 || events[0].event.Title != "In week" {
+		t.Fatalf("visible week events = %#v, want only active week event", events)
+	}
+}
+
 func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)
@@ -2636,6 +2915,47 @@ func calendarImmediateMessagesForTest(cmd tea.Cmd) []tea.Msg {
 		return messages
 	}
 	return []tea.Msg{msg}
+}
+
+func dateAnchorCalendarEventsForTest() []models.CalendarEvent {
+	loc := time.FixedZone("PDT", -7*60*60)
+	return []models.CalendarEvent{
+		{
+			Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "month-start"}.WithDefaults(),
+			Title: "Month start",
+			Start: time.Date(2026, 5, 1, 9, 0, 0, 0, loc),
+			End:   time.Date(2026, 5, 1, 10, 0, 0, 0, loc),
+		},
+		{
+			Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "selected-current"}.WithDefaults(),
+			Title: "Selected current week",
+			Start: time.Date(2026, 5, 28, 15, 45, 0, 0, loc),
+			End:   time.Date(2026, 5, 28, 17, 45, 0, 0, loc),
+		},
+		{
+			Ref:   models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "next-month"}.WithDefaults(),
+			Title: "Next month",
+			Start: time.Date(2026, 6, 2, 11, 0, 0, 0, loc),
+			End:   time.Date(2026, 6, 2, 12, 0, 0, 0, loc),
+		},
+	}
+}
+
+func setCalendarWeekStartForTest(t *testing.T, cfg *config.Config, value string) {
+	t.Helper()
+	root := reflect.ValueOf(cfg).Elem()
+	calendarField := root.FieldByName("Calendar")
+	if !calendarField.IsValid() {
+		t.Fatal("config.Config is missing Calendar settings")
+	}
+	weekStart := calendarField.FieldByName("WeekStart")
+	if !weekStart.IsValid() {
+		t.Fatal("config.Config.Calendar is missing WeekStart")
+	}
+	if !weekStart.CanSet() {
+		t.Fatal("config.Config.Calendar.WeekStart is not settable")
+	}
+	weekStart.SetString(value)
 }
 
 func testCalendarEvents() []models.CalendarEvent {

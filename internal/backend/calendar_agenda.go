@@ -166,7 +166,9 @@ func (b *LocalBackend) listCachedCalendarAgenda(start, end time.Time) ([]models.
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, events...)
+		for _, event := range events {
+			out = append(out, calendar.ExpandEventOccurrences(event, start, end)...)
+		}
 	}
 	sortCalendarEvents(out)
 	return out, nil

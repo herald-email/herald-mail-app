@@ -135,6 +135,66 @@ func TestLocalBackendCalendarAgendaReadsConfiguredSourceCache(t *testing.T) {
 	}
 }
 
+func TestLocalBackendCalendarAgendaExpandsRecurringCachedEvents(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{
+		{ID: "icloud-calendar", Kind: "calendar", Provider: "caldav", AccountID: "icloud", CalDAV: config.CalDAVConfig{URL: "https://calendar.example/"}},
+	}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+	ics := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"BEGIN:VEVENT",
+		"UID:rsm-alg-sofia",
+		"SUMMARY:RSM Alg Sofia",
+		"DTSTART;TZID=America/Los_Angeles:20250825T153500",
+		"DTEND;TZID=America/Los_Angeles:20250825T180500",
+		"EXDATE;TZID=America/Los_Angeles:20260518T153500",
+		"RRULE:FREQ=WEEKLY;UNTIL=20260602T065959Z",
+		"END:VEVENT",
+		"BEGIN:VTIMEZONE",
+		"TZID:America/Los_Angeles",
+		"BEGIN:STANDARD",
+		"DTSTART:20071104T020000",
+		"END:STANDARD",
+		"END:VTIMEZONE",
+		"END:VCALENDAR",
+	}, "\r\n") + "\r\n"
+	event, err := calendar.EventFromICS("icloud-calendar", "icloud", "home", "rsm-alg-sofia.ics", `"etag"`, ics)
+	if err != nil {
+		t.Fatalf("EventFromICS: %v", err)
+	}
+	if err := store.PutCalendarEvent(*event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	events, err := b.listCachedCalendarAgenda(
+		time.Date(2026, 5, 1, 0, 0, 0, 0, loc),
+		time.Date(2026, 6, 1, 0, 0, 0, 0, loc),
+	)
+	if err != nil {
+		t.Fatalf("listCachedCalendarAgenda: %v", err)
+	}
+
+	var got []string
+	for _, event := range events {
+		got = append(got, event.Start.In(loc).Format("2006-01-02 15:04"))
+	}
+	want := []string{"2026-05-04 15:35", "2026-05-11 15:35", "2026-05-25 15:35"}
+	if strings.Join(got, ", ") != strings.Join(want, ", ") {
+		t.Fatalf("expanded occurrences = %#v, want %#v", got, want)
+	}
+}
+
 func TestLocalBackendCalendarAgendaSyncsProviderWhenCacheEmpty(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,

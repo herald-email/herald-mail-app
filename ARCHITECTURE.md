@@ -232,6 +232,8 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add selected Calendar Event Edit mutations for reminder overrides while preserving provider save-through/cache-after-success behavior.
 - [x] Add a shared calendar-source rail model for calendar views and invitation import pickers that groups calendars by account/provider, filters visible events, preserves scoped refs internally, and renders only user-visible calendar/account labels.
 - [x] Add a normalized visible calendar event row layer so Week, Day, 3-Day, Agenda, Search, and invitation flows share date-range filtering, sorting, all-day handling, RSVP markers, calendar colors, and provider-internal redaction.
+- [x] Normalize provider date-only and all-day event dates as local calendar days before display, treating provider all-day end dates as exclusive and preserving date anchors across Calendar view switches.
+- [x] Add `calendar.week_start` as a profile setting so Week can render Monday-first by default or Sunday-first when the user chooses Apple Calendar-style US week layout.
 - [x] Add a shared calendar notes renderer that converts provider HTML or Markdown notes into terminal-readable text before drawers, inspectors, full detail, command panels, and previews wrap content.
 - [x] Add explicit calendar invitation intake from mail previews by parsing `text/calendar` parts and `.ics` attachments into the existing `CalendarEvent` model, then routing adds through the selected writable calendar source.
 - [x] Add optional source/account scoped daemon read filters and MCP listing refs while preserving legacy folder/message-ID compatibility.

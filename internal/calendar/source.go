@@ -1116,7 +1116,7 @@ func googleTimeEmpty(t googleEventTime) bool {
 
 func parseGoogleTime(t googleEventTime) (time.Time, bool, bool) {
 	if strings.TrimSpace(t.Date) != "" {
-		parsed, err := time.Parse("2006-01-02", strings.TrimSpace(t.Date))
+		parsed, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(t.Date), time.Local)
 		return parsed, true, err == nil
 	}
 	parsed, ok := parseRFC3339(t.DateTime)
@@ -1247,6 +1247,12 @@ func resolveCalDAVHref(baseURL, href string) string {
 
 func sameCalDAVURL(a, b string) bool {
 	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
+// EventFromICS parses the first VEVENT in an iCalendar payload into Herald's
+// calendar event model.
+func EventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
+	return eventFromICS(sourceID, accountID, calendarID, eventID, etag, data)
 }
 
 func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
@@ -1407,7 +1413,7 @@ func parseICSRichDetails(data string) icsRichDetails {
 	inAlarm := false
 	alarmAction := ""
 	alarmTrigger := ""
-	for _, line := range unfoldICSLines(data) {
+	for _, line := range firstVEVENTLines(data) {
 		nameAndParams, value, ok := strings.Cut(line, ":")
 		if !ok {
 			continue
@@ -1544,7 +1550,7 @@ func calendarMailtoAddress(value string) string {
 }
 
 func parseICS(data string) map[string]string {
-	lines := unfoldICSLines(data)
+	lines := firstVEVENTLines(data)
 	out := make(map[string]string)
 	for _, line := range lines {
 		key, value, ok := strings.Cut(line, ":")
@@ -1555,6 +1561,56 @@ func parseICS(data string) map[string]string {
 		out[key] = unescapeICSValue(value)
 	}
 	return out
+}
+
+func firstVEVENTLines(data string) []string {
+	lines := unfoldICSLines(data)
+	var eventLines []string
+	inEvent := false
+	nestedDepth := 0
+	for _, line := range lines {
+		nameAndParams, value, ok := strings.Cut(line, ":")
+		if !ok {
+			if inEvent {
+				eventLines = append(eventLines, line)
+			}
+			continue
+		}
+		key := strings.ToUpper(strings.TrimSpace(strings.Split(nameAndParams, ";")[0]))
+		component := strings.ToUpper(strings.TrimSpace(value))
+		switch key {
+		case "BEGIN":
+			if component == "VEVENT" && !inEvent {
+				inEvent = true
+				nestedDepth = 0
+				continue
+			}
+			if inEvent {
+				nestedDepth++
+				eventLines = append(eventLines, line)
+			}
+			continue
+		case "END":
+			if !inEvent {
+				continue
+			}
+			if component == "VEVENT" && nestedDepth == 0 {
+				return eventLines
+			}
+			if nestedDepth > 0 {
+				nestedDepth--
+			}
+			eventLines = append(eventLines, line)
+			continue
+		}
+		if inEvent {
+			eventLines = append(eventLines, line)
+		}
+	}
+	if len(eventLines) > 0 {
+		return eventLines
+	}
+	return lines
 }
 
 func unfoldICSLines(data string) []string {
@@ -1584,7 +1640,7 @@ func parseICSTimeWithZone(value, timezone string) (time.Time, bool, error) {
 		return time.Time{}, false, fmt.Errorf("empty timestamp")
 	}
 	if len(value) == len("20060102") {
-		parsed, err := time.Parse("20060102", value)
+		parsed, err := time.ParseInLocation("20060102", value, time.Local)
 		if err != nil {
 			return time.Time{}, false, err
 		}

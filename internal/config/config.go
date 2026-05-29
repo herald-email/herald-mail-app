@@ -75,6 +75,10 @@ type ComposeConfig struct {
 	Signature SignatureConfig `yaml:"signature,omitempty"`
 }
 
+type CalendarConfig struct {
+	WeekStart string `yaml:"week_start,omitempty"` // monday | sunday
+}
+
 type AccountGroup struct {
 	AccountID         string
 	DisplayName       string
@@ -98,6 +102,7 @@ type Config struct {
 		Profile      string `yaml:"profile,omitempty"`
 		CustomKeymap string `yaml:"custom_keymap,omitempty"`
 	} `yaml:"keyboard,omitempty"`
+	Calendar    CalendarConfig    `yaml:"calendar,omitempty"`
 	Theme       ThemeConfig       `yaml:"theme,omitempty"`
 	Sources     []SourceConfig    `yaml:"sources,omitempty"`
 	Credentials CredentialsConfig `yaml:"credentials"`
@@ -213,6 +218,9 @@ const (
 	CacheStoragePolicyLightweight   = "lightweight"
 	CacheStoragePolicyNoAttachments = "no_attachments"
 	CacheStoragePolicyPreserveAll   = "preserve_all"
+
+	CalendarWeekStartMonday = "monday"
+	CalendarWeekStartSunday = "sunday"
 )
 
 func NormalizeCacheStoragePolicy(policy string) string {
@@ -225,6 +233,15 @@ func NormalizeCacheStoragePolicy(policy string) string {
 		return CacheStoragePolicyPreserveAll
 	default:
 		return CacheStoragePolicyNoAttachments
+	}
+}
+
+func NormalizeCalendarWeekStart(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case CalendarWeekStartSunday:
+		return CalendarWeekStartSunday
+	default:
+		return CalendarWeekStartMonday
 	}
 }
 
@@ -603,6 +620,7 @@ func (c *Config) Save(path string) error {
 // applyDefaults sets sensible defaults for optional config fields
 func (c *Config) applyDefaults() {
 	c.Cache.StoragePolicy = NormalizeCacheStoragePolicy(c.Cache.StoragePolicy)
+	c.Calendar.WeekStart = NormalizeCalendarWeekStart(c.Calendar.WeekStart)
 	if c.Ollama.Model == "" {
 		c.Ollama.Model = "gemma3:4b"
 	}
