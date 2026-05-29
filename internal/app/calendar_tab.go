@@ -16,6 +16,7 @@ import (
 	calendarpkg "github.com/herald-email/herald-mail-app/internal/calendar"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 type calendarViewMode string
@@ -2817,9 +2818,7 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	if len(lines) > 0 {
 		lines = append(lines, "")
 	}
-	swatch := dynamicCalendarBlockStyle("#181819", m.calendarEventColor(*event)).Render("  ")
-	titleW := width - ansi.StringWidth(swatch) - 1
-	lines = append(lines, swatch+" "+m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, titleW)))
+	lines = append(lines, m.calendarDetailTitleLine(*event, width))
 	lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
 	if !event.AllDay && !event.Start.IsZero() {
 		lines = append(lines, calendarDetailRow(m, "Local", calendarTimeRangeInLocation(*event, time.Local), width))
@@ -2877,7 +2876,7 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	if strings.TrimSpace(calendarRenderedNotes(event.Description)) != "" {
 		lines = append(lines, "")
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Notes", width)))
-		for _, line := range wrapText(calendarRenderedNotes(event.Description), width) {
+		for _, line := range calendarDetailNoteLines(event.Description, width) {
 			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(line, width)))
 		}
 	}
@@ -3524,7 +3523,18 @@ func calendarDetailRow(m *Model, label, value string, width int) string {
 	if valueW < 4 {
 		valueW = 4
 	}
-	return m.theme.Metadata.Label.Style().Render(label) + " " + m.theme.Text.Primary.Style().Render(calendarFit(value, valueW))
+	return m.theme.Metadata.Label.Style().Render(label) + " " + m.theme.Text.Primary.Style().Render(calendarFit(linkifyURLs(value), valueW))
+}
+
+func (m *Model) calendarDetailTitleLine(event models.CalendarEvent, width int) string {
+	color := m.calendarEventColor(event)
+	swatch := dynamicCalendarBlockStyle("#181819", color).Render("  ")
+	titleW := width - ansi.StringWidth(swatch) - 1
+	if titleW < 8 {
+		titleW = 8
+	}
+	title := dynamicForegroundStyle(color).Bold(true).Render(calendarFit(event.Title, titleW))
+	return swatch + " " + title
 }
 
 func calendarOrganizerLabel(event models.CalendarEvent) string {
@@ -3565,9 +3575,32 @@ func calendarAttachmentLabel(attachment models.CalendarAttachment) string {
 		title = "Attachment"
 	}
 	if mimeType := strings.TrimSpace(attachment.MIMEType); mimeType != "" {
-		return title + " (" + mimeType + ")"
+		title += " (" + mimeType + ")"
+	}
+	if uri := strings.TrimSpace(attachment.URI); uri != "" {
+		return render.TerminalHyperlink(title, uri)
 	}
 	return title
+}
+
+func calendarDetailNoteLines(value string, width int) []string {
+	notes := calendarRenderedNotes(value)
+	if strings.TrimSpace(notes) == "" {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(notes, "\n") {
+		line = strings.TrimRight(line, " \t")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if render.URLRe.MatchString(line) {
+			out = append(out, calendarFit(linkifyURLs(line), width))
+			continue
+		}
+		out = append(out, wrapText(line, width)...)
+	}
+	return out
 }
 
 func calendarRecurrenceLabel(event models.CalendarEvent) string {

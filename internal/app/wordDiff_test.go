@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestTokenizeWords_SimpleWords(t *testing.T) {
@@ -420,22 +422,7 @@ func TestAcceptComposeAIResponseStoresUndoBody(t *testing.T) {
 
 // stripANSI removes ANSI escape codes for test assertions.
 func stripANSI(s string) string {
-	var out strings.Builder
-	inEscape := false
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\x1b' {
-			inEscape = true
-			continue
-		}
-		if inEscape {
-			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		out.WriteByte(s[i])
-	}
-	return out.String()
+	return ansi.Strip(s)
 }
 
 // --- styledSender tests ---

@@ -1854,6 +1854,7 @@ func TestCalendarViewSwitchingUsesSelectedDateInsteadOfAgendaMonthStart(t *testi
 			m.calendarView = calendarViewAgenda
 			m.calendarEvents = normalizeCalendarEventsForDisplay(events)
 			m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(events[0].Start)
+			m.calendarAgendaShowPast = true
 			m.calendarCursor = 1
 			m.calendarDetail = &m.calendarEvents[1]
 
@@ -2047,6 +2048,7 @@ func TestCalendarWeekStartCanUseSundayFromConfig(t *testing.T) {
 	m.activeTab = tabCalendar
 	m.calendarView = calendarViewAgenda
 	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarAgendaShowPast = true
 	m.calendarCursor = 1
 	m.calendarDetail = &m.calendarEvents[1]
 
@@ -2294,6 +2296,57 @@ func TestCalendarFullEventDetailRendersRichMetadataAndTimezones(t *testing.T) {
 		if strings.Contains(lower, forbidden) {
 			t.Fatalf("rich event detail leaked provider internals %q:\n%s", forbidden, rendered)
 		}
+	}
+}
+
+func TestCalendarEventDetailLinkifiesEventURLs(t *testing.T) {
+	rich := richCalendarEventForTest()
+	locationURL := "https://us06web.zoom.us/j/86920825197?pwd=dp0q1p26mDDxEHsgtMtULPaHB3hz5s.1"
+	briefURL := "https://example.com/interview/brief"
+	attachmentURL := "https://docs.example.com/agenda.pdf"
+	rich.Location = locationURL
+	rich.Description = "This is a Zoom meeting. Click this link to join:\n" + locationURL + "\nBrief: " + briefURL
+	rich.Attachments = []models.CalendarAttachment{{
+		Title:    "Agenda",
+		URI:      attachmentURL,
+		MIMEType: "application/pdf",
+	}}
+	b := &calendarAgendaStubBackend{
+		available: true,
+		events:    []models.CalendarEvent{rich},
+		collections: []models.CalendarCollection{{
+			Ref: models.CollectionRef{
+				SourceID:     "demo-calendar",
+				AccountID:    "default",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "work",
+				DisplayName:  "Work",
+			},
+			Color: "#ff5f87",
+		}},
+	}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarCollections = b.collections
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+
+	rendered := m.renderCalendarEventDetail(120, 60, false)
+	for _, target := range []string{locationURL, briefURL, attachmentURL} {
+		if !strings.Contains(rendered, "\x1b]8;;"+target) {
+			t.Fatalf("calendar detail missing OSC8 target %q:\n%q", target, rendered)
+		}
+	}
+	visible := ansi.Strip(rendered)
+	if strings.Contains(visible, locationURL) {
+		t.Fatalf("calendar detail should shorten visible event URLs, got:\n%s", visible)
+	}
+	if !strings.Contains(visible, "us06web.zoom.us/j/86920825197") || !strings.Contains(visible, "example.com/interview/brief") || !strings.Contains(visible, "Agenda (application/pdf)") {
+		t.Fatalf("calendar detail missing readable shortened URL labels:\n%s", visible)
 	}
 }
 

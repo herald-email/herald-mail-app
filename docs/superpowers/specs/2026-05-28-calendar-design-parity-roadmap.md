@@ -131,7 +131,7 @@ Raw HTML in event descriptions makes the current detail and inspector surfaces f
 - [x] Detect HTML notes from provider data and convert them into terminal-readable text or Markdown before wrapping.
 - [x] Preserve paragraph breaks, ordered and unordered lists, emphasis, links, meeting URLs, dial-in numbers, and code-like tokens.
 - [ ] Collapse or de-emphasize machine-generated calendar footers such as repeated separator lines and `Please do not edit this section` when doing so does not hide join details.
-- [ ] Reuse Herald's existing URL linkification and tracker-sanitization behavior where links are shown.
+- [x] Reuse Herald's existing URL linkification and tracker-sanitization behavior where links are shown.
 - [x] Keep Markdown notes readable with the same renderer path so providers that supply plain Markdown do not regress.
 - [ ] Add fixtures for Shopify-style interview notes, Google Meet dial-in blocks, plain text descriptions, and mixed HTML plus plain text descriptions.
 
