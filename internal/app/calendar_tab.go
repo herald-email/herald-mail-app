@@ -1349,9 +1349,6 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "p":
-		if m.calendarDetailOpen {
-			return m, m.openCalendarMeetingPrep()
-		}
 		if m.calendarView == "" || m.calendarView == calendarViewAgenda {
 			m.calendarAgendaShowPast = !m.calendarAgendaShowPast
 			if m.calendarAgendaShowPast {
@@ -1398,31 +1395,8 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "e":
-		if m.calendarDetailOpen {
-			m.openCalendarEdit()
-		}
+		m.openCalendarEdit()
 		return m, nil
-	case "b":
-		if m.calendarDetailOpen {
-			return m, m.openCalendarTravelBuffer()
-		}
-		return m, nil
-	case "s":
-		if m.calendarDetailOpen {
-			return m, m.openCalendarAISummary()
-		}
-		return m, nil
-	case "v":
-		if m.calendarDetailOpen {
-			return m, m.saveCalendarRSVP()
-		}
-		return m, nil
-	case "y":
-		return m, m.saveCalendarRSVPStatus("accepted")
-	case "m":
-		return m, m.saveCalendarRSVPStatus("tentative")
-	case "n":
-		return m, m.saveCalendarRSVPStatus("declined")
 	case "esc":
 		if m.calendarDetailOpen {
 			m.calendarEdit = calendarEventEditState{}
@@ -2952,16 +2926,10 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	lines = append(lines, calendarDetailRow(m, "Status", calendarStatusLabel(*event), width))
 	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(*event), width))
 	lines = append(lines, calendarDetailRow(m, "Scope", "this event", width))
-	lines = append(lines, calendarDetailRow(m, "Mode", "read-only list / provider-backed edit/RSVP", width))
-	if len(event.Attendees) > 0 {
-		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("RSVP", width)))
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarRSVPActionLabel(*event)+"  y: accept  m: maybe  n: decline", width)))
-	}
+	lines = append(lines, calendarDetailRow(m, "Mode", "read-only list / provider-backed edit", width))
 	lines = append(lines, "")
 	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Actions", width)))
-	for _, action := range []string{"e: edit event", "p: meeting prep", "b: travel buffer", "s: AI summary"} {
-		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(action, width)))
-	}
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit("e: edit event", width)))
 	if strings.TrimSpace(calendarRenderedNotes(event.Description)) != "" {
 		lines = append(lines, "")
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Notes", width)))

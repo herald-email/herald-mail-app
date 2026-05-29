@@ -467,7 +467,7 @@ func TestCrossSourceSearchViewBlendsMailAndCalendarResults(t *testing.T) {
 	}
 }
 
-func TestCalendarMeetingPrepOpensFromDetailWithRelatedCachedMail(t *testing.T) {
+func TestCalendarMeetingPrepShortcutIgnoredFromDetail(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	event := richCalendarEventForTest()
 	event.Title = "Launch planning"
@@ -512,46 +512,11 @@ func TestCalendarMeetingPrepOpensFromDetailWithRelatedCachedMail(t *testing.T) {
 
 	model, cmd := m.handleKeyMsg(keyRunes("p"))
 	m = model.(*Model)
-	if !m.calendarMeetingPrepOpen || !m.calendarMeetingPrepLoading {
-		t.Fatalf("meeting prep state open=%v loading=%v, want open loading", m.calendarMeetingPrepOpen, m.calendarMeetingPrepLoading)
+	if cmd != nil {
+		t.Fatalf("meeting prep shortcut returned command %T, want ignored", cmd)
 	}
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
-	}
-	if len(b.meetingPrepCalls) != 1 || b.meetingPrepCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
-		t.Fatalf("meeting prep calls = %#v, want selected event ref", b.meetingPrepCalls)
-	}
-	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{
-		"Meeting Prep",
-		"read-only cached context",
-		"Launch planning",
-		"Related Mail",
-		"Launch planning memo",
-		"mina@example.com",
-		"Nearby Events",
-		"Launch retro",
-		"Query Terms",
-		"Launch planning",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("meeting prep missing %q:\n%s", want, rendered)
-		}
-	}
-	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
-		if strings.Contains(rendered, forbidden) {
-			t.Fatalf("meeting prep leaked or advertised %q:\n%s", forbidden, rendered)
-		}
-	}
-
-	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
-	m = model.(*Model)
-	if m.calendarMeetingPrepOpen {
-		t.Fatal("expected Esc to close meeting prep")
-	}
-	if !m.calendarDetailOpen {
-		t.Fatal("expected Esc from meeting prep to return to Event Detail")
+	if m.calendarMeetingPrepOpen || m.calendarMeetingPrepLoading || len(b.meetingPrepCalls) != 0 {
+		t.Fatalf("meeting prep should not open from event actions, open=%v loading=%v calls=%#v", m.calendarMeetingPrepOpen, m.calendarMeetingPrepLoading, b.meetingPrepCalls)
 	}
 }
 
@@ -707,7 +672,7 @@ func TestCalendarMeetingPrepShortcutDoesNotStealTextEntry(t *testing.T) {
 	})
 }
 
-func TestCalendarTravelBufferOpensFromDetailWithCachedTravelMail(t *testing.T) {
+func TestCalendarTravelBufferShortcutIgnoredFromDetail(t *testing.T) {
 	start := time.Date(2026, 5, 24, 14, 0, 0, 0, time.UTC)
 	event := richCalendarEventForTest()
 	event.Title = "Partner onsite"
@@ -758,48 +723,11 @@ func TestCalendarTravelBufferOpensFromDetailWithCachedTravelMail(t *testing.T) {
 
 	model, cmd := m.handleKeyMsg(keyRunes("b"))
 	m = model.(*Model)
-	if !m.calendarTravelBufferOpen || !m.calendarTravelBufferLoading {
-		t.Fatalf("travel buffer state open=%v loading=%v, want open loading", m.calendarTravelBufferOpen, m.calendarTravelBufferLoading)
+	if cmd != nil {
+		t.Fatalf("travel buffer shortcut returned command %T, want ignored", cmd)
 	}
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
-	}
-	if len(b.travelCalls) != 1 || b.travelCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
-		t.Fatalf("travel buffer calls = %#v, want selected event ref", b.travelCalls)
-	}
-	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{
-		"Travel Buffer",
-		"read-only cached travel context",
-		"Partner onsite",
-		"Buffer Suggestions",
-		"Arrive early",
-		"Flight itinerary for SFO",
-		"Travel Mail",
-		"airline@example.com",
-		"Nearby Gaps",
-		"Team sync",
-		"Query Terms",
-		"SFO Terminal 2",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("travel buffer missing %q:\n%s", want, rendered)
-		}
-	}
-	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
-		if strings.Contains(rendered, forbidden) {
-			t.Fatalf("travel buffer leaked or advertised %q:\n%s", forbidden, rendered)
-		}
-	}
-
-	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
-	m = model.(*Model)
-	if m.calendarTravelBufferOpen {
-		t.Fatal("expected Esc to close travel buffer")
-	}
-	if !m.calendarDetailOpen {
-		t.Fatal("expected Esc from travel buffer to return to Event Detail")
+	if m.calendarTravelBufferOpen || m.calendarTravelBufferLoading || len(b.travelCalls) != 0 {
+		t.Fatalf("travel buffer should not open from event actions, open=%v loading=%v calls=%#v", m.calendarTravelBufferOpen, m.calendarTravelBufferLoading, b.travelCalls)
 	}
 }
 
@@ -864,7 +792,7 @@ func TestCalendarTravelBufferShortcutDoesNotStealTextEntry(t *testing.T) {
 	})
 }
 
-func TestCalendarAISummaryOpensFromDetailWithCachedContext(t *testing.T) {
+func TestCalendarAISummaryShortcutIgnoredFromDetail(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	event := richCalendarEventForTest()
 	event.Title = "Launch planning"
@@ -915,48 +843,11 @@ func TestCalendarAISummaryOpensFromDetailWithCachedContext(t *testing.T) {
 
 	model, cmd := m.handleKeyMsg(keyRunes("s"))
 	m = model.(*Model)
-	if !m.calendarAISummaryOpen || !m.calendarAISummaryLoading {
-		t.Fatalf("AI summary state open=%v loading=%v, want open loading", m.calendarAISummaryOpen, m.calendarAISummaryLoading)
+	if cmd != nil {
+		t.Fatalf("AI summary shortcut returned command %T, want ignored", cmd)
 	}
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
-	}
-	if len(b.aiSummaryCalls) != 1 || b.aiSummaryCalls[0].LocalID != event.Ref.WithDefaults().LocalID {
-		t.Fatalf("AI summary calls = %#v, want selected event ref", b.aiSummaryCalls)
-	}
-	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{
-		"AI Summary",
-		"read-only cached AI summary",
-		"Launch planning",
-		"Summary Bullets",
-		"Mina flagged launch risk",
-		"Action Items",
-		"Review Launch planning risks",
-		"Related Sources",
-		"1 cached mail",
-		"1 nearby event",
-		"Query Terms",
-		"mina@example.com",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("AI summary missing %q:\n%s", want, rendered)
-		}
-	}
-	for _, forbidden := range []string{"provider-secret", "provider-etag", "syncToken", "OAuth", "Save", "Edit"} {
-		if strings.Contains(rendered, forbidden) {
-			t.Fatalf("AI summary leaked or advertised %q:\n%s", forbidden, rendered)
-		}
-	}
-
-	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
-	m = model.(*Model)
-	if m.calendarAISummaryOpen {
-		t.Fatal("expected Esc to close AI summary")
-	}
-	if !m.calendarDetailOpen {
-		t.Fatal("expected Esc from AI summary to return to Event Detail")
+	if m.calendarAISummaryOpen || m.calendarAISummaryLoading || len(b.aiSummaryCalls) != 0 {
+		t.Fatalf("AI summary should not open from event actions, open=%v loading=%v calls=%#v", m.calendarAISummaryOpen, m.calendarAISummaryLoading, b.aiSummaryCalls)
 	}
 }
 
@@ -2513,7 +2404,7 @@ func TestCalendarFullEventDetailRendersRichMetadataAndTimezones(t *testing.T) {
 		"Scope",
 		"this event",
 		"Mode",
-		"provider-backed edit/RSVP",
+		"provider-backed edit",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rich event detail missing %q:\n%s", want, rendered)
@@ -2578,7 +2469,7 @@ func TestCalendarEventDetailLinkifiesEventURLs(t *testing.T) {
 	}
 }
 
-func TestCalendarEventDetailSeparatesRSVPFromRunnableActions(t *testing.T) {
+func TestCalendarEventDetailOnlyAdvertisesEditAction(t *testing.T) {
 	rich := richCalendarEventForTest()
 	rich.Attendees[0].RSVP = "needs-action"
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
@@ -2593,25 +2484,14 @@ func TestCalendarEventDetailSeparatesRSVPFromRunnableActions(t *testing.T) {
 
 	rendered := stripANSI(m.renderCalendarEventDetail(70, 60, false))
 	for _, want := range []string{
-		"RSVP",
-		"needs response",
-		"y: accept  m: maybe  n: decline",
 		"Actions",
 		"e: edit event",
-		"p: meeting prep",
-		"b: travel buffer",
-		"s: AI summary",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("event detail missing %q:\n%s", want, rendered)
 		}
 	}
-	rsvpAt := strings.Index(rendered, "y: accept  m: maybe  n: decline")
-	actionsAt := strings.Index(rendered, "Actions")
-	if rsvpAt == -1 || actionsAt == -1 || rsvpAt > actionsAt {
-		t.Fatalf("RSVP controls should render before runnable actions:\n%s", rendered)
-	}
-	for _, forbidden := range []string{"n: new event", "d: delete event", "r: reply", "a: add reminder"} {
+	for _, forbidden := range []string{"RSVP", "y: accept", "m: maybe", "n: decline", "p: meeting prep", "b: travel buffer", "s: AI summary", "n: new event", "d: delete event", "r: reply", "a: add reminder"} {
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("event detail advertised stale/conflicting action %q:\n%s", forbidden, rendered)
 		}
@@ -2665,6 +2545,33 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("event edit leaked or advertised %q:\n%s", forbidden, rendered)
 		}
+	}
+}
+
+func TestCalendarEventEditOpensFromSelectedCalendarRow(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+
+	model, cmd := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("edit shortcut returned command %T, want immediate edit state", cmd)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatal("expected e from selected calendar row to open Event Edit")
+	}
+	if !m.calendarDetailOpen {
+		t.Fatal("expected row edit to open the preview/edit surface")
+	}
+	if m.calendarEdit.Base.Ref.WithDefaults().LocalID != rich.Ref.WithDefaults().LocalID {
+		t.Fatalf("edit ref=%q, want selected event %q", m.calendarEdit.Base.Ref.WithDefaults().LocalID, rich.Ref.WithDefaults().LocalID)
 	}
 }
 
@@ -2799,7 +2706,7 @@ func TestCalendarEventEditProviderConflictNamesConflictAndKeepsEditorOpen(t *tes
 	}
 }
 
-func TestCalendarEventRSVPShortcutUpdatesAttendeeAndDetail(t *testing.T) {
+func TestCalendarEventRSVPShortcutIgnoredFromDetail(t *testing.T) {
 	rich := richCalendarEventForTest()
 	rich.Attendees[0].RSVP = "needs-action"
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
@@ -2814,28 +2721,21 @@ func TestCalendarEventRSVPShortcutUpdatesAttendeeAndDetail(t *testing.T) {
 
 	model, cmd := m.handleKeyMsg(keyRunes("v"))
 	m = model.(*Model)
-	if cmd == nil {
-		t.Fatal("expected RSVP shortcut to produce mutation command")
+	if cmd != nil {
+		t.Fatalf("RSVP shortcut returned command %T, want ignored", cmd)
 	}
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
+	if len(b.rsvpEvents) != 0 || len(b.rsvpStatuses) != 0 {
+		t.Fatalf("RSVP calls refs=%#v statuses=%#v, want none", b.rsvpEvents, b.rsvpStatuses)
 	}
-	if len(b.rsvpEvents) != 1 || len(b.rsvpStatuses) != 1 || b.rsvpStatuses[0] != "accepted" {
-		t.Fatalf("RSVP calls refs=%#v statuses=%#v, want accepted response", b.rsvpEvents, b.rsvpStatuses)
-	}
-	if m.calendarDetail == nil || len(m.calendarDetail.Attendees) == 0 || m.calendarDetail.Attendees[0].RSVP != "accepted" {
-		t.Fatalf("calendar detail attendees = %#v, want accepted RSVP", m.calendarDetail)
-	}
-	if !strings.Contains(m.calendarStatus, "Saved RSVP accepted") {
-		t.Fatalf("calendar status = %q, want RSVP success", m.calendarStatus)
+	if m.calendarDetail == nil || len(m.calendarDetail.Attendees) == 0 || m.calendarDetail.Attendees[0].RSVP != "needs-action" {
+		t.Fatalf("calendar detail attendees = %#v, want unchanged RSVP", m.calendarDetail)
 	}
 }
 
-func TestCalendarEventRSVPConflictLeavesCachedAttendeeUnchanged(t *testing.T) {
+func TestCalendarExplicitRSVPKeysIgnoredFromCalendarRow(t *testing.T) {
 	rich := richCalendarEventForTest()
 	rich.Attendees[0].RSVP = "tentative"
-	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}, rsvpErr: models.ErrCalendarMutationConflict}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
 	m := New(b, nil, "", nil, false)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
 	m = updated.(*Model)
@@ -2843,19 +2743,18 @@ func TestCalendarEventRSVPConflictLeavesCachedAttendeeUnchanged(t *testing.T) {
 	m.activeTab = tabCalendar
 	m.calendarEvents = b.events
 	m.calendarDetail = &rich
-	m.calendarDetailOpen = true
 
-	model, cmd := m.handleKeyMsg(keyRunes("v"))
+	model, cmd := m.handleKeyMsg(keyRunes("n"))
 	m = model.(*Model)
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
+	_ = model
+	if cmd != nil {
+		t.Fatalf("explicit RSVP key returned command %T, want ignored", cmd)
+	}
+	if len(b.rsvpEvents) != 0 || len(b.rsvpStatuses) != 0 {
+		t.Fatalf("RSVP calls refs=%#v statuses=%#v, want none", b.rsvpEvents, b.rsvpStatuses)
 	}
 	if m.calendarDetail == nil || len(m.calendarDetail.Attendees) == 0 || m.calendarDetail.Attendees[0].RSVP != "tentative" {
 		t.Fatalf("calendar detail attendees = %#v, want unchanged tentative RSVP", m.calendarDetail)
-	}
-	if !strings.Contains(strings.ToLower(m.calendarStatus), "conflict") {
-		t.Fatalf("calendar status = %q, want conflict", m.calendarStatus)
 	}
 }
 
@@ -3252,9 +3151,14 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 	}
 	m.calendarDetail = &rich
 	detail := stripANSI(m.renderCalendarEventDetail(70, 60, false))
-	for _, want := range []string{"Before the meeting", "- Read brief", "- Bring notes", "RSVP", "needs response"} {
+	for _, want := range []string{"Before the meeting", "- Read brief", "- Bring notes", "Actions", "e: edit event"} {
 		if !strings.Contains(detail, want) {
 			t.Fatalf("rendered notes/detail missing %q:\n%s", want, detail)
+		}
+	}
+	for _, forbidden := range []string{"RSVP", "needs response", "p: meeting prep", "b: travel buffer", "s: AI summary"} {
+		if strings.Contains(detail, forbidden) {
+			t.Fatalf("rendered notes/detail advertised removed action %q:\n%s", forbidden, detail)
 		}
 	}
 	if strings.Contains(detail, "<strong>") || strings.Contains(detail, "</p>") {
@@ -3428,35 +3332,6 @@ func TestCalendarDayNavigationCrossesDayBoundary(t *testing.T) {
 	}
 	if !sameCalendarDate(m.calendarDay, events[2].Start) {
 		t.Fatalf("calendarDay=%v, want next event day %v", m.calendarDay, events[2].Start)
-	}
-}
-
-func TestCalendarExplicitRSVPKeys(t *testing.T) {
-	rich := richCalendarEventForTest()
-	rich.Attendees[0].RSVP = "needs-action"
-	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
-	m := New(b, nil, "", nil, false)
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
-	m = updated.(*Model)
-	m.loading = false
-	m.activeTab = tabCalendar
-	m.calendarEvents = b.events
-	m.calendarDetail = &rich
-
-	model, cmd := m.handleKeyMsg(keyRunes("n"))
-	m = model.(*Model)
-	if cmd == nil {
-		t.Fatal("expected decline key to produce RSVP command")
-	}
-	for _, msg := range calendarImmediateMessagesForTest(cmd) {
-		model, _ = m.Update(msg)
-		m = model.(*Model)
-	}
-	if len(b.rsvpStatuses) != 1 || b.rsvpStatuses[0] != "declined" {
-		t.Fatalf("RSVP statuses=%#v, want declined", b.rsvpStatuses)
-	}
-	if m.calendarDetail == nil || m.calendarDetail.Attendees[0].RSVP != "declined" {
-		t.Fatalf("calendar detail = %#v, want declined attendee", m.calendarDetail)
 	}
 }
 
