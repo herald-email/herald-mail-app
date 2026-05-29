@@ -2234,6 +2234,110 @@ func TestCalendarWeekVisibleEventsAreScopedToActiveWeek(t *testing.T) {
 	}
 }
 
+func TestCalendarDayAgendaUsesSharedHalfHourGridWithoutCuttingLongEvents(t *testing.T) {
+	start := time.Date(2026, 4, 20, 13, 0, 0, 0, time.Local)
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "demo-calendar",
+			AccountID:  models.DefaultAccountID,
+			CalendarID: "personal",
+			EventID:    "focus-block",
+		}.WithDefaults(),
+		Title:  "Focus Block",
+		Start:  start,
+		End:    start.Add(2 * time.Hour),
+		Status: "busy",
+	}
+	m := New(&calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event}}, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewDay
+	m.calendarEvents = normalizeCalendarEventsForDisplay([]models.CalendarEvent{event})
+	m.calendarDay = calendarDayStartFor(start)
+	m.calendarDetail = &m.calendarEvents[0]
+
+	rendered := stripANSI(m.renderCalendarDayAgenda(110, 40))
+	if !strings.Contains(rendered, "13:30") {
+		t.Fatalf("tall day agenda should include 30-minute rows from the shared grid:\n%s", rendered)
+	}
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "13:00") || !strings.Contains(line, "Focus Block") {
+			continue
+		}
+		if i+1 >= len(lines) {
+			t.Fatalf("13:00 event row was the final rendered line:\n%s", rendered)
+		}
+		next := lines[i+1]
+		if !strings.Contains(next, "13:30") {
+			t.Fatalf("long event should continue into the next half-hour row, got next line %q:\n%s", next, rendered)
+		}
+		if strings.Contains(next, "····") {
+			t.Fatalf("continuation row should not be cut by guide dots, got %q:\n%s", next, rendered)
+		}
+		return
+	}
+	t.Fatalf("did not find 13:00 Focus Block row:\n%s", rendered)
+}
+
+func TestCalendarThreeDayCommandUsesSharedHalfHourGridWithoutOpenLaneFillers(t *testing.T) {
+	start := time.Date(2026, 4, 20, 13, 0, 0, 0, time.Local)
+	events := []models.CalendarEvent{
+		{
+			Ref: models.EventRef{
+				SourceID:   "demo-calendar",
+				AccountID:  models.DefaultAccountID,
+				CalendarID: "personal",
+				EventID:    "focus-block",
+			}.WithDefaults(),
+			Title:  "Focus Block",
+			Start:  start,
+			End:    start.Add(2 * time.Hour),
+			Status: "busy",
+		},
+		{
+			Ref: models.EventRef{
+				SourceID:   "demo-calendar",
+				AccountID:  models.DefaultAccountID,
+				CalendarID: "work",
+				EventID:    "planning",
+			}.WithDefaults(),
+			Title:  "Planning",
+			Start:  start.AddDate(0, 0, 1).Add(time.Hour),
+			End:    start.AddDate(0, 0, 1).Add(2 * time.Hour),
+			Status: "confirmed",
+		},
+	}
+	m := New(&calendarAgendaStubBackend{available: true, events: events}, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewThreeDay
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarThreeDayStart = calendarDayStartFor(start)
+	m.calendarDetail = &m.calendarEvents[0]
+
+	rendered := stripANSI(m.renderCalendarThreeDayLanes(110, 40))
+	for _, want := range []string{"Mon Apr 20", "Tue Apr 21", "Wed Apr 22", "13:00", "13:30", "Focus Block", "Planning"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("3-day shared grid missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "open") {
+		t.Fatalf("3-day shared grid should not render list-style open lane fillers:\n%s", rendered)
+	}
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "13:00") || !strings.Contains(line, "Focus Block") {
+			continue
+		}
+		if i+1 >= len(lines) || !strings.Contains(lines[i+1], "13:30") {
+			t.Fatalf("long 3-day event should continue into the next half-hour row:\n%s", rendered)
+		}
+		return
+	}
+	t.Fatalf("did not find 13:00 Focus Block row:\n%s", rendered)
+}
+
 func TestCalendarWeekGridNavigatesWeeksAndPreservesDetailReturn(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)

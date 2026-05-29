@@ -1671,8 +1671,9 @@ Check these states during every applicable lane:
 
 **Expect:**
 - `d` switches to a read-only Day Agenda and `a` returns to Agenda List without changing the Calendar destination.
-- Day Agenda shows only events for the selected day, preserves source/calendar labels through the selected-event drawer, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
-- All-day and multi-day events stay separate from the hourly timed grid so they do not paint every hour of the day.
+- Day Agenda shows only events for the selected day using the shared calendar time-grid foundation, preserves source/calendar labels through the selected-event drawer, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- On tall terminals, Day Agenda shows explicit `:30` rows using the same density rule as Week Time-Grid; standard-height terminals can keep hourly density when the half-hour grid would crowd the schedule.
+- Long timed events render as continuous blocks across their occupied slots; all-day and multi-day events stay separate from the timed grid so they do not paint every hour of the day.
 - The drawer shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between days without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Day Agenda state.
@@ -1722,7 +1723,8 @@ Check these states during every applicable lane:
 
 **Expect:**
 - `t` switches to a read-only 3-Day Command view and `a` returns to Agenda List without changing the Calendar destination.
-- 3-Day Command shows today, tomorrow, and the next day as compact lanes with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- 3-Day Command shows today, tomorrow, and the next day with the same shared calendar time-grid foundation used by Day and Week, including visible time labels, selected event state, continuous long-event blocks, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
+- On tall terminals, 3-Day Command shows explicit `:30` rows using the same density rule as Week Time-Grid; standard-height terminals can keep hourly density when the half-hour grid would crowd the schedule.
 - The command panel shows the selected event, next-up event, open-slot summary, conflict summary, mode, and notes where available.
 - `h/l` and left/right slide the three-day window without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the 3-Day Command state.

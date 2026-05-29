@@ -2439,46 +2439,16 @@ func calendarMutationErrorStatus(prefix string, err error) string {
 }
 
 func (m *Model) renderCalendarDayAgenda(width, height int) string {
-	if width < 10 {
-		width = 10
-	}
 	day := m.selectedCalendarDay()
-	events := m.calendarEventsForDay(day)
-	var lines []string
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Day Agenda", width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(day.Local().Format("Mon Jan 2, 2006"), width)))
-	if status := m.visibleCalendarStatus(); status != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
-	}
-	if summary := calendarAllDayAndSpanningSummary(events, width); summary != "" {
-		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit(summary, width)))
-	}
-	if len(events) == 0 {
-		lines = append(lines, "")
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No events on this day", width)))
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("h/l: previous/next day", width)))
-		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
-	}
-
-	startHour, endHour := calendarVisibleHourRange(events)
-	timeW := 7
-	cellW := width - timeW - 1
-	for hour := startHour; hour <= endHour && len(lines) < height; hour++ {
-		event, continuation := m.calendarEventInHour(day, hour)
-		var row strings.Builder
-		row.WriteString(m.theme.Text.Primary.Style().Render(calendarFit(fmt.Sprintf("%02d:00", hour), timeW)))
-		row.WriteString(m.theme.Text.Dim.Style().Render("│"))
-		if continuation {
-			row.WriteString(m.calendarGridContinuationCell(event, cellW))
-		} else {
-			row.WriteString(m.calendarGridCell(event, cellW))
-		}
-		lines = append(lines, calendarFit(row.String(), width))
-		if hour < endHour && len(lines) < height {
-			lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", width), width)))
-		}
-	}
-	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	return m.renderCalendarTimeGrid(width, height, calendarTimeGridConfig{
+		Title:        "Day Agenda",
+		RangeLabel:   day.Local().Format("Mon Jan 2, 2006"),
+		Start:        day,
+		DayCount:     1,
+		Events:       m.calendarEventsForDay(day),
+		EmptyMessage: "No events on this day",
+		EmptyHint:    "h/l: previous/next day",
+	})
 }
 
 func (m *Model) renderCalendarDayDrawer(width, height int) string {
@@ -2486,19 +2456,56 @@ func (m *Model) renderCalendarDayDrawer(width, height int) string {
 }
 
 func (m *Model) renderCalendarWeekGrid(width, height int) string {
+	start := m.selectedCalendarWeekStart()
+	return m.renderCalendarTimeGrid(width, height, calendarTimeGridConfig{
+		Title:          "Week Time-Grid",
+		RangeLabel:     m.calendarWeekRange(start),
+		DaySummary:     m.calendarWeekDaySummary(start),
+		Start:          start,
+		DayCount:       7,
+		Events:         m.calendarEventsForWeek(start),
+		CompactSummary: m.calendarWeekEventSummary(start, width),
+		ShowNowMarker:  true,
+	})
+}
+
+func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []string {
+	return m.calendarTimeGridRows(calendarTimeGridConfig{Start: start, DayCount: 7, Events: m.calendarEventsForWeek(start), ShowNowMarker: true}, width, maxRows)
+}
+
+type calendarTimeGridConfig struct {
+	Title          string
+	RangeLabel     string
+	DaySummary     string
+	Start          time.Time
+	DayCount       int
+	Events         []indexedCalendarEvent
+	CompactSummary string
+	EmptyMessage   string
+	EmptyHint      string
+	ShowNowMarker  bool
+}
+
+func (m *Model) renderCalendarTimeGrid(width, height int, cfg calendarTimeGridConfig) string {
 	if width < 10 {
 		width = 10
 	}
-	start := m.selectedCalendarWeekStart()
+	if cfg.DayCount < 1 {
+		cfg.DayCount = 1
+	}
 	var lines []string
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Week Time-Grid", width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarWeekRange(start), width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(m.calendarWeekDaySummary(start), width)))
-	if summary := calendarAllDayAndSpanningSummary(m.calendarEventsForWeek(start), width); summary != "" {
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(cfg.Title, width)))
+	if cfg.RangeLabel != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(cfg.RangeLabel, width)))
+	}
+	if cfg.DaySummary != "" {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(cfg.DaySummary, width)))
+	}
+	if summary := calendarAllDayAndSpanningSummary(cfg.Events, width); summary != "" {
 		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit(summary, width)))
 	}
-	if summary := m.calendarWeekEventSummary(start, width); summary != "" {
-		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(summary, width)))
+	if cfg.CompactSummary != "" {
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(cfg.CompactSummary, width)))
 	}
 	if status := m.visibleCalendarStatus(); status != "" {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
@@ -2507,7 +2514,15 @@ func (m *Model) renderCalendarWeekGrid(width, height int) string {
 	if maxRows < 1 {
 		maxRows = 1
 	}
-	rows := m.calendarWeekGridRows(start, width, maxRows)
+	rows := m.calendarTimeGridRows(cfg, width, maxRows)
+	if len(cfg.Events) == 0 {
+		if cfg.EmptyMessage != "" {
+			rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(cfg.EmptyMessage, width)))
+		}
+		if cfg.EmptyHint != "" {
+			rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(cfg.EmptyHint, width)))
+		}
+	}
 	if len(rows) > maxRows {
 		rows = rows[:maxRows]
 	}
@@ -2515,32 +2530,34 @@ func (m *Model) renderCalendarWeekGrid(width, height int) string {
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
-func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []string {
+func (m *Model) calendarTimeGridRows(cfg calendarTimeGridConfig, width, maxRows int) []string {
+	if cfg.DayCount < 1 {
+		cfg.DayCount = 1
+	}
 	timeW := 7
-	dayW := (width - timeW - 7) / 7
+	dayW := (width - timeW - (cfg.DayCount - 1)) / cfg.DayCount
 	if dayW < 4 {
 		dayW = 4
 	}
 	rows := make([]string, 0, 28)
 	var header strings.Builder
 	header.WriteString(calendarFit("", timeW))
-	for i := 0; i < 7; i++ {
-		day := start.AddDate(0, 0, i)
-		label := calendarWeekGridDayLabel(day, dayW)
+	for i := 0; i < cfg.DayCount; i++ {
+		day := cfg.Start.AddDate(0, 0, i)
+		label := calendarTimeGridDayLabel(day, dayW, i, cfg.DayCount)
 		if sameCalendarDate(day, m.selectedCalendarDay()) {
 			header.WriteString(m.theme.Focus.VisualSelection.Style().Render(calendarFit(label, dayW)))
 		} else {
 			header.WriteString(m.theme.Metadata.Label.Style().Render(calendarFit(label, dayW)))
 		}
-		if i < 6 {
+		if i < cfg.DayCount-1 {
 			header.WriteString(m.theme.Text.Dim.Style().Render("│"))
 		}
 	}
 	rows = append(rows, calendarFit(header.String(), width))
 	rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("─", width), width)))
-	events := m.calendarEventsForWeek(start)
-	startHour, endHour := calendarVisibleHourRange(events)
-	markerTime, showMarker := m.calendarWeekCurrentTimeMarker(start)
+	startHour, endHour := calendarVisibleHourRange(cfg.Events)
+	markerTime, showMarker := m.calendarTimeGridCurrentTimeMarker(cfg.Start, cfg.DayCount, cfg.ShowNowMarker)
 	if showMarker {
 		if hour := markerTime.Hour(); hour < startHour {
 			startHour = hour
@@ -2550,11 +2567,11 @@ func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []stri
 	}
 	showHalfHours := calendarWeekGridShouldShowHalfHours(maxRows, startHour, endHour)
 	for hour := startHour; hour <= endHour; hour++ {
-		rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 0, timeW, dayW, width))
+		rows = append(rows, m.calendarTimeGridSlotRow(cfg.Start, cfg.DayCount, hour, 0, timeW, dayW, width))
 		if showMarker && markerTime.Hour() == hour {
 			rows = append(rows, m.calendarWeekCurrentTimeMarkerRow(markerTime, width))
 			if showHalfHours && hour < endHour {
-				rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 30, timeW, dayW, width))
+				rows = append(rows, m.calendarTimeGridSlotRow(cfg.Start, cfg.DayCount, hour, 30, timeW, dayW, width))
 			}
 			continue
 		}
@@ -2562,27 +2579,47 @@ func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []stri
 			continue
 		}
 		if showHalfHours {
-			rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 30, timeW, dayW, width))
+			rows = append(rows, m.calendarTimeGridSlotRow(cfg.Start, cfg.DayCount, hour, 30, timeW, dayW, width))
 		} else {
-			rows = append(rows, m.calendarWeekGridGuideRow(start, hour, timeW, dayW, width))
+			rows = append(rows, m.calendarTimeGridGuideRow(cfg.Start, cfg.DayCount, hour, timeW, dayW, width))
 		}
 	}
 	return rows
 }
 
-func (m *Model) calendarWeekCurrentTimeMarker(start time.Time) (time.Time, bool) {
+func calendarTimeGridDayLabel(day time.Time, width, offset, dayCount int) string {
+	if dayCount == 3 {
+		label := day.Local().Format("Mon Jan 2")
+		if offset == 0 {
+			label += " today"
+		} else if offset == 1 {
+			label += " tomorrow"
+		}
+		return label
+	}
+	return calendarWeekGridDayLabel(day, width)
+}
+
+func (m *Model) calendarTimeGridCurrentTimeMarker(start time.Time, dayCount int, enabled bool) (time.Time, bool) {
+	if !enabled {
+		return time.Time{}, false
+	}
 	now := m.calendarNow
 	if now.IsZero() {
 		now = time.Now()
 	}
 	now = now.Local()
-	start = m.calendarWeekStartFor(start)
+	start = calendarDayStartFor(start)
 	today := calendarDayStartFor(now)
-	end := start.AddDate(0, 0, 7)
+	end := start.AddDate(0, 0, dayCount)
 	if today.Before(start) || !today.Before(end) {
 		return time.Time{}, false
 	}
 	return now, true
+}
+
+func (m *Model) calendarWeekCurrentTimeMarker(start time.Time) (time.Time, bool) {
+	return m.calendarTimeGridCurrentTimeMarker(m.calendarWeekStartFor(start), 7, true)
 }
 
 func (m *Model) calendarWeekCurrentTimeMarkerRow(now time.Time, width int) string {
@@ -2684,9 +2721,13 @@ func calendarAllDayAndSpanningSummary(events []indexedCalendarEvent, width int) 
 }
 
 func (m *Model) calendarWeekGridSlotRow(start time.Time, hour, minute, timeW, dayW, width int) string {
+	return m.calendarTimeGridSlotRow(start, 7, hour, minute, timeW, dayW, width)
+}
+
+func (m *Model) calendarTimeGridSlotRow(start time.Time, dayCount, hour, minute, timeW, dayW, width int) string {
 	var row strings.Builder
 	row.WriteString(m.theme.Text.Primary.Style().Render(calendarFit(fmt.Sprintf("%02d:%02d", hour, minute), timeW)))
-	for dayIdx := 0; dayIdx < 7; dayIdx++ {
+	for dayIdx := 0; dayIdx < dayCount; dayIdx++ {
 		day := start.AddDate(0, 0, dayIdx)
 		event, continuation := m.calendarEventInSlot(day, hour, minute)
 		cell := m.calendarGridCell(event, dayW)
@@ -2696,7 +2737,7 @@ func (m *Model) calendarWeekGridSlotRow(start time.Time, hour, minute, timeW, da
 			cell = m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", dayW), dayW))
 		}
 		row.WriteString(cell)
-		if dayIdx < 6 {
+		if dayIdx < dayCount-1 {
 			row.WriteString(m.theme.Text.Dim.Style().Render("│"))
 		}
 	}
@@ -2704,9 +2745,13 @@ func (m *Model) calendarWeekGridSlotRow(start time.Time, hour, minute, timeW, da
 }
 
 func (m *Model) calendarWeekGridGuideRow(start time.Time, hour, timeW, dayW, width int) string {
+	return m.calendarTimeGridGuideRow(start, 7, hour, timeW, dayW, width)
+}
+
+func (m *Model) calendarTimeGridGuideRow(start time.Time, dayCount, hour, timeW, dayW, width int) string {
 	var row strings.Builder
 	row.WriteString(m.theme.Text.Dim.Style().Render(calendarFit("", timeW)))
-	for dayIdx := 0; dayIdx < 7; dayIdx++ {
+	for dayIdx := 0; dayIdx < dayCount; dayIdx++ {
 		day := start.AddDate(0, 0, dayIdx)
 		event, continuation := m.calendarEventInSlot(day, hour, 30)
 		if event != nil {
@@ -2718,7 +2763,7 @@ func (m *Model) calendarWeekGridGuideRow(start time.Time, hour, timeW, dayW, wid
 		} else {
 			row.WriteString(m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("·", dayW), dayW)))
 		}
-		if dayIdx < 6 {
+		if dayIdx < dayCount-1 {
 			row.WriteString(m.theme.Text.Dim.Style().Render("│"))
 		}
 	}
@@ -2781,86 +2826,16 @@ func (m *Model) renderCalendarWeekInspector(width, height int) string {
 }
 
 func (m *Model) renderCalendarThreeDayLanes(width, height int) string {
-	if width < 10 {
-		width = 10
-	}
 	start := m.selectedCalendarThreeDayStart()
-	events := m.calendarEventsForThreeDay(start)
-	var lines []string
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("3-Day Command", width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(calendarThreeDayRange(start), width)))
-	if status := m.visibleCalendarStatus(); status != "" {
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
-	}
-
-	rows, selectedOffset := m.calendarThreeDayRows(start, width)
-	if len(events) == 0 {
-		rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit("No events in this 3-day window", width)))
-		rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit("h/l: slide 3-day window", width)))
-	}
-	maxRows := height - len(lines)
-	if maxRows < 1 {
-		maxRows = 1
-	}
-	if selectedOffset < 0 {
-		selectedOffset = 0
-	}
-	startRow := 0
-	if selectedOffset >= maxRows {
-		startRow = selectedOffset - maxRows + 1
-	}
-	endRow := startRow + maxRows
-	if endRow > len(rows) {
-		endRow = len(rows)
-	}
-	lines = append(lines, rows[startRow:endRow]...)
-	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
-}
-
-func (m *Model) calendarThreeDayRows(start time.Time, width int) ([]string, int) {
-	dayW := (width - 2) / 3
-	if dayW < 12 {
-		dayW = 12
-	}
-	rows := make([]string, 0, 18)
-	var header strings.Builder
-	for i := 0; i < 3; i++ {
-		day := start.AddDate(0, 0, i)
-		label := day.Local().Format("Mon Jan 2")
-		if i == 0 {
-			label += "  today"
-		} else if i == 1 {
-			label += "  tomorrow"
-		}
-		header.WriteString(m.theme.Metadata.Label.Style().Render(calendarFit(label, dayW)))
-		if i < 2 {
-			header.WriteString(m.theme.Text.Dim.Style().Render("│"))
-		}
-	}
-	rows = append(rows, header.String())
-	rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("─", width), width)))
-	for slot := 0; slot < 10; slot++ {
-		var row strings.Builder
-		for i := 0; i < 3; i++ {
-			day := start.AddDate(0, 0, i)
-			dayEvents := m.calendarEventsForDay(day)
-			var event *models.CalendarEvent
-			if slot < len(dayEvents) {
-				selected := dayEvents[slot].event
-				event = &selected
-			}
-			if event == nil {
-				row.WriteString(m.theme.Text.Dim.Style().Render(calendarFit("open", dayW)))
-			} else {
-				row.WriteString(m.calendarGridCell(event, dayW))
-			}
-			if i < 2 {
-				row.WriteString(m.theme.Text.Dim.Style().Render("│"))
-			}
-		}
-		rows = append(rows, calendarFit(row.String(), width))
-	}
-	return rows, 0
+	return m.renderCalendarTimeGrid(width, height, calendarTimeGridConfig{
+		Title:        "3-Day Command",
+		RangeLabel:   calendarThreeDayRange(start),
+		Start:        start,
+		DayCount:     3,
+		Events:       m.calendarEventsForThreeDay(start),
+		EmptyMessage: "No events in this 3-day window",
+		EmptyHint:    "h/l: slide 3-day window",
+	})
 }
 
 func (m *Model) renderCalendarThreeDayCommandPanel(width, height int) string {

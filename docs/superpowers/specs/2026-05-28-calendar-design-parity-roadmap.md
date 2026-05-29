@@ -92,7 +92,7 @@ Day Agenda should be the fast daily command view, with the shared rail on the le
 
 - [x] Layout the screen as calendar rail, day agenda, and day drawer at wide and standard sizes.
 - [x] Use the frame-title range format `Day Agenda for <day>` and keep previous/next day movement visible as the right-side frame hint.
-- [ ] Render selected-day events in chronological order with all-day/multi-day events separated from timed events.
+- [x] Render selected-day events through the shared calendar time-grid foundation, with the Week-style half-hour density rule on tall terminals and all-day/multi-day events separated from timed events.
 - [x] Let `up/down` move across day boundaries when the user reaches the first or last event for the current day.
 - [x] Show pending invitations and RSVP-needed events inline in the day list with an explicit marker such as `RSVP`.
 - [x] Render drawer notes from HTML or Markdown into clean terminal text, preserving lists, links, meeting URLs, and important emphasis.
@@ -102,9 +102,9 @@ Day Agenda should be the fast daily command view, with the shared rail on the le
 
 The 3-Day Command view should be Herald's terminal-native differentiator rather than another list. It should help the user bridge today, tomorrow, and the next day with conflicts, next-up context, and open slots.
 
-- [x] Layout the screen as calendar rail, three day lanes, and command panel.
+- [x] Layout the screen as calendar rail, shared three-day time grid, and command panel.
 - [x] Use the frame-title range format `3-Day Window for <start> - <end>` and let `h/l` or left/right slide the window by one day.
-- [x] Render three visible day lanes with stable day labels, per-calendar color/source markers, and visible selected-event focus.
+- [x] Render three visible days through the shared calendar time-grid foundation, with stable day labels, per-calendar color/source markers, visible selected-event focus, and Week-style half-hour density on tall terminals.
 - [x] Traverse all visible events chronologically with `up/down`, skipping empty days but preserving the lane context.
 - [ ] Show pending RSVP events in the command panel as a first-class action group when any are visible.
 - [x] Show next-up, conflicts, and open slots based only on the currently enabled calendars.
