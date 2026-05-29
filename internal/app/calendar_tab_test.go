@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,24 +16,31 @@ import (
 
 type calendarAgendaStubBackend struct {
 	stubBackend
-	available        bool
-	events           []models.CalendarEvent
-	collections      []models.CalendarCollection
-	crossResults     []models.CrossSourceSearchResult
-	meetingPrep      *models.CalendarMeetingPrep
-	meetingPrepCalls []models.EventRef
-	travelBuffer     *models.CalendarTravelBuffer
-	travelCalls      []models.EventRef
-	aiSummary        *models.CalendarAISummary
-	aiSummaryCalls   []models.EventRef
-	getCalls         int
-	searchCalls      []string
-	crossSearchCalls []string
-	savedEvents      []models.CalendarEvent
-	saveErr          error
-	rsvpEvents       []models.EventRef
-	rsvpStatuses     []string
-	rsvpErr          error
+	available             bool
+	events                []models.CalendarEvent
+	cachedEvents          []models.CalendarEvent
+	refreshEvents         []models.CalendarEvent
+	collections           []models.CalendarCollection
+	cachedCollections     []models.CalendarCollection
+	refreshCollections    []models.CalendarCollection
+	crossResults          []models.CrossSourceSearchResult
+	meetingPrep           *models.CalendarMeetingPrep
+	meetingPrepCalls      []models.EventRef
+	travelBuffer          *models.CalendarTravelBuffer
+	travelCalls           []models.EventRef
+	aiSummary             *models.CalendarAISummary
+	aiSummaryCalls        []models.EventRef
+	getCalls              int
+	searchCalls           []string
+	crossSearchCalls      []string
+	savedEvents           []models.CalendarEvent
+	saveErr               error
+	rsvpEvents            []models.EventRef
+	rsvpStatuses          []string
+	rsvpErr               error
+	cachedAgendaCalls     int
+	cachedCollectionCalls int
+	refreshAgendaCalls    int
 }
 
 func (b *calendarAgendaStubBackend) CalendarAgendaAvailable() bool {
@@ -57,6 +65,55 @@ func (b *calendarAgendaStubBackend) ListCalendarCollections() ([]models.Calendar
 	out := make([]models.CalendarCollection, len(b.collections))
 	copy(out, b.collections)
 	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) ListCachedCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, error) {
+	b.cachedAgendaCalls++
+	events := b.cachedEvents
+	if events == nil {
+		events = b.events
+	}
+	return filterCalendarEventsForTest(events, start, end), nil
+}
+
+func (b *calendarAgendaStubBackend) ListCachedCalendarCollections() ([]models.CalendarCollection, error) {
+	b.cachedCollectionCalls++
+	collections := b.cachedCollections
+	if collections == nil {
+		collections = b.collections
+	}
+	out := make([]models.CalendarCollection, len(collections))
+	copy(out, collections)
+	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) RefreshCalendarAgenda(start, end time.Time) ([]models.CalendarEvent, []models.CalendarCollection, error) {
+	b.refreshAgendaCalls++
+	events := b.refreshEvents
+	if events == nil {
+		events = b.events
+	}
+	collections := b.refreshCollections
+	if collections == nil {
+		collections = b.collections
+	}
+	outCollections := make([]models.CalendarCollection, len(collections))
+	copy(outCollections, collections)
+	return filterCalendarEventsForTest(events, start, end), outCollections, nil
+}
+
+func filterCalendarEventsForTest(events []models.CalendarEvent, start, end time.Time) []models.CalendarEvent {
+	out := make([]models.CalendarEvent, 0, len(events))
+	for _, event := range events {
+		if !start.IsZero() && !event.End.IsZero() && !event.End.After(start) {
+			continue
+		}
+		if !end.IsZero() && !event.Start.IsZero() && !event.Start.Before(end) {
+			continue
+		}
+		out = append(out, event)
+	}
+	return out
 }
 
 func (b *calendarAgendaStubBackend) GetCalendarEvent(ref models.EventRef) (*models.CalendarEvent, error) {
@@ -1144,6 +1201,162 @@ func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 			t.Fatalf("agenda rendered forbidden %q:\n%s", forbidden, rendered)
 		}
 	}
+}
+
+func TestCalendarAgendaLoadUsesCachedRowsBeforeProviderRefresh(t *testing.T) {
+	now := calendarDayStartFor(time.Now()).Add(10 * time.Hour)
+	cached := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "cached"}.WithDefaults(),
+		Title:  "Cached planning",
+		Start:  now,
+		End:    now.Add(time.Hour),
+		Status: "confirmed",
+	}
+	refreshed := cached
+	refreshed.Ref.EventID = "fresh"
+	refreshed.Ref = refreshed.Ref.WithDefaults()
+	refreshed.Title = "Provider planning"
+	b := &calendarAgendaStubBackend{
+		available:     true,
+		cachedEvents:  []models.CalendarEvent{cached},
+		refreshEvents: []models.CalendarEvent{refreshed},
+	}
+	m := New(b, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarLoading = true
+
+	msgs := calendarImmediateMessagesForTest(m.loadCalendarAgenda())
+	if len(msgs) < 2 {
+		t.Fatalf("expected cache-first load to return cached and refreshed messages, got %d", len(msgs))
+	}
+	first, ok := msgs[0].(CalendarAgendaLoadedMsg)
+	if !ok {
+		t.Fatalf("first calendar load message = %T, want CalendarAgendaLoadedMsg", msgs[0])
+	}
+	if len(first.Events) != 1 || first.Events[0].Title != "Cached planning" {
+		t.Fatalf("first calendar load events = %#v, want cached event before provider refresh", first.Events)
+	}
+	model, _ := m.Update(first)
+	m = model.(*Model)
+	if len(m.calendarEvents) != 1 || m.calendarEvents[0].Title != "Cached planning" {
+		t.Fatalf("model events after cached load = %#v, want cached rows visible", m.calendarEvents)
+	}
+	if !m.calendarLoading {
+		t.Fatalf("calendar loading should remain active while provider refresh is pending")
+	}
+
+	second, ok := msgs[1].(CalendarAgendaLoadedMsg)
+	if !ok {
+		t.Fatalf("second calendar load message = %T, want CalendarAgendaLoadedMsg", msgs[1])
+	}
+	model, _ = m.Update(second)
+	m = model.(*Model)
+	if len(m.calendarEvents) != 1 || m.calendarEvents[0].Title != "Provider planning" {
+		t.Fatalf("model events after refresh = %#v, want provider-refreshed rows", m.calendarEvents)
+	}
+	if m.calendarLoading {
+		t.Fatalf("calendar loading should be false after provider refresh completes")
+	}
+	if b.cachedAgendaCalls != 1 || b.refreshAgendaCalls != 1 {
+		t.Fatalf("cache/refresh calls = %d/%d, want one each", b.cachedAgendaCalls, b.refreshAgendaCalls)
+	}
+}
+
+func TestCalendarDerivedEventSlicesAreReusedUntilInvalidated(t *testing.T) {
+	loc := time.Local
+	events := largeCalendarEventsForTest(80, loc)
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.setCalendarEventsForDisplay(events)
+	m.calendarView = calendarViewAgenda
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(time.Date(2026, 5, 12, 0, 0, 0, 0, loc))
+
+	first := m.indexedVisibleCalendarEvents()
+	second := m.indexedVisibleCalendarEvents()
+	if len(first) == 0 || len(second) == 0 {
+		t.Fatalf("expected visible test events")
+	}
+	if &first[0] != &second[0] {
+		t.Fatalf("visible calendar event slices were rebuilt between identical reads")
+	}
+
+	day := time.Date(2026, 5, 12, 0, 0, 0, 0, loc)
+	firstDay := m.calendarEventsForDay(day)
+	secondDay := m.calendarEventsForDay(day)
+	if len(firstDay) == 0 || len(secondDay) == 0 {
+		t.Fatalf("expected day test events")
+	}
+	if &firstDay[0] != &secondDay[0] {
+		t.Fatalf("day calendar event slices were rebuilt between identical reads")
+	}
+
+	m.calendarHiddenCollections = map[string]bool{
+		calendarCollectionRefKey(models.CollectionRef{SourceID: "demo-calendar", AccountID: "default", Kind: models.SourceKindCalendar, CollectionID: "work"}): true,
+	}
+	m.invalidateCalendarFilterDerivations()
+	hidden := m.indexedVisibleCalendarEvents()
+	if len(hidden) != 0 {
+		t.Fatalf("hidden collection should invalidate derived cache and remove events, got %d", len(hidden))
+	}
+}
+
+func BenchmarkCalendarAgendaNavigationRenderLarge(b *testing.B) {
+	loc := time.Local
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.windowWidth = 140
+	m.windowHeight = 40
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.calendarView = calendarViewAgenda
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(time.Date(2026, 5, 12, 0, 0, 0, 0, loc))
+	m.setCalendarEventsForDisplay(largeCalendarEventsForTest(1200, loc))
+	m.ensureCalendarSelectionVisible()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		model, _ := m.handleKeyMsg(keyRunes("j"))
+		m = model.(*Model)
+		_ = m.renderCalendarView()
+	}
+}
+
+func BenchmarkSettingsOverlayCalendarBackdropMovement(b *testing.B) {
+	loc := time.Local
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.windowWidth = 120
+	m.windowHeight = 40
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.calendarView = calendarViewAgenda
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(time.Date(2026, 5, 12, 0, 0, 0, 0, loc))
+	m.setCalendarEventsForDisplay(largeCalendarEventsForTest(1200, loc))
+	model, _ := m.handleKeyMsg(keyRunes("S"))
+	m = model.(*Model)
+	_ = m.View().Content
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		model, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		m = model.(*Model)
+		_ = m.View().Content
+	}
+}
+
+func largeCalendarEventsForTest(count int, loc *time.Location) []models.CalendarEvent {
+	events := make([]models.CalendarEvent, 0, count)
+	for i := 0; i < count; i++ {
+		day := 1 + (i % 28)
+		hour := 8 + (i % 10)
+		start := time.Date(2026, 5, day, hour, 0, 0, 0, loc)
+		events = append(events, models.CalendarEvent{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: fmt.Sprintf("event-%04d", i)}.WithDefaults(),
+			Title:  fmt.Sprintf("Planning %04d", i),
+			Start:  start,
+			End:    start.Add(time.Hour),
+			Status: "confirmed",
+		})
+	}
+	return events
 }
 
 func TestCalendarAgendaWindowUsesCalendarMonth(t *testing.T) {

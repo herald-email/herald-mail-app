@@ -608,6 +608,39 @@ func TestSettingsPanelOpensFromCalendarAndPreservesContext(t *testing.T) {
 	}
 }
 
+func TestSettingsOverlayReusesBackdropDuringPanelNavigation(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.calendarView = calendarViewAgenda
+	m.calendarEvents = testCalendarEvents()
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(m.calendarEvents[0].Start)
+
+	updated := pressSettingsPanelForTest(t, m)
+	_ = updated.View()
+	if !updated.settingsBackdrop.Valid || updated.settingsBackdrop.Content == "" {
+		t.Fatalf("expected first settings render to populate backdrop cache")
+	}
+	firstBackdrop := updated.settingsBackdrop.Content
+
+	model, _ := updated.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	updated = model.(*Model)
+	_ = updated.View()
+	if !updated.settingsBackdrop.Valid {
+		t.Fatalf("expected settings backdrop cache to remain valid after panel navigation")
+	}
+	if updated.settingsBackdrop.Content != firstBackdrop {
+		t.Fatalf("settings backdrop was re-rendered during ordinary settings navigation")
+	}
+
+	model, _ = updated.Update(tea.WindowSizeMsg{Width: 100, Height: 32})
+	updated = model.(*Model)
+	_ = updated.View()
+	if !updated.settingsBackdrop.Valid || updated.settingsBackdrop.Content == firstBackdrop {
+		t.Fatalf("expected resize to invalidate and refresh settings backdrop cache")
+	}
+}
+
 func findRenderedText(lines []string, needle string) (int, int) {
 	for row, line := range lines {
 		if col := strings.Index(line, needle); col >= 0 {

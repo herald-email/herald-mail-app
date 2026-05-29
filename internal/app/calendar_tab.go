@@ -55,6 +55,22 @@ type indexedCalendarEvent struct {
 	event models.CalendarEvent
 }
 
+type calendarDerivedCache struct {
+	EventsVersion  uint64
+	FiltersVersion uint64
+	View           calendarViewMode
+	AgendaStart    time.Time
+	AgendaEnd      time.Time
+	AllVisible     []indexedCalendarEvent
+	AllValid       bool
+	Visible        []indexedCalendarEvent
+	VisibleValid   bool
+	Day            map[int64][]indexedCalendarEvent
+	Week           map[int64][]indexedCalendarEvent
+	ThreeDay       map[int64][]indexedCalendarEvent
+	Offsets        map[int]int
+}
+
 type calendarEditField int
 
 const (
@@ -96,8 +112,8 @@ func (m *Model) refreshCalendarAvailability() {
 	agenda, ok := m.backend.(backend.CalendarAgendaBackend)
 	m.calendarAvailable = ok && agenda.CalendarAgendaAvailable()
 	if !m.calendarAvailable {
-		m.calendarEvents = nil
-		m.calendarCollections = nil
+		m.setCalendarEventsForDisplay(nil)
+		m.setCalendarCollections(nil)
 		m.calendarDetail = nil
 		m.calendarView = calendarViewAgenda
 		m.calendarFocus = calendarFocusMain
@@ -130,6 +146,45 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarAISummary = nil
 		m.calendarEdit = calendarEventEditState{}
 	}
+}
+
+func (m *Model) setCalendarEventsForDisplay(events []models.CalendarEvent) {
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarEventsVersion++
+	m.calendarDerived = calendarDerivedCache{}
+	m.invalidateSettingsBackdrop()
+}
+
+func (m *Model) setCalendarCollections(collections []models.CalendarCollection) {
+	m.calendarCollections = collections
+	m.calendarFiltersVersion++
+	m.calendarDerived = calendarDerivedCache{}
+	m.invalidateSettingsBackdrop()
+}
+
+func (m *Model) invalidateCalendarFilterDerivations() {
+	m.calendarFiltersVersion++
+	m.calendarDerived = calendarDerivedCache{}
+	m.invalidateSettingsBackdrop()
+}
+
+func (m *Model) ensureCalendarDerivedCache() *calendarDerivedCache {
+	agendaStart, agendaEnd := m.calendarAgendaWindow()
+	cache := &m.calendarDerived
+	if cache.EventsVersion != m.calendarEventsVersion ||
+		cache.FiltersVersion != m.calendarFiltersVersion ||
+		cache.View != m.calendarView ||
+		!cache.AgendaStart.Equal(agendaStart) ||
+		!cache.AgendaEnd.Equal(agendaEnd) {
+		*cache = calendarDerivedCache{
+			EventsVersion:  m.calendarEventsVersion,
+			FiltersVersion: m.calendarFiltersVersion,
+			View:           m.calendarView,
+			AgendaStart:    agendaStart,
+			AgendaEnd:      agendaEnd,
+		}
+	}
+	return cache
 }
 
 func (m *Model) calendarAgendaBackend() (backend.CalendarAgendaBackend, bool) {
@@ -180,6 +235,12 @@ func (m *Model) loadCalendarAgenda() tea.Cmd {
 			return CalendarAgendaLoadedMsg{Err: fmt.Errorf("calendar agenda unavailable")}
 		}
 	}
+	if cacheBackend, ok := m.backend.(backend.CalendarAgendaCacheBackend); ok {
+		return tea.Batch(
+			m.loadCachedCalendarAgenda(cacheBackend),
+			m.refreshCalendarAgenda(cacheBackend),
+		)
+	}
 	return func() tea.Msg {
 		events, err := agenda.ListCalendarAgenda(time.Time{}, time.Time{})
 		if err != nil {
@@ -193,6 +254,27 @@ func (m *Model) loadCalendarAgenda() tea.Cmd {
 			}
 		}
 		return CalendarAgendaLoadedMsg{Events: events, Collections: collections}
+	}
+}
+
+func (m *Model) loadCachedCalendarAgenda(cacheBackend backend.CalendarAgendaCacheBackend) tea.Cmd {
+	return func() tea.Msg {
+		events, err := cacheBackend.ListCachedCalendarAgenda(time.Time{}, time.Time{})
+		if err != nil {
+			return CalendarAgendaLoadedMsg{Err: err, Cached: true, Refreshing: true}
+		}
+		collections, err := cacheBackend.ListCachedCalendarCollections()
+		if err != nil {
+			return CalendarAgendaLoadedMsg{Err: err, Cached: true, Refreshing: true}
+		}
+		return CalendarAgendaLoadedMsg{Events: events, Collections: collections, Cached: true, Refreshing: true}
+	}
+}
+
+func (m *Model) refreshCalendarAgenda(cacheBackend backend.CalendarAgendaCacheBackend) tea.Cmd {
+	return func() tea.Msg {
+		events, collections, err := cacheBackend.RefreshCalendarAgenda(time.Time{}, time.Time{})
+		return CalendarAgendaLoadedMsg{Events: events, Collections: collections, Err: err}
 	}
 }
 
@@ -490,12 +572,21 @@ func (m *Model) calendarEventsForDay(day time.Time) []indexedCalendarEvent {
 	if day.IsZero() {
 		day = m.selectedCalendarDay()
 	}
+	cache := m.ensureCalendarDerivedCache()
+	key := calendarDayStartFor(day).Unix()
+	if cache.Day == nil {
+		cache.Day = make(map[int64][]indexedCalendarEvent)
+	}
+	if events, ok := cache.Day[key]; ok {
+		return events
+	}
 	out := make([]indexedCalendarEvent, 0)
 	for _, item := range m.indexedVisibleCalendarEvents() {
 		if eventOccursOnCalendarDate(item.event, day) {
 			out = append(out, item)
 		}
 	}
+	cache.Day[key] = out
 	return out
 }
 
@@ -503,12 +594,21 @@ func (m *Model) calendarEventsForWeek(start time.Time) []indexedCalendarEvent {
 	if start.IsZero() {
 		start = m.selectedCalendarWeekStart()
 	}
+	cache := m.ensureCalendarDerivedCache()
+	key := calendarDayStartFor(start).Unix()
+	if cache.Week == nil {
+		cache.Week = make(map[int64][]indexedCalendarEvent)
+	}
+	if events, ok := cache.Week[key]; ok {
+		return events
+	}
 	out := make([]indexedCalendarEvent, 0)
 	for _, item := range m.indexedVisibleCalendarEvents() {
 		if eventOccursInCalendarRange(item.event, start, start.AddDate(0, 0, 7)) {
 			out = append(out, item)
 		}
 	}
+	cache.Week[key] = out
 	return out
 }
 
@@ -516,12 +616,21 @@ func (m *Model) calendarEventsForThreeDay(start time.Time) []indexedCalendarEven
 	if start.IsZero() {
 		start = m.selectedCalendarThreeDayStart()
 	}
+	cache := m.ensureCalendarDerivedCache()
+	key := calendarDayStartFor(start).Unix()
+	if cache.ThreeDay == nil {
+		cache.ThreeDay = make(map[int64][]indexedCalendarEvent)
+	}
+	if events, ok := cache.ThreeDay[key]; ok {
+		return events
+	}
 	out := make([]indexedCalendarEvent, 0)
 	for _, item := range m.indexedVisibleCalendarEvents() {
 		if eventOccursInCalendarRange(item.event, start, start.AddDate(0, 0, 3)) {
 			out = append(out, item)
 		}
 	}
+	cache.ThreeDay[key] = out
 	return out
 }
 
@@ -1103,10 +1212,17 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 
 func (m *Model) applySavedCalendarEvent(event models.CalendarEvent) {
 	event.Ref = event.Ref.WithDefaults()
+	changedEvents := false
 	for i := range m.calendarEvents {
 		if m.calendarEvents[i].Ref.WithDefaults().LocalID == event.Ref.LocalID {
 			m.calendarEvents[i] = event
+			changedEvents = true
 		}
+	}
+	if changedEvents {
+		m.calendarEventsVersion++
+		m.calendarDerived = calendarDerivedCache{}
+		m.invalidateSettingsBackdrop()
 	}
 	for i := range m.calendarSearchResults {
 		if m.calendarSearchResults[i].Ref.WithDefaults().LocalID == event.Ref.LocalID {
@@ -3967,21 +4083,33 @@ func (m *Model) pruneCalendarCollectionState() {
 }
 
 func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
+	cache := m.ensureCalendarDerivedCache()
+	if cache.VisibleValid {
+		return cache.Visible
+	}
 	out := m.indexedAllVisibleCalendarEvents()
 	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	if m.calendarView != calendarViewAgenda {
+		cache.Visible = out
+		cache.VisibleValid = true
 		return out
 	}
-	filtered := out[:0]
+	filtered := make([]indexedCalendarEvent, 0, len(out))
 	for _, item := range out {
 		if calendarEventOccursInAgendaWindow(item.event, agendaStart, agendaEnd) {
 			filtered = append(filtered, item)
 		}
 	}
+	cache.Visible = filtered
+	cache.VisibleValid = true
 	return filtered
 }
 
 func (m *Model) indexedAllVisibleCalendarEvents() []indexedCalendarEvent {
+	cache := m.ensureCalendarDerivedCache()
+	if cache.AllValid {
+		return cache.AllVisible
+	}
 	out := make([]indexedCalendarEvent, 0, len(m.calendarEvents))
 	for i, event := range m.calendarEvents {
 		if m.calendarEventHidden(event) || event.Start.IsZero() {
@@ -3989,6 +4117,8 @@ func (m *Model) indexedAllVisibleCalendarEvents() []indexedCalendarEvent {
 		}
 		out = append(out, indexedCalendarEvent{index: i, event: event})
 	}
+	cache.AllVisible = out
+	cache.AllValid = true
 	return out
 }
 
@@ -4000,12 +4130,21 @@ func (m *Model) calendarEventHidden(event models.CalendarEvent) bool {
 }
 
 func (m *Model) calendarVisibleOffset() int {
+	cache := m.ensureCalendarDerivedCache()
+	if cache.Offsets == nil {
+		cache.Offsets = make(map[int]int)
+	}
+	if offset, ok := cache.Offsets[m.calendarCursor]; ok {
+		return offset
+	}
 	events := m.indexedVisibleCalendarEvents()
 	for i, item := range events {
 		if item.index == m.calendarCursor {
+			cache.Offsets[m.calendarCursor] = i
 			return i
 		}
 	}
+	cache.Offsets[m.calendarCursor] = 0
 	return 0
 }
 
@@ -4081,6 +4220,7 @@ func (m *Model) toggleFocusedCalendarCollection() {
 		m.calendarHiddenCollections[key] = true
 		m.calendarStatus = "Calendar hidden: " + calendarCollectionDisplayName(m.calendarCollections[m.calendarRailCursor])
 	}
+	m.invalidateCalendarFilterDerivations()
 	m.ensureCalendarSelectionVisible()
 }
 
