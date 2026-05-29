@@ -7,15 +7,16 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 ## Overview
 
-Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder sidebar, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Browsing happens in Timeline or Contacts; cleanup review is a Timeline grouping mode, and Compose is a transient writing screen launched from Timeline.
+Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder or calendar rail, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Browsing happens in Timeline, Contacts, or Calendar; cleanup review is a Timeline grouping mode, and Compose is a transient writing screen launched from Timeline.
 
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
 | --- | --- | --- |
-| Title row | `Herald` plus `1 Timeline` and `2 Contacts`. | The active tab is highlighted. `F1` opens Timeline, `F2` opens Contacts, `F3` is a temporary Contacts alias, and mouse clicks switch tabs when the terminal sends mouse events. |
+| Title row | `Herald` plus `1 Timeline`, `2 Contacts`, and `3 Calendar` when Calendar is available. | The active tab is highlighted. `F1` opens Timeline, `F2` opens Contacts, `F3` is a temporary Contacts alias, `F4` opens Calendar, and mouse clicks switch tabs when the terminal sends mouse events. |
 | Top sync strip | Current startup or live sync phase. | Appears when Herald is loading while some visible data is already available. |
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline when the terminal is wide enough. |
+| Calendar rail | Mini month, calendar source groups, colored swatches, enabled state, counts, and filter scope. | Visible on Calendar when the terminal is wide enough. |
 | Main panels | The active view content. | Timeline can split into list/preview layouts; Contacts uses list/detail panels. |
 | Chat panel | Right-side AI chat input and transcript. | Opens with `c` when AI is configured and the terminal is wide enough. |
 | Status bar | Folder breadcrumb, AI chip, search/grouping state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
@@ -30,9 +31,8 @@ Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optio
 
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
-| `F1` / `F2` / `F3` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Contacts, or Contacts legacy alias from any main tab or Compose screen. |
-| `1` / `2` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches to Timeline or Contacts. In the quick reply picker, chooses replies 1-2. |
-| `3` | Quick reply picker | Quick replies are open. | Chooses quick reply 3. |
+| `F1` / `F2` / `F3` / `F4` | Main TUI | Visible data can be interacted with. | Switches to Timeline, Contacts, Contacts legacy alias, or Calendar from any main tab or Compose screen. |
+| `1` / `2` / `3` | Browse contexts | Visible data can be interacted with and no text field owns the keys. | Switches to Timeline, Contacts, or Calendar. In the quick reply picker, chooses replies 1-3. |
 | `q` | Browse contexts | No text input is being edited. | Quits Herald after cleanup. |
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
@@ -67,11 +67,11 @@ Press `m` in Timeline to temporarily release Herald's mouse capture for terminal
 
 ### Move Between Tabs
 
-1. Press `F1`, `F2`, or `F3`.
+1. Press `1`, `2`, or `3`, or use the corresponding function-key aliases when available.
 2. Watch the tab bar highlight move.
 3. Use the bottom key hints to learn the active tab's controls.
 
-Browse contexts also accept `1` and `2` as visible tab aliases. `F3` remains a temporary Contacts alias; digit `3` is reserved for quick replies when that picker is open.
+Browse contexts also accept `1`, `2`, and `3` as visible tab aliases. `F3` remains a temporary Contacts alias, while `F4` mirrors Calendar where function keys are easier to reach than number keys.
 
 ### Use Panel Focus
 
@@ -111,6 +111,7 @@ Browse contexts also accept `1` and `2` as visible tab aliases. `F3` remains a t
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
 | Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
 | Compact modal | Help, settings, automation rule editors, prompt editors, cleanup manager, or dry-run previews are centered over the current screen. | Use the overlay's local keys; at `50x15`, resize until the minimum-size guard clears. |
+| Calendar rail | Calendar source groups and swatches are shown beside the current calendar view. | Press `tab` to focus the rail, then `space` to show or hide a calendar. |
 | Confirmation | Status bar asks for `y` confirm or `n`/`Esc` cancel. | Confirm only if the described action matches your intent. |
 
 ## Data And Privacy
@@ -142,6 +143,7 @@ If a prompt will not close, press `esc` first. If that does not apply, `ctrl+c` 
 ## Related Pages
 
 - [All Keybindings](/reference/keybindings/)
+- [Calendar](/using-herald/calendar/)
 - [Sync and Status](/features/sync-status/)
 - [Settings](/features/settings/)
 - [Chat Panel](/features/chat/)

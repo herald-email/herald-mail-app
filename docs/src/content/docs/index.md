@@ -3,7 +3,7 @@ title: Herald Docs
 description: Complete end-user manual for Herald, the terminal email client and inbox cleanup tool.
 ---
 
-Herald is a keyboard-first and mouse-friendly terminal email client and inbox cleanup tool. It combines a chronological Timeline, Markdown Compose, bulk Cleanup, Contacts, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
+Herald is a keyboard-first and mouse-friendly terminal email client, inbox cleanup tool, and calendar workspace. It combines a chronological Timeline, transient Markdown Compose, Contacts, Calendar, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
 
 This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
 
@@ -35,6 +35,12 @@ Source-built OAuth flows need local Google OAuth defaults or runtime variables. 
 
 On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
 
+## New since v0.4.1-beta.1
+
+The current `main` branch adds a top-level Calendar workspace, multi-source account identity, account-aware mail behavior, source-scoped MCP/daemon safety, and updated demo evidence. See [What's New Since v0.4.1-beta.1](/whats-new-since-v0-4-1/) for the release-delta checklist and colorful screenshots.
+
+![Calendar week time-grid with source rail and inspector](/screenshots/calendar-week-time-grid.png)
+
 <!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="fresh config, 120x40" desc="Shows the initial setup path users see before connecting a real mailbox." capture="vhs docs media; rm -f /tmp/herald-docs-wizard.yaml; launch ./bin/herald -config /tmp/herald-docs-wizard.yaml" -->
 
 ![Herald first-run wizard entry screen](/screenshots/overview-first-launch.png)
@@ -49,9 +55,10 @@ Herald's keyboard model stays complete, but you can also click and scroll the ma
 
 ## Main features
 
-- [Timeline](/using-herald/timeline/) lists mail chronologically, groups threads, opens split or full-screen previews, supports mouse row clicks, preview scrolling, search, quick replies, attachment saves, starring, reading, reply, forward, and text copy.
-- [Compose](/using-herald/compose/) sends new mail, replies, and forwards with To/CC/BCC fields, address autocomplete, Markdown preview, attachments, drafts, and optional AI assistance.
-- [Cleanup](/using-herald/cleanup/) groups mail by sender or domain for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, cleanup schedules, and mouse-assisted summary/detail navigation.
+- [Timeline](/using-herald/timeline/) lists mail chronologically, groups threads, opens split or full-screen previews, supports mouse row clicks, preview scrolling, search, quick replies, attachment saves, starring, reading, reply, forward, text copy, and sender/domain grouping for cleanup review.
+- [Compose](/using-herald/compose/) opens from Timeline for new mail, replies, forwards, quick replies, and draft editing with To/CC/BCC fields, address autocomplete, Markdown preview, attachments, drafts, account-aware sending, signatures, and optional AI assistance.
+- [Calendar](/using-herald/calendar/) shows Week, Day, 3-Day, Agenda, Search, Event Detail, RSVP, and edit surfaces with a colored source rail.
+- [Cleanup](/using-herald/cleanup/) now lives in Timeline grouping and Settings Sync & Cleanup managers for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, and cleanup schedules.
 - [Contacts](/using-herald/contacts/) lists known senders, opens contact details, shows recent mail, previews messages inline, and supports keyword or semantic contact search.
 - [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, `?` shortcut help, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
 - [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, themes, and sync status.

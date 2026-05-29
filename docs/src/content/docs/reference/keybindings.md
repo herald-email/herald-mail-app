@@ -13,8 +13,8 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | `ctrl+c` | Quit Herald from any state, including text inputs and overlays. |
 | `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
 | `2` | Switch/load Contacts in browse contexts, or choose quick reply 2 when quick reply picker is open. |
-| `3` | Choose quick reply 3 when quick reply picker is open. It is not a top-level tab shortcut. |
-| `F1` / `F2` / `F3` | Aliases for Timeline / Contacts / Contacts legacy. |
+| `3` | Switch/load Calendar in browse contexts, or choose quick reply 3 when quick reply picker is open. |
+| `F1` / `F2` / `F3` / `F4` | Aliases for Timeline / Contacts / Contacts legacy / Calendar. |
 | `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
 | `shift+tab` | Cycle focus backward where supported. |
 | `h` / `j` / `k` / `l` | Navigate left / down / up / right where the active pane supports it. |
@@ -133,6 +133,28 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `a` / `e` | Archive highlighted/selected mail. |
 | `S` then `Sync & Cleanup` | Open automation-rule, custom-prompt, and cleanup-rule managers. |
 
+## Calendar
+
+| Key | Result |
+| --- | --- |
+| `3` / `F4` | Open Calendar when a calendar source is available. |
+| `tab` / `shift+tab` | Cycle focus between calendar rail, main schedule/list, and detail or command panel. |
+| `j` / `down` | Move to the next visible event or result. |
+| `k` / `up` | Move to the previous visible event or result. |
+| `h` / `left` | Move to the previous day, week, or 3-day range. |
+| `l` / `right` | Move to the next day, week, or 3-day range. |
+| `w` | Switch to Week Time-Grid. |
+| `d` | Switch to Day Agenda. |
+| `t` | Switch to 3-Day Command. |
+| `a` | Switch to Agenda List. |
+| `/` | Open Calendar Search. |
+| `x` | Open cross-source mail-and-calendar search when available. |
+| `enter` | Open full event detail for the selected event. |
+| `e` | Open Event Edit for the selected event when the source supports it. |
+| `space` | Show or hide the focused calendar when the rail is focused. |
+| `p` | Show or hide past rows in Agenda when past rows are hidden. |
+| `esc` | Return from detail/search/edit to the previous Calendar view. |
+
 ## Contacts
 
 | Key | Result |
@@ -185,6 +207,7 @@ fields:
 | Logs | `L` or `esc` close, `j`/`k` or arrows scroll, `q` quit. |
 | Chat | `enter` send, `esc` or `tab` close/leave chat, `q` quit. |
 | Shortcut help | `/` search, `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
+| Calendar RSVP picker | `y` accept, `m` maybe/tentative, `n` decline, `esc` cancel. |
 | Rule editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
 | Prompt editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
 | Cleanup manager | Launched from Settings Sync & Cleanup; `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |

@@ -59,6 +59,7 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
+            { label: "What's new", slug: 'whats-new-since-v0-4-1' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
             { label: 'Run without email', slug: 'demo-mode' },
@@ -73,6 +74,7 @@ export default defineConfig({
             { label: 'Global UI', slug: 'using-herald/global-ui' },
             { label: 'Timeline', slug: 'using-herald/timeline' },
             { label: 'Compose', slug: 'using-herald/compose' },
+            { label: 'Calendar', slug: 'using-herald/calendar' },
             { label: 'Cleanup', slug: 'using-herald/cleanup' },
             { label: 'Contacts', slug: 'using-herald/contacts' },
           ],
