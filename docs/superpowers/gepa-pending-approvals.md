@@ -4,10 +4,10 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-28T17:36:23+00:00
-- Published runs analyzed: 44
-- Total queue items: 10
-- Pending: 0
+- Updated at: 2026-05-29T16:16:36+00:00
+- Published runs analyzed: 46
+- Total queue items: 12
+- Pending: 2
 - Approved: 0
 - Rejected: 0
 - Implemented: 10
@@ -20,7 +20,32 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Pending Items
 
-- No pending items.
+### two-candidate-worktree-trial
+
+- Queue key: `two-candidate-worktree-trial-f38557be73`
+- Status: pending
+- Seen in runs: 2
+- First seen: 2026-05-29T05:46:13+00:00
+- Last seen: 2026-05-29T16:00:15+00:00
+- Publish actions: commit, merge, worktree-remove
+- Why: A narrow challenger-worktree experiment is the next step toward true GEPA-style search once the baseline is trustworthy.
+- Approval prompt: Approve exploring `two-candidate-worktree-trial` as the next explicit GEPA improvement pass.
+- Source runs:
+- `20260529-090015-fix-calendar-detail-rsvp-actions-collision` at 2026-05-29T16:00:15+00:00 via commit, merge
+- `20260528-224613-improve-calendar-week-time-grid-density-on-tall-screens-and-keep-long-event-blocks-uninterrupted-by-guide-dots` at 2026-05-29T05:46:13+00:00 via commit, merge, worktree-remove
+
+### User-review follow-up settings hints template
+
+- Queue key: `user-review-follow-up-settings-hints-template-d8172ef566`
+- Status: pending
+- Seen in runs: 1
+- First seen: 2026-05-29T05:46:13+00:00
+- Last seen: 2026-05-29T05:46:13+00:00
+- Publish actions: commit, merge, worktree-remove
+- Why: Repeated user follow-up around settings and bottom hints shows that a green implementation can still miss the exact review path, visible hint contract, or text the user expected to survive.
+- Approval prompt: Approve keeping the user-review follow-up settings hints template as a default GEPA retry aid.
+- Source runs:
+- `20260528-224613-improve-calendar-week-time-grid-density-on-tall-screens-and-keep-long-event-blocks-uninterrupted-by-guide-dots` at 2026-05-29T05:46:13+00:00 via commit, merge, worktree-remove
 
 ## Approved Items
 
