@@ -1268,7 +1268,7 @@ func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, 
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}
@@ -1306,6 +1306,13 @@ func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, 
 		Render(fitCalendarPanelContent(m.renderCalendarLeftPanel(railInnerW, innerH), railInnerW, innerH))
 	railPanel = m.renderCalendarPanelFrameChrome(railPanel, m.calendarRailPanelFrameChrome())
 	return lipgloss.JoinHorizontal(lipgloss.Top, railPanel, panelGap, mainPanel, panelGap, detailPanel)
+}
+
+func calendarPanelOuterHeight(plan LayoutPlan) int {
+	// LayoutPlan.ContentHeight is the inner content budget used by table-like
+	// views. Calendar renders bordered panels, so the outer panel height needs
+	// to include the top and bottom frame rows to keep bottom chrome anchored.
+	return plan.ContentHeight + 2
 }
 
 func (m *Model) calendarMainPanelFrameChrome() calendarPanelFrameChrome {
@@ -1454,7 +1461,7 @@ func (m *Model) renderCalendarDetailFullView() string {
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}
@@ -1473,7 +1480,7 @@ func (m *Model) renderCalendarEditFullView() string {
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}
@@ -1490,7 +1497,7 @@ func (m *Model) renderCalendarMeetingPrepFullView() string {
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}
@@ -1507,7 +1514,7 @@ func (m *Model) renderCalendarTravelBufferFullView() string {
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}
@@ -1524,7 +1531,7 @@ func (m *Model) renderCalendarAISummaryFullView() string {
 	if plan.ChatVisible {
 		contentW -= chatPanelWidth + 2 + panelGapWidth
 	}
-	contentH := plan.ContentHeight
+	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
 		contentH = 4
 	}

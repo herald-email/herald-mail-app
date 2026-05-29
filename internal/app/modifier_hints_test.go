@@ -113,6 +113,28 @@ func TestModifierHintCtrlSearchLayerShowsOnlyExistingActions(t *testing.T) {
 	}
 }
 
+func TestModifierHintCtrlCalendarLayerShowsCalendarActions(t *testing.T) {
+	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 50})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarEvents = normalizeCalendarEventsForDisplay(b.events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(b.events[0].Start)
+	m.calendarDetail = m.selectedCalendarEvent()
+	m.setCalendarView(calendarViewWeek)
+
+	model, _ := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	m = model.(*Model)
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints, "ctrl+c: quit", "ctrl+r: refresh", "ctrl+u/d: page")
+	if strings.TrimSpace(hints) == "ctrl+c: quit" {
+		t.Fatalf("calendar ctrl layer should not collapse to quit only, got:\n%s", hints)
+	}
+}
+
 func TestModifierHintsDoNotConfirmPendingDelete(t *testing.T) {
 	m := modifierHintTimelineModel(t)
 	confirmed := false
