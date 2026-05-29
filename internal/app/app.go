@@ -325,6 +325,9 @@ type EmailExpungedMsg struct {
 // SyncTickMsg drives the sync countdown timer
 type SyncTickMsg struct{}
 
+// CalendarClockTickMsg drives the Calendar current-time marker.
+type CalendarClockTickMsg struct{ Now time.Time }
+
 // EmbeddingProgressMsg reports background embedding progress
 type EmbeddingProgressMsg struct {
 	Folder     string
@@ -877,6 +880,7 @@ type Model struct {
 	calendarDay                 time.Time
 	calendarWeekStart           time.Time
 	calendarThreeDayStart       time.Time
+	calendarNow                 time.Time
 	calendarDetailOpen          bool
 	calendarDetailLoading       bool
 	calendarDetail              *models.CalendarEvent
@@ -1005,6 +1009,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		loading:         true,
 		dryRun:          dryRun,
 		startTime:       time.Now(),
+		calendarNow:     time.Now().Local(),
 		currentFolder:   "INBOX",
 		folders:         []string{"INBOX"},
 		folderTree:      buildFolderTree([]string{"INBOX"}),
@@ -1641,6 +1646,7 @@ func (m *Model) Init() tea.Cmd {
 			m.listenForRuleResult(),
 			m.importAppleContacts(),
 			draftSaveTick(),
+			m.calendarClockTick(),
 			startupAIWarning,
 		)
 	}
@@ -1651,6 +1657,7 @@ func (m *Model) Init() tea.Cmd {
 		m.listenForRuleResult(),
 		m.importAppleContacts(),
 		draftSaveTick(),
+		m.calendarClockTick(),
 		startupAIWarning,
 	)
 }
@@ -2976,6 +2983,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCountdown--
 		}
 		return m, m.tickSyncCountdown()
+
+	case CalendarClockTickMsg:
+		if msg.Now.IsZero() {
+			m.calendarNow = time.Now().Local()
+		} else {
+			m.calendarNow = msg.Now.Local()
+		}
+		return m, m.calendarClockTick()
 
 	case previewPrewarmMsg:
 		return m, m.handlePreviewPrewarmMsg(msg)

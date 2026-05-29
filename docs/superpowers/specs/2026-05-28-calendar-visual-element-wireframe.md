@@ -30,7 +30,7 @@ The Week screen must become a real time grid, not a grouped list. The reference 
 - [x] Render weekday columns with a fixed time-axis column on the left.
 - [x] Render hourly grid lines for the visible day range.
 - [x] Render colored event blocks for timed events, including title and time range.
-- [x] Show an explicit current-time marker line when the visible week contains the demo current day.
+- [x] Show an explicit current-time marker line using the local wall clock only when the visible week contains today.
 - [x] Keep the selected event visually distinct without relying on color alone.
 
 ## Day Body

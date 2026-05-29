@@ -2540,14 +2540,25 @@ func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []stri
 	rows = append(rows, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("─", width), width)))
 	events := m.calendarEventsForWeek(start)
 	startHour, endHour := calendarVisibleHourRange(events)
+	markerTime, showMarker := m.calendarWeekCurrentTimeMarker(start)
+	if showMarker {
+		if hour := markerTime.Hour(); hour < startHour {
+			startHour = hour
+		} else if hour > endHour {
+			endHour = hour
+		}
+	}
 	showHalfHours := calendarWeekGridShouldShowHalfHours(maxRows, startHour, endHour)
 	for hour := startHour; hour <= endHour; hour++ {
 		rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 0, timeW, dayW, width))
-		if hour >= endHour {
+		if showMarker && markerTime.Hour() == hour {
+			rows = append(rows, m.calendarWeekCurrentTimeMarkerRow(markerTime, width))
+			if showHalfHours && hour < endHour {
+				rows = append(rows, m.calendarWeekGridSlotRow(start, hour, 30, timeW, dayW, width))
+			}
 			continue
 		}
-		if hour == 9 {
-			rows = append(rows, m.theme.Severity.Error.Style().Render(calendarFit(" 09:30 ◀"+strings.Repeat("─", clamp(width-9, 1)), width)))
+		if hour >= endHour {
 			continue
 		}
 		if showHalfHours {
@@ -2557,6 +2568,39 @@ func (m *Model) calendarWeekGridRows(start time.Time, width, maxRows int) []stri
 		}
 	}
 	return rows
+}
+
+func (m *Model) calendarWeekCurrentTimeMarker(start time.Time) (time.Time, bool) {
+	now := m.calendarNow
+	if now.IsZero() {
+		now = time.Now()
+	}
+	now = now.Local()
+	start = m.calendarWeekStartFor(start)
+	today := calendarDayStartFor(now)
+	end := start.AddDate(0, 0, 7)
+	if today.Before(start) || !today.Before(end) {
+		return time.Time{}, false
+	}
+	return now, true
+}
+
+func (m *Model) calendarWeekCurrentTimeMarkerRow(now time.Time, width int) string {
+	label := " " + now.Local().Format("15:04") + " ◀"
+	line := label + strings.Repeat("─", clamp(width-ansi.StringWidth(label), 1))
+	return m.theme.Severity.Error.Style().Render(calendarFit(line, width))
+}
+
+func (m *Model) calendarClockTick() tea.Cmd {
+	now := time.Now().Local()
+	next := now.Truncate(time.Minute).Add(time.Minute)
+	delay := time.Until(next)
+	if delay <= 0 {
+		delay = time.Minute
+	}
+	return tea.Tick(delay, func(t time.Time) tea.Msg {
+		return CalendarClockTickMsg{Now: t.Local()}
+	})
 }
 
 func calendarWeekGridShouldShowHalfHours(maxRows, startHour, endHour int) bool {

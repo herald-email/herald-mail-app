@@ -1831,6 +1831,76 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	}
 }
 
+func TestCalendarWeekGridHidesCurrentTimeMarkerOutsideCurrentWeek(t *testing.T) {
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewWeek
+	m.calendarNow = time.Date(2026, 5, 29, 9, 42, 0, 0, time.Local)
+	m.calendarWeekStart = time.Date(2026, 4, 27, 0, 0, 0, 0, time.Local)
+
+	rendered := stripANSI(m.renderCalendarWeekGrid(110, 40))
+	if strings.Contains(rendered, "◀") || strings.Contains(rendered, "09:30 ◀") {
+		t.Fatalf("week outside today should not render a current-time marker:\n%s", rendered)
+	}
+}
+
+func TestCalendarWeekGridRendersLocalCurrentTimeMarkerForCurrentWeek(t *testing.T) {
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewWeek
+	m.calendarNow = time.Date(2026, 5, 29, 14, 37, 0, 0, time.Local)
+	m.calendarWeekStart = m.calendarWeekStartFor(m.calendarNow)
+
+	rendered := stripANSI(m.renderCalendarWeekGrid(110, 40))
+	if !strings.Contains(rendered, "14:37 ◀") {
+		t.Fatalf("current week should render the exact local clock marker:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "09:30 ◀") {
+		t.Fatalf("current week should not render the old hard-coded marker:\n%s", rendered)
+	}
+}
+
+func TestCalendarWeekGridCurrentTimeMarkerHonorsSundayWeekStart(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Calendar.WeekStart = config.CalendarWeekStartSunday
+	now := time.Date(2026, 5, 3, 9, 44, 0, 0, time.Local)
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	m.SetConfig(cfg)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewWeek
+	m.calendarNow = now
+
+	m.calendarWeekStart = time.Date(2026, 4, 26, 0, 0, 0, 0, time.Local)
+	if rendered := stripANSI(m.renderCalendarWeekGrid(110, 40)); strings.Contains(rendered, "◀") {
+		t.Fatalf("previous Sunday-start week should not render today's marker:\n%s", rendered)
+	}
+
+	m.calendarWeekStart = m.calendarWeekStartFor(now)
+	rendered := stripANSI(m.renderCalendarWeekGrid(110, 40))
+	if !strings.Contains(rendered, "09:44 ◀") {
+		t.Fatalf("Sunday-start week containing today should render the marker:\n%s", rendered)
+	}
+}
+
+func TestCalendarClockTickUpdatesNowAndReschedules(t *testing.T) {
+	m := New(&calendarAgendaStubBackend{available: true}, nil, "", nil, false)
+	initial := time.Date(2026, 5, 29, 9, 41, 0, 0, time.Local)
+	next := initial.Add(time.Minute)
+	m.calendarNow = initial
+
+	updated, cmd := m.Update(CalendarClockTickMsg{Now: next})
+	m = updated.(*Model)
+	if !m.calendarNow.Equal(next.Local()) {
+		t.Fatalf("calendarNow = %s, want %s", m.calendarNow, next.Local())
+	}
+	if cmd == nil {
+		t.Fatal("calendar clock tick should schedule the next minute tick")
+	}
+}
+
 func TestCalendarWeekGridShowsHalfHourRowsOnTallScreensWithoutCuttingLongEvents(t *testing.T) {
 	start := time.Date(2026, 4, 20, 13, 0, 0, 0, time.Local)
 	event := models.CalendarEvent{

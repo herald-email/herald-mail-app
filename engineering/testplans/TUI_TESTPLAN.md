@@ -1697,6 +1697,7 @@ Check these states during every applicable lane:
 - Week Time-Grid shows weekday columns or compact day bands with visible time labels, selected event state, and source/calendar labels without exposing provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
 - On tall terminals, Week Time-Grid shows explicit `:30` rows; standard-height terminals can keep hourly density when the half-hour grid would crowd the schedule.
 - Long timed events render as continuous blocks across their occupied slots; guide dots remain visible in empty cells but do not cut through active event cells.
+- Week Time-Grid shows a current-time marker with the local `HH:MM` only when the visible week contains today; past and future weeks, including deterministic demo weeks outside today, do not show a fake marker.
 - Week Time-Grid uses Monday-Sunday calendar-week windows, such as `Mon May 25 - Sun May 31`, rather than a rolling seven-day range from the selected day.
 - Settings can switch Week Time-Grid to Sunday-Saturday windows while Monday-Sunday remains the default.
 - All-day and multi-day events render in a compact top row or summary, not as repeated hourly blocks across every day.
