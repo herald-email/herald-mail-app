@@ -542,6 +542,13 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			crossSearchHint = "x: all search"
 		}
 		settingsHint := m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings")
+		agendaPastHint := ""
+		if m.calendarAgendaHiddenPastCount() > 0 {
+			agendaPastHint = "p: show past"
+			if m.calendarAgendaShowPast {
+				agendaPastHint = "p: hide past"
+			}
+		}
 		if m.calendarEdit.Active {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "backspace: edit", "ctrl+u: clear", "ctrl+s: save", "esc: cancel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "cache-backed")
 		} else if m.calendarMeetingPrepOpen {
@@ -585,7 +592,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else if m.calendarView == calendarViewThreeDay {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", "h/l: 3-day", "y/m/n: RSVP", "w: week", "d: day", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
 		} else {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", "h/l: day", "y/m/n: RSVP", "d: day", "w: week", "t: 3-day", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", agendaPastHint, "h/l: day", "y/m/n: RSVP", "d: day", "w: week", "t: 3-day", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
 		}
 	} else {
 		switch chrome.FocusedPanel {

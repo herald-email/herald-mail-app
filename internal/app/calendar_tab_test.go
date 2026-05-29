@@ -612,6 +612,26 @@ func TestCalendarMeetingPrepShortcutDoesNotStealTextEntry(t *testing.T) {
 		}
 	})
 
+	t.Run("timeline prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabTimeline
+		m.timeline.searchMode = true
+		m.timeline.searchFocus = timelineSearchFocusInput
+		m.timeline.searchInput.Focus()
+
+		model, _ := m.handleKeyMsg(keyRunes("p"))
+		m = model.(*Model)
+		if m.activeTab != tabTimeline {
+			t.Fatalf("activeTab = %d, want Timeline", m.activeTab)
+		}
+		if got := m.timeline.searchInput.Value(); got != "p" {
+			t.Fatalf("timeline search=%q, want literal p", got)
+		}
+	})
+
 	t.Run("editor", func(t *testing.T) {
 		m := New(b, nil, "", nil, false)
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -1053,7 +1073,7 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar events = %d, want %d", len(m.calendarEvents), len(events))
 	}
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "Event Detail", "Herald planning room", "read-only"} {
+	for _, want := range []string{"Calendar", "Agenda", "Roadmap sync", "past events hidden", "[p] Show past", "Event Detail", "read-only"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("calendar view missing %q:\n%s", want, rendered)
 		}
@@ -1062,14 +1082,21 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 		t.Fatalf("calendar view exposed provider internals:\n%s", rendered)
 	}
 
-	cursorBefore := m.calendarCursor
-	model, _ = m.handleKeyMsg(keyRunes("j"))
-	m = model.(*Model)
-	if m.calendarCursor != cursorBefore+1 {
-		t.Fatalf("calendar cursor = %d, want next event after %d", m.calendarCursor, cursorBefore)
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Roadmap sync" {
+		t.Fatalf("selected event with past rows hidden = %#v, want Roadmap sync", got)
 	}
-	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Daily standup" {
-		t.Fatalf("selected event after j = %#v, want Daily standup", got)
+	model, _ = m.handleKeyMsg(keyRunes("p"))
+	m = model.(*Model)
+	rendered = stripANSI(m.renderMainView())
+	for _, want := range []string{"[p] Hide past", "Design review", "Daily standup"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("calendar show-past view missing %q:\n%s", want, rendered)
+		}
+	}
+	model, _ = m.handleKeyMsg(keyRunes("k"))
+	m = model.(*Model)
+	if got := m.selectedCalendarEvent(); got == nil || got.Title != "Weekly planning" {
+		t.Fatalf("selected event after k with past rows shown = %#v, want Weekly planning", got)
 	}
 }
 
@@ -1079,7 +1106,7 @@ func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 	nextMonth := monthStart.AddDate(0, 1, 0)
 	old := today.AddDate(0, 0, -45).Add(9 * time.Hour)
 	malformedSpan := today.AddDate(-2, 0, 0).Add(16 * time.Hour)
-	current := monthStart.AddDate(0, 0, 10).Add(10 * time.Hour)
+	current := today.Add(10 * time.Hour)
 	future := nextMonth.AddDate(0, 0, -1).Add(11 * time.Hour)
 	events := []models.CalendarEvent{
 		{
@@ -1143,6 +1170,121 @@ func TestCalendarAgendaFiltersZeroStartRowsAndUsesDefaultRange(t *testing.T) {
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("agenda rendered forbidden %q:\n%s", forbidden, rendered)
 		}
+	}
+}
+
+func TestCalendarAgendaHidesPastRowsByDefaultAndCanShowPast(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	pastStart := today.AddDate(0, 0, -1).Add(9 * time.Hour)
+	spanningStart := today.Add(-1 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "past-finished"}.WithDefaults(),
+			Title:  "Past finished",
+			Start:  pastStart,
+			End:    pastStart.Add(time.Hour),
+			Status: "confirmed",
+		},
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "spans-today"}.WithDefaults(),
+			Title:  "Spans into today",
+			Start:  spanningStart,
+			End:    today.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+	b := &calendarAgendaStubBackend{available: true, events: events}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewAgenda
+	m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(pastStart)
+	m.ensureCalendarSelectionVisible()
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"Spans into today", "1 past event hidden before", "[p] Show past"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("agenda with hidden past rows missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Past finished") {
+		t.Fatalf("agenda rendered a past row by default:\n%s", rendered)
+	}
+	if hints := stripANSI(m.renderKeyHints()); !strings.Contains(hints, "p: show past") {
+		t.Fatalf("agenda hints missing show-past action:\n%s", hints)
+	}
+
+	model, _ := m.handleKeyMsg(keyRunes("p"))
+	m = model.(*Model)
+	rendered = stripANSI(m.renderMainView())
+	for _, want := range []string{"Past finished", "Spans into today", "[p] Hide past"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("agenda after show-past missing %q:\n%s", want, rendered)
+		}
+	}
+	if hints := stripANSI(m.renderKeyHints()); !strings.Contains(hints, "p: hide past") {
+		t.Fatalf("agenda hints missing hide-past action:\n%s", hints)
+	}
+
+	model, _ = m.handleKeyMsg(keyRunes("p"))
+	m = model.(*Model)
+	if rendered = stripANSI(m.renderMainView()); strings.Contains(rendered, "Past finished") {
+		t.Fatalf("agenda kept rendering past row after hiding again:\n%s", rendered)
+	}
+}
+
+func TestCalendarAgendaEmptyUpcomingStateShowsHiddenPastAffordance(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	pastStart := today.AddDate(0, 0, -1).Add(9 * time.Hour)
+	event := models.CalendarEvent{
+		Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "past-only"}.WithDefaults(),
+		Title:  "Past only",
+		Start:  pastStart,
+		End:    pastStart.Add(time.Hour),
+		Status: "confirmed",
+	}
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewAgenda
+	m.calendarEvents = normalizeCalendarEventsForDisplay([]models.CalendarEvent{event})
+	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(pastStart)
+	m.ensureCalendarSelectionVisible()
+
+	rendered := stripANSI(m.renderMainView())
+	for _, want := range []string{"1 past event hidden before", "[p] Show past", "No upcoming calendar events"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("empty upcoming agenda missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Past only") {
+		t.Fatalf("empty upcoming agenda rendered hidden past row:\n%s", rendered)
+	}
+}
+
+func TestCalendarDefaultAgendaRangeIgnoresPastOnlyHistory(t *testing.T) {
+	today := calendarDayStartFor(time.Now())
+	pastOnly := today.AddDate(0, -2, 0).Add(9 * time.Hour)
+	events := []models.CalendarEvent{
+		{
+			Ref:    models.EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "past-only-history"}.WithDefaults(),
+			Title:  "Past only history",
+			Start:  pastOnly,
+			End:    pastOnly.Add(time.Hour),
+			Status: "confirmed",
+		},
+	}
+
+	got := calendarDefaultAgendaStart(events, today)
+	want, _ := calendarAgendaWindowFor(today)
+	if !sameCalendarDate(got, want) {
+		t.Fatalf("default agenda start = %v, want current month %v instead of past-only history", got, want)
 	}
 }
 
@@ -2564,6 +2706,8 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 		model, _ := m.Update(msg)
 		m = model.(*Model)
 	}
+	m.calendarAgendaShowPast = true
+	m.ensureCalendarSelectionVisible()
 
 	rendered := stripANSI(m.renderMainView())
 	for _, want := range []string{"Calendars", "[x] Work", "Agenda (1) for", "<-/->/h/l to switch", "! Timezone planning"} {
@@ -2616,7 +2760,7 @@ func TestCalendarAgendaRangeTitleLivesOnPanelFrame(t *testing.T) {
 	rendered := stripANSI(m.renderMainView())
 	var titleLine string
 	for _, line := range strings.Split(rendered, "\n") {
-		if strings.Contains(line, "Agenda (4) for") {
+		if strings.Contains(line, "Agenda (1) for") {
 			titleLine = line
 			break
 		}
@@ -2646,13 +2790,13 @@ func TestCalendarAgendaFrameChromePromotesCountAndRemovesLoadedStatus(t *testing
 
 	rendered := stripANSI(m.renderMainView())
 	titleLine := calendarFirstFrameLineForTest(rendered)
-	for _, want := range []string{"Agenda (4) for Fri May 1 - Sun May 31, 2026", "(<-/->/h/l to switch)"} {
+	for _, want := range []string{"Agenda (1) for Fri May 1 - Sun May 31, 2026", "(<-/->/h/l to switch)"} {
 		if !strings.Contains(titleLine, want) {
 			t.Fatalf("calendar agenda frame missing %q in:\n%s\n\nrendered:\n%s", want, titleLine, rendered)
 		}
 	}
 	body := calendarAfterFirstFrameLineForTest(rendered)
-	for _, stale := range []string{"Agenda (4)", "Loaded 4 calendar event(s)"} {
+	for _, stale := range []string{"Agenda (1)", "Loaded 4 calendar event(s)"} {
 		if strings.Contains(body, stale) {
 			t.Fatalf("calendar agenda body kept stale %q:\n%s", stale, rendered)
 		}

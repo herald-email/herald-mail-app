@@ -116,6 +116,7 @@ func (m *Model) refreshCalendarAvailability() {
 		m.crossSourceSearchLoading = false
 		m.calendarAgendaStart = time.Time{}
 		m.calendarAgendaEnd = time.Time{}
+		m.calendarAgendaShowPast = false
 		m.calendarDetailOpen = false
 		m.calendarLoading = false
 		m.calendarDetailLoading = false
@@ -249,6 +250,15 @@ func (m *Model) selectedCalendarEvent() *models.CalendarEvent {
 		}
 		event := m.calendarSearchResults[m.calendarSearchCursor]
 		return &event
+	}
+	if m.calendarView == "" || m.calendarView == calendarViewAgenda {
+		for _, item := range m.indexedVisibleCalendarEvents() {
+			if item.index == m.calendarCursor {
+				event := item.event
+				return &event
+			}
+		}
+		return nil
 	}
 	if m.calendarCursor < 0 || m.calendarCursor >= len(m.calendarEvents) {
 		return nil
@@ -1218,6 +1228,20 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.setCalendarView(calendarViewAgenda)
 		}
 		return m, nil
+	case "p":
+		if m.calendarDetailOpen {
+			return m, m.openCalendarMeetingPrep()
+		}
+		if m.calendarView == "" || m.calendarView == calendarViewAgenda {
+			m.calendarAgendaShowPast = !m.calendarAgendaShowPast
+			if m.calendarAgendaShowPast {
+				m.calendarStatus = "Showing past agenda events"
+			} else {
+				m.calendarStatus = "Hiding past agenda events"
+			}
+			m.ensureCalendarSelectionVisible()
+		}
+		return m, nil
 	case "w":
 		if !m.calendarDetailOpen {
 			m.setCalendarView(calendarViewWeek)
@@ -1256,11 +1280,6 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		if m.calendarDetailOpen {
 			m.openCalendarEdit()
-		}
-		return m, nil
-	case "p":
-		if m.calendarDetailOpen {
-			return m, m.openCalendarMeetingPrep()
 		}
 		return m, nil
 	case "b":
@@ -1781,9 +1800,19 @@ func (m *Model) renderCalendarAgendaList(width, height int) string {
 	if status := m.visibleCalendarStatus(); status != "" {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(status, width)))
 	}
+	hiddenPast := m.calendarAgendaHiddenPastCount()
+	if hiddenPast > 0 {
+		for _, notice := range m.calendarAgendaPastNoticeLines(hiddenPast) {
+			lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(notice, width)))
+		}
+	}
 	if len(visibleEvents) == 0 {
 		lines = append(lines, "")
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No cached calendar events", width)))
+		empty := "No cached calendar events"
+		if hiddenPast > 0 && !m.calendarAgendaShowPast {
+			empty = "No upcoming calendar events"
+		}
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(empty, width)))
 		return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 	}
 
@@ -2928,7 +2957,6 @@ func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) ti
 		}
 	}
 	var nearestFuture time.Time
-	var latestPast time.Time
 	for _, event := range events {
 		if event.Start.IsZero() {
 			continue
@@ -2940,17 +2968,11 @@ func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) ti
 			}
 			continue
 		}
-		if latestPast.IsZero() || day.After(latestPast) {
-			latestPast = day
-		}
 	}
 	if !nearestFuture.IsZero() {
 		return nearestFuture
 	}
-	if !latestPast.IsZero() {
-		return latestPast
-	}
-	return today
+	return defaultStart
 }
 
 func calendarAgendaWindowFor(day time.Time) (time.Time, time.Time) {
@@ -3728,6 +3750,15 @@ func calendarEventOccursInAgendaWindow(event models.CalendarEvent, start, end ti
 	return !eventStart.Before(start)
 }
 
+func calendarEventEndedBeforeDay(event models.CalendarEvent, day time.Time) bool {
+	if event.Start.IsZero() {
+		return false
+	}
+	dayStart := calendarDayStartFor(day)
+	_, eventEnd := calendarEventDisplaySpan(event)
+	return !eventEnd.After(dayStart)
+}
+
 func calendarEventDisplaySpan(event models.CalendarEvent) (time.Time, time.Time) {
 	start := event.Start.Local()
 	if event.AllDay {
@@ -3968,10 +3999,31 @@ func (m *Model) pruneCalendarCollectionState() {
 
 func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
 	out := m.indexedAllVisibleCalendarEvents()
-	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	if m.calendarView != calendarViewAgenda {
 		return out
 	}
+	return m.filterAgendaVisibleEvents(out, m.calendarAgendaShowPast)
+}
+
+func (m *Model) filterAgendaVisibleEvents(events []indexedCalendarEvent, showPast bool) []indexedCalendarEvent {
+	agendaStart, agendaEnd := m.calendarAgendaWindow()
+	filtered := events[:0]
+	today := calendarDayStartFor(time.Now())
+	for _, item := range events {
+		if !calendarEventOccursInAgendaWindow(item.event, agendaStart, agendaEnd) {
+			continue
+		}
+		if !showPast && calendarEventEndedBeforeDay(item.event, today) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func (m *Model) calendarAgendaWindowEvents() []indexedCalendarEvent {
+	out := m.indexedAllVisibleCalendarEvents()
+	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	filtered := out[:0]
 	for _, item := range out {
 		if calendarEventOccursInAgendaWindow(item.event, agendaStart, agendaEnd) {
@@ -3979,6 +4031,40 @@ func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
 		}
 	}
 	return filtered
+}
+
+func (m *Model) calendarAgendaHiddenPastCount() int {
+	if m.calendarView != "" && m.calendarView != calendarViewAgenda {
+		return 0
+	}
+	today := calendarDayStartFor(time.Now())
+	count := 0
+	for _, item := range m.calendarAgendaWindowEvents() {
+		if calendarEventEndedBeforeDay(item.event, today) {
+			count++
+		}
+	}
+	return count
+}
+
+func (m *Model) calendarAgendaPastNoticeLines(count int) []string {
+	if count <= 0 {
+		return nil
+	}
+	noun := "events"
+	if count == 1 {
+		noun = "event"
+	}
+	action := "Show past"
+	state := "hidden"
+	if m.calendarAgendaShowPast {
+		action = "Hide past"
+		state = "shown"
+	}
+	return []string{
+		fmt.Sprintf("%d past %s %s before %s", count, noun, state, calendarDayStartFor(time.Now()).Local().Format("Jan 2")),
+		fmt.Sprintf("[p] %s", action),
+	}
 }
 
 func (m *Model) indexedAllVisibleCalendarEvents() []indexedCalendarEvent {

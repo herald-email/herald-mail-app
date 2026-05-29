@@ -861,6 +861,7 @@ type Model struct {
 	crossSourceSearchLoading    bool
 	calendarAgendaStart         time.Time
 	calendarAgendaEnd           time.Time
+	calendarAgendaShowPast      bool
 	calendarDay                 time.Time
 	calendarWeekStart           time.Time
 	calendarThreeDayStart       time.Time

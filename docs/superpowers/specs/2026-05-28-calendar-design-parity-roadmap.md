@@ -54,6 +54,7 @@ The date bugs should be fixed as a foundation before the screen work, because ev
 - [x] Sort timed events by local start time, then local end time, then all-day status, then title, then scoped event ref for deterministic ties.
 - [ ] Sort all-day and multi-day events into predictable top rows or day-spanning rows instead of mixing them into timed rows by midnight artifacts.
 - [x] Make Agenda List use a deliberate local 30-day range, defaulting to today when that window has events and otherwise falling back to the nearest valid event window.
+- [x] Hide Agenda List events that ended before the current local day by default, with a visible `[p] Show past` affordance that restores those rows without changing Day, Week, 3-Day, Search, or Event Detail behavior.
 - [x] Reject or hide calendar events with invalid or missing start timestamps, including stale cache rows with absurdly long historic spans, so parser failures never render as zero-time historical dates.
 - [ ] Make Week Time-Grid default to the week containing today or the selected event, not the first cached event when that produces surprising historical windows.
 - [ ] Make Day Agenda default to today when possible, then nearest upcoming event, then first cached event only as a final fallback.
@@ -116,6 +117,7 @@ Agenda List should become the compact chronological calendar timeline once the s
 - [x] Layout the screen as calendar rail, agenda list, and event preview/detail panel.
 - [x] Use the frame-title range format `Agenda (N) for <start> - <end>` with explicit previous/next range movement in the right-side frame hint.
 - [ ] Group events by local date with readable date separators and stable chronological sorting inside each group.
+- [x] Keep past Agenda rows hidden before today's local date until the user toggles `[p] Show past`; when hidden rows exist, show a compact count and keep `p` advertised only on the Agenda surface.
 - [x] Include calendar color/source markers, RSVP-needed markers, and account badges without leaking provider internals.
 - [x] Support page movement with `ctrl+u/ctrl+d` in the agenda list.
 - [ ] Add independent preview scrolling when the preview/detail panel is focused.

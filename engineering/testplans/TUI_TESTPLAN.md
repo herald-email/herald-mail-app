@@ -1646,6 +1646,7 @@ Check these states during every applicable lane:
 - Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
 - The Agenda List is sorted by start time, shows each event's calendar/source label, and never exposes provider event IDs, CalDAV URLs, sync tokens, ETags, or OAuth details.
 - The Agenda List uses a deliberate local calendar-month range, such as `May 1 - May 31`, falls back to the nearest valid event's calendar month when the current month is empty, and never renders malformed, zero-time, or absurdly long stale provider spans as historical rows such as `Dec 31` or `1950`.
+- The Agenda List hides events that ended before the current local day by default; when hidden rows exist, it shows a compact `past events hidden` notice with a `[p] Show past` affordance, and pressing `p` reveals those rows until `p` hides them again.
 - Google and CalDAV date-only/all-day provider events appear on their intended local calendar date, and exclusive all-day end dates do not duplicate the event on the following day.
 - Switching from Agenda to Day, Week, or 3-Day anchors on the selected/current date instead of jumping to the first cached event; returning to Agenda uses the anchor's calendar month.
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
