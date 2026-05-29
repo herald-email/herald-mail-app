@@ -1831,6 +1831,59 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	}
 }
 
+func TestCalendarWeekGridShowsHalfHourRowsOnTallScreensWithoutCuttingLongEvents(t *testing.T) {
+	start := time.Date(2026, 4, 20, 13, 0, 0, 0, time.Local)
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "demo-calendar",
+			AccountID:  models.DefaultAccountID,
+			CalendarID: "personal",
+			EventID:    "focus-block",
+		}.WithDefaults(),
+		Title:  "Focus Block",
+		Start:  start,
+		End:    start.Add(2 * time.Hour),
+		Status: "busy",
+	}
+	m := New(&calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{event}}, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarView = calendarViewWeek
+	m.calendarEvents = normalizeCalendarEventsForDisplay([]models.CalendarEvent{event})
+	m.calendarWeekStart = calendarWeekStartFor(start)
+	m.calendarDetail = &m.calendarEvents[0]
+
+	rendered := stripANSI(m.renderCalendarWeekGrid(110, 40))
+	if !strings.Contains(rendered, "13:30") {
+		t.Fatalf("tall week grid should include 30-minute rows:\n%s", rendered)
+	}
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "13:00") || !strings.Contains(line, "Focus Block") {
+			continue
+		}
+		if i+1 >= len(lines) {
+			t.Fatalf("13:00 event row was the final rendered line:\n%s", rendered)
+		}
+		next := lines[i+1]
+		if !strings.Contains(next, "13:30") {
+			t.Fatalf("long event should continue into the next half-hour row, got next line %q:\n%s", next, rendered)
+		}
+		cells := strings.Split(next[7:], "│")
+		if len(cells) < 2 {
+			t.Fatalf("half-hour row should keep day cells, got %q:\n%s", next, rendered)
+		}
+		if strings.Contains(cells[0], "·") {
+			t.Fatalf("long event continuation cell should mask guide dots, got %q in row %q:\n%s", cells[0], next, rendered)
+		}
+		if !strings.Contains(strings.Join(cells[1:], ""), "····") {
+			t.Fatalf("guide dots should remain in empty half-hour cells, got %q:\n%s", next, rendered)
+		}
+		return
+	}
+	t.Fatalf("did not find 13:00 Focus Block row:\n%s", rendered)
+}
+
 func TestCalendarViewSwitchingUsesSelectedDateInsteadOfAgendaMonthStart(t *testing.T) {
 	events := dateAnchorCalendarEventsForTest()
 	b := &calendarAgendaStubBackend{available: true, events: events}
@@ -1853,6 +1906,7 @@ func TestCalendarViewSwitchingUsesSelectedDateInsteadOfAgendaMonthStart(t *testi
 			m.activeTab = tabCalendar
 			m.calendarView = calendarViewAgenda
 			m.calendarEvents = normalizeCalendarEventsForDisplay(events)
+			m.calendarAgendaShowPast = true
 			m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(events[0].Start)
 			m.calendarAgendaShowPast = true
 			m.calendarCursor = 1
