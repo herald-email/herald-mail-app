@@ -1638,7 +1638,8 @@ Check these states during every applicable lane:
 3. Capture the Agenda List with the selected event detail visible.
 4. Move through events with `j/k` or arrow keys.
 5. Press `Enter` to open the full Event Detail view, then `Esc` to return to the agenda without losing position.
-6. Switch back to Timeline and Contacts, then repeat in a mail-only session with no calendar agenda backend.
+6. Press `S` from Calendar, confirm Settings opens as the same compact overlay used elsewhere, press `Esc`, and confirm Calendar returns to the same view and selection.
+7. Switch back to Timeline and Contacts, then repeat in a mail-only session with no calendar agenda backend.
 
 **Expect:**
 - Calendar appears as a durable title-row destination only when an agenda backend is available; mail-only sessions keep the existing Timeline/Contacts title row and `1-2: tabs` hints.
@@ -1646,6 +1647,7 @@ Check these states during every applicable lane:
 - The Agenda List uses a deliberate local calendar-month range, such as `May 1 - May 31`, falls back to the nearest valid event's calendar month when the current month is empty, and never renders malformed, zero-time, or absurdly long stale provider spans as historical rows such as `Dec 31` or `1950`.
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
 - `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
+- `S` opens Settings from Calendar, Settings hints replace the Calendar hints while the overlay is open, and closing Settings preserves the active Calendar view and selected event.
 - Calendar hints are read-only and do not advertise RSVP, edit, create, or provider mutation actions.
 - Timeline, Contacts, Compose, account switching, chat, settings, SSH, and MCP behavior remain unchanged.
 - At `50x15`, the minimum-size guard appears instead of clipped calendar chrome, and resizing larger restores the agenda or detail state cleanly.

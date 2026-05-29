@@ -998,6 +998,15 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.calendarEdit.Active {
 		return m.handleCalendarEditKey(msg)
 	}
+	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
+		return m.handleCalendarSearchKey(msg)
+	}
+	if m.calendarView == calendarViewCrossSearch && !m.calendarDetailOpen {
+		return m.handleCrossSourceSearchKey(msg)
+	}
+	if key == "S" {
+		return m, m.openSettingsPanel()
+	}
 	if m.calendarMeetingPrepOpen {
 		return m.handleCalendarMeetingPrepKey(msg)
 	}
@@ -1006,12 +1015,6 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.calendarAISummaryOpen {
 		return m.handleCalendarAISummaryKey(msg)
-	}
-	if m.calendarView == calendarViewSearch && !m.calendarDetailOpen {
-		return m.handleCalendarSearchKey(msg)
-	}
-	if m.calendarView == calendarViewCrossSearch && !m.calendarDetailOpen {
-		return m.handleCrossSourceSearchKey(msg)
 	}
 	switch key {
 	case "q":

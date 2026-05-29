@@ -1440,6 +1440,15 @@ func (m *Model) newSettingsPanel(section settingsPanelSection, status string) *S
 	return panel
 }
 
+func (m *Model) openSettingsPanel() tea.Cmd {
+	if m.showSettings {
+		return nil
+	}
+	m.showSettings = true
+	m.settingsPanel = m.newSettingsPanel("", "")
+	return m.settingsPanel.Init()
+}
+
 func (m *Model) openSettingsCleanupTool(tool string) tea.Cmd {
 	m.showSettings = false
 	m.settingsPanel = nil
@@ -3271,12 +3280,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "S":
-		if !m.showSettings {
-			m.showSettings = true
-			m.settingsPanel = m.newSettingsPanel("", "")
-			return m, m.settingsPanel.Init()
-		}
-		return m, nil
+		return m, m.openSettingsPanel()
 
 	case "a", "e":
 		if m.activeTab == tabTimeline {

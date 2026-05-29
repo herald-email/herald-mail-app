@@ -563,6 +563,51 @@ func pressSettingsPanelForTest(t *testing.T, m *Model) *Model {
 	return updated
 }
 
+func TestSettingsPanelOpensFromCalendarAndPreservesContext(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.calendarView = calendarViewWeek
+	m.calendarFocus = calendarFocusRail
+	m.calendarCursor = 2
+	m.calendarRailCursor = 1
+	m.calendarHiddenCollections = map[string]bool{"work": true}
+
+	if hints := stripANSI(m.renderKeyHints()); !strings.Contains(hints, "S: settings") {
+		t.Fatalf("expected Calendar key hints to advertise settings, got:\n%s", hints)
+	}
+
+	updated := pressSettingsPanelForTest(t, m)
+
+	if updated.activeTab != tabCalendar {
+		t.Fatalf("activeTab = %v, want calendar", updated.activeTab)
+	}
+	if updated.calendarView != calendarViewWeek {
+		t.Fatalf("calendarView = %q, want %q", updated.calendarView, calendarViewWeek)
+	}
+	if updated.calendarFocus != calendarFocusRail {
+		t.Fatalf("calendarFocus = %v, want rail", updated.calendarFocus)
+	}
+	if updated.calendarCursor != 2 || updated.calendarRailCursor != 1 {
+		t.Fatalf("calendar cursor state changed: event=%d rail=%d", updated.calendarCursor, updated.calendarRailCursor)
+	}
+	if !updated.calendarHiddenCollections["work"] {
+		t.Fatalf("calendar filter state was not preserved")
+	}
+
+	model, _ := updated.Update(SettingsCancelledMsg{})
+	closed := model.(*Model)
+	if closed.showSettings || closed.settingsPanel != nil {
+		t.Fatalf("expected settings to close after cancellation")
+	}
+	if closed.activeTab != tabCalendar || closed.calendarView != calendarViewWeek || closed.calendarFocus != calendarFocusRail {
+		t.Fatalf("calendar context changed after closing settings: tab=%v view=%q focus=%v", closed.activeTab, closed.calendarView, closed.calendarFocus)
+	}
+	if closed.calendarCursor != 2 || closed.calendarRailCursor != 1 || !closed.calendarHiddenCollections["work"] {
+		t.Fatalf("calendar selection/filter state changed after closing settings")
+	}
+}
+
 func findRenderedText(lines []string, needle string) (int, int) {
 	for row, line := range lines {
 		if col := strings.Index(line, needle); col >= 0 {

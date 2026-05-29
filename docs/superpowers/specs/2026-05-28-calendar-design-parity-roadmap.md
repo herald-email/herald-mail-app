@@ -70,7 +70,7 @@ Calendar should inherit Timeline's panel discipline while keeping calendar-speci
 - [x] In Day Agenda, make `down` on the last event move to the first event on the next day with visible events, and make `up` on the first event move to the last event on the previous day with visible events.
 - [x] Keep `enter` opening detail for the selected event and `esc` returning one level without losing the selected date range.
 - [x] Keep `q` and `ctrl+c` as global quit actions even when Calendar, detail, notes, RSVP picker, or invitation-add picker has focus.
-- [ ] Keep settings available from Calendar with the same key used elsewhere, and return to the same calendar view, selected range, and selected event after settings closes.
+- [x] Keep settings available from Calendar with the same key used elsewhere, and return to the same calendar view, selected range, and selected event after settings closes.
 
 ## Screen 01 Week Time-Grid
 
@@ -161,7 +161,7 @@ Mail and calendar should meet at invitation emails, especially when the email co
 
 Calendar design parity depends on the rest of Herald still feeling coherent. Settings and global controls should work while Calendar has focus, and calendar settings should share the same source vocabulary as the rail.
 
-- [ ] Opening Settings from Calendar should preserve active calendar screen, focused panel, selected range, selected event, and enabled calendar filters.
+- [x] Opening Settings from Calendar should preserve active calendar screen, focused panel, selected range, selected event, and enabled calendar filters.
 - [ ] Settings > Accounts should expose mail and calendar sources using the same account labels and calendar display names shown in the calendar rail.
 - [ ] Calendar source changes should validate provider credentials and then refresh the rail without forcing the user back to Timeline.
 - [x] `q`, `ctrl+c`, logs, chat, help, and theme/settings controls should keep their global behavior in Calendar unless a modal explicitly documents a local override.
