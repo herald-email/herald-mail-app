@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMailboxCoversPublicDemoStories(t *testing.T) {
@@ -218,6 +219,29 @@ func mustParseDemoAddresses(t *testing.T, value string) []*mail.Address {
 		t.Fatalf("invalid demo address list %q: %v", value, err)
 	}
 	return addrs
+}
+
+func TestCalendarEventsAreSeededAroundCurrentDate(t *testing.T) {
+	events := CalendarEvents()
+	if len(events) == 0 {
+		t.Fatal("expected demo calendar events")
+	}
+
+	now := time.Now()
+	start := calendarFixtureDayStart(now)
+	end := start.AddDate(0, 0, 5)
+	var inWindow int
+	for _, event := range events {
+		if event.Start.IsZero() {
+			t.Fatalf("event %q has zero start", event.Title)
+		}
+		if !event.Start.Before(start) && event.Start.Before(end) {
+			inWindow++
+		}
+	}
+	if inWindow < 5 {
+		t.Fatalf("events in current 5-day demo window = %d, want at least 5", inWindow)
+	}
 }
 
 func TestMailboxOnboardingBodiesTeachCoreFeatures(t *testing.T) {

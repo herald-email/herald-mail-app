@@ -23,6 +23,25 @@ func TestRegisterTUIFlagsParsesDemoKeys(t *testing.T) {
 	}
 }
 
+func TestDemoMultiAccountFlagImpliesDemoMode(t *testing.T) {
+	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
+	opts := registerTUIFlags(fs)
+
+	if err := fs.Parse([]string{"--demo-multi-account"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	if !shouldRunDemo(*opts.demo, *opts.demoMulti) {
+		t.Fatal("expected --demo-multi-account to start demo mode")
+	}
+}
+
+func TestPlainLaunchDoesNotRunDemoMode(t *testing.T) {
+	if shouldRunDemo(false, false) {
+		t.Fatal("plain launch should not start demo mode")
+	}
+}
+
 func TestRegisterTUIFlagsParsesThemeOverride(t *testing.T) {
 	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
 	opts := registerTUIFlags(fs)

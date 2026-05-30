@@ -449,6 +449,10 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 	}
 }
 
+func shouldRunDemo(demo, demoMultiAccount bool) bool {
+	return demo || demoMultiAccount
+}
+
 func rootCommandFromArgs(args []string) (rootCommand, []string) {
 	if len(args) < 2 {
 		return rootCommandTUI, nil
@@ -762,7 +766,7 @@ func runTUI() {
 	}
 
 	// Demo mode: skip all real IMAP setup
-	if *opts.demo {
+	if shouldRunDemo(*opts.demo, *opts.demoMulti) {
 		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme)
 		return
 	}

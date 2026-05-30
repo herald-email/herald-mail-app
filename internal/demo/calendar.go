@@ -61,7 +61,7 @@ func CalendarCollections() []models.CalendarCollection {
 }
 
 func CalendarEvents() []models.CalendarEvent {
-	week := time.Date(2026, 4, 20, 7, 0, 0, 0, time.Local)
+	week := calendarFixtureDayStart(time.Now()).Add(7 * time.Hour)
 	at := func(day, hour, minute int) time.Time {
 		return week.AddDate(0, 0, day).Add(time.Duration(hour-7)*time.Hour + time.Duration(minute)*time.Minute)
 	}
@@ -118,6 +118,13 @@ func CalendarEvents() []models.CalendarEvent {
 	out := make([]models.CalendarEvent, len(events))
 	copy(out, events)
 	return out
+}
+
+func calendarFixtureDayStart(t time.Time) time.Time {
+	if t.IsZero() {
+		t = time.Now()
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
 func calendarEvent(calendarID, id, title, description, location string, start time.Time, duration time.Duration, status string) models.CalendarEvent {

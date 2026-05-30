@@ -22,7 +22,7 @@ func TestDemoBackendCalendarAgendaIsSortedAndFetchesDetail(t *testing.T) {
 		t.Fatal("demo backend should advertise calendar agenda data")
 	}
 
-	start := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC)
+	start := time.Now().Add(-time.Hour)
 	events, err := b.ListCalendarAgenda(start, start.AddDate(0, 0, 14))
 	if err != nil {
 		t.Fatalf("ListCalendarAgenda: %v", err)
@@ -54,7 +54,7 @@ func TestDemoBackendCalendarAgendaIsSortedAndFetchesDetail(t *testing.T) {
 
 func TestDemoBackendSaveCalendarEventUpdatesMemory(t *testing.T) {
 	b := NewDemoBackend()
-	start := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC)
+	start := time.Now().Add(-time.Hour)
 	events, err := b.ListCalendarAgenda(start, start.AddDate(0, 0, 14))
 	if err != nil {
 		t.Fatalf("ListCalendarAgenda: %v", err)
