@@ -110,7 +110,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 ### Start OAuth
 
 1. Choose an OAuth-capable provider path.
-2. In first-run onboarding, launch Herald with `-experimental` first; in the in-app settings overlay, choose the OAuth path directly.
+2. In first-run onboarding or the in-app settings overlay, choose the OAuth path directly.
 3. Confirm you are using Homebrew/a release binary with OAuth defaults, a source build made with `.herald-dev.env` or exported Google OAuth variables, or a shell that has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported. See [Local OAuth Builds](/development/local-oauth-builds/) for source-build options.
 4. In the OAuth wait overlay, press `enter` to open the browser.
 5. Complete provider consent.
@@ -145,9 +145,9 @@ If settings will not save, check file permissions for the config path and parent
 
 If account validation fails, check the IMAP or SMTP section named in the error. Run `herald -debug` and open the latest file in `~/Library/Logs/Herald` on macOS, `${XDG_STATE_HOME:-~/.local/state}/herald/logs` on Linux/BSD, or `%LOCALAPPDATA%\\Herald\\Logs` on Windows.
 
-If OAuth does not complete, copy the displayed URL into a browser and finish consent. On Google's test-app warning page, choose `Continue`; `Back to safety` does not authorize Herald. If you choose `Cancel` on the consent screen, Herald reports that authorization was cancelled and does not save settings.
+If OAuth does not complete, copy the displayed URL into a browser and finish consent. If you choose `Cancel` on the consent screen, Herald reports that authorization was cancelled and does not save settings.
 
-If OAuth is missing from first-run onboarding, relaunch with `-experimental`. If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use Homebrew or another release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally after filling `.herald-dev.env`. Plain `make build` embeds those values when both are available and still succeeds without them; `make build-release-local` reads `.herald-release.env` and remains strict if either value is missing. See [Local OAuth Builds](/development/local-oauth-builds/) for the detailed local build paths.
+If OAuth fails before showing a URL with `Google OAuth credentials are not configured`, use Homebrew or another release binary, export the two `HERALD_GOOGLE_*` variables before starting Herald, or build locally after filling `.herald-dev.env`. Plain `make build` embeds those values when both are available and still succeeds without them; `make build-release-local` reads `.herald-release.env` and remains strict if either value is missing. See [Local OAuth Builds](/development/local-oauth-builds/) for the detailed local build paths.
 
 If AI stops working after model changes, verify the new model is installed or reachable and allow embedding regeneration to complete.
 

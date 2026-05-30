@@ -337,7 +337,7 @@ func oauthFailureMessage(err error) string {
 		return "Authorization cancelled; settings were not saved."
 	}
 	if errors.Is(err, ErrOAuthTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return "No authorization received; settings were not saved. On Google's test-app warning page choose Continue. Back to safety does not authorize Herald."
+		return "No authorization received; settings were not saved. Complete the Google consent screen in your browser, or cancel and start OAuth again."
 	}
 	msg := err.Error()
 	if strings.Contains(strings.ToLower(msg), "authorization denied") || strings.Contains(strings.ToLower(msg), "access_denied") {

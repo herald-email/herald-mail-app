@@ -199,7 +199,7 @@ func TestOAuthWaitModel_EscapeCancelsWithoutSaving(t *testing.T) {
 	}
 }
 
-func TestOAuthWaitModel_TimeoutExplainsGoogleContinuePath(t *testing.T) {
+func TestOAuthWaitModel_TimeoutExplainsBrowserConsentPath(t *testing.T) {
 	cfg := &config.Config{}
 	m := &OAuthWaitModel{
 		email:       "test@gmail.com",
@@ -220,8 +220,8 @@ func TestOAuthWaitModel_TimeoutExplainsGoogleContinuePath(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected OAuthErrorMsg, got %T", cmd())
 	}
-	if !strings.Contains(msg.UserMessage, "Continue") || !strings.Contains(msg.UserMessage, "Back to safety") {
-		t.Fatalf("timeout message should explain Google test-app buttons, got %q", msg.UserMessage)
+	if !strings.Contains(msg.UserMessage, "Google consent screen") || !strings.Contains(msg.UserMessage, "start OAuth again") {
+		t.Fatalf("timeout message should explain browser consent recovery, got %q", msg.UserMessage)
 	}
 }
 

@@ -84,8 +84,8 @@ func TestNewSettings_PrefillsFromExistingConfig(t *testing.T) {
 func TestNewSettings_NilConfigUsesDefaults(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 
-	if s.provider != "imap" {
-		t.Errorf("provider = %q, want %q (default)", s.provider, "imap")
+	if s.provider != "gmail-oauth" {
+		t.Errorf("provider = %q, want %q (default)", s.provider, "gmail-oauth")
 	}
 	if s.email != "" {
 		t.Errorf("email = %q, want empty", s.email)
@@ -888,7 +888,7 @@ func TestSettingsAddCalendarFlowSkipsMailAccountType(t *testing.T) {
 	}
 }
 
-func TestSettingsCalendarProviderOptionsShowGoogleCalendarWithExperimentalFlag(t *testing.T) {
+func TestSettingsCalendarProviderOptionsShowGoogleCalendarByDefault(t *testing.T) {
 	originalOAuthConfigured := googleOAuthCredentialsConfigured
 	t.Cleanup(func() { googleOAuthCredentialsConfigured = originalOAuthConfigured })
 
@@ -898,7 +898,7 @@ func TestSettingsCalendarProviderOptionsShowGoogleCalendarWithExperimentalFlag(t
 		oauth        bool
 		wantGoogle   bool
 	}{
-		{name: "experimental off", experimental: false, oauth: true, wantGoogle: false},
+		{name: "experimental off", experimental: false, oauth: true, wantGoogle: true},
 		{name: "oauth credentials missing", experimental: true, oauth: false, wantGoogle: true},
 		{name: "enabled", experimental: true, oauth: true, wantGoogle: true},
 	}
@@ -1097,6 +1097,7 @@ func TestSettingsGoogleCalendarWithoutEmailRequestsOAuth(t *testing.T) {
 	s := NewSettingsWithOptions(SettingsModePanel, existing, SettingsOptions{ShowExperimentalEmailServices: true})
 	s.panelSection = settingsPanelSectionAccount
 	s.accountEditMode = settingsAccountEditAddCalendar
+	s.provider = "imap"
 	s.accountDisplayName = "Work Calendar"
 	s.calendarProvider = "google_calendar"
 	s.calendarEmail = ""

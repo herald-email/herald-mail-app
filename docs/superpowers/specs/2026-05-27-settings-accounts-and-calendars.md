@@ -38,7 +38,7 @@ Config writes should happen only after validation succeeds. Runtime replacement 
 This slice exposes only providers already supported by Herald's source platform. Local calendar is deliberately out of scope.
 
 - [x] Gmail OAuth can add mail plus Google Calendar when the OAuth token has calendar scopes.
-- [x] Google Calendar setup is visible whenever experimental Google services are enabled, and missing OAuth client credentials fail at OAuth start instead of forcing users into a CalDAV URL/password form.
+- [x] Google Calendar setup is visible by default, and missing OAuth client credentials fail at OAuth start instead of forcing users into a CalDAV URL/password form.
 - [x] Gmail IMAP app-password remains mail-only.
 - [x] Fastmail and iCloud can optionally pair mail with CalDAV, using editable CalDAV fields.
 - [x] Custom CalDAV is available from `Add Calendar`.

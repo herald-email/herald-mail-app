@@ -15,7 +15,7 @@ OAuth produces a candidate account config, not a saved config. This keeps token 
 
 - [x] Google consent cancellation must show a clear authorization-cancelled message and must not save account settings.
 - [x] Local `Esc` or `q` cancellation on the OAuth wait screen must stop waiting and report that setup was cancelled.
-- [x] OAuth waits must time out with guidance that mentions Google test-app warning screens and the `Continue` path.
+- [x] OAuth waits must time out with guidance to finish the Google consent screen or restart OAuth.
 - [x] Gmail OAuth must support SMTP XOAUTH2 so the same OAuth account can validate and send mail.
 
 ## Connection Validation

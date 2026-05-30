@@ -3,11 +3,11 @@ title: Local OAuth Builds
 description: Embed Google OAuth defaults in local source builds without committing credentials.
 ---
 
-Herald's experimental Google OAuth paths use desktop OAuth application credentials before they can open a browser consent flow. Release binaries include those defaults, while source builds can either provide them at runtime or embed local development defaults during `make build`.
+Herald's Google OAuth paths use desktop OAuth application credentials before they can open a browser consent flow. Release binaries include those defaults, while source builds can either provide them at runtime or embed local development defaults during `make build`.
 
 ## What The Credentials Do
 
-The same Google OAuth client ID and client secret are used for experimental Gmail OAuth and Google Calendar OAuth. These are desktop application defaults that let Herald start the local browser authorization flow; the user consent screen and saved refresh token still control account access.
+The same Google OAuth client ID and client secret are used for Gmail OAuth and Google Calendar OAuth. These are desktop application defaults that let Herald start the local browser authorization flow; the user consent screen and saved refresh token still control account access.
 
 OAuth client secrets embedded in desktop binaries are convenience defaults, not private secrets. Treat real values carefully in your shell history and local files, but do not rely on the embedded secret as a security boundary.
 
@@ -19,7 +19,7 @@ Plain `make build` reads `.herald-dev.env` when it exists. If both Google OAuth 
 cp .herald-dev.env.example .herald-dev.env
 $EDITOR .herald-dev.env
 make build
-./bin/herald -experimental
+./bin/herald
 ```
 
 Use the same variable names in `.herald-dev.env`:
@@ -39,7 +39,7 @@ For a one-off source run, you can avoid embedding credentials and export them in
 make build
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
-./bin/herald -experimental -config ~/.herald/conf.yaml
+./bin/herald -config ~/.herald/conf.yaml
 ```
 
 `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` does not read `.herald-dev.env` because it bypasses the repository Makefile. Use runtime credentials with that install path, or build from a checkout with `make build`.

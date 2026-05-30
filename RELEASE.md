@@ -57,7 +57,7 @@ The nightly workflow fails before building if either nightly OAuth secret is mis
 
 ## Homebrew Install
 
-Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow. Gmail OAuth remains experimental in first-run onboarding and is shown only when launched with `-experimental`; Google Calendar setup uses the same experimental Google OAuth credentials from in-app account settings.
+Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow. Gmail OAuth is the default recommended Gmail onboarding path, and Google Calendar setup uses the same supported Google OAuth credentials from in-app account settings.
 
 ```bash
 brew tap herald-email/herald

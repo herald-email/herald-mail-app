@@ -1,11 +1,32 @@
 ---
 title: Gmail Setup
-description: Configure Gmail with an App Password or experimental OAuth.
+description: Configure Gmail with OAuth or an App Password fallback.
 ---
 
-Gmail IMAP with an App Password is the normal Gmail setup path while Gmail OAuth onboarding is experimental. The first-run wizard hides OAuth unless Herald starts with `-experimental`.
+Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization flow, then validates Gmail IMAP and SMTP with XOAUTH2 before saving the resulting config.
 
-## Recommended: Gmail with an App Password
+## Recommended: Gmail OAuth
+
+1. Install with Homebrew:
+
+   ```sh
+   brew tap herald-email/herald
+   brew install herald
+   ```
+
+2. Run `herald`.
+3. Choose `Gmail OAuth` in the setup wizard.
+4. Complete browser authorization, then return to Herald.
+5. Wait for Herald to validate IMAP and SMTP before it continues to optional preferences.
+6. Finish the remaining setup steps to save the validated config.
+
+Homebrew and release binaries include the desktop OAuth defaults needed by the wizard.
+
+OAuth stores refresh token data in the Herald config only after validation succeeds and you finish setup so it can refresh access tokens later. Treat the config file like a credential.
+
+OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
+
+## Fallback: Gmail with an App Password
 
 Use this path for personal Gmail accounts with 2-Step Verification.
 
@@ -30,41 +51,16 @@ smtp:
 
 For personal Gmail, IMAP is generally already enabled. Google Workspace accounts may require an admin to allow IMAP or may require OAuth instead of password-based IMAP.
 
-## Experimental: Gmail OAuth
-
-OAuth opens a local browser authorization flow, then Herald validates Gmail IMAP and SMTP with XOAUTH2 before it continues to optional preferences or stores the resulting refresh token in config. This path is opt-in because Google OAuth onboarding and verification can take weeks and significant cost.
-
-1. Install with Homebrew:
-
-   ```sh
-   brew tap herald-email/herald
-   brew install herald
-   ```
-
-2. Run `herald -experimental`.
-3. Choose `Gmail OAuth (Experimental)` in the setup wizard.
-4. Complete browser authorization, then return to Herald.
-5. Wait for Herald to validate IMAP and SMTP before it continues to optional preferences.
-6. Finish the remaining setup steps to save the validated config.
-
-Homebrew and release binaries include the desktop OAuth defaults needed by the experimental wizard.
-
-On Google's test-app warning page, choose `Continue` to reach the real consent screen. `Back to safety` does not authorize Herald. On the consent screen, `Cancel` returns an authorization-cancelled error and Herald does not save settings.
-
-OAuth stores refresh token data in the Herald config only after validation succeeds and you finish setup so it can refresh access tokens later. Treat the config file like a credential.
-
-OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
-
 ## Source builds with OAuth
 
-Plain `make build` embeds OAuth defaults when both `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` are available in the environment or `.herald-dev.env`; otherwise it creates a normal development binary that still builds successfully. If you run `make build && ./bin/herald -experimental` without build-time defaults or exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
+Plain `make build` embeds OAuth defaults when both `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` are available in the environment or `.herald-dev.env`; otherwise it creates a normal development binary that still builds successfully. If you run `make build && ./bin/herald` without build-time defaults or exported runtime credentials, the OAuth wizard can fail with `Google OAuth credentials are not configured`.
 
 For a one-off local run, export credentials in the same shell that launches Herald:
 
 ```sh
 export HERALD_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 export HERALD_GOOGLE_CLIENT_SECRET="your-client-secret"
-./bin/herald -experimental -config ~/.herald/conf.yaml
+./bin/herald -config ~/.herald/conf.yaml
 ```
 
 For a local development binary with OAuth defaults built in:
@@ -73,7 +69,7 @@ For a local development binary with OAuth defaults built in:
 cp .herald-dev.env.example .herald-dev.env
 $EDITOR .herald-dev.env
 make build
-./bin/herald -experimental -config ~/.herald/conf.yaml
+./bin/herald -config ~/.herald/conf.yaml
 ```
 
 For release-style local builds, custom env file paths, and troubleshooting details, see [Local OAuth Builds](/development/local-oauth-builds/).

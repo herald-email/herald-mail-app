@@ -75,7 +75,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | macOS Homebrew install + IMAP-first onboarding                                            | ✅     |
 | Standard IMAP + Gmail IMAP App Password setup                                             | ✅     |
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook                                | ✅     |
-| Experimental Gmail OAuth onboarding (`-experimental`)                                     | ⚠️     |
+| Gmail OAuth onboarding                                                                    | ✅     |
 | Reading-first Timeline with split/full previews and range selection                       | ✅     |
 | Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews                  | ✅     |
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
@@ -116,8 +116,8 @@ Homebrew is the default macOS install path. The formula installs `herald`,
 whose `mcp` and `ssh` subcommands are the primary MCP and SSH entrypoints. It
 also installs the compatibility wrappers `herald-mcp-server` and
 `herald-ssh-server` for existing MCP configs and scripts. Release binaries
-include the bundled Google OAuth defaults used when experimental OAuth
-onboarding is explicitly enabled.
+include the bundled Google OAuth defaults used by the recommended Gmail and
+Google Calendar setup paths.
 
 Update Homebrew metadata and upgrade Herald:
 
@@ -189,17 +189,11 @@ go install github.com/herald-email/herald-mail-app/cmd/herald-ssh-server@latest
 
 ## Gmail Setup
 
-Gmail IMAP with an App Password is the normal Gmail setup path while Gmail OAuth onboarding is experimental. The first-run wizard prefills `imap.gmail.com:993` and `smtp.gmail.com:587` for that path.
+Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization prompt, validates Gmail IMAP and SMTP with XOAUTH2, and stores the resulting refresh token in your config so it can refresh access later.
 
-To configure Gmail over IMAP, turn on Google 2-Step Verification, create an App Password for Herald, then choose `Gmail (IMAP + App Password)` in the setup wizard.
+To configure Gmail with OAuth, choose `Gmail OAuth` in the setup wizard and complete the browser flow.
 
-Experimental OAuth onboarding is hidden from the first-run wizard unless Herald is launched with `-experimental`:
-
-```bash
-herald -experimental
-```
-
-If you choose `Gmail OAuth (Experimental)`, Herald opens a browser authorization prompt and stores the resulting refresh token in your config so it can refresh access later. OAuth remains gated because Google OAuth onboarding and verification can take weeks and significant cost.
+As a fallback, you can still configure Gmail over IMAP by turning on Google 2-Step Verification, creating an App Password for Herald, then choosing `Gmail (IMAP + App Password)` in the setup wizard. That path prefills `imap.gmail.com:993` and `smtp.gmail.com:587`.
 
 Helpful references:
 
@@ -207,7 +201,7 @@ Helpful references:
 - [Gmail Help: Add Gmail to another email client](https://support.google.com/mail/answer/75726?hl=en)
 - [Gmail Help: Sign in with app passwords](https://support.google.com/mail/answer/185833?hl=en)
 
-Homebrew and release binaries include the desktop OAuth defaults used by experimental Google OAuth. Source builds embed development OAuth defaults from `.herald-dev.env` when both Google OAuth variables are present, and otherwise keep building without OAuth defaults.
+Homebrew and release binaries include the desktop OAuth defaults used by Google OAuth. Source builds embed development OAuth defaults from `.herald-dev.env` when both Google OAuth variables are present, and otherwise keep building without OAuth defaults.
 
 For a one-off local run, export the credentials before launching Herald:
 

@@ -23,8 +23,8 @@ herald
 Homebrew installs the primary `herald` CLI. Use `herald mcp` for MCP and
 `herald ssh` for SSH mode; the package also includes `herald-mcp-server` and
 `herald-ssh-server` as compatibility wrappers for older configs and scripts.
-Release builds include the Google OAuth defaults used only when experimental
-OAuth onboarding is enabled.
+Release builds include the Google OAuth defaults used by the recommended Gmail
+and Google Calendar setup paths.
 
 Update and upgrade:
 
@@ -64,7 +64,7 @@ make build
 ./bin/herald
 ```
 
-If you need experimental Gmail OAuth or Google Calendar OAuth from a source checkout, prepare local OAuth defaults before building. See [Local OAuth Builds](/development/local-oauth-builds/) for `.herald-dev.env`, runtime variables, and release-style local builds.
+If you need Gmail OAuth or Google Calendar OAuth from a source checkout, prepare local OAuth defaults before building or export runtime credentials. See [Local OAuth Builds](/development/local-oauth-builds/) for `.herald-dev.env`, runtime variables, and release-style local builds.
 
 For development, you can also run:
 
@@ -76,7 +76,7 @@ make run
 
 Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, Herald opens a first-run setup wizard.
 
-The wizard can fill IMAP presets for common accounts, including Gmail, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Gmail IMAP with an App Password is the normal Gmail path; Gmail OAuth is experimental and appears in first-run onboarding only when Herald starts with `-experimental`. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
+The wizard recommends Gmail OAuth for Google accounts and can fill IMAP presets for common alternatives, including Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
 
 <!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
@@ -93,7 +93,7 @@ herald -experimental
 herald --demo
 ```
 
-Use `./bin/herald` instead when running from a source checkout. `-experimental` shows experimental first-run email service onboarding options such as Gmail OAuth. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
+Use `./bin/herald` instead when running from a source checkout. `-experimental` remains available for future feature flags, but Gmail OAuth no longer requires it. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
 
 ## Example config
 

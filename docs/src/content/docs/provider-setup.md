@@ -7,23 +7,23 @@ Herald talks to mail providers through IMAP for reading and SMTP for sending. Pr
 
 ## Overview
 
-Choose the narrowest supported path that matches your account. Gmail users should use Gmail IMAP with an App Password unless they explicitly opt into experimental OAuth with `-experimental`. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates both IMAP and SMTP immediately after account details; in-app account settings validate before saving or applying account changes.
+Choose the narrowest supported path that matches your account. Gmail users should start with Gmail OAuth and use Gmail IMAP with an App Password only as a fallback. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates both IMAP and SMTP immediately after account details; in-app account settings validate before saving or applying account changes.
 
 ## Provider Matrix
 
 | Provider path | IMAP | SMTP | Credential type |
 | --- | --- | --- | --- |
+| Gmail OAuth | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
 | Gmail IMAP | `imap.gmail.com:993` | `smtp.gmail.com:587` | Google App Password |
 | Proton Mail Bridge | `127.0.0.1:1143` | `127.0.0.1:1025` | Bridge-generated username and password |
 | Fastmail | `imap.fastmail.com:993` | `smtp.fastmail.com:587` | Provider password or app password |
 | iCloud | `imap.mail.me.com:993` | `smtp.mail.me.com:587` | App-specific password |
 | Outlook | `outlook.office365.com:993` | `smtp.office365.com:587` | Provider-supported IMAP credential |
 | Custom IMAP | Your provider value | Your provider value | Provider-specific |
-| Gmail OAuth (Experimental) | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
 
 ## Calendar Provider Matrix
 
-Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's experimental OAuth path, while CalDAV providers use a URL, username, and provider-specific password.
+Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's supported OAuth path, while CalDAV providers use a URL, username, and provider-specific password.
 
 | Provider path | Calendar URL or API | Credential type |
 | --- | --- | --- |
@@ -40,8 +40,8 @@ Microsoft Calendar is not shown as a CalDAV preset because the live integration 
 ### Gmail OAuth
 
 1. Install with Homebrew or another release binary. For source builds, prepare OAuth defaults with [Local OAuth Builds](/development/local-oauth-builds/) first.
-2. Run `herald -experimental`.
-3. Choose `Gmail OAuth (Experimental)`.
+2. Run `herald`.
+3. Choose `Gmail OAuth`.
 4. Complete browser authorization and return to Herald.
 5. Wait for Herald to validate Gmail IMAP and SMTP XOAUTH2 before it continues to optional preferences.
 6. Save the generated config and let Herald sync.

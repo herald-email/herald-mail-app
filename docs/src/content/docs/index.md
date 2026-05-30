@@ -16,7 +16,7 @@ herald
 ```
 
 On macOS, Homebrew is the default install path and includes release binaries
-with Google OAuth defaults built in for the experimental OAuth path.
+with Google OAuth defaults built in for Gmail and Google Calendar setup.
 
 For source installs or development:
 
@@ -31,9 +31,9 @@ make build
 ./bin/herald
 ```
 
-Source-built OAuth flows need local Google OAuth defaults or runtime variables. See [Local OAuth Builds](/development/local-oauth-builds/) before using experimental Gmail OAuth or Google Calendar OAuth from a checkout.
+Source-built OAuth flows need local Google OAuth defaults or runtime variables. See [Local OAuth Builds](/development/local-oauth-builds/) before using Gmail OAuth or Google Calendar OAuth from a checkout.
 
-On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
+On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail OAuth, Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 

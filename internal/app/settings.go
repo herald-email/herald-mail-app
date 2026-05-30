@@ -419,9 +419,9 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		}
 	}
 
-	// Default provider to "imap" if empty.
+	// Default new setup to Google's supported browser authorization path.
 	if s.provider == "" {
-		s.provider = "imap"
+		s.provider = "gmail-oauth"
 	}
 	s.normalizeAIProvider()
 	if s.syncPollStr == "" {
@@ -456,7 +456,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 
 func defaultSettingsOptions(mode SettingsMode) SettingsOptions {
 	return SettingsOptions{
-		ShowExperimentalEmailServices: mode == SettingsModePanel,
+		ShowExperimentalEmailServices: true,
 	}
 }
 
@@ -464,17 +464,14 @@ func (s *Settings) accountTypeDescription() string {
 	if s.mode == SettingsModePanel {
 		return "Recommended: Gmail OAuth. Supported: Standard IMAP and Gmail App Password. Experimental: ProtonMail Bridge, Fastmail, iCloud, Outlook."
 	}
-	if s.showExperimentalEmailServices {
-		return "Experimental: Gmail OAuth."
-	}
-	return "OAuth onboarding is hidden unless -experimental is set."
+	return "Recommended: Gmail OAuth. Supported: Standard IMAP and Gmail App Password."
 }
 
 func (s *Settings) accountTypeOptions() []huh.Option[string] {
 	if s.mode == SettingsModePanel {
 		return []huh.Option[string]{
-			huh.NewOption("Standard IMAP", "imap"),
 			huh.NewOption("Gmail OAuth", "gmail-oauth"),
+			huh.NewOption("Standard IMAP", "imap"),
 			huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
 			huh.NewOption("ProtonMail Bridge (Experimental)", "protonmail"),
 			huh.NewOption("Fastmail (Experimental)", "fastmail"),
@@ -484,11 +481,9 @@ func (s *Settings) accountTypeOptions() []huh.Option[string] {
 	}
 
 	options := []huh.Option[string]{
+		huh.NewOption("Gmail OAuth", "gmail-oauth"),
 		huh.NewOption("Standard IMAP", "imap"),
 		huh.NewOption("Gmail (IMAP + App Password)", "gmail"),
-	}
-	if s.showExperimentalEmailServices {
-		options = append(options, huh.NewOption("Gmail OAuth (Experimental)", "gmail-oauth"))
 	}
 	return append(options,
 		huh.NewOption("ProtonMail Bridge", "protonmail"),
@@ -663,8 +658,8 @@ func (s *Settings) buildForm() {
 	// Group 2b — Gmail IMAP fallback guidance and credentials
 	gmailGroup := huh.NewGroup(
 		huh.NewNote().
-			Title("Personal Gmail via IMAP").
-			Description("Normal Gmail setup. Use your Gmail address and a Google App Password. Google Workspace accounts may still require OAuth."),
+			Title("Gmail via IMAP App Password").
+			Description("Fallback Gmail setup. Use your Gmail address and a Google App Password when OAuth is unavailable for your account."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
 		huh.NewConfirm().
@@ -703,7 +698,7 @@ func (s *Settings) buildForm() {
 	gmailOAuthGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Gmail OAuth").
-			Description("Experimental browser-based Gmail setup. Source builds need Google OAuth env vars or make build-release-local."),
+			Description("Recommended browser-based Gmail setup. Herald validates Gmail IMAP and SMTP with Google OAuth before saving."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider != "gmail-oauth" })
 
@@ -1565,7 +1560,7 @@ func (s *Settings) accountDetailHasCalendar() bool {
 }
 
 func (s *Settings) googleCalendarSetupAvailable() bool {
-	return s != nil && s.showExperimentalEmailServices
+	return s != nil
 }
 
 func (s *Settings) editingExistingGoogleCalendar() bool {
@@ -3136,17 +3131,17 @@ func (s *Settings) wizardSummaryLines() []string {
 	switch s.provider {
 	case "gmail":
 		return []string{
-			wizardSummaryLine("Recommended:", "Gmail via IMAP + App Password."),
+			wizardSummaryLine("Fallback:", "Gmail via IMAP + App Password."),
 			wizardSummaryLine("Defaults:", "imap.gmail.com:993 and smtp.gmail.com:587."),
-			wizardSummaryLine("Workspace:", "some accounts may still require OAuth."),
+			wizardSummaryLine("Workspace:", "some accounts require OAuth instead of app passwords."),
 			wizardSummaryDoc("App passwords", "https://myaccount.google.com/apppasswords"),
 			wizardSummaryDoc("Add Gmail to another client", "https://support.google.com/mail/answer/75726?hl=en"),
 			wizardSummaryDoc("Workspace IMAP setup", "https://knowledge.workspace.google.com/admin/sync/set-up-gmail-with-a-third-party-email-client"),
 		}
 	case "gmail-oauth":
 		return []string{
-			wizardSummaryLine("Experimental:", "Gmail OAuth in a browser."),
-			wizardSummaryLine("Visible with:", "-experimental during first-run setup, or from in-app settings."),
+			wizardSummaryLine("Recommended:", "Gmail OAuth in a browser."),
+			wizardSummaryLine("Validates:", "Gmail IMAP and SMTP XOAUTH2 before saving."),
 			wizardSummaryLine("Best with:", "Homebrew or release binaries, which include OAuth defaults."),
 			wizardSummaryLine("Source builds:", "use .herald-dev.env or set HERALD_GOOGLE_CLIENT_ID and HERALD_GOOGLE_CLIENT_SECRET."),
 		}
@@ -3162,9 +3157,8 @@ func (s *Settings) wizardSummaryLines() []string {
 		}
 	default:
 		return []string{
-			wizardSummaryLine("Recommended:", "Gmail (IMAP + App Password) for Gmail."),
-			wizardSummaryLine("Supported:", "Standard IMAP plus ProtonMail Bridge, Fastmail, iCloud, Outlook."),
-			wizardSummaryLine("Experimental:", "start with -experimental to include OAuth onboarding."),
+			wizardSummaryLine("Recommended:", "Gmail OAuth for Google accounts."),
+			wizardSummaryLine("Supported:", "Standard IMAP, Gmail App Password, ProtonMail Bridge, Fastmail, iCloud, Outlook."),
 		}
 	}
 }

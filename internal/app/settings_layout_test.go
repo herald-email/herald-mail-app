@@ -32,7 +32,7 @@ func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
 	if !strings.Contains(rendered, "Herald Setup") {
 		t.Fatalf("expected Herald setup title, got:\n%s", rendered)
 	}
-	for _, want := range []string{"Recommended", "Supported", "Experimental"} {
+	for _, want := range []string{"Recommended", "Supported", "Gmail OAuth"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected setup messaging to include %q, got:\n%s", want, rendered)
 		}
@@ -105,6 +105,7 @@ func TestSettingsWizardShiftTabBackBypassesRequiredFieldValidation(t *testing.T)
 
 func TestSettingsWizard_ProtonMailPresetFieldsArePrepopulated(t *testing.T) {
 	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
 	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
 	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
 	s.form.NextGroup()
@@ -180,7 +181,7 @@ func TestSettingsWizard_SyncCleanupUsesCompactOfflineCachePolicyLabels(t *testin
 	}
 }
 
-func TestSettingsWizard_DefaultHidesGmailOAuthAndShowsIMAPPresets(t *testing.T) {
+func TestSettingsWizard_DefaultShowsGmailOAuthAndIMAPFallbacks(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 
 	var labels []string
@@ -190,6 +191,7 @@ func TestSettingsWizard_DefaultHidesGmailOAuthAndShowsIMAPPresets(t *testing.T) 
 	rendered := strings.Join(labels, "\n")
 
 	for _, want := range []string{
+		"Gmail OAuth",
 		"Gmail (IMAP + App Password)",
 		"ProtonMail Bridge",
 		"Fastmail",
@@ -200,25 +202,11 @@ func TestSettingsWizard_DefaultHidesGmailOAuthAndShowsIMAPPresets(t *testing.T) 
 			t.Fatalf("expected default wizard account choices to include %q, got:\n%s", want, rendered)
 		}
 	}
-	if strings.Contains(rendered, "Gmail OAuth") {
-		t.Fatalf("expected default wizard account choices to hide Gmail OAuth, got:\n%s", rendered)
-	}
 	if strings.Contains(rendered, "(Experimental)") {
-		t.Fatalf("expected IMAP-based wizard account choices to avoid experimental labels, got:\n%s", rendered)
+		t.Fatalf("expected default wizard account choices to avoid experimental labels, got:\n%s", rendered)
 	}
-}
-
-func TestSettingsWizard_ExperimentalShowsGmailOAuthMarked(t *testing.T) {
-	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{ShowExperimentalEmailServices: true})
-
-	var labels []string
-	for _, option := range s.accountTypeOptions() {
-		labels = append(labels, option.Key)
-	}
-	rendered := strings.Join(labels, "\n")
-
-	if !strings.Contains(rendered, "Gmail OAuth (Experimental)") {
-		t.Fatalf("expected experimental wizard account choices to include marked Gmail OAuth, got:\n%s", rendered)
+	if strings.Contains(rendered, "Gmail OAuth (Experimental)") {
+		t.Fatalf("expected Gmail OAuth to be GA-labeled, got:\n%s", rendered)
 	}
 }
 
@@ -825,6 +813,8 @@ func TestSettingsWizard_GmailSummaryUsesShortClickableLinks(t *testing.T) {
 	updated, _ := s.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	s = updated.(*Settings)
 
+	updated, _ = s.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	s = updated.(*Settings)
 	updated, _ = s.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	s = updated.(*Settings)
 	rendered := s.View().Content

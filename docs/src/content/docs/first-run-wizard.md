@@ -7,9 +7,9 @@ The first-run wizard appears when Herald cannot find a usable config at the defa
 
 ## Overview
 
-Use the wizard to choose an account type, enter credentials, validate the account immediately, configure optional preferences, and save `conf.yaml`. The default first-run wizard focuses on IMAP-based setup: Standard IMAP, Gmail with an App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. Gmail OAuth is experimental and appears only when Herald starts with `-experimental`.
+Use the wizard to choose an account type, enter credentials, validate the account immediately, configure optional preferences, and save `conf.yaml`. The default first-run wizard recommends Gmail OAuth, while Standard IMAP, Gmail with an App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook remain available.
 
-<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the default account type choices including standard IMAP, Gmail IMAP App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook; Gmail OAuth is hidden unless launched with -experimental." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
+<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the default account type choices including Gmail OAuth, standard IMAP, Gmail IMAP App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
 
 ![First-run wizard account type selection](/screenshots/wizard-account-type.png)
 
@@ -41,7 +41,7 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 1. Install Herald with Homebrew or build it from source.
 2. Run `herald`, or use `./bin/herald` from a source checkout. Pass an explicit path with `herald -config ~/.herald/conf.yaml` when needed.
 3. Choose the provider path that matches your account.
-4. Enter the provider credentials. For Gmail IMAP and iCloud, use an app password when required by the provider. If you launched with `-experimental` and selected Gmail OAuth, complete browser authorization instead.
+4. Enter the provider credentials. For Gmail OAuth, complete browser authorization. For Gmail IMAP and iCloud, use an app password when required by the provider.
 5. Herald validates IMAP and SMTP before showing the optional preference steps. If either check fails, the config file is not written and the wizard returns you to account setup.
 6. Pick optional AI, sync, keyboard, theme, and signature settings. Choose disabled if you only want mail sync, reading, composing, and cleanup.
 7. Review the remaining settings and save.
@@ -56,10 +56,10 @@ The Sync and cleanup step asks how much fetched preview data Herald should keep.
 | Choice | Use when | Notes |
 | --- | --- | --- |
 | Standard IMAP | You know your IMAP and SMTP host and port. | Most portable path. |
-| Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password. | Normal Gmail path while OAuth onboarding is experimental. |
+| Gmail OAuth | You want browser-based Google authorization for Gmail. | Recommended Gmail path; stores refresh token data only after IMAP and SMTP XOAUTH2 validation pass. |
+| Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password. | Fallback Gmail path when OAuth is unavailable for your account. |
 | Proton Mail Bridge | You run Proton Mail Bridge locally. | Uses Bridge host, ports, username, and password. |
 | Fastmail, iCloud, Outlook | You want preset host/port values. | IMAP presets; provider app passwords may still be required. |
-| Gmail OAuth (Experimental) | You launched with `-experimental` and want browser-based Gmail authorization. | Hidden by default; stores refresh token data only after IMAP and SMTP XOAUTH2 validation pass. |
 
 ## Data And Privacy
 
@@ -73,9 +73,9 @@ If the wizard reappears every time, verify that Herald is reading the config pat
 
 If validation fails, read which check failed. IMAP failures usually mean the host, port, username, password, app password, OAuth grant, or provider IMAP setting is wrong. SMTP failures usually mean the SMTP host, port, username, password, app password, OAuth grant, or provider send setting is wrong. Some providers use different credentials for IMAP and SMTP.
 
-If Gmail OAuth is missing from the first-run choices, relaunch with `-experimental`. On Google's test-app warning page, choose `Continue` to reach the real consent screen; `Back to safety` does not authorize Herald. If you choose `Cancel` on the consent screen, Herald reports that authorization was cancelled and does not save settings. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
+If you choose `Cancel` on the Google consent screen, Herald reports that authorization was cancelled and does not save settings. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
 
-If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary without build-time or runtime OAuth credentials. Homebrew and release binaries include OAuth defaults for the experimental path. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching `herald -experimental`, or place both values in `.herald-dev.env` before running `make build`. Release-style local builds use `.herald-release.env` with `make build-release-local` and fail early if either value is missing. See [Local OAuth Builds](/development/local-oauth-builds/) for the full source-build contract.
+If OAuth fails immediately with `Google OAuth credentials are not configured`, you are probably using a source-built development binary without build-time or runtime OAuth credentials. Homebrew and release binaries include OAuth defaults. For source builds, export `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` before launching `herald`, or place both values in `.herald-dev.env` before running `make build`. Release-style local builds use `.herald-release.env` with `make build-release-local` and fail early if either value is missing. See [Local OAuth Builds](/development/local-oauth-builds/) for the full source-build contract.
 
 ## Related Pages
 
