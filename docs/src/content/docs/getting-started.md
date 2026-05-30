@@ -42,6 +42,10 @@ brew tap herald-email/herald
 brew install herald
 ```
 
+## Nightly builds
+
+Nightly builds are short-lived GitHub Actions artifacts for testing the latest successful `main` build before the next beta tag. They are not signed releases or Homebrew packages; see [Nightly Builds](/nightly-builds/) for download steps and channel rules.
+
 ## Install from source with Go
 
 ```sh

@@ -138,6 +138,28 @@ brew install herald
 Direct browser downloads from GitHub are not Developer ID signed or notarized
 yet, so macOS Gatekeeper may warn until the packaging milestone adds signing.
 
+### Nightly Builds
+
+Nightly builds are for testers who want the latest successful `main` build before the next beta tag. They are short-lived GitHub Actions artifacts, not signed releases, not Homebrew packages, and not guaranteed to be stable.
+
+Download the latest nightly from GitHub:
+
+1. Open [Actions > Nightly](https://github.com/herald-email/herald-mail-app/actions/workflows/nightly.yml).
+2. Select the latest successful run.
+3. Download the artifact for your Mac:
+   - `herald-nightly-darwin-arm64` for Apple Silicon
+   - `herald-nightly-darwin-amd64` for Intel
+4. Unzip the artifact, verify the `.sha256` file if desired, then extract the included `.tar.gz`.
+
+With the GitHub CLI:
+
+```bash
+run_id="$(gh run list --repo herald-email/herald-mail-app --workflow Nightly --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run download "$run_id" --repo herald-email/herald-mail-app --name herald-nightly-darwin-arm64
+```
+
+Nightly artifacts expire after 14 days. Use Homebrew or beta releases for normal installation.
+
 ### Install from source with Go
 
 ```bash
