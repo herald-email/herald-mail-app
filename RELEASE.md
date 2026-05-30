@@ -41,6 +41,20 @@ You can also use the GitHub web UI: repository `Settings` -> `Secrets and variab
 
 The release workflow fails before building if either OAuth secret is missing, and fails after GitHub release publication with a clear error if `TAP_GITHUB_TOKEN` is missing. Runtime environment variables with the same names still override built-in defaults for local testing. Desktop OAuth client secrets bundled into release binaries are convenience defaults, not confidential once distributed.
 
+Nightly builds use separate Google OAuth defaults so test-channel binaries can be configured independently from release binaries:
+
+```bash
+gh secret set HERALD_NIGHTLY_GOOGLE_CLIENT_ID \
+  --repo herald-email/herald-mail-app \
+  --body "your-nightly-client-id.apps.googleusercontent.com"
+
+gh secret set HERALD_NIGHTLY_GOOGLE_CLIENT_SECRET \
+  --repo herald-email/herald-mail-app \
+  --body "your-nightly-client-secret"
+```
+
+The nightly workflow fails before building if either nightly OAuth secret is missing. Nightly credentials should be treated as distribution defaults for test builds, not confidential application secrets.
+
 ## Homebrew Install
 
 Homebrew installs the same release-built binaries as the GitHub tarballs, including the desktop OAuth convenience defaults embedded by the release workflow. Gmail OAuth remains experimental in first-run onboarding and is shown only when launched with `-experimental`; Google Calendar setup uses the same experimental Google OAuth credentials from in-app account settings.
@@ -119,6 +133,17 @@ Channel behavior:
 - `v0.1.0` publishes as stable, is not a prerelease, and becomes GitHub's latest release.
 - `v0.1.0-beta.1` publishes as a prerelease, does not become GitHub latest, and updates `beta-latest`.
 - Future tags such as `v0.2.0-rc.1` publish as prereleases but do not update `beta-latest`.
+
+Nightly builds are intentionally not GitHub releases. The `Nightly` workflow runs from `main` on a schedule and by manual dispatch, runs tests and vet, builds both macOS architectures, smokes the binaries, and uploads short-lived GitHub Actions artifacts named `herald-nightly-darwin-arm64` and `herald-nightly-darwin-amd64`. Nightly binary versions use `nightly-YYYYMMDD-<commit>`, and artifacts are retained for 14 days.
+
+Nightly builds do not:
+
+- create tags
+- update `beta-latest`
+- update Homebrew
+- publish to GitHub Releases
+
+Keep releases tag-driven until there is a concrete need for long-lived stabilization. A separate `release/*` branch should be introduced only when `main` carries changes that should not ship while an older beta or stable line still needs hotfixes.
 
 The `beta-latest` release uses stable asset names:
 
