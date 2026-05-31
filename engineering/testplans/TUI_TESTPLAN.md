@@ -1033,25 +1033,28 @@ Check these states during every applicable lane:
 2. Press `S`, open `Accounts`, and capture the account/source list.
 3. Select a mail account, press `Enter`, and capture the account detail form.
 4. Return to `Accounts`, select a calendar-only account, press `Enter`, and capture the calendar detail form.
-5. Return to `Accounts`, choose `Add account`, confirm it shows `Add Mail` and `Add Calendar`, then open each path without saving.
-6. In `Add Calendar`, confirm the provider picker includes Google Calendar when experimental Google services are enabled, plus Fastmail, iCloud, Yahoo, and Custom CalDAV; confirm Fastmail/iCloud/Yahoo show short clickable app-password guidance near the CalDAV fields.
+5. Return to `Accounts` and confirm the list includes both `Add account` and `Add calendar only` without an intermediate add-type submenu.
+6. Choose `Add account`, confirm the provider-first form shows Gmail OAuth with paired Google Calendar enabled by default, and confirm the Gmail address plus connect/save action live in the same add flow without an early account-name prompt.
+7. Choose `Add calendar only`, confirm the provider picker includes Google Calendar when experimental Google services are enabled, plus Fastmail, iCloud, Yahoo, and Custom CalDAV; confirm Fastmail/iCloud/Yahoo show short clickable app-password guidance near the CalDAV fields.
 7. On a mail provider that supports calendar pairing, confirm the mail form includes `Also add calendar`; repeat on a mail-only provider and confirm the option is absent.
-8. Attempt to delete a calendar-only account and confirm Herald asks for disconnect confirmation without provider-deletion language.
-9. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
+8. Attempt to delete a calendar-only account with `d` or `\` and confirm Herald asks for disconnect confirmation that says local cached mail/calendar data is removed while provider mail/calendars are not deleted.
+9. Attempt fast delete with `D` or `|` on a non-final account and confirm Herald immediately removes the selected account from config and purges only that account's local cache.
+10. Attempt to delete the final remaining mail account and confirm the operation is blocked with a bounded message.
 10. Attempt to save an iCloud CalDAV source against a deterministic 401/403 fixture and capture the validation error modal.
 11. Resize the open Accounts list or detail view to `50x15`, then resize back to `80x24`.
 
 **Expect:**
 - The Settings top-level menu uses `Accounts` instead of `Account setup`.
 - `Settings > Accounts` groups configured sources by `account_id`, shows display name/provider/identity, and uses compact capability badges such as `Mail`, `Calendar`, or `Mail + Calendar`.
-- The final Accounts row is `Add account`.
+- The final Accounts rows are `Add account` and `Add calendar only`.
 - Mail-capable account detail preserves the existing account setup fields and validates IMAP plus SMTP before saving.
 - Calendar-capable account detail shows Google Calendar OAuth or CalDAV configuration fields and validates by listing calendars before saving.
-- `Add Mail` creates a mail source and offers `Also add calendar` only for supported paired providers; `Add Calendar` creates a standalone Google Calendar OAuth or CalDAV source.
+- `Add account` creates a mail source and offers paired calendar setup only for supported providers; Gmail OAuth defaults Google Calendar on and validates both sources through one OAuth flow.
+- `Add calendar only` creates a standalone Google Calendar OAuth or CalDAV source.
 - Google Calendar setup starts Herald's OAuth flow instead of asking for Google's CalDAV endpoint, and missing Google OAuth client credentials produce a bounded OAuth configuration error without saving settings.
 - CalDAV presets cover Fastmail, iCloud, and Yahoo with provider URL placeholders and app-password guidance links; Proton Calendar and Microsoft Calendar are documented but not shown as basic CalDAV presets.
 - iCloud CalDAV Unauthorized validation failures keep the previous config active and explain Apple Account email, Apple app-specific password, password-reset regeneration, and two-factor authentication without exposing saved passwords.
-- Disconnecting an account removes Herald config sources only; it does not delete provider mail, provider calendars, or cached/server content.
+- Disconnecting an account removes Herald config sources and local cache rows for that account only; it does not delete provider mail, provider calendars, or other accounts' cached data.
 - Herald blocks deletion of the last configured mail source.
 - At `50x15`, the standard minimum-size guard appears and resizing larger restores the same Accounts state cleanly.
 
@@ -2116,13 +2119,13 @@ This case covers the interaction polish required after the design-parity screens
 **Lane:** F
 **Sizes:** `220x50`, `80x24`, `50x15`
 
-This case covers the Gmail API mail source behind Gmail OAuth. It proves the transport swap remains invisible to normal mail workflows while preserving Gmail IMAP App Password setup as the non-OAuth Gmail path.
+This case covers the Gmail API mail source behind Gmail OAuth. It proves the transport swap remains invisible to normal mail workflows while preserving Gmail IMAP app-password setup as a compatibility path.
 
 **Steps:**
-1. Configure a Gmail OAuth source that saves or normalizes to `provider: gmail`.
+1. Configure a Gmail OAuth source that normalizes to a Gmail mail source with `provider: gmail` and Google token metadata. Older `provider: gmail_api` configs remain a compatibility alias.
 2. Launch Herald and open Timeline on `INBOX`.
 3. Open a message preview, mark it read/unread, star/unstar it, archive or trash a test message, and send a harmless self-addressed test message.
-4. Repeat setup with Gmail IMAP App Password.
+4. Repeat setup with Gmail IMAP App Password, and verify older `provider: gmail_api` configs still open through the Gmail API compatibility alias.
 
 **Expect:**
 - Gmail API OAuth uses narrower Gmail API mail access for core sync, body reads, mutations, and send.

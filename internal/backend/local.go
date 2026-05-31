@@ -927,6 +927,13 @@ func (b *LocalBackend) Cache() *cache.Cache {
 	return b.cache
 }
 
+func (b *LocalBackend) PurgeAccountCache(accountID models.AccountID, sourceIDs []models.SourceID) error {
+	if b == nil || b.cache == nil {
+		return nil
+	}
+	return b.cache.PurgeAccountCache(accountID, sourceIDs)
+}
+
 func (b *LocalBackend) EnsureEmbeddingModel(model string) (bool, error) {
 	return b.cache.EnsureEmbeddingModel(model)
 }

@@ -9,7 +9,7 @@ Settings should make configured sources visible without turning account manageme
 - [x] The top-level Settings menu shows `Accounts` instead of `Account setup`.
 - [x] `Settings > Accounts` groups configured `sources[]` by `account_id`, materializing the legacy single-account config as `default-mail` for display and edits.
 - [x] Account rows show a display name, provider/identity, and capability badge: `Mail`, `Calendar`, or `Mail + Calendar`.
-- [x] The final row is `Add account`.
+- [x] The final rows are `Add account` and `Add calendar only`; no intermediate add-type submenu is required.
 - [x] `Esc` returns from account detail or add flow to Accounts, then from Accounts to the top-level Settings menu.
 
 ## Account Detail And Add Flow
@@ -18,10 +18,12 @@ The detail forms should reuse proven setup controls where possible and keep prov
 
 - [x] Mail-capable account detail shows the existing account setup fields scoped to that source.
 - [x] Calendar-capable account detail shows Google Calendar or CalDAV fields scoped to that source.
-- [x] Account detail includes a delete confirmation and blocks deletion of the last mail source.
-- [x] `Add account` offers `Add Mail` and `Add Calendar`.
-- [x] `Add Mail` exposes `Also add calendar` only for providers that can pair with an existing calendar source in this slice.
-- [x] `Add Calendar` creates a standalone Google Calendar OAuth source or CalDAV source.
+- [x] Account detail and account rows include safe delete aliases that confirm before disconnecting, and fast delete aliases that immediately disconnect after selection.
+- [x] Account delete removes Herald config sources and local cache rows for that account while never deleting provider-side mail or calendars.
+- [x] Account delete blocks deletion of the last mail source.
+- [x] `Add account` opens a provider-first mail setup form and exposes paired-calendar intent in that same flow when supported.
+- [x] Gmail OAuth defaults paired Google Calendar on, derives calendar identity from the Gmail address, and validates mail plus calendar after one OAuth flow.
+- [x] `Add calendar only` creates a standalone Google Calendar OAuth source or CalDAV source.
 
 ## Validation And Runtime Application
 
@@ -37,7 +39,7 @@ Config writes should happen only after validation succeeds. Runtime replacement 
 
 This slice exposes only providers already supported by Herald's source platform. Local calendar is deliberately out of scope.
 
-- [x] Gmail OAuth can add mail plus Google Calendar when the OAuth token has calendar scopes.
+- [x] Gmail OAuth can add mail plus Google Calendar in one default-on paired setup when the OAuth token has calendar scopes.
 - [x] Google Calendar setup is visible by default, and missing OAuth client credentials fail at OAuth start instead of forcing users into a CalDAV URL/password form.
 - [x] Gmail IMAP app-password remains mail-only.
 - [x] Fastmail and iCloud can optionally pair mail with CalDAV, using editable CalDAV fields.

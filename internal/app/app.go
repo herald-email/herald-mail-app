@@ -454,6 +454,8 @@ type AccountValidationMsg struct {
 	ReclaimOfflineCacheStorage bool
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
+	RemovedAccountID           models.AccountID
+	RemovedSourceIDs           []models.SourceID
 	Result                     accountcheck.Result
 }
 
@@ -462,6 +464,8 @@ type CalendarValidationMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	SourceIDs                  []models.SourceID
+	RemovedAccountID           models.AccountID
+	RemovedSourceIDs           []models.SourceID
 	Err                        error
 }
 
@@ -482,6 +486,8 @@ type accountValidationState struct {
 	ReclaimOfflineCacheStorage bool
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
+	RemovedAccountID           models.AccountID
+	RemovedSourceIDs           []models.SourceID
 	Checking                   bool
 	Message                    string
 }
@@ -1101,28 +1107,32 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyCalendarConfig(cfg)
 }
 
-func validateAccountSettingsCmd(cfg *config.Config, configPath string, returnToMenu, reclaimOfflineCache, validateCalendar bool, calendarSourceIDs []models.SourceID) tea.Cmd {
+func validateAccountSettingsCmd(msg SettingsSavedMsg, configPath string) tea.Cmd {
 	return func() tea.Msg {
-		result := validateAccountConfig(context.Background(), cfg, configPath)
+		result := validateAccountConfig(context.Background(), msg.Config, configPath)
 		return AccountValidationMsg{
-			Config:                     cfg,
-			ReturnToMenu:               returnToMenu,
-			ReclaimOfflineCacheStorage: reclaimOfflineCache,
-			ValidateCalendar:           validateCalendar,
-			CalendarSourceIDs:          calendarSourceIDs,
+			Config:                     msg.Config,
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+			ValidateCalendar:           msg.ValidateCalendar,
+			CalendarSourceIDs:          msg.CalendarSourceIDs,
+			RemovedAccountID:           msg.RemovedAccountID,
+			RemovedSourceIDs:           msg.RemovedSourceIDs,
 			Result:                     result,
 		}
 	}
 }
 
-func validateCalendarSettingsCmd(cfg *config.Config, returnToMenu, reclaimOfflineCache bool, sourceIDs []models.SourceID) tea.Cmd {
+func validateCalendarSettingsCmd(msg SettingsSavedMsg) tea.Cmd {
 	return func() tea.Msg {
 		return CalendarValidationMsg{
-			Config:                     cfg,
-			ReturnToMenu:               returnToMenu,
-			ReclaimOfflineCacheStorage: reclaimOfflineCache,
-			SourceIDs:                  sourceIDs,
-			Err:                        validateCalendarConfig(context.Background(), cfg, sourceIDs),
+			Config:                     msg.Config,
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+			SourceIDs:                  msg.CalendarSourceIDs,
+			RemovedAccountID:           msg.RemovedAccountID,
+			RemovedSourceIDs:           msg.RemovedSourceIDs,
+			Err:                        validateCalendarConfig(context.Background(), msg.Config, msg.CalendarSourceIDs),
 		}
 	}
 }
@@ -1205,39 +1215,45 @@ func (m *Model) refreshAIClientForConfig(previous, next *config.Config) error {
 	return nil
 }
 
-func (m *Model) beginAccountValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache, validateCalendar bool, calendarSourceIDs []models.SourceID) tea.Cmd {
+func (m *Model) beginAccountValidation(msg SettingsSavedMsg) tea.Cmd {
+	cfg := msg.Config
 	m.showSettings = false
 	m.settingsPanel = nil
 	m.oauthWait = nil
 	m.accountValidation = &accountValidationState{
 		Config:                     cfg,
-		ReturnToMenu:               returnToMenu,
-		ReclaimOfflineCacheStorage: reclaimOfflineCache,
-		ValidateCalendar:           validateCalendar,
-		CalendarSourceIDs:          calendarSourceIDs,
+		ReturnToMenu:               msg.ReturnToMenu,
+		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+		ValidateCalendar:           msg.ValidateCalendar,
+		CalendarSourceIDs:          msg.CalendarSourceIDs,
+		RemovedAccountID:           msg.RemovedAccountID,
+		RemovedSourceIDs:           msg.RemovedSourceIDs,
 		Checking:                   true,
 		Message:                    "Checking IMAP and SMTP before saving account settings...",
 	}
 	m.statusMessage = "Validating account settings..."
 	logger.Info("Validating account settings before applying config")
-	return validateAccountSettingsCmd(cfg, m.configPath, returnToMenu, reclaimOfflineCache, validateCalendar, calendarSourceIDs)
+	return validateAccountSettingsCmd(msg, m.configPath)
 }
 
-func (m *Model) beginCalendarValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool, sourceIDs []models.SourceID) tea.Cmd {
+func (m *Model) beginCalendarValidation(msg SettingsSavedMsg) tea.Cmd {
+	cfg := msg.Config
 	m.showSettings = false
 	m.settingsPanel = nil
 	m.oauthWait = nil
 	m.accountValidation = &accountValidationState{
 		Config:                     cfg,
-		ReturnToMenu:               returnToMenu,
-		ReclaimOfflineCacheStorage: reclaimOfflineCache,
-		CalendarSourceIDs:          sourceIDs,
+		ReturnToMenu:               msg.ReturnToMenu,
+		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+		CalendarSourceIDs:          msg.CalendarSourceIDs,
+		RemovedAccountID:           msg.RemovedAccountID,
+		RemovedSourceIDs:           msg.RemovedSourceIDs,
 		Checking:                   true,
 		Message:                    "Checking calendar source before saving settings...",
 	}
 	m.statusMessage = "Validating calendar settings..."
 	logger.Info("Validating calendar source settings before applying config")
-	return validateCalendarSettingsCmd(cfg, returnToMenu, reclaimOfflineCache, sourceIDs)
+	return validateCalendarSettingsCmd(msg)
 }
 
 func (m *Model) beginOllamaModelValidation(cfg *config.Config, returnToMenu, reclaimOfflineCache bool) tea.Cmd {
@@ -1271,9 +1287,22 @@ func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
 		return nil
 	}
 	if msg.ValidateCalendar {
-		return m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
+		return m.beginCalendarValidation(SettingsSavedMsg{
+			Config:                     msg.Config,
+			ReturnToMenu:               msg.ReturnToMenu,
+			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+			CalendarSourceIDs:          msg.CalendarSourceIDs,
+			RemovedAccountID:           msg.RemovedAccountID,
+			RemovedSourceIDs:           msg.RemovedSourceIDs,
+		})
 	}
-	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+	return m.applyValidatedAccountConfig(SettingsSavedMsg{
+		Config:                     msg.Config,
+		ReturnToMenu:               msg.ReturnToMenu,
+		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+		RemovedAccountID:           msg.RemovedAccountID,
+		RemovedSourceIDs:           msg.RemovedSourceIDs,
+	})
 }
 
 func (m *Model) finishCalendarValidation(msg CalendarValidationMsg) tea.Cmd {
@@ -1291,7 +1320,14 @@ func (m *Model) finishCalendarValidation(msg CalendarValidationMsg) tea.Cmd {
 		logger.Error("Calendar settings validation failed: %v", msg.Err)
 		return nil
 	}
-	return m.applyValidatedAccountConfig(msg.Config, msg.ReturnToMenu)
+	return m.applyValidatedAccountConfig(SettingsSavedMsg{
+		Config:                     msg.Config,
+		ReturnToMenu:               msg.ReturnToMenu,
+		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+		CalendarSourceIDs:          msg.SourceIDs,
+		RemovedAccountID:           msg.RemovedAccountID,
+		RemovedSourceIDs:           msg.RemovedSourceIDs,
+	})
 }
 
 func calendarValidationFailureMessage(cfg *config.Config, sourceIDs []models.SourceID, err error) string {
@@ -1384,7 +1420,8 @@ func (m *Model) finishOllamaModelValidation(msg OllamaModelValidationMsg) tea.Cm
 	})
 }
 
-func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu bool) tea.Cmd {
+func (m *Model) applyValidatedAccountConfig(msg SettingsSavedMsg) tea.Cmd {
+	cfg := msg.Config
 	if cfg == nil {
 		m.accountValidation.Message = "Account validation finished without a config. Settings were not saved."
 		m.statusMessage = "Account settings were not saved."
@@ -1408,6 +1445,13 @@ func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu boo
 	}
 
 	oldBackend := m.backend
+	cachePurgeMessage := ""
+	if msg.RemovedAccountID != "" {
+		if err := purgeAccountCacheFromBackend(oldBackend, msg.RemovedAccountID, msg.RemovedSourceIDs); err != nil {
+			cachePurgeMessage = fmt.Sprintf(" Local cache purge failed: %v.", err)
+			logger.Error("Account cache purge failed after account removal: %v", err)
+		}
+	}
 	m.backend = nextBackend
 	m.progressCh = nextBackend.Progress()
 	m.syncEventsCh = nextBackend.SyncEvents()
@@ -1425,12 +1469,12 @@ func (m *Model) applyValidatedAccountConfig(cfg *config.Config, returnToMenu boo
 	m.resetMailboxStateForAccountSwitch()
 	m.refreshCalendarAvailability()
 	m.accountValidation = nil
-	m.statusMessage = "Account settings validated and saved. Reconnecting..."
+	m.statusMessage = "Account settings validated and saved. Reconnecting..." + cachePurgeMessage
 
 	var cmds []tea.Cmd
-	if returnToMenu {
+	if msg.ReturnToMenu {
 		m.showSettings = true
-		m.settingsPanel = m.newSettingsPanel("", "Account settings validated and saved.")
+		m.settingsPanel = m.newSettingsPanel("", strings.TrimSpace("Account settings validated and saved."+cachePurgeMessage))
 		cmds = append(cmds, m.settingsPanel.Init())
 	}
 	cmds = append(cmds, m.startLoading(), m.listenForSyncEvents(), m.tickSpinner())
@@ -1713,6 +1757,15 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 			m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
 		}
 	}
+	if msg.RemovedAccountID != "" {
+		if err := purgeAccountCacheFromBackend(m.backend, msg.RemovedAccountID, msg.RemovedSourceIDs); err != nil {
+			m.statusMessage = fmt.Sprintf("Settings saved, but local account cache purge failed: %v", err)
+			logger.Error("Account cache purge failed after settings save: %v", err)
+		} else {
+			m.statusMessage = "Account disconnected and local cache removed."
+		}
+		m.refreshCalendarAvailability()
+	}
 	if previousCachePolicy != nextCachePolicy && !msg.ReclaimOfflineCacheStorage {
 		type cacheStoragePolicyApplier interface {
 			ApplyCacheStoragePolicy(string) (models.PreviewCachePruneResult, error)
@@ -1758,6 +1811,21 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 		return tea.Batch(settingsCmds...)
 	}
 	return nil
+}
+
+type accountCachePurger interface {
+	PurgeAccountCache(models.AccountID, []models.SourceID) error
+}
+
+func purgeAccountCacheFromBackend(b backend.Backend, accountID models.AccountID, sourceIDs []models.SourceID) error {
+	if b == nil || accountID == "" {
+		return nil
+	}
+	purger, ok := b.(accountCachePurger)
+	if !ok {
+		return fmt.Errorf("active backend does not expose account cache purge")
+	}
+	return purger.PurgeAccountCache(accountID, sourceIDs)
 }
 
 // Update implements tea.Model
@@ -1839,10 +1907,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SettingsSavedMsg:
 		if msg.ValidateAccount {
-			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.ValidateCalendar, msg.CalendarSourceIDs)
+			return m, m.beginAccountValidation(msg)
 		}
 		if msg.ValidateCalendar {
-			return m, m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
+			return m, m.beginCalendarValidation(msg)
 		}
 		if msg.ValidateOllamaModels {
 			return m, m.beginOllamaModelValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage)
@@ -1932,10 +2000,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case OAuthDoneMsg:
 		if msg.ValidateAccount {
-			return m, m.beginAccountValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.ValidateCalendar, msg.CalendarSourceIDs)
+			return m, m.beginAccountValidation(SettingsSavedMsg{
+				Config:                     msg.Config,
+				ReturnToMenu:               msg.ReturnToMenu,
+				ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+				ValidateCalendar:           msg.ValidateCalendar,
+				CalendarSourceIDs:          msg.CalendarSourceIDs,
+			})
 		}
 		if msg.ValidateCalendar {
-			return m, m.beginCalendarValidation(msg.Config, msg.ReturnToMenu, msg.ReclaimOfflineCacheStorage, msg.CalendarSourceIDs)
+			return m, m.beginCalendarValidation(SettingsSavedMsg{
+				Config:                     msg.Config,
+				ReturnToMenu:               msg.ReturnToMenu,
+				ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
+				CalendarSourceIDs:          msg.CalendarSourceIDs,
+			})
 		}
 		return m, m.applySettingsSaved(SettingsSavedMsg{
 			Config:                     msg.Config,

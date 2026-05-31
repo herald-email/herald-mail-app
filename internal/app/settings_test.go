@@ -712,7 +712,7 @@ func TestSettingsAccountsListRendersSourceGroupsAndAddAccount(t *testing.T) {
 	rendered := renderSettingsViewForTest(t, s, 120, 40)
 	plain := stripANSI(rendered)
 
-	for _, want := range []string{"Accounts", "Work Gmail", "Mail + Calendar", "work@example.com", "Family CalDAV", "Calendar", "Add account"} {
+	for _, want := range []string{"Accounts", "Work Gmail", "Mail + Calendar", "work@example.com", "Family CalDAV", "Calendar", "Add account", "Add calendar only"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("expected accounts list to include %q, got:\n%s", want, plain)
 		}
@@ -737,14 +737,16 @@ func TestSettingsAccountsListEnterOpensSelectedAccount(t *testing.T) {
 	s.buildForm()
 
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
-	if s.panelSection != settingsPanelSectionAddAccount {
-		t.Fatalf("expected initial Add account selection to open add flow, got %q", s.panelSection)
+	if s.panelSection != settingsPanelSectionAccount || s.accountEditMode != settingsAccountEditAddMail {
+		t.Fatalf("expected initial Add account selection to open add-account detail, section=%q mode=%q", s.panelSection, s.accountEditMode)
 	}
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEscape})
 	if s.panelSection != settingsPanelSectionAccounts {
 		t.Fatalf("expected Esc from add flow to return accounts list, got %q", s.panelSection)
 	}
 
+	s.accountsMenuChoice = "account:work"
+	s.buildForm()
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if s.panelSection != settingsPanelSectionAccount {
@@ -758,18 +760,294 @@ func TestSettingsAccountsListEnterOpensSelectedAccount(t *testing.T) {
 	}
 }
 
-func TestSettingsAddAccountFlowShowsMailAndCalendarChoices(t *testing.T) {
+func TestSettingsAccountsListShowsAddAccountAndCalendarOnlyWithoutSubmenu(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s.panelSection = settingsPanelSectionAddAccount
+	s.panelSection = settingsPanelSectionAccounts
 	s.buildForm()
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
 	plain := stripANSI(rendered)
 
-	for _, want := range []string{"Add account", "Add Mail", "Add Calendar"} {
+	for _, want := range []string{"Add account", "Add calendar only"} {
 		if !strings.Contains(plain, want) {
-			t.Fatalf("expected add account flow to include %q, got:\n%s", want, plain)
+			t.Fatalf("expected accounts list to include %q, got:\n%s", want, plain)
 		}
+	}
+	for _, notWant := range []string{"Add Mail", "Add Calendar"} {
+		if strings.Contains(plain, notWant) {
+			t.Fatalf("accounts list should not expose old add submenu option %q, got:\n%s", notWant, plain)
+		}
+	}
+}
+
+func TestSettingsAccountsListFooterShowsAccountActions(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", DisplayName: "Work", Credentials: config.CredentialsConfig{Username: "work@example.com"}},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	for _, want := range []string{"enter/e: edit", "d/\\: disconnect", "D/|: delete", "esc: back"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("accounts footer should include %q, got:\n%s", want, plain)
+		}
+	}
+}
+
+func TestSettingsAccountsListDeleteKeys(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", DisplayName: "Work", Credentials: config.CredentialsConfig{Username: "work@example.com", Password: "secret"}, IMAP: config.ServerConfig{Host: "imap.example.com", Port: 993}, SMTP: config.ServerConfig{Host: "smtp.example.com", Port: 587}},
+		{ID: "personal-mail", Kind: "mail", AccountID: "personal", DisplayName: "Personal", Credentials: config.CredentialsConfig{Username: "me@example.com", Password: "secret"}, IMAP: config.ServerConfig{Host: "imap.example.com", Port: 993}, SMTP: config.ServerConfig{Host: "smtp.example.com", Port: 587}},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:work"
+	s.buildForm()
+
+	s, _ = updateAndPumpSettingsForTest(t, s, keyRunes("d"))
+	plain := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	if s.panelSection != settingsPanelSectionAccount || !s.accountDeletePending ||
+		!strings.Contains(plain, "local cached") ||
+		!strings.Contains(plain, "mail/calendar") ||
+		!strings.Contains(plain, "Provider mail and calendars are not deleted") {
+		t.Fatalf("safe delete should open cache-aware confirmation, section=%q pending=%v view:\n%s", s.panelSection, s.accountDeletePending, plain)
+	}
+
+	s = NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:work"
+	s.buildForm()
+	_, messages := updateAndPumpSettingsForTest(t, s, keyRunes("D"))
+	var saved SettingsSavedMsg
+	for _, msg := range messages {
+		if m, ok := msg.(SettingsSavedMsg); ok {
+			saved = m
+		}
+	}
+	if saved.Config == nil {
+		t.Fatalf("fast delete should emit SettingsSavedMsg, got %#v", messages)
+	}
+	if saved.RemovedAccountID != "work" || len(saved.RemovedSourceIDs) != 1 || saved.RemovedSourceIDs[0] != "work-mail" {
+		t.Fatalf("removed scope = account %q sources %#v, want work/work-mail", saved.RemovedAccountID, saved.RemovedSourceIDs)
+	}
+	if len(saved.Config.Sources) != 1 || saved.Config.Sources[0].AccountID != "personal" {
+		t.Fatalf("fast delete config sources = %#v, want only personal account", saved.Config.Sources)
+	}
+}
+
+func TestSettingsExistingAccountEditIsOneCompactPage(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "imap",
+			DisplayName: "Work Mail",
+			AccountID:   "work",
+			Credentials: config.CredentialsConfig{Username: "work@example.com", Password: "secret"},
+			IMAP:        config.ServerConfig{Host: "imap.example.com", Port: 993},
+			SMTP:        config.ServerConfig{Host: "smtp.example.com", Port: 587},
+		},
+		{
+			ID:          "family-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Family Calendar",
+			AccountID:   "family",
+			Google:      config.GoogleConfig{Email: "family@example.com"},
+		},
+	}}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:work"
+	s.buildForm()
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	mailPage := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	for _, want := range []string{"Display Name", "Email address", "Password", "Save changes"} {
+		if !strings.Contains(mailPage, want) {
+			t.Fatalf("mail edit page should include %q on the same page, got:\n%s", want, mailPage)
+		}
+	}
+	for _, notWant := range []string{"Account Type", "Calendar Provider", "Google Calendar identity", "IMAP Host", "SMTP Host"} {
+		if strings.Contains(mailPage, notWant) {
+			t.Fatalf("mail edit page should not include setup screen %q, got:\n%s", notWant, mailPage)
+		}
+	}
+
+	s = NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:family"
+	s.buildForm()
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	calendarPage := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	for _, want := range []string{"Display Name", "Google Calendar identity", "Save changes"} {
+		if !strings.Contains(calendarPage, want) {
+			t.Fatalf("calendar edit page should include %q on the same page, got:\n%s", want, calendarPage)
+		}
+	}
+	for _, notWant := range []string{"Calendar Provider", "Account Type"} {
+		if strings.Contains(calendarPage, notWant) {
+			t.Fatalf("calendar edit page should not include setup screen %q, got:\n%s", notWant, calendarPage)
+		}
+	}
+}
+
+func TestSettingsExistingLegacyGmailOAuthEditHidesPassword(t *testing.T) {
+	existing := &config.Config{}
+	existing.Vendor = "gmail"
+	existing.Gmail.Email = "oauth@example.com"
+	existing.Gmail.RefreshToken = "refresh-token"
+	existing.Gmail.AccessToken = "access-token"
+	existing.Server = config.ServerConfig{Host: "imap.gmail.com", Port: 993}
+	existing.SMTP = config.ServerConfig{Host: "smtp.gmail.com", Port: 587}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:" + string(models.DefaultAccountID)
+	s.buildForm()
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	if strings.Contains(plain, "Password") {
+		t.Fatalf("legacy Gmail OAuth edit should not show password field, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Gmail address") {
+		t.Fatalf("legacy Gmail OAuth edit should show Gmail identity field, got:\n%s", plain)
+	}
+
+	s.accountDisplayName = "Renamed OAuth"
+	cfg := s.buildConfig()
+	mail := settingsTestSourceByID(t, cfg.Sources, string(models.DefaultMailSourceID))
+	if mail.Provider != "gmail" {
+		t.Fatalf("legacy OAuth provider = %q, want normalized gmail provider", mail.Provider)
+	}
+	if mail.Google.RefreshToken != "refresh-token" || mail.Google.AccessToken != "access-token" {
+		t.Fatalf("legacy OAuth tokens were not preserved: %#v", mail.Google)
+	}
+	if mail.Credentials.Password != "" {
+		t.Fatalf("legacy OAuth save should not add a password credential, got %#v", mail.Credentials)
+	}
+	if s.requiresAccountValidation() {
+		t.Fatal("renaming legacy Gmail OAuth account should not validate connectivity")
+	}
+	if msg, ok := s.oauthRequiredMsg(cfg); ok {
+		t.Fatalf("renaming legacy Gmail OAuth account should not require OAuth: %#v", msg)
+	}
+}
+
+func TestSettingsExistingAccountRenameSavesWithoutValidationOrOAuth(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "gmail",
+			DisplayName: "Old Work",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "mail-refresh"},
+			IMAP:        config.ServerConfig{Host: "imap.gmail.com", Port: 993},
+			SMTP:        config.ServerConfig{Host: "smtp.gmail.com", Port: 587},
+		},
+		{
+			ID:          "family-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Old Family",
+			AccountID:   "family",
+			Google:      config.GoogleConfig{Email: "family@example.com", RefreshToken: "calendar-refresh"},
+		},
+	}}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditExisting
+	s.selectedAccountID = "work"
+	s.loadSelectedAccountFields()
+	s.accountDisplayName = "New Work"
+
+	cfg := s.buildConfig()
+	mail := settingsTestSourceByID(t, cfg.Sources, "work-mail")
+	if mail.DisplayName != "New Work" {
+		t.Fatalf("mail display name = %q, want updated name", mail.DisplayName)
+	}
+	if mail.Google.RefreshToken != "mail-refresh" {
+		t.Fatalf("mail refresh token = %q, want preserved token", mail.Google.RefreshToken)
+	}
+	if s.requiresAccountValidation() {
+		t.Fatal("renaming an existing mail account should not validate connectivity")
+	}
+	if msg, ok := s.oauthRequiredMsg(cfg); ok {
+		t.Fatalf("renaming an existing OAuth mail account should not require OAuth: %#v", msg)
+	}
+
+	s = NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditExisting
+	s.selectedAccountID = "family"
+	s.loadSelectedAccountFields()
+	s.accountDisplayName = "New Family"
+
+	cfg = s.buildConfig()
+	calendar := settingsTestSourceByID(t, cfg.Sources, "family-calendar")
+	if calendar.DisplayName != "New Family" {
+		t.Fatalf("calendar display name = %q, want updated name", calendar.DisplayName)
+	}
+	if calendar.Google.RefreshToken != "calendar-refresh" {
+		t.Fatalf("calendar refresh token = %q, want preserved token", calendar.Google.RefreshToken)
+	}
+	if s.requiresCalendarValidation() {
+		t.Fatal("renaming an existing calendar account should not validate or resubscribe")
+	}
+	if msg, ok := s.oauthRequiredMsg(cfg); ok {
+		t.Fatalf("renaming an existing OAuth calendar account should not require OAuth: %#v", msg)
+	}
+}
+
+func settingsTestSourceByID(t *testing.T, sources []config.SourceConfig, id string) config.SourceConfig {
+	t.Helper()
+	for _, source := range sources {
+		if source.ID == id {
+			return source
+		}
+	}
+	t.Fatalf("source %q not found in %#v", id, sources)
+	return config.SourceConfig{}
+}
+
+func TestSettingsExistingGoogleCalendarIdentityChangeRequiresOAuth(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "family-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Family",
+			AccountID:   "family",
+			Google:      config.GoogleConfig{Email: "old@example.com", RefreshToken: "calendar-refresh"},
+		},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditExisting
+	s.selectedAccountID = "family"
+	s.loadSelectedAccountFields()
+	s.calendarEmail = "new@example.com"
+
+	cfg := s.buildConfig()
+	if !s.requiresCalendarValidation() {
+		t.Fatal("changing Google Calendar identity should validate the calendar")
+	}
+	msg, ok := s.oauthRequiredMsg(cfg)
+	if !ok {
+		t.Fatal("changing Google Calendar identity should require OAuth")
+	}
+	if msg.ServiceLabel != "Google Calendar OAuth" {
+		t.Fatalf("service label = %q, want Google Calendar OAuth", msg.ServiceLabel)
+	}
+	if len(msg.SourceIDs) != 1 || msg.SourceIDs[0] != "family-calendar" {
+		t.Fatalf("OAuth source IDs = %#v, want family-calendar", msg.SourceIDs)
 	}
 }
 
@@ -788,12 +1066,11 @@ func TestSettingsAddMailStartsBlankInsteadOfReusingExistingAccount(t *testing.T)
 	s.buildForm()
 
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
-	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if s.panelSection != settingsPanelSectionAccount || s.accountEditMode != settingsAccountEditAddMail {
 		t.Fatalf("expected add-mail detail, section=%q mode=%q", s.panelSection, s.accountEditMode)
 	}
-	if s.accountDisplayName != "" || s.email != "" || s.password != "" || s.imapHost != "" || s.imapPort != "" || s.smtpHost != "" || s.smtpPort != "" {
+	if s.accountDisplayName != "" || s.email != "" || s.password != "" {
 		t.Fatalf("add mail reused existing account fields: display=%q email=%q password=%q imap=%q:%q smtp=%q:%q",
 			s.accountDisplayName, s.email, s.password, s.imapHost, s.imapPort, s.smtpHost, s.smtpPort)
 	}
@@ -845,8 +1122,8 @@ func TestSettingsAddCalendarStartsBlankInsteadOfReusingSelectedCalendar(t *testi
 		t.Fatal("test setup failed to load selected calendar fields")
 	}
 
-	s.panelSection = settingsPanelSectionAddAccount
-	s.addAccountChoice = settingsAccountEditAddCalendar
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = settingsAccountEditAddCalendar
 	s.buildForm()
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
 
@@ -861,15 +1138,15 @@ func TestSettingsAddCalendarStartsBlankInsteadOfReusingSelectedCalendar(t *testi
 
 func TestSettingsAddCalendarFlowSkipsMailAccountType(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
-	s.panelSection = settingsPanelSectionAddAccount
-	s.addAccountChoice = settingsAccountEditAddCalendar
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = settingsAccountEditAddCalendar
 	s.buildForm()
 
 	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	first := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
-	if !strings.Contains(first, "Account Name") {
-		t.Fatalf("expected add-calendar flow to ask for account name first, got:\n%s", first)
+	if strings.Contains(first, "Account Name") {
+		t.Fatalf("add-calendar flow should not ask for account name first, got:\n%s", first)
 	}
 	if strings.Contains(first, "Work Gmail") || strings.Contains(first, "Family Calendar") {
 		t.Fatalf("add-calendar account-name step should not show existing-looking placeholders, got:\n%s", first)
@@ -878,13 +1155,11 @@ func TestSettingsAddCalendarFlowSkipsMailAccountType(t *testing.T) {
 		t.Fatalf("add-calendar flow should not show mail account type on the name step, got:\n%s", first)
 	}
 
-	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
-	second := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
-	if !strings.Contains(second, "Calendar Provider") {
-		t.Fatalf("expected add-calendar flow to ask for calendar type after account name, got:\n%s", second)
+	if !strings.Contains(first, "Calendar Provider") {
+		t.Fatalf("expected add-calendar flow to ask for calendar type first, got:\n%s", first)
 	}
-	if strings.Contains(second, "Account Type") {
-		t.Fatalf("add-calendar flow should not show mail account types, got:\n%s", second)
+	if strings.Contains(first, "Account Type") {
+		t.Fatalf("add-calendar flow should not show mail account types, got:\n%s", first)
 	}
 }
 
@@ -1210,11 +1485,63 @@ func TestBuildConfigAddMailWithCalendarCreatesExplicitSources(t *testing.T) {
 	mail := cfg.Sources[0]
 	cal := cfg.Sources[1]
 	if mail.Kind != "mail" || mail.AccountID == "" || mail.Provider != "gmail" || mail.Google.Email != "work@example.com" {
-		t.Fatalf("mail source = %#v, want gmail OAuth mail source scoped to work account", mail)
+		t.Fatalf("mail source = %#v, want Gmail API mail source scoped to work account", mail)
 	}
 	if cal.Kind != "calendar" || cal.AccountID != mail.AccountID || cal.Provider != "google_calendar" || cal.Google.Email != "work@example.com" {
 		t.Fatalf("calendar source = %#v, want paired google calendar source", cal)
 	}
+}
+
+func TestBuildConfigGmailOAuthAddDefaultsCalendarFromMailAddress(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddMail
+	s.provider = "gmail-oauth"
+	s.email = "work@example.com"
+	s.alsoAddCalendar = true
+	s.calendarProvider = "google_calendar"
+
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(sources) = %d, want paired mail/calendar: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	if cfg.Sources[0].DisplayName != "work@example.com" {
+		t.Fatalf("mail display name = %q, want derived email", cfg.Sources[0].DisplayName)
+	}
+	if cfg.Sources[1].Google.Email != "work@example.com" {
+		t.Fatalf("calendar email = %q, want Gmail address fallback", cfg.Sources[1].Google.Email)
+	}
+	if cfg.Sources[1].AccountID != cfg.Sources[0].AccountID {
+		t.Fatalf("calendar account = %q, want same account as mail %q", cfg.Sources[1].AccountID, cfg.Sources[0].AccountID)
+	}
+}
+
+func TestSettingsGmailOAuthAddFlowPacksCalendarAndConnect(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = settingsAccountEditAddMail
+	s.buildForm()
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if !s.alsoAddCalendar {
+		t.Fatal("Gmail OAuth add account should default to paired Google Calendar")
+	}
+	plainViews := []string{}
+	for i := 0; i < 4; i++ {
+		plain := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+		plainViews = append(plainViews, plain)
+		if strings.Contains(plain, "Gmail address") {
+			if !strings.Contains(plain, "Include Google Calendar") || !strings.Contains(plain, "Connect account") {
+				t.Fatalf("Gmail OAuth add screen should include calendar question and connect action, got:\n%s", plain)
+			}
+			if strings.Contains(plain, "Google Calendar identity") || strings.Contains(plain, "Calendar Provider") || strings.Contains(plain, "Account Name") {
+				t.Fatalf("Gmail OAuth add screen exposed separate calendar/name setup, got:\n%s", plain)
+			}
+			return
+		}
+		s.form.NextGroup()
+	}
+	t.Fatalf("Gmail OAuth add screen not found; views:\n%s", strings.Join(plainViews, "\n---\n"))
 }
 
 func TestBuildConfigAddMailWithVendorCalendarUsesCalDAVPreset(t *testing.T) {

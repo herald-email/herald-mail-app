@@ -77,7 +77,7 @@ func TestAdaptiveLowContrastTextRolesUseDefaultForeground(t *testing.T) {
 	}
 }
 
-func TestHeraldHuhThemeDimsFormHelp(t *testing.T) {
+func TestHeraldHuhThemeUsesBrightFormHelp(t *testing.T) {
 	styles := heraldHuhTheme(true)
 	helpStyles := map[string]lipgloss.Style{
 		"ellipsis":        styles.Help.Ellipsis,
@@ -89,11 +89,11 @@ func TestHeraldHuhThemeDimsFormHelp(t *testing.T) {
 		"full separator":  styles.Help.FullSeparator,
 	}
 	for name, style := range helpStyles {
-		if !reflect.DeepEqual(style.GetForeground(), lipgloss.Color("8")) {
-			t.Fatalf("%s help should use dim gray, got %#v", name, style.GetForeground())
+		if style.GetFaint() {
+			t.Fatalf("%s help should not use faint styling", name)
 		}
-		if !style.GetFaint() {
-			t.Fatalf("%s help should use faint styling", name)
+		if !isUnsetColor(style.GetForeground()) {
+			t.Fatalf("%s help should inherit the terminal foreground, got %#v", name, style.GetForeground())
 		}
 	}
 }

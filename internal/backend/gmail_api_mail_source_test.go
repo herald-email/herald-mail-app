@@ -35,12 +35,36 @@ func TestSourceRegistryOpensGmailAPIMailSource(t *testing.T) {
 		Google:      config.GoogleConfig{Email: "work@example.com", AccessToken: "token"},
 	}, SourceDeps{Cache: c})
 	if err != nil {
-		t.Fatalf("Open gmail_api: %v", err)
+		t.Fatalf("Open Gmail API source: %v", err)
 	}
 	defer opened.Close()
 
 	if opened.Provider != "gmail" || opened.Mail == nil || !opened.Caps.MailSync || !opened.Caps.MailMutations || !opened.Caps.CacheBypassReads {
-		t.Fatalf("opened source = %#v, want gmail mail source with sync/mutation/cache-bypass capabilities", opened)
+		t.Fatalf("opened source = %#v, want Gmail API mail source with sync/mutation/cache-bypass capabilities", opened)
+	}
+}
+
+func TestSourceRegistryKeepsGmailAPIAlias(t *testing.T) {
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-alias.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	opened, err := DefaultSourceRegistry().Open(context.Background(), config.SourceConfig{
+		ID:        "legacy-gmail-api",
+		Kind:      string(models.SourceKindMail),
+		Provider:  "gmail_api",
+		AccountID: "legacy",
+		Google:    config.GoogleConfig{Email: "legacy@example.com", AccessToken: "token"},
+	}, SourceDeps{Cache: c})
+	if err != nil {
+		t.Fatalf("Open gmail_api alias: %v", err)
+	}
+	defer opened.Close()
+
+	if opened.Provider != "gmail" || opened.Mail == nil {
+		t.Fatalf("opened alias source = %#v, want canonical Gmail API provider", opened)
 	}
 }
 

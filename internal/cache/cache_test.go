@@ -84,6 +84,15 @@ func tableColumns(t *testing.T, db *sql.DB, table string) map[string]bool {
 	return cols
 }
 
+func countRowsWhere(t *testing.T, c *Cache, table, where string) int {
+	t.Helper()
+	var count int
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM ` + table + ` WHERE ` + where).Scan(&count); err != nil {
+		t.Fatalf("count %s where %s: %v", table, where, err)
+	}
+	return count
+}
+
 // --- extractDomain ---
 
 func TestExtractDomain(t *testing.T) {
@@ -258,6 +267,53 @@ func TestCacheEmailPreservesExplicitScope(t *testing.T) {
 	}
 	if got.SourceID != models.SourceID("work-mail") || got.AccountID != models.AccountID("work") || got.LocalID != email.LocalID || got.UIDValidity != 777 {
 		t.Fatalf("scope = %#v, want explicit source/account/local/uidvalidity", got)
+	}
+}
+
+func TestPurgeAccountCacheRemovesOnlySelectedAccount(t *testing.T) {
+	c := newTestCache(t)
+	now := time.Now().UTC()
+	for _, email := range []*models.EmailData{
+		{SourceID: "work-mail", AccountID: "work", LocalID: "mail:work", MessageID: "<work@example.com>", UID: 1, Folder: "INBOX", Date: now},
+		{SourceID: "personal-mail", AccountID: "personal", LocalID: "mail:personal", MessageID: "<personal@example.com>", UID: 2, Folder: "INBOX", Date: now},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+	}
+	if _, err := c.db.Exec(`INSERT INTO email_classifications (message_id, source_id, account_id, local_id, category, classified_at) VALUES (?, ?, ?, ?, ?, ?)`, "<work@example.com>", "work-mail", "work", "mail:work", "news", now); err != nil {
+		t.Fatalf("seed classification: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO email_preview_bodies (message_id, source_id, account_id, local_id, text_plain, cached_at) VALUES (?, ?, ?, ?, ?, ?)`, "<work@example.com>", "work-mail", "work", "mail:work", "preview", now); err != nil {
+		t.Fatalf("seed preview: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO email_embeddings (message_id, source_id, account_id, local_id, embedding, hash, embedded_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "<work@example.com>", "work-mail", "work", "mail:work", []byte{1, 2}, "hash", now); err != nil {
+		t.Fatalf("seed embedding: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO email_embedding_chunks (message_id, source_id, account_id, local_id, chunk_index, embedding, content_hash, embedded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, "<work@example.com>", "work-mail", "work", "mail:work", 0, []byte{1, 2}, "hash", now); err != nil {
+		t.Fatalf("seed embedding chunk: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO calendar_collections (local_id, source_id, account_id, calendar_id, display_name, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, "calendar:work", "work-calendar", "work", "primary", "Work", now); err != nil {
+		t.Fatalf("seed calendar collection: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO calendar_events (local_id, source_id, account_id, calendar_id, event_id, title, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "event:work", "work-calendar", "work", "primary", "evt", "Work event", now); err != nil {
+		t.Fatalf("seed calendar event: %v", err)
+	}
+	if _, err := c.db.Exec(`INSERT INTO cleanup_rules (name, source_id, account_id, match_type, match_value, action, older_than_days, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "Work cleanup", "work-mail", "work", "sender", "news@example.com", "delete", 30, 1, now); err != nil {
+		t.Fatalf("seed cleanup rule: %v", err)
+	}
+
+	if err := c.PurgeAccountCache("work", []models.SourceID{"work-mail", "work-calendar"}); err != nil {
+		t.Fatalf("PurgeAccountCache: %v", err)
+	}
+
+	for _, table := range []string{"emails", "email_classifications", "email_preview_bodies", "email_embeddings", "email_embedding_chunks", "calendar_collections", "calendar_events", "cleanup_rules"} {
+		if got := countRowsWhere(t, c, table, `COALESCE(account_id, 'default') = 'work'`); got != 0 {
+			t.Fatalf("%s retained %d work rows after purge", table, got)
+		}
+	}
+	if got := countRowsWhere(t, c, "emails", `COALESCE(account_id, 'default') = 'personal'`); got != 1 {
+		t.Fatalf("personal emails after purge = %d, want 1", got)
 	}
 }
 

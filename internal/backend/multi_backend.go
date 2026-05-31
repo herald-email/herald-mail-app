@@ -1220,6 +1220,27 @@ func (m *MultiBackend) ReclaimOfflineCacheStorage(policy string) (models.Preview
 	return total, nil
 }
 
+func (m *MultiBackend) PurgeAccountCache(accountID models.AccountID, sourceIDs []models.SourceID) error {
+	if m == nil || accountID == "" {
+		return nil
+	}
+	for _, slot := range m.snapshotSlots() {
+		if slot == nil || slot.backend == nil || models.NormalizeAccountID(slot.info.AccountID) != models.NormalizeAccountID(accountID) {
+			continue
+		}
+		purger, ok := slot.backend.(interface {
+			PurgeAccountCache(models.AccountID, []models.SourceID) error
+		})
+		if !ok {
+			return fmt.Errorf("account %s backend does not expose cache purge", slot.info.SourceID)
+		}
+		if err := purger.PurgeAccountCache(accountID, sourceIDs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *MultiBackend) snapshotSlots() []*accountSlot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

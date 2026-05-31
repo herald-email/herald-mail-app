@@ -1,13 +1,13 @@
 # Gmail API Mail Source Core
 
-This spec defines the first Gmail API mail-provider slice. It matters because Herald should reduce Google mail OAuth access for normal Gmail use without removing the existing IMAP-based Gmail paths that users already rely on.
+This spec defines the first Gmail API mail-provider slice. It matters because Herald should reduce Google mail OAuth access for normal Gmail use without removing the existing app-password IMAP Gmail paths that users already rely on.
 
 ## User-Visible Behavior
 
 The Gmail API source should feel like the current Gmail mail account in Timeline, search, preview, compose, and cleanup flows. The transport change must stay behind the source platform boundary, so TUI, SSH, daemon, and MCP callers keep using scoped Herald refs instead of raw Gmail provider IDs.
 
 - [x] Gmail OAuth can use a Gmail API mail source with narrower Gmail API access for sync, body reads, common mailbox mutations, and sending.
-- [x] Existing Gmail IMAP OAuth remains available for compatibility and still uses the legacy full-mail OAuth scope required by IMAP/SMTP XOAUTH2.
+- [x] Older `provider: gmail_api` source configs remain readable as a compatibility alias for the canonical `provider: gmail` Gmail API source.
 - [x] Gmail IMAP App Password setup remains available and continues to use the IMAP adapter.
 - [x] Gmail API delete moves messages to Trash instead of permanent provider deletion.
 - [x] Gmail API draft create/list/delete/send parity uses `users.drafts.*` while preserving Herald draft UIDs, scoped refs, and send-after-success cleanup behavior.
@@ -16,7 +16,7 @@ The Gmail API source should feel like the current Gmail mail account in Timeline
 
 ## OAuth And Provider Boundaries
 
-Provider-specific OAuth scopes must be selected from configured source capabilities rather than requested globally. This keeps Calendar access, legacy IMAP OAuth, and Gmail API mail access independent while preserving shared token storage and refresh behavior.
+Provider-specific OAuth scopes must be selected from configured source capabilities rather than requested globally. This keeps Calendar access and Gmail API mail access independent while preserving shared token storage and refresh behavior.
 
 - [x] OAuth Gmail mail sources using `provider: gmail` request Gmail API mail access only, using `https://www.googleapis.com/auth/gmail.modify`.
 - [x] `provider: gmail_api` remains accepted as a compatibility alias for the Gmail API adapter.
