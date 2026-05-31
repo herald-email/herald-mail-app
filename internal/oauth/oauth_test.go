@@ -76,24 +76,65 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 	}
 }
 
-func TestGoogleOAuthScopesIncludeMailAndCalendarSources(t *testing.T) {
-	want := []string{
-		"https://mail.google.com/",
-		"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-		"https://www.googleapis.com/auth/calendar.events",
+func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
+	tests := []struct {
+		name    string
+		sources []config.SourceConfig
+		want    []string
+	}{
+		{
+			name: "gmail api mail only",
+			sources: []config.SourceConfig{{
+				Kind:     "mail",
+				Provider: "gmail_api",
+			}},
+			want: []string{ScopeGmailModify},
+		},
+		{
+			name: "legacy gmail imap oauth keeps full mail scope",
+			sources: []config.SourceConfig{{
+				Kind:     "mail",
+				Provider: "gmail",
+				Google:   config.GoogleConfig{Email: "legacy@example.com"},
+			}},
+			want: []string{ScopeLegacyMail},
+		},
+		{
+			name: "calendar source only",
+			sources: []config.SourceConfig{{
+				Kind:     "calendar",
+				Provider: "google_calendar",
+			}},
+			want: []string{ScopeCalendarListReadonly, ScopeCalendarEvents},
+		},
+		{
+			name: "gmail api mail plus calendar",
+			sources: []config.SourceConfig{
+				{Kind: "mail", Provider: "gmail_api"},
+				{Kind: "calendar", Provider: "google_calendar"},
+			},
+			want: []string{ScopeGmailModify, ScopeCalendarListReadonly, ScopeCalendarEvents},
+		},
 	}
-	for _, scope := range want {
-		found := false
-		for _, got := range Scopes {
-			if got == scope {
-				found = true
-				break
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ScopesForSources(tt.sources); !equalStringSlices(got, tt.want) {
+				t.Fatalf("ScopesForSources() = %#v, want %#v", got, tt.want)
 			}
-		}
-		if !found {
-			t.Fatalf("Scopes missing %q; got %#v", scope, Scopes)
+		})
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
+	return true
 }
 
 func TestStartFlow_AuthorizeRedirectsToGoogleURL(t *testing.T) {

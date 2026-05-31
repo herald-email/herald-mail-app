@@ -23,11 +23,49 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
-// Scopes required for Google mail and calendar access.
-var Scopes = []string{
-	"https://mail.google.com/",
-	"https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-	"https://www.googleapis.com/auth/calendar.events",
+const (
+	ScopeLegacyMail           = "https://mail.google.com/"
+	ScopeGmailModify          = "https://www.googleapis.com/auth/gmail.modify"
+	ScopeCalendarListReadonly = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+	ScopeCalendarEvents       = "https://www.googleapis.com/auth/calendar.events"
+)
+
+// Scopes is the default browser OAuth scope set for new Gmail API mail setup.
+// Provider-aware callers should prefer ScopesForSources.
+var Scopes = []string{ScopeGmailModify}
+
+// ScopesForSources returns the minimum Google OAuth scopes needed for the
+// configured Google-backed sources, preserving legacy Gmail IMAP OAuth.
+func ScopesForSources(sources []config.SourceConfig) []string {
+	if len(sources) == 0 {
+		return append([]string(nil), Scopes...)
+	}
+	var out []string
+	add := func(scope string) {
+		for _, existing := range out {
+			if existing == scope {
+				return
+			}
+		}
+		out = append(out, scope)
+	}
+	for _, source := range sources {
+		kind := strings.TrimSpace(source.Kind)
+		provider := strings.ToLower(strings.TrimSpace(source.Provider))
+		switch {
+		case kind == "calendar" && provider == "google_calendar":
+			add(ScopeCalendarListReadonly)
+			add(ScopeCalendarEvents)
+		case (kind == "" || kind == "mail") && provider == "gmail_api":
+			add(ScopeGmailModify)
+		case (kind == "" || kind == "mail") && provider == "gmail" && strings.TrimSpace(source.Google.Email) != "":
+			add(ScopeLegacyMail)
+		}
+	}
+	if len(out) == 0 {
+		return append([]string(nil), Scopes...)
+	}
+	return out
 }
 
 // clientID and clientSecret are the OAuth2 application credentials.
@@ -64,11 +102,18 @@ func Configured() bool {
 // client ID and secret. The redirect URL should be a localhost callback
 // for the desktop auth flow.
 func NewGmailConfig(clientIDVal, clientSecretVal, redirectURL string) *oauth2.Config {
+	return NewGoogleConfigWithScopes(clientIDVal, clientSecretVal, redirectURL, Scopes)
+}
+
+func NewGoogleConfigWithScopes(clientIDVal, clientSecretVal, redirectURL string, scopes []string) *oauth2.Config {
+	if len(scopes) == 0 {
+		scopes = Scopes
+	}
 	return &oauth2.Config{
 		ClientID:     clientIDVal,
 		ClientSecret: clientSecretVal,
 		RedirectURL:  redirectURL,
-		Scopes:       Scopes,
+		Scopes:       append([]string(nil), scopes...),
 		Endpoint:     google.Endpoint,
 	}
 }
@@ -85,6 +130,10 @@ type Result struct {
 // receive the authorization code when the user completes the flow.
 // The server shuts down automatically after receiving one code or when ctx is cancelled.
 func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan Result, err error) {
+	return StartFlowForSources(ctx, email, nil)
+}
+
+func StartFlowForSources(ctx context.Context, email string, sources []config.SourceConfig) (authURL string, codeCh <-chan Result, err error) {
 	clientID, clientSecret, err := credentials()
 	if err != nil {
 		return "", nil, err
@@ -98,7 +147,7 @@ func StartFlow(ctx context.Context, email string) (authURL string, codeCh <-chan
 	port := listener.Addr().(*net.TCPAddr).Port
 	redirectURI := fmt.Sprintf("http://localhost:%d/callback", port)
 
-	cfg := NewGmailConfig(clientID, clientSecret, redirectURI)
+	cfg := NewGoogleConfigWithScopes(clientID, clientSecret, redirectURI, ScopesForSources(sources))
 
 	// Generate a random state parameter for CSRF protection.
 	stateBytes := make([]byte, 16)

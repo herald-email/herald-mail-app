@@ -210,6 +210,7 @@ type vendorPreset struct {
 var vendorPresets = map[string]vendorPreset{
 	"protonmail": {"127.0.0.1", 1143, "127.0.0.1", 1025},
 	"gmail":      {"imap.gmail.com", 993, "smtp.gmail.com", 587},
+	"gmail_api":  {"imap.gmail.com", 993, "smtp.gmail.com", 587},
 	"outlook":    {"outlook.office365.com", 993, "smtp.office365.com", 587},
 	"fastmail":   {"imap.fastmail.com", 993, "smtp.fastmail.com", 587},
 	"icloud":     {"imap.mail.me.com", 993, "smtp.mail.me.com", 587},

@@ -2,9 +2,14 @@ package accountcheck
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func TestResultErrNamesFailedSurfaces(t *testing.T) {
@@ -43,5 +48,37 @@ func TestValidateNilConfigFailsBothSurfaces(t *testing.T) {
 	}
 	if err := result.Err(); err == nil || !strings.Contains(err.Error(), "IMAP") || !strings.Contains(err.Error(), "SMTP") {
 		t.Fatalf("expected combined nil-config error, got %v", err)
+	}
+}
+
+func TestValidateGmailAPISourceUsesProviderCheck(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/gmail/v1/users/me/labels" {
+			t.Fatalf("unexpected Gmail API validation path %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"labels": []map[string]string{{"id": "INBOX", "name": "INBOX", "type": "system"}},
+		})
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:        "test-gmail",
+		Kind:      "mail",
+		Provider:  "gmail_api",
+		AccountID: "test",
+		Google: config.GoogleConfig{
+			Email:       "test@example.com",
+			AccessToken: "access-token",
+			APIBaseURL:  server.URL + "/gmail/v1",
+		},
+	}}}
+
+	result := Validate(context.Background(), cfg, "")
+	if !result.OK() {
+		t.Fatalf("Validate gmail_api = %#v, want provider-backed success", result)
+	}
+	if result.IMAP.Surface != "Gmail API" || result.SMTP.Surface != "Gmail API send" {
+		t.Fatalf("surfaces = %q/%q, want Gmail API labels", result.IMAP.Surface, result.SMTP.Surface)
 	}
 }

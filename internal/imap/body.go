@@ -224,10 +224,10 @@ func (c *Client) fetchEmailBodyLocked(uid uint32, folder string) (*models.EmailB
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	return parseMIMEBody(raw)
+	return ParseMIMEBody(raw)
 }
 
-func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
+func ParseMIMEBody(raw []byte) (*models.EmailBody, error) {
 	mailMsg, err := mail.ReadMessage(bytes.NewReader(raw))
 	if err != nil {
 		// Fallback: treat the whole thing as plain text
@@ -251,6 +251,10 @@ func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
 		result.IsFromHTML = true
 	}
 	return result, nil
+}
+
+func parseMIMEBody(raw []byte) (*models.EmailBody, error) {
+	return ParseMIMEBody(raw)
 }
 
 func decodeHeaderValue(value string) string {

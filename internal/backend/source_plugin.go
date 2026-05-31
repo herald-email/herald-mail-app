@@ -142,6 +142,7 @@ func NewSourceRegistry(plugins ...SourcePlugin) *SourceRegistry {
 func DefaultSourceRegistry() *SourceRegistry {
 	return NewSourceRegistry(
 		IMAPSourcePlugin{},
+		GmailAPISourcePlugin{},
 		GoogleCalendarSourcePlugin{},
 		CalDAVSourcePlugin{},
 	)

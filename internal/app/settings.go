@@ -1879,7 +1879,7 @@ func (s *Settings) loadSelectedAccountFields() {
 			if s.provider == "" {
 				s.provider = "imap"
 			}
-			if source.Provider == "gmail" && source.Google.RefreshToken != "" {
+			if (source.Provider == "gmail" || source.Provider == "gmail_api") && source.Google.RefreshToken != "" {
 				s.provider = "gmail-oauth"
 			}
 			s.email = sourceAddressForSettings(source)
@@ -2596,7 +2596,7 @@ func editableSourcesForSettings(cfg config.Config) []config.SourceConfig {
 }
 
 func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceConfig) config.SourceConfig {
-	provider := configVendorForProvider(s.provider)
+	provider := mailSourceProviderForSettings(s.provider)
 	id := settingsUniqueSourceID(existing, firstNonEmptyString(s.accountDisplayName, s.email, accountID), "mail")
 	source := config.SourceConfig{
 		ID:          id,
@@ -2703,7 +2703,7 @@ func syncLegacyMailFieldsForSettings(cfg *config.Config) {
 		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
 			continue
 		}
-		cfg.Vendor = source.Provider
+		cfg.Vendor = configVendorForProvider(source.Provider)
 		cfg.Credentials = source.Credentials
 		cfg.Server = source.IMAP
 		cfg.SMTP = source.SMTP
@@ -2907,11 +2907,18 @@ func (s *Settings) applyThemeFileActions() error {
 
 func configVendorForProvider(provider string) string {
 	switch provider {
-	case "gmail", "gmail-oauth":
+	case "gmail", "gmail-oauth", "gmail_api":
 		return "gmail"
 	default:
 		return provider
 	}
+}
+
+func mailSourceProviderForSettings(provider string) string {
+	if provider == "gmail-oauth" {
+		return "gmail_api"
+	}
+	return configVendorForProvider(provider)
 }
 
 func configAIProvider(provider string) string {

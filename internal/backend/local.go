@@ -1093,6 +1093,11 @@ func (b *LocalBackend) GetEmailsByThread(folder, subject string) ([]*models.Emai
 }
 
 func (b *LocalBackend) SendEmail(to, subject, body, from string) error {
+	if sender, ok := b.mailSource.(interface {
+		SendEmail(context.Context, string, string, string, string) error
+	}); ok {
+		return sender.SendEmail(context.Background(), from, to, subject, body)
+	}
 	mailer := appsmtp.New(b.cfg)
 	return mailer.Send(from, to, subject, body, "")
 }
@@ -1109,6 +1114,12 @@ func (b *LocalBackend) SendCompose(req ComposeSendRequest) error {
 			preserved.From = from
 		}
 		return mailer.SendPreserved(preserved)
+	}
+	if sender, ok := b.mailSource.(interface {
+		SendCompose(context.Context, ComposeSendRequest) error
+	}); ok {
+		req.From = from
+		return sender.SendCompose(context.Background(), req)
 	}
 	htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(req.MarkdownBody)
 	if inlineErr != nil {

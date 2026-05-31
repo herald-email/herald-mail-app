@@ -1,0 +1,321 @@
+package backend
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/models"
+)
+
+func TestSourceRegistryOpensGmailAPIMailSource(t *testing.T) {
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-source.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	registry := DefaultSourceRegistry()
+	opened, err := registry.Open(context.Background(), config.SourceConfig{
+		ID:          "work-gmail",
+		Kind:        string(models.SourceKindMail),
+		Provider:    "gmail_api",
+		DisplayName: "Work Gmail",
+		AccountID:   "work",
+		Google:      config.GoogleConfig{Email: "work@example.com", AccessToken: "token"},
+	}, SourceDeps{Cache: c})
+	if err != nil {
+		t.Fatalf("Open gmail_api: %v", err)
+	}
+	defer opened.Close()
+
+	if opened.Provider != "gmail_api" || opened.Mail == nil || !opened.Caps.MailSync || !opened.Caps.MailMutations || !opened.Caps.CacheBypassReads {
+		t.Fatalf("opened source = %#v, want gmail_api mail source with sync/mutation/cache-bypass capabilities", opened)
+	}
+}
+
+func TestGmailAPIMailSourceSyncFetchMutateAndSend(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-core.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	if err := source.Connect(context.Background()); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer source.Close()
+
+	folders, err := source.ListFolders(context.Background())
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	for _, want := range []string{"INBOX", "STARRED", "All Mail"} {
+		if !containsString(folders, want) {
+			t.Fatalf("folders = %#v, missing %q", folders, want)
+		}
+	}
+
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental: %v", err)
+	}
+	emails, err := c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(emails) != 1 {
+		t.Fatalf("cached emails = %d, want 1", len(emails))
+	}
+	email := emails[0]
+	if email.SourceID != "gmail-api" || email.AccountID != "work" || email.MessageID != "<api-1@example.com>" || email.IsRead || !email.IsStarred || email.LocalID == "" {
+		t.Fatalf("cached email = %#v, want scoped unread/starred Gmail API row", email)
+	}
+
+	body, err := source.FetchMessageNoCache(context.Background(), email.MessageRef())
+	if err != nil {
+		t.Fatalf("FetchMessageNoCache: %v", err)
+	}
+	if body.MessageID != "<api-1@example.com>" || !strings.Contains(body.TextPlain, "hello from gmail api") {
+		t.Fatalf("body = %#v, want parsed raw MIME body", body)
+	}
+
+	if _, err := source.SearchIMAP(context.Background(), "INBOX", "roadmap"); err != nil {
+		t.Fatalf("SearchIMAP: %v", err)
+	}
+	if err := source.MarkRead(context.Background(), email.UID, "INBOX"); err != nil {
+		t.Fatalf("MarkRead: %v", err)
+	}
+	if err := source.MarkUnread(context.Background(), email.UID, "INBOX"); err != nil {
+		t.Fatalf("MarkUnread: %v", err)
+	}
+	if err := source.UnmarkStarred(context.Background(), email.UID, "INBOX"); err != nil {
+		t.Fatalf("UnmarkStarred: %v", err)
+	}
+	if err := source.MarkStarred(context.Background(), email.UID, "INBOX"); err != nil {
+		t.Fatalf("MarkStarred: %v", err)
+	}
+	if err := source.ArchiveEmail(context.Background(), email.MessageID, "INBOX"); err != nil {
+		t.Fatalf("ArchiveEmail: %v", err)
+	}
+	if err := source.MoveEmail(context.Background(), email.MessageID, "INBOX", "Later"); err != nil {
+		t.Fatalf("MoveEmail: %v", err)
+	}
+	if err := source.DeleteEmail(context.Background(), email.MessageID, "INBOX"); err != nil {
+		t.Fatalf("DeleteEmail: %v", err)
+	}
+	if err := source.SendEmail(context.Background(), "me@example.com", "you@example.com", "Gmail API send", "hello"); err != nil {
+		t.Fatalf("SendEmail: %v", err)
+	}
+
+	fake.assertModify(t, "msg-1", []string(nil), []string{"UNREAD"})
+	fake.assertModify(t, "msg-1", []string{"UNREAD"}, []string(nil))
+	fake.assertModify(t, "msg-1", []string(nil), []string{"STARRED"})
+	fake.assertModify(t, "msg-1", []string{"STARRED"}, []string(nil))
+	fake.assertModify(t, "msg-1", []string(nil), []string{"INBOX"})
+	fake.assertModify(t, "msg-1", []string{"Label_42"}, []string{"INBOX"})
+	if !fake.sawTrash("msg-1") {
+		t.Fatalf("expected DeleteEmail to call Gmail trash endpoint, got calls %#v", fake.calls)
+	}
+	if fake.sentRaw == "" {
+		t.Fatal("expected SendEmail to post raw RFC 2822 message")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(fake.sentRaw)
+	if err != nil {
+		t.Fatalf("decode sent raw: %v", err)
+	}
+	if sent := string(decoded); !strings.Contains(sent, "Subject: Gmail API send") || !strings.Contains(sent, "hello") {
+		t.Fatalf("sent raw message = %q, want subject and body", sent)
+	}
+}
+
+func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *GmailAPIMailSource {
+	t.Helper()
+	opened, err := (GmailAPISourcePlugin{}).Open(context.Background(), config.SourceConfig{
+		ID:        "gmail-api",
+		Kind:      string(models.SourceKindMail),
+		Provider:  "gmail_api",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			Email:       "me@example.com",
+			AccessToken: "test-token",
+			APIBaseURL:  baseURL + "/gmail/v1",
+		},
+	}, SourceDeps{Cache: c})
+	if err != nil {
+		t.Fatalf("open Gmail API source: %v", err)
+	}
+	source, ok := opened.Mail.(*GmailAPIMailSource)
+	if !ok {
+		t.Fatalf("opened Mail = %T, want *GmailAPIMailSource", opened.Mail)
+	}
+	return source
+}
+
+type fakeGmailAPIServer struct {
+	server  *httptest.Server
+	calls   []fakeGmailCall
+	sentRaw string
+}
+
+type fakeGmailCall struct {
+	Method string
+	Path   string
+	Query  url.Values
+	Body   map[string][]string
+}
+
+func newFakeGmailAPIServer(t *testing.T) *fakeGmailAPIServer {
+	t.Helper()
+	fake := &fakeGmailAPIServer{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/gmail/v1/users/me/labels", fake.handleLabels)
+	mux.HandleFunc("/gmail/v1/users/me/messages", fake.handleMessages)
+	mux.HandleFunc("/gmail/v1/users/me/messages/", fake.handleMessage)
+	fake.server = httptest.NewServer(mux)
+	return fake
+}
+
+func (f *fakeGmailAPIServer) URL() string { return f.server.URL }
+func (f *fakeGmailAPIServer) Close()      { f.server.Close() }
+
+func (f *fakeGmailAPIServer) record(r *http.Request, body map[string][]string) {
+	f.calls = append(f.calls, fakeGmailCall{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Body: body})
+}
+
+func (f *fakeGmailAPIServer) handleLabels(w http.ResponseWriter, r *http.Request) {
+	f.record(r, nil)
+	writeJSON(w, map[string]any{"labels": []map[string]string{
+		{"id": "INBOX", "name": "INBOX", "type": "system"},
+		{"id": "STARRED", "name": "STARRED", "type": "system"},
+		{"id": "CATEGORY_PERSONAL", "name": "CATEGORY_PERSONAL", "type": "system"},
+		{"id": "Label_42", "name": "Later", "type": "user"},
+	}})
+}
+
+func (f *fakeGmailAPIServer) handleMessages(w http.ResponseWriter, r *http.Request) {
+	body := readModifyBody(r)
+	f.record(r, body)
+	if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/send") {
+		f.sentRaw = firstBodyValue(body, "raw")
+		writeJSON(w, map[string]string{"id": "sent-1"})
+		return
+	}
+	writeJSON(w, map[string]any{"messages": []map[string]string{{"id": "msg-1", "threadId": "thread-1"}}})
+}
+
+func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Request) {
+	body := readModifyBody(r)
+	f.record(r, body)
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/send"):
+		f.sentRaw = firstBodyValue(body, "raw")
+		writeJSON(w, map[string]string{"id": "sent-1"})
+	case strings.HasSuffix(r.URL.Path, "/modify"):
+		writeJSON(w, map[string]string{"id": "msg-1"})
+	case strings.HasSuffix(r.URL.Path, "/trash"):
+		writeJSON(w, map[string]string{"id": "msg-1"})
+	default:
+		writeJSON(w, gmailMessagePayload())
+	}
+}
+
+func gmailMessagePayload() map[string]any {
+	raw := "From: Sender <sender@example.com>\r\n" +
+		"To: Me <me@example.com>\r\n" +
+		"Subject: API Roadmap\r\n" +
+		"Message-Id: <api-1@example.com>\r\n" +
+		"Date: Sun, 31 May 2026 09:00:00 -0700\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n\r\n" +
+		"hello from gmail api"
+	return map[string]any{
+		"id":           "msg-1",
+		"threadId":     "thread-1",
+		"labelIds":     []string{"INBOX", "UNREAD", "STARRED"},
+		"internalDate": time.Date(2026, 5, 31, 16, 0, 0, 0, time.UTC).UnixMilli(),
+		"sizeEstimate": len(raw),
+		"raw":          base64.RawURLEncoding.EncodeToString([]byte(raw)),
+	}
+}
+
+func readModifyBody(r *http.Request) map[string][]string {
+	if r.Body == nil {
+		return nil
+	}
+	defer r.Body.Close()
+	data, _ := io.ReadAll(r.Body)
+	if len(data) == 0 {
+		return nil
+	}
+	var payload map[string][]string
+	_ = json.Unmarshal(data, &payload)
+	return payload
+}
+
+func writeJSON(w http.ResponseWriter, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func firstBodyValue(body map[string][]string, key string) string {
+	if len(body[key]) == 0 {
+		return ""
+	}
+	return body[key][0]
+}
+
+func (f *fakeGmailAPIServer) assertModify(t *testing.T, id string, add, remove []string) {
+	t.Helper()
+	for _, call := range f.calls {
+		if call.Method != http.MethodPost || call.Path != "/gmail/v1/users/me/messages/"+id+"/modify" {
+			continue
+		}
+		if equalStringSlices(call.Body["addLabelIds"], add) && equalStringSlices(call.Body["removeLabelIds"], remove) {
+			return
+		}
+	}
+	t.Fatalf("missing modify call for %s add=%v remove=%v in %#v", id, add, remove, f.calls)
+}
+
+func (f *fakeGmailAPIServer) sawTrash(id string) bool {
+	for _, call := range f.calls {
+		if call.Method == http.MethodPost && call.Path == "/gmail/v1/users/me/messages/"+id+"/trash" {
+			return true
+		}
+	}
+	return false
+}

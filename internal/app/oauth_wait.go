@@ -88,7 +88,11 @@ func NewOAuthWaitModel(email string, cfg *config.Config, configPath string) (*OA
 
 func NewOAuthWaitModelWithOptions(email string, cfg *config.Config, configPath string, opts OAuthWaitOptions) (*OAuthWaitModel, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	authURL, codeCh, err := oauth.StartFlow(ctx, email)
+	var sources []config.SourceConfig
+	if cfg != nil {
+		sources = cfg.NormalizedSources()
+	}
+	authURL, codeCh, err := oauth.StartFlowForSources(ctx, email, sources)
 	if err != nil {
 		cancel()
 		return nil, err

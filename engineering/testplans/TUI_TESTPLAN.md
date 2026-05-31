@@ -2111,6 +2111,25 @@ This case covers the interaction polish required after the design-parity screens
 - Gmail IMAP is described as the normal Gmail setup path while OAuth onboarding is experimental, with a note that Workspace may require OAuth.
 - Advanced server fields are hidden until explicitly requested.
 
+### TC-41G — Gmail API OAuth core source
+
+**Lane:** F
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+This case covers the Gmail API mail source behind Gmail OAuth. It proves the transport swap remains invisible to normal mail workflows while preserving legacy Gmail IMAP setup as a compatibility path.
+
+**Steps:**
+1. Configure a Gmail OAuth source that normalizes to `provider: gmail_api`.
+2. Launch Herald and open Timeline on `INBOX`.
+3. Open a message preview, mark it read/unread, star/unstar it, archive or trash a test message, and send a harmless self-addressed test message.
+4. Repeat setup with Gmail IMAP App Password and legacy Gmail IMAP OAuth compatibility config.
+
+**Expect:**
+- Gmail API OAuth uses narrower Gmail API mail access for core sync, body reads, mutations, and send.
+- Timeline, preview, search, compose send, and scoped refs behave the same as other mail sources and do not expose raw Gmail message IDs, label IDs, OAuth tokens, or provider URLs.
+- Delete moves the message to Gmail Trash rather than permanently deleting it.
+- Gmail App Password and legacy Gmail IMAP OAuth configs still route through the IMAP adapter.
+
 ### TC-41A — First-run validates account before preferences
 
 **Lane:** F

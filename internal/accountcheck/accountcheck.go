@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/imap"
@@ -93,6 +94,19 @@ func Validate(ctx context.Context, cfg *config.Config, configPath string) Result
 		result.SMTP.Err = err
 		return result
 	}
+	if gmailAPISource, ok := firstGmailAPISource(cfg); ok {
+		result.IMAP.Surface = "Gmail API"
+		result.SMTP.Surface = "Gmail API send"
+		err := runWithTimeout(ctx, func(ctx context.Context) error {
+			return checkGmailAPI(ctx, cfg, gmailAPISource)
+		})
+		result.IMAP.Err = err
+		result.SMTP.Err = err
+		if err != nil {
+			logger.Error("Account validation Gmail API failed: %v", err)
+		}
+		return result
+	}
 	result.IMAP.Err = runWithTimeout(ctx, func(ctx context.Context) error {
 		return checkIMAP(ctx, cfg)
 	})
@@ -106,6 +120,45 @@ func Validate(ctx context.Context, cfg *config.Config, configPath string) Result
 		logger.Error("Account validation SMTP failed: %v", result.SMTP.Err)
 	}
 	return result
+}
+
+func firstGmailAPISource(cfg *config.Config) (config.SourceConfig, bool) {
+	if cfg == nil {
+		return config.SourceConfig{}, false
+	}
+	for _, source := range cfg.NormalizedSources() {
+		if strings.TrimSpace(source.Kind) == string(models.SourceKindCalendar) {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(source.Provider), "gmail_api") {
+			return source, true
+		}
+	}
+	return config.SourceConfig{}, false
+}
+
+func checkGmailAPI(ctx context.Context, cfg *config.Config, source config.SourceConfig) error {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		return fmt.Errorf("gmail api validation cache: %w", err)
+	}
+	defer c.Close()
+	opened, err := backend.DefaultSourceRegistry().Open(ctx, source, backend.SourceDeps{
+		ProfileConfig: cfg,
+		Cache:         c,
+	})
+	if err != nil {
+		return err
+	}
+	defer opened.Close()
+	if opened.Mail == nil {
+		return fmt.Errorf("gmail api mail source unavailable")
+	}
+	if err := opened.Mail.Connect(ctx); err != nil {
+		return err
+	}
+	_, err = opened.Mail.ListFolders(ctx)
+	return err
 }
 
 func checkIMAP(ctx context.Context, cfg *config.Config) error {
