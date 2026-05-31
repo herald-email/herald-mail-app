@@ -130,11 +130,18 @@ func firstGmailAPISource(cfg *config.Config) (config.SourceConfig, bool) {
 		if strings.TrimSpace(source.Kind) == string(models.SourceKindCalendar) {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(source.Provider), "gmail_api") {
+		provider := strings.ToLower(strings.TrimSpace(source.Provider))
+		if provider == "gmail_api" || (provider == "gmail" && gmailSourceUsesOAuth(source)) {
 			return source, true
 		}
 	}
 	return config.SourceConfig{}, false
+}
+
+func gmailSourceUsesOAuth(source config.SourceConfig) bool {
+	return strings.TrimSpace(source.Google.Email) != "" ||
+		strings.TrimSpace(source.Google.AccessToken) != "" ||
+		strings.TrimSpace(source.Google.RefreshToken) != ""
 }
 
 func checkGmailAPI(ctx context.Context, cfg *config.Config, source config.SourceConfig) error {

@@ -140,12 +140,15 @@ func NewSourceRegistry(plugins ...SourcePlugin) *SourceRegistry {
 }
 
 func DefaultSourceRegistry() *SourceRegistry {
-	return NewSourceRegistry(
+	registry := NewSourceRegistry(
 		IMAPSourcePlugin{},
 		GmailAPISourcePlugin{},
 		GoogleCalendarSourcePlugin{},
 		CalDAVSourcePlugin{},
 	)
+	// Compatibility alias for configs created by the first Gmail API core slice.
+	registry.plugins[sourcePluginKey(models.SourceKindMail, "gmail_api")] = GmailAPISourcePlugin{}
+	return registry
 }
 
 func (r *SourceRegistry) Register(plugin SourcePlugin) error {
@@ -204,7 +207,13 @@ func sourceRegistryKey(source config.SourceConfig) string {
 	provider := strings.ToLower(strings.TrimSpace(source.Provider))
 	if kind == models.SourceKindMail {
 		switch provider {
-		case "", "imap", "gmail", "protonmail", "fastmail", "outlook", "icloud":
+		case "gmail":
+			if strings.TrimSpace(source.Google.Email) == "" &&
+				strings.TrimSpace(source.Google.AccessToken) == "" &&
+				strings.TrimSpace(source.Google.RefreshToken) == "" {
+				provider = "imap"
+			}
+		case "", "imap", "protonmail", "fastmail", "outlook", "icloud":
 			provider = "imap"
 		}
 	}

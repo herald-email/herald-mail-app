@@ -2116,19 +2116,19 @@ This case covers the interaction polish required after the design-parity screens
 **Lane:** F
 **Sizes:** `220x50`, `80x24`, `50x15`
 
-This case covers the Gmail API mail source behind Gmail OAuth. It proves the transport swap remains invisible to normal mail workflows while preserving legacy Gmail IMAP setup as a compatibility path.
+This case covers the Gmail API mail source behind Gmail OAuth. It proves the transport swap remains invisible to normal mail workflows while preserving Gmail IMAP App Password setup as the non-OAuth Gmail path.
 
 **Steps:**
-1. Configure a Gmail OAuth source that normalizes to `provider: gmail_api`.
+1. Configure a Gmail OAuth source that saves or normalizes to `provider: gmail`.
 2. Launch Herald and open Timeline on `INBOX`.
 3. Open a message preview, mark it read/unread, star/unstar it, archive or trash a test message, and send a harmless self-addressed test message.
-4. Repeat setup with Gmail IMAP App Password and legacy Gmail IMAP OAuth compatibility config.
+4. Repeat setup with Gmail IMAP App Password.
 
 **Expect:**
 - Gmail API OAuth uses narrower Gmail API mail access for core sync, body reads, mutations, and send.
 - Timeline, preview, search, compose send, and scoped refs behave the same as other mail sources and do not expose raw Gmail message IDs, label IDs, OAuth tokens, or provider URLs.
 - Delete moves the message to Gmail Trash rather than permanently deleting it.
-- Gmail App Password and legacy Gmail IMAP OAuth configs still route through the IMAP adapter.
+- Gmail App Password still routes through the IMAP adapter; `provider: gmail_api` remains accepted only as a compatibility alias for the Gmail API adapter.
 
 ### TC-41A — First-run validates account before preferences
 

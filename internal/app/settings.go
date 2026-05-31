@@ -2809,7 +2809,7 @@ func settingsSourceUsesGoogleOAuth(source config.SourceConfig) bool {
 	provider := strings.TrimSpace(source.Provider)
 	switch kind {
 	case "", string(models.SourceKindMail):
-		return provider == "gmail" && strings.TrimSpace(source.Google.Email) != ""
+		return (provider == "gmail" || provider == "gmail_api") && strings.TrimSpace(source.Google.Email) != ""
 	case string(models.SourceKindCalendar):
 		return provider == "google_calendar"
 	default:
@@ -2916,7 +2916,7 @@ func configVendorForProvider(provider string) string {
 
 func mailSourceProviderForSettings(provider string) string {
 	if provider == "gmail-oauth" {
-		return "gmail_api"
+		return "gmail"
 	}
 	return configVendorForProvider(provider)
 }

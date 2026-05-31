@@ -108,6 +108,57 @@ func TestSourceRegistryNormalizesLegacyConfigToDefaultMailSource(t *testing.T) {
 	}
 }
 
+func TestSourceRegistryRoutesGmailOAuthProviderToGmailAPI(t *testing.T) {
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:        "oauth-gmail",
+		Kind:      string(models.SourceKindMail),
+		Provider:  "gmail",
+		AccountID: "personal",
+		Google:    config.GoogleConfig{Email: "me@gmail.example", AccessToken: "access-token"},
+		IMAP:      config.ServerConfig{Host: "imap.gmail.com", Port: 993},
+		SMTP:      config.ServerConfig{Host: "smtp.gmail.com", Port: 587},
+	}}}
+
+	opened, err := DefaultSourceRegistry().OpenConfiguredSources(context.Background(), cfg, SourceDeps{
+		ProfileConfig: cfg,
+		Cache:         newMemoryCache(t),
+	})
+	if err != nil {
+		t.Fatalf("OpenConfiguredSources: %v", err)
+	}
+	got := opened[0]
+	if got.Provider != "gmail" || got.Mail == nil {
+		t.Fatalf("opened source = %#v, want Gmail API-backed gmail provider", got)
+	}
+	caps := got.Capabilities()
+	if !caps.Mail || !caps.MailSync || !caps.MailMutations || !caps.CacheBypassReads || caps.Drafts {
+		t.Fatalf("gmail oauth capabilities = %#v, want Gmail API capabilities", caps)
+	}
+}
+
+func TestSourceRegistryKeepsGmailAppPasswordOnIMAP(t *testing.T) {
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:          "app-password-gmail",
+		Kind:        string(models.SourceKindMail),
+		Provider:    "gmail",
+		Credentials: config.CredentialsConfig{Username: "me@gmail.example", Password: "app-password"},
+		IMAP:        config.ServerConfig{Host: "imap.gmail.com", Port: 993},
+		SMTP:        config.ServerConfig{Host: "smtp.gmail.com", Port: 587},
+	}}}
+
+	opened, err := DefaultSourceRegistry().OpenConfiguredSources(context.Background(), cfg, SourceDeps{
+		ProfileConfig: cfg,
+		Cache:         newMemoryCache(t),
+	})
+	if err != nil {
+		t.Fatalf("OpenConfiguredSources: %v", err)
+	}
+	caps := opened[0].Capabilities()
+	if !caps.Drafts || !caps.Freshness.UIDValidity {
+		t.Fatalf("gmail app password capabilities = %#v, want IMAP capabilities", caps)
+	}
+}
+
 func TestSourceRegistryRejectsUnsupportedProvider(t *testing.T) {
 	cfg := &config.Config{Sources: []config.SourceConfig{
 		{ID: "icloud-calendar", Kind: string(models.SourceKindCalendar), Provider: "apple_calendar"},

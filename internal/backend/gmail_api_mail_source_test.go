@@ -29,7 +29,7 @@ func TestSourceRegistryOpensGmailAPIMailSource(t *testing.T) {
 	opened, err := registry.Open(context.Background(), config.SourceConfig{
 		ID:          "work-gmail",
 		Kind:        string(models.SourceKindMail),
-		Provider:    "gmail_api",
+		Provider:    "gmail",
 		DisplayName: "Work Gmail",
 		AccountID:   "work",
 		Google:      config.GoogleConfig{Email: "work@example.com", AccessToken: "token"},
@@ -39,8 +39,8 @@ func TestSourceRegistryOpensGmailAPIMailSource(t *testing.T) {
 	}
 	defer opened.Close()
 
-	if opened.Provider != "gmail_api" || opened.Mail == nil || !opened.Caps.MailSync || !opened.Caps.MailMutations || !opened.Caps.CacheBypassReads {
-		t.Fatalf("opened source = %#v, want gmail_api mail source with sync/mutation/cache-bypass capabilities", opened)
+	if opened.Provider != "gmail" || opened.Mail == nil || !opened.Caps.MailSync || !opened.Caps.MailMutations || !opened.Caps.CacheBypassReads {
+		t.Fatalf("opened source = %#v, want gmail mail source with sync/mutation/cache-bypass capabilities", opened)
 	}
 }
 
@@ -147,7 +147,7 @@ func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *Gm
 	opened, err := (GmailAPISourcePlugin{}).Open(context.Background(), config.SourceConfig{
 		ID:        "gmail-api",
 		Kind:      string(models.SourceKindMail),
-		Provider:  "gmail_api",
+		Provider:  "gmail",
 		AccountID: "work",
 		Google: config.GoogleConfig{
 			Email:       "me@example.com",

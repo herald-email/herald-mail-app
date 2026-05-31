@@ -17,9 +17,10 @@ The Gmail API source should feel like the current Gmail mail account in Timeline
 
 Provider-specific OAuth scopes must be selected from configured source capabilities rather than requested globally. This keeps Calendar access, legacy IMAP OAuth, and Gmail API mail access independent while preserving shared token storage and refresh behavior.
 
-- [x] `provider: gmail_api` mail sources request Gmail API mail access only, using `https://www.googleapis.com/auth/gmail.modify`.
+- [x] OAuth Gmail mail sources using `provider: gmail` request Gmail API mail access only, using `https://www.googleapis.com/auth/gmail.modify`.
+- [x] `provider: gmail_api` remains accepted as a compatibility alias for the Gmail API adapter.
 - [x] Google Calendar sources request Calendar scopes only when a Calendar source is configured.
-- [x] Legacy Gmail IMAP OAuth continues to request `https://mail.google.com/`.
+- [x] Gmail App Password and credential-based Gmail IMAP configs remain on the IMAP adapter without using Google OAuth scopes.
 - [x] Provider tokens, Gmail message IDs, label IDs, sync details, and raw OAuth details stay out of user-facing TUI and MCP output except through existing scoped refs.
 
 ## Core Mail Operations

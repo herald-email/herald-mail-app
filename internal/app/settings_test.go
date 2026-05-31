@@ -1209,8 +1209,8 @@ func TestBuildConfigAddMailWithCalendarCreatesExplicitSources(t *testing.T) {
 	}
 	mail := cfg.Sources[0]
 	cal := cfg.Sources[1]
-	if mail.Kind != "mail" || mail.AccountID == "" || mail.Provider != "gmail_api" || mail.Google.Email != "work@example.com" {
-		t.Fatalf("mail source = %#v, want gmail_api mail source scoped to work account", mail)
+	if mail.Kind != "mail" || mail.AccountID == "" || mail.Provider != "gmail" || mail.Google.Email != "work@example.com" {
+		t.Fatalf("mail source = %#v, want gmail OAuth mail source scoped to work account", mail)
 	}
 	if cal.Kind != "calendar" || cal.AccountID != mail.AccountID || cal.Provider != "google_calendar" || cal.Google.Email != "work@example.com" {
 		t.Fatalf("calendar source = %#v, want paired google calendar source", cal)

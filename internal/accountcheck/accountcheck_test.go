@@ -51,7 +51,7 @@ func TestValidateNilConfigFailsBothSurfaces(t *testing.T) {
 	}
 }
 
-func TestValidateGmailAPISourceUsesProviderCheck(t *testing.T) {
+func TestValidateGmailOAuthSourceUsesProviderCheck(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/gmail/v1/users/me/labels" {
 			t.Fatalf("unexpected Gmail API validation path %s", r.URL.Path)
@@ -65,7 +65,7 @@ func TestValidateGmailAPISourceUsesProviderCheck(t *testing.T) {
 	cfg := &config.Config{Sources: []config.SourceConfig{{
 		ID:        "test-gmail",
 		Kind:      "mail",
-		Provider:  "gmail_api",
+		Provider:  "gmail",
 		AccountID: "test",
 		Google: config.GoogleConfig{
 			Email:       "test@example.com",
@@ -76,7 +76,7 @@ func TestValidateGmailAPISourceUsesProviderCheck(t *testing.T) {
 
 	result := Validate(context.Background(), cfg, "")
 	if !result.OK() {
-		t.Fatalf("Validate gmail_api = %#v, want provider-backed success", result)
+		t.Fatalf("Validate gmail OAuth = %#v, want provider-backed success", result)
 	}
 	if result.IMAP.Surface != "Gmail API" || result.SMTP.Surface != "Gmail API send" {
 		t.Fatalf("surfaces = %q/%q, want Gmail API labels", result.IMAP.Surface, result.SMTP.Surface)

@@ -627,8 +627,8 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [x] Status bar shows active account name when multiple mail sources are configured
 - [x] Compose "From" field lets user pick sending account and routes sends/drafts through that account
 - [x] Unified Timeline and search view across accounts (opt-in) shows account badges and routes selected-message reads/writes by scoped refs
-- [x] Gmail OAuth is the supported default Google mail onboarding path, with app-password Gmail retained as a fallback
-- [x] Gmail API mail source uses narrower Gmail API access for core Gmail OAuth mail sync, body reads, mailbox mutations, and send while preserving legacy IMAP OAuth compatibility
+- [x] Gmail OAuth is the supported default Google mail onboarding path, with app-password Gmail retained as the non-OAuth Gmail fallback
+- [x] `provider: gmail` OAuth mail uses the Gmail API source and narrower Gmail API access for core sync, body reads, mailbox mutations, and send; `provider: gmail_api` remains a compatibility alias
 - [ ] Gmail API draft create/update/send parity remains planned after the core Gmail API source is stable
 - [ ] Gmail API history/watch incremental sync remains planned after the core Gmail API source is stable
 - [ ] Outlook OAuth
@@ -779,9 +779,9 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields with known preset host/port defaults pre-populated, then Herald validates IMAP and SMTP before optional preferences
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth is available by default as a browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials to run OAuth
-- [x] Gmail OAuth defaults to the Gmail API mail source for core mail operations so normal Gmail setup does not require the legacy full-mail IMAP/SMTP OAuth scope
+- [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations so normal Gmail setup does not require the legacy full-mail IMAP/SMTP OAuth scope
 - [x] Account setup validates both IMAP and SMTP before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
-- [x] Gmail OAuth setup treats browser consent as a candidate config, validates IMAP plus SMTP XOAUTH2 before saving, and makes Google cancel/timeout states explicit
+- [x] Gmail OAuth setup treats browser consent as a candidate config, validates Gmail API read/send capability before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
 - [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
 - [x] AI setup defaults to quality-first local models (`gemma3:4b` and `nomic-embed-text-v2-moe`), warns that 16GB RAM is comfortable while 8GB can work more slowly, and keeps custom Ollama downgrade choices plus freeform model names

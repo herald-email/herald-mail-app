@@ -465,10 +465,14 @@ func hasMailSource(sources []SourceConfig) bool {
 }
 
 func legacyDefaultMailSource(c Config) SourceConfig {
+	provider := "imap"
+	if c.IsGmailOAuth() {
+		provider = "gmail"
+	}
 	return SourceConfig{
 		ID:          string(models.DefaultMailSourceID),
 		Kind:        string(models.SourceKindMail),
-		Provider:    "imap",
+		Provider:    provider,
 		DisplayName: "Default Mail",
 		AccountID:   string(models.DefaultAccountID),
 		Credentials: c.Credentials,

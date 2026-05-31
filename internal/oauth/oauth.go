@@ -35,7 +35,8 @@ const (
 var Scopes = []string{ScopeGmailModify}
 
 // ScopesForSources returns the minimum Google OAuth scopes needed for the
-// configured Google-backed sources, preserving legacy Gmail IMAP OAuth.
+// configured Google-backed sources. Gmail OAuth uses the Gmail API mail scope;
+// credential-based Gmail IMAP/App Password sources do not start this flow.
 func ScopesForSources(sources []config.SourceConfig) []string {
 	if len(sources) == 0 {
 		return append([]string(nil), Scopes...)
@@ -56,10 +57,8 @@ func ScopesForSources(sources []config.SourceConfig) []string {
 		case kind == "calendar" && provider == "google_calendar":
 			add(ScopeCalendarListReadonly)
 			add(ScopeCalendarEvents)
-		case (kind == "" || kind == "mail") && provider == "gmail_api":
+		case (kind == "" || kind == "mail") && (provider == "gmail" || provider == "gmail_api"):
 			add(ScopeGmailModify)
-		case (kind == "" || kind == "mail") && provider == "gmail" && strings.TrimSpace(source.Google.Email) != "":
-			add(ScopeLegacyMail)
 		}
 	}
 	if len(out) == 0 {

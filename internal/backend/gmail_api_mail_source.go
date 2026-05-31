@@ -22,7 +22,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/oauth"
 )
 
-const gmailAPIProvider = "gmail_api"
+const gmailAPIProvider = "gmail"
 
 type GmailAPISourcePlugin struct{}
 

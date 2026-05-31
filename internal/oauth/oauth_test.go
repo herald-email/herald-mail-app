@@ -83,21 +83,20 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 		want    []string
 	}{
 		{
-			name: "gmail api mail only",
+			name: "gmail mail defaults to api scope",
+			sources: []config.SourceConfig{{
+				Kind:     "mail",
+				Provider: "gmail",
+			}},
+			want: []string{ScopeGmailModify},
+		},
+		{
+			name: "gmail api alias keeps api scope",
 			sources: []config.SourceConfig{{
 				Kind:     "mail",
 				Provider: "gmail_api",
 			}},
 			want: []string{ScopeGmailModify},
-		},
-		{
-			name: "legacy gmail imap oauth keeps full mail scope",
-			sources: []config.SourceConfig{{
-				Kind:     "mail",
-				Provider: "gmail",
-				Google:   config.GoogleConfig{Email: "legacy@example.com"},
-			}},
-			want: []string{ScopeLegacyMail},
 		},
 		{
 			name: "calendar source only",
@@ -110,7 +109,7 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 		{
 			name: "gmail api mail plus calendar",
 			sources: []config.SourceConfig{
-				{Kind: "mail", Provider: "gmail_api"},
+				{Kind: "mail", Provider: "gmail"},
 				{Kind: "calendar", Provider: "google_calendar"},
 			},
 			want: []string{ScopeGmailModify, ScopeCalendarListReadonly, ScopeCalendarEvents},
