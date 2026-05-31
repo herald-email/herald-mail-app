@@ -10,7 +10,7 @@ The Gmail API source should feel like the current Gmail mail account in Timeline
 - [x] Existing Gmail IMAP OAuth remains available for compatibility and still uses the legacy full-mail OAuth scope required by IMAP/SMTP XOAUTH2.
 - [x] Gmail IMAP App Password setup remains available and continues to use the IMAP adapter.
 - [x] Gmail API delete moves messages to Trash instead of permanent provider deletion.
-- [ ] Gmail API draft create/update/send parity is deferred; current draft behavior remains owned by existing IMAP-capable paths until a dedicated draft slice lands.
+- [x] Gmail API draft create/list/delete/send parity uses `users.drafts.*` while preserving Herald draft UIDs, scoped refs, and send-after-success cleanup behavior.
 - [ ] Gmail API history/watch incremental sync is deferred; the core slice may use bounded list/get sync with cache reconciliation.
 
 ## OAuth And Provider Boundaries

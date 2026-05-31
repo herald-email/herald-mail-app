@@ -49,7 +49,7 @@ func (GmailAPISourcePlugin) Open(ctx context.Context, source config.SourceConfig
 			MailSync:         true,
 			MailSearch:       true,
 			MailMutations:    true,
-			Drafts:           false,
+			Drafts:           true,
 			CacheBypassReads: true,
 			Freshness: ProviderFreshnessMetadata{
 				Revision: true,
@@ -69,6 +69,7 @@ type GmailAPIMailSource struct {
 	client     *http.Client
 
 	labels map[string]gmailAPILabel
+	drafts map[uint32]string
 }
 
 func NewGmailAPIMailSource(source config.SourceConfig, c *cache.Cache, progressCh chan models.ProgressInfo) *GmailAPIMailSource {
@@ -337,16 +338,115 @@ func (s *GmailAPIMailSource) PollForNewEmails(ctx context.Context, folder string
 	return out, nil
 }
 
-func (s *GmailAPIMailSource) AppendDraft(context.Context, []byte) (uint32, string, error) {
-	return 0, "", fmt.Errorf("Gmail API draft append is not implemented")
+func (s *GmailAPIMailSource) AppendDraft(ctx context.Context, raw []byte) (uint32, string, error) {
+	payload := map[string]map[string]string{"message": {"raw": base64.RawURLEncoding.EncodeToString(raw)}}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return 0, "", err
+	}
+	req, err := s.newRequest(ctx, http.MethodPost, s.baseURL+"/users/me/drafts", bytes.NewReader(data))
+	if err != nil {
+		return 0, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var draft gmailAPIDraft
+	if err := s.doJSON(req, &draft); err != nil {
+		return 0, "", err
+	}
+	messageID := strings.TrimSpace(draft.Message.ID)
+	if messageID == "" {
+		messageID = strings.TrimSpace(draft.ID)
+	}
+	uid := gmailAPISyntheticUID(messageID)
+	s.rememberDraft(uid, draft.ID)
+	return uid, "DRAFT", nil
 }
 
-func (s *GmailAPIMailSource) ListDrafts(context.Context) ([]*models.Draft, error) {
-	return nil, nil
+func (s *GmailAPIMailSource) ListDrafts(ctx context.Context) ([]*models.Draft, error) {
+	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/drafts", nil)
+	if err != nil {
+		return nil, err
+	}
+	var list gmailAPIDraftList
+	if err := s.doJSON(req, &list); err != nil {
+		return nil, err
+	}
+	drafts := make([]*models.Draft, 0, len(list.Drafts))
+	for _, item := range list.Drafts {
+		draftID := strings.TrimSpace(item.ID)
+		if draftID == "" {
+			continue
+		}
+		draft, err := s.fetchDraft(ctx, draftID)
+		if err != nil {
+			return nil, err
+		}
+		body, err := gmailAPIMessageBody(draft.Message)
+		if err != nil {
+			return nil, err
+		}
+		messageID := strings.TrimSpace(draft.Message.ID)
+		if messageID == "" {
+			messageID = draftID
+		}
+		uid := gmailAPISyntheticUID(messageID)
+		s.rememberDraft(uid, draftID)
+		date := time.Now()
+		if draft.Message.InternalDate != nil {
+			if millis, err := parseGmailAPIInternalDate(draft.Message.InternalDate); err == nil && millis > 0 {
+				date = time.UnixMilli(millis)
+			}
+		}
+		drafts = append(drafts, &models.Draft{
+			UID:     uid,
+			Folder:  "DRAFT",
+			To:      body.To,
+			CC:      body.CC,
+			BCC:     body.BCC,
+			Subject: body.Subject,
+			Body:    firstNonEmpty(body.TextPlain, body.TextHTML),
+			Date:    date,
+		})
+	}
+	return drafts, nil
 }
 
-func (s *GmailAPIMailSource) DeleteDraft(context.Context, uint32, string) error {
-	return fmt.Errorf("Gmail API draft delete is not implemented")
+func (s *GmailAPIMailSource) DeleteDraft(ctx context.Context, uid uint32, folder string) error {
+	draftID, err := s.draftIDForUID(ctx, uid, folder)
+	if err != nil {
+		return err
+	}
+	req, err := s.newRequest(ctx, http.MethodDelete, s.baseURL+"/users/me/drafts/"+url.PathEscape(draftID), nil)
+	if err != nil {
+		return err
+	}
+	if err := s.doJSON(req, nil); err != nil {
+		return err
+	}
+	delete(s.drafts, uid)
+	return nil
+}
+
+func (s *GmailAPIMailSource) SendDraft(ctx context.Context, uid uint32, folder string) error {
+	draftID, err := s.draftIDForUID(ctx, uid, folder)
+	if err != nil {
+		return err
+	}
+	payload := map[string]string{"id": draftID}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := s.newRequest(ctx, http.MethodPost, s.baseURL+"/users/me/drafts/send", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if err := s.doJSON(req, nil); err != nil {
+		return err
+	}
+	delete(s.drafts, uid)
+	return nil
 }
 
 func (s *GmailAPIMailSource) CreateMailbox(context.Context, string) error {
@@ -668,6 +768,15 @@ type gmailAPIMessageList struct {
 	} `json:"messages"`
 }
 
+type gmailAPIDraftList struct {
+	Drafts []gmailAPIDraft `json:"drafts"`
+}
+
+type gmailAPIDraft struct {
+	ID      string          `json:"id"`
+	Message gmailAPIMessage `json:"message"`
+}
+
 type gmailAPIMessage struct {
 	ID           string   `json:"id"`
 	ThreadID     string   `json:"threadId"`
@@ -778,4 +887,89 @@ func buildGmailAPIRawMessage(from, to, cc, subject, body string) string {
 	b.WriteString("\r\n")
 	b.WriteString(body)
 	return b.String()
+}
+
+func (s *GmailAPIMailSource) fetchDraft(ctx context.Context, draftID string) (gmailAPIDraft, error) {
+	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/drafts/"+url.PathEscape(draftID)+"?format=raw", nil)
+	if err != nil {
+		return gmailAPIDraft{}, err
+	}
+	var draft gmailAPIDraft
+	if err := s.doJSON(req, &draft); err != nil {
+		return gmailAPIDraft{}, err
+	}
+	if draft.ID == "" {
+		draft.ID = draftID
+	}
+	return draft, nil
+}
+
+func (s *GmailAPIMailSource) rememberDraft(uid uint32, draftID string) {
+	if s.drafts == nil {
+		s.drafts = make(map[uint32]string)
+	}
+	if draftID != "" {
+		s.drafts[uid] = draftID
+	}
+}
+
+func (s *GmailAPIMailSource) draftIDForUID(ctx context.Context, uid uint32, folder string) (string, error) {
+	if s.drafts != nil {
+		if draftID := strings.TrimSpace(s.drafts[uid]); draftID != "" {
+			return draftID, nil
+		}
+	}
+	messageID := ""
+	if s.cache != nil {
+		if email, err := s.cache.GetEmailByFolderUID(folder, uid); err == nil && email != nil {
+			messageID = gmailIDFromLocalID(email.LocalID)
+		}
+	}
+	if messageID == "" {
+		return "", fmt.Errorf("Gmail API draft id unavailable for uid %d in %s", uid, folder)
+	}
+	draftID, err := s.draftIDForMessageID(ctx, messageID)
+	if err != nil {
+		return "", err
+	}
+	s.rememberDraft(uid, draftID)
+	return draftID, nil
+}
+
+func (s *GmailAPIMailSource) draftIDForMessageID(ctx context.Context, messageID string) (string, error) {
+	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/drafts", nil)
+	if err != nil {
+		return "", err
+	}
+	var list gmailAPIDraftList
+	if err := s.doJSON(req, &list); err != nil {
+		return "", err
+	}
+	for _, item := range list.Drafts {
+		draftID := strings.TrimSpace(item.ID)
+		if draftID == "" {
+			continue
+		}
+		msgID := strings.TrimSpace(item.Message.ID)
+		if msgID == "" {
+			draft, err := s.fetchDraft(ctx, draftID)
+			if err != nil {
+				return "", err
+			}
+			msgID = strings.TrimSpace(draft.Message.ID)
+		}
+		if msgID == messageID {
+			return draftID, nil
+		}
+	}
+	return "", fmt.Errorf("Gmail API draft for message %s not found", messageID)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

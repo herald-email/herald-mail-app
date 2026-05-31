@@ -142,6 +142,56 @@ func TestGmailAPIMailSourceSyncFetchMutateAndSend(t *testing.T) {
 	}
 }
 
+func TestGmailAPIMailSourceDraftCreateListDeleteAndSend(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-drafts.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	raw := []byte("From: Me <me@example.com>\r\nTo: You <you@example.com>\r\nCc: Copy <copy@example.com>\r\nSubject: Draft API\r\nContent-Type: text/plain; charset=utf-8\r\n\r\ndraft body")
+	uid, folder, err := source.AppendDraft(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("AppendDraft: %v", err)
+	}
+	if uid == 0 || folder != "DRAFT" {
+		t.Fatalf("AppendDraft = (%d, %q), want nonzero DRAFT", uid, folder)
+	}
+	if fake.draftRaw == "" {
+		t.Fatal("AppendDraft did not post raw draft MIME")
+	}
+
+	drafts, err := source.ListDrafts(context.Background())
+	if err != nil {
+		t.Fatalf("ListDrafts: %v", err)
+	}
+	if len(drafts) != 1 || drafts[0].UID != uid || drafts[0].Subject != "Draft API" || drafts[0].To == "" || drafts[0].CC == "" || !strings.Contains(drafts[0].Body, "draft body") {
+		t.Fatalf("drafts = %#v, want parsed Gmail API draft", drafts)
+	}
+
+	if err := source.DeleteDraft(context.Background(), uid, folder); err != nil {
+		t.Fatalf("DeleteDraft: %v", err)
+	}
+	if fake.deletedDraft != "draft-1" {
+		t.Fatalf("deleted draft = %q, want draft-1", fake.deletedDraft)
+	}
+
+	uid, folder, err = source.AppendDraft(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("AppendDraft for send: %v", err)
+	}
+	if err := source.SendDraft(context.Background(), uid, folder); err != nil {
+		t.Fatalf("SendDraft: %v", err)
+	}
+	if fake.sentDraft != "draft-1" {
+		t.Fatalf("sent draft = %q, want draft-1", fake.sentDraft)
+	}
+}
+
 func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *GmailAPIMailSource {
 	t.Helper()
 	opened, err := (GmailAPISourcePlugin{}).Open(context.Background(), config.SourceConfig{
@@ -166,9 +216,12 @@ func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *Gm
 }
 
 type fakeGmailAPIServer struct {
-	server  *httptest.Server
-	calls   []fakeGmailCall
-	sentRaw string
+	server       *httptest.Server
+	calls        []fakeGmailCall
+	sentRaw      string
+	draftRaw     string
+	deletedDraft string
+	sentDraft    string
 }
 
 type fakeGmailCall struct {
@@ -185,6 +238,9 @@ func newFakeGmailAPIServer(t *testing.T) *fakeGmailAPIServer {
 	mux.HandleFunc("/gmail/v1/users/me/labels", fake.handleLabels)
 	mux.HandleFunc("/gmail/v1/users/me/messages", fake.handleMessages)
 	mux.HandleFunc("/gmail/v1/users/me/messages/", fake.handleMessage)
+	mux.HandleFunc("/gmail/v1/users/me/drafts", fake.handleDrafts)
+	mux.HandleFunc("/gmail/v1/users/me/drafts/", fake.handleDraft)
+	mux.HandleFunc("/gmail/v1/users/me/drafts/send", fake.handleDraftSend)
 	fake.server = httptest.NewServer(mux)
 	return fake
 }
@@ -233,6 +289,36 @@ func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+func (f *fakeGmailAPIServer) handleDrafts(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		raw := readRawDraftBody(r)
+		f.draftRaw = raw
+		f.record(r, map[string][]string{"raw": {raw}})
+		writeJSON(w, gmailDraftPayload())
+	default:
+		f.record(r, nil)
+		writeJSON(w, map[string]any{"drafts": []map[string]any{{"id": "draft-1", "message": map[string]string{"id": "draft-msg-1"}}}})
+	}
+}
+
+func (f *fakeGmailAPIServer) handleDraft(w http.ResponseWriter, r *http.Request) {
+	f.record(r, readModifyBody(r))
+	if r.Method == http.MethodDelete {
+		f.deletedDraft = path.Base(r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, gmailDraftPayload())
+}
+
+func (f *fakeGmailAPIServer) handleDraftSend(w http.ResponseWriter, r *http.Request) {
+	body := readStringBody(r)
+	f.record(r, map[string][]string{"id": {body["id"]}})
+	f.sentDraft = body["id"]
+	writeJSON(w, map[string]any{"id": "sent-draft-msg-1"})
+}
+
 func gmailMessagePayload() map[string]any {
 	raw := "From: Sender <sender@example.com>\r\n" +
 		"To: Me <me@example.com>\r\n" +
@@ -251,6 +337,28 @@ func gmailMessagePayload() map[string]any {
 	}
 }
 
+func gmailDraftPayload() map[string]any {
+	raw := "From: Me <me@example.com>\r\n" +
+		"To: You <you@example.com>\r\n" +
+		"Cc: Copy <copy@example.com>\r\n" +
+		"Subject: Draft API\r\n" +
+		"Message-Id: <draft-api@example.com>\r\n" +
+		"Date: Sun, 31 May 2026 09:05:00 -0700\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n\r\n" +
+		"draft body"
+	return map[string]any{
+		"id": "draft-1",
+		"message": map[string]any{
+			"id":           "draft-msg-1",
+			"threadId":     "draft-thread-1",
+			"labelIds":     []string{"DRAFT"},
+			"internalDate": time.Date(2026, 5, 31, 16, 5, 0, 0, time.UTC).UnixMilli(),
+			"sizeEstimate": len(raw),
+			"raw":          base64.RawURLEncoding.EncodeToString([]byte(raw)),
+		},
+	}
+}
+
 func readModifyBody(r *http.Request) map[string][]string {
 	if r.Body == nil {
 		return nil
@@ -263,6 +371,35 @@ func readModifyBody(r *http.Request) map[string][]string {
 	var payload map[string][]string
 	_ = json.Unmarshal(data, &payload)
 	return payload
+}
+
+func readStringBody(r *http.Request) map[string]string {
+	if r.Body == nil {
+		return nil
+	}
+	defer r.Body.Close()
+	data, _ := io.ReadAll(r.Body)
+	if len(data) == 0 {
+		return nil
+	}
+	var payload map[string]string
+	_ = json.Unmarshal(data, &payload)
+	return payload
+}
+
+func readRawDraftBody(r *http.Request) string {
+	if r.Body == nil {
+		return ""
+	}
+	defer r.Body.Close()
+	data, _ := io.ReadAll(r.Body)
+	var payload struct {
+		Message struct {
+			Raw string `json:"raw"`
+		} `json:"message"`
+	}
+	_ = json.Unmarshal(data, &payload)
+	return payload.Message.Raw
 }
 
 func writeJSON(w http.ResponseWriter, value any) {

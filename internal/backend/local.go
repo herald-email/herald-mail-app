@@ -1653,6 +1653,11 @@ func (b *LocalBackend) DeleteDraft(uid uint32, folder string) error {
 }
 
 func (b *LocalBackend) SendDraft(uid uint32, folder string) error {
+	if sender, ok := b.mailSource.(interface {
+		SendDraft(context.Context, uint32, string) error
+	}); ok {
+		return sender.SendDraft(context.Background(), uid, folder)
+	}
 	body, err := b.FetchEmailBody(folder, uid)
 	if err != nil {
 		return fmt.Errorf("fetch draft body: %w", err)

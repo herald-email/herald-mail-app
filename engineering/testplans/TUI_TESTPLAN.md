@@ -2126,6 +2126,7 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 
 **Expect:**
 - Gmail API OAuth uses narrower Gmail API mail access for core sync, body reads, mutations, and send.
+- Gmail API OAuth draft autosave, list, edit, discard, and direct send use Gmail API draft endpoints without exposing raw draft IDs.
 - Timeline, preview, search, compose send, and scoped refs behave the same as other mail sources and do not expose raw Gmail message IDs, label IDs, OAuth tokens, or provider URLs.
 - Delete moves the message to Gmail Trash rather than permanently deleting it.
 - Gmail App Password still routes through the IMAP adapter; `provider: gmail_api` remains accepted only as a compatibility alias for the Gmail API adapter.

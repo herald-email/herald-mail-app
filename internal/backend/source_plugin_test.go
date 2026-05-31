@@ -131,7 +131,7 @@ func TestSourceRegistryRoutesGmailOAuthProviderToGmailAPI(t *testing.T) {
 		t.Fatalf("opened source = %#v, want Gmail API-backed gmail provider", got)
 	}
 	caps := got.Capabilities()
-	if !caps.Mail || !caps.MailSync || !caps.MailMutations || !caps.CacheBypassReads || caps.Drafts {
+	if !caps.Mail || !caps.MailSync || !caps.MailMutations || !caps.CacheBypassReads || !caps.Drafts {
 		t.Fatalf("gmail oauth capabilities = %#v, want Gmail API capabilities", caps)
 	}
 }
