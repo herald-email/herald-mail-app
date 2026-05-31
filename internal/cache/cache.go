@@ -644,6 +644,18 @@ func (c *Cache) setMetadata(key, value string) error {
 	return err
 }
 
+// GetMetadata returns a cache metadata value for provider-specific state such as
+// sync cursors. The key namespace is owned by callers.
+func (c *Cache) GetMetadata(key string) (string, bool, error) {
+	return c.getMetadata(key)
+}
+
+// SetMetadata stores a cache metadata value for provider-specific state such as
+// sync cursors. The key namespace is owned by callers.
+func (c *Cache) SetMetadata(key, value string) error {
+	return c.setMetadata(key, value)
+}
+
 func (c *Cache) hasAnyEmbeddings() (bool, error) {
 	queries := []string{
 		`SELECT EXISTS(SELECT 1 FROM email_embeddings LIMIT 1)`,
@@ -824,6 +836,17 @@ func (c *Cache) DeleteEmailsByMessageIDs(folder string, messageIDs []string) err
 	}
 	query := `DELETE FROM emails WHERE folder = ? AND message_id IN (` + strings.Join(placeholders, ",") + `)`
 	_, err := c.db.Exec(query, args...)
+	return err
+}
+
+// DeleteEmailByLocalID removes one source-scoped cache row by its provider-backed
+// Herald local ID. It is a no-op for an empty local ID.
+func (c *Cache) DeleteEmailByLocalID(localID string) error {
+	localID = strings.TrimSpace(localID)
+	if localID == "" {
+		return nil
+	}
+	_, err := c.db.Exec(`DELETE FROM emails WHERE local_id = ?`, localID)
 	return err
 }
 

@@ -630,7 +630,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 - [x] Gmail OAuth is the supported default Google mail onboarding path, with app-password Gmail retained as the non-OAuth Gmail fallback
 - [x] `provider: gmail` OAuth mail uses the Gmail API source and narrower Gmail API access for core sync, body reads, mailbox mutations, and send; `provider: gmail_api` remains a compatibility alias
 - [x] Gmail API draft create/list/delete/send parity supports Herald autosave, draft lists, edit, discard, and direct send flows
-- [ ] Gmail API history/watch incremental sync remains planned after the core Gmail API source is stable
+- [x] Gmail API history polling uses cached provider cursors for delta sync and falls back to bounded list/get when the cursor is missing or expired
 - [ ] Outlook OAuth
 - [x] Vendor presets: `protonmail`, `gmail`, `outlook`, `fastmail`, `icloud`
 

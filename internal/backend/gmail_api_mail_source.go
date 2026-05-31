@@ -149,12 +149,33 @@ func (s *GmailAPIMailSource) GetFolderStatus(ctx context.Context, folders []stri
 }
 
 func (s *GmailAPIMailSource) ProcessEmailsIncremental(ctx context.Context, folder string) error {
-	emails, err := s.fetchEmails(ctx, folder, "")
+	cursor, hasCursor, err := s.cache.GetMetadata(s.historyCursorKey(folder))
+	if err != nil {
+		return err
+	}
+	if hasCursor && strings.TrimSpace(cursor) != "" {
+		updated, err := s.applyHistoryDelta(ctx, folder, cursor)
+		if err == nil {
+			if s.progressCh != nil {
+				s.progressCh <- models.ProgressInfo{SourceID: s.id, AccountID: s.accountID, Phase: models.SyncPhaseRowsCached, Current: updated, Total: updated, ProcessedEmails: updated, Message: fmt.Sprintf("Applied %d Gmail API history updates", updated)}
+			}
+			return nil
+		}
+		if !isGmailAPIHistoryExpired(err) {
+			return err
+		}
+	}
+	emails, nextCursor, err := s.fetchEmailsWithCursor(ctx, folder, "")
 	if err != nil {
 		return err
 	}
 	if err := s.cache.BatchCacheEmails(emails); err != nil {
 		return err
+	}
+	if nextCursor != "" {
+		if err := s.cache.SetMetadata(s.historyCursorKey(folder), nextCursor); err != nil {
+			return err
+		}
 	}
 	if s.progressCh != nil {
 		s.progressCh <- models.ProgressInfo{SourceID: s.id, AccountID: s.accountID, Phase: models.SyncPhaseRowsCached, Current: len(emails), Total: len(emails), ProcessedEmails: len(emails), Message: fmt.Sprintf("Cached %d Gmail API messages", len(emails))}
@@ -526,23 +547,150 @@ func (s *GmailAPIMailSource) SendCompose(ctx context.Context, req ComposeSendReq
 }
 
 func (s *GmailAPIMailSource) fetchEmails(ctx context.Context, folder, query string) ([]*models.EmailData, error) {
+	emails, _, err := s.fetchEmailsWithCursor(ctx, folder, query)
+	return emails, err
+}
+
+func (s *GmailAPIMailSource) fetchEmailsWithCursor(ctx context.Context, folder, query string) ([]*models.EmailData, string, error) {
 	ids, err := s.listMessageIDs(ctx, folder, query)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	emails := make([]*models.EmailData, 0, len(ids))
+	nextCursor := ""
 	for _, id := range ids {
 		payload, err := s.fetchMessage(ctx, id)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		email, err := s.emailDataFromMessage(folder, payload)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		emails = append(emails, email)
+		nextCursor = maxGmailAPIHistoryID(nextCursor, payload.HistoryID)
 	}
-	return emails, nil
+	return emails, nextCursor, nil
+}
+
+func (s *GmailAPIMailSource) applyHistoryDelta(ctx context.Context, folder, cursor string) (int, error) {
+	labelID, err := s.labelIDForFolder(ctx, folder)
+	if err != nil {
+		return 0, err
+	}
+	payload, err := s.listHistory(ctx, cursor, labelID)
+	if err != nil {
+		return 0, err
+	}
+	changed := map[string]bool{}
+	deleted := map[string]bool{}
+	for _, record := range payload.History {
+		for _, item := range record.MessagesAdded {
+			if id := strings.TrimSpace(item.Message.ID); id != "" {
+				changed[id] = true
+			}
+		}
+		for _, item := range record.MessagesDeleted {
+			if id := strings.TrimSpace(item.Message.ID); id != "" {
+				deleted[id] = true
+			}
+		}
+		for _, item := range record.LabelsAdded {
+			id := strings.TrimSpace(item.Message.ID)
+			if id == "" {
+				continue
+			}
+			if containsAnyLabel(item.LabelIDs, "TRASH") && !strings.EqualFold(labelID, "TRASH") {
+				deleted[id] = true
+				continue
+			}
+			changed[id] = true
+		}
+		for _, item := range record.LabelsRemoved {
+			id := strings.TrimSpace(item.Message.ID)
+			if id == "" {
+				continue
+			}
+			if labelID != "" && containsAnyLabel(item.LabelIDs, labelID) {
+				deleted[id] = true
+				continue
+			}
+			changed[id] = true
+		}
+		for _, msg := range record.Messages {
+			if id := strings.TrimSpace(msg.ID); id != "" {
+				changed[id] = true
+			}
+		}
+	}
+	for id := range deleted {
+		if err := s.cache.DeleteEmailByLocalID(gmailAPILocalID(s.id, s.accountID, folder, id)); err != nil {
+			return 0, err
+		}
+		delete(changed, id)
+	}
+	cached := 0
+	for id := range changed {
+		msg, err := s.fetchMessage(ctx, id)
+		if err != nil {
+			return cached, err
+		}
+		if !s.messageBelongsInFolder(labelID, msg.LabelIDs) {
+			if err := s.cache.DeleteEmailByLocalID(gmailAPILocalID(s.id, s.accountID, folder, id)); err != nil {
+				return cached, err
+			}
+			continue
+		}
+		email, err := s.emailDataFromMessage(folder, msg)
+		if err != nil {
+			return cached, err
+		}
+		if err := s.cache.CacheEmail(email); err != nil {
+			return cached, err
+		}
+		cached++
+	}
+	if strings.TrimSpace(payload.HistoryID) != "" {
+		if err := s.cache.SetMetadata(s.historyCursorKey(folder), strings.TrimSpace(payload.HistoryID)); err != nil {
+			return cached, err
+		}
+	}
+	return cached + len(deleted), nil
+}
+
+func (s *GmailAPIMailSource) listHistory(ctx context.Context, cursor, labelID string) (gmailAPIHistoryList, error) {
+	values := url.Values{}
+	values.Set("startHistoryId", strings.TrimSpace(cursor))
+	if strings.TrimSpace(labelID) != "" {
+		values.Set("labelId", strings.TrimSpace(labelID))
+	}
+	u := s.baseURL + "/users/me/history?" + values.Encode()
+	req, err := s.newRequest(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return gmailAPIHistoryList{}, err
+	}
+	var payload gmailAPIHistoryList
+	if err := s.doJSON(req, &payload); err != nil {
+		return gmailAPIHistoryList{}, err
+	}
+	return payload, nil
+}
+
+func (s *GmailAPIMailSource) messageBelongsInFolder(labelID string, labels []string) bool {
+	labelID = strings.TrimSpace(labelID)
+	if labelID == "" {
+		return !containsAnyLabel(labels, "TRASH", "SPAM")
+	}
+	return containsAnyLabel(labels, labelID)
+}
+
+func (s *GmailAPIMailSource) historyCursorKey(folder string) string {
+	return strings.Join([]string{
+		"gmail_api_history",
+		string(models.NormalizeSourceID(s.id, models.DefaultMailSourceID)),
+		string(models.NormalizeAccountID(s.accountID)),
+		gmailAPIFolderName(folder),
+	}, ":")
 }
 
 func (s *GmailAPIMailSource) listMessageIDs(ctx context.Context, folder, query string) ([]string, error) {
@@ -742,13 +890,32 @@ func (s *GmailAPIMailSource) doJSON(req *http.Request, out any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("gmail api %s %s: status %d: %s", req.Method, req.URL.Path, resp.StatusCode, strings.TrimSpace(string(body)))
+		return gmailAPIHTTPError{Method: req.Method, Path: req.URL.Path, StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
 	if out == nil {
 		io.Copy(io.Discard, resp.Body) //nolint:errcheck
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+type gmailAPIHTTPError struct {
+	Method     string
+	Path       string
+	StatusCode int
+	Body       string
+}
+
+func (e gmailAPIHTTPError) Error() string {
+	return fmt.Sprintf("gmail api %s %s: status %d: %s", e.Method, e.Path, e.StatusCode, e.Body)
+}
+
+func isGmailAPIHistoryExpired(err error) bool {
+	apiErr, ok := err.(gmailAPIHTTPError)
+	if !ok {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusGone || apiErr.StatusCode == http.StatusBadRequest
 }
 
 type gmailAPILabelList struct {
@@ -768,6 +935,30 @@ type gmailAPIMessageList struct {
 	} `json:"messages"`
 }
 
+type gmailAPIHistoryList struct {
+	History   []gmailAPIHistoryRecord `json:"history"`
+	HistoryID string                  `json:"historyId"`
+}
+
+type gmailAPIHistoryRecord struct {
+	ID              string                  `json:"id"`
+	Messages        []gmailAPIHistoryMsg    `json:"messages"`
+	MessagesAdded   []gmailAPIHistoryChange `json:"messagesAdded"`
+	MessagesDeleted []gmailAPIHistoryChange `json:"messagesDeleted"`
+	LabelsAdded     []gmailAPIHistoryChange `json:"labelsAdded"`
+	LabelsRemoved   []gmailAPIHistoryChange `json:"labelsRemoved"`
+}
+
+type gmailAPIHistoryMsg struct {
+	ID       string `json:"id"`
+	ThreadID string `json:"threadId"`
+}
+
+type gmailAPIHistoryChange struct {
+	Message  gmailAPIHistoryMsg `json:"message"`
+	LabelIDs []string           `json:"labelIds"`
+}
+
 type gmailAPIDraftList struct {
 	Drafts []gmailAPIDraft `json:"drafts"`
 }
@@ -780,6 +971,7 @@ type gmailAPIDraft struct {
 type gmailAPIMessage struct {
 	ID           string   `json:"id"`
 	ThreadID     string   `json:"threadId"`
+	HistoryID    string   `json:"historyId"`
 	LabelIDs     []string `json:"labelIds"`
 	InternalDate any      `json:"internalDate"`
 	SizeEstimate int      `json:"sizeEstimate"`
@@ -872,6 +1064,40 @@ func containsLabel(labels []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func containsAnyLabel(labels []string, wants ...string) bool {
+	for _, label := range labels {
+		for _, want := range wants {
+			if strings.EqualFold(label, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func maxGmailAPIHistoryID(current, candidate string) string {
+	current = strings.TrimSpace(current)
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return current
+	}
+	if current == "" {
+		return candidate
+	}
+	currentNum, currentErr := strconv.ParseUint(current, 10, 64)
+	candidateNum, candidateErr := strconv.ParseUint(candidate, 10, 64)
+	if currentErr == nil && candidateErr == nil {
+		if candidateNum > currentNum {
+			return candidate
+		}
+		return current
+	}
+	if candidate > current {
+		return candidate
+	}
+	return current
 }
 
 func buildGmailAPIRawMessage(from, to, cc, subject, body string) string {

@@ -192,6 +192,109 @@ func TestGmailAPIMailSourceDraftCreateListDeleteAndSend(t *testing.T) {
 	}
 }
 
+func TestGmailAPIMailSourceHistoryDeltaAndExpiredCursorFallback(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-history.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("initial ProcessEmailsIncremental: %v", err)
+	}
+	cursor, found, err := c.GetMetadata(source.historyCursorKey("INBOX"))
+	if err != nil {
+		t.Fatalf("GetMetadata initial cursor: %v", err)
+	}
+	if !found || cursor != "101" {
+		t.Fatalf("initial cursor = (%q, %v), want 101 true", cursor, found)
+	}
+
+	fake.resetCalls()
+	fake.listIDs = []string{"msg-1"}
+	fake.messagePayloads["msg-2"] = gmailMessagePayloadFor("msg-2", "<api-2@example.com>", []string{"INBOX", "UNREAD"}, "102")
+	fake.messagePayloads["msg-3"] = gmailMessagePayloadFor("msg-3", "<api-3@example.com>", []string{"INBOX", "STARRED"}, "103")
+	fake.historyResponse = map[string]any{
+		"history": []map[string]any{
+			{"messagesAdded": []map[string]any{{"message": map[string]string{"id": "msg-2"}}}},
+			{"labelsRemoved": []map[string]any{{"message": map[string]string{"id": "msg-1"}, "labelIds": []string{"INBOX"}}}},
+			{"labelsAdded": []map[string]any{{"message": map[string]string{"id": "msg-3"}, "labelIds": []string{"STARRED"}}}},
+		},
+		"historyId": "105",
+	}
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("history ProcessEmailsIncremental: %v", err)
+	}
+	if !fake.sawPath("/gmail/v1/users/me/history") {
+		t.Fatalf("expected history endpoint, got calls %#v", fake.calls)
+	}
+	emails, err := c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate after history: %v", err)
+	}
+	if got := messageIDSet(emails); !got["<api-2@example.com>"] || !got["<api-3@example.com>"] || got["<api-1@example.com>"] {
+		t.Fatalf("history cache message set = %#v, want msg-2/msg-3 only", got)
+	}
+	cursor, _, err = c.GetMetadata(source.historyCursorKey("INBOX"))
+	if err != nil {
+		t.Fatalf("GetMetadata updated cursor: %v", err)
+	}
+	if cursor != "105" {
+		t.Fatalf("updated cursor = %q, want 105", cursor)
+	}
+
+	fake.resetCalls()
+	fake.historyResponse = map[string]any{
+		"history": []map[string]any{
+			{"messagesDeleted": []map[string]any{{"message": map[string]string{"id": "msg-2"}}}},
+			{"labelsAdded": []map[string]any{{"message": map[string]string{"id": "msg-3"}, "labelIds": []string{"TRASH"}}}},
+		},
+		"historyId": "106",
+	}
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("history delete/trash sync: %v", err)
+	}
+	emails, err = c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate after delete/trash: %v", err)
+	}
+	if len(emails) != 0 {
+		t.Fatalf("emails after delete/trash = %#v, want empty", emails)
+	}
+
+	if err := c.SetMetadata(source.historyCursorKey("INBOX"), "1"); err != nil {
+		t.Fatalf("SetMetadata expired cursor: %v", err)
+	}
+	fake.resetCalls()
+	fake.historyStatus = http.StatusNotFound
+	fake.listIDs = []string{"msg-4"}
+	fake.messagePayloads["msg-4"] = gmailMessagePayloadFor("msg-4", "<api-4@example.com>", []string{"INBOX"}, "200")
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("expired cursor fallback sync: %v", err)
+	}
+	if !fake.sawPath("/gmail/v1/users/me/history") || !fake.sawPath("/gmail/v1/users/me/messages") {
+		t.Fatalf("expected history attempt then messages fallback, got calls %#v", fake.calls)
+	}
+	emails, err = c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate after fallback: %v", err)
+	}
+	if len(emails) != 1 || emails[0].MessageID != "<api-4@example.com>" {
+		t.Fatalf("fallback emails = %#v, want msg-4", emails)
+	}
+	cursor, _, err = c.GetMetadata(source.historyCursorKey("INBOX"))
+	if err != nil {
+		t.Fatalf("GetMetadata fallback cursor: %v", err)
+	}
+	if cursor != "200" {
+		t.Fatalf("fallback cursor = %q, want 200", cursor)
+	}
+}
+
 func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *GmailAPIMailSource {
 	t.Helper()
 	opened, err := (GmailAPISourcePlugin{}).Open(context.Background(), config.SourceConfig{
@@ -216,12 +319,16 @@ func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *Gm
 }
 
 type fakeGmailAPIServer struct {
-	server       *httptest.Server
-	calls        []fakeGmailCall
-	sentRaw      string
-	draftRaw     string
-	deletedDraft string
-	sentDraft    string
+	server          *httptest.Server
+	calls           []fakeGmailCall
+	sentRaw         string
+	draftRaw        string
+	deletedDraft    string
+	sentDraft       string
+	listIDs         []string
+	messagePayloads map[string]map[string]any
+	historyResponse map[string]any
+	historyStatus   int
 }
 
 type fakeGmailCall struct {
@@ -233,9 +340,15 @@ type fakeGmailCall struct {
 
 func newFakeGmailAPIServer(t *testing.T) *fakeGmailAPIServer {
 	t.Helper()
-	fake := &fakeGmailAPIServer{}
+	fake := &fakeGmailAPIServer{
+		listIDs: []string{"msg-1"},
+		messagePayloads: map[string]map[string]any{
+			"msg-1": gmailMessagePayload(),
+		},
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/gmail/v1/users/me/labels", fake.handleLabels)
+	mux.HandleFunc("/gmail/v1/users/me/history", fake.handleHistory)
 	mux.HandleFunc("/gmail/v1/users/me/messages", fake.handleMessages)
 	mux.HandleFunc("/gmail/v1/users/me/messages/", fake.handleMessage)
 	mux.HandleFunc("/gmail/v1/users/me/drafts", fake.handleDrafts)
@@ -247,6 +360,8 @@ func newFakeGmailAPIServer(t *testing.T) *fakeGmailAPIServer {
 
 func (f *fakeGmailAPIServer) URL() string { return f.server.URL }
 func (f *fakeGmailAPIServer) Close()      { f.server.Close() }
+
+func (f *fakeGmailAPIServer) resetCalls() { f.calls = nil }
 
 func (f *fakeGmailAPIServer) record(r *http.Request, body map[string][]string) {
 	f.calls = append(f.calls, fakeGmailCall{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Body: body})
@@ -270,7 +385,11 @@ func (f *fakeGmailAPIServer) handleMessages(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, map[string]string{"id": "sent-1"})
 		return
 	}
-	writeJSON(w, map[string]any{"messages": []map[string]string{{"id": "msg-1", "threadId": "thread-1"}}})
+	messages := make([]map[string]string, 0, len(f.listIDs))
+	for _, id := range f.listIDs {
+		messages = append(messages, map[string]string{"id": id, "threadId": "thread-" + id})
+	}
+	writeJSON(w, map[string]any{"messages": messages})
 }
 
 func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Request) {
@@ -285,8 +404,26 @@ func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Reques
 	case strings.HasSuffix(r.URL.Path, "/trash"):
 		writeJSON(w, map[string]string{"id": "msg-1"})
 	default:
+		id := path.Base(r.URL.Path)
+		if payload := f.messagePayloads[id]; payload != nil {
+			writeJSON(w, payload)
+			return
+		}
 		writeJSON(w, gmailMessagePayload())
 	}
+}
+
+func (f *fakeGmailAPIServer) handleHistory(w http.ResponseWriter, r *http.Request) {
+	f.record(r, nil)
+	if f.historyStatus != 0 {
+		http.Error(w, "history cursor expired", f.historyStatus)
+		return
+	}
+	if f.historyResponse != nil {
+		writeJSON(w, f.historyResponse)
+		return
+	}
+	writeJSON(w, map[string]string{"historyId": "101"})
 }
 
 func (f *fakeGmailAPIServer) handleDrafts(w http.ResponseWriter, r *http.Request) {
@@ -320,17 +457,22 @@ func (f *fakeGmailAPIServer) handleDraftSend(w http.ResponseWriter, r *http.Requ
 }
 
 func gmailMessagePayload() map[string]any {
+	return gmailMessagePayloadFor("msg-1", "<api-1@example.com>", []string{"INBOX", "UNREAD", "STARRED"}, "101")
+}
+
+func gmailMessagePayloadFor(id, messageID string, labels []string, historyID string) map[string]any {
 	raw := "From: Sender <sender@example.com>\r\n" +
 		"To: Me <me@example.com>\r\n" +
 		"Subject: API Roadmap\r\n" +
-		"Message-Id: <api-1@example.com>\r\n" +
+		"Message-Id: " + messageID + "\r\n" +
 		"Date: Sun, 31 May 2026 09:00:00 -0700\r\n" +
 		"Content-Type: text/plain; charset=utf-8\r\n\r\n" +
 		"hello from gmail api"
 	return map[string]any{
-		"id":           "msg-1",
-		"threadId":     "thread-1",
-		"labelIds":     []string{"INBOX", "UNREAD", "STARRED"},
+		"id":           id,
+		"threadId":     "thread-" + id,
+		"historyId":    historyID,
+		"labelIds":     labels,
 		"internalDate": time.Date(2026, 5, 31, 16, 0, 0, 0, time.UTC).UnixMilli(),
 		"sizeEstimate": len(raw),
 		"raw":          base64.RawURLEncoding.EncodeToString([]byte(raw)),
@@ -455,4 +597,21 @@ func (f *fakeGmailAPIServer) sawTrash(id string) bool {
 		}
 	}
 	return false
+}
+
+func (f *fakeGmailAPIServer) sawPath(path string) bool {
+	for _, call := range f.calls {
+		if call.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func messageIDSet(emails []*models.EmailData) map[string]bool {
+	out := make(map[string]bool, len(emails))
+	for _, email := range emails {
+		out[email.MessageID] = true
+	}
+	return out
 }
