@@ -12,6 +12,7 @@ The Gmail API source should feel like the current Gmail mail account in Timeline
 - [x] Gmail API delete moves messages to Trash instead of permanent provider deletion.
 - [x] Gmail API draft create/list/delete/send parity uses `users.drafts.*` while preserving Herald draft UIDs, scoped refs, and send-after-success cleanup behavior.
 - [x] Gmail API history polling stores source/folder cursors, applies added/deleted/label-change events, and falls back to bounded list/get sync when the cursor is missing or expired.
+- [x] Gmail API list, label, draft, and history calls page through provider results and retry bounded 429/5xx responses with UI-safe errors.
 
 ## OAuth And Provider Boundaries
 
@@ -33,3 +34,4 @@ The first implementation slice should cover everyday Herald mail operations whil
 - [x] Body preview/full-body reads fetch raw RFC 2822 content and reuse the existing MIME parsing and preview cache behavior.
 - [x] Read/unread, star/unstar, archive, trash, and move-to-label operations call Gmail API mutation endpoints and update cache only after provider success.
 - [x] Compose send posts RFC 2822 MIME through `users.messages.send`.
+- [x] Compose send preserves CC/BCC delivery headers and attachment MIME parts on the Gmail API path.

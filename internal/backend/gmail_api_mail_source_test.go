@@ -295,6 +295,103 @@ func TestGmailAPIMailSourceHistoryDeltaAndExpiredCursorFallback(t *testing.T) {
 	}
 }
 
+func TestGmailAPIMailSourcePaginationRetryAndComposeMIME(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	fake.labelPages = []fakeGmailLabelPage{
+		{Labels: []map[string]string{{"id": "INBOX", "name": "INBOX", "type": "system"}}, Next: "labels-2"},
+		{Labels: []map[string]string{{"id": "Label_99", "name": "Projects", "type": "user"}}},
+	}
+	fake.messagePages = []fakeGmailIDPage{
+		{IDs: []string{"msg-1"}, Next: "messages-2"},
+		{IDs: []string{"msg-2"}},
+	}
+	fake.messagePayloads["msg-2"] = gmailMessagePayloadFor("msg-2", "<api-2@example.com>", []string{"INBOX"}, "102")
+	fake.draftPages = []fakeGmailIDPage{
+		{IDs: []string{"draft-1"}, Next: "drafts-2"},
+		{IDs: []string{"draft-2"}},
+	}
+	fake.historyPages = []map[string]any{
+		{
+			"history":       []map[string]any{{"messagesDeleted": []map[string]any{{"message": map[string]string{"id": "msg-1"}}}}},
+			"historyId":     "201",
+			"nextPageToken": "history-2",
+		},
+		{
+			"history":   []map[string]any{{"messagesDeleted": []map[string]any{{"message": map[string]string{"id": "msg-2"}}}}},
+			"historyId": "202",
+		},
+	}
+	fake.retryOnce = map[string]bool{"/gmail/v1/users/me/messages": true}
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-hardening.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+
+	folders, err := source.ListFolders(context.Background())
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	if !containsString(folders, "Projects") {
+		t.Fatalf("folders = %#v, want paginated user label", folders)
+	}
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental paginated/retry: %v", err)
+	}
+	emails, err := c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if got := messageIDSet(emails); !got["<api-1@example.com>"] || !got["<api-2@example.com>"] {
+		t.Fatalf("cached paginated messages = %#v, want msg-1 and msg-2", got)
+	}
+	if fake.pathCallCount("/gmail/v1/users/me/messages") < 3 {
+		t.Fatalf("message list calls = %#v, want retry plus second page", fake.calls)
+	}
+
+	drafts, err := source.ListDrafts(context.Background())
+	if err != nil {
+		t.Fatalf("ListDrafts paginated: %v", err)
+	}
+	if len(drafts) != 2 {
+		t.Fatalf("drafts = %d, want 2", len(drafts))
+	}
+	if err := c.SetMetadata(source.historyCursorKey("INBOX"), "200"); err != nil {
+		t.Fatalf("SetMetadata: %v", err)
+	}
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental history pagination: %v", err)
+	}
+	emails, err = c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate after history pagination: %v", err)
+	}
+	if len(emails) != 0 {
+		t.Fatalf("emails after paginated history delete = %#v, want empty", emails)
+	}
+
+	raw, err := buildGmailAPIComposeRaw(ComposeSendRequest{
+		From:         "Me <me@example.com>",
+		To:           "You <you@example.com>",
+		CC:           "Copy <copy@example.com>",
+		BCC:          "Blind <blind@example.com>",
+		Subject:      "MIME parity",
+		MarkdownBody: "hello",
+		Attachments:  []models.ComposeAttachment{{Filename: "note.txt", Data: []byte("hello attachment")}},
+	})
+	if err != nil {
+		t.Fatalf("buildGmailAPIComposeRaw: %v", err)
+	}
+	for _, want := range []string{"Cc: Copy <copy@example.com>", "Bcc: Blind <blind@example.com>", `Content-Disposition: attachment; filename="note.txt"`, base64.StdEncoding.EncodeToString([]byte("hello attachment"))} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("raw MIME missing %q:\n%s", want, raw)
+		}
+	}
+}
+
 func newTestGmailAPIMailSource(t *testing.T, baseURL string, c *cache.Cache) *GmailAPIMailSource {
 	t.Helper()
 	opened, err := (GmailAPISourcePlugin{}).Open(context.Background(), config.SourceConfig{
@@ -329,6 +426,22 @@ type fakeGmailAPIServer struct {
 	messagePayloads map[string]map[string]any
 	historyResponse map[string]any
 	historyStatus   int
+	labelPages      []fakeGmailLabelPage
+	messagePages    []fakeGmailIDPage
+	draftPages      []fakeGmailIDPage
+	historyPages    []map[string]any
+	retryOnce       map[string]bool
+	retried         map[string]bool
+}
+
+type fakeGmailIDPage struct {
+	IDs  []string
+	Next string
+}
+
+type fakeGmailLabelPage struct {
+	Labels []map[string]string
+	Next   string
 }
 
 type fakeGmailCall struct {
@@ -369,6 +482,14 @@ func (f *fakeGmailAPIServer) record(r *http.Request, body map[string][]string) {
 
 func (f *fakeGmailAPIServer) handleLabels(w http.ResponseWriter, r *http.Request) {
 	f.record(r, nil)
+	if f.shouldRetryOnce(w, r.URL.Path) {
+		return
+	}
+	if len(f.labelPages) > 0 {
+		page := f.labelPages[pageIndex(r)]
+		writeJSON(w, map[string]any{"labels": page.Labels, "nextPageToken": page.Next})
+		return
+	}
 	writeJSON(w, map[string]any{"labels": []map[string]string{
 		{"id": "INBOX", "name": "INBOX", "type": "system"},
 		{"id": "STARRED", "name": "STARRED", "type": "system"},
@@ -380,9 +501,21 @@ func (f *fakeGmailAPIServer) handleLabels(w http.ResponseWriter, r *http.Request
 func (f *fakeGmailAPIServer) handleMessages(w http.ResponseWriter, r *http.Request) {
 	body := readModifyBody(r)
 	f.record(r, body)
+	if f.shouldRetryOnce(w, r.URL.Path) {
+		return
+	}
 	if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/send") {
 		f.sentRaw = firstBodyValue(body, "raw")
 		writeJSON(w, map[string]string{"id": "sent-1"})
+		return
+	}
+	if len(f.messagePages) > 0 {
+		page := f.messagePages[pageIndex(r)]
+		messages := make([]map[string]string, 0, len(page.IDs))
+		for _, id := range page.IDs {
+			messages = append(messages, map[string]string{"id": id, "threadId": "thread-" + id})
+		}
+		writeJSON(w, map[string]any{"messages": messages, "nextPageToken": page.Next})
 		return
 	}
 	messages := make([]map[string]string, 0, len(f.listIDs))
@@ -415,8 +548,15 @@ func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Reques
 
 func (f *fakeGmailAPIServer) handleHistory(w http.ResponseWriter, r *http.Request) {
 	f.record(r, nil)
+	if f.shouldRetryOnce(w, r.URL.Path) {
+		return
+	}
 	if f.historyStatus != 0 {
 		http.Error(w, "history cursor expired", f.historyStatus)
+		return
+	}
+	if len(f.historyPages) > 0 {
+		writeJSON(w, f.historyPages[pageIndex(r)])
 		return
 	}
 	if f.historyResponse != nil {
@@ -435,6 +575,18 @@ func (f *fakeGmailAPIServer) handleDrafts(w http.ResponseWriter, r *http.Request
 		writeJSON(w, gmailDraftPayload())
 	default:
 		f.record(r, nil)
+		if f.shouldRetryOnce(w, r.URL.Path) {
+			return
+		}
+		if len(f.draftPages) > 0 {
+			page := f.draftPages[pageIndex(r)]
+			drafts := make([]map[string]any, 0, len(page.IDs))
+			for _, id := range page.IDs {
+				drafts = append(drafts, map[string]any{"id": id, "message": map[string]string{"id": id + "-msg"}})
+			}
+			writeJSON(w, map[string]any{"drafts": drafts, "nextPageToken": page.Next})
+			return
+		}
 		writeJSON(w, map[string]any{"drafts": []map[string]any{{"id": "draft-1", "message": map[string]string{"id": "draft-msg-1"}}}})
 	}
 }
@@ -606,6 +758,35 @@ func (f *fakeGmailAPIServer) sawPath(path string) bool {
 		}
 	}
 	return false
+}
+
+func (f *fakeGmailAPIServer) pathCallCount(path string) int {
+	count := 0
+	for _, call := range f.calls {
+		if call.Path == path {
+			count++
+		}
+	}
+	return count
+}
+
+func (f *fakeGmailAPIServer) shouldRetryOnce(w http.ResponseWriter, requestPath string) bool {
+	if !f.retryOnce[requestPath] || f.retried[requestPath] {
+		return false
+	}
+	if f.retried == nil {
+		f.retried = map[string]bool{}
+	}
+	f.retried[requestPath] = true
+	http.Error(w, "rate limited", http.StatusTooManyRequests)
+	return true
+}
+
+func pageIndex(r *http.Request) int {
+	if strings.TrimSpace(r.URL.Query().Get("pageToken")) == "" {
+		return 0
+	}
+	return 1
 }
 
 func messageIDSet(emails []*models.EmailData) map[string]bool {

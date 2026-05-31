@@ -20,6 +20,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/imap"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/oauth"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 const gmailAPIProvider = "gmail"
@@ -384,52 +385,62 @@ func (s *GmailAPIMailSource) AppendDraft(ctx context.Context, raw []byte) (uint3
 }
 
 func (s *GmailAPIMailSource) ListDrafts(ctx context.Context) ([]*models.Draft, error) {
-	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/drafts", nil)
-	if err != nil {
-		return nil, err
-	}
-	var list gmailAPIDraftList
-	if err := s.doJSON(req, &list); err != nil {
-		return nil, err
-	}
-	drafts := make([]*models.Draft, 0, len(list.Drafts))
-	for _, item := range list.Drafts {
-		draftID := strings.TrimSpace(item.ID)
-		if draftID == "" {
-			continue
+	values := url.Values{}
+	var drafts []*models.Draft
+	for {
+		u := s.baseURL + "/users/me/drafts"
+		if encoded := values.Encode(); encoded != "" {
+			u += "?" + encoded
 		}
-		draft, err := s.fetchDraft(ctx, draftID)
+		req, err := s.newRequest(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			return nil, err
 		}
-		body, err := gmailAPIMessageBody(draft.Message)
-		if err != nil {
+		var list gmailAPIDraftList
+		if err := s.doJSON(req, &list); err != nil {
 			return nil, err
 		}
-		messageID := strings.TrimSpace(draft.Message.ID)
-		if messageID == "" {
-			messageID = draftID
-		}
-		uid := gmailAPISyntheticUID(messageID)
-		s.rememberDraft(uid, draftID)
-		date := time.Now()
-		if draft.Message.InternalDate != nil {
-			if millis, err := parseGmailAPIInternalDate(draft.Message.InternalDate); err == nil && millis > 0 {
-				date = time.UnixMilli(millis)
+		for _, item := range list.Drafts {
+			draftID := strings.TrimSpace(item.ID)
+			if draftID == "" {
+				continue
 			}
+			draft, err := s.fetchDraft(ctx, draftID)
+			if err != nil {
+				return nil, err
+			}
+			body, err := gmailAPIMessageBody(draft.Message)
+			if err != nil {
+				return nil, err
+			}
+			messageID := strings.TrimSpace(draft.Message.ID)
+			if messageID == "" {
+				messageID = draftID
+			}
+			uid := gmailAPISyntheticUID(messageID)
+			s.rememberDraft(uid, draftID)
+			date := time.Now()
+			if draft.Message.InternalDate != nil {
+				if millis, err := parseGmailAPIInternalDate(draft.Message.InternalDate); err == nil && millis > 0 {
+					date = time.UnixMilli(millis)
+				}
+			}
+			drafts = append(drafts, &models.Draft{
+				UID:     uid,
+				Folder:  "DRAFT",
+				To:      body.To,
+				CC:      body.CC,
+				BCC:     body.BCC,
+				Subject: body.Subject,
+				Body:    firstNonEmpty(body.TextPlain, body.TextHTML),
+				Date:    date,
+			})
 		}
-		drafts = append(drafts, &models.Draft{
-			UID:     uid,
-			Folder:  "DRAFT",
-			To:      body.To,
-			CC:      body.CC,
-			BCC:     body.BCC,
-			Subject: body.Subject,
-			Body:    firstNonEmpty(body.TextPlain, body.TextHTML),
-			Date:    date,
-		})
+		if strings.TrimSpace(list.NextPageToken) == "" {
+			return drafts, nil
+		}
+		values.Set("pageToken", strings.TrimSpace(list.NextPageToken))
 	}
-	return drafts, nil
 }
 
 func (s *GmailAPIMailSource) DeleteDraft(ctx context.Context, uid uint32, folder string) error {
@@ -513,18 +524,9 @@ func (s *GmailAPIMailSource) FetchMessagePreviewNoCache(ctx context.Context, ref
 }
 
 func (s *GmailAPIMailSource) SendEmail(ctx context.Context, from, to, subject, body string) error {
-	raw := buildGmailAPIRawMessage(from, to, "", subject, body)
-	payload := map[string][]string{"raw": []string{base64.RawURLEncoding.EncodeToString([]byte(raw))}}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	httpReq, err := s.newRequest(ctx, http.MethodPost, s.baseURL+"/users/me/messages/send", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	return s.doJSON(httpReq, nil)
+	raw := buildGmailAPIRawMessage(from, to, "", "", subject, body)
+	err := s.sendRawMessage(ctx, raw)
+	return err
 }
 
 func (s *GmailAPIMailSource) SendCompose(ctx context.Context, req ComposeSendRequest) error {
@@ -532,8 +534,29 @@ func (s *GmailAPIMailSource) SendCompose(ctx context.Context, req ComposeSendReq
 	if from == "" {
 		from = strings.TrimSpace(s.google.Email)
 	}
-	raw := buildGmailAPIRawMessage(from, req.To, req.CC, req.Subject, req.MarkdownBody)
-	payload := map[string][]string{"raw": []string{base64.RawURLEncoding.EncodeToString([]byte(raw))}}
+	req.From = from
+	var raw string
+	var err error
+	if req.Preserved != nil {
+		preserved := *req.Preserved
+		if strings.TrimSpace(preserved.From) == "" {
+			preserved.From = from
+		}
+		raw, err = appsmtp.BuildPreservedMIMEMessage(preserved)
+		if err == nil && strings.TrimSpace(preserved.BCC) != "" {
+			raw = insertGmailAPIBccHeader(raw, preserved.BCC)
+		}
+	} else {
+		raw, err = buildGmailAPIComposeRaw(req)
+	}
+	if err != nil {
+		return err
+	}
+	return s.sendRawMessage(ctx, raw)
+}
+
+func (s *GmailAPIMailSource) sendRawMessage(ctx context.Context, raw string) error {
+	payload := map[string][]string{"raw": {base64.RawURLEncoding.EncodeToString([]byte(raw))}}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -664,16 +687,26 @@ func (s *GmailAPIMailSource) listHistory(ctx context.Context, cursor, labelID st
 	if strings.TrimSpace(labelID) != "" {
 		values.Set("labelId", strings.TrimSpace(labelID))
 	}
-	u := s.baseURL + "/users/me/history?" + values.Encode()
-	req, err := s.newRequest(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return gmailAPIHistoryList{}, err
+	var combined gmailAPIHistoryList
+	for {
+		u := s.baseURL + "/users/me/history?" + values.Encode()
+		req, err := s.newRequest(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return gmailAPIHistoryList{}, err
+		}
+		var payload gmailAPIHistoryList
+		if err := s.doJSON(req, &payload); err != nil {
+			return gmailAPIHistoryList{}, err
+		}
+		combined.History = append(combined.History, payload.History...)
+		if payload.HistoryID != "" {
+			combined.HistoryID = payload.HistoryID
+		}
+		if strings.TrimSpace(payload.NextPageToken) == "" {
+			return combined, nil
+		}
+		values.Set("pageToken", strings.TrimSpace(payload.NextPageToken))
 	}
-	var payload gmailAPIHistoryList
-	if err := s.doJSON(req, &payload); err != nil {
-		return gmailAPIHistoryList{}, err
-	}
-	return payload, nil
 }
 
 func (s *GmailAPIMailSource) messageBelongsInFolder(labelID string, labels []string) bool {
@@ -701,25 +734,30 @@ func (s *GmailAPIMailSource) listMessageIDs(ctx context.Context, folder, query s
 	if strings.TrimSpace(query) != "" {
 		values.Set("q", strings.TrimSpace(query))
 	}
-	u := s.baseURL + "/users/me/messages"
-	if encoded := values.Encode(); encoded != "" {
-		u += "?" + encoded
-	}
-	req, err := s.newRequest(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	var payload gmailAPIMessageList
-	if err := s.doJSON(req, &payload); err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(payload.Messages))
-	for _, msg := range payload.Messages {
-		if strings.TrimSpace(msg.ID) != "" {
-			ids = append(ids, msg.ID)
+	var ids []string
+	for {
+		u := s.baseURL + "/users/me/messages"
+		if encoded := values.Encode(); encoded != "" {
+			u += "?" + encoded
 		}
+		req, err := s.newRequest(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		var payload gmailAPIMessageList
+		if err := s.doJSON(req, &payload); err != nil {
+			return nil, err
+		}
+		for _, msg := range payload.Messages {
+			if strings.TrimSpace(msg.ID) != "" {
+				ids = append(ids, msg.ID)
+			}
+		}
+		if strings.TrimSpace(payload.NextPageToken) == "" {
+			return ids, nil
+		}
+		values.Set("pageToken", strings.TrimSpace(payload.NextPageToken))
 	}
-	return ids, nil
 }
 
 func (s *GmailAPIMailSource) fetchMessage(ctx context.Context, gmailID string) (gmailAPIMessage, error) {
@@ -782,17 +820,28 @@ func (s *GmailAPIMailSource) loadLabels(ctx context.Context) (map[string]gmailAP
 	if s.labels != nil {
 		return s.labels, nil
 	}
-	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/labels", nil)
-	if err != nil {
-		return nil, err
-	}
-	var payload gmailAPILabelList
-	if err := s.doJSON(req, &payload); err != nil {
-		return nil, err
-	}
-	labels := make(map[string]gmailAPILabel, len(payload.Labels))
-	for _, label := range payload.Labels {
-		labels[label.ID] = label
+	values := url.Values{}
+	labels := map[string]gmailAPILabel{}
+	for {
+		u := s.baseURL + "/users/me/labels"
+		if encoded := values.Encode(); encoded != "" {
+			u += "?" + encoded
+		}
+		req, err := s.newRequest(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		var payload gmailAPILabelList
+		if err := s.doJSON(req, &payload); err != nil {
+			return nil, err
+		}
+		for _, label := range payload.Labels {
+			labels[label.ID] = label
+		}
+		if strings.TrimSpace(payload.NextPageToken) == "" {
+			break
+		}
+		values.Set("pageToken", strings.TrimSpace(payload.NextPageToken))
 	}
 	s.labels = labels
 	return labels, nil
@@ -883,20 +932,59 @@ func (s *GmailAPIMailSource) newRequest(ctx context.Context, method, u string, b
 }
 
 func (s *GmailAPIMailSource) doJSON(req *http.Request, out any) error {
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return err
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			body, err := retryableRequestBody(req)
+			if err != nil {
+				return lastErr
+			}
+			req.Body = body
+			time.Sleep(time.Duration(attempt*150) * time.Millisecond)
+		}
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			resp.Body.Close()
+			lastErr = gmailAPIHTTPError{Method: req.Method, Path: req.URL.Path, StatusCode: resp.StatusCode, Body: trimGmailAPIErrorBody(string(body))}
+			if isGmailAPIRetryableStatus(resp.StatusCode) {
+				continue
+			}
+			return lastErr
+		}
+		defer resp.Body.Close()
+		if out == nil {
+			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			return nil
+		}
+		return json.NewDecoder(resp.Body).Decode(out)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return gmailAPIHTTPError{Method: req.Method, Path: req.URL.Path, StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(body))}
+	return lastErr
+}
+
+func retryableRequestBody(req *http.Request) (io.ReadCloser, error) {
+	if req.Body == nil {
+		return nil, nil
 	}
-	if out == nil {
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
-		return nil
+	if req.GetBody == nil {
+		return nil, fmt.Errorf("request body cannot be replayed")
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return req.GetBody()
+}
+
+func isGmailAPIRetryableStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
+func trimGmailAPIErrorBody(body string) string {
+	body = strings.TrimSpace(body)
+	if len(body) > 240 {
+		return body[:240] + "..."
+	}
+	return body
 }
 
 type gmailAPIHTTPError struct {
@@ -919,7 +1007,8 @@ func isGmailAPIHistoryExpired(err error) bool {
 }
 
 type gmailAPILabelList struct {
-	Labels []gmailAPILabel `json:"labels"`
+	Labels        []gmailAPILabel `json:"labels"`
+	NextPageToken string          `json:"nextPageToken"`
 }
 
 type gmailAPILabel struct {
@@ -933,11 +1022,13 @@ type gmailAPIMessageList struct {
 		ID       string `json:"id"`
 		ThreadID string `json:"threadId"`
 	} `json:"messages"`
+	NextPageToken string `json:"nextPageToken"`
 }
 
 type gmailAPIHistoryList struct {
-	History   []gmailAPIHistoryRecord `json:"history"`
-	HistoryID string                  `json:"historyId"`
+	History       []gmailAPIHistoryRecord `json:"history"`
+	HistoryID     string                  `json:"historyId"`
+	NextPageToken string                  `json:"nextPageToken"`
 }
 
 type gmailAPIHistoryRecord struct {
@@ -960,7 +1051,8 @@ type gmailAPIHistoryChange struct {
 }
 
 type gmailAPIDraftList struct {
-	Drafts []gmailAPIDraft `json:"drafts"`
+	Drafts        []gmailAPIDraft `json:"drafts"`
+	NextPageToken string          `json:"nextPageToken"`
 }
 
 type gmailAPIDraft struct {
@@ -1100,12 +1192,15 @@ func maxGmailAPIHistoryID(current, candidate string) string {
 	return current
 }
 
-func buildGmailAPIRawMessage(from, to, cc, subject, body string) string {
+func buildGmailAPIRawMessage(from, to, cc, bcc, subject, body string) string {
 	var b strings.Builder
 	b.WriteString("From: " + from + "\r\n")
 	b.WriteString("To: " + to + "\r\n")
 	if strings.TrimSpace(cc) != "" {
 		b.WriteString("Cc: " + cc + "\r\n")
+	}
+	if strings.TrimSpace(bcc) != "" {
+		b.WriteString("Bcc: " + bcc + "\r\n")
 	}
 	b.WriteString("Subject: " + subject + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
@@ -1113,6 +1208,113 @@ func buildGmailAPIRawMessage(from, to, cc, subject, body string) string {
 	b.WriteString("\r\n")
 	b.WriteString(body)
 	return b.String()
+}
+
+func buildGmailAPIComposeRaw(req ComposeSendRequest) (string, error) {
+	htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(req.MarkdownBody)
+	if inlineErr != nil {
+		htmlBody, _ = appsmtp.MarkdownToHTMLAndPlain(req.MarkdownBody)
+		inlines = nil
+	}
+	_, plainText := appsmtp.MarkdownToHTMLAndPlain(req.MarkdownBody)
+	if htmlBody == "" && len(req.Attachments) == 0 && len(inlines) == 0 {
+		return buildGmailAPIRawMessage(req.From, req.To, req.CC, req.BCC, req.Subject, plainText), nil
+	}
+
+	outerBoundary := fmt.Sprintf("gmail_outer_%d", time.Now().UnixNano())
+	relatedBoundary := fmt.Sprintf("gmail_related_%d", time.Now().UnixNano()+1)
+	altBoundary := fmt.Sprintf("gmail_alt_%d", time.Now().UnixNano()+2)
+
+	var msg strings.Builder
+	msg.WriteString("From: " + req.From + "\r\n")
+	msg.WriteString("To: " + req.To + "\r\n")
+	if strings.TrimSpace(req.CC) != "" {
+		msg.WriteString("Cc: " + req.CC + "\r\n")
+	}
+	if strings.TrimSpace(req.BCC) != "" {
+		msg.WriteString("Bcc: " + req.BCC + "\r\n")
+	}
+	msg.WriteString("Subject: " + req.Subject + "\r\n")
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n\r\n", outerBoundary))
+
+	msg.WriteString(fmt.Sprintf("--%s\r\n", outerBoundary))
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/related; boundary=%q\r\n\r\n", relatedBoundary))
+	msg.WriteString(fmt.Sprintf("--%s\r\n", relatedBoundary))
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n\r\n", altBoundary))
+	msg.WriteString(fmt.Sprintf("--%s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", altBoundary, plainText))
+	if strings.TrimSpace(htmlBody) != "" {
+		msg.WriteString(fmt.Sprintf("--%s\r\nContent-Type: text/html; charset=utf-8\r\n\r\n%s\r\n", altBoundary, htmlBody))
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
+
+	for i, img := range inlines {
+		filename := fmt.Sprintf("inline%03d%s", i+1, gmailAPIExtFromMIME(img.MIMEType))
+		writeGmailAPIBinaryPart(&msg, relatedBoundary, img.MIMEType, "inline", filename, img.ContentID, img.Data)
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", relatedBoundary))
+
+	for _, att := range req.Attachments {
+		if att.Filename == "" || len(att.Data) == 0 {
+			continue
+		}
+		writeGmailAPIBinaryPart(&msg, outerBoundary, "application/octet-stream", "attachment", att.Filename, "", att.Data)
+	}
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", outerBoundary))
+	return msg.String(), nil
+}
+
+func writeGmailAPIBinaryPart(msg *strings.Builder, boundary, mimeType, disposition, filename, contentID string, data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	if strings.TrimSpace(mimeType) == "" {
+		mimeType = "application/octet-stream"
+	}
+	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	msg.WriteString(fmt.Sprintf("Content-Type: %s\r\n", mimeType))
+	msg.WriteString("Content-Transfer-Encoding: base64\r\n")
+	if strings.TrimSpace(contentID) != "" {
+		msg.WriteString(fmt.Sprintf("Content-ID: <%s>\r\n", contentID))
+	}
+	msg.WriteString(fmt.Sprintf("Content-Disposition: %s; filename=%q\r\n\r\n", disposition, filename))
+	encoded := base64.StdEncoding.EncodeToString(data)
+	for len(encoded) > 76 {
+		msg.WriteString(encoded[:76] + "\r\n")
+		encoded = encoded[76:]
+	}
+	if encoded != "" {
+		msg.WriteString(encoded + "\r\n")
+	}
+}
+
+func insertGmailAPIBccHeader(raw, bcc string) string {
+	bcc = strings.TrimSpace(bcc)
+	if bcc == "" || strings.Contains(strings.ToLower(raw), "\r\nbcc:") {
+		return raw
+	}
+	if idx := strings.Index(raw, "\r\nSubject:"); idx >= 0 {
+		return raw[:idx] + "\r\nBcc: " + bcc + raw[idx:]
+	}
+	if idx := strings.Index(raw, "\r\nMIME-Version:"); idx >= 0 {
+		return raw[:idx] + "\r\nBcc: " + bcc + raw[idx:]
+	}
+	return "Bcc: " + bcc + "\r\n" + raw
+}
+
+func gmailAPIExtFromMIME(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".bin"
+	}
 }
 
 func (s *GmailAPIMailSource) fetchDraft(ctx context.Context, draftID string) (gmailAPIDraft, error) {
