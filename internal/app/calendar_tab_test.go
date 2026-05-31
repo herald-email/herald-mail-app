@@ -1472,6 +1472,25 @@ func TestCalendarMiniMonthBoldsEventDaysDifferentlyFromEmptyDays(t *testing.T) {
 	}
 }
 
+func TestCalendarLeftPanelStartsWithMiniMonthWithoutTodayControl(t *testing.T) {
+	loc := time.FixedZone("Test", 0)
+	m := New(&calendarAgendaStubBackend{available: true, events: testCalendarEvents()}, nil, "", nil, false)
+	m.theme = defaultTheme
+	m.calendarView = calendarViewAgenda
+	m.calendarAgendaStart = time.Date(2026, 6, 1, 0, 0, 0, 0, loc)
+	m.calendarAgendaEnd = time.Date(2026, 7, 1, 0, 0, 0, 0, loc)
+
+	rendered := stripANSI(m.renderCalendarLeftPanel(24, 18))
+	if strings.Contains(rendered, "Today") || strings.Contains(rendered, "<") || strings.Contains(rendered, ">") {
+		t.Fatalf("calendar rail kept redundant Today control:\n%s", rendered)
+	}
+
+	lines := strings.Split(rendered, "\n")
+	if len(lines) == 0 || !strings.Contains(lines[0], "2026") {
+		t.Fatalf("calendar rail should start with the mini-month header, got:\n%s", rendered)
+	}
+}
+
 func hasBoldANSI(value string) bool {
 	return strings.Contains(value, "[1m") || strings.Contains(value, "[1;") || strings.Contains(value, ";1m") || strings.Contains(value, ";1;")
 }

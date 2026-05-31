@@ -1884,8 +1884,6 @@ func (m *Model) renderCalendarLeftPanel(width, height int) string {
 	}
 	var lines []string
 	start, end, _ := m.calendarActiveRange()
-	lines = append(lines, m.theme.Severity.Success.Style().Render(calendarFit("<     Today     >", width)))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRule(width)))
 	lines = append(lines, m.renderCalendarMiniMonth(width, start, end)...)
 	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarRule(width)))
 	lines = append(lines, m.theme.Severity.Info.Style().Render(calendarFit("Calendars", width)))
