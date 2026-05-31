@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -45,7 +46,7 @@ func TestTimelineEmailBodyErrorShowsRootCauseDetails(t *testing.T) {
 		"Details: select folder INBOX",
 		"source_id=gmail-api",
 		"account_id=work",
-		"Press !",
+		"Press Ctrl+G",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("failure body missing %q:\n%s", want, text)
@@ -120,12 +121,9 @@ func TestProblemReportShortcutOpensModalWithoutWriting(t *testing.T) {
 	m.activeTab = tabTimeline
 	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg-modal", Folder: "INBOX", UID: 42}
 
-	model, cmd, handled := m.handleTimelineKey(keyRune('!'))
-	if !handled {
-		t.Fatal("expected ! to be handled")
-	}
+	model, cmd := m.handleKeyMsg(keyCtrl('g'))
 	if cmd != nil {
-		t.Fatal("! should open the report modal without writing a report command")
+		t.Fatal("ctrl+g should open the report modal without writing a report command")
 	}
 	updated := model.(*Model)
 	if !updated.showProblemReport {
@@ -136,7 +134,7 @@ func TestProblemReportShortcutOpensModalWithoutWriting(t *testing.T) {
 		t.Fatalf("read report dir: %v", err)
 	}
 	if len(entries) != 0 {
-		t.Fatalf("! wrote files before user chose save: %#v", entries)
+		t.Fatalf("report shortcut wrote files before user chose save: %#v", entries)
 	}
 
 	rendered := updated.View().Content
@@ -173,10 +171,11 @@ func TestProblemReportShortcutOpensFromContactPreview(t *testing.T) {
 	}
 	m.contactPreviewEmail = email
 
-	updated, cmd := m.handleContactsKey(keyRune('!'))
+	model, cmd := m.handleKeyMsg(keyCtrl('g'))
 	if cmd != nil {
-		t.Fatal("! should open the report modal without writing a report command")
+		t.Fatal("ctrl+g should open the report modal without writing a report command")
 	}
+	updated := model.(*Model)
 	if !updated.showProblemReport {
 		t.Fatal("expected problem report modal to be open")
 	}
@@ -186,6 +185,92 @@ func TestProblemReportShortcutOpensFromContactPreview(t *testing.T) {
 	}
 	if snapshot.Selected.MessageID != email.MessageID {
 		t.Fatalf("snapshot selected message = %q, want %q", snapshot.Selected.MessageID, email.MessageID)
+	}
+}
+
+func TestProblemReportShortcutOpensFromNonComposeScreens(t *testing.T) {
+	tests := []struct {
+		name string
+		tab  int
+	}{
+		{name: "timeline without selected message", tab: tabTimeline},
+		{name: "contacts list", tab: tabContacts},
+		{name: "calendar agenda", tab: tabCalendar},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := makeSizedModel(t, 100, 30)
+			m.activeTab = tt.tab
+
+			model, cmd := m.handleKeyMsg(keyCtrl('g'))
+			if cmd != nil {
+				t.Fatal("ctrl+g should open the report modal without writing a report command")
+			}
+			updated := model.(*Model)
+			if !updated.showProblemReport {
+				t.Fatal("expected problem report modal to be open")
+			}
+		})
+	}
+}
+
+func TestProblemReportShortcutDoesNotStealComposeBang(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCompose
+
+	model, _ := m.handleKeyMsg(keyRune('!'))
+	updated := model.(*Model)
+	if updated.showProblemReport {
+		t.Fatal("plain ! should remain available for compose text instead of opening report modal")
+	}
+}
+
+func TestProblemReportShortcutDoesNotStealComposeCtrlG(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCompose
+
+	model, _ := m.handleKeyMsg(keyCtrl('g'))
+	updated := model.(*Model)
+	if updated.showProblemReport {
+		t.Fatal("ctrl+g should keep its Compose behavior instead of opening report modal")
+	}
+}
+
+func TestProblemReportShortcutDoesNotTreatCtrlShiftOneAsReport(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCalendar
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: '!', Mod: tea.ModCtrl})
+	if cmd != nil {
+		t.Fatal("ctrl+! should not run report commands")
+	}
+	updated := model.(*Model)
+	if updated.showProblemReport {
+		t.Fatal("ctrl+! should not open the report modal")
+	}
+}
+
+func TestProblemReportShortcutDoesNotTreatCtrlOneAsReport(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabCalendar
+
+	model, _ := m.handleKeyMsg(keyCtrl('1'))
+	updated := model.(*Model)
+	if updated.showProblemReport {
+		t.Fatal("ctrl+1 should not open the report modal")
+	}
+}
+
+func TestProblemReportShortcutIgnoresPlainBang(t *testing.T) {
+	m := makeSizedModel(t, 100, 30)
+	m.activeTab = tabTimeline
+	m.timeline.selectedEmail = &models.EmailData{MessageID: "msg", Folder: "INBOX", UID: 1}
+
+	model, _ := m.handleKeyMsg(keyRune('!'))
+	updated := model.(*Model)
+	if updated.showProblemReport {
+		t.Fatal("plain ! should not open the report modal")
 	}
 }
 

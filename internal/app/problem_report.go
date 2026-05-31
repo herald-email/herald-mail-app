@@ -17,6 +17,7 @@ import (
 const problemReportLogLimit = 100
 const problemReportSupportAddress = "support@herald-mail.app"
 const problemReportFeedbackURL = "https://herald-mail.app/feedback/"
+const problemReportShortcutHint = "ctrl+g: report"
 
 type problemReportSnapshot struct {
 	GeneratedAt   time.Time
@@ -42,8 +43,54 @@ func previewFailureBodyText(msg EmailBodyMsg, email *models.EmailData) string {
 		b.WriteString("Details: " + singleLineReportValue(errText) + "\n")
 	}
 	b.WriteString("Message: " + previewFailureRefLine(ref) + "\n\n")
-	b.WriteString("Press ! to choose how to email, copy, or save a problem report with the last Herald events. For the next run, start Herald with -debug and attach the log file shown in the report.")
+	b.WriteString("Press Ctrl+G to choose how to email, copy, or save a problem report with the last Herald events. For the next run, start Herald with -debug and attach the log file shown in the report.")
 	return b.String()
+}
+
+func isProblemReportShortcut(msg tea.KeyPressMsg) bool {
+	switch shortcutKey(msg) {
+	case "ctrl+g":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *Model) problemReportShortcutTextEntryActive() bool {
+	if m.activeTab == tabCompose {
+		return true
+	}
+	if m.showChat && m.focusedPanel == panelChat {
+		return true
+	}
+	if m.timeline.attachmentSavePrompt {
+		return true
+	}
+	if m.timeline.searchMode && m.activeTab == tabTimeline && m.timeline.searchFocus == timelineSearchFocusInput {
+		return true
+	}
+	if m.activeTab == tabContacts && m.contactSearchMode != "" {
+		return true
+	}
+	if m.activeTab == tabCalendar {
+		if m.calendarEdit.Active {
+			return true
+		}
+		if !m.calendarDetailOpen && (m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) shouldHandleProblemReportShortcut(msg tea.KeyPressMsg) bool {
+	if !isProblemReportShortcut(msg) {
+		return false
+	}
+	if m.showProblemReport || m.problemReportShortcutTextEntryActive() {
+		return false
+	}
+	return true
 }
 
 func previewFailureMessageRef(msg EmailBodyMsg, email *models.EmailData) models.MessageRef {

@@ -191,6 +191,10 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 }
 
 func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if m.shouldHandleProblemReportShortcut(msg) {
+		m.showProblemReport = true
+		return m, nil, true
+	}
 	if model, cmd, handled := m.handleAccountSwitcherKey(msg); handled {
 		return model, cmd, true
 	}

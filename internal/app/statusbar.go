@@ -532,7 +532,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else if m.contactSearchMode == "semantic" {
 			hints = fmt.Sprintf("? %s  │  esc: clear search  │  q: quit", m.contactSearch)
 		} else if m.contactPreviewEmail != nil {
-			hints = "tab: next panel  │  !: report  │  esc: back to contact  │  q: quit"
+			hints = joinHintSegments("tab: next panel", problemReportShortcutHint, "esc: back to contact", "q: quit")
 		} else if m.contactFocusPanel == 1 {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		} else {
@@ -603,6 +603,16 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		default:
 			hints = joinHintSegments(m.primaryTabShortcutHint(), m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandChatToggle, "chat"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}
+	}
+	if !m.showSettings &&
+		!m.showHelp &&
+		!m.showAccountSwitcher &&
+		!m.showProblemReport &&
+		!m.pendingDeleteConfirm &&
+		!m.pendingUnsubscribe &&
+		!m.problemReportShortcutTextEntryActive() &&
+		!strings.Contains(hints, problemReportShortcutHint) {
+		hints = joinHintSegments(hints, problemReportShortcutHint)
 	}
 	if m.activeTab == tabCalendar &&
 		!m.showSettings &&

@@ -236,11 +236,6 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				return m, m.loadEmailBodyForRefCmd(email.MessageRef())
 			}
 		}
-	case "!":
-		if m.contactPreviewEmail != nil {
-			m.showProblemReport = true
-		}
-		return m, nil
 	case "e":
 		var target *models.ContactData
 		if m.contactFocusPanel == 1 && m.contactDetail != nil {
