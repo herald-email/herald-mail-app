@@ -74,6 +74,13 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 	if !strings.Contains(authURL, "login_hint=test%40example.com") {
 		t.Errorf("expected login_hint in URL, got: %q", authURL)
 	}
+	assertAuthURLScopes(t, authURL, []string{ScopeGmailModify})
+}
+
+func TestDefaultGoogleOAuthScopesUseGmailModifyOnly(t *testing.T) {
+	if !equalStringSlices(Scopes, []string{ScopeGmailModify}) {
+		t.Fatalf("Scopes = %#v, want only %#v", Scopes, []string{ScopeGmailModify})
+	}
 }
 
 func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
@@ -117,10 +124,22 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ScopesForSources(tt.sources); !equalStringSlices(got, tt.want) {
+			got := ScopesForSources(tt.sources)
+			if !equalStringSlices(got, tt.want) {
 				t.Fatalf("ScopesForSources() = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func assertAuthURLScopes(t *testing.T, authURL string, want []string) {
+	t.Helper()
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("could not parse auth URL: %v", err)
+	}
+	if got := strings.Fields(parsed.Query().Get("scope")); !equalStringSlices(got, want) {
+		t.Fatalf("auth URL scopes = %#v, want %#v", got, want)
 	}
 }
 

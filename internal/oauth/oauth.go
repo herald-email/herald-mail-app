@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	ScopeLegacyMail           = "https://mail.google.com/"
 	ScopeGmailModify          = "https://www.googleapis.com/auth/gmail.modify"
 	ScopeCalendarListReadonly = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 	ScopeCalendarEvents       = "https://www.googleapis.com/auth/calendar.events"

@@ -780,7 +780,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields with known preset host/port defaults pre-populated, then Herald validates IMAP and SMTP before optional preferences
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth is available by default as a browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials to run OAuth
-- [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations so normal Gmail setup does not require the legacy full-mail IMAP/SMTP OAuth scope
+- [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations using the Gmail API `gmail.modify` OAuth scope
 - [x] Account setup validates both IMAP and SMTP before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates Gmail API read/send capability before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
