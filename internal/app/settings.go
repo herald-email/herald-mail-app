@@ -1163,6 +1163,17 @@ func (s *Settings) buildForm() {
 			func() bool { return !s.accountDetailShowsMail() },
 		),
 		hideSettingsFieldWhen(
+			huh.NewConfirm().
+				Title("Include Google Calendar").
+				Description("Keeps a paired Google Calendar source on this account. Turning it off removes only Herald's calendar source.").
+				Affirmative("Mail + Calendar").
+				Negative("Mail only").
+				Value(&s.alsoAddCalendar),
+			func() bool {
+				return !s.existingAccountCanToggleCalendarPairing()
+			},
+		),
+		hideSettingsFieldWhen(
 			huh.NewInput().
 				TitleFunc(func() string {
 					if s.provider == "gmail" {
@@ -1489,6 +1500,55 @@ func accountListHasOption(options []huh.Option[string], value string) bool {
 	return false
 }
 
+func accountGroupProviderLabel(group config.AccountGroup) string {
+	seen := make(map[string]bool)
+	var labels []string
+	add := func(label string) {
+		label = strings.TrimSpace(label)
+		if label == "" || seen[label] {
+			return
+		}
+		seen[label] = true
+		labels = append(labels, label)
+	}
+	for _, source := range group.Sources {
+		kind := strings.TrimSpace(source.Kind)
+		provider := strings.TrimSpace(source.Provider)
+		switch kind {
+		case "", string(models.SourceKindMail):
+			if settingsMailSourceUsesGoogleOAuth(source) {
+				add("Gmail OAuth")
+				continue
+			}
+			switch provider {
+			case "gmail":
+				add("Gmail IMAP")
+			case "gmail_api":
+				add("Gmail API")
+			case "imap":
+				add("IMAP")
+			default:
+				add(provider)
+			}
+		case string(models.SourceKindCalendar):
+			switch provider {
+			case "google_calendar":
+				add("Google Calendar")
+			case "caldav":
+				add("CalDAV")
+			default:
+				add(provider)
+			}
+		default:
+			add(provider)
+		}
+	}
+	if len(labels) == 0 {
+		return strings.TrimSpace(group.Provider)
+	}
+	return strings.Join(labels, " + ")
+}
+
 func (s *Settings) accountListOptions() []huh.Option[string] {
 	var options []huh.Option[string]
 	if s.cfg != nil {
@@ -1501,7 +1561,7 @@ func (s *Settings) accountListOptions() []huh.Option[string] {
 			if address := strings.TrimSpace(group.Address); address != "" {
 				meta = append(meta, address)
 			}
-			if provider := strings.TrimSpace(group.Provider); provider != "" {
+			if provider := accountGroupProviderLabel(group); provider != "" {
 				meta = append(meta, provider)
 			}
 			options = append(options, huh.NewOption(label+" · "+strings.Join(meta, " · "), "account:"+group.AccountID))
@@ -1760,7 +1820,16 @@ func (s *Settings) accountDetailShowsCalendar() bool {
 		return s.alsoAddCalendar
 	default:
 		group, ok := s.selectedAccountGroup()
-		return ok && len(group.CalendarSourceIDs) > 0
+		if !ok {
+			return false
+		}
+		if group.MailSourceID == "" {
+			return len(group.CalendarSourceIDs) > 0
+		}
+		if s.existingAccountCanToggleCalendarPairing() {
+			return s.alsoAddCalendar
+		}
+		return len(group.CalendarSourceIDs) > 0
 	}
 }
 
@@ -2082,6 +2151,7 @@ func (s *Settings) loadSelectedAccountFields() {
 	if !ok {
 		return
 	}
+	s.alsoAddCalendar = len(group.CalendarSourceIDs) > 0
 	s.accountDisplayName = group.DisplayName
 	for _, source := range group.Sources {
 		switch strings.TrimSpace(source.Kind) {
@@ -2114,6 +2184,13 @@ func (s *Settings) loadSelectedAccountFields() {
 	if s.accountDisplayName == "" {
 		s.accountDisplayName = group.AccountID
 	}
+}
+
+func (s *Settings) existingAccountCanToggleCalendarPairing() bool {
+	if s == nil || s.accountEditMode != settingsAccountEditExisting || !s.accountDetailShowsMail() {
+		return false
+	}
+	return strings.TrimSpace(s.provider) == "gmail-oauth"
 }
 
 func (s *Settings) openSelectedAccountFromList() bool {
@@ -2970,6 +3047,9 @@ func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceCo
 	if s.accountEditMode == settingsAccountEditExisting {
 		if hasExistingSource && strings.TrimSpace(existingSource.ID) != "" {
 			id = strings.TrimSpace(existingSource.ID)
+		}
+		if hasExistingSource && strings.TrimSpace(existingSource.Provider) != "" {
+			provider = strings.TrimSpace(existingSource.Provider)
 		}
 	}
 	source := config.SourceConfig{

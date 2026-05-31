@@ -719,6 +719,40 @@ func TestSettingsAccountsListRendersSourceGroupsAndAddAccount(t *testing.T) {
 	}
 }
 
+func TestSettingsAccountsListLabelsGoogleOAuthSources(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "imap",
+			DisplayName: "Work",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "refresh-token"},
+		},
+		{
+			ID:          "work-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Work Calendar",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "refresh-token"},
+		},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 160, 40))
+	for _, want := range []string{"Work", "Mail + Calendar", "work@example.com", "Gmail OAuth + Google", "Calendar"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("expected accounts list to include %q, got:\n%s", want, plain)
+		}
+	}
+	if strings.Contains(plain, " · imap") {
+		t.Fatalf("accounts list exposed raw imap provider for OAuth source:\n%s", plain)
+	}
+}
+
 func TestSettingsAccountsListEnterOpensSelectedAccount(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{
@@ -936,6 +970,109 @@ func TestSettingsExistingLegacyGmailOAuthEditHidesPassword(t *testing.T) {
 	}
 	if msg, ok := s.oauthRequiredMsg(cfg); ok {
 		t.Fatalf("renaming legacy Gmail OAuth account should not require OAuth: %#v", msg)
+	}
+}
+
+func TestSettingsExistingGmailOAuthAccountCanToggleCalendarPairing(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "gmail",
+			DisplayName: "Work",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "mail-refresh"},
+			IMAP:        config.ServerConfig{Host: "imap.gmail.com", Port: 993},
+			SMTP:        config.ServerConfig{Host: "smtp.gmail.com", Port: 587},
+		},
+	}}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.accountsMenuChoice = "account:work"
+	s.buildForm()
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 110, 34))
+	if !strings.Contains(plain, "Include Google Calendar") {
+		t.Fatalf("existing Gmail OAuth account should expose calendar pairing toggle, got:\n%s", plain)
+	}
+	if s.alsoAddCalendar {
+		t.Fatal("mail-only existing Gmail OAuth account should load with calendar pairing off")
+	}
+
+	s.alsoAddCalendar = true
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(sources) = %d, want mail plus new calendar: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	cal := settingsTestSourceByID(t, cfg.Sources, "work-calendar")
+	if cal.Kind != "calendar" || cal.Provider != "google_calendar" || cal.AccountID != "work" || cal.Google.Email != "work@example.com" {
+		t.Fatalf("calendar source = %#v, want paired Google Calendar source", cal)
+	}
+}
+
+func TestSettingsExistingGmailOAuthAccountCanRemoveCalendarPairing(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "gmail",
+			DisplayName: "Work",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "mail-refresh"},
+		},
+		{
+			ID:          "work-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: "Work Calendar",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "calendar-refresh"},
+		},
+	}}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditExisting
+	s.selectedAccountID = "work"
+	s.loadSelectedAccountFields()
+	if !s.alsoAddCalendar {
+		t.Fatal("existing Mail + Calendar account should load with calendar pairing on")
+	}
+
+	s.alsoAddCalendar = false
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 1 || cfg.Sources[0].ID != "work-mail" {
+		t.Fatalf("sources after disabling calendar = %#v, want only work-mail", cfg.Sources)
+	}
+}
+
+func TestSettingsExistingAccountSavePreservesMailProvider(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "work-mail",
+			Kind:        "mail",
+			Provider:    "gmail",
+			DisplayName: "Work",
+			AccountID:   "work",
+			Google:      config.GoogleConfig{Email: "work@example.com", RefreshToken: "mail-refresh"},
+			IMAP:        config.ServerConfig{Host: "imap.gmail.com", Port: 993},
+			SMTP:        config.ServerConfig{Host: "smtp.gmail.com", Port: 587},
+		},
+	}}
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditExisting
+	s.selectedAccountID = "work"
+	s.loadSelectedAccountFields()
+	s.provider = "imap"
+
+	cfg := s.buildConfig()
+	mail := settingsTestSourceByID(t, cfg.Sources, "work-mail")
+	if mail.Provider != "gmail" {
+		t.Fatalf("existing account save changed provider to %q, want preserved gmail", mail.Provider)
 	}
 }
 
