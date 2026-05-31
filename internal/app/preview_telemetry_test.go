@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -180,6 +181,36 @@ func TestTimelinePreviewShowsLoadTagWithinNarrowHeader(t *testing.T) {
 	assertFitsWidth(t, 80, rendered)
 }
 
+func TestTimelinePreviewLoadTagShowsFailureState(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	email := &models.EmailData{
+		MessageID: "msg-load-error",
+		Folder:    "INBOX",
+		UID:       11,
+		Sender:    "sender@example.com",
+		Subject:   "Preview failure",
+		Date:      time.Date(2026, 5, 15, 9, 30, 0, 0, time.UTC),
+	}
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{TextPlain: "(Failed to load body)"}
+	m.timeline.previewLoad = previewLoadTelemetry{
+		MessageID: email.MessageID,
+		Folder:    email.Folder,
+		UID:       email.UID,
+		Source:    previewLoadSourceIMAP,
+		Duration:  time.Millisecond,
+		Err:       "select folder INBOX: authentication failed",
+	}
+
+	rendered := m.renderEmailPreview()
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "Load: failed after 1ms imap") {
+		t.Fatalf("expected failed load tag, got:\n%s", stripped)
+	}
+	assertFitsWidth(t, 80, rendered)
+}
+
 func TestLoadEmailBodyCmdUsesCachedPreviewBeforeIMAP(t *testing.T) {
 	backend := &previewTelemetryBackend{
 		body:          &models.EmailBody{TextPlain: "imap body should not load"},
@@ -240,6 +271,90 @@ func TestLoadEmailBodyCmdUsesCacheFirstServiceWhenAvailable(t *testing.T) {
 	}
 	if msg.LoadSource != previewLoadSourceCache {
 		t.Fatalf("LoadSource = %q, want cache", msg.LoadSource)
+	}
+}
+
+func TestOpenTimelineEmailLoadsBodyWithSelectedEmailScope(t *testing.T) {
+	backend := &previewTelemetryServiceBackend{
+		servicePreviewResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "scoped preview"},
+			Source: backendpkg.MessageReadSourceProvider,
+		},
+	}
+	m := New(backend, nil, "", nil, false)
+	email := &models.EmailData{
+		SourceID:    "gmail-api",
+		AccountID:   "work",
+		LocalID:     "mail:gmail-api:work:INBOX:msg-scoped",
+		UIDValidity: 777,
+		MessageID:   "msg-scoped",
+		Folder:      "INBOX",
+		UID:         88,
+	}
+
+	cmd := m.openTimelineEmail(email)
+	if cmd == nil {
+		t.Fatal("expected body load command")
+	}
+	msg := cmd().(EmailBodyMsg)
+
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+	if got := backend.servicePreviewRef.SourceID; got != email.SourceID {
+		t.Fatalf("service source id = %q, want %q", got, email.SourceID)
+	}
+	if got := backend.servicePreviewRef.AccountID; got != email.AccountID {
+		t.Fatalf("service account id = %q, want %q", got, email.AccountID)
+	}
+	if got := backend.servicePreviewRef.LocalID; got != email.LocalID {
+		t.Fatalf("service local id = %q, want %q", got, email.LocalID)
+	}
+	if backend.servicePreviewRef.UIDValidity != email.UIDValidity {
+		t.Fatalf("service uid validity = %d, want %d", backend.servicePreviewRef.UIDValidity, email.UIDValidity)
+	}
+}
+
+func TestContactPreviewLoadsBodyWithSelectedEmailScope(t *testing.T) {
+	backend := &previewTelemetryServiceBackend{
+		servicePreviewResult: backendpkg.MessageReadResult{
+			Body:   &models.EmailBody{TextPlain: "scoped contact preview"},
+			Source: backendpkg.MessageReadSourceProvider,
+		},
+	}
+	m := New(backend, nil, "", nil, false)
+	email := &models.EmailData{
+		SourceID:    "gmail-api",
+		AccountID:   "work",
+		LocalID:     "mail:gmail-api:work:INBOX:msg-contact-scoped",
+		UIDValidity: 888,
+		MessageID:   "msg-contact-scoped",
+		Folder:      "INBOX",
+		UID:         99,
+	}
+	m.contactFocusPanel = 1
+	m.contactDetailEmails = []*models.EmailData{email}
+
+	_, cmd := m.handleContactsKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected contact preview body load command")
+	}
+	msg := cmd().(EmailBodyMsg)
+
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+	if got := backend.servicePreviewRef.SourceID; got != email.SourceID {
+		t.Fatalf("service source id = %q, want %q", got, email.SourceID)
+	}
+	if got := backend.servicePreviewRef.AccountID; got != email.AccountID {
+		t.Fatalf("service account id = %q, want %q", got, email.AccountID)
+	}
+	if got := backend.servicePreviewRef.LocalID; got != email.LocalID {
+		t.Fatalf("service local id = %q, want %q", got, email.LocalID)
+	}
+	if backend.servicePreviewRef.UIDValidity != email.UIDValidity {
+		t.Fatalf("service uid validity = %d, want %d", backend.servicePreviewRef.UIDValidity, email.UIDValidity)
 	}
 }
 

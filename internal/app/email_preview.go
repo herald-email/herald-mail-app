@@ -794,10 +794,23 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.quickRepliesReady = false
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesAIFetched = false
-	return m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
+	return m.loadEmailBodyForRefCmd(email.MessageRef())
 }
 
 func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
+	return m.loadEmailBodyForRefCmd(models.MessageRef{
+		MessageID: messageID,
+		Folder:    folder,
+		UID:       uid,
+	}.WithDefaults())
+}
+
+func (m *Model) loadEmailBodyForRefCmd(ref models.MessageRef) tea.Cmd {
+	ref = ref.WithDefaults()
+	messageID := ref.MessageID
+	folder := ref.Folder
+	uid := ref.UID
+
 	// Cancel any in-flight body fetch so rapid j/k doesn't pile up
 	// concurrent IMAP requests that overwhelm the connection.
 	if m.timeline.bodyFetchCancel != nil {
@@ -815,6 +828,7 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 			return EmailBodyMsg{
 				Body:           body,
 				Err:            err,
+				MessageRef:     ref,
 				MessageID:      messageID,
 				Folder:         folder,
 				UID:            uid,
@@ -827,11 +841,6 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 		if ctx.Err() != nil {
 			return finish(nil, ctx.Err(), previewLoadSourceIMAP)
 		}
-		ref := models.MessageRef{
-			MessageID: messageID,
-			Folder:    folder,
-			UID:       uid,
-		}.WithDefaults()
 		if serviceBackend, ok := b.(messagePreviewServiceBackend); ok {
 			result, err := serviceBackend.GetMessagePreview(ctx, ref, backend.MessageReadIntent{ViewID: "timeline-preview"})
 			if ctx.Err() != nil {

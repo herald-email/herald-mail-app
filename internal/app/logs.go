@@ -134,3 +134,18 @@ func (lv *LogViewer) GetLogCount() int {
 	defer lv.mutex.RUnlock()
 	return len(lv.logs)
 }
+
+func (lv *LogViewer) LastEntries(n int) []LogEntry {
+	if lv == nil || n <= 0 {
+		return nil
+	}
+	lv.mutex.RLock()
+	defer lv.mutex.RUnlock()
+	start := len(lv.logs) - n
+	if start < 0 {
+		start = 0
+	}
+	out := make([]LogEntry, len(lv.logs[start:]))
+	copy(out, lv.logs[start:])
+	return out
+}

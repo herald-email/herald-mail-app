@@ -2246,7 +2246,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.quickReplyIdx = 0
 	m.timeline.quickRepliesAIFetched = false
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	return m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
+	return m.loadEmailBodyForRefCmd(email.MessageRef())
 }
 
 func (m *Model) openTimelineQuickReply() tea.Cmd {
@@ -2365,7 +2365,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				return joinHintSegments(append(
 					[]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")},
 					append(m.timelineMessageActionHintSegments(),
-						m.movementHint("timeline", "scroll"), "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
+						m.movementHint("timeline", "scroll"), "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "!: report", "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 				)...), true
 			}
 			return joinHintSegments(append(
@@ -2430,7 +2430,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			segments = append(segments, "i: add to calendar")
 		}
 		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
-		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "!: report", "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
@@ -2532,7 +2532,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
-	return joinHintSegments(backHint, "↑/k ↓/j: scroll", "read-only", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "m: mouse mode", closeHint, "q: quit")
+	return joinHintSegments(backHint, "↑/k ↓/j: scroll", "read-only", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", "!: report", "m: mouse mode", closeHint, "q: quit")
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -2614,7 +2614,8 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.revokeImagePreviews()
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
-			m.timeline.body = &models.EmailBody{TextPlain: "(Failed to load body)"}
+			m.statusMessage = "Body load failed: " + previewFailureHint(msg.Err.Error())
+			m.timeline.body = &models.EmailBody{TextPlain: previewFailureBodyText(msg, m.timeline.selectedEmail)}
 			if m.timeline.selectedEmail != nil {
 				m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
 			}
@@ -2932,6 +2933,12 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 	}
 	switch key {
+	case "!":
+		if m.timeline.selectedEmail != nil {
+			m.showProblemReport = true
+			return m, nil, true
+		}
+		return m, nil, true
 	case " ", "space":
 		if m.focusedPanel != panelTimeline {
 			return m, nil, false

@@ -644,6 +644,35 @@ func TestMultiBackendScopedMessageReadAndMutationRouteToSource(t *testing.T) {
 	}
 }
 
+func TestMultiBackendGetMessagePreviewFallsBackToLegacyFetch(t *testing.T) {
+	workEmail := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "same-message", UID: 11, Folder: "INBOX", Subject: "Work"})
+	personalEmail := scopedTestEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "same-message", UID: 22, Folder: "INBOX", Subject: "Personal"})
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, workEmail, "work body")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, personalEmail, "personal body")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount all accounts: %v", err)
+	}
+
+	read, err := mb.GetMessagePreview(context.Background(), personalEmail.MessageRef(), MessageReadIntent{ViewID: "timeline-preview"})
+	if err != nil {
+		t.Fatalf("GetMessagePreview legacy fallback: %v", err)
+	}
+	if read.Body == nil || read.Body.TextPlain != "personal body" {
+		t.Fatalf("preview body = %#v, want personal body", read.Body)
+	}
+	if read.Source != MessageReadSourceProvider {
+		t.Fatalf("preview source = %q, want %q", read.Source, MessageReadSourceProvider)
+	}
+}
+
 func TestMultiBackendCloseClosesAllAccountBackends(t *testing.T) {
 	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
 	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
