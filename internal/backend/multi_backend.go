@@ -795,7 +795,7 @@ func (m *MultiBackend) GetMessage(ctx context.Context, ref models.MessageRef) (M
 		GetMessage(context.Context, models.MessageRef) (MessageReadResult, error)
 	})
 	if !ok {
-		return MessageReadResult{}, fmt.Errorf("source %q does not support cache-first message reads", slot.info.SourceID)
+		return legacyMessageRead(slot, ref)
 	}
 	return getter.GetMessage(ctx, ref)
 }
@@ -809,9 +809,32 @@ func (m *MultiBackend) GetMessagePreview(ctx context.Context, ref models.Message
 		GetMessagePreview(context.Context, models.MessageRef, MessageReadIntent) (MessageReadResult, error)
 	})
 	if !ok {
-		return MessageReadResult{}, fmt.Errorf("source %q does not support cache-first preview reads", slot.info.SourceID)
+		return legacyMessagePreviewRead(slot, ref)
 	}
 	return getter.GetMessagePreview(ctx, ref, intent)
+}
+
+func legacyMessageRead(slot *accountSlot, ref models.MessageRef) (MessageReadResult, error) {
+	body, err := slot.backend.FetchEmailBody(ref.Folder, ref.UID)
+	if err != nil {
+		return MessageReadResult{Source: MessageReadSourceProvider}, err
+	}
+	return MessageReadResult{Body: body, Source: MessageReadSourceProvider}, nil
+}
+
+func legacyMessagePreviewRead(slot *accountSlot, ref models.MessageRef) (MessageReadResult, error) {
+	if previewFetcher, ok := slot.backend.(interface {
+		FetchPreviewBody(messageID, folder string, uid uint32) (*models.EmailBody, error)
+	}); ok {
+		body, err := previewFetcher.FetchPreviewBody(ref.MessageID, ref.Folder, ref.UID)
+		if err != nil {
+			return MessageReadResult{Source: MessageReadSourceProvider}, err
+		}
+		if body != nil {
+			return MessageReadResult{Body: body, Source: MessageReadSourceProvider}, nil
+		}
+	}
+	return legacyMessageRead(slot, ref)
 }
 
 func resolveMessageRefForSlot(slot *accountSlot, ref models.MessageRef) models.MessageRef {

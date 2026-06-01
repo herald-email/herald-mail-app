@@ -200,6 +200,7 @@ type ValidIDsMsg struct {
 type EmailBodyMsg struct {
 	Body           *models.EmailBody
 	Err            error
+	MessageRef     models.MessageRef
 	MessageID      string // used to discard stale body fetches from rapid cursor movement
 	Folder         string
 	UID            uint32
@@ -207,6 +208,11 @@ type EmailBodyMsg struct {
 	LoadStartedAt  time.Time
 	LoadFinishedAt time.Time
 	LoadDuration   time.Duration
+}
+
+type ProblemReportMsg struct {
+	Path string
+	Err  error
 }
 
 // TimelineForwardBodyMsg carries a body fetch result for Timeline forwarding.
@@ -830,6 +836,9 @@ type Model struct {
 	// Prompt editor overlay
 	showPromptEditor bool
 	promptEditor     *PromptEditor
+
+	// Problem report overlay
+	showProblemReport bool
 
 	// OAuth wait overlay (shown after Gmail is chosen in the S-key settings panel)
 	oauthWait *OAuthWaitModel
@@ -1878,6 +1887,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PromptEditorCancelledMsg:
 		m.showPromptEditor = false
 		m.promptEditor = nil
+		return m, nil
+
+	case ProblemReportMsg:
+		if msg.Err != nil {
+			m.statusMessage = "Problem report failed: " + msg.Err.Error()
+			logger.Warn("Problem report failed: %v", msg.Err)
+		} else {
+			m.statusMessage = "Problem report written: " + msg.Path
+			logger.Info("Problem report written: %s", msg.Path)
+		}
 		return m, nil
 	}
 
@@ -2929,7 +2948,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.contactPreviewLoading {
 			m.contactPreviewLoading = false
 			if msg.Err != nil {
-				m.contactPreviewBody = &models.EmailBody{TextPlain: "(Failed to load body)"}
+				m.contactPreviewBody = &models.EmailBody{TextPlain: previewFailureBodyText(msg, m.contactPreviewEmail)}
 			} else {
 				m.contactPreviewBody = msg.Body
 			}
@@ -3244,6 +3263,9 @@ func (m *Model) View() tea.View {
 	}
 	if m.showAccountSwitcher {
 		return m.buildView(m.renderAccountSwitcherOverlayView())
+	}
+	if m.showProblemReport {
+		return m.buildView(m.renderProblemReportOverlayView())
 	}
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())

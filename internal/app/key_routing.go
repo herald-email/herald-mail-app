@@ -12,6 +12,30 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 		return model, cmd, true
 	}
 
+	if m.showProblemReport {
+		switch shortcutKey(msg) {
+		case "esc", "q":
+			m.showProblemReport = false
+			return m, nil, true
+		case "e":
+			m.showProblemReport = false
+			m.openProblemReportSupportCompose()
+			return m, nil, true
+		case "s":
+			m.showProblemReport = false
+			m.statusMessage = "Writing problem report..."
+			return m, m.writeProblemReportCmd(), true
+		case "c":
+			report := formatProblemReport(m.problemReportSnapshot(time.Now()))
+			m.statusMessage = "Problem report copied. Paste it into email or the feedback form."
+			return m, copyToClipboard(report), true
+		case "f":
+			m.statusMessage = "Feedback link copied. Open https://herald-mail.app/feedback/ if your terminal does not support links."
+			return m, copyToClipboard(problemReportFeedbackURL), true
+		}
+		return m, nil, true
+	}
+
 	if m.pendingDeleteConfirm {
 		switch shortcutKey(msg) {
 		case "y", "Y":
@@ -167,6 +191,10 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 }
 
 func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if m.shouldHandleProblemReportShortcut(msg) {
+		m.showProblemReport = true
+		return m, nil, true
+	}
 	if model, cmd, handled := m.handleAccountSwitcherKey(msg); handled {
 		return model, cmd, true
 	}

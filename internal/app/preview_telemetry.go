@@ -35,6 +35,7 @@ type messageBodyServiceBackend interface {
 }
 
 type previewLoadTelemetry struct {
+	MessageRef models.MessageRef
 	MessageID  string
 	Folder     string
 	UID        uint32
@@ -47,6 +48,7 @@ type previewLoadTelemetry struct {
 
 func previewTelemetryFromEmailBodyMsg(msg EmailBodyMsg) previewLoadTelemetry {
 	return previewLoadTelemetry{
+		MessageRef: msg.MessageRef,
 		MessageID:  msg.MessageID,
 		Folder:     msg.Folder,
 		UID:        msg.UID,
@@ -73,6 +75,9 @@ func previewLoadTag(t previewLoadTelemetry, messageID string) string {
 	if source == "" {
 		source = previewLoadSourceIMAP
 	}
+	if t.Err != "" {
+		return fmt.Sprintf("failed after %s %s", formatPreviewLoadDuration(t.Duration), source)
+	}
 	return fmt.Sprintf("%s %s", formatPreviewLoadDuration(t.Duration), source)
 }
 
@@ -96,11 +101,15 @@ func logPreviewLoad(surface string, t previewLoadTelemetry, stale bool) {
 		status = "error"
 	}
 	logger.Info(
-		"Preview load: surface=%s message_id=%s folder=%s uid=%d source=%s duration=%s status=%s stale=%t error=%q",
+		"Preview load: surface=%s message_id=%s source_id=%s account_id=%s local_id=%s folder=%s uid=%d uid_validity=%d source=%s duration=%s status=%s stale=%t error=%q",
 		surface,
 		t.MessageID,
+		t.MessageRef.SourceID,
+		t.MessageRef.AccountID,
+		t.MessageRef.LocalID,
 		t.Folder,
 		t.UID,
+		t.MessageRef.UIDValidity,
 		t.Source,
 		t.Duration.Round(time.Millisecond),
 		status,

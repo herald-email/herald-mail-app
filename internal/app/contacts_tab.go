@@ -233,7 +233,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.contactPreviewEmail = email
 				m.contactPreviewBody = nil
 				m.contactPreviewLoading = true
-				return m, m.loadEmailBodyCmd(email.MessageID, email.Folder, email.UID)
+				return m, m.loadEmailBodyForRefCmd(email.MessageRef())
 			}
 		}
 	case "e":
