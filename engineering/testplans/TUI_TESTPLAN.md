@@ -625,6 +625,24 @@ Check these states during every applicable lane:
 - Non-empty CC/BCC preserve existing send, draft-save, draft-restore, and autocomplete behavior.
 - At `50x15`, the minimum-size guard is acceptable; returning to larger sizes restores the composed layout cleanly.
 
+### TC-11B — Compose external editor handoff
+
+**Lane:** C
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Launch Herald in demo mode with `EDITOR` or `VISUAL` set to a terminal editor command.
+2. Open Timeline and press `c` to open a blank Compose screen.
+3. Confirm the bottom hint bar advertises `Ctrl+X` for the external editor.
+4. Type a short body, press `Ctrl+X`, edit the temporary buffer in the external editor, save, and exit.
+5. Confirm Compose restores with the edited body text, the Body field focused, and the draft still available for preview, attachment, or send.
+6. Repeat once from a reply or forward Compose screen that has preserved original-message context.
+
+**Expect:**
+- Herald temporarily releases the TUI, opens the configured `$VISUAL` or `$EDITOR`, then restores the TUI after the editor exits.
+- The edited buffer replaces only the Compose body/top note; To, CC, BCC, Subject, attachments, and preserved original-message context remain unchanged.
+- If the editor command fails, Compose keeps the previous body and shows a bounded error in the Compose status line.
+
 ### TC-12 — Compose AI subject hint accept and dismiss
 
 **Lane:** C  

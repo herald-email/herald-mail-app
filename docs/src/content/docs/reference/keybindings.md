@@ -116,6 +116,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
 | `ctrl+s` | Send message. |
 | `ctrl+p` | Toggle Markdown preview. |
+| `ctrl+x` | Open the Compose body in `$VISUAL` or `$EDITOR`, then read it back on save and exit. |
 | `ctrl+a` | Open outgoing attachment path prompt. |
 | `ctrl+k` | Focus the inline Compose AI prompt. |
 | `ctrl+j` | Generate AI subject suggestion. |
