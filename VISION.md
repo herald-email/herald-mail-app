@@ -359,6 +359,7 @@ Write in Markdown, deliver as properly formatted HTML email. Compose is a transi
 - [x] Markdown editor (textarea)
 - [x] Timeline `c` opens a blank Compose screen for a new message
 - [x] Live Markdown preview (`Ctrl+P`)
+- [x] External editor handoff (`Ctrl+X`) writes the Compose body through `$VISUAL` or `$EDITOR` and restores the edited text when the editor exits
 - [x] Send as multipart HTML + plain-text via SMTP
 - [x] Reply (`r` reply-all and `R` sender-only keys — pre-fill To, Re: subject, quotes original)
 - [x] Loaded preview headers show visible `To` and `Cc` recipients when a message body includes them, so reply-all participants can be checked before composing

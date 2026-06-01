@@ -2614,6 +2614,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case composeExternalEditorFinishedMsg:
+		m.applyComposeExternalEditorResult(msg)
+		return m, nil
+
 	case ClassifyProgressMsg:
 		m.classifyDone = msg.Done
 		m.classifyTotal = msg.Total
