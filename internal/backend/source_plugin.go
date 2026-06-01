@@ -257,6 +257,38 @@ func firstConfiguredMailSource(cfg *config.Config) (config.SourceConfig, bool) {
 	return config.SourceConfig{}, false
 }
 
+func mailAddressForSource(source config.SourceConfig) string {
+	for _, value := range []string{
+		source.Credentials.Username,
+		source.Google.Email,
+	} {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func defaultMailAddressForConfig(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if source, ok := firstConfiguredMailSource(cfg); ok {
+		if address := mailAddressForSource(source); address != "" {
+			return address
+		}
+	}
+	for _, value := range []string{
+		cfg.Credentials.Username,
+		cfg.Gmail.Email,
+	} {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
 func calendarSourceHasProviderConfig(source config.SourceConfig) bool {
 	switch strings.ToLower(strings.TrimSpace(source.Provider)) {
 	case "google_calendar":

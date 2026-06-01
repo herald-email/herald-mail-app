@@ -16,6 +16,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 func TestSourceRegistryOpensGmailAPIMailSource(t *testing.T) {
@@ -213,6 +214,60 @@ func TestGmailAPIMailSourceDraftCreateListDeleteAndSend(t *testing.T) {
 	}
 	if fake.sentDraft != "draft-1" {
 		t.Fatalf("sent draft = %q, want draft-1", fake.sentDraft)
+	}
+}
+
+func TestGmailAPIMailSourceSendComposePreserved(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-preserved.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	err = source.SendCompose(context.Background(), ComposeSendRequest{
+		From:    "me@example.com",
+		To:      "you@example.com",
+		Subject: "Re: Preserved API",
+		Preserved: &appsmtp.PreservedMessageRequest{
+			Kind:            models.PreservedMessageKindReply,
+			From:            "me@example.com",
+			To:              "you@example.com",
+			Subject:         "Re: Preserved API",
+			TopNoteMarkdown: "Thanks for the note.",
+			Original: models.PreservedMessageOriginal{
+				MessageID: "<original@example.com>",
+				Sender:    "you@example.com",
+				Subject:   "Preserved API",
+				TextPlain: "original body",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendCompose preserved: %v", err)
+	}
+	if fake.sentRaw == "" {
+		t.Fatal("expected Gmail API preserved send to post raw MIME")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(fake.sentRaw)
+	if err != nil {
+		t.Fatalf("decode sent raw: %v", err)
+	}
+	sent := string(decoded)
+	for _, want := range []string{
+		"From: me@example.com",
+		"To: you@example.com",
+		"Subject: Re: Preserved API",
+		"In-Reply-To: <original@example.com>",
+		"Thanks for the note.",
+		"original body",
+	} {
+		if !strings.Contains(sent, want) {
+			t.Fatalf("sent raw missing %q:\n%s", want, sent)
+		}
 	}
 }
 

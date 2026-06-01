@@ -125,12 +125,19 @@ func mimeTypeFromExt(ext string) string {
 // recipients via RCPT TO at send time.
 // Returns the full message bytes.
 func BuildDraftMessage(from, to, cc, bcc, subject, body string) ([]byte, error) {
-	_ = bcc // intentionally not written to headers per RFC 5321
+	fromHeader, _, err := normalizeMailbox("From", from)
+	if err != nil {
+		return nil, err
+	}
+	rcpts, err := normalizeRecipientFields(to, cc, bcc)
+	if err != nil {
+		return nil, err
+	}
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	if cc != "" {
-		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", rcpts.ToHeader))
+	if rcpts.CCHeader != "" {
+		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", rcpts.CCHeader))
 	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))

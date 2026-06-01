@@ -12,6 +12,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 const AllAccountsSourceID models.SourceID = "all-accounts"
@@ -484,6 +485,34 @@ func emailForAccountSlot(slot *accountSlot, email *models.EmailData) *models.Ema
 	return &clone
 }
 
+func emailsForAccountSlot(slot *accountSlot, emails []*models.EmailData) []*models.EmailData {
+	if len(emails) == 0 {
+		return emails
+	}
+	out := make([]*models.EmailData, 0, len(emails))
+	for _, email := range emails {
+		out = append(out, emailForAccountSlot(slot, email))
+	}
+	return out
+}
+
+func semanticResultsForAccountSlot(slot *accountSlot, results []*models.SemanticSearchResult) []*models.SemanticSearchResult {
+	if len(results) == 0 {
+		return results
+	}
+	out := make([]*models.SemanticSearchResult, 0, len(results))
+	for _, result := range results {
+		if result == nil {
+			out = append(out, nil)
+			continue
+		}
+		clone := *result
+		clone.Email = emailForAccountSlot(slot, result.Email)
+		out = append(out, &clone)
+	}
+	return out
+}
+
 func sortEmailsNewestFirst(emails []*models.EmailData) {
 	sort.SliceStable(emails, func(i, j int) bool {
 		if emails[i] == nil || emails[j] == nil {
@@ -571,8 +600,9 @@ func (m *MultiBackend) GetFolderStatus(folders []string) (map[string]models.Fold
 
 func (m *MultiBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.GetTimelineEmails(folder)
+		if slot := m.activeRealSlot(); slot != nil {
+			emails, err := slot.backend.GetTimelineEmails(folder)
+			return emailsForAccountSlot(slot, emails), err
 		}
 		return nil, nil
 	}
@@ -583,8 +613,9 @@ func (m *MultiBackend) GetTimelineEmails(folder string) ([]*models.EmailData, er
 
 func (m *MultiBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.SearchEmails(folder, query, bodySearch)
+		if slot := m.activeRealSlot(); slot != nil {
+			emails, err := slot.backend.SearchEmails(folder, query, bodySearch)
+			return emailsForAccountSlot(slot, emails), err
 		}
 		return nil, nil
 	}
@@ -595,8 +626,9 @@ func (m *MultiBackend) SearchEmails(folder, query string, bodySearch bool) ([]*m
 
 func (m *MultiBackend) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.SearchEmailsCrossFolder(query)
+		if slot := m.activeRealSlot(); slot != nil {
+			emails, err := slot.backend.SearchEmailsCrossFolder(query)
+			return emailsForAccountSlot(slot, emails), err
 		}
 		return nil, nil
 	}
@@ -607,8 +639,9 @@ func (m *MultiBackend) SearchEmailsCrossFolder(query string) ([]*models.EmailDat
 
 func (m *MultiBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailData, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.SearchEmailsIMAP(folder, query)
+		if slot := m.activeRealSlot(); slot != nil {
+			emails, err := slot.backend.SearchEmailsIMAP(folder, query)
+			return emailsForAccountSlot(slot, emails), err
 		}
 		return nil, nil
 	}
@@ -619,8 +652,9 @@ func (m *MultiBackend) SearchEmailsIMAP(folder, query string) ([]*models.EmailDa
 
 func (m *MultiBackend) SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.SearchEmailsSemantic(folder, query, limit, minScore)
+		if slot := m.activeRealSlot(); slot != nil {
+			emails, err := slot.backend.SearchEmailsSemantic(folder, query, limit, minScore)
+			return emailsForAccountSlot(slot, emails), err
 		}
 		return nil, nil
 	}
@@ -635,8 +669,9 @@ func (m *MultiBackend) SearchEmailsSemantic(folder, query string, limit int, min
 
 func (m *MultiBackend) SearchSemanticChunked(folder string, queryVec []float32, limit int, minScore float64) ([]*models.SemanticSearchResult, error) {
 	if !m.allAccountsActive() {
-		if active := m.activeBackend(); active != nil {
-			return active.SearchSemanticChunked(folder, queryVec, limit, minScore)
+		if slot := m.activeRealSlot(); slot != nil {
+			results, err := slot.backend.SearchSemanticChunked(folder, queryVec, limit, minScore)
+			return semanticResultsForAccountSlot(slot, results), err
 		}
 		return nil, nil
 	}
@@ -924,6 +959,7 @@ func (m *MultiBackend) ReplyToEmailByRef(ref models.MessageRef, opts models.Repl
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.ReplyToEmailWithOptions(ref.MessageID, opts)
 }
 
@@ -932,6 +968,7 @@ func (m *MultiBackend) ForwardEmailByRef(ref models.MessageRef, opts models.Forw
 	if err != nil {
 		return err
 	}
+	ref = resolveMessageRefForSlot(slot, ref)
 	return slot.backend.ForwardEmailWithOptions(ref.MessageID, opts)
 }
 
@@ -1016,7 +1053,7 @@ func (m *MultiBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, str
 	if err != nil {
 		return 0, "", err
 	}
-	return slot.backend.SaveDraft(to, cc, bcc, subject, body)
+	return m.SaveDraftForAccount(slot.info.SourceID, to, cc, bcc, subject, body)
 }
 
 func (m *MultiBackend) SaveRawDraft(raw []byte) (uint32, string, error) {
@@ -1047,6 +1084,18 @@ func (m *MultiBackend) SaveDraftForAccount(sourceID models.SourceID, to, cc, bcc
 	slot, err := m.slotForCompose(sourceID, "")
 	if err != nil {
 		return 0, "", err
+	}
+	if from := strings.TrimSpace(slot.info.Address); from != "" {
+		raw, err := appsmtp.BuildDraftMessage(from, to, cc, bcc, subject, body)
+		if err != nil {
+			return 0, "", fmt.Errorf("build draft message: %w", err)
+		}
+		if saver, ok := slot.backend.(interface {
+			SaveRawDraftForAccount(models.SourceID, []byte) (uint32, string, error)
+		}); ok {
+			return saver.SaveRawDraftForAccount(slot.info.SourceID, raw)
+		}
+		return slot.backend.SaveRawDraft(raw)
 	}
 	if saver, ok := slot.backend.(interface {
 		SaveDraftForAccount(models.SourceID, string, string, string, string, string) (uint32, string, error)
@@ -1340,12 +1389,9 @@ func calendarSourcesForMailSource(source config.SourceConfig, calendarSources []
 
 func configForMailSource(profile *config.Config, configPath string, source config.SourceConfig, calendarSources ...config.SourceConfig) *config.Config {
 	child := *profile
-	child.Sources = nil
-	if len(calendarSources) > 0 {
-		child.Sources = make([]config.SourceConfig, 0, len(calendarSources)+1)
-		child.Sources = append(child.Sources, source)
-		child.Sources = append(child.Sources, calendarSources...)
-	}
+	child.Sources = make([]config.SourceConfig, 0, len(calendarSources)+1)
+	child.Sources = append(child.Sources, source)
+	child.Sources = append(child.Sources, calendarSources...)
 	child.Credentials = source.Credentials
 	child.Server = source.IMAP
 	child.SMTP = source.SMTP
@@ -1417,16 +1463,12 @@ func sanitizeAccountCachePart(value string) string {
 }
 
 func accountInfoFromSource(source config.SourceConfig) AccountInfo {
-	address := strings.TrimSpace(source.Credentials.Username)
-	if address == "" {
-		address = strings.TrimSpace(source.Google.Email)
-	}
 	return normalizeAccountInfo(AccountInfo{
 		SourceID:    models.SourceID(source.ID),
 		AccountID:   models.AccountID(source.AccountID),
 		DisplayName: source.DisplayName,
 		Provider:    source.Provider,
-		Address:     address,
+		Address:     mailAddressForSource(source),
 		Signature:   source.Compose.Signature.Text,
 	})
 }

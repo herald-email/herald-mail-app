@@ -282,6 +282,8 @@ func (c *Client) Connect() error {
 
 // Close closes the IMAP connection
 func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.client != nil {
 		err := c.client.Logout()
 		c.client = nil
@@ -878,6 +880,12 @@ func (c *Client) StartBackgroundReconcile(folder string, validIDsCh chan<- map[s
 		logger.Debug("StartBackgroundReconcile: starting for folder=%s", folder)
 		// Fetch all server UIDs (lightweight — no envelopes).
 		c.mu.Lock()
+		if c.client == nil {
+			c.mu.Unlock()
+			logger.Warn("StartBackgroundReconcile: client unavailable for %s", folder)
+			close(validIDsCh)
+			return
+		}
 		if _, err := c.client.Select(folder, true); err != nil {
 			c.mu.Unlock()
 			logger.Warn("StartBackgroundReconcile: select %s: %v", folder, err)

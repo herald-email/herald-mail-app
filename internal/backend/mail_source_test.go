@@ -11,6 +11,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
 func TestLocalBackendDoesNotRetainConcreteIMAPClient(t *testing.T) {
@@ -212,6 +213,89 @@ func TestLocalBackendSourceBackedMessageServiceUsesMailSource(t *testing.T) {
 	}
 }
 
+func TestLocalBackendPreservedComposeUsesMailSourceBeforeSMTP(t *testing.T) {
+	source := newFakeMailSource()
+	b := &LocalBackend{
+		mailSource: source,
+		cache:      newMemoryCache(t),
+		cfg:        &config.Config{},
+	}
+
+	err := b.SendCompose(ComposeSendRequest{
+		From:    "me@example.test",
+		To:      "friend@example.test",
+		Subject: "Re: source send",
+		Preserved: &appsmtp.PreservedMessageRequest{
+			Kind:    models.PreservedMessageKindReply,
+			To:      "friend@example.test",
+			Subject: "Re: source send",
+			Original: models.PreservedMessageOriginal{
+				MessageID: "<original@example.test>",
+				TextPlain: "original body",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendCompose preserved returned error: %v", err)
+	}
+	if len(source.composeSends) != 1 {
+		t.Fatalf("compose sends = %#v, want one mail-source send", source.composeSends)
+	}
+	if got := source.composeSends[0].Preserved.From; got != "me@example.test" {
+		t.Fatalf("preserved From = %q, want me@example.test", got)
+	}
+	if got := source.callsSnapshot(); !reflect.DeepEqual(got, []string{"send-compose:me@example.test:friend@example.test:Re: source send"}) {
+		t.Fatalf("source calls = %#v", got)
+	}
+}
+
+func TestLocalBackendReplyAndForwardUseMailSourcePreservedCompose(t *testing.T) {
+	source := newFakeMailSource()
+	ref := models.MessageRef{Folder: "INBOX", UID: 42, MessageID: "<original@example.test>"}.WithDefaults()
+	source.fullBodies[source.refKey(ref)] = &models.EmailBody{
+		MessageID: ref.MessageID,
+		TextPlain: "original body",
+	}
+	c := newMemoryCache(t)
+	if err := c.CacheEmail(&models.EmailData{
+		MessageID: ref.MessageID,
+		UID:       ref.UID,
+		Sender:    "sender@example.test",
+		Subject:   "Original",
+		Folder:    ref.Folder,
+		Date:      time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("cache original: %v", err)
+	}
+	b := &LocalBackend{
+		mailSource: source,
+		cache:      c,
+		cfg:        &config.Config{Credentials: config.CredentialsConfig{Username: "me@example.test"}},
+	}
+
+	if err := b.ReplyToEmailWithOptions(ref.MessageID, models.ReplyEmailOptions{Body: "reply body"}); err != nil {
+		t.Fatalf("ReplyToEmailWithOptions: %v", err)
+	}
+	if err := b.ForwardEmailWithOptions(ref.MessageID, models.ForwardEmailOptions{To: "forward@example.test", Body: "forward body"}); err != nil {
+		t.Fatalf("ForwardEmailWithOptions: %v", err)
+	}
+	if len(source.composeSends) != 2 {
+		t.Fatalf("compose sends = %#v, want reply and forward", source.composeSends)
+	}
+	if got := source.composeSends[0].Preserved.Kind; got != models.PreservedMessageKindReply {
+		t.Fatalf("reply preserved kind = %q", got)
+	}
+	if got := source.composeSends[0].Preserved.To; got != "sender@example.test" {
+		t.Fatalf("reply to = %q, want sender@example.test", got)
+	}
+	if got := source.composeSends[1].Preserved.Kind; got != models.PreservedMessageKindForward {
+		t.Fatalf("forward preserved kind = %q", got)
+	}
+	if got := source.composeSends[1].Preserved.To; got != "forward@example.test" {
+		t.Fatalf("forward to = %q, want forward@example.test", got)
+	}
+}
+
 func TestAllMailOnlyViewUsesMailSourceMembership(t *testing.T) {
 	source := newFakeMailSource()
 	source.folders = []string{"INBOX", "All Mail", "Labels/Home"}
@@ -289,6 +373,7 @@ type fakeMailSource struct {
 	appendFolder string
 	drafts       []*models.Draft
 	pollEmails   []*models.EmailData
+	composeSends []ComposeSendRequest
 }
 
 func newFakeMailSource() *fakeMailSource {
@@ -378,6 +463,14 @@ func (s *fakeMailSource) DeleteDomainEmails(_ context.Context, domain, folder st
 
 func (s *fakeMailSource) DeleteEmail(_ context.Context, messageID, folder string) error {
 	s.record("delete-email:" + folder + ":" + messageID)
+	return nil
+}
+
+func (s *fakeMailSource) SendCompose(_ context.Context, req ComposeSendRequest) error {
+	s.mu.Lock()
+	s.composeSends = append(s.composeSends, req)
+	s.calls = append(s.calls, "send-compose:"+req.From+":"+req.To+":"+req.Subject)
+	s.mu.Unlock()
 	return nil
 }
 

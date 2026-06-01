@@ -202,6 +202,9 @@ func (c *Client) runFetchStreamLocked(
 	fetch func(messages chan *imap.Message) error,
 	handle func(*imap.Message) error,
 ) error {
+	if c.client == nil {
+		return fmt.Errorf("IMAP client unavailable")
+	}
 	opts.Reconnect = c.Reconnect
 	opts.Abort = c.abortIMAPCommandLocked
 	return runIMAPStreamCommand(opts, fetch, handle)

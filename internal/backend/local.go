@@ -1118,7 +1118,20 @@ func (b *LocalBackend) SendEmail(to, subject, body, from string) error {
 func (b *LocalBackend) SendCompose(req ComposeSendRequest) error {
 	from := strings.TrimSpace(req.From)
 	if from == "" {
-		from = strings.TrimSpace(b.cfg.Credentials.Username)
+		from = defaultMailAddressForConfig(b.cfg)
+	}
+	if sender, ok := b.mailSource.(interface {
+		SendCompose(context.Context, ComposeSendRequest) error
+	}); ok {
+		req.From = from
+		if req.Preserved != nil {
+			preserved := *req.Preserved
+			if strings.TrimSpace(preserved.From) == "" {
+				preserved.From = from
+			}
+			req.Preserved = &preserved
+		}
+		return sender.SendCompose(context.Background(), req)
 	}
 	mailer := appsmtp.New(b.cfg)
 	if req.Preserved != nil {
@@ -1127,12 +1140,6 @@ func (b *LocalBackend) SendCompose(req ComposeSendRequest) error {
 			preserved.From = from
 		}
 		return mailer.SendPreserved(preserved)
-	}
-	if sender, ok := b.mailSource.(interface {
-		SendCompose(context.Context, ComposeSendRequest) error
-	}); ok {
-		req.From = from
-		return sender.SendCompose(context.Background(), req)
 	}
 	htmlBody, inlines, inlineErr := appsmtp.BuildInlineImages(req.MarkdownBody)
 	if inlineErr != nil {
@@ -1476,16 +1483,20 @@ func (b *LocalBackend) ReplyToEmailWithOptions(messageID string, opts models.Rep
 	}
 	body := result.Body
 	subject := buildReplySubject(email.Subject)
-	from := b.cfg.Credentials.Username
-	mailer := appsmtp.New(b.cfg)
-	return mailer.SendPreserved(appsmtp.PreservedMessageRequest{
-		Kind:            models.PreservedMessageKindReply,
-		Mode:            models.NormalizePreservationMode(opts.PreservationMode),
-		From:            from,
-		To:              email.Sender,
-		Subject:         subject,
-		TopNoteMarkdown: opts.Body,
-		Original:        preservedOriginalFromEmail(email, body, false),
+	from := defaultMailAddressForConfig(b.cfg)
+	return b.SendCompose(ComposeSendRequest{
+		From:    from,
+		To:      email.Sender,
+		Subject: subject,
+		Preserved: &appsmtp.PreservedMessageRequest{
+			Kind:            models.PreservedMessageKindReply,
+			Mode:            models.NormalizePreservationMode(opts.PreservationMode),
+			From:            from,
+			To:              email.Sender,
+			Subject:         subject,
+			TopNoteMarkdown: opts.Body,
+			Original:        preservedOriginalFromEmail(email, body, false),
+		},
 	})
 }
 
@@ -1511,18 +1522,22 @@ func (b *LocalBackend) ForwardEmailWithOptions(messageID string, opts models.For
 	}
 	body := result.Body
 	subject := buildForwardSubject(email.Subject)
-	from := b.cfg.Credentials.Username
-	mailer := appsmtp.New(b.cfg)
-	return mailer.SendPreserved(appsmtp.PreservedMessageRequest{
-		Kind:                           models.PreservedMessageKindForward,
-		Mode:                           models.NormalizePreservationMode(opts.PreservationMode),
-		From:                           from,
-		To:                             opts.To,
-		Subject:                        subject,
-		TopNoteMarkdown:                opts.Body,
-		Original:                       preservedOriginalFromEmail(email, body, true),
-		OmitOriginalAttachments:        opts.OmitOriginalAttachments,
-		OmittedOriginalAttachmentNames: opts.OmittedOriginalAttachmentNames,
+	from := defaultMailAddressForConfig(b.cfg)
+	return b.SendCompose(ComposeSendRequest{
+		From:    from,
+		To:      opts.To,
+		Subject: subject,
+		Preserved: &appsmtp.PreservedMessageRequest{
+			Kind:                           models.PreservedMessageKindForward,
+			Mode:                           models.NormalizePreservationMode(opts.PreservationMode),
+			From:                           from,
+			To:                             opts.To,
+			Subject:                        subject,
+			TopNoteMarkdown:                opts.Body,
+			Original:                       preservedOriginalFromEmail(email, body, true),
+			OmitOriginalAttachments:        opts.OmitOriginalAttachments,
+			OmittedOriginalAttachmentNames: opts.OmittedOriginalAttachmentNames,
+		},
 	})
 }
 
@@ -1629,7 +1644,7 @@ func attachmentMatchesLookup(a models.Attachment, lookup string) bool {
 // --- Drafts ---
 
 func (b *LocalBackend) SaveDraft(to, cc, bcc, subject, body string) (uint32, string, error) {
-	from := b.cfg.Credentials.Username
+	from := defaultMailAddressForConfig(b.cfg)
 	raw, err := appsmtp.BuildDraftMessage(from, to, cc, bcc, subject, body)
 	if err != nil {
 		return 0, "", fmt.Errorf("build draft message: %w", err)
@@ -1688,7 +1703,7 @@ func (b *LocalBackend) SendDraft(uid uint32, folder string) error {
 	}
 	from := strings.TrimSpace(body.From)
 	if from == "" {
-		from = b.cfg.Credentials.Username
+		from = defaultMailAddressForConfig(b.cfg)
 	}
 	plain := body.TextPlain
 	htmlBody := body.TextHTML

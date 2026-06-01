@@ -360,6 +360,32 @@ func TestAccountInfoFromSourceCarriesComposeSignature(t *testing.T) {
 	}
 }
 
+func TestConfigForMailSourceKeepsExplicitMailSourceWithoutCalendars(t *testing.T) {
+	source := config.SourceConfig{
+		ID:          "proton-mail",
+		Kind:        string(models.SourceKindMail),
+		Provider:    "protonmail",
+		DisplayName: "Proton",
+		AccountID:   "proton",
+		Credentials: config.CredentialsConfig{Username: "me@example.test", Password: "bridge-password"},
+		IMAP:        config.ServerConfig{Host: "127.0.0.1", Port: 1143},
+		SMTP:        config.ServerConfig{Host: "127.0.0.1", Port: 1025},
+	}
+	profile := &config.Config{Sources: []config.SourceConfig{source}}
+
+	child := configForMailSource(profile, "proton.yaml", source)
+	sources := child.NormalizedSources()
+	if len(sources) != 1 {
+		t.Fatalf("normalized child sources = %d, want 1", len(sources))
+	}
+	if got := sources[0].ID; got != "proton-mail" {
+		t.Fatalf("child source id = %q, want proton-mail", got)
+	}
+	if got := sources[0].AccountID; got != "proton" {
+		t.Fatalf("child account id = %q, want proton", got)
+	}
+}
+
 func TestMultiBackendDuplicateFoldersAndMessageIDsStayActiveAccountScoped(t *testing.T) {
 	workEmail := &models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "same-message", UID: 42, Folder: "INBOX"}
 	personalEmail := &models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "same-message", UID: 42, Folder: "INBOX"}
@@ -521,6 +547,39 @@ func TestMultiBackendDraftOperationsRouteBySelectedSource(t *testing.T) {
 	}
 }
 
+func TestMultiBackendSaveDraftForAccountUsesSelectedAccountAddress(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail", Address: "work@example.test"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal", Address: "me@example.test"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	uid, folder, err := mb.SaveDraftForAccount("personal-mail", "friend@example.test", "", "", "Draft identity", "body")
+	if err != nil {
+		t.Fatalf("SaveDraftForAccount: %v", err)
+	}
+	if uid != 502 || folder != "Drafts" {
+		t.Fatalf("saved draft uid/folder=%d/%s, want 502/Drafts from raw draft path", uid, folder)
+	}
+	if len(work.rawDraftCalls) != 0 || len(work.saveDraftCalls) != 0 {
+		t.Fatalf("work draft calls raw=%#v save=%#v, want none", work.rawDraftCalls, work.saveDraftCalls)
+	}
+	if len(personal.saveDraftCalls) != 0 {
+		t.Fatalf("personal SaveDraft calls=%#v, want raw draft with selected account From", personal.saveDraftCalls)
+	}
+	if len(personal.rawDraftCalls) != 1 {
+		t.Fatalf("personal raw draft calls=%#v, want one", personal.rawDraftCalls)
+	}
+	if !strings.Contains(personal.rawDraftCalls[0], "From: me@example.test\r\n") {
+		t.Fatalf("raw draft missing selected account From header:\n%s", personal.rawDraftCalls[0])
+	}
+}
+
 func TestMultiBackendAllAccountsTimelineAggregatesAndKeepsDuplicateIDsScoped(t *testing.T) {
 	workEmail := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "same-message", UID: 11, Folder: "INBOX", Subject: "Work", Date: time.Date(2026, 5, 23, 13, 0, 0, 0, time.UTC)})
 	personalEmail := scopedTestEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "same-message", UID: 22, Folder: "INBOX", Subject: "Personal", Date: time.Date(2026, 5, 23, 14, 0, 0, 0, time.UTC)})
@@ -582,6 +641,58 @@ func TestMultiBackendAllAccountsSearchAggregatesVisibleAccounts(t *testing.T) {
 	}
 	if emails[0].SourceID != "personal-mail" || emails[1].SourceID != "work-mail" {
 		t.Fatalf("search results not newest-first with source identity: %#v", emails)
+	}
+}
+
+func TestMultiBackendActiveTimelineAndSearchResultsAreScoped(t *testing.T) {
+	workEmail := &models.EmailData{MessageID: "same-message", UID: 11, Folder: "INBOX", Subject: "roadmap", Date: time.Date(2026, 5, 23, 13, 0, 0, 0, time.UTC)}
+	personalEmail := &models.EmailData{MessageID: "same-message", UID: 22, Folder: "INBOX", Subject: "roadmap", Date: time.Date(2026, 5, 23, 14, 0, 0, 0, time.UTC)}
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, workEmail, "work body")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, personalEmail, "personal body")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount("personal-mail"); err != nil {
+		t.Fatalf("SwitchAccount: %v", err)
+	}
+
+	timeline, err := mb.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+	if len(timeline) != 1 {
+		t.Fatalf("timeline len=%d, want 1", len(timeline))
+	}
+	if timeline[0].SourceID != "personal-mail" || timeline[0].AccountID != "personal" {
+		t.Fatalf("timeline result scope=(%q,%q), want personal-mail/personal", timeline[0].SourceID, timeline[0].AccountID)
+	}
+	if timeline[0].MessageRef().SourceID != "personal-mail" {
+		t.Fatalf("timeline message ref = %#v, want personal-mail source", timeline[0].MessageRef())
+	}
+
+	search, err := mb.SearchEmails("INBOX", "roadmap", false)
+	if err != nil {
+		t.Fatalf("SearchEmails: %v", err)
+	}
+	if len(search) != 1 {
+		t.Fatalf("search len=%d, want 1", len(search))
+	}
+	if search[0].SourceID != "personal-mail" || search[0].AccountID != "personal" {
+		t.Fatalf("search result scope=(%q,%q), want personal-mail/personal", search[0].SourceID, search[0].AccountID)
+	}
+	if err := mb.ArchiveEmailByRef(search[0].MessageRef()); err != nil {
+		t.Fatalf("ArchiveEmailByRef with active search ref: %v", err)
+	}
+	if got := personal.archiveCalls; !reflect.DeepEqual(got, []string{"INBOX:same-message"}) {
+		t.Fatalf("personal archive calls=%#v", got)
+	}
+	if len(work.archiveCalls) != 0 {
+		t.Fatalf("work archive calls=%#v, want none", work.archiveCalls)
 	}
 }
 
