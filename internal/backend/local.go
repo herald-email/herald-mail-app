@@ -632,6 +632,12 @@ func (b *LocalBackend) ListFolders() ([]string, error) {
 	b.foldersMu.RUnlock()
 
 	folders, err := b.mailSource.ListFolders(context.Background())
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "not connected") {
+		if connectErr := b.mailSource.Connect(context.Background()); connectErr != nil {
+			return nil, fmt.Errorf("connect before listing folders: %w", connectErr)
+		}
+		folders, err = b.mailSource.ListFolders(context.Background())
+	}
 	if err != nil {
 		return nil, err
 	}

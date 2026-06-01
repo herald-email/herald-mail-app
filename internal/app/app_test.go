@@ -410,6 +410,53 @@ func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsValidationSuccessRefreshesMultiAccountChrome(t *testing.T) {
+	oldValidate := validateAccountConfig
+	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
+		return accountcheck.Result{
+			IMAP: accountcheck.Check{Surface: "IMAP"},
+			SMTP: accountcheck.Check{Surface: "SMTP"},
+		}
+	}
+	defer func() { validateAccountConfig = oldValidate }()
+
+	accounts := []backend.AccountInfo{
+		{SourceID: "google-mail", AccountID: "google", DisplayName: "Google", Provider: "gmail", Address: "me@gmail.com"},
+		{SourceID: "proton-mail", AccountID: "proton", DisplayName: "ProtonMail", Provider: "protonmail", Address: "me@proton.me"},
+	}
+	newBackend := newAccountAwareStubBackend(accounts)
+	oldFactory := newValidatedLocalBackend
+	newValidatedLocalBackend = func(*config.Config, string, ai.AIClient) (backend.Backend, error) {
+		return newBackend, nil
+	}
+	defer func() { newValidatedLocalBackend = oldFactory }()
+
+	next := &config.Config{Sources: []config.SourceConfig{
+		{ID: "google-mail", Kind: "mail", Provider: "gmail", AccountID: "google", DisplayName: "Google"},
+		{ID: "proton-mail", Kind: "mail", Provider: "protonmail", AccountID: "proton", DisplayName: "ProtonMail"},
+	}}
+
+	m := New(&stubBackend{}, nil, "me@gmail.com", nil, false)
+	m.SetConfig(&config.Config{})
+	m.SetConfigPath(t.TempDir() + "/conf.yaml")
+
+	updatedModel, cmd := m.Update(SettingsSavedMsg{Config: next, ValidateAccount: true})
+	updated := updatedModel.(*Model)
+	msg := cmd().(AccountValidationMsg)
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if !updated.hasMultipleAccounts() {
+		t.Fatalf("validated multi-account backend did not update account chrome; accounts=%#v active=%q", updated.accounts, updated.activeSourceID)
+	}
+	if updated.activeSourceID != "google-mail" {
+		t.Fatalf("activeSourceID = %q, want google-mail", updated.activeSourceID)
+	}
+	if got := updated.accountSelectedFolders["google-mail"]; got != "INBOX" {
+		t.Fatalf("selected folder for active account = %q, want INBOX", got)
+	}
+}
+
 func TestAccountSettingsValidationSuccessResetsSyncGenerationForNewBackend(t *testing.T) {
 	oldValidate := validateAccountConfig
 	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {

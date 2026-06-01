@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -43,6 +45,46 @@ func TestLocalBackendPrimesFolderCacheFromPersistedFolderList(t *testing.T) {
 	want := []string{"INBOX", "Projects/Launch", "Sent"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ListFolders from cached folder list = %#v, want %#v", got, want)
+	}
+}
+
+type connectOnListMailSource struct {
+	*fakeMailSource
+	connected bool
+}
+
+func (s *connectOnListMailSource) Connect(ctx context.Context) error {
+	s.connected = true
+	return s.fakeMailSource.Connect(ctx)
+}
+
+func (s *connectOnListMailSource) ListFolders(ctx context.Context) ([]string, error) {
+	if !s.connected {
+		return nil, errors.New("not connected")
+	}
+	return s.fakeMailSource.ListFolders(ctx)
+}
+
+func TestLocalBackendListFoldersConnectsDisconnectedSourceWhenCacheEmpty(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	source := &connectOnListMailSource{fakeMailSource: newFakeMailSource()}
+	source.folders = []string{"INBOX", "Archive", "Projects/Launch"}
+	b := &LocalBackend{cache: c, mailSource: source}
+
+	got, err := b.ListFolders()
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	want := []string{"INBOX", "Archive", "Projects/Launch"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListFolders after connect = %#v, want %#v", got, want)
+	}
+	if !source.connected {
+		t.Fatal("ListFolders did not connect the source before retrying")
 	}
 }
 

@@ -1465,6 +1465,7 @@ func (m *Model) applyValidatedAccountConfig(msg SettingsSavedMsg) tea.Cmd {
 	m.backend = nextBackend
 	m.progressCh = nextBackend.Progress()
 	m.syncEventsCh = nextBackend.SyncEvents()
+	m.syncAccountIdentityFromBackend()
 	if oldBackend != nil && oldBackend != nextBackend {
 		go func() {
 			if err := oldBackend.Close(); err != nil {
