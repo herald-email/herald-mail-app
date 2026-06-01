@@ -88,6 +88,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Compose + reply + forward with Markdown preview                                           | ✅     |
 | MCP server — AI agents read and manage email over stdio                                   | ✅     |
 | SSH server — run the full TUI over SSH                                                    | ✅     |
+| Privacy-safe logs by default, with `-unsafe-logs` for explicit local diagnostics           | ✅     |
 | IMAP IDLE push sync — new mail appears instantly                                          | ✅     |
 
 ![Herald semantic search demo](assets/demo/semantic-search.gif)

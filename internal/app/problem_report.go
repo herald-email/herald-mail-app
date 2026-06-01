@@ -378,7 +378,7 @@ func formatProblemReport(snapshot problemReportSnapshot) string {
 	b.WriteString(fmt.Sprintf("\n## Last %d events\n\n", problemReportLogLimit))
 	if len(snapshot.Logs) == 0 {
 		b.WriteString("No in-app log events were captured.\n")
-		return b.String()
+		return logger.Redact(b.String())
 	}
 	for _, entry := range snapshot.Logs {
 		fmt.Fprintf(&b, "- %s %s %s\n",
@@ -387,7 +387,7 @@ func formatProblemReport(snapshot problemReportSnapshot) string {
 			singleLineReportValue(entry.Message),
 		)
 	}
-	return b.String()
+	return logger.Redact(b.String())
 }
 
 func writeReportField(b *strings.Builder, name, value string) {

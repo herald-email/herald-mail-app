@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -98,7 +99,7 @@ func TestProblemReportCommandWritesLastEventsAndPreviewFailure(t *testing.T) {
 	for _, want := range []string{
 		"# Herald Problem Report",
 		"Debug enabled:",
-		"Config path: /tmp/herald-test.yaml",
+		"Config path:",
 		"source_id: gmail-api",
 		"account_id: work",
 		"uid: 91",
@@ -110,6 +111,48 @@ func TestProblemReportCommandWritesLastEventsAndPreviewFailure(t *testing.T) {
 		if !strings.Contains(report, want) {
 			t.Fatalf("problem report missing %q:\n%s", want, report)
 		}
+	}
+	if strings.Contains(report, "/tmp/herald-test.yaml") {
+		t.Fatalf("problem report leaked raw config path:\n%s", report)
+	}
+}
+
+func TestProblemReportMasksPrivateDiagnostics(t *testing.T) {
+	reportDir := t.TempDir()
+	t.Setenv("HERALD_REPORT_DIR", reportDir)
+
+	m := makeSizedModel(t, 120, 40)
+	m.configPath = filepath.Join("/Users", "alice", ".herald", "conf.yaml")
+	m.statusMessage = "Failed loading sender=person@example.com subject=\"Project launch\""
+	email := &models.EmailData{
+		SourceID:    "gmail-api",
+		AccountID:   "work",
+		LocalID:     "mail:gmail-api:work:INBOX:<secret-message@example.com>",
+		UIDValidity: 888,
+		MessageID:   "<secret-message@example.com>",
+		Folder:      "Folders/Private Plans",
+		UID:         91,
+	}
+	m.timeline.selectedEmail = email
+	m.timeline.previewLoad = previewLoadTelemetry{
+		MessageRef: email.MessageRef(),
+		MessageID:  email.MessageID,
+		Folder:     email.Folder,
+		UID:        email.UID,
+		Source:     previewLoadSourceIMAP,
+		Duration:   5 * time.Second,
+		Err:        "uid fetch failed for person@example.com at /Users/alice/.herald/conf.yaml",
+	}
+	m.logViewer.AddLog("WARN", "sender=person@example.com message_id=<secret-message@example.com> subject=\"Project launch\" path=/Users/alice/.herald/conf.yaml")
+
+	report := formatProblemReport(m.problemReportSnapshot(time.Date(2026, 5, 31, 12, 0, 0, 0, time.UTC)))
+	for _, leaked := range []string{"person@example.com", "secret-message@example.com", "Project launch", "/Users/alice/.herald/conf.yaml", "Folders/Private Plans"} {
+		if strings.Contains(report, leaked) {
+			t.Fatalf("problem report leaked private value %q:\n%s", leaked, report)
+		}
+	}
+	if strings.Count(report, "?????????") < 5 {
+		t.Fatalf("expected masked values in problem report, got:\n%s", report)
 	}
 }
 

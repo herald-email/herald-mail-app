@@ -55,6 +55,22 @@ func TestRegisterTUIFlagsParsesThemeOverride(t *testing.T) {
 	}
 }
 
+func TestRegisterTUIFlagsParsesUnsafeLogs(t *testing.T) {
+	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
+	opts := registerTUIFlags(fs)
+
+	if err := fs.Parse([]string{"-debug", "-unsafe-logs"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	if !*opts.debug {
+		t.Fatal("expected -debug to parse")
+	}
+	if !*opts.unsafeLogs {
+		t.Fatal("expected -unsafe-logs to parse")
+	}
+}
+
 func TestRegisterTUIFlagsAdvertisesDemoKeys(t *testing.T) {
 	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
 	registerTUIFlags(fs)
@@ -80,5 +96,19 @@ func TestRegisterTUIFlagsAdvertisesThemeOverride(t *testing.T) {
 	help := buf.String()
 	if !strings.Contains(help, "theme") || !strings.Contains(help, "built-in theme name or theme YAML file") {
 		t.Fatalf("expected help to advertise theme override, got:\n%s", help)
+	}
+}
+
+func TestRegisterTUIFlagsAdvertisesUnsafeLogs(t *testing.T) {
+	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
+	registerTUIFlags(fs)
+
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+
+	help := buf.String()
+	if !strings.Contains(help, "unsafe-logs") || !strings.Contains(help, "unredacted private data") {
+		t.Fatalf("expected help to advertise unsafe logs opt-in, got:\n%s", help)
 	}
 }

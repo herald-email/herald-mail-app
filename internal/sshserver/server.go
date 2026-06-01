@@ -38,6 +38,7 @@ func Run(commandName string, args []string) error {
 	hostKey := fs.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := fs.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
 	imageProtocol := fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
+	unsafeLogs := fs.Bool("unsafe-logs", false, "Write unredacted private data to logs for explicit local diagnostics")
 	showVersion := fs.Bool("version", false, "Show version information")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -53,7 +54,7 @@ func Run(commandName string, args []string) error {
 		return err
 	}
 
-	if err := logger.Init(false); err != nil {
+	if err := logger.Init(false, logger.WithUnsafeLogs(*unsafeLogs)); err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logger.Close()

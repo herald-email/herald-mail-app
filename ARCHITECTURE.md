@@ -53,7 +53,7 @@ cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 | `internal/render` | Email body rendering: shared HTML-to-Markdown conversion, ANSI-aware text wrapping, URL linkification, link sanitization. No TUI dependency — usable from MCP, daemon, SSH |
 | `internal/mcpserver` | Shared MCP stdio server implementation used by `herald mcp` and the legacy `herald-mcp-server` wrapper |
 | `internal/sshserver` | Shared SSH server implementation used by `herald ssh` and the legacy `herald-ssh-server` wrapper |
-| `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory |
+| `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory and masks private mailbox/config data unless `-unsafe-logs` is explicitly enabled |
 
 ### First-run configuration flow
 

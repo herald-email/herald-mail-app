@@ -360,8 +360,8 @@ func newWizardPreferencesSettings(existing *config.Config, configPath string, ex
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string) {
-	if err := logger.Init(false); err != nil {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool) {
+	if err := logger.Init(false, logger.WithUnsafeLogs(unsafeLogs)); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
 	defer logger.Close()
@@ -439,6 +439,7 @@ const (
 type tuiFlagOptions struct {
 	debug         *bool
 	verbose       *bool
+	unsafeLogs    *bool
 	demo          *bool
 	demoKeys      *bool
 	demoMulti     *bool
@@ -456,6 +457,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 	return tuiFlagOptions{
 		debug:         fs.Bool("debug", false, "Enable debug logging in the Herald user log directory"),
 		verbose:       fs.Bool("verbose", false, "Alias for -debug (same behavior today)"),
+		unsafeLogs:    fs.Bool("unsafe-logs", false, "Write unredacted private data to logs for explicit local diagnostics"),
 		demo:          fs.Bool("demo", false, "Start with synthetic demo data (no real IMAP required)"),
 		demoKeys:      fs.Bool("demo-keys", false, "Show a demo keypress overlay while running with --demo"),
 		demoMulti:     fs.Bool("demo-multi-account", false, "Start demo mode with two deterministic mail accounts"),
@@ -743,6 +745,7 @@ func printRootHelp(w io.Writer, executable string, fs *flag.FlagSet) {
 	fmt.Fprintf(w, "  %s                         # Run with default config (~/.herald/conf.yaml)\n", executable)
 	fmt.Fprintf(w, "  %s -debug                  # Run with debug logging in the Herald user log directory\n", executable)
 	fmt.Fprintf(w, "  %s -verbose                # Alias for -debug\n", executable)
+	fmt.Fprintf(w, "  %s -debug -unsafe-logs     # Include unredacted private data in local diagnostic logs\n", executable)
 	fmt.Fprintf(w, "  %s -experimental           # Show experimental first-run email service onboarding\n", executable)
 	fmt.Fprintf(w, "  %s -config custom.yaml     # Use custom config file\n", executable)
 	fmt.Fprintf(w, "  %s --demo -theme jade-signal # Preview a built-in app theme without saving config\n", executable)
@@ -787,7 +790,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if shouldRunDemo(*opts.demo, *opts.demoMulti) {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme)
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs)
 		return
 	}
 
@@ -829,7 +832,7 @@ func runTUI() {
 
 	// Initialize logging before first-run setup so OAuth and validation failures
 	// have a user-shareable log path even when no config has been saved yet.
-	if err := logger.Init(*opts.debug || *opts.verbose); err != nil {
+	if err := logger.Init(*opts.debug || *opts.verbose, logger.WithUnsafeLogs(*opts.unsafeLogs)); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
 	defer logger.Close()

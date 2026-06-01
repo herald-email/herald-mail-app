@@ -2356,7 +2356,7 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 5. Save each policy in turn: `Lightweight previews`, `Message bodies without attachments`, and `Full offline archive`.
 6. In `Sync & Cleanup`, enable `Reclaim offline cache storage`, save, and confirm the reclaim prompt shows before/after byte estimates plus the preserved-data explanation.
 7. Press `n`, repeat the action, then press `y` and confirm the status bar reports the reclaimed bytes and compaction result.
-8. With debug logging enabled, wait for the active Timeline folder to finish loading and confirm the log records preview prewarming progress, such as `Preview cache: 0/50 warming folder=INBOX` followed by a completion summary.
+8. With debug logging enabled and without `-unsafe-logs`, wait for the active Timeline folder to finish loading and confirm the log records preview prewarming progress with private values masked, such as `Preview cache: 0/50 warming folder=?????????` followed by a completion summary. Use `-unsafe-logs` only when explicitly collecting local unredacted diagnostics.
 9. Switch folders during prewarming and confirm stale prewarm progress does not continue warming the old folder.
 10. Open a message with an attachment, then save the selected attachment.
 11. Resize to `50x15`, then recover to `80x24`.

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -94,4 +95,97 @@ func TestDefaultLogDirHonorsOverride(t *testing.T) {
 	if logDir != want {
 		t.Fatalf("defaultLogDir() = %q, want override %q", logDir, want)
 	}
+}
+
+func TestLogsMaskPrivateDataByDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HERALD_LOG_DIR", dir)
+	resetLoggerState(t)
+
+	var callbackMessages []string
+	SetLogCallback(func(level, message string) {
+		callbackMessages = append(callbackMessages, level+": "+message)
+	})
+
+	if err := Init(true); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	Debug("sender=%s message_id=%s subject=%q config=%s token=%s", "person@example.com", "<secret-message@example.com>", "Project launch", "/Users/alice/.herald/conf.yaml", "refresh-token-123")
+	Close()
+
+	raw, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	logText := string(raw)
+	for _, leaked := range []string{"person@example.com", "secret-message@example.com", "Project launch", "/Users/alice/.herald/conf.yaml", "refresh-token-123"} {
+		if strings.Contains(logText, leaked) {
+			t.Fatalf("log leaked private value %q:\n%s", leaked, logText)
+		}
+		if strings.Contains(strings.Join(callbackMessages, "\n"), leaked) {
+			t.Fatalf("callback leaked private value %q: %q", leaked, callbackMessages)
+		}
+	}
+	if strings.Count(logText, "?????????") < 5 {
+		t.Fatalf("expected masked values in log, got:\n%s", logText)
+	}
+	if !callbackMessagesContain(callbackMessages, "DEBUG: sender=?????????") {
+		t.Fatalf("expected redacted DEBUG callback, got %#v", callbackMessages)
+	}
+}
+
+func TestUnsafeLogsOptionPreservesPrivateData(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HERALD_LOG_DIR", dir)
+	resetLoggerState(t)
+
+	if err := Init(true, WithUnsafeLogs(true)); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	Debug("sender=%s subject=%q", "person@example.com", "Project launch")
+	Close()
+
+	raw, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	logText := string(raw)
+	for _, want := range []string{"person@example.com", "Project launch"} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("unsafe logs should preserve %q:\n%s", want, logText)
+		}
+	}
+}
+
+func resetLoggerState(t *testing.T) {
+	t.Helper()
+	Close()
+	infoLogger = nil
+	errorLogger = nil
+	debugLogger = nil
+	logFile = nil
+	logPath = ""
+	debugMode = false
+	unsafeLogs = false
+	logCallback = nil
+	t.Cleanup(func() {
+		Close()
+		infoLogger = nil
+		errorLogger = nil
+		debugLogger = nil
+		logFile = nil
+		logPath = ""
+		debugMode = false
+		unsafeLogs = false
+		logCallback = nil
+	})
+}
+
+func callbackMessagesContain(messages []string, needle string) bool {
+	for _, message := range messages {
+		if strings.Contains(message, needle) {
+			return true
+		}
+	}
+	return false
 }
