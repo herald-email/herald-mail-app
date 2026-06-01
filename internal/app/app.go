@@ -613,6 +613,7 @@ type Model struct {
 
 	// UI State
 	loading                   bool
+	startupSnapshotReady      bool
 	deleting                  bool
 	deletionProgress          models.DeletionResult
 	deletionsPending          int  // Number of deletions waiting to complete
@@ -1584,6 +1585,7 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.syncCountsSettled = false
 	m.syncingFolder = ""
 	m.progressInfo = models.ProgressInfo{}
+	m.startupSnapshotReady = false
 	m.validIDsCh = nil
 	m.currentFolder = folder
 	m.folders = []string{folder}
@@ -2734,6 +2736,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		logger.Debug("StartupHydratedMsg: emails=%d finish=%v status=%q", len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
+		m.startupSnapshotReady = true
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails
@@ -2920,6 +2923,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		logger.Debug("SyncHydratedMsg: folder=%s generation=%d emails=%d finish=%v status=%q", msg.Folder, msg.Generation, len(msg.Emails), msg.FinishLoading, strings.TrimSpace(msg.StatusMessage))
+		m.startupSnapshotReady = true
 		if msg.Emails != nil {
 			m.finishTimelineRangeSelection()
 			m.timeline.emails = msg.Emails

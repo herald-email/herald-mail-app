@@ -258,6 +258,8 @@ Check these states during every applicable lane:
 - Status bar and key hint bar are separated by a full-width horizontal line divider.
 - Active tab and active panel are visually obvious.
 - If cached data is already visible while live sync continues, the UI explains that clearly and shows active sync progress in a human-readable way.
+- If the startup cache snapshot is empty, the app still shows the real Timeline chrome with an empty list and sync strip instead of staying on the standalone loading screen.
+- First-run/full-resync startup progressively hydrates Timeline rows from cached IMAP batches, starting with the newest available batch, rather than waiting for every envelope scan to finish.
 - The top sync strip uses stream language (`opening`, `syncing`, `reconciled`) rather than vague spinner-only wording.
 - The sidebar folder tree is present as soon as the server folder list is available; it must not remain stuck on only `INBOX` and diagnostic entries while the active folder sync continues.
 

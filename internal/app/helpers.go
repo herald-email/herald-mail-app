@@ -151,6 +151,7 @@ func (m *Model) startLoading() tea.Cmd {
 	folder := m.currentFolder
 	m.cancelBackgroundWork()
 	m.loading = true
+	m.startupSnapshotReady = false
 	m.startTime = time.Now()
 	m.syncCountsSettled = false
 	m.syncingFolder = folder
@@ -166,6 +167,7 @@ func (m *Model) startLoading() tea.Cmd {
 	}
 	return tea.Batch(
 		loadCmd,
+		m.loadCachedStartupCmd(),
 		m.loadFolderStatusCmd([]string{folder}, 0),
 		m.loadFoldersCmd(500*time.Millisecond),
 	)
@@ -230,7 +232,7 @@ func (m *Model) hasVisibleStartupData() bool {
 	if len(m.timeline.emails) > 0 {
 		return true
 	}
-	return false
+	return m.startupSnapshotReady
 }
 
 func (m *Model) canInteractWithVisibleData() bool {

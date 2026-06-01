@@ -346,6 +346,43 @@ func chunkUint32s(items []uint32, size int) [][]uint32 {
 	return chunks
 }
 
+func uint32Range(start, end uint32) []uint32 {
+	if start == 0 || end < start {
+		return nil
+	}
+	out := make([]uint32, 0, int(end-start+1))
+	for n := start; ; n++ {
+		out = append(out, n)
+		if n == end {
+			break
+		}
+	}
+	return out
+}
+
+func newestFirstSeqNumChunks(start, end uint32, size int) [][]uint32 {
+	if start == 0 || end < start {
+		return nil
+	}
+	if size <= 0 {
+		size = int(end-start) + 1
+	}
+	chunkSize := uint32(size)
+	chunks := make([][]uint32, 0, (int(end-start)+size)/size)
+	for chunkEnd := end; ; {
+		chunkStart := start
+		if chunkEnd-start+1 > chunkSize {
+			chunkStart = chunkEnd - chunkSize + 1
+		}
+		chunks = append(chunks, uint32Range(chunkStart, chunkEnd))
+		if chunkStart == start {
+			break
+		}
+		chunkEnd = chunkStart - 1
+	}
+	return chunks
+}
+
 func syncStrategyName(strategy syncStrategy) string {
 	switch strategy {
 	case syncStrategyNone:
@@ -575,13 +612,19 @@ func (c *Client) ProcessEmailsIncremental(folder string) error {
 			Total:   totalMessages,
 			Message: fmt.Sprintf("Refreshing %s from the server...", folder),
 		})
+		cacheCleared := false
 		if storedValidity != 0 {
 			if err := c.cache.ClearFolder(folder); err != nil {
 				return fmt.Errorf("clear folder on uidvalidity change: %w", err)
 			}
+			cacheCleared = true
 		}
 		if totalMessages > 0 {
-			if err := c.fetchAndCacheRange(folder, 1, uint32(totalMessages), totalMessages, mbox.UidValidity); err != nil {
+			if cacheCleared || cachedCount == 0 {
+				if err := c.fetchAndCacheRangeNewestFirst(folder, 1, uint32(totalMessages), totalMessages, mbox.UidValidity); err != nil {
+					return err
+				}
+			} else if err := c.fetchAndCacheRange(folder, 1, uint32(totalMessages), totalMessages, mbox.UidValidity); err != nil {
 				return err
 			}
 		}
@@ -625,6 +668,37 @@ func (c *Client) refreshCachedFlags(folder string, totalMessages int) error {
 		return fmt.Errorf("refresh cached flags in %s: %w", folder, err)
 	}
 	logger.Debug("refreshCachedFlags: folder=%s refreshed=%d", folder, len(flagStates))
+	return nil
+}
+
+func (c *Client) fetchAndCacheRangeNewestFirst(folder string, start, end uint32, total int, uidValidity uint32) error {
+	logger.Debug("fetchAndCacheRangeNewestFirst: folder=%s seq=%d:%d serverTotal=%d", folder, start, end, total)
+	if start == 0 || end < start {
+		return nil
+	}
+	totalToFetch := int(end-start) + 1
+	c.sendProgress(models.ProgressInfo{
+		Phase:   "fetching",
+		Current: 0,
+		Total:   totalToFetch,
+		Message: fmt.Sprintf("Fetching %d new emails for %s...", totalToFetch, folder),
+	})
+
+	cachedCount := 0
+	chunks := newestFirstSeqNumChunks(start, end, fetchCacheBatchSize)
+	for i, chunk := range chunks {
+		logger.Debug("fetchAndCacheRangeNewestFirst: chunk %d/%d folder=%s size=%d seq=%d..%d", i+1, len(chunks), folder, len(chunk), chunk[0], chunk[len(chunk)-1])
+		if err := c.batchFetchDetails(chunk, folder, uidValidity); err != nil {
+			return err
+		}
+		cachedCount += len(chunk)
+		c.sendProgress(models.ProgressInfo{
+			Phase:   "fetching",
+			Current: cachedCount,
+			Total:   totalToFetch,
+			Message: fmt.Sprintf("Fetched %d/%d new emails into cache", cachedCount, totalToFetch),
+		})
+	}
 	return nil
 }
 

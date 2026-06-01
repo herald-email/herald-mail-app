@@ -56,6 +56,33 @@ func TestAdjustSyncStrategyForCacheRecovery_PreservesNoneWhenCacheLooksHealthy(t
 	}
 }
 
+func TestNewestFirstSeqNumChunks_FullSyncStartsAtMailboxTail(t *testing.T) {
+	chunks := newestFirstSeqNumChunks(1, 125, 50)
+	if len(chunks) != 3 {
+		t.Fatalf("expected 3 chunks, got %d: %#v", len(chunks), chunks)
+	}
+
+	checkChunk := func(idx int, first, last uint32, count int) {
+		t.Helper()
+		chunk := chunks[idx]
+		if len(chunk) != count {
+			t.Fatalf("chunk %d len=%d, want %d: %#v", idx, len(chunk), count, chunk)
+		}
+		if chunk[0] != first || chunk[len(chunk)-1] != last {
+			t.Fatalf("chunk %d = %d..%d, want %d..%d: %#v", idx, chunk[0], chunk[len(chunk)-1], first, last, chunk)
+		}
+		for i := 1; i < len(chunk); i++ {
+			if chunk[i] != chunk[i-1]+1 {
+				t.Fatalf("chunk %d is not ascending at index %d: %#v", idx, i, chunk)
+			}
+		}
+	}
+
+	checkChunk(0, 76, 125, 50)
+	checkChunk(1, 26, 75, 50)
+	checkChunk(2, 1, 25, 25)
+}
+
 func TestMessageFlagStateFromIMAPDetectsDraftFlagAndCanonicalDraftFolder(t *testing.T) {
 	tests := []struct {
 		name      string
