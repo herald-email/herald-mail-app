@@ -208,6 +208,36 @@ func TestTimelineFullScreen_ItermAppendsNativeOverlayTail(t *testing.T) {
 	}
 }
 
+func TestTimelineFullScreen_ItermScrollRequestsRasterRepaint(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 100, 30)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+	m.timeline.fullScreen = true
+
+	if cmd := m.timelineIterm2NativeImageRepaintCmd(); cmd == nil {
+		t.Fatal("expected native iTerm2 image layout to request a clear-screen repaint")
+	}
+
+	_, cmd, handled := m.handleTimelineKey(keyRunes("down"))
+	if !handled {
+		t.Fatal("down should be handled in full-screen preview")
+	}
+	if cmd == nil {
+		t.Fatal("scrolling an iTerm2 raster preview should request a repaint command")
+	}
+}
+
 func TestTimelineFullScreen_ItermUsesSafeLandscapeRasterBox(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	m := makeSizedModel(t, 120, 32)

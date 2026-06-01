@@ -1594,9 +1594,13 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.folderStatus = make(map[string]models.FolderStatus)
 	m.sidebarCursor = 0
 	m.focusedPanel = panelTimeline
+	m.revokeImagePreviews()
 	m.timeline.emails = nil
 	m.timeline.emailsCache = nil
 	m.timeline.selectedEmail = nil
+	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
+	m.timeline.bodyLoading = false
 	m.timeline.selectedMessageIDs = make(map[string]bool)
 	m.timeline.searchResults = nil
 	m.timeline.searchMode = false

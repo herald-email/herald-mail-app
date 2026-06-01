@@ -256,6 +256,9 @@ func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, b
 	}
 	m.setFocusedPanel(panelPreview)
 	m.scrollTimelinePreview(mouseWheelDirection(msg))
+	if m.timeline.fullScreen {
+		return m, m.timelineIterm2NativeImageRepaintCmd(), true
+	}
 	return m, nil, true
 }
 

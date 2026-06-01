@@ -43,6 +43,7 @@ func (m *Model) clearTimelinePreviewDocumentCache() {
 	m.timeline.previewDocRows = 0
 	m.timeline.previewDocMode = ""
 	m.timeline.previewDocMessageID = ""
+	m.timeline.previewDocRemoteRevision = 0
 }
 
 func (m *Model) timelinePreviewInnerHeight() int {
@@ -374,6 +375,11 @@ func (m *Model) renderEmailPreview() string {
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
 			imageLines++
 		}
+		if nRemote := m.timelineRemoteImageCount(); nRemote > 0 {
+			label := splitRemoteImageHint(nRemote, m.fullScreenImagesAvailable())
+			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
+			imageLines++
+		}
 
 		// Show downloadable attachments
 		attachStyle := m.theme.Text.Primary.Style()
@@ -644,6 +650,19 @@ func (m *Model) timelineFullScreenDocumentLayout() previewDocumentLayout {
 	return m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
 }
 
+func (m *Model) timelineIterm2NativeImageRepaintCmd() tea.Cmd {
+	if m.currentPreviewImageMode() != previewImageModeIterm2 || m.timeline.body == nil {
+		return nil
+	}
+	layout := m.timelineFullScreenDocumentLayout()
+	for _, row := range layout.Rows {
+		if isNativePreviewImageContent(previewImageModeIterm2, row.Content) {
+			return tea.ClearScreen
+		}
+	}
+	return nil
+}
+
 func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) previewDocumentLayout {
 	mode := m.currentPreviewImageMode()
 	messageID := m.timeline.bodyMessageID
@@ -653,15 +672,13 @@ func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) preview
 		m.timeline.previewDocRows == availableRows &&
 		m.timeline.previewDocMode == mode &&
 		m.timeline.previewDocMessageID == messageID &&
+		m.timeline.previewDocRemoteRevision == m.timeline.remoteImageRevision &&
 		(mode != previewImageModeLinks || m.imagePreviewLinks == nil || m.imagePreviewLinks.CurrentKey() == scopeKey) {
 		return *m.timeline.previewDocLayout
 	}
 
 	doc := buildPreviewDocument(m.timeline.body, m.timeline.inlineImageDescs)
-	var images []models.InlineImage
-	if m.timeline.body != nil {
-		images = m.timeline.body.InlineImages
-	}
+	images := previewDocumentRenderableImages(doc, m.timeline.remoteImageLoads)
 	imageLinks := m.localImageLinkMap(scopeKey, images, mode)
 	layout := layoutPreviewDocument(doc, previewLayoutOptions{
 		InnerWidth:    innerW,
@@ -669,12 +686,14 @@ func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) preview
 		ImageMode:     mode,
 		Descriptions:  m.timeline.inlineImageDescs,
 		ImageLinks:    imageLinks,
+		RemoteImages:  m.timeline.remoteImageLoads,
 	})
 	m.timeline.previewDocLayout = &layout
 	m.timeline.previewDocWidth = innerW
 	m.timeline.previewDocRows = availableRows
 	m.timeline.previewDocMode = mode
 	m.timeline.previewDocMessageID = messageID
+	m.timeline.previewDocRemoteRevision = m.timeline.remoteImageRevision
 	return layout
 }
 

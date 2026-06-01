@@ -58,6 +58,8 @@ const (
 	CommandTimelineGroupCycle = "timeline.group_cycle"
 	CommandTimelineSortCycle  = "timeline.sort_cycle"
 
+	CommandPreviewRevealRemoteImages = "preview.reveal_remote_images"
+
 	CommandFieldInsert        = "field.insert"
 	CommandFieldAppend        = "field.append"
 	CommandFieldAppendLineEnd = "field.append_line_end"
@@ -116,8 +118,9 @@ var commandCatalog = map[string]struct{}{
 
 	CommandSidebarToggle: {},
 
-	CommandTimelineGroupCycle: {},
-	CommandTimelineSortCycle:  {},
+	CommandTimelineGroupCycle:        {},
+	CommandTimelineSortCycle:         {},
+	CommandPreviewRevealRemoteImages: {},
 
 	CommandFieldInsert:        {},
 	CommandFieldAppend:        {},
@@ -329,6 +332,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
 	add("timeline", keyboardModeNormal, "G", CommandTimelineGroupCycle)
 	add("timeline", keyboardModeNormal, "O", CommandTimelineSortCycle)
+	add("timeline", keyboardModeNormal, "o", CommandPreviewRevealRemoteImages)
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
 
 	for _, scope := range []string{"cleanup", "contacts", "calendar"} {
@@ -455,6 +459,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "G"
 	case CommandTimelineSortCycle:
 		return "O"
+	case CommandPreviewRevealRemoteImages:
+		return remoteImageRevealCommandKey
 	case CommandLogsToggle:
 		return "L"
 	case CommandChatToggle:

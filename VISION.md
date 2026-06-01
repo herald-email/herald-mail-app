@@ -32,6 +32,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
 - [x] Unified CLI subcommands (`herald mcp`, `herald ssh`) with legacy wrapper binaries preserved
 - [x] Inline image placeholders (text labels with AI vision descriptions when available)
+- [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
 - [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)

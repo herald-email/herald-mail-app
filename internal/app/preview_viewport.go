@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/herald-email/herald-mail-app/internal/kittyimg"
+	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 type previewLayoutOptions struct {
@@ -15,6 +17,7 @@ type previewLayoutOptions struct {
 	ImageMode     previewImageMode
 	Descriptions  map[string]string
 	ImageLinks    map[string]imagePreviewLink
+	RemoteImages  map[string]previewRemoteImageState
 }
 
 type previewRenderedRow struct {
@@ -71,6 +74,8 @@ func layoutPreviewDocumentBlock(block previewDocumentBlock, opts previewLayoutOp
 	switch block.Kind {
 	case previewBlockInlineImage:
 		return layoutPreviewImageBlock(block, opts)
+	case previewBlockRemoteImage:
+		return layoutPreviewRemoteImageBlock(block, opts)
 	default:
 		return layoutPreviewTextBlock(block.Text, opts.InnerWidth)
 	}
@@ -115,6 +120,118 @@ func layoutPreviewImageBlock(block previewDocumentBlock, opts previewLayoutOptio
 	}
 
 	return previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+}
+
+func layoutPreviewRemoteImageBlock(block previewDocumentBlock, opts previewLayoutOptions) []previewRenderedRow {
+	key := block.Remote.Key
+	if key == "" {
+		key = remoteImageDocumentKey(block.Remote.URL)
+	}
+	state := opts.RemoteImages[key]
+	if len(state.Image.Data) == 0 {
+		return []previewRenderedRow{{Content: remoteImagePlaceholderLine(block.Remote, state, opts.InnerWidth)}}
+	}
+	image := state.Image
+	if image.ContentID == "" {
+		image.ContentID = key
+	}
+	if image.MIMEType == "" {
+		image.MIMEType = "image"
+	}
+	link := opts.ImageLinks[normalizeContentID(key)]
+	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+		Mode:          opts.ImageMode,
+		Image:         image,
+		Alt:           block.Remote.Alt,
+		InnerWidth:    opts.InnerWidth,
+		AvailableRows: opts.AvailableRows,
+		LinkLabel:     link.Label,
+		LinkURL:       link.URL,
+	})
+	if rendered.Rows == 0 || rendered.Content == "" {
+		return []previewRenderedRow{{Content: remoteImagePlaceholderLine(block.Remote, state, opts.InnerWidth)}}
+	}
+	return previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+}
+
+func remoteImagePlaceholderLine(remote previewRemoteImage, state previewRemoteImageState, innerWidth int) string {
+	label := remoteImageDisplayLabel(remote)
+	text := fmt.Sprintf("image: %s (press o to reveal)", label)
+	if state.Loading {
+		text = fmt.Sprintf("image: %s (loading...)", label)
+	} else if state.Err != "" {
+		text = fmt.Sprintf("image: %s (reveal failed; press o to retry)", label)
+	}
+	if remote.URL != "" {
+		text = render.TerminalHyperlink(text, remote.URL)
+	}
+	return truncateVisual(text, innerWidth)
+}
+
+func previewDocumentRemoteImages(doc previewDocument) []previewRemoteImage {
+	seen := make(map[string]bool)
+	images := make([]previewRemoteImage, 0)
+	for _, block := range doc.Blocks {
+		if block.Kind != previewBlockRemoteImage || block.Remote.URL == "" {
+			continue
+		}
+		key := block.Remote.Key
+		if key == "" {
+			key = remoteImageDocumentKey(block.Remote.URL)
+			block.Remote.Key = key
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		images = append(images, block.Remote)
+	}
+	return images
+}
+
+func previewDocumentRenderableImages(doc previewDocument, remoteImages map[string]previewRemoteImageState) []models.InlineImage {
+	images := make([]models.InlineImage, 0)
+	seen := make(map[string]bool)
+	for _, block := range doc.Blocks {
+		switch block.Kind {
+		case previewBlockInlineImage:
+			image := block.Image
+			key := normalizeContentID(block.ContentID)
+			if key == "" {
+				key = normalizeContentID(image.ContentID)
+			}
+			if key == "" {
+				key = inlineImageDocumentKey(image, len(images))
+			}
+			if image.ContentID == "" {
+				image.ContentID = key
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			images = append(images, image)
+		case previewBlockRemoteImage:
+			key := block.Remote.Key
+			if key == "" {
+				key = remoteImageDocumentKey(block.Remote.URL)
+			}
+			if seen[key] {
+				continue
+			}
+			state := remoteImages[key]
+			if len(state.Image.Data) == 0 {
+				continue
+			}
+			image := state.Image
+			if image.ContentID == "" {
+				image.ContentID = key
+			}
+			seen[key] = true
+			images = append(images, image)
+		}
+	}
+	return images
 }
 
 func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth int) []previewRenderedRow {

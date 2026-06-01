@@ -1314,6 +1314,8 @@ func (m *Model) clearTimelineSearch() {
 		m.timeline.bodyMessageID = origin.bodyMessageID
 		m.timeline.bodyLoading = origin.bodyLoading
 		m.timeline.inlineImageDescs = cloneInlineImageDescs(origin.inlineImageDescs)
+		m.timeline.remoteImageLoads = cloneRemoteImageStates(origin.remoteImageLoads)
+		m.timeline.remoteImageRevision = origin.remoteImageRevision
 		m.timeline.fullScreen = origin.fullScreen
 		m.timeline.bodyScrollOffset = origin.bodyScrollOffset
 		m.timeline.bodyWrappedLines = nil
@@ -1475,16 +1477,18 @@ func (m *Model) openTimelineSearch() {
 	m.finishTimelineRangeSelection()
 	if m.timeline.searchOrigin == nil {
 		m.timeline.searchOrigin = &timelineSearchOrigin{
-			cursor:           m.timelineTable.Cursor(),
-			expandedThreads:  cloneTimelineExpandedThreads(m.timeline.expandedThreads),
-			focusedPanel:     m.focusedPanel,
-			selectedEmail:    m.timeline.selectedEmail,
-			body:             m.timeline.body,
-			bodyMessageID:    m.timeline.bodyMessageID,
-			bodyLoading:      m.timeline.bodyLoading,
-			inlineImageDescs: cloneInlineImageDescs(m.timeline.inlineImageDescs),
-			fullScreen:       m.timeline.fullScreen,
-			bodyScrollOffset: m.timeline.bodyScrollOffset,
+			cursor:              m.timelineTable.Cursor(),
+			expandedThreads:     cloneTimelineExpandedThreads(m.timeline.expandedThreads),
+			focusedPanel:        m.focusedPanel,
+			selectedEmail:       m.timeline.selectedEmail,
+			body:                m.timeline.body,
+			bodyMessageID:       m.timeline.bodyMessageID,
+			bodyLoading:         m.timeline.bodyLoading,
+			inlineImageDescs:    cloneInlineImageDescs(m.timeline.inlineImageDescs),
+			remoteImageLoads:    cloneRemoteImageStates(m.timeline.remoteImageLoads),
+			remoteImageRevision: m.timeline.remoteImageRevision,
+			fullScreen:          m.timeline.fullScreen,
+			bodyScrollOffset:    m.timeline.bodyScrollOffset,
 		}
 	}
 	m.timeline.searchToken++
@@ -1499,6 +1503,8 @@ func (m *Model) openTimelineSearch() {
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = false
 	m.timeline.inlineImageDescs = nil
+	m.timeline.remoteImageLoads = nil
+	m.timeline.remoteImageRevision++
 	m.timeline.fullScreen = false
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
@@ -2231,12 +2237,15 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	if email == nil {
 		return nil
 	}
+	m.revokeImagePreviews()
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = true
 	m.timeline.previewLoad = previewLoadTelemetry{}
 	m.timeline.inlineImageDescs = nil
+	m.timeline.remoteImageLoads = nil
+	m.timeline.remoteImageRevision++
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
@@ -2362,10 +2371,14 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				if m.timelineIsReadOnlyDiagnostic() {
 					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
 				}
+				revealHint := ""
+				if m.timelineRemoteRevealAvailable() {
+					revealHint = m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images")
+				}
 				return joinHintSegments(append(
 					[]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")},
 					append(m.timelineMessageActionHintSegments(),
-						m.movementHint("timeline", "scroll"), "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
+						m.movementHint("timeline", "scroll"), revealHint, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 				)...), true
 			}
 			return joinHintSegments(append(
@@ -2430,6 +2443,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			segments = append(segments, "i: add to calendar")
 		}
 		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
+		if m.timelineRemoteRevealAvailable() {
+			segments = append(segments, m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images"))
+		}
 		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
@@ -2695,6 +2711,52 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			m.timeline.inlineImageDescs[msg.ContentID] = msg.Description
 			m.clearTimelinePreviewDocumentCache()
+		}
+		return m, nil, true
+
+	case RemoteImageRevealMsg:
+		if m.timeline.selectedEmail == nil ||
+			msg.MessageID == "" ||
+			msg.MessageID != m.timeline.selectedEmail.MessageID ||
+			msg.MessageID != m.timeline.bodyMessageID {
+			return m, nil, true
+		}
+		if m.timeline.remoteImageLoads == nil {
+			m.timeline.remoteImageLoads = make(map[string]previewRemoteImageState, len(msg.Results))
+		}
+		revealed := 0
+		failed := 0
+		for _, result := range msg.Results {
+			key := result.Key
+			if key == "" {
+				key = remoteImageDocumentKey(result.URL)
+			}
+			state := m.timeline.remoteImageLoads[key]
+			state.Loading = false
+			if result.Err != nil {
+				state.Err = previewFailureHint(result.Err.Error())
+				state.Image = models.InlineImage{}
+				failed++
+			} else {
+				state.Err = ""
+				state.Image = result.Image
+				if state.Image.ContentID == "" {
+					state.Image.ContentID = key
+				}
+				revealed++
+			}
+			m.timeline.remoteImageLoads[key] = state
+		}
+		m.timeline.remoteImageRevision++
+		m.timeline.bodyWrappedLines = nil
+		m.clearTimelinePreviewDocumentCache()
+		switch {
+		case revealed > 0 && failed > 0:
+			m.statusMessage = fmt.Sprintf("Revealed %d linked image(s); %d failed", revealed, failed)
+		case revealed > 0:
+			m.statusMessage = fmt.Sprintf("Revealed %d linked image(s)", revealed)
+		case failed > 0:
+			m.statusMessage = fmt.Sprintf("Linked image reveal failed (%d)", failed)
 		}
 		return m, nil, true
 
@@ -3114,6 +3176,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			m.timeline.bodyWrappedLines = nil
 			m.clearTimelinePreviewDocumentCache()
 		}
+		return m, m.timelineIterm2NativeImageRepaintCmd(), true
+	case remoteImageRevealCommandKey:
+		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) && m.timeline.body != nil {
+			return m, m.revealTimelineRemoteImages(), true
+		}
 		return m, nil, true
 	case "s":
 		if m.timelineIsReadOnlyDiagnostic() {
@@ -3206,7 +3273,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				} else if m.timeline.bodyScrollOffset > 0 {
 					m.timeline.bodyScrollOffset--
 				}
-				return m, nil, true
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelPreview {
 				if m.timeline.visualMode {
@@ -3249,7 +3316,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				} else {
 					m.timeline.bodyScrollOffset++
 				}
-				return m, nil, true
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelPreview {
 				if m.timeline.visualMode {
@@ -3355,6 +3422,9 @@ func (m *Model) timelineHalfPageScroll(down bool) tea.Cmd {
 		if m.timeline.bodyScrollOffset < 0 {
 			m.timeline.bodyScrollOffset = 0
 		}
+		if m.timeline.fullScreen {
+			return m.timelineIterm2NativeImageRepaintCmd()
+		}
 		return nil
 	}
 	if m.focusedPanel == panelSidebar {
@@ -3404,6 +3474,20 @@ func cloneInlineImageDescs(src map[string]string) map[string]string {
 	}
 	dst := make(map[string]string, len(src))
 	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func cloneRemoteImageStates(src map[string]previewRemoteImageState) map[string]previewRemoteImageState {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]previewRemoteImageState, len(src))
+	for key, value := range src {
+		if len(value.Image.Data) > 0 {
+			value.Image.Data = append([]byte(nil), value.Image.Data...)
+		}
 		dst[key] = value
 	}
 	return dst

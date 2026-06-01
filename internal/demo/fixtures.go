@@ -416,7 +416,7 @@ Try now
 - Scroll through the image section and watch for safe fallback links or text when raster graphics are unavailable.
 
 What Herald is doing
-This email includes embedded inline images, so Herald can render the local MIME bytes without downloading anything. Remote images are shown as links and are intentionally not fetched.
+This email includes embedded inline images, so Herald can render the local MIME bytes without downloading anything. Remote images are shown as safe placeholders until you press o to reveal them for this message.
 
 Embedded Creative Commons images:
 - CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png
@@ -424,8 +424,8 @@ Embedded Creative Commons images:
 - Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg
 - Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg
 
-Remote image link, intentionally not fetched by Herald:
-![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)`,
+Remote image link, intentionally not fetched until you press o:
+![Remote Commons thumbnail](https://assets.herald.demo/color-chart-330px.png)`,
 		withDate(baseTime.Add(5*time.Hour)),
 		withHTMLBody(`<html><body>
 <h1>Step 5: View inline images in full screen</h1>
@@ -441,8 +441,8 @@ Remote image link, intentionally not fetched by Herald:
 <li>Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: <a href="https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg">Bee on Sunflower</a></li>
 <li>Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: <a href="https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg">Changing Landscape</a></li>
 </ul>
-<p>Remote image link, intentionally not fetched by Herald:</p>
-<p><img alt="Remote Commons thumbnail" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png"></p>
+<p>Remote image link, intentionally not fetched until you press <strong>o</strong>:</p>
+<p><img alt="Remote Commons thumbnail" src="https://assets.herald.demo/color-chart-330px.png"></p>
 </body></html>`),
 		withInlineImage("cc-by-sa-badge", "image/png", demoCCBySABadgePNG),
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),

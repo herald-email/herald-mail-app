@@ -1176,16 +1176,19 @@ Check these states during every applicable lane:
 **Steps:**
 1. Open Timeline and search for `Step 5: View inline images in full screen`.
 2. Open the split preview and capture the image hint plus body links.
-3. Press `z` to enter full-screen and capture the top of the document.
-4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
-5. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
-6. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
-7. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
-8. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
-9. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
-10. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
-11. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
-12. Run the standard resize cycle while full-screen preview is open.
+3. For a message with remote HTML image URLs, confirm the visible placeholder reads `image: <label> (press o to reveal)` and the raw output keeps the original URL only inside the OSC 8 target.
+4. Press `o` and confirm the remote images are fetched only after that keypress.
+5. Press `z` to enter full-screen and capture the top of the document.
+6. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
+7. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
+8. Capture raster-mode screenshots with images visibly rendered at the initial full-screen image block, after several scroll steps, farther down the message, and after scrolling back upward; inspect those screenshots before reporting.
+9. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
+10. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
+11. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
+12. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
+13. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
+14. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+15. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
@@ -1200,7 +1203,10 @@ Check these states during every applicable lane:
 - Stock ttyd smoke records screenshot plus pixel metrics for color-chart cells and at least one large photo region; its placement is not authoritative for acceptance.
 - Non-raster local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH auto mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs; forced `-image-protocol=iterm2` or `-image-protocol=kitty` emits the selected raster protocol.
-- Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
+- Remote HTML image URLs appear as readable OSC 8 placeholders and Herald does not fetch them automatically.
+- Pressing `o` reveals only the current message's remote images; `r` and `R` remain reply shortcuts.
+- Remote image fetching uses no cookies, no auth headers, no referrer, bounded response size/time, image content-type checks, and private/local/link-local destination blocking.
+- Acceptance evidence includes screenshots with raster images actually rendered at multiple scroll positions, plus a checked scroll-back screenshot proving no stale or overlapping image artifacts after moving through the message.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
 - Test reports include terminal app/version, ttyd/frontend mode, selected app theme, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 

@@ -255,6 +255,7 @@ func (m *Model) toggleLogs() tea.Cmd {
 func (m *Model) refreshCurrentFolder() tea.Cmd {
 	if !m.loading {
 		m.finishTimelineRangeSelection()
+		m.revokeImagePreviews()
 		m.loading = true
 		m.startTime = time.Now()
 		m.clearTimelineChatFilter()
@@ -364,8 +365,9 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.timeline.fullScreen {
+		cmd := m.timelineIterm2NativeImageRepaintCmd()
 		m.clearTimelineFullScreen()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabTimeline && m.timeline.rangeMode {
 		m.finishTimelineRangeSelection()

@@ -1,0 +1,793 @@
+Delivered-To: person1@herald.test
+Received: by 2002:a17:907:874e:b0:bec:7612:1ef6 with SMTP id qo14csp473530ejc;
+        Sun, 31 May 2026 14:37:33 -0700 (PDT)
+X-Received: by 2002:a05:620a:6303:20b0:8b1:2853:673f with SMTP id af79cd13be357-9153d97127bmr961521685a.15.1780263452700;
+        Sun, 31 May 2026 14:37:32 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1780263452; cv=none;
+        d=google.com; s=arc-20240605;
+        b=VpAcJxirvQBb6UdkUDt0ws8DJhFcGVHeq4gqORZGOQ/gMi323/g3aD7RruYVkKT5L8
+         Fm2oIODtdi4r03p4gXkUaWKo9R1Nf7q1FuM254rg7Q+6EncR9QzsOxZPCqSxu/uP/292
+         +aSJ6BTa7LbFYTbezYuMvPXhIa6oYDG9Gvf8Dz871XxGmkgNGdK+eKyzPZtL86POjWVj
+         MPeaLYiDq+2m4F53UKS73n5nefomoFs4OXjPXZXH0BV1083VKQu3YezfFTP0oW3lsEDR
+         Cv5eMFCnLArjeFut/GZD6D+t8byAMDQ2IPOutQyX9o/dXv0KGK9LIQ6D5vBmnN1DJuQ7
+         1msQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=mime-version:feedback-id:list-id:precedence:list-unsubscribe-post
+         :list-unsubscribe:to:reply-to:message-id:subject:date:from
+         :dkim-signature:dkim-signature;
+        bh=0BUIGTYVkm2TdwajzoarYB12rDwhLEVOCUbD5Xl73NI=;
+        fh=AfSEOiJamZTN/4lE2c8Hk8TavoG0tokgMV7Kzmuz888=;
+        b=gH+6axVPSPPOxNAn8x6C32JmF33VOFbd2E/q9TXEwuySTlvfz28N3k94eFBVN1ctfl
+         3E4EBU6NlDakBE6McDbHoA8bYNi9i96xczFvyL+gDm609Qt5aTI7DrpJfyW/iqeUEJvJ
+         33Kr0F6uMmihqVQIOePPAUFwjMh0YASFc/RuBHdH6MfMYSsuYHBZwvc39vkapEszUzjU
+         ael/JV2KIxjLfiQgYlRcHv12XiAD+uGa+cEJXr3t6nh2mYhHbo/iTB8vF0skojmyM02n
+         YIo//AYSjt+xWRLhXJvDIU2Q54jk8sPW63A9q7RfNOZf8L2aH0xd2Pg1NAUdPWfVSyEB
+         WbaQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@ab.mtasv.net header.s=ab20250806 header.b="TfNr5c/w";
+       dkim=pass header.i=@buttondown.email header.s=20220223122653pm header.b=K4eAKUlK;
+       spf=pass (google.com: domain of person2@herald.test designates 50.31.205.7 as permitted sender) smtp.mailfrom=person2@herald.test;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=buttondown.email
+Return-Path: <person2@herald.test>
+Received: from mta7-ab1.mtasv.net (mta7-ab1.mtasv.net. [50.31.205.7])
+        by mx.google.com with ESMTPS id af79cd13be357-9153261a0fcsi849560185a.148.2026.05.31.14.37.32
+        for <person1@herald.test>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 31 May 2026 14:37:32 -0700 (PDT)
+Received-SPF: pass (google.com: domain of person2@herald.test designates 50.31.205.7 as permitted sender) client-ip=50.31.205.7;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@ab.mtasv.net header.s=ab20250806 header.b="TfNr5c/w";
+       dkim=pass header.i=@buttondown.email header.s=20220223122653pm header.b=K4eAKUlK;
+       spf=pass (google.com: domain of person2@herald.test designates 50.31.205.7 as permitted sender) smtp.mailfrom=person2@herald.test;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=buttondown.email
+X-KumoRef: fixture-id-redacted
+DKIM-Signature: v=1; a=rsa-sha256; d=ab.mtasv.net; s=ab20250806; c=relaxed/relaxed;
+	bh=0BUIGTYVkm2TdwajzoarYB12rDwhLEVOCUbD5Xl73NI=;
+	h=from:to:subject:date:mime-version:content-type:sender:cc:date:message-id;
+	t=1780263452; x=1780868252;
+	b=TfNr5c/wjjw4q6fsyw/rx3JijknqTYatcDaImnqzZtvEzRoaOurnjaxuhzxZStvdGgAkUFYFI
+	2beKJ5iNSkhGE6jevMGqebIFTSIw6uK116iIC1cuB9y8aqYbPEYM3Hk/dH1z9kyCNZxz3AxyxmP
+	M2LrEdsb+bEyDqkzFfc3EupKJdQRhkW/F2Qk3jDOTUlmd32SAHDo3cHzQO463mCCnGJTZsmNZv7
+	lEbukZA4G7kvlqLYnVpmj2ZBSNsNA5672WL50Y9kAjMDi/pIDmx6C9YueVWf8K0dTdaHsM/VqD1
+	FgbLksBbU4EhfoDcL1OkeF7ZNNurJkRDnYmuHmUcZBWA==;
+Received: from ip-172-26-33-156.us-east-2.compute.internal (172.26.33.156)
+  by production-pmta-useast2.internal.postmarkapp.com (KumoMTA 10.97.240.239)
+  with ESMTP id ee5d2e7f5d3811f19344020002355bb3 for <person1@herald.test>;
+  Sun, 31 May 2026 21:37:32 +0000
+DKIM-Signature: v=1; a=rsa-sha256; d=buttondown.email; s=20220223122653pm;
+	c=relaxed/relaxed; i=person3@herald.test; t=1780263452;
+	x=1780436252;
+	h=date:date:from:from:message-id:reply-to:reply-to:sender:subject:subject:to:
+	to:cc:list-unsubscribe:list-unsubscribe-post:list-id:feedback-id:
+	mime-version:content-type;
+	bh=0BUIGTYVkm2TdwajzoarYB12rDwhLEVOCUbD5Xl73NI=;
+	b=K4eAKUlKmCy8SOaleuBenYa5xZqUFjI3FCqc18LIEF+pFlzgD2kV/PnYdZmJ+eM1/giBPD7PucC
+	nIjnHpW0oJR4+YK5tAPaZ7l1cI4I4ZGwI5SXDbDV819kOJfjz3qMjCglztcG1mEGr3v8phoVAYcDD
+	U1RmaboeDCtncxUfGV0=
+From: Herald Mail App <person3@herald.test>
+Date: Wed, 20 May 2026 10:00:00 -0700
+Subject: [PREVIEW] Herald v0.5.0 =?utf-8?b?4oCU?= Calendar, and multi-account
+ arrive
+Message-Id: <person4@herald.test>
+Reply-To: person5@herald.test
+To: person1@herald.test
+List-Unsubscribe: <https://example.test/redacted-link-1>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+Precedence: bulk
+List-Id: <herald-mail.app.buttondown.email>
+Feedback-ID: =?utf-8?q?s15787167-YzY3NDU4NGItZWYxMy00YTIzLThjMTUtOGE3YTlmMDc3M2Y3=3As1?=
+ =?utf-8?q?5787167=3Aa169074=3Apostmark?=
+X-Complaints-To: person6@herald.test
+X-Job: 169074_15787167
+X-PM-Message-Id: fixture-id-redacted
+X-PM-Tag: fixture-id-redacted
+X-PM-RCPT: fixture-id-redacted
+X-PM-Message-Options: fixture-id-redacted
+MIME-Version: 1.0
+X-virtual-MTA: mta7-ab1
+X-PM-MTA-Pool: application-bulk-1
+Content-Type: multipart/alternative;
+	boundary=mk3-cc6151e4129840429e6bc48343d11cf0; charset=UTF-8
+
+--mk3-cc6151e4129840429e6bc48343d11cf0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+Hi everyone,
+
+This one is a big release =E2=80=94 the biggest since we started this newsl=
+etter. v0.5.0 lands the multi-account work we said was coming, and also ope=
+ns up a whole new surface: **Calendar**. Herald is no longer just an email =
+client.
+
+A bit of plumbing made this possible: mail and calendar share a common noti=
+on of source/account that flows through reads, search, compose, sync, and w=
+rites. One caveat for now =E2=80=94 you still add the mail side and the cal=
+endar side as separate sources, even when they come from the same provider,=
+ but Herald shows them together under one unified view. That's the unglamor=
+ous half; the visible half is below.
+
+<hr/>## Multi-account, finally
+
+The v0.4 newsletter said this was next. It is now in. You get source badges=
+ on messages so you can see at a glance which account a thread came from, M=
+ail.app-style account sections in the folder list, account-scoped signature=
+s, and Compose that routes replies from the right address automatically. Ad=
+ding and managing accounts happens in Settings.
+
+If you were juggling separate config files and separate terminal windows as=
+ the workaround =E2=80=94 you can stop.
+
+Demo mode now ships with multiple synthetic accounts too, so you can try th=
+e whole multi-account experience =E2=80=94 badges, sections, Compose routin=
+g =E2=80=94 without setting up a single real one.
+
+<figure>![Herald sidebar showing two demo accounts (Work Mail, Personal) as=
+ separate sections with their own Inbox/Drafts/Folders, plus an All Inboxes=
+ view.](https://example.test/redacted-link-2
+484ae066.png?w=3D960&fit=3Dmax)<figcaption>Multi-account timeline view (Tom=
+orrow Desk theme)</figcaption></figure>
+<hr/>## Calendar (preview)
+
+<p>Press <code>3</code> to open Calendar. The surfaces are: **Week Time-Gri=
+d** for spotting dense days and conflicts, **Day Agenda** for focus on one =
+day with a detail drawer, **3-Day Command** for today + tomorrow + the next=
+ day with a side panel of open slots and conflicts, **Agenda List**, and **=
+Calendar Search**, plus Event Detail with RSVP. The left rail filters by so=
+urce and shows colored swatches per calendar.</p>
+<p>It is mostly a preview surface in this release. Reading, RSVP, and basic=
+ event actions work. The smoother day-to-day flows =E2=80=94 like "I got an=
+ <code>.ics</code> in an email, please put it on my calendar" =E2=80=94 are=
+ what we are focusing on next. A couple of us are using it daily; we want t=
+o hear from anyone else who is.</p>
+[Calendar guide](https://example.test/redacted-link-3
+urce=3Dherald-mail.app&utm_medium=3Demail) =C2=B7 [What's new in v0.5](http=
+s://docs.herald-mail.app/whats-new-in-v0-5/?utm_source=3Dherald-mail.app&ut=
+m_medium=3Demail)
+
+<figure>![Herald Calendar's 3-Day Command view with a mini month and color-=
+coded calendars on the left, three days of events across a time grid, and a=
+ side panel showing the selected event, next-up, open slots, and conflicts.=
+](https://example.test/redacted-link-4
+f8.png?w=3D960&fit=3Dmax)<figcaption>Calendar 3-days view (Tokyo Dusk theme=
+)</figcaption></figure>
+<hr/>## Calendar providers in beta
+
+CalDAV-based providers =E2=80=94 Fastmail Calendar, iCloud Calendar, Yahoo =
+Calendar, custom CalDAV =E2=80=94 work with an app-specific password or the=
+ provider's CalDAV URL. **Google Calendar OAuth is under construction** in =
+test mode; the public OAuth path is expected in a later beta, likely v0.6.0=
+. We know Google Calendar without OAuth is rough.
+
+[Provider setup docs](https://example.test/redacted-link-5
+ce=3Dherald-mail.app&utm_medium=3Demail).
+
+<hr/>## Cleanup tab is gone =E2=80=94 it moved into Timeline
+
+<p>Cleanup is no longer a separate top-level tab. Browsing what to clean no=
+w lives inside Timeline grouping: press <code>G</code> in Timeline to cycle=
+ through thread, sender, and domain grouping. Rule execution and dry-run pr=
+eviews still work the way they did. One fewer tab, same actions.</p>
+<hr/>## What is coming next
+
+- **Google Calendar OAuth** (and Gmail OAuth), so Calendar in particular wo=
+rks the way people expect, without the app-password dance.
+- **Smarter email =E2=86=92 calendar handoff.** When a message has an .ics,=
+ Herald should offer to add it to one of your configured calendars in one s=
+tep, instead of making you download the file and hope your OS opens it in t=
+he right place. We've all hit this.
+- **Polish on Calendar** based on whoever pokes at it during this beta =E2=80=
+=94 that part depends on you.
+
+<hr/>## Try it
+
+<div class=3D"codehilite" style=3D"background: #272822"><pre style=3D"line-=
+height: 125%;"><span></span><code>brew<span style=3D"color: #F8F8F2"> </spa=
+n>tap<span style=3D"color: #F8F8F2"> </span>herald-email/herald
+brew<span style=3D"color: #F8F8F2"> </span>install<span style=3D"color: #F8=
+F8F2"> </span>herald
+herald<span style=3D"color: #F8F8F2"> </span>--demo-multi-account
+</code></pre></div>
+<p>Press <code>3</code> to open Calendar with demo data =E2=80=94 no real a=
+ccount needed.</p>
+If you hit something rough, or there is a feature you want, tell us. The ro=
+admap moves fastest when we hear from people who are actually using it.
+
+<p>Full v0.5.0 notes: [https://example.test/redacted-link-6
+ases/tag/v0.5.0-beta.1](https://example.test/redacted-link-7
+eases/tag/v0.5.0-beta.1?utm_source=3Dherald-mail.app&amp;utm_medium=3Demail=
+)<br/>What's new in v0.5: [https://example.test/redacted-link-8
+(https://example.test/redacted-link-9
+pp&amp;utm_medium=3Demail)<br/>Site: [https://example.test/redacted-link-10
+ald-mail.app/?utm_source=3Dherald-mail.app&amp;utm_medium=3Demail) =C2=B7 D=
+ocs: [https://example.test/redacted-link-11
+ce=3Dherald-mail.app&amp;utm_medium=3Demail)</p>
+Thanks for being on this list.
+
+=E2=80=94 Anton
+
+=E2=80=93=E2=80=93=E2=80=93
+This is a draft issue of Herald Mail App Newsletter. You can [subscribe](ht=
+tps://buttondown.com/herald-mail.app) or [unsubscribe](https://example.test/redacted-link-12
+om/unsubscribe/fixture-id-redacted?email=3Dc674584b-ef13-4=
+a23-8c15-8a7a9f0773f7).
+
+=E2=80=93=E2=80=93=E2=80=93
+Powered by Buttondown, the easiest way to
+start and grow your newsletter: https://example.test/redacted-link-13
+
+--mk3-cc6151e4129840429e6bc48343d11cf0
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<html lang=3D"en" xml:lang=3D"en" style=3D"color: #000;"><head style=3D"col=
+or: #000;"><style>@media (prefers-color-scheme:dark) {
+code {
+    background: #44494e;
+}
+blockquote {
+    color: #d2d2d2!important;
+    background-color: #212121!important;
+}
+blockquote p,blockquote li,blockquote * {
+    color: #d2d2d2!important;
+}
+body {
+    background-color: #fafafa!important;
+}
+} @media screen and (max-width:500px) {
+td.related-email {
+    width: 100%!important;
+    margin-bottom: 30px!important;
+    padding: 0!important;
+    display: block!important;
+}
+} </style>
+        <meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Du=
+tf-8" style=3D"color: #000;">
+        <meta name=3D"x-apple-disable-message-reformatting" style=3D"color:=
+ #000;">
+       =20
+            <style type=3D"text/css" style=3D"color: #000;">body {
+    color: #000;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 20px;
+    font-family: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,S=
+egoe UI,Roboto,Noto Sans,Ubuntu,Cantarell,Helvetica Neue,Arial,sans-serif,A=
+pple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
+    background-color: #fafafa!important;
+}
+p,ul,li,h1,h2,h3,h4,h5,h6,blockquote,figure {
+    margin: 16px 0!important;
+}
+p,ul,li {
+    font-size: 16px!important;
+    line-height: 24px!important;
+}
+li {
+    margin-top: 8px!important;
+    margin-bottom: 0!important;
+}
+h3 {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 24px!important;
+}
+hr {
+    border: none;
+    border-top: 1px solid #eaeaea;
+    border-color: #f5f5f5;
+    border-width: 2px;
+    width: 300px;
+    margin: 40px auto;
+}
+blockquote {
+    padding: 20px;
+    color: #666!important;
+    background-color: #f5f5f5!important;
+    border-radius: .5rem!important;
+    font-size: 16px!important;
+    line-height: 24px!important;
+}
+blockquote p,blockquote li {
+    color: #666!important;
+}
+.twitter-embed,.twitter-embed p,.twitter-embed li {
+    color: #000!important;
+}
+blockquote.pullquote {
+    text-align: center!important;
+    border: none!important;
+    padding: 20px 50px!important;
+    font-style: italic!important;
+}
+blockquote p:first-child {
+    margin-top: 0!important;
+}
+blockquote p:last-child {
+    margin-bottom: 0!important;
+}
+figure {
+    text-align: center;
+    margin: 16px auto;
+}
+figcaption {
+    text-align: center;
+    font-size: 14px!important;
+    line-height: 18px!important;
+}
+img,video {
+    max-width: 100%!important;
+}
+pre {
+    background-color: #272822;
+    border-radius: 0 .25rem .25rem 0;
+    padding: 1em;
+    font-size: 15px;
+    line-height: 20px;
+    overflow-x: auto;
+}
+pre.poetry {
+    color: #333;
+    white-space: pre-wrap;
+    background-color: #f8f8f8;
+    border-radius: .25rem;
+    padding: 1em;
+}
+code {
+    color: #fff;
+    border-radius: 0 .25rem .25rem 0;
+    font-size: 14px;
+}
+p code,li code,h1 code,h2 code,h3 code,h4 code {
+    color: #333;
+    background: #eee;
+}
+table.buttondown-block-styled {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+table.buttondown-block-styled td,table.buttondown-block-styled th {
+    vertical-align: top;
+    box-sizing: border-box;
+    border: 2px solid #ced4da;
+    min-width: 1em;
+    padding: 3px 5px;
+    position: relative;
+}
+table.buttondown-block-styled td>*,table.buttondown-block-styled th>* {
+    margin-bottom: 0;
+}
+table.buttondown-block-styled th {
+    text-align: left;
+    background-color: #f1f3f5;
+    font-weight: 700;
+}
+table.buttondown-block-styled p {
+    margin: 0;
+}
+.buttondown-reference-invalid {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+    color: #666!important;
+}
+* {
+    color: #000;
+}
+.social-links {
+    text-align: center;
+    max-width: 600px;
+    margin: 20px auto;
+    padding-left: 20px;
+    padding-right: 20px;
+    line-height: 1.5;
+}
+.social-link {
+    margin-left: 2px;
+    margin-right: 2px;
+}
+.powered-by {
+    text-align: center;
+    margin-bottom: 16px;
+}
+.email-actions--unsubscribe,.email-actions--upsell,.email-actions--gifted-p=
+remium,.email-actions--trial-premium,.powered-by {
+    color: #666;
+    max-width: 600px;
+    margin-top: 8px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 13px;
+    line-height: 18px;
+}
+.powered-by-container {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.powered-by-link {
+    text-decoration: none;
+    color: #0069ff!important;
+}
+.powered-by-icon {
+    border: none;
+    outline: none;
+    width: 40px;
+    margin: 20px auto 10px;
+    text-decoration: none;
+    display: block;
+}
+@media (prefers-color-scheme:dark) {
+code {
+    background: #44494e;
+}
+blockquote {
+    color: #d2d2d2!important;
+    background-color: #212121!important;
+}
+blockquote p,blockquote li,blockquote * {
+    color: #d2d2d2!important;
+}
+body {
+    background-color: #fafafa!important;
+}
+}
+@media screen and (max-width:500px) {
+td.related-email {
+    width: 100%!important;
+    margin-bottom: 30px!important;
+    padding: 0!important;
+    display: block!important;
+}
+}
+</style>
+       =20
+       =20
+    <style type=3D"text/css" style=3D"color: #000;">
+    a {
+        color: #22c55e !important;
+        /* Some clients (Android Gmail) do not automatically add the underl=
+ine. */
+        text-decoration: underline;
+    }
+
+    a.buttondown-button {
+        color: #ffffff !important;
+        background-color: #22c55e !important;
+    }
+
+    /* Keep the color of the links even when e.g. some text is being bolded=
+. */
+    a > * {
+        color: inherit !important;
+    }
+    </style>
+
+
+
+
+    </head>
+    <body class=3D"email-body" style=3D"color: #000;margin-left: auto;margi=
+n-right: auto;padding: 20px;font-family: ui-sans-serif,system-ui,-apple-sys=
+tem,BlinkMacSystemFont,Segoe UI,Roboto,Noto Sans,Ubuntu,Cantarell,Helvetica=
+ Neue,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Not=
+o Color Emoji;background-color: #fafafa!important;">
+       =20
+           =20
+
+
+           =20
+                <img class=3D"newsletter-icon" src=3D"https://example.test/redacted-link-14
+down.email/images/fixture-id-redacted.png" width=3D"40" he=
+ight=3D"40" alt=3D"" style=3D"color: #000;display: block;outline: none;bord=
+er: none;text-decoration: none;margin-left: auto;margin-right: auto;margin-=
+top: 20px;width: 40px;max-width: 100%">
+           =20
+            <table class=3D"newsletter-masthead" style=3D"color: #000;max-w=
+idth: 600px;text-align: center;margin-left: auto;margin-right: auto;padding=
+: 20px;padding-top: 0px;padding-bottom: 0px" align=3D"center" width=3D"100%=
+" role=3D"presentation" cellspacing=3D"0" cellpadding=3D"0" border=3D"0">
+                <tbody style=3D"color: #000;">
+                    <tr style=3D"color: #000;width: 100%">
+                        <td style=3D"color: #000;">
+                            <h1 class=3D"subject" style=3D"color: #000;marg=
+in: 16px 0;font-weight: 900;margin-bottom: 0px;line-height: 30px;font-size:=
+ 26px">
+                               =20
+                                    <a href=3D"https://example.test/redacted-link-15
+d-mail.app/archive/fixture-id-redacted/" style=3D"color: i=
+nherit !important;text-decoration: none">Herald v0.5.0 =E2=80=94 Calendar, =
+and multi-account arrive</a>
+                               =20
+                            </h1>
+                            <h2 class=3D"description" style=3D"margin: 16px=
+ 0;margin-top: 0.25rem;margin-bottom: 0px;font-weight: 400;color: rgb(115,1=
+15,115);font-size: 20px"></h2>
+                            <h3 class=3D"colophon" style=3D"margin: 16px 0;=
+line-height: 24px;margin-top: 0.5rem;margin-bottom: 2rem;font-weight: 400;c=
+olor: rgb(115,115,115);font-size: 12px;text-transform: uppercase">
+                                Herald Mail App Newsletter
+                               =20
+                            </h3>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+           =20
+                <div class=3D"email-preamble" style=3D"font-size: 13px;line=
+-height: 18px;color: rgb(102,102,102);text-align: right;margin-left: auto;m=
+argin-right: auto;max-width: 600px;margin-top: 40px;margin-bottom: 8px">
+                   =20
+                        Did someone forward you this? <a href=3D"https://example.test/redacted-link-16
+ttondown.com/herald-mail.app" target=3D"_blank" style=3D"color: #22c55e !im=
+portant;text-decoration: underline;">Subscribe to this newsletter</a>.
+                   =20
+                </div>
+           =20
+            <table class=3D"email-container" style=3D"color: #000;margin-le=
+ft: auto;margin-right: auto;padding: 20px;padding-top: 0px;padding-bottom: =
+0px;max-width: 600px;background-color: rgb(255, 255, 255);border-style: sol=
+id;border-width: 1px;border-color: rgb(229, 229, 229);word-break: break-wor=
+d" align=3D"center" width=3D"100%" role=3D"presentation" cellspacing=3D"0" =
+cellpadding=3D"0" border=3D"0">
+                <tbody style=3D"color: #000;">
+                    <tr style=3D"color: #000;width: 100%">
+                        <td style=3D"color: #000;">
+                           =20
+                            <div class=3D"newsletter-body" style=3D"color: =
+#000;"><p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!imp=
+ortant;line-height: 24px!important;">Hi everyone,</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">This one is a big release =E2=80=94 the bigge=
+st since we started this newsletter. v0.5.0 lands the multi-account work we=
+ said was coming, and also opens up a whole new surface: <strong style=3D"c=
+olor: #000;">Calendar</strong>. Herald is no longer just an email client.</=
+p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">A bit of plumbing made this possible: mail an=
+d calendar share a common notion of source/account that flows through reads=
+, search, compose, sync, and writes. One caveat for now =E2=80=94 you still=
+ add the mail side and the calendar side as separate sources, even when the=
+y come from the same provider, but Herald shows them together under one uni=
+fied view. That's the unglamorous half; the visible half is below.</p>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">Multi-account, finally</h2>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">The v0.4 newsletter said this was next. It is=
+ now in. You get source badges on messages so you can see at a glance which=
+ account a thread came from, Mail.app-style account sections in the folder =
+list, account-scoped signatures, and Compose that routes replies from the r=
+ight address automatically. Adding and managing accounts happens in Setting=
+s.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">If you were juggling separate config files an=
+d separate terminal windows as the workaround =E2=80=94 you can stop.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Demo mode now ships with multiple synthetic a=
+ccounts too, so you can try the whole multi-account experience =E2=80=94 ba=
+dges, sections, Compose routing =E2=80=94 without setting up a single real =
+one.</p>
+<figure style=3D"color: #000;margin: 16px 0!important;text-align: center;">=
+<img class=3D"" alt=3D"Herald sidebar showing two demo accounts (Work Mail,=
+ Personal) as separate sections with their own Inbox/Drafts/Folders, plus a=
+n All Inboxes view." width=3D"600" draggable=3D"false" src=3D"https://example.test/redacted-link-17
+s.buttondown.email/images/fixture-id-redacted.png?w=3D960&=
+amp;fit=3Dmax" style=3D"color: #000;max-width: 100%!important;"><figcaption=
+ style=3D"color: #000;text-align: center;font-size: 14px!important;line-hei=
+ght: 18px!important;">Multi-account timeline view (Tomorrow Desk theme)</fi=
+gcaption></figure>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">Calendar (preview)</h2>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Press <code style=3D"border-radius: 0 .25rem =
+.25rem 0;font-size: 14px;color: #333;background: #eee;">3</code> to open Ca=
+lendar. The surfaces are: <strong style=3D"color: #000;">Week Time-Grid</st=
+rong> for spotting dense days and conflicts, <strong style=3D"color: #000;"=
+>Day Agenda</strong> for focus on one day with a detail drawer, <strong sty=
+le=3D"color: #000;">3-Day Command</strong> for today + tomorrow + the next =
+day with a side panel of open slots and conflicts, <strong style=3D"color: =
+#000;">Agenda List</strong>, and <strong style=3D"color: #000;">Calendar Se=
+arch</strong>, plus Event Detail with RSVP. The left rail filters by source=
+ and shows colored swatches per calendar.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">It is mostly a preview surface in this releas=
+e. Reading, RSVP, and basic event actions work. The smoother day-to-day flo=
+ws =E2=80=94 like "I got an <code style=3D"border-radius: 0 .25rem .25rem 0=
+;font-size: 14px;color: #333;background: #eee;">.ics</code> in an email, pl=
+ease put it on my calendar" =E2=80=94 are what we are focusing on next. A c=
+ouple of us are using it daily; we want to hear from anyone else who is.</p=
+>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;"><a href=3D"https://example.test/redacted-link-18
+-herald/calendar/?utm_source=3Dherald-mail.app&amp;utm_medium=3Demail" rel=3D=
+"noopener noreferrer nofollow" target=3D"_blank" style=3D"color: #22c55e !i=
+mportant;text-decoration: underline;">Calendar guide</a> =C2=B7 <a href=3D"=
+https://example.test/redacted-link-19
+p&amp;utm_medium=3Demail" rel=3D"noopener noreferrer nofollow" target=3D"_b=
+lank" style=3D"color: #22c55e !important;text-decoration: underline;">What'=
+s new in v0.5</a></p>
+<figure style=3D"color: #000;margin: 16px 0!important;text-align: center;">=
+<img class=3D"" alt=3D"Herald Calendar's 3-Day Command view with a mini mon=
+th and color-coded calendars on the left, three days of events across a tim=
+e grid, and a side panel showing the selected event, next-up, open slots, a=
+nd conflicts." width=3D"600" draggable=3D"false" src=3D"https://example.test/redacted-link-20
+ondown.email/images/fixture-id-redacted.png?w=3D960&amp;fi=
+t=3Dmax" style=3D"color: #000;max-width: 100%!important;"><figcaption style=
+=3D"color: #000;text-align: center;font-size: 14px!important;line-height: 1=
+8px!important;">Calendar 3-days view (Tokyo Dusk theme)</figcaption></figur=
+e>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">Calendar providers in beta</h2>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">CalDAV-based providers =E2=80=94 Fastmail Cal=
+endar, iCloud Calendar, Yahoo Calendar, custom CalDAV =E2=80=94 work with a=
+n app-specific password or the provider's CalDAV URL. <strong style=3D"colo=
+r: #000;">Google Calendar OAuth is under construction</strong> in test mode=
+; the public OAuth path is expected in a later beta, likely v0.6.0. We know=
+ Google Calendar without OAuth is rough.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;"><a href=3D"https://example.test/redacted-link-21
+der-setup/?utm_source=3Dherald-mail.app&amp;utm_medium=3Demail" rel=3D"noop=
+ener noreferrer nofollow" target=3D"_blank" style=3D"color: #22c55e !import=
+ant;text-decoration: underline;">Provider setup docs</a>.</p>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">Cleanup tab is gone =E2=80=94 it=
+ moved into Timeline</h2>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Cleanup is no longer a separate top-level tab=
+. Browsing what to clean now lives inside Timeline grouping: press <code st=
+yle=3D"border-radius: 0 .25rem .25rem 0;font-size: 14px;color: #333;backgro=
+und: #eee;">G</code> in Timeline to cycle through thread, sender, and domai=
+n grouping. Rule execution and dry-run previews still work the way they did=
+. One fewer tab, same actions.</p>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">What is coming next</h2>
+<ul style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important=
+;line-height: 24px!important;"><li style=3D"color: #000;margin: 16px 0!impo=
+rtant;font-size: 16px!important;line-height: 24px!important;margin-top: 8px=
+!important;margin-bottom: 0!important;"><p style=3D"color: #000;margin: 16p=
+x 0!important;font-size: 16px!important;line-height: 24px!important;"><stro=
+ng style=3D"color: #000;">Google Calendar OAuth</strong> (and Gmail OAuth),=
+ so Calendar in particular works the way people expect, without the app-pas=
+sword dance.</p></li><li style=3D"color: #000;margin: 16px 0!important;font=
+-size: 16px!important;line-height: 24px!important;margin-top: 8px!important=
+;margin-bottom: 0!important;"><p style=3D"color: #000;margin: 16px 0!import=
+ant;font-size: 16px!important;line-height: 24px!important;"><strong style=3D=
+"color: #000;">Smarter email =E2=86=92 calendar handoff.</strong> When a me=
+ssage has an <code style=3D"border-radius: 0 .25rem .25rem 0;font-size: 14p=
+x;color: #333;background: #eee;">.ics</code>, Herald should offer to add it=
+ to one of your configured calendars in one step, instead of making you dow=
+nload the file and hope your OS opens it in the right place. We've all hit =
+this.</p></li><li style=3D"color: #000;margin: 16px 0!important;font-size: =
+16px!important;line-height: 24px!important;margin-top: 8px!important;margin=
+-bottom: 0!important;"><p style=3D"color: #000;margin: 16px 0!important;fon=
+t-size: 16px!important;line-height: 24px!important;"><strong style=3D"color=
+: #000;">Polish on Calendar</strong> based on whoever pokes at it during th=
+is beta =E2=80=94 that part depends on you.</p></li></ul>
+<hr style=3D"color: #000;border: none;border-top: 1px solid #eaeaea;border-=
+color: #f5f5f5;border-width: 2px;width: 300px;margin: 40px auto;"><h2 style=
+=3D"color: #000;margin: 16px 0!important;">Try it</h2>
+<div class=3D"codehilite" style=3D"color: #000;background: #272822"><pre st=
+yle=3D"color: #000;background-color: #272822;border-radius: 0 .25rem .25rem=
+ 0;padding: 1em;font-size: 15px;overflow-x: auto;line-height: 125%"><span s=
+tyle=3D"color: #000;"></span><code style=3D"color: #fff;border-radius: 0 .2=
+5rem .25rem 0;font-size: 14px;">brew<span style=3D"color: #F8F8F2"> </span>=
+tap<span style=3D"color: #F8F8F2"> </span>herald-email/herald
+brew<span style=3D"color: #F8F8F2"> </span>install<span style=3D"color: #F8=
+F8F2"> </span>herald
+herald<span style=3D"color: #F8F8F2"> </span>--demo-multi-account
+</code></pre></div>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Press <code style=3D"border-radius: 0 .25rem =
+.25rem 0;font-size: 14px;color: #333;background: #eee;">3</code> to open Ca=
+lendar with demo data =E2=80=94 no real account needed.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">If you hit something rough, or there is a fea=
+ture you want, tell us. The roadmap moves fastest when we hear from people =
+who are actually using it.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Full v0.5.0 notes: <a href=3D"https://example.test/redacted-link-22
+com/herald-email/herald-mail-app/releases/tag/v0.5.0-beta.1?utm_source=3Dhe=
+rald-mail.app&amp;utm_medium=3Demail" rel=3D"noopener noreferrer nofollow" =
+target=3D"_blank" style=3D"color: #22c55e !important;text-decoration: under=
+line;">https://example.test/redacted-link-23
+beta.1</a><br style=3D"color: #000;">What's new in v0.5: <a href=3D"https:/=
+/docs.herald-mail.app/whats-new-in-v0-5/?utm_source=3Dherald-mail.app&amp;u=
+tm_medium=3Demail" rel=3D"noopener noreferrer nofollow" target=3D"_blank" s=
+tyle=3D"color: #22c55e !important;text-decoration: underline;">https://example.test/redacted-link-24
+.herald-mail.app/whats-new-in-v0-5/</a><br style=3D"color: #000;">Site: <a =
+href=3D"https://example.test/redacted-link-25
+m=3Demail" rel=3D"noopener noreferrer nofollow" target=3D"_blank" style=3D"=
+color: #22c55e !important;text-decoration: underline;">https://example.test/redacted-link-26
+app/</a> =C2=B7 Docs: <a href=3D"https://example.test/redacted-link-27
+herald-mail.app&amp;utm_medium=3Demail" rel=3D"noopener noreferrer nofollow=
+" target=3D"_blank" style=3D"color: #22c55e !important;text-decoration: und=
+erline;">https://example.test/redacted-link-28</a></p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">Thanks for being on this list.</p>
+<p style=3D"color: #000;margin: 16px 0!important;font-size: 16px!important;=
+line-height: 24px!important;">=E2=80=94 Anton</p></div>
+                           =20
+
+                           =20
+                           =20
+                           =20
+                                <p style=3D"color: #000;margin: 16px 0;font=
+-size: 16px;line-height: 24px;margin-top: 20px;margin-bottom: 20px">
+                                    <a href=3D"https://example.test/redacted-link-29
+d-mail.app/archive/fixture-id-redacted/?auth=3DImxvZ3J1c2F=
+kbUBnbWFpbC5jb20i:1wTnqd:k32MWuq85-sKR0K1j83PgVVYIOTAO9Fsej_A_baR4bo#commen=
+ts" style=3D"color: #22c55e;font-size: 14px;font-weight: 500;text-decoratio=
+n: underline">
+                                        Leave a comment on the web
+                                    </a>
+                                </p>
+                           =20
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+           =20
+                <div class=3D"email-actions--unsubscribe" style=3D"color: #=
+666;max-width: 600px;margin-top: 8px;margin-left: auto;margin-right: auto;f=
+ont-size: 13px;line-height: 18px;">You can <a href=3D"https://example.test/redacted-link-30
+m/unsubscribe/fixture-id-redacted?email=3Dc674584b-ef13-4a=
+23-8c15-8a7a9f0773f7" target=3D"_blank" style=3D"color: #22c55e !important;=
+text-decoration: underline;">unsubscribe</a> or <a href=3D"https://example.test/redacted-link-31
+wn.com/herald-mail.app/management/subscribers/68fa7079-9012-4ea6-a2db-bb707=
+3165084/" target=3D"_blank" style=3D"color: #22c55e !important;text-decorat=
+ion: underline;">manage your subscription</a>.</div>
+           =20
+            <div class=3D"social-links" style=3D"color: #000;text-align: ce=
+nter;max-width: 600px;margin: 20px auto;padding-left: 20px;padding-right: 2=
+0px;line-height: 1.5;">
+               =20
+            </div>
+            <table class=3D"powered-by-container" align=3D"center" width=3D=
+"100%" border=3D"0" cellpadding=3D"0" cellspacing=3D"0" role=3D"presentatio=
+n" style=3D"color: #000;max-width: 600px;margin-left: auto;margin-right: au=
+to;">
+                <tbody style=3D"color: #000;">
+                    <tr style=3D"color: #000;">
+                        <td style=3D"color: #000;">
+                           =20
+                                <div class=3D"powered-by" style=3D"color: #=
+666;text-align: center;margin-bottom: 16px;max-width: 600px;margin-top: 8px=
+;margin-left: auto;margin-right: auto;font-size: 13px;line-height: 18px;">
+                                    <a class=3D"powered-by-link" href=3D"ht=
+tps://buttondown.com/refer/herald-mail.app" style=3D"color: #0069ff!importa=
+nt;text-decoration: none;">
+                                        <img class=3D"powered-by-icon" src=3D=
+"https://example.test/redacted-link-32" height=3D=
+"40" alt=3D"Powered by Buttondown" width=3D"40" style=3D"max-width: 100%!im=
+portant;color: inherit !important;border: none;outline: none;width: 40px;ma=
+rgin: 20px auto 10px;text-decoration: none;display: block;">
+                                        Powered by Buttondown
+                                    </a>
+                                </div>
+                           =20
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+           =20
+<a class=3D"canary-link" href=3D"https://example.test/redacted-link-33
+8fa7079-9012-4ea6-a2db-bb7073165084/fixture-id-redacted/" =
+style=3D"color: #22c55e !important;text-decoration: underline;">=E2=80=8B</=
+a>
+       =20
+   =20
+
+</body></html>
+
+--mk3-cc6151e4129840429e6bc48343d11cf0--

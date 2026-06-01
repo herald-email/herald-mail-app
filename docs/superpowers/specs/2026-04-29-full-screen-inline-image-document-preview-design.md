@@ -12,7 +12,7 @@ This design covers the full-screen preview path for Timeline first, then the sha
 - [x] Preserve `cid:` inline image placement from `TextHTML` when HTML is available.
 - [x] Keep local inline raster images scrollable as part of the email document, below the pinned preview header.
 - [x] Keep split preview compact, with image hints rather than full raster rendering.
-- [x] Keep remote HTML image URLs as readable OSC 8 links without fetching remote bytes.
+- [x] Keep remote HTML image URLs as readable OSC 8 placeholders without fetching remote bytes automatically.
 - [x] Include orphan inline MIME images in a deterministic scrollable fallback section when no authored placement is available.
 - [x] Add a protocol selection foundation for iTerm2 now and Kitty/Sixel later.
 - [x] Update TUI test protocols so real-terminal raster behavior is captured, not only ANSI text output.

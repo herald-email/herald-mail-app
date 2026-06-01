@@ -31,16 +31,18 @@ const (
 )
 
 type timelineSearchOrigin struct {
-	cursor           int
-	expandedThreads  map[string]bool
-	focusedPanel     int
-	selectedEmail    *models.EmailData
-	body             *models.EmailBody
-	bodyMessageID    string
-	bodyLoading      bool
-	inlineImageDescs map[string]string
-	fullScreen       bool
-	bodyScrollOffset int
+	cursor              int
+	expandedThreads     map[string]bool
+	focusedPanel        int
+	selectedEmail       *models.EmailData
+	body                *models.EmailBody
+	bodyMessageID       string
+	bodyLoading         bool
+	inlineImageDescs    map[string]string
+	remoteImageLoads    map[string]previewRemoteImageState
+	remoteImageRevision int
+	fullScreen          bool
+	bodyScrollOffset    int
 }
 
 type TimelineState struct {
@@ -62,23 +64,26 @@ type TimelineState struct {
 	threadRowMap    []timelineRowRef
 	expandedThreads map[string]bool
 
-	selectedEmail       *models.EmailData
-	body                *models.EmailBody
-	bodyMessageID       string
-	bodyLoading         bool
-	previewLoad         previewLoadTelemetry
-	inlineImageDescs    map[string]string
-	previewWidth        int
-	fullScreen          bool
-	bodyFetchCancel     context.CancelFunc
-	bodyWrappedLines    []string
-	bodyWrappedWidth    int
-	bodyScrollOffset    int
-	previewDocLayout    *previewDocumentLayout
-	previewDocWidth     int
-	previewDocRows      int
-	previewDocMode      previewImageMode
-	previewDocMessageID string
+	selectedEmail            *models.EmailData
+	body                     *models.EmailBody
+	bodyMessageID            string
+	bodyLoading              bool
+	previewLoad              previewLoadTelemetry
+	inlineImageDescs         map[string]string
+	remoteImageLoads         map[string]previewRemoteImageState
+	remoteImageRevision      int
+	previewWidth             int
+	fullScreen               bool
+	bodyFetchCancel          context.CancelFunc
+	bodyWrappedLines         []string
+	bodyWrappedWidth         int
+	bodyScrollOffset         int
+	previewDocLayout         *previewDocumentLayout
+	previewDocWidth          int
+	previewDocRows           int
+	previewDocMode           previewImageMode
+	previewDocMessageID      string
+	previewDocRemoteRevision int
 
 	selectedAttachment    int
 	attachmentSavePrompt  bool

@@ -141,7 +141,7 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 
 ### Inline image preview safety
 
-Timeline previews keep image bytes local to the TUI process. Full-screen preview renders bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs are rendered as links without being fetched by Herald.
+Timeline previews keep image bytes local to the TUI process. Full-screen preview renders bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs render as readable placeholders and OSC 8 links by default; pressing `o` in the current Timeline preview fetches only the current message's remote images with bounded, no-cookie, no-referrer HTTP(S) requests, blocks local/private/link-local destinations and unsafe redirects, keeps bytes in memory only, and then sends revealed images through the same renderer/fallback path as MIME inline images.
 
 **Interactive-before-background priority**
 

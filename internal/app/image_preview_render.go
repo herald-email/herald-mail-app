@@ -34,6 +34,16 @@ func splitInlineImageHint(count int, available bool) string {
 	return fmt.Sprintf("[%d image(s) - full-screen image viewing unavailable here]", count)
 }
 
+func splitRemoteImageHint(count int, available bool) string {
+	if count == 0 {
+		return ""
+	}
+	if available {
+		return fmt.Sprintf("[%d linked image(s) - press o to reveal, z for full-screen]", count)
+	}
+	return fmt.Sprintf("[%d linked image(s) - press o to reveal]", count)
+}
+
 func (m *Model) renderInlineImagesForPreview(scopeKey string, images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {
 	if len(images) == 0 || availableRows <= 0 {
 		return "", 0
@@ -170,5 +180,7 @@ func (m *Model) revokeImagePreviews() {
 	if m.imagePreviewLinks != nil {
 		m.imagePreviewLinks.RevokeAll()
 	}
+	m.timeline.remoteImageLoads = nil
+	m.timeline.remoteImageRevision++
 	m.clearTimelinePreviewDocumentCache()
 }

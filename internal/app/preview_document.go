@@ -16,12 +16,14 @@ type previewDocumentBlockKind int
 const (
 	previewBlockText previewDocumentBlockKind = iota
 	previewBlockInlineImage
+	previewBlockRemoteImage
 )
 
 type previewDocumentBlock struct {
 	Kind      previewDocumentBlockKind
 	Text      string
 	Image     models.InlineImage
+	Remote    previewRemoteImage
 	ContentID string
 	Alt       string
 }
@@ -61,6 +63,13 @@ func buildPreviewDocument(body *models.EmailBody, imageDescriptions map[string]s
 	blocks = append(blocks, orphanBlocks...)
 
 	return previewDocument{Blocks: blocks}
+}
+
+type previewRemoteImage struct {
+	Key   string
+	URL   string
+	Alt   string
+	Title string
 }
 
 func mapInlineImagesByCID(images []models.InlineImage) map[string]models.InlineImage {
@@ -162,13 +171,13 @@ func (b *previewHTMLBuilder) walk(n *html.Node) {
 	if n == nil {
 		return
 	}
-	if n.Type == html.ElementNode && strings.EqualFold(n.Data, "img") && isCIDImageNode(n) {
+	if n.Type == html.ElementNode && strings.EqualFold(n.Data, "img") && isPreviewImageNode(n) {
 		b.flushHTML()
 		b.writeImage(n)
 		return
 	}
 
-	if n.Type == html.DocumentNode || nodeContainsCIDImage(n) {
+	if n.Type == html.DocumentNode || nodeContainsPreviewImage(n) {
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			b.walk(child)
 		}
@@ -207,6 +216,7 @@ func (b *previewHTMLBuilder) flushHTML() {
 func (b *previewHTMLBuilder) writeImage(n *html.Node) {
 	src := strings.TrimSpace(attrValue(n, "src"))
 	alt := strings.TrimSpace(attrValue(n, "alt"))
+	title := strings.TrimSpace(attrValue(n, "title"))
 	if src == "" {
 		return
 	}
@@ -225,6 +235,21 @@ func (b *previewHTMLBuilder) writeImage(n *html.Node) {
 		b.blocks = append(b.blocks, previewDocumentBlock{Kind: previewBlockText, Text: "[missing inline image: " + cid + "]"})
 		return
 	}
+	if isRemoteImageURL(src) {
+		src = normalizeRemoteImageURL(src)
+		b.blocks = append(b.blocks, previewDocumentBlock{
+			Kind: previewBlockRemoteImage,
+			Remote: previewRemoteImage{
+				Key:   remoteImageDocumentKey(src),
+				URL:   src,
+				Alt:   alt,
+				Title: title,
+			},
+			ContentID: remoteImageDocumentKey(src),
+			Alt:       alt,
+		})
+		return
+	}
 }
 
 func isCIDImageNode(n *html.Node) bool {
@@ -234,15 +259,26 @@ func isCIDImageNode(n *html.Node) bool {
 		strings.HasPrefix(strings.ToLower(strings.TrimSpace(attrValue(n, "src"))), "cid:")
 }
 
-func nodeContainsCIDImage(n *html.Node) bool {
+func isRemoteImageNode(n *html.Node) bool {
+	return n != nil &&
+		n.Type == html.ElementNode &&
+		strings.EqualFold(n.Data, "img") &&
+		isRemoteImageURL(strings.TrimSpace(attrValue(n, "src")))
+}
+
+func isPreviewImageNode(n *html.Node) bool {
+	return isCIDImageNode(n) || isRemoteImageNode(n)
+}
+
+func nodeContainsPreviewImage(n *html.Node) bool {
 	if n == nil {
 		return false
 	}
-	if isCIDImageNode(n) {
+	if isPreviewImageNode(n) {
 		return true
 	}
 	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if nodeContainsCIDImage(child) {
+		if nodeContainsPreviewImage(child) {
 			return true
 		}
 	}

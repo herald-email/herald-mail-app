@@ -752,6 +752,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive after confirmation"),
 			{"* / " + m.commandHelpKey("timeline", CommandMailReclassify), "star or re-classify"},
 			{"u / " + m.commandHelpKey("timeline", CommandMailHideFuture), "unsubscribe when available or hide future mail"},
+			m.commandHelpEntry("timeline", CommandPreviewRevealRemoteImages, "reveal linked remote images in this message"),
 			{"z", "toggle full-screen preview"},
 			{"v / y / Y", "visual selection and copy"},
 			{"Esc", "close preview"},
