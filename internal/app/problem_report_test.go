@@ -141,10 +141,10 @@ func TestProblemReportShortcutOpensModalWithoutWriting(t *testing.T) {
 	stripped := stripANSI(rendered)
 	for _, want := range []string{
 		"Report Problem",
-		"Email Support",
-		"Copy report/logs",
-		"Save to ~/.herald/reports",
-		"feedback form",
+		"[e] Email Support",
+		"[c] Copy report/logs",
+		"[s] Save to ~/.herald/reports",
+		"[f] feedback form",
 		"support will reply to the From address",
 	} {
 		if !strings.Contains(stripped, want) {
