@@ -3,13 +3,13 @@ title: First-run Wizard
 description: Configure Herald the first time it starts without an existing config file.
 ---
 
-The first-run wizard appears when Herald cannot find a usable config at the default path or at the path passed with `-config`. It creates the account, server, SMTP, sync, cleanup, and AI settings that the normal TUI uses afterward.
+The first-run wizard appears when Herald cannot find a usable config at the default path or at the path passed with `-config`. It connects a mail account first, applies safe defaults, and lets people customize optional preferences only when they choose to.
 
 ## Overview
 
-Use the wizard to choose an account type, enter credentials, validate the account immediately, configure optional preferences, and save `conf.yaml`. The default first-run wizard recommends Gmail OAuth, while Standard IMAP, Gmail with an App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook remain available.
+Use the wizard to choose an account type first, then move through a compact provider-specific setup. Gmail OAuth can include Gmail and optional Google Calendar from one OAuth grant; Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, Outlook, and Standard IMAP remain available from the same account chooser.
 
-<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type selection" state="fresh config, 120x40" desc="Shows the default account type choices including Gmail OAuth, standard IMAP, Gmail IMAP App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
+<!-- HERALD_SCREENSHOT id="wizard-account-type" page="first-run-wizard" alt="First-run wizard account type chooser" state="fresh config, 120x40" desc="Shows Account Type first with Gmail OAuth, Standard IMAP, Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook." capture="tmux demo 120x40; launch ./bin/herald -config /tmp/herald-new.yaml" -->
 
 ![First-run wizard account type selection](/screenshots/wizard-account-type.png)
 
@@ -19,13 +19,13 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 
 | Area | What it shows |
 | --- | --- |
-| Account type | A provider or generic IMAP path. Presets fill host and port values but do not invent credentials. |
+| Account Type | Gmail OAuth, Standard IMAP, Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. |
+| Google account | The Gmail OAuth provider step, with Mail enabled, Google Calendar enabled by default, and optional identity before Herald verifies Google access. |
+| Provider details | Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, Outlook, and Standard IMAP fields. Presets fill host and port values but do not invent credentials. |
 | Identity fields | Email address, username, and password or app password, depending on the selected provider. |
 | Server fields | IMAP host and port, SMTP host and port, and optional advanced overrides. |
-| Account connection | Validates IMAP and SMTP after account details, before optional AI, sync, theme, keyboard, or signature steps. |
-| AI provider | Ollama local, Ollama custom host, Claude API, OpenAI-compatible API, or disabled. |
-| Sync and cleanup | Poll interval in minutes, IMAP IDLE toggle, and cleanup schedule in hours. |
-| Review/save step | Writes the config file only after the account has already passed validation, then launches the main Herald UI. |
+| Account connection | Verifies required provider access after account details, before writing the config. |
+| Advanced settings | Shows default Theme, AI, Keyboard, Offline Cache, and Signature choices in one screen, then lets users enter Herald or customize. |
 
 ## Controls
 
@@ -40,12 +40,11 @@ The wizard replaces the normal tabbed interface until it completes or is cancell
 
 1. Install Herald with Homebrew or build it from source.
 2. Run `herald`, or use `./bin/herald` from a source checkout. Pass an explicit path with `herald -config ~/.herald/conf.yaml` when needed.
-3. Choose the provider path that matches your account.
-4. Enter the provider credentials. For Gmail OAuth, complete browser authorization. For Gmail IMAP and iCloud, use an app password when required by the provider.
-5. Herald validates IMAP and SMTP before showing the optional preference steps. If either check fails, the config file is not written and the wizard returns you to account setup.
-6. Pick optional AI, sync, keyboard, theme, and signature settings. Choose disabled if you only want mail sync, reading, composing, and cleanup.
-7. Review the remaining settings and save.
-8. After the final save, Herald writes the validated config, creates or opens the SQLite cache, processes new mail, and opens the Timeline tab.
+3. Choose an account type.
+4. For Google, leave Mail enabled, decide whether to keep Google Calendar enabled, and complete browser authorization. For app-password or IMAP providers, enter the provider credentials.
+5. Herald verifies access before saving. If the check fails, the config file is not written and the wizard returns you to account setup.
+6. Review the compact Advanced settings screen, then choose `Enter Herald` to launch with defaults or `Customize setup` to change AI, cache, keyboard, theme, and signature in detail.
+7. After save, Herald writes the validated config, creates or opens the SQLite cache, processes new mail, and opens the Timeline tab.
 
 ## Offline Cache Policy
 
@@ -55,15 +54,15 @@ The Sync and cleanup step asks how much fetched preview data Herald should keep.
 
 | Choice | Use when | Notes |
 | --- | --- | --- |
-| Standard IMAP | You know your IMAP and SMTP host and port. | Most portable path. |
-| Gmail OAuth | You want browser-based Google authorization for Gmail. | Recommended Gmail path; stores refresh token data only after IMAP and SMTP XOAUTH2 validation pass. |
+| Gmail OAuth / Google account | You want browser-based Google authorization for Gmail, with optional Google Calendar. | Recommended default; stores refresh token data only after selected Google access verifies successfully. |
 | Gmail IMAP + App Password | You use personal Gmail with 2-Step Verification and an app password. | Fallback Gmail path when OAuth is unavailable for your account. |
 | Proton Mail Bridge | You run Proton Mail Bridge locally. | Uses Bridge host, ports, username, and password. |
 | Fastmail, iCloud, Outlook | You want preset host/port values. | IMAP presets; provider app passwords may still be required. |
+| Standard IMAP | You know your IMAP and SMTP host and port. | Most portable non-preset path. |
 
 ## Data And Privacy
 
-The wizard keeps credentials, app passwords, OAuth refresh tokens, host names, and ports in memory until account validation passes, then writes them to the selected YAML file only when you finish the remaining setup. Treat that file as a credential store and use `chmod 600` on Unix-like systems.
+The wizard keeps credentials, app passwords, OAuth refresh tokens, host names, and ports in memory until account validation passes, then writes them to the selected YAML file only when you enter Herald or save customized preferences. Treat that file as a credential store and use `chmod 600` on Unix-like systems.
 
 If you configure Ollama, AI requests stay local to the Ollama host. If you configure Claude or an OpenAI-compatible provider, later AI features may send selected email context to that provider when you invoke them.
 
@@ -71,7 +70,7 @@ If you configure Ollama, AI requests stay local to the Ollama host. If you confi
 
 If the wizard reappears every time, verify that Herald is reading the config path you expect and that the file was saved successfully.
 
-If validation fails, read which check failed. IMAP failures usually mean the host, port, username, password, app password, OAuth grant, or provider IMAP setting is wrong. SMTP failures usually mean the SMTP host, port, username, password, app password, OAuth grant, or provider send setting is wrong. Some providers use different credentials for IMAP and SMTP.
+If verification fails, read which check failed, press Enter to return to the populated setup screen, check what you typed, and try again. Credential-based mail failures usually mean the host, port, username, password, app password, or provider mail setting is wrong. Google OAuth failures usually mean the grant was canceled, expired, or missing the selected Mail or Calendar access.
 
 If you choose `Cancel` on the Google consent screen, Herald reports that authorization was cancelled and does not save settings. See [Settings](/features/settings/) for the OAuth wait overlay behavior.
 

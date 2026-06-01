@@ -776,15 +776,16 @@ First-run experience and ongoing configuration should not require the user to ed
 ### First-run wizard
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
 - [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
-- [x] Step 1 — Account type: recommended `Gmail OAuth`, supported `Standard IMAP` and `Gmail (IMAP + App Password)` fallback plus IMAP presets for ProtonMail Bridge, Fastmail, iCloud, and Outlook
-- [x] Step 2 — Credentials and connection gate: Gmail IMAP uses email + app password with prefilled Gmail defaults and an optional advanced-server toggle; Standard IMAP and IMAP presets keep editable server fields with known preset host/port defaults pre-populated, then Herald validates IMAP and SMTP before optional preferences
+- [x] Step 1 — Account Type chooser remains first: Gmail OAuth, Standard IMAP, Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook are visible before provider details
+- [x] Step 2 — Provider express paths: Gmail OAuth opens a compact Google account step with optional email identity, Mail enabled, and Google Calendar enabled by default; credential providers keep editable host/port fields where relevant
+- [x] Connection gate: Google OAuth verifies selected Google access through one browser flow; credential-based providers use generic `Verify access` copy while retaining protocol-aware validation internally
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth is available by default as a browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials to run OAuth
 - [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations using the Gmail API `gmail.modify` OAuth scope
-- [x] Account setup validates both IMAP and SMTP before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
+- [x] Account setup validates required read/send access before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates Gmail API read/send capability before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
-- [x] Step 3 — Preferences: enter AI settings, offline-cache policy, keyboard profile, theme, and signature only after the account connection has passed
+- [x] Step 3 — Enter or customize: after account validation, first-run shows a compact Advanced settings review with AI off/deferred, cache set to message bodies without attachments, keyboard Default, theme Inherited/Default, and empty signature, then offers `Enter Herald` with `Customize setup`
 - [x] AI setup defaults to quality-first local models (`gemma3:4b` and `nomic-embed-text-v2-moe`), warns that 16GB RAM is comfortable while 8GB can work more slowly, and keeps custom Ollama downgrade choices plus freeform model names
 - [x] First-run Ollama setup validates that the selected chat/classification and embedding models are installed before saving; missing models show exact `ollama pull` commands and keep the config unwritten
 - [x] Offline Cache choices use compact labels for lightweight previews, message bodies without attachments, and full offline archives

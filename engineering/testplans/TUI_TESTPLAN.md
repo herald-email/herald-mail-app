@@ -123,9 +123,13 @@ After TUI-affecting work, validate:
 Use a missing or empty temp config file to validate:
 
 - setup wizard chrome and minimum-size handling
-- recommended, supported, and experimental account messaging
+- Account Type first screen with Gmail OAuth, Standard IMAP, Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook visible before provider details
+- compact Google account provider step with Mail enabled, Google Calendar enabled by default, no `Connect Google` button, and no IMAP/SMTP copy on the OAuth screen
+- generic `Verify access` / `Checking account access...` copy on credential provider validation screens
+- OAuth or validation failure returns to a populated provider setup screen so typos can be corrected without restarting
+- post-validation compact `Advanced settings` review with `Enter Herald`, `Customize setup`, default preferences applied, and full preference steps available only when customizing
 - Standard IMAP credential labeling and navigation
-- default-hidden Gmail OAuth, Gmail IMAP guidance, IMAP preset visibility, and hidden advanced defaults
+- Gmail IMAP guidance, IMAP preset visibility, provider switching without stale host/port values, and hidden advanced defaults
 
 ### Lane G — Virtual Mail Lab
 
@@ -2046,9 +2050,8 @@ This case covers the interaction polish required after the design-parity screens
 
 **Expect:**
 - Wizard uses Herald-branded chrome rather than raw unframed form output.
-- Copy clearly distinguishes supported IMAP account paths from experimental OAuth onboarding.
-- Default account choices include Standard IMAP, Gmail IMAP App Password, ProtonMail Bridge, Fastmail, iCloud, and Outlook, without experimental labels on IMAP-based presets.
-- Default account choices do not include Gmail OAuth.
+- Copy clearly distinguishes browser-based Google setup from credential-based mail providers.
+- Default account choices include Gmail OAuth, Standard IMAP, Gmail IMAP App Password, ProtonMail Bridge, Fastmail, iCloud, and Outlook, without experimental labels on IMAP-based presets.
 - At `220x50` and `80x24`, the form is centered and fully readable.
 - At `50x15`, Herald shows the minimum-size resize message instead of clipped fields.
 
@@ -2087,31 +2090,31 @@ This case covers the interaction polish required after the design-parity screens
 - Fastmail, iCloud, Outlook, and Gmail advanced fields show their known IMAP/SMTP host and port defaults before the user types.
 - Editing any preset field keeps the user's manual value unless the field is blank or still matches the previous preset.
 
-### TC-41 — Gmail OAuth experimental gate and IMAP guidance
+### TC-41 — Gmail OAuth express path and IMAP guidance
 
 **Lane:** F
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
-1. Launch Herald with a missing temp config path and no `-experimental` flag.
-2. Capture the account-selection step and confirm Gmail OAuth is absent.
+1. Launch Herald with a missing temp config path.
+2. Capture the account-selection step and confirm Gmail OAuth is visible alongside IMAP provider choices.
 3. Choose `Gmail (IMAP + App Password)`.
 4. Capture the Gmail IMAP guidance step.
 5. Toggle advanced server editing and capture again.
-6. Relaunch with `-experimental` and a missing temp config path.
-7. Choose `Gmail OAuth (Experimental)` and capture the OAuth account guidance and wait screen.
+6. Return to Account Type, choose `Gmail OAuth`, and capture the compact Google account guidance and wait screen.
 8. Simulate or perform Google consent cancellation and capture the resulting setup error state.
 9. Simulate an OAuth wait timeout and capture the guidance state.
 
 **Expect:**
-- Gmail OAuth is hidden in default first-run onboarding.
-- Gmail OAuth appears as `Gmail OAuth (Experimental)` only when launched with `-experimental`.
+- Gmail OAuth is visible in default first-run onboarding.
+- The Gmail OAuth provider step shows Mail enabled, Google Calendar enabled by default, optional Google identity, and no IMAP/SMTP host/port fields.
+- The Gmail OAuth provider step does not add a separate `Connect Google` button; completing the step starts the access verification flow.
 - The OAuth wait screen remains centered and shows an unboxed browser-auth prompt: `Click: [here] or copy this link to the browser:`, where `[here]` is an OSC 8 terminal hyperlink and a short `http://localhost:<port>/authorize` URL remains visible for copying.
 - OAuth wait hints include local cancel behavior, and `Esc`/`q` cancellation returns a clear "settings were not saved" result.
-- Google consent cancellation reports authorization cancelled, does not write the config file, and keeps the user in setup.
+- Google consent cancellation reports authorization cancelled, does not write the config file, and returns to the populated Google account setup so the email can be corrected.
 - OAuth timeout mentions that Google test-app screens require choosing `Continue` and that `Back to safety` does not authorize Herald.
 - Gmail IMAP guidance includes Gmail server defaults and links or copy for IMAP/App Password setup.
-- Gmail IMAP is described as the normal Gmail setup path while OAuth onboarding is experimental, with a note that Workspace may require OAuth.
+- Gmail IMAP is described as the fallback app-password setup path, with a note that Workspace may require OAuth.
 - Advanced server fields are hidden until explicitly requested.
 
 ### TC-41G — Gmail API OAuth core source
@@ -2151,8 +2154,8 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 **Expect:**
 - The wizard shows a validation-in-progress state immediately after the account details step.
 - Validation progress and failure states render inside the Herald setup box, not as unstyled terminal text.
-- If IMAP fails, the config path remains missing or empty and the user sees a clear IMAP failure.
-- If SMTP fails, the config path remains missing or empty and the user sees a clear SMTP failure.
+- If IMAP fails, the config path remains missing or empty, the user sees a clear IMAP failure, and Enter returns to the populated credential step.
+- If SMTP fails, the config path remains missing or empty, the user sees a clear SMTP failure, and Enter returns to the populated credential step.
 - If both pass, Herald advances to optional preferences; the final save writes the validated config and proceeds to the inbox.
 - At `50x15`, validation and error states use the minimum-size guard rather than clipped modal content.
 
@@ -2163,11 +2166,11 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 
 **Steps:**
 1. Complete or mock a successful account validation so the first-run preferences step opens.
-2. Capture the default Ollama AI step.
-3. Select custom Ollama and capture the chat and embedding model selectors.
+2. Capture the compact Advanced settings review with Theme, AI, Keyboard, Offline Cache, Signature, `Enter Herald`, and `Customize setup`.
+3. Choose `Customize setup`, capture the default Ollama AI step, then select custom Ollama and capture the chat and embedding model selectors.
 4. Attempt to save Ollama settings with one missing chat model and one missing embedding model.
 5. Repeat with both models installed or mocked as installed.
-6. Continue through first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
+6. Continue through customized first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
 7. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
 8. Simulate an existing saved Ollama config whose model is no longer installed.
 

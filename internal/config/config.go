@@ -765,13 +765,14 @@ func (c *Config) validateExplicitSources() error {
 		if strings.TrimSpace(source.Kind) != "" && source.Kind != string(models.SourceKindMail) {
 			continue
 		}
-		if strings.TrimSpace(source.Google.RefreshToken) == "" {
-			if strings.TrimSpace(source.Credentials.Username) == "" {
-				return fmt.Errorf("mail source %q missing credentials.username", source.ID)
-			}
-			if strings.TrimSpace(source.Credentials.Password) == "" {
-				return fmt.Errorf("mail source %q missing credentials.password", source.ID)
-			}
+		if explicitMailSourceUsesGoogleOAuth(source) {
+			continue
+		}
+		if strings.TrimSpace(source.Credentials.Username) == "" {
+			return fmt.Errorf("mail source %q missing credentials.username", source.ID)
+		}
+		if strings.TrimSpace(source.Credentials.Password) == "" {
+			return fmt.Errorf("mail source %q missing credentials.password", source.ID)
 		}
 		if strings.TrimSpace(source.IMAP.Host) == "" {
 			return fmt.Errorf("mail source %q missing imap.host", source.ID)
@@ -787,6 +788,14 @@ func (c *Config) validateExplicitSources() error {
 		}
 	}
 	return nil
+}
+
+func explicitMailSourceUsesGoogleOAuth(source SourceConfig) bool {
+	provider := strings.ToLower(strings.TrimSpace(source.Provider))
+	if provider != "gmail" && provider != "gmail_api" {
+		return false
+	}
+	return strings.TrimSpace(source.Google.RefreshToken) != ""
 }
 
 // checkFilePermissions ensures the config file has secure permissions

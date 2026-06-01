@@ -24,6 +24,7 @@ The detail forms should reuse proven setup controls where possible and keep prov
 - [x] `Add account` opens a provider-first mail setup form and exposes paired-calendar intent in that same flow when supported.
 - [x] Gmail OAuth defaults paired Google Calendar on, derives calendar identity from the Gmail address, and validates mail plus calendar after one OAuth flow.
 - [x] `Add calendar only` creates a standalone Google Calendar OAuth source or CalDAV source.
+- [x] First-run Google onboarding reuses the paired Gmail + Google Calendar source shape instead of writing only legacy top-level Gmail account fields.
 
 ## Validation And Runtime Application
 

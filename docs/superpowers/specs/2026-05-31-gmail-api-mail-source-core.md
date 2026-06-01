@@ -21,6 +21,7 @@ Provider-specific OAuth scopes must be selected from configured source capabilit
 - [x] OAuth Gmail mail sources using `provider: gmail` request Gmail API mail access only, using `https://www.googleapis.com/auth/gmail.modify`.
 - [x] `provider: gmail_api` remains accepted as a compatibility alias for the Gmail API adapter.
 - [x] Google Calendar sources request Calendar scopes only when a Calendar source is configured.
+- [x] First-run Google onboarding creates explicit selected mail and calendar sources before OAuth so the shared browser grant requests only the scopes for enabled Google capabilities.
 - [x] Gmail App Password and credential-based Gmail IMAP configs remain on the IMAP adapter without using Google OAuth scopes.
 - [x] Provider tokens, Gmail message IDs, label IDs, sync details, and raw OAuth details stay out of user-facing TUI and MCP output except through existing scoped refs.
 

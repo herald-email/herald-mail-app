@@ -42,6 +42,157 @@ func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
 	}
 }
 
+func TestSettingsWizardFirstRunStartsWithAccountTypeChooser(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+
+	if !s.alsoAddCalendar {
+		t.Fatal("first-run Google path should default Google Calendar on")
+	}
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"Account Type", "Gmail OAuth", "Standard IMAP", "Gmail (IMAP + App Password)", "ProtonMail Bridge", "Fastmail", "iCloud", "Outlook"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run account chooser to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Include Google Calendar", "Connect Google"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("first-run account chooser should not jump into Google details %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunGoogleProviderIsCompactAndHasNoConnectButton(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.form.NextGroup()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"Google account", "Mail", "Include Google Calendar"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run Google provider step to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Connect Google", "Other mail provider", "IMAP", "SMTP", "Validate IMAP and SMTP"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("first-run Google provider step should not show %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunProviderChoiceRoutesToSelectedProviderDetails(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+
+	for i := 0; i < 3; i++ {
+		s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"IMAP preset", "ProtonMail Bridge", "127.0.0.1", "1143", "1025"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Proton provider details to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Google account", "Include Google Calendar", "Google address"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("provider choice should not route to Google detail %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunProviderChoiceRebuildsDetailsAfterInitialResize(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s = updateSettingsForTest(t, s, tea.WindowSizeMsg{Width: 80, Height: 24})
+	s.form.NextGroup()
+	oldProvider := s.provider
+	s.provider = "protonmail"
+	s.syncProviderDefaults(oldProvider, s.provider)
+	s.syncCalendarPairingForProviderChange(oldProvider, s.provider)
+
+	rendered := ansi.Strip(s.View().Content)
+	if s.provider != "protonmail" {
+		t.Fatalf("provider = %q, want protonmail", s.provider)
+	}
+	for _, want := range []string{"IMAP preset", "ProtonMail Bridge", "Email address", "IMAP Host", "SMTP Host"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected selected provider details to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Google account", "Include Google Calendar", "Google address"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("selected provider details should not keep stale Google field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunOtherProviderCanReachVerifyAccess(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.provider = "protonmail"
+	s.firstRunOtherProvider = true
+	s.syncProviderDefaults("gmail-oauth", s.provider)
+	s.buildForm()
+
+	for i := 0; i < 5; i++ {
+		rendered := ansi.Strip(s.View().Content)
+		if strings.Contains(rendered, "Verify access") {
+			return
+		}
+		s.form.NextGroup()
+	}
+	t.Fatalf("expected other-provider setup to reach Verify access, got:\n%s", ansi.Strip(s.View().Content))
+}
+
+func TestSettingsWizardFirstRunProviderTabRoutesToSelectedProviderDetails(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+
+	for i := 0; i < 3; i++ {
+		s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyTab})
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"IMAP preset", "ProtonMail Bridge", "127.0.0.1"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Tab after provider choice to route to Proton details with %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Google account", "Include Google Calendar", "Google address"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("Tab after provider choice should not route to Google detail %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunGoogleProviderShowsTypedEmailAfterRetry(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.email = "typo@gmial.com"
+	s.form.NextGroup()
+	s.ResetForRetry()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	if !strings.Contains(rendered, "typo@gmial.com") {
+		t.Fatalf("expected retry screen to preserve typed email, got:\n%s", rendered)
+	}
+	for _, notWant := range []string{"Account Type", "IMAP", "SMTP", "Validate IMAP and SMTP"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("first-run Google retry should not show protocol copy %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardOtherProviderShowsFallbackChoices(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.provider = "imap"
+	s.buildForm()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"Account Type", "Standard IMAP", "Gmail (IMAP + App Password)", "ProtonMail Bridge", "Fastmail", "iCloud", "Outlook"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected provider fallback to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestSettingsWizardView_MinimumSizeGuardAt50x15(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 
@@ -105,9 +256,10 @@ func TestSettingsWizardShiftTabBackBypassesRequiredFieldValidation(t *testing.T)
 
 func TestSettingsWizard_ProtonMailPresetFieldsArePrepopulated(t *testing.T) {
 	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
-	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
-	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
-	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	s.firstRunOtherProvider = true
+	s.provider = "protonmail"
+	s.syncProviderDefaults("gmail-oauth", s.provider)
+	s.buildForm()
 	s.form.NextGroup()
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
@@ -134,6 +286,22 @@ func TestSettingsWizardPreferencesOmitAdvancedSyncCleanupControls(t *testing.T) 
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected first-run preferences to omit advanced sync/cleanup control %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardPreferencesStartWithEnterHerald(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{"Advanced settings", "Theme", "AI", "Keyboard", "Offline Cache", "Signature", "Enter Herald", "Customize setup"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected post-validation setup screen to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Ollama Host", "Poll Interval", "Auto-Cleanup Schedule"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected post-validation setup screen to keep %q out of the compact review, got:\n%s", notWant, rendered)
 		}
 	}
 }
@@ -446,6 +614,8 @@ func TestSettingsWizardThemeStepOnlyShowsThemePicker(t *testing.T) {
 
 func TestSettingsWizardPreferencesThemeStepOnlyShowsThemePicker(t *testing.T) {
 	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
+	s.firstRunCustomizePreferences = true
+	s.buildForm()
 
 	var views []string
 	for i := 0; i < 12; i++ {

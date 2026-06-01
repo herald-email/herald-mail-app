@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
@@ -209,6 +210,44 @@ func TestWizardPreferencesOllamaValidationFailureDoesNotSaveConfig(t *testing.T)
 	rendered := ansi.Strip(updated.View().Content)
 	if !strings.Contains(rendered, "AI setup failed") {
 		t.Fatalf("expected AI failure view title, got:\n%s", rendered)
+	}
+}
+
+func TestWizardOAuthFailureReturnsToPopulatedSetup(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "conf.yaml")
+	cfg := &config.Config{}
+	cfg.Vendor = "gmail"
+	cfg.Gmail.Email = "typo@gmial.com"
+	cfg.Gmail.RefreshToken = "pending-refresh"
+	settings := newWizardAccountSettings(cfg, configPath, false)
+	model := wizardModel{
+		settings:      settings,
+		configPath:    configPath,
+		pendingConfig: cfg,
+	}
+
+	updatedModel, _ := model.Update(app.OAuthErrorMsg{
+		Err:         errors.New("authorization denied"),
+		UserMessage: "Google authorization failed. Check the email address and try again.",
+	})
+	updated := updatedModel.(wizardModel)
+	if updated.state != wizardStateSettings {
+		t.Fatalf("state = %v, want settings", updated.state)
+	}
+	if !strings.Contains(updated.validationMessage, "Check the email address") {
+		t.Fatalf("validationMessage = %q, want recovery hint", updated.validationMessage)
+	}
+
+	updatedModel, cmd := updated.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	updated = updatedModel.(wizardModel)
+	if cmd == nil {
+		t.Fatal("expected setup form init command")
+	}
+	rendered := ansi.Strip(updated.View().Content)
+	for _, want := range []string{"Google account", "typo@gmial.com", "Include Google Calendar"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected recovered setup to include %q, got:\n%s", want, rendered)
+		}
 	}
 }
 

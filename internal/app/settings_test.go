@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -190,6 +191,82 @@ func TestBuildConfig_GmailOAuthVendor(t *testing.T) {
 	}
 	if cfg.Credentials.Username != "" {
 		t.Errorf("Credentials.Username = %q, want empty for Gmail OAuth", cfg.Credentials.Username)
+	}
+}
+
+func TestFirstRunGoogleFastPathCreatesMailAndCalendarSources(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.email = "work@example.com"
+
+	cfg := s.buildConfig()
+
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(sources) = %d, want Gmail mail plus Google Calendar: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	mail := settingsTestSourceByID(t, cfg.Sources, "work-example-com-mail")
+	if mail.Kind != "mail" || mail.Provider != "gmail" || mail.Google.Email != "work@example.com" {
+		t.Fatalf("mail source = %#v, want Gmail OAuth source", mail)
+	}
+	cal := settingsTestSourceByID(t, cfg.Sources, "work-example-com-calendar")
+	if cal.Kind != "calendar" || cal.Provider != "google_calendar" || cal.Google.Email != "work@example.com" || cal.AccountID != mail.AccountID {
+		t.Fatalf("calendar source = %#v, want paired Google Calendar source", cal)
+	}
+}
+
+func TestFirstRunGoogleFastPathCanDisableCalendarSource(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.email = "work@example.com"
+	s.alsoAddCalendar = false
+
+	cfg := s.buildConfig()
+
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("len(sources) = %d, want mail only: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	if cfg.Sources[0].Kind != "mail" || cfg.Sources[0].Provider != "gmail" {
+		t.Fatalf("source = %#v, want Gmail mail source", cfg.Sources[0])
+	}
+}
+
+func TestFirstRunGoogleFastPathOAuthCarriesSelectedSourceIDs(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	s.email = "work@example.com"
+
+	cfg := s.buildConfig()
+	msg, ok := s.oauthRequiredMsg(cfg)
+	if !ok {
+		t.Fatal("expected first-run Google setup to require OAuth")
+	}
+	if !msg.ValidateAccount || !msg.ValidateCalendar {
+		t.Fatalf("validation flags = account %v calendar %v, want both true", msg.ValidateAccount, msg.ValidateCalendar)
+	}
+	if got, want := msg.SourceIDs, []models.SourceID{"work-example-com-mail", "work-example-com-calendar"}; !slices.Equal(got, want) {
+		t.Fatalf("OAuth source IDs = %#v, want %#v", got, want)
+	}
+	if msg.ServiceLabel != "Google account" {
+		t.Fatalf("service label = %q, want Google account", msg.ServiceLabel)
+	}
+}
+
+func TestFirstRunGoogleFastPathDefaultsPreferencesWithoutOllama(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != aiProviderDisabled {
+		t.Fatalf("AI provider = %q, want disabled on fast path", cfg.AI.Provider)
+	}
+	if cfg.Cache.StoragePolicy != config.CacheStoragePolicyNoAttachments {
+		t.Fatalf("cache policy = %q, want %q", cfg.Cache.StoragePolicy, config.CacheStoragePolicyNoAttachments)
+	}
+	if cfg.Keyboard.Profile != keyboardProfileDefault {
+		t.Fatalf("keyboard profile = %q, want default", cfg.Keyboard.Profile)
+	}
+	if cfg.Theme.Name != "inherited" {
+		t.Fatalf("theme = %q, want inherited", cfg.Theme.Name)
+	}
+	if cfg.Compose.Signature.Text != "" {
+		t.Fatalf("signature = %q, want empty", cfg.Compose.Signature.Text)
 	}
 }
 
@@ -1223,6 +1300,35 @@ func TestSettingsAddMailStartsBlankInsteadOfReusingExistingAccount(t *testing.T)
 	}
 }
 
+func TestSettingsWizardProviderSwitchDoesNotKeepStaleGmailServers(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		old      string
+		next     string
+		wantIMAP string
+		wantSMTP string
+	}{
+		{name: "standard-imap", old: "gmail-oauth", next: "imap", wantIMAP: "", wantSMTP: ""},
+		{name: "protonmail", old: "gmail-oauth", next: "protonmail", wantIMAP: "127.0.0.1", wantSMTP: "127.0.0.1"},
+		{name: "protonmail-after-other-provider-menu", old: "imap", next: "protonmail", wantIMAP: "127.0.0.1", wantSMTP: "127.0.0.1"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+			s.imapHost = "imap.gmail.com"
+			s.imapPort = "993"
+			s.smtpHost = "smtp.gmail.com"
+			s.smtpPort = "587"
+
+			s.provider = tt.next
+			s.syncProviderDefaults(tt.old, s.provider)
+
+			if s.imapHost != tt.wantIMAP || s.smtpHost != tt.wantSMTP {
+				t.Fatalf("server fields after switch to %s = %q/%q, want %q/%q", tt.next, s.imapHost, s.smtpHost, tt.wantIMAP, tt.wantSMTP)
+			}
+		})
+	}
+}
+
 func TestSettingsAddCalendarStartsBlankInsteadOfReusingSelectedCalendar(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{
@@ -1592,6 +1698,155 @@ func TestSettingsMailAccountDetailShowsCalendarPairingForSupportedProviders(t *t
 			t.Fatalf("expected mail-only provider not to show calendar pairing")
 		}
 		s.form.NextGroup()
+	}
+}
+
+func TestSettingsAddMailSwitchToProtonClearsInheritedCalendarPairing(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddMail
+	s.provider = "gmail-oauth"
+	s.alsoAddCalendar = true
+
+	oldProvider := s.provider
+	s.provider = "protonmail"
+	s.syncProviderDefaults(oldProvider, s.provider)
+	s.syncCalendarPairingForProviderChange(oldProvider, s.provider)
+
+	if s.alsoAddCalendar {
+		t.Fatal("switching Add account from Gmail OAuth to ProtonMail Bridge should clear inherited calendar pairing")
+	}
+	if s.accountDetailShowsCalendar() {
+		t.Fatal("ProtonMail Bridge add-mail flow should not include a calendar detail")
+	}
+
+	s.email = "user@proton.me"
+	s.password = "bridge-password"
+	s.imapHost = "127.0.0.1"
+	s.imapPort = "1143"
+	s.smtpHost = "127.0.0.1"
+	s.smtpPort = "1025"
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("Proton add-mail config created %d sources, want mail only: %#v", len(cfg.Sources), cfg.Sources)
+	}
+	if cfg.Sources[0].Kind != "mail" || cfg.Sources[0].Provider != "protonmail" {
+		t.Fatalf("source = %#v, want Proton mail source only", cfg.Sources[0])
+	}
+}
+
+func TestSettingsAddMailSwitchToFastmailOffersCalendarWithoutDefaultingOn(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddMail
+	s.provider = "gmail-oauth"
+	s.alsoAddCalendar = true
+
+	oldProvider := s.provider
+	s.provider = "fastmail"
+	s.syncProviderDefaults(oldProvider, s.provider)
+	s.syncCalendarPairingForProviderChange(oldProvider, s.provider)
+
+	if s.alsoAddCalendar {
+		t.Fatal("switching Add account from Gmail OAuth to Fastmail should make calendar opt-in, not default-on")
+	}
+	if s.accountDetailShowsCalendar() {
+		t.Fatal("Fastmail add-mail flow should not include calendar details until the user opts in")
+	}
+
+	s.buildForm()
+	rendered := ""
+	for i := 0; i < 8; i++ {
+		rendered = renderSettingsViewForTest(t, s, 120, 40)
+		if strings.Contains(stripANSI(rendered), "Also add calendar") {
+			return
+		}
+		s.form.NextGroup()
+	}
+	t.Fatalf("Fastmail should still expose optional calendar pairing, got:\n%s", rendered)
+}
+
+func TestSettingsAddMailUnsupportedProviderIgnoresStaleCalendarFlag(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccount
+	s.accountEditMode = settingsAccountEditAddMail
+	s.provider = "protonmail"
+	s.alsoAddCalendar = true
+	s.calendarProvider = "caldav"
+	s.buildForm()
+
+	for i := 0; i < 8; i++ {
+		plain := stripANSI(renderSettingsViewForTest(t, s, 120, 40))
+		for _, notWant := range []string{"Also add calendar", "Calendar Provider", "CalDAV URL", "Google Calendar identity"} {
+			if strings.Contains(plain, notWant) {
+				t.Fatalf("unsupported mail provider should not render calendar field %q even with stale flag, got:\n%s", notWant, plain)
+			}
+		}
+		s.form.NextGroup()
+	}
+}
+
+func TestFirstRunSwitchToProtonClearsGoogleCalendarPairing(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	if !s.alsoAddCalendar {
+		t.Fatal("Gmail OAuth first-run path should start with calendar on")
+	}
+
+	oldProvider := s.provider
+	s.provider = "protonmail"
+	s.syncProviderDefaults(oldProvider, s.provider)
+	s.syncCalendarPairingForProviderChange(oldProvider, s.provider)
+
+	if s.alsoAddCalendar {
+		t.Fatal("first-run ProtonMail Bridge path should not inherit Google Calendar pairing")
+	}
+	if s.requiresCalendarValidation() {
+		t.Fatal("first-run ProtonMail Bridge path should not require calendar validation")
+	}
+	s.email = "user@proton.me"
+	s.password = "bridge-password"
+	s.imapHost = "127.0.0.1"
+	s.imapPort = "1143"
+	s.smtpHost = "127.0.0.1"
+	s.smtpPort = "1025"
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 0 {
+		t.Fatalf("first-run Proton config should stay mail-only legacy config, got sources: %#v", cfg.Sources)
+	}
+	if cfg.Vendor != "protonmail" || cfg.Server.Host != "127.0.0.1" || cfg.SMTP.Port != 1025 {
+		t.Fatalf("first-run Proton config = vendor %q imap %q:%d smtp %q:%d", cfg.Vendor, cfg.Server.Host, cfg.Server.Port, cfg.SMTP.Host, cfg.SMTP.Port)
+	}
+}
+
+func TestFirstRunSwitchToProtonAfterGoogleRetryDoesNotCarryOAuthSources(t *testing.T) {
+	staleGoogle := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunAccountOnly: true})
+	staleGoogle.email = "typo@gmail.com"
+	staleCfg := staleGoogle.buildConfig()
+	if len(staleCfg.Sources) == 0 {
+		t.Fatal("expected stale Google first-run config to carry explicit OAuth sources")
+	}
+
+	s := NewSettingsWithOptions(SettingsModeWizard, staleCfg, SettingsOptions{FirstRunAccountOnly: true})
+	oldProvider := s.provider
+	s.provider = "protonmail"
+	s.syncProviderDefaults(oldProvider, s.provider)
+	s.syncCalendarPairingForProviderChange(oldProvider, s.provider)
+	s.email = "user@proton.me"
+	s.password = "bridge-password"
+	s.imapHost = "127.0.0.1"
+	s.imapPort = "1143"
+	s.smtpHost = "127.0.0.1"
+	s.smtpPort = "1025"
+
+	cfg := s.buildConfig()
+	if len(cfg.Sources) != 0 {
+		t.Fatalf("first-run Proton retry config should clear stale Google OAuth sources, got %#v", cfg.Sources)
+	}
+	if msg, ok := s.oauthRequiredMsg(cfg); ok {
+		t.Fatalf("first-run Proton retry should not request OAuth, got %#v", msg)
+	}
+	if cfg.Vendor != "protonmail" || cfg.Credentials.Username != "user@proton.me" || cfg.Server.Host != "127.0.0.1" || cfg.SMTP.Port != 1025 {
+		t.Fatalf("first-run Proton retry config = vendor %q user %q imap %q:%d smtp %q:%d", cfg.Vendor, cfg.Credentials.Username, cfg.Server.Host, cfg.Server.Port, cfg.SMTP.Host, cfg.SMTP.Port)
 	}
 }
 

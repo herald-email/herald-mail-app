@@ -303,7 +303,7 @@ func (m *OAuthWaitModel) View() tea.View {
 		"",
 		urlLines,
 		"",
-		"  " + m.spinner.View() + " Waiting for authorization…",
+		"  " + m.spinner.View() + " Waiting for Google authorization...",
 		"",
 		browserLine,
 		"  Esc/q cancels without saving settings",

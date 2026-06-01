@@ -148,9 +148,13 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.validationStep == wizardStepPreferences {
 						m.settings = newWizardPreferencesSettings(m.pendingConfig, m.configPath, m.experimental)
 						m.step = wizardStepPreferences
+						m.state = wizardStateSettings
+						return m, m.settings.Init()
 					} else {
 						m.settings = newWizardAccountSettings(m.pendingConfig, m.configPath, m.experimental)
 						m.step = wizardStepAccount
+						m.state = wizardStateSettings
+						return m, m.settings.ResetForRetry()
 					}
 				}
 				m.state = wizardStateSettings
@@ -201,6 +205,8 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cfg == nil {
 			cfg = &config.Config{}
 		}
+		m.pendingConfig = cfg
+		m.validationStep = wizardStepAccount
 		oauthModel, err := app.NewOAuthWaitModelWithOptions(msg.Email, cfg, m.configPath, app.OAuthWaitOptions{
 			ReturnToMenu:               msg.ReturnToMenu,
 			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
@@ -211,7 +217,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ServiceLabel:               msg.ServiceLabel,
 		})
 		if err != nil {
-			m.validationMessage = setupOAuthStartFailureMessage(err)
+			m.validationMessage = setupAccountRetryMessage(setupOAuthStartFailureMessage(err))
 			logger.Error("Setup OAuth start failed: %v", err)
 			return m, nil
 		}
@@ -229,9 +235,9 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case app.OAuthErrorMsg:
 		m.oauthWait = nil
 		m.state = wizardStateSettings
-		m.validationMessage = msg.UserMessage
+		m.validationMessage = setupAccountRetryMessage(msg.UserMessage)
 		if m.validationMessage == "" && msg.Err != nil {
-			m.validationMessage = msg.Err.Error()
+			m.validationMessage = setupAccountRetryMessage(msg.Err.Error())
 		}
 		logger.Error("Setup OAuth failed: %v", msg.Err)
 		return m, nil
@@ -261,20 +267,22 @@ func (m wizardModel) View() tea.View {
 			))
 		}
 		return newWizardView(renderWizardStatus(m.width, m.height,
-			"Validating account",
-			"Checking IMAP and SMTP before continuing. This can take a few seconds.",
-			"You will only continue to preferences after both checks pass.",
+			"Verifying access",
+			"Checking account access before continuing. This can take a few seconds.",
+			"You will only continue after the selected access checks pass.",
 		))
 	}
 	if m.validationMessage != "" {
 		title := "Account setup failed"
 		if m.validationStep == wizardStepPreferences {
 			title = "AI setup failed"
+		} else {
+			title = "Check account details"
 		}
 		return newWizardView(renderWizardStatus(m.width, m.height,
 			title,
 			m.validationMessage,
-			"Enter: return to setup  Esc/q: quit without saving",
+			"Enter: edit and try again  Esc/q: quit without saving",
 		))
 	}
 	switch m.state {
@@ -298,6 +306,18 @@ func setupOAuthStartFailureMessage(err error) string {
 		parts = append(parts, "Debug log: "+path)
 	}
 	return strings.Join(parts, " ")
+}
+
+func setupAccountRetryMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return ""
+	}
+	hint := "Check the email address and account details, then try again."
+	if strings.Contains(message, hint) {
+		return message
+	}
+	return message + " " + hint
 }
 
 func newWizardView(content string) tea.View {

@@ -184,6 +184,39 @@ func TestValidateExplicitSourcesDoesNotRequireLegacyMailFields(t *testing.T) {
 	}
 }
 
+func TestValidateExplicitGmailOAuthSourceDoesNotRequireIMAPSMTP(t *testing.T) {
+	cfg := Config{
+		Sources: []SourceConfig{
+			{
+				ID:          "work-gmail-mail",
+				Kind:        "mail",
+				Provider:    "gmail",
+				DisplayName: "Work Gmail",
+				AccountID:   "work",
+				Google: GoogleConfig{
+					Email:        "work@gmail.com",
+					RefreshToken: "refresh-token",
+				},
+			},
+			{
+				ID:          "work-gmail-calendar",
+				Kind:        "calendar",
+				Provider:    "google_calendar",
+				DisplayName: "Work Calendar",
+				AccountID:   "work",
+				Google: GoogleConfig{
+					Email:        "work@gmail.com",
+					RefreshToken: "refresh-token",
+				},
+			},
+		},
+	}
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("Gmail OAuth source should validate without IMAP/SMTP fields: %v", err)
+	}
+}
+
 func TestAccountGroupsGroupMailAndCalendarByAccountID(t *testing.T) {
 	cfg := Config{
 		Sources: []SourceConfig{

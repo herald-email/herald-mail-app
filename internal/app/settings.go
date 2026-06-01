@@ -45,6 +45,9 @@ const (
 	aiProviderOllamaCustom  = "ollama-custom"
 	aiProviderDisabled      = "disabled"
 
+	firstRunPreferenceEnter     = "enter-herald"
+	firstRunPreferenceCustomize = "customize-setup"
+
 	defaultOllamaHost     = "http://localhost:11434"
 	defaultOllamaModel    = "gemma3:4b"
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
@@ -140,6 +143,9 @@ type Settings struct {
 	showExperimentalEmailServices bool
 	firstRunAccountOnly           bool
 	firstRunPreferencesOnly       bool
+	firstRunOtherProvider         bool
+	firstRunPreferenceAction      string
+	firstRunCustomizePreferences  bool
 	panelSection                  settingsPanelSection
 	panelMenuChoice               string
 	panelStatus                   string
@@ -373,6 +379,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		showExperimentalEmailServices: opts.ShowExperimentalEmailServices,
 		firstRunAccountOnly:           opts.FirstRunAccountOnly,
 		firstRunPreferencesOnly:       opts.FirstRunPreferencesOnly,
+		firstRunPreferenceAction:      firstRunPreferenceEnter,
 	}
 
 	if existing != nil {
@@ -426,7 +433,22 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	if s.provider == "" {
 		s.provider = "gmail-oauth"
 	}
+	if s.firstRunAccountOnly {
+		s.firstRunOtherProvider = s.provider != "gmail-oauth"
+	}
 	s.normalizeAIProvider()
+	if s.firstRunAccountOnly && s.provider == "gmail-oauth" {
+		s.alsoAddCalendar = true
+		s.calendarProvider = "google_calendar"
+		if existing == nil || strings.TrimSpace(existing.AI.Provider) == "" {
+			s.aiProvider = aiProviderDisabled
+			s.syncAIDefaults()
+		}
+	}
+	if s.firstRunPreferencesOnly && (existing == nil || strings.TrimSpace(existing.AI.Provider) == "") {
+		s.aiProvider = aiProviderDisabled
+		s.syncAIDefaults()
+	}
 	if s.syncPollStr == "" {
 		s.syncPollStr = "5" // default only on first run; 0 is valid (IDLE-only mode)
 	}
@@ -648,11 +670,15 @@ func (s *Settings) buildForm() {
 	}
 	s.normalizeCalendarProviderChoice()
 	s.syncCalendarProviderDefaults("", s.calendarProvider)
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		s.firstRunOtherProvider = s.provider != "gmail-oauth"
+	}
 
 	// Group 1 — Account type selection
+	accountTitle := "Account Type"
 	accountGroup := huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Account Type").
+			Title(accountTitle).
 			Description(s.accountTypeDescription()).
 			Options(s.accountTypeOptions()...).
 			Value(&s.provider),
@@ -661,6 +687,9 @@ func (s *Settings) buildForm() {
 	credentialsIntro := huh.NewNote().
 		TitleFunc(func() string {
 			if s.provider == "imap" {
+				if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+					return "Custom IMAP"
+				}
 				return "Standard IMAP"
 			}
 			if s.mode == SettingsModeWizard {
@@ -757,9 +786,26 @@ func (s *Settings) buildForm() {
 	gmailOAuthGroup := huh.NewGroup(
 		huh.NewNote().
 			Title("Gmail OAuth").
-			Description("Recommended browser-based Gmail setup. Herald validates Gmail IMAP and SMTP with Google OAuth before saving."),
+			Description("Recommended browser-based Gmail setup. Herald verifies Google access before saving."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 	).WithHideFunc(func() bool { return s.mailSettingsHidden() || s.provider != "gmail-oauth" })
+
+	firstRunGoogleGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Mail and Calendar").
+			Description("Mail: Enabled\nCalendar: On by default\nFinishing this step verifies Google access before saving."),
+		huh.NewInput().
+			Title("Google address (optional)").
+			Placeholder("you@gmail.com").
+			Inline(true).
+			Value(&s.email),
+		huh.NewConfirm().
+			Title("Include Google Calendar").
+			Description("Mail is enabled. Adds a Google Calendar source with the same Google account.").
+			Affirmative("Calendar on").
+			Negative("Mail only").
+			Value(&s.alsoAddCalendar),
+	).Title("Google account")
 
 	// Group 3 — AI provider selection
 	aiProviderGroup := huh.NewGroup(
@@ -1097,11 +1143,11 @@ func (s *Settings) buildForm() {
 	)
 	connectGroup := huh.NewGroup(
 		huh.NewConfirm().
-			Title("Validate IMAP and SMTP").
+			Title("Verify access").
 			Affirmative("Connect").
 			Negative("Cancel").
 			Value(&s.saveButton),
-	).Title("Connect account")
+	).Title("Connect mail account")
 
 	accountDeleteConfirmGroup := huh.NewGroup(
 		huh.NewNote().
@@ -1384,25 +1430,48 @@ func (s *Settings) buildForm() {
 		}
 	}
 	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
-		groups = []*huh.Group{
-			accountGroup,
-			credentialsGroup,
-			gmailGroup,
-			gmailAdvancedGroup,
-			gmailOAuthGroup,
-			connectGroup,
+		if s.provider == "gmail-oauth" && !s.firstRunOtherProvider {
+			groups = []*huh.Group{
+				accountGroup,
+				firstRunGoogleGroup,
+			}
+		} else {
+			s.firstRunOtherProvider = true
+			groups = []*huh.Group{
+				accountGroup,
+				credentialsGroup,
+				gmailGroup,
+				gmailAdvancedGroup,
+				connectGroup,
+			}
 		}
 	} else if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly {
-		groups = []*huh.Group{
-			aiProviderGroup,
-			ollamaDefaultGroup,
-			ollamaGroup,
-			claudeGroup,
-			openAIGroup,
-			wizardCacheGroup,
-			keyboardGroup,
-			wizardThemeGroup,
-			composeGroup,
+		enterGroup := huh.NewGroup(
+			huh.NewNote().
+				Title("Advanced settings").
+				Description("Theme: Inherited\nAI: Disabled\nKeyboard: Default\nOffline Cache: Message bodies without attachments\nSignature: None"),
+			huh.NewSelect[string]().
+				Title("Next").
+				Options(
+					huh.NewOption("Enter Herald", firstRunPreferenceEnter),
+					huh.NewOption("Customize setup", firstRunPreferenceCustomize),
+				).
+				Value(&s.firstRunPreferenceAction),
+		).Title("Advanced settings")
+		if !s.firstRunCustomizePreferences {
+			groups = []*huh.Group{enterGroup}
+		} else {
+			groups = []*huh.Group{
+				aiProviderGroup,
+				ollamaDefaultGroup,
+				ollamaGroup,
+				claudeGroup,
+				openAIGroup,
+				wizardCacheGroup,
+				keyboardGroup,
+				wizardThemeGroup,
+				composeGroup,
+			}
 		}
 	}
 
@@ -1810,6 +1879,9 @@ func (s *Settings) accountDetailShowsMail() bool {
 }
 
 func (s *Settings) accountDetailShowsCalendar() bool {
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		return !s.firstRunOtherProvider && s.alsoAddCalendar
+	}
 	if s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount {
 		return false
 	}
@@ -1817,7 +1889,7 @@ func (s *Settings) accountDetailShowsCalendar() bool {
 	case settingsAccountEditAddCalendar:
 		return true
 	case settingsAccountEditAddMail:
-		return s.alsoAddCalendar
+		return s.alsoAddCalendar && calendarPairingSupportedProvider(s.provider)
 	default:
 		group, ok := s.selectedAccountGroup()
 		if !ok {
@@ -2146,6 +2218,36 @@ func calendarPairingSupportedProvider(provider string) bool {
 	}
 }
 
+func calendarPairingDefaultsOnForProvider(provider string) bool {
+	return strings.TrimSpace(provider) == "gmail-oauth"
+}
+
+func (s *Settings) syncCalendarPairingForProviderChange(oldProvider, newProvider string) {
+	if s == nil || oldProvider == newProvider {
+		return
+	}
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		s.firstRunOtherProvider = newProvider != "gmail-oauth"
+		s.alsoAddCalendar = calendarPairingDefaultsOnForProvider(newProvider)
+		if !calendarPairingSupportedProvider(newProvider) {
+			s.calendarProvider = s.defaultCalendarProvider()
+		}
+		return
+	}
+	if s.mode != SettingsModePanel || s.panelSection != settingsPanelSectionAccount || s.accountEditMode != settingsAccountEditAddMail {
+		return
+	}
+	if calendarPairingDefaultsOnForProvider(newProvider) {
+		s.alsoAddCalendar = true
+		s.calendarProvider = s.defaultCalendarProvider()
+		return
+	}
+	s.alsoAddCalendar = false
+	if !calendarPairingSupportedProvider(newProvider) {
+		s.calendarProvider = s.defaultCalendarProvider()
+	}
+}
+
 func (s *Settings) loadSelectedAccountFields() {
 	group, ok := s.selectedAccountGroup()
 	if !ok {
@@ -2206,7 +2308,7 @@ func (s *Settings) openSelectedAccountFromList() bool {
 			s.calendarProvider = s.defaultCalendarProvider()
 			s.syncCalendarProviderDefaults("", s.calendarProvider)
 		} else {
-			s.alsoAddCalendar = calendarPairingSupportedProvider(s.provider)
+			s.alsoAddCalendar = calendarPairingDefaultsOnForProvider(s.provider)
 			s.syncProviderDefaults("", s.provider)
 		}
 	case "":
@@ -2513,6 +2615,24 @@ func (s *Settings) Init() tea.Cmd {
 	return s.form.Init()
 }
 
+// ResetForRetry reopens the current wizard settings form after a failed
+// validation or OAuth attempt, preserving the values the user already typed.
+func (s *Settings) ResetForRetry() tea.Cmd {
+	if s == nil {
+		return nil
+	}
+	s.done = false
+	s.saveButton = true
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		s.firstRunOtherProvider = s.provider != "gmail-oauth"
+	}
+	s.buildForm()
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		s.form.NextGroup()
+	}
+	return s.form.Init()
+}
+
 // Update implements tea.Model.
 func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.done {
@@ -2594,6 +2714,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if prevProvider != s.provider {
 		s.syncProviderDefaults(prevProvider, s.provider)
+		s.syncCalendarPairingForProviderChange(prevProvider, s.provider)
 	}
 	if prevCalendarProvider != s.calendarProvider {
 		s.syncCalendarProviderDefaults(prevCalendarProvider, s.calendarProvider)
@@ -2614,6 +2735,14 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if s.openSelectedAccountFromList() {
 				return s, tea.Batch(cmd, s.form.Init())
 			}
+		}
+		if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly && !s.firstRunCustomizePreferences && s.firstRunPreferenceAction == firstRunPreferenceCustomize {
+			s.firstRunCustomizePreferences = true
+			s.firstRunPreferenceAction = firstRunPreferenceEnter
+			s.saveButton = true
+			s.done = false
+			s.buildForm()
+			return s, tea.Batch(cmd, s.form.Init())
 		}
 		s.done = true
 		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccount && s.accountDeletePending {
@@ -2691,6 +2820,10 @@ func (s *Settings) View() tea.View {
 	currentFormView := s.form.View()
 	if s.ensureProviderDefaults() || s.needsPresetFieldRefresh(currentFormView) {
 		s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
+		currentFormView = s.form.View()
+	}
+	if s.needsFirstRunProviderDetailRefresh(currentFormView) {
+		s.refreshFirstRunProviderDetailGroup()
 		currentFormView = s.form.View()
 	}
 	s.syncAIDefaults()
@@ -2900,8 +3033,18 @@ func (s *Settings) buildConfig() *config.Config {
 	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccount {
 		cfg = s.buildAccountSourcesConfig(cfg)
 	}
+	firstRunGoogleFastPath := s.mode == SettingsModeWizard && s.firstRunAccountOnly && s.provider == "gmail-oauth" && !s.firstRunOtherProvider
+	if firstRunGoogleFastPath {
+		cfg = s.buildFirstRunGoogleSourcesConfig(cfg)
+	} else if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		cfg.Sources = nil
+	}
 	if s.requiresAccountValidation() {
-		cfg.Vendor = configVendorForProvider(s.provider)
+		accountProvider := s.provider
+		if firstRunGoogleFastPath {
+			accountProvider = "gmail-oauth"
+		}
+		cfg.Vendor = configVendorForProvider(accountProvider)
 		cfg.Gmail.AccessToken = ""
 		cfg.Gmail.RefreshToken = ""
 		cfg.Gmail.TokenExpiry = ""
@@ -2909,7 +3052,7 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Credentials.Username = ""
 		cfg.Credentials.Password = ""
 
-		if s.provider == "gmail-oauth" {
+		if accountProvider == "gmail-oauth" {
 			cfg.Gmail.Email = s.email
 		} else {
 			cfg.Credentials.Username = s.email
@@ -2924,6 +3067,9 @@ func (s *Settings) buildConfig() *config.Config {
 
 	// AI provider
 	if s.disableAIFromWarning {
+		s.aiProvider = aiProviderDisabled
+	}
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
 		s.aiProvider = aiProviderDisabled
 	}
 	cfg.AI.Provider = configAIProvider(s.aiProvider)
@@ -2983,6 +3129,51 @@ func (s *Settings) buildConfig() *config.Config {
 
 	applyVendorPreset(&cfg)
 	return &cfg
+}
+
+func (s *Settings) buildFirstRunGoogleSourcesConfig(cfg config.Config) config.Config {
+	email := strings.TrimSpace(s.email)
+	accountID := settingsSlug(firstNonEmptyString(s.accountDisplayName, email, "google-account"))
+	if accountID == "" {
+		accountID = "google-account"
+	}
+	displayName := strings.TrimSpace(firstNonEmptyString(s.accountDisplayName, email, "Google Mail"))
+	mailID := settingsUniqueSourceID(nil, firstNonEmptyString(displayName, accountID), "mail")
+	mail := config.SourceConfig{
+		ID:          mailID,
+		Kind:        string(models.SourceKindMail),
+		Provider:    "gmail",
+		DisplayName: displayName,
+		AccountID:   accountID,
+		Google: config.GoogleConfig{
+			Email:        email,
+			AccessToken:  cfg.Gmail.AccessToken,
+			RefreshToken: cfg.Gmail.RefreshToken,
+			TokenExpiry:  cfg.Gmail.TokenExpiry,
+		},
+		Compose: cfg.Compose,
+	}
+	sources := []config.SourceConfig{mail}
+	if s.alsoAddCalendar {
+		calendarName := strings.TrimSpace(firstNonEmptyString(s.calendarDisplayName, displayName+" Calendar", "Google Calendar"))
+		calendarID := settingsUniqueSourceID(sources, firstNonEmptyString(displayName, accountID), "calendar")
+		sources = append(sources, config.SourceConfig{
+			ID:          calendarID,
+			Kind:        string(models.SourceKindCalendar),
+			Provider:    "google_calendar",
+			DisplayName: calendarName,
+			AccountID:   accountID,
+			Google: config.GoogleConfig{
+				Email:        strings.TrimSpace(firstNonEmptyString(s.calendarEmail, email)),
+				AccessToken:  cfg.Gmail.AccessToken,
+				RefreshToken: cfg.Gmail.RefreshToken,
+				TokenExpiry:  cfg.Gmail.TokenExpiry,
+			},
+		})
+	}
+	cfg.Sources = sources
+	syncLegacyMailFieldsForSettings(&cfg)
+	return cfg
 }
 
 func (s *Settings) buildAccountSourcesConfig(cfg config.Config) config.Config {
@@ -3239,6 +3430,9 @@ func (s *Settings) requiresOllamaModelValidation(candidate *config.Config) bool 
 }
 
 func (s *Settings) requiresCalendarValidation() bool {
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly {
+		return s.provider == "gmail-oauth" && !s.firstRunOtherProvider && s.alsoAddCalendar
+	}
 	if s.mode != SettingsModePanel ||
 		s.panelSection != settingsPanelSectionAccount ||
 		s.deleteAccount ||
@@ -3261,13 +3455,16 @@ func (s *Settings) oauthRequiredMsg(candidate *config.Config) (OAuthRequiredMsg,
 	if s.mode == SettingsModeWizard && s.firstRunPreferencesOnly {
 		return OAuthRequiredMsg{}, false
 	}
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly && (s.provider != "gmail-oauth" || s.firstRunOtherProvider) {
+		return OAuthRequiredMsg{}, false
+	}
 
 	validateAccount := s.requiresAccountValidation()
 	validateCalendar := s.requiresCalendarValidation()
 	if s.accountEditMode == settingsAccountEditExisting && !validateAccount && !validateCalendar {
 		return OAuthRequiredMsg{}, false
 	}
-	includeConfigured := s.provider == "gmail-oauth" ||
+	includeConfigured := (s.provider == "gmail-oauth" || (s.mode == SettingsModeWizard && s.firstRunAccountOnly && s.provider == "gmail-oauth" && !s.firstRunOtherProvider)) ||
 		(s.accountEditMode == settingsAccountEditExisting && (validateAccount || validateCalendar))
 	sourceIDs := s.googleOAuthSourceIDsForCurrentAccount(candidate, includeConfigured)
 	needsCalendarOAuth := !includeConfigured && len(sourceIDs) > 0
@@ -3280,6 +3477,9 @@ func (s *Settings) oauthRequiredMsg(candidate *config.Config) (OAuthRequiredMsg,
 		email = strings.TrimSpace(s.calendarEmail)
 	}
 	serviceLabel := "Gmail OAuth"
+	if s.mode == SettingsModeWizard && s.firstRunAccountOnly && s.provider == "gmail-oauth" && !s.firstRunOtherProvider {
+		serviceLabel = "Google account"
+	}
 	if (!s.accountDetailShowsMail() && s.accountDetailShowsCalendar()) || (!includeConfigured && needsCalendarOAuth) {
 		serviceLabel = "Google Calendar OAuth"
 	}
@@ -3552,6 +3752,7 @@ func (s *Settings) visibleSettingsGroupTarget(view string) string {
 	for _, target := range []string{
 		"Email address>",
 		"Gmail address>",
+		"Google address",
 		"IMAP Host>",
 		"AI Provider",
 		"Offline Cache",
@@ -3582,6 +3783,48 @@ func (s *Settings) needsPresetFieldRefresh(view string) bool {
 		}
 	}
 	return false
+}
+
+func (s *Settings) firstRunProviderDetailTarget() string {
+	if s.mode != SettingsModeWizard || !s.firstRunAccountOnly {
+		return ""
+	}
+	switch s.provider {
+	case "gmail-oauth":
+		if !s.firstRunOtherProvider {
+			return "Google address"
+		}
+	case "gmail":
+		return "Gmail address>"
+	default:
+		return "Email address>"
+	}
+	return ""
+}
+
+func (s *Settings) needsFirstRunProviderDetailRefresh(view string) bool {
+	target := s.firstRunProviderDetailTarget()
+	if target == "" || strings.Contains(view, "Account Type") {
+		return false
+	}
+	if strings.Contains(view, target) {
+		return false
+	}
+	switch s.provider {
+	case "gmail-oauth":
+		return !s.firstRunOtherProvider
+	case "gmail":
+		return strings.Contains(view, "Google account") || strings.Contains(view, "Google address")
+	default:
+		return strings.Contains(view, "Google account") ||
+			strings.Contains(view, "Google address") ||
+			strings.Contains(view, "Gmail address>")
+	}
+}
+
+func (s *Settings) refreshFirstRunProviderDetailGroup() {
+	s.buildForm()
+	s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
 }
 
 func providerPresetValues(provider string) (imapHost, imapPort, smtpHost, smtpPort string, ok bool) {
@@ -3631,21 +3874,47 @@ func (s *Settings) syncProviderDefaults(oldProvider, newProvider string) {
 	}
 
 	oldIMAPHost, oldIMAPPort, oldSMTPHost, oldSMTPPort, oldOK := providerPresetValues(oldProvider)
+	gmailIMAPHost, gmailIMAPPort, gmailSMTPHost, gmailSMTPPort, gmailOK := providerPresetValues("gmail")
+	staleGmailPreset := gmailOK &&
+		s.imapHost == gmailIMAPHost &&
+		s.imapPort == gmailIMAPPort &&
+		s.smtpHost == gmailSMTPHost &&
+		s.smtpPort == gmailSMTPPort
+	matchesOldOrStaleGmail := func(current, oldValue, gmailValue string) bool {
+		if oldOK && current == oldValue {
+			return true
+		}
+		return staleGmailPreset && configVendorForProvider(newProvider) != "gmail" && current == gmailValue
+	}
 	newIMAPHost, newIMAPPort, newSMTPHost, newSMTPPort, newOK := providerPresetValues(newProvider)
 	if !newOK {
+		if configVendorForProvider(newProvider) == "imap" {
+			if matchesOldOrStaleGmail(s.imapHost, oldIMAPHost, gmailIMAPHost) {
+				s.imapHost = ""
+			}
+			if matchesOldOrStaleGmail(s.imapPort, oldIMAPPort, gmailIMAPPort) {
+				s.imapPort = ""
+			}
+			if matchesOldOrStaleGmail(s.smtpHost, oldSMTPHost, gmailSMTPHost) {
+				s.smtpHost = ""
+			}
+			if matchesOldOrStaleGmail(s.smtpPort, oldSMTPPort, gmailSMTPPort) {
+				s.smtpPort = ""
+			}
+		}
 		return
 	}
 
-	if s.imapHost == "" || (oldOK && s.imapHost == oldIMAPHost) {
+	if s.imapHost == "" || matchesOldOrStaleGmail(s.imapHost, oldIMAPHost, gmailIMAPHost) {
 		s.imapHost = newIMAPHost
 	}
-	if s.imapPort == "" || (oldOK && s.imapPort == oldIMAPPort) {
+	if s.imapPort == "" || matchesOldOrStaleGmail(s.imapPort, oldIMAPPort, gmailIMAPPort) {
 		s.imapPort = newIMAPPort
 	}
-	if s.smtpHost == "" || (oldOK && s.smtpHost == oldSMTPHost) {
+	if s.smtpHost == "" || matchesOldOrStaleGmail(s.smtpHost, oldSMTPHost, gmailSMTPHost) {
 		s.smtpHost = newSMTPHost
 	}
-	if s.smtpPort == "" || (oldOK && s.smtpPort == oldSMTPPort) {
+	if s.smtpPort == "" || matchesOldOrStaleGmail(s.smtpPort, oldSMTPPort, gmailSMTPPort) {
 		s.smtpPort = newSMTPPort
 	}
 }
@@ -3665,8 +3934,15 @@ func (s *Settings) renderWizardSummary(width int) string {
 func (s *Settings) wizardSummaryLines() []string {
 	if s.firstRunPreferencesOnly {
 		return []string{
-			wizardSummaryLine("Account:", "validated. Finish optional Herald preferences."),
-			wizardSummaryLine("Next:", "choose AI, sync, theme, keyboard, and signature settings."),
+			wizardSummaryLine("Account:", "verified. Enter Herald now or customize optional preferences."),
+			wizardSummaryLine("Defaults:", "AI off, message bodies without attachments, Default keyboard, inherited theme, no signature."),
+		}
+	}
+	if s.firstRunAccountOnly && s.provider == "gmail-oauth" && !s.firstRunOtherProvider {
+		return []string{
+			wizardSummaryLine("Recommended:", "Google account in a browser."),
+			wizardSummaryLine("Includes:", "Gmail now and Google Calendar by default."),
+			wizardSummaryLine("Next:", "choose an account type, then verify access."),
 		}
 	}
 	switch s.provider {
@@ -3698,8 +3974,8 @@ func (s *Settings) wizardSummaryLines() []string {
 		}
 	default:
 		return []string{
-			wizardSummaryLine("Recommended:", "Gmail OAuth for Google accounts."),
-			wizardSummaryLine("Supported:", "Standard IMAP, Gmail App Password, ProtonMail Bridge, Fastmail, iCloud, Outlook."),
+			wizardSummaryLine("Recommended:", "Google account for the fastest setup."),
+			wizardSummaryLine("Supported:", "Custom IMAP, Gmail App Password, ProtonMail Bridge, Fastmail, iCloud, Outlook."),
 		}
 	}
 }
