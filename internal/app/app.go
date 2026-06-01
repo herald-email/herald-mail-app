@@ -2358,7 +2358,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.calendarView = calendarViewAgenda
 		}
 		if m.calendarView == calendarViewAgenda && (m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero()) {
-			m.setDefaultCalendarAgendaRange(time.Now())
+			m.setDefaultCalendarAgendaRange(m.calendarCurrentTime())
 		}
 		if m.calendarView == calendarViewDay {
 			if m.calendarDay.IsZero() {

@@ -1003,6 +1003,7 @@ func TestCalendarAgendaTabLoadsAndRendersReadOnlyDetail(t *testing.T) {
 	events := testCalendarEvents()
 	b := &calendarAgendaStubBackend{available: true, events: events}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(*Model)
 	m.loading = false
@@ -2073,6 +2074,7 @@ func TestCalendarWeekStartCanUseSundayFromConfig(t *testing.T) {
 	events := dateAnchorCalendarEventsForTest()
 	b := &calendarAgendaStubBackend{available: true, events: events}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	cfg := &config.Config{}
 	setCalendarWeekStartForTest(t, cfg, "sunday")
 	m.SetConfig(cfg)
@@ -3151,6 +3153,7 @@ func TestCalendarRailRangeHeaderAndRenderedNotes(t *testing.T) {
 		},
 	}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
 	m = updated.(*Model)
 	m.loading = false
@@ -3207,6 +3210,7 @@ func TestCalendarTitleBarUsesSharedTopLevelTabs(t *testing.T) {
 func TestCalendarAgendaRangeTitleLivesOnPanelFrame(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 42})
 	m = updated.(*Model)
 	m.loading = false
@@ -3237,6 +3241,7 @@ func TestCalendarAgendaRangeTitleLivesOnPanelFrame(t *testing.T) {
 func TestCalendarAgendaFrameChromePromotesCountAndRemovesLoadedStatus(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 220, Height: 42})
 	m = updated.(*Model)
 	m.loading = false
@@ -3264,6 +3269,7 @@ func TestCalendarAgendaFrameChromePromotesCountAndRemovesLoadedStatus(t *testing
 func TestCalendarDetailBorderContainsTitleWithoutBodyDuplicate(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
 	m = updated.(*Model)
 	m.loading = false
@@ -3286,6 +3292,7 @@ func TestCalendarDetailBorderContainsTitleWithoutBodyDuplicate(t *testing.T) {
 func TestCalendarRailBorderContainsDateRangeWithoutBodyDuplicate(t *testing.T) {
 	b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents()}
 	m := New(b, nil, "", nil, false)
+	pinCalendarFixtureNowForTest(m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
 	m = updated.(*Model)
 	m.loading = false
@@ -3560,6 +3567,10 @@ func calendarImmediateMessagesForTest(cmd tea.Cmd) []tea.Msg {
 		return messages
 	}
 	return []tea.Msg{msg}
+}
+
+func pinCalendarFixtureNowForTest(m *Model) {
+	m.calendarNow = time.Date(2026, 5, 31, 12, 0, 0, 0, time.UTC)
 }
 
 func dateAnchorCalendarEventsForTest() []models.CalendarEvent {

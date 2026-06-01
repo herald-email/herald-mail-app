@@ -388,7 +388,7 @@ func (m *Model) calendarAnchorDate() time.Time {
 	if start := m.calendarActiveRangeStartForAnchor(); !start.IsZero() {
 		return start
 	}
-	today := calendarDayStartFor(time.Now())
+	today := calendarDayStartFor(m.calendarCurrentTime())
 	if m.calendarDateInActiveRange(today) {
 		return today
 	}
@@ -3171,6 +3171,13 @@ func (m *Model) setDefaultCalendarAgendaRange(now time.Time) {
 	m.calendarAgendaStart, m.calendarAgendaEnd = calendarAgendaWindowFor(start)
 }
 
+func (m *Model) calendarCurrentTime() time.Time {
+	if !m.calendarNow.IsZero() {
+		return m.calendarNow
+	}
+	return time.Now().Local()
+}
+
 func calendarDefaultAgendaStart(events []models.CalendarEvent, now time.Time) time.Time {
 	today := calendarDayStartFor(now)
 	defaultStart, defaultEnd := calendarAgendaWindowFor(today)
@@ -3206,7 +3213,7 @@ func calendarAgendaWindowFor(day time.Time) (time.Time, time.Time) {
 
 func (m *Model) calendarAgendaWindow() (time.Time, time.Time) {
 	if m.calendarAgendaStart.IsZero() || m.calendarAgendaEnd.IsZero() || !m.calendarAgendaEnd.After(m.calendarAgendaStart) {
-		return calendarAgendaWindowFor(time.Now())
+		return calendarAgendaWindowFor(m.calendarCurrentTime())
 	}
 	return calendarDayStartFor(m.calendarAgendaStart), calendarDayStartFor(m.calendarAgendaEnd)
 }
@@ -4275,7 +4282,7 @@ func (m *Model) indexedVisibleCalendarEvents() []indexedCalendarEvent {
 func (m *Model) filterAgendaVisibleEvents(events []indexedCalendarEvent, showPast bool) []indexedCalendarEvent {
 	agendaStart, agendaEnd := m.calendarAgendaWindow()
 	filtered := make([]indexedCalendarEvent, 0, len(events))
-	today := calendarDayStartFor(time.Now())
+	today := calendarDayStartFor(m.calendarCurrentTime())
 	for _, item := range events {
 		if !calendarEventOccursInAgendaWindow(item.event, agendaStart, agendaEnd) {
 			continue
@@ -4304,7 +4311,7 @@ func (m *Model) calendarAgendaHiddenPastCount() int {
 	if m.calendarView != "" && m.calendarView != calendarViewAgenda {
 		return 0
 	}
-	today := calendarDayStartFor(time.Now())
+	today := calendarDayStartFor(m.calendarCurrentTime())
 	count := 0
 	for _, item := range m.calendarAgendaWindowEvents() {
 		if calendarEventEndedBeforeDay(item.event, today) {
@@ -4329,7 +4336,7 @@ func (m *Model) calendarAgendaPastNoticeLines(count int) []string {
 		state = "shown"
 	}
 	return []string{
-		fmt.Sprintf("%d past %s %s before %s", count, noun, state, calendarDayStartFor(time.Now()).Local().Format("Jan 2")),
+		fmt.Sprintf("%d past %s %s before %s", count, noun, state, calendarDayStartFor(m.calendarCurrentTime()).Local().Format("Jan 2")),
 		fmt.Sprintf("[p] %s", action),
 	}
 }
