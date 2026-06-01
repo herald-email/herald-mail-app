@@ -490,6 +490,45 @@ func TestMainView_ShowsIncrementalFetchProgressInSyncStrip(t *testing.T) {
 	}
 }
 
+func TestStartupHydratedMsg_EmptyCacheShowsTimelineShellWhileLoading(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.loading = true
+	m.syncCountsSettled = false
+	m.progressInfo = models.ProgressInfo{
+		Phase:   "scanning",
+		Message: "Opening INBOX...",
+	}
+	m.timeline.emails = nil
+	m.updateTimelineTable()
+
+	model, _ := m.Update(StartupHydratedMsg{
+		Folder: "INBOX",
+		Emails: []*models.EmailData{},
+	})
+	updated := model.(*Model)
+
+	if !updated.loading {
+		t.Fatal("startup hydration should keep live sync active")
+	}
+	if !updated.hasVisibleStartupData() {
+		t.Fatal("empty cache snapshot should still make the Timeline shell visible")
+	}
+
+	rendered := updated.View().Content
+	assertFitsWidth(t, 80, rendered)
+	assertFitsHeight(t, 24, rendered)
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "1  Timeline") {
+		t.Fatalf("expected real Timeline chrome instead of the full loading screen, got:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "IMAP connected") {
+		t.Fatalf("expected startup sync strip over empty Timeline shell, got:\n%s", stripped)
+	}
+	if strings.Contains(stripped, "Press 'q' to quit") {
+		t.Fatalf("empty cache snapshot should not stay on the standalone loading view:\n%s", stripped)
+	}
+}
+
 func TestRenderMainView_DoesNotInsertBlankLineAfterTitleTabs(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

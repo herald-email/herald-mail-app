@@ -971,6 +971,25 @@ func TestStartupHydratedMsg_ProgressivelyHydratesWhileLoading(t *testing.T) {
 	}
 }
 
+func TestSyncHydratedMsg_StaleEmptySnapshotDoesNotExposeTimelineShell(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.loading = true
+	m.currentFolder = "INBOX"
+	m.syncGeneration = 9
+	m.syncAccumulator.reset("INBOX", 9)
+
+	updatedModel, _ := m.Update(SyncHydratedMsg{
+		Folder:     "INBOX",
+		Generation: 8,
+		Emails:     []*models.EmailData{},
+	})
+	updated := updatedModel.(*Model)
+
+	if updated.hasVisibleStartupData() {
+		t.Fatal("stale empty sync snapshot must not make the active Timeline shell visible")
+	}
+}
+
 type slowCloseBackend struct {
 	stubBackend
 	delay time.Duration
