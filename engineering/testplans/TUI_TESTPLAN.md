@@ -2403,6 +2403,32 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 - Attachment save fetches bytes on demand when preview only has metadata.
 - `50x15` shows the minimum-size guard and resizing back restores a clean preview.
 
+### TC-53 — macOS notifications and Herald deep-link activation
+
+**Lane:** A/B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode with `--open 'herald://mail/message?folder=INBOX&message_id=<demo-message-id>'`.
+2. Capture the activated Timeline preview at `220x50` and `80x24`.
+3. Launch demo mode with `--open 'herald://mail/folder?folder=Newsletters'` and capture the selected folder.
+4. Launch demo mode with `--open 'herald://mail/search?folder=INBOX&q=invoice'` and capture the populated Timeline search state.
+5. Launch demo mode with `--open 'herald://mail/compose?to=friend%40example.com&subject=Hello'` and capture the Compose fields.
+6. Resize the active deep-link state to `50x15`, then recover to `80x24`.
+7. On macOS, trigger a fake notifier-backed new-mail event and click the delivered notification when Notification Center allows it.
+8. On non-macOS, run the same notifier tests and confirm notification delivery degrades without changing TUI state or surfacing misleading click-through affordances.
+
+**Expect:**
+- Message deep links switch to Timeline, select the target folder, highlight the target message, and open its preview when the message exists.
+- Folder deep links switch to Timeline and load the target folder without opening a stale preview.
+- Search deep links switch to Timeline, populate the search prompt, run the search, and keep normal search escape behavior.
+- Compose deep links open Compose with recipient and subject prefilled while preserving normal text-entry routing.
+- New-mail notifications link to the message for a single new message and to the folder for multiple new messages.
+- Sync-failure notifications link to the affected folder and do not replace the visible sync error status.
+- Delete/archive, classification, and chat-result notifications are supported by config but remain disabled by default.
+- `50x15` shows the minimum-size guard and resizing back restores the activated state cleanly.
+- Non-macOS builds compile and either deliver platform-supported notifications without activation or no-op cleanly.
+
 ---
 
 ## Recommendations

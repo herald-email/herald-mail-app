@@ -115,11 +115,12 @@ func (m *Model) listenForDeletionResults() tea.Cmd {
 
 // ruleWorker processes emails through the rule engine serially.
 func (m *Model) ruleWorker() {
-	engine := rules.New(m.backend, m.backend, m.classifier)
+	engine := rules.NewWithNotifier(m.backend, m.backend, m.classifier, m.notifier)
 	engine.DryRun = m.dryRun
 	lane := rules.NewAutomationLane(engine)
 	defer lane.Close()
 	for event := range m.ruleRequestCh {
+		engine.SetNotifier(m.notifier)
 		result := lane.Submit(context.Background(), event)
 		go m.forwardRuleResult(result)
 	}

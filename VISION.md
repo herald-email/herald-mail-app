@@ -35,6 +35,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
+- [ ] macOS notifications with Herald deep links for new mail and sync failures
 - [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
@@ -613,6 +614,14 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 - [x] New emails cached and prepended to timeline
 - [x] Sync countdown shown in status bar (↻ 42s)
 - [ ] Per-folder poll frequency (active folder more often; background folders less)
+
+### Notifications and deep links
+Notifications should bring attention back to the right mailbox context without turning every background action into noise. The first target is macOS native notifications with Herald deep links, while other platforms must degrade cleanly.
+
+- [ ] Native macOS notifications for new mail and sync failures are enabled by default.
+- [ ] Notification activation can open folder, message, sender, search, or compose contexts through `herald://mail/...` links.
+- [ ] Deletion/archive completion, classification completion, and chat-result notifications are supported but disabled by default.
+- [ ] Linux keeps delivery-only notification behavior and unsupported platforms no-op without misleading click-through claims.
 
 ---
 

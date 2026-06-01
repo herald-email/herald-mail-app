@@ -28,6 +28,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/mcpserver"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/notifications"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 	"github.com/herald-email/herald-mail-app/internal/sshserver"
 	buildversion "github.com/herald-email/herald-mail-app/internal/version"
@@ -360,7 +361,7 @@ func newWizardPreferencesSettings(existing *config.Config, configPath string, ex
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool, openDeepLink string) {
 	if err := logger.Init(false, logger.WithUnsafeLogs(unsafeLogs)); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -403,6 +404,13 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMul
 	model.SetDemoKeyOverlay(demoKeys)
 	model.SetConfigPath("demo-config.yaml")
 	model.SetConfig(cfg)
+	if strings.TrimSpace(openDeepLink) != "" {
+		if err := model.SetInitialDeepLink(openDeepLink); err != nil {
+			logger.Error("Invalid deep link: %v", err)
+			fmt.Printf("Invalid --open link: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	if err := applyLaunchTheme(model, themeValue); err != nil {
 		logger.Error("Failed to apply theme override: %v", err)
 		fmt.Printf("Error applying theme: %v\n", err)
@@ -447,6 +455,7 @@ type tuiFlagOptions struct {
 	experimental  *bool
 	imageProtocol *string
 	theme         *string
+	openDeepLink  *string
 	configPath    *string
 	showHelp      *bool
 	showVersion   *bool
@@ -465,6 +474,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
 		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
 		theme:         fs.String("theme", "", "Start with a built-in theme name or theme YAML file path without saving config"),
+		openDeepLink:  fs.String("open", "", "Open Herald to a herald:// deep-link context"),
 		configPath:    fs.String("config", defaultConfig, "Path to configuration file"),
 		showHelp:      fs.Bool("help", false, "Show help message"),
 		showVersion:   fs.Bool("version", false, "Show version information"),
@@ -749,6 +759,7 @@ func printRootHelp(w io.Writer, executable string, fs *flag.FlagSet) {
 	fmt.Fprintf(w, "  %s -experimental           # Show experimental first-run email service onboarding\n", executable)
 	fmt.Fprintf(w, "  %s -config custom.yaml     # Use custom config file\n", executable)
 	fmt.Fprintf(w, "  %s --demo -theme jade-signal # Preview a built-in app theme without saving config\n", executable)
+	fmt.Fprintf(w, "  %s --demo --open 'herald://mail/search?folder=INBOX&q=invoice' # Open a Herald deep link in demo mode\n", executable)
 	fmt.Fprintf(w, "  %s mcp --demo              # Run the MCP server with deterministic demo data\n", executable)
 	fmt.Fprintf(w, "  %s ssh -addr :2222         # Serve the TUI over SSH\n", executable)
 	fmt.Fprintln(w)
@@ -790,7 +801,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if shouldRunDemo(*opts.demo, *opts.demoMulti) {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs)
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs, *opts.openDeepLink)
 		return
 	}
 
@@ -972,6 +983,13 @@ func runTUI() {
 	model.SetPreviewImageMode(imageMode)
 	model.SetConfigPath(resolvedConfig)
 	model.SetConfig(cfg)
+	model.SetNotifier(notifications.New(notifications.Options{Enabled: cfg.Notifications.Enabled, Sound: cfg.Notifications.Sound}))
+	if strings.TrimSpace(*opts.openDeepLink) != "" {
+		if err := model.SetInitialDeepLink(*opts.openDeepLink); err != nil {
+			logger.Error("Invalid deep link: %v", err)
+			log.Fatalf("Invalid --open link: %v", err)
+		}
+	}
 	if err := applyLaunchTheme(model, *opts.theme); err != nil {
 		logger.Error("Failed to apply theme override: %v", err)
 		log.Fatalf("Failed to apply theme: %v", err)

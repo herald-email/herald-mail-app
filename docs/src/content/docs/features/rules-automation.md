@@ -15,7 +15,7 @@ Use `Settings > Sync & Cleanup` for future-mail automation rules, reusable AI pr
 | --- | --- |
 | Automation rule editor | `Automation Rule` form with trigger group, action multiselect, action detail fields, and saved-rule summary. |
 | Trigger fields | Trigger type sender, domain, or AI category; trigger value such as address, domain, or category. |
-| Action list | Desktop notification, move, archive, delete, webhook POST, and shell command. |
+| Action list | Desktop notification with Herald message context where supported, move, archive, delete, webhook POST, and shell command. |
 | Action detail fields | Destination folder, webhook URL/body, shell command, notification title/body. |
 | Prompt editor | Name, output variable, system prompt, user template, and saved-prompt summary. |
 | Cleanup manager list | Saved cleanup rules with name, match type, match value, action, older-than days, enabled state, and last run. |

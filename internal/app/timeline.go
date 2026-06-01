@@ -2611,8 +2611,12 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 		}
+		pendingDeepLinkCmd := m.consumePendingDeepLinkCmd()
 		if !msg.ReadOnly {
 			cmds := make([]tea.Cmd, 0, 4)
+			if pendingDeepLinkCmd != nil {
+				cmds = append(cmds, pendingDeepLinkCmd)
+			}
 			if cmd := m.startPreviewPrewarmerIfNeeded(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -2632,6 +2636,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if len(cmds) > 0 {
 				return m, tea.Batch(cmds...), true
 			}
+		}
+		if pendingDeepLinkCmd != nil {
+			return m, pendingDeepLinkCmd, true
 		}
 		return m, nil, true
 
@@ -2865,6 +2872,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		var cmds []tea.Cmd
 		cmds = append(cmds, m.listenForNewEmails())
+		cmds = append(cmds, m.notifyNewMailCmd(msg))
 		for _, email := range msg.Emails {
 			if m.classifier != nil && m.classificationForEmail(email) == "" {
 				cmds = append(cmds, m.autoClassifyEmailCmd(email))
