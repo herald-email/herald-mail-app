@@ -93,6 +93,146 @@ func TestShortcutKeyPrefersBaseCodeAndPreservesModifiersAndShift(t *testing.T) {
 	}
 }
 
+func TestShortcutKeyPrefersLatinAssociatedTextOverBaseCode(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  tea.KeyPressMsg
+		want string
+	}{
+		{
+			name: "qwertz z stays z despite physical y",
+			msg:  tea.KeyPressMsg{Text: "z", Code: 'z', BaseCode: 'y'},
+			want: "z",
+		},
+		{
+			name: "qwertz y stays y despite physical z",
+			msg:  tea.KeyPressMsg{Text: "y", Code: 'y', BaseCode: 'z'},
+			want: "y",
+		},
+		{
+			name: "qwertz shifted Z stays uppercase Z",
+			msg:  tea.KeyPressMsg{Text: "Z", Code: 'z', BaseCode: 'y', Mod: tea.ModShift},
+			want: "Z",
+		},
+		{
+			name: "swiss german question mark follows associated text",
+			msg:  keySwissQuestionMark(),
+			want: "?",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shortcutKey(tc.msg); got != tc.want {
+				t.Fatalf("shortcutKey=%q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestQWERTZPrintableZControlsTimelineFullscreen(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelPreview)
+	m.timeline.selectedEmail = m.timeline.emails[0]
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Text: "z", Code: 'z', BaseCode: 'y'})
+	updated := model.(*Model)
+	if !updated.timeline.fullScreen {
+		t.Fatal("QWERTZ printable z should toggle fullscreen, not route as physical y")
+	}
+	if updated.timeline.pendingY {
+		t.Fatal("QWERTZ printable z must not start the physical-y copy sequence")
+	}
+}
+
+func TestSwissGermanQuestionMarkOpensHelpInBrowseContext(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.setFocusedPanel(panelTimeline)
+
+	model, _ := m.handleKeyMsg(keySwissQuestionMark())
+	updated := model.(*Model)
+	if !updated.showHelp {
+		t.Fatal("Swiss German associated ? should open shortcut help in browse contexts")
+	}
+}
+
+func TestSwissGermanQuestionMarkTypesIntoSearchAndCompose(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelTimeline)
+
+	model, _ := m.handleKeyMsg(keyRune('/'))
+	updated := model.(*Model)
+	if !updated.timeline.searchMode {
+		t.Fatal("expected search mode to open")
+	}
+	model, _ = updated.handleKeyMsg(keySwissQuestionMark())
+	updated = model.(*Model)
+	if got := updated.timeline.searchInput.Value(); got != "?" {
+		t.Fatalf("search input value=%q, want Swiss German literal ?", got)
+	}
+	if updated.showHelp {
+		t.Fatal("Swiss German ? in search input should not open shortcut help")
+	}
+
+	updated.activeTab = tabCompose
+	updated.composeField = composeFieldBody
+	updated.composeTo.Blur()
+	updated.composeBody.Focus()
+	updated.composeBody.SetValue("")
+
+	model, _ = updated.handleKeyMsg(keySwissQuestionMark())
+	updated = model.(*Model)
+	if got := updated.composeBody.Value(); got != "?" {
+		t.Fatalf("compose body value=%q, want Swiss German literal ?", got)
+	}
+	if updated.showHelp {
+		t.Fatal("Swiss German ? in Compose should not open shortcut help")
+	}
+}
+
+func TestSwissGermanQuestionMarkTypesIntoPromptAndEditorSurfaces(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.showPromptEditor = true
+	m.promptEditor = NewPromptEditor(nil, m.windowWidth, m.windowHeight)
+	_ = m.promptEditor.Init()
+
+	model, _ := m.Update(keySwissQuestionMark())
+	updated := model.(*Model)
+	if got := updated.promptEditor.name; got != "?" {
+		t.Fatalf("prompt editor name=%q, want Swiss German literal ?", got)
+	}
+	if updated.showHelp {
+		t.Fatal("Swiss German ? in prompt editor should not open shortcut help")
+	}
+
+	editor := makeSizedModel(t, 140, 40)
+	editor.activeTab = tabCalendar
+	editor.calendarEdit = calendarEventEditState{
+		Active: true,
+		Field:  calendarEditFieldTitle,
+		Draft:  models.CalendarEventEditDraft{},
+	}
+
+	model, _ = editor.handleKeyMsg(keySwissQuestionMark())
+	updated = model.(*Model)
+	if got := updated.calendarEdit.Draft.Title; got != "?" {
+		t.Fatalf("calendar editor title=%q, want Swiss German literal ?", got)
+	}
+	if updated.showHelp {
+		t.Fatal("Swiss German ? in calendar editor should not open shortcut help")
+	}
+}
+
 func TestCyrillicPunctuationOpensTimelineSearchAndPreservesQueryText(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
@@ -219,4 +359,8 @@ func TestCyrillicPunctuationAliasDoesNotStealComposeComma(t *testing.T) {
 	if got := updated.composeBody.Value(); got != "," {
 		t.Fatalf("compose body value=%q, want comma preserved", got)
 	}
+}
+
+func keySwissQuestionMark() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Text: "?", Code: '\'', BaseCode: '\'', Mod: tea.ModShift}
 }

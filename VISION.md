@@ -106,7 +106,7 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 The TUI uses a title-row tab strip beside the `Herald` title, a collapsible folder sidebar on the left, and a main content area whose layout changes per top-level view.
 
 - [x] Mouse navigation supports top tabs, sidebars, Timeline/Contacts rows, and preview wheel scrolling while preserving keyboard parity
-- [x] Keyboard layouts with physical-key reporting trigger Herald-owned shortcuts from their QWERTY positions in browse contexts, with Cyrillic and direct Japanese kana fallback aliases when terminals do not report `BaseCode`
+- [x] Keyboard layouts with physical-key reporting prefer layout-correct printable characters for Latin/ASCII shortcuts, while Cyrillic and direct Japanese kana physical fallback aliases remain available when terminals do not report `BaseCode`
 - [x] Keyboard profiles make `h/j/k/l` coherent browse navigation while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
 - [x] Delete shortcuts use a safe/fast split: `d` or `Backspace` asks for confirmation, while `D` or `Shift+Backspace` deletes immediately in browse contexts
 

@@ -292,17 +292,19 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start in Timeline with the app in a browse context.
-2. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `h`, `j`, `k`, `l`, `c`, `/`, and `?`.
-3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
-4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
-5. Open Timeline search with the physical `/` key, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
-6. Open Compose from Timeline with the physical `c` key or Cyrillic fallback lowercase `с`, type native body text, and then leave Compose with `Esc`.
-7. Repeat the safe browse-key portion over SSH.
+2. In a terminal with keyboard enhancement support, use a Latin non-US layout such as Swiss German QWERTZ and press printable keys that differ from US QWERTY, including `y`, `z`, and the layout's `?`.
+3. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `h`, `j`, `k`, `l`, `c`, `/`, and `?`.
+4. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
+5. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
+6. Open Timeline search with the layout's printable `/` or `?` keys, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
+7. Open Compose from Timeline with printable `c` or Cyrillic fallback lowercase `с`, type native body text, and then leave Compose with `Esc`.
+8. Repeat the safe browse-key portion over SSH.
 
 **Expect:**
-- Physical `h/j/k/l` positions navigate left/down/up/right where the active view has a meaningful target.
-- Physical `c` opens Compose from Timeline while literal `c` stays text in editable fields.
-- Physical `/` opens Timeline search and physical `?` opens shortcut help.
+- Latin non-US printable keys route by the actual associated text: CH-QWERTZ `y` and `z` are not swapped, and CH `?` opens shortcut help in browse contexts while remaining literal text in search and Compose.
+- Non-Latin physical `h/j/k/l` positions navigate left/down/up/right where the active view has a meaningful target.
+- Printable `c` opens Compose from Timeline while literal `c` stays text in editable fields.
+- Printable `/` opens Timeline search and printable `?` opens shortcut help in browse contexts.
 - The Cyrillic and direct-kana fallback aliases continue to behave the same way when `BaseCode` is unavailable and the terminal sends one committed character per keypress.
 - Search and Compose text fields preserve the typed native characters instead of converting them to Latin shortcut names.
 - Japanese romaji IME pre-edit is not treated as command input before the IME commits text; those sessions need terminal `BaseCode`/keyboard-enhancement support for true physical shortcuts while composing.

@@ -2,6 +2,7 @@ package app
 
 import (
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
@@ -115,6 +116,9 @@ var printablePhysicalShortcutAliases = map[rune]rune{
 }
 
 func shortcutKey(msg tea.KeyPressMsg) string {
+	if key, ok := associatedTextShortcutKey(msg); ok {
+		return key
+	}
 	if key, ok := physicalShortcutKey(msg); ok {
 		return key
 	}
@@ -127,6 +131,39 @@ func shortcutKey(msg tea.KeyPressMsg) string {
 	parts := shortcutModifierParts(key.Mod)
 	parts = append(parts, base)
 	return strings.Join(parts, "+")
+}
+
+func associatedTextShortcutKey(msg tea.KeyPressMsg) (string, bool) {
+	key := msg.Key()
+	if !associatedTextShouldWin(key.Text) {
+		return "", false
+	}
+	parts := shortcutModifierParts(key.Mod)
+	parts = append(parts, key.Text)
+	return strings.Join(parts, "+"), true
+}
+
+func associatedTextShouldWin(text string) bool {
+	r, size := utf8.DecodeRuneInString(text)
+	if r == utf8.RuneError || size != len(text) {
+		return false
+	}
+	if r == ' ' {
+		return true
+	}
+	if r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+		return true
+	}
+	if unicode.Is(unicode.Latin, r) {
+		return true
+	}
+	if r >= 0x21 && r <= 0x7e {
+		if mapped, ok := printablePhysicalShortcutAliases[r]; ok && mapped != r {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func fallbackShortcutBase(key tea.Key, rendered string) (string, bool) {

@@ -144,6 +144,14 @@ func (m *Model) questionMarkBelongsToTextInput() bool {
 		(m.activeTab == tabContacts && m.contactSearchMode != "") {
 		return true
 	}
+	if m.activeTab == tabCalendar {
+		if m.calendarEdit.Active {
+			return true
+		}
+		if !m.calendarDetailOpen && (m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch) {
+			return true
+		}
+	}
 	if m.activeTab == tabCompose {
 		return m.composeQuestionMarkBelongsToTextInput()
 	}
