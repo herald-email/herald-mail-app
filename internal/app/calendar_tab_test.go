@@ -35,7 +35,9 @@ type calendarAgendaStubBackend struct {
 	crossSearchCalls      []string
 	savedEvents           []models.CalendarEvent
 	createdEvents         []models.CalendarEvent
+	deletedEvents         []models.EventRef
 	saveErr               error
+	deleteErr             error
 	rsvpEvents            []models.EventRef
 	rsvpStatuses          []string
 	rsvpErr               error
@@ -243,6 +245,21 @@ func (b *calendarAgendaStubBackend) CreateCalendarEvent(event models.CalendarEve
 	b.events = append(b.events, event)
 	saved := event
 	return &saved, nil
+}
+
+func (b *calendarAgendaStubBackend) DeleteCalendarEvent(ref models.EventRef) error {
+	if b.deleteErr != nil {
+		return b.deleteErr
+	}
+	ref = ref.WithDefaults()
+	b.deletedEvents = append(b.deletedEvents, ref)
+	for i := range b.events {
+		if b.events[i].Ref.WithDefaults().LocalID == ref.LocalID {
+			b.events = append(b.events[:i], b.events[i+1:]...)
+			return nil
+		}
+	}
+	return nil
 }
 
 func (b *calendarAgendaStubBackend) FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
@@ -2840,6 +2857,114 @@ func TestCalendarEventEditValidationKeepsEditorOpen(t *testing.T) {
 	rendered := stripANSI(m.renderMainView())
 	if !strings.Contains(rendered, "Validation") || !strings.Contains(rendered, "end") {
 		t.Fatalf("event edit validation not rendered:\n%s", rendered)
+	}
+}
+
+func TestCalendarEventCreateOpensBlankDraftAndSavesThroughCreate(t *testing.T) {
+	collection := models.CalendarCollection{Ref: models.CollectionRef{
+		SourceID:     "demo-calendar",
+		AccountID:    "default",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "work",
+		DisplayName:  "Work",
+	}}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{collection}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarCollections([]models.CalendarCollection{collection})
+	pinCalendarFixtureNowForTest(m)
+
+	model, _ := m.handleKeyMsg(keyCtrl('n'))
+	m = model.(*Model)
+	if !m.calendarEdit.Active {
+		t.Fatal("expected ctrl+n to open Calendar Event Create")
+	}
+	if !m.calendarEdit.Create {
+		t.Fatal("expected create-mode editor")
+	}
+	if got := m.calendarEdit.Draft.Ref.CalendarID; got != "work" {
+		t.Fatalf("draft calendar = %q, want work", got)
+	}
+	rendered := ansi.Strip(m.renderCalendarEventEdit(120, 36))
+	for _, want := range []string{"Create Event", "Calendar", "All day", "Timezone preview", "Conflict check"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("create editor missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "ctrl+d: delete") {
+		t.Fatalf("create editor advertised delete before save:\n%s", rendered)
+	}
+	model, _ = m.handleKeyMsg(keyCtrl('d'))
+	m = model.(*Model)
+	if m.calendarDelete.Active {
+		t.Fatal("expected ctrl+d from unsaved create draft to stay out of delete confirmation")
+	}
+
+	m.calendarEdit.Draft.Title = "New planning block"
+	m.calendarEdit.Draft.StartText = "2026-05-31 13:00"
+	m.calendarEdit.Draft.EndText = "2026-05-31 13:30"
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.createdEvents) != 1 {
+		t.Fatalf("createdEvents = %d, want 1", len(b.createdEvents))
+	}
+	if got := b.createdEvents[0].Title; got != "New planning block" {
+		t.Fatalf("created title = %q", got)
+	}
+	if m.calendarEdit.Active {
+		t.Fatal("expected successful create save to close Event Create")
+	}
+}
+
+func TestCalendarEventDeleteRequiresConfirmationAndRemovesEvent(t *testing.T) {
+	rich := richCalendarEventForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarEventsForDisplay([]models.CalendarEvent{rich})
+	m.calendarDetail = &rich
+
+	model, _ := m.handleKeyMsg(keyRunes("D"))
+	m = model.(*Model)
+	if !m.calendarDelete.Active {
+		t.Fatal("expected D to open calendar delete confirmation")
+	}
+	if len(b.deletedEvents) != 0 {
+		t.Fatal("delete ran before confirmation")
+	}
+	rendered := ansi.Strip(m.renderCalendarView())
+	for _, want := range []string{"Delete Event", rich.Title, "y: delete", "esc: cancel"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("delete confirmation missing %q:\n%s", want, rendered)
+		}
+	}
+
+	model, cmd := m.handleKeyMsg(keyRunes("y"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.deletedEvents) != 1 {
+		t.Fatalf("deletedEvents = %d, want 1", len(b.deletedEvents))
+	}
+	if m.calendarDelete.Active {
+		t.Fatal("expected delete confirmation to close")
+	}
+	if len(m.calendarEvents) != 0 {
+		t.Fatalf("calendarEvents = %d, want deleted event removed", len(m.calendarEvents))
 	}
 }
 

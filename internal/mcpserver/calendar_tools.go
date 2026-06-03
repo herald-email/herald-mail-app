@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -115,6 +117,170 @@ func addCalendarTools(s *server.MCPServer, c *cache.Cache) {
 			return mcp.NewToolResultText(formatMCPCalendarEventDetail(*event)), nil
 		},
 	)
+
+	s.AddTool(
+		mcp.NewTool("create_calendar_event",
+			mcp.WithDescription("Create a calendar event through the running herald daemon"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("calendar_id", mcp.Required(), mcp.Description("Calendar collection ID")),
+			mcp.WithString("title", mcp.Required(), mcp.Description("Event title")),
+			mcp.WithString("start", mcp.Required(), mcp.Description("Start time, RFC3339 or YYYY-MM-DD HH:MM")),
+			mcp.WithString("end", mcp.Required(), mcp.Description("End time, RFC3339 or YYYY-MM-DD HH:MM")),
+			mcp.WithString("source_id", mcp.Description("Calendar source ID")),
+			mcp.WithString("account_id", mcp.Description("Account ID")),
+			mcp.WithString("event_id", mcp.Description("Provider event ID to request")),
+			mcp.WithString("timezone", mcp.Description("IANA timezone, for non-RFC3339 start/end values")),
+			mcp.WithString("location", mcp.Description("Event location")),
+			mcp.WithString("description", mcp.Description("Event notes/description")),
+			mcp.WithBoolean("all_day", mcp.Description("Whether this is an all-day event")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			for _, key := range []string{"calendar_id", "title", "start", "end"} {
+				if _, err := req.RequireString(key); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+			}
+			body := calendarDaemonBody(req)
+			respBody, status, err := daemonPost("/v1/calendar/events", body)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusCreated && status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText("Calendar event created: " + strings.TrimSpace(string(respBody))), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("update_calendar_event",
+			mcp.WithDescription("Update a calendar event through the running herald daemon"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald event local ID from list/search results")),
+			mcp.WithString("source_id", mcp.Description("Calendar source ID")),
+			mcp.WithString("account_id", mcp.Description("Account ID")),
+			mcp.WithString("calendar_id", mcp.Description("Calendar collection ID")),
+			mcp.WithString("event_id", mcp.Description("Provider event ID")),
+			mcp.WithString("instance_id", mcp.Description("Recurrence instance ID, when present")),
+			mcp.WithString("title", mcp.Description("Event title")),
+			mcp.WithString("start", mcp.Description("Start time, RFC3339 or YYYY-MM-DD HH:MM")),
+			mcp.WithString("end", mcp.Description("End time, RFC3339 or YYYY-MM-DD HH:MM")),
+			mcp.WithString("timezone", mcp.Description("IANA timezone, for non-RFC3339 start/end values")),
+			mcp.WithString("location", mcp.Description("Event location")),
+			mcp.WithString("description", mcp.Description("Event notes/description")),
+			mcp.WithBoolean("all_day", mcp.Description("Whether this is an all-day event")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if !calendarToolHasRef(req) {
+				return mcp.NewToolResultError("local_id or calendar_id plus event_id is required"), nil
+			}
+			body := calendarDaemonBody(req)
+			respBody, status, err := daemonPatch(calendarDaemonPath(req), body)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusOK {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d: %s", status, string(respBody))), nil
+			}
+			return mcp.NewToolResultText("Calendar event updated: " + strings.TrimSpace(string(respBody))), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("delete_calendar_event",
+			mcp.WithDescription("Delete a calendar event through the running herald daemon"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithString("local_id", mcp.Description("Scoped Herald event local ID from list/search results")),
+			mcp.WithString("source_id", mcp.Description("Calendar source ID")),
+			mcp.WithString("account_id", mcp.Description("Account ID")),
+			mcp.WithString("calendar_id", mcp.Description("Calendar collection ID")),
+			mcp.WithString("event_id", mcp.Description("Provider event ID")),
+			mcp.WithString("instance_id", mcp.Description("Recurrence instance ID, when present")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if !calendarToolHasRef(req) {
+				return mcp.NewToolResultError("local_id or calendar_id plus event_id is required"), nil
+			}
+			status, err := daemonDelete(calendarDaemonPath(req))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status != http.StatusNoContent {
+				return mcp.NewToolResultError(fmt.Sprintf("daemon returned %d", status)), nil
+			}
+			return mcp.NewToolResultText("Calendar event deleted"), nil
+		},
+	)
+}
+
+func calendarDaemonBody(req mcp.CallToolRequest) map[string]any {
+	args := req.GetArguments()
+	body := make(map[string]any)
+	for _, key := range []string{
+		"source_id",
+		"account_id",
+		"calendar_id",
+		"event_id",
+		"instance_id",
+		"local_id",
+		"provider_uid",
+		"title",
+		"description",
+		"location",
+		"start",
+		"end",
+		"timezone",
+		"status",
+	} {
+		if value := strings.TrimSpace(req.GetString(key, "")); value != "" {
+			body[key] = value
+		}
+	}
+	if _, ok := args["all_day"]; ok {
+		body["all_day"] = req.GetBool("all_day", false)
+	}
+	return body
+}
+
+func calendarToolHasRef(req mcp.CallToolRequest) bool {
+	if strings.TrimSpace(req.GetString("local_id", "")) != "" {
+		return true
+	}
+	return strings.TrimSpace(req.GetString("calendar_id", "")) != "" && strings.TrimSpace(calendarToolEventID(req)) != ""
+}
+
+func calendarToolEventID(req mcp.CallToolRequest) string {
+	if eventID := strings.TrimSpace(req.GetString("event_id", "")); eventID != "" {
+		return eventID
+	}
+	if parsed, ok := models.EventRefFromLocalID(req.GetString("local_id", "")); ok {
+		return parsed.EventID
+	}
+	return ""
+}
+
+func calendarDaemonPath(req mcp.CallToolRequest) string {
+	eventID := calendarToolEventID(req)
+	if eventID == "" {
+		eventID = "event"
+	}
+	values := url.Values{}
+	for _, key := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id"} {
+		if value := strings.TrimSpace(req.GetString(key, "")); value != "" {
+			values.Set(key, value)
+		}
+	}
+	if values.Get("event_id") == "" && eventID != "event" {
+		values.Set("event_id", eventID)
+	}
+	path := "/v1/calendar/events/" + url.PathEscape(eventID)
+	if len(values) == 0 {
+		return path
+	}
+	return path + "?" + values.Encode()
 }
 
 func clampMCPResultLimit(limit int) int {

@@ -552,7 +552,13 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			}
 		}
 		if m.calendarEdit.Active {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "backspace: edit", "ctrl+u: clear", "ctrl+s: save", "esc: cancel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "cache-backed")
+			deleteHint := ""
+			if !m.calendarEdit.Create {
+				deleteHint = "ctrl+d: delete"
+			}
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "space: all day", "backspace: edit", "ctrl+u: clear", "ctrl+s: save", deleteHint, "esc: cancel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
+		} else if m.calendarDelete.Active {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "y: delete", "n/esc: cancel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarMeetingPrepOpen {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "esc: event detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only cached")
 		} else if m.calendarTravelBufferOpen {
@@ -570,7 +576,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			} else if m.calendarView == calendarViewSearch {
 				backLabel = "esc: search"
 			}
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "e: edit", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "ctrl+n: new", "e: edit", "D: delete", backLabel, m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarView == calendarViewSearch {
 			query := strings.TrimSpace(m.calendarSearchQuery)
 			if query == "" {
@@ -588,13 +594,13 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			}
 			hints = joinHintSegments(m.primaryTabShortcutHint(), query, m.movementHint("calendar", "results"), "backspace: edit", "enter: event detail", "esc: clear search", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		} else if m.calendarView == calendarViewDay {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", "h/l: day", "e: edit", "t: 3-day", "w: week", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+n: new", "D: delete", "ctrl+u/d: page", "h/l: day", "e: edit", "t: 3-day", "w: week", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarView == calendarViewWeek {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", "h/l: week", "e: edit", "t: 3-day", "d: day", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+n: new", "D: delete", "ctrl+u/d: page", "h/l: week", "e: edit", "t: 3-day", "d: day", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else if m.calendarView == calendarViewThreeDay {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", "h/l: 3-day", "e: edit", "w: week", "d: day", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+n: new", "D: delete", "ctrl+u/d: page", "h/l: 3-day", "e: edit", "w: week", "d: day", "a: agenda", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		} else {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+u/d: page", agendaPastHint, "h/l: day", "e: edit", "d: day", "w: week", "t: 3-day", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only list")
+			hints = joinHintSegments(m.primaryTabShortcutHint(), settingsHint, "tab: rail/main/detail", m.movementHint("calendar", "events"), "ctrl+n: new", "D: delete", "ctrl+u/d: page", agendaPastHint, "h/l: day", "e: edit", "d: day", "w: week", "t: 3-day", "/: search", crossSearchHint, "enter: detail", m.commandHint(keyboardScopeGlobal, CommandAppRefresh, "refresh"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "provider-backed")
 		}
 	} else {
 		switch chrome.FocusedPanel {

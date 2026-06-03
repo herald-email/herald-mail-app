@@ -76,11 +76,14 @@ type calendarDerivedCache struct {
 type calendarEditField int
 
 const (
-	calendarEditFieldTitle calendarEditField = iota
+	calendarEditFieldCalendar calendarEditField = iota
+	calendarEditFieldTitle
 	calendarEditFieldLocation
 	calendarEditFieldStart
 	calendarEditFieldEnd
 	calendarEditFieldTimeZone
+	calendarEditFieldAlternateTimeZones
+	calendarEditFieldAllDay
 	calendarEditFieldAttendees
 	calendarEditFieldRecurrence
 	calendarEditFieldReminders
@@ -89,6 +92,7 @@ const (
 
 type calendarEventEditState struct {
 	Active bool
+	Create bool
 	Ref    models.EventRef
 	Base   models.CalendarEvent
 	Draft  models.CalendarEventEditDraft
@@ -98,12 +102,23 @@ type calendarEventEditState struct {
 	Error  string
 }
 
+type calendarEventDeleteState struct {
+	Active   bool
+	Ref      models.EventRef
+	Event    models.CalendarEvent
+	Deleting bool
+	Error    string
+}
+
 var calendarEditFields = []calendarEditField{
+	calendarEditFieldCalendar,
 	calendarEditFieldTitle,
 	calendarEditFieldLocation,
 	calendarEditFieldStart,
 	calendarEditFieldEnd,
 	calendarEditFieldTimeZone,
+	calendarEditFieldAlternateTimeZones,
+	calendarEditFieldAllDay,
 	calendarEditFieldAttendees,
 	calendarEditFieldRecurrence,
 	calendarEditFieldReminders,
@@ -148,6 +163,7 @@ func (m *Model) refreshCalendarAvailability() {
 		m.calendarAISummaryLoading = false
 		m.calendarAISummary = nil
 		m.calendarEdit = calendarEventEditState{}
+		m.calendarDelete = calendarEventDeleteState{}
 	}
 }
 
@@ -949,6 +965,109 @@ func (m *Model) openCalendarEdit() {
 	m.calendarStatus = "Editing cached calendar event"
 }
 
+func (m *Model) openCalendarCreate() {
+	collection := m.calendarCollectionForCreate()
+	ref := models.EventRef{
+		SourceID:   collection.Ref.SourceID,
+		AccountID:  collection.Ref.AccountID,
+		CalendarID: collection.Ref.CollectionID,
+		EventID:    fmt.Sprintf("herald-%d", time.Now().UnixNano()),
+	}.WithDefaults()
+	start := m.calendarDefaultCreateStart()
+	end := start.Add(30 * time.Minute)
+	timezone := calendarCreateTimeZone(start)
+	base := models.CalendarEvent{
+		Ref:                ref,
+		ProviderUID:        ref.EventID,
+		Title:              "",
+		Start:              start,
+		End:                end,
+		TimeZone:           timezone,
+		Status:             "confirmed",
+		AlternateTimeZones: []string{"Europe/London", "Asia/Tokyo"},
+	}
+	draft := models.NewCalendarEventEditDraft(base)
+	m.calendarEdit = calendarEventEditState{
+		Active: true,
+		Create: true,
+		Ref:    ref,
+		Base:   base,
+		Draft:  draft,
+		Field:  calendarEditFieldTitle,
+	}
+	m.calendarDelete = calendarEventDeleteState{}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
+	m.calendarAISummaryOpen = false
+	m.calendarAISummaryLoading = false
+	m.calendarAISummary = nil
+	m.calendarDetailOpen = true
+	m.calendarDetailLoading = false
+	m.calendarStatus = "Creating calendar event"
+}
+
+func (m *Model) calendarCollectionForCreate() models.CalendarCollection {
+	if len(m.calendarCollections) > 0 && m.calendarRailCursor >= 0 && m.calendarRailCursor < len(m.calendarCollections) {
+		return m.calendarCollections[m.calendarRailCursor]
+	}
+	if event := m.selectedCalendarEvent(); event != nil {
+		ref := event.Ref.WithDefaults()
+		for _, collection := range m.calendarCollections {
+			if calendarCollectionRefKey(collection.Ref) == calendarEventRefCollectionKey(ref) {
+				return collection
+			}
+		}
+		return models.CalendarCollection{Ref: models.CollectionRef{
+			Kind:         models.SourceKindCalendar,
+			SourceID:     ref.SourceID,
+			AccountID:    ref.AccountID,
+			CollectionID: ref.CalendarID,
+			DisplayName:  calendarSourceLabel(*event),
+		}}
+	}
+	return models.CalendarCollection{Ref: models.CollectionRef{
+		Kind:         models.SourceKindCalendar,
+		SourceID:     models.DefaultCalendarSourceID,
+		AccountID:    models.DefaultAccountID,
+		CollectionID: "calendar",
+		DisplayName:  "Calendar",
+	}}
+}
+
+func (m *Model) calendarDefaultCreateStart() time.Time {
+	anchor := m.calendarAnchorDate()
+	if anchor.IsZero() {
+		anchor = m.calendarCurrentTime()
+	}
+	loc := anchor.Location()
+	if loc == nil {
+		loc = time.Local
+	}
+	start := anchor.In(loc)
+	if start.Hour() == 0 && start.Minute() == 0 {
+		now := m.calendarCurrentTime().In(loc)
+		start = time.Date(start.Year(), start.Month(), start.Day(), now.Hour(), now.Minute(), 0, 0, loc)
+	}
+	start = start.Truncate(30 * time.Minute)
+	if start.Before(m.calendarCurrentTime().In(loc)) {
+		start = start.Add(30 * time.Minute)
+	}
+	return start
+}
+
+func calendarCreateTimeZone(start time.Time) string {
+	if start.Location() != nil {
+		if name := strings.TrimSpace(start.Location().String()); name != "" {
+			return name
+		}
+	}
+	return time.Local.String()
+}
+
 func (m *Model) openCalendarMeetingPrep() tea.Cmd {
 	event := m.calendarDetail
 	if event == nil {
@@ -1112,8 +1231,67 @@ func (m *Model) saveCalendarEdit() tea.Cmd {
 	m.calendarEdit.Error = ""
 	m.calendarStatus = "Saving calendar event..."
 	return func() tea.Msg {
-		saved, err := mutation.SaveCalendarEvent(updated)
+		var saved *models.CalendarEvent
+		var err error
+		if m.calendarEdit.Create {
+			saved, err = mutation.CreateCalendarEvent(updated)
+		} else {
+			saved, err = mutation.SaveCalendarEvent(updated)
+		}
 		return CalendarEventSavedMsg{Ref: ref, Event: saved, Err: err}
+	}
+}
+
+func (m *Model) openCalendarDelete() {
+	event := m.calendarDetail
+	if event == nil {
+		event = m.selectedCalendarEvent()
+	}
+	if event == nil {
+		m.calendarStatus = "No calendar event selected to delete"
+		return
+	}
+	ref := event.Ref.WithDefaults()
+	selected := *event
+	selected.Ref = ref
+	m.calendarDelete = calendarEventDeleteState{
+		Active: true,
+		Ref:    ref,
+		Event:  selected,
+	}
+	m.calendarEdit = calendarEventEditState{}
+	m.calendarMeetingPrepOpen = false
+	m.calendarMeetingPrepLoading = false
+	m.calendarMeetingPrep = nil
+	m.calendarTravelBufferOpen = false
+	m.calendarTravelBufferLoading = false
+	m.calendarTravelBuffer = nil
+	m.calendarAISummaryOpen = false
+	m.calendarAISummaryLoading = false
+	m.calendarAISummary = nil
+	m.calendarDetailOpen = true
+	m.calendarDetailLoading = false
+	m.calendarStatus = "Confirm calendar event delete"
+}
+
+func (m *Model) deleteCalendarEvent() tea.Cmd {
+	if !m.calendarDelete.Active || m.calendarDelete.Deleting {
+		return nil
+	}
+	mutation, ok := m.calendarMutationBackend()
+	if !ok {
+		m.calendarDelete.Error = "Delete failed: calendar mutation backend unavailable"
+		m.calendarStatus = m.calendarDelete.Error
+		return nil
+	}
+	ref := m.calendarDelete.Ref.WithDefaults()
+	m.calendarDelete.Ref = ref
+	m.calendarDelete.Deleting = true
+	m.calendarDelete.Error = ""
+	m.calendarStatus = "Deleting calendar event..."
+	return func() tea.Msg {
+		err := mutation.DeleteCalendarEvent(ref)
+		return CalendarEventDeletedMsg{Ref: ref, Err: err}
 	}
 }
 
@@ -1159,6 +1337,13 @@ func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	switch key {
 	case "ctrl+s":
 		return m, m.saveCalendarEdit()
+	case "ctrl+d":
+		if m.calendarEdit.Create {
+			m.calendarStatus = "Save the event before deleting it"
+			return m, nil
+		}
+		m.openCalendarDelete()
+		return m, nil
 	case "esc":
 		m.calendarEdit = calendarEventEditState{}
 		m.calendarStatus = "Calendar edit cancelled"
@@ -1181,9 +1366,30 @@ func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case "ctrl+u":
 		m.setCalendarEditFieldValue("")
 		return m, nil
+	case " ", "space":
+		if m.calendarEdit.Field == calendarEditFieldAllDay {
+			m.calendarEdit.Draft.AllDay = !m.calendarEdit.Draft.AllDay
+			m.calendarEdit.Dirty = true
+			m.calendarEdit.Error = ""
+		} else {
+			m.appendCalendarEditFieldValue(" ")
+		}
+		return m, nil
 	}
 	if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt) == 0 {
 		m.appendCalendarEditFieldValue(msg.Text)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) handleCalendarDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch shortcutKey(msg) {
+	case "y", "Y":
+		return m, m.deleteCalendarEvent()
+	case "n", "N", "esc":
+		m.calendarDelete = calendarEventDeleteState{}
+		m.calendarStatus = "Calendar delete cancelled"
 		return m, nil
 	}
 	return m, nil
@@ -1224,6 +1430,8 @@ func (m *Model) backspaceCalendarEditField() {
 
 func (m *Model) calendarEditFieldValue() string {
 	switch m.calendarEdit.Field {
+	case calendarEditFieldCalendar:
+		return m.calendarEditCalendarLabel()
 	case calendarEditFieldTitle:
 		return m.calendarEdit.Draft.Title
 	case calendarEditFieldLocation:
@@ -1234,6 +1442,13 @@ func (m *Model) calendarEditFieldValue() string {
 		return m.calendarEdit.Draft.EndText
 	case calendarEditFieldTimeZone:
 		return m.calendarEdit.Draft.TimeZone
+	case calendarEditFieldAlternateTimeZones:
+		return strings.Join(m.calendarEdit.Draft.AlternateTimeZones, ", ")
+	case calendarEditFieldAllDay:
+		if m.calendarEdit.Draft.AllDay {
+			return "on"
+		}
+		return "off"
 	case calendarEditFieldAttendees:
 		return m.calendarEdit.Draft.AttendeesText
 	case calendarEditFieldRecurrence:
@@ -1249,6 +1464,8 @@ func (m *Model) calendarEditFieldValue() string {
 
 func (m *Model) setCalendarEditFieldValue(value string) {
 	switch m.calendarEdit.Field {
+	case calendarEditFieldCalendar:
+		return
 	case calendarEditFieldTitle:
 		m.calendarEdit.Draft.Title = value
 	case calendarEditFieldLocation:
@@ -1259,6 +1476,10 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 		m.calendarEdit.Draft.EndText = value
 	case calendarEditFieldTimeZone:
 		m.calendarEdit.Draft.TimeZone = value
+	case calendarEditFieldAlternateTimeZones:
+		m.calendarEdit.Draft.AlternateTimeZones = splitCalendarEditCSV(value)
+	case calendarEditFieldAllDay:
+		m.calendarEdit.Draft.AllDay = parseCalendarEditBool(value)
 	case calendarEditFieldAttendees:
 		m.calendarEdit.Draft.AttendeesText = value
 	case calendarEditFieldRecurrence:
@@ -1272,6 +1493,37 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 	m.calendarEdit.Error = ""
 }
 
+func (m *Model) calendarEditCalendarLabel() string {
+	ref := m.calendarEdit.Draft.Ref.WithDefaults()
+	for _, collection := range m.calendarCollections {
+		if calendarCollectionRefKey(collection.Ref) == calendarEventRefCollectionKey(ref) {
+			return calendarCollectionDisplayName(collection)
+		}
+	}
+	return calendarHumanLabel(firstNonEmptyString(ref.CalendarID, string(ref.AccountID), string(ref.SourceID), "calendar"))
+}
+
+func splitCalendarEditCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func parseCalendarEditBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on", "all day":
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *Model) applySavedCalendarEvent(event models.CalendarEvent) {
 	event.Ref = event.Ref.WithDefaults()
 	changedEvents := false
@@ -1281,7 +1533,12 @@ func (m *Model) applySavedCalendarEvent(event models.CalendarEvent) {
 			changedEvents = true
 		}
 	}
+	if !changedEvents {
+		m.calendarEvents = append(m.calendarEvents, event)
+		changedEvents = true
+	}
 	if changedEvents {
+		m.calendarEvents = normalizeCalendarEventsForDisplay(m.calendarEvents)
 		m.calendarEventsVersion++
 		m.calendarDerived = calendarDerivedCache{}
 		m.invalidateSettingsBackdrop()
@@ -1302,8 +1559,59 @@ func (m *Model) applySavedCalendarEvent(event models.CalendarEvent) {
 	m.calendarDetail = &event
 }
 
+func (m *Model) applyDeletedCalendarEvent(ref models.EventRef) {
+	ref = ref.WithDefaults()
+	m.calendarEvents = removeCalendarEventByLocalID(m.calendarEvents, ref.LocalID)
+	m.calendarSearchResults = removeCalendarEventByLocalID(m.calendarSearchResults, ref.LocalID)
+	if m.crossSourceSearchResults != nil {
+		filtered := m.crossSourceSearchResults[:0]
+		for _, result := range m.crossSourceSearchResults {
+			if result.Event != nil && result.Event.Ref.WithDefaults().LocalID == ref.LocalID {
+				continue
+			}
+			filtered = append(filtered, result)
+		}
+		m.crossSourceSearchResults = filtered
+	}
+	if m.calendarDetail != nil && m.calendarDetail.Ref.WithDefaults().LocalID == ref.LocalID {
+		m.calendarDetail = nil
+		m.calendarDetailOpen = false
+		m.calendarDetailLoading = false
+	}
+	if m.calendarCursor >= len(m.calendarEvents) {
+		m.calendarCursor = len(m.calendarEvents) - 1
+	}
+	if m.calendarCursor < 0 {
+		m.calendarCursor = 0
+	}
+	if m.calendarSearchCursor >= len(m.calendarSearchResults) {
+		m.calendarSearchCursor = len(m.calendarSearchResults) - 1
+	}
+	if m.calendarSearchCursor < 0 {
+		m.calendarSearchCursor = 0
+	}
+	m.calendarEventsVersion++
+	m.calendarDerived = calendarDerivedCache{}
+	m.invalidateSettingsBackdrop()
+	m.calendarDetail = m.selectedCalendarEvent()
+}
+
+func removeCalendarEventByLocalID(events []models.CalendarEvent, localID string) []models.CalendarEvent {
+	filtered := events[:0]
+	for _, event := range events {
+		if event.Ref.WithDefaults().LocalID == localID {
+			continue
+		}
+		filtered = append(filtered, event)
+	}
+	return filtered
+}
+
 func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
+	if m.calendarDelete.Active {
+		return m.handleCalendarDeleteKey(msg)
+	}
 	if m.calendarEdit.Active {
 		return m.handleCalendarEditKey(msg)
 	}
@@ -1345,6 +1653,12 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !m.calendarDetailOpen && m.calendarFocus == calendarFocusRail {
 			m.toggleFocusedCalendarCollection()
 		}
+		return m, nil
+	case "ctrl+n":
+		m.openCalendarCreate()
+		return m, nil
+	case "D":
+		m.openCalendarDelete()
 		return m, nil
 	case "ctrl+d", "pgdown":
 		if !m.calendarDetailOpen {
@@ -1466,6 +1780,9 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) renderCalendarView() string {
 	if !m.calendarAvailable {
 		return m.emptyStateView("Calendar agenda is not configured for this session")
+	}
+	if m.calendarDelete.Active {
+		return m.renderCalendarDeleteFullView()
 	}
 	if m.calendarEdit.Active {
 		return m.renderCalendarEditFullView()
@@ -1783,6 +2100,30 @@ func (m *Model) renderCalendarEditFullView() string {
 	}
 	panelW, innerW, innerH := clamp(contentW, 40), clamp(contentW-4, 20), clamp(contentH-2, 1)
 	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarEventEdit(innerW, innerH), innerW, innerH))
+}
+
+func (m *Model) renderCalendarDeleteFullView() string {
+	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+	contentW := m.windowWidth
+	if contentW <= 0 {
+		contentW = 80
+	}
+	if plan.ChatVisible {
+		contentW -= chatPanelWidth + 2 + panelGapWidth
+	}
+	contentH := calendarPanelOuterHeight(plan)
+	if contentH < 4 {
+		contentH = 4
+	}
+	panelW := contentW
+	if panelW > 90 {
+		panelW = 90
+	}
+	if panelW < 40 {
+		panelW = contentW
+	}
+	innerW, innerH := clamp(panelW-4, 20), clamp(contentH-2, 1)
+	return m.calendarPanel(panelW, contentH, true).Render(fitCalendarPanelContent(m.renderCalendarEventDelete(innerW, innerH), innerW, innerH))
 }
 
 func (m *Model) renderCalendarMeetingPrepFullView() string {
@@ -2157,8 +2498,10 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		width = 12
 	}
 	state := m.calendarEdit
-	var lines []string
-	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Event Edit", width)))
+	title := "Event Edit"
+	if state.Create {
+		title = "Create Event"
+	}
 	subtitle := "provider save-through when available"
 	if state.Dirty {
 		subtitle += " - unsaved"
@@ -2166,24 +2509,71 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	if state.Saving {
 		subtitle = "saving calendar event..."
 	}
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)))
-	lines = append(lines, "")
-	lines = append(lines, m.renderCalendarEditField("Title", calendarEditFieldTitle, state.Draft.Title, width))
-	lines = append(lines, m.renderCalendarEditField("Location", calendarEditFieldLocation, state.Draft.Location, width))
-	lines = append(lines, m.renderCalendarEditField("Start", calendarEditFieldStart, state.Draft.StartText, width))
-	lines = append(lines, m.renderCalendarEditField("End", calendarEditFieldEnd, state.Draft.EndText, width))
-	lines = append(lines, m.renderCalendarEditField("Event TZ", calendarEditFieldTimeZone, state.Draft.TimeZone, width))
-	lines = append(lines, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, width))
-	lines = append(lines, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, width))
-	lines = append(lines, m.renderCalendarEditField("Reminders", calendarEditFieldReminders, state.Draft.RemindersText, width))
-	lines = append(lines, m.renderCalendarEditField("Notes", calendarEditFieldDescription, state.Draft.Description, width))
-	if strings.TrimSpace(state.Error) != "" {
-		lines = append(lines, "")
-		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Validation", width)))
-		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(state.Error, width)))
+	header := []string{
+		m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)),
+		m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)),
+		"",
 	}
+
+	leftW := width
+	rightW := 0
+	if width >= 96 {
+		leftW = width*58/100 - 1
+		rightW = width - leftW - panelGapWidth
+	}
+	var fields []string
+	fields = append(fields, m.renderCalendarEditField("Calendar", calendarEditFieldCalendar, m.calendarEditCalendarLabel(), leftW))
+	fields = append(fields, m.renderCalendarEditField("Title", calendarEditFieldTitle, state.Draft.Title, leftW))
+	fields = append(fields, m.renderCalendarEditField("Location", calendarEditFieldLocation, state.Draft.Location, leftW))
+	fields = append(fields, m.renderCalendarEditField("Start", calendarEditFieldStart, state.Draft.StartText, leftW))
+	fields = append(fields, m.renderCalendarEditField("End", calendarEditFieldEnd, state.Draft.EndText, leftW))
+	fields = append(fields, m.renderCalendarEditField("Event TZ", calendarEditFieldTimeZone, state.Draft.TimeZone, leftW))
+	fields = append(fields, m.renderCalendarEditField("Display TZs", calendarEditFieldAlternateTimeZones, strings.Join(state.Draft.AlternateTimeZones, ", "), leftW))
+	fields = append(fields, m.renderCalendarEditField("All day", calendarEditFieldAllDay, m.calendarEditAllDayLabel(), leftW))
+	fields = append(fields, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, leftW))
+	fields = append(fields, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, leftW))
+	fields = append(fields, m.renderCalendarEditField("Reminders", calendarEditFieldReminders, state.Draft.RemindersText, leftW))
+	fields = append(fields, m.renderCalendarEditField("Notes", calendarEditFieldDescription, state.Draft.Description, leftW))
+	if strings.TrimSpace(state.Error) != "" {
+		fields = append(fields, "")
+		fields = append(fields, m.theme.Metadata.Label.Style().Render(calendarFit("Validation", leftW)))
+		fields = append(fields, m.theme.Text.Primary.Style().Render(calendarFit(state.Error, leftW)))
+	}
+
+	preview := m.renderCalendarEditPreview(max(rightW, width))
+	var body string
+	if rightW > 0 {
+		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(fields, "\n"), panelGap, m.renderCalendarEditPreview(rightW))
+	} else {
+		body = strings.Join(fields, "\n") + "\n\n" + preview
+	}
+	lines := append(header, strings.Split(body, "\n")...)
 	lines = append(lines, "")
+	hint := "tab: next field  space: toggle all day  ctrl+s: save  esc: cancel"
+	if !state.Create {
+		hint = "tab: next field  space: toggle all day  ctrl+s: save  ctrl+d: delete  esc: cancel"
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(hint, width)))
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) renderCalendarEditPreview(width int) string {
+	if width < 12 {
+		width = 12
+	}
+	state := m.calendarEdit
+	var lines []string
 	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Preview", width)))
+	title := strings.TrimSpace(state.Draft.Title)
+	if title == "" {
+		title = "Untitled event"
+	}
+	lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(title, width)))
+	lines = append(lines, calendarDetailRow(m, "Calendar", m.calendarEditCalendarLabel(), width))
+	lines = append(lines, calendarDetailRow(m, "Scope", models.CalendarMutationScopeLabel(state.Draft.RecurrenceScope), width))
+	lines = append(lines, calendarDetailRow(m, "Mode", "provider save-through, cache after success", width))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Timezone preview", width)))
 	preview, err := state.Draft.TimezonePreview(state.Base)
 	if err != nil {
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit("Validation: "+err.Error(), width)))
@@ -2199,9 +2589,44 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Alt TZ rows are preview only; Event TZ saves.", width)))
 	}
 	lines = append(lines, "")
-	lines = append(lines, calendarDetailRow(m, "Scope", models.CalendarMutationScopeLabel(state.Draft.RecurrenceScope), width))
-	lines = append(lines, calendarDetailRow(m, "Mode", "provider save-through, cache after success", width))
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("tab: next field  ctrl+s: save  esc: cancel", width)))
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Conflict check", width)))
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(m.calendarEditConflictSummary(), width)))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Recurrence preview", width)))
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarEditRecurrencePreview(state.Draft), width)))
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderCalendarEventDelete(width, height int) string {
+	if width < 12 {
+		width = 12
+	}
+	state := m.calendarDelete
+	event := state.Event
+	var lines []string
+	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render(calendarFit("Delete Event", width)))
+	subtitle := "provider delete-through, cache after success"
+	if state.Deleting {
+		subtitle = "deleting calendar event..."
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Subject.Style().Render(calendarFit(event.Title, width)))
+	lines = append(lines, calendarDetailRow(m, "When", calendarTimeRange(event), width))
+	lines = append(lines, calendarDetailRow(m, "Calendar", calendarSourceLabel(event), width))
+	if strings.TrimSpace(event.Location) != "" {
+		lines = append(lines, calendarDetailRow(m, "Location", event.Location, width))
+	}
+	if strings.TrimSpace(state.Error) != "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Error", width)))
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(state.Error, width)))
+	}
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Confirm", width)))
+	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit("Delete this event from the calendar provider and local cache?", width)))
+	lines = append(lines, "")
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("y: delete  n: keep  esc: cancel", width)))
 	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -2445,6 +2870,52 @@ func (m *Model) renderCalendarEditField(label string, field calendarEditField, v
 		return m.theme.Focus.SelectionActive.Style().Render(calendarFit(line, width))
 	}
 	return m.theme.Text.Primary.Style().Render(calendarFit(line, width))
+}
+
+func (m *Model) calendarEditAllDayLabel() string {
+	if m.calendarEdit.Draft.AllDay {
+		return "on"
+	}
+	return "off"
+}
+
+func (m *Model) calendarEditConflictSummary() string {
+	event, err := m.calendarEdit.Draft.Apply(m.calendarEdit.Base)
+	if err != nil {
+		return "Resolve validation before checking conflicts"
+	}
+	if event.Start.IsZero() {
+		return "No scheduled time"
+	}
+	event.Ref = event.Ref.WithDefaults()
+	eventEnd := event.End
+	if eventEnd.IsZero() {
+		eventEnd = event.Start
+	}
+	for _, existing := range m.calendarEvents {
+		existing.Ref = existing.Ref.WithDefaults()
+		if existing.Ref.LocalID == event.Ref.LocalID {
+			continue
+		}
+		if existing.Start.IsZero() {
+			continue
+		}
+		existingEnd := existing.End
+		if existingEnd.IsZero() {
+			existingEnd = existing.Start
+		}
+		if event.Start.Before(existingEnd) && existing.Start.Before(eventEnd) {
+			return existing.Title + " overlaps"
+		}
+	}
+	return "No conflicts"
+}
+
+func calendarEditRecurrencePreview(draft models.CalendarEventEditDraft) string {
+	if strings.TrimSpace(draft.RecurrenceText) == "" {
+		return "Does not repeat"
+	}
+	return strings.TrimSpace(draft.RecurrenceText)
 }
 
 func calendarMutationErrorStatus(prefix string, err error) string {
@@ -4553,6 +5024,11 @@ func calendarCollectionRefKey(ref models.CollectionRef) string {
 
 func calendarEventCollectionKey(event models.CalendarEvent) string {
 	ref := event.Ref.WithDefaults()
+	return calendarEventRefCollectionKey(ref)
+}
+
+func calendarEventRefCollectionKey(ref models.EventRef) string {
+	ref = ref.WithDefaults()
 	return calendarCollectionRefKey(models.CollectionRef{
 		SourceID:     ref.SourceID,
 		AccountID:    ref.AccountID,

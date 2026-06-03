@@ -125,3 +125,18 @@ func (r EventRef) WithDefaults() EventRef {
 	}
 	return r
 }
+
+func EventRefFromLocalID(localID string) (EventRef, bool) {
+	parts := strings.SplitN(strings.TrimSpace(localID), ":", 6)
+	if len(parts) != 6 || parts[0] != string(SourceKindCalendar) || parts[1] == "" || parts[2] == "" || parts[3] == "" {
+		return EventRef{}, false
+	}
+	return EventRef{
+		SourceID:   SourceID(parts[1]),
+		AccountID:  AccountID(parts[2]),
+		CalendarID: parts[3],
+		EventID:    parts[4],
+		InstanceID: parts[5],
+		LocalID:    strings.TrimSpace(localID),
+	}, true
+}

@@ -274,6 +274,12 @@ func (l *Lab) handleGoogleCalendarEvents(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		_ = json.NewEncoder(w).Encode(googleEvent(updated))
+	case http.MethodDelete:
+		if err := l.deleteEvent(calendarID, eventID, strings.TrimSpace(r.Header.Get("If-Match"))); err != nil {
+			http.Error(w, err.Error(), http.StatusPreconditionFailed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
 	}
@@ -544,6 +550,13 @@ func (l *Lab) handleCalDAV(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("ETag", updated.ETag)
 		w.WriteHeader(http.StatusNoContent)
+	case "DELETE":
+		calendarID, eventID := splitCalDAVEventPath(r.URL.Path)
+		if err := l.deleteEvent(calendarID, eventID, strings.TrimSpace(r.Header.Get("If-Match"))); err != nil {
+			http.Error(w, err.Error(), http.StatusPreconditionFailed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
 	}
@@ -662,6 +675,23 @@ func (l *Lab) updateCalDAVEvent(calendarID, eventID string, r *http.Request) (Ev
 		return event, nil
 	}
 	return Event{}, fmt.Errorf("event not found")
+}
+
+func (l *Lab) deleteEvent(calendarID, eventID, ifMatch string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	events := l.events[calendarID]
+	for i := range events {
+		if events[i].ID != eventID && strings.TrimSuffix(events[i].ID, ".ics") != eventID && events[i].UID != eventID {
+			continue
+		}
+		if ifMatch != "" && ifMatch != events[i].ETag {
+			return fmt.Errorf("etag mismatch")
+		}
+		l.events[calendarID] = append(events[:i], events[i+1:]...)
+		return nil
+	}
+	return fmt.Errorf("event not found")
 }
 
 func splitCalDAVEventPath(p string) (string, string) {

@@ -38,6 +38,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/emails/{id}/attachments", s.handleListAttachments)
 	mux.HandleFunc("GET /v1/emails/{id}/attachments/{filename...}", s.handleGetAttachment)
 
+	// Calendar
+	mux.HandleFunc("POST /v1/calendar/events", s.handleCreateCalendarEvent)
+	mux.HandleFunc("PATCH /v1/calendar/events/{id}", s.handleUpdateCalendarEvent)
+	mux.HandleFunc("DELETE /v1/calendar/events/{id}", s.handleDeleteCalendarEvent)
+
 	// Threads
 	mux.HandleFunc("GET /v1/threads", s.handleGetThread)
 	mux.HandleFunc("POST /v1/threads/delete", s.handleDeleteThread)

@@ -56,3 +56,15 @@ func TestCollectionRefCacheKeyIncludesScope(t *testing.T) {
 		t.Fatalf("CacheKey = %q, want %q", got, want)
 	}
 }
+
+func TestEventRefFromLocalIDParsesCalendarScope(t *testing.T) {
+	ref := EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "planning", InstanceID: "instance-1"}.WithDefaults()
+
+	got, ok := EventRefFromLocalID(ref.LocalID)
+	if !ok {
+		t.Fatalf("EventRefFromLocalID(%q) did not parse", ref.LocalID)
+	}
+	if got.SourceID != ref.SourceID || got.AccountID != ref.AccountID || got.CalendarID != ref.CalendarID || got.EventID != ref.EventID || got.InstanceID != ref.InstanceID || got.LocalID != ref.LocalID {
+		t.Fatalf("parsed ref = %#v, want %#v", got, ref)
+	}
+}

@@ -1,6 +1,8 @@
 package mcpserver
 
 import (
+	"encoding/json"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -126,5 +128,75 @@ func TestMCPSearchAndGetCalendarEventUseScopedRefs(t *testing.T) {
 		if !strings.Contains(detail, want) {
 			t.Fatalf("get_calendar_event missing %q:\n%s", want, detail)
 		}
+	}
+}
+
+func TestMCPCalendarMutationToolsForwardToDaemon(t *testing.T) {
+	localID := "calendar:work-calendar:work:primary:planning-123:"
+	var calls []string
+	withTestDaemonURL(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/status" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		calls = append(calls, r.Method+" "+r.URL.String())
+		var body map[string]any
+		if r.Body != nil && r.Method != http.MethodDelete {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode daemon body: %v", err)
+			}
+		}
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/calendar/events":
+			if body["calendar_id"] != "primary" || body["title"] != "Created by MCP" || body["start"] != "2026-06-03T16:00:00Z" {
+				t.Fatalf("create body = %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/calendar/events/planning-123":
+			if r.URL.Query().Get("local_id") != localID || body["title"] != "Updated by MCP" {
+				t.Fatalf("update path/body = %s %#v", r.URL.String(), body)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/v1/calendar/events/planning-123":
+			if r.URL.Query().Get("local_id") != localID {
+				t.Fatalf("delete query = %s", r.URL.RawQuery)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected daemon call: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+
+	created := callVirtualLabTool(t, s, 10, "create_calendar_event", map[string]any{
+		"source_id":   "work-calendar",
+		"account_id":  "work",
+		"calendar_id": "primary",
+		"event_id":    "planning-123",
+		"title":       "Created by MCP",
+		"start":       "2026-06-03T16:00:00Z",
+		"end":         "2026-06-03T16:30:00Z",
+		"timezone":    "UTC",
+	})
+	if !strings.Contains(created, "Calendar event created") {
+		t.Fatalf("create response = %s", created)
+	}
+	updated := callVirtualLabTool(t, s, 11, "update_calendar_event", map[string]any{
+		"local_id": localID,
+		"title":    "Updated by MCP",
+	})
+	if !strings.Contains(updated, "Calendar event updated") {
+		t.Fatalf("update response = %s", updated)
+	}
+	deleted := callVirtualLabTool(t, s, 12, "delete_calendar_event", map[string]any{
+		"local_id": localID,
+	})
+	if !strings.Contains(deleted, "Calendar event deleted") {
+		t.Fatalf("delete response = %s", deleted)
+	}
+	if len(calls) != 3 {
+		t.Fatalf("daemon calls = %d, want 3: %#v", len(calls), calls)
 	}
 }

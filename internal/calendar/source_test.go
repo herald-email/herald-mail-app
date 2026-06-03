@@ -437,6 +437,44 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 }
 
+func TestGoogleCalendarSourceDeleteEventWritesThroughProvider(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:       "delete-evt",
+			UID:      "delete-evt",
+			Summary:  "Provider delete",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+		}),
+	)
+	src, err := NewGoogleCalendarSource(lab.GoogleSourceConfig("work-calendar", "work"))
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+
+	if err := src.DeleteEvent(context.Background(), events[0].Ref, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         events[0].Ref.ETag,
+	}); err != nil {
+		t.Fatalf("DeleteEvent: %v", err)
+	}
+	after, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents after delete: %v", err)
+	}
+	if len(after) != 0 {
+		t.Fatalf("events after delete = %#v, want none", after)
+	}
+}
+
 func TestGoogleCalendarSourceImportsEventAndFindsDuplicateUID(t *testing.T) {
 	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t, testcalendar.WithCalendar("primary", "Work", "#3367d6"))
@@ -1197,6 +1235,44 @@ func TestCalDAVSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 	if saved.Ref.ETag == edited.Ref.ETag {
 		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)
+	}
+}
+
+func TestCalDAVSourceDeleteEventWritesThroughProvider(t *testing.T) {
+	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("team", "Team Calendar", "#0b8043"),
+		testcalendar.WithEvent("team", testcalendar.Event{
+			ID:       "delete-evt.ics",
+			UID:      "delete-evt",
+			Summary:  "CalDAV delete",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"c-v1"`,
+		}),
+	)
+	src, err := NewCalDAVSource(lab.CalDAVSourceConfig("family-caldav", "family"))
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	events, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "family-caldav", AccountID: "family", Kind: models.SourceKindCalendar, CollectionID: "team"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+
+	if err := src.DeleteEvent(context.Background(), events[0].Ref, models.CalendarMutationOptions{
+		RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		IfMatch:         events[0].Ref.ETag,
+	}); err != nil {
+		t.Fatalf("DeleteEvent: %v", err)
+	}
+	after, err := src.ListEvents(context.Background(), models.CollectionRef{SourceID: "family-caldav", AccountID: "family", Kind: models.SourceKindCalendar, CollectionID: "team"})
+	if err != nil {
+		t.Fatalf("ListEvents after delete: %v", err)
+	}
+	if len(after) != 0 {
+		t.Fatalf("events after delete = %#v, want none", after)
 	}
 }
 

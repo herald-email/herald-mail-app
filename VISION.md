@@ -651,7 +651,7 @@ The app currently supports one IMAP account per config file. Multi-account suppo
 
 ## Calendar Sources
 
-Calendar sources extend Herald's source platform beyond mail while keeping provider-specific sync details out of the TUI. The first milestone is read-only calendar collection/event sync and search; mutations come after source identity and cache-first event services are stable.
+Calendar sources extend Herald's source platform beyond mail while keeping provider-specific sync details out of the TUI. The current milestone includes source-scoped sync, search, and provider-backed create/update/delete mutations that update Herald's cache only after the provider succeeds.
 
 - [x] `CalendarSource` capability shared by Google Calendar and CalDAV providers
 - [x] Source-scoped calendar and event cache with provider freshness metadata such as ETag, revision, or sync token
@@ -666,12 +666,15 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Meeting Prep view opens from Calendar Event Detail and blends the selected event with related cached mail and nearby cached events without provider fetches or mutations
 - [x] Travel Buffer view opens from Calendar Event Detail and blends the selected event with cached travel-related mail and nearby event gaps without provider fetches or mutations
 - [x] AI Summary view opens from Calendar Event Detail and summarizes the selected event, cached related mail, and cached nearby events without provider fetches or mutations
-- [x] Local/cache-backed Event Edit form with explicit save/cancel state, timezone preview, and no live provider mutation writes
+- [x] Local/cache-backed Event Edit form with explicit save/cancel state and timezone preview
 - [x] Provider-backed Event Edit saves write through Google Calendar/CalDAV before updating cache, and provider failures keep unsaved edits visible
+- [x] Provider-backed Event Create opens from Calendar, scopes new events to the selected calendar, and writes through Google Calendar/CalDAV before adding cached rows
+- [x] Provider-backed Event Delete requires confirmation, writes through Google Calendar/CalDAV before invalidating cached rows, and is available from Calendar browse/detail/edit contexts
 - [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [x] Provider mutation conflicts and unsupported recurrence scopes fail visibly without rewriting cached event rows
 - [x] Event Edit can mutate attendee lists and this-event recurrence rules through the existing provider save-through flow
 - [x] Event Edit can mutate reminder overrides through the existing provider save-through flow
+- [x] Calendar create/update/delete routes are exposed through the daemon and MCP tools for agent-driven calendar workflows
 - [x] Google Calendar source using OAuth and provider sync tokens
 - [x] Google Calendar account setup uses Herald's supported Google OAuth flow instead of asking users to configure Google's CalDAV URL with an app password
 - [x] CalDAV source using discovery, ETag, and sync-token or polling fallback

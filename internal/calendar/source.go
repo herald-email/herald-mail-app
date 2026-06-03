@@ -35,6 +35,7 @@ type Source interface {
 type MutationSource interface {
 	CreateEvent(context.Context, models.CalendarEvent, models.CalendarMutationOptions) (*models.CalendarEvent, error)
 	UpdateEvent(context.Context, models.CalendarEvent, models.CalendarMutationOptions) (*models.CalendarEvent, error)
+	DeleteEvent(context.Context, models.EventRef, models.CalendarMutationOptions) error
 	RespondToEvent(context.Context, models.EventRef, string, models.CalendarMutationOptions) (*models.CalendarEvent, error)
 }
 
@@ -254,6 +255,24 @@ func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.Cal
 	return &out, nil
 }
 
+func (s *GoogleCalendarSource) DeleteEvent(ctx context.Context, ref models.EventRef, opts models.CalendarMutationOptions) error {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
+		return err
+	}
+	ref = s.normalizeEvent(ref)
+	u := s.baseURL + "/calendars/" + url.PathEscape(ref.CalendarID) + "/events/" + url.PathEscape(ref.EventID) + "?sendUpdates=none"
+	req, err := s.newRequest(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return err
+	}
+	if ifMatch := firstNonEmpty(opts.IfMatch, ref.ETag); ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	return s.doNoContent(req)
+}
+
 func (s *GoogleCalendarSource) FindEventByUID(ctx context.Context, ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
 	uid = strings.TrimSpace(uid)
 	if uid == "" {
@@ -341,6 +360,19 @@ func (s *GoogleCalendarSource) doJSON(req *http.Request, out any) error {
 		return calendarProviderHTTPError("google calendar", req.Method, resp.StatusCode, body)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func (s *GoogleCalendarSource) doNoContent(req *http.Request) error {
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return calendarProviderHTTPError("google calendar", req.Method, resp.StatusCode, body)
+	}
+	return nil
 }
 
 type CalDAVSource struct {
@@ -624,6 +656,38 @@ func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEve
 		freshRef.ETag = etag
 	}
 	return s.FetchEvent(ctx, freshRef)
+}
+
+func (s *CalDAVSource) DeleteEvent(ctx context.Context, ref models.EventRef, opts models.CalendarMutationOptions) error {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
+		return err
+	}
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, s.id)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	ref = ref.WithDefaults()
+	eventURL, err := s.eventURL(ctx, ref.CalendarID, ref.EventID)
+	if err != nil {
+		return err
+	}
+	req, err := s.newRequest(ctx, http.MethodDelete, eventURL, nil)
+	if err != nil {
+		return err
+	}
+	if ifMatch := firstNonEmpty(opts.IfMatch, ref.ETag); ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return calendarProviderHTTPError("caldav", req.Method, resp.StatusCode, body)
+	}
+	return nil
 }
 
 func (s *CalDAVSource) FindEventByUID(ctx context.Context, ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {

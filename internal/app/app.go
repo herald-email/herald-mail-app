@@ -131,6 +131,12 @@ type CalendarEventSavedMsg struct {
 	Err   error
 }
 
+// CalendarEventDeletedMsg carries a provider/cache-backed calendar delete result.
+type CalendarEventDeletedMsg struct {
+	Ref models.EventRef
+	Err error
+}
+
 // CalendarEventRSVPMsg carries a provider-backed calendar RSVP result.
 type CalendarEventRSVPMsg struct {
 	Ref    models.EventRef
@@ -933,6 +939,7 @@ type Model struct {
 	calendarAISummaryLoading    bool
 	calendarAISummary           *models.CalendarAISummary
 	calendarEdit                calendarEventEditState
+	calendarDelete              calendarEventDeleteState
 	calendarInvitation          calendarInvitationPromptState
 	calendarStatus              string
 	mouseSelectionMode          bool
@@ -2582,6 +2589,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarDetailOpen = true
 		m.calendarDetailLoading = false
 		m.calendarStatus = "Saved calendar event"
+		return m, nil
+
+	case CalendarEventDeletedMsg:
+		if msg.Ref.WithDefaults().LocalID != m.calendarDelete.Ref.WithDefaults().LocalID {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.calendarDelete.Deleting = false
+			m.calendarDelete.Error = calendarMutationErrorStatus("Delete failed", msg.Err)
+			m.calendarStatus = m.calendarDelete.Error
+			return m, nil
+		}
+		m.applyDeletedCalendarEvent(msg.Ref)
+		m.calendarDelete = calendarEventDeleteState{}
+		m.calendarEdit = calendarEventEditState{}
+		m.calendarStatus = "Deleted calendar event"
 		return m, nil
 
 	case CalendarEventRSVPMsg:

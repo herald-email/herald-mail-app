@@ -230,8 +230,8 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add a read-only Calendar Travel Buffer view that reuses cache-backed cross-source search to show selected-event travel context, cached travel mail, nearby event gaps, and buffer suggestions without provider fetches or mutations.
 - [x] Add a read-only Calendar AI Summary view that reuses cache-backed cross-source search plus the configured AI client when available, with deterministic cached fallback and no provider fetches or mutations.
 - [x] Add source-aware automation event lanes so existing mail rules run with scoped message identity while calendar change events can enter the lane as read-only groundwork.
-- [x] Add a local/cache-backed Calendar Event Edit boundary that proves timezone-safe save/cancel UI before live provider mutation adapters are enabled.
-- [x] Add provider-backed Calendar Event Edit and RSVP mutation boundaries that write through Google Calendar/CalDAV before cache updates and leave daemon/MCP mutation APIs deferred.
+- [x] Add a local/cache-backed Calendar Event Edit boundary that proves timezone-safe save/cancel UI through the shared mutation path.
+- [x] Add provider-backed Calendar Event Create, Edit, Delete, and RSVP mutation boundaries that write through Google Calendar/CalDAV before cache updates.
 - [x] Add Google Calendar source OAuth refresh and provider sync-token persistence so cache-backed event sync can use incremental provider reads without exposing provider tokens to the TUI.
 - [x] Add a Gmail API mail source for core OAuth Gmail operations so sync, body reads, mailbox mutations, and send can use provider-aware Gmail API scopes without exposing provider message IDs or labels to the TUI.
 - [x] Add CalDAV principal/home-set discovery plus sync-collection incremental reads with calendar-query polling fallback when a provider does not support sync tokens.
@@ -247,6 +247,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add optional source/account scoped daemon read filters and MCP listing refs while preserving legacy folder/message-ID compatibility.
 - [x] Add source/account/collection/item identity to daemon progress, sync, valid-ID, new-email, and mutation events while preserving legacy event names.
 - [x] Add read-only scoped calendar MCP tools for cached agenda, search, and event detail results.
+- [x] Add scoped daemon and MCP calendar create/update/delete tools so write callers can pass `EventRef`/`local_id` identity instead of provider-internal IDs alone.
 - [x] Add scoped single-message daemon/MCP mail mutation refs so multi-account writes cannot silently target the wrong account while legacy single-account calls still work.
 - [x] Add scoped bulk/thread/sender/draft daemon/MCP mail mutation guards so multi-account writes fail clearly without source refs or per-message local IDs.
 - [x] Preserve legacy folder/message-ID APIs until daemon, MCP, TUI, and SSH callers can pass scoped refs safely.

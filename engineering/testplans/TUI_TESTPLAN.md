@@ -1847,7 +1847,7 @@ Check these states during every applicable lane:
 - Event Edit uses Herald's form/settings pattern with focused fields, validation rows, compact controls, and a live timezone preview.
 - The primary event timezone field is near the start/end fields and saving a timezone is explicit; alternate display timezones are preview-only.
 - Unsaved changes, validation errors, cancel, and cache-backed save success are visible to the user.
-- The edit boundary writes to demo/cache state only in this stage; it does not advertise RSVP, recurrence-provider writes, create-event, Google Calendar mutation, CalDAV mutation, or daemon/MCP mutation APIs.
+- The edit boundary writes through the configured mutation backend when available, keeps provider/cache state scoped by EventRef, and does not expose provider IDs, raw ETags, CalDAV URLs, OAuth details, or daemon/MCP internals in the TUI.
 - Literal `e` typed in Compose, search prompts, and editor-like text fields remains text instead of opening Event Edit.
 - At `50x15`, the minimum-size guard appears instead of clipped Event Edit chrome, and resizing larger restores the edit state cleanly.
 
@@ -1874,6 +1874,31 @@ This case covers the first provider-backed mutation slice after the local/cache 
 - Recurring events show an explicit `this event` recurrence-scope label for the first mutation slice; broader recurrence editing remains unavailable.
 - Event Detail and Event Edit still hide provider event IDs, CalDAV URLs, raw sync tokens, raw ETags, OAuth details, and daemon/MCP mutation APIs.
 - Literal `e` and the RSVP response shortcut typed in Compose, search prompts, and editor-like text fields remain text instead of firing calendar mutations.
+
+### TC-38U — Calendar event create, update, delete, and Screen 06 edit parity
+
+This case covers the provider-backed event creation and deletion slice plus the Screen 06 edit/create surface. It proves users can create, edit, and delete events from Calendar while a color side-by-side comparison shows the implemented Event Edit UI beside the proposed reference mockup.
+
+**Lane:** A, B when calendar provider fixtures are available
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one writable calendar collection.
+2. Press `3` or `F4` to open Calendar, then press `Ctrl+N` to open Create Event.
+3. Confirm Create Event shows Calendar, Title, Location, Start, End, Event TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
+4. Fill title/start/end fields and press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success.
+5. Open the created event, press `e`, edit a visible field, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref.
+6. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
+7. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
+8. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
+9. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
+
+**Expect:**
+- Create, update, and delete use provider-backed mutation boundaries first and update or invalidate cached rows only after success.
+- Delete always requires confirmation in the Calendar TUI and never runs from a text-entry surface.
+- Event Edit/Create follows the Screen 06 structure closely enough that the color side-by-side comparison can be reviewed without relying on prose.
+- Daemon and MCP create/update/delete tools route through the same scoped mutation semantics as the TUI.
+- At `50x15`, the minimum-size guard appears instead of clipped create/edit/delete chrome, and resizing larger restores the same modal state.
 
 ### TC-38M — Calendar mutation conflict and recurrence-scope safety
 

@@ -135,6 +135,17 @@ Raw HTML in event descriptions makes the current detail and inspector surfaces f
 - [x] Keep Markdown notes readable with the same renderer path so providers that supply plain Markdown do not regress.
 - [ ] Add fixtures for Shopify-style interview notes, Google Meet dial-in blocks, plain text descriptions, and mixed HTML plus plain text descriptions.
 
+## Event Create Edit And Delete
+
+Screen `06` covers the calendar mutation surface after the read-only calendar views are credible. The create/edit/delete workflow should look like a terminal-native calendar form while proving provider-first writes, cache-after-success updates, and visible failure states.
+
+- [x] Open Create Event from Calendar with `Ctrl+N`, scoped to the selected calendar rail collection when available.
+- [x] Render Create/Edit Event with Calendar, title, location, start/end, event timezone, display timezones, all-day, attendees, recurrence, reminders, notes, preview, timezone preview, conflict check, and recurrence preview sections.
+- [x] Save creates and edits through Google Calendar or CalDAV before adding/updating cached event rows.
+- [x] Delete Event opens a confirmation from browse/detail/edit contexts, requires `y`, and invalidates cached rows only after provider success.
+- [x] Expose calendar create/update/delete through daemon and MCP tools with source-scoped EventRef semantics.
+- [x] Capture a color side-by-side image with `06-event-edit-timezones.png` and the implemented Herald UI before treating Screen `06` as accepted.
+
 ## RSVP And Invitation Actions
 
 Calendar event response should be explicit and visible, not a hidden cycle action. Events that require a response should stand out in every calendar screen where they appear.

@@ -100,6 +100,14 @@ func ensureDaemonAvailable() (string, error) {
 
 // daemonPost makes a POST to the daemon. Returns error if daemon unavailable.
 func daemonPost(path string, body any) ([]byte, int, error) {
+	return daemonJSON(http.MethodPost, path, body)
+}
+
+func daemonPatch(path string, body any) ([]byte, int, error) {
+	return daemonJSON(http.MethodPatch, path, body)
+}
+
+func daemonJSON(method, path string, body any) ([]byte, int, error) {
 	baseURL, err := ensureDaemonAvailable()
 	if err != nil {
 		return nil, 0, err
@@ -110,7 +118,12 @@ func daemonPost(path string, body any) ([]byte, int, error) {
 			return nil, 0, err
 		}
 	}
-	resp, err := http.Post(baseURL+path, "application/json", &buf)
+	req, err := http.NewRequest(method, baseURL+path, &buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("daemon unreachable: %w", err)
 	}

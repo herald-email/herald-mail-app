@@ -547,6 +547,54 @@ func TestLocalBackendCalendarCreateEventWritesProviderBeforeCache(t *testing.T) 
 	}
 }
 
+func TestLocalBackendDeleteCalendarEventWritesProviderBeforeCache(t *testing.T) {
+	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("primary", "Work", "#3367d6"),
+		testcalendar.WithEvent("primary", testcalendar.Event{
+			ID:       "planning",
+			UID:      "planning",
+			Summary:  "Provider planning",
+			Start:    start,
+			End:      start.Add(time.Hour),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	provider, err := calendar.NewGoogleCalendarSource(sourceCfg)
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	sourceEvents, err := provider.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.PutCalendarEvent(sourceEvents[0]); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+
+	if err := b.DeleteCalendarEvent(sourceEvents[0].Ref); err != nil {
+		t.Fatalf("DeleteCalendarEvent: %v", err)
+	}
+	providerAfter, err := provider.ListEvents(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"})
+	if err != nil {
+		t.Fatalf("provider ListEvents after delete: %v", err)
+	}
+	if len(providerAfter) != 0 {
+		t.Fatalf("provider events after delete = %#v, want none", providerAfter)
+	}
+	if _, err := store.GetCalendarEventByRef(sourceEvents[0].Ref); err == nil {
+		t.Fatal("cache still returned deleted event, want invalidated row")
+	}
+}
+
 func TestLocalBackendFindCalendarEventByUIDTrustsProviderOverStaleCache(t *testing.T) {
 	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t, testcalendar.WithCalendar("primary", "Work", "#3367d6"))

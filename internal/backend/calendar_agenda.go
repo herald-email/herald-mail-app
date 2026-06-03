@@ -47,6 +47,7 @@ type CalendarCollectionBackend interface {
 type CalendarEventMutationBackend interface {
 	CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
 	SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
+	DeleteCalendarEvent(ref models.EventRef) error
 	RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error)
 	FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error)
 }
@@ -127,6 +128,19 @@ func (d *DemoBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.C
 	d.calendarEvents = append(d.calendarEvents, event)
 	saved := event
 	return &saved, nil
+}
+
+func (d *DemoBackend) DeleteCalendarEvent(ref models.EventRef) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ref = ref.WithDefaults()
+	for i := range d.calendarEvents {
+		if d.calendarEvents[i].Ref.WithDefaults().LocalID == ref.LocalID {
+			d.calendarEvents = append(d.calendarEvents[:i], d.calendarEvents[i+1:]...)
+			return nil
+		}
+	}
+	return sql.ErrNoRows
 }
 
 func (d *DemoBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
@@ -357,6 +371,24 @@ func (b *LocalBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.
 		return nil, err
 	}
 	return b.cache.GetCalendarEventByRef(event.Ref)
+}
+
+func (b *LocalBackend) DeleteCalendarEvent(ref models.EventRef) error {
+	if b == nil || b.cache == nil {
+		return sql.ErrNoRows
+	}
+	ref = ref.WithDefaults()
+	if source, ok, err := b.calendarMutationSourceForRef(ref); err != nil {
+		return err
+	} else if ok {
+		if err := source.DeleteEvent(context.Background(), ref, models.CalendarMutationOptions{
+			RecurrenceScope: models.CalendarMutationScopeThisEvent,
+			IfMatch:         ref.ETag,
+		}); err != nil {
+			return calendarProviderMutationError("delete", err)
+		}
+	}
+	return b.cache.InvalidateCalendarEvent(ref)
 }
 
 func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
@@ -796,6 +828,31 @@ func (m *MultiBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.
 		}
 	}
 	return nil, lastErr
+}
+
+func (m *MultiBackend) DeleteCalendarEvent(ref models.EventRef) error {
+	ref = ref.WithDefaults()
+	var lastErr error = sql.ErrNoRows
+	for _, backend := range m.calendarMutationBackendsForRef(ref) {
+		if agenda, ok := backend.(CalendarAgendaBackend); ok {
+			if _, err := agenda.GetCalendarEvent(ref); err != nil {
+				lastErr = err
+				if !errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				continue
+			}
+		}
+		err := backend.DeleteCalendarEvent(ref)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	}
+	return lastErr
 }
 
 func (m *MultiBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
