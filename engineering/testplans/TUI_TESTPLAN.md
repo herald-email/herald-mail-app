@@ -2326,12 +2326,14 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 2. Open Timeline and search for `Example: Link rendering stress preview`.
 3. Open the Taskpad demo email preview.
 4. Capture plain text and ANSI output at `220x50`.
-5. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
+5. With mouse capture enabled, click the visible `Display in your browser` link label, then repeat with Ctrl held.
+6. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
 
 **Expect:**
 - Visible preview text shows readable labels such as `Display in your browser` and `Taskpad logo`.
 - Long destination fragments such as `eyJmaXJ`, `_next/static/media`, and `abcdefghijklmnopqrstuvwxyz0123456789` do not appear in visible preview text.
 - ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
+- Clicking or Ctrl-clicking the visible link opens the OSC 8 target through the terminal or the local fallback without first pressing `m`, and ordinary mouse navigation remains enabled afterward.
 - The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
 
 ### TC-49A — Shared HTML Markdown previews across surfaces

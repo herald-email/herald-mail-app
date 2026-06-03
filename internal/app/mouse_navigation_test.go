@@ -8,12 +8,25 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func mousePress(x, y int) tea.MouseClickMsg {
 	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
+}
+
+func mouseCtrlPress(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft, Mod: tea.ModCtrl}
+}
+
+func mouseCtrlRelease(x, y int) tea.MouseReleaseMsg {
+	return tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft, Mod: tea.ModCtrl}
+}
+
+func mouseCtrlReleaseNone(x, y int) tea.MouseReleaseMsg {
+	return tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseNone, Mod: tea.ModCtrl}
 }
 
 func mouseWheelDown(x, y int) tea.MouseWheelMsg {
@@ -135,6 +148,42 @@ func makeMouseThreadTimelineModel(t *testing.T) (*Model, *models.EmailData, *mod
 	m.updateTimelineTable()
 	m.setFocusedPanel(panelTimeline)
 	return m, root, child
+}
+
+func makeMouseLinkPreviewModel(t *testing.T, fullScreen bool) (*Model, string) {
+	t.Helper()
+	body, target := linkStressMarkdownBody()
+	email := &models.EmailData{
+		MessageID: "msg-link-click",
+		Sender:    "Taskpad <hello@taskpad.example>",
+		Subject:   "Link stress",
+		Date:      time.Date(2026, 4, 26, 2, 31, 0, 0, time.UTC),
+		Folder:    "INBOX",
+		UID:       42,
+	}
+	m := makeMouseTimelineModel(t)
+	m.updateTableDimensions(140, 50)
+	m.timeline.selectedEmail = email
+	m.timeline.body = &models.EmailBody{TextPlain: body, IsFromHTML: true}
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.bodyLoading = false
+	m.timeline.fullScreen = fullScreen
+	m.setFocusedPanel(panelPreview)
+	return m, target
+}
+
+func visiblePointForText(t *testing.T, content, text string) (int, int) {
+	t.Helper()
+	for y, line := range strings.Split(content, "\n") {
+		visible := ansi.Strip(line)
+		idx := strings.Index(visible, text)
+		if idx < 0 {
+			continue
+		}
+		return ansi.StringWidth(visible[:idx]), y
+	}
+	t.Fatalf("could not find %q in view:\n%s", text, ansi.Strip(content))
+	return 0, 0
 }
 
 func TestMouseClickTabSwitchesWithoutTypingIntoCompose(t *testing.T) {
@@ -283,6 +332,235 @@ func TestMouseWheelTimelinePreviewScrollsBody(t *testing.T) {
 	updated = model.(*Model)
 	if updated.timeline.bodyScrollOffset != 0 {
 		t.Fatalf("expected preview wheel up to scroll back to top, got %d", updated.timeline.bodyScrollOffset)
+	}
+}
+
+func TestCtrlHeldOverOSC8LinksTemporarilyReleasesMouseCapture(t *testing.T) {
+	m := makeMouseTimelineModel(t)
+	link := "\033]8;;https://example.test\033\\open\033]8;;\033\\"
+
+	if got := m.buildView(link).MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("MouseMode without ctrl=%v, want MouseModeCellMotion", got)
+	}
+
+	m.activeHintMods = tea.ModCtrl
+	if got := m.buildView("no terminal links here").MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("MouseMode for ctrl without OSC8=%v, want MouseModeCellMotion", got)
+	}
+	if got := m.buildView(link).MouseMode; got != tea.MouseModeNone {
+		t.Fatalf("MouseMode for ctrl over OSC8 view=%v, want MouseModeNone", got)
+	}
+
+	m.mouseSelectionMode = true
+	if got := m.buildView(link).MouseMode; got != tea.MouseModeNone {
+		t.Fatalf("mouse-selection mode should still release capture, got %v", got)
+	}
+}
+
+func TestCtrlReleaseRestoresMouseCaptureForOSC8Links(t *testing.T) {
+	m := makeMouseTimelineModel(t)
+	link := "\033]8;;https://example.test\033\\open\033]8;;\033\\"
+
+	model, _ := m.Update(tea.KeyboardEnhancementsMsg{Flags: ansi.KittyReportEventTypes})
+	m = model.(*Model)
+	model, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyLeftCtrl})
+	m = model.(*Model)
+	if got := m.buildView(link).MouseMode; got != tea.MouseModeNone {
+		t.Fatalf("MouseMode with ctrl held=%v, want MouseModeNone", got)
+	}
+
+	model, _ = m.Update(tea.KeyReleaseMsg(tea.Key{Code: tea.KeyLeftCtrl}))
+	m = model.(*Model)
+	if got := m.buildView(link).MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("MouseMode after ctrl release=%v, want MouseModeCellMotion", got)
+	}
+}
+
+func TestCtrlClickTimelinePreviewLinkUsesLocalBrowserFallback(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mouseCtrlPress(x, y))
+	updated := model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected ctrl-click on OSC8 link to open browser fallback")
+	}
+	if updated.statusMessage != "Opening link in browser..." {
+		t.Fatalf("statusMessage=%q, want opening status", updated.statusMessage)
+	}
+
+	msg := cmd()
+	model, _ = updated.Update(msg)
+	updated = model.(*Model)
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want %q", opened, target)
+	}
+	if updated.statusMessage != "Opened link in browser" {
+		t.Fatalf("statusMessage=%q, want opened status", updated.statusMessage)
+	}
+}
+
+func TestPlainClickTimelinePreviewLinkUsesLocalBrowserFallback(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mousePress(x, y))
+	updated := model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected direct click on OSC8 link to open local browser fallback")
+	}
+	if updated.statusMessage != "Opening link in browser..." {
+		t.Fatalf("statusMessage=%q, want opening status", updated.statusMessage)
+	}
+
+	msg := cmd()
+	model, _ = updated.Update(msg)
+	updated = model.(*Model)
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want %q", opened, target)
+	}
+	if updated.statusMessage != "Opened link in browser" {
+		t.Fatalf("statusMessage=%q, want opened status", updated.statusMessage)
+	}
+}
+
+func TestPlainClickPreviewLinkDoesNotOpenWhenFallbackDisabled(t *testing.T) {
+	m, _ := makeMouseLinkPreviewModel(t, false)
+	m.SetTerminalLinkBrowserFallbackEnabled(false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		t.Fatalf("openBrowserFn should not be called for plain click with disabled fallback, got %q", rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mousePress(x, y))
+	updated := model.(*Model)
+	if cmd != nil {
+		t.Fatal("disabled browser fallback should not return an open command for plain clicks")
+	}
+	if updated.statusMessage != "" {
+		t.Fatalf("statusMessage=%q, want no link status for plain click with disabled fallback", updated.statusMessage)
+	}
+}
+
+func TestCtrlClickFullScreenPreviewLinkUsesLocalBrowserFallback(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, true)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mouseCtrlPress(x, y))
+	if cmd == nil {
+		t.Fatal("expected ctrl-click on full-screen OSC8 link to open browser fallback")
+	}
+	_ = model
+	msg := cmd()
+	if linkMsg, ok := msg.(terminalLinkOpenMsg); !ok || linkMsg.Err != nil {
+		t.Fatalf("cmd returned %#v, want successful terminalLinkOpenMsg", msg)
+	}
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want %q", opened, target)
+	}
+}
+
+func TestCtrlReleasePreviewLinkUsesLocalBrowserFallback(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mouseCtrlRelease(x, y))
+	updated := model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected ctrl-release on OSC8 link to open browser fallback")
+	}
+	if updated.statusMessage != "Opening link in browser..." {
+		t.Fatalf("statusMessage=%q, want opening status", updated.statusMessage)
+	}
+
+	msg := cmd()
+	model, _ = updated.Update(msg)
+	updated = model.(*Model)
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want %q", opened, target)
+	}
+	if updated.statusMessage != "Opened link in browser" {
+		t.Fatalf("statusMessage=%q, want opened status", updated.statusMessage)
+	}
+}
+
+func TestCtrlReleasePreviewLinkSupportsMouseNoneRelease(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	_, cmd := m.Update(mouseCtrlReleaseNone(x, y))
+	if cmd == nil {
+		t.Fatal("expected ctrl-release with MouseNone on OSC8 link to open browser fallback")
+	}
+	_ = cmd()
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want %q", opened, target)
+	}
+}
+
+func TestCtrlClickPreviewLinkDoesNotOpenBrowserWhenFallbackDisabled(t *testing.T) {
+	m, _ := makeMouseLinkPreviewModel(t, false)
+	m.SetTerminalLinkBrowserFallbackEnabled(false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		t.Fatalf("openBrowserFn should not be called for disabled fallback, got %q", rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mouseCtrlPress(x, y))
+	updated := model.(*Model)
+	if cmd != nil {
+		t.Fatal("disabled browser fallback should not return an open command")
+	}
+	if !strings.Contains(updated.statusMessage, "terminal") {
+		t.Fatalf("statusMessage=%q, want terminal-local guidance", updated.statusMessage)
 	}
 }
 
