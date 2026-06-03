@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -56,28 +57,8 @@ func TestRemoteImagePlaceholderHidesRawURLButKeepsOSC8Target(t *testing.T) {
 }
 
 func TestTimelinePreviewORevealsDemoRemoteImage(t *testing.T) {
-	t.Setenv("TERM_PROGRAM", "")
-	m := makeSizedModel(t, 100, 32)
+	m := makeTimelineRemoteImageRevealModel(t, panelPreview, true)
 	defer m.cleanup()
-	m.demoMode = true
-	m.SetPreviewImageMode(PreviewImageModeLinks)
-	m.activeTab = tabTimeline
-	m.focusedPanel = panelPreview
-	email := &models.EmailData{
-		MessageID: "remote-demo",
-		Sender:    "image-lab@example.test",
-		Subject:   "Remote demo",
-		Date:      time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC),
-		Folder:    "INBOX",
-	}
-	m.timeline.emails = []*models.EmailData{email}
-	m.updateTimelineTable()
-	m.timeline.selectedEmail = email
-	m.timeline.bodyMessageID = email.MessageID
-	m.timeline.body = &models.EmailBody{
-		TextHTML: `<p>Before</p><img alt="Demo chart" src="https://assets.herald.demo/color-chart-330px.png"><p>After</p>`,
-	}
-	m.timeline.fullScreen = true
 
 	before := m.renderFullScreenEmail()
 	if !strings.Contains(ansi.Strip(before), "image: Demo chart (press o to reveal)") {
@@ -114,6 +95,117 @@ func TestTimelinePreviewORevealsDemoRemoteImage(t *testing.T) {
 	if strings.Contains(plain, "press o to reveal") {
 		t.Fatalf("placeholder should be replaced after reveal, got:\n%s", plain)
 	}
+}
+
+func TestTimelinePreviewORevealsDemoRemoteImageFromTimelineFocus(t *testing.T) {
+	m := makeTimelineRemoteImageRevealModel(t, panelTimeline, false)
+	defer m.cleanup()
+
+	model, cmd, handled := m.handleTimelineKey(keyRunes("o"))
+	if !handled || cmd == nil {
+		t.Fatalf("o should reveal the loaded split preview from timeline focus, handled=%v cmd=%v", handled, cmd)
+	}
+	updated := applyRemoteRevealCmd(t, model.(*Model), cmd)
+
+	layout := updated.timelinePreviewDocumentLayout(90, 20)
+	var raw strings.Builder
+	for _, row := range layout.Rows {
+		raw.WriteString(row.Content)
+		raw.WriteByte('\n')
+	}
+	plain := ansi.Strip(raw.String())
+	if !strings.Contains(plain, "open image") {
+		t.Fatalf("expected revealed remote image to render as an open-image link, got:\n%s", plain)
+	}
+	if strings.Contains(plain, "press o to reveal") {
+		t.Fatalf("timeline-focus reveal should replace placeholder, got:\n%s", plain)
+	}
+}
+
+func TestTimelinePreviewORevealsDemoRemoteImageFromSearchResultsFocus(t *testing.T) {
+	m := makeTimelineRemoteImageRevealModel(t, panelTimeline, false)
+	defer m.cleanup()
+	email := m.timeline.selectedEmail
+	body := m.timeline.body
+	m.openTimelineSearch()
+	m.timeline.searchResults = []*models.EmailData{email}
+	m.timeline.searchResultsQuery = "remote"
+	m.timeline.searchFocus = timelineSearchFocusResults
+	m.timeline.searchInput.Blur()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = body
+
+	model, cmd, handled := m.handleTimelineKey(keyRunes("o"))
+	if !handled || cmd == nil {
+		t.Fatalf("o should reveal the loaded split preview from search-results focus, handled=%v cmd=%v", handled, cmd)
+	}
+	updated := applyRemoteRevealCmd(t, model.(*Model), cmd)
+
+	if !updated.timelineHasLoadedRemoteImages() {
+		t.Fatal("expected search-results reveal to load the remote image")
+	}
+}
+
+func TestTimelineSearchInputOIsTextNotRemoteReveal(t *testing.T) {
+	m := makeTimelineRemoteImageRevealModel(t, panelTimeline, false)
+	defer m.cleanup()
+	m.openTimelineSearch()
+	m.timeline.searchInput.SetValue("rem")
+	m.timeline.searchFocus = timelineSearchFocusInput
+	m.timeline.searchInput.Focus()
+
+	model, _, handled := m.handleOverlayKey(keyRunes("o"))
+	if !handled {
+		t.Fatal("expected active search input to handle typed o")
+	}
+	updated := model.(*Model)
+	if got := updated.timeline.searchInput.Value(); got != "remo" {
+		t.Fatalf("search input value = %q, want %q", got, "remo")
+	}
+	if updated.timeline.remoteImageLoads != nil {
+		t.Fatalf("typed o in search input should not start remote-image reveal, got %#v", updated.timeline.remoteImageLoads)
+	}
+}
+
+func makeTimelineRemoteImageRevealModel(t *testing.T, focus int, fullScreen bool) *Model {
+	t.Helper()
+	t.Setenv("TERM_PROGRAM", "")
+	m := makeSizedModel(t, 100, 32)
+	m.demoMode = true
+	m.SetPreviewImageMode(PreviewImageModeLinks)
+	m.activeTab = tabTimeline
+	m.focusedPanel = focus
+	email := &models.EmailData{
+		MessageID: "remote-demo",
+		Sender:    "image-lab@example.test",
+		Subject:   "Remote demo",
+		Date:      time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC),
+		Folder:    "INBOX",
+	}
+	m.timeline.emails = []*models.EmailData{email}
+	m.updateTimelineTable()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before</p><img alt="Demo chart" src="https://assets.herald.demo/color-chart-330px.png"><p>After</p>`,
+	}
+	m.timeline.fullScreen = fullScreen
+	return m
+}
+
+func applyRemoteRevealCmd(t *testing.T, m *Model, cmd tea.Cmd) *Model {
+	t.Helper()
+	rawMsg := cmd()
+	msg, ok := rawMsg.(RemoteImageRevealMsg)
+	if !ok {
+		t.Fatalf("reveal command returned %T, want RemoteImageRevealMsg", rawMsg)
+	}
+	model, _, handled := m.handleTimelineMsg(msg)
+	if !handled {
+		t.Fatal("expected reveal message to be handled")
+	}
+	return model.(*Model)
 }
 
 func TestTimelineReplyKeyRemainsReplyAllAfterRemoteRevealKeyAdded(t *testing.T) {

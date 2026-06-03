@@ -1186,14 +1186,14 @@ Check these states during every applicable lane:
 - Degraded path does not overflow or wedge the preview.
 - Failure is surfaced cleanly.
 
-### TC-23A — Full-screen inline image rendering and fallback links
+### TC-23A — Split and full-screen inline image rendering and fallback links
 
 **Lane:** A, B, C
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
 1. Open Timeline and search for `Step 5: View inline images in full screen`.
-2. Open the split preview and capture the image hint plus body links.
+2. Open the split preview and capture the image hint plus bounded inline image output, local open-image links, or placeholders for the selected protocol.
 3. For a message with remote HTML image URLs, confirm the visible placeholder reads `image: <label> (press o to reveal)` and the raw output keeps the original URL only inside the OSC 8 target.
 4. Press `o` and confirm the remote images are fetched only after that keypress.
 5. Press `z` to enter full-screen and capture the top of the document.
@@ -1203,14 +1203,15 @@ Check these states during every applicable lane:
 9. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
 10. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
 11. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
-12. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
+12. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output in the split preview and full-screen preview.
 13. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
 14. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
 15. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
-- Split preview stays compact and does not promise image viewing when no full-screen image path is available.
+- Split preview renders bounded inline images when raster output is enabled, local open-image links in links mode, and compact placeholders when no raster/link path is available.
+- Split preview stays bounded inside the side panel and does not promise unavailable image viewing when no image path is available.
 - Full-screen preview renders text and inline images as one scrollable document below the pinned header.
 - Raster images appear near their authored positions and do not push the header/title out of the visible app viewport or terminal scrollback.
 - iTerm2-compatible terminals render bounded inline images using OSC 1337 when selected or auto-detected.

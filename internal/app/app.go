@@ -3618,14 +3618,17 @@ func (m *Model) renderLoadingView() string {
 // renderMainView renders the main application view
 func (m *Model) renderMainView() string {
 	var content strings.Builder
+	var nativeImageTail string
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
 	// Header
 	content.WriteString(m.renderTitleBar(m.windowWidth) + "\n")
 
+	mainContentTopRow := 2
 	if syncStrip := m.renderTopSyncStrip(); syncStrip != "" {
 		content.WriteString(syncStrip + "\n")
+		mainContentTopRow++
 	}
 
 	// Content area
@@ -3633,7 +3636,9 @@ func (m *Model) renderMainView() string {
 	if m.showLogs {
 		mainContent = m.baseStyle.Width(m.logViewer.viewport.Width() + 2).Render(m.logViewer.View().Content)
 	} else if m.activeTab == tabTimeline {
-		mainContent = m.renderTimelineView()
+		timelineFrame := m.renderTimelineViewFrame(mainContentTopRow)
+		mainContent = timelineFrame.Content
+		nativeImageTail = timelineFrame.NativeImageTail
 	} else if m.activeTab == tabCompose {
 		mainContent = m.renderComposeView()
 	} else if m.activeTab == tabContacts {
@@ -3655,7 +3660,7 @@ func (m *Model) renderMainView() string {
 	content.WriteString(m.renderStatusHintDivider() + "\n")
 	content.WriteString(m.renderKeyHints())
 
-	return content.String()
+	return appendNativeImageOverlayTailToLastLine(content.String(), nativeImageTail)
 }
 
 // Helper functions and other methods continue in next part due to length...

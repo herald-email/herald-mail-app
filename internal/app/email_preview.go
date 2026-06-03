@@ -13,7 +13,6 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
-	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
 
 func fitPanelContentHeight(content string, target int) string {
@@ -299,7 +298,18 @@ func (m *Model) renderDraftThreadContextLines(email *models.EmailData, innerW, m
 	return lines
 }
 
+type emailPreviewRender struct {
+	Panel             string
+	NativeOverlays    []previewNativeOverlay
+	DocumentStartLine int
+	PanelInnerHeight  int
+}
+
 func (m *Model) renderEmailPreview() string {
+	return m.renderEmailPreviewFrame().Panel
+}
+
+func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 	w := m.timeline.previewWidth
 	if w <= 0 {
 		w = 40
@@ -307,6 +317,8 @@ func (m *Model) renderEmailPreview() string {
 	innerW := w - 4 // left border + padding
 
 	var sb strings.Builder
+	var nativeOverlays []previewNativeOverlay
+	documentStartLine := 0
 
 	chrome := m.chromeState(m.buildLayoutPlan(m.windowWidth, m.windowHeight))
 	headerActive := chrome.FocusedPanel == panelPreview
@@ -367,18 +379,17 @@ func (m *Model) renderEmailPreview() string {
 	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
-		// Split view: show compact image placeholders (no iTerm2 rendering).
-		// Full-screen (z) renders actual images.
-		imageLines := 0
+		bodyChromeLines := 0
+		imageMode := m.currentPreviewImageMode()
 		if nImg := len(m.timeline.body.InlineImages); nImg > 0 {
-			label := splitInlineImageHint(nImg, m.fullScreenImagesAvailable())
+			label := splitInlineImageHint(nImg, imageMode)
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
-			imageLines++
+			bodyChromeLines++
 		}
 		if nRemote := m.timelineRemoteImageCount(); nRemote > 0 {
-			label := splitRemoteImageHint(nRemote, m.fullScreenImagesAvailable())
+			label := splitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable())
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
-			imageLines++
+			bodyChromeLines++
 		}
 
 		// Show downloadable attachments
@@ -396,7 +407,7 @@ func (m *Model) renderEmailPreview() string {
 			} else {
 				sb.WriteString(attachStyle.Render(label) + "\n")
 			}
-			imageLines++
+			bodyChromeLines++
 		}
 
 		if calendarBodyHasInvitation(m.timeline.body) {
@@ -405,11 +416,11 @@ func (m *Model) renderEmailPreview() string {
 				label = "Calendar invitation detected - configure a calendar to add"
 			}
 			sb.WriteString(m.theme.Severity.Info.Style().Render(truncate(label, innerW)) + "\n")
-			imageLines++
+			bodyChromeLines++
 		}
 		for _, line := range m.renderCalendarInvitationPrompt(innerW) {
 			sb.WriteString(line + "\n")
-			imageLines++
+			bodyChromeLines++
 		}
 
 		// Save-path prompt
@@ -417,65 +428,40 @@ func (m *Model) renderEmailPreview() string {
 			promptStyle := m.theme.Severity.Info.Style()
 			if m.timeline.attachmentSaveWarning != "" {
 				sb.WriteString(promptStyle.Render(truncate(m.timeline.attachmentSaveWarning, innerW)) + "\n")
-				imageLines++
+				bodyChromeLines++
 			}
 			sb.WriteString(promptStyle.Render("Save to: ") + m.timeline.attachmentSaveInput.View() + "\n")
-			imageLines++
+			bodyChromeLines++
 		}
 		if len(m.timeline.body.Attachments) > 0 {
 			sb.WriteString(previewAttachmentDivider(innerW) + "\n")
 			sb.WriteString("\n")
-			imageLines += 2
+			bodyChromeLines += 2
 		}
 
-		// Body — wrap/render once and cache; re-render only if panel width changed
-		body := stripInvisibleChars(emailrender.EmailBodyMarkdown(m.timeline.body))
-		if body == "" {
-			body = "(No plain text — HTML only)"
-		}
-		if m.timeline.bodyWrappedLines == nil || m.timeline.bodyWrappedWidth != innerW {
-			m.timeline.bodyWrappedLines = renderEmailBodyLines(body, innerW)
-			// Safety: hard-truncate every line to innerW visual chars.
-			for i, line := range m.timeline.bodyWrappedLines {
-				m.timeline.bodyWrappedLines[i] = ansi.Truncate(line, innerW, "")
-			}
-			m.timeline.bodyWrappedWidth = innerW
-		}
-
-		// Clamp scroll offset
-		visibleLines := maxBodyLines - imageLines
+		visibleLines := maxBodyLines - bodyChromeLines
 		if visibleLines < 1 {
 			visibleLines = 1
 		}
-		totalLines := len(m.timeline.bodyWrappedLines)
-		maxOffset := totalLines - visibleLines
-		if maxOffset < 0 {
-			maxOffset = 0
-		}
-		if m.timeline.bodyScrollOffset > maxOffset {
-			m.timeline.bodyScrollOffset = maxOffset
-		}
 
-		end := m.timeline.bodyScrollOffset + visibleLines
-		if end > totalLines {
-			end = totalLines
-		}
-		sb.WriteString(renderBodyLinesWithTheme(m.theme, m.timeline.bodyWrappedLines, m.timeline.bodyScrollOffset, end,
-			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd))
-
-		// Pad short content so the indicator always sits at the bottom of the panel.
-		shownLines := end - m.timeline.bodyScrollOffset
-		for i := shownLines; i < visibleLines; i++ {
-			sb.WriteString("\n")
-		}
+		documentStartLine = strings.Count(sb.String(), "\n")
+		layout := m.timelinePreviewDocumentLayout(innerW, visibleLines)
+		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, visibleLines)
+		viewport := renderPreviewDocumentViewportWithTheme(m.theme, layout, m.timeline.bodyScrollOffset, visibleLines,
+			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
+		sb.WriteString(viewport.Content)
+		nativeOverlays = viewport.NativeOverlays
+		m.timeline.bodyWrappedLines = previewLayoutPlainRows(layout)
+		m.timeline.bodyWrappedWidth = innerW
 
 		// Scroll indicator (pinned to bottom)
-		if totalLines > visibleLines {
+		if layout.TotalRows > visibleLines {
+			maxOffset := layout.TotalRows - visibleLines
 			pct := 0
 			if maxOffset > 0 {
 				pct = m.timeline.bodyScrollOffset * 100 / maxOffset
 			}
-			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%", m.timeline.bodyScrollOffset+1, totalLines, pct)
+			indicator := fmt.Sprintf(" ↑↓ j/k  line %d/%d  %d%%", m.timeline.bodyScrollOffset+1, layout.TotalRows, pct)
 			sb.WriteString("\n" + dimStyle.Render(truncateVisual(indicator, innerW)))
 		}
 	}
@@ -494,7 +480,12 @@ func (m *Model) renderEmailPreview() string {
 		BorderForeground(borderColor).
 		PaddingLeft(1)
 
-	return panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight))
+	return emailPreviewRender{
+		Panel:             panelStyle.Render(fitPanelContentHeight(sb.String(), panelHeight)),
+		NativeOverlays:    nativeOverlays,
+		DocumentStartLine: documentStartLine,
+		PanelInnerHeight:  panelHeight,
+	}
 }
 
 // renderBodyLines joins lines[start:end] into a string, applying the active
@@ -650,17 +641,39 @@ func (m *Model) timelineFullScreenDocumentLayout() previewDocumentLayout {
 	return m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
 }
 
-func (m *Model) timelineIterm2NativeImageRepaintCmd() tea.Cmd {
-	if m.currentPreviewImageMode() != previewImageModeIterm2 || m.timeline.body == nil {
+func (m *Model) timelineNativeImageClearCmd() tea.Cmd {
+	if !m.timelineNativeImageClearNeeded() {
 		return nil
 	}
-	layout := m.timelineFullScreenDocumentLayout()
-	for _, row := range layout.Rows {
-		if isNativePreviewImageContent(previewImageModeIterm2, row.Content) {
-			return tea.ClearScreen
+	return tea.ClearScreen
+}
+
+func (m *Model) timelineNativeImageClearNeeded() bool {
+	switch m.currentPreviewImageMode() {
+	case previewImageModeIterm2, previewImageModeKitty:
+	default:
+		return false
+	}
+	if m.timeline.body == nil {
+		return false
+	}
+	if len(m.timeline.body.InlineImages) > 0 || m.timelineHasLoadedRemoteImages() {
+		return true
+	}
+	return false
+}
+
+func (m *Model) timelineIterm2NativeImageRepaintCmd() tea.Cmd {
+	return m.timelineNativeImageClearCmd()
+}
+
+func (m *Model) timelineHasLoadedRemoteImages() bool {
+	for _, state := range m.timeline.remoteImageLoads {
+		if len(state.Image.Data) > 0 {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) previewDocumentLayout {
@@ -800,6 +813,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	if email.MessageID == m.timeline.selectedEmail.MessageID {
 		return nil // same email already shown
 	}
+	clearCmd := m.timelineNativeImageClearCmd()
 	m.revokeImagePreviews()
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
@@ -813,7 +827,11 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.quickRepliesReady = false
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesAIFetched = false
-	return m.loadEmailBodyForRefCmd(email.MessageRef())
+	loadCmd := m.loadEmailBodyForRefCmd(email.MessageRef())
+	if clearCmd != nil {
+		return tea.Sequence(clearCmd, loadCmd)
+	}
+	return loadCmd
 }
 
 func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {

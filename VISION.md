@@ -31,7 +31,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] MCP server (read/search/classify tools for Claude Code)
 - [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
 - [x] Unified CLI subcommands (`herald mcp`, `herald ssh`) with legacy wrapper binaries preserved
-- [x] Inline image placeholders (text labels with AI vision descriptions when available)
+- [x] Inline image rendering in email previews (bounded side-panel thumbnails plus full-screen raster viewing where supported; placeholders/links otherwise)
 - [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
@@ -123,7 +123,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-width thread list sorted by date
 - [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
 - [x] Sender-cell disclosure markers make collapsed and expanded Timeline threads recognizable before opening them
-- [x] Body preview split (right panel, auto-updates on navigation)
+- [x] Body preview split (right panel, auto-updates on navigation, with bounded inline image rendering when supported)
 - [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders
 - [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)

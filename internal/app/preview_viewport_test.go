@@ -66,7 +66,7 @@ func TestRenderPreviewDocumentViewportClearsKittyPlacements(t *testing.T) {
 		TotalRows: 3,
 	}
 
-	rendered := renderPreviewDocumentViewport(layout, 0, 3)
+	rendered := renderPreviewDocumentViewportWithThemeAndSafety(defaultTheme, layout, 0, 3, false, 0, 0, true)
 	tail := renderNativeImageOverlayTail(rendered.NativeOverlays, 1, 1)
 	if !strings.HasPrefix(tail, kittyimg.DeleteVisiblePlacements()) {
 		t.Fatalf("Kitty overlay tail should clear previous placements before redraw, got %q", tail[:min(len(tail), 80)])
@@ -179,6 +179,67 @@ func TestRenderPreviewDocumentViewportReservesIterm2ConsumedPhysicalRows(t *test
 	}
 	if len(rendered.NativeOverlays) != 1 {
 		t.Fatalf("native overlays = %d, want 1", len(rendered.NativeOverlays))
+	}
+}
+
+func TestRenderPreviewDocumentViewportSuppressesNativeOverlayWhenImageWouldOverflow(t *testing.T) {
+	layout := previewDocumentLayout{
+		ImageMode: previewImageModeIterm2,
+		Rows: []previewRenderedRow{
+			{Content: "line 1"},
+			{Content: "line 2"},
+			{Content: "\x1b]1337;File=inline=1;width=64;height=3:payload\a"},
+			{TerminalConsumed: true},
+			{TerminalConsumed: true},
+			{Content: "after"},
+		},
+		TotalRows: 6,
+	}
+
+	rendered := renderPreviewDocumentViewport(layout, 0, 4)
+
+	if len(rendered.NativeOverlays) != 0 {
+		t.Fatalf("native overlays = %d, want 0 when the image rows would overflow the viewport", len(rendered.NativeOverlays))
+	}
+	if strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("overflowing image escape should not be emitted inline: %q", rendered.Content)
+	}
+}
+
+func TestRenderPreviewDocumentViewportSuppressesNativeOverlayAtViewportBottom(t *testing.T) {
+	layout := previewDocumentLayout{
+		ImageMode: previewImageModeIterm2,
+		Rows: []previewRenderedRow{
+			{Content: "\x1b]1337;File=inline=1;width=64;height=3:payload\a"},
+			{TerminalConsumed: true},
+			{TerminalConsumed: true},
+		},
+		TotalRows: 3,
+	}
+
+	rendered := renderPreviewDocumentViewportWithThemeAndSafety(defaultTheme, layout, 0, 3, false, 0, 0, true)
+
+	if len(rendered.NativeOverlays) != 0 {
+		t.Fatalf("native overlays = %d, want 0 when no safety row remains below the image", len(rendered.NativeOverlays))
+	}
+	if strings.Contains(rendered.Content, "\x1b]1337;File=") {
+		t.Fatalf("bottom-aligned image escape should not be emitted inline: %q", rendered.Content)
+	}
+}
+
+func TestFilterNativeOverlaysWithinBottomRowUsesRenderedImageHeight(t *testing.T) {
+	overlays := []previewNativeOverlay{
+		{Row: 5, Rows: 4, Mode: previewImageModeIterm2, Content: "\x1b]1337;File=inline=1;width=64;height=4:fits\a"},
+		{Row: 8, Rows: 6, Mode: previewImageModeIterm2, Content: "\x1b]1337;File=inline=1;width=64;height=6:overlaps\a"},
+	}
+
+	filtered := filterNativeOverlaysWithinBottomRow(overlays, 10, 18)
+
+	if len(filtered) != 1 {
+		t.Fatalf("filtered overlays = %d, want only the fitting image", len(filtered))
+	}
+	if filtered[0].Content != overlays[0].Content {
+		t.Fatalf("kept overlay = %q, want first fitting overlay", filtered[0].Content)
 	}
 }
 

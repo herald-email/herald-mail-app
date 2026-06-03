@@ -6,12 +6,12 @@ Full-screen email preview should behave more like a GUI email reader: text and i
 
 ## Scope
 
-This design covers the full-screen preview path for Timeline first, then the shared Cleanup full-screen preview path where the same body renderer is already reused. Split preview should stay compact and continue to advertise image availability without rendering large raster images.
+This design originally covered the full-screen preview path for Timeline first, then the shared Cleanup full-screen preview path where the same body renderer was reused. As of the split-preview image rendering slice, Timeline split preview also uses the same ordered document layer with tighter row budgets so bounded thumbnails, local links, or placeholders can appear in the side panel without turning it into a full HTML renderer.
 
 - [x] Build an ordered preview document from `models.EmailBody` instead of rendering a pre-body image block plus flattened text.
 - [x] Preserve `cid:` inline image placement from `TextHTML` when HTML is available.
 - [x] Keep local inline raster images scrollable as part of the email document, below the pinned preview header.
-- [x] Keep split preview compact, with image hints rather than full raster rendering.
+- [x] Keep split preview compact while allowing bounded raster thumbnails, local links, or placeholders in the ordered body flow.
 - [x] Keep remote HTML image URLs as readable OSC 8 placeholders without fetching remote bytes automatically.
 - [x] Include orphan inline MIME images in a deterministic scrollable fallback section when no authored placement is available.
 - [x] Add a protocol selection foundation for iTerm2 now and Kitty/Sixel later.
@@ -93,5 +93,5 @@ This design intentionally avoids turning Herald into a full HTML email renderer.
 - [x] Do not fetch remote image bytes automatically.
 - [x] Implement Kitty after the iTerm2 abstraction is stable; Sixel remains out of scope.
 - [x] Do not change send/compose inline image MIME behavior.
-- [x] Do not redesign split preview layout.
+- [x] Do not redesign split preview chrome or panel layout beyond rendering bounded image blocks inside the existing body viewport.
 - [x] Do not attempt CSS table/layout fidelity beyond preserving sensible text flow and image placement.

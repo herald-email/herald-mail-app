@@ -1194,9 +1194,18 @@ func (m *Model) updateTimelineTable() {
 	}
 }
 
+type timelineViewRender struct {
+	Content         string
+	NativeImageTail string
+}
+
 // renderTimelineView renders the timeline tab content.
 // When an email is selected, it splits into a list on the left and preview on the right.
 func (m *Model) renderTimelineView() string {
+	return m.renderTimelineViewFrame(0).Content
+}
+
+func (m *Model) renderTimelineViewFrame(mainTopRow int) timelineViewRender {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	chrome := m.chromeState(plan)
 
@@ -1224,13 +1233,15 @@ func (m *Model) renderTimelineView() string {
 	}
 
 	var mainContent string
+	var previewFrame emailPreviewRender
 	if m.timeline.selectedEmail != nil {
-		previewPanel := m.renderEmailPreview()
-		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, tableView, panelGap, previewPanel)
+		previewFrame = m.renderEmailPreviewFrame()
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, tableView, panelGap, previewFrame.Panel)
 	} else {
 		mainContent = tableView
 	}
 
+	contentLeftCol := 1
 	if plan.SidebarVisible {
 		sidebarStyle := m.baseStyle.Width(sidebarContentWidth + 2)
 		if chrome.FocusedPanel == panelSidebar {
@@ -1239,9 +1250,19 @@ func (m *Model) renderTimelineView() string {
 			sidebarStyle = sidebarStyle.BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor())
 		}
 		sidebarView := sidebarStyle.Render(m.renderSidebar())
-		return lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
+		contentLeftCol += lipgloss.Width(sidebarView) + panelGapWidth
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, panelGap, mainContent)
 	}
-	return mainContent
+
+	nativeTail := ""
+	if mainTopRow > 0 && len(previewFrame.NativeOverlays) > 0 {
+		originRow := mainTopRow + 1 + previewFrame.DocumentStartLine
+		originCol := contentLeftCol + lipgloss.Width(tableView) + panelGapWidth + 2
+		maxBottomRow := mainTopRow + previewFrame.PanelInnerHeight
+		overlays := filterNativeOverlaysWithinBottomRow(previewFrame.NativeOverlays, originRow, maxBottomRow)
+		nativeTail = renderNativeImageOverlayTail(overlays, originRow, originCol)
+	}
+	return timelineViewRender{Content: mainContent, NativeImageTail: nativeTail}
 }
 
 func (m *Model) timelineGroupingNoticeText(maxWidth int) string {
@@ -1628,11 +1649,12 @@ func (m *Model) closeTimelinePreviewOrFocusFolders() tea.Cmd {
 	if m.focusedPanel == panelTimeline && m.foldCurrentTimelineThreadIfOpen() {
 		return nil
 	}
+	clearCmd := m.timelineNativeImageClearCmd()
 	if m.timeline.selectedEmail != nil {
 		m.clearTimelinePreview()
 	}
 	m.focusTimelineFolders()
-	return nil
+	return clearCmd
 }
 
 func (m *Model) setTimelineEmailReadState(email *models.EmailData, read bool) bool {
@@ -2237,6 +2259,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	if email == nil {
 		return nil
 	}
+	clearCmd := m.timelineNativeImageClearCmd()
 	m.revokeImagePreviews()
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
@@ -2255,7 +2278,11 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.quickReplyIdx = 0
 	m.timeline.quickRepliesAIFetched = false
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
-	return m.loadEmailBodyForRefCmd(email.MessageRef())
+	loadCmd := m.loadEmailBodyForRefCmd(email.MessageRef())
+	if clearCmd != nil {
+		return tea.Sequence(clearCmd, loadCmd)
+	}
+	return loadCmd
 }
 
 func (m *Model) openTimelineQuickReply() tea.Cmd {
@@ -3027,7 +3054,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, nil, false
 		}
 		if m.canInteractWithVisibleData() {
+			cmd := m.timelineNativeImageClearCmd()
 			m.cycleTimelineGrouping()
+			return m, cmd, true
 		}
 		return m, nil, true
 	case "O":
@@ -3127,7 +3156,9 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 	case "/":
 		if !m.loading && !m.timeline.searchMode {
+			cmd := m.timelineNativeImageClearCmd()
 			m.openTimelineSearch()
+			return m, cmd, true
 		}
 		return m, nil, true
 	case "enter":
@@ -3178,7 +3209,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, m.timelineIterm2NativeImageRepaintCmd(), true
 	case remoteImageRevealCommandKey:
-		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) && m.timeline.body != nil {
+		if m.timelineRemoteRevealAvailable() {
 			return m, m.revealTimelineRemoteImages(), true
 		}
 		return m, nil, true
@@ -3283,7 +3314,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				} else if m.timeline.bodyScrollOffset > 0 {
 					m.timeline.bodyScrollOffset--
 				}
-				return m, nil, true
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelSidebar {
 				model, cmd := m.handleNavigation(-1)
@@ -3326,7 +3357,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				} else {
 					m.timeline.bodyScrollOffset++
 				}
-				return m, nil, true
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelSidebar {
 				model, cmd := m.handleNavigation(1)
@@ -3422,7 +3453,7 @@ func (m *Model) timelineHalfPageScroll(down bool) tea.Cmd {
 		if m.timeline.bodyScrollOffset < 0 {
 			m.timeline.bodyScrollOffset = 0
 		}
-		if m.timeline.fullScreen {
+		if m.timeline.fullScreen || m.focusedPanel == panelPreview {
 			return m.timelineIterm2NativeImageRepaintCmd()
 		}
 		return nil

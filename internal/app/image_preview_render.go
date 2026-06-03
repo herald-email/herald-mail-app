@@ -24,24 +24,46 @@ func (m *Model) fullScreenImagesAvailable() bool {
 	}
 }
 
-func splitInlineImageHint(count int, available bool) string {
+func splitInlineImageHint(count int, mode previewImageMode) string {
 	if count == 0 {
 		return ""
 	}
-	if available {
-		return fmt.Sprintf("[%d image(s) - press z for full-screen to view]", count)
+	switch mode {
+	case previewImageModeIterm2, previewImageModeKitty:
+		return fmt.Sprintf("[%d image(s) shown below - press z for full-screen]", count)
+	case previewImageModeLinks:
+		return fmt.Sprintf("[%d image(s) as open-image links below - press z for full-screen]", count)
+	case previewImageModeOff:
+		return fmt.Sprintf("[%d image(s) - image rendering off]", count)
+	default:
+		return fmt.Sprintf("[%d image(s) shown as placeholders here]", count)
 	}
-	return fmt.Sprintf("[%d image(s) - full-screen image viewing unavailable here]", count)
 }
 
-func splitRemoteImageHint(count int, available bool) string {
+func splitRemoteImageHint(count int, mode previewImageMode, canReveal bool) string {
 	if count == 0 {
 		return ""
 	}
-	if available {
-		return fmt.Sprintf("[%d linked image(s) - press o to reveal, z for full-screen]", count)
+	if !canReveal {
+		switch mode {
+		case previewImageModeIterm2, previewImageModeKitty:
+			return fmt.Sprintf("[%d linked image(s) shown below - press z for full-screen]", count)
+		case previewImageModeLinks:
+			return fmt.Sprintf("[%d linked image(s) as open-image links below - press z for full-screen]", count)
+		case previewImageModeOff:
+			return fmt.Sprintf("[%d linked image(s) revealed - image rendering off]", count)
+		default:
+			return fmt.Sprintf("[%d linked image(s) revealed]", count)
+		}
 	}
-	return fmt.Sprintf("[%d linked image(s) - press o to reveal]", count)
+	switch mode {
+	case previewImageModeIterm2, previewImageModeKitty, previewImageModeLinks:
+		return fmt.Sprintf("[%d linked image(s) - press o to reveal, z for full-screen]", count)
+	case previewImageModeOff:
+		return fmt.Sprintf("[%d linked image(s) - press o to reveal, rendering off]", count)
+	default:
+		return fmt.Sprintf("[%d linked image(s) - press o to reveal]", count)
+	}
 }
 
 func (m *Model) renderInlineImagesForPreview(scopeKey string, images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {

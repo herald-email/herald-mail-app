@@ -193,6 +193,7 @@ func TestTimelineFullScreen_ItermAppendsNativeOverlayTail(t *testing.T) {
 		},
 	}
 	m.timeline.fullScreen = true
+	m.timeline.bodyScrollOffset = 2
 
 	rendered := m.renderFullScreenEmail()
 
@@ -235,6 +236,29 @@ func TestTimelineFullScreen_ItermScrollRequestsRasterRepaint(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("scrolling an iTerm2 raster preview should request a repaint command")
+	}
+}
+
+func TestTimelineSplitPreview_ItermEscRequestsNativeImageClear(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 100, 30)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelTimeline
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+
+	_, cmd := m.handleEscKey()
+
+	if cmd == nil {
+		t.Fatal("closing an iTerm2 raster split preview should request a clear-screen repaint")
 	}
 }
 
@@ -456,6 +480,41 @@ func TestTimelinePreviewDocumentLayout_CacheIncludesAvailableRowsForItermImages(
 	}
 }
 
+func TestTimelineSplitPreview_ItermDoesNotShrinkImagesToAvoidOverflow(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 120, 50)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before</p><img alt="Landscape" src="cid:landscape"><p>After</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+
+	split := m.timelinePreviewDocumentLayout(98, 30)
+	splitViewport := renderPreviewDocumentViewport(split, 0, split.TotalRows)
+	splitRendered := renderNativeImageOverlayTail(splitViewport.NativeOverlays, 1, 1)
+	splitHeight := itermImageDimension(t, splitRendered, "height")
+	if splitHeight <= maxPreviewImageRows {
+		t.Fatalf("split preview image height = %d, want larger than thumbnail cap %d so overlap is handled by boundary filtering, not resizing", splitHeight, maxPreviewImageRows)
+	}
+
+	m.timeline.fullScreen = true
+	m.clearTimelinePreviewDocumentCache()
+	full := m.timelinePreviewDocumentLayout(98, 30)
+	fullViewport := renderPreviewDocumentViewport(full, 0, full.TotalRows)
+	fullRendered := renderNativeImageOverlayTail(fullViewport.NativeOverlays, 1, 1)
+	fullHeight := itermImageDimension(t, fullRendered, "height")
+	if fullHeight != splitHeight {
+		t.Fatalf("full-screen image height = %d, split image height = %d; want split preview sizing not to be reduced", fullHeight, splitHeight)
+	}
+}
+
 func TestTimelineFullScreenVisualSelectionUsesDocumentRows(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "")
 	m := makeSizedModel(t, 100, 30)
@@ -546,6 +605,66 @@ func TestItermPreviewImagesDoNotExceedAvailableRows(t *testing.T) {
 	}
 	if count := strings.Count(rendered, "\x1b]1337;File="); count != 2 {
 		t.Fatalf("rendered %d image escapes, want 2 within row budget; raw:\n%q", count, rendered)
+	}
+}
+
+func TestTimelineSplitPreview_DocumentImageUsesLocalOpenLink(t *testing.T) {
+	clearTerminalImageEnv(t)
+	m := makeSizedModel(t, 120, 40)
+	defer m.cleanup()
+	m.SetLocalImageLinksEnabled(true)
+	m.SetPreviewImageMode(PreviewImageModeLinks)
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before</p><img alt="Logo" src="cid:logo"><p>After</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: []byte("png-bytes")},
+		},
+	}
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.previewWidth = 60
+
+	rendered := m.renderEmailPreview()
+	plain := stripANSI(rendered)
+	if !strings.Contains(plain, "Before") || !strings.Contains(plain, "After") {
+		t.Fatalf("split preview should render the ordered preview document, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "open image 1") {
+		t.Fatalf("split preview should expose local open-image link, got:\n%s", plain)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;http://127.0.0.1:") {
+		t.Fatalf("split preview should keep OSC8 localhost target, got raw:\n%q", rendered)
+	}
+}
+
+func TestTimelineSplitPreview_RasterModeAppendsNativeImageOverlayTail(t *testing.T) {
+	clearTerminalImageEnv(t)
+	m := makeSizedModel(t, 120, 40)
+	defer m.cleanup()
+	m.SetLocalImageLinksEnabled(false)
+	m.SetPreviewImageMode(PreviewImageModeIterm2)
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before</p><img alt="Logo" src="cid:logo"><p>After</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "logo", MIMEType: "image/png", Data: tinyPNG(t, 120, 80)},
+		},
+	}
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.previewWidth = 60
+
+	rendered := m.renderMainView()
+	if !strings.Contains(rendered, "\x1b]1337;File=") {
+		t.Fatalf("split preview raster mode should append native iTerm2 image overlay tail, got raw:\n%q", rendered)
+	}
+	if strings.Contains(stripANSI(rendered), "press z for full-screen to view") {
+		t.Fatalf("split preview should not say images require full-screen once side-panel rendering is enabled:\n%s", stripANSI(rendered))
 	}
 }
 

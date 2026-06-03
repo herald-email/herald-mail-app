@@ -105,7 +105,10 @@ func (m *Model) timelineRemoteImageCount() int {
 }
 
 func (m *Model) timelineRemoteRevealAvailable() bool {
-	if m.timeline.body == nil || m.timeline.selectedEmail == nil {
+	if m.activeTab != tabTimeline || m.loading || m.timeline.body == nil || m.timeline.selectedEmail == nil {
+		return false
+	}
+	if m.timeline.bodyMessageID != "" && m.timeline.bodyMessageID != m.timeline.selectedEmail.MessageID {
 		return false
 	}
 	for _, remote := range m.timelineRemoteImages() {

@@ -378,12 +378,13 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail != nil {
+		cmd := m.timelineNativeImageClearCmd()
 		if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {
 			m.clearTimelinePreview()
-			return m, nil
+			return m, cmd
 		}
 		m.clearTimelinePreview()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabTimeline && m.timeline.searchMode {
 		if m.timeline.searchFocus == timelineSearchFocusResults {
@@ -392,8 +393,9 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 			m.setFocusedPanel(panelTimeline)
 			return m, nil
 		}
+		cmd := m.timelineNativeImageClearCmd()
 		m.clearTimelineSearch()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabCompose {
 		if m.composeAISubjectHint != "" {
