@@ -1,25 +1,31 @@
 package contacts
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
-// parseAppleScriptOutput parses the "Name|email\n" output from the AppleScript.
-func parseAppleScriptOutput(output string) []models.ContactAddr {
+type importedContactRow struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// parseContactsJSON parses contacts returned by the native macOS API bridge.
+func parseContactsJSON(output string) []models.ContactAddr {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return nil
+	}
+	var rows []importedContactRow
+	if err := json.Unmarshal([]byte(output), &rows); err != nil {
+		return nil
+	}
 	var result []models.ContactAddr
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "|", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		name := strings.TrimSpace(parts[0])
-		email := strings.TrimSpace(parts[1])
+	for _, row := range rows {
+		name := strings.TrimSpace(row.Name)
+		email := strings.TrimSpace(row.Email)
 		if email == "" {
 			continue
 		}
