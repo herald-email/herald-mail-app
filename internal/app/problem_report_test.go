@@ -55,6 +55,80 @@ func TestTimelineEmailBodyErrorShowsRootCauseDetails(t *testing.T) {
 	}
 }
 
+type stalePreviewCacheBackend struct {
+	stubBackend
+	deletedRefs []models.MessageRef
+}
+
+func (b *stalePreviewCacheBackend) DeleteCachedEmail(ref models.MessageRef) error {
+	b.deletedRefs = append(b.deletedRefs, ref.WithDefaults())
+	return nil
+}
+
+func TestTimelineStaleGmailNotFoundUpdatesCacheAndMovesNext(t *testing.T) {
+	backend := &stalePreviewCacheBackend{}
+	m := New(backend, nil, "", nil, false)
+	updatedModel, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updatedModel.(*Model)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.currentFolder = "INBOX"
+
+	stale := &models.EmailData{
+		SourceID:  "gmail-api",
+		AccountID: "work",
+		LocalID:   "mail:gmail-api:work:INBOX:gmail:missing",
+		MessageID: "msg-missing",
+		Folder:    "INBOX",
+		UID:       55,
+	}
+	next := &models.EmailData{
+		SourceID:  "gmail-api",
+		AccountID: "work",
+		LocalID:   "mail:gmail-api:work:INBOX:gmail:next",
+		MessageID: "msg-next",
+		Folder:    "INBOX",
+		UID:       56,
+	}
+	m.timeline.emails = []*models.EmailData{stale, next}
+	m.timeline.selectedEmail = stale
+	m.timeline.bodyLoading = true
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+
+	model, cmd, handled := m.handleTimelineMsg(EmailBodyMsg{
+		MessageRef: stale.MessageRef(),
+		MessageID:  stale.MessageID,
+		Folder:     stale.Folder,
+		UID:        stale.UID,
+		Err:        errors.New(`gmail api GET /gmail/v1/users/me/messages/missing: status 404: { "error": { "code": 404, "message": "Requested entity was not found.", "status": "NOT_FOUND" } }`),
+	})
+	if !handled {
+		t.Fatal("expected EmailBodyMsg to be handled")
+	}
+	updated := model.(*Model)
+	requireMessageAbsent(t, updated.timeline.emails, stale.MessageID)
+	requireMessagePresent(t, updated.timeline.emails, next.MessageID)
+	if len(backend.deletedRefs) != 1 {
+		t.Fatalf("DeleteCachedEmail calls = %d, want 1", len(backend.deletedRefs))
+	}
+	if got := backend.deletedRefs[0].LocalID; got != stale.LocalID {
+		t.Fatalf("deleted local_id = %q, want %q", got, stale.LocalID)
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != next.MessageID {
+		t.Fatalf("selectedEmail = %#v, want next message", updated.timeline.selectedEmail)
+	}
+	if !updated.timeline.bodyLoading {
+		t.Fatal("expected next message body load to start")
+	}
+	if updated.timeline.body != nil || updated.timeline.bodyMessageID != "" {
+		t.Fatalf("expected stale failure body not to render, body=%#v bodyMessageID=%q", updated.timeline.body, updated.timeline.bodyMessageID)
+	}
+	if cmd == nil {
+		t.Fatal("expected command to load next message body")
+	}
+}
+
 func TestProblemReportCommandWritesLastEventsAndPreviewFailure(t *testing.T) {
 	reportDir := t.TempDir()
 	t.Setenv("HERALD_REPORT_DIR", reportDir)

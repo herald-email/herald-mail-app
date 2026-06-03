@@ -918,6 +918,21 @@ func (m *MultiBackend) DeleteEmailByRef(ref models.MessageRef) error {
 	return slot.backend.DeleteEmail(ref.MessageID, ref.Folder)
 }
 
+func (m *MultiBackend) DeleteCachedEmail(ref models.MessageRef) error {
+	slot, ref, err := m.slotForRef(ref)
+	if err != nil {
+		return err
+	}
+	ref = resolveMessageRefForSlot(slot, ref)
+	deleter, ok := slot.backend.(interface {
+		DeleteCachedEmail(models.MessageRef) error
+	})
+	if !ok {
+		return fmt.Errorf("account %s backend does not expose cached email deletion", slot.info.SourceID)
+	}
+	return deleter.DeleteCachedEmail(ref)
+}
+
 func (m *MultiBackend) MarkReadByRef(ref models.MessageRef) error {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

@@ -463,6 +463,19 @@ func (d *DemoBackend) DeleteEmail(messageID, folder string) error {
 	return nil
 }
 
+func (d *DemoBackend) DeleteCachedEmail(ref models.MessageRef) error {
+	ref = ref.WithDefaults()
+	if strings.TrimSpace(ref.MessageID) == "" {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.deletedIDs[ref.MessageID] = true
+	delete(d.bodyCache, ref.MessageID)
+	return nil
+}
+
 // ArchiveEmail marks a single email as archived (removed from active list).
 func (d *DemoBackend) ArchiveEmail(messageID, folder string) error {
 	return d.DeleteEmail(messageID, folder)
