@@ -84,7 +84,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | AI classification via Ollama (`gemma3:4b` default, custom models supported)               | ✅     |
 | Semantic search with `nomic-embed-text-v2-moe` default + chunked body embeddings          | ✅     |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
-| Contact book with LLM enrichment and Apple Contacts import                                | ✅     |
+| Contact book with LLM enrichment and native Apple Contacts import                         | ✅     |
 | Compose + reply + forward with Markdown preview                                           | ✅     |
 | MCP server — AI agents read and manage email over stdio                                   | ✅     |
 | SSH server — run the full TUI over SSH                                                    | ✅     |

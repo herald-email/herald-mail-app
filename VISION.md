@@ -705,7 +705,7 @@ Contacts are derived from To/From/CC headers seen in sent and received mail — 
 - [x] LLM enrichment via Ollama: extracts company name and discussed topics from email subjects (`e` key)
 - [x] Semantic contact embeddings for natural-language search
 - [x] Tab 2 — Contacts TUI: two-panel list+detail, `/` keyword search, `/` then `? query` semantic search
-- [x] Apple Contacts import via AppleScript at startup (darwin only, read-only name merge)
+- [x] Apple Contacts import via native Contacts.framework API at startup (darwin+cgo only, read-only name merge)
 - [x] `list_contacts` / `search_contacts` / `semantic_search_contacts` / `get_contact` MCP tools
 - [x] Common AI/model-related contact enrichment failures are deduplicated per batch and surfaced in the Contacts status area
 - [ ] All contact enrichment failure modes are deduplicated and surfaced without log spam

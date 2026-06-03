@@ -3,7 +3,7 @@ title: Notifications and Deep Links
 description: Use desktop notifications and Herald deep links to return to mailbox context.
 ---
 
-Herald notifications are local-first mailbox nudges. On macOS they use the system notification center and can activate a running Herald TUI through `herald://mail/...` deep links; on other platforms Herald either uses delivery-only support or no-ops cleanly.
+Herald notifications are local-first mailbox nudges. On macOS they use the system notification center when launched from a macOS app bundle and can activate a running Herald TUI through `herald://mail/...` deep links; raw CLI, tmux, and SSH sessions no-op cleanly instead of requesting Notification Center access. On other platforms Herald either uses delivery-only support or no-ops cleanly.
 
 ## Event Defaults
 
@@ -29,7 +29,7 @@ herald --demo --open 'herald://mail/search?folder=INBOX&q=invoice'
 
 ## macOS Permissions
 
-The first native macOS notification may ask for Notification Center permission for the terminal or Herald binary that launched the TUI. If notifications do not appear, check System Settings > Notifications for that launcher.
+The first native macOS notification from an app-bundle launch may ask for Notification Center permission. Raw CLI, tmux, and SSH launches do not request macOS notification permission.
 
 ## Other Platforms
 

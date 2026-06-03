@@ -7,7 +7,7 @@ Contacts turns the senders and imported address book data Herald knows about int
 
 ## Overview
 
-Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
+Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup through the native Contacts.framework API. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
 
 ## Screen Anatomy
 
@@ -92,7 +92,7 @@ Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS
 
 ## Data And Privacy
 
-Contacts reads and stores sender addresses, display names, company/topic metadata, message counts, recent email references, and optional embeddings. On macOS, Apple Contacts import can add address book contacts through the backend. Enrichment sends selected contact and email-derived context to the configured AI backend.
+Contacts reads and stores sender addresses, display names, company/topic metadata, message counts, recent email references, and optional embeddings. On macOS, read-only Apple Contacts import can add address book contacts through the backend using Contacts.framework. Enrichment sends selected contact and email-derived context to the configured AI backend.
 
 ## Troubleshooting
 

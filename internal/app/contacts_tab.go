@@ -114,9 +114,14 @@ func (m *Model) runSingleContactEnrichment(contact models.ContactData) tea.Cmd {
 	}
 }
 
+var importAppleContactsFromSystem = contacts.ImportFromAppleContacts
+
 func (m *Model) importAppleContacts() tea.Cmd {
 	return func() tea.Msg {
-		addrs, err := contacts.ImportFromAppleContacts()
+		if m.demoMode {
+			return AppleContactsImportedMsg{Count: 0}
+		}
+		addrs, err := importAppleContactsFromSystem()
 		if err != nil || len(addrs) == 0 {
 			return AppleContactsImportedMsg{Count: 0}
 		}

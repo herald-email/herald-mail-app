@@ -51,32 +51,64 @@ static NSString *heraldString(const char *value, NSString *fallback) {
 	return [NSString stringWithUTF8String:value];
 }
 
-void heraldInitNotifications(void) {
+int heraldCanUseUserNotifications(void) {
 	@autoreleasepool {
-		UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
-		if (heraldDelegate == nil) {
-			heraldDelegate = [HeraldNotificationDelegate new];
+		NSBundle *bundle = [NSBundle mainBundle];
+		if (bundle == nil) {
+			return 0;
 		}
-		center.delegate = heraldDelegate;
-		[center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
-			completionHandler:^(BOOL granted, NSError * _Nullable error) {}];
+		NSURL *bundleURL = [bundle bundleURL];
+		if (bundleURL == nil) {
+			return 0;
+		}
+		NSString *extension = [[bundleURL pathExtension] lowercaseString];
+		if (extension == nil || ![extension isEqualToString:@"app"]) {
+			return 0;
+		}
+		NSString *identifier = [bundle bundleIdentifier];
+		if (identifier == nil || [identifier length] == 0) {
+			return 0;
+		}
+		return 1;
 	}
 }
 
-void heraldPostNotification(const char *identifier, const char *title, const char *body, const char *deepLink, int sound) {
+int heraldInitNotifications(void) {
 	@autoreleasepool {
-		UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-		content.title = heraldString(title, @"Herald");
-		content.body = heraldString(body, @"");
-		if (sound) {
-			content.sound = [UNNotificationSound defaultSound];
+		@try {
+			UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+			if (heraldDelegate == nil) {
+				heraldDelegate = [HeraldNotificationDelegate new];
+			}
+			center.delegate = heraldDelegate;
+			[center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
+				completionHandler:^(BOOL granted, NSError * _Nullable error) {}];
+			return 1;
+		} @catch (NSException *exception) {
+			return 0;
 		}
-		if (deepLink != NULL && strlen(deepLink) > 0) {
-			content.userInfo = @{@"deep_link": heraldString(deepLink, @"")};
+	}
+}
+
+int heraldPostNotification(const char *identifier, const char *title, const char *body, const char *deepLink, int sound) {
+	@autoreleasepool {
+		@try {
+			UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+			content.title = heraldString(title, @"Herald");
+			content.body = heraldString(body, @"");
+			if (sound) {
+				content.sound = [UNNotificationSound defaultSound];
+			}
+			if (deepLink != NULL && strlen(deepLink) > 0) {
+				content.userInfo = @{@"deep_link": heraldString(deepLink, @"")};
+			}
+			NSString *requestID = heraldString(identifier, [[NSUUID UUID] UUIDString]);
+			UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:requestID content:content trigger:nil];
+			[[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {}];
+			return 1;
+		} @catch (NSException *exception) {
+			return 0;
 		}
-		NSString *requestID = heraldString(identifier, [[NSUUID UUID] UUIDString]);
-		UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:requestID content:content trigger:nil];
-		[[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {}];
 	}
 }
 */
@@ -93,18 +125,40 @@ type platformNotifier struct {
 	responses chan string
 }
 
-var darwinInitOnce sync.Once
+var (
+	darwinMu          sync.Mutex
+	darwinInitialized bool
+	darwinAvailable   bool
+
+	canUseDarwinUserNotifications = func() bool {
+		return C.heraldCanUseUserNotifications() != 0
+	}
+	initDarwinNotifications = func() bool {
+		return C.heraldInitNotifications() != 0
+	}
+)
 
 func newPlatformNotifier(opts Options) Notifier {
+	if !ensureDarwinNotifications() {
+		return noopNotifier{platform: "darwin"}
+	}
 	n := &platformNotifier{
 		opts:      opts,
 		responses: make(chan string, 16),
 	}
 	setDarwinResponseChannel(n.responses)
-	darwinInitOnce.Do(func() {
-		C.heraldInitNotifications()
-	})
 	return n
+}
+
+func ensureDarwinNotifications() bool {
+	darwinMu.Lock()
+	defer darwinMu.Unlock()
+
+	if !darwinInitialized {
+		darwinAvailable = canUseDarwinUserNotifications() && initDarwinNotifications()
+		darwinInitialized = true
+	}
+	return darwinAvailable
 }
 
 func (n *platformNotifier) Notify(ctx context.Context, req Request) error {
