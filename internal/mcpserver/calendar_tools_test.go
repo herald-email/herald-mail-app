@@ -151,10 +151,13 @@ func TestMCPCalendarMutationToolsForwardToDaemon(t *testing.T) {
 			if body["calendar_id"] != "primary" || body["title"] != "Created by MCP" || body["start"] != "2026-06-03T16:00:00Z" {
 				t.Fatalf("create body = %#v", body)
 			}
+			if body["start_timezone"] != "America/Los_Angeles" || body["end_timezone"] != "Asia/Tokyo" {
+				t.Fatalf("create endpoint zones = %#v", body)
+			}
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case r.Method == http.MethodPatch && r.URL.Path == "/v1/calendar/events/planning-123":
-			if r.URL.Query().Get("local_id") != localID || body["title"] != "Updated by MCP" {
+			if r.URL.Query().Get("local_id") != localID || body["title"] != "Updated by MCP" || body["end_timezone"] != "Europe/London" {
 				t.Fatalf("update path/body = %s %#v", r.URL.String(), body)
 			}
 			w.WriteHeader(http.StatusOK)
@@ -171,21 +174,24 @@ func TestMCPCalendarMutationToolsForwardToDaemon(t *testing.T) {
 	s := newMCPServer(newScopedMutationTestMCP(t), nil)
 
 	created := callVirtualLabTool(t, s, 10, "create_calendar_event", map[string]any{
-		"source_id":   "work-calendar",
-		"account_id":  "work",
-		"calendar_id": "primary",
-		"event_id":    "planning-123",
-		"title":       "Created by MCP",
-		"start":       "2026-06-03T16:00:00Z",
-		"end":         "2026-06-03T16:30:00Z",
-		"timezone":    "UTC",
+		"source_id":      "work-calendar",
+		"account_id":     "work",
+		"calendar_id":    "primary",
+		"event_id":       "planning-123",
+		"title":          "Created by MCP",
+		"start":          "2026-06-03T16:00:00Z",
+		"end":            "2026-06-03T16:30:00Z",
+		"timezone":       "UTC",
+		"start_timezone": "America/Los_Angeles",
+		"end_timezone":   "Asia/Tokyo",
 	})
 	if !strings.Contains(created, "Calendar event created") {
 		t.Fatalf("create response = %s", created)
 	}
 	updated := callVirtualLabTool(t, s, 11, "update_calendar_event", map[string]any{
-		"local_id": localID,
-		"title":    "Updated by MCP",
+		"local_id":     localID,
+		"title":        "Updated by MCP",
+		"end_timezone": "Europe/London",
 	})
 	if !strings.Contains(updated, "Calendar event updated") {
 		t.Fatalf("update response = %s", updated)

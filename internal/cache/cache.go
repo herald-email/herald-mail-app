@@ -362,6 +362,8 @@ func (c *Cache) initDB() error {
 	}
 	for _, stmt := range []string{
 		`ALTER TABLE calendar_events ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN start_timezone TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE calendar_events ADD COLUMN end_timezone TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE calendar_events ADD COLUMN organizer TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE calendar_events ADD COLUMN organizer_email TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE calendar_events ADD COLUMN attendees_json TEXT NOT NULL DEFAULT '[]'`,
