@@ -2,6 +2,7 @@ package rules
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -9,8 +10,10 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/deeplink"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/notifications"
 )
 
 // Store is implemented by *cache.Cache
@@ -40,12 +43,21 @@ type Engine struct {
 	store    Store
 	executor Executor
 	ai       ai.AIClient
+	notifier notifications.Notifier
 	DryRun   bool // when true, log actions without executing destructive ones
 }
 
 // New creates a new Engine.
 func New(store Store, executor Executor, classifier ai.AIClient) *Engine {
-	return &Engine{store: store, executor: executor, ai: classifier}
+	return NewWithNotifier(store, executor, classifier, nil)
+}
+
+func NewWithNotifier(store Store, executor Executor, classifier ai.AIClient, notifier notifications.Notifier) *Engine {
+	return &Engine{store: store, executor: executor, ai: classifier, notifier: notifier}
+}
+
+func (e *Engine) SetNotifier(notifier notifications.Notifier) {
+	e.notifier = notifier
 }
 
 // EvaluateEmail checks all enabled rules against the email and fires matching ones.
@@ -143,6 +155,14 @@ func (e *Engine) executeAction(action models.RuleAction, email *models.EmailData
 	case models.ActionNotify:
 		title := renderTemplate(action.NotifyTitle, ctx)
 		body := renderTemplate(action.NotifyBody, ctx)
+		if e.notifier != nil {
+			return e.notifier.Notify(context.Background(), notifications.Request{
+				ID:       email.MessageID,
+				Title:    title,
+				Body:     body,
+				DeepLink: deeplink.Build(deeplink.MessageTarget(email)),
+			})
+		}
 		return notify(title, body)
 	case models.ActionWebhook:
 		return webhook(action.WebhookURL, action.WebhookBody, action.Headers, ctx)

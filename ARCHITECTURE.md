@@ -54,6 +54,8 @@ cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 | `internal/mcpserver` | Shared MCP stdio server implementation used by `herald mcp` and the legacy `herald-mcp-server` wrapper |
 | `internal/sshserver` | Shared SSH server implementation used by `herald ssh` and the legacy `herald-ssh-server` wrapper |
 | `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory and masks private mailbox/config data unless `-unsafe-logs` is explicitly enabled |
+| `internal/deeplink` | Parses and builds `herald://mail/...` links for folder, message, sender, search, and compose contexts |
+| `internal/notifications` | Platform notification boundary: macOS native activation, Linux delivery-only fallback, unsupported-platform no-op, and fake recorder for tests |
 
 ### First-run configuration flow
 
@@ -380,9 +382,15 @@ app.listenForNewEmails() tea.Cmd
     │
     ▼
 NewEmailsMsg → Update() → prepend rows to timeline table
+    │
+    ├─ if notifications.new_mail: notify with message or folder deep link
+    │
+    └─ if notification activated: DeepLinkMsg → route TUI to folder/message/search/compose
 ```
 
 In Phase 2, the daemon emits a `NewEmailsEvent` on the WebSocket. `RemoteBackend` receives it and forwards it to the same `newEmailsCh`. The app is unchanged.
+
+Sync failures follow the same boundary: a `sync_error` event keeps the existing visible TUI status and additionally asks the notifier for a folder-scoped deep link when `notifications.sync_failures` is enabled. macOS uses `UNUserNotificationCenter` response callbacks to feed the deep link back into the running TUI; Linux and unsupported platforms do not claim activation support.
 
 ---
 

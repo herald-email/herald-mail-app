@@ -852,6 +852,50 @@ func TestConfigSave_SyncAndAIFields(t *testing.T) {
 	}
 }
 
+func TestNotificationDefaults(t *testing.T) {
+	c := &Config{}
+	c.applyDefaults()
+
+	if !c.Notifications.Enabled {
+		t.Fatal("notifications.enabled should default true")
+	}
+	if !c.Notifications.NewMail {
+		t.Fatal("notifications.new_mail should default true")
+	}
+	if !c.Notifications.SyncFailures {
+		t.Fatal("notifications.sync_failures should default true")
+	}
+	if c.Notifications.DeletionCompletion || c.Notifications.ClassificationCompletion || c.Notifications.ChatResults || c.Notifications.Sound {
+		t.Fatalf("optional notification events should default false, got %#v", c.Notifications)
+	}
+}
+
+func TestNotificationExplicitFalsePreserved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(`
+gmail:
+  refresh_token: token
+server:
+  host: imap.gmail.com
+  port: 993
+notifications:
+  enabled: false
+  new_mail: false
+  sync_failures: false
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Notifications.Enabled || loaded.Notifications.NewMail || loaded.Notifications.SyncFailures {
+		t.Fatalf("explicit false notification settings were not preserved: %#v", loaded.Notifications)
+	}
+}
+
 func TestDaemonDefaults(t *testing.T) {
 	c := &Config{}
 	c.applyDefaults()

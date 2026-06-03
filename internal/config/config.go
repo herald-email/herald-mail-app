@@ -80,6 +80,61 @@ type CalendarConfig struct {
 	SelectedCalendars []string `yaml:"selected_calendars,omitempty"`
 }
 
+type NotificationConfig struct {
+	Enabled                  bool `yaml:"enabled"`
+	NewMail                  bool `yaml:"new_mail"`
+	SyncFailures             bool `yaml:"sync_failures"`
+	DeletionCompletion       bool `yaml:"deletion_completion"`
+	ClassificationCompletion bool `yaml:"classification_completion"`
+	ChatResults              bool `yaml:"chat_results"`
+	Sound                    bool `yaml:"sound"`
+
+	enabledSet      bool
+	newMailSet      bool
+	syncFailuresSet bool
+}
+
+func (n *NotificationConfig) UnmarshalYAML(value *yaml.Node) error {
+	type notificationConfigYAML struct {
+		Enabled                  *bool `yaml:"enabled"`
+		NewMail                  *bool `yaml:"new_mail"`
+		SyncFailures             *bool `yaml:"sync_failures"`
+		DeletionCompletion       *bool `yaml:"deletion_completion"`
+		ClassificationCompletion *bool `yaml:"classification_completion"`
+		ChatResults              *bool `yaml:"chat_results"`
+		Sound                    *bool `yaml:"sound"`
+	}
+	var decoded notificationConfigYAML
+	if err := value.Decode(&decoded); err != nil {
+		return err
+	}
+	if decoded.Enabled != nil {
+		n.Enabled = *decoded.Enabled
+		n.enabledSet = true
+	}
+	if decoded.NewMail != nil {
+		n.NewMail = *decoded.NewMail
+		n.newMailSet = true
+	}
+	if decoded.SyncFailures != nil {
+		n.SyncFailures = *decoded.SyncFailures
+		n.syncFailuresSet = true
+	}
+	if decoded.DeletionCompletion != nil {
+		n.DeletionCompletion = *decoded.DeletionCompletion
+	}
+	if decoded.ClassificationCompletion != nil {
+		n.ClassificationCompletion = *decoded.ClassificationCompletion
+	}
+	if decoded.ChatResults != nil {
+		n.ChatResults = *decoded.ChatResults
+	}
+	if decoded.Sound != nil {
+		n.Sound = *decoded.Sound
+	}
+	return nil
+}
+
 type AccountGroup struct {
 	AccountID         string
 	DisplayName       string
@@ -122,7 +177,8 @@ type Config struct {
 		PollIntervalMinutes int  `yaml:"poll_interval_minutes"` // 0 = IDLE only; default 5
 		IDLEEnabled         bool `yaml:"idle_enabled"`          // default true
 	} `yaml:"sync"`
-	Semantic struct {
+	Notifications NotificationConfig `yaml:"notifications,omitempty"`
+	Semantic      struct {
 		Enabled   bool    `yaml:"enabled"`    // default: true when Ollama configured
 		Model     string  `yaml:"model"`      // default: configured Ollama embedding model
 		BatchSize int     `yaml:"batch_size"` // default: 20
@@ -638,6 +694,15 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Sync.Interval == 0 {
 		c.Sync.Interval = 60
+	}
+	if !c.Notifications.enabledSet {
+		c.Notifications.Enabled = true
+	}
+	if !c.Notifications.newMailSet {
+		c.Notifications.NewMail = true
+	}
+	if !c.Notifications.syncFailuresSet {
+		c.Notifications.SyncFailures = true
 	}
 	if c.Semantic.BatchSize == 0 {
 		c.Semantic.BatchSize = 20

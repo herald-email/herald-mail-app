@@ -63,6 +63,13 @@ semantic:
 | `sync.idle_enabled` | Enables IMAP IDLE when supported. |
 | `sync.background` | Enables background sync of other folders. |
 | `sync.notify` | Enables status notification behavior. |
+| `notifications.enabled` | Enables desktop notification delivery. Default `true`. |
+| `notifications.new_mail` | Notify when new mail arrives. Default `true`. |
+| `notifications.sync_failures` | Notify when active-folder sync fails. Default `true`. |
+| `notifications.deletion_completion` | Notify when delete/archive batches finish. Default `false`. |
+| `notifications.classification_completion` | Notify when folder classification finishes. Default `false`. |
+| `notifications.chat_results` | Notify when a long-running chat answer completes. Default `false`. |
+| `notifications.sound` | Request notification sound where supported. Default `false`. |
 | `semantic.enabled` | Enables semantic search indexing and automatic background embedding/contact enrichment when AI is configured. Keep `false` to avoid background body fetches and embedding work. |
 | `semantic.model` | Embedding model name. Defaults to Ollama embedding model. When Ollama is selected, setup validates this effective embedding model and shows `ollama pull <model>` when it is missing. |
 | `semantic.batch_size` | Embedding batch size. Default `20`. |
