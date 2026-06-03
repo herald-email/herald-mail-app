@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -1141,6 +1142,22 @@ type gmailAPIHTTPError struct {
 
 func (e gmailAPIHTTPError) Error() string {
 	return fmt.Sprintf("gmail api %s %s: status %d: %s", e.Method, e.Path, e.StatusCode, e.Body)
+}
+
+// IsStaleMessageNotFoundError reports provider responses that mean a cached
+// message ref no longer resolves and should be removed from the local cache.
+func IsStaleMessageNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr gmailAPIHTTPError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusGone
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "gmail api ") &&
+		(strings.Contains(lower, "status 404") || strings.Contains(lower, "status 410")) &&
+		(strings.Contains(lower, "not found") || strings.Contains(lower, "requested entity was not found"))
 }
 
 func isGmailAPIHistoryExpired(err error) bool {

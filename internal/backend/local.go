@@ -763,6 +763,54 @@ func (b *LocalBackend) InvalidatePreview(ref models.MessageRef) error {
 	return b.ensureMessageService().InvalidatePreview(ref)
 }
 
+func (b *LocalBackend) DeleteCachedEmail(ref models.MessageRef) error {
+	rawRef := ref
+	ref = ref.WithDefaults()
+	if b.cache == nil {
+		return nil
+	}
+	useLocalID := strings.TrimSpace(rawRef.LocalID) != "" ||
+		(rawRef.SourceID != "" && rawRef.SourceID != models.DefaultMailSourceID) ||
+		(rawRef.AccountID != "" && rawRef.AccountID != models.DefaultAccountID)
+	if strings.HasPrefix(ref.LocalID, "mail:default-mail:default:") && strings.TrimSpace(rawRef.LocalID) == "" {
+		useLocalID = false
+	}
+	invalidateRef := ref
+	if !useLocalID {
+		invalidateRef.LocalID = ""
+	}
+	if err := b.cache.InvalidateMessageByRef(invalidateRef); err != nil {
+		return err
+	}
+	var err error
+	switch {
+	case useLocalID && strings.TrimSpace(ref.LocalID) != "":
+		err = b.cache.DeleteEmailByLocalID(ref.LocalID)
+	case strings.TrimSpace(ref.Folder) != "" && strings.TrimSpace(ref.MessageID) != "":
+		err = b.cache.DeleteEmailsByMessageIDs(ref.Folder, []string{ref.MessageID})
+	case strings.TrimSpace(ref.MessageID) != "":
+		err = b.cache.DeleteEmail(ref.MessageID)
+	case strings.TrimSpace(ref.Folder) != "" && ref.UID != 0:
+		err = b.cache.DeleteEmailsByUIDs(ref.Folder, []uint32{ref.UID})
+	default:
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	b.bodyCacheMu.Lock()
+	b.bodyCache = nil
+	b.bodyCacheMu.Unlock()
+	if strings.TrimSpace(ref.Folder) != "" && strings.TrimSpace(ref.MessageID) != "" {
+		b.validIDsMu.Lock()
+		if ids := b.validIDsByFolder[ref.Folder]; ids != nil {
+			delete(ids, ref.MessageID)
+		}
+		b.validIDsMu.Unlock()
+	}
+	return nil
+}
+
 func (b *LocalBackend) ensureMessageService() *MessageService {
 	b.messageServiceMu.Lock()
 	defer b.messageServiceMu.Unlock()

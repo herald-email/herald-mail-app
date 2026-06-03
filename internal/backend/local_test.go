@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"reflect"
 	"strings"
@@ -20,6 +21,60 @@ func makeEmail(id string) *models.EmailData {
 		Subject:   "test",
 		Date:      time.Now(),
 		Folder:    "INBOX",
+	}
+}
+
+func TestLocalBackendDeleteCachedEmailRemovesScopedRowAndPreview(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	email := &models.EmailData{
+		SourceID:  "gmail-api",
+		AccountID: "work",
+		LocalID:   "mail:gmail-api:work:INBOX:gmail:missing",
+		MessageID: "msg-missing",
+		UID:       55,
+		Sender:    "person@example.com",
+		Subject:   "Missing provider row",
+		Date:      time.Now(),
+		Folder:    "INBOX",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+	if err := c.CachePreviewBodyByRef(email.MessageRef(), &models.EmailBody{TextPlain: "cached preview"}, config.CacheStoragePolicyPreserveAll); err != nil {
+		t.Fatalf("CachePreviewBodyByRef: %v", err)
+	}
+
+	b := &LocalBackend{
+		cache:     c,
+		bodyCache: map[string]*models.EmailBody{"INBOX:55": &models.EmailBody{TextPlain: "cached body"}},
+		validIDsByFolder: map[string]map[string]bool{
+			"INBOX": {email.MessageID: true},
+		},
+	}
+	if err := b.DeleteCachedEmail(email.MessageRef()); err != nil {
+		t.Fatalf("DeleteCachedEmail: %v", err)
+	}
+
+	if _, err := c.GetEmailByRef(email.MessageRef()); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetEmailByRef after delete err = %v, want sql.ErrNoRows", err)
+	}
+	preview, err := c.GetPreviewBodyByRef(email.MessageRef())
+	if err != nil {
+		t.Fatalf("GetPreviewBodyByRef: %v", err)
+	}
+	if preview != nil {
+		t.Fatalf("preview remained after cache delete: %#v", preview)
+	}
+	if len(b.bodyCache) != 0 {
+		t.Fatalf("bodyCache length = %d, want cleared", len(b.bodyCache))
+	}
+	if b.validIDsByFolder["INBOX"][email.MessageID] {
+		t.Fatalf("valid ID set still contains deleted message")
 	}
 }
 

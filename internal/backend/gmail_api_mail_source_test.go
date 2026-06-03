@@ -70,6 +70,28 @@ func TestSourceRegistryKeepsGmailAPIAlias(t *testing.T) {
 	}
 }
 
+func TestIsStaleMessageNotFoundErrorRecognizesGmailHTTPNotFound(t *testing.T) {
+	notFound := gmailAPIHTTPError{
+		Method:     http.MethodGet,
+		Path:       "/gmail/v1/users/me/messages/missing",
+		StatusCode: http.StatusNotFound,
+		Body:       `{ "error": { "message": "Requested entity was not found." } }`,
+	}
+	if !IsStaleMessageNotFoundError(notFound) {
+		t.Fatalf("expected Gmail API 404 to be treated as stale message ref")
+	}
+
+	rateLimited := gmailAPIHTTPError{
+		Method:     http.MethodGet,
+		Path:       "/gmail/v1/users/me/messages/slow",
+		StatusCode: http.StatusTooManyRequests,
+		Body:       `{ "error": { "message": "Rate limited." } }`,
+	}
+	if IsStaleMessageNotFoundError(rateLimited) {
+		t.Fatalf("rate limit should not prune cached email")
+	}
+}
+
 func TestGmailAPIMailSourceSyncFetchMutateAndSend(t *testing.T) {
 	fake := newFakeGmailAPIServer(t)
 	defer fake.Close()

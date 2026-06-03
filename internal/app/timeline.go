@@ -1780,6 +1780,161 @@ func (m *Model) removeTimelineEmail(messageID string) {
 	}
 }
 
+func timelineSelectionKeyForRef(ref models.MessageRef) string {
+	ref = ref.WithDefaults()
+	if ref.SourceID != "" && ref.SourceID != models.DefaultMailSourceID {
+		return ref.LocalID
+	}
+	if ref.AccountID != "" && ref.AccountID != models.DefaultAccountID {
+		return ref.LocalID
+	}
+	if strings.TrimSpace(ref.LocalID) != "" && !strings.HasPrefix(ref.LocalID, "mail:default-mail:default:") {
+		return ref.LocalID
+	}
+	return ref.MessageID
+}
+
+func timelineEmailMatchesMessageRef(email *models.EmailData, ref models.MessageRef, fallbackMessageID string) bool {
+	if email == nil {
+		return false
+	}
+	if key := timelineSelectionKeyForRef(ref); key != "" {
+		if timelineEmailMatchesSelectionKey(email, key) {
+			return true
+		}
+		if key != ref.WithDefaults().MessageID {
+			return false
+		}
+	}
+	return strings.TrimSpace(fallbackMessageID) != "" && email.MessageID == fallbackMessageID
+}
+
+func (m *Model) removeTimelineEmailByRef(ref models.MessageRef, fallbackMessageID string) {
+	if strings.TrimSpace(fallbackMessageID) == "" && strings.TrimSpace(ref.MessageID) == "" && strings.TrimSpace(ref.LocalID) == "" {
+		return
+	}
+	m.finishTimelineRangeSelection()
+	remove := func(emails []*models.EmailData) []*models.EmailData {
+		out := emails[:0]
+		for _, email := range emails {
+			if !timelineEmailMatchesMessageRef(email, ref, fallbackMessageID) {
+				out = append(out, email)
+			}
+		}
+		return out
+	}
+	m.timeline.emails = remove(m.timeline.emails)
+	if m.timeline.emailsCache != nil {
+		m.timeline.emailsCache = remove(m.timeline.emailsCache)
+	}
+	if m.timeline.searchResults != nil {
+		m.timeline.searchResults = remove(m.timeline.searchResults)
+	}
+	if m.timeline.chatFilteredEmails != nil {
+		m.timeline.chatFilteredEmails = remove(m.timeline.chatFilteredEmails)
+	}
+	if m.timeline.selectedMessageIDs != nil {
+		if key := timelineSelectionKeyForRef(ref); key != "" {
+			delete(m.timeline.selectedMessageIDs, key)
+		}
+		delete(m.timeline.selectedMessageIDs, fallbackMessageID)
+	}
+}
+
+type cachedTimelineEmailDeleter interface {
+	DeleteCachedEmail(models.MessageRef) error
+}
+
+func (m *Model) timelineBodyLoadRef(msg EmailBodyMsg) models.MessageRef {
+	ref := msg.MessageRef
+	if m.timeline.selectedEmail != nil {
+		selectedRef := m.timeline.selectedEmail.MessageRef()
+		if strings.TrimSpace(ref.MessageID) == "" {
+			ref.MessageID = selectedRef.MessageID
+		}
+		if strings.TrimSpace(ref.Folder) == "" {
+			ref.Folder = selectedRef.Folder
+		}
+		if ref.UID == 0 {
+			ref.UID = selectedRef.UID
+		}
+		if strings.TrimSpace(ref.LocalID) == "" {
+			ref.LocalID = selectedRef.LocalID
+		}
+		if ref.SourceID == "" {
+			ref.SourceID = selectedRef.SourceID
+		}
+		if ref.AccountID == "" {
+			ref.AccountID = selectedRef.AccountID
+		}
+		if ref.UIDValidity == 0 {
+			ref.UIDValidity = selectedRef.UIDValidity
+		}
+	}
+	if strings.TrimSpace(ref.MessageID) == "" {
+		ref.MessageID = msg.MessageID
+	}
+	if strings.TrimSpace(ref.Folder) == "" {
+		ref.Folder = msg.Folder
+	}
+	if ref.UID == 0 {
+		ref.UID = msg.UID
+	}
+	return ref.WithDefaults()
+}
+
+func (m *Model) recoverFromStaleTimelineBodyLoad(msg EmailBodyMsg) tea.Cmd {
+	ref := m.timelineBodyLoadRef(msg)
+	messageID := strings.TrimSpace(msg.MessageID)
+	if messageID == "" {
+		messageID = ref.MessageID
+	}
+	if messageID == "" && m.timeline.selectedEmail != nil {
+		messageID = m.timeline.selectedEmail.MessageID
+	}
+	if deleter, ok := m.backend.(cachedTimelineEmailDeleter); ok {
+		if err := deleter.DeleteCachedEmail(ref); err != nil {
+			logger.Warn("Failed to delete stale cached email %s: %v", ref.LocalID, err)
+		}
+	} else {
+		logger.Warn("Backend does not expose stale cached email deletion for %s", ref.LocalID)
+	}
+
+	cursor := m.timelineTable.Cursor()
+	m.timeline.bodyLoading = false
+	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
+	m.timeline.bodyWrappedLines = nil
+	m.timeline.inlineImageDescs = nil
+	m.timeline.quickReplies = nil
+	m.timeline.quickRepliesReady = false
+	m.timeline.quickReplyOpen = false
+	m.timeline.quickReplyIdx = 0
+	m.clearTimelinePreviewDocumentCache()
+	m.removeTimelineEmailByRef(ref, messageID)
+	m.updateTimelineTable()
+	if len(m.timeline.threadRowMap) == 0 {
+		m.timeline.selectedEmail = nil
+		m.statusMessage = "Removed stale cached email"
+		return nil
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(m.timeline.threadRowMap) {
+		cursor = len(m.timeline.threadRowMap) - 1
+	}
+	m.timelineTable.SetCursor(cursor)
+	next := m.currentTimelinePreviewTarget()
+	if next == nil {
+		m.timeline.selectedEmail = nil
+		m.statusMessage = "Removed stale cached email"
+		return nil
+	}
+	m.statusMessage = "Removed stale cached email; loading next message"
+	return m.openTimelineEmail(next)
+}
+
 func buildForwardSubject(subject string) string {
 	if strings.HasPrefix(strings.ToLower(subject), "fwd:") {
 		return subject
@@ -2665,6 +2820,13 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		openInviteAfterLoad := m.calendarInvitation.OpenAfterLoad
 		var cmds []tea.Cmd
 		if msg.Err != nil {
+			if backend.IsStaleMessageNotFoundError(msg.Err) {
+				logger.Warn("Timeline body ref is stale; pruning cached email: %v", msg.Err)
+				if openInviteAfterLoad {
+					m.calendarInvitation = calendarInvitationPromptState{}
+				}
+				return m, m.recoverFromStaleTimelineBodyLoad(msg), true
+			}
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.statusMessage = "Body load failed: " + previewFailureHint(msg.Err.Error())
 			if openInviteAfterLoad {
