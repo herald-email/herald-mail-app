@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 func mousePress(x, y int) tea.MouseClickMsg {
@@ -169,7 +170,7 @@ func makeMouseLinkPreviewModel(t *testing.T, fullScreen bool) (*Model, string) {
 	m.timeline.bodyLoading = false
 	m.timeline.fullScreen = fullScreen
 	m.setFocusedPanel(panelPreview)
-	return m, target
+	return m, render.SanitizePreviewURLTarget(target)
 }
 
 func visiblePointForText(t *testing.T, content, text string) (int, int) {
