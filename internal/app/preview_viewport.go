@@ -24,6 +24,7 @@ type previewRenderedRow struct {
 	Content          string
 	TerminalConsumed bool
 	NativeImageRows  int
+	NativeImage      *previewNativeImageSource
 }
 
 type previewDocumentLayout struct {
@@ -33,10 +34,12 @@ type previewDocumentLayout struct {
 }
 
 type previewNativeOverlay struct {
-	Row     int
-	Rows    int
-	Mode    previewImageMode
-	Content string
+	Row         int
+	Rows        int
+	Mode        previewImageMode
+	Content     string
+	ClipTopRows int
+	Source      *previewNativeImageSource
 }
 
 type previewViewportRender struct {
@@ -238,7 +241,7 @@ func previewDocumentRenderableImages(doc previewDocument, remoteImages map[strin
 
 func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth int) []previewRenderedRow {
 	if rendered.TerminalConsumesRows {
-		rows := []previewRenderedRow{{Content: rendered.Content, NativeImageRows: rendered.Rows}}
+		rows := []previewRenderedRow{{Content: rendered.Content, NativeImageRows: rendered.Rows, NativeImage: rendered.NativeImage}}
 		for len(rows) < rendered.Rows {
 			rows = append(rows, previewRenderedRow{TerminalConsumed: true})
 		}
@@ -254,6 +257,7 @@ func previewRowsFromRenderedImage(rendered previewImageRenderResult, innerWidth 
 		row := previewRenderedRow{Content: ansi.Truncate(line, innerWidth, "")}
 		if i == 0 {
 			row.NativeImageRows = rendered.Rows
+			row.NativeImage = rendered.NativeImage
 		}
 		rows = append(rows, row)
 	}
@@ -301,7 +305,7 @@ func renderPreviewDocumentViewportWithThemeAndSafety(theme Theme, layout preview
 	}
 
 	lines := make([]string, 0, visibleRows)
-	nativeOverlays := make([]previewNativeOverlay, 0)
+	nativeOverlays := nativeOverlaysForViewport(layout, offset, end, requireNativeImageSafetyRow)
 	lo, hi := visualStart, visualEnd
 	if lo > hi {
 		lo, hi = hi, lo
@@ -309,21 +313,12 @@ func renderPreviewDocumentViewportWithThemeAndSafety(theme Theme, layout preview
 	highlightStyle := theme.Focus.VisualSelection.Style()
 	for i := offset; i < end && i < len(layout.Rows); i++ {
 		row := layout.Rows[i]
-		viewportRow := len(lines)
 		if row.TerminalConsumed {
 			lines = append(lines, "")
 			continue
 		}
 		content := row.Content
 		if isNativePreviewImageContent(layout.ImageMode, content) {
-			if nativePreviewImageFitsViewport(layout.Rows, i, end, requireNativeImageSafetyRow) {
-				nativeOverlays = append(nativeOverlays, previewNativeOverlay{
-					Row:     viewportRow,
-					Rows:    nativePreviewImageRows(layout.Rows, i),
-					Mode:    layout.ImageMode,
-					Content: content,
-				})
-			}
 			content = ""
 		} else if visualMode && i >= lo && i <= hi {
 			content = highlightStyle.Render(content)
@@ -335,6 +330,50 @@ func renderPreviewDocumentViewportWithThemeAndSafety(theme Theme, layout preview
 	}
 	content := strings.Join(lines, "\n")
 	return previewViewportRender{Content: content, Rows: visibleRows, NativeOverlays: nativeOverlays}
+}
+
+func nativeOverlaysForViewport(layout previewDocumentLayout, offset, end int, requireSafetyRow bool) []previewNativeOverlay {
+	if end <= offset || len(layout.Rows) == 0 {
+		return nil
+	}
+	overlays := make([]previewNativeOverlay, 0)
+	for imageRow, row := range layout.Rows {
+		if !isNativePreviewImageContent(layout.ImageMode, row.Content) {
+			continue
+		}
+		imageRows := nativePreviewImageRows(layout.Rows, imageRow)
+		imageEnd := imageRow + imageRows
+		if imageEnd <= offset || imageRow >= end {
+			continue
+		}
+		if requireSafetyRow && imageEnd >= end {
+			continue
+		}
+		visibleStart := maxInt(imageRow, offset)
+		visibleEnd := minInt(imageEnd, end)
+		visibleRows := visibleEnd - visibleStart
+		if visibleRows < 1 {
+			continue
+		}
+		clipTopRows := visibleStart - imageRow
+		content := row.Content
+		if clipTopRows > 0 || visibleRows < imageRows {
+			clipped, ok := renderClippedPreviewNativeImage(row.NativeImage, layout.ImageMode, clipTopRows, visibleRows)
+			if !ok {
+				continue
+			}
+			content = clipped
+		}
+		overlays = append(overlays, previewNativeOverlay{
+			Row:         visibleStart - offset,
+			Rows:        visibleRows,
+			Mode:        layout.ImageMode,
+			Content:     content,
+			ClipTopRows: clipTopRows,
+			Source:      row.NativeImage,
+		})
+	}
+	return overlays
 }
 
 func nativePreviewImageFitsViewport(rows []previewRenderedRow, imageRow, viewportEnd int, requireSafetyRow bool) bool {
@@ -376,7 +415,19 @@ func filterNativeOverlaysWithinBottomRow(overlays []previewNativeOverlay, origin
 		bottom := top + rows - 1
 		if bottom <= maxBottomRow {
 			filtered = append(filtered, overlay)
+			continue
 		}
+		visibleRows := maxBottomRow - top + 1
+		if visibleRows < 1 {
+			continue
+		}
+		clipped, ok := renderClippedPreviewNativeImage(overlay.Source, overlay.Mode, overlay.ClipTopRows, visibleRows)
+		if !ok {
+			continue
+		}
+		overlay.Rows = visibleRows
+		overlay.Content = clipped
+		filtered = append(filtered, overlay)
 	}
 	return filtered
 }

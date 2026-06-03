@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -54,10 +55,18 @@ type previewImageRenderRequest struct {
 	LinkURL       string
 }
 
+type previewNativeImageSource struct {
+	Image models.InlineImage
+	Width int
+	Rows  int
+}
+
 type previewImageRenderResult struct {
 	Content              string
 	Rows                 int
+	Width                int
 	TerminalConsumesRows bool
+	NativeImage          *previewNativeImageSource
 }
 
 func detectPreviewImageMode(requested previewImageMode, localLinks bool, sshMode bool) previewImageMode {
@@ -216,7 +225,13 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 		if rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
-		return previewImageRenderResult{Content: rendered, Rows: size.Rows, TerminalConsumesRows: true}
+		return previewImageRenderResult{
+			Content:              rendered,
+			Rows:                 size.Rows,
+			Width:                size.Width,
+			TerminalConsumesRows: true,
+			NativeImage:          &previewNativeImageSource{Image: req.Image, Width: size.Width, Rows: size.Rows},
+		}
 	case previewImageModeKitty:
 		if len(req.Image.Data) > maxPreviewImageBytes {
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
@@ -226,7 +241,12 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 		if err != nil || rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
-		return previewImageRenderResult{Content: strings.TrimRight(rendered, "\n"), Rows: size.Rows}
+		return previewImageRenderResult{
+			Content:     strings.TrimRight(rendered, "\n"),
+			Rows:        size.Rows,
+			Width:       size.Width,
+			NativeImage: &previewNativeImageSource{Image: req.Image, Width: size.Width, Rows: size.Rows},
+		}
 	case previewImageModeLinks:
 		if req.LinkURL != "" && req.LinkLabel != "" {
 			label := render.TerminalHyperlink("["+req.LinkLabel+"]", req.LinkURL)
@@ -280,6 +300,94 @@ func previewImagePlaceholderText(req previewImageRenderRequest) string {
 
 func oneLinePreviewImageFallback(text string, innerW int) previewImageRenderResult {
 	return previewImageRenderResult{Content: truncateVisual(text, innerW), Rows: 1}
+}
+
+func renderClippedPreviewNativeImage(source *previewNativeImageSource, mode previewImageMode, clipTopRows, visibleRows int) (string, bool) {
+	if source == nil || visibleRows < 1 || source.Rows < 1 || source.Width < 1 || len(source.Image.Data) == 0 {
+		return "", false
+	}
+	if clipTopRows < 0 {
+		clipTopRows = 0
+	}
+	if clipTopRows >= source.Rows {
+		return "", false
+	}
+	if clipTopRows+visibleRows > source.Rows {
+		visibleRows = source.Rows - clipTopRows
+	}
+	if visibleRows < 1 {
+		return "", false
+	}
+
+	data, err := cropPreviewImageRows(source.Image.Data, clipTopRows, visibleRows, source.Rows)
+	if err != nil || len(data) == 0 {
+		return "", false
+	}
+
+	switch mode {
+	case previewImageModeIterm2:
+		rendered := strings.TrimRight(iterm2.RenderInlineImageOnly(data, source.Width, visibleRows), "\n")
+		return rendered, rendered != ""
+	case previewImageModeKitty:
+		rendered, err := kittyimg.RenderInline(data, source.Width, visibleRows)
+		if err != nil {
+			return "", false
+		}
+		rendered = strings.TrimRight(rendered, "\n")
+		return rendered, rendered != ""
+	default:
+		return "", false
+	}
+}
+
+func cropPreviewImageRows(imageData []byte, clipTopRows, visibleRows, totalRows int) ([]byte, error) {
+	if totalRows < 1 || visibleRows < 1 {
+		return nil, fmt.Errorf("invalid crop rows")
+	}
+	img, _, err := image.Decode(bytes.NewReader(imageData))
+	if err != nil {
+		return nil, err
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("invalid image dimensions")
+	}
+
+	if clipTopRows < 0 {
+		clipTopRows = 0
+	}
+	if clipTopRows > totalRows {
+		clipTopRows = totalRows
+	}
+	if clipTopRows+visibleRows > totalRows {
+		visibleRows = totalRows - clipTopRows
+	}
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	y0 := bounds.Min.Y + clipTopRows*height/totalRows
+	y1 := bounds.Min.Y + (clipTopRows+visibleRows)*height/totalRows
+	if y1 <= y0 {
+		y1 = y0 + 1
+	}
+	if y1 > bounds.Max.Y {
+		y1 = bounds.Max.Y
+	}
+	if y0 >= y1 {
+		return nil, fmt.Errorf("empty image crop")
+	}
+
+	cropped := image.NewRGBA(image.Rect(0, 0, width, y1-y0))
+	draw.Draw(cropped, cropped.Bounds(), img, image.Point{X: bounds.Min.X, Y: y0}, draw.Src)
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, cropped); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func minInt(a, b int) int {

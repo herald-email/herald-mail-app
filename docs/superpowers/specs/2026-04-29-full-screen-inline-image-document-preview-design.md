@@ -12,6 +12,7 @@ This design originally covered the full-screen preview path for Timeline first, 
 - [x] Preserve `cid:` inline image placement from `TextHTML` when HTML is available.
 - [x] Keep local inline raster images scrollable as part of the email document, below the pinned preview header.
 - [x] Keep split preview compact while allowing bounded raster thumbnails, local links, or placeholders in the ordered body flow.
+- [ ] Clip partially visible native raster images to the preview viewport so images can enter or leave from the top or bottom without overflowing panel borders.
 - [x] Keep remote HTML image URLs as readable OSC 8 placeholders without fetching remote bytes automatically.
 - [x] Include orphan inline MIME images in a deterministic scrollable fallback section when no authored placement is available.
 - [x] Add a protocol selection foundation for iTerm2 now and Kitty/Sixel later.
@@ -48,6 +49,7 @@ When an email body loads or the terminal width/protocol changes, Herald should r
 - [x] Compute document row heights before clamping scroll offset.
 - [x] Clamp scroll offset against total document rows, not just text rows.
 - [x] Render visible text/image blocks under the pinned header and above the bottom hint/scroll indicator.
+- [ ] When only part of a native raster image is visible, crop and re-encode the visible slice before emitting the terminal graphics escape.
 - [x] Update the Creative Commons demo sampler to include HTML/CID placement so demo mode exercises real inline-image positioning.
 
 ## Graphics Protocol Selection
@@ -72,6 +74,7 @@ Image failures should degrade in place inside the scrollable document instead of
 - [x] Avoid hidden trailing newlines from image renderers; callers should know every consumed row.
 - [x] Keep remote image URLs clickable/readable and never fetch them automatically.
 - [x] Preserve current safe local-link and SSH placeholder behavior when raster graphics are unavailable.
+- [ ] Preserve the existing hide-on-overlap behavior as a safe fallback when an image cannot be decoded or cropped.
 
 ## Testing
 
@@ -81,6 +84,7 @@ Unit tests should cover deterministic document construction and row accounting. 
 - [x] Add unit tests for orphan inline MIME images, missing CIDs, remote image links, empty images, and oversized images.
 - [x] Add unit tests proving iTerm2 and Kitty image row accounting includes raster rows and avoids hidden trailing newlines.
 - [x] Add viewport tests proving full-screen rendering never emits more visible rows than the available terminal budget.
+- [ ] Add viewport tests proving native raster images are clipped at the top and bottom of the visible preview bounds.
 - [x] Update `TUI_TESTPLAN.md` TC-23A to require app-scroll, terminal-native scrollback, and Kitty/Ghostty stale-placement checks for the Creative Commons sampler.
 - [x] Update `TUI_TESTING.md` with guidance that tmux can verify layout and escape output but cannot validate actual raster placement.
 - [x] Require real-terminal test report evidence for raster modes: terminal app/version, selected protocol mode, screenshots, and ANSI capture when possible.

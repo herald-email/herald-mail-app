@@ -206,6 +206,55 @@ func TestRenderPreviewDocumentViewportSuppressesNativeOverlayWhenImageWouldOverf
 	}
 }
 
+func TestRenderPreviewDocumentViewportClipsNativeOverlayAtViewportBottom(t *testing.T) {
+	layout := layoutPreviewDocument(previewDocument{Blocks: []previewDocumentBlock{
+		{Kind: previewBlockInlineImage, Image: models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)}, Alt: "Landscape"},
+	}}, previewLayoutOptions{
+		InnerWidth:    160,
+		AvailableRows: 18,
+		ImageMode:     previewImageModeIterm2,
+	})
+
+	rendered := renderPreviewDocumentViewport(layout, 0, 5)
+
+	if len(rendered.NativeOverlays) != 1 {
+		t.Fatalf("native overlays = %d, want one clipped bottom slice", len(rendered.NativeOverlays))
+	}
+	if rendered.NativeOverlays[0].Row != 0 || rendered.NativeOverlays[0].Rows != 5 {
+		t.Fatalf("overlay geometry = row %d rows %d, want row 0 rows 5", rendered.NativeOverlays[0].Row, rendered.NativeOverlays[0].Rows)
+	}
+	tail := renderNativeImageOverlayTail(rendered.NativeOverlays, 1, 1)
+	if height := itermImageDimension(t, tail, "height"); height != 5 {
+		t.Fatalf("clipped image height = %d, want 5; raw=%q", height, tail)
+	}
+}
+
+func TestRenderPreviewDocumentViewportClipsNativeOverlayAtViewportTop(t *testing.T) {
+	layout := layoutPreviewDocument(previewDocument{Blocks: []previewDocumentBlock{
+		{Kind: previewBlockInlineImage, Image: models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)}, Alt: "Landscape"},
+	}}, previewLayoutOptions{
+		InnerWidth:    160,
+		AvailableRows: 18,
+		ImageMode:     previewImageModeIterm2,
+	})
+
+	rendered := renderPreviewDocumentViewport(layout, 4, 5)
+
+	if len(rendered.NativeOverlays) != 1 {
+		t.Fatalf("native overlays = %d, want one clipped top slice", len(rendered.NativeOverlays))
+	}
+	if rendered.NativeOverlays[0].Row != 0 || rendered.NativeOverlays[0].Rows != 5 {
+		t.Fatalf("overlay geometry = row %d rows %d, want row 0 rows 5", rendered.NativeOverlays[0].Row, rendered.NativeOverlays[0].Rows)
+	}
+	if rendered.NativeOverlays[0].ClipTopRows != 4 {
+		t.Fatalf("clip top rows = %d, want 4", rendered.NativeOverlays[0].ClipTopRows)
+	}
+	tail := renderNativeImageOverlayTail(rendered.NativeOverlays, 1, 1)
+	if height := itermImageDimension(t, tail, "height"); height != 5 {
+		t.Fatalf("clipped image height = %d, want 5; raw=%q", height, tail)
+	}
+}
+
 func TestRenderPreviewDocumentViewportSuppressesNativeOverlayAtViewportBottom(t *testing.T) {
 	layout := previewDocumentLayout{
 		ImageMode: previewImageModeIterm2,
@@ -240,6 +289,34 @@ func TestFilterNativeOverlaysWithinBottomRowUsesRenderedImageHeight(t *testing.T
 	}
 	if filtered[0].Content != overlays[0].Content {
 		t.Fatalf("kept overlay = %q, want first fitting overlay", filtered[0].Content)
+	}
+}
+
+func TestFilterNativeOverlaysWithinBottomRowClipsOverflowingBottomSlice(t *testing.T) {
+	source := &previewNativeImageSource{
+		Image: models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		Width: 64,
+		Rows:  8,
+	}
+	overlay := previewNativeOverlay{
+		Row:     4,
+		Rows:    8,
+		Mode:    previewImageModeIterm2,
+		Content: "\x1b]1337;File=inline=1;width=64;height=8:full\a",
+		Source:  source,
+	}
+
+	filtered := filterNativeOverlaysWithinBottomRow([]previewNativeOverlay{overlay}, 10, 16)
+
+	if len(filtered) != 1 {
+		t.Fatalf("filtered overlays = %d, want clipped overlay", len(filtered))
+	}
+	if filtered[0].Rows != 3 {
+		t.Fatalf("clipped rows = %d, want 3", filtered[0].Rows)
+	}
+	tail := renderNativeImageOverlayTail(filtered, 10, 1)
+	if height := itermImageDimension(t, tail, "height"); height != 3 {
+		t.Fatalf("clipped panel image height = %d, want 3; raw=%q", height, tail)
 	}
 }
 

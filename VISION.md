@@ -31,7 +31,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] MCP server (read/search/classify tools for Claude Code)
 - [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
 - [x] Unified CLI subcommands (`herald mcp`, `herald ssh`) with legacy wrapper binaries preserved
-- [x] Inline image rendering in email previews (bounded side-panel thumbnails plus full-screen raster viewing where supported; placeholders/links otherwise)
+- [x] Inline image rendering in email previews (bounded side-panel and full-screen raster viewing where supported, with safe links/placeholders otherwise)
 - [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
@@ -767,7 +767,7 @@ Bubble Tea's alt-screen captures all input, so the terminal's native mouse selec
 - [x] Tab bar, sidebar, timeline table hidden in full-screen
 - [x] Header (From / Date / Subject) pinned at top
 - [x] Same scroll controls (`j`/`k`, `PgUp`/`PgDn`)
-- [x] Inline images stay within the viewport in full-screen mode and degrade to safe links/placeholders when graphics are unavailable
+- [ ] Native inline images clip to the visible preview bounds while scrolling so partially visible images appear from the top or bottom without overflowing
 - [x] `z` or `Esc` exits and restores split layout
 
 ---
