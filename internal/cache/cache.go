@@ -135,6 +135,7 @@ func (c *Cache) initDB() error {
 			list_unsubscribe_post TEXT,
 			inline_images_json TEXT NOT NULL DEFAULT '[]',
 			attachments_json TEXT NOT NULL DEFAULT '[]',
+			calendar_invitations_json TEXT NOT NULL DEFAULT '[]',
 			cached_at DATETIME NOT NULL,
 			cache_policy TEXT NOT NULL DEFAULT 'no_attachments',
 			invalidated_at DATETIME
@@ -149,6 +150,7 @@ func (c *Cache) initDB() error {
 		`ALTER TABLE email_preview_bodies ADD COLUMN uid_validity INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE email_preview_bodies ADD COLUMN cache_policy TEXT NOT NULL DEFAULT 'no_attachments'`,
 		`ALTER TABLE email_preview_bodies ADD COLUMN invalidated_at DATETIME`,
+		`ALTER TABLE email_preview_bodies ADD COLUMN calendar_invitations_json TEXT NOT NULL DEFAULT '[]'`,
 		`CREATE INDEX IF NOT EXISTS idx_preview_bodies_scope ON email_preview_bodies(source_id, account_id, local_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_preview_bodies_invalidated ON email_preview_bodies(invalidated_at)`,
 	} {
@@ -308,11 +310,15 @@ func (c *Cache) initDB() error {
 			color TEXT,
 			sync_token TEXT,
 			etag TEXT,
+			access_role TEXT NOT NULL DEFAULT '',
 			last_synced DATETIME,
 			updated_at DATETIME NOT NULL
 		)
 	`); err != nil {
 		return err
+	}
+	if _, err := c.db.Exec(`ALTER TABLE calendar_collections ADD COLUMN access_role TEXT NOT NULL DEFAULT ''`); err != nil {
+		logger.Debug("calendar collection access_role migration might already be applied: %v", err)
 	}
 	if _, err := c.db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_collections_scope
@@ -1192,13 +1198,17 @@ func (c *Cache) CachePreviewBodyByRef(ref models.MessageRef, body *models.EmailB
 	if err != nil {
 		return fmt.Errorf("marshal preview attachments: %w", err)
 	}
+	invitationsJSON, err := json.Marshal(cached.CalendarInvitations)
+	if err != nil {
+		return fmt.Errorf("marshal preview calendar invitations: %w", err)
+	}
 	_, err = c.db.Exec(`
 		INSERT OR REPLACE INTO email_preview_bodies
 		(message_id, source_id, account_id, local_id, uid_validity,
 		 from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
-		 list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cached_at,
+		 list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, calendar_invitations_json, cached_at,
 		 cache_policy, invalidated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`,
 		ref.MessageID,
 		string(ref.SourceID),
@@ -1217,6 +1227,7 @@ func (c *Cache) CachePreviewBodyByRef(ref models.MessageRef, body *models.EmailB
 		cached.ListUnsubscribePost,
 		string(inlineJSON),
 		string(attachmentsJSON),
+		string(invitationsJSON),
 		time.Now().Format(time.RFC3339),
 		policy,
 	)
@@ -1271,10 +1282,10 @@ func (c *Cache) getPreviewBodyByRef(ref models.MessageRef) (*models.EmailBody, s
 	}
 	var body models.EmailBody
 	var isFromHTML int
-	var messageID, inlineJSON, attachmentsJSON, policy string
+	var messageID, inlineJSON, attachmentsJSON, invitationsJSON, policy string
 	err := c.db.QueryRow(`
 		SELECT message_id, from_addr, to_addr, cc, bcc, subject, text_plain, text_html, is_from_html,
-		       list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, cache_policy
+		       list_unsubscribe, list_unsubscribe_post, inline_images_json, attachments_json, calendar_invitations_json, cache_policy
 		FROM email_preview_bodies
 		WHERE invalidated_at IS NULL
 		  AND (
@@ -1297,6 +1308,7 @@ func (c *Cache) getPreviewBodyByRef(ref models.MessageRef) (*models.EmailBody, s
 		&body.ListUnsubscribePost,
 		&inlineJSON,
 		&attachmentsJSON,
+		&invitationsJSON,
 		&policy,
 	)
 	if err == sql.ErrNoRows {
@@ -1315,6 +1327,11 @@ func (c *Cache) getPreviewBodyByRef(ref models.MessageRef) (*models.EmailBody, s
 	if strings.TrimSpace(attachmentsJSON) != "" {
 		if err := json.Unmarshal([]byte(attachmentsJSON), &body.Attachments); err != nil {
 			return nil, "", fmt.Errorf("unmarshal preview attachments: %w", err)
+		}
+	}
+	if strings.TrimSpace(invitationsJSON) != "" {
+		if err := json.Unmarshal([]byte(invitationsJSON), &body.CalendarInvitations); err != nil {
+			return nil, "", fmt.Errorf("unmarshal preview calendar invitations: %w", err)
 		}
 	}
 	return &body, policy, nil
@@ -1554,6 +1571,7 @@ func previewBodyForPolicy(body *models.EmailBody, policy string) *models.EmailBo
 	cached := *body
 	cached.InlineImages = cloneInlineImagesForPolicy(body.InlineImages, policy)
 	cached.Attachments = cloneAttachmentsForPolicy(body.Attachments, policy)
+	cached.CalendarInvitations = cloneCalendarInvitations(body.CalendarInvitations)
 	return &cached
 }
 
@@ -1600,6 +1618,15 @@ func cloneAttachmentsForPolicy(attachments []models.Attachment, policy string) [
 			cloned[i].Data = nil
 		}
 	}
+	return cloned
+}
+
+func cloneCalendarInvitations(invitations []models.CalendarInvitationPart) []models.CalendarInvitationPart {
+	if len(invitations) == 0 {
+		return nil
+	}
+	cloned := make([]models.CalendarInvitationPart, len(invitations))
+	copy(cloned, invitations)
 	return cloned
 }
 

@@ -208,6 +208,40 @@ func TestMailboxIncludesCobaltWorksMultiRecipientHeaders(t *testing.T) {
 	}
 }
 
+func TestMailboxIncludesCalendarInvitationWithDuplicateUID(t *testing.T) {
+	mailbox := Mailbox()
+	const uid = "demo-product-review-invite@herald.demo"
+	var inviteFound bool
+	for _, msg := range mailbox.Messages {
+		if msg.Email.Subject != "Example: Product review invitation" {
+			continue
+		}
+		inviteFound = true
+		if len(msg.Body.CalendarInvitations) != 1 {
+			t.Fatalf("calendar invitations = %#v, want one demo invite", msg.Body.CalendarInvitations)
+		}
+		if !strings.Contains(msg.Body.CalendarInvitations[0].Data, "UID:"+uid) {
+			t.Fatalf("demo invitation missing UID %q:\n%s", uid, msg.Body.CalendarInvitations[0].Data)
+		}
+		if len(msg.Body.Attachments) != 1 || !strings.HasSuffix(msg.Body.Attachments[0].Filename, ".ics") {
+			t.Fatalf("demo invitation attachments = %#v, want .ics attachment", msg.Body.Attachments)
+		}
+	}
+	if !inviteFound {
+		t.Fatal("demo mailbox missing Product review invitation")
+	}
+	var duplicateFound bool
+	for _, event := range CalendarEvents() {
+		if event.ProviderUID == uid && event.Ref.CalendarID == "work" {
+			duplicateFound = true
+			break
+		}
+	}
+	if !duplicateFound {
+		t.Fatalf("demo calendar missing duplicate UID %q in work calendar", uid)
+	}
+}
+
 func mustParseDemoAddresses(t *testing.T, value string) []*mail.Address {
 	t.Helper()
 	value = strings.TrimSpace(value)

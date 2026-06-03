@@ -216,6 +216,7 @@ func (l *Lab) writeGoogleCalendarList(w http.ResponseWriter) {
 			"id":              cal.ID,
 			"summary":         cal.DisplayName,
 			"backgroundColor": cal.Color,
+			"accessRole":      "owner",
 		})
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
@@ -237,12 +238,25 @@ func (l *Lab) handleGoogleCalendarEvents(w http.ResponseWriter, r *http.Request,
 			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
 			return
 		}
-		l.writeGoogleEvents(w, calendarID)
+		l.writeGoogleEvents(w, calendarID, r.URL.Query().Get("iCalUID"))
 		return
 	}
 	eventID, err := url.PathUnescape(parts[2])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if eventID == "import" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+		imported, err := l.importGoogleEvent(calendarID, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(googleEvent(imported))
 		return
 	}
 	event, ok := l.findEvent(calendarID, eventID)
@@ -265,12 +279,16 @@ func (l *Lab) handleGoogleCalendarEvents(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (l *Lab) writeGoogleEvents(w http.ResponseWriter, calendarID string) {
+func (l *Lab) writeGoogleEvents(w http.ResponseWriter, calendarID, iCalUID string) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	iCalUID = strings.TrimSpace(iCalUID)
 	events := l.events[calendarID]
 	items := make([]map[string]any, 0, len(events))
 	for _, event := range events {
+		if iCalUID != "" && event.UID != iCalUID {
+			continue
+		}
 		items = append(items, googleEvent(event))
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": items, "nextSyncToken": "sync-" + calendarID})
@@ -352,6 +370,8 @@ func googleEvent(event Event) map[string]any {
 }
 
 type googleEventPatch struct {
+	ID          string           `json:"id"`
+	ICalUID     string           `json:"iCalUID"`
 	Summary     string           `json:"summary"`
 	Description string           `json:"description"`
 	Location    string           `json:"location"`
@@ -434,6 +454,68 @@ func parseGooglePatchTime(value googlePatchTime) (time.Time, bool, string) {
 	}
 	parsed, _ := time.Parse(time.RFC3339, value.DateTime)
 	return parsed, false, value.TimeZone
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func (l *Lab) importGoogleEvent(calendarID string, r *http.Request) (Event, error) {
+	var payload googleEventPatch
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return Event{}, err
+	}
+	start, allDay, timezone := parseGooglePatchTime(payload.Start)
+	end, _, endTimezone := parseGooglePatchTime(payload.End)
+	if timezone == "" {
+		timezone = endTimezone
+	}
+	event := Event{
+		ID:          firstNonEmpty(payload.ID, payload.ICalUID),
+		UID:         firstNonEmpty(payload.ICalUID, payload.ID),
+		Summary:     payload.Summary,
+		Description: payload.Description,
+		Location:    payload.Location,
+		Start:       start,
+		End:         end,
+		AllDay:      allDay,
+		TimeZone:    timezone,
+		Status:      firstNonEmpty(payload.Status, "confirmed"),
+		Recurrence:  append([]string(nil), payload.Recurrence...),
+		Updated:     time.Now().UTC(),
+	}
+	if event.ID == "" {
+		event.ID = fmt.Sprintf("event-%d", event.Updated.UnixNano())
+	}
+	if event.UID == "" {
+		event.UID = event.ID
+	}
+	for _, attendee := range payload.Attendees {
+		event.Attendees = append(event.Attendees, Attendee{
+			Name:           attendee.DisplayName,
+			Email:          attendee.Email,
+			ResponseStatus: attendee.ResponseStatus,
+			Optional:       attendee.Optional,
+		})
+	}
+	if payload.Reminders != nil {
+		for _, reminder := range payload.Reminders.Overrides {
+			event.Reminders = append(event.Reminders, Reminder{
+				Method:        reminder.Method,
+				MinutesBefore: reminder.Minutes,
+			})
+		}
+	}
+	event.ETag = nextETag(event)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events[calendarID] = append(l.events[calendarID], event)
+	return event, nil
 }
 
 func (l *Lab) handleCalDAV(w http.ResponseWriter, r *http.Request) {
@@ -556,6 +638,9 @@ func (l *Lab) updateCalDAVEvent(calendarID, eventID string, r *http.Request) (Ev
 		if events[i].ID != eventID && strings.TrimSuffix(events[i].ID, ".ics") != eventID && events[i].UID != eventID {
 			continue
 		}
+		if strings.TrimSpace(r.Header.Get("If-None-Match")) == "*" {
+			return Event{}, fmt.Errorf("event already exists")
+		}
 		if ifMatch := strings.TrimSpace(r.Header.Get("If-Match")); ifMatch != "" && ifMatch != events[i].ETag {
 			return Event{}, fmt.Errorf("etag mismatch")
 		}
@@ -564,6 +649,17 @@ func (l *Lab) updateCalDAVEvent(calendarID, eventID string, r *http.Request) (Ev
 		events[i].Updated = time.Now().UTC()
 		l.events[calendarID] = events
 		return events[i], nil
+	}
+	if strings.TrimSpace(r.Header.Get("If-None-Match")) == "*" {
+		event := Event{ID: eventID, UID: strings.TrimSuffix(eventID, ".ics"), Status: "confirmed"}
+		event = applyICSPatch(event, string(data))
+		if event.UID == "" {
+			event.UID = strings.TrimSuffix(eventID, ".ics")
+		}
+		event.ETag = nextETag(event)
+		event.Updated = time.Now().UTC()
+		l.events[calendarID] = append(l.events[calendarID], event)
+		return event, nil
 	}
 	return Event{}, fmt.Errorf("event not found")
 }

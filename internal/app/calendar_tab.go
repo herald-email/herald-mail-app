@@ -2457,6 +2457,12 @@ func calendarMutationErrorStatus(prefix string, err error) string {
 	if errors.Is(err, models.ErrCalendarRecurrenceScopeUnsupported) {
 		return prefix + ": recurrence scope unsupported"
 	}
+	if errors.Is(err, models.ErrCalendarAuthorizationRequired) {
+		return prefix + ": calendar authorization expired; reconnect Google Calendar in Settings"
+	}
+	if errors.Is(err, models.ErrCalendarWritePermission) {
+		return prefix + ": calendar write permission missing; reconnect Google Calendar in Settings"
+	}
 	return prefix + ": " + err.Error()
 }
 

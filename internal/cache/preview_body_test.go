@@ -206,6 +206,37 @@ func TestPreviewBodyCachePreserveAllKeepsAttachmentBytes(t *testing.T) {
 	}
 }
 
+func TestPreviewBodyCachePreservesCalendarInvitations(t *testing.T) {
+	c, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New cache: %v", err)
+	}
+	defer c.Close()
+
+	ref := models.MessageRef{MessageID: "msg-calendar", Folder: "INBOX", UID: 12}.WithDefaults()
+	body := &models.EmailBody{
+		TextPlain: "meeting invite",
+		CalendarInvitations: []models.CalendarInvitationPart{{
+			MIMEType: "text/calendar",
+			PartPath: "2",
+			Data:     "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:cache-invite\r\nEND:VEVENT\r\nEND:VCALENDAR",
+		}},
+	}
+	if err := c.CachePreviewBodyByRef(ref, body, config.CacheStoragePolicyNoAttachments); err != nil {
+		t.Fatalf("CachePreviewBodyByRef: %v", err)
+	}
+	got, err := c.GetPreviewBodyByRef(ref)
+	if err != nil {
+		t.Fatalf("GetPreviewBodyByRef: %v", err)
+	}
+	if len(got.CalendarInvitations) != 1 {
+		t.Fatalf("calendar invitations = %#v, want preserved preview invitation", got.CalendarInvitations)
+	}
+	if got.CalendarInvitations[0].Data == "" || got.CalendarInvitations[0].PartPath != "2" {
+		t.Fatalf("calendar invitation = %#v, want data and part path", got.CalendarInvitations[0])
+	}
+}
+
 func TestPrunePreviewBodiesForPolicyNoAttachmentsRemovesAttachmentBytesOnly(t *testing.T) {
 	c := newTestCache(t)
 	body := &models.EmailBody{

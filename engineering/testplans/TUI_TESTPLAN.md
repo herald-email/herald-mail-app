@@ -2028,14 +2028,14 @@ This case covers the interaction polish required after the design-parity screens
 3. Confirm the event with attendee RSVP `needs-action` is visibly marked in every calendar list/detail surface.
 4. Open the RSVP action picker and choose accept, tentative, and decline against the deterministic provider or demo mutation boundary.
 5. Open the event with HTML notes and confirm notes render as readable terminal text with paragraphs, lists, links, meeting URLs, dial-in numbers, and emphasis.
-6. Return to Timeline, open the invitation email, and trigger Add to Calendar.
-7. Choose a writable calendar from the calendar picker and confirm duplicate ICS UIDs offer update or skip instead of silently duplicating events.
+6. Return to Timeline, open the invitation email, and confirm the preview header action row advertises `i create calendar event` beside the existing unsubscribe, attachment, and hide-future-mail affordances.
+7. Trigger Create Calendar Event, choose a configured writable calendar from the picker when more than one exists, and confirm duplicate ICS UIDs offer update or skip instead of silently duplicating events.
 
 **Expect:**
 - Raw HTML tags do not appear in completed calendar notes surfaces.
 - RSVP actions are explicit, provider-backed where available, and update cached state only after provider/demo success.
 - Read-only calendars show RSVP state but disable response actions with a visible reason.
-- Invitation emails expose Add to Calendar only when a parseable invitation exists, and mail-only or no-writable-calendar sessions explain why the action is unavailable.
+- Invitation emails expose Create Calendar Event only when a parseable invitation exists, and mail-only or no-writable-calendar sessions explain why the action is unavailable.
 - ICS parsing preserves summary, description, location, start/end, timezone, organizer, attendees, recurrence, attachments, reminders, UID, and sequence/revision where present.
 - Literal RSVP and invitation shortcut characters typed in Compose, search prompts, and editor-like text fields remain text instead of firing calendar actions.
 - At `50x15`, RSVP and invitation modals or pickers show the minimum-size guard or compact fallback instead of clipped controls.

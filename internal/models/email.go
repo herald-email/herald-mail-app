@@ -122,6 +122,7 @@ type EmailBody struct {
 	TextHTML            string
 	InlineImages        []InlineImage
 	Attachments         []Attachment
+	CalendarInvitations []CalendarInvitationPart
 	IsFromHTML          bool   // TextPlain was converted from HTML; render via markdown
 	ListUnsubscribe     string // raw List-Unsubscribe header value
 	ListUnsubscribePost string // raw List-Unsubscribe-Post header value (RFC 8058)
@@ -244,6 +245,16 @@ type Attachment struct {
 	Size     int    // bytes
 	PartPath string // MIME part path for targeted fetch (e.g. "2", "1.2")
 	Data     []byte // populated during FetchEmailBody (full message already in memory)
+}
+
+// CalendarInvitationPart records an inline text/calendar part or .ics
+// attachment detected while parsing a message body.
+type CalendarInvitationPart struct {
+	Filename string
+	MIMEType string
+	Method   string
+	PartPath string
+	Data     string
 }
 
 // ComposeAttachment is a local file staged for sending.

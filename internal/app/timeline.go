@@ -2427,7 +2427,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			segments = append(segments, "s: save attachment")
 		}
 		if calendarBodyHasInvitation(m.timeline.body) {
-			segments = append(segments, "i: add to calendar")
+			segments = append(segments, "i: create event")
 		}
 		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
 		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
@@ -2612,9 +2612,14 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.timeline.quickReplyOpen = false
 		m.timeline.quickReplyIdx = 0
 		m.revokeImagePreviews()
+		openInviteAfterLoad := m.calendarInvitation.OpenAfterLoad
+		var cmds []tea.Cmd
 		if msg.Err != nil {
 			logger.Warn("Failed to fetch email body: %v", msg.Err)
 			m.statusMessage = "Body load failed: " + previewFailureHint(msg.Err.Error())
+			if openInviteAfterLoad {
+				m.calendarInvitation = calendarInvitationPromptState{}
+			}
 			m.timeline.body = &models.EmailBody{TextPlain: previewFailureBodyText(msg, m.timeline.selectedEmail)}
 			if m.timeline.selectedEmail != nil {
 				m.timeline.bodyMessageID = m.timeline.selectedEmail.MessageID
@@ -2635,7 +2640,6 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				email := m.timeline.selectedEmail
 				m.timeline.quickReplies = buildCannedReplies(email.Sender)
 				body := msg.Body
-				var cmds []tea.Cmd
 				if !email.IsRead && !m.timelineIsReadOnlyDiagnostic() {
 					m.setTimelineEmailReadState(email, true)
 					m.updateTimelineTable()
@@ -2650,6 +2654,13 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.timeline.quickRepliesReady = true
 				if m.timeline.quickReplyPending {
 					cmds = append(cmds, m.openTimelineQuickReply())
+				}
+				if openInviteAfterLoad {
+					m.calendarInvitation.OpenAfterLoad = false
+					if cmd := m.openCalendarInvitationPrompt(); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+					openInviteAfterLoad = false
 				}
 				if len(cmds) > 0 {
 					m.timeline.bodyWrappedLines = nil
@@ -2666,8 +2677,17 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 		}
+		if openInviteAfterLoad && msg.Err == nil {
+			m.calendarInvitation.OpenAfterLoad = false
+			if cmd := m.openCalendarInvitationPrompt(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		m.timeline.bodyWrappedLines = nil
 		m.clearTimelinePreviewDocumentCache()
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...), true
+		}
 		return m, nil, true
 
 	case QuickRepliesMsg:
@@ -3134,7 +3154,10 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
-		if !m.loading && (m.focusedPanel == panelPreview || m.timeline.fullScreen) && m.timeline.body != nil {
+		inviteShortcutPanel := m.focusedPanel == panelPreview ||
+			m.timeline.fullScreen ||
+			(m.focusedPanel == panelTimeline && m.timelineBodyLoadedFor(m.timeline.selectedEmail))
+		if !m.loading && inviteShortcutPanel && m.timeline.body != nil {
 			return m, m.openCalendarInvitationPrompt(), true
 		}
 		return m, nil, true

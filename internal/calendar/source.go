@@ -33,8 +33,13 @@ type Source interface {
 }
 
 type MutationSource interface {
+	CreateEvent(context.Context, models.CalendarEvent, models.CalendarMutationOptions) (*models.CalendarEvent, error)
 	UpdateEvent(context.Context, models.CalendarEvent, models.CalendarMutationOptions) (*models.CalendarEvent, error)
 	RespondToEvent(context.Context, models.EventRef, string, models.CalendarMutationOptions) (*models.CalendarEvent, error)
+}
+
+type UIDLookupSource interface {
+	FindEventByUID(context.Context, models.CollectionRef, string) (*models.CalendarEvent, error)
 }
 
 type SyncTokenSource interface {
@@ -99,9 +104,10 @@ func (s *GoogleCalendarSource) ListCalendars(ctx context.Context) ([]models.Cale
 			DisplayName:  firstNonEmpty(item.Summary, item.ID),
 		}
 		out = append(out, models.CalendarCollection{
-			Ref:   ref,
-			Color: item.BackgroundColor,
-			ETag:  item.ETag,
+			Ref:        ref,
+			Color:      item.BackgroundColor,
+			ETag:       item.ETag,
+			AccessRole: item.AccessRole,
 		})
 	}
 	return out, nil
@@ -184,6 +190,38 @@ func (s *GoogleCalendarSource) FetchEvent(ctx context.Context, ref models.EventR
 	return &event, nil
 }
 
+func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	event.Ref = s.normalizeEvent(event.Ref)
+	if strings.TrimSpace(event.ProviderUID) == "" {
+		event.ProviderUID = strings.TrimSpace(event.Ref.EventID)
+	}
+	payload := googleEventFromModel(event)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	u := s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events/import?sendUpdates=none"
+	req, err := s.newRequest(ctx, http.MethodPost, u, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var imported googleEventPayload
+	if err := s.doJSON(req, &imported); err != nil {
+		return nil, err
+	}
+	out, err := googleEventToModel(s.id, s.accountID, event.Ref.CalendarID, imported)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
 	var err error
 	opts, err = validateCalendarMutationOptions(opts)
@@ -214,6 +252,36 @@ func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.Cal
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (s *GoogleCalendarSource) FindEventByUID(ctx context.Context, ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return nil, nil
+	}
+	ref = s.normalizeCollection(ref)
+	endpoint := s.baseURL + "/calendars/" + url.PathEscape(ref.CollectionID) + "/events"
+	values := url.Values{}
+	values.Set("iCalUID", uid)
+	values.Set("singleEvents", "false")
+	values.Set("showDeleted", "false")
+	req, err := s.newRequest(ctx, http.MethodGet, endpoint+"?"+values.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var payload googleEvents
+	if err := s.doJSON(req, &payload); err != nil {
+		return nil, err
+	}
+	for _, item := range payload.Items {
+		event, err := googleEventToModel(s.id, s.accountID, ref.CollectionID, item)
+		if err != nil {
+			logger.Warn("Skipping Google calendar duplicate candidate %q from %s: %v", item.ID, ref.CollectionID, err)
+			continue
+		}
+		return &event, nil
+	}
+	return nil, nil
 }
 
 func (s *GoogleCalendarSource) RespondToEvent(ctx context.Context, ref models.EventRef, status string, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
@@ -254,7 +322,7 @@ func (s *GoogleCalendarSource) newRequest(ctx context.Context, method, u string,
 	}
 	token, err := oauth.RefreshGoogleConfigIfNeeded(ctx, &s.google)
 	if err != nil {
-		return nil, err
+		return nil, calendarProviderOAuthError("google calendar", err)
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -483,6 +551,44 @@ func (s *CalDAVSource) FetchEvent(ctx context.Context, ref models.EventRef) (*mo
 	return eventFromICS(s.id, s.accountID, ref.CalendarID, ref.EventID, resp.Header.Get("ETag"), string(data))
 }
 
+func (s *CalDAVSource) CreateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
+	var err error
+	opts, err = validateCalendarMutationOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	event.Ref.SourceID = models.NormalizeSourceID(event.Ref.SourceID, s.id)
+	event.Ref.AccountID = models.NormalizeAccountID(event.Ref.AccountID)
+	if strings.TrimSpace(event.Ref.EventID) == "" {
+		event.Ref.EventID = safeCalDAVEventID(firstNonEmpty(event.ProviderUID, event.Title, "mail-invitation"))
+	}
+	event.Ref = event.Ref.WithDefaults()
+	eventURL, err := s.eventURL(ctx, event.Ref.CalendarID, event.Ref.EventID)
+	if err != nil {
+		return nil, err
+	}
+	req, err := s.newRequest(ctx, http.MethodPut, eventURL, strings.NewReader(eventToICS(event)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "text/calendar; charset=utf-8")
+	req.Header.Set("If-None-Match", "*")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, s.calendarHTTPError(req.Method, resp.StatusCode, body)
+	}
+	freshRef := event.Ref
+	if etag := strings.TrimSpace(resp.Header.Get("ETag")); etag != "" {
+		freshRef.ETag = etag
+	}
+	return s.FetchEvent(ctx, freshRef)
+}
+
 func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
 	var err error
 	opts, err = validateCalendarMutationOptions(opts)
@@ -518,6 +624,24 @@ func (s *CalDAVSource) UpdateEvent(ctx context.Context, event models.CalendarEve
 		freshRef.ETag = etag
 	}
 	return s.FetchEvent(ctx, freshRef)
+}
+
+func (s *CalDAVSource) FindEventByUID(ctx context.Context, ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return nil, nil
+	}
+	events, err := s.ListEvents(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	for _, event := range events {
+		if strings.TrimSpace(event.ProviderUID) == uid {
+			found := event
+			return &found, nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *CalDAVSource) RespondToEvent(ctx context.Context, ref models.EventRef, status string, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
@@ -888,6 +1012,7 @@ type googleCalendarList struct {
 		Summary         string `json:"summary"`
 		BackgroundColor string `json:"backgroundColor"`
 		ETag            string `json:"etag"`
+		AccessRole      string `json:"accessRole"`
 	} `json:"items"`
 }
 
@@ -1247,6 +1372,32 @@ func resolveCalDAVHref(baseURL, href string) string {
 
 func sameCalDAVURL(a, b string) bool {
 	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
+func safeCalDAVEventID(uid string) string {
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		uid = "mail-invitation"
+	}
+	var b strings.Builder
+	for _, r := range uid {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case strings.ContainsRune("-_.@", r):
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	id := strings.Trim(b.String(), "._-")
+	if id == "" {
+		id = "mail-invitation"
+	}
+	if !strings.HasSuffix(strings.ToLower(id), ".ics") {
+		id += ".ics"
+	}
+	return id
 }
 
 // EventFromICS parses the first VEVENT in an iCalendar payload into Herald's
@@ -1776,14 +1927,69 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 	if status == http.StatusConflict || status == http.StatusPreconditionFailed {
 		return fmt.Errorf("%w: provider calendar item changed before %s", models.ErrCalendarMutationConflict, strings.ToLower(method))
 	}
-	message := strings.TrimSpace(string(body))
+	message := calendarProviderBodyMessage(status, body)
 	if message == "" {
 		message = http.StatusText(status)
 	}
 	if message == "" {
 		message = fmt.Sprintf("status %d", status)
 	}
+	if status == http.StatusUnauthorized {
+		return fmt.Errorf("%w: %s authorization expired; reconnect this calendar account", models.ErrCalendarAuthorizationRequired, provider)
+	}
+	if status == http.StatusForbidden {
+		action := "access"
+		if strings.TrimSpace(method) != "" && !strings.EqualFold(method, http.MethodGet) {
+			action = "write access"
+		}
+		return fmt.Errorf("%w: %s %s denied; reconnect this calendar account to approve Calendar access", models.ErrCalendarWritePermission, provider, action)
+	}
 	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
+}
+
+func calendarProviderOAuthError(provider string, err error) error {
+	if err == nil {
+		return nil
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "re-authenticate") || strings.Contains(message, "refresh token") || strings.Contains(message, "oauth") {
+		return fmt.Errorf("%w: %s needs OAuth; reconnect this calendar account", models.ErrCalendarAuthorizationRequired, provider)
+	}
+	return err
+}
+
+func calendarProviderBodyMessage(status int, body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+	var payload struct {
+		Error struct {
+			Message string `json:"message"`
+			Status  string `json:"status"`
+			Errors  []struct {
+				Message string `json:"message"`
+				Reason  string `json:"reason"`
+			} `json:"errors"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) == nil {
+		if payload.Error.Message != "" {
+			return payload.Error.Message
+		}
+		for _, item := range payload.Error.Errors {
+			if item.Message != "" {
+				return item.Message
+			}
+			if item.Reason != "" {
+				return item.Reason
+			}
+		}
+		if payload.Error.Status != "" {
+			return strings.ReplaceAll(strings.ToLower(payload.Error.Status), "_", " ")
+		}
+	}
+	return strings.TrimSpace(string(body))
 }
 
 func isCalDAVAuthStatus(status int) bool {

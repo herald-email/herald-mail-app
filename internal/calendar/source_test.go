@@ -51,7 +51,7 @@ func TestGoogleCalendarSourceUsesLocalTestServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCalendars: %v", err)
 	}
-	if len(collections) != 1 || collections[0].Ref.CollectionID != "primary" || collections[0].Ref.SourceID != models.SourceID("work-calendar") {
+	if len(collections) != 1 || collections[0].Ref.CollectionID != "primary" || collections[0].Ref.SourceID != models.SourceID("work-calendar") || collections[0].AccessRole != "owner" {
 		t.Fatalf("collections = %#v, want local primary collection scoped to work-calendar", collections)
 	}
 
@@ -434,6 +434,94 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 	if len(fetched.Reminders) != 1 || fetched.Reminders[0].MinutesBefore != 15 {
 		t.Fatalf("fetched reminders = %#v, want provider-updated reminder", fetched.Reminders)
+	}
+}
+
+func TestGoogleCalendarSourceImportsEventAndFindsDuplicateUID(t *testing.T) {
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t, testcalendar.WithCalendar("primary", "Work", "#3367d6"))
+	src, err := NewGoogleCalendarSource(lab.GoogleSourceConfig("work-calendar", "work"))
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	event := models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "email-invite@example.test"}.WithDefaults(),
+		ProviderUID: "email-invite@example.test",
+		Title:       "Email invite",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		TimeZone:    "UTC",
+		Status:      "confirmed",
+		Raw: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:email-invite@example.test",
+			"SUMMARY:Email invite",
+			"DTSTART:20260602T160000Z",
+			"DTEND:20260602T163000Z",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}
+
+	saved, err := src.CreateEvent(context.Background(), event, models.CalendarMutationOptions{})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if saved.ProviderUID != event.ProviderUID || saved.Title != event.Title {
+		t.Fatalf("saved event = %#v, want imported event", saved)
+	}
+	duplicate, err := src.FindEventByUID(context.Background(), models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"}, event.ProviderUID)
+	if err != nil {
+		t.Fatalf("FindEventByUID: %v", err)
+	}
+	if duplicate == nil || duplicate.Ref.EventID != saved.Ref.EventID {
+		t.Fatalf("duplicate = %#v, want saved event %q", duplicate, saved.Ref.EventID)
+	}
+}
+
+func TestGoogleCalendarSourceCreateEventSurfacesMissingWritePermission(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/events/import") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED","errors":[{"reason":"insufficientPermissions","message":"Insufficient Permission"}]}}`))
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "token-without-calendar-events",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	_, err = src.CreateEvent(context.Background(), models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "missing-scope@example.test"}.WithDefaults(),
+		ProviderUID: "missing-scope@example.test",
+		Title:       "Missing scope",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		Status:      "confirmed",
+	}, models.CalendarMutationOptions{})
+	if !errors.Is(err, models.ErrCalendarWritePermission) {
+		t.Fatalf("error = %v, want ErrCalendarWritePermission", err)
+	}
+	if strings.Contains(err.Error(), "{") || strings.Contains(err.Error(), "insufficientPermissions") {
+		t.Fatalf("error leaked raw Google response: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "reconnect") {
+		t.Fatalf("error = %v, want reconnect guidance", err)
 	}
 }
 

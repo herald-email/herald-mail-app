@@ -8,10 +8,11 @@ import (
 )
 
 type CalendarCollection struct {
-	Ref       CollectionRef
-	Color     string
-	SyncToken string
-	ETag      string
+	Ref        CollectionRef
+	Color      string
+	SyncToken  string
+	ETag       string
+	AccessRole string
 }
 
 type CalendarEvent struct {
@@ -65,6 +66,8 @@ const (
 var (
 	ErrCalendarMutationConflict           = errors.New("calendar mutation conflict")
 	ErrCalendarRecurrenceScopeUnsupported = errors.New("calendar recurrence scope unsupported")
+	ErrCalendarAuthorizationRequired      = errors.New("calendar authorization required")
+	ErrCalendarWritePermission            = errors.New("calendar write permission missing")
 )
 
 type CalendarMutationOptions struct {
