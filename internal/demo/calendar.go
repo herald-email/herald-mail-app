@@ -62,6 +62,14 @@ func CalendarCollections() []models.CalendarCollection {
 
 func CalendarEvents() []models.CalendarEvent {
 	week := calendarFixtureDayStart(time.Now()).Add(7 * time.Hour)
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		losAngeles = time.Local
+	}
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		tokyo = time.Local
+	}
 	at := func(day, hour, minute int) time.Time {
 		return week.AddDate(0, 0, day).Add(time.Duration(hour-7)*time.Hour + time.Duration(minute)*time.Minute)
 	}
@@ -116,6 +124,20 @@ func CalendarEvents() []models.CalendarEvent {
 	events[7].Attendees = []models.CalendarAttendee{
 		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "needs-action"},
 		{Name: "Mina Park", Email: "mina@example.com", RSVP: "accepted"},
+	}
+	flightStartDay := week.AddDate(0, 0, 1)
+	events[20].Title = "LAX -> HND Flight"
+	events[20].Description = "<p>Flight notes from the travel desk.</p><ul><li><strong>Bring</strong> passport and headphones</li><li>Check rail transfer after landing</li></ul>\n\n**Markdown note:** confirm hotel check-in."
+	events[20].Location = "LAX TBIT -> HND T3"
+	events[20].Start = time.Date(flightStartDay.Year(), flightStartDay.Month(), flightStartDay.Day(), 22, 30, 0, 0, losAngeles)
+	events[20].End = time.Date(flightStartDay.Year(), flightStartDay.Month(), flightStartDay.Day()+2, 5, 30, 0, 0, tokyo)
+	events[20].TimeZone = "America/Los_Angeles"
+	events[20].StartTimeZone = "America/Los_Angeles"
+	events[20].EndTimeZone = "Asia/Tokyo"
+	events[20].AlternateTimeZones = []string{"Europe/London"}
+	events[20].Reminders = []models.CalendarReminder{
+		{Method: "popup", MinutesBefore: 180},
+		{Method: "popup", MinutesBefore: 45},
 	}
 	out := make([]models.CalendarEvent, len(events))
 	copy(out, events)

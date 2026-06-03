@@ -49,6 +49,7 @@ var (
 	calendarHTMLBreakPattern    = regexp.MustCompile(`(?i)<\s*(br|/p|/div|/li|/h[1-6])[^>]*>`)
 	calendarHTMLListItemPattern = regexp.MustCompile(`(?i)<\s*li[^>]*>`)
 	calendarHTMLTagPattern      = regexp.MustCompile(`(?s)<[^>]*>`)
+	calendarMarkdownLinkPattern = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 )
 
 type indexedCalendarEvent struct {
@@ -80,8 +81,9 @@ const (
 	calendarEditFieldTitle
 	calendarEditFieldLocation
 	calendarEditFieldStart
+	calendarEditFieldStartTimeZone
 	calendarEditFieldEnd
-	calendarEditFieldTimeZone
+	calendarEditFieldEndTimeZone
 	calendarEditFieldAlternateTimeZones
 	calendarEditFieldAllDay
 	calendarEditFieldAttendees
@@ -115,8 +117,9 @@ var calendarEditFields = []calendarEditField{
 	calendarEditFieldTitle,
 	calendarEditFieldLocation,
 	calendarEditFieldStart,
+	calendarEditFieldStartTimeZone,
 	calendarEditFieldEnd,
-	calendarEditFieldTimeZone,
+	calendarEditFieldEndTimeZone,
 	calendarEditFieldAlternateTimeZones,
 	calendarEditFieldAllDay,
 	calendarEditFieldAttendees,
@@ -983,6 +986,8 @@ func (m *Model) openCalendarCreate() {
 		Start:              start,
 		End:                end,
 		TimeZone:           timezone,
+		StartTimeZone:      timezone,
+		EndTimeZone:        timezone,
 		Status:             "confirmed",
 		AlternateTimeZones: []string{"Europe/London", "Asia/Tokyo"},
 	}
@@ -1438,10 +1443,12 @@ func (m *Model) calendarEditFieldValue() string {
 		return m.calendarEdit.Draft.Location
 	case calendarEditFieldStart:
 		return m.calendarEdit.Draft.StartText
+	case calendarEditFieldStartTimeZone:
+		return m.calendarEdit.Draft.StartTimeZone
 	case calendarEditFieldEnd:
 		return m.calendarEdit.Draft.EndText
-	case calendarEditFieldTimeZone:
-		return m.calendarEdit.Draft.TimeZone
+	case calendarEditFieldEndTimeZone:
+		return m.calendarEdit.Draft.EndTimeZone
 	case calendarEditFieldAlternateTimeZones:
 		return strings.Join(m.calendarEdit.Draft.AlternateTimeZones, ", ")
 	case calendarEditFieldAllDay:
@@ -1472,10 +1479,13 @@ func (m *Model) setCalendarEditFieldValue(value string) {
 		m.calendarEdit.Draft.Location = value
 	case calendarEditFieldStart:
 		m.calendarEdit.Draft.StartText = value
+	case calendarEditFieldStartTimeZone:
+		m.calendarEdit.Draft.StartTimeZone = value
+		m.calendarEdit.Draft.TimeZone = value
 	case calendarEditFieldEnd:
 		m.calendarEdit.Draft.EndText = value
-	case calendarEditFieldTimeZone:
-		m.calendarEdit.Draft.TimeZone = value
+	case calendarEditFieldEndTimeZone:
+		m.calendarEdit.Draft.EndTimeZone = value
 	case calendarEditFieldAlternateTimeZones:
 		m.calendarEdit.Draft.AlternateTimeZones = splitCalendarEditCSV(value)
 	case calendarEditFieldAllDay:
@@ -2522,33 +2532,47 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		rightW = width - leftW - panelGapWidth
 	}
 	var fields []string
+	fields = append(fields, m.renderCalendarEditSectionTitle("Event", leftW))
 	fields = append(fields, m.renderCalendarEditField("Calendar", calendarEditFieldCalendar, m.calendarEditCalendarLabel(), leftW))
 	fields = append(fields, m.renderCalendarEditField("Title", calendarEditFieldTitle, state.Draft.Title, leftW))
 	fields = append(fields, m.renderCalendarEditField("Location", calendarEditFieldLocation, state.Draft.Location, leftW))
+	fields = append(fields, "")
+	fields = append(fields, m.renderCalendarEditSectionTitle("Timing", leftW))
 	fields = append(fields, m.renderCalendarEditField("Start", calendarEditFieldStart, state.Draft.StartText, leftW))
+	fields = append(fields, m.renderCalendarEditField("Start TZ", calendarEditFieldStartTimeZone, state.Draft.StartTimeZone, leftW))
 	fields = append(fields, m.renderCalendarEditField("End", calendarEditFieldEnd, state.Draft.EndText, leftW))
-	fields = append(fields, m.renderCalendarEditField("Event TZ", calendarEditFieldTimeZone, state.Draft.TimeZone, leftW))
+	fields = append(fields, m.renderCalendarEditField("End TZ", calendarEditFieldEndTimeZone, state.Draft.EndTimeZone, leftW))
 	fields = append(fields, m.renderCalendarEditField("Display TZs", calendarEditFieldAlternateTimeZones, strings.Join(state.Draft.AlternateTimeZones, ", "), leftW))
 	fields = append(fields, m.renderCalendarEditField("All day", calendarEditFieldAllDay, m.calendarEditAllDayLabel(), leftW))
+	fields = append(fields, "")
+	fields = append(fields, m.renderCalendarEditSectionTitle("People & Rules", leftW))
 	fields = append(fields, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, leftW))
 	fields = append(fields, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, leftW))
 	fields = append(fields, m.renderCalendarEditField("Reminders", calendarEditFieldReminders, state.Draft.RemindersText, leftW))
-	fields = append(fields, m.renderCalendarEditField("Notes", calendarEditFieldDescription, state.Draft.Description, leftW))
+	fields = append(fields, "")
+	fields = append(fields, m.renderCalendarEditSectionTitle("Description", leftW))
+	fields = append(fields, m.renderCalendarEditField("Notes", calendarEditFieldDescription, calendarEditSingleLine(calendarRenderedNotes(state.Draft.Description)), leftW))
 	if strings.TrimSpace(state.Error) != "" {
 		fields = append(fields, "")
 		fields = append(fields, m.theme.Metadata.Label.Style().Render(calendarFit("Validation", leftW)))
 		fields = append(fields, m.theme.Text.Primary.Style().Render(calendarFit(state.Error, leftW)))
 	}
 
-	preview := m.renderCalendarEditPreview(max(rightW, width))
+	previewW := width
+	if rightW > 0 {
+		previewW = max(12, rightW-2)
+	}
+	preview := m.renderCalendarEditPreview(previewW)
 	var body string
 	if rightW > 0 {
-		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(fields, "\n"), panelGap, m.renderCalendarEditPreview(rightW))
+		preview = m.renderCalendarEditPreviewBox(preview, rightW)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(fields, "\n"), panelGap, preview)
 	} else {
 		body = strings.Join(fields, "\n") + "\n\n" + preview
 	}
 	lines := append(header, strings.Split(body, "\n")...)
 	lines = append(lines, "")
+	lines = append(lines, m.renderCalendarEditValidationStatus(width))
 	hint := "tab: next field  space: toggle all day  ctrl+s: save  esc: cancel"
 	if !state.Create {
 		hint = "tab: next field  space: toggle all day  ctrl+s: save  ctrl+d: delete  esc: cancel"
@@ -2578,15 +2602,24 @@ func (m *Model) renderCalendarEditPreview(width int) string {
 	if err != nil {
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit("Validation: "+err.Error(), width)))
 	} else {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Timezone                         Local time", width)))
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(strings.Repeat("-", min(width, 52)), width)))
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(preview.Local, width)))
 		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(preview.Event, width)))
 		for _, alt := range preview.Alternates {
 			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(alt, width)))
 		}
 		if strings.TrimSpace(preview.DateCrossingNote) != "" {
-			lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(preview.DateCrossingNote, width)))
+			lines = append(lines, m.theme.Severity.Warning.Style().Render(calendarFit("Warning: "+preview.DateCrossingNote, width)))
 		}
-		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Alt TZ rows are preview only; Event TZ saves.", width)))
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Alt TZ rows are preview only; Start/End TZ save.", width)))
+	}
+	if notes := calendarRenderedNotes(state.Draft.Description); strings.TrimSpace(notes) != "" {
+		lines = append(lines, "")
+		lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Notes preview", width)))
+		for _, line := range wrapText(notes, width) {
+			lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(line, width)))
+		}
 	}
 	lines = append(lines, "")
 	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Conflict check", width)))
@@ -2595,6 +2628,17 @@ func (m *Model) renderCalendarEditPreview(width int) string {
 	lines = append(lines, m.theme.Metadata.Label.Style().Render(calendarFit("Recurrence preview", width)))
 	lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(calendarEditRecurrencePreview(state.Draft), width)))
 	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderCalendarEditPreviewBox(preview string, width int) string {
+	if width < 8 {
+		return preview
+	}
+	return lipgloss.NewStyle().
+		Width(width - 2).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor()).
+		Render(preview)
 }
 
 func (m *Model) renderCalendarEventDelete(width, height int) string {
@@ -2857,19 +2901,69 @@ func (m *Model) renderCalendarEditField(label string, field calendarEditField, v
 	if m.calendarEdit.Field == field {
 		prefix = "> "
 	}
+	value = calendarEditSingleLine(value)
 	if strings.TrimSpace(value) == "" {
 		value = "--"
 	}
-	labelText := calendarFit(label+":", 11)
-	valueW := width - ansi.StringWidth(labelText) - 3
-	if valueW < 4 {
-		valueW = 4
+	labelText := calendarFit(label+":", 13)
+	if width < 96 {
+		valueW := width - ansi.StringWidth(prefix) - ansi.StringWidth(labelText) - 1
+		if valueW < 4 {
+			valueW = 4
+		}
+		line := prefix + labelText + " " + calendarFit(value, valueW)
+		if m.calendarEdit.Field == field {
+			return m.theme.Focus.SelectionActive.Style().Render(calendarFit(line, width))
+		}
+		return m.theme.Text.Primary.Style().Render(calendarFit(line, width))
 	}
-	line := prefix + labelText + " " + calendarFit(value, valueW)
+	cellW := width - ansi.StringWidth(prefix) - ansi.StringWidth(labelText) - 3
+	if cellW < 8 {
+		line := prefix + labelText + " " + calendarFit(value, 4)
+		if m.calendarEdit.Field == field {
+			return m.theme.Focus.SelectionActive.Style().Render(calendarFit(line, width))
+		}
+		return m.theme.Text.Primary.Style().Render(calendarFit(line, width))
+	}
+	valueW := max(1, cellW-2)
+	valueText := calendarFit(value, valueW)
+	cell := " " + lipgloss.NewStyle().Width(valueW).MaxWidth(valueW).Render(valueText) + " "
+	borderStyle := m.theme.Focus.PanelBorder.Style()
+	labelStyle := m.theme.Metadata.Label.Style()
+	valueStyle := m.theme.Text.Primary.Style()
 	if m.calendarEdit.Field == field {
-		return m.theme.Focus.SelectionActive.Style().Render(calendarFit(line, width))
+		borderStyle = m.theme.Focus.PanelBorderFocused.Style()
+		labelStyle = m.theme.Severity.Info.Style().Bold(true)
+		valueStyle = m.theme.Focus.SelectionActive.Style()
 	}
-	return m.theme.Text.Primary.Style().Render(calendarFit(line, width))
+	return prefix +
+		labelStyle.Render(labelText) +
+		" " +
+		borderStyle.Render("│") +
+		valueStyle.Render(cell) +
+		borderStyle.Render("│")
+}
+
+func (m *Model) renderCalendarEditSectionTitle(label string, width int) string {
+	return m.theme.Metadata.Label.Style().Render(calendarFit(label, width))
+}
+
+func (m *Model) renderCalendarEditValidationStatus(width int) string {
+	state := m.calendarEdit
+	if strings.TrimSpace(state.Error) != "" {
+		return m.theme.Severity.Error.Style().Render(calendarFit("Validation: "+state.Error, width))
+	}
+	if _, err := state.Draft.Apply(state.Base); err != nil {
+		return m.theme.Severity.Warning.Style().Render(calendarFit("Warning: "+err.Error(), width))
+	}
+	status := "✓ No validation issues"
+	if state.Dirty {
+		status += "  |  unsaved changes"
+	}
+	if state.Saving {
+		status = "Saving calendar event..."
+	}
+	return m.theme.Severity.Success.Style().Render(calendarFit(status, width))
 }
 
 func (m *Model) calendarEditAllDayLabel() string {
@@ -3410,7 +3504,12 @@ func (m *Model) renderCalendarEventDetailWithHeader(width, height int, full bool
 	lines = append(lines, calendarDetailRow(m, "Time", calendarTimeRange(*event), width))
 	if !event.AllDay && !event.Start.IsZero() {
 		lines = append(lines, calendarDetailRow(m, "Local", calendarTimeRangeInLocation(*event, time.Local), width))
-		lines = append(lines, calendarDetailRow(m, "Event TZ", calendarTimeRangeInNamedLocation(*event, event.CanonicalTimeZone()), width))
+		if event.CanonicalStartTimeZone() != event.CanonicalEndTimeZone() {
+			lines = append(lines, calendarDetailRow(m, "Start TZ", calendarTimeRangeInNamedLocation(*event, event.CanonicalStartTimeZone()), width))
+			lines = append(lines, calendarDetailRow(m, "End TZ", calendarTimeRangeInNamedLocation(*event, event.CanonicalEndTimeZone()), width))
+		} else {
+			lines = append(lines, calendarDetailRow(m, "Event TZ", calendarTimeRangeInNamedLocation(*event, event.CanonicalTimeZone()), width))
+		}
 		for _, timezone := range calendarAlternateTimeZones(*event) {
 			lines = append(lines, calendarDetailRow(m, "Alt TZ", calendarTimeRangeInNamedLocation(*event, timezone), width))
 		}
@@ -4222,8 +4321,10 @@ func calendarReminderLabel(reminder models.CalendarReminder) string {
 
 func calendarAlternateTimeZones(event models.CalendarEvent) []string {
 	seen := map[string]bool{
-		event.CanonicalTimeZone(): true,
-		"":                        true,
+		event.CanonicalTimeZone():      true,
+		event.CanonicalStartTimeZone(): true,
+		event.CanonicalEndTimeZone():   true,
+		"":                             true,
 	}
 	out := make([]string, 0, len(event.AlternateTimeZones))
 	for _, timezone := range event.AlternateTimeZones {
@@ -5086,10 +5187,17 @@ func calendarRenderedNotes(value string) string {
 	}
 	value = strings.ReplaceAll(value, "\r\n", "\n")
 	value = strings.ReplaceAll(value, "\r", "\n")
-	value = calendarHTMLListItemPattern.ReplaceAllString(value, "\n- ")
-	value = calendarHTMLBreakPattern.ReplaceAllString(value, "\n")
-	value = calendarHTMLTagPattern.ReplaceAllString(value, "")
+	if strings.Contains(value, "<") && strings.Contains(value, ">") {
+		if markdown := strings.TrimSpace(render.HTMLToMarkdown(value)); markdown != "" {
+			value = markdown
+		} else {
+			value = calendarHTMLListItemPattern.ReplaceAllString(value, "\n- ")
+			value = calendarHTMLBreakPattern.ReplaceAllString(value, "\n")
+			value = calendarHTMLTagPattern.ReplaceAllString(value, "")
+		}
+	}
 	value = html.UnescapeString(value)
+	value = calendarMarkdownLinkPattern.ReplaceAllString(value, "$1")
 	value = strings.NewReplacer("**", "", "__", "", "`", "").Replace(value)
 	lines := strings.Split(value, "\n")
 	out := make([]string, 0, len(lines))
@@ -5101,6 +5209,13 @@ func calendarRenderedNotes(value string) string {
 		out = append(out, line)
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func calendarEditSingleLine(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	value = strings.ReplaceAll(value, "\n", " ")
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func calendarEventNeedsAction(event models.CalendarEvent) bool {

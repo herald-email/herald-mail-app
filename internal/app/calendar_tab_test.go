@@ -2569,6 +2569,10 @@ func TestCalendarEventDetailOnlyAdvertisesEditAction(t *testing.T) {
 
 func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T) {
 	rich := richCalendarEventForTest()
+	rich.Description = `<p>Flight notes</p><ul><li><strong>Bring</strong> passport</li><li>[Boarding pass](https://air.example/boarding)</li></ul>`
+	rich.StartTimeZone = "America/Los_Angeles"
+	rich.EndTimeZone = "Asia/Tokyo"
+	rich.AlternateTimeZones = []string{"Europe/London"}
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
 	m := New(b, nil, "", nil, false)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
@@ -2591,8 +2595,10 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 		"Timezone planning",
 		"Start",
 		"End",
-		"Event TZ",
+		"Start TZ",
+		"End TZ",
 		"America/Los_Angeles",
+		"Asia/Tokyo",
 		"Attendees",
 		"Rae Stone <rae@example.com> accepted",
 		"Recurrence",
@@ -2600,9 +2606,13 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 		"Reminders",
 		"popup 30m",
 		"Alt TZ",
-		"Asia/Tokyo",
+		"Europe/London",
+		"Notes preview",
+		"Flight notes",
+		"Bring passport",
+		"Boarding pass",
 		"Preview",
-		"Alt TZ rows are preview only; Event TZ saves.",
+		"Alt TZ rows are preview only; Start/End TZ save.",
 		"ctrl+s: save",
 		"esc: cancel",
 	} {
@@ -2610,7 +2620,7 @@ func TestCalendarEventEditOpensFromDetailAndRendersTimezonePreview(t *testing.T)
 			t.Fatalf("event edit missing %q:\n%s", want, rendered)
 		}
 	}
-	for _, forbidden := range []string{"provider-etag", "syncToken", "RSVP", "Create event"} {
+	for _, forbidden := range []string{"provider-etag", "syncToken", "RSVP", "Create event", "<p>", "<li>", "**Bring**"} {
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("event edit leaked or advertised %q:\n%s", forbidden, rendered)
 		}

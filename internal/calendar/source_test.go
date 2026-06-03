@@ -437,6 +437,32 @@ func TestGoogleCalendarSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 }
 
+func TestGoogleEventFromModelUsesSeparateStartAndEndTimezones(t *testing.T) {
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation Los Angeles: %v", err)
+	}
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Fatalf("LoadLocation Tokyo: %v", err)
+	}
+	payload := googleEventFromModel(models.CalendarEvent{
+		Ref:           models.EventRef{SourceID: "travel-calendar", AccountID: "travel", CalendarID: "flights", EventID: "flight-1"}.WithDefaults(),
+		Title:         "LAX to HND",
+		Start:         time.Date(2026, 6, 3, 22, 30, 0, 0, losAngeles),
+		End:           time.Date(2026, 6, 5, 5, 30, 0, 0, tokyo),
+		TimeZone:      "America/Los_Angeles",
+		StartTimeZone: "America/Los_Angeles",
+		EndTimeZone:   "Asia/Tokyo",
+	})
+	if payload.Start.TimeZone != "America/Los_Angeles" || !strings.Contains(payload.Start.DateTime, "22:30:00") {
+		t.Fatalf("start payload = %#v, want Los Angeles wall time", payload.Start)
+	}
+	if payload.End.TimeZone != "Asia/Tokyo" || !strings.Contains(payload.End.DateTime, "05:30:00") {
+		t.Fatalf("end payload = %#v, want Tokyo wall time", payload.End)
+	}
+}
+
 func TestGoogleCalendarSourceDeleteEventWritesThroughProvider(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,
@@ -1235,6 +1261,35 @@ func TestCalDAVSourceUpdateEventWritesThroughProvider(t *testing.T) {
 	}
 	if saved.Ref.ETag == edited.Ref.ETag {
 		t.Fatalf("saved etag = %q, want provider freshness to advance", saved.Ref.ETag)
+	}
+}
+
+func TestEventToICSUsesSeparateStartAndEndTimezones(t *testing.T) {
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation Los Angeles: %v", err)
+	}
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Fatalf("LoadLocation Tokyo: %v", err)
+	}
+	ics := eventToICS(models.CalendarEvent{
+		Ref:           models.EventRef{SourceID: "travel-calendar", AccountID: "travel", CalendarID: "flights", EventID: "flight-1"}.WithDefaults(),
+		ProviderUID:   "flight-1@example.test",
+		Title:         "LAX to HND",
+		Start:         time.Date(2026, 6, 3, 22, 30, 0, 0, losAngeles),
+		End:           time.Date(2026, 6, 5, 5, 30, 0, 0, tokyo),
+		TimeZone:      "America/Los_Angeles",
+		StartTimeZone: "America/Los_Angeles",
+		EndTimeZone:   "Asia/Tokyo",
+	})
+	for _, want := range []string{
+		"DTSTART;TZID=America/Los_Angeles:20260603T223000",
+		"DTEND;TZID=Asia/Tokyo:20260605T053000",
+	} {
+		if !strings.Contains(ics, want) {
+			t.Fatalf("ICS missing %q:\n%s", want, ics)
+		}
 	}
 }
 

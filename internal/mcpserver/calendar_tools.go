@@ -131,6 +131,8 @@ func addCalendarTools(s *server.MCPServer, c *cache.Cache) {
 			mcp.WithString("account_id", mcp.Description("Account ID")),
 			mcp.WithString("event_id", mcp.Description("Provider event ID to request")),
 			mcp.WithString("timezone", mcp.Description("IANA timezone, for non-RFC3339 start/end values")),
+			mcp.WithString("start_timezone", mcp.Description("IANA timezone for the start wall time")),
+			mcp.WithString("end_timezone", mcp.Description("IANA timezone for the end wall time")),
 			mcp.WithString("location", mcp.Description("Event location")),
 			mcp.WithString("description", mcp.Description("Event notes/description")),
 			mcp.WithBoolean("all_day", mcp.Description("Whether this is an all-day event")),
@@ -168,6 +170,8 @@ func addCalendarTools(s *server.MCPServer, c *cache.Cache) {
 			mcp.WithString("start", mcp.Description("Start time, RFC3339 or YYYY-MM-DD HH:MM")),
 			mcp.WithString("end", mcp.Description("End time, RFC3339 or YYYY-MM-DD HH:MM")),
 			mcp.WithString("timezone", mcp.Description("IANA timezone, for non-RFC3339 start/end values")),
+			mcp.WithString("start_timezone", mcp.Description("IANA timezone for the start wall time")),
+			mcp.WithString("end_timezone", mcp.Description("IANA timezone for the end wall time")),
 			mcp.WithString("location", mcp.Description("Event location")),
 			mcp.WithString("description", mcp.Description("Event notes/description")),
 			mcp.WithBoolean("all_day", mcp.Description("Whether this is an all-day event")),
@@ -233,6 +237,8 @@ func calendarDaemonBody(req mcp.CallToolRequest) map[string]any {
 		"start",
 		"end",
 		"timezone",
+		"start_timezone",
+		"end_timezone",
 		"status",
 	} {
 		if value := strings.TrimSpace(req.GetString(key, "")); value != "" {

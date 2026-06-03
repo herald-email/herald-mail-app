@@ -26,6 +26,8 @@ type CalendarEvent struct {
 	End                time.Time
 	AllDay             bool
 	TimeZone           string
+	StartTimeZone      string
+	EndTimeZone        string
 	Status             string
 	Organizer          string
 	OrganizerEmail     string
@@ -113,10 +115,27 @@ func (e CalendarEvent) CanonicalTimeZone() string {
 	if e.TimeZone != "" {
 		return e.TimeZone
 	}
+	if e.StartTimeZone != "" {
+		return e.StartTimeZone
+	}
 	if !e.Start.IsZero() && e.Start.Location() != nil {
 		return e.Start.Location().String()
 	}
 	return "Local"
+}
+
+func (e CalendarEvent) CanonicalStartTimeZone() string {
+	if e.StartTimeZone != "" {
+		return e.StartTimeZone
+	}
+	return e.CanonicalTimeZone()
+}
+
+func (e CalendarEvent) CanonicalEndTimeZone() string {
+	if e.EndTimeZone != "" {
+		return e.EndTimeZone
+	}
+	return e.CanonicalStartTimeZone()
 }
 
 func CalendarEventMatchesQuery(event CalendarEvent, query string) bool {
@@ -134,6 +153,8 @@ func CalendarEventSearchText(event CalendarEvent) string {
 		event.Description,
 		event.Location,
 		event.TimeZone,
+		event.StartTimeZone,
+		event.EndTimeZone,
 		event.Status,
 		event.Organizer,
 		event.OrganizerEmail,

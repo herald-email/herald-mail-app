@@ -18,7 +18,7 @@ func TestCalendarCacheTablesAreSourceScoped(t *testing.T) {
 	}
 
 	eventCols := tableColumns(t, c.db, "calendar_events")
-	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "timezone", "organizer", "attendees_json", "recurrence_json", "attachments_json", "reminders_json", "alternate_timezones_json", "invalidated_at"} {
+	for _, name := range []string{"source_id", "account_id", "calendar_id", "event_id", "instance_id", "local_id", "etag", "revision", "starts_at", "ends_at", "timezone", "start_timezone", "end_timezone", "organizer", "attendees_json", "recurrence_json", "attachments_json", "reminders_json", "alternate_timezones_json", "invalidated_at"} {
 		if !eventCols[name] {
 			t.Fatalf("calendar_events missing column %s", name)
 		}
@@ -249,6 +249,30 @@ func TestCacheCalendarEventRichDetailRoundTrip(t *testing.T) {
 	}
 	if len(got.AlternateTimeZones) != 1 || got.AlternateTimeZones[0] != "Asia/Tokyo" {
 		t.Fatalf("alternate zones = %#v", got.AlternateTimeZones)
+	}
+}
+
+func TestCacheCalendarEventRoundTripsEndpointTimezones(t *testing.T) {
+	c := newTestCache(t)
+	start := time.Date(2026, 6, 3, 22, 30, 0, 0, time.UTC)
+	event := models.CalendarEvent{
+		Ref:           models.EventRef{SourceID: "travel-calendar", AccountID: "travel", CalendarID: "flights", EventID: "flight-1"}.WithDefaults(),
+		Title:         "LAX to HND",
+		Start:         start,
+		End:           start.Add(12 * time.Hour),
+		TimeZone:      "America/Los_Angeles",
+		StartTimeZone: "America/Los_Angeles",
+		EndTimeZone:   "Asia/Tokyo",
+	}
+	if err := c.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	got, err := c.GetCalendarEventByRef(event.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if got.StartTimeZone != "America/Los_Angeles" || got.EndTimeZone != "Asia/Tokyo" {
+		t.Fatalf("endpoint zones = %q/%q, want preserved start/end zones", got.StartTimeZone, got.EndTimeZone)
 	}
 }
 

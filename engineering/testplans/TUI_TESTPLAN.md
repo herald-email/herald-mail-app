@@ -292,17 +292,19 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start in Timeline with the app in a browse context.
-2. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `h`, `j`, `k`, `l`, `c`, `/`, and `?`.
-3. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
-4. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
-5. Open Timeline search with the physical `/` key, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
-6. Open Compose from Timeline with the physical `c` key or Cyrillic fallback lowercase `с`, type native body text, and then leave Compose with `Esc`.
-7. Repeat the safe browse-key portion over SSH.
+2. In a terminal with keyboard enhancement support, use a Latin non-US layout such as Swiss German QWERTZ and press printable keys that differ from US QWERTY, including `y`, `z`, and the layout's `?`.
+3. In a terminal with keyboard enhancement support, use a non-Latin keyboard layout and press the physical keys advertised as `h`, `j`, `k`, `l`, `c`, `/`, and `?`.
+4. In fallback mode or synthetic tests, send Cyrillic characters that correspond to advertised physical shortcut keys on a Russian keyboard: `р` for `h`, `о` for `j`, `л` for `k`, `д` for `l`, `с` for `c`, `.` for `/`, and `,` for `?`.
+5. In fallback mode or synthetic tests, send direct Japanese kana layout characters that correspond to advertised physical shortcut keys: `く` for `h`, `ま` for `j`, `の` for `k`, `り` for `l`, `そ` for `c`, and `め` for `/`.
+6. Open Timeline search with the layout's printable `/` or `?` keys, Cyrillic fallback `.`, or direct-kana fallback `め`, then type native query text such as `привет` or `まのり`.
+7. Open Compose from Timeline with printable `c` or Cyrillic fallback lowercase `с`, type native body text, and then leave Compose with `Esc`.
+8. Repeat the safe browse-key portion over SSH.
 
 **Expect:**
-- Physical `h/j/k/l` positions navigate left/down/up/right where the active view has a meaningful target.
-- Physical `c` opens Compose from Timeline while literal `c` stays text in editable fields.
-- Physical `/` opens Timeline search and physical `?` opens shortcut help.
+- Latin non-US printable keys route by the actual associated text: CH-QWERTZ `y` and `z` are not swapped, and CH `?` opens shortcut help in browse contexts while remaining literal text in search and Compose.
+- Non-Latin physical `h/j/k/l` positions navigate left/down/up/right where the active view has a meaningful target.
+- Printable `c` opens Compose from Timeline while literal `c` stays text in editable fields.
+- Printable `/` opens Timeline search and printable `?` opens shortcut help in browse contexts.
 - The Cyrillic and direct-kana fallback aliases continue to behave the same way when `BaseCode` is unavailable and the terminal sends one committed character per keypress.
 - Search and Compose text fields preserve the typed native characters instead of converting them to Latin shortcut names.
 - Japanese romaji IME pre-edit is not treated as command input before the IME commits text; those sessions need terminal `BaseCode`/keyboard-enhancement support for true physical shortcuts while composing.
@@ -1885,18 +1887,21 @@ This case covers the provider-backed event creation and deletion slice plus the 
 **Steps:**
 1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one writable calendar collection.
 2. Press `3` or `F4` to open Calendar, then press `Ctrl+N` to open Create Event.
-3. Confirm Create Event shows Calendar, Title, Location, Start, End, Event TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
+3. Confirm Create Event shows Calendar, Title, Location, Start, End, Start TZ, End TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
 4. Fill title/start/end fields and press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success.
-5. Open the created event, press `e`, edit a visible field, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref.
+5. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
 6. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
 7. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
-8. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
-9. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
+8. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
+9. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
+10. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
 
 **Expect:**
 - Create, update, and delete use provider-backed mutation boundaries first and update or invalidate cached rows only after success.
 - Delete always requires confirmation in the Calendar TUI and never runs from a text-entry surface.
 - Event Edit/Create follows the Screen 06 structure closely enough that the color side-by-side comparison can be reviewed without relying on prose.
+- Start and end timezones can differ for travel events; Google Calendar, CalDAV, cache, daemon, and MCP preserve those endpoint-specific zones.
+- HTML and Markdown notes render in the edit preview with readable paragraphs/lists/links rather than raw provider markup.
 - Daemon and MCP create/update/delete tools route through the same scoped mutation semantics as the TUI.
 - At `50x15`, the minimum-size guard appears instead of clipped create/edit/delete chrome, and resizing larger restores the same modal state.
 

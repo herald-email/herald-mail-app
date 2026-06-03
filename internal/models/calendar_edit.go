@@ -17,6 +17,8 @@ type CalendarEventEditDraft struct {
 	StartText          string
 	EndText            string
 	TimeZone           string
+	StartTimeZone      string
+	EndTimeZone        string
 	AttendeesText      string
 	RecurrenceText     string
 	RemindersText      string
@@ -35,14 +37,17 @@ type CalendarTimezonePreview struct {
 
 func NewCalendarEventEditDraft(event CalendarEvent) CalendarEventEditDraft {
 	event.Ref = event.Ref.WithDefaults()
-	loc := calendarEditLocation(event.CanonicalTimeZone(), event.Start.Location())
+	startTZ := event.CanonicalStartTimeZone()
+	endTZ := event.CanonicalEndTimeZone()
+	startLoc := calendarEditLocation(startTZ, event.Start.Location())
+	endLoc := calendarEditLocation(endTZ, event.End.Location())
 	start := event.Start
 	end := event.End
 	if !start.IsZero() {
-		start = start.In(loc)
+		start = start.In(startLoc)
 	}
 	if !end.IsZero() {
-		end = end.In(loc)
+		end = end.In(endLoc)
 	}
 	return CalendarEventEditDraft{
 		Ref:                event.Ref,
@@ -52,6 +57,8 @@ func NewCalendarEventEditDraft(event CalendarEvent) CalendarEventEditDraft {
 		StartText:          formatCalendarEditTime(start),
 		EndText:            formatCalendarEditTime(end),
 		TimeZone:           event.CanonicalTimeZone(),
+		StartTimeZone:      startTZ,
+		EndTimeZone:        endTZ,
 		AttendeesText:      formatCalendarEditAttendees(event.Attendees),
 		RecurrenceText:     formatCalendarEditRecurrence(event.Recurrence),
 		RemindersText:      formatCalendarEditReminders(event.Reminders),
@@ -68,23 +75,40 @@ func (d CalendarEventEditDraft) Apply(base CalendarEvent) (CalendarEvent, error)
 	updated.Title = strings.TrimSpace(d.Title)
 	updated.Description = strings.TrimSpace(d.Description)
 	updated.Location = strings.TrimSpace(d.Location)
-	updated.TimeZone = strings.TrimSpace(d.TimeZone)
-	if updated.TimeZone == "" {
-		updated.TimeZone = base.CanonicalTimeZone()
+	startTZ := strings.TrimSpace(d.StartTimeZone)
+	if startTZ == "" {
+		startTZ = strings.TrimSpace(d.TimeZone)
 	}
-	loc, err := time.LoadLocation(updated.TimeZone)
+	if startTZ == "" {
+		startTZ = base.CanonicalStartTimeZone()
+	}
+	endTZ := strings.TrimSpace(d.EndTimeZone)
+	if endTZ == "" {
+		endTZ = startTZ
+	}
+	if legacyTZ := strings.TrimSpace(d.TimeZone); legacyTZ != "" && legacyTZ != startTZ &&
+		startTZ == strings.TrimSpace(base.CanonicalStartTimeZone()) &&
+		endTZ == strings.TrimSpace(base.CanonicalEndTimeZone()) &&
+		startTZ == endTZ {
+		startTZ = legacyTZ
+		endTZ = legacyTZ
+	}
+	startLoc, err := loadCalendarEditLocation(startTZ)
 	if err != nil {
-		if strings.EqualFold(updated.TimeZone, "local") {
-			loc = time.Local
-		} else {
-			return CalendarEvent{}, fmt.Errorf("timezone %q is not available", updated.TimeZone)
-		}
+		return CalendarEvent{}, err
 	}
-	start, err := parseCalendarEditTime(d.StartText, loc)
+	endLoc, err := loadCalendarEditLocation(endTZ)
+	if err != nil {
+		return CalendarEvent{}, err
+	}
+	updated.TimeZone = startTZ
+	updated.StartTimeZone = startTZ
+	updated.EndTimeZone = endTZ
+	start, err := parseCalendarEditTime(d.StartText, startLoc)
 	if err != nil {
 		return CalendarEvent{}, fmt.Errorf("start time: %w", err)
 	}
-	end, err := parseCalendarEditTime(d.EndText, loc)
+	end, err := parseCalendarEditTime(d.EndText, endLoc)
 	if err != nil {
 		return CalendarEvent{}, fmt.Errorf("end time: %w", err)
 	}
@@ -123,9 +147,15 @@ func (d CalendarEventEditDraft) TimezonePreview(base CalendarEvent) (CalendarTim
 	}
 	preview := CalendarTimezonePreview{
 		Local: calendarEditPreviewLine("Local", "Local", event, time.Local),
-		Event: calendarEditPreviewLine("Event TZ", event.CanonicalTimeZone(), event, calendarEditLocation(event.CanonicalTimeZone(), event.Start.Location())),
+		Event: calendarEditEndpointPreviewLine(event),
 	}
-	eventStart := event.Start.In(calendarEditLocation(event.CanonicalTimeZone(), event.Start.Location()))
+	startLoc := calendarEditLocation(event.CanonicalStartTimeZone(), event.Start.Location())
+	endLoc := calendarEditLocation(event.CanonicalEndTimeZone(), event.End.Location())
+	eventStart := event.Start.In(startLoc)
+	eventEnd := event.End.In(endLoc)
+	if !event.End.IsZero() && !sameCalendarEditDate(eventStart, eventEnd) {
+		preview.DateCrossingNote = fmt.Sprintf("date changes between start/end timezones (%s to %s)", eventStart.Format("Mon Jan 2"), eventEnd.Format("Mon Jan 2"))
+	}
 	for _, timezone := range calendarEditAlternateTimeZones(event) {
 		loc, err := time.LoadLocation(timezone)
 		if err != nil {
@@ -170,6 +200,9 @@ func formatCalendarEditTime(value time.Time) string {
 
 func calendarEditLocation(timezone string, fallback *time.Location) *time.Location {
 	timezone = strings.TrimSpace(timezone)
+	if strings.EqualFold(timezone, "local") {
+		return time.Local
+	}
 	if timezone != "" {
 		if loc, err := time.LoadLocation(timezone); err == nil {
 			return loc
@@ -179,6 +212,54 @@ func calendarEditLocation(timezone string, fallback *time.Location) *time.Locati
 		return fallback
 	}
 	return time.Local
+}
+
+func loadCalendarEditLocation(timezone string) (*time.Location, error) {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" || strings.EqualFold(timezone, "local") {
+		return time.Local, nil
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, fmt.Errorf("timezone %q is not available", timezone)
+	}
+	return loc, nil
+}
+
+func calendarEditEndpointPreviewLine(event CalendarEvent) string {
+	startTZ := event.CanonicalStartTimeZone()
+	endTZ := event.CanonicalEndTimeZone()
+	labelTZ := startTZ
+	if endTZ != "" && endTZ != startTZ {
+		labelTZ = startTZ + " -> " + endTZ
+	}
+	startLoc := calendarEditLocation(startTZ, event.Start.Location())
+	endLoc := calendarEditLocation(endTZ, event.End.Location())
+	return fmt.Sprintf("Event TZ  %s  %s", labelTZ, calendarEditEndpointTimeRange(event, startLoc, endLoc))
+}
+
+func calendarEditEndpointTimeRange(event CalendarEvent, startLoc, endLoc *time.Location) string {
+	if startLoc == nil {
+		startLoc = time.Local
+	}
+	if endLoc == nil {
+		endLoc = startLoc
+	}
+	if event.Start.IsZero() {
+		return "unscheduled"
+	}
+	if event.AllDay {
+		return event.Start.In(startLoc).Format("Mon Jan 2") + " (all day)"
+	}
+	start := event.Start.In(startLoc)
+	if event.End.IsZero() {
+		return start.Format("Mon Jan 2 15:04 MST")
+	}
+	end := event.End.In(endLoc)
+	if sameCalendarEditDate(start, end) {
+		return start.Format("Mon Jan 2 15:04 MST") + " - " + end.Format("15:04 MST")
+	}
+	return start.Format("Mon Jan 2 15:04 MST") + " - " + end.Format("Mon Jan 2 15:04 MST")
 }
 
 func calendarEditPreviewLine(label, timezone string, event CalendarEvent, loc *time.Location) string {
@@ -216,7 +297,7 @@ func sameCalendarEditDate(a, b time.Time) bool {
 }
 
 func calendarEditAlternateTimeZones(event CalendarEvent) []string {
-	seen := map[string]bool{"": true, event.CanonicalTimeZone(): true}
+	seen := map[string]bool{"": true, event.CanonicalTimeZone(): true, event.CanonicalStartTimeZone(): true, event.CanonicalEndTimeZone(): true}
 	out := make([]string, 0, len(event.AlternateTimeZones))
 	for _, timezone := range event.AlternateTimeZones {
 		timezone = strings.TrimSpace(timezone)

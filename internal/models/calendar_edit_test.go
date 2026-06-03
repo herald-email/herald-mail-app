@@ -62,6 +62,59 @@ func TestCalendarEventEditDraftAppliesTimezoneAndPreview(t *testing.T) {
 	}
 }
 
+func TestCalendarEventEditDraftAppliesSeparateStartAndEndTimezones(t *testing.T) {
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation Los Angeles: %v", err)
+	}
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Fatalf("LoadLocation Tokyo: %v", err)
+	}
+	event := CalendarEvent{
+		Ref:           EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "travel", EventID: "flight-1"}.WithDefaults(),
+		Title:         "Flight to Tokyo",
+		Start:         time.Date(2026, 6, 3, 22, 30, 0, 0, losAngeles),
+		End:           time.Date(2026, 6, 5, 2, 30, 0, 0, tokyo),
+		TimeZone:      "America/Los_Angeles",
+		StartTimeZone: "America/Los_Angeles",
+		EndTimeZone:   "Asia/Tokyo",
+	}
+
+	draft := NewCalendarEventEditDraft(event)
+	if draft.StartTimeZone != "America/Los_Angeles" || draft.EndTimeZone != "Asia/Tokyo" {
+		t.Fatalf("draft zones = %q/%q, want endpoint-specific zones", draft.StartTimeZone, draft.EndTimeZone)
+	}
+	draft.StartText = "2026-06-03 23:30"
+	draft.EndText = "2026-06-05 03:30"
+	draft.StartTimeZone = "America/Los_Angeles"
+	draft.EndTimeZone = "Asia/Tokyo"
+	updated, err := draft.Apply(event)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if updated.StartTimeZone != "America/Los_Angeles" || updated.EndTimeZone != "Asia/Tokyo" {
+		t.Fatalf("updated zones = %q/%q, want endpoint-specific zones", updated.StartTimeZone, updated.EndTimeZone)
+	}
+	if got := updated.Start.In(losAngeles).Format(CalendarEventEditTimeLayout); got != "2026-06-03 23:30" {
+		t.Fatalf("updated start wall time = %s", got)
+	}
+	if got := updated.End.In(tokyo).Format(CalendarEventEditTimeLayout); got != "2026-06-05 03:30" {
+		t.Fatalf("updated end wall time = %s", got)
+	}
+
+	preview, err := draft.TimezonePreview(event)
+	if err != nil {
+		t.Fatalf("TimezonePreview: %v", err)
+	}
+	if !strings.Contains(preview.Event, "America/Los_Angeles -> Asia/Tokyo") {
+		t.Fatalf("preview event row = %q, want travel timezone range", preview.Event)
+	}
+	if !strings.Contains(preview.DateCrossingNote, "date changes") {
+		t.Fatalf("date crossing note = %q, want date crossing warning", preview.DateCrossingNote)
+	}
+}
+
 func TestCalendarEventEditDraftValidatesTimeAndTimezone(t *testing.T) {
 	event := CalendarEvent{
 		Ref:      EventRef{SourceID: "demo-calendar", AccountID: "default", CalendarID: "work", EventID: "bad-time"}.WithDefaults(),
@@ -72,7 +125,7 @@ func TestCalendarEventEditDraftValidatesTimeAndTimezone(t *testing.T) {
 	}
 
 	draft := NewCalendarEventEditDraft(event)
-	draft.TimeZone = "Mars/Base"
+	draft.StartTimeZone = "Mars/Base"
 	if _, err := draft.Apply(event); err == nil || !strings.Contains(err.Error(), "timezone") {
 		t.Fatalf("Apply invalid timezone err=%v, want timezone validation", err)
 	}
