@@ -68,7 +68,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Daemon server (`herald serve`, Ollama-style)
 - [x] Source installs use the canonical Go module path and `cmd/herald` package so `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` creates a `herald` binary.
 - [x] Email rendering package (`internal/render` — independent, testable component)
-- [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc.)
+- [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc. from visible labels, terminal hyperlink targets, and opt-in remote image reveal URLs)
 - [ ] Link display modes (full URL, title-only clickable, sanitized)
 - [ ] Native app client (Phase 3)
 
