@@ -145,6 +145,7 @@ Screen `06` covers the calendar mutation surface after the read-only calendar vi
 - [x] Delete Event opens a confirmation from browse/detail/edit contexts, requires `y`, and invalidates cached rows only after provider success.
 - [x] Expose calendar create/update/delete through daemon and MCP tools with source-scoped EventRef semantics.
 - [x] Capture a color side-by-side image with `06-event-edit-timezones.png` and the implemented Herald UI before treating Screen `06` as accepted.
+- [x] Bring Event Create/Edit closer to Screen `06` with separate start/end timezone fields, a table-style timezone preview, a date-crossing warning row, and rendered HTML/Markdown notes in the live preview.
 
 ## RSVP And Invitation Actions
 

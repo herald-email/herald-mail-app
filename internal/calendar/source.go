@@ -1171,6 +1171,8 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		End:               end,
 		AllDay:            allDay,
 		TimeZone:          firstNonEmpty(item.Start.TimeZone, item.End.TimeZone),
+		StartTimeZone:     item.Start.TimeZone,
+		EndTimeZone:       item.End.TimeZone,
 		Status:            item.Status,
 		Organizer:         item.Organizer.DisplayName,
 		OrganizerEmail:    item.Organizer.Email,
@@ -1197,8 +1199,9 @@ func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
 		Recurrence:  append([]string(nil), event.Recurrence...),
 		Reminders:   googleRemindersFromModel(event.Reminders),
 	}
-	payload.Start = googleTimeFromModel(event.Start, event.TimeZone, event.AllDay)
-	payload.End = googleTimeFromModel(event.End, event.TimeZone, event.AllDay)
+	startTimeZone, endTimeZone := eventMutationTimeZones(event)
+	payload.Start = googleTimeFromModel(event.Start, startTimeZone, event.AllDay)
+	payload.End = googleTimeFromModel(event.End, endTimeZone, event.AllDay)
 	if event.Organizer != "" || event.OrganizerEmail != "" {
 		payload.Organizer = googlePerson{DisplayName: event.Organizer, Email: event.OrganizerEmail}
 	}
@@ -1473,13 +1476,13 @@ func EventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendarID, eventID, etag, data string) (*models.CalendarEvent, error) {
 	fields := parseICS(data)
 	details := parseICSRichDetails(data)
-	start, allDay, err := parseICSTimeWithZone(fields["DTSTART"], details.TimeZone)
+	start, allDay, err := parseICSTimeWithZone(fields["DTSTART"], firstNonEmpty(details.StartTimeZone, details.TimeZone))
 	if err != nil {
 		return nil, fmt.Errorf("calendar event %s has invalid DTSTART %q: %w", firstNonEmpty(eventID, fields["UID"], "(unknown)"), fields["DTSTART"], err)
 	}
 	var end time.Time
 	if strings.TrimSpace(fields["DTEND"]) != "" {
-		end, _, err = parseICSTimeWithZone(fields["DTEND"], details.TimeZone)
+		end, _, err = parseICSTimeWithZone(fields["DTEND"], firstNonEmpty(details.EndTimeZone, details.TimeZone))
 		if err != nil {
 			return nil, fmt.Errorf("calendar event %s has invalid DTEND %q: %w", firstNonEmpty(eventID, fields["UID"], "(unknown)"), fields["DTEND"], err)
 		}
@@ -1502,6 +1505,8 @@ func eventFromICS(sourceID models.SourceID, accountID models.AccountID, calendar
 		End:               end,
 		AllDay:            allDay,
 		TimeZone:          details.TimeZone,
+		StartTimeZone:     details.StartTimeZone,
+		EndTimeZone:       details.EndTimeZone,
 		Status:            fields["STATUS"],
 		Organizer:         details.Organizer,
 		OrganizerEmail:    details.OrganizerEmail,
@@ -1541,13 +1546,17 @@ func eventToICS(event models.CalendarEvent) string {
 	if event.AllDay {
 		writeCalendarICSLine(&b, "DTSTART;VALUE=DATE", event.Start.Format("20060102"))
 		writeCalendarICSLine(&b, "DTEND;VALUE=DATE", event.End.Format("20060102"))
-	} else if timezone := strings.TrimSpace(event.TimeZone); timezone != "" {
-		loc := event.Start.Location()
+	} else if timezone, endTimezone := eventMutationTimeZones(event); strings.TrimSpace(timezone) != "" {
+		startLoc := event.Start.Location()
 		if loaded, err := time.LoadLocation(timezone); err == nil {
-			loc = loaded
+			startLoc = loaded
 		}
-		writeCalendarICSLine(&b, "DTSTART;TZID="+timezone, event.Start.In(loc).Format("20060102T150405"))
-		writeCalendarICSLine(&b, "DTEND;TZID="+timezone, event.End.In(loc).Format("20060102T150405"))
+		endLoc := event.End.Location()
+		if loaded, err := time.LoadLocation(endTimezone); err == nil {
+			endLoc = loaded
+		}
+		writeCalendarICSLine(&b, "DTSTART;TZID="+timezone, event.Start.In(startLoc).Format("20060102T150405"))
+		writeCalendarICSLine(&b, "DTEND;TZID="+endTimezone, event.End.In(endLoc).Format("20060102T150405"))
 	} else {
 		writeCalendarICSLine(&b, "DTSTART", event.Start.UTC().Format("20060102T150405Z"))
 		writeCalendarICSLine(&b, "DTEND", event.End.UTC().Format("20060102T150405Z"))
@@ -1599,6 +1608,23 @@ func eventToICS(event models.CalendarEvent) string {
 	return b.String()
 }
 
+func eventMutationTimeZones(event models.CalendarEvent) (string, string) {
+	startTimeZone := strings.TrimSpace(event.StartTimeZone)
+	endTimeZone := strings.TrimSpace(event.EndTimeZone)
+	legacyTimeZone := strings.TrimSpace(event.TimeZone)
+	if legacyTimeZone != "" && startTimeZone != "" && endTimeZone != "" && startTimeZone == endTimeZone && legacyTimeZone != startTimeZone {
+		startTimeZone = legacyTimeZone
+		endTimeZone = legacyTimeZone
+	}
+	if startTimeZone == "" {
+		startTimeZone = legacyTimeZone
+	}
+	if endTimeZone == "" {
+		endTimeZone = firstNonEmpty(startTimeZone, legacyTimeZone)
+	}
+	return startTimeZone, endTimeZone
+}
+
 func writeCalendarICSLine(b *strings.Builder, key, value string) {
 	if strings.TrimSpace(value) == "" {
 		return
@@ -1615,6 +1641,8 @@ func escapeICSValue(value string) string {
 
 type icsRichDetails struct {
 	TimeZone       string
+	StartTimeZone  string
+	EndTimeZone    string
 	Organizer      string
 	OrganizerEmail string
 	Attendees      []models.CalendarAttendee
@@ -1661,9 +1689,12 @@ func parseICSRichDetails(data string) icsRichDetails {
 		}
 		switch key {
 		case "DTSTART":
+			details.StartTimeZone = params["TZID"]
 			if details.TimeZone == "" {
-				details.TimeZone = params["TZID"]
+				details.TimeZone = details.StartTimeZone
 			}
+		case "DTEND":
+			details.EndTimeZone = params["TZID"]
 		case "ORGANIZER":
 			details.Organizer = firstNonEmpty(params["CN"], value)
 			details.OrganizerEmail = calendarMailtoAddress(value)

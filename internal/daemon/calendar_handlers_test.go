@@ -25,14 +25,16 @@ func TestDaemonCalendarEventCreateUpdateDelete(t *testing.T) {
 	s := &Server{backend: b, broadcaster: NewBroadcaster()}
 
 	createPayload := map[string]any{
-		"source_id":   string(collection.SourceID),
-		"account_id":  string(collection.AccountID),
-		"calendar_id": collection.CollectionID,
-		"event_id":    "daemon-calendar-create",
-		"title":       "Daemon calendar create",
-		"start":       "2026-06-03T16:00:00Z",
-		"end":         "2026-06-03T16:30:00Z",
-		"timezone":    "UTC",
+		"source_id":      string(collection.SourceID),
+		"account_id":     string(collection.AccountID),
+		"calendar_id":    collection.CollectionID,
+		"event_id":       "daemon-calendar-create",
+		"title":          "Daemon calendar create",
+		"start":          "2026-06-03T16:00:00Z",
+		"end":            "2026-06-03T16:30:00Z",
+		"timezone":       "UTC",
+		"start_timezone": "America/Los_Angeles",
+		"end_timezone":   "Asia/Tokyo",
 	}
 	createReq := jsonRequest(t, http.MethodPost, "/v1/calendar/events", createPayload)
 	createRR := httptest.NewRecorder()
@@ -47,8 +49,11 @@ func TestDaemonCalendarEventCreateUpdateDelete(t *testing.T) {
 	if created.Title != "Daemon calendar create" || created.Ref.EventID != "daemon-calendar-create" {
 		t.Fatalf("created = %#v", created)
 	}
+	if created.StartTimeZone != "America/Los_Angeles" || created.EndTimeZone != "Asia/Tokyo" {
+		t.Fatalf("created endpoint zones = %q/%q", created.StartTimeZone, created.EndTimeZone)
+	}
 
-	updatePayload := map[string]any{"title": "Daemon calendar updated", "location": "Room D"}
+	updatePayload := map[string]any{"title": "Daemon calendar updated", "location": "Room D", "end_timezone": "Europe/London"}
 	updateURL := "/v1/calendar/events/" + url.PathEscape(created.Ref.EventID) + "?source_id=" + url.QueryEscape(string(created.Ref.SourceID)) + "&account_id=" + url.QueryEscape(string(created.Ref.AccountID)) + "&calendar_id=" + url.QueryEscape(created.Ref.CalendarID)
 	updateReq := jsonRequest(t, http.MethodPatch, updateURL, updatePayload)
 	updateReq.SetPathValue("id", created.Ref.EventID)
@@ -63,6 +68,9 @@ func TestDaemonCalendarEventCreateUpdateDelete(t *testing.T) {
 	}
 	if updated.Title != "Daemon calendar updated" || updated.Location != "Room D" {
 		t.Fatalf("updated = %#v", updated)
+	}
+	if updated.StartTimeZone != "America/Los_Angeles" || updated.EndTimeZone != "Europe/London" {
+		t.Fatalf("updated endpoint zones = %q/%q", updated.StartTimeZone, updated.EndTimeZone)
 	}
 
 	deleteReq := httptest.NewRequest(http.MethodDelete, updateURL, nil)

@@ -22,14 +22,16 @@ type calendarEventMutationRequest struct {
 	LocalID     string  `json:"local_id,omitempty"`
 	ProviderUID *string `json:"provider_uid,omitempty"`
 
-	Title       *string `json:"title,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Location    *string `json:"location,omitempty"`
-	Start       *string `json:"start,omitempty"`
-	End         *string `json:"end,omitempty"`
-	TimeZone    *string `json:"timezone,omitempty"`
-	Status      *string `json:"status,omitempty"`
-	AllDay      *bool   `json:"all_day,omitempty"`
+	Title         *string `json:"title,omitempty"`
+	Description   *string `json:"description,omitempty"`
+	Location      *string `json:"location,omitempty"`
+	Start         *string `json:"start,omitempty"`
+	End           *string `json:"end,omitempty"`
+	TimeZone      *string `json:"timezone,omitempty"`
+	StartTimeZone *string `json:"start_timezone,omitempty"`
+	EndTimeZone   *string `json:"end_timezone,omitempty"`
+	Status        *string `json:"status,omitempty"`
+	AllDay        *bool   `json:"all_day,omitempty"`
 
 	Attendees          []models.CalendarAttendee   `json:"attendees,omitempty"`
 	Recurrence         []string                    `json:"recurrence,omitempty"`
@@ -278,6 +280,21 @@ func (req calendarEventMutationRequest) applyCalendarEventFields(event *models.C
 	if req.TimeZone != nil {
 		event.TimeZone = strings.TrimSpace(*req.TimeZone)
 	}
+	if req.StartTimeZone != nil {
+		event.StartTimeZone = strings.TrimSpace(*req.StartTimeZone)
+	}
+	if req.EndTimeZone != nil {
+		event.EndTimeZone = strings.TrimSpace(*req.EndTimeZone)
+	}
+	if strings.TrimSpace(event.StartTimeZone) == "" {
+		event.StartTimeZone = strings.TrimSpace(event.TimeZone)
+	}
+	if strings.TrimSpace(event.EndTimeZone) == "" {
+		event.EndTimeZone = strings.TrimSpace(event.StartTimeZone)
+	}
+	if strings.TrimSpace(event.TimeZone) == "" {
+		event.TimeZone = strings.TrimSpace(event.StartTimeZone)
+	}
 	if req.Status != nil {
 		event.Status = strings.TrimSpace(*req.Status)
 	}
@@ -287,23 +304,23 @@ func (req calendarEventMutationRequest) applyCalendarEventFields(event *models.C
 	if req.AllDay != nil {
 		event.AllDay = *req.AllDay
 	}
-	loc := time.Local
-	if strings.TrimSpace(event.TimeZone) != "" {
-		loaded, err := time.LoadLocation(event.TimeZone)
-		if err != nil {
-			return fmt.Errorf("timezone %q is not available", event.TimeZone)
-		}
-		loc = loaded
+	startLoc, err := daemonCalendarLocation(event.StartTimeZone)
+	if err != nil {
+		return err
+	}
+	endLoc, err := daemonCalendarLocation(event.EndTimeZone)
+	if err != nil {
+		return err
 	}
 	if req.Start != nil {
-		start, err := parseDaemonCalendarTime(*req.Start, loc)
+		start, err := parseDaemonCalendarTime(*req.Start, startLoc)
 		if err != nil {
 			return fmt.Errorf("start: %w", err)
 		}
 		event.Start = start
 	}
 	if req.End != nil {
-		end, err := parseDaemonCalendarTime(*req.End, loc)
+		end, err := parseDaemonCalendarTime(*req.End, endLoc)
 		if err != nil {
 			return fmt.Errorf("end: %w", err)
 		}
@@ -331,6 +348,18 @@ func (req calendarEventMutationRequest) applyCalendarEventFields(event *models.C
 		event.AlternateTimeZones = append([]string(nil), req.AlternateTimeZones...)
 	}
 	return nil
+}
+
+func daemonCalendarLocation(timezone string) (*time.Location, error) {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" || strings.EqualFold(timezone, "local") {
+		return time.Local, nil
+	}
+	loaded, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, fmt.Errorf("timezone %q is not available", timezone)
+	}
+	return loaded, nil
 }
 
 func parseDaemonCalendarTime(value string, loc *time.Location) (time.Time, error) {
