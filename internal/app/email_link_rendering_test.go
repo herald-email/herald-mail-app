@@ -10,7 +10,7 @@ import (
 )
 
 func linkStressMarkdownBody() (string, string) {
-	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
+	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?utm_source=email&o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
 	body := "Welcome to the trial.\n\n[Display in your browser](" + longURL + ")\n\n![Taskpad logo](https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png)\n\nHi Rowan"
 	return body, longURL
 }
@@ -33,8 +33,12 @@ func assertNoVisibleLinkDestination(t *testing.T, rendered, longURL string) {
 			t.Fatalf("expected %q to be hidden from visible preview text, got:\n%s", bad, visible)
 		}
 	}
-	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
-		t.Fatalf("expected full URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	if strings.Contains(rendered, "utm_source=email") {
+		t.Fatalf("expected tracker param to be stripped from OSC 8 target, got raw:\n%q", rendered)
+	}
+	sanitizedURL := strings.Replace(longURL, "utm_source=email&", "", 1)
+	if !strings.Contains(rendered, "\x1b]8;;"+sanitizedURL+"\x1b\\") {
+		t.Fatalf("expected sanitized URL to remain in OSC 8 target, got raw:\n%q", rendered)
 	}
 }
 

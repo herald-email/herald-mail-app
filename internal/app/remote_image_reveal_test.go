@@ -25,9 +25,9 @@ func publicRemoteImageResolver(context.Context, string) ([]net.IP, error) {
 	return []net.IP{net.ParseIP("93.184.216.34")}, nil
 }
 
-func TestRemoteImagePlaceholderHidesRawURLButKeepsOSC8Target(t *testing.T) {
+func TestRemoteImagePlaceholderHidesRawURLButKeepsSanitizedOSC8Target(t *testing.T) {
 	doc := buildPreviewDocument(&models.EmailBody{
-		TextHTML: `<p>Before</p><img alt="Launch chart" src="https://cdn.example.test/chart.png?token=secret"><p>After</p>`,
+		TextHTML: `<p>Before</p><img alt="Launch chart" src="https://cdn.example.test/chart.png?utm_source=email&token=secret"><p>After</p>`,
 	}, nil)
 	layout := layoutPreviewDocument(doc, previewLayoutOptions{
 		InnerWidth:    120,
@@ -51,8 +51,41 @@ func TestRemoteImagePlaceholderHidesRawURLButKeepsOSC8Target(t *testing.T) {
 			t.Fatalf("visible placeholder leaked %q:\n%s", leaked, visible)
 		}
 	}
+	if strings.Contains(rendered, "utm_source=email") {
+		t.Fatalf("placeholder should strip tracker params from raw OSC8 output, got:\n%q", rendered)
+	}
 	if !strings.Contains(rendered, "\x1b]8;;https://cdn.example.test/chart.png?token=secret") {
-		t.Fatalf("placeholder should keep OSC8 target in raw output, got:\n%q", rendered)
+		t.Fatalf("placeholder should keep sanitized OSC8 target in raw output, got:\n%q", rendered)
+	}
+}
+
+func TestRemoteImageFetcherUsesSanitizedURL(t *testing.T) {
+	ctx := context.Background()
+	var requested string
+	fetcher := remoteImageHTTPFetcher{
+		resolve: publicRemoteImageResolver,
+		client: &http.Client{Transport: remoteImageRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requested = req.URL.String()
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"image/png"}},
+				Body:       io.NopCloser(strings.NewReader("png-bytes")),
+				Request:    req,
+			}, nil
+		})},
+	}
+
+	image, err := fetchRemoteImage(ctx, previewRemoteImage{
+		URL: "https://cdn.example.test/chart.png?utm_source=email&token=secret",
+	}, false, fetcher)
+	if err != nil {
+		t.Fatalf("fetchRemoteImage returned error: %v", err)
+	}
+	if image.ContentID == "" {
+		t.Fatal("expected sanitized remote image to keep a content ID")
+	}
+	if requested != "https://cdn.example.test/chart.png?token=secret" {
+		t.Fatalf("requested URL = %q, want sanitized URL with token preserved", requested)
 	}
 }
 

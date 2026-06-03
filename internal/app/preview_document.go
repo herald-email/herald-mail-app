@@ -236,16 +236,17 @@ func (b *previewHTMLBuilder) writeImage(n *html.Node) {
 		return
 	}
 	if isRemoteImageURL(src) {
-		src = normalizeRemoteImageURL(src)
+		src = sanitizeRemoteImageURL(src)
+		key := remoteImageDocumentKey(src)
 		b.blocks = append(b.blocks, previewDocumentBlock{
 			Kind: previewBlockRemoteImage,
 			Remote: previewRemoteImage{
-				Key:   remoteImageDocumentKey(src),
+				Key:   key,
 				URL:   src,
 				Alt:   alt,
 				Title: title,
 			},
-			ContentID: remoteImageDocumentKey(src),
+			ContentID: key,
 			Alt:       alt,
 		})
 		return

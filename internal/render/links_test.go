@@ -55,7 +55,8 @@ func TestLinkifyWrappedLines(t *testing.T) {
 }
 
 func TestRenderEmailBodyLines_MarkdownLinksUseAnchorText(t *testing.T) {
-	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
+	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?utm_source=email&o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
+	sanitizedURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
 	lines := RenderEmailBodyLines("Welcome\n\n[Display in your browser]("+longURL+")\n\nHi Rowan", 80)
 	rendered := strings.Join(lines, "\n")
 	visible := ansi.Strip(rendered)
@@ -66,8 +67,11 @@ func TestRenderEmailBodyLines_MarkdownLinksUseAnchorText(t *testing.T) {
 	if strings.Contains(visible, "taskpad.mail.example") || strings.Contains(visible, "eyJmaXJ") {
 		t.Fatalf("expected long URL to be hidden from visible text, got:\n%s", visible)
 	}
-	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
-		t.Fatalf("expected full URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	if strings.Contains(rendered, "utm_source=email") {
+		t.Fatalf("expected tracker param to be stripped from OSC 8 target, got raw:\n%q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+sanitizedURL+"\x1b\\") {
+		t.Fatalf("expected sanitized URL to remain in OSC 8 target, got raw:\n%q", rendered)
 	}
 }
 
@@ -92,7 +96,8 @@ func TestRenderEmailBodyLines_LabelFollowedByBracketedURLBecomesOneLink(t *testi
 }
 
 func TestRenderEmailBodyLines_ImageLinksUseAltText(t *testing.T) {
-	logoURL := "https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png"
+	logoURL := "https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png?utm_medium=email&id=42#logo"
+	sanitizedURL := "https://taskpad.mail.example/_next/static/media/taskpad-logo.0-dsvhpw__1x7.png?id=42#logo"
 	lines := RenderEmailBodyLines("![Taskpad logo]("+logoURL+")", 80)
 	rendered := strings.Join(lines, "\n")
 	visible := ansi.Strip(rendered)
@@ -103,8 +108,11 @@ func TestRenderEmailBodyLines_ImageLinksUseAltText(t *testing.T) {
 	if strings.Contains(visible, "taskpad-logo") {
 		t.Fatalf("expected image URL to be hidden from visible text, got %q", visible)
 	}
-	if !strings.Contains(rendered, "\x1b]8;;"+logoURL+"\x1b\\") {
-		t.Fatalf("expected logo URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	if strings.Contains(rendered, "utm_medium=email") {
+		t.Fatalf("expected image tracker param to be stripped from OSC 8 target, got raw:\n%q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+sanitizedURL+"\x1b\\") {
+		t.Fatalf("expected sanitized logo URL to remain in OSC 8 target, got raw:\n%q", rendered)
 	}
 }
 
@@ -143,6 +151,7 @@ func TestRenderEmailBodyLines_DoesNotForceDarkThemeBodyForeground(t *testing.T) 
 
 func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
+	sanitizedURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?token=abcdefghijklmnopqrstuvwxyz0123456789"
 	lines := RenderEmailBodyLines("Open "+longURL+" today", 80)
 	rendered := strings.Join(lines, "\n")
 	visible := ansi.Strip(rendered)
@@ -153,8 +162,11 @@ func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	if strings.Contains(visible, "abcdefghijklmnopqrstuvwxyz0123456789") || strings.Contains(visible, "utm_source=email") {
 		t.Fatalf("expected long query string to be hidden from visible text, got:\n%s", visible)
 	}
-	if !strings.Contains(rendered, "\x1b]8;;"+longURL+"\x1b\\") {
-		t.Fatalf("expected full naked URL to remain in OSC 8 target, got raw:\n%q", rendered)
+	if strings.Contains(rendered, "utm_source=email") {
+		t.Fatalf("expected tracker param to be stripped from OSC 8 target, got raw:\n%q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;"+sanitizedURL+"\x1b\\") {
+		t.Fatalf("expected sanitized naked URL to remain in OSC 8 target, got raw:\n%q", rendered)
 	}
 }
 
@@ -382,5 +394,18 @@ func TestStripTrackersFromText(t *testing.T) {
 	}
 	if !strings.Contains(result, "Click here:") || !strings.Contains(result, "for more info") {
 		t.Errorf("StripTrackersFromText should preserve surrounding text: %q", result)
+	}
+}
+
+func TestSanitizePreviewURLTargetStripsTrackersOnly(t *testing.T) {
+	raw := "https://example.com/path?utm_source=email&id=42&token=abc#frag"
+	want := "https://example.com/path?id=42&token=abc#frag"
+	if got := SanitizePreviewURLTarget(raw); got != want {
+		t.Fatalf("SanitizePreviewURLTarget(%q) = %q, want %q", raw, got, want)
+	}
+
+	invalid := "https://%"
+	if got := SanitizePreviewURLTarget(invalid); got != invalid {
+		t.Fatalf("invalid URL should be unchanged, got %q", got)
 	}
 }
