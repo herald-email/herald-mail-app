@@ -16,8 +16,36 @@ const (
 	MessageReadSourceUnavailable = "unavailable"
 )
 
+type MessageReadClass string
+
+const (
+	MessageReadClassInteractive MessageReadClass = "interactive"
+	MessageReadClassBackground  MessageReadClass = "background"
+)
+
+type messageReadClassContextKey struct{}
+
+func withMessageReadClass(ctx context.Context, class MessageReadClass) context.Context {
+	if ctx == nil || class == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, messageReadClassContextKey{}, class)
+}
+
+func messageReadClassFromContext(ctx context.Context) MessageReadClass {
+	if ctx == nil {
+		return MessageReadClassInteractive
+	}
+	class, _ := ctx.Value(messageReadClassContextKey{}).(MessageReadClass)
+	if class == MessageReadClassBackground {
+		return MessageReadClassBackground
+	}
+	return MessageReadClassInteractive
+}
+
 type MessageReadIntent struct {
 	ViewID string
+	Class  MessageReadClass
 }
 
 type MessageReadResult struct {
@@ -216,8 +244,17 @@ func (s *MessageService) InvalidatePreview(ref models.MessageRef) error {
 
 func (s *MessageService) submitProviderRead(ctx context.Context, ref models.MessageRef, intent MessageReadIntent, operation string, run func(context.Context) (MessageReadResult, error)) (MessageReadResult, error) {
 	policy := work.PolicyCoalesceByResource | work.PolicyReplayCompletedResource
+	priority := work.PriorityInteractive
+	readClass := intent.Class
+	if readClass == "" {
+		readClass = messageReadClassFromContext(ctx)
+	}
+	if readClass == MessageReadClassBackground {
+		policy |= work.PolicySerialBySource
+		priority = work.PriorityBackground
+	}
 	intentKey := work.IntentKey{}
-	if strings.TrimSpace(intent.ViewID) != "" {
+	if strings.TrimSpace(intent.ViewID) != "" && readClass != MessageReadClassBackground {
 		policy |= work.PolicyTakeLatestByIntent
 		intentKey = work.IntentKey{ViewID: intent.ViewID}
 	}
@@ -226,8 +263,9 @@ func (s *MessageService) submitProviderRead(ctx context.Context, ref models.Mess
 		IntentKey:   intentKey,
 		ResourceKey: s.resourceKey(ref, operation),
 		Policy:      policy,
-		Priority:    work.PriorityInteractive,
+		Priority:    priority,
 		Run: func(runCtx context.Context) (any, error) {
+			runCtx = withMessageReadClass(runCtx, readClass)
 			return run(runCtx)
 		},
 	})

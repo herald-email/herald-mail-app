@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,13 @@ import (
 )
 
 const gmailAPIProvider = "gmail"
+
+const (
+	gmailAPIBoundedSyncLimit = 100
+	gmailAPIMaxRetryDelay    = 5 * time.Second
+)
+
+var gmailAPIRetryAfterBodyRE = regexp.MustCompile(`(?i)retry after ([0-9T:\-.Z]+)`)
 
 type GmailAPISourcePlugin struct{}
 
@@ -166,7 +174,7 @@ func (s *GmailAPIMailSource) ProcessEmailsIncremental(ctx context.Context, folde
 			return err
 		}
 	}
-	emails, nextCursor, err := s.fetchEmailsWithCursor(ctx, folder, "")
+	emails, nextCursor, err := s.fetchEmailsWithCursorLimit(ctx, folder, "", gmailAPIBoundedSyncLimit)
 	if err != nil {
 		return err
 	}
@@ -198,13 +206,23 @@ func (s *GmailAPIMailSource) GetEmailsBySender(_ context.Context, folder string)
 
 func (s *GmailAPIMailSource) StartBackgroundReconcile(ctx context.Context, folder string, validIDsCh chan<- map[string]bool) {
 	defer close(validIDsCh)
-	emails, err := s.fetchEmails(ctx, folder, "")
+	ids, err := s.listMessageIDs(ctx, folder, "", 0)
 	if err != nil {
 		return
 	}
-	valid := make(map[string]bool, len(emails))
-	for _, email := range emails {
-		valid[email.MessageID] = true
+	gmailIDs := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		gmailIDs[id] = true
+	}
+	cached, err := s.cache.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return
+	}
+	valid := make(map[string]bool, len(cached))
+	for _, email := range cached {
+		if email != nil && gmailIDs[gmailIDFromLocalID(email.LocalID)] {
+			valid[email.MessageID] = true
+		}
 	}
 	validIDsCh <- valid
 }
@@ -212,15 +230,48 @@ func (s *GmailAPIMailSource) StartBackgroundReconcile(ctx context.Context, folde
 func (s *GmailAPIMailSource) GetFolderMessageIDs(ctx context.Context, folders []string) (map[string]map[string]bool, error) {
 	out := make(map[string]map[string]bool, len(folders))
 	for _, folder := range folders {
-		emails, err := s.fetchEmails(ctx, folder, "")
+		ids, err := s.listMessageIDs(ctx, folder, "", 0)
 		if err != nil {
 			return nil, err
 		}
-		ids := make(map[string]bool, len(emails))
-		for _, email := range emails {
-			ids[email.MessageID] = true
+		gmailIDs := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			gmailIDs[id] = true
 		}
-		out[folder] = ids
+		cached, err := s.cachedEmailsForGmailIDMapping(folder)
+		if err != nil {
+			return nil, err
+		}
+		messageIDs := make(map[string]bool, len(cached))
+		for _, email := range cached {
+			if email != nil && gmailIDs[gmailIDFromLocalID(email.LocalID)] {
+				messageIDs[email.MessageID] = true
+			}
+		}
+		out[folder] = messageIDs
+	}
+	return out, nil
+}
+
+func (s *GmailAPIMailSource) cachedEmailsForGmailIDMapping(folder string) ([]*models.EmailData, error) {
+	folders := []string{folder}
+	normalized := gmailAPIFolderName(folder)
+	if normalized != "All Mail" {
+		folders = append(folders, "All Mail")
+	}
+	seen := map[string]bool{}
+	var out []*models.EmailData
+	for _, cacheFolder := range folders {
+		cacheFolder = gmailAPIFolderName(cacheFolder)
+		if cacheFolder == "" || seen[cacheFolder] {
+			continue
+		}
+		seen[cacheFolder] = true
+		emails, err := s.cache.GetEmailsSortedByDate(cacheFolder)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, emails...)
 	}
 	return out, nil
 }
@@ -505,7 +556,7 @@ func (s *GmailAPIMailSource) FetchMessageNoCache(ctx context.Context, ref models
 	if gmailID == "" {
 		return nil, fmt.Errorf("Gmail API message id unavailable for %s", ref.MessageID)
 	}
-	payload, err := s.fetchMessage(ctx, gmailID)
+	payload, err := s.fetchMessageRaw(ctx, gmailID)
 	if err != nil {
 		return nil, err
 	}
@@ -575,14 +626,18 @@ func (s *GmailAPIMailSource) fetchEmails(ctx context.Context, folder, query stri
 }
 
 func (s *GmailAPIMailSource) fetchEmailsWithCursor(ctx context.Context, folder, query string) ([]*models.EmailData, string, error) {
-	ids, err := s.listMessageIDs(ctx, folder, query)
+	return s.fetchEmailsWithCursorLimit(ctx, folder, query, 0)
+}
+
+func (s *GmailAPIMailSource) fetchEmailsWithCursorLimit(ctx context.Context, folder, query string, limit int) ([]*models.EmailData, string, error) {
+	ids, err := s.listMessageIDs(ctx, folder, query, limit)
 	if err != nil {
 		return nil, "", err
 	}
 	emails := make([]*models.EmailData, 0, len(ids))
 	nextCursor := ""
 	for _, id := range ids {
-		payload, err := s.fetchMessage(ctx, id)
+		payload, err := s.fetchMessageMetadata(ctx, id)
 		if err != nil {
 			return nil, "", err
 		}
@@ -654,7 +709,7 @@ func (s *GmailAPIMailSource) applyHistoryDelta(ctx context.Context, folder, curs
 	}
 	cached := 0
 	for id := range changed {
-		msg, err := s.fetchMessage(ctx, id)
+		msg, err := s.fetchMessageMetadata(ctx, id)
 		if err != nil {
 			return cached, err
 		}
@@ -726,13 +781,16 @@ func (s *GmailAPIMailSource) historyCursorKey(folder string) string {
 	}, ":")
 }
 
-func (s *GmailAPIMailSource) listMessageIDs(ctx context.Context, folder, query string) ([]string, error) {
+func (s *GmailAPIMailSource) listMessageIDs(ctx context.Context, folder, query string, limit int) ([]string, error) {
 	values := url.Values{}
 	if label, err := s.labelIDForFolder(ctx, folder); err == nil && label != "" {
 		values.Set("labelIds", label)
 	}
 	if strings.TrimSpace(query) != "" {
 		values.Set("q", strings.TrimSpace(query))
+	}
+	if limit > 0 {
+		values.Set("maxResults", strconv.Itoa(min(limit, gmailAPIBoundedSyncLimit)))
 	}
 	var ids []string
 	for {
@@ -751,16 +809,26 @@ func (s *GmailAPIMailSource) listMessageIDs(ctx context.Context, folder, query s
 		for _, msg := range payload.Messages {
 			if strings.TrimSpace(msg.ID) != "" {
 				ids = append(ids, msg.ID)
+				if limit > 0 && len(ids) >= limit {
+					return ids, nil
+				}
 			}
 		}
 		if strings.TrimSpace(payload.NextPageToken) == "" {
 			return ids, nil
 		}
+		if limit > 0 {
+			remaining := limit - len(ids)
+			if remaining <= 0 {
+				return ids, nil
+			}
+			values.Set("maxResults", strconv.Itoa(min(remaining, gmailAPIBoundedSyncLimit)))
+		}
 		values.Set("pageToken", strings.TrimSpace(payload.NextPageToken))
 	}
 }
 
-func (s *GmailAPIMailSource) fetchMessage(ctx context.Context, gmailID string) (gmailAPIMessage, error) {
+func (s *GmailAPIMailSource) fetchMessageRaw(ctx context.Context, gmailID string) (gmailAPIMessage, error) {
 	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/messages/"+url.PathEscape(gmailID)+"?format=raw", nil)
 	if err != nil {
 		return gmailAPIMessage{}, err
@@ -775,8 +843,28 @@ func (s *GmailAPIMailSource) fetchMessage(ctx context.Context, gmailID string) (
 	return payload, nil
 }
 
+func (s *GmailAPIMailSource) fetchMessageMetadata(ctx context.Context, gmailID string) (gmailAPIMessage, error) {
+	values := url.Values{}
+	values.Set("format", "metadata")
+	for _, header := range []string{"From", "To", "Cc", "Bcc", "Subject", "Message-ID", "Date", "List-Unsubscribe", "List-Unsubscribe-Post", "In-Reply-To", "References"} {
+		values.Add("metadataHeaders", header)
+	}
+	req, err := s.newRequest(ctx, http.MethodGet, s.baseURL+"/users/me/messages/"+url.PathEscape(gmailID)+"?"+values.Encode(), nil)
+	if err != nil {
+		return gmailAPIMessage{}, err
+	}
+	var payload gmailAPIMessage
+	if err := s.doJSON(req, &payload); err != nil {
+		return gmailAPIMessage{}, err
+	}
+	if payload.ID == "" {
+		payload.ID = gmailID
+	}
+	return payload, nil
+}
+
 func (s *GmailAPIMailSource) emailDataFromMessage(folder string, payload gmailAPIMessage) (*models.EmailData, error) {
-	body, err := gmailAPIMessageBody(payload)
+	body, err := gmailAPIMessageMetadataBody(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +896,7 @@ func (s *GmailAPIMailSource) emailDataFromMessage(folder string, payload gmailAP
 		Subject:        body.Subject,
 		Date:           date,
 		Size:           payload.SizeEstimate,
-		HasAttachments: len(body.Attachments) > 0,
+		HasAttachments: gmailAPIMessageHasAttachments(payload.Payload),
 		Folder:         folder,
 		IsRead:         !containsLabel(payload.LabelIDs, "UNREAD"),
 		IsStarred:      containsLabel(payload.LabelIDs, "STARRED"),
@@ -940,7 +1028,6 @@ func (s *GmailAPIMailSource) doJSON(req *http.Request, out any) error {
 				return lastErr
 			}
 			req.Body = body
-			time.Sleep(time.Duration(attempt*150) * time.Millisecond)
 		}
 		resp, err := s.client.Do(req)
 		if err != nil {
@@ -950,7 +1037,11 @@ func (s *GmailAPIMailSource) doJSON(req *http.Request, out any) error {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 			resp.Body.Close()
 			lastErr = gmailAPIHTTPError{Method: req.Method, Path: req.URL.Path, StatusCode: resp.StatusCode, Body: trimGmailAPIErrorBody(string(body))}
-			if isGmailAPIRetryableStatus(resp.StatusCode) {
+			if isGmailAPIRetryableStatus(resp.StatusCode) && attempt < 2 {
+				delay := gmailAPIRetryDelay(attempt+1, resp.Header.Get("Retry-After"), string(body), time.Now())
+				if err := sleepWithContext(req.Context(), delay); err != nil {
+					return err
+				}
 				continue
 			}
 			return lastErr
@@ -963,6 +1054,60 @@ func (s *GmailAPIMailSource) doJSON(req *http.Request, out any) error {
 		return json.NewDecoder(resp.Body).Decode(out)
 	}
 	return lastErr
+}
+
+func gmailAPIRetryDelay(attempt int, retryAfterHeader, body string, now time.Time) time.Duration {
+	if delay, ok := parseGmailAPIRetryAfter(retryAfterHeader, now); ok {
+		return boundGmailAPIRetryDelay(delay)
+	}
+	if match := gmailAPIRetryAfterBodyRE.FindStringSubmatch(body); len(match) == 2 {
+		if retryAt, err := time.Parse(time.RFC3339Nano, match[1]); err == nil {
+			return boundGmailAPIRetryDelay(retryAt.Sub(now))
+		}
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	delay := time.Duration(1<<uint(attempt-1)) * 150 * time.Millisecond
+	return boundGmailAPIRetryDelay(delay)
+}
+
+func parseGmailAPIRetryAfter(value string, now time.Time) (time.Duration, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return time.Duration(seconds) * time.Second, true
+	}
+	if retryAt, err := http.ParseTime(value); err == nil {
+		return retryAt.Sub(now), true
+	}
+	return 0, false
+}
+
+func boundGmailAPIRetryDelay(delay time.Duration) time.Duration {
+	if delay < 0 {
+		return 0
+	}
+	if delay > gmailAPIMaxRetryDelay {
+		return gmailAPIMaxRetryDelay
+	}
+	return delay
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func retryableRequestBody(req *http.Request) (io.ReadCloser, error) {
@@ -1061,13 +1206,32 @@ type gmailAPIDraft struct {
 }
 
 type gmailAPIMessage struct {
-	ID           string   `json:"id"`
-	ThreadID     string   `json:"threadId"`
-	HistoryID    string   `json:"historyId"`
-	LabelIDs     []string `json:"labelIds"`
-	InternalDate any      `json:"internalDate"`
-	SizeEstimate int      `json:"sizeEstimate"`
-	Raw          string   `json:"raw"`
+	ID           string                 `json:"id"`
+	ThreadID     string                 `json:"threadId"`
+	HistoryID    string                 `json:"historyId"`
+	LabelIDs     []string               `json:"labelIds"`
+	InternalDate any                    `json:"internalDate"`
+	SizeEstimate int                    `json:"sizeEstimate"`
+	Raw          string                 `json:"raw"`
+	Payload      gmailAPIMessagePayload `json:"payload"`
+}
+
+type gmailAPIMessagePayload struct {
+	MIMEType string                   `json:"mimeType"`
+	Filename string                   `json:"filename"`
+	Headers  []gmailAPIMessageHeader  `json:"headers"`
+	Body     gmailAPIMessagePartBody  `json:"body"`
+	Parts    []gmailAPIMessagePayload `json:"parts"`
+}
+
+type gmailAPIMessageHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type gmailAPIMessagePartBody struct {
+	AttachmentID string `json:"attachmentId"`
+	Size         int    `json:"size"`
 }
 
 func gmailAPIMessageBody(payload gmailAPIMessage) (*models.EmailBody, error) {
@@ -1080,6 +1244,54 @@ func gmailAPIMessageBody(payload gmailAPIMessage) (*models.EmailBody, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+func gmailAPIMessageMetadataBody(payload gmailAPIMessage) (*models.EmailBody, error) {
+	if strings.TrimSpace(payload.Raw) != "" {
+		return gmailAPIMessageBody(payload)
+	}
+	body := &models.EmailBody{}
+	for _, header := range payload.Payload.Headers {
+		value := strings.TrimSpace(header.Value)
+		switch strings.ToLower(strings.TrimSpace(header.Name)) {
+		case "from":
+			body.From = value
+		case "to":
+			body.To = value
+		case "cc":
+			body.CC = value
+		case "bcc":
+			body.BCC = value
+		case "subject":
+			body.Subject = value
+		case "message-id":
+			body.MessageID = value
+		case "list-unsubscribe":
+			body.ListUnsubscribe = value
+		case "list-unsubscribe-post":
+			body.ListUnsubscribePost = value
+		case "in-reply-to":
+			body.InReplyTo = value
+		case "references":
+			body.References = value
+		}
+	}
+	if body.MessageID == "" && strings.TrimSpace(payload.ID) != "" {
+		body.MessageID = "gmail:" + strings.TrimSpace(payload.ID)
+	}
+	return body, nil
+}
+
+func gmailAPIMessageHasAttachments(part gmailAPIMessagePayload) bool {
+	if strings.TrimSpace(part.Filename) != "" && (strings.TrimSpace(part.Body.AttachmentID) != "" || part.Body.Size > 0) {
+		return true
+	}
+	for _, child := range part.Parts {
+		if gmailAPIMessageHasAttachments(child) {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeGmailAPIRaw(raw string) ([]byte, error) {
