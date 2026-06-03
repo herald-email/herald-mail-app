@@ -1311,14 +1311,14 @@ Check these states during every applicable lane:
 10. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
 11. Open Step 5 and confirm inline image/full-screen instructions are present.
 12. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
-13. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
+13. Confirm the sanitized `[PREVIEW] Herald v0.5.0` newsletter appears immediately below the onboarding course, then supporting demo fixtures below it use `Example:` subjects and avoid repetitive filler.
 14. Switch to Cleanup, open sender details, and preview one message.
 15. Switch to Contacts, open one contact detail, and open a recent email inline.
 
 **Expect:**
 - Demo startup shows a compact welcome overlay only in `--demo`, and dismissing it does not route the dismiss key to the underlying Timeline.
 - Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 9.
-- Supporting demo messages below the onboarding course are labeled as `Example:` fixtures and the mailbox remains focused.
+- The sanitized v0.5 preview newsletter appears below the onboarding course, and the remaining supporting demo messages are labeled as `Example:` fixtures so the mailbox remains focused.
 - Preview bodies are specific instructional docs rather than generic lorem ipsum.
 - Attachment, unsubscribe, HTML, inline image, cleanup, AI, semantic search, contacts, and MCP demo coverage remains represented in the fixture set.
 - Contacts are populated from demo data and their recent emails open inline.
