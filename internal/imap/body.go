@@ -112,14 +112,19 @@ func (c *Client) fetchEmailPreviewBodyLocked(uid uint32, folder string) (*models
 		}
 	}
 	result.Attachments = previewAttachmentMetadata(msg.BodyStructure)
+	result.CalendarInvitations = previewCalendarInvitationMetadata(msg.BodyStructure)
 
 	plainPath, plainPart, htmlPath, htmlPart := previewTextParts(msg.BodyStructure)
+	calendarParts := previewInlineCalendarParts(msg.BodyStructure)
 	var textSections []*imap.BodySectionName
 	if len(plainPath) > 0 {
 		textSections = append(textSections, &imap.BodySectionName{BodyPartName: imap.BodyPartName{Path: plainPath}, Peek: true})
 	}
 	if len(htmlPath) > 0 {
 		textSections = append(textSections, &imap.BodySectionName{BodyPartName: imap.BodyPartName{Path: htmlPath}, Peek: true})
+	}
+	for _, part := range calendarParts {
+		textSections = append(textSections, &imap.BodySectionName{BodyPartName: imap.BodyPartName{Path: part.Path}, Peek: true})
 	}
 	if len(textSections) == 0 {
 		return result, nil
@@ -165,6 +170,43 @@ func (c *Client) fetchEmailPreviewBodyLocked(uid uint32, folder string) (*models
 			if text := decodePreviewTextPart(htmlPart, reader); text != "" {
 				result.TextHTML = text
 			}
+		}
+	}
+	calendarStart := 0
+	if len(plainPath) > 0 {
+		calendarStart++
+	}
+	if len(htmlPath) > 0 {
+		calendarStart++
+	}
+	for i, part := range calendarParts {
+		sectionIdx := calendarStart + i
+		if sectionIdx >= len(textSections) {
+			continue
+		}
+		reader := msg.GetBody(textSections[sectionIdx])
+		if reader == nil {
+			continue
+		}
+		data, err := decodeMIMEContent(part.Part.Encoding, reader)
+		if err != nil {
+			logger.Warn("Failed to decode preview calendar part %s: %v", previewPartPath(part.Path), err)
+			continue
+		}
+		invitation := calendarInvitationPartFromMIME(part.Part, data, previewPartPath(part.Path), "")
+		if invitation.Data == "" {
+			continue
+		}
+		found := false
+		for idx := range result.CalendarInvitations {
+			if result.CalendarInvitations[idx].PartPath == invitation.PartPath {
+				result.CalendarInvitations[idx] = invitation
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.CalendarInvitations = append(result.CalendarInvitations, invitation)
 		}
 	}
 	if result.TextPlain == "" && result.TextHTML != "" {
@@ -338,6 +380,55 @@ func previewAttachmentMetadata(bs *imap.BodyStructure) []models.Attachment {
 	return attachments
 }
 
+type previewCalendarPart struct {
+	Path []int
+	Part *imap.BodyStructure
+}
+
+func previewInlineCalendarParts(bs *imap.BodyStructure) []previewCalendarPart {
+	if bs == nil {
+		return nil
+	}
+	var parts []previewCalendarPart
+	bs.Walk(func(path []int, part *imap.BodyStructure) bool {
+		if part == nil || len(part.Parts) > 0 || isAttachmentPart(part) {
+			return true
+		}
+		mimeType := strings.ToLower(part.MIMEType + "/" + part.MIMESubType)
+		filename := bodyStructureFilename(part)
+		if calendarPartLooksLikeInvitation(mimeType, filename) {
+			parts = append(parts, previewCalendarPart{Path: append([]int(nil), path...), Part: part})
+		}
+		return true
+	})
+	return parts
+}
+
+func previewCalendarInvitationMetadata(bs *imap.BodyStructure) []models.CalendarInvitationPart {
+	if bs == nil {
+		return nil
+	}
+	var invitations []models.CalendarInvitationPart
+	bs.Walk(func(path []int, part *imap.BodyStructure) bool {
+		if part == nil || len(part.Parts) > 0 {
+			return true
+		}
+		mimeType := strings.ToLower(part.MIMEType + "/" + part.MIMESubType)
+		filename := bodyStructureFilename(part)
+		if !calendarPartLooksLikeInvitation(mimeType, filename) {
+			return true
+		}
+		invitations = append(invitations, models.CalendarInvitationPart{
+			Filename: filename,
+			MIMEType: mimeType,
+			Method:   strings.ToUpper(strings.TrimSpace(part.Params["method"])),
+			PartPath: previewPartPath(path),
+		})
+		return true
+	})
+	return invitations
+}
+
 func isAttachmentPart(part *imap.BodyStructure) bool {
 	disp := strings.ToLower(strings.TrimSpace(part.Disposition))
 	if strings.HasPrefix(disp, "attachment") {
@@ -398,6 +489,7 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 	if err != nil {
 		return
 	}
+	mediaType = strings.ToLower(mediaType)
 
 	if strings.HasPrefix(mediaType, "multipart/") {
 		mr := multipart.NewReader(body, params["boundary"])
@@ -424,8 +516,27 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 	}
 
 	disp := strings.ToLower(header.Get("Content-Disposition"))
+	filename := extractAttachmentFilename(header)
+	if calendarPartLooksLikeInvitation(mediaType, filename) {
+		invitation := calendarInvitationPartFromHeader(mediaType, params, data, partPath, filename)
+		if strings.HasPrefix(disp, "attachment") {
+			if filename == "" {
+				filename = fmt.Sprintf("attachment_%s", partPath)
+			}
+			result.Attachments = append(result.Attachments, models.Attachment{
+				Filename: filename,
+				MIMEType: mediaType,
+				Size:     len(data),
+				PartPath: partPath,
+				Data:     data,
+			})
+		}
+		result.CalendarInvitations = append(result.CalendarInvitations, invitation)
+		if strings.HasPrefix(disp, "attachment") {
+			return
+		}
+	}
 	if strings.HasPrefix(disp, "attachment") {
-		filename := extractAttachmentFilename(header)
 		if filename == "" {
 			filename = fmt.Sprintf("attachment_%s", partPath)
 		}
@@ -477,6 +588,82 @@ func parseMIMEPart(header textproto.MIMEHeader, body io.Reader, result *models.E
 			})
 		}
 	}
+}
+
+func calendarPartLooksLikeInvitation(mediaType, filename string) bool {
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+	filename = strings.ToLower(strings.TrimSpace(filename))
+	return mediaType == "text/calendar" ||
+		mediaType == "application/ics" ||
+		mediaType == "application/calendar" ||
+		strings.HasSuffix(filename, ".ics")
+}
+
+func calendarInvitationPartFromHeader(mediaType string, params map[string]string, data []byte, partPath, filename string) models.CalendarInvitationPart {
+	method := strings.ToUpper(strings.TrimSpace(params["method"]))
+	text := decodeCalendarTextPart(data, params)
+	if method == "" {
+		method = calendarMethodFromICS(text)
+	}
+	return models.CalendarInvitationPart{
+		Filename: filename,
+		MIMEType: mediaType,
+		Method:   method,
+		PartPath: partPath,
+		Data:     text,
+	}
+}
+
+func calendarInvitationPartFromMIME(part *imap.BodyStructure, data []byte, partPath, filename string) models.CalendarInvitationPart {
+	if part == nil {
+		return models.CalendarInvitationPart{}
+	}
+	params := part.Params
+	if filename == "" {
+		filename = bodyStructureFilename(part)
+	}
+	mimeType := strings.ToLower(part.MIMEType + "/" + part.MIMESubType)
+	text := decodeCalendarTextPart(data, params)
+	method := ""
+	if params != nil {
+		method = strings.ToUpper(strings.TrimSpace(params["method"]))
+	}
+	if method == "" {
+		method = calendarMethodFromICS(text)
+	}
+	return models.CalendarInvitationPart{
+		Filename: filename,
+		MIMEType: mimeType,
+		Method:   method,
+		PartPath: partPath,
+		Data:     text,
+	}
+}
+
+func decodeCalendarTextPart(data []byte, params map[string]string) string {
+	charsetName := strings.TrimSpace(params["charset"])
+	if charsetName != "" {
+		reader, err := htmlcharset.NewReaderLabel(charsetName, bytes.NewReader(data))
+		if err != nil {
+			logger.Warn("Failed to create calendar charset reader for %s: %v", charsetName, err)
+		} else if decoded, err := io.ReadAll(reader); err != nil {
+			logger.Warn("Failed to decode calendar part charset %s: %v", charsetName, err)
+		} else {
+			data = decoded
+		}
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func calendarMethodFromICS(data string) string {
+	for _, line := range strings.Split(strings.ReplaceAll(data, "\r\n", "\n"), "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "METHOD") {
+			continue
+		}
+		return strings.ToUpper(strings.TrimSpace(value))
+	}
+	return ""
 }
 
 func decodeTextPart(data []byte, params map[string]string) string {

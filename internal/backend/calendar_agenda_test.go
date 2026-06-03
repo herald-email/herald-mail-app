@@ -493,6 +493,91 @@ func TestLocalBackendSaveCalendarEventWritesProviderBeforeCache(t *testing.T) {
 	}
 }
 
+func TestLocalBackendCalendarCreateEventWritesProviderBeforeCache(t *testing.T) {
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t, testcalendar.WithCalendar("primary", "Work", "#3367d6"))
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+	event := models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "backend-invite@example.test"}.WithDefaults(),
+		ProviderUID: "backend-invite@example.test",
+		Title:       "Backend invite",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		TimeZone:    "UTC",
+		Status:      "confirmed",
+		Raw: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:backend-invite@example.test",
+			"SUMMARY:Backend invite",
+			"DTSTART:20260602T160000Z",
+			"DTEND:20260602T163000Z",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}
+
+	saved, err := b.CreateCalendarEvent(event)
+	if err != nil {
+		t.Fatalf("CreateCalendarEvent: %v", err)
+	}
+	if saved.ProviderUID != event.ProviderUID || saved.Ref.ETag == "" {
+		t.Fatalf("saved = %#v, want provider-created event with etag", saved)
+	}
+	cached, err := store.GetCalendarEventByRef(saved.Ref)
+	if err != nil {
+		t.Fatalf("GetCalendarEventByRef: %v", err)
+	}
+	if cached.Title != event.Title || cached.ProviderUID != event.ProviderUID {
+		t.Fatalf("cached = %#v, want created event", cached)
+	}
+	duplicate, err := b.FindCalendarEventByUID(models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"}, event.ProviderUID)
+	if err != nil {
+		t.Fatalf("FindCalendarEventByUID: %v", err)
+	}
+	if duplicate == nil || duplicate.Ref.LocalID != saved.Ref.LocalID {
+		t.Fatalf("duplicate = %#v, want saved event", duplicate)
+	}
+}
+
+func TestLocalBackendFindCalendarEventByUIDTrustsProviderOverStaleCache(t *testing.T) {
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t, testcalendar.WithCalendar("primary", "Work", "#3367d6"))
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	stale := models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "deleted-provider-event"}.WithDefaults(),
+		ProviderUID: "deleted-invite@example.test",
+		Title:       "Deleted provider invite",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		Status:      "confirmed",
+	}
+	if err := store.PutCalendarEvent(stale); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}
+
+	duplicate, err := b.FindCalendarEventByUID(models.CollectionRef{SourceID: "work-calendar", AccountID: "work", Kind: models.SourceKindCalendar, CollectionID: "primary"}, stale.ProviderUID)
+	if err != nil {
+		t.Fatalf("FindCalendarEventByUID: %v", err)
+	}
+	if duplicate != nil {
+		t.Fatalf("duplicate = %#v, want provider miss to ignore stale cache row", duplicate)
+	}
+}
+
 func TestLocalBackendSaveCalendarEventProviderFailureKeepsCachedEvent(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,

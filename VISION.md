@@ -688,7 +688,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Calendar mouse navigation supports mini-month day selection, event selection/detail opening, and calendar rail toggles, with the visible-calendar selection persisted in YAML.
 - [x] Calendar notes render HTML and Markdown into readable terminal text instead of exposing raw tags.
 - [x] Calendar RSVP is explicit through accept, tentative, and decline actions, and events requiring a response are visibly highlighted.
-- [x] Emails with `text/calendar` parts or `.ics` attachments expose an Add to Calendar flow that asks which writable calendar should receive the invitation.
+- [x] Emails with `text/calendar` parts or `.ics` attachments expose a preview-header Create Calendar Event action, ask which configured writable calendar should receive the invitation when more than one exists, and offer update or skip when the selected calendar already has the same ICS UID.
 
 ---
 

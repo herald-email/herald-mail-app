@@ -146,6 +146,23 @@ type CalendarInvitationSavedMsg struct {
 	Err   error
 }
 
+// CalendarInvitationCollectionsMsg carries calendar choices loaded on demand
+// for importing an invitation from the mail preview.
+type CalendarInvitationCollectionsMsg struct {
+	Event            models.CalendarEvent
+	Collections      []models.CalendarCollection
+	PayloadLoadTried bool
+	Err              error
+}
+
+// CalendarInvitationDuplicateMsg carries an existing event found by ICS UID.
+type CalendarInvitationDuplicateMsg struct {
+	Ref       models.CollectionRef
+	UID       string
+	Duplicate *models.CalendarEvent
+	Err       error
+}
+
 // StartupHydratedMsg carries cached startup data used to progressively hydrate
 // the UI while live IMAP loading continues in the background.
 type StartupHydratedMsg struct {
@@ -2591,7 +2608,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarInvitation.Saving = false
 		if msg.Err != nil {
 			m.calendarInvitation.Error = calendarMutationErrorStatus("Invitation import failed", msg.Err)
+			m.calendarInvitation.ReconnectAvailable = m.calendarInvitationReconnectAvailable(msg.Err)
 			m.calendarStatus = m.calendarInvitation.Error
+			m.statusMessage = m.calendarInvitation.Error
 			return m, nil
 		}
 		if msg.Event != nil {
@@ -2599,7 +2618,51 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setCalendarEventsForDisplay(m.calendarEvents)
 		}
 		m.calendarInvitation = calendarInvitationPromptState{}
-		m.calendarStatus = "Added invitation to calendar"
+		m.statusMessage = "Added invitation to calendar"
+		m.calendarStatus = m.statusMessage
+		return m, nil
+
+	case CalendarInvitationCollectionsMsg:
+		if msg.Err != nil {
+			m.calendarInvitation = calendarInvitationPromptState{}
+			m.statusMessage = calendarMutationErrorStatus("Invitation calendars failed", msg.Err)
+			m.calendarStatus = m.statusMessage
+			return m, nil
+		}
+		collections := writableCalendarInvitationCollections(m.mergeCalendarCollections(msg.Collections))
+		if len(collections) == 0 {
+			m.calendarInvitation = calendarInvitationPromptState{}
+			m.statusMessage = "No writable calendar is available for invitation import"
+			m.calendarStatus = m.statusMessage
+			return m, nil
+		}
+		m.setCalendarCollections(collections)
+		m.pruneCalendarCollectionState()
+		m.calendarInvitation = calendarInvitationPromptState{
+			Active:           true,
+			Event:            msg.Event,
+			Collections:      collections,
+			PayloadLoadTried: msg.PayloadLoadTried,
+		}
+		m.statusMessage = "Choose a calendar for this invitation"
+		m.calendarStatus = m.statusMessage
+		return m, nil
+
+	case CalendarInvitationDuplicateMsg:
+		m.calendarInvitation.Saving = false
+		if msg.Err != nil {
+			m.calendarInvitation.Error = calendarMutationErrorStatus("Invitation duplicate check failed", msg.Err)
+			m.calendarInvitation.ReconnectAvailable = m.calendarInvitationReconnectAvailable(msg.Err)
+			m.calendarStatus = m.calendarInvitation.Error
+			m.statusMessage = m.calendarInvitation.Error
+			return m, nil
+		}
+		m.calendarInvitation.DuplicateChecked = true
+		m.calendarInvitation.Duplicate = msg.Duplicate
+		if msg.Duplicate != nil {
+			m.statusMessage = "Event already exists"
+			m.calendarStatus = m.statusMessage
+		}
 		return m, nil
 
 	case ComposeStatusMsg:

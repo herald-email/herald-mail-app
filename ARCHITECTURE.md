@@ -243,7 +243,7 @@ The next refactor layer turns the current single-account backend discipline into
 - [x] Add `calendar.week_start` as a profile setting so Week can render Monday-first by default or Sunday-first when the user chooses Apple Calendar-style US week layout.
 - [x] Add `calendar.selected_calendars` as a profile-level allow-list of scoped collection keys; the Calendar rail uses it to restore visible calendars after restart while keeping provider URLs, tokens, ETags, and event IDs out of YAML.
 - [x] Add a shared calendar notes renderer that converts provider HTML or Markdown notes into terminal-readable text before drawers, inspectors, full detail, command panels, and previews wrap content.
-- [x] Add explicit calendar invitation intake from mail previews by parsing `text/calendar` parts and `.ics` attachments into the existing `CalendarEvent` model, then routing adds through the selected writable calendar source.
+- [x] Add explicit calendar invitation intake from mail previews by parsing `text/calendar` parts and `.ics` attachments into the existing `CalendarEvent` model, then routing create/update/skip decisions through the selected writable calendar source after checking the selected calendar for an existing ICS UID.
 - [x] Add optional source/account scoped daemon read filters and MCP listing refs while preserving legacy folder/message-ID compatibility.
 - [x] Add source/account/collection/item identity to daemon progress, sync, valid-ID, new-email, and mutation events while preserving legacy event names.
 - [x] Add read-only scoped calendar MCP tools for cached agenda, search, and event detail results.

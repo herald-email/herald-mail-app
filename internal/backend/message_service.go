@@ -355,5 +355,8 @@ func cloneEmailBody(body *models.EmailBody) *models.EmailBody {
 			}
 		}
 	}
+	if body.CalendarInvitations != nil {
+		cloned.CalendarInvitations = append([]models.CalendarInvitationPart(nil), body.CalendarInvitations...)
+	}
 	return &cloned
 }

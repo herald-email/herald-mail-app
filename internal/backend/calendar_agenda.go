@@ -45,8 +45,10 @@ type CalendarCollectionBackend interface {
 // boundary. Live provider mutation adapters stay behind this interface until a
 // later provider-write stage enables them explicitly.
 type CalendarEventMutationBackend interface {
+	CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
 	SaveCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error)
 	RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error)
+	FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error)
 }
 
 func (d *DemoBackend) CalendarAgendaAvailable() bool {
@@ -109,6 +111,24 @@ func (d *DemoBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Cal
 	return nil, sql.ErrNoRows
 }
 
+func (d *DemoBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if strings.TrimSpace(event.Ref.EventID) == "" {
+		event.Ref.EventID = firstNonEmptyString(event.ProviderUID, event.Title, "mail-invitation")
+	}
+	event.Ref = event.Ref.WithDefaults()
+	if strings.TrimSpace(event.ProviderUID) == "" {
+		event.ProviderUID = event.Ref.EventID
+	}
+	if event.UpdatedAt.IsZero() {
+		event.UpdatedAt = time.Now().UTC()
+	}
+	d.calendarEvents = append(d.calendarEvents, event)
+	saved := event
+	return &saved, nil
+}
+
 func (d *DemoBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
 	normalized, err := models.NormalizeCalendarRSVP(status)
 	if err != nil {
@@ -130,6 +150,26 @@ func (d *DemoBackend) RespondCalendarEvent(ref models.EventRef, status string) (
 		return &saved, nil
 	}
 	return nil, sql.ErrNoRows
+}
+
+func (d *DemoBackend) FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return nil, nil
+	}
+	for _, event := range d.calendarEvents {
+		event.Ref = event.Ref.WithDefaults()
+		if event.Ref.SourceID == ref.SourceID && event.Ref.AccountID == ref.AccountID && event.Ref.CalendarID == ref.CollectionID && strings.TrimSpace(event.ProviderUID) == uid {
+			got := event
+			return &got, nil
+		}
+	}
+	return nil, nil
 }
 
 func (d *DemoBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
@@ -285,6 +325,40 @@ func (b *LocalBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 	return b.cache.GetCalendarEventByRef(event.Ref)
 }
 
+func (b *LocalBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	if b == nil || b.cache == nil {
+		return nil, sql.ErrNoRows
+	}
+	event.Ref = event.Ref.WithDefaults()
+	if strings.TrimSpace(event.ProviderUID) == "" {
+		event.ProviderUID = strings.TrimSpace(event.Ref.EventID)
+	}
+	if strings.TrimSpace(event.Ref.EventID) == "" {
+		event.Ref.EventID = firstNonEmptyString(event.ProviderUID, event.Title, "mail-invitation")
+	}
+	if event.UpdatedAt.IsZero() {
+		event.UpdatedAt = time.Now().UTC()
+	}
+	if source, ok, err := b.calendarMutationSourceForRef(event.Ref); err != nil {
+		return nil, err
+	} else if ok {
+		saved, err := source.CreateEvent(context.Background(), event, models.CalendarMutationOptions{
+			RecurrenceScope: models.CalendarMutationScopeThisEvent,
+		})
+		if err != nil {
+			return nil, calendarProviderMutationError("create", err)
+		}
+		if err := b.cache.PutCalendarEvent(*saved); err != nil {
+			return nil, err
+		}
+		return b.cache.GetCalendarEventByRef(saved.Ref)
+	}
+	if err := b.cache.PutCalendarEvent(event); err != nil {
+		return nil, err
+	}
+	return b.cache.GetCalendarEventByRef(event.Ref)
+}
+
 func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
 	if b == nil || b.cache == nil {
 		return nil, sql.ErrNoRows
@@ -324,6 +398,36 @@ func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) 
 		return nil, err
 	}
 	return b.cache.GetCalendarEventByRef(event.Ref)
+}
+
+func (b *LocalBackend) FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	if b == nil || b.cache == nil {
+		return nil, nil
+	}
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return nil, nil
+	}
+	if source, ok, err := b.calendarUIDLookupSourceForRef(ref); err != nil {
+		return nil, err
+	} else if ok {
+		found, err := source.FindEventByUID(context.Background(), ref, uid)
+		if err != nil {
+			return nil, calendarProviderMutationError("duplicate lookup", err)
+		}
+		if found != nil {
+			return found, nil
+		}
+		return nil, nil
+	}
+	found, err := b.cache.FindCalendarEventByProviderUID(ref, uid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return found, err
 }
 
 func (b *LocalBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {
@@ -471,6 +575,28 @@ func (b *LocalBackend) calendarMutationSourceForRef(ref models.EventRef) (calend
 	return nil, false, nil
 }
 
+func (b *LocalBackend) calendarUIDLookupSourceForRef(ref models.CollectionRef) (calendar.UIDLookupSource, bool, error) {
+	for _, source := range b.configuredCalendarSources() {
+		if models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID) != ref.SourceID {
+			continue
+		}
+		if !calendarSourceHasProviderConfig(source) {
+			continue
+		}
+		opened, err := DefaultSourceRegistry().Open(context.Background(), source, SourceDeps{ProfileConfig: b.cfg})
+		if err != nil {
+			return nil, false, calendarProviderMutationError("open", err)
+		}
+		if lookup, ok := opened.Calendar.(calendar.UIDLookupSource); ok {
+			return lookup, true, nil
+		}
+		if lookup, ok := opened.CalendarMutation.(calendar.UIDLookupSource); ok {
+			return lookup, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
 func calendarProviderMutationError(action string, err error) error {
 	if err == nil {
 		return nil
@@ -481,6 +607,12 @@ func calendarProviderMutationError(action string, err error) error {
 	}
 	if errors.Is(err, models.ErrCalendarRecurrenceScopeUnsupported) {
 		return fmt.Errorf("calendar provider %s recurrence scope unsupported; cache was not updated: %w", action, err)
+	}
+	if errors.Is(err, models.ErrCalendarAuthorizationRequired) {
+		return fmt.Errorf("calendar provider %s authorization required; cache was not updated: %w", action, err)
+	}
+	if errors.Is(err, models.ErrCalendarWritePermission) {
+		return fmt.Errorf("calendar provider %s write permission missing; cache was not updated: %w", action, err)
 	}
 	return fmt.Errorf("calendar provider %s failed; cache was not updated: %w", action, err)
 }
@@ -650,6 +782,22 @@ func (m *MultiBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 	return nil, lastErr
 }
 
+func (m *MultiBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	ref := event.Ref.WithDefaults()
+	var lastErr error = sql.ErrNoRows
+	for _, backend := range m.calendarMutationBackendsForRef(ref) {
+		saved, err := backend.CreateCalendarEvent(event)
+		if err == nil {
+			return saved, nil
+		}
+		lastErr = err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
 func (m *MultiBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {
 	ref = ref.WithDefaults()
 	var lastErr error = sql.ErrNoRows
@@ -671,6 +819,33 @@ func (m *MultiBackend) RespondCalendarEvent(ref models.EventRef, status string) 
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
+	}
+	return nil, lastErr
+}
+
+func (m *MultiBackend) FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	eventRef := models.EventRef{
+		SourceID:   ref.SourceID,
+		AccountID:  ref.AccountID,
+		CalendarID: ref.CollectionID,
+	}.WithDefaults()
+	var lastErr error = sql.ErrNoRows
+	for _, backend := range m.calendarMutationBackendsForRef(eventRef) {
+		found, err := backend.FindCalendarEventByUID(ref, uid)
+		if err == nil {
+			if found != nil {
+				return found, nil
+			}
+			lastErr = sql.ErrNoRows
+			continue
+		}
+		lastErr = err
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	if errors.Is(lastErr, sql.ErrNoRows) {
+		return nil, nil
 	}
 	return nil, lastErr
 }
@@ -818,6 +993,15 @@ func sortCalendarEvents(events []models.CalendarEvent) {
 		}
 		return events[i].Ref.LocalID < events[j].Ref.LocalID
 	})
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func normalizedCalendarSortRange(event models.CalendarEvent) (time.Time, time.Time) {

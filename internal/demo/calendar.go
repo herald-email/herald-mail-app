@@ -66,6 +66,7 @@ func CalendarEvents() []models.CalendarEvent {
 		return week.AddDate(0, 0, day).Add(time.Duration(hour-7)*time.Hour + time.Duration(minute)*time.Minute)
 	}
 	events := []models.CalendarEvent{
+		calendarEvent("work", "demo-product-review-existing", "Product review", "Existing event imported from the demo invitation UID.", "Video", at(2, 15, 0), 45*time.Minute, "confirmed"),
 		calendarEvent("work", "mon-standup", "Standup", "Daily team standup.", "Huddle room", at(0, 8, 0), 30*time.Minute, "confirmed"),
 		calendarEvent("work", "tue-standup", "Standup", "Daily team standup.", "Huddle room", at(1, 8, 0), 30*time.Minute, "confirmed"),
 		calendarEvent("work", "wed-standup", "Standup", "Daily team standup.", "Huddle room", at(2, 8, 0), 30*time.Minute, "confirmed"),
@@ -91,10 +92,11 @@ func CalendarEvents() []models.CalendarEvent {
 		calendarEvent("work", "wed-ship-review", "Ship Review", "Release check.", "Ops room", at(2, 16, 0), time.Hour, "confirmed"),
 		calendarEvent("work", "fri-ship-review", "Ship Review", "Release check.", "Ops room", at(4, 16, 0), time.Hour, "confirmed"),
 	}
-	events[5].TimeZone = "America/Los_Angeles"
-	events[5].Organizer = "Mina Park"
-	events[5].OrganizerEmail = "mina@example.com"
-	events[5].Attendees = []models.CalendarAttendee{
+	events[0].ProviderUID = "demo-product-review-invite@herald.demo"
+	events[6].TimeZone = "America/Los_Angeles"
+	events[6].Organizer = "Mina Park"
+	events[6].OrganizerEmail = "mina@example.com"
+	events[6].Attendees = []models.CalendarAttendee{
 		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "accepted"},
 		{Name: "Alex Chen", Email: "alex@example.com", RSVP: "accepted"},
 		{Name: "Jordan Lee", Email: "jordan@example.com", RSVP: "needs-action"},
@@ -102,16 +104,16 @@ func CalendarEvents() []models.CalendarEvent {
 		{Name: "Taylor Fox", Email: "taylor@example.com", RSVP: "tentative"},
 		{Name: "You", Email: "you@example.com", RSVP: "accepted"},
 	}
-	events[5].Recurrence = []string{"RRULE:FREQ=WEEKLY;BYDAY=TU"}
-	events[5].RecurrenceSummary = "Weekly on Tuesday"
-	events[5].Attachments = []models.CalendarAttachment{
+	events[6].Recurrence = []string{"RRULE:FREQ=WEEKLY;BYDAY=TU"}
+	events[6].RecurrenceSummary = "Weekly on Tuesday"
+	events[6].Attachments = []models.CalendarAttachment{
 		{Title: "Agenda", URI: "https://calendar.example/agenda.pdf", MIMEType: "application/pdf"},
 	}
-	events[5].Reminders = []models.CalendarReminder{
+	events[6].Reminders = []models.CalendarReminder{
 		{Method: "popup", MinutesBefore: 30},
 	}
-	events[5].AlternateTimeZones = []string{"Europe/London"}
-	events[6].Attendees = []models.CalendarAttendee{
+	events[6].AlternateTimeZones = []string{"Europe/London"}
+	events[7].Attendees = []models.CalendarAttendee{
 		{Name: "Rae Stone", Email: "rae@example.com", RSVP: "needs-action"},
 		{Name: "Mina Park", Email: "mina@example.com", RSVP: "accepted"},
 	}

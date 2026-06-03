@@ -11,7 +11,7 @@ func TestCalendarCacheTablesAreSourceScoped(t *testing.T) {
 	c := newTestCache(t)
 
 	calCols := tableColumns(t, c.db, "calendar_collections")
-	for _, name := range []string{"source_id", "account_id", "calendar_id", "local_id", "display_name", "sync_token", "etag"} {
+	for _, name := range []string{"source_id", "account_id", "calendar_id", "local_id", "display_name", "sync_token", "etag", "access_role"} {
 		if !calCols[name] {
 			t.Fatalf("calendar_collections missing column %s", name)
 		}
@@ -36,9 +36,10 @@ func TestCacheCalendarCollectionRoundTrip(t *testing.T) {
 			CollectionID: "primary",
 			DisplayName:  "Work",
 		},
-		Color:     "#3367d6",
-		SyncToken: "sync-1",
-		ETag:      `"cal-v1"`,
+		Color:      "#3367d6",
+		SyncToken:  "sync-1",
+		ETag:       `"cal-v1"`,
+		AccessRole: "owner",
 	}
 	if err := c.PutCalendarCollection(collection); err != nil {
 		t.Fatalf("PutCalendarCollection: %v", err)
@@ -51,7 +52,7 @@ func TestCacheCalendarCollectionRoundTrip(t *testing.T) {
 	if got.Ref.SourceID != collection.Ref.SourceID || got.Ref.AccountID != collection.Ref.AccountID || got.Ref.CollectionID != "primary" {
 		t.Fatalf("collection scope = %#v, want %#v", got.Ref, collection.Ref)
 	}
-	if got.Color != "#3367d6" || got.SyncToken != "sync-1" || got.ETag != `"cal-v1"` {
+	if got.Color != "#3367d6" || got.SyncToken != "sync-1" || got.ETag != `"cal-v1"` || got.AccessRole != "owner" {
 		t.Fatalf("collection metadata = %#v, want color/sync/etag", got)
 	}
 }

@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -22,9 +23,9 @@ func (c *Cache) PutCalendarCollection(collection models.CalendarCollection) erro
 	now := time.Now().UTC()
 	_, err := c.db.Exec(`
 		INSERT OR REPLACE INTO calendar_collections
-		(local_id, source_id, account_id, calendar_id, display_name, color, sync_token, etag, last_synced, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, localID, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, ref.DisplayName, collection.Color, collection.SyncToken, collection.ETag, now, now)
+		(local_id, source_id, account_id, calendar_id, display_name, color, sync_token, etag, access_role, last_synced, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, localID, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, ref.DisplayName, collection.Color, collection.SyncToken, collection.ETag, collection.AccessRole, now, now)
 	return err
 }
 
@@ -34,13 +35,13 @@ func (c *Cache) GetCalendarCollection(ref models.CollectionRef) (*models.Calenda
 	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
 	localID := calendarCollectionLocalID(ref)
 	row := c.db.QueryRow(`
-		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag
+		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag, access_role
 		FROM calendar_collections
 		WHERE local_id = ?
 	`, localID)
 
-	var sourceID, accountID, calendarID, displayName, color, syncToken, etag string
-	if err := row.Scan(&sourceID, &accountID, &calendarID, &displayName, &color, &syncToken, &etag); err != nil {
+	var sourceID, accountID, calendarID, displayName, color, syncToken, etag, accessRole string
+	if err := row.Scan(&sourceID, &accountID, &calendarID, &displayName, &color, &syncToken, &etag, &accessRole); err != nil {
 		return nil, err
 	}
 	return &models.CalendarCollection{
@@ -51,9 +52,10 @@ func (c *Cache) GetCalendarCollection(ref models.CollectionRef) (*models.Calenda
 			CollectionID: calendarID,
 			DisplayName:  displayName,
 		},
-		Color:     color,
-		SyncToken: syncToken,
-		ETag:      etag,
+		Color:      color,
+		SyncToken:  syncToken,
+		ETag:       etag,
+		AccessRole: accessRole,
 	}, nil
 }
 
@@ -61,7 +63,7 @@ func (c *Cache) ListCalendarCollections(sourceID models.SourceID, accountID mode
 	sourceID = models.NormalizeSourceID(sourceID, models.DefaultCalendarSourceID)
 	accountID = models.NormalizeAccountID(accountID)
 	rows, err := c.db.Query(`
-		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag
+		SELECT source_id, account_id, calendar_id, display_name, color, sync_token, etag, access_role
 		FROM calendar_collections
 		WHERE source_id = ? AND account_id = ?
 		ORDER BY display_name ASC, calendar_id ASC
@@ -73,8 +75,8 @@ func (c *Cache) ListCalendarCollections(sourceID models.SourceID, accountID mode
 
 	var out []models.CalendarCollection
 	for rows.Next() {
-		var sourceIDValue, accountIDValue, calendarID, displayName, color, syncToken, etag string
-		if err := rows.Scan(&sourceIDValue, &accountIDValue, &calendarID, &displayName, &color, &syncToken, &etag); err != nil {
+		var sourceIDValue, accountIDValue, calendarID, displayName, color, syncToken, etag, accessRole string
+		if err := rows.Scan(&sourceIDValue, &accountIDValue, &calendarID, &displayName, &color, &syncToken, &etag, &accessRole); err != nil {
 			return nil, err
 		}
 		out = append(out, models.CalendarCollection{
@@ -85,9 +87,10 @@ func (c *Cache) ListCalendarCollections(sourceID models.SourceID, accountID mode
 				CollectionID: calendarID,
 				DisplayName:  displayName,
 			},
-			Color:     color,
-			SyncToken: syncToken,
-			ETag:      etag,
+			Color:      color,
+			SyncToken:  syncToken,
+			ETag:       etag,
+			AccessRole: accessRole,
 		})
 	}
 	return out, rows.Err()
@@ -197,6 +200,27 @@ func (c *Cache) GetCalendarEventByRef(ref models.EventRef) (*models.CalendarEven
 		FROM calendar_events
 		WHERE local_id = ? AND invalidated_at IS NULL
 	`, ref.LocalID)
+	return scanCalendarEvent(row)
+}
+
+func (c *Cache) FindCalendarEventByProviderUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return nil, sql.ErrNoRows
+	}
+	row := c.db.QueryRow(`
+		SELECT source_id, account_id, calendar_id, event_id, instance_id, provider_uid, etag, revision,
+		       title, description, location, starts_at, ends_at, all_day, timezone, status, organizer, organizer_email,
+		       attendees_json, recurrence_json, recurrence_summary, attachments_json, reminders_json, alternate_timezones_json,
+		       updated_at, raw, local_id
+		FROM calendar_events
+		WHERE source_id = ? AND account_id = ? AND calendar_id = ? AND provider_uid = ? AND invalidated_at IS NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`, string(ref.SourceID), string(ref.AccountID), ref.CollectionID, uid)
 	return scanCalendarEvent(row)
 }
 

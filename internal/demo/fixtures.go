@@ -296,6 +296,42 @@ func buildMailbox() MailboxFixture {
 			})
 		}
 	}
+	withCalendarInvitation := func(filename, uid, summary string, start, end time.Time) func(*Message) {
+		return func(msg *Message) {
+			data := strings.Join([]string{
+				"BEGIN:VCALENDAR",
+				"VERSION:2.0",
+				"PRODID:-//Herald//Demo Invite//EN",
+				"METHOD:REQUEST",
+				"BEGIN:VEVENT",
+				"UID:" + uid,
+				"SUMMARY:" + summary,
+				"DESCRIPTION:Demo invitation with a deterministic duplicate UID.",
+				"LOCATION:Video",
+				"DTSTART:" + start.UTC().Format("20060102T150405Z"),
+				"DTEND:" + end.UTC().Format("20060102T150405Z"),
+				"ORGANIZER;CN=Rae Stone:mailto:rae@cobalt-works.example",
+				"ATTENDEE;CN=Rowan Finch;PARTSTAT=NEEDS-ACTION;ROLE=REQ-PARTICIPANT:mailto:demo@demo.local",
+				"END:VEVENT",
+				"END:VCALENDAR",
+			}, "\r\n")
+			msg.Email.HasAttachments = true
+			msg.Body.CalendarInvitations = append(msg.Body.CalendarInvitations, models.CalendarInvitationPart{
+				Filename: filename,
+				MIMEType: "text/calendar",
+				Method:   "REQUEST",
+				PartPath: strconv.Itoa(2 + len(msg.Body.Attachments)),
+				Data:     data,
+			})
+			msg.Body.Attachments = append(msg.Body.Attachments, models.Attachment{
+				Filename: filename,
+				MIMEType: "text/calendar",
+				Size:     len(data),
+				PartPath: strconv.Itoa(2 + len(msg.Body.Attachments)),
+				Data:     []byte(data),
+			})
+		}
+	}
 	withInlineImage := func(contentID, mime string, data []byte) func(*Message) {
 		return func(msg *Message) {
 			msg.Body.InlineImages = append(msg.Body.InlineImages, models.InlineImage{
@@ -498,6 +534,12 @@ Try now
 What Herald is doing
 The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
 		withDate(baseTime.Add(2*time.Hour)))
+	inviteStart := calendarFixtureDayStart(baseTime).AddDate(0, 0, 2).Add(15 * time.Hour)
+	add(42, "Rae Stone <rae@cobalt-works.example>", "Example: Product review invitation", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"calendar", "ics", "scheduling", "product review"},
+		"Bob invited you to a product review.\n\nThis demo email includes a safe .ics invitation so Herald can show the Create Calendar Event flow without touching a real mailbox.",
+		withHeaders("Rae Stone <rae@cobalt-works.example>", "Rowan Finch <demo@demo.local>", "", ""),
+		withCalendarInvitation("product-review.ics", "demo-product-review-invite@herald.demo", "Product review", inviteStart, inviteStart.Add(45*time.Minute)),
+		withDate(baseTime.Add(29*time.Minute)))
 	add(38, "Herald Next Steps <next@herald.demo>", "Step 9: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
 		`Step 9 gives you a few extra paths to try after the core tour.
 

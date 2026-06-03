@@ -59,11 +59,16 @@ func previewHasUnsubscribe(body *models.EmailBody) bool {
 	return body != nil && strings.TrimSpace(body.ListUnsubscribe) != ""
 }
 
-func previewActionText(hasUnsubscribe bool) string {
+func previewActionText(hasUnsubscribe, hasInvitation bool) string {
+	actions := []string{}
 	if hasUnsubscribe {
-		return "u unsubscribe  H hide future mail"
+		actions = append(actions, "u unsubscribe")
 	}
-	return "H hide future mail"
+	if hasInvitation {
+		actions = append(actions, "i create calendar event")
+	}
+	actions = append(actions, "H hide future mail")
+	return strings.Join(actions, "  ")
 }
 
 func previewTagText(category string) string {
@@ -166,7 +171,7 @@ func renderPreviewHeaderLinesWithTheme(theme Theme, email *models.EmailData, bod
 		lines = append(lines, renderPreviewHeaderLine("State:", draftStateText(email), innerW, styles, styles.action))
 	}
 	lines = append(lines, renderPreviewHeaderWrapped("Tags:", previewTagText(category), innerW, styles, styles.tag)...)
-	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe), innerW, styles, styles.action)...)
+	lines = append(lines, renderPreviewHeaderWrapped("Actions:", previewActionText(hasUnsubscribe, calendarBodyHasInvitation(body)), innerW, styles, styles.action)...)
 	if strings.TrimSpace(loadTag) != "" {
 		lines = append(lines, renderPreviewHeaderLine("Load:", loadTag, innerW, styles, styles.date))
 	}
@@ -410,14 +415,6 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 			bodyChromeLines++
 		}
 
-		if calendarBodyHasInvitation(m.timeline.body) {
-			label := "[i] Add invitation to calendar"
-			if !m.calendarAvailable {
-				label = "Calendar invitation detected - configure a calendar to add"
-			}
-			sb.WriteString(m.theme.Severity.Info.Style().Render(truncate(label, innerW)) + "\n")
-			bodyChromeLines++
-		}
 		for _, line := range m.renderCalendarInvitationPrompt(innerW) {
 			sb.WriteString(line + "\n")
 			bodyChromeLines++
@@ -541,6 +538,17 @@ func (m *Model) renderFullScreenEmail() string {
 		sb.WriteString(line + "\n")
 	}
 	bodyStartRow := len(headerLines) + 1
+	promptLines := m.renderCalendarInvitationPrompt(innerW)
+	if len(promptLines) > 0 {
+		for _, line := range promptLines {
+			sb.WriteString(line + "\n")
+		}
+		maxBodyLines -= len(promptLines)
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+		bodyStartRow += len(promptLines)
+	}
 
 	dimStyle := m.theme.Text.Muted.Style()
 	threadContextLines := m.renderDraftThreadContextLines(email, innerW, 6)
@@ -840,6 +848,59 @@ func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {
 		Folder:    folder,
 		UID:       uid,
 	}.WithDefaults())
+}
+
+func (m *Model) loadEmailFullBodyForRefCmd(ref models.MessageRef) tea.Cmd {
+	ref = ref.WithDefaults()
+	messageID := ref.MessageID
+	folder := ref.Folder
+	uid := ref.UID
+	if m.timeline.bodyFetchCancel != nil {
+		m.timeline.bodyFetchCancel()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	m.timeline.bodyFetchCancel = cancel
+	m.timeline.bodyLoading = true
+	b := m.backend
+	return func() tea.Msg {
+		defer cancel()
+		started := time.Now()
+		finish := func(body *models.EmailBody, err error, source string) EmailBodyMsg {
+			finished := time.Now()
+			return EmailBodyMsg{
+				Body:           body,
+				Err:            err,
+				MessageRef:     ref,
+				MessageID:      messageID,
+				Folder:         folder,
+				UID:            uid,
+				LoadSource:     source,
+				LoadStartedAt:  started,
+				LoadFinishedAt: finished,
+				LoadDuration:   finished.Sub(started),
+			}
+		}
+		if ctx.Err() != nil {
+			return finish(nil, ctx.Err(), previewLoadSourceIMAP)
+		}
+		if serviceBackend, ok := b.(messageBodyServiceBackend); ok {
+			result, err := serviceBackend.GetMessage(ctx, ref)
+			source := result.Source
+			if strings.TrimSpace(source) == "" {
+				source = previewLoadSourceIMAP
+			}
+			return finish(result.Body, err, source)
+		}
+		if uid == 0 {
+			return finish(
+				&models.EmailBody{TextPlain: "(Body unavailable: this cached email has no server UID yet, so Herald cannot safely load its full contents. Re-sync the folder or use server search to refresh it.)"},
+				nil,
+				previewLoadSourceUnavailable,
+			)
+		}
+		body, err := b.FetchEmailBody(folder, uid)
+		return finish(body, err, previewLoadSourceIMAP)
+	}
 }
 
 func (m *Model) loadEmailBodyForRefCmd(ref models.MessageRef) tea.Cmd {
