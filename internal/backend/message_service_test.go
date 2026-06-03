@@ -202,6 +202,65 @@ func TestGetMessagePreviewReplaysCompletedResourceAfterInterveningStaleIntent(t 
 	}
 }
 
+func TestBackgroundPreviewReadsSerializeButInteractivePreviewBypasses(t *testing.T) {
+	cache := newFakeMessageCache()
+	cache.disablePreviewReads = true
+	background1 := testMessageRef("background-1")
+	background2 := testMessageRef("background-2")
+	interactive := testMessageRef("interactive")
+	source := newFakeMessageSource()
+	source.blockPreview(background1)
+	source.blockPreview(background2)
+	source.blockPreview(interactive)
+	service := NewMessageService(MessageServiceOptions{Cache: cache, Source: source})
+
+	results := make(chan messageServiceResult, 3)
+	go func() {
+		result, err := service.GetMessagePreview(context.Background(), background1, MessageReadIntent{
+			ViewID: "timeline-prewarm",
+			Class:  MessageReadClassBackground,
+		})
+		results <- messageServiceResult{result: result, err: err}
+	}()
+	source.waitForPreviewStart(t, background1)
+
+	go func() {
+		result, err := service.GetMessagePreview(context.Background(), background2, MessageReadIntent{
+			ViewID: "timeline-prewarm",
+			Class:  MessageReadClassBackground,
+		})
+		results <- messageServiceResult{result: result, err: err}
+	}()
+	time.Sleep(20 * time.Millisecond)
+	if calls := source.previewCallCount(background2); calls != 0 {
+		t.Fatalf("second background provider calls while first is active = %d, want serial queue", calls)
+	}
+
+	go func() {
+		result, err := service.GetMessagePreview(context.Background(), interactive, MessageReadIntent{ViewID: "timeline-preview"})
+		results <- messageServiceResult{result: result, err: err}
+	}()
+	source.waitForPreviewStart(t, interactive)
+	if calls := source.previewCallCount(interactive); calls != 1 {
+		t.Fatalf("interactive provider calls while background active = %d, want bypass", calls)
+	}
+
+	source.releasePreview(interactive, &models.EmailBody{TextPlain: "interactive body"}, nil)
+	source.releasePreview(background1, &models.EmailBody{TextPlain: "background one"}, nil)
+	source.waitForPreviewStart(t, background2)
+	source.releasePreview(background2, &models.EmailBody{TextPlain: "background two"}, nil)
+
+	for i := 0; i < 3; i++ {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("result %d err = %v", i, got.err)
+		}
+		if got.result.Body == nil || got.result.Body.TextPlain == "" {
+			t.Fatalf("result %d body = %#v, want body", i, got.result.Body)
+		}
+	}
+}
+
 func TestGetMessageCompletedReplayReturnsIsolatedBodyCopies(t *testing.T) {
 	cache := newFakeMessageCache()
 	cache.disableBodyReads = true

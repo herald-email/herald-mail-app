@@ -1263,7 +1263,7 @@ func (b *LocalBackend) FetchAndCacheBody(messageID string) (*models.EmailBody, e
 	if email == nil {
 		return nil, fmt.Errorf("FetchAndCacheBody: message %s not found in cache", messageID)
 	}
-	result, err := b.GetMessage(context.Background(), email.MessageRef())
+	result, err := b.GetMessage(withMessageReadClass(context.Background(), MessageReadClassBackground), email.MessageRef())
 	if err != nil {
 		return nil, err
 	}
@@ -1285,7 +1285,7 @@ func (b *LocalBackend) FetchAndCacheBodyByRef(ref models.MessageRef) (*models.Em
 		return nil, fmt.Errorf("FetchAndCacheBodyByRef: message %s not found in cache", ref.WithDefaults().LocalID)
 	}
 	ref = email.MessageRef()
-	result, err := b.GetMessage(context.Background(), ref)
+	result, err := b.GetMessage(withMessageReadClass(context.Background(), MessageReadClassBackground), ref)
 	if err != nil {
 		return nil, err
 	}

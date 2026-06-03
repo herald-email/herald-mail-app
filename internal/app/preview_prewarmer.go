@@ -115,7 +115,7 @@ func (m *Model) runPreviewPrewarmNext(targets []previewPrewarmTarget, folder str
 				MessageID: target.MessageID,
 				Folder:    target.Folder,
 				UID:       target.UID,
-			}.WithDefaults(), backend.MessageReadIntent{ViewID: "timeline-prewarm"})
+			}.WithDefaults(), backend.MessageReadIntent{ViewID: "timeline-prewarm", Class: backend.MessageReadClassBackground})
 			if fetchErr != nil {
 				resultErr = fetchErr
 			} else if result.Body == nil {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -396,6 +397,79 @@ func TestGmailAPIMailSourceHistoryDeltaAndExpiredCursorFallback(t *testing.T) {
 	}
 }
 
+func TestGmailAPIMailSourceColdSyncUsesBoundedMetadataFetches(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	fake.listIDs = []string{"msg-1", "msg-2"}
+	fake.messagePayloads["msg-2"] = gmailMessagePayloadFor("msg-2", "<api-2@example.com>", []string{"INBOX"}, "102")
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-bounded-metadata.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental: %v", err)
+	}
+
+	listCalls := fake.callsForPath("/gmail/v1/users/me/messages")
+	if len(listCalls) != 1 {
+		t.Fatalf("message list calls = %d, want one first-page bounded list call: %#v", len(listCalls), fake.calls)
+	}
+	if got := listCalls[0].Query.Get("maxResults"); got == "" {
+		t.Fatalf("message list maxResults was empty, want bounded cold-sync page size")
+	} else if n, err := strconv.Atoi(got); err != nil || n <= 0 || n > 100 {
+		t.Fatalf("message list maxResults = %q, want 1..100", got)
+	}
+
+	for _, call := range fake.calls {
+		if call.Method != http.MethodGet || !strings.HasPrefix(call.Path, "/gmail/v1/users/me/messages/") {
+			continue
+		}
+		if got := call.Query.Get("format"); got == "raw" {
+			t.Fatalf("cold sync fetched raw body for %s; want metadata/header fetch only", call.Path)
+		}
+		if got := call.Query.Get("format"); got != "metadata" {
+			t.Fatalf("cold sync format for %s = %q, want metadata", call.Path, got)
+		}
+	}
+
+	emails, err := c.GetEmailsSortedByDate("INBOX")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(emails) != 2 {
+		t.Fatalf("cached emails = %d, want 2", len(emails))
+	}
+	if emails[0].Subject == "" || emails[0].Sender == "" || emails[0].MessageID == "" {
+		t.Fatalf("metadata cached email missing sender/subject/message id: %#v", emails[0])
+	}
+}
+
+func TestGmailAPIMailSourceRetryHonorsRetryAfterHeader(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	fake.retryOnce = map[string]bool{"/gmail/v1/users/me/labels": true}
+	fake.retryAfter = map[string]string{"/gmail/v1/users/me/labels": "1"}
+
+	c, err := cache.New(path.Join(t.TempDir(), "gmail-api-retry-after.db"))
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	defer c.Close()
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+
+	started := time.Now()
+	if _, err := source.ListFolders(context.Background()); err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed < 900*time.Millisecond {
+		t.Fatalf("ListFolders retry elapsed = %s, want Retry-After delay to be honored", elapsed)
+	}
+}
+
 func TestGmailAPIMailSourcePaginationRetryAndComposeMIME(t *testing.T) {
 	fake := newFakeGmailAPIServer(t)
 	defer fake.Close()
@@ -532,6 +606,7 @@ type fakeGmailAPIServer struct {
 	draftPages      []fakeGmailIDPage
 	historyPages    []map[string]any
 	retryOnce       map[string]bool
+	retryAfter      map[string]string
 	retried         map[string]bool
 }
 
@@ -640,7 +715,15 @@ func (f *fakeGmailAPIServer) handleMessage(w http.ResponseWriter, r *http.Reques
 	default:
 		id := path.Base(r.URL.Path)
 		if payload := f.messagePayloads[id]; payload != nil {
+			if r.URL.Query().Get("format") == "metadata" {
+				writeJSON(w, gmailMetadataPayloadFrom(payload))
+				return
+			}
 			writeJSON(w, payload)
+			return
+		}
+		if r.URL.Query().Get("format") == "metadata" {
+			writeJSON(w, gmailMetadataPayloadFrom(gmailMessagePayload()))
 			return
 		}
 		writeJSON(w, gmailMessagePayload())
@@ -729,7 +812,28 @@ func gmailMessagePayloadFor(id, messageID string, labels []string, historyID str
 		"internalDate": time.Date(2026, 5, 31, 16, 0, 0, 0, time.UTC).UnixMilli(),
 		"sizeEstimate": len(raw),
 		"raw":          base64.RawURLEncoding.EncodeToString([]byte(raw)),
+		"payload": map[string]any{
+			"mimeType": "text/plain",
+			"headers": []map[string]string{
+				{"name": "From", "value": "Sender <sender@example.com>"},
+				{"name": "To", "value": "Me <me@example.com>"},
+				{"name": "Subject", "value": "API Roadmap"},
+				{"name": "Message-ID", "value": messageID},
+				{"name": "Date", "value": "Sun, 31 May 2026 09:00:00 -0700"},
+			},
+		},
 	}
+}
+
+func gmailMetadataPayloadFrom(payload map[string]any) map[string]any {
+	out := make(map[string]any, len(payload))
+	for key, value := range payload {
+		if key == "raw" {
+			continue
+		}
+		out[key] = value
+	}
+	return out
 }
 
 func gmailDraftPayload() map[string]any {
@@ -871,6 +975,16 @@ func (f *fakeGmailAPIServer) pathCallCount(path string) int {
 	return count
 }
 
+func (f *fakeGmailAPIServer) callsForPath(path string) []fakeGmailCall {
+	var calls []fakeGmailCall
+	for _, call := range f.calls {
+		if call.Path == path {
+			calls = append(calls, call)
+		}
+	}
+	return calls
+}
+
 func (f *fakeGmailAPIServer) shouldRetryOnce(w http.ResponseWriter, requestPath string) bool {
 	if !f.retryOnce[requestPath] || f.retried[requestPath] {
 		return false
@@ -879,6 +993,9 @@ func (f *fakeGmailAPIServer) shouldRetryOnce(w http.ResponseWriter, requestPath 
 		f.retried = map[string]bool{}
 	}
 	f.retried[requestPath] = true
+	if retryAfter := strings.TrimSpace(f.retryAfter[requestPath]); retryAfter != "" {
+		w.Header().Set("Retry-After", retryAfter)
+	}
 	http.Error(w, "rate limited", http.StatusTooManyRequests)
 	return true
 }
