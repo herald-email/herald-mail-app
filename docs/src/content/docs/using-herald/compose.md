@@ -41,6 +41,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 | `tab` | Subject hint | AI subject hint is visible. | Accepts the suggested subject. |
 | `ctrl+s` | Compose | SMTP configured, To not empty, Subject not empty. | Sends the message with Markdown-derived HTML/plain text and attachments. |
 | `ctrl+p` | Compose | Any draft. | Toggles Markdown preview. |
+| `ctrl+x` | Compose | `$VISUAL` or `$EDITOR` is configured, otherwise Herald falls back to `nano`. | Opens the body/top-note in an external editor and reads the saved buffer back into Compose. |
 | `ctrl+a` | Compose | Attachment prompt not already active. | Opens file path input for adding an attachment. |
 | `enter` | Attachment prompt | Attachment prompt active. | Adds the expanded path as an attachment. |
 | `esc` | Attachment prompt | Attachment prompt active. | Cancels attachment input. |
@@ -72,6 +73,14 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 3. Press `enter`.
 4. Confirm the attachment line appears.
 5. Send normally.
+
+### Edit Body In Your Editor
+
+1. Write or focus a Compose draft.
+2. Press `ctrl+x`.
+3. Edit the temporary Markdown buffer in `$VISUAL` or `$EDITOR`.
+4. Save and exit the editor.
+5. Continue composing, previewing, attaching, or sending in Herald.
 
 ### Use Address Autocomplete
 

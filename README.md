@@ -379,6 +379,7 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `1` / `2`                          | Timeline / Contacts tab in browse contexts                                                  |
 | `F1` / `F2` / `F3`                 | Timeline / Contacts / Contacts legacy aliases                                               |
 | `c`                                | Open a new Compose screen from Timeline                                                     |
+| `Ctrl+X`                           | Open the Compose body in `$VISUAL` or `$EDITOR`                                             |
 | `h` / `j` / `k` / `l`              | Navigate left / down / up / right where the active pane supports it                         |
 | `Enter`                            | Open email preview                                                                          |
 | `Space`                            | Select Timeline messages or grouped sender/domain rows                                      |

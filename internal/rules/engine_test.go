@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/notifications"
 )
 
 // --- mock Store ---
@@ -325,6 +327,37 @@ func TestEvaluateEmail_MultipleRules(t *testing.T) {
 	}
 	if len(exec.deleted) != 0 {
 		t.Errorf("expected 0 deletes, got %d", len(exec.deleted))
+	}
+}
+
+func TestEvaluateEmailNotifyUsesSharedNotifierWithMessageDeepLink(t *testing.T) {
+	store := &mockStore{
+		rules: []*models.Rule{
+			makeRule(1, models.TriggerSender, "alice@example.com",
+				models.RuleAction{Type: models.ActionNotify, NotifyTitle: "Important", NotifyBody: "From {{.Sender}}"}),
+		},
+	}
+	exec := &mockExecutor{}
+	rec := notifications.NewRecorder()
+	engine := NewWithNotifier(store, exec, nil, rec)
+
+	email := makeEmail("alice@example.com", "Hello", "INBOX", "msg-1")
+	fired, err := engine.EvaluateEmail(email, "")
+	if err != nil {
+		t.Fatalf("EvaluateEmail: %v", err)
+	}
+	if fired != 1 {
+		t.Fatalf("fired = %d, want 1", fired)
+	}
+	delivered := rec.Delivered()
+	if len(delivered) != 1 {
+		t.Fatalf("delivered = %d, want 1", len(delivered))
+	}
+	if delivered[0].Title != "Important" || !strings.Contains(delivered[0].Body, "alice@example.com") {
+		t.Fatalf("notification = %#v, want templated title/body", delivered[0])
+	}
+	if !strings.Contains(delivered[0].DeepLink, "herald://mail/message?") || !strings.Contains(delivered[0].DeepLink, "message_id=msg-1") {
+		t.Fatalf("notification deep link = %q, want msg-1 message link", delivered[0].DeepLink)
 	}
 }
 

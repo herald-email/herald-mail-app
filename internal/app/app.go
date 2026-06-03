@@ -20,8 +20,10 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/cleanup"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/deeplink"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/notifications"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
@@ -835,6 +837,10 @@ type Model struct {
 	keyboardWarn string
 	theme        Theme
 	themeWarn    string
+	notifier     notifications.Notifier
+
+	initialDeepLink *deeplink.Target
+	pendingDeepLink *deeplink.Target
 
 	// Settings panel overlay
 	showSettings     bool
@@ -1611,9 +1617,13 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.folderStatus = make(map[string]models.FolderStatus)
 	m.sidebarCursor = 0
 	m.focusedPanel = panelTimeline
+	m.revokeImagePreviews()
 	m.timeline.emails = nil
 	m.timeline.emailsCache = nil
 	m.timeline.selectedEmail = nil
+	m.timeline.body = nil
+	m.timeline.bodyMessageID = ""
+	m.timeline.bodyLoading = false
 	m.timeline.selectedMessageIDs = make(map[string]bool)
 	m.timeline.searchResults = nil
 	m.timeline.searchMode = false
@@ -1718,8 +1728,12 @@ func (m *Model) SetDemoKeyOverlay(enabled bool) {
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
 	startupAIWarning := ollamaModelWarningCmd(m.cfg, m.demoMode)
+	initialDeepLink := m.prepareInitialDeepLink()
+	notificationResponses := m.listenForNotificationResponses()
 	if !m.loading {
 		return tea.Batch(
+			initialDeepLink,
+			notificationResponses,
 			m.listenForRuleResult(),
 			m.importAppleContacts(),
 			draftSaveTick(),
@@ -1728,6 +1742,8 @@ func (m *Model) Init() tea.Cmd {
 		)
 	}
 	return tea.Batch(
+		initialDeepLink,
+		notificationResponses,
 		m.startLoading(),
 		m.tickSpinner(),
 		m.listenForSyncEvents(),
@@ -1918,6 +1934,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Info("Problem report written: %s", msg.Path)
 		}
 		return m, nil
+
+	case NotificationActivatedMsg:
+		target, err := deeplink.Parse(msg.DeepLink)
+		if err != nil {
+			m.statusMessage = "Notification link failed: " + err.Error()
+			return m, m.listenForNotificationResponses()
+		}
+		return m, tea.Batch(m.applyDeepLinkTarget(target), m.listenForNotificationResponses())
 	}
 
 	// Handle settings panel messages before forwarding to the panel, so we can
@@ -2673,6 +2697,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case composeExternalEditorFinishedMsg:
+		m.applyComposeExternalEditorResult(msg)
+		return m, nil
+
 	case ClassifyProgressMsg:
 		m.classifyDone = msg.Done
 		m.classifyTotal = msg.Total
@@ -2695,7 +2723,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.classifying = false
 		m.updateTimelineTable()
 		logger.Info("Classification complete: %d emails tagged", m.classifyDone)
-		return m, nil
+		return m, m.notifyClassificationCompletionCmd()
 
 	case ReclassifyResultMsg:
 		if msg.Err != nil {
@@ -2813,7 +2841,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = msg.StatusMessage
 			m.reflowIfTopSyncStripChanged(hadTopSyncStrip)
 		}
-		return m, nil
+		return m, m.consumePendingDeepLinkCmd()
 
 	case ContactSuggestionsMsg:
 		m.suggestions = msg.Contacts
@@ -2955,6 +2983,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = event.Message
 			m.loading = false
 			logger.Debug("SyncEventMsg: sync error folder=%s generation=%d error=%q", event.Folder, event.Generation, strings.TrimSpace(event.Error))
+			cmds = append(cmds, m.notifySyncFailureCmd(event))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -3005,6 +3034,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd := m.startPreviewPrewarmerIfNeeded(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
+		}
+		if cmd := m.consumePendingDeepLinkCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 		if len(cmds) > 0 {
 			return m, tea.Batch(cmds...)
@@ -3058,10 +3090,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Content: content,
 		})
 		m.chatWrappedLines = nil // invalidate wrap cache
+		notifyCmd := m.notifyChatResultCmd(msg)
 		if filterCmd != nil {
-			return m, filterCmd
+			return m, tea.Batch(notifyCmd, filterCmd)
 		}
-		return m, nil
+		return m, notifyCmd
 
 	case LoadingMsg:
 		m.progressInfo = msg.Info
@@ -3098,6 +3131,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if all deletions are complete
 		if m.deletionsPending <= 0 {
 			logger.Info("All %d deletions complete, reloading data...", m.deletionsTotal)
+			completedTotal := m.deletionsTotal
 			m.deleting = false
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
@@ -3116,7 +3150,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return FolderStatusMsg{SourceID: sourceID, Status: status}
 			}
-			return m, tea.Batch(m.loadTimelineEmails(), refreshCounts)
+			return m, tea.Batch(m.loadTimelineEmails(), refreshCounts, m.notifyDeletionCompletionCmd(msg, completedTotal))
 		}
 
 		// Continue listening for more results
@@ -3673,14 +3707,17 @@ func (m *Model) renderLoadingView() string {
 // renderMainView renders the main application view
 func (m *Model) renderMainView() string {
 	var content strings.Builder
+	var nativeImageTail string
 
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 
 	// Header
 	content.WriteString(m.renderTitleBar(m.windowWidth) + "\n")
 
+	mainContentTopRow := 2
 	if syncStrip := m.renderTopSyncStrip(); syncStrip != "" {
 		content.WriteString(syncStrip + "\n")
+		mainContentTopRow++
 	}
 
 	// Content area
@@ -3688,7 +3725,9 @@ func (m *Model) renderMainView() string {
 	if m.showLogs {
 		mainContent = m.baseStyle.Width(m.logViewer.viewport.Width() + 2).Render(m.logViewer.View().Content)
 	} else if m.activeTab == tabTimeline {
-		mainContent = m.renderTimelineView()
+		timelineFrame := m.renderTimelineViewFrame(mainContentTopRow)
+		mainContent = timelineFrame.Content
+		nativeImageTail = timelineFrame.NativeImageTail
 	} else if m.activeTab == tabCompose {
 		mainContent = m.renderComposeView()
 	} else if m.activeTab == tabContacts {
@@ -3710,7 +3749,7 @@ func (m *Model) renderMainView() string {
 	content.WriteString(m.renderStatusHintDivider() + "\n")
 	content.WriteString(m.renderKeyHints())
 
-	return content.String()
+	return appendNativeImageOverlayTailToLastLine(content.String(), nativeImageTail)
 }
 
 // Helper functions and other methods continue in next part due to length...

@@ -25,7 +25,7 @@ The report recommendations are considered closed when they are implemented, expl
 - [x] Compatibility wrapper for old IMAP tests - implemented through the existing test utility compatibility path.
 - [x] Sanitized corpus workflow - implemented with quarantine guidance, committed `.eml` fixtures, and `tools/testmail-sanitize`.
 - [x] Scenario helpers - implemented with named `ScenarioName` constants, `LoadScenario`, and `StartScenario`.
-- [x] Realistic scenario catalog - implemented for plain thread, calendar invite, newsletter table, receipt HTML, malformed charset, inline CID image, long-link HTML, and unsubscribe-header variants.
+- [x] Realistic scenario catalog - implemented for plain thread, calendar invite, newsletter table, receipt HTML, malformed charset, inline CID image, remote HTML image, long-link HTML, and unsubscribe-header variants.
 - [x] Backend coverage - implemented through virtual-lab `LocalBackend` send, draft, reply, and body-fetch tests.
 - [x] Rendering and TUI coverage - implemented through in-process Bubble Tea preview tests at realistic sizes.
 - [x] SSH coverage - implemented through a real loopback Wish SSH server backed by virtual-lab scenarios.

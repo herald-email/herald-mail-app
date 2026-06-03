@@ -31,9 +31,11 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] MCP server (read/search/classify tools for Claude Code)
 - [x] SSH app mode (`cmd/herald-ssh-server` via charmbracelet/wish)
 - [x] Unified CLI subcommands (`herald mcp`, `herald ssh`) with legacy wrapper binaries preserved
-- [x] Inline image placeholders (text labels with AI vision descriptions when available)
+- [x] Inline image rendering in email previews (bounded side-panel and full-screen raster viewing where supported, with safe links/placeholders otherwise)
+- [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
+- [ ] macOS notifications with Herald deep links for new mail and sync failures
 - [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
@@ -122,7 +124,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Full-width thread list sorted by date
 - [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
 - [x] Sender-cell disclosure markers make collapsed and expanded Timeline threads recognizable before opening them
-- [x] Body preview split (right panel, auto-updates on navigation)
+- [x] Body preview split (right panel, auto-updates on navigation, with bounded inline image rendering when supported)
 - [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders
 - [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)
@@ -358,6 +360,7 @@ Write in Markdown, deliver as properly formatted HTML email. Compose is a transi
 - [x] Markdown editor (textarea)
 - [x] Timeline `c` opens a blank Compose screen for a new message
 - [x] Live Markdown preview (`Ctrl+P`)
+- [x] External editor handoff (`Ctrl+X`) writes the Compose body through `$VISUAL` or `$EDITOR` and restores the edited text when the editor exits
 - [x] Send as multipart HTML + plain-text via SMTP
 - [x] Reply (`r` reply-all and `R` sender-only keys — pre-fill To, Re: subject, quotes original)
 - [x] Loaded preview headers show visible `To` and `Cc` recipients when a message body includes them, so reply-all participants can be checked before composing
@@ -612,6 +615,14 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 - [x] Sync countdown shown in status bar (↻ 42s)
 - [ ] Per-folder poll frequency (active folder more often; background folders less)
 
+### Notifications and deep links
+Notifications should bring attention back to the right mailbox context without turning every background action into noise. The first target is macOS native notifications with Herald deep links, while other platforms must degrade cleanly.
+
+- [ ] Native macOS notifications for new mail and sync failures are enabled by default.
+- [ ] Notification activation can open folder, message, sender, search, or compose contexts through `herald://mail/...` links.
+- [ ] Deletion/archive completion, classification completion, and chat-result notifications are supported but disabled by default.
+- [ ] Linux keeps delivery-only notification behavior and unsupported platforms no-op without misleading click-through claims.
+
 ---
 
 ## Multi-Account Support
@@ -765,7 +776,7 @@ Bubble Tea's alt-screen captures all input, so the terminal's native mouse selec
 - [x] Tab bar, sidebar, timeline table hidden in full-screen
 - [x] Header (From / Date / Subject) pinned at top
 - [x] Same scroll controls (`j`/`k`, `PgUp`/`PgDn`)
-- [x] Inline images stay within the viewport in full-screen mode and degrade to safe links/placeholders when graphics are unavailable
+- [ ] Native inline images clip to the visible preview bounds while scrolling so partially visible images appear from the top or bottom without overflowing
 - [x] `z` or `Esc` exits and restores split layout
 
 ---

@@ -452,6 +452,9 @@ func (m *Model) clearTimelinePreviewIfDeleted(ids map[string]bool) {
 		origin.body = nil
 		origin.bodyMessageID = ""
 		origin.bodyLoading = false
+		origin.inlineImageDescs = nil
+		origin.remoteImageLoads = nil
+		origin.remoteImageRevision++
 		origin.bodyScrollOffset = 0
 	}
 	if m.timeline.selectedEmail == nil || !(ids[m.timeline.selectedEmail.MessageID] || ids[timelineSelectionKey(m.timeline.selectedEmail)]) {

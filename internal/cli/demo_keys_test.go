@@ -42,6 +42,18 @@ func TestPlainLaunchDoesNotRunDemoMode(t *testing.T) {
 	}
 }
 
+func TestTUIFlagsParseOpenDeepLink(t *testing.T) {
+	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
+	opts := registerTUIFlags(fs)
+
+	if err := fs.Parse([]string{"--demo", "--open", "herald://mail/folder?folder=INBOX"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if opts.openDeepLink == nil || *opts.openDeepLink != "herald://mail/folder?folder=INBOX" {
+		t.Fatalf("openDeepLink = %#v", opts.openDeepLink)
+	}
+}
+
 func TestRegisterTUIFlagsParsesThemeOverride(t *testing.T) {
 	fs := flag.NewFlagSet("herald", flag.ContinueOnError)
 	opts := registerTUIFlags(fs)

@@ -99,6 +99,19 @@
           socket.send(encode.encode(command + payload));
         }
       };
+      window.heraldHarnessSendData = (data) => {
+        sendText("0", data);
+        return socket.readyState;
+      };
+      window.heraldHarnessInput = (data) => {
+        terminal.focus();
+        if (typeof terminal.input === "function") {
+          terminal.input(data, true);
+        } else {
+          terminal.paste(data);
+        }
+        return socket.readyState;
+      };
 
       socket.addEventListener("open", () => {
         const sendResize = () => {

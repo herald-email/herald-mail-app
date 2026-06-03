@@ -54,6 +54,8 @@ cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 | `internal/mcpserver` | Shared MCP stdio server implementation used by `herald mcp` and the legacy `herald-mcp-server` wrapper |
 | `internal/sshserver` | Shared SSH server implementation used by `herald ssh` and the legacy `herald-ssh-server` wrapper |
 | `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory and masks private mailbox/config data unless `-unsafe-logs` is explicitly enabled |
+| `internal/deeplink` | Parses and builds `herald://mail/...` links for folder, message, sender, search, and compose contexts |
+| `internal/notifications` | Platform notification boundary: macOS native activation, Linux delivery-only fallback, unsupported-platform no-op, and fake recorder for tests |
 
 ### First-run configuration flow
 
@@ -141,7 +143,7 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 
 ### Inline image preview safety
 
-Timeline previews keep image bytes local to the TUI process. Full-screen preview renders bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs are rendered as links without being fetched by Herald.
+Timeline previews keep image bytes local to the TUI process. Split and full-screen previews render bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. Native raster overlays carry row geometry so Herald can crop and re-encode the visible image slice when a scroll position or split-preview panel boundary shows only part of the image; if cropping cannot be done safely, the overlay is suppressed rather than allowed to overflow. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs render as readable placeholders and OSC 8 links by default; pressing `o` in the current Timeline preview fetches only the current message's remote images with bounded, no-cookie, no-referrer HTTP(S) requests, blocks local/private/link-local destinations and unsafe redirects, keeps bytes in memory only, and then sends revealed images through the same renderer/fallback path as MIME inline images.
 
 **Interactive-before-background priority**
 
@@ -380,9 +382,15 @@ app.listenForNewEmails() tea.Cmd
     │
     ▼
 NewEmailsMsg → Update() → prepend rows to timeline table
+    │
+    ├─ if notifications.new_mail: notify with message or folder deep link
+    │
+    └─ if notification activated: DeepLinkMsg → route TUI to folder/message/search/compose
 ```
 
 In Phase 2, the daemon emits a `NewEmailsEvent` on the WebSocket. `RemoteBackend` receives it and forwards it to the same `newEmailsCh`. The app is unchanged.
+
+Sync failures follow the same boundary: a `sync_error` event keeps the existing visible TUI status and additionally asks the notifier for a folder-scoped deep link when `notifications.sync_failures` is enabled. macOS uses `UNUserNotificationCenter` response callbacks to feed the deep link back into the running TUI; Linux and unsupported platforms do not claim activation support.
 
 ---
 

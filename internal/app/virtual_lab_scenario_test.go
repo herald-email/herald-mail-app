@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -60,6 +61,15 @@ func TestTimelinePreviewRendersVirtualMailScenarios(t *testing.T) {
 			forbidShown: []string{"cid:chart-001@herald.test"},
 		},
 		{
+			name: testmail.ScenarioRemoteHTMLImages,
+			want: []string{
+				"Herald Mail App Newsletter",
+				"linked image",
+				"press o to reveal",
+			},
+			forbidShown: []string{"https://example.test", "redacted-link"},
+		},
+		{
 			name: testmail.ScenarioLongLinkTracking,
 			want: []string{
 				"Open safe fixture link",
@@ -94,6 +104,39 @@ func TestTimelinePreviewRendersVirtualMailScenarios(t *testing.T) {
 					t.Fatalf("%s preview raw output leaked %q:\n%q", tc.name, bad, rendered)
 				}
 			}
+		})
+	}
+}
+
+func TestVirtualLabRemoteHTMLImagesFullScreenPlaceholdersAtTerminalSizes(t *testing.T) {
+	for _, size := range []struct {
+		width  int
+		height int
+	}{
+		{width: 120, height: 40},
+		{width: 80, height: 24},
+	} {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			m := newVirtualLabTimelinePreviewModel(t, testmail.ScenarioRemoteHTMLImages, size.width, size.height)
+			m.timeline.fullScreen = true
+			rendered := m.renderFullScreenEmail()
+			visible := ansi.Strip(rendered)
+			normalizedVisible := normalizePreviewText(visible)
+			for _, want := range []string{"image:", "press o to reveal"} {
+				if !strings.Contains(normalizedVisible, normalizePreviewText(want)) {
+					t.Fatalf("%dx%d remote image placeholder missing %q:\n%s", size.width, size.height, want, visible)
+				}
+			}
+			for _, leaked := range []string{"https://example.test", "redacted-link"} {
+				if strings.Contains(visible, leaked) {
+					t.Fatalf("%dx%d visible placeholder leaked %q:\n%s", size.width, size.height, leaked, visible)
+				}
+			}
+			if !strings.Contains(rendered, "\x1b]8;;https://example.test/redacted-link") {
+				t.Fatalf("%dx%d raw output should keep sanitized image URL as OSC8 target, got:\n%q", size.width, size.height, rendered)
+			}
+			assertFitsWidth(t, size.width, rendered)
+			assertFitsHeight(t, size.height, rendered)
 		})
 	}
 }

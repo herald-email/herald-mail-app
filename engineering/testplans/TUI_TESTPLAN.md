@@ -625,6 +625,24 @@ Check these states during every applicable lane:
 - Non-empty CC/BCC preserve existing send, draft-save, draft-restore, and autocomplete behavior.
 - At `50x15`, the minimum-size guard is acceptable; returning to larger sizes restores the composed layout cleanly.
 
+### TC-11B — Compose external editor handoff
+
+**Lane:** C
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Launch Herald in demo mode with `EDITOR` or `VISUAL` set to a terminal editor command.
+2. Open Timeline and press `c` to open a blank Compose screen.
+3. Confirm the bottom hint bar advertises `Ctrl+X` for the external editor.
+4. Type a short body, press `Ctrl+X`, edit the temporary buffer in the external editor, save, and exit.
+5. Confirm Compose restores with the edited body text, the Body field focused, and the draft still available for preview, attachment, or send.
+6. Repeat once from a reply or forward Compose screen that has preserved original-message context.
+
+**Expect:**
+- Herald temporarily releases the TUI, opens the configured `$VISUAL` or `$EDITOR`, then restores the TUI after the editor exits.
+- The edited buffer replaces only the Compose body/top note; To, CC, BCC, Subject, attachments, and preserved original-message context remain unchanged.
+- If the editor command fails, Compose keeps the previous body and shows a bounded error in the Compose status line.
+
 ### TC-12 — Compose AI subject hint accept and dismiss
 
 **Lane:** C  
@@ -1168,28 +1186,34 @@ Check these states during every applicable lane:
 - Degraded path does not overflow or wedge the preview.
 - Failure is surfaced cleanly.
 
-### TC-23A — Full-screen inline image rendering and fallback links
+### TC-23A — Split and full-screen inline image rendering and fallback links
 
 **Lane:** A, B, C
 **Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
 
 **Steps:**
 1. Open Timeline and search for `Step 5: View inline images in full screen`.
-2. Open the split preview and capture the image hint plus body links.
-3. Press `z` to enter full-screen and capture the top of the document.
-4. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
-5. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
-6. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
-7. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
-8. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
-9. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output.
-10. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
-11. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
-12. Run the standard resize cycle while full-screen preview is open.
+2. Open the split preview and capture the image hint plus bounded inline image output, local open-image links, or placeholders for the selected protocol.
+3. For a message with remote HTML image URLs, confirm the visible placeholder reads `image: <label> (press o to reveal)` and the raw output keeps the original URL only inside the OSC 8 target.
+4. Press `o` and confirm the remote images are fetched only after that keypress.
+5. Press `z` to enter full-screen and capture the top of the document.
+6. Scroll with app keys (`j`, `k`, `PgDn`, `PgUp`) until each inline image has appeared in the document flow.
+7. In iTerm2 or Kitty raster mode, press `m` to release mouse capture, then use terminal-native scrollback to inspect whether image raster output displaced header/body text.
+8. Capture raster-mode screenshots with images visibly rendered at the initial full-screen image block, after several scroll steps, farther down the message, and after scrolling back upward; inspect those screenshots before reporting.
+9. At a constrained split-preview height, scroll or position Step 5 so a tall image is only partly visible and confirm the raster image is clipped to the top or bottom preview border rather than hidden completely or painted into the footer/status area.
+10. Repeat with the repo custom ttyd harness: `env -u NO_COLOR COLORTERM=truecolor PORT=7682 EVIDENCE_DIR=reports/ttyd-custom-image-preview tools/ttyd-image-harness/probe.sh`.
+11. Repeat the custom ttyd harness with a full-screen app theme: `env -u NO_COLOR COLORTERM=truecolor HERALD_THEME=jade-signal PORT=7684 EVIDENCE_DIR=reports/ttyd-themed-image-preview tools/ttyd-image-harness/probe.sh`.
+12. Repeat with stock ttyd smoke when comparing against the manual ttyd frontend: `env -u NO_COLOR COLORTERM=truecolor TTYD_MODE=stock PORT=7683 EVIDENCE_DIR=reports/ttyd-stock-image-preview tools/ttyd-image-harness/probe.sh`.
+13. Repeat with `--demo -image-protocol=kitty` and confirm ANSI capture includes Kitty graphics `ESC_G` output in the split preview and full-screen preview.
+14. In Kitty or Ghostty raster mode, scroll back and forth across multiple inline images and confirm old image placements are cleared before the current viewport is redrawn.
+15. Repeat in Ghostty or a terminal with `TERM=xterm-ghostty` if available, a non-raster terminal, an iTerm2-compatible terminal if available, and SSH mode.
+16. Run the standard resize cycle while full-screen preview is open.
 
 **Expect:**
 - The Creative Commons sampler fixture exposes four embedded inline images with different dimensions and HTML `cid:` placement.
-- Split preview stays compact and does not promise image viewing when no full-screen image path is available.
+- Split preview renders bounded inline images when raster output is enabled, local open-image links in links mode, and compact placeholders when no raster/link path is available.
+- Split preview stays bounded inside the side panel and does not promise unavailable image viewing when no image path is available.
+- Native raster images that are only partially visible are cropped to the preview boundary; undecodable images keep the safe hide-on-overlap fallback.
 - Full-screen preview renders text and inline images as one scrollable document below the pinned header.
 - Raster images appear near their authored positions and do not push the header/title out of the visible app viewport or terminal scrollback.
 - iTerm2-compatible terminals render bounded inline images using OSC 1337 when selected or auto-detected.
@@ -1200,7 +1224,10 @@ Check these states during every applicable lane:
 - Stock ttyd smoke records screenshot plus pixel metrics for color-chart cells and at least one large photo region; its placement is not authoritative for acceptance.
 - Non-raster local TUI shows OSC 8 `open image` links to localhost-served MIME inline image bytes.
 - SSH auto mode avoids misleading localhost links and shows bounded placeholders unless the original email contains remote image URLs; forced `-image-protocol=iterm2` or `-image-protocol=kitty` emits the selected raster protocol.
-- Remote HTML image URLs appear as readable OSC 8 links and Herald does not fetch them automatically.
+- Remote HTML image URLs appear as readable OSC 8 placeholders and Herald does not fetch them automatically.
+- Pressing `o` reveals only the current message's remote images; `r` and `R` remain reply shortcuts.
+- Remote image fetching uses no cookies, no auth headers, no referrer, bounded response size/time, image content-type checks, and private/local/link-local destination blocking.
+- Acceptance evidence includes screenshots with raster images actually rendered at multiple scroll positions, plus a checked scroll-back screenshot proving no stale or overlapping image artifacts after moving through the message.
 - At `50x15`, the minimum-size guard appears and resizing back restores a clean full-screen preview.
 - Test reports include terminal app/version, ttyd/frontend mode, selected app theme, selected image protocol mode, screenshots for raster modes, and ANSI captures where possible.
 
@@ -1284,14 +1311,14 @@ Check these states during every applicable lane:
 10. Open Step 4 and confirm the body explains text selection, full-screen preview, and `m` to release/restore mouse capture.
 11. Open Step 5 and confirm inline image/full-screen instructions are present.
 12. Open Step 7 and confirm cleanup rules, automation rules, custom prompts, and dry-run previews are explained.
-13. Confirm supporting demo fixtures below the onboarding course use `Example:` subjects and avoid repetitive filler.
+13. Confirm the sanitized `[PREVIEW] Herald v0.5.0` newsletter appears immediately below the onboarding course, then supporting demo fixtures below it use `Example:` subjects and avoid repetitive filler.
 14. Switch to Cleanup, open sender details, and preview one message.
 15. Switch to Contacts, open one contact detail, and open a recent email inline.
 
 **Expect:**
 - Demo startup shows a compact welcome overlay only in `--demo`, and dismissing it does not route the dismiss key to the underlying Timeline.
 - Timeline starts with a Herald welcome message followed by explicit onboarding messages ordered Step 1 through Step 9.
-- Supporting demo messages below the onboarding course are labeled as `Example:` fixtures and the mailbox remains focused.
+- The sanitized v0.5 preview newsletter appears below the onboarding course, and the remaining supporting demo messages are labeled as `Example:` fixtures so the mailbox remains focused.
 - Preview bodies are specific instructional docs rather than generic lorem ipsum.
 - Attachment, unsubscribe, HTML, inline image, cleanup, AI, semantic search, contacts, and MCP demo coverage remains represented in the fixture set.
 - Contacts are populated from demo data and their recent emails open inline.
@@ -2375,6 +2402,32 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 - The preview prewarmer warms active-folder preview misses conservatively, one message at a time, skips already cached messages, and stops scheduling additional old-folder work after a folder switch.
 - Attachment save fetches bytes on demand when preview only has metadata.
 - `50x15` shows the minimum-size guard and resizing back restores a clean preview.
+
+### TC-53 — macOS notifications and Herald deep-link activation
+
+**Lane:** A/B
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode with `--open 'herald://mail/message?folder=INBOX&message_id=<demo-message-id>'`.
+2. Capture the activated Timeline preview at `220x50` and `80x24`.
+3. Launch demo mode with `--open 'herald://mail/folder?folder=Newsletters'` and capture the selected folder.
+4. Launch demo mode with `--open 'herald://mail/search?folder=INBOX&q=invoice'` and capture the populated Timeline search state.
+5. Launch demo mode with `--open 'herald://mail/compose?to=friend%40example.com&subject=Hello'` and capture the Compose fields.
+6. Resize the active deep-link state to `50x15`, then recover to `80x24`.
+7. On macOS, trigger a fake notifier-backed new-mail event and click the delivered notification when Notification Center allows it.
+8. On non-macOS, run the same notifier tests and confirm notification delivery degrades without changing TUI state or surfacing misleading click-through affordances.
+
+**Expect:**
+- Message deep links switch to Timeline, select the target folder, highlight the target message, and open its preview when the message exists.
+- Folder deep links switch to Timeline and load the target folder without opening a stale preview.
+- Search deep links switch to Timeline, populate the search prompt, run the search, and keep normal search escape behavior.
+- Compose deep links open Compose with recipient and subject prefilled while preserving normal text-entry routing.
+- New-mail notifications link to the message for a single new message and to the folder for multiple new messages.
+- Sync-failure notifications link to the affected folder and do not replace the visible sync error status.
+- Delete/archive, classification, and chat-result notifications are supported by config but remain disabled by default.
+- `50x15` shows the minimum-size guard and resizing back restores the activated state cleanly.
+- Non-macOS builds compile and either deliver platform-supported notifications without activation or no-op cleanly.
 
 ---
 

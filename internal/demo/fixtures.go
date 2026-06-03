@@ -452,7 +452,7 @@ Try now
 - Scroll through the image section and watch for safe fallback links or text when raster graphics are unavailable.
 
 What Herald is doing
-This email includes embedded inline images, so Herald can render the local MIME bytes without downloading anything. Remote images are shown as links and are intentionally not fetched.
+This email includes embedded inline images, so Herald can render the local MIME bytes without downloading anything. Remote images are shown as safe placeholders until you press o to reveal them for this message.
 
 Embedded Creative Commons images:
 - CC BY-SA badge: 46x21 PNG, CC0 1.0, by Heflox. Source: https://commons.wikimedia.org/wiki/File:CC-BY-SA.png
@@ -460,8 +460,8 @@ Embedded Creative Commons images:
 - Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg
 - Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg
 
-Remote image link, intentionally not fetched by Herald:
-![Remote Commons thumbnail](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png)`,
+Remote image link, intentionally not fetched until you press o:
+![Remote Commons thumbnail](https://assets.herald.demo/color-chart-330px.png)`,
 		withDate(baseTime.Add(5*time.Hour)),
 		withHTMLBody(`<html><body>
 <h1>Step 5: View inline images in full screen</h1>
@@ -477,8 +477,8 @@ Remote image link, intentionally not fetched by Herald:
 <li>Bee on sunflower: 330px JPEG thumbnail, CC BY 4.0, by Mbrickn. Source: <a href="https://commons.wikimedia.org/wiki/File:Bee_on_Sunflower.jpg">Bee on Sunflower</a></li>
 <li>Changing Landscape: 960px JPEG thumbnail, CC BY 4.0, by Mit.d.sheth. Source: <a href="https://commons.wikimedia.org/wiki/File:Changing_Landscape.jpg">Changing Landscape</a></li>
 </ul>
-<p>Remote image link, intentionally not fetched by Herald:</p>
-<p><img alt="Remote Commons thumbnail" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/ColorChart.svg/330px-ColorChart.svg.png"></p>
+<p>Remote image link, intentionally not fetched until you press <strong>o</strong>:</p>
+<p><img alt="Remote Commons thumbnail" src="https://assets.herald.demo/color-chart-330px.png"></p>
 </body></html>`),
 		withInlineImage("cc-by-sa-badge", "image/png", demoCCBySABadgePNG),
 		withInlineImage("color-chart-330px", "image/png", demoColorChartPNG),
@@ -535,11 +535,11 @@ What Herald is doing
 The settings overlay writes the same YAML shape used by normal config files. Demo mode itself does not read your mailbox or send mail, but saving settings is still a real configuration action, so inspect safely and save only when you mean it.`,
 		withDate(baseTime.Add(2*time.Hour)))
 	inviteStart := calendarFixtureDayStart(baseTime).AddDate(0, 0, 2).Add(15 * time.Hour)
-	add(41, "Rae Stone <rae@cobalt-works.example>", "Example: Product review invitation", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"calendar", "ics", "scheduling", "product review"},
+	add(42, "Rae Stone <rae@cobalt-works.example>", "Example: Product review invitation", "INBOX", 0, 14336, false, true, ai.CategoryImportant, []string{"calendar", "ics", "scheduling", "product review"},
 		"Bob invited you to a product review.\n\nThis demo email includes a safe .ics invitation so Herald can show the Create Calendar Event flow without touching a real mailbox.",
 		withHeaders("Rae Stone <rae@cobalt-works.example>", "Rowan Finch <demo@demo.local>", "", ""),
 		withCalendarInvitation("product-review.ics", "demo-product-review-invite@herald.demo", "Product review", inviteStart, inviteStart.Add(45*time.Minute)),
-		withDate(baseTime.Add(30*time.Minute)))
+		withDate(baseTime.Add(29*time.Minute)))
 	add(38, "Herald Next Steps <next@herald.demo>", "Step 9: Explore contacts, chat, SSH, and MCP", "INBOX", 0, 9984, true, true, ai.CategoryNewsletter, []string{"onboarding", "contacts", "chat", "quick replies", "mcp", "ssh"},
 		`Step 9 gives you a few extra paths to try after the core tour.
 
@@ -553,6 +553,122 @@ Try now
 What Herald is doing
 The demo mailbox is shared across the TUI and MCP demo surfaces, so search, stats, classifications, and previews all point at the same fictional data. Good practice searches include ? infrastructure budget risk, images, attachments, and cleanup.`,
 		withDate(baseTime.Add(1*time.Hour)))
+	add(41, "Herald Mail App <newsletter@herald.demo>", "[PREVIEW] Herald v0.5.0 — Calendar, and multi-account arrive", "INBOX", 0, 36864, true, true, ai.CategoryNewsletter, []string{"newsletter", "release", "calendar", "multi-account", "oauth", "cleanup"},
+		`Hi everyone,
+
+This one is a big release — the biggest since we started this newsletter. v0.5.0 lands the multi-account work we said was coming, and also opens up a whole new surface: **Calendar**. Herald is no longer just an email client.
+
+A bit of plumbing made this possible: mail and calendar share a common notion of source/account that flows through reads, search, compose, sync, and writes. One caveat for now — you still add the mail side and the calendar side as separate sources, even when they come from the same provider, but Herald shows them together under one unified view. That's the unglamorous half; the visible half is below.
+
+## Multi-account, finally
+
+The v0.4 newsletter said this was next. It is now in. You get source badges on messages so you can see at a glance which account a thread came from, Mail.app-style account sections in the folder list, account-scoped signatures, and Compose that routes replies from the right address automatically. Adding and managing accounts happens in Settings.
+
+If you were juggling separate config files and separate terminal windows as the workaround — you can stop.
+
+Demo mode now ships with multiple synthetic accounts too, so you can try the whole multi-account experience — badges, sections, Compose routing — without setting up a single real one.
+
+![Herald sidebar showing two demo accounts as separate sections with their own Inbox/Drafts/Folders, plus an All Inboxes view.](https://assets.buttondown.email/images/8a2e3bc3-a4ba-4b8b-bf1e-1c58484ae066.png?w=960&fit=max)
+
+Multi-account timeline view (Tomorrow Desk theme)
+
+## Calendar (preview)
+
+Press 3 to open Calendar. The surfaces are: **Week Time-Grid** for spotting dense days and conflicts, **Day Agenda** for focus on one day with a detail drawer, **3-Day Command** for today + tomorrow + the next day with a side panel of open slots and conflicts, **Agenda List**, and **Calendar Search**, plus Event Detail with RSVP. The left rail filters by source and shows colored swatches per calendar.
+
+It is mostly a preview surface in this release. Reading, RSVP, and basic event actions work. The smoother day-to-day flows — like "I got an .ics in an email, please put it on my calendar" — are what we are focusing on next. A couple of us are using it daily; we want to hear from anyone else who is.
+
+[Calendar guide](https://docs.herald-mail.app/using-herald/calendar/?utm_source=herald-mail.app&utm_medium=email) · [What's new in v0.5](https://docs.herald-mail.app/whats-new-in-v0-5/?utm_source=herald-mail.app&utm_medium=email)
+
+![Herald Calendar's 3-Day Command view with a mini month and color-coded calendars on the left, three days of events across a time grid, and a side panel showing the selected event, next-up, open slots, and conflicts.](https://assets.buttondown.email/images/7b1c6dbe-804d-4997-a843-984f7e86dcf8.png?w=960&fit=max)
+
+Calendar 3-days view (Tokyo Dusk theme)
+
+## Calendar providers in beta
+
+CalDAV-based providers — Fastmail Calendar, iCloud Calendar, Yahoo Calendar, custom CalDAV — work with an app-specific password or the provider's CalDAV URL. **Google Calendar OAuth is under construction** in test mode; the public OAuth path is expected in a later beta, likely v0.6.0. We know Google Calendar without OAuth is rough.
+
+[Provider setup docs](https://docs.herald-mail.app/provider-setup/?utm_source=herald-mail.app&utm_medium=email).
+
+## Cleanup tab is gone — it moved into Timeline
+
+Cleanup is no longer a separate top-level tab. Browsing what to clean now lives inside Timeline grouping: press G in Timeline to cycle through thread, sender, and domain grouping. Rule execution and dry-run previews still work the way they did. One fewer tab, same actions.
+
+## What is coming next
+
+- **Google Calendar OAuth** (and Gmail OAuth), so Calendar in particular works the way people expect, without the app-password dance.
+- **Smarter email → calendar handoff.** When a message has an .ics, Herald should offer to add it to one of your configured calendars in one step, instead of making you download the file and hope your OS opens it in the right place. We've all hit this.
+- **Polish on Calendar** based on whoever pokes at it during this beta — that part depends on you.
+
+## Try it
+
+brew tap herald-email/herald
+brew install herald
+herald --demo-multi-account
+
+Press 3 to open Calendar with demo data — no real account needed.
+
+If you hit something rough, or there is a feature you want, tell us. The roadmap moves fastest when we hear from people who are actually using it.
+
+Full v0.5.0 notes: https://github.com/herald-email/herald-mail-app/releases/tag/v0.5.0-beta.1
+What's new in v0.5: https://docs.herald-mail.app/whats-new-in-v0-5/
+Site: https://herald-mail.app/ · Docs: https://docs.herald-mail.app/
+
+Thanks for being on this list.
+
+— Herald team
+
+---
+This is a sanitized demo copy of the Herald Mail App Newsletter. You can subscribe at https://buttondown.com/herald-mail.app or unsubscribe at https://herald.demo/unsubscribe/v050-preview.`,
+		withDate(baseTime.Add(30*time.Minute)),
+		withMessageID("demo-herald-v050-preview@demo.local"),
+		withHeaders("Herald Mail App <newsletter@herald.demo>", "Rowan Finch <demo@demo.local>", "", ""),
+		withUnsub("https://herald.demo/unsubscribe/v050-preview"),
+		withHTMLBody(`<html><body>
+<p>Hi everyone,</p>
+<p>This one is a big release — the biggest since we started this newsletter. v0.5.0 lands the multi-account work we said was coming, and also opens up a whole new surface: <strong>Calendar</strong>. Herald is no longer just an email client.</p>
+<p>A bit of plumbing made this possible: mail and calendar share a common notion of source/account that flows through reads, search, compose, sync, and writes. One caveat for now — you still add the mail side and the calendar side as separate sources, even when they come from the same provider, but Herald shows them together under one unified view. That's the unglamorous half; the visible half is below.</p>
+<h2>Multi-account, finally</h2>
+<p>The v0.4 newsletter said this was next. It is now in. You get source badges on messages so you can see at a glance which account a thread came from, Mail.app-style account sections in the folder list, account-scoped signatures, and Compose that routes replies from the right address automatically. Adding and managing accounts happens in Settings.</p>
+<p>If you were juggling separate config files and separate terminal windows as the workaround — you can stop.</p>
+<p>Demo mode now ships with multiple synthetic accounts too, so you can try the whole multi-account experience — badges, sections, Compose routing — without setting up a single real one.</p>
+<figure>
+<img alt="Herald sidebar showing two demo accounts as separate sections with their own Inbox/Drafts/Folders, plus an All Inboxes view." src="https://assets.buttondown.email/images/8a2e3bc3-a4ba-4b8b-bf1e-1c58484ae066.png?w=960&amp;fit=max">
+<figcaption>Multi-account timeline view (Tomorrow Desk theme)</figcaption>
+</figure>
+<h2>Calendar (preview)</h2>
+<p>Press <code>3</code> to open Calendar. The surfaces are: <strong>Week Time-Grid</strong> for spotting dense days and conflicts, <strong>Day Agenda</strong> for focus on one day with a detail drawer, <strong>3-Day Command</strong> for today + tomorrow + the next day with a side panel of open slots and conflicts, <strong>Agenda List</strong>, and <strong>Calendar Search</strong>, plus Event Detail with RSVP. The left rail filters by source and shows colored swatches per calendar.</p>
+<p>It is mostly a preview surface in this release. Reading, RSVP, and basic event actions work. The smoother day-to-day flows — like "I got an <code>.ics</code> in an email, please put it on my calendar" — are what we are focusing on next. A couple of us are using it daily; we want to hear from anyone else who is.</p>
+<p><a href="https://docs.herald-mail.app/using-herald/calendar/?utm_source=herald-mail.app&amp;utm_medium=email">Calendar guide</a> · <a href="https://docs.herald-mail.app/whats-new-in-v0-5/?utm_source=herald-mail.app&amp;utm_medium=email">What's new in v0.5</a></p>
+<figure>
+<img alt="Herald Calendar's 3-Day Command view with a mini month and color-coded calendars on the left, three days of events across a time grid, and a side panel showing the selected event, next-up, open slots, and conflicts." src="https://assets.buttondown.email/images/7b1c6dbe-804d-4997-a843-984f7e86dcf8.png?w=960&amp;fit=max">
+<figcaption>Calendar 3-days view (Tokyo Dusk theme)</figcaption>
+</figure>
+<h2>Calendar providers in beta</h2>
+<p>CalDAV-based providers — Fastmail Calendar, iCloud Calendar, Yahoo Calendar, custom CalDAV — work with an app-specific password or the provider's CalDAV URL. <strong>Google Calendar OAuth is under construction</strong> in test mode; the public OAuth path is expected in a later beta, likely v0.6.0. We know Google Calendar without OAuth is rough.</p>
+<p><a href="https://docs.herald-mail.app/provider-setup/?utm_source=herald-mail.app&amp;utm_medium=email">Provider setup docs</a>.</p>
+<h2>Cleanup tab is gone — it moved into Timeline</h2>
+<p>Cleanup is no longer a separate top-level tab. Browsing what to clean now lives inside Timeline grouping: press <code>G</code> in Timeline to cycle through thread, sender, and domain grouping. Rule execution and dry-run previews still work the way they did. One fewer tab, same actions.</p>
+<h2>What is coming next</h2>
+<ul>
+<li><strong>Google Calendar OAuth</strong> (and Gmail OAuth), so Calendar in particular works the way people expect, without the app-password dance.</li>
+<li><strong>Smarter email → calendar handoff.</strong> When a message has an .ics, Herald should offer to add it to one of your configured calendars in one step, instead of making you download the file and hope your OS opens it in the right place. We've all hit this.</li>
+<li><strong>Polish on Calendar</strong> based on whoever pokes at it during this beta — that part depends on you.</li>
+</ul>
+<h2>Try it</h2>
+<pre><code>brew tap herald-email/herald
+brew install herald
+herald --demo-multi-account</code></pre>
+<p>Press <code>3</code> to open Calendar with demo data — no real account needed.</p>
+<p>If you hit something rough, or there is a feature you want, tell us. The roadmap moves fastest when we hear from people who are actually using it.</p>
+<p>Full v0.5.0 notes: <a href="https://github.com/herald-email/herald-mail-app/releases/tag/v0.5.0-beta.1">https://github.com/herald-email/herald-mail-app/releases/tag/v0.5.0-beta.1</a><br>
+What's new in v0.5: <a href="https://docs.herald-mail.app/whats-new-in-v0-5/">https://docs.herald-mail.app/whats-new-in-v0-5/</a><br>
+Site: <a href="https://herald-mail.app/">https://herald-mail.app/</a> · Docs: <a href="https://docs.herald-mail.app/">https://docs.herald-mail.app/</a></p>
+<p>Thanks for being on this list.</p>
+<p>— Herald team</p>
+<hr>
+<p>This is a sanitized demo copy of the Herald Mail App Newsletter. You can <a href="https://buttondown.com/herald-mail.app">subscribe</a> or <a href="https://herald.demo/unsubscribe/v050-preview">unsubscribe</a>.</p>
+</body></html>`))
 
 	add(1, "Northstar Cloud <billing@northstar-cloud.example>", "Example: Project Orion usage alert", "INBOX", 0, 18432, false, true, ai.CategoryImportant, []string{"infrastructure", "budget", "risk", "cloud"},
 		"Northstar Cloud detected a usage change on Project Orion.\n\nThe compute cluster is 18 percent above forecast and the attached invoice highlights the services driving the budget risk.\n\nReview before Friday so the infrastructure owner can right-size the workload.",

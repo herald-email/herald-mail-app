@@ -255,6 +255,7 @@ func (m *Model) toggleLogs() tea.Cmd {
 func (m *Model) refreshCurrentFolder() tea.Cmd {
 	if !m.loading {
 		m.finishTimelineRangeSelection()
+		m.revokeImagePreviews()
 		m.loading = true
 		m.startTime = time.Now()
 		m.clearTimelineChatFilter()
@@ -364,8 +365,9 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.timeline.fullScreen {
+		cmd := m.timelineIterm2NativeImageRepaintCmd()
 		m.clearTimelineFullScreen()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabTimeline && m.timeline.rangeMode {
 		m.finishTimelineRangeSelection()
@@ -376,12 +378,13 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.activeTab == tabTimeline && m.timeline.selectedEmail != nil {
+		cmd := m.timelineNativeImageClearCmd()
 		if m.timeline.searchMode && m.timeline.searchFocus == timelineSearchFocusResults {
 			m.clearTimelinePreview()
-			return m, nil
+			return m, cmd
 		}
 		m.clearTimelinePreview()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabTimeline && m.timeline.searchMode {
 		if m.timeline.searchFocus == timelineSearchFocusResults {
@@ -390,8 +393,9 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 			m.setFocusedPanel(panelTimeline)
 			return m, nil
 		}
+		cmd := m.timelineNativeImageClearCmd()
 		m.clearTimelineSearch()
-		return m, nil
+		return m, cmd
 	}
 	if m.activeTab == tabCompose {
 		if m.composeAISubjectHint != "" {

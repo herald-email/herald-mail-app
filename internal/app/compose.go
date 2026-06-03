@@ -410,6 +410,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+p":
 		m.composePreview = !m.composePreview
 		return m, nil
+	case composeExternalEditorShortcut:
+		m.composeStatus = "Opening editor for Compose body..."
+		return m, m.openComposeExternalEditorCmd()
 	case "ctrl+o":
 		if m.composePreserved != nil {
 			m.cyclePreservationMode()

@@ -57,10 +57,10 @@ func TestBuildPreviewDocument_HTMLCIDImagesStayInAuthoredOrder(t *testing.T) {
 	}
 }
 
-func TestBuildPreviewDocument_RemoteImagesRemainLinksAndMissingCIDIsPlaceholder(t *testing.T) {
+func TestBuildPreviewDocument_RemoteImagesBecomeRevealBlocksAndMissingCIDIsPlaceholder(t *testing.T) {
 	body := &models.EmailBody{
 		TextHTML: `<p>Logo below</p>
-            <img alt="Remote logo" src="https://example.test/logo.png">
+            <img alt="Remote logo" title="Title logo" src="https://example.test/logo.png">
             <img alt="Missing" src="cid:not-found">`,
 	}
 
@@ -70,8 +70,15 @@ func TestBuildPreviewDocument_RemoteImagesRemainLinksAndMissingCIDIsPlaceholder(
 	if !strings.Contains(plain, "Logo below") {
 		t.Fatalf("expected surrounding text, got %#v", doc.Blocks)
 	}
-	if !strings.Contains(plain, "![Remote logo](https://example.test/logo.png)") {
-		t.Fatalf("expected remote image markdown link, got %#v", doc.Blocks)
+	if got, want := len(doc.Blocks), 3; got != want {
+		t.Fatalf("block count = %d, want %d: %#v", got, want, doc.Blocks)
+	}
+	remote := doc.Blocks[1]
+	if remote.Kind != previewBlockRemoteImage {
+		t.Fatalf("second block should be remote image reveal block, got %#v", remote)
+	}
+	if remote.Remote.URL != "https://example.test/logo.png" || remote.Remote.Alt != "Remote logo" || remote.Remote.Title != "Title logo" {
+		t.Fatalf("remote image metadata mismatch: %#v", remote.Remote)
 	}
 	if !strings.Contains(plain, "[missing inline image: not-found]") {
 		t.Fatalf("expected missing CID placeholder, got %#v", doc.Blocks)
@@ -184,14 +191,23 @@ func TestBuildPreviewDocument_AnchorWrappedRemoteImageRemainsVisible(t *testing.
 	}
 
 	doc := buildPreviewDocument(body, nil)
-	plain := strings.Join(blockTexts(doc.Blocks), "\n")
 
-	if !strings.Contains(plain, "Before") || !strings.Contains(plain, "After") {
+	if got, want := len(doc.Blocks), 3; got != want {
+		t.Fatalf("block count = %d, want %d: %#v", got, want, doc.Blocks)
+	}
+	if doc.Blocks[0].Kind != previewBlockText || !strings.Contains(doc.Blocks[0].Text, "Before") {
+		t.Fatalf("expected text before remote image, got %#v", doc.Blocks)
+	}
+	if doc.Blocks[1].Kind != previewBlockRemoteImage {
+		t.Fatalf("expected linked remote image reveal block, got %#v", doc.Blocks)
+	}
+	if doc.Blocks[1].Remote.URL != "https://example.test/logo.png" || doc.Blocks[1].Remote.Alt != "Logo" {
+		t.Fatalf("remote image metadata mismatch: %#v", doc.Blocks[1].Remote)
+	}
+	if doc.Blocks[2].Kind != previewBlockText || !strings.Contains(doc.Blocks[2].Text, "After") {
 		t.Fatalf("expected surrounding text, got %#v", doc.Blocks)
 	}
-	if !strings.Contains(plain, "![Logo](https://example.test/logo.png)") {
-		t.Fatalf("expected linked remote image to remain visible, got %#v", doc.Blocks)
-	}
+	plain := strings.Join(blockTexts(doc.Blocks), "\n")
 	if strings.Contains(plain, "[](https://example.test)") || strings.Contains(plain, "[https://example.test](https://example.test)") {
 		t.Fatalf("expected image link instead of empty/plain anchor link, got %#v", doc.Blocks)
 	}

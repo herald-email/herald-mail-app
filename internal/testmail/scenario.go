@@ -24,6 +24,7 @@ const (
 	ScenarioReceiptHTML        ScenarioName = "receipt-html"
 	ScenarioMalformedCharset   ScenarioName = "malformed-charset"
 	ScenarioInlineCIDImage     ScenarioName = "inline-cid-image"
+	ScenarioRemoteHTMLImages   ScenarioName = "remote-html-images"
 	ScenarioLongLinkTracking   ScenarioName = "long-link-tracking"
 	ScenarioUnsubscribeHeaders ScenarioName = "unsubscribe-headers"
 )

@@ -83,7 +83,18 @@ func TestMailboxCoversPublicDemoStories(t *testing.T) {
 
 func TestMailboxOmitsPrivateDemoIdentityTerms(t *testing.T) {
 	mailbox := Mailbox()
-	forbidden := []string{"anthropic", "anton", "golubtsov", "tatiana", "tytiana"}
+	forbidden := []string{
+		"anthropic",
+		"anton",
+		"golubtsov",
+		"logrusadm",
+		"gmail.com",
+		"c674584b-ef13-4a23-8c15-8a7a9f0773f7",
+		"68fa7079-9012-4ea6-a2db-bb7073165084",
+		"55e58bef-7e82-4786-ab34-dbf28017a01f",
+		"tatiana",
+		"tytiana",
+	}
 
 	assertClean := func(label, value string) {
 		t.Helper()
@@ -117,6 +128,47 @@ func TestMailboxOmitsPrivateDemoIdentityTerms(t *testing.T) {
 		for _, topic := range contact.Topics {
 			assertClean(contact.Email+" topic", topic)
 		}
+	}
+}
+
+func TestMailboxPlacesV050PreviewAfterOnboarding(t *testing.T) {
+	messages := append([]Message(nil), Mailbox().Messages...)
+	sort.SliceStable(messages, func(i, j int) bool {
+		return messages[i].Email.Date.After(messages[j].Email.Date)
+	})
+
+	step9 := -1
+	for i, msg := range messages {
+		if msg.Email.Subject == "Step 9: Explore contacts, chat, SSH, and MCP" {
+			step9 = i
+			break
+		}
+	}
+	if step9 < 0 {
+		t.Fatal("expected Step 9 onboarding message")
+	}
+	if step9+1 >= len(messages) {
+		t.Fatal("expected a message after Step 9")
+	}
+
+	got := messages[step9+1]
+	if got.Email.Subject != "[PREVIEW] Herald v0.5.0 — Calendar, and multi-account arrive" {
+		t.Fatalf("message after Step 9 subject = %q, want v0.5 preview newsletter", got.Email.Subject)
+	}
+	if got.Email.Sender != "Herald Mail App <newsletter@herald.demo>" {
+		t.Fatalf("preview sender = %q, want sanitized Herald demo sender", got.Email.Sender)
+	}
+	if got.Body.To != "Rowan Finch <demo@demo.local>" {
+		t.Fatalf("preview To = %q, want demo recipient", got.Body.To)
+	}
+	if got.Body.ListUnsubscribe != "<https://herald.demo/unsubscribe/v050-preview>" {
+		t.Fatalf("preview List-Unsubscribe = %q, want sanitized demo unsubscribe URL", got.Body.ListUnsubscribe)
+	}
+	if !messages[step9].Email.Date.After(got.Email.Date) {
+		t.Fatalf("preview date %s should sort after Step 9 date %s", got.Email.Date, messages[step9].Email.Date)
+	}
+	if !strings.Contains(got.Body.TextPlain, "Calendar (preview)") || !strings.Contains(got.Body.TextPlain, "multi-account") {
+		t.Fatalf("preview body does not look like the v0.5 newsletter: %q", got.Body.TextPlain)
 	}
 }
 
@@ -177,6 +229,9 @@ func TestSupportingDemoMessagesAreExamplesAndNotTooMany(t *testing.T) {
 	for _, msg := range mailbox.Messages {
 		subject := msg.Email.Subject
 		if subject == "✉ Welcome to Herald" || strings.HasPrefix(subject, "Step ") {
+			continue
+		}
+		if subject == "[PREVIEW] Herald v0.5.0 — Calendar, and multi-account arrive" {
 			continue
 		}
 		normalized := strings.TrimPrefix(strings.TrimPrefix(subject, "Re: "), "Fwd: ")

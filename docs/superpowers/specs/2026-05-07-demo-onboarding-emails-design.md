@@ -44,7 +44,7 @@ The sequence should be explicit and numbered after a short welcome message. The 
 - [x] `Herald Selection Coach <selection@herald.demo>` sends `Step 4: Select text from an email`.
 - [x] Step 4 covers terminal text selection, full-screen preview `z`, mouse capture, `m` to release/restore mouse handling, and why mouse capture is enabled by default.
 - [x] `Herald Image Lab <images@herald.demo>` sends `Step 5: View inline images in full screen`.
-- [x] Step 5 retains the Creative Commons sampler behavior with embedded images, `z` full-screen mode, Kitty/iTerm2 rendering, safe fallback links or placeholders, and no remote image fetching.
+- [x] Step 5 retains the Creative Commons sampler behavior with embedded images, `z` full-screen mode, Kitty/iTerm2 rendering, safe fallback links or placeholders, and no automatic remote image fetching.
 - [x] `Herald Cleanup Coach <cleanup@herald.demo>` sends `Step 6: Clean up senders and domains safely`.
 - [x] Step 6 covers Timeline `G` sender and domain grouping, `space` selection, delete/archive actions, unsubscribe hints, and preview-before-action behavior.
 - [x] `Herald AI Rules <rules@herald.demo>` sends `Step 7: Classify mail and dry-run rules`.
@@ -97,5 +97,5 @@ This change should not redesign the TUI or add a separate persistent onboarding 
 - [x] Do not add a new persistent onboarding wizard.
 - [x] Do not change normal IMAP mailbox behavior.
 - [x] Do not make demo mode write or send real mail.
-- [x] Do not fetch remote images for the image step.
+- [x] Do not fetch remote images for the image step until the user presses `o`.
 - [x] Do not implement the first-run `Try without an account` wizard entry as part of this work.
