@@ -2384,14 +2384,16 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 3. Open the Taskpad demo email preview.
 4. Capture plain text and ANSI output at `220x50`.
 5. With mouse capture enabled, click the visible `Display in your browser` link label, then repeat with Ctrl held.
-6. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
+6. Hover over the visible `Display in your browser` label and capture the hover-active status bar and ANSI output.
+7. Resize to `80x24`, scroll to the link section, hover the same visible label, and capture plain text and ANSI output again.
 
 **Expect:**
 - Visible preview text shows readable labels such as `Display in your browser` and `Taskpad logo`.
 - Long destination fragments such as `eyJmaXJ`, `_next/static/media`, and `abcdefghijklmnopqrstuvwxyz0123456789` do not appear in visible preview text.
 - ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
+- Hovering a visible OSC 8 label applies a width-preserving highlight to that label and shows a short sanitized `Link:` destination preview in the status bar.
 - Clicking or Ctrl-clicking the visible link opens the OSC 8 target through the terminal or the local fallback without first pressing `m`, and ordinary mouse navigation remains enabled afterward.
-- The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
+- The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders or layout shift when hover enters or leaves.
 
 ### TC-49A — Shared HTML Markdown previews across surfaces
 

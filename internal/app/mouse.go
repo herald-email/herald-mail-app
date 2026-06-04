@@ -24,6 +24,15 @@ type mouseRect struct {
 	h int
 }
 
+type terminalLinkHoverState struct {
+	Active      bool
+	X           int
+	Y           int
+	Target      string
+	StartColumn int
+	EndColumn   int
+}
+
 func (r mouseRect) contains(x, y int) bool {
 	return x >= r.x && x < r.x+r.w && y >= r.y && y < r.y+r.h
 }
@@ -32,15 +41,22 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	switch msg.(type) {
 	case tea.MouseMotionMsg:
 		if m.previewSelection.Dragging {
+			m.clearTerminalLinkHover()
 			mouse := msg.Mouse()
 			return m.handlePreviewMouseSelectionMotion(mouse, false)
+		}
+		mouse := msg.Mouse()
+		if m.updateTerminalLinkHover(mouse.X, mouse.Y) {
+			return m, nil, true
 		}
 		return m, nil, false
 	case tea.MouseReleaseMsg:
 		if m.previewSelection.Dragging {
+			m.clearTerminalLinkHover()
 			mouse := msg.Mouse()
 			return m.handlePreviewMouseSelectionMotion(mouse, true)
 		}
+		m.clearTerminalLinkHover()
 		mouse := msg.Mouse()
 		if m.windowWidth > 0 && (m.windowWidth < minTermWidth || m.windowHeight < minTermHeight) {
 			return m, nil, true
@@ -50,6 +66,7 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, false
 	case tea.MouseClickMsg, tea.MouseWheelMsg:
+		m.clearTerminalLinkHover()
 	default:
 		return m, nil, false
 	}
@@ -290,6 +307,97 @@ func (m *Model) terminalLinkTargetAt(x, y int) (string, bool) {
 		return "", false
 	}
 	return render.OSC8TargetAtVisibleColumn(lines[y], x)
+}
+
+func (m *Model) updateTerminalLinkHover(x, y int) bool {
+	if x < 0 || y < 0 {
+		return m.clearTerminalLinkHover()
+	}
+	lines := strings.Split(viewContent(m.View()), "\n")
+	if y >= len(lines) {
+		return m.clearTerminalLinkHover()
+	}
+	link, ok := render.OSC8LinkRangeAtVisibleColumn(lines[y], x)
+	if !ok {
+		return m.clearTerminalLinkHover()
+	}
+	next := terminalLinkHoverState{
+		Active:      true,
+		X:           x,
+		Y:           y,
+		Target:      link.Target,
+		StartColumn: link.StartColumn,
+		EndColumn:   link.EndColumn,
+	}
+	if m.terminalLinkHover == next {
+		return false
+	}
+	m.terminalLinkHover = next
+	return true
+}
+
+func (m *Model) clearTerminalLinkHover() bool {
+	if !m.terminalLinkHover.Active {
+		return false
+	}
+	m.terminalLinkHover = terminalLinkHoverState{}
+	return true
+}
+
+func (m *Model) renderTerminalLinkHover(content string) string {
+	hover := m.terminalLinkHover
+	if !hover.Active || hover.Y < 0 || hover.StartColumn < 0 || hover.EndColumn <= hover.StartColumn {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	if hover.Y >= len(lines) {
+		return content
+	}
+	link, ok := render.OSC8LinkRangeAtVisibleColumn(lines[hover.Y], hover.StartColumn)
+	if !ok || link.Target != hover.Target {
+		return content
+	}
+	lines[hover.Y] = render.HighlightOSC8LinkRange(lines[hover.Y], link)
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) terminalLinkHoverStatus() string {
+	if !m.terminalLinkHover.Active {
+		return ""
+	}
+	label := terminalLinkHoverStatusLabel(m.terminalLinkHover.Target)
+	if label == "" {
+		return ""
+	}
+	return "Link: " + label
+}
+
+func terminalLinkHoverStatusLabel(target string) string {
+	target = strings.TrimSpace(render.StripTrackers(target))
+	if target == "" {
+		return ""
+	}
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return truncateVisual(target, 72)
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		label := parsed.Host
+		path := strings.TrimRight(parsed.EscapedPath(), "/")
+		if path != "" {
+			label += path
+		}
+		return truncateVisual(label, 72)
+	case "mailto":
+		label := strings.TrimSpace(parsed.Opaque)
+		if label == "" {
+			label = strings.TrimSpace(parsed.Path)
+		}
+		return truncateVisual(label, 72)
+	default:
+		return truncateVisual(render.ShortenURL(target), 72)
+	}
 }
 
 func browserOpenableTerminalLink(target string) bool {

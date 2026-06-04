@@ -84,6 +84,64 @@ func TestOSC8TargetAtVisibleColumnHandlesWideRunes(t *testing.T) {
 	}
 }
 
+func TestOSC8LinkRangeAtVisibleColumn(t *testing.T) {
+	line := "see " + TerminalHyperlink("example", "https://example.com/path") + " today"
+
+	link, ok := OSC8LinkRangeAtVisibleColumn(line, 7)
+	if !ok {
+		t.Fatal("expected link range at visible column")
+	}
+	if link.Target != "https://example.com/path" {
+		t.Fatalf("target=%q, want example target", link.Target)
+	}
+	if link.StartColumn != 4 || link.EndColumn != 11 {
+		t.Fatalf("range=%d..%d, want 4..11", link.StartColumn, link.EndColumn)
+	}
+}
+
+func TestOSC8LinkRangeAtVisibleColumnHandlesWideRunes(t *testing.T) {
+	line := "a " + TerminalHyperlink("界", "https://wide.example") + " z"
+
+	link, ok := OSC8LinkRangeAtVisibleColumn(line, 3)
+	if !ok {
+		t.Fatal("expected wide-rune link range at visible column")
+	}
+	if link.Target != "https://wide.example" {
+		t.Fatalf("target=%q, want wide target", link.Target)
+	}
+	if link.StartColumn != 2 || link.EndColumn != 4 {
+		t.Fatalf("range=%d..%d, want 2..4", link.StartColumn, link.EndColumn)
+	}
+	if _, ok := OSC8LinkRangeAtVisibleColumn(line, 4); ok {
+		t.Fatal("column after wide-rune link should not be in range")
+	}
+}
+
+func TestOSC8HoverHighlightPreservesWidthTargetAndANSI(t *testing.T) {
+	line := "see " + TerminalHyperlink("\033[3mexample\033[23m", "https://example.com/path") + " today"
+	link, ok := OSC8LinkRangeAtVisibleColumn(line, 7)
+	if !ok {
+		t.Fatal("expected link range at visible column")
+	}
+
+	highlighted := HighlightOSC8LinkRange(line, link)
+	if ansi.StringWidth(highlighted) != ansi.StringWidth(line) {
+		t.Fatalf("highlight changed visible width: got %d want %d", ansi.StringWidth(highlighted), ansi.StringWidth(line))
+	}
+	if !strings.Contains(highlighted, "\033[1;4;7m") || !strings.Contains(highlighted, "\033[22;24;27m") {
+		t.Fatalf("highlight should add width-preserving SGR styling, got %q", highlighted)
+	}
+	if !strings.Contains(highlighted, "\033[3m") || !strings.Contains(highlighted, "\033[23m") {
+		t.Fatalf("highlight should preserve embedded ANSI styling, got %q", highlighted)
+	}
+	for _, col := range []int{4, 7, 10} {
+		got, ok := OSC8TargetAtVisibleColumn(highlighted, col)
+		if !ok || got != "https://example.com/path" {
+			t.Fatalf("column %d target=%q ok=%v after highlight, want example target", col, got, ok)
+		}
+	}
+}
+
 func TestRenderEmailBodyLines_MarkdownLinksUseAnchorText(t *testing.T) {
 	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?utm_source=email&o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
 	sanitizedURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"

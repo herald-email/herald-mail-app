@@ -362,6 +362,136 @@ func OSC8TargetAtVisibleColumn(line string, column int) (string, bool) {
 	return "", false
 }
 
+// OSC8LinkRange describes one visible OSC 8 hyperlink segment on a terminal
+// line. StartColumn is inclusive and EndColumn is exclusive.
+type OSC8LinkRange struct {
+	Target      string
+	StartColumn int
+	EndColumn   int
+}
+
+// OSC8LinkRangeAtVisibleColumn returns the target and visible column span for
+// the OSC 8 hyperlink covering the zero-based terminal column in line.
+func OSC8LinkRangeAtVisibleColumn(line string, column int) (OSC8LinkRange, bool) {
+	if column < 0 {
+		return OSC8LinkRange{}, false
+	}
+	for _, link := range OSC8LinkRanges(line) {
+		if column >= link.StartColumn && column < link.EndColumn {
+			return link, true
+		}
+	}
+	return OSC8LinkRange{}, false
+}
+
+// OSC8LinkRanges returns visible OSC 8 hyperlink spans for a terminal line.
+func OSC8LinkRanges(line string) []OSC8LinkRange {
+	var ranges []OSC8LinkRange
+	activeTarget := ""
+	rangeStart := -1
+	visibleColumn := 0
+
+	closeActive := func() {
+		if activeTarget != "" && rangeStart >= 0 && visibleColumn > rangeStart {
+			ranges = append(ranges, OSC8LinkRange{
+				Target:      activeTarget,
+				StartColumn: rangeStart,
+				EndColumn:   visibleColumn,
+			})
+		}
+		rangeStart = -1
+	}
+
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			if target, end, ok := parseOSC8Target(line, i); ok {
+				closeActive()
+				activeTarget = target
+				i = end
+				continue
+			}
+			i = skipEscapeSeqBytes(line, i)
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		if size <= 0 {
+			break
+		}
+		width := xansi.StringWidth(string(r))
+		if width > 0 {
+			if activeTarget != "" && rangeStart < 0 {
+				rangeStart = visibleColumn
+			}
+			visibleColumn += width
+		}
+		i += size
+	}
+	closeActive()
+	return ranges
+}
+
+// HighlightOSC8LinkRange applies a width-preserving hover style to the visible
+// span of an OSC 8 link without changing the hyperlink target.
+func HighlightOSC8LinkRange(line string, link OSC8LinkRange) string {
+	if link.Target == "" || link.EndColumn <= link.StartColumn {
+		return line
+	}
+	return HighlightVisibleColumns(line, link.StartColumn, link.EndColumn, "\033[1;4;7m", "\033[22;24;27m")
+}
+
+// HighlightVisibleColumns wraps visible terminal columns in prefix/suffix while
+// copying ANSI and OSC escape sequences through unchanged.
+func HighlightVisibleColumns(line string, startColumn, endColumn int, prefix, suffix string) string {
+	if line == "" || endColumn <= startColumn {
+		return line
+	}
+	var b strings.Builder
+	b.Grow(len(line) + len(prefix) + len(suffix))
+	visibleColumn := 0
+	highlighting := false
+
+	closeHighlight := func() {
+		if highlighting {
+			b.WriteString(suffix)
+			highlighting = false
+		}
+	}
+
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			end := skipEscapeSeqBytes(line, i)
+			b.WriteString(line[i:end])
+			i = end
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		if size <= 0 {
+			break
+		}
+		width := xansi.StringWidth(string(r))
+		if width > 0 && !highlighting && visibleColumn+width > startColumn && visibleColumn < endColumn {
+			b.WriteString(prefix)
+			highlighting = true
+		}
+		b.WriteString(line[i : i+size])
+		if width > 0 {
+			visibleColumn += width
+			if visibleColumn >= endColumn {
+				closeHighlight()
+			}
+		}
+		i += size
+	}
+	closeHighlight()
+	return b.String()
+}
+
 func parseOSC8Target(s string, start int) (string, int, bool) {
 	if start < 0 || start+4 > len(s) || !strings.HasPrefix(s[start:], "\033]8;") {
 		return "", start, false

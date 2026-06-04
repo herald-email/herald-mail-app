@@ -893,6 +893,7 @@ type Model struct {
 	// localhost would point at the server instead of the user's browser.
 	localImageLinks             bool
 	terminalLinkBrowserFallback bool
+	terminalLinkHover           terminalLinkHoverState
 	previewImageMode            previewImageMode
 	imagePreviewLinks           *imagePreviewServer
 
@@ -2318,6 +2319,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		m.clearTerminalLinkHover()
 		modifierCmd, handledModifierOnly := m.handleModifierHintPress(msg)
 		if handledModifierOnly {
 			return m, modifierCmd
@@ -3332,6 +3334,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		m.clearTerminalLinkHover()
 		m.updateTableDimensions(msg.Width, msg.Height)
 		if m.composeAIReviewActive() && msg.Height <= 24 {
 			m.composeAIResponse.MoveToBegin()
@@ -3453,6 +3456,7 @@ func (m *Model) View() tea.View {
 
 func (m *Model) buildView(content string) tea.View {
 	content = m.renderDemoKeyOverlay(content)
+	content = m.renderTerminalLinkHover(content)
 	if m.theme.Text.Primary.Background != nil {
 		content = m.theme.RenderScreen(content, m.windowWidth, m.windowHeight)
 	}

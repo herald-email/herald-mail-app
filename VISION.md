@@ -439,6 +439,7 @@ Email body rendering and link handling live in `internal/render`, a standalone p
 - [x] `StripInvisibleChars` — removes zero-width joiners, BOM, and invisible spacers that HTML emails embed
 - [x] `LinkifyURLs` / `LinkifyWrappedLines` — converts raw URLs to OSC 8 clickable terminal hyperlinks with shortened labels
 - [x] `ShortenURL` — produces human-readable labels like `example.com/path…` for long URLs
+- [x] OSC 8 link hover affordance — when terminal mouse motion is available, hovered links brighten in place and the status bar shows a shortened sanitized destination preview
 - [x] `Truncate`, `SanitizeText`, `CalculateTextWidth` — text utilities shared across all rendering surfaces
 - [x] Full test suite (`internal/render/*_test.go`)
 

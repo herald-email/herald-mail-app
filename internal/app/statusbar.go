@@ -235,6 +235,9 @@ func (m *Model) renderStatusBar() string {
 
 	if m.activeTab == tabCalendar && !m.showLogs {
 		line := m.calendarStatusLine()
+		if hover := m.terminalLinkHoverStatus(); hover != "" {
+			line = joinHintSegments(hover, line)
+		}
 		return m.theme.Chrome.StatusBar.Style().
 			Width(w).
 			Padding(0, 1).
@@ -247,6 +250,9 @@ func (m *Model) renderStatusBar() string {
 	statusRole := m.theme.Chrome.StatusBar
 
 	var parts []string
+	if hover := m.terminalLinkHoverStatus(); hover != "" {
+		parts = append(parts, chromeBarPart(statusRole, m.theme.Severity.Info.Style().Render(hover)))
+	}
 	if msg := strings.TrimSpace(m.statusMessageForActiveTab()); msg != "" {
 		parts = append(parts, chromeBarPart(statusRole, m.theme.Severity.Info.Style().Render(msg)))
 	}

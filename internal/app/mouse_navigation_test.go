@@ -441,6 +441,102 @@ func TestPlainClickTimelinePreviewLinkUsesLocalBrowserFallback(t *testing.T) {
 	}
 }
 
+func TestTerminalLinkHoverPreviewLinkHighlightsAndShowsSanitizedStatus(t *testing.T) {
+	m, _ := makeMouseLinkPreviewModel(t, false)
+	m.statusMessage = "Draft saved"
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	model, cmd := m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	updated := model.(*Model)
+	if cmd != nil {
+		t.Fatal("hovering a link should not trigger a command")
+	}
+	if updated.statusMessage != "Draft saved" {
+		t.Fatalf("hover should not overwrite persistent statusMessage, got %q", updated.statusMessage)
+	}
+	if !updated.terminalLinkHover.Active {
+		t.Fatal("expected terminal link hover state to become active")
+	}
+
+	raw := viewContent(updated.View())
+	visible := ansi.Strip(raw)
+	if !strings.Contains(raw, "\033[1;4;7m") {
+		t.Fatalf("expected hovered link to include highlight styling, got raw view:\n%q", raw)
+	}
+	if !strings.Contains(visible, "Link: taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile") {
+		t.Fatalf("expected status bar to show sanitized short link preview, got:\n%s", visible)
+	}
+	for _, leaked := range []string{"utm_source=email", "eyJmaXJ", "3TyPkavY9d1vRx"} {
+		if strings.Contains(visible, leaked) {
+			t.Fatalf("hover status leaked long/tracking fragment %q:\n%s", leaked, visible)
+		}
+	}
+}
+
+func TestTerminalLinkHoverPreviewLinkClearsWhenLeavingLink(t *testing.T) {
+	m, _ := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	model, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	updated := model.(*Model)
+	if !updated.terminalLinkHover.Active {
+		t.Fatal("expected hover state to become active")
+	}
+
+	model, _ = updated.Update(tea.MouseMotionMsg{X: 0, Y: 0})
+	updated = model.(*Model)
+	if updated.terminalLinkHover.Active {
+		t.Fatal("expected hover state to clear after leaving link")
+	}
+	if visible := ansi.Strip(viewContent(updated.View())); strings.Contains(visible, "Link: taskpad.mail.example") {
+		t.Fatalf("hover status should clear after leaving link, got:\n%s", visible)
+	}
+}
+
+func TestTerminalLinkHoverPreviewLinkDoesNotBlockOpeningGestures(t *testing.T) {
+	tests := []struct {
+		name    string
+		message func(x, y int) tea.Msg
+	}{
+		{name: "plain click", message: func(x, y int) tea.Msg { return mousePress(x, y) }},
+		{name: "ctrl click", message: func(x, y int) tea.Msg { return mouseCtrlPress(x, y) }},
+		{name: "ctrl release", message: func(x, y int) tea.Msg { return mouseCtrlRelease(x, y) }},
+		{name: "ctrl mouse-none release", message: func(x, y int) tea.Msg { return mouseCtrlReleaseNone(x, y) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, target := makeMouseLinkPreviewModel(t, false)
+			x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+			var opened []string
+			originalOpenBrowser := openBrowserFn
+			openBrowserFn = func(rawURL string) error {
+				opened = append(opened, rawURL)
+				return nil
+			}
+			defer func() { openBrowserFn = originalOpenBrowser }()
+
+			model, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y})
+			updated := model.(*Model)
+			if !updated.terminalLinkHover.Active {
+				t.Fatal("expected hover state before opening gesture")
+			}
+
+			model, cmd := updated.Update(tt.message(x, y))
+			updated = model.(*Model)
+			if cmd == nil {
+				t.Fatalf("%s after hover should open browser fallback", tt.name)
+			}
+			_ = updated
+			_ = cmd()
+			if len(opened) != 1 || opened[0] != target {
+				t.Fatalf("opened=%#v, want %q", opened, target)
+			}
+		})
+	}
+}
+
 func TestPlainClickPreviewLinkDoesNotOpenWhenFallbackDisabled(t *testing.T) {
 	m, _ := makeMouseLinkPreviewModel(t, false)
 	m.SetTerminalLinkBrowserFallbackEnabled(false)
