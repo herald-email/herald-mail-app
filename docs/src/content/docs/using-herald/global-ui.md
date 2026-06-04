@@ -37,12 +37,12 @@ Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optio
 | `ctrl+c` | Global | Any state. | Quits Herald after cleanup, including from text inputs and overlays. |
 | `tab` / `ctrl+i` | Most tabs | Visible data can be interacted with. | Cycles focus forward through visible panels. |
 | `shift+tab` | Most tabs | Visible data can be interacted with. | Cycles focus backward through visible panels. |
-| `f` / `alt+f` | Timeline | Visible data can be interacted with. | Toggles the folder sidebar when Timeline can render it; use `alt+f` while composing. |
-| `c` / `alt+c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input; use `alt+c` while composing. |
-| `l` / `L` / `alt+l` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay; use `alt+l` while composing. |
-| `r` / `alt+r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters; use `alt+r` while composing. |
+| `B` / `f` | Timeline | Visible data can be interacted with. | Toggles the folder sidebar when Timeline can render it. |
+| `g` / `c` | Main UI | Not loading and width allows the chat panel. | Toggles AI chat and focuses its input; `g` is the advertised key so Timeline can keep `c` for Compose. |
+| `L` / `l` | Main UI | Visible data can be interacted with. | Toggles the log viewer overlay. |
+| `ctrl+r` / `r` | Main UI | Not loading. | Refreshes the current folder and clears Timeline chat filters. |
 | `S` | Main UI | Settings overlay is not already open. | Opens settings as a compact centered overlay over the current screen. |
-| `a` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
+| `t` | Main UI | AI classifier is configured and work is available. | Starts folder classification. |
 | `?` | Main UI and Herald-owned overlays | Visible data can be interacted with. | Opens context-sensitive shortcut help; pressing `?`, `esc`, or `q` closes it. |
 | `esc` | Main UI and overlays | A transient state is active. | Closes the most specific state first, such as quick reply, visual mode, full-screen preview, chat filter, Timeline preview, search, Compose AI panel, Compose status message, or the Compose screen itself. |
 
@@ -52,7 +52,7 @@ Mouse controls are convenience shortcuts over the same model as keyboard focus a
 
 | Mouse action | Context | Result |
 | --- | --- | --- |
-| Click a top tab | Main UI | Switches to Timeline or Contacts. |
+| Click a top tab | Main UI | Switches to Timeline, Contacts, or Calendar when available. |
 | Click a folder/sidebar row | Timeline with sidebar visible | Selects the folder and loads it. |
 | Click a Timeline row | Timeline table | Selects the row and opens the split preview. |
 | Scroll over Timeline rows | Timeline table | Moves the Timeline cursor by small steps and refreshes the open preview. |
@@ -82,7 +82,7 @@ Browse contexts also accept `1`, `2`, and `3` as visible tab aliases. `F3` remai
 
 ### Open Chat
 
-1. Press `c` from a wide terminal.
+1. Press `g` from a wide terminal.
 2. Type a mailbox question.
 3. Press `enter` to send.
 4. Press `esc` or `tab` to close or leave chat focus.
@@ -106,8 +106,8 @@ Browse contexts also accept `1`, `2`, and `3` as visible tab aliases. `F3` remai
 | Startup loading | A loading banner, progress text, optional progress bar, elapsed time, and `q` quit hint. | Wait for sync or press `q`. |
 | Visible-data loading | Existing cached rows remain visible and a top sync strip explains current IMAP work. | Continue reading cached data while sync completes. |
 | Minimum terminal | A size guard replaces the normal UI below roughly `60x15`. | Resize the terminal. |
-| Sidebar auto-hidden | Status includes a sidebar hidden notice. | Widen the terminal or press `f` when the tab supports the sidebar. |
-| Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `c` again. |
+| Sidebar auto-hidden | Status includes a sidebar hidden notice. | Widen the terminal or press `B` when the tab supports the sidebar. |
+| Chat unavailable at size | Status says chat is hidden at this size. | Widen the terminal before pressing `g` again. |
 | AI unavailable | AI chip reads off/down or AI actions show a concise error. | Configure AI or continue using non-AI mail features. |
 | Logs overlay | Log viewer is on top of the current tab and status includes `Logs ON`. | Press `l` or `Alt+L` to close. |
 | Compact modal | Help, settings, automation rule editors, prompt editors, cleanup manager, or dry-run previews are centered over the current screen. | Use the overlay's local keys; at `50x15`, resize until the minimum-size guard clears. |
@@ -128,11 +128,11 @@ If a prompt will not close, press `esc` first. If that does not apply, `ctrl+c` 
 
 ## Screenshot Placeholders
 
-<!-- HERALD_SCREENSHOT id="global-chat-open" page="global-ui" alt="Chat panel open beside Timeline" state="demo mode, 120x40, Timeline tab, chat visible" desc="Shows the right-side chat panel, chat input, active focus, compressed Timeline width, status bar, and chat key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press c" -->
+<!-- HERALD_SCREENSHOT id="global-chat-open" page="global-ui" alt="Chat panel open beside Timeline" state="demo mode, 120x40, Timeline tab, chat visible" desc="Shows the right-side chat panel, chat input, active focus, compressed Timeline width, status bar, and chat key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press g" -->
 
 ![Chat panel open beside Timeline](/screenshots/global-chat-open.png)
 
-<!-- HERALD_SCREENSHOT id="global-logs-overlay" page="global-ui" alt="Log viewer overlay open" state="demo mode, 120x40, logs overlay visible" desc="Shows the real-time log viewer overlay, log levels, scrollable history area, and close hints." capture="tmux demo 120x40; ./bin/herald --demo; press l" -->
+<!-- HERALD_SCREENSHOT id="global-logs-overlay" page="global-ui" alt="Log viewer overlay open" state="demo mode, 120x40, logs overlay visible" desc="Shows the real-time log viewer overlay, log levels, scrollable history area, and close hints." capture="tmux demo 120x40; ./bin/herald --demo; press L" -->
 
 ![Log viewer overlay open](/screenshots/global-logs-overlay.png)
 

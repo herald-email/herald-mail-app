@@ -651,7 +651,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`
 
 **Steps:**
-1. Open Timeline and press `C` for a non-empty draft body, or press `R` from a Timeline message for reply context.
+1. Open Timeline and press `c` for a non-empty draft body, or press `R` from a Timeline message for reply context.
 2. Press `Ctrl+J` to request a subject suggestion.
 3. Capture the hint line when it appears.
 4. Press `Tab` to accept the suggestion.
@@ -790,7 +790,7 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Start `/tmp/herald --demo` with no SMTP credentials configured.
-2. Open Timeline, press `C`, then fill To, Subject, and Body.
+2. Open Timeline, press `c`, then fill To, Subject, and Body.
 3. Press `Ctrl+S` and capture the resulting status line.
 4. Repeat at `80x24`.
 

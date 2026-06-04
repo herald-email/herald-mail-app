@@ -59,7 +59,7 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
-            { label: "What's new in v0.6", slug: 'whats-new-in-v0-6' },
+            { label: "What's New", slug: 'whats-new-in-v0-6' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
@@ -67,6 +67,14 @@ export default defineConfig({
             { label: 'Provider setup', slug: 'provider-setup' },
             { label: 'Gmail', slug: 'gmail-setup' },
             { label: 'Custom IMAP', slug: 'custom-imap' },
+          ],
+        },
+        {
+          label: 'Release Archive',
+          items: [
+            { label: "What's New in v0.6", slug: 'whats-new-in-v0-6' },
+            { label: "What's New in v0.5", slug: 'whats-new-in-v0-5' },
+            { label: "What's New in v0.4", slug: 'whats-new-in-v0-4' },
           ],
         },
         {

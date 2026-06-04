@@ -195,7 +195,7 @@ go install github.com/herald-email/herald-mail-app/cmd/herald-ssh-server@latest
 
 ## Gmail Setup
 
-Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization prompt, validates Gmail IMAP and SMTP with XOAUTH2, and stores the resulting refresh token in your config so it can refresh access later.
+Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization prompt, validates selected Google access, and stores a Gmail API mail source so sync, body reads, drafts, mailbox mutations, and send use Google's API instead of IMAP.
 
 To configure Gmail with OAuth, choose `Gmail OAuth` in the setup wizard and complete the browser flow.
 
@@ -250,10 +250,10 @@ Keyboard controls remain complete, but mouse users get the comfortable path too:
 
 | Mouse action                         | Result                                             |
 | ------------------------------------ | -------------------------------------------------- |
-| Click a top tab                      | Switches to Timeline, Cleanup, or Contacts         |
+| Click a top tab                      | Switches to Timeline, Contacts, or Calendar        |
 | Click a folder/sidebar row           | Selects and opens that folder                      |
 | Click a Timeline row                 | Opens the email preview for that message or thread |
-| Scroll over Timeline or Cleanup rows | Moves through the list in small steps              |
+| Scroll over Timeline or Calendar rows | Moves through the list in small steps             |
 | Scroll over an email preview         | Scrolls the message body                           |
 | Click an OSC 8 email link            | Opens the target URL through your terminal         |
 
@@ -381,8 +381,8 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 
 | Key                                | Action                                                                                      |
 | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| `1` / `2`                          | Timeline / Contacts tab in browse contexts                                                  |
-| `F1` / `F2` / `F3`                 | Timeline / Contacts / Contacts legacy aliases                                               |
+| `1` / `2` / `3`                    | Timeline / Contacts / Calendar tabs in browse contexts                                      |
+| `F1` / `F2` / `F3` / `F4`          | Timeline / Contacts / Contacts legacy / Calendar aliases                                    |
 | `c`                                | Open a new Compose screen from Timeline                                                     |
 | `Ctrl+X`                           | Open the Compose body in `$VISUAL` or `$EDITOR`                                             |
 | `h` / `j` / `k` / `l`              | Navigate left / down / up / right where the active pane supports it                         |

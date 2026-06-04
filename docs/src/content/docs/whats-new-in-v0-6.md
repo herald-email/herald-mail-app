@@ -17,6 +17,7 @@ These are the changes most visible to people using Herald every day. The theme o
 - [x] Preview rendering is safer: bounded native image previews, opt-in remote HTML image reveal with tracker sanitization, sanitized OSC 8 link targets, and local fallback links/placeholders.
 - [x] Read-only previews gained practical cursor selection, mouse drag selection, visual-range copy, line/body copy, and richer clipboard payloads where the platform supports them.
 - [x] Compose gained an external-editor body flow, preserved reply/forward context, account-scoped signatures, AI toolbar polish, and Gmail API draft/send parity.
+- [x] Contacts can import from native macOS Contacts where supported, and layout-correct keyboard routing keeps printable text safe in Compose, search, prompts, settings, and editor-like fields.
 - [x] Local notifications and `herald://mail/...` deep links can return to folder, message, sender, search, or compose context where platform support exists.
 - [x] First-run and Settings flows are faster and safer, with Google account setup, account/calendar source management, AI repair states, privacy-safe logs, and explicit `-unsafe-logs` diagnostics.
 

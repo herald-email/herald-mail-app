@@ -34,9 +34,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 | Key | Context | Preconditions | Result |
 | --- | --- | --- | --- |
 | Plain letters and digits | Compose fields | Any Compose text field is focused. | Inserts text, including `q` and numbers, without switching tabs or quitting. |
-| `F1` / `F2` / `F3` | Compose | Main Compose handler active. | Switches to Timeline, Contacts, or legacy Contacts without inserting text. |
-| `alt+1` / `alt+2` | Compose | Main Compose handler active. | Switches to Timeline or Contacts without inserting text. |
-| `alt+l` / `alt+c` / `alt+f` / `alt+r` | Compose | Main Compose handler active. | Toggles logs, chat, sidebar, or refresh without inserting text. |
+| `F1` / `F2` / `F3` / `F4` | Compose | Main Compose handler active. | Switches to Timeline, Contacts, legacy Contacts, or Calendar without inserting text. |
 | `tab` | Compose fields | No autocomplete selection is being accepted and no subject hint is pending. | Moves focus To -> CC -> BCC -> Subject -> Body -> To. |
 | `tab` | Subject hint | AI subject hint is visible. | Accepts the suggested subject. |
 | `ctrl+s` | Compose | SMTP configured, To not empty, Subject not empty. | Sends the message with Markdown-derived HTML/plain text and attachments. |
@@ -59,7 +57,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 
 ### Send a New Message
 
-1. Open Timeline and press `C`.
+1. Open Timeline and press `c`.
 2. Enter at least one `To` recipient.
 3. Press `tab` through CC, BCC, Subject, and Body as needed.
 4. Write the body.
@@ -132,7 +130,7 @@ If autocomplete does not appear, keep typing until the current token is long eno
 
 If `ctrl+s` does not send, read the compose status for missing To, missing Subject, SMTP configuration, or provider errors.
 
-If a tab, logs, chat, sidebar, or refresh shortcut appears to type into your draft, use the Alt version while composing.
+Function-key tab aliases remain available while composing. Other browse shortcuts stay out of Compose text fields, so printable keys and Alt-modified text can be typed safely.
 
 If an AI subject suggestion appears but you do not want it, press `esc`. If you do want it, press `tab`.
 

@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This spec defines the account-setup behavior for first-run onboarding and in-app account settings. It matters because Herald must not save or apply a mail account that has not proven both read and send connectivity.
+This spec defines the account-setup behavior for first-run onboarding and in-app account settings. It matters because Herald must not save or apply a mail source that has not proven the read and send capabilities required by its provider.
 
-- [x] First-run account setup must validate IMAP and SMTP immediately after account details, before optional preferences or writes to the selected config path.
-- [x] In-app account settings must validate IMAP and SMTP before replacing the active account config, backend, or SMTP client.
+- [x] First-run account setup must validate the selected mail source immediately after account details, before optional preferences or writes to the selected config path.
+- [x] In-app account settings must validate the selected mail source before replacing the active account config, backend, or send client.
 - [x] Normal startup for an already configured account must keep the existing cached/offline startup behavior.
 - [x] Demo mode must remain offline and must not require IMAP, SMTP, or OAuth.
 
@@ -16,16 +16,16 @@ OAuth produces a candidate account config, not a saved config. This keeps token 
 - [x] Google consent cancellation must show a clear authorization-cancelled message and must not save account settings.
 - [x] Local `Esc` or `q` cancellation on the OAuth wait screen must stop waiting and report that setup was cancelled.
 - [x] OAuth waits must time out with guidance to finish the Google consent screen or restart OAuth.
-- [x] Gmail OAuth must support SMTP XOAUTH2 so the same OAuth account can validate and send mail.
+- [x] Gmail OAuth must validate Gmail API read and send access in the same candidate account flow before saving the mail source.
 
 ## Connection Validation
 
-Validation uses a shared checker so first-run setup and in-app account settings agree about what "ready" means. The checker reports IMAP and SMTP independently while giving the UI a single concise summary.
+Validation uses a shared source-aware checker so first-run setup and in-app account settings agree about what "ready" means. The checker reports provider-specific read/send failures independently while giving the UI a single concise summary.
 
-- [x] Validation must use bounded contexts/timeouts for IMAP and SMTP.
+- [x] Validation must use bounded contexts/timeouts for Gmail API, IMAP, SMTP, and calendar providers where configured.
 - [x] Validation must sanitize errors for display while logging the detailed failure.
-- [x] IMAP validation must authenticate and close without syncing the mailbox.
-- [x] SMTP validation must authenticate and close without sending a message.
+- [x] Gmail API validation must verify read and send capability without syncing the mailbox or sending a message.
+- [x] IMAP/SMTP validation must authenticate and close without syncing the mailbox or sending a message.
 
 ## User Interface
 

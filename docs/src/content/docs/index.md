@@ -39,7 +39,7 @@ Nightly builds are available as short-lived GitHub Actions artifacts for testers
 
 ## New in v0.6
 
-The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail source, hardens multi-account mail behavior, adds provider-backed Calendar mutations and invitation import, and makes previews safer to inspect and copy. See [What's New in v0.6](/whats-new-in-v0-6/) for the release-delta checklist and updated demo GIFs.
+The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail source, hardens multi-account mail behavior, adds provider-backed Calendar mutations and invitation import, and makes previews safer to inspect and copy. See [What's New in v0.6](/whats-new-in-v0-6/) for the release-delta checklist and updated demo GIFs; older release pages remain available under Release Archive so stable links keep working.
 
 ![Calendar workspace demo](/demo/calendar-workspace.gif)
 
@@ -49,7 +49,7 @@ The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail s
 
 ## Mouse-friendly terminal controls
 
-Herald's keyboard model stays complete, but you can also click and scroll the main TUI. Top tabs, folder rows, Timeline rows, and Cleanup rows respond to clicks; Timeline and Cleanup lists and message previews respond to wheel or trackpad scrolling. Email links render as OSC 8 terminal hyperlinks when supported, so readable labels and shortened URLs still open the original target.
+Herald's keyboard model stays complete, but you can also click and scroll the main TUI. Top tabs, folder rows, Timeline rows, and Calendar rows respond to clicks; Timeline lists, Calendar lists, and message previews respond to wheel or trackpad scrolling. Email links render as OSC 8 terminal hyperlinks when supported, so readable labels and shortened URLs still open the original target.
 
 <!-- HERALD_SCREENSHOT id="mouse-navigation-links" page="overview" alt="Mouse navigation and clickable email links in Herald" state="demo mode, 120x40, Timeline preview with OSC 8 links" desc="Shows clickable tabs, a selected Timeline row, a scrollable email preview, and OSC 8-rendered links." capture="tmux demo 120x40; ./bin/herald --demo; search Link rendering stress; open preview; focus preview; scroll to links" -->
 

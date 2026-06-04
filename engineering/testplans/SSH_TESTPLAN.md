@@ -238,7 +238,7 @@ tmux kill-session -t ssh_test
 ### TC-SS-05 — Folder switch via sidebar
 
 **Steps:**
-1. Ensure sidebar is visible (press `f` if needed).
+1. Ensure sidebar is visible (press `B` if needed).
 2. Press `Tab` until sidebar is focused.
 3. Press `j` to move to a different folder.
 4. Press Enter to switch.

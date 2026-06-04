@@ -66,14 +66,15 @@ internal/
 
 ### Key Features
 
-- **Tab 1 — Cleanup**: Groups emails by sender or domain for bulk analysis and deletion
-- **Tab 2 — Timeline**: Chronological email list; press Enter to open body preview (split view)
-- **Tab 3 — Compose**: Write and send email with Markdown preview (glamour) via SMTP
+- **Tab 1 — Timeline**: Chronological and grouped email list; press Enter to open body preview (split view)
+- **Tab 2 — Contacts**: Contact book with list/detail panels, keyword and semantic search, enrichment, and recent-message context
+- **Tab 3 — Calendar**: Calendar workspace with Week, Day, 3-Day, Agenda, Search, Event Detail, RSVP, and provider-backed create/edit/delete flows
+- **Compose**: Transient writing screen launched from Timeline with `c`, reply, forward, draft edit, quick reply, Markdown preview, AI assist, signatures, and external editor support
 - **SQLite Caching**: `email_cache.db` — only fetches new messages on subsequent launches
 - **Interactive Deletion**: Single email, selected senders, or domain-wide (copies to Trash then expunges)
-- **AI Classification**: Ollama-powered `Classify()` tags emails; `a` runs on current folder
-- **Chat Panel**: Right-side slide-out (`c` key) — converse with your emails via Ollama
-- **Multi-folder Sidebar**: Collapsible IMAP folder tree (`f` key)
+- **AI Classification**: Ollama-powered `Classify()` tags emails; `t` runs a folder pass and `T` re-classifies the focused email
+- **Chat Panel**: Right-side slide-out (`g` key; `c` remains a legacy alias outside Timeline) — converse with your emails via Ollama
+- **Multi-folder Sidebar**: Collapsible IMAP folder tree (`B` key; `f` remains a legacy alias)
 - **MCP Server**: `cmd/herald-mcp-server` exposes list/search/stats/classify tools over stdio to Codex
 - **SSH App Mode**: `cmd/herald-ssh-server` serves the full TUI over SSH on port 2222
 - **iTerm2 Images**: Inline image rendering in the email body preview on iTerm2
@@ -130,7 +131,7 @@ tmux capture-pane -t test -p -e > /tmp/cap.txt
 cat /tmp/cap.txt
 
 # 5. Send keystrokes to navigate (no Enter suffix = no newline)
-tmux send-keys -t test '2' ''   # switch to Timeline tab
+tmux send-keys -t test '1' ''   # switch to Timeline tab
 sleep 0.5
 tmux send-keys -t test 'jjjj' ''   # navigate down
 sleep 0.3
@@ -160,17 +161,18 @@ tmux kill-session -t test
 | Action | Keys |
 |--------|------|
 | Tab 1 Timeline | `1` |
-| Tab 2 Compose | `2` |
-| Tab 3 Cleanup | `3` |
+| Tab 2 Contacts | `2` |
+| Tab 3 Calendar | `3` |
+| Open Compose from Timeline | `c` |
 | Open body preview | `Enter` (send as `''`) |
 | Close preview | `Escape` |
-| Toggle sidebar | `f` |
-| Toggle chat | `c` |
-| Toggle logs | `l` |
+| Toggle sidebar | `B` |
+| Toggle chat | `g` |
+| Toggle logs | `L` |
 | Navigate | `j` / `k` |
 | Delete with confirmation | `d` or `Backspace` |
 | Delete immediately | `D` or `Shift+Backspace` |
-| Markdown preview | `C-p` (Compose tab) |
+| Markdown preview | `C-p` (Compose screen) |
 
 #### What to look for in captures
 
@@ -221,22 +223,24 @@ Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | Key | Action |
 |-----|--------|
 | `q` / `ctrl+c` | Quit |
-| `1` / `2` / `3` | Switch to Timeline / Compose / Cleanup tab |
+| `1` / `2` / `3` | Switch to Timeline / Contacts / Calendar tab |
 | `d` / `backspace` | Delete selected or current sender/message after confirmation |
 | `r` | Refresh (reconnect + re-process) |
 | `D` / `shift+backspace` | Delete selected or current sender/message immediately, without confirmation |
 | `space` | Toggle selection (sender row or individual message) |
 | `tab` | Cycle focus between panels |
-| `enter` | Load details (Cleanup) or open body preview (Timeline) |
+| `enter` | Open body preview (Timeline) or details for the focused list item |
 | `esc` | Close email preview (Timeline) |
 | `up`/`k`, `down`/`j` | Navigate |
-| `f` | Toggle folder sidebar |
+| `B` / `f` | Toggle folder sidebar |
 | `l` / `L` | Toggle real-time log viewer overlay |
-| `c` | Toggle AI chat panel |
-| `a` | Run AI classification on current folder |
+| `g` / `c` | Toggle AI chat panel outside Timeline text/compose contexts |
+| `t` | Run AI classification on current folder |
+| `T` / `A` | Re-classify the focused email |
 | `R` | Reply: open Compose pre-filled from highlighted Timeline email |
-| `ctrl+s` | Send email (Compose tab) |
-| `ctrl+p` | Toggle Markdown preview (Compose tab) |
+| `c` | Open a new Compose screen from Timeline |
+| `ctrl+s` | Send email (Compose screen) |
+| `ctrl+p` | Toggle Markdown preview (Compose screen) |
 
 ## Development Notes
 

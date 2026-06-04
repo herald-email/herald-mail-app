@@ -47,3 +47,7 @@ HERALD_THEME=sonokai-signal ./bin/herald --demo
 ```
 
 Press `3` to open Calendar, then try `w`, `d`, `t`, `a`, `/`, `j`/`k`, `h`/`l`, `tab`, and `enter`.
+
+## Previous Release
+
+The v0.4 release introduced the configurable theme system, Compose AI writing polish, setup validation, and safer preview-cache behavior. See [What's New in v0.4](/whats-new-in-v0-4/) for that historical release checklist.

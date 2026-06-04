@@ -186,9 +186,9 @@ A single persistent line at the bottom of the screen. Its content changes based 
 
 ### Chat Panel
 
-The chat panel is a right-side slide-out (`c` key) that lets you have a conversation with your inbox using a local Ollama model. It currently supports Q&A over email content. The vision is to evolve it into a full agentic assistant that can search, summarise, compose, and manage email through natural conversation.
+The chat panel is a right-side slide-out (`g` key, with `c` retained as a legacy alias outside Timeline) that lets you have a conversation with your inbox using a local Ollama model. It currently supports Q&A over email content. The vision is to evolve it into a full agentic assistant that can search, summarise, compose, and manage email through natural conversation.
 
-- [x] Slide-out panel (`c` key)
+- [x] Slide-out panel (`g` key, with `c` retained as a legacy alias outside Timeline)
 - [x] Conversation history (multiple turns)
 - [x] Markdown rendering of assistant responses (glamour)
 - [x] Context: currently open email available to the model
@@ -221,9 +221,9 @@ When the chat returns a set of emails (from a search, date filter, or semantic q
 
 ## AI Classification
 
-The app can automatically tag emails with categories (subscription, important, unnecessary, etc.) using a local Ollama model. Classification runs in the background after sync — it never blocks the UI. The `a` key triggers a full classification pass on the current folder.
+The app can automatically tag emails with categories (subscription, important, unnecessary, etc.) using a local Ollama model. Classification runs in the background after sync — it never blocks the UI. The `t` key triggers a full classification pass on the current folder, while `T` re-classifies the focused email.
 
-- [x] Background classification via Ollama (`a` key)
+- [x] Background classification via Ollama (`t` key for folder pass, `T` for current-message re-classification)
 - [x] Category tags stored in SQLite (`email_classifications` table)
 - [x] Tag column visible in Timeline, including sender/domain grouped cleanup workflows
 - [x] MCP tool: `classify_email` (single message)
@@ -421,7 +421,7 @@ AI-generated contextual replies (shown when body is loaded):
 Received emails are converted from HTML to Markdown for display in the terminal. The conversion is best-effort — complex layouts simplify gracefully.
 
 - [x] HTML → Markdown conversion for body preview
-- [x] Shared Markdown-aware rendering across Timeline, Cleanup, Contacts, and full-screen received-email previews
+- [x] Shared Markdown-aware rendering across Timeline, Contacts, grouped cleanup rows, and full-screen received-email previews
 - [x] Inline image text placeholders (`[image: type  size]` in split view, `[Image: AI description]` when vision model available)
 - [x] Remote HTML image links render as readable OSC 8 links without auto-fetching remote image bytes
 - [x] Full-screen inline image viewing uses bounded iTerm2 or Kitty rendering when supported, or localhost OSC 8 links for local MIME image bytes in local TUI sessions
