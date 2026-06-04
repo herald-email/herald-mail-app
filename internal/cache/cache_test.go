@@ -206,6 +206,133 @@ func TestCacheEmail_DraftFlagIsPersistedAndReadable(t *testing.T) {
 	}
 }
 
+func TestCacheEmailThreadMetadataRoundTrips(t *testing.T) {
+	c := newTestCache(t)
+
+	email := &models.EmailData{
+		MessageID:        "<reply@example.com>",
+		UID:              102,
+		Sender:           "me@example.com",
+		Subject:          "Re: Thread metadata",
+		Date:             time.Now().Truncate(time.Second),
+		Folder:           "Sent",
+		InReplyTo:        "<original@example.com>",
+		References:       "<root@example.com> <original@example.com>",
+		ProviderThreadID: "provider-thread-1",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	got, err := c.GetEmailByID(email.MessageID)
+	if err != nil {
+		t.Fatalf("GetEmailByID: %v", err)
+	}
+	if got.InReplyTo != email.InReplyTo || got.References != email.References || got.ProviderThreadID != email.ProviderThreadID {
+		t.Fatalf("thread metadata = (%q, %q, %q), want (%q, %q, %q)",
+			got.InReplyTo, got.References, got.ProviderThreadID,
+			email.InReplyTo, email.References, email.ProviderThreadID)
+	}
+
+	timeline, err := c.GetEmailsSortedByDate("Sent")
+	if err != nil {
+		t.Fatalf("GetEmailsSortedByDate: %v", err)
+	}
+	if len(timeline) != 1 {
+		t.Fatalf("timeline rows = %d, want 1", len(timeline))
+	}
+	if timeline[0].InReplyTo != email.InReplyTo || timeline[0].References != email.References || timeline[0].ProviderThreadID != email.ProviderThreadID {
+		t.Fatalf("timeline thread metadata = %#v", timeline[0])
+	}
+}
+
+func TestGetTimelineEmailsWithThreadContextIncludesSentReplyByInReplyTo(t *testing.T) {
+	c := newTestCache(t)
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+
+	for _, email := range []*models.EmailData{
+		{
+			MessageID: "<original@example.com>",
+			UID:       1,
+			Sender:    "sender@example.com",
+			Subject:   "Project update",
+			Date:      now.Add(-10 * time.Minute),
+			Folder:    "INBOX",
+		},
+		{
+			MessageID:  "<reply@example.com>",
+			UID:        2,
+			Sender:     "me@example.com",
+			Subject:    "Re: Project update",
+			Date:       now,
+			Folder:     "Sent",
+			InReplyTo:  "<original@example.com>",
+			References: "<root@example.com> <original@example.com>",
+		},
+		{
+			MessageID: "<unrelated@example.com>",
+			UID:       3,
+			Sender:    "me@example.com",
+			Subject:   "Re: Project update",
+			Date:      now.Add(5 * time.Minute),
+			Folder:    "Sent",
+		},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+	}
+
+	got, err := c.GetTimelineEmailsWithThreadContext("INBOX", []string{"Sent"})
+	if err != nil {
+		t.Fatalf("GetTimelineEmailsWithThreadContext: %v", err)
+	}
+	if ids := emailIDs(got); !reflect.DeepEqual(ids, []string{"<reply@example.com>", "<original@example.com>"}) {
+		t.Fatalf("timeline IDs = %#v, want linked Sent reply and original only", ids)
+	}
+	if got[0].Folder != "Sent" {
+		t.Fatalf("linked reply folder = %q, want Sent", got[0].Folder)
+	}
+}
+
+func TestGetTimelineEmailsWithThreadContextIncludesProviderThreadMatch(t *testing.T) {
+	c := newTestCache(t)
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+
+	for _, email := range []*models.EmailData{
+		{
+			MessageID:        "<gmail-original@example.com>",
+			UID:              1,
+			Sender:           "sender@example.com",
+			Subject:          "Gmail thread",
+			Date:             now.Add(-10 * time.Minute),
+			Folder:           "INBOX",
+			ProviderThreadID: "thread-123",
+		},
+		{
+			MessageID:        "<gmail-reply@example.com>",
+			UID:              2,
+			Sender:           "me@example.com",
+			Subject:          "Re: Gmail thread",
+			Date:             now,
+			Folder:           "Sent",
+			ProviderThreadID: "thread-123",
+		},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+	}
+
+	got, err := c.GetTimelineEmailsWithThreadContext("INBOX", []string{"Sent"})
+	if err != nil {
+		t.Fatalf("GetTimelineEmailsWithThreadContext: %v", err)
+	}
+	if ids := emailIDs(got); !reflect.DeepEqual(ids, []string{"<gmail-reply@example.com>", "<gmail-original@example.com>"}) {
+		t.Fatalf("timeline IDs = %#v, want provider-thread match", ids)
+	}
+}
+
 func TestCacheAddsDefaultSourceColumns(t *testing.T) {
 	c := newTestCache(t)
 
@@ -222,6 +349,16 @@ func TestCacheAddsDefaultSourceColumns(t *testing.T) {
 			t.Fatalf("folder_sync_state missing column %s", name)
 		}
 	}
+}
+
+func emailIDs(emails []*models.EmailData) []string {
+	ids := make([]string, 0, len(emails))
+	for _, email := range emails {
+		if email != nil {
+			ids = append(ids, email.MessageID)
+		}
+	}
+	return ids
 }
 
 func TestCacheEmailWritesDefaultScopeForLegacyEmail(t *testing.T) {

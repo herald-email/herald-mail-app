@@ -7,6 +7,7 @@ This spec defines the Issue #15 behavior for Timeline replies opened in Compose.
 - [x] Reply Compose opens with `To`, `Re:` subject, and an empty editable response body.
 - [x] Reply Compose shows a read-only `Original message` pane sourced from the preserved reply context.
 - [x] Reply send and draft assembly continue to preserve the original HTML/plain fallback and threading headers outside the editable textarea.
+- [x] Sent replies whose provider thread ID or RFC reply headers link to the original message appear inline with the original Timeline thread after refresh while preserving the Sent row's real folder identity.
 
 ## TUI Behavior
 

@@ -11,18 +11,21 @@ type EmailData struct {
 	LocalID     string    `db:"local_id"`
 	UIDValidity uint32    `db:"uid_validity"`
 
-	MessageID      string    `db:"message_id"`
-	UID            uint32    `db:"uid"`
-	Sender         string    `db:"sender"`
-	Subject        string    `db:"subject"`
-	Date           time.Time `db:"date"`
-	Size           int       `db:"size"`
-	HasAttachments bool      `db:"has_attachments"`
-	Folder         string    `db:"folder"`
-	LastUpdated    time.Time `db:"last_updated"`
-	IsRead         bool      `db:"is_read"`
-	IsStarred      bool      `db:"is_starred"`
-	IsDraft        bool      `db:"is_draft"`
+	MessageID        string    `db:"message_id"`
+	UID              uint32    `db:"uid"`
+	Sender           string    `db:"sender"`
+	Subject          string    `db:"subject"`
+	InReplyTo        string    `db:"in_reply_to"`
+	References       string    `db:"references_header"`
+	ProviderThreadID string    `db:"provider_thread_id"`
+	Date             time.Time `db:"date"`
+	Size             int       `db:"size"`
+	HasAttachments   bool      `db:"has_attachments"`
+	Folder           string    `db:"folder"`
+	LastUpdated      time.Time `db:"last_updated"`
+	IsRead           bool      `db:"is_read"`
+	IsStarred        bool      `db:"is_starred"`
+	IsDraft          bool      `db:"is_draft"`
 }
 
 func (e EmailData) MessageRef() MessageRef {

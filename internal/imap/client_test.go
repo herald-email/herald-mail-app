@@ -150,6 +150,7 @@ func TestEmailDataFromIMAPMessageCarriesUIDValidity(t *testing.T) {
 		Size: 2048,
 		Envelope: &goimap.Envelope{
 			MessageId: "<fresh@example.test>",
+			InReplyTo: "<original@example.test>",
 			Subject:   "Fresh provider metadata",
 			Date:      time.Date(2026, 5, 26, 9, 30, 0, 0, time.UTC),
 			From: []*goimap.Address{{
@@ -168,6 +169,9 @@ func TestEmailDataFromIMAPMessageCarriesUIDValidity(t *testing.T) {
 	}
 	if ref := email.MessageRef(); ref.UIDValidity != 777 || ref.UID != 42 || ref.Folder != "INBOX" {
 		t.Fatalf("MessageRef = %#v, want UID 42 in INBOX with UIDVALIDITY 777", ref)
+	}
+	if email.InReplyTo != "<original@example.test>" {
+		t.Fatalf("InReplyTo = %q, want provider envelope In-Reply-To", email.InReplyTo)
 	}
 }
 

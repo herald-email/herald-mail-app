@@ -123,6 +123,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 
 - [x] Full-width thread list sorted by date
 - [x] Thread grouping across participants (fold/unfold inline with `Enter`, reply rows marked visibly)
+- [x] Sent replies linked by provider thread IDs or RFC reply headers appear inline with their original active-folder Timeline thread while keeping their real Sent folder identity for preview and mutations
 - [x] Sender-cell disclosure markers make collapsed and expanded Timeline threads recognizable before opening them
 - [x] Body preview split (right panel, auto-updates on navigation, with bounded inline image rendering when supported)
 - [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders

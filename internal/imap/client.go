@@ -94,6 +94,7 @@ func emailDataFromIMAPMessage(msg *imap.Message, folder string, uidValidity uint
 		UIDValidity:    uidValidity,
 		Sender:         sender,
 		Subject:        msg.Envelope.Subject,
+		InReplyTo:      msg.Envelope.InReplyTo,
 		Date:           msg.Envelope.Date,
 		Size:           int(msg.Size),
 		HasAttachments: hasAttach,
