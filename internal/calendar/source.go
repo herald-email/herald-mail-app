@@ -202,11 +202,21 @@ func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.Cal
 		event.ProviderUID = strings.TrimSpace(event.Ref.EventID)
 	}
 	payload := googleEventFromModel(event)
+	u := s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events?sendUpdates=none"
+	if googleEventShouldImport(event) {
+		payload.ID = ""
+		if strings.TrimSpace(payload.ICalUID) == "" {
+			payload.ICalUID = strings.TrimSpace(firstNonEmpty(event.ProviderUID, event.Ref.EventID))
+		}
+		u = s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events/import?sendUpdates=none"
+	} else {
+		payload.ID = ""
+		payload.ICalUID = ""
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	u := s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events/import?sendUpdates=none"
 	req, err := s.newRequest(ctx, http.MethodPost, u, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -221,6 +231,10 @@ func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.Cal
 		return nil, err
 	}
 	return &out, nil
+}
+
+func googleEventShouldImport(event models.CalendarEvent) bool {
+	return strings.Contains(strings.ToUpper(event.Raw), "BEGIN:VEVENT") && strings.TrimSpace(event.ProviderUID) != ""
 }
 
 func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
@@ -1087,29 +1101,29 @@ type googleEvents struct {
 }
 
 type googleEventPayload struct {
-	ID          string             `json:"id"`
-	ICalUID     string             `json:"iCalUID"`
-	ETag        string             `json:"etag"`
+	ID          string             `json:"id,omitempty"`
+	ICalUID     string             `json:"iCalUID,omitempty"`
+	ETag        string             `json:"etag,omitempty"`
 	Summary     string             `json:"summary"`
-	Description string             `json:"description"`
-	Location    string             `json:"location"`
-	Status      string             `json:"status"`
-	Updated     string             `json:"updated"`
+	Description string             `json:"description,omitempty"`
+	Location    string             `json:"location,omitempty"`
+	Status      string             `json:"status,omitempty"`
+	Updated     string             `json:"updated,omitempty"`
 	Start       googleEventTime    `json:"start"`
 	End         googleEventTime    `json:"end"`
-	Sequence    int                `json:"sequence"`
-	Organizer   googlePerson       `json:"organizer"`
-	Attendees   []googleAttendee   `json:"attendees"`
-	Recurrence  []string           `json:"recurrence"`
-	Attachments []googleAttachment `json:"attachments"`
+	Sequence    int                `json:"sequence,omitempty"`
+	Organizer   *googlePerson      `json:"organizer,omitempty"`
+	Attendees   []googleAttendee   `json:"attendees,omitempty"`
+	Recurrence  []string           `json:"recurrence,omitempty"`
+	Attachments []googleAttachment `json:"attachments,omitempty"`
 	Reminders   *googleReminders   `json:"reminders,omitempty"`
-	Extended    map[string]any     `json:"extendedProperties"`
+	Extended    map[string]any     `json:"extendedProperties,omitempty"`
 }
 
 type googleEventTime struct {
-	DateTime string `json:"dateTime"`
-	Date     string `json:"date"`
-	TimeZone string `json:"timeZone"`
+	DateTime string `json:"dateTime,omitempty"`
+	Date     string `json:"date,omitempty"`
+	TimeZone string `json:"timeZone,omitempty"`
 }
 
 type googlePerson struct {
@@ -1161,6 +1175,10 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		EventID:    item.ID,
 		ETag:       item.ETag,
 	}.WithDefaults()
+	organizer := googlePerson{}
+	if item.Organizer != nil {
+		organizer = *item.Organizer
+	}
 	return models.CalendarEvent{
 		Ref:               ref,
 		ProviderUID:       item.ICalUID,
@@ -1174,8 +1192,8 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 		StartTimeZone:     item.Start.TimeZone,
 		EndTimeZone:       item.End.TimeZone,
 		Status:            item.Status,
-		Organizer:         item.Organizer.DisplayName,
-		OrganizerEmail:    item.Organizer.Email,
+		Organizer:         organizer.DisplayName,
+		OrganizerEmail:    organizer.Email,
 		Attendees:         googleAttendeesToModel(item.Attendees),
 		Recurrence:        append([]string(nil), item.Recurrence...),
 		RecurrenceSummary: summarizeRecurrence(item.Recurrence),
@@ -1203,7 +1221,7 @@ func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
 	payload.Start = googleTimeFromModel(event.Start, startTimeZone, event.AllDay)
 	payload.End = googleTimeFromModel(event.End, endTimeZone, event.AllDay)
 	if event.Organizer != "" || event.OrganizerEmail != "" {
-		payload.Organizer = googlePerson{DisplayName: event.Organizer, Email: event.OrganizerEmail}
+		payload.Organizer = &googlePerson{DisplayName: event.Organizer, Email: event.OrganizerEmail}
 	}
 	for _, attendee := range event.Attendees {
 		payload.Attendees = append(payload.Attendees, googleAttendee{
@@ -1230,13 +1248,23 @@ func googleTimeFromModel(value time.Time, timezone string, allDay bool) googleEv
 	if allDay {
 		return googleEventTime{Date: value.Format("2006-01-02")}
 	}
-	timezone = strings.TrimSpace(timezone)
-	if timezone != "" {
-		if loc, err := time.LoadLocation(timezone); err == nil {
-			return googleEventTime{DateTime: value.In(loc).Format(time.RFC3339), TimeZone: timezone}
-		}
+	timezone, loc := googleProviderMutationTimeZone(timezone)
+	if timezone != "" && loc != nil {
+		return googleEventTime{DateTime: value.In(loc).Format(time.RFC3339), TimeZone: timezone}
 	}
-	return googleEventTime{DateTime: value.Format(time.RFC3339), TimeZone: timezone}
+	return googleEventTime{DateTime: value.Format(time.RFC3339)}
+}
+
+func googleProviderMutationTimeZone(timezone string) (string, *time.Location) {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" || strings.EqualFold(timezone, "local") {
+		return "", nil
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return "", nil
+	}
+	return timezone, loc
 }
 
 func googleAttendeesToModel(attendees []googleAttendee) []models.CalendarAttendee {
@@ -2029,6 +2057,9 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 	if message == "" {
 		message = fmt.Sprintf("status %d", status)
 	}
+	if status == http.StatusBadRequest && calendarProviderMutationMethod(method) && strings.EqualFold(message, http.StatusText(status)) {
+		message = "provider rejected the event details; check title, start/end time, timezone, attendees, recurrence, and reminders"
+	}
 	if status == http.StatusUnauthorized {
 		return fmt.Errorf("%w: %s authorization expired; reconnect this calendar account", models.ErrCalendarAuthorizationRequired, provider)
 	}
@@ -2040,6 +2071,11 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 		return fmt.Errorf("%w: %s %s denied; reconnect this calendar account to approve Calendar access", models.ErrCalendarWritePermission, provider, action)
 	}
 	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
+}
+
+func calendarProviderMutationMethod(method string) bool {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	return method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete
 }
 
 func calendarProviderOAuthError(provider string, err error) error {

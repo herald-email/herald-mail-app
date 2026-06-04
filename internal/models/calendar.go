@@ -15,6 +15,18 @@ type CalendarCollection struct {
 	AccessRole string
 }
 
+func CalendarCollectionWritableForMutation(collection CalendarCollection) bool {
+	role := strings.ToLower(strings.TrimSpace(collection.AccessRole))
+	role = strings.ReplaceAll(role, "_", "")
+	role = strings.ReplaceAll(role, "-", "")
+	switch role {
+	case "freebusyreader", "reader":
+		return false
+	default:
+		return true
+	}
+}
+
 type CalendarEvent struct {
 	Ref EventRef
 

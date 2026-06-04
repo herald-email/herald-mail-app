@@ -2903,10 +2903,10 @@ func TestCalendarEventCreateOpensBlankDraftAndSavesThroughCreate(t *testing.T) {
 	m.setCalendarCollections([]models.CalendarCollection{collection})
 	pinCalendarFixtureNowForTest(m)
 
-	model, _ := m.handleKeyMsg(keyCtrl('n'))
+	model, _ := m.handleKeyMsg(keyRunes("n"))
 	m = model.(*Model)
 	if !m.calendarEdit.Active {
-		t.Fatal("expected ctrl+n to open Calendar Event Create")
+		t.Fatal("expected n to open Calendar Event Create")
 	}
 	if !m.calendarEdit.Create {
 		t.Fatal("expected create-mode editor")
@@ -3108,6 +3108,283 @@ func TestCalendarEventEditMiniCalendarUpdatesDateAndPreservesTime(t *testing.T) 
 	}
 }
 
+func TestCalendarEventCreateFallsBackFromReadOnlySelectionToWritableCalendar(t *testing.T) {
+	readOnly := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "google-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "holiday-us",
+			DisplayName:  "Holidays in United States",
+		},
+		AccessRole: "reader",
+	}
+	writable := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "google-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "primary",
+			DisplayName:  "Work",
+		},
+		AccessRole: "owner",
+	}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{readOnly, writable}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarCollections([]models.CalendarCollection{readOnly, writable})
+	m.calendarFocus = calendarFocusRail
+	m.calendarRailCursor = 0
+
+	model, cmd := m.handleKeyMsg(keyRunes("n"))
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("create returned command %T, want none", cmd)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatal("read-only selected calendar should still open Create Event when a writable calendar exists")
+	}
+	if !m.calendarEdit.Create {
+		t.Fatal("expected create-mode editor")
+	}
+	if got := m.calendarEdit.Draft.Ref.CalendarID; got != "primary" {
+		t.Fatalf("draft calendar = %q, want writable primary calendar", got)
+	}
+	if len(b.createdEvents) != 0 {
+		t.Fatalf("created events before save = %#v, want none", b.createdEvents)
+	}
+	if strings.Contains(m.calendarStatus, "read-only") {
+		t.Fatalf("calendarStatus = %q, should not block on read-only selection when writable calendars exist", m.calendarStatus)
+	}
+}
+
+func TestCalendarEventCreateNoWritableCalendarsExplainsWhy(t *testing.T) {
+	readOnly := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "google-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "holiday-us",
+			DisplayName:  "Holidays in United States",
+		},
+		AccessRole: "freeBusyReader",
+	}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{readOnly}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarCollections([]models.CalendarCollection{readOnly})
+	m.calendarFocus = calendarFocusRail
+	m.calendarRailCursor = 0
+
+	model, cmd := m.handleKeyMsg(keyRunes("n"))
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("no-writable create returned command %T, want none", cmd)
+	}
+	if m.calendarEdit.Active {
+		t.Fatal("no writable calendar should not open Create Event")
+	}
+	if !strings.Contains(m.calendarStatus, "Create Event needs a writable calendar source") {
+		t.Fatalf("calendarStatus = %q, want no-writable guidance", m.calendarStatus)
+	}
+}
+
+func TestCalendarEventCreatePermissionErrorOffersReconnectAction(t *testing.T) {
+	collection := models.CalendarCollection{Ref: models.CollectionRef{
+		SourceID:     "work-calendar",
+		AccountID:    "work",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "primary",
+		DisplayName:  "Work",
+	}, AccessRole: "owner"}
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			Email:       "work@example.com",
+			AccessToken: "old-token",
+		},
+	}}}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{collection}, saveErr: models.ErrCalendarWritePermission}
+	m := New(b, nil, "", nil, false)
+	m.SetConfig(cfg)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarCollections([]models.CalendarCollection{collection})
+	pinCalendarFixtureNowForTest(m)
+
+	model, _ := m.handleKeyMsg(keyRunes("n"))
+	m = model.(*Model)
+	m.calendarEdit.Draft.Title = "Needs permission"
+	model, cmd := m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if !m.calendarEdit.Active {
+		t.Fatalf("calendarEdit=%#v, want active editor after permission failure", m.calendarEdit)
+	}
+	rendered := ansi.Strip(m.renderCalendarEventEdit(140, 36))
+	if !strings.Contains(rendered, "r: reconnect") {
+		t.Fatalf("edit view missing reconnect hint:\n%s", rendered)
+	}
+	model, cmd = m.handleKeyMsg(keyRunes("r"))
+	m = model.(*Model)
+	msgs := calendarImmediateMessagesForTest(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("reconnect messages=%#v, want one OAuthRequiredMsg", msgs)
+	}
+	oauthMsg, ok := msgs[0].(OAuthRequiredMsg)
+	if !ok {
+		t.Fatalf("reconnect message=%T, want OAuthRequiredMsg", msgs[0])
+	}
+	if oauthMsg.ServiceLabel != "Google Calendar OAuth" || oauthMsg.Email != "work@example.com" {
+		t.Fatalf("OAuth msg = %#v, want Google Calendar OAuth for work@example.com", oauthMsg)
+	}
+	if len(oauthMsg.SourceIDs) != 1 || oauthMsg.SourceIDs[0] != "work-calendar" {
+		t.Fatalf("OAuth SourceIDs=%#v, want work-calendar", oauthMsg.SourceIDs)
+	}
+}
+
+func TestCalendarReconnectShortcutPreservesNormalTextEntry(t *testing.T) {
+	collection := models.CalendarCollection{Ref: models.CollectionRef{
+		SourceID:     "work-calendar",
+		AccountID:    "work",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "primary",
+		DisplayName:  "Work",
+	}, AccessRole: "owner"}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{collection}}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+		model, _ := m.handleKeyMsg(keyRunes("r"))
+		updated := model.(*Model)
+		if got := updated.composeBody.Value(); got != "r" {
+			t.Fatalf("compose body=%q, want literal r", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.openCalendarSearch()
+		model, cmd := m.handleKeyMsg(keyRunes("r"))
+		m = model.(*Model)
+		if cmd == nil {
+			t.Fatal("calendar search literal r should trigger search command")
+		}
+		if m.calendarSearchQuery != "r" {
+			t.Fatalf("calendarSearchQuery=%q, want literal r", m.calendarSearchQuery)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.setCalendarCollections([]models.CalendarCollection{collection})
+		model, cmd := m.handleKeyMsg(keyRunes("n"))
+		m = model.(*Model)
+		if cmd != nil || !m.calendarEdit.Active {
+			t.Fatalf("create setup cmd=%T edit=%#v", cmd, m.calendarEdit)
+		}
+		model, _ = m.handleKeyMsg(keyRunes("r"))
+		m = model.(*Model)
+		if m.calendarEdit.Draft.Title != "r" {
+			t.Fatalf("calendar edit title=%q, want literal r", m.calendarEdit.Draft.Title)
+		}
+	})
+}
+
+func TestCalendarCreateShortcutPreservesNormalNTextEntry(t *testing.T) {
+	collection := models.CalendarCollection{Ref: models.CollectionRef{
+		SourceID:     "demo-calendar",
+		AccountID:    "default",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "work",
+		DisplayName:  "Work",
+	}, AccessRole: "owner"}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{collection}}
+
+	t.Run("compose", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+		model, _ := m.handleKeyMsg(keyRunes("n"))
+		updated := model.(*Model)
+		if got := updated.composeBody.Value(); got != "n" {
+			t.Fatalf("compose body=%q, want literal n", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.openCalendarSearch()
+		model, cmd := m.handleKeyMsg(keyRunes("n"))
+		m = model.(*Model)
+		if cmd == nil {
+			t.Fatal("calendar search literal n should trigger search command")
+		}
+		if m.calendarSearchQuery != "n" {
+			t.Fatalf("calendarSearchQuery=%q, want literal n", m.calendarSearchQuery)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		m := New(b, nil, "", nil, false)
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.setCalendarCollections([]models.CalendarCollection{collection})
+		model, cmd := m.handleKeyMsg(keyRunes("n"))
+		m = model.(*Model)
+		if cmd != nil || !m.calendarEdit.Active {
+			t.Fatalf("create setup cmd=%T edit=%#v", cmd, m.calendarEdit)
+		}
+		m.calendarEdit.Draft.Title = ""
+		model, _ = m.handleKeyMsg(keyRunes("n"))
+		m = model.(*Model)
+		if m.calendarEdit.Draft.Title != "n" {
+			t.Fatalf("calendar edit title=%q, want literal n", m.calendarEdit.Draft.Title)
+		}
+	})
+}
+
 func TestCalendarEventDeleteRequiresConfirmationAndRemovesEvent(t *testing.T) {
 	rich := richCalendarEventForTest()
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
@@ -3170,7 +3447,7 @@ func newCalendarCreateUXModelForTest(t *testing.T) (*Model, *calendarAgendaStubB
 	m.calendarAvailable = true
 	m.setCalendarCollections([]models.CalendarCollection{collection})
 	pinCalendarFixtureNowForTest(m)
-	model, _ := m.handleKeyMsg(keyCtrl('n'))
+	model, _ := m.handleKeyMsg(keyRunes("n"))
 	m = model.(*Model)
 	if !m.calendarEdit.Active || !m.calendarEdit.Create {
 		t.Fatalf("failed to open create editor: %#v", m.calendarEdit)

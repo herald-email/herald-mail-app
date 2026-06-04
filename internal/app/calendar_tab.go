@@ -115,6 +115,7 @@ type calendarEventEditState struct {
 	ContactCursor      int
 	ContactQuery       string
 	ContactLoading     bool
+	ReconnectAvailable bool
 }
 
 type calendarEditPickerMode string
@@ -998,7 +999,10 @@ func (m *Model) openCalendarEdit() {
 }
 
 func (m *Model) openCalendarCreate() {
-	collection := m.calendarCollectionForCreate()
+	collection, ok := m.calendarWritableCollectionForCreate()
+	if !ok {
+		return
+	}
 	ref := models.EventRef{
 		SourceID:   collection.Ref.SourceID,
 		AccountID:  collection.Ref.AccountID,
@@ -1045,6 +1049,23 @@ func (m *Model) openCalendarCreate() {
 	m.calendarStatus = "Creating calendar event"
 }
 
+func (m *Model) calendarWritableCollectionForCreate() (models.CalendarCollection, bool) {
+	collections := m.calendarCollections
+	if len(collections) == 0 {
+		collections = m.mergeCalendarCollections(nil)
+	}
+	collection := m.calendarCollectionForCreate()
+	if models.CalendarCollectionWritableForMutation(collection) && (len(collections) > 0 || strings.TrimSpace(collection.Ref.CollectionID) != "") {
+		return collection, true
+	}
+	writable := writableCalendarCollectionsForMutation(collections)
+	if len(writable) > 0 {
+		return preferredWritableCalendarCollectionForCreate(collection, writable), true
+	}
+	m.calendarStatus = "Create Event needs a writable calendar source"
+	return models.CalendarCollection{}, false
+}
+
 func (m *Model) calendarCollectionForCreate() models.CalendarCollection {
 	if len(m.calendarCollections) > 0 && m.calendarRailCursor >= 0 && m.calendarRailCursor < len(m.calendarCollections) {
 		return m.calendarCollections[m.calendarRailCursor]
@@ -1071,6 +1092,29 @@ func (m *Model) calendarCollectionForCreate() models.CalendarCollection {
 		CollectionID: "calendar",
 		DisplayName:  "Calendar",
 	}}
+}
+
+func writableCalendarCollectionsForMutation(collections []models.CalendarCollection) []models.CalendarCollection {
+	out := make([]models.CalendarCollection, 0, len(collections))
+	for _, collection := range collections {
+		if models.CalendarCollectionWritableForMutation(collection) {
+			out = append(out, collection)
+		}
+	}
+	return out
+}
+
+func preferredWritableCalendarCollectionForCreate(selected models.CalendarCollection, writable []models.CalendarCollection) models.CalendarCollection {
+	selectedSourceID := models.NormalizeSourceID(selected.Ref.SourceID, models.DefaultCalendarSourceID)
+	selectedAccountID := models.NormalizeAccountID(selected.Ref.AccountID)
+	for _, collection := range writable {
+		sourceID := models.NormalizeSourceID(collection.Ref.SourceID, models.DefaultCalendarSourceID)
+		accountID := models.NormalizeAccountID(collection.Ref.AccountID)
+		if sourceID == selectedSourceID && accountID == selectedAccountID {
+			return collection
+		}
+	}
+	return writable[0]
 }
 
 func (m *Model) calendarDefaultCreateStart() time.Time {
@@ -1364,6 +1408,7 @@ func (m *Model) saveCalendarEdit() tea.Cmd {
 	m.calendarEdit.Ref = ref
 	m.calendarEdit.Saving = true
 	m.calendarEdit.Error = ""
+	m.calendarEdit.ReconnectAvailable = false
 	m.calendarStatus = "Saving calendar event..."
 	return func() tea.Msg {
 		var saved *models.CalendarEvent
@@ -1375,6 +1420,60 @@ func (m *Model) saveCalendarEdit() tea.Cmd {
 		}
 		return CalendarEventSavedMsg{Ref: ref, Event: saved, Err: err}
 	}
+}
+
+func (m *Model) calendarEditReconnectAvailable(err error) bool {
+	return calendarMutationNeedsReconnect(err) && m.calendarEditGoogleSource() != nil
+}
+
+func (m *Model) reconnectCalendarEditOAuthCmd() tea.Cmd {
+	source := m.calendarEditGoogleSource()
+	if source == nil || m.cfg == nil {
+		m.calendarStatus = "Google Calendar reconnect is unavailable for this calendar source"
+		if m.calendarEdit.Active {
+			m.calendarEdit.Error = m.calendarStatus
+		}
+		return nil
+	}
+	candidate := cloneConfigForOAuth(m.cfg)
+	sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+	email := strings.TrimSpace(source.Google.Email)
+	m.calendarStatus = "Starting Google Calendar reconnect..."
+	return func() tea.Msg {
+		return OAuthRequiredMsg{
+			Email:             email,
+			ServiceLabel:      "Google Calendar OAuth",
+			Config:            candidate,
+			ValidateCalendar:  true,
+			CalendarSourceIDs: []models.SourceID{sourceID},
+			SourceIDs:         []models.SourceID{sourceID},
+		}
+	}
+}
+
+func (m *Model) calendarEditGoogleSource() *config.SourceConfig {
+	if m == nil || m.cfg == nil || !m.calendarEdit.Active {
+		return nil
+	}
+	ref := m.calendarEdit.Draft.Ref.WithDefaults()
+	if strings.TrimSpace(string(ref.SourceID)) == "" {
+		ref = m.calendarEdit.Ref.WithDefaults()
+	}
+	sourceID := models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	for _, source := range m.cfg.NormalizedSources() {
+		if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) {
+			continue
+		}
+		if strings.TrimSpace(source.Provider) != "google_calendar" {
+			continue
+		}
+		if models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID) != sourceID {
+			continue
+		}
+		copy := source
+		return &copy
+	}
+	return nil
 }
 
 func (m *Model) openCalendarDelete() {
@@ -1500,6 +1599,10 @@ func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	switch key {
 	case "ctrl+s":
 		return m, m.saveCalendarEdit()
+	case "r":
+		if m.calendarEdit.ReconnectAvailable {
+			return m, m.reconnectCalendarEditOAuthCmd()
+		}
 	case "ctrl+d":
 		if m.calendarEdit.Create {
 			m.calendarStatus = "Save the event before deleting it"
@@ -2264,7 +2367,7 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.toggleFocusedCalendarCollection()
 		}
 		return m, nil
-	case "ctrl+n":
+	case "n":
 		m.openCalendarCreate()
 		return m, nil
 	case "D":
@@ -3196,6 +3299,9 @@ func (m *Model) calendarEditFooterHint(state calendarEventEditState) string {
 	}
 	if action := m.calendarEditFocusedFieldHint(); action != "" {
 		hint = action + "  |  " + hint
+	}
+	if state.ReconnectAvailable {
+		hint += "  r: reconnect"
 	}
 	return hint
 }

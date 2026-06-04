@@ -57,6 +57,18 @@ func CalendarCollections() []models.CalendarCollection {
 			Color: "#b39df3",
 			ETag:  `"demo-calendar-holidays-v1"`,
 		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     CalendarSourceID,
+				AccountID:    CalendarAccountID,
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "us-holidays",
+				DisplayName:  "Holidays in United States",
+			},
+			Color:      "#f0907f",
+			ETag:       `"demo-calendar-us-holidays-v1"`,
+			AccessRole: "reader",
+		},
 	}
 }
 
@@ -95,6 +107,7 @@ func CalendarEvents() []models.CalendarEvent {
 		calendarEvent("personal", "thu-focus", "Focus Block", "Deep work block.", "", at(3, 13, 0), 2*time.Hour, "busy"),
 		calendarEvent("work", "fri-one-one", "1:1 Alex", "Weekly check-in.", "Video", at(4, 13, 0), time.Hour, "confirmed"),
 		calendarEvent("travel", "tue-travel-prep", "Travel Prep", "Confirm tickets, hotel, and packing list.", "", at(1, 14, 0), 2*time.Hour, "tentative"),
+		calendarEvent("us-holidays", "demo-subscribed-holiday", "Subscribed Holiday", "Read-only subscribed holiday calendar entry.", "", at(3, 0, 0), 24*time.Hour, "confirmed"),
 		calendarEvent("work", "thu-planning-pm", "Planning", "Implementation review.", "Planning room", at(3, 15, 0), time.Hour, "confirmed"),
 		calendarEvent("work", "mon-ship-review", "Ship Review", "Release check.", "Ops room", at(0, 16, 0), time.Hour, "confirmed"),
 		calendarEvent("work", "wed-ship-review", "Ship Review", "Release check.", "Ops room", at(2, 16, 0), time.Hour, "confirmed"),

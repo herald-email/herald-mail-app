@@ -315,6 +315,9 @@ func (b *LocalBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 		return nil, sql.ErrNoRows
 	}
 	event.Ref = event.Ref.WithDefaults()
+	if err := b.ensureCalendarCollectionWritableForMutation(event.Ref); err != nil {
+		return nil, err
+	}
 	if event.UpdatedAt.IsZero() {
 		event.UpdatedAt = time.Now().UTC()
 	}
@@ -344,6 +347,9 @@ func (b *LocalBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.
 		return nil, sql.ErrNoRows
 	}
 	event.Ref = event.Ref.WithDefaults()
+	if err := b.ensureCalendarCollectionWritableForMutation(event.Ref); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(event.ProviderUID) == "" {
 		event.ProviderUID = strings.TrimSpace(event.Ref.EventID)
 	}
@@ -378,6 +384,9 @@ func (b *LocalBackend) DeleteCalendarEvent(ref models.EventRef) error {
 		return sql.ErrNoRows
 	}
 	ref = ref.WithDefaults()
+	if err := b.ensureCalendarCollectionWritableForMutation(ref); err != nil {
+		return err
+	}
 	if source, ok, err := b.calendarMutationSourceForRef(ref); err != nil {
 		return err
 	} else if ok {
@@ -396,6 +405,9 @@ func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) 
 		return nil, sql.ErrNoRows
 	}
 	ref = ref.WithDefaults()
+	if err := b.ensureCalendarCollectionWritableForMutation(ref); err != nil {
+		return nil, err
+	}
 	source, ok, err := b.calendarMutationSourceForRef(ref)
 	if err != nil {
 		return nil, err
@@ -460,6 +472,33 @@ func (b *LocalBackend) FindCalendarEventByUID(ref models.CollectionRef, uid stri
 		return nil, nil
 	}
 	return found, err
+}
+
+func (b *LocalBackend) ensureCalendarCollectionWritableForMutation(ref models.EventRef) error {
+	if b == nil || b.cache == nil {
+		return nil
+	}
+	ref = ref.WithDefaults()
+	collection, err := b.cache.GetCalendarCollection(models.CollectionRef{
+		SourceID:     ref.SourceID,
+		AccountID:    ref.AccountID,
+		Kind:         models.SourceKindCalendar,
+		CollectionID: ref.CalendarID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if models.CalendarCollectionWritableForMutation(*collection) {
+		return nil
+	}
+	label := strings.TrimSpace(collection.Ref.DisplayName)
+	if label == "" {
+		label = firstNonEmptyString(collection.Ref.CollectionID, string(collection.Ref.AccountID), string(collection.Ref.SourceID), "calendar")
+	}
+	return fmt.Errorf("%w: %s is read-only", models.ErrCalendarWritePermission, label)
 }
 
 func (b *LocalBackend) SearchCalendarEvents(query string, start, end time.Time) ([]models.CalendarEvent, error) {

@@ -2610,6 +2610,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.calendarEdit.Saving = false
 			m.calendarEdit.Error = calendarMutationErrorStatus("Save failed", msg.Err)
+			m.calendarEdit.ReconnectAvailable = m.calendarEditReconnectAvailable(msg.Err)
 			m.calendarStatus = m.calendarEdit.Error
 			return m, nil
 		}

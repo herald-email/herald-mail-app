@@ -668,7 +668,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] AI Summary view opens from Calendar Event Detail and summarizes the selected event, cached related mail, and cached nearby events without provider fetches or mutations
 - [x] Local/cache-backed Event Edit form with explicit save/cancel state and timezone preview
 - [x] Provider-backed Event Edit saves write through Google Calendar/CalDAV before updating cache, and provider failures keep unsaved edits visible
-- [x] Provider-backed Event Create opens from Calendar, scopes new events to the selected calendar, and writes through Google Calendar/CalDAV before adding cached rows
+- [x] Provider-backed Event Create opens from Calendar on a writable collection, falls back from a read-only browse/filter selection to an available writable calendar, and writes through Google Calendar/CalDAV before adding cached rows
 - [x] Provider-backed Event Delete requires confirmation, writes through Google Calendar/CalDAV before invalidating cached rows, and is available from Calendar browse/detail/edit contexts
 - [x] Event Create/Edit supports different start and end timezones for travel events and renders HTML/Markdown notes in the live preview
 - [x] Event Create/Edit uses cursor-aware modal fields plus keyboard pickers for timezones, attendees, recurrence, reminders, and date selection without stealing text-entry shortcuts

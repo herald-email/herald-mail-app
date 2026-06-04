@@ -547,6 +547,138 @@ func TestLocalBackendCalendarCreateEventWritesProviderBeforeCache(t *testing.T) 
 	}
 }
 
+func TestLocalBackendCalendarMutationsRejectCachedReadOnlyCollection(t *testing.T) {
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	lab := testcalendar.Start(t,
+		testcalendar.WithCalendar("holiday-us", "Holidays in United States", "#188038"),
+		testcalendar.WithEvent("holiday-us", testcalendar.Event{
+			ID:       "readonly-existing",
+			UID:      "readonly-existing",
+			Summary:  "Read-only provider event",
+			Start:    start,
+			End:      start.Add(30 * time.Minute),
+			TimeZone: "UTC",
+			ETag:     `"g-v1"`,
+			Attendees: []testcalendar.Attendee{
+				{Name: "Me", Email: "me@example.com", ResponseStatus: "needsAction"},
+			},
+		}),
+	)
+	sourceCfg := lab.GoogleSourceConfig("work-calendar", "work")
+	readOnlyCollection := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "work-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "holiday-us",
+			DisplayName:  "Holidays in United States",
+		},
+		AccessRole: "reader",
+	}
+	existing := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "work-calendar",
+			AccountID:  "work",
+			CalendarID: "holiday-us",
+			EventID:    "readonly-existing",
+			ETag:       `"g-v1"`,
+		}.WithDefaults(),
+		ProviderUID: "readonly-existing",
+		Title:       "Read-only provider event",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		TimeZone:    "UTC",
+		Status:      "confirmed",
+		Attendees: []models.CalendarAttendee{
+			{Name: "Me", Email: "me@example.com", RSVP: "needs-action"},
+		},
+	}
+
+	newBackend := func(t *testing.T) (*LocalBackend, *cache.Cache) {
+		t.Helper()
+		store, err := cache.New(":memory:")
+		if err != nil {
+			t.Fatalf("cache.New: %v", err)
+		}
+		t.Cleanup(func() { _ = store.Close() })
+		if err := store.PutCalendarCollection(readOnlyCollection); err != nil {
+			t.Fatalf("PutCalendarCollection: %v", err)
+		}
+		if err := store.PutCalendarEvent(existing); err != nil {
+			t.Fatalf("PutCalendarEvent: %v", err)
+		}
+		return &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{sourceCfg}}}, store
+	}
+	wantWritePermission := func(t *testing.T, err error) {
+		t.Helper()
+		if !errors.Is(err, models.ErrCalendarWritePermission) {
+			t.Fatalf("error = %v, want ErrCalendarWritePermission", err)
+		}
+	}
+
+	t.Run("create", func(t *testing.T) {
+		b, store := newBackend(t)
+		created, err := b.CreateCalendarEvent(models.CalendarEvent{
+			Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "holiday-us", EventID: "readonly-create"}.WithDefaults(),
+			ProviderUID: "readonly-create",
+			Title:       "Should not create",
+			Start:       start,
+			End:         start.Add(30 * time.Minute),
+			TimeZone:    "UTC",
+			Status:      "confirmed",
+		})
+		if created != nil {
+			t.Fatalf("created = %#v, want nil", created)
+		}
+		wantWritePermission(t, err)
+		if _, err := store.GetCalendarEventByRef(models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "holiday-us", EventID: "readonly-create"}.WithDefaults()); err == nil {
+			t.Fatal("read-only create wrote a cached event")
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		b, store := newBackend(t)
+		edited := existing
+		edited.Title = "Should not update"
+		saved, err := b.SaveCalendarEvent(edited)
+		if saved != nil {
+			t.Fatalf("saved = %#v, want nil", saved)
+		}
+		wantWritePermission(t, err)
+		cached, err := store.GetCalendarEventByRef(existing.Ref)
+		if err != nil {
+			t.Fatalf("GetCalendarEventByRef: %v", err)
+		}
+		if cached.Title == edited.Title {
+			t.Fatalf("read-only update changed cached title to %q", cached.Title)
+		}
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		b, store := newBackend(t)
+		wantWritePermission(t, b.DeleteCalendarEvent(existing.Ref))
+		if _, err := store.GetCalendarEventByRef(existing.Ref); err != nil {
+			t.Fatalf("read-only delete removed cached event: %v", err)
+		}
+	})
+
+	t.Run("rsvp", func(t *testing.T) {
+		b, store := newBackend(t)
+		saved, err := b.RespondCalendarEvent(existing.Ref, "accepted")
+		if saved != nil {
+			t.Fatalf("saved = %#v, want nil", saved)
+		}
+		wantWritePermission(t, err)
+		cached, err := store.GetCalendarEventByRef(existing.Ref)
+		if err != nil {
+			t.Fatalf("GetCalendarEventByRef: %v", err)
+		}
+		if len(cached.Attendees) == 0 || cached.Attendees[0].RSVP != "needs-action" {
+			t.Fatalf("read-only RSVP changed cached attendees to %#v", cached.Attendees)
+		}
+	})
+}
+
 func TestLocalBackendDeleteCalendarEventWritesProviderBeforeCache(t *testing.T) {
 	start := time.Date(2026, 5, 24, 9, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,

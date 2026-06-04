@@ -463,6 +463,44 @@ func TestGoogleEventFromModelUsesSeparateStartAndEndTimezones(t *testing.T) {
 	}
 }
 
+func TestGoogleEventFromModelOmitsLocalPseudoTimezone(t *testing.T) {
+	losAngeles, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("LoadLocation Los Angeles: %v", err)
+	}
+	payload := googleEventFromModel(models.CalendarEvent{
+		Ref:           models.EventRef{SourceID: "google-calendar", AccountID: "work", CalendarID: "primary", EventID: "local-tz"}.WithDefaults(),
+		Title:         "Local timezone event",
+		Start:         time.Date(2026, 1, 1, 19, 30, 0, 0, losAngeles),
+		End:           time.Date(2026, 1, 1, 20, 0, 0, 0, losAngeles),
+		TimeZone:      "Local",
+		StartTimeZone: "Local",
+		EndTimeZone:   "Local",
+	})
+	if payload.Start.TimeZone != "" || payload.End.TimeZone != "" {
+		t.Fatalf("payload timezones = start %q end %q, want omitted provider timezone for Local", payload.Start.TimeZone, payload.End.TimeZone)
+	}
+	if !strings.Contains(payload.Start.DateTime, "19:30:00") || !strings.Contains(payload.End.DateTime, "20:00:00") {
+		t.Fatalf("payload times = start %#v end %#v, want local wall times preserved with RFC3339 offsets", payload.Start, payload.End)
+	}
+}
+
+func TestCalendarProviderHTTPErrorDescribesEmptyBadRequest(t *testing.T) {
+	err := calendarProviderHTTPError("google calendar", http.MethodPost, http.StatusBadRequest, nil)
+	if err == nil {
+		t.Fatal("calendarProviderHTTPError returned nil")
+	}
+	message := err.Error()
+	if strings.Contains(message, "Bad Request") {
+		t.Fatalf("error = %q, want actionable event validation guidance instead of raw Bad Request", message)
+	}
+	for _, want := range []string{"google calendar post failed", "event details", "time", "timezone"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error = %q, missing %q", message, want)
+		}
+	}
+}
+
 func TestGoogleCalendarSourceDeleteEventWritesThroughProvider(t *testing.T) {
 	start := time.Date(2026, 5, 24, 18, 30, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,
@@ -545,9 +583,79 @@ func TestGoogleCalendarSourceImportsEventAndFindsDuplicateUID(t *testing.T) {
 	}
 }
 
+func TestGoogleCalendarSourceCreateEventUsesInsertAndOmitsDraftIDs(t *testing.T) {
+	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
+	var gotPath string
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.Path != "/calendar/v3/calendars/primary/events" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":      "googleassigned123",
+			"iCalUID": "googleassigned123@google.com",
+			"etag":    `"g-created"`,
+			"summary": gotPayload["summary"],
+			"status":  "confirmed",
+			"start":   map[string]string{"dateTime": start.Format(time.RFC3339)},
+			"end":     map[string]string{"dateTime": start.Add(30 * time.Minute).Format(time.RFC3339)},
+		})
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+	saved, err := src.CreateEvent(context.Background(), models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "herald-123456"}.WithDefaults(),
+		ProviderUID: "herald-123456",
+		Title:       "Fresh draft",
+		Start:       start,
+		End:         start.Add(30 * time.Minute),
+		TimeZone:    "UTC",
+		Status:      "confirmed",
+	}, models.CalendarMutationOptions{})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if gotPath != "/calendar/v3/calendars/primary/events" {
+		t.Fatalf("path = %q, want events.insert path", gotPath)
+	}
+	if _, ok := gotPayload["id"]; ok {
+		t.Fatalf("payload id = %#v, want omitted Herald draft ID", gotPayload["id"])
+	}
+	if _, ok := gotPayload["iCalUID"]; ok {
+		t.Fatalf("payload iCalUID = %#v, want omitted Herald draft UID", gotPayload["iCalUID"])
+	}
+	for _, field := range []string{"etag", "updated", "organizer", "attendees", "attachments", "extendedProperties"} {
+		if _, ok := gotPayload[field]; ok {
+			t.Fatalf("payload field %q = %#v, want omitted from fresh create", field, gotPayload[field])
+		}
+	}
+	if saved.Ref.EventID != "googleassigned123" || saved.ProviderUID != "googleassigned123@google.com" {
+		t.Fatalf("saved event = %#v, want provider-assigned identifiers", saved)
+	}
+}
+
 func TestGoogleCalendarSourceCreateEventSurfacesMissingWritePermission(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/events/import") {
+		if r.Method != http.MethodPost || (!strings.HasSuffix(r.URL.Path, "/events") && !strings.Contains(r.URL.Path, "/events/import")) {
 			http.NotFound(w, r)
 			return
 		}

@@ -448,12 +448,7 @@ func writableCalendarInvitationCollections(collections []models.CalendarCollecti
 }
 
 func calendarCollectionWritableForInvitation(collection models.CalendarCollection) bool {
-	switch strings.ToLower(strings.TrimSpace(collection.AccessRole)) {
-	case "freebusyreader", "reader":
-		return false
-	default:
-		return true
-	}
+	return models.CalendarCollectionWritableForMutation(collection)
 }
 
 func calendarInvitationAccountLabels(collections []models.CalendarCollection) map[string]string {
