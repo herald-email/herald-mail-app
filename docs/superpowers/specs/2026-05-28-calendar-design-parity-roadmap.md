@@ -141,6 +141,8 @@ Screen `06` covers the calendar mutation surface after the read-only calendar vi
 
 - [x] Open Create Event from Calendar with `Ctrl+N`, scoped to the selected calendar rail collection when available.
 - [x] Render Create/Edit Event with Calendar, title, location, start/end, event timezone, display timezones, all-day, attendees, recurrence, reminders, notes, preview, timezone preview, conflict check, and recurrence preview sections.
+- [x] Create/Edit Event fields are cursor-aware and modal, so printable shortcut-looking text, arrows, and `h/j/k/l` edit the active field instead of switching tabs or moving Calendar browse ranges.
+- [x] Create/Edit Event provides keyboard picker submodes for timezone selection, attendee contact autocomplete, recurrence presets, reminder presets, and mini calendar date selection while preserving manual text fallbacks.
 - [x] Save creates and edits through Google Calendar or CalDAV before adding/updating cached event rows.
 - [x] Delete Event opens a confirmation from browse/detail/edit contexts, requires `y`, and invalidates cached rows only after provider success.
 - [x] Expose calendar create/update/delete through daemon and MCP tools with source-scoped EventRef semantics.
