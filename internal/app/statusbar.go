@@ -201,6 +201,18 @@ func (m *Model) renderTopSyncStrip() string {
 
 // renderStatusBar renders the persistent bottom status bar
 func (m *Model) renderStatusBar() string {
+	// Reply/forward Compose exit confirmation asks before creating or removing drafts.
+	if m.pendingComposeExitPrompt {
+		w := m.windowWidth
+		if w <= 0 {
+			w = 80
+		}
+		line := fmt.Sprintf("  %s  [k/y] keep draft  [d/n] discard  [Esc] cancel", m.pendingComposeExitDesc)
+		return m.theme.Severity.Caution.Style().
+			Width(w).
+			Padding(0, 1).
+			Render(safeChromeLine(line, w-2))
+	}
 	// Deletion/archive confirmation prompt overrides everything
 	if m.pendingDeleteConfirm {
 		w := m.windowWidth
@@ -496,6 +508,8 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		hints = m.settingsPanel.keyHints()
 	} else if m.showProblemReport {
 		hints = joinHintSegments("e: email support", "c: copy report/logs", "s: save report", "f: copy feedback link", "esc: close")
+	} else if m.pendingComposeExitPrompt {
+		hints = "[k/y] keep draft  │  [d/n] discard  │  esc: cancel"
 	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
