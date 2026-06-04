@@ -315,8 +315,8 @@ func (m *Model) renderStatusBar() string {
 		}
 		parts = append(parts, mode)
 		parts = append(parts, "Keys: "+m.keyboardProfileLabel())
-	} else if m.timeline.visualMode {
-		parts = append(parts, "VISUAL")
+	} else if label := previewSelectionStatusLabel(m.previewSelection); label != "" {
+		parts = append(parts, label)
 	} else if profile := m.keyboardProfileLabel(); profile != "Default" {
 		parts = append(parts, "Keys: "+profile)
 	}
@@ -517,12 +517,24 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		if m.composePreserved != nil {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "ctrl+p: preview", "esc: back", "ctrl+c: quit")
 			if m.composeField == composeFieldOriginalMessage {
-				hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "scroll original"), "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "esc: back", "ctrl+c: quit")
+				if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionComposeOriginal); len(selectionHints) > 0 {
+					segments := append([]string{m.primaryTabShortcutHint()}, selectionHints...)
+					segments = append(segments, "ctrl+c: quit")
+					hints = joinHintSegments(segments...)
+				} else {
+					hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "scroll original"), "v: cursor", "yy: copy line", "Y: copy all", "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "esc: back", "ctrl+c: quit")
+				}
 			}
 			if m.hasForwardedAttachments() {
 				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "ctrl+p: preview", "x: toggle fwd attach", "esc: back", "ctrl+c: quit")
 				if m.composeField == composeFieldOriginalMessage {
-					hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "scroll original"), "tab: attachments", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "esc: back", "ctrl+c: quit")
+					if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionComposeOriginal); len(selectionHints) > 0 {
+						segments := append([]string{m.primaryTabShortcutHint()}, selectionHints...)
+						segments = append(segments, "ctrl+c: quit")
+						hints = joinHintSegments(segments...)
+					} else {
+						hints = joinHintSegments(m.primaryTabShortcutHint(), m.movementHint("timeline", "scroll original"), "v: cursor", "yy: copy line", "Y: copy all", "tab: attachments", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "esc: back", "ctrl+c: quit")
+					}
 				}
 			}
 		}
@@ -532,7 +544,12 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else if m.contactSearchMode == "semantic" {
 			hints = fmt.Sprintf("? %s  │  esc: clear search  │  q: quit", m.contactSearch)
 		} else if m.contactPreviewEmail != nil {
-			hints = joinHintSegments("tab: next panel", problemReportShortcutHint, "esc: back to contact", "q: quit")
+			if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionContacts); len(selectionHints) > 0 {
+				segments := append(selectionHints, "q: quit")
+				hints = joinHintSegments(segments...)
+			} else {
+				hints = joinHintSegments("v: cursor", "j/k: scroll", "yy: copy line", "Y: copy all", problemReportShortcutHint, "esc: back to contact", "q: quit")
+			}
 		} else if m.contactFocusPanel == 1 {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		} else {

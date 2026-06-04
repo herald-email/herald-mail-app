@@ -175,6 +175,53 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 	}
 
 	key = shortcutKey(msg)
+	if m.contactPreviewEmail != nil {
+		switch key {
+		case "esc":
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.clearPreviewSelection()
+				return m, nil
+			}
+			m.contactPreviewEmail = nil
+			m.contactPreviewBody = nil
+			m.contactPreviewLoading = false
+			m.contactPreviewScroll = 0
+			m.clearPreviewSelection()
+			return m, nil
+		case "v":
+			m.togglePreviewSelectionForSurface(previewSelectionContacts)
+			return m, nil
+		case "left", "h":
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.moveActivePreviewSelection(0, -1)
+			}
+			return m, nil
+		case "right", "l":
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.moveActivePreviewSelection(0, 1)
+			}
+			return m, nil
+		case "up", "k":
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.moveActivePreviewSelection(-1, 0)
+			} else if m.contactPreviewScroll > 0 {
+				m.contactPreviewScroll--
+			}
+			return m, nil
+		case "down", "j":
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.moveActivePreviewSelection(1, 0)
+			} else {
+				m.contactPreviewScroll++
+			}
+			return m, nil
+		case "y", "Y":
+			if cmd, handled := m.handlePreviewCopyKey(previewSelectionContacts, key); handled {
+				return m, cmd
+			}
+			return m, nil
+		}
+	}
 	switch key {
 	case "/":
 		m.contactSearchMode = "keyword"
@@ -189,6 +236,8 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.contactPreviewEmail = nil
 			m.contactPreviewBody = nil
 			m.contactPreviewLoading = false
+			m.contactPreviewScroll = 0
+			m.clearPreviewSelection()
 			return m, nil
 		}
 		m.contactSearchMode = ""
@@ -238,6 +287,8 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.contactPreviewEmail = email
 				m.contactPreviewBody = nil
 				m.contactPreviewLoading = true
+				m.contactPreviewScroll = 0
+				m.clearPreviewSelection()
 				return m, m.loadEmailBodyForRefCmd(email.MessageRef())
 			}
 		}
@@ -459,14 +510,11 @@ func (m *Model) renderContactsTab(width, height int) string {
 			if maxLines < 1 {
 				maxLines = 1
 			}
-			if len(lines) > maxLines {
-				lines = lines[:maxLines]
+			m.contactPreviewScroll = clampPreviewScrollOffset(m.contactPreviewScroll, len(lines), maxLines)
+			if m.previewSelection.activeOn(previewSelectionContacts) {
+				m.previewSelection.ensureCursorVisible(&m.contactPreviewScroll, maxLines, len(lines))
 			}
-			rightSb.WriteString(strings.Join(lines, "\n"))
-			// Pad to push hint to bottom
-			for i := len(lines); i < maxLines; i++ {
-				rightSb.WriteString("\n")
-			}
+			rightSb.WriteString(renderPlainRowsWithSelection(m.theme, lines, m.contactPreviewScroll, maxLines, m.previewSelection, previewSelectionContacts))
 		}
 		rightSb.WriteString("\n" + dimStyle.Render(" Esc: back to contact"))
 	} else if m.contactDetail == nil {

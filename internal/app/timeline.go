@@ -1341,8 +1341,7 @@ func (m *Model) clearTimelineSearch() {
 		m.timeline.bodyScrollOffset = origin.bodyScrollOffset
 		m.timeline.bodyWrappedLines = nil
 		m.clearTimelinePreviewDocumentCache()
-		m.timeline.visualMode = false
-		m.timeline.pendingY = false
+		m.clearPreviewSelection()
 		m.timeline.quickReplyOpen = false
 		m.timeline.quickReplyPending = false
 		m.timeline.quickReplyIdx = 0
@@ -1392,8 +1391,7 @@ func (m *Model) clearTimelinePreview() {
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
 	m.timeline.bodyScrollOffset = 0
-	m.timeline.visualMode = false
-	m.timeline.pendingY = false
+	m.clearPreviewSelection()
 	m.setFocusedPanel(panelTimeline)
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 }
@@ -1530,8 +1528,7 @@ func (m *Model) openTimelineSearch() {
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
 	m.timeline.bodyScrollOffset = 0
-	m.timeline.visualMode = false
-	m.timeline.pendingY = false
+	m.clearPreviewSelection()
 	m.timeline.quickReplyOpen = false
 	m.timeline.quickReplyPending = false
 	m.timeline.quickReplyIdx = 0
@@ -2553,6 +2550,11 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				if m.timelineIsReadOnlyDiagnostic() {
 					return timelineReadOnlyPreviewHintText("tab: back to results", "esc: back to results"), true
 				}
+				if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionTimeline); len(selectionHints) > 0 {
+					segments := append([]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")}, selectionHints...)
+					segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+					return joinHintSegments(segments...), true
+				}
 				revealHint := ""
 				if m.timelineRemoteRevealAvailable() {
 					revealHint = m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images")
@@ -2560,7 +2562,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				return joinHintSegments(append(
 					[]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")},
 					append(m.timelineMessageActionHintSegments(),
-						m.movementHint("timeline", "scroll"), revealHint, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
+						m.movementHint("timeline", "scroll"), revealHint, "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
 				)...), true
 			}
 			return joinHintSegments(append(
@@ -2609,8 +2611,8 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		hasAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 0
 		hasMultipleAttachments := m.timeline.body != nil && len(m.timeline.body.Attachments) > 1
 		hasUnsub := m.timeline.selectedEmail != nil && m.timeline.bodyMessageID == m.timeline.selectedEmail.MessageID && previewHasUnsubscribe(m.timeline.body)
-		if m.timeline.visualMode {
-			return "j/k: extend selection  │  y: copy selection  │  Y: copy all  │  esc: cancel visual", true
+		if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionTimeline); len(selectionHints) > 0 {
+			return joinHintSegments(selectionHints...), true
 		}
 		segments := []string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
@@ -2628,7 +2630,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timelineRemoteRevealAvailable() {
 			segments = append(segments, m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images"))
 		}
-		segments = append(segments, "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
@@ -2730,7 +2732,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
-	return joinHintSegments(backHint, "↑/k ↓/j: scroll", "read-only", "z: full-screen", "v: visual", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", closeHint, "q: quit")
+	return joinHintSegments(backHint, "↑/k ↓/j: scroll", "read-only", "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", closeHint, "q: quit")
 }
 
 func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -3335,11 +3337,19 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	case "right", "l":
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.moveActivePreviewSelection(0, 1)
+			return m, nil, true
+		}
 		if m.canInteractWithVisibleData() {
 			return m, m.previewCurrentTimelineRow(), true
 		}
 		return m, nil, true
 	case "left", "h":
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.moveActivePreviewSelection(0, -1)
+			return m, nil, true
+		}
 		if m.canInteractWithVisibleData() {
 			return m, m.closeTimelinePreviewOrFocusFolders(), true
 		}
@@ -3490,20 +3500,16 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				return m, nil, true
 			}
 			if m.timeline.fullScreen {
-				if m.timeline.visualMode {
-					if m.timeline.visualEnd > m.timeline.visualStart {
-						m.timeline.visualEnd--
-					}
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(-1, 0)
 				} else if m.timeline.bodyScrollOffset > 0 {
 					m.timeline.bodyScrollOffset--
 				}
 				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelPreview {
-				if m.timeline.visualMode {
-					if m.timeline.visualEnd > m.timeline.visualStart {
-						m.timeline.visualEnd--
-					}
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(-1, 0)
 				} else if m.timeline.bodyScrollOffset > 0 {
 					m.timeline.bodyScrollOffset--
 				}
@@ -3532,21 +3538,16 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				return m, nil, true
 			}
 			if m.timeline.fullScreen {
-				if m.timeline.visualMode {
-					totalRows := m.timelineFullScreenDocumentLayout().TotalRows
-					if m.timeline.visualEnd < totalRows-1 {
-						m.timeline.visualEnd++
-					}
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(1, 0)
 				} else {
 					m.timeline.bodyScrollOffset++
 				}
 				return m, m.timelineIterm2NativeImageRepaintCmd(), true
 			}
 			if m.focusedPanel == panelPreview {
-				if m.timeline.visualMode {
-					if m.timeline.visualEnd < len(m.timeline.bodyWrappedLines)-1 {
-						m.timeline.visualEnd++
-					}
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(1, 0)
 				} else {
 					m.timeline.bodyScrollOffset++
 				}
@@ -3561,69 +3562,20 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	case "v":
-		if m.timeline.fullScreen {
-			if m.timelineFullScreenDocumentLayout().TotalRows > 0 {
-				m.timeline.visualMode = !m.timeline.visualMode
-				if m.timeline.visualMode {
-					m.timeline.visualStart = m.timeline.bodyScrollOffset
-					m.timeline.visualEnd = m.timeline.bodyScrollOffset
-				}
-			}
-		} else if m.focusedPanel == panelPreview {
-			if len(m.timeline.bodyWrappedLines) > 0 {
-				m.timeline.visualMode = !m.timeline.visualMode
-				if m.timeline.visualMode {
-					m.timeline.visualStart = m.timeline.bodyScrollOffset
-					m.timeline.visualEnd = m.timeline.bodyScrollOffset
-				}
-			}
+		if m.timeline.fullScreen || m.focusedPanel == panelPreview {
+			m.togglePreviewSelectionForSurface(previewSelectionTimeline)
 		}
 		return m, nil, true
 	case "m":
 		return m, m.toggleMouseCaptureMode(), true
 	case "y":
-		if m.timeline.pendingY {
-			m.timeline.pendingY = false
-			if m.timeline.fullScreen {
-				if line := m.timelineFullScreenCurrentPlainLine(); line != "" {
-					return m, copyToClipboard(line), true
-				}
-			} else if m.timeline.bodyScrollOffset < len(m.timeline.bodyWrappedLines) {
-				return m, copyToClipboard(m.timeline.bodyWrappedLines[m.timeline.bodyScrollOffset]), true
-			}
-		} else if m.timeline.visualMode {
-			m.timeline.visualMode = false
-			m.timeline.pendingY = false
-			if m.timeline.fullScreen {
-				if selected := m.timelineFullScreenSelectedPlainText(); selected != "" {
-					return m, copyToClipboard(selected), true
-				}
-			} else {
-				start, end := m.timeline.visualStart, m.timeline.visualEnd
-				if start > end {
-					start, end = end, start
-				}
-				if end >= len(m.timeline.bodyWrappedLines) {
-					end = len(m.timeline.bodyWrappedLines) - 1
-				}
-				if start < len(m.timeline.bodyWrappedLines) {
-					selected := strings.Join(m.timeline.bodyWrappedLines[start:end+1], "\n")
-					return m, copyToClipboard(selected), true
-				}
-			}
-		} else {
-			m.timeline.pendingY = true
+		if cmd, handled := m.handlePreviewCopyKey(previewSelectionTimeline, key); handled {
+			return m, cmd, true
 		}
 		return m, nil, true
 	case "Y":
-		m.timeline.visualMode = false
-		m.timeline.pendingY = false
-		if m.timeline.fullScreen {
-			if text := m.timelineFullScreenAllPlainText(); text != "" {
-				return m, copyToClipboard(text), true
-			}
-		} else if len(m.timeline.bodyWrappedLines) > 0 {
-			return m, copyToClipboard(strings.Join(m.timeline.bodyWrappedLines, "\n")), true
+		if cmd, handled := m.handlePreviewCopyKey(previewSelectionTimeline, key); handled {
+			return m, cmd, true
 		}
 		return m, nil, true
 	}

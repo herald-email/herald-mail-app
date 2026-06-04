@@ -982,6 +982,28 @@ Check these states during every applicable lane:
 - Full-screen exits before preview.
 - Preview exits before broader tab state changes.
 
+### TC-17A — Preview cursor selection and rich copy
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Open the Timeline preview for `Step 4: Select text from an email`, press `v`, and move the visible cursor with `h/j/k/l` plus arrow keys before selecting anything.
+2. Press `v` again to anchor selection at the current cursor, then move with `h/j/k/l` plus arrow keys.
+3. Confirm cursor-only movement does not highlight from the top of the preview, the anchored range highlights only after the second `v`, and vertical movement preserves the preferred column while scrolling.
+4. Press `yy`, then reopen cursor mode, press `v` to start selection, and press `y`; confirm the status indicates a copied line or selected range without closing the preview.
+5. Press `Y`; confirm the whole preview text is copied without changing the selected Timeline row.
+6. Repeat cursor selection in Timeline full-screen preview, Contacts inline preview, and the Compose original-message pane for a reply or forward.
+7. On an inline image row, press `y`; confirm macOS+cgo builds copy image bytes, while fallback builds save a temp image and copy/report that path.
+8. Type literal `v`, `y`, `h`, `j`, `k`, `l`, arrow keys, and printable punctuation in Compose body, search, Settings, prompt editor, and rule editor text-entry fields.
+
+**Expect:**
+- Read-only preview cursor mode has a visible cursor without an accidental range; selection highlight starts only from the cursor position where the second `v` was pressed.
+- Existing `m` mouse-selection mode still releases/restores mouse capture, and `Esc` exits selection before closing the enclosing preview state.
+- `yy`, `y`, and `Y` keep their existing copy meanings while gaining exact row/range behavior from the visible cursor.
+- Plain-text clipboard payloads are exact and ANSI-free; HTML-derived selections include rich HTML where supported; image-copy fallback is explicit and bounded.
+- Preview-selection shortcuts do not fire from editable text-entry surfaces.
+
 ### TC-18 — Logs and chat resilience
 
 **Lane:** A, B, C  

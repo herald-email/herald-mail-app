@@ -145,6 +145,10 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 
 Timeline previews keep image bytes local to the TUI process. Split and full-screen previews render bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. Native raster overlays carry row geometry so Herald can crop and re-encode the visible image slice when a scroll position or split-preview panel boundary shows only part of the image; if cropping cannot be done safely, the overlay is suppressed rather than allowed to overflow. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs render as readable placeholders and OSC 8 links by default; pressing `o` in the current Timeline preview fetches only the current message's remote images with bounded, no-cookie, no-referrer HTTP(S) requests, blocks local/private/link-local destinations and unsafe redirects, keeps bytes in memory only, and then sends revealed images through the same renderer/fallback path as MIME inline images.
 
+### Preview selection and clipboard payloads
+
+Read-only email preview selection is a TUI-layer reader mode over the shared preview document. Preview rows carry copy metadata such as plain text, HTML fragments, and image identity so the cursor/highlight renderer does not need to scrape ANSI output; clipboard writes go through an internal payload writer that always supports plain text and can add HTML or image data on platforms that expose richer clipboard APIs.
+
 **Interactive-before-background priority**
 
 - Highest priority: user-blocking interactive work such as chat replies, semantic query embeddings, quick replies, current-email image description, and user-triggered single-contact enrichment

@@ -549,6 +549,11 @@ func TestTimelineFullScreenVisualSelectionUsesDocumentRows(t *testing.T) {
 		t.Fatal("expected v to be handled")
 	}
 	updated := model.(*Model)
+	model, _, handled = updated.handleTimelineKey(keyRunes("v"))
+	if !handled {
+		t.Fatal("expected second v to start visual selection")
+	}
+	updated = model.(*Model)
 	model, _, handled = updated.handleTimelineKey(keyRunes("j"))
 	if !handled {
 		t.Fatal("expected j to be handled")

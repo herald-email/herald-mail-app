@@ -483,10 +483,7 @@ func (m *Model) clearTimelinePreviewIfDeleted(ids map[string]bool) {
 	m.timeline.quickReplyPending = false
 	m.timeline.quickReplyIdx = 0
 	m.timeline.quickRepliesAIFetched = false
-	m.timeline.visualMode = false
-	m.timeline.visualStart = 0
-	m.timeline.visualEnd = 0
-	m.timeline.pendingY = false
+	m.clearPreviewSelection()
 }
 
 func (m *Model) pruneTimelineStateAfterDeletion(result models.DeletionResult) bool {

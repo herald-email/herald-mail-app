@@ -275,21 +275,25 @@ func cacheUnsubscribeHeadersCmd(b backend.Backend, messageID, listUnsub, listUns
 // logged and silently dropped so the TUI keeps running.
 func copyToClipboard(text string) tea.Cmd {
 	return func() tea.Msg {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
-			cmd = exec.Command("pbcopy")
-		default:
-			if os.Getenv("WAYLAND_DISPLAY") != "" {
-				cmd = exec.Command("wl-copy")
-			} else {
-				cmd = exec.Command("xclip", "-sel", "clip")
-			}
-		}
-		cmd.Stdin = strings.NewReader(text)
-		if err := cmd.Run(); err != nil {
+		if err := copyPlainTextToClipboard(text); err != nil {
 			logger.Warn("clipboard copy failed: %v", err)
 		}
 		return nil
 	}
+}
+
+func copyPlainTextToClipboard(text string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	default:
+		if os.Getenv("WAYLAND_DISPLAY") != "" {
+			cmd = exec.Command("wl-copy")
+		} else {
+			cmd = exec.Command("xclip", "-sel", "clip")
+		}
+	}
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
 }

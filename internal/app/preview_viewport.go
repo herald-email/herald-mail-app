@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -25,6 +26,11 @@ type previewRenderedRow struct {
 	TerminalConsumed bool
 	NativeImageRows  int
 	NativeImage      *previewNativeImageSource
+	CopyPlain        string
+	CopyHTML         string
+	HasImage         bool
+	Image            models.InlineImage
+	ImageAlt         string
 }
 
 type previewDocumentLayout struct {
@@ -95,7 +101,12 @@ func layoutPreviewTextBlock(text string, innerWidth int) []previewRenderedRow {
 	lines := renderEmailBodyLines(text, innerWidth)
 	rows := make([]previewRenderedRow, 0, len(lines))
 	for _, line := range lines {
-		rows = append(rows, previewRenderedRow{Content: ansi.Truncate(line, innerWidth, "")})
+		plain := strings.TrimRight(ansi.Strip(line), "\r\n")
+		rows = append(rows, previewRenderedRow{
+			Content:   ansi.Truncate(line, innerWidth, ""),
+			CopyPlain: plain,
+			CopyHTML:  html.EscapeString(plain),
+		})
 	}
 	return rows
 }
@@ -124,7 +135,9 @@ func layoutPreviewImageBlock(block previewDocumentBlock, opts previewLayoutOptio
 		return nil
 	}
 
-	return previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+	rows := previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+	annotatePreviewImageRows(rows, block.Image, block.Alt)
+	return rows
 }
 
 func layoutPreviewRemoteImageBlock(block previewDocumentBlock, opts previewLayoutOptions) []previewRenderedRow {
@@ -156,7 +169,30 @@ func layoutPreviewRemoteImageBlock(block previewDocumentBlock, opts previewLayou
 	if rendered.Rows == 0 || rendered.Content == "" {
 		return []previewRenderedRow{{Content: remoteImagePlaceholderLine(block.Remote, state, opts.InnerWidth)}}
 	}
-	return previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+	rows := previewRowsFromRenderedImage(rendered, opts.InnerWidth)
+	annotatePreviewImageRows(rows, image, block.Remote.Alt)
+	return rows
+}
+
+func annotatePreviewImageRows(rows []previewRenderedRow, image models.InlineImage, alt string) {
+	if len(rows) == 0 {
+		return
+	}
+	label := previewSelectionImageLabel(&image, alt)
+	for i := range rows {
+		if i > 0 && !rows[i].TerminalConsumed {
+			continue
+		}
+		rows[i].HasImage = true
+		rows[i].Image = image
+		rows[i].ImageAlt = alt
+		if rows[i].CopyPlain == "" {
+			rows[i].CopyPlain = label
+		}
+		if rows[i].CopyHTML == "" {
+			rows[i].CopyHTML = html.EscapeString(label)
+		}
+	}
 }
 
 func remoteImagePlaceholderLine(remote previewRemoteImage, state previewRemoteImageState, innerWidth int) string {
@@ -293,6 +329,50 @@ func renderPreviewDocumentViewportWithTheme(theme Theme, layout previewDocumentL
 	return renderPreviewDocumentViewportWithThemeAndSafety(theme, layout, offset, visibleRows, visualMode, visualStart, visualEnd, false)
 }
 
+func renderPreviewDocumentViewportWithSelection(theme Theme, layout previewDocumentLayout, offset, visibleRows int, selection previewSelectionState, surface previewSelectionSurface) previewViewportRender {
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+	offset = clampPreviewScrollOffset(offset, layout.TotalRows, visibleRows)
+	end := minInt(layout.TotalRows, offset+visibleRows)
+
+	activeSelection := selection.activeOn(surface)
+	nativeOverlays := nativeOverlaysForViewport(layout, offset, end, false)
+	if activeSelection {
+		nativeOverlays = nil
+	}
+
+	lines := make([]string, 0, visibleRows)
+	for i := offset; i < end && i < len(layout.Rows); i++ {
+		row := layout.Rows[i]
+		if activeSelection {
+			plain := row.CopyPlain
+			if plain == "" {
+				plain = strings.TrimRight(ansi.Strip(row.Content), "\r\n")
+			}
+			if row.HasImage && strings.TrimSpace(plain) == "" {
+				image := row.Image
+				plain = previewSelectionImageLabel(&image, row.ImageAlt)
+			}
+			lines = append(lines, renderPreviewSelectionText(theme, plain, i, selection))
+			continue
+		}
+		if row.TerminalConsumed {
+			lines = append(lines, "")
+			continue
+		}
+		content := row.Content
+		if isNativePreviewImageContent(layout.ImageMode, content) {
+			content = ""
+		}
+		lines = append(lines, content)
+	}
+	for len(lines) < visibleRows {
+		lines = append(lines, "")
+	}
+	return previewViewportRender{Content: strings.Join(lines, "\n"), Rows: visibleRows, NativeOverlays: nativeOverlays}
+}
+
 func renderPreviewDocumentViewportWithThemeAndSafety(theme Theme, layout previewDocumentLayout, offset, visibleRows int, visualMode bool, visualStart, visualEnd int, requireNativeImageSafetyRow bool) previewViewportRender {
 	if visibleRows < 1 {
 		visibleRows = 1
@@ -314,12 +394,20 @@ func renderPreviewDocumentViewportWithThemeAndSafety(theme Theme, layout preview
 	for i := offset; i < end && i < len(layout.Rows); i++ {
 		row := layout.Rows[i]
 		if row.TerminalConsumed {
-			lines = append(lines, "")
+			content := ""
+			if visualMode && row.CopyPlain != "" {
+				content = highlightStyle.Render(row.CopyPlain)
+			}
+			lines = append(lines, content)
 			continue
 		}
 		content := row.Content
 		if isNativePreviewImageContent(layout.ImageMode, content) {
-			content = ""
+			if visualMode && row.CopyPlain != "" {
+				content = highlightStyle.Render(row.CopyPlain)
+			} else {
+				content = ""
+			}
 		} else if visualMode && i >= lo && i <= hi {
 			content = highlightStyle.Render(content)
 		}
@@ -435,7 +523,11 @@ func filterNativeOverlaysWithinBottomRow(overlays []previewNativeOverlay, origin
 func previewLayoutPlainRows(layout previewDocumentLayout) []string {
 	rows := make([]string, 0, len(layout.Rows))
 	for _, row := range layout.Rows {
-		rows = append(rows, ansi.Strip(row.Content))
+		if row.CopyPlain != "" {
+			rows = append(rows, row.CopyPlain)
+		} else {
+			rows = append(rows, ansi.Strip(row.Content))
+		}
 	}
 	return rows
 }

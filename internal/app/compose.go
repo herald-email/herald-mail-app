@@ -805,13 +805,34 @@ func (m *Model) handleOriginalMessageKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	if m.composePreserved == nil {
 		return m, nil
 	}
-	switch shortcutKey(msg) {
+	key := shortcutKey(msg)
+	switch key {
+	case "v":
+		m.togglePreviewSelectionForSurface(previewSelectionComposeOriginal)
+	case "left", "h":
+		if m.previewSelection.activeOn(previewSelectionComposeOriginal) {
+			m.moveActivePreviewSelection(0, -1)
+		}
+	case "right", "l":
+		if m.previewSelection.activeOn(previewSelectionComposeOriginal) {
+			m.moveActivePreviewSelection(0, 1)
+		}
 	case "up", "k":
-		if m.composePreserved.originalScrollOffset > 0 {
+		if m.previewSelection.activeOn(previewSelectionComposeOriginal) {
+			m.moveActivePreviewSelection(-1, 0)
+		} else if m.composePreserved.originalScrollOffset > 0 {
 			m.composePreserved.originalScrollOffset--
 		}
 	case "down", "j":
-		m.composePreserved.originalScrollOffset++
+		if m.previewSelection.activeOn(previewSelectionComposeOriginal) {
+			m.moveActivePreviewSelection(1, 0)
+		} else {
+			m.composePreserved.originalScrollOffset++
+		}
+	case "y", "Y":
+		if cmd, handled := m.handlePreviewCopyKey(previewSelectionComposeOriginal, key); handled {
+			return m, cmd
+		}
 	case "enter":
 		m.cycleComposeField()
 	}
@@ -1654,6 +1675,16 @@ func (m *Model) renderComposeOriginalMessagePreview(width int) string {
 		maxOffset = 0
 	}
 	ctx.originalScrollOffset = clampInt(ctx.originalScrollOffset, 0, maxOffset)
+	if m.previewSelection.activeOn(previewSelectionComposeOriginal) {
+		m.previewSelection.ensureCursorVisible(&ctx.originalScrollOffset, innerRows, len(rows))
+		content := renderPlainRowsWithSelection(m.theme, rows, ctx.originalScrollOffset, innerRows, m.previewSelection, previewSelectionComposeOriginal)
+		return lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(borderColor).
+			Width(width).
+			Height(innerRows).
+			Render(content)
+	}
 	start := ctx.originalScrollOffset
 	end := start + innerRows
 	if end > len(rows) {

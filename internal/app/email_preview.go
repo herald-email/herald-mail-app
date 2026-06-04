@@ -444,8 +444,11 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 		documentStartLine = strings.Count(sb.String(), "\n")
 		layout := m.timelinePreviewDocumentLayout(innerW, visibleLines)
 		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, visibleLines)
-		viewport := renderPreviewDocumentViewportWithTheme(m.theme, layout, m.timeline.bodyScrollOffset, visibleLines,
-			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.previewSelection.ensureCursorVisible(&m.timeline.bodyScrollOffset, visibleLines, layout.TotalRows)
+		}
+		viewport := renderPreviewDocumentViewportWithSelection(m.theme, layout, m.timeline.bodyScrollOffset, visibleLines,
+			m.previewSelection, previewSelectionTimeline)
 		sb.WriteString(viewport.Content)
 		nativeOverlays = viewport.NativeOverlays
 		m.timeline.bodyWrappedLines = previewLayoutPlainRows(layout)
@@ -568,8 +571,11 @@ func (m *Model) renderFullScreenEmail() string {
 	} else if m.timeline.body != nil {
 		layout := m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
 		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, maxBodyLines)
-		viewport := renderPreviewDocumentViewportWithTheme(m.theme, layout, m.timeline.bodyScrollOffset, maxBodyLines,
-			m.timeline.visualMode, m.timeline.visualStart, m.timeline.visualEnd)
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.previewSelection.ensureCursorVisible(&m.timeline.bodyScrollOffset, maxBodyLines, layout.TotalRows)
+		}
+		viewport := renderPreviewDocumentViewportWithSelection(m.theme, layout, m.timeline.bodyScrollOffset, maxBodyLines,
+			m.previewSelection, previewSelectionTimeline)
 		sb.WriteString(viewport.Content)
 		nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, bodyStartRow, 1)
 
@@ -722,7 +728,11 @@ func (m *Model) timelineFullScreenDocumentPlainRows() []string {
 	layout := m.timelineFullScreenDocumentLayout()
 	rows := make([]string, 0, len(layout.Rows))
 	for _, row := range layout.Rows {
-		rows = append(rows, ansi.Strip(row.Content))
+		if row.CopyPlain != "" {
+			rows = append(rows, row.CopyPlain)
+		} else {
+			rows = append(rows, ansi.Strip(row.Content))
+		}
 	}
 	return rows
 }

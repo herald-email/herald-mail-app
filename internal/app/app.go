@@ -694,6 +694,10 @@ type Model struct {
 	// Timeline
 	timeline TimelineState
 
+	// Read-only preview cursor selection shared by Timeline, Contacts, and
+	// Compose original-message previews.
+	previewSelection previewSelectionState
+
 	// Chat panel
 	showChat         bool
 	chatMessages     []ai.ChatMessage // conversation history
@@ -835,6 +839,7 @@ type Model struct {
 	contactPreviewEmail   *models.EmailData
 	contactPreviewBody    *models.EmailBody
 	contactPreviewLoading bool
+	contactPreviewScroll  int
 
 	// Config
 	cfg          *config.Config
@@ -2306,6 +2311,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if model, cmd, handled := m.handleMouseMsg(msg); handled {
 			return model, cmd
 		}
+
+	case PreviewClipboardMsg:
+		if msg.Err != nil {
+			m.statusMessage = msg.Err.Error()
+		} else if msg.Summary != "" {
+			m.statusMessage = msg.Summary
+		}
+		return m, nil
 
 	case FoldersLoadedMsg:
 		logger.Debug("FoldersLoadedMsg: folders=%d currentFolder=%s", len(msg.Folders), m.currentFolder)

@@ -762,15 +762,18 @@ Attachments appear in previews and compose flows, so this section tracks both ra
 
 ## Text Selection
 
-Bubble Tea's alt-screen captures all input, so the terminal's native mouse selection is disabled. Two mechanisms restore copy-ability.
+Bubble Tea's alt-screen captures input and mouse events, so Herald needs explicit copy paths that work even when the terminal cursor is hidden. Text selection should be visible, keyboard-first, and still leave terminal-native selection available as a fallback.
 
 - [x] `m` toggles mouse-selection mode (releases mouse capture; status bar indicator)
 - [x] `m` restores TUI mouse capture after temporary terminal-native text selection
 - [x] `m` uses the same release/restore behavior from Calendar so calendar users can temporarily use terminal-native text selection.
-- [x] `v` in preview enters vim-style visual line mode
-- [x] `y` yanks selected lines to system clipboard (`pbcopy` / `xclip`)
-- [x] `Esc` cancels visual mode
+- [x] First `v` in read-only email previews shows a visible row/column cursor without starting a text range
+- [x] Second `v` anchors the current cursor position and starts/stops range selection from there
+- [x] `h/j/k/l` and arrow keys move the preview cursor by character or line, extending the selected range only after selection has started
+- [x] `y` copies the selected preview range to the system clipboard, preferring rich HTML/image payloads where the platform supports them and plain text everywhere else
+- [x] `Esc` cancels preview cursor/selection mode before closing the enclosing preview
 - [x] `yy` copies current line; `Y` copies entire visible body
+- [x] Contacts inline previews and Compose original-message previews share the same visible selection behavior as Timeline split and full-screen previews
 
 ---
 

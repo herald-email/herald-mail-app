@@ -359,9 +359,12 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		m.clearTimelineQuickReply()
 		return m, nil
 	}
+	if m.previewSelection.Active {
+		m.clearPreviewSelection()
+		return m, nil
+	}
 	if m.timeline.visualMode {
-		m.timeline.visualMode = false
-		m.timeline.pendingY = false
+		m.clearPreviewSelection()
 		return m, nil
 	}
 	if m.timeline.fullScreen {
