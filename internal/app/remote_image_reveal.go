@@ -18,6 +18,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
 
 const (
@@ -51,7 +52,7 @@ type remoteImageHTTPFetcher struct {
 }
 
 func remoteImageDocumentKey(rawURL string) string {
-	sum := sha1.Sum([]byte(normalizeRemoteImageURL(rawURL)))
+	sum := sha1.Sum([]byte(sanitizeRemoteImageURL(rawURL)))
 	return "remote-" + hex.EncodeToString(sum[:8])
 }
 
@@ -69,6 +70,10 @@ func normalizeRemoteImageURL(rawURL string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+func sanitizeRemoteImageURL(rawURL string) string {
+	return emailrender.SanitizePreviewURLTarget(normalizeRemoteImageURL(rawURL))
 }
 
 func isRemoteImageURL(rawURL string) bool {
@@ -177,7 +182,7 @@ func revealRemoteImagesCmd(messageID string, targets []previewRemoteImage, demoM
 }
 
 func fetchRemoteImage(ctx context.Context, target previewRemoteImage, demoMode bool, fetcher remoteImageHTTPFetcher) (models.InlineImage, error) {
-	target.URL = normalizeRemoteImageURL(target.URL)
+	target.URL = sanitizeRemoteImageURL(target.URL)
 	if target.Key == "" {
 		target.Key = remoteImageDocumentKey(target.URL)
 	}
@@ -218,7 +223,7 @@ func defaultRemoteImageResolver(ctx context.Context, host string) ([]net.IP, err
 }
 
 func (f remoteImageHTTPFetcher) Fetch(ctx context.Context, rawURL string) (models.InlineImage, error) {
-	rawURL = normalizeRemoteImageURL(rawURL)
+	rawURL = sanitizeRemoteImageURL(rawURL)
 	if f.resolve == nil {
 		f.resolve = defaultRemoteImageResolver
 	}

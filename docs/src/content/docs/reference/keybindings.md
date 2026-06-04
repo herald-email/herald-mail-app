@@ -40,7 +40,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | Click Calendar mini-month day | Select that calendar day or range. |
 | Click Calendar event | Select the event. Double-click the same event to open its full detail. |
 | Click Calendar checkbox | Show or hide that calendar and persist the visible-calendar selection in YAML. |
-| Click OSC 8 email link | Open the target URL through the terminal. |
+| Click or Ctrl-click OSC 8 email link | Open the target URL while Herald mouse navigation is enabled. |
 | Press `m` in Timeline or Calendar | Release or restore Herald mouse capture for terminal-native text selection. |
 
 ## Sidebar

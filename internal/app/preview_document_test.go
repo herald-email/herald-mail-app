@@ -60,7 +60,7 @@ func TestBuildPreviewDocument_HTMLCIDImagesStayInAuthoredOrder(t *testing.T) {
 func TestBuildPreviewDocument_RemoteImagesBecomeRevealBlocksAndMissingCIDIsPlaceholder(t *testing.T) {
 	body := &models.EmailBody{
 		TextHTML: `<p>Logo below</p>
-            <img alt="Remote logo" title="Title logo" src="https://example.test/logo.png">
+            <img alt="Remote logo" title="Title logo" src="https://example.test/logo.png?utm_source=email&id=42">
             <img alt="Missing" src="cid:not-found">`,
 	}
 
@@ -77,7 +77,7 @@ func TestBuildPreviewDocument_RemoteImagesBecomeRevealBlocksAndMissingCIDIsPlace
 	if remote.Kind != previewBlockRemoteImage {
 		t.Fatalf("second block should be remote image reveal block, got %#v", remote)
 	}
-	if remote.Remote.URL != "https://example.test/logo.png" || remote.Remote.Alt != "Remote logo" || remote.Remote.Title != "Title logo" {
+	if remote.Remote.URL != "https://example.test/logo.png?id=42" || remote.Remote.Alt != "Remote logo" || remote.Remote.Title != "Title logo" {
 		t.Fatalf("remote image metadata mismatch: %#v", remote.Remote)
 	}
 	if !strings.Contains(plain, "[missing inline image: not-found]") {

@@ -40,10 +40,11 @@ func LinkifyURLs(text string) string {
 		// instead of 200+ chars of encoded tracker gibberish.
 		cleaned := StripTrackers(trimmed)
 		label := ShortenURL(cleaned)
+		target := SanitizePreviewURLTarget(trimmed)
 		// OSC 8: \033]8;;URL\033\\ LABEL \033]8;;\033\\
 		// Wrap label in blue color so links are readable on dark backgrounds.
 		coloredLabel := "\033[38;5;75m" + label + "\033[39m"
-		return "\033]8;;" + trimmed + "\033\\" + coloredLabel + "\033]8;;\033\\"
+		return "\033]8;;" + target + "\033\\" + coloredLabel + "\033]8;;\033\\"
 	})
 }
 
@@ -222,7 +223,8 @@ func applyTerminalHyperlinks(line string, targets []emailLinkTarget) string {
 }
 
 func wrapVisibleLabelWithTerminalHyperlink(line, label, rawURL string) string {
-	if line == "" || label == "" || rawURL == "" || strings.Contains(line, "\033]8;;"+rawURL+"\033\\") {
+	target := SanitizePreviewURLTarget(rawURL)
+	if line == "" || label == "" || target == "" || strings.Contains(line, "\033]8;;"+target+"\033\\") {
 		return line
 	}
 	visibleRunes := []rune(xansi.Strip(line))
@@ -240,7 +242,7 @@ func wrapVisibleLabelWithTerminalHyperlink(line, label, rawURL string) string {
 	}
 	for i := len(rawRanges) - 1; i >= 0; i-- {
 		rawStart, rawEnd := rawRanges[i][0], rawRanges[i][1]
-		line = line[:rawStart] + "\033]8;;" + rawURL + "\033\\" + line[rawStart:rawEnd] + "\033]8;;\033\\" + line[rawEnd:]
+		line = line[:rawStart] + "\033]8;;" + target + "\033\\" + line[rawStart:rawEnd] + "\033]8;;\033\\" + line[rawEnd:]
 	}
 	return line
 }
@@ -321,6 +323,66 @@ func skipEscapeSeqBytes(s string, start int) int {
 	default:
 		return start + 2
 	}
+}
+
+// OSC8TargetAtVisibleColumn returns the OSC 8 hyperlink target covering the
+// zero-based visible terminal column in line.
+func OSC8TargetAtVisibleColumn(line string, column int) (string, bool) {
+	if column < 0 {
+		return "", false
+	}
+	activeTarget := ""
+	visibleColumn := 0
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			if target, end, ok := parseOSC8Target(line, i); ok {
+				activeTarget = target
+				i = end
+				continue
+			}
+			i = skipEscapeSeqBytes(line, i)
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		if size <= 0 {
+			break
+		}
+		width := xansi.StringWidth(string(r))
+		if width > 0 {
+			if column >= visibleColumn && column < visibleColumn+width {
+				return activeTarget, activeTarget != ""
+			}
+			visibleColumn += width
+		}
+		i += size
+	}
+	return "", false
+}
+
+func parseOSC8Target(s string, start int) (string, int, bool) {
+	if start < 0 || start+4 > len(s) || !strings.HasPrefix(s[start:], "\033]8;") {
+		return "", start, false
+	}
+	end := skipEscapeSeqBytes(s, start)
+	payload := s[start+2 : end]
+	switch {
+	case strings.HasSuffix(payload, "\a"):
+		payload = payload[:len(payload)-1]
+	case strings.HasSuffix(payload, "\033\\"):
+		payload = payload[:len(payload)-2]
+	}
+	if !strings.HasPrefix(payload, "8;") {
+		return "", start, false
+	}
+	rest := payload[2:]
+	separator := strings.IndexByte(rest, ';')
+	if separator < 0 {
+		return "", start, false
+	}
+	return rest[separator+1:], end, true
 }
 
 func collapseLabelURLReferenceLines(body string) string {
@@ -619,7 +681,7 @@ func labelBareURLsForMarkdown(body string) string {
 			out.WriteString("[")
 			out.WriteString(escapeMarkdownLabel(ShortenURL(StripTrackers(trimmed))))
 			out.WriteString("](")
-			out.WriteString(trimmed)
+			out.WriteString(SanitizePreviewURLTarget(trimmed))
 			out.WriteString(")")
 			out.WriteString(suffix)
 		}
@@ -958,7 +1020,7 @@ func emailWordJoinsPrevious(label string) bool {
 }
 
 func terminalHyperlink(label, rawURL string) string {
-	return TerminalHyperlink(label, rawURL)
+	return TerminalHyperlink(label, SanitizePreviewURLTarget(rawURL))
 }
 
 // TerminalHyperlink wraps a visible label in an OSC 8 hyperlink target.
@@ -1028,6 +1090,13 @@ func init() {
 	for _, p := range knownTrackerParams {
 		trackerParamSet[strings.ToLower(p)] = true
 	}
+}
+
+// SanitizePreviewURLTarget removes known tracker query parameters from a URL
+// before it is embedded in terminal preview hyperlink targets or reveal fetches.
+// Invalid inputs are returned unchanged so rendering remains best-effort.
+func SanitizePreviewURLTarget(rawURL string) string {
+	return StripTrackers(rawURL)
 }
 
 // StripTrackers removes known tracking query parameters from a URL string.

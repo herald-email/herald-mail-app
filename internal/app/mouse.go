@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/render"
 )
 
 const (
@@ -39,6 +41,13 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			mouse := msg.Mouse()
 			return m.handlePreviewMouseSelectionMotion(mouse, true)
 		}
+		mouse := msg.Mouse()
+		if m.windowWidth > 0 && (m.windowWidth < minTermWidth || m.windowHeight < minTermHeight) {
+			return m, nil, true
+		}
+		if cmd, handled := m.handleTerminalLinkMouse(mouse, true); handled {
+			return m, cmd, true
+		}
 		return m, nil, false
 	case tea.MouseClickMsg, tea.MouseWheelMsg:
 	default:
@@ -47,6 +56,9 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	mouse := msg.Mouse()
 	if m.windowWidth > 0 && (m.windowWidth < minTermWidth || m.windowHeight < minTermHeight) {
 		return m, nil, true
+	}
+	if cmd, handled := m.handleTerminalLinkMouse(mouse, false); handled {
+		return m, cmd, true
 	}
 	if m.timeline.fullScreen {
 		rect := mouseRect{x: -2, y: -1, w: m.windowWidth + 2, h: m.windowHeight + 1}
@@ -243,6 +255,60 @@ func mouseWheelDirection(msg tea.Mouse) int {
 		return 1
 	}
 	return 0
+}
+
+func (m *Model) handleTerminalLinkMouse(msg tea.Mouse, release bool) (tea.Cmd, bool) {
+	if msg.Button != tea.MouseLeft && !(release && msg.Button == tea.MouseNone) {
+		return nil, false
+	}
+	ctrlGesture := msg.Mod.Contains(tea.ModCtrl)
+	if !ctrlGesture && !m.terminalLinkBrowserFallback {
+		return nil, false
+	}
+	target, ok := m.terminalLinkTargetAt(msg.X, msg.Y)
+	if !ok {
+		return nil, false
+	}
+	if !m.terminalLinkBrowserFallback {
+		m.statusMessage = "Link is handled by your terminal; press m if Ctrl-click is intercepted"
+		return nil, true
+	}
+	if !browserOpenableTerminalLink(target) {
+		m.statusMessage = "Link target is not browser-openable"
+		return nil, true
+	}
+	m.statusMessage = "Opening link in browser..."
+	return openTerminalLinkCmd(target), true
+}
+
+func (m *Model) terminalLinkTargetAt(x, y int) (string, bool) {
+	if x < 0 || y < 0 {
+		return "", false
+	}
+	lines := strings.Split(viewContent(m.View()), "\n")
+	if y >= len(lines) {
+		return "", false
+	}
+	return render.OSC8TargetAtVisibleColumn(lines[y], x)
+}
+
+func browserOpenableTerminalLink(target string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(target))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https", "mailto":
+		return parsed.Scheme != ""
+	default:
+		return false
+	}
+}
+
+func openTerminalLinkCmd(target string) tea.Cmd {
+	return func() tea.Msg {
+		return terminalLinkOpenMsg{Err: openBrowserFn(target)}
+	}
 }
 
 func (m *Model) toggleMouseCaptureMode() tea.Cmd {
