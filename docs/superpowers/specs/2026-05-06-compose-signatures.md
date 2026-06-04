@@ -7,6 +7,7 @@ This spec defines v1 account-scoped signatures for Herald Compose. The goal is t
 - [x] Users can configure one default signature per account config under `compose.signature.text`.
 - [x] The existing `S` settings panel exposes the signature as a multiline `Email Signature` field.
 - [x] Empty or missing signature text disables automatic signature insertion.
+- [x] Settings normalizes a bare signature delimiter line `--` to the email-standard `-- ` line so the required trailing space is saved.
 
 ## Compose Behavior
 
@@ -18,6 +19,7 @@ This section defines when Herald mutates the editable Compose body. Signatures a
 - [x] Existing draft edits restore the saved draft body exactly and do not append the configured signature.
 - [x] Herald does not append a duplicate when the body already ends with the configured signature.
 - [x] Herald does not append signatures invisibly at send time.
+- [x] Email previews preserve a standard signature delimiter as its own `-- ` line, followed by the signature lines, instead of collapsing the block into one paragraph.
 
 ## Draft Safety
 
@@ -31,6 +33,6 @@ This section keeps automatic signatures from creating noisy or surprising draft 
 
 This section identifies the acceptance evidence needed because the feature changes config parsing, settings UI, Compose state, and terminal rendering.
 
-- [x] Focused Go tests cover config parsing, settings prefill/save, Compose insertion, cursor placement, duplicate prevention, draft edit opt-out, and signature-only autosave suppression.
+- [x] Focused Go tests cover config parsing, settings prefill/save, delimiter normalization, Compose insertion, cursor placement, duplicate prevention, draft edit opt-out, signature-only autosave suppression, and preview delimiter rendering.
 - [x] TUI captures cover Compose and settings at `220x50`, `80x24`, and `50x15`.
 - [x] Large-feature handoff includes focused tests, full tests, build, SSH smoke, and MCP smoke evidence.

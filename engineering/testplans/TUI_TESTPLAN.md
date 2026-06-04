@@ -880,7 +880,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
-1. Configure `compose.signature.text` with a multiline signature and start Herald.
+1. Configure `compose.signature.text` with a multiline signature that starts with `-- ` and start Herald.
 2. Open Timeline and press `c` to open blank Compose.
 3. Return to Timeline, open a reply with `r`, and open a forward with `f`.
 4. Open the quick-reply picker from a preview, choose a reply, and inspect the Compose body.
@@ -894,7 +894,8 @@ Check these states during every applicable lane:
 - Reply and forward signatures stay in the editable top-note body and do not alter the read-only original-message pane.
 - Existing draft edits restore the saved body exactly and do not append another configured signature.
 - Opening and leaving a blank Compose screen containing only the automatic signature does not create a draft.
-- Settings exposes the multiline `Email Signature` field and saves future Compose openings without mutating the currently open draft.
+- Settings exposes the multiline `Email Signature` field, explains the `-- ` delimiter, normalizes a bare `--` delimiter on save, and saves future Compose openings without mutating the currently open draft.
+- Timeline preview renders the signature delimiter and following signature text as separate lines, preserving the delimiter's trailing space.
 - Reopening Compose does not duplicate a signature when the body already ends with the configured signature.
 
 ### TC-15 — Narrow screen behavior

@@ -125,7 +125,7 @@ func WrapLines(text string, width int) []string {
 	var result []string
 	consecutiveBlanks := 0
 	for _, para := range strings.Split(text, "\n") {
-		para = strings.TrimRight(para, " \t")
+		para = trimRightLineWhitespacePreservingSignatureDelimiter(para)
 		if para == "" {
 			consecutiveBlanks++
 			if consecutiveBlanks <= 1 {
@@ -137,6 +137,14 @@ func WrapLines(text string, width int) []string {
 		result = append(result, WrapText(para, width)...)
 	}
 	return result
+}
+
+func trimRightLineWhitespacePreservingSignatureDelimiter(line string) string {
+	trimmed := strings.TrimRight(line, " \t")
+	if trimmed == "--" && strings.HasSuffix(line, " ") {
+		return "-- "
+	}
+	return trimmed
 }
 
 // WrapText wraps a single paragraph to fit within width visible columns.

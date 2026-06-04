@@ -179,6 +179,28 @@ func TestRenderEmailBodyLines_DoesNotForceDarkThemeBodyForeground(t *testing.T) 
 	}
 }
 
+func TestRenderEmailBodyLines_PreservesSignatureDelimiterBlock(t *testing.T) {
+	lines := RenderEmailBodyLines("-- \nCheers, \nAnton", 80)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+	want := "-- \nCheers, \nAnton"
+
+	if visible != want {
+		t.Fatalf("rendered signature block = %q, want %q", visible, want)
+	}
+	if lines[0] != "-- " {
+		t.Fatalf("signature delimiter line = %q, want trailing space preserved", lines[0])
+	}
+}
+
+func TestRenderEmailBodyLines_PreservesSignatureBlockAfterBody(t *testing.T) {
+	lines := RenderEmailBodyLines("Hello Anton,\n\n-- \nCheers,\nAnton", 80)
+	visible := ansi.Strip(strings.Join(lines, "\n"))
+
+	if !strings.Contains(visible, "\n\n-- \nCheers,\nAnton") {
+		t.Fatalf("expected signature block to stay multiline after body, got:\n%q", visible)
+	}
+}
+
 func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
 	sanitizedURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?token=abcdefghijklmnopqrstuvwxyz0123456789"

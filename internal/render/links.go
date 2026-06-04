@@ -65,11 +65,79 @@ func RenderEmailBodyLines(body string, width int) []string {
 	body = unwrapInlineBracketedURLs(body)
 	body = reflowPaddedPlaintextFallback(body)
 	body = labelBareURLsForMarkdown(body)
+	if before, signatureLines, ok := splitStandardSignatureBlock(body); ok {
+		return renderSignatureAwareEmailBodyLines(before, signatureLines, width)
+	}
+	return renderMarkdownEmailBodyLines(body, width)
+}
+
+func renderMarkdownEmailBodyLines(body string, width int) []string {
 	if lines, err := renderGlamourEmailBodyLines(body, width); err == nil {
 		return lines
 	}
 	tokens := splitNakedURLTokens(markdownEmailTokens(protectBareURLsForMarkdown(body)))
 	return wrapEmailLinkTokens(tokens, width)
+}
+
+func splitStandardSignatureBlock(body string) (string, []string, bool) {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\r", "\n")
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if strings.TrimRight(line, " \t") == "--" {
+			return strings.Join(lines[:i], "\n"), lines[i:], true
+		}
+	}
+	return "", nil, false
+}
+
+func renderSignatureAwareEmailBodyLines(before string, signatureLines []string, width int) []string {
+	out := make([]string, 0, len(signatureLines)+4)
+	beforeHadBlankSeparator := signatureBeforeBlockHasBlankSeparator(before)
+	if strings.TrimSpace(before) != "" {
+		out = append(out, renderMarkdownEmailBodyLines(strings.TrimSpace(before), width)...)
+	}
+	if beforeHadBlankSeparator && len(out) > 0 && out[len(out)-1] != "" {
+		out = append(out, "")
+	}
+	out = append(out, renderLiteralSignatureLines(signatureLines, width)...)
+	return out
+}
+
+func signatureBeforeBlockHasBlankSeparator(before string) bool {
+	before = strings.ReplaceAll(before, "\r\n", "\n")
+	before = strings.ReplaceAll(before, "\r", "\n")
+	lines := strings.Split(before, "\n")
+	if len(lines) == 0 {
+		return false
+	}
+	return strings.TrimSpace(lines[len(lines)-1]) == ""
+}
+
+func renderLiteralSignatureLines(lines []string, width int) []string {
+	out := make([]string, 0, len(lines))
+	for _, raw := range lines {
+		line := normalizeRenderedSignatureDelimiterLine(raw)
+		if line == "" {
+			out = append(out, "")
+			continue
+		}
+		linked := LinkifyURLs(line)
+		if xansi.StringWidth(linked) <= width {
+			out = append(out, linked)
+			continue
+		}
+		out = append(out, WrapText(linked, width)...)
+	}
+	return out
+}
+
+func normalizeRenderedSignatureDelimiterLine(line string) string {
+	line = strings.TrimRight(line, "\r")
+	if strings.TrimRight(line, " \t") == "--" && strings.HasSuffix(line, " ") {
+		return "-- "
+	}
+	return line
 }
 
 func renderGlamourEmailBodyLines(body string, width int) ([]string, error) {

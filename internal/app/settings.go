@@ -954,7 +954,7 @@ func (s *Settings) buildForm() {
 	composeGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
-			Description("Enter adds a line. Tab moves to Save Settings. Empty disables.").
+			Description("Enter=newline. Tab=Save. Empty disables. Bare -- gets space.").
 			Placeholder("-- \nYour Name").
 			Lines(5).
 			Value(&s.signatureText),
@@ -1058,7 +1058,7 @@ func (s *Settings) buildForm() {
 	panelSignatureGroup := huh.NewGroup(
 		huh.NewText().
 			Title("Email Signature").
-			Description("Enter adds a line. Tab moves to Save. Empty disables.").
+			Description("Enter=newline. Tab=Save. Empty disables. Bare -- gets space.").
 			Placeholder("-- \nYour Name").
 			Lines(5).
 			Value(&s.signatureText),
@@ -3108,7 +3108,7 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Cleanup.ScheduleHours = n
 	}
 	cfg.Calendar.WeekStart = config.NormalizeCalendarWeekStart(s.calendarWeekStart)
-	cfg.Compose.Signature.Text = s.signatureText
+	cfg.Compose.Signature.Text = normalizeSignatureText(s.signatureText)
 	cfg.Keyboard.Profile = s.keyboardProfile
 	cfg.Keyboard.CustomKeymap = strings.TrimSpace(s.customKeymap)
 	cfg.Theme.Name = strings.TrimSpace(s.themeName)

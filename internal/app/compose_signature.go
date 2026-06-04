@@ -22,6 +22,11 @@ func normalizeSignatureText(raw string) string {
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
+	for i, line := range lines {
+		if line == "--" {
+			lines[i] = "-- "
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
