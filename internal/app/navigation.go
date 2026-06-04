@@ -40,13 +40,12 @@ func (m *Model) clearContactsStatus() {
 }
 
 func (m *Model) switchToTimeline() tea.Cmd {
+	if m.shouldPromptForComposeExitDraft() {
+		return m.openComposeExitPrompt(tabTimeline, panelTimeline, true)
+	}
 	cmds := m.composeExitCmds()
 	m.clearContactsStatus()
-	m.activeTab = tabTimeline
-	m.clearComposeReturn()
-	m.setFocusedPanel(panelTimeline)
-	cmds = append(cmds, m.loadTimelineEmails())
-	return tea.Batch(cmds...)
+	return m.finishComposeExit(tabTimeline, panelTimeline, true, cmds...)
 }
 
 func (m *Model) switchToCompose() tea.Cmd {
@@ -54,31 +53,17 @@ func (m *Model) switchToCompose() tea.Cmd {
 }
 
 func (m *Model) switchToContacts() tea.Cmd {
+	if m.shouldPromptForComposeExitDraft() {
+		return m.openComposeExitPrompt(tabContacts, panelTimeline, true)
+	}
 	cmds := m.composeExitCmds()
-	m.finishTimelineRangeSelection()
-	m.clearPreviewSelection()
-	m.activeTab = tabContacts
-	m.clearComposeReturn()
-	m.contactFocusPanel = 0
-	m.contactDetail = nil
-	m.contactDetailEmails = nil
-	m.contactPreviewEmail = nil
-	m.contactPreviewBody = nil
-	m.contactPreviewLoading = false
-	cmds = append(cmds, m.loadContacts())
-	return tea.Batch(cmds...)
+	return m.finishComposeExit(tabContacts, panelTimeline, true, cmds...)
 }
 
 func (m *Model) switchToCalendar() tea.Cmd {
+	if m.shouldPromptForComposeExitDraft() {
+		return m.openComposeExitPrompt(tabCalendar, panelTimeline, true)
+	}
 	cmds := m.composeExitCmds()
-	m.clearContactsStatus()
-	m.finishTimelineRangeSelection()
-	m.activeTab = tabCalendar
-	m.clearComposeReturn()
-	m.setFocusedPanel(panelTimeline)
-	m.calendarDetailOpen = false
-	m.calendarLoading = true
-	m.calendarStatus = "Loading calendar agenda..."
-	cmds = append(cmds, m.loadCalendarAgenda())
-	return tea.Batch(cmds...)
+	return m.finishComposeExit(tabCalendar, panelTimeline, true, cmds...)
 }

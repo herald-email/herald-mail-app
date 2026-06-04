@@ -718,25 +718,30 @@ type Model struct {
 	classifyDone    int
 
 	// Compose
-	mailer             *appsmtp.Client
-	fromAddress        string
-	composeSourceID    models.SourceID
-	composeTo          textinput.Model
-	composeCC          textinput.Model
-	composeBCC         textinput.Model
-	composeCCExpanded  bool
-	composeBCCExpanded bool
-	composeSubject     textinput.Model
-	composeBody        textarea.Model
-	composeField       int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
-	composeStatus      string // last send result message
-	composePreview     bool   // show glamour markdown preview
-	composeAttachments []models.ComposeAttachment
-	composePreserved   *composePreservedContext
-	composeReturnSet   bool
-	composeReturnTab   int
-	composeReturnPanel int
-	fieldKeyMode       string
+	mailer                        *appsmtp.Client
+	fromAddress                   string
+	composeSourceID               models.SourceID
+	composeTo                     textinput.Model
+	composeCC                     textinput.Model
+	composeBCC                    textinput.Model
+	composeCCExpanded             bool
+	composeBCCExpanded            bool
+	composeSubject                textinput.Model
+	composeBody                   textarea.Model
+	composeField                  int    // 0=To, 1=CC, 2=BCC, 3=Subject, 4=Body
+	composeStatus                 string // last send result message
+	composePreview                bool   // show glamour markdown preview
+	composeAttachments            []models.ComposeAttachment
+	composePreserved              *composePreservedContext
+	composeReturnSet              bool
+	composeReturnTab              int
+	composeReturnPanel            int
+	pendingComposeExitPrompt      bool
+	pendingComposeExitDesc        string
+	pendingComposeExitTargetTab   int
+	pendingComposeExitTargetPanel int
+	pendingComposeExitLoadTarget  bool
+	fieldKeyMode                  string
 
 	// Autocomplete (compose address fields)
 	suggestions   []models.ContactData // current autocomplete candidates (empty = dropdown hidden)
@@ -2739,6 +2744,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err == nil && msg.Message != "" {
 			// Clear the compose fields on success
 			m.composeTo.SetValue("")
+			m.composeCC.SetValue("")
+			m.composeBCC.SetValue("")
+			m.composeCCExpanded = false
+			m.composeBCCExpanded = false
 			m.composeSubject.SetValue("")
 			m.composeBody.SetValue("")
 			m.composeAttachments = nil
@@ -2746,23 +2755,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.replyContextEmail = nil
 			m.composePreserved = nil
 			m.composeAIThread = false
+			m.clearComposeExitPrompt()
 			m.resetComposeAIBar()
+			m.statusMessage = msg.Message
 			// Delete the auto-saved draft (if any) since the email was sent
+			var cmds []tea.Cmd
 			if m.lastDraftUID != 0 {
 				if !m.lastDraftReplaceable {
 					m.lastDraftUID = 0
 					m.lastDraftFolder = ""
 					m.lastDraftSourceID = ""
 					m.lastDraftReplaceable = false
-					return m, nil
+				} else {
+					cmds = append(cmds, m.deleteDraftForSourceCmd(m.lastDraftSourceID, m.lastDraftUID, m.lastDraftFolder))
+					m.lastDraftUID = 0
+					m.lastDraftFolder = ""
+					m.lastDraftSourceID = ""
+					m.lastDraftReplaceable = false
 				}
-				cmd := m.deleteDraftCmd(m.lastDraftUID, m.lastDraftFolder)
-				m.lastDraftUID = 0
-				m.lastDraftFolder = ""
-				m.lastDraftSourceID = ""
-				m.lastDraftReplaceable = false
-				return m, cmd
 			}
+			if m.activeTab == tabCompose {
+				targetPanel := panelTimeline
+				if m.composeReturnSet && m.composeReturnTab == tabTimeline {
+					targetPanel = m.composeReturnPanel
+				}
+				return m, m.finishComposeExit(tabTimeline, targetPanel, false, cmds...)
+			}
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 
@@ -2859,7 +2878,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case DraftSaveTickMsg:
 		cmds := []tea.Cmd{draftSaveTick()} // always reschedule
-		if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving {
+		if m.activeTab == tabCompose && composeHasContent(m) && !m.draftSaving && !m.pendingComposeExitPrompt {
 			m.draftSaving = true
 			cmds = append(cmds, m.saveDraftCmd())
 		}

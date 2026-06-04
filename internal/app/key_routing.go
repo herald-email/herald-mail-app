@@ -36,6 +36,18 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 		return m, nil, true
 	}
 
+	if m.pendingComposeExitPrompt {
+		switch shortcutKey(msg) {
+		case "k", "K", "y", "Y":
+			return m, m.keepComposeExitDraft(), true
+		case "d", "D", "n", "N", "delete", "backspace":
+			return m, m.discardComposeExitDraft(), true
+		case "esc":
+			m.clearComposeExitPrompt()
+		}
+		return m, nil, true
+	}
+
 	if m.pendingDeleteConfirm {
 		switch shortcutKey(msg) {
 		case "y", "Y":
@@ -191,6 +203,9 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 }
 
 func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if m.pendingComposeExitPrompt && shortcutKey(msg) != "ctrl+c" {
+		return m, nil, false
+	}
 	if m.shouldHandleProblemReportShortcut(msg) {
 		m.showProblemReport = true
 		return m, nil, true

@@ -175,6 +175,111 @@ func TestComposeFunctionKeysSwitchTabsAndDoNotTypeIntoDraft(t *testing.T) {
 	}
 }
 
+func TestReplyComposeEscapePromptsBeforeLeaving(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.composeReturnSet = true
+	m.composeReturnTab = tabTimeline
+	m.composeReturnPanel = panelTimeline
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+
+	if cmd != nil {
+		t.Fatalf("reply Compose Esc returned command %T before prompt answer", cmd)
+	}
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab=%d, want Compose while prompt is unanswered", updated.activeTab)
+	}
+	if !updated.pendingComposeExitPrompt {
+		t.Fatal("expected reply Compose Esc to ask whether to keep or discard the draft")
+	}
+	if updated.draftSaving {
+		t.Fatal("reply Compose prompt should not start draft saving before the user chooses keep")
+	}
+	status := stripANSI(updated.renderStatusBar())
+	if !strings.Contains(status, "Keep reply draft") || !strings.Contains(status, "discard") {
+		t.Fatalf("reply Compose prompt status missing keep/discard affordances:\n%s", status)
+	}
+}
+
+func TestReplyComposeExitPromptKeepSavesDraftAndReturnsTimeline(t *testing.T) {
+	m := newReplyPreservedComposeModel()
+	m.composeReturnSet = true
+	m.composeReturnTab = tabTimeline
+	m.composeReturnPanel = panelTimeline
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+
+	model, cmd, handled := updated.handleOverlayKey(keyRunes("k"))
+	updated = model.(*Model)
+
+	if !handled {
+		t.Fatal("expected keep key to be handled by reply/forward exit prompt")
+	}
+	if updated.pendingComposeExitPrompt {
+		t.Fatal("keep should close the reply/forward exit prompt")
+	}
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("activeTab=%d, want Timeline after keeping draft", updated.activeTab)
+	}
+	if !updated.draftSaving {
+		t.Fatal("keep should start draft saving before leaving reply Compose")
+	}
+	if cmd == nil {
+		t.Fatal("keep should return a draft save command")
+	}
+}
+
+func TestForwardComposeExitPromptDiscardDeletesSavedDraftAndReturnsTimeline(t *testing.T) {
+	backend := &draftDeleteRecordingBackend{}
+	m := newPreservedComposeModel()
+	m.backend = backend
+	m.composeReturnSet = true
+	m.composeReturnTab = tabTimeline
+	m.composeReturnPanel = panelTimeline
+	m.lastDraftUID = 42
+	m.lastDraftFolder = "Drafts"
+	m.lastDraftReplaceable = true
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+	if !updated.pendingComposeExitPrompt {
+		t.Fatal("expected forward Compose Esc to ask whether to keep or discard the draft")
+	}
+
+	model, cmd, handled := updated.handleOverlayKey(keyRunes("d"))
+	updated = model.(*Model)
+
+	if !handled {
+		t.Fatal("expected discard key to be handled by reply/forward exit prompt")
+	}
+	if updated.pendingComposeExitPrompt {
+		t.Fatal("discard should close the reply/forward exit prompt")
+	}
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("activeTab=%d, want Timeline after discarding draft", updated.activeTab)
+	}
+	if updated.draftSaving {
+		t.Fatal("discard should not start draft saving")
+	}
+	if updated.composePreserved != nil {
+		t.Fatal("discard should clear preserved reply/forward context")
+	}
+	if updated.lastDraftUID != 0 || updated.lastDraftFolder != "" || updated.lastDraftReplaceable {
+		t.Fatalf("discard should clear tracked draft state, got uid=%d folder=%q replaceable=%v", updated.lastDraftUID, updated.lastDraftFolder, updated.lastDraftReplaceable)
+	}
+	if cmd == nil {
+		t.Fatal("discard should delete the already saved replaceable draft")
+	}
+	raw := cmd()
+	if _, ok := raw.(DraftDeletedMsg); !ok {
+		t.Fatalf("discard command returned %T, want DraftDeletedMsg", raw)
+	}
+	if len(backend.deleted) != 1 || backend.deleted[0].uid != 42 || backend.deleted[0].folder != "Drafts" {
+		t.Fatalf("expected discard to delete saved draft 42/Drafts, got %#v", backend.deleted)
+	}
+}
+
 func TestFunctionKeyF2SwitchesToContacts(t *testing.T) {
 	m := makeSizedModel(t, 140, 40)
 	m.activeTab = tabTimeline
