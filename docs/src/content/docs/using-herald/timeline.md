@@ -57,6 +57,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `z` | Preview | A selected email is open. | Toggles full-screen reading. |
 | `s` | Preview | Preview has attachments. | Opens attachment save prompt with a default Downloads path. |
 | `[` / `]` | Preview | Message has more than one attachment. | Selects previous or next attachment. |
+| `i` | Preview | Body includes `text/calendar` or `.ics` invitation data and Calendar is available. | Opens the Create Calendar Event picker for a writable calendar source. |
 | `u` | Preview | Body has `List-Unsubscribe` data and tab is not read-only. | Opens unsubscribe confirmation. |
 | `h` / `H` | Preview | A selected email is open and tab is not read-only. | Creates a hide-future-mail rule for the sender. |
 | `v` | Preview/full-screen | Body wrapped lines are available. | Toggles visual text selection. |
@@ -126,6 +127,14 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 4. Edit the destination path if needed.
 5. Press `enter` to save or `esc` to cancel.
 
+### Import a Calendar Invitation
+
+1. Open an email with an `.ics` attachment or `text/calendar` part.
+2. Press `i`.
+3. Choose the writable calendar with `j`/`k` when more than one is available.
+4. Press `enter` to create the event, or update it when the selected calendar already has the same invitation UID.
+5. Press `s` to skip a duplicate prompt or `esc` to cancel without writing to the calendar.
+
 ## States
 
 | State | What happens |
@@ -144,7 +153,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 
 Timeline reads message metadata from SQLite and IMAP-backed cache. Opening a message fetches the full message body by UID, parses text/plain content, inline images, attachments, and unsubscribe headers, and can cache body text for later use. Marking read, starring, deleting, archiving, unsubscribing, hiding future mail, and attachment saving write to IMAP, SQLite, local files, or rules depending on the action.
 
-Inline MIME image bytes are never written to disk for preview. In full-screen previews, Herald prefers Kitty graphics in Kitty-protocol terminals such as Ghostty on macOS or Kitty itself, and supports iTerm2's inline image protocol as well. In local TUI sessions that cannot render inline graphics, Herald serves the currently previewed images from a random localhost URL and exposes short OSC 8 links; those links are revoked when the preview changes. Remote HTML image URLs are shown as links only and are not fetched by Herald.
+Inline MIME image bytes are never written to disk for preview. In full-screen previews, Herald prefers Kitty graphics in Kitty-protocol terminals such as Ghostty on macOS or Kitty itself, and supports iTerm2's inline image protocol as well. In local TUI sessions that cannot render inline graphics, Herald serves the currently previewed images from a random localhost URL and exposes short OSC 8 links; those links are revoked when the preview changes. Remote HTML image URLs are shown as links only until you press `o` to reveal them for the current message with bounded, no-cookie, no-referrer requests and sanitized tracker parameters.
 
 AI actions such as semantic search, classification, image descriptions, and quick replies send selected query or message context to the configured AI backend. Ollama is local by default; external providers receive the context required for the requested action.
 

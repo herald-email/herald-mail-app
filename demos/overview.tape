@@ -43,6 +43,10 @@ Sleep 0.4s
 Enter
 Sleep 0.8s
 
+# Show Calendar as a top-level workspace
+Type "3"
+Sleep 1s
+
 # Back to Timeline
 Type "1"
 Sleep 1s

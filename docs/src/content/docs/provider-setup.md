@@ -3,17 +3,17 @@ title: Provider Setup
 description: Choose and configure the mail provider path that Herald should use.
 ---
 
-Herald talks to mail providers through IMAP for reading and SMTP for sending. Provider setup is mostly about supplying the correct host, port, username, password, and optional OAuth or bridge details.
+Herald talks to mail providers through provider-specific mail sources. Gmail OAuth uses the Gmail API for core reads, drafts, mailbox mutations, and send, while Gmail App Password and other credential paths use IMAP for reading and SMTP for sending.
 
 ## Overview
 
-Choose the narrowest supported path that matches your account. Gmail users should start with Gmail OAuth and use Gmail IMAP with an App Password only as a fallback. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates both IMAP and SMTP immediately after account details; in-app account settings validate before saving or applying account changes.
+Choose the narrowest supported path that matches your account. Gmail users should start with Gmail OAuth and use Gmail IMAP with an App Password only as a fallback. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates the selected provider access immediately after account details; in-app account settings validate before saving or applying account changes.
 
 ## Provider Matrix
 
-| Provider path | IMAP | SMTP | Credential type |
+| Provider path | Read transport | Send transport | Credential type |
 | --- | --- | --- | --- |
-| Gmail OAuth | `imap.gmail.com:993` | `smtp.gmail.com:587` | Browser OAuth |
+| Gmail OAuth | Gmail API | Gmail API | Browser OAuth |
 | Gmail IMAP | `imap.gmail.com:993` | `smtp.gmail.com:587` | Google App Password |
 | Proton Mail Bridge | `127.0.0.1:1143` | `127.0.0.1:1025` | Bridge-generated username and password |
 | Fastmail | `imap.fastmail.com:993` | `smtp.fastmail.com:587` | Provider password or app password |
@@ -43,8 +43,8 @@ Microsoft Calendar is not shown as a CalDAV preset because the live integration 
 2. Run `herald`.
 3. Choose `Gmail OAuth`.
 4. Complete browser authorization and return to Herald.
-5. Wait for Herald to validate Gmail IMAP and SMTP XOAUTH2 before it continues to optional preferences.
-6. Save the generated config and let Herald sync.
+5. Wait for Herald to validate the selected Google mail and optional calendar access before it continues to optional preferences.
+6. Save the generated config and let Herald sync through the Gmail API mail source.
 
 ### Google Calendar OAuth
 
@@ -105,7 +105,7 @@ Helpful references:
 
 ## Data And Privacy
 
-Provider credentials live in the Herald config file. Herald opens an IMAP connection for the lifetime of the app, caches message metadata in SQLite, fetches body text when needed, and sends outgoing messages over SMTP.
+Provider credentials live in the Herald config file. Gmail OAuth stores refresh-token data and uses the Gmail API mail source for core mail operations. IMAP/App Password providers open IMAP connections, cache message metadata in SQLite, fetch body text when needed, and send outgoing messages over SMTP.
 
 ## Troubleshooting
 

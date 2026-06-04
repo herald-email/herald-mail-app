@@ -15,9 +15,23 @@ brew install vhs ffmpeg
 
 ```sh
 make docs-media
+
+# GIF-only refresh:
+HERALD_DOC_MEDIA_ONLY=demo-gifs make docs-media
 ```
 
-Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`. Showcase tapes use `./bin/herald --demo --demo-keys` so viewers can see shortcuts such as `S`, `?`, `2`, `G`, Settings Sync & Cleanup launchers, range selection, horizontal preview movement, and full-screen preview. The image-preview tape forces `-image-protocol=kitty` against `Step 5: View inline images in full screen` so the generated media can exercise the Kitty/Ghostty rendering path once the capture stack can render raster blocks.
+Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.gif`, docs-facing copies are written to `docs/public/demo/*.gif`, and still screenshots are written to `docs/public/screenshots/*.png`. Run media generation from the repository root because the tapes reference `./bin/herald`. Showcase tapes use `./bin/herald --demo --demo-keys` so viewers can see shortcuts such as `S`, `?`, `2`, `3`, `G`, Settings Sync & Cleanup launchers, Calendar navigation, invitation import, preview selection, horizontal preview movement, and full-screen preview. The image-preview tape forces `-image-protocol=kitty` against `Step 5: View inline images in full screen` so the generated media can exercise the Kitty/Ghostty rendering path once the capture stack can render raster blocks.
+
+## Current Story Set
+
+The v0.6 media set keeps the README and docs front door focused on the newest user-visible workflows. Each tape should remain short enough to understand without narration.
+
+- [x] `overview.tape` shows Timeline, cleanup grouping, Contacts, and Calendar.
+- [x] `calendar-workspace.tape` shows Week, Day, 3-Day, Agenda, Search, Detail, and Event Edit.
+- [x] `calendar-invitation.tape` shows importing an `.ics` mail invitation into Calendar with duplicate handling.
+- [x] `preview-selection-images.tape` shows linked image reveal, full-screen preview, and rich preview selection/copy.
+- [x] `compose-preserved-reply.tape` shows reply Compose with preserved original context and Markdown preview.
+- [x] `guided-tour-dark-pastel.tape`, `cleanup-rules-red-alert.tape`, and focused AI/search/MCP tapes keep older headline flows visible.
 
 Theme gallery screenshots are regenerated separately because they need one `--demo -theme <name>` launch per built-in palette:
 

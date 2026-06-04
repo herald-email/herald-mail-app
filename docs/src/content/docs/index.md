@@ -37,11 +37,11 @@ On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missi
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.5
+## New in v0.6
 
-The `v0.5.0-beta.1` release adds a top-level Calendar workspace, multi-source account identity, account-aware mail behavior, source-scoped MCP/daemon safety, and updated demo evidence. See [What's New in v0.5](/whats-new-in-v0-5/) for the release-delta checklist and colorful screenshots.
+The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail source, hardens multi-account mail behavior, adds provider-backed Calendar mutations and invitation import, and makes previews safer to inspect and copy. See [What's New in v0.6](/whats-new-in-v0-6/) for the release-delta checklist and updated demo GIFs.
 
-![Calendar week time-grid with source rail and inspector](/screenshots/calendar-week-time-grid.png)
+![Calendar workspace demo](/demo/calendar-workspace.gif)
 
 <!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="fresh config, 120x40" desc="Shows the initial setup path users see before connecting a real mailbox." capture="vhs docs media; rm -f /tmp/herald-docs-wizard.yaml; launch ./bin/herald -config /tmp/herald-docs-wizard.yaml" -->
 

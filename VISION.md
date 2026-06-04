@@ -35,7 +35,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Opt-in remote HTML image reveal in email preview (`o` reveals linked images for the current message without auto-loading remote content)
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
-- [ ] macOS notifications with Herald deep links for new mail and sync failures
+- [x] macOS notifications with Herald deep links for new mail and sync failures
 - [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
@@ -618,10 +618,10 @@ IMAP IDLE (`RFC 2177`) lets the server push `EXISTS` and `EXPUNGE` notifications
 ### Notifications and deep links
 Notifications should bring attention back to the right mailbox context without turning every background action into noise. The first target is macOS native notifications with Herald deep links, while other platforms must degrade cleanly.
 
-- [ ] Native macOS notifications for new mail and sync failures are enabled by default.
-- [ ] Notification activation can open folder, message, sender, search, or compose contexts through `herald://mail/...` links.
-- [ ] Deletion/archive completion, classification completion, and chat-result notifications are supported but disabled by default.
-- [ ] Linux keeps delivery-only notification behavior and unsupported platforms no-op without misleading click-through claims.
+- [x] Native macOS notifications for new mail and sync failures are enabled by default.
+- [x] Notification activation can open folder, message, sender, search, or compose contexts through `herald://mail/...` links.
+- [x] Deletion/archive completion, classification completion, and chat-result notifications are supported but disabled by default.
+- [x] Linux keeps delivery-only notification behavior and unsupported platforms no-op without misleading click-through claims.
 
 ---
 
@@ -889,6 +889,7 @@ Demo mode lets anyone try the full TUI without a live IMAP account. It launches 
 - [x] Deterministic demo AI powers classification, semantic search, chat, quick replies, and contact enrichment without Ollama
 - [x] `herald mcp --demo` exposes the same synthetic mailbox without loading private config or cache files
 - [x] Canonical demo tapes generate 5-30 second GIFs in `assets/demo/`
+- [x] v0.6 demo tapes cover Calendar workspace, invitation import, preview selection/image reveal, and preserved reply Compose flows
 - [x] High-resolution themed showcase tapes cover Dark Pastel, Red Alert, and softer dark terminal profiles without multiplying every docs capture
 - [x] Demo media can opt into a compact keypress overlay with `--demo-keys` so presentation GIFs show the shortcuts being pressed
 - [x] `[DEMO]` indicator in the status bar so the user knows they are not connected to a real account

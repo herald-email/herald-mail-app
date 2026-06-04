@@ -65,7 +65,9 @@ Calendar search is cache-backed and searches event titles, notes, locations, org
 | `/` | Calendar | Calendar search is closed. | Opens Calendar Search. |
 | `x` | Calendar | Cross-source search is available. | Opens blended mail-and-calendar search. |
 | `enter` | Calendar event | An event is selected. | Opens full event detail. |
+| `n` | Calendar | A writable calendar source exists. | Opens Event Create, using the selected writable calendar or a safe writable fallback. |
 | `e` | Calendar event | The selected source supports editing. | Opens Event Edit. |
+| `D` | Calendar event | The selected source supports deletion. | Opens Event Delete confirmation. |
 | `y` / `m` / `n` | RSVP action picker | Selected event supports RSVP. | Accepts, tentatively accepts, or declines. |
 | `space` | Calendar rail | Rail has focus. | Shows or hides the highlighted calendar. |
 | `p` | Agenda | Hidden past events exist. | Shows or hides past agenda rows. |
@@ -103,6 +105,20 @@ Calendar search is cache-backed and searches event titles, notes, locations, org
 4. Move through results with `j`/`k`.
 5. Read the detail panel, or press `enter` for the full event reader.
 
+### Create or Edit an Event
+
+1. Press `n` to create a new event, or select an event and press `e` to edit.
+2. Move through fields with `tab` and edit title, time, timezone, attendees, reminders, recurrence, and notes.
+3. Use picker fields for dates, timezones, attendees, recurrence, and reminders when they open.
+4. Save the form to write through the provider first; failed provider writes keep the unsaved edit visible.
+
+### Import an Invitation From Mail
+
+1. Open Timeline and preview an email with `text/calendar` or `.ics` invitation data.
+2. Press `i`.
+3. Choose a writable calendar when Herald shows the picker.
+4. Press `enter` to create or update the event, `s` to skip a duplicate, or `esc` to cancel.
+
 ## States
 
 | State | What happens |
@@ -112,6 +128,7 @@ Calendar search is cache-backed and searches event titles, notes, locations, org
 | Rail filtering | Disabled calendars immediately disappear from the visible event set while date range and selection are preserved when possible. |
 | Read-only source | Events remain readable, but mutation and RSVP actions are hidden or disabled with a clear reason. |
 | Provider-backed edit | Event edits write through Google Calendar or CalDAV first, then update the cache only after provider success. |
+| Provider-backed create/delete | Event create and delete write through Google Calendar or CalDAV before adding or removing cached rows. |
 | Conflict or unsupported recurrence | Herald keeps the edit/error visible and does not rewrite cached event rows on failed provider writes. |
 | Narrow terminal | Calendar collapses to a compact layout or the global minimum-size guard instead of clipping columns. |
 

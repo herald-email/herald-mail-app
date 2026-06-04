@@ -1,7 +1,7 @@
 # Herald
 
 > [!NOTE]
-> Herald 0.2.0-beta is a UI maturity and automation-safety milestone: cleaner adaptive terminal chrome, a reading-first Timeline, mail-style range selection, compact overlays, and dry-run previews before rule-driven mail mutation.
+> Herald v0.6.2-beta.1 is the current beta: Gmail OAuth now uses Herald's Gmail API mail source, Calendar supports provider-backed create/edit/delete/RSVP and invitation import, previews gained safer images plus richer copy, and demo media covers the new workflows.
 
 **Fast terminal email for power users.** AI classification, semantic search, bulk cleanup, quick replies, and an MCP server for AI agents — all from your terminal.
 
@@ -75,9 +75,11 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | macOS Homebrew install + IMAP-first onboarding                                            | ✅     |
 | Standard IMAP + Gmail IMAP App Password setup                                             | ✅     |
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook                                | ✅     |
-| Gmail OAuth onboarding                                                                    | ✅     |
+| Gmail OAuth onboarding through the Gmail API mail source                                  | ✅     |
+| Calendar workspace with Google Calendar OAuth, CalDAV, create/edit/delete, RSVP, and `.ics` import | ✅     |
 | Reading-first Timeline with split/full previews and range selection                       | ✅     |
 | Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews                  | ✅     |
+| Opt-in remote image reveal, sanitized preview links, and rich preview copy                | ✅     |
 | Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
 | Bulk cleanup — Timeline sender/domain grouping plus dry-run cleanup rule previews         | ✅     |
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
@@ -85,13 +87,16 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Semantic search with `nomic-embed-text-v2-moe` default + chunked body embeddings          | ✅     |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
 | Contact book with LLM enrichment and native Apple Contacts import                         | ✅     |
-| Compose + reply + forward with Markdown preview                                           | ✅     |
+| Compose + reply + forward with Markdown preview, preserved context, and external editor   | ✅     |
 | MCP server — AI agents read and manage email over stdio                                   | ✅     |
 | SSH server — run the full TUI over SSH                                                    | ✅     |
 | Privacy-safe logs by default, with `-unsafe-logs` for explicit local diagnostics           | ✅     |
+| macOS notifications and `herald://mail/...` deep links where platform support exists      | ✅     |
 | IMAP IDLE push sync — new mail appears instantly                                          | ✅     |
 
 ![Herald semantic search demo](assets/demo/semantic-search.gif)
+
+![Herald Calendar workspace demo](assets/demo/calendar-workspace.gif)
 
 ---
 

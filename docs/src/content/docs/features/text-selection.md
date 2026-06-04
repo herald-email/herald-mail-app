@@ -3,11 +3,11 @@ title: Text Selection
 description: Copy email text from Timeline preview and full-screen reading mode.
 ---
 
-Text selection is available in Timeline preview and full-screen reading. It gives keyboard-first copying for a current line, a visual range, or the full wrapped body.
+Text selection is available in Timeline preview, Contacts inline previews, and full-screen reading. It gives keyboard-first and mouse-driven copying for a current line, a visual range, or the full wrapped body.
 
 ## Overview
 
-Use text selection when you need to copy a quote, reference number, address, or full email body without leaving the terminal. Mouse-selection mode is also available when you prefer terminal-native selection.
+Use text selection when you need to copy a quote, reference number, address, or full email body without leaving the terminal. Herald-owned selection tracks preview rows directly, so copied payloads can include plain text, rich HTML fragments, or image data where the platform clipboard supports them.
 
 ## Screen Anatomy
 
@@ -15,7 +15,9 @@ Use text selection when you need to copy a quote, reference number, address, or 
 | --- | --- |
 | Wrapped body lines | The preview/full-screen body after Herald wraps text to the current width. |
 | Scroll offset | The current top line in the preview body. |
+| Cursor selection | The active preview row used for `yy` line copy and visual-range start. |
 | Visual selection | Highlighted range between selection start and end. |
+| Mouse drag selection | Herald-owned mouse selection across preview rows when mouse capture is enabled. |
 | Pending line copy | A one-key waiting state after the first `y`. |
 | Mouse-selection mode | Terminal mouse mode toggle that changes whether terminal-native selection is easier. |
 
@@ -33,6 +35,7 @@ Use text selection when you need to copy a quote, reference number, address, or 
 | `y` | Visual mode | A range is selected. | Copies selected wrapped lines and exits visual mode. |
 | `y` then `y` | Preview/full-screen | Body lines exist and visual mode is not active. | Copies the current visible line. |
 | `Y` | Preview/full-screen | Body lines exist. | Copies the entire wrapped body. |
+| Mouse drag | Timeline or Contacts preview | Mouse capture is enabled and selectable rows are visible. | Selects the dragged preview range for copy. |
 | `m` | Timeline | Any Timeline state. | Toggles mouse-selection mode. |
 | `esc` | Visual mode | Visual mode active. | Cancels visual mode. |
 
@@ -58,6 +61,12 @@ Use text selection when you need to copy a quote, reference number, address, or 
 1. Open an email preview or full-screen reader.
 2. Press `Y`.
 
+### Copy With the Mouse
+
+1. Open a Timeline or Contacts preview.
+2. Drag across the preview text while Herald mouse capture is enabled.
+3. Press `y` to copy the selected range.
+
 ### Use Terminal Mouse Selection
 
 1. Press `m`.
@@ -71,12 +80,13 @@ Use text selection when you need to copy a quote, reference number, address, or 
 | No body loaded | Copy keys have nothing to copy. |
 | Visual mode | Navigation changes the selected range instead of just scrolling. |
 | Pending `yy` | Herald waits for the second `y`; any other key clears the pending state. |
+| Rich clipboard | On supported platforms, Herald writes richer HTML or image payloads along with plain text when the selected preview row carries that data. |
 | Full-screen | Same copy controls apply with more body lines visible. |
 | Clipboard unavailable | Copy command can fail if the operating system clipboard command is unavailable. |
 
 ## Data And Privacy
 
-Text selection reads body text that is already displayed in Herald and writes selected text to the operating system clipboard. The clipboard may be visible to other local applications according to your OS security model.
+Text selection reads body text, HTML fragments, and image metadata that are already represented in the preview document and writes selected payloads to the operating system clipboard. The clipboard may be visible to other local applications according to your OS security model.
 
 ## Troubleshooting
 

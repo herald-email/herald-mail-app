@@ -43,6 +43,10 @@ semantic:
 | YAML path | Purpose |
 | --- | --- |
 | `vendor` | Optional provider shortcut: `gmail`, `protonmail`, `fastmail`, `outlook`, or `icloud`. |
+| `sources[]` | Optional source-based account list for multi-account mail and calendar. First-run Google OAuth writes explicit mail/calendar sources; the legacy single-account IMAP shape remains supported. |
+| `sources[].kind` | Source capability: `mail` or `calendar`. |
+| `sources[].provider` | Provider adapter such as `imap`, `gmail`, `google_calendar`, or `caldav`. `provider: gmail` uses the Gmail API mail source; `provider: gmail_api` remains a compatibility alias. |
+| `sources[].account_id` | Stable account grouping key used to keep mail and calendar sources together without exposing provider IDs in the TUI. |
 | `cache.database_path` | SQLite cache file path. Generated as an absolute `<home>/.herald/cached/<config-name>.db` path when missing. |
 | `compose.signature.text` | Optional default signature inserted into new Compose messages, replies, forwards, and quick replies. |
 | `keyboard.profile` | Keyboard profile: `default`, `vim`, `emacs`, or `custom`. Default `default`. |
@@ -70,6 +74,8 @@ semantic:
 | `notifications.classification_completion` | Notify when folder classification finishes. Default `false`. |
 | `notifications.chat_results` | Notify when a long-running chat answer completes. Default `false`. |
 | `notifications.sound` | Request notification sound where supported. Default `false`. |
+| `calendar.week_start` | Calendar week layout: `monday` by default, or `sunday` for Apple Calendar-style US weeks. |
+| `calendar.selected_calendars` | Persisted allow-list of visible calendar collection keys; provider URLs, tokens, ETags, and event IDs stay out of YAML. |
 | `semantic.enabled` | Enables semantic search indexing and automatic background embedding/contact enrichment when AI is configured. Keep `false` to avoid background body fetches and embedding work. |
 | `semantic.model` | Embedding model name. Defaults to Ollama embedding model. When Ollama is selected, setup validates this effective embedding model and shows `ollama pull <model>` when it is missing. |
 | `semantic.batch_size` | Embedding batch size. Default `20`. |

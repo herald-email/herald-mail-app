@@ -3,7 +3,7 @@ title: Gmail Setup
 description: Configure Gmail with OAuth or an App Password fallback.
 ---
 
-Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization flow, then validates Gmail IMAP and SMTP with XOAUTH2 before saving the resulting config.
+Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authorization flow, validates the selected Google access, then saves a Gmail API mail source so sync, body reads, drafts, mailbox mutations, and send use Google's API instead of IMAP.
 
 ## Recommended: Gmail OAuth
 
@@ -17,18 +17,20 @@ Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authoriz
 2. Run `herald`.
 3. Choose `Gmail OAuth` in the setup wizard.
 4. Complete browser authorization, then return to Herald.
-5. Wait for Herald to validate IMAP and SMTP before it continues to optional preferences.
+5. Wait for Herald to validate Gmail API access before it continues to optional preferences.
 6. Finish the remaining setup steps to save the validated config.
 
 Homebrew and release binaries include the desktop OAuth defaults needed by the wizard.
 
 OAuth stores refresh token data in the Herald config only after validation succeeds and you finish setup so it can refresh access tokens later. Treat the config file like a credential.
 
+If you keep Google Calendar enabled during setup, Herald also creates a Google Calendar source from the same OAuth flow. You can add or remove calendar sources later from Settings > Accounts.
+
 OAuth desktop client secrets are convenience defaults, not a protection boundary. Once a secret is embedded in a distributed binary, users can extract it, so Google account consent and token storage remain the real security controls.
 
 ## Fallback: Gmail with an App Password
 
-Use this path for personal Gmail accounts with 2-Step Verification.
+Use this path for personal Gmail accounts with 2-Step Verification when you do not want OAuth or cannot use the Gmail API path.
 
 1. Make sure 2-Step Verification is enabled for your Google account.
 2. Create a Google App Password for Herald.

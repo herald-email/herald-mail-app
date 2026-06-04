@@ -59,13 +59,13 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
-            { label: "What's new", slug: 'whats-new-in-v0-5' },
+            { label: "What's new in v0.6", slug: 'whats-new-in-v0-6' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
             { label: 'Run without email', slug: 'demo-mode' },
             { label: 'Provider setup', slug: 'provider-setup' },
-            { label: 'Gmail IMAP', slug: 'gmail-setup' },
+            { label: 'Gmail', slug: 'gmail-setup' },
             { label: 'Custom IMAP', slug: 'custom-imap' },
           ],
         },
@@ -93,6 +93,7 @@ export default defineConfig({
             { label: 'Themes', slug: 'themes' },
             { label: 'Sync and Status', slug: 'features/sync-status' },
             { label: 'Destructive Actions', slug: 'features/destructive-actions' },
+            { label: 'Notifications and Deep Links', slug: 'features/notifications' },
           ],
         },
         {

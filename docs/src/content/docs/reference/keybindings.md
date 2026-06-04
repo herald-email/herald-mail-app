@@ -79,6 +79,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `s` | Save selected attachment from preview. |
 | `[` | Select previous attachment. |
 | `]` | Select next attachment. |
+| `i` | Create or update a calendar event from an email preview with `text/calendar` or `.ics` invitation data. |
 | `u` | Unsubscribe when preview body includes unsubscribe data. |
 | `H` | Hide future mail from current sender. |
 | `v` | Toggle visual text selection in preview/full-screen. |
@@ -154,7 +155,9 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `/` | Open Calendar Search. |
 | `x` | Open cross-source mail-and-calendar search when available. |
 | `enter` | Open full event detail for the selected event. |
+| `n` | Open Event Create on a writable calendar source. |
 | `e` | Open Event Edit for the selected event when the source supports it. |
+| `D` | Delete the selected event after confirmation when the source supports deletion. |
 | `space` | Show or hide the focused calendar when the rail is focused. |
 | `p` | Show or hide past rows in Agenda when past rows are hidden. |
 | `esc` | Return from detail/search/edit to the previous Calendar view. |
@@ -212,6 +215,7 @@ fields:
 | Chat | `enter` send, `esc` or `tab` close/leave chat, `q` quit. |
 | Shortcut help | `/` search, `j`/`k`, arrows, page keys, `home`/`end`, or mouse wheel scroll; `?`/`esc`/`q` close. |
 | Calendar RSVP picker | `y` accept, `m` maybe/tentative, `n` decline, `esc` cancel. |
+| Calendar invitation import | `j`/`k` choose calendar, `enter` create or update, `s` skip duplicate, `r` reconnect OAuth when available, `esc` cancel. |
 | Rule editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
 | Prompt editor | Launched from Settings Sync & Cleanup; form navigation, `esc` cancel. |
 | Cleanup manager | Launched from Settings Sync & Cleanup; `n` new, `enter` edit, `d`/`D` delete, `r` run all, `j`/`k` move, `esc` close or cancel edit. |
