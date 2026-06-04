@@ -33,6 +33,21 @@ func TestBlankComposeInsertsConfiguredSignature(t *testing.T) {
 	assertComposeBodyCursorAtStart(t, m)
 }
 
+func TestConfiguredSignatureNormalizesBareDelimiterLine(t *testing.T) {
+	m := New(&stubBackend{}, nil, "rowan@example.com", nil, false)
+	m.cfg = &config.Config{}
+	m.cfg.Compose.Signature.Text = "--\nRowan Finch"
+
+	if got := m.configuredSignature(); got != "-- \nRowan Finch" {
+		t.Fatalf("configured signature = %q, want standard delimiter", got)
+	}
+
+	m.openBlankComposeFromCurrent()
+	if got := m.composeBody.Value(); got != "\n\n-- \nRowan Finch" {
+		t.Fatalf("compose body = %q, want normalized signature", got)
+	}
+}
+
 func TestReplyAndForwardComposeAppendConfiguredSignature(t *testing.T) {
 	backend := &forwardBodyBackend{body: &models.EmailBody{TextPlain: "original", TextHTML: "<p>original</p>"}}
 	m, email := newTimelineForwardModel(backend)

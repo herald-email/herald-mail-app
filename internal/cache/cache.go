@@ -81,6 +81,10 @@ func (c *Cache) initDB() error {
 		`ALTER TABLE emails ADD COLUMN account_id TEXT NOT NULL DEFAULT 'default'`,
 		`ALTER TABLE emails ADD COLUMN local_id TEXT`,
 		`ALTER TABLE emails ADD COLUMN uid_validity INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE emails ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE emails ADD COLUMN references_header TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE emails ADD COLUMN provider_thread_id TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_emails_provider_thread ON emails(source_id, account_id, provider_thread_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_emails_source_folder_date ON emails(source_id, account_id, folder, date DESC)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_local_id ON emails(local_id) WHERE local_id IS NOT NULL`,
 	} {
@@ -967,8 +971,8 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 	ref := email.MessageRef()
 	query := `
 		INSERT OR REPLACE INTO emails
-		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, in_reply_to, references_header, provider_thread_id, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	hasAttachments := 0
@@ -997,6 +1001,9 @@ func (c *Cache) CacheEmail(email *models.EmailData) error {
 		ref.LocalID,
 		email.Sender,
 		email.Subject,
+		email.InReplyTo,
+		email.References,
+		email.ProviderThreadID,
 		email.Date.Format(time.RFC3339),
 		email.Size,
 		hasAttachments,
@@ -1030,8 +1037,8 @@ func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
 	}
 	query := `
 		INSERT OR REPLACE INTO emails
-		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(message_id, uid, uid_validity, source_id, account_id, local_id, sender, subject, in_reply_to, references_header, provider_thread_id, date, size, has_attachments, folder, last_updated, is_read, is_starred, is_draft)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	stmt, err := tx.Prepare(query)
 	if err != nil {
@@ -1061,6 +1068,7 @@ func (c *Cache) BatchCacheEmails(emails []*models.EmailData) error {
 		}
 		if _, err = stmt.Exec(
 			email.MessageID, email.UID, ref.UIDValidity, string(ref.SourceID), string(ref.AccountID), ref.LocalID, email.Sender, email.Subject,
+			email.InReplyTo, email.References, email.ProviderThreadID,
 			email.Date.Format(time.RFC3339), email.Size, hasAttachments,
 			email.Folder, now, isRead, isStarred, isDraft,
 		); err != nil {
@@ -2036,33 +2044,36 @@ func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) 
 
 // GetEmailByID returns a single email by message ID
 func (c *Cache) GetEmailByID(messageID string) (*models.EmailData, error) {
-	row := c.db.QueryRow(`SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0), message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, folder, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
+	row := c.db.QueryRow(`SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0), message_id, COALESCE(uid, 0), sender, subject, COALESCE(in_reply_to, ''), COALESCE(references_header, ''), COALESCE(provider_thread_id, ''), date, size, has_attachments, folder, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 	                       FROM emails WHERE message_id = ?`, messageID)
-	var msgID, sender, subject, folder string
+	var msgID, sender, subject, inReplyTo, references, providerThreadID, folder string
 	var sourceID, accountID, localID string
 	var uid uint32
 	var uidValidity uint32
 	var date time.Time
 	var size, hasAtt, isRead, isStarred, isDraft int
-	if err := row.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
+	if err := row.Scan(&sourceID, &accountID, &localID, &uidValidity, &msgID, &uid, &sender, &subject, &inReplyTo, &references, &providerThreadID, &date, &size, &hasAtt, &folder, &isRead, &isStarred, &isDraft); err != nil {
 		return nil, err
 	}
 	return normalizeEmailScope(&models.EmailData{
-		SourceID:       models.SourceID(sourceID),
-		AccountID:      models.AccountID(accountID),
-		LocalID:        localID,
-		UIDValidity:    uidValidity,
-		MessageID:      msgID,
-		UID:            uid,
-		Sender:         sender,
-		Subject:        subject,
-		Date:           date,
-		Size:           size,
-		HasAttachments: hasAtt == 1,
-		IsRead:         isRead == 1,
-		IsStarred:      isStarred == 1,
-		IsDraft:        isDraft == 1,
-		Folder:         folder,
+		SourceID:         models.SourceID(sourceID),
+		AccountID:        models.AccountID(accountID),
+		LocalID:          localID,
+		UIDValidity:      uidValidity,
+		MessageID:        msgID,
+		UID:              uid,
+		Sender:           sender,
+		Subject:          subject,
+		InReplyTo:        inReplyTo,
+		References:       references,
+		ProviderThreadID: providerThreadID,
+		Date:             date,
+		Size:             size,
+		HasAttachments:   hasAtt == 1,
+		IsRead:           isRead == 1,
+		IsStarred:        isStarred == 1,
+		IsDraft:          isDraft == 1,
+		Folder:           folder,
 	}), nil
 }
 
@@ -2127,7 +2138,7 @@ func (c *Cache) GetEmailByFolderUID(folder string, uid uint32) (*models.EmailDat
 // GetEmailsSortedByDate returns all emails for a folder sorted by date descending
 func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error) {
 	query := `SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
-	                 message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
+	                 message_id, COALESCE(uid, 0), sender, subject, COALESCE(in_reply_to, ''), COALESCE(references_header, ''), COALESCE(provider_thread_id, ''), date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 	          FROM emails WHERE folder = ? ORDER BY date DESC`
 	rows, err := c.db.Query(query, folder)
 	if err != nil {
@@ -2137,35 +2148,183 @@ func (c *Cache) GetEmailsSortedByDate(folder string) ([]*models.EmailData, error
 
 	var emails []*models.EmailData
 	for rows.Next() {
-		var messageID, sender, subject string
+		var messageID, sender, subject, inReplyTo, references, providerThreadID string
 		var sourceID, accountID, localID string
 		var uid uint32
 		var uidValidity uint32
 		var date time.Time
 		var size, hasAttachments, isRead, isStarred, isDraft int
-		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &messageID, &uid, &sender, &subject, &date, &size, &hasAttachments, &isRead, &isStarred, &isDraft); err != nil {
+		if err := rows.Scan(&sourceID, &accountID, &localID, &uidValidity, &messageID, &uid, &sender, &subject, &inReplyTo, &references, &providerThreadID, &date, &size, &hasAttachments, &isRead, &isStarred, &isDraft); err != nil {
 			return nil, err
 		}
 		email := normalizeEmailScope(&models.EmailData{
-			SourceID:       models.SourceID(sourceID),
-			AccountID:      models.AccountID(accountID),
-			LocalID:        localID,
-			UIDValidity:    uidValidity,
-			MessageID:      messageID,
-			UID:            uid,
-			Sender:         sender,
-			Subject:        subject,
-			Date:           date,
-			Size:           size,
-			HasAttachments: hasAttachments == 1,
-			IsRead:         isRead == 1,
-			IsStarred:      isStarred == 1,
-			IsDraft:        isDraft == 1,
-			Folder:         folder,
+			SourceID:         models.SourceID(sourceID),
+			AccountID:        models.AccountID(accountID),
+			LocalID:          localID,
+			UIDValidity:      uidValidity,
+			MessageID:        messageID,
+			UID:              uid,
+			Sender:           sender,
+			Subject:          subject,
+			InReplyTo:        inReplyTo,
+			References:       references,
+			ProviderThreadID: providerThreadID,
+			Date:             date,
+			Size:             size,
+			HasAttachments:   hasAttachments == 1,
+			IsRead:           isRead == 1,
+			IsStarred:        isStarred == 1,
+			IsDraft:          isDraft == 1,
+			Folder:           folder,
 		})
 		emails = append(emails, email)
 	}
 	return emails, rows.Err()
+}
+
+// GetTimelineEmailsWithThreadContext returns active-folder emails plus messages
+// from context folders that are explicitly linked by provider or RFC threading
+// metadata. It intentionally does not match by subject alone.
+func (c *Cache) GetTimelineEmailsWithThreadContext(folder string, contextFolders []string) ([]*models.EmailData, error) {
+	base, err := c.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return nil, err
+	}
+	cleanContextFolders := cleanThreadContextFolders(folder, contextFolders)
+	if len(base) == 0 || len(cleanContextFolders) == 0 {
+		return base, nil
+	}
+
+	anchors := buildThreadContextAnchors(base)
+	if len(anchors.messageIDs) == 0 && len(anchors.providerThreadIDs) == 0 {
+		return base, nil
+	}
+
+	out := append([]*models.EmailData(nil), base...)
+	seen := make(map[string]bool, len(out))
+	for _, email := range out {
+		seen[emailThreadDedupeKey(email)] = true
+	}
+
+	for _, contextFolder := range cleanContextFolders {
+		candidates, err := c.GetEmailsSortedByDate(contextFolder)
+		if err != nil {
+			return nil, err
+		}
+		for _, candidate := range candidates {
+			key := emailThreadDedupeKey(candidate)
+			if seen[key] || !emailMatchesThreadContext(candidate, anchors) {
+				continue
+			}
+			out = append(out, candidate)
+			seen[key] = true
+		}
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		left := out[i]
+		right := out[j]
+		if left == nil || right == nil {
+			return right != nil
+		}
+		if !left.Date.Equal(right.Date) {
+			return left.Date.After(right.Date)
+		}
+		return left.MessageID < right.MessageID
+	})
+	return out, nil
+}
+
+type threadContextAnchors struct {
+	messageIDs        map[string]bool
+	providerThreadIDs map[string]bool
+}
+
+func buildThreadContextAnchors(emails []*models.EmailData) threadContextAnchors {
+	anchors := threadContextAnchors{
+		messageIDs:        make(map[string]bool),
+		providerThreadIDs: make(map[string]bool),
+	}
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		if id := normalizeThreadMessageID(email.MessageID); id != "" {
+			anchors.messageIDs[id] = true
+		}
+		if threadID := strings.TrimSpace(email.ProviderThreadID); threadID != "" {
+			anchors.providerThreadIDs[threadID] = true
+		}
+	}
+	return anchors
+}
+
+func cleanThreadContextFolders(activeFolder string, contextFolders []string) []string {
+	activeFolder = strings.TrimSpace(activeFolder)
+	seen := make(map[string]bool, len(contextFolders))
+	out := make([]string, 0, len(contextFolders))
+	for _, folder := range contextFolders {
+		folder = strings.TrimSpace(folder)
+		if folder == "" || folder == activeFolder || seen[folder] {
+			continue
+		}
+		seen[folder] = true
+		out = append(out, folder)
+	}
+	return out
+}
+
+func emailMatchesThreadContext(email *models.EmailData, anchors threadContextAnchors) bool {
+	if email == nil {
+		return false
+	}
+	if threadID := strings.TrimSpace(email.ProviderThreadID); threadID != "" && anchors.providerThreadIDs[threadID] {
+		return true
+	}
+	if id := normalizeThreadMessageID(email.InReplyTo); id != "" && anchors.messageIDs[id] {
+		return true
+	}
+	for _, id := range extractThreadMessageIDs(email.References) {
+		if anchors.messageIDs[id] {
+			return true
+		}
+	}
+	return false
+}
+
+func extractThreadMessageIDs(header string) []string {
+	header = strings.NewReplacer(",", " ", "\r", " ", "\n", " ", "\t", " ").Replace(header)
+	fields := strings.Fields(header)
+	ids := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if id := normalizeThreadMessageID(field); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func normalizeThreadMessageID(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.Trim(id, ",;")
+	if id == "" {
+		return ""
+	}
+	return strings.ToLower(id)
+}
+
+func emailThreadDedupeKey(email *models.EmailData) string {
+	if email == nil {
+		return ""
+	}
+	ref := email.MessageRef()
+	if ref.LocalID != "" {
+		return "local:" + ref.LocalID
+	}
+	if email.MessageID != "" {
+		return "message:" + string(ref.SourceID) + ":" + string(ref.AccountID) + ":" + email.Folder + ":" + email.MessageID
+	}
+	return "uid:" + string(ref.SourceID) + ":" + string(ref.AccountID) + ":" + email.Folder + ":" + fmt.Sprint(email.UID)
 }
 
 // GetCachedUIDs returns all cached UIDs for a folder

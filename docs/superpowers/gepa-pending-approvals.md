@@ -4,8 +4,8 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 ## Snapshot
 
-- Updated at: 2026-05-31T21:15:03+00:00
-- Published runs analyzed: 50
+- Updated at: 2026-06-04T19:16:36+00:00
+- Published runs analyzed: 52
 - Total queue items: 12
 - Pending: 2
 - Approved: 0
@@ -24,18 +24,18 @@ This document is the visible approval backlog for workflow suggestions recovered
 
 - Queue key: `two-candidate-worktree-trial-f38557be73`
 - Status: pending
-- Seen in runs: 6
+- Seen in runs: 8
 - First seen: 2026-05-29T05:46:13+00:00
-- Last seen: 2026-05-31T20:49:32+00:00
-- Publish actions: branch-delete, commit, commit 9ee4508 Add Gmail API history sync, commit a6435fa Harden Gmail API mail source, fast-forward merged to local main, merge, worktree-remove
+- Last seen: 2026-06-04T18:25:56+00:00
+- Publish actions: branch-delete, commit, commit 68cf842 Refs #32, commit 91a1f10 Cache clipped native image previews, commit 9ee4508 Add Gmail API history sync, commit a6435fa Harden Gmail API mail source, deleted branch codex/autopilot-demo-newsletter-preview-scroll-lag-20260604-112556, fast-forward merged to local main, merge, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260604-112556-demo-newsletter-preview-scroll-lag, worktree-remove
 - Why: A narrow challenger-worktree experiment is the next step toward true GEPA-style search once the baseline is trustworthy.
 - Approval prompt: Approve exploring `two-candidate-worktree-trial` as the next explicit GEPA improvement pass.
 - Source runs:
+- `20260604-112556-fix-demo-herald-newsletter-preview-scroll-lag-while-preserving-cropped-native-image-previews` at 2026-06-04T18:25:56+00:00 via commit 91a1f10 Cache clipped native image previews, fast-forward merged to local main, removed worktree /Users/zoomacode/Developer/mail-processor/.worktrees/20260604-112556-demo-newsletter-preview-scroll-lag, deleted branch codex/autopilot-demo-newsletter-preview-scroll-lag-20260604-112556
+- `20260531-222238-issue-32-add-macos-notifications-with-herald-deep-links` at 2026-06-01T05:22:38+00:00 via commit 68cf842 Refs #32
 - `20260531-134932-remove-legacy-google-scope` at 2026-05-31T20:49:32+00:00 via commit, merge, worktree-remove, branch-delete
 - `20260531-104218-slice-4-gmail-api-hardening-pagination-retry-backoff-and-send-mime-parity` at 2026-05-31T17:42:18+00:00 via commit a6435fa Harden Gmail API mail source, fast-forward merged to local main
 - `20260531-103007-slice-3-gmail-api-incremental-sync-via-users-history-list-with-fallback-and-live-smoke` at 2026-05-31T17:30:07+00:00 via commit 9ee4508 Add Gmail API history sync, fast-forward merged to local main
-- `20260529-112514-check-changes-since-last-release-update-docs-and-add-colorful-screenshots-showing-new-functionality` at 2026-05-29T18:25:14+00:00 via commit, merge
-- `20260529-090015-fix-calendar-detail-rsvp-actions-collision` at 2026-05-29T16:00:15+00:00 via commit, merge
 
 ### User-review follow-up settings hints template
 

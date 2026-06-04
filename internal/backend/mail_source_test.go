@@ -161,6 +161,117 @@ func TestLocalBackendRunLoadUsesMailSourceInOrder(t *testing.T) {
 	}
 }
 
+func TestLocalBackendRunLoadRefreshesSentThreadContextFolders(t *testing.T) {
+	source := newFakeMailSource()
+	source.folders = []string{"INBOX", "Sent", "Archive"}
+	source.stats = map[string]*models.SenderStats{
+		"sender@example.com": {TotalEmails: 3},
+	}
+	source.reconcileIDs = map[string]bool{"<live@x>": true}
+
+	b := &LocalBackend{
+		mailSource:       source,
+		cache:            newMemoryCache(t),
+		cfg:              &config.Config{},
+		progressCh:       make(chan models.ProgressInfo, 20),
+		syncEventsCh:     make(chan models.FolderSyncEvent, 20),
+		lastFetchCurrent: make(map[int64]int),
+	}
+
+	b.runLoad(folderLoadRequest{Folder: "INBOX", Generation: 8})
+
+	wantCalls := []string{
+		"connect",
+		"list-folders",
+		"process:INBOX",
+		"process:Sent",
+		"stats:INBOX",
+		"reconcile:INBOX",
+	}
+	if got := source.callsSnapshot(); !reflect.DeepEqual(got, wantCalls) {
+		t.Fatalf("source calls = %#v, want %#v", got, wantCalls)
+	}
+}
+
+func TestLocalBackendGetTimelineEmailsIncludesLinkedSentReply(t *testing.T) {
+	c := newMemoryCache(t)
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+	for _, email := range []*models.EmailData{
+		{
+			MessageID: "<original@example.test>",
+			UID:       1,
+			Sender:    "sender@example.test",
+			Subject:   "Project update",
+			Date:      now.Add(-10 * time.Minute),
+			Folder:    "INBOX",
+		},
+		{
+			MessageID:  "<reply@example.test>",
+			UID:        2,
+			Sender:     "me@example.test",
+			Subject:    "Re: Project update",
+			Date:       now,
+			Folder:     "Sent",
+			InReplyTo:  "<original@example.test>",
+			References: "<root@example.test> <original@example.test>",
+		},
+		{
+			MessageID: "<same-subject-unlinked@example.test>",
+			UID:       3,
+			Sender:    "me@example.test",
+			Subject:   "Re: Project update",
+			Date:      now.Add(5 * time.Minute),
+			Folder:    "Sent",
+		},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+	}
+	if err := c.StoreFolderList([]string{"INBOX", "Sent"}); err != nil {
+		t.Fatalf("StoreFolderList: %v", err)
+	}
+
+	b := &LocalBackend{
+		mailSource: newFakeMailSource(),
+		cache:      c,
+		cfg:        &config.Config{},
+	}
+	if err := b.primeCachedFoldersFromCache(); err != nil {
+		t.Fatalf("primeCachedFoldersFromCache: %v", err)
+	}
+
+	got, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+	if ids := backendEmailIDs(got); !reflect.DeepEqual(ids, []string{"<reply@example.test>", "<original@example.test>"}) {
+		t.Fatalf("timeline IDs = %#v, want linked Sent reply plus original", ids)
+	}
+	if got[0].Folder != "Sent" {
+		t.Fatalf("linked reply folder = %q, want Sent", got[0].Folder)
+	}
+}
+
+func TestLocalBackendSentThreadContextFoldersRecognizesCommonNames(t *testing.T) {
+	b := &LocalBackend{
+		cachedFolders: []string{
+			"INBOX",
+			"Sent",
+			"[Gmail]/Sent Mail",
+			"INBOX.Sent",
+			"Projects/Sent",
+			"Archive",
+			"Drafts",
+		},
+	}
+	got := b.sentThreadContextFolders("INBOX")
+	want := []string{"Sent", "[Gmail]/Sent Mail", "INBOX.Sent", "Projects/Sent"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sent thread context folders = %#v, want %#v", got, want)
+	}
+}
+
 func TestLocalBackendSourceBackedMessageServiceUsesMailSource(t *testing.T) {
 	source := newFakeMailSource()
 	ref := models.MessageRef{
@@ -601,4 +712,14 @@ func uintString(v uint32) string {
 		v /= 10
 	}
 	return string(buf[i:])
+}
+
+func backendEmailIDs(emails []*models.EmailData) []string {
+	ids := make([]string, 0, len(emails))
+	for _, email := range emails {
+		if email != nil {
+			ids = append(ids, email.MessageID)
+		}
+	}
+	return ids
 }

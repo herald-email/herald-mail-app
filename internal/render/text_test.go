@@ -115,6 +115,16 @@ func TestWrapLines_CollapsesBlanks(t *testing.T) {
 	}
 }
 
+func TestWrapLines_PreservesStandardSignatureDelimiterSpace(t *testing.T) {
+	lines := WrapLines("-- \nCheers,\nAnton", 80)
+	if len(lines) < 1 {
+		t.Fatal("expected wrapped signature lines")
+	}
+	if lines[0] != "-- " {
+		t.Fatalf("signature delimiter line = %q, want trailing space preserved", lines[0])
+	}
+}
+
 func TestCalculateTextWidth(t *testing.T) {
 	if w := CalculateTextWidth("abc"); w != 3 {
 		t.Errorf("CalculateTextWidth(\"abc\") = %d, want 3", w)

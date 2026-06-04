@@ -4,6 +4,7 @@ package kittyimg
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/png"
 	"os"
@@ -60,8 +61,19 @@ func RenderInline(imageData []byte, width, height int) (string, error) {
 	if err := png.Encode(&pngBuf, img); err != nil {
 		return "", err
 	}
+	return RenderInlinePNG(pngBuf.Bytes(), bounds.Dx(), bounds.Dy(), width, height)
+}
 
-	b64 := base64.StdEncoding.EncodeToString(pngBuf.Bytes())
+// RenderInlinePNG emits a direct-transfer Kitty graphics command for PNG bytes
+// when the caller already knows the source image dimensions.
+func RenderInlinePNG(pngData []byte, pixelWidth, pixelHeight, width, height int) (string, error) {
+	if len(pngData) == 0 {
+		return "", nil
+	}
+	if pixelWidth <= 0 || pixelHeight <= 0 {
+		return "", errors.New("invalid PNG dimensions")
+	}
+	b64 := base64.StdEncoding.EncodeToString(pngData)
 	if b64 == "" {
 		return "", nil
 	}
@@ -79,9 +91,9 @@ func RenderInline(imageData []byte, width, height int) (string, error) {
 		if offset == 0 {
 			out.WriteString("\033_Ga=T,f=100,t=d,q=2,C=1")
 			out.WriteString(",s=")
-			out.WriteString(itoa(bounds.Dx()))
+			out.WriteString(itoa(pixelWidth))
 			out.WriteString(",v=")
-			out.WriteString(itoa(bounds.Dy()))
+			out.WriteString(itoa(pixelHeight))
 			if width > 0 {
 				out.WriteString(",c=")
 				out.WriteString(itoa(width))

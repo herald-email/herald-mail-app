@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"strings"
 	"testing"
 
@@ -291,6 +292,77 @@ func TestPreviewImageRendererFallbacks(t *testing.T) {
 	if off.Rows != 0 || off.Content != "" {
 		t.Fatalf("off mode = %#v, want empty block", off)
 	}
+}
+
+func TestRenderClippedPreviewNativeImageCachesRepeatedSlice(t *testing.T) {
+	restore, decodeCalls := countPreviewNativeImageDecodes(t)
+	defer restore()
+
+	source := &previewNativeImageSource{
+		Image: models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		Width: 64,
+		Rows:  8,
+	}
+
+	first, ok := renderClippedPreviewNativeImage(source, previewImageModeIterm2, 2, 3)
+	if !ok || first == "" {
+		t.Fatalf("first clipped render ok/content = %v/%q, want content", ok, first)
+	}
+	second, ok := renderClippedPreviewNativeImage(source, previewImageModeIterm2, 2, 3)
+	if !ok || second == "" {
+		t.Fatalf("second clipped render ok/content = %v/%q, want content", ok, second)
+	}
+	if first != second {
+		t.Fatalf("cached clipped render changed output")
+	}
+	if *decodeCalls != 1 {
+		t.Fatalf("decode calls = %d, want one decode for repeated slice", *decodeCalls)
+	}
+	if got := len(source.clippedRenders); got != 1 {
+		t.Fatalf("cached clipped renders = %d, want 1", got)
+	}
+}
+
+func TestRenderClippedPreviewNativeImageReusesDecodedSourceForDifferentSlices(t *testing.T) {
+	restore, decodeCalls := countPreviewNativeImageDecodes(t)
+	defer restore()
+
+	source := &previewNativeImageSource{
+		Image: models.InlineImage{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		Width: 64,
+		Rows:  8,
+	}
+
+	top, ok := renderClippedPreviewNativeImage(source, previewImageModeIterm2, 0, 3)
+	if !ok || top == "" {
+		t.Fatalf("top clipped render ok/content = %v/%q, want content", ok, top)
+	}
+	lower, ok := renderClippedPreviewNativeImage(source, previewImageModeIterm2, 1, 3)
+	if !ok || lower == "" {
+		t.Fatalf("lower clipped render ok/content = %v/%q, want content", ok, lower)
+	}
+	if top == lower {
+		t.Fatalf("different clipped slices should not produce identical image payloads")
+	}
+	if *decodeCalls != 1 {
+		t.Fatalf("decode calls = %d, want one decode reused across slices", *decodeCalls)
+	}
+	if got := len(source.clippedRenders); got != 2 {
+		t.Fatalf("cached clipped renders = %d, want 2", got)
+	}
+}
+
+func countPreviewNativeImageDecodes(t *testing.T) (func(), *int) {
+	t.Helper()
+	original := decodePreviewNativeImage
+	calls := 0
+	decodePreviewNativeImage = func(r io.Reader) (image.Image, string, error) {
+		calls++
+		return original(r)
+	}
+	return func() {
+		decodePreviewNativeImage = original
+	}, &calls
 }
 
 func TestPreviewImageModeLinksPreservesOpenImageLabelWithLongAlt(t *testing.T) {

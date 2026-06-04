@@ -92,6 +92,38 @@ func TestIsStaleMessageNotFoundErrorRecognizesGmailHTTPNotFound(t *testing.T) {
 	}
 }
 
+func TestGmailAPIMailSourceEmailDataFromMessageCarriesThreadMetadata(t *testing.T) {
+	source := &GmailAPIMailSource{
+		id:        models.SourceID("gmail-api"),
+		accountID: models.AccountID("work"),
+	}
+	internalDate := "1770000000000"
+
+	email, err := source.emailDataFromMessage("INBOX", gmailAPIMessage{
+		ID:           "msg-1",
+		ThreadID:     "thread-123",
+		InternalDate: &internalDate,
+		Payload: gmailAPIMessagePayload{
+			Headers: []gmailAPIMessageHeader{
+				{Name: "Message-ID", Value: "<reply@example.test>"},
+				{Name: "In-Reply-To", Value: "<original@example.test>"},
+				{Name: "References", Value: "<root@example.test> <original@example.test>"},
+				{Name: "From", Value: "me@example.test"},
+				{Name: "Subject", Value: "Re: Gmail API thread"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("emailDataFromMessage: %v", err)
+	}
+	if email.ProviderThreadID != "thread-123" {
+		t.Fatalf("ProviderThreadID = %q, want Gmail thread id", email.ProviderThreadID)
+	}
+	if email.InReplyTo != "<original@example.test>" || email.References != "<root@example.test> <original@example.test>" {
+		t.Fatalf("thread headers = (%q, %q), want Gmail metadata headers", email.InReplyTo, email.References)
+	}
+}
+
 func TestGmailAPIMailSourceSyncFetchMutateAndSend(t *testing.T) {
 	fake := newFakeGmailAPIServer(t)
 	defer fake.Close()

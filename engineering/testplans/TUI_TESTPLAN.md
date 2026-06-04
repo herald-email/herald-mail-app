@@ -880,7 +880,7 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
-1. Configure `compose.signature.text` with a multiline signature and start Herald.
+1. Configure `compose.signature.text` with a multiline signature that starts with `-- ` and start Herald.
 2. Open Timeline and press `c` to open blank Compose.
 3. Return to Timeline, open a reply with `r`, and open a forward with `f`.
 4. Open the quick-reply picker from a preview, choose a reply, and inspect the Compose body.
@@ -894,7 +894,8 @@ Check these states during every applicable lane:
 - Reply and forward signatures stay in the editable top-note body and do not alter the read-only original-message pane.
 - Existing draft edits restore the saved body exactly and do not append another configured signature.
 - Opening and leaving a blank Compose screen containing only the automatic signature does not create a draft.
-- Settings exposes the multiline `Email Signature` field and saves future Compose openings without mutating the currently open draft.
+- Settings exposes the multiline `Email Signature` field, explains the `-- ` delimiter, normalizes a bare `--` delimiter on save, and saves future Compose openings without mutating the currently open draft.
+- Timeline preview renders the signature delimiter and following signature text as separate lines, preserving the delimiter's trailing space.
 - Reopening Compose does not duplicate a signature when the body already ends with the configured signature.
 
 ### TC-15 — Narrow screen behavior
@@ -946,8 +947,8 @@ Check these states during every applicable lane:
 
 ### TC-16A — Timeline cross-participant reply threads
 
-**Lane:** A, B
-**Sizes:** `220x50`, `80x24`
+**Lane:** A, B, G
+**Sizes:** `220x50`, `80x24`, `50x15`
 
 **Steps:**
 1. Start `/tmp/herald --demo`.
@@ -956,9 +957,14 @@ Check these states during every applicable lane:
 4. Press `Enter` to expand the thread.
 5. Confirm the expanded root row shows a `▾` disclosure marker.
 6. Move through the expanded rows.
+7. In the virtual mail lab or live config, reply to an Inbox message, wait for send success, then refresh the active Inbox folder.
+8. Reopen the original Inbox thread and inspect any unrelated Sent message with the same normalized subject.
 
 **Expect:**
 - Messages with the same normalized subject appear as one thread even when participants differ.
+- Sent replies linked by provider thread ID, `In-Reply-To`, or `References` appear inline in the original active-folder thread after refresh.
+- Unrelated Sent messages with the same normalized subject but no provider/RFC thread metadata link do not appear in the active-folder thread.
+- Inline Sent reply rows keep their real Sent folder/source identity for preview and message actions.
 - The collapsed sender cell starts with `▸` after unread/star indicators and shows the newest unique participants rather than only the newest sender.
 - The expanded root sender cell starts with `▾` after unread/star indicators.
 - Rows whose subject starts with a reply prefix show a visible `↩` reply marker at the beginning of the sender cell; an expanded reply root shows `▾ ↩`.

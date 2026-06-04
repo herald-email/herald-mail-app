@@ -610,7 +610,7 @@ func TestSettingsSignatureFieldShowsMultilineSaveHelp(t *testing.T) {
 	rendered := renderSettingsViewForTest(t, s, 120, 44)
 	normalized := strings.Join(strings.Fields(rendered), " ")
 
-	for _, want := range []string{"Enter adds a line", "Tab moves to Save", "Save", "enter new line", "tab next"} {
+	for _, want := range []string{"Enter=newline", "Tab=Save", "Empty disables", "Bare -- gets space", "enter new line", "tab next"} {
 		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected signature settings help to include %q, got:\n%s", want, rendered)
 		}
@@ -650,6 +650,31 @@ func TestSettingsSignatureFieldTabMovesToSaveButtonAndEnterSaves(t *testing.T) {
 	}
 	if saved.Config.Compose.Signature.Text != "Line one" {
 		t.Fatalf("saved signature = %q, want field value", saved.Config.Compose.Signature.Text)
+	}
+}
+
+func TestSettingsSignatureSaveNormalizesBareDelimiterLine(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	focusSignatureSettingsGroup(t, s)
+	s = updateSettingsForTest(t, s, keyRunes("--"))
+	s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	s = updateSettingsForTest(t, s, keyRunes("Line one"))
+
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyTab})
+	_, messages := updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	var saved SettingsSavedMsg
+	for _, msg := range messages {
+		if m, ok := msg.(SettingsSavedMsg); ok {
+			saved = m
+			break
+		}
+	}
+	if saved.Config == nil {
+		t.Fatalf("expected SettingsSavedMsg, got messages %#v", messages)
+	}
+	if got := saved.Config.Compose.Signature.Text; got != "-- \nLine one" {
+		t.Fatalf("saved signature = %q, want normalized delimiter", got)
 	}
 }
 

@@ -59,6 +59,19 @@ type previewNativeImageSource struct {
 	Image models.InlineImage
 	Width int
 	Rows  int
+
+	decodeAttempted bool
+	decodedImage    image.Image
+	decodeErr       error
+	clippedRenders  map[previewNativeImageClipKey]string
+}
+
+type previewNativeImageClipKey struct {
+	Mode        previewImageMode
+	Width       int
+	TotalRows   int
+	ClipTopRows int
+	VisibleRows int
 }
 
 type previewImageRenderResult struct {
@@ -68,6 +81,8 @@ type previewImageRenderResult struct {
 	TerminalConsumesRows bool
 	NativeImage          *previewNativeImageSource
 }
+
+var decodePreviewNativeImage = image.Decode
 
 func detectPreviewImageMode(requested previewImageMode, localLinks bool, sshMode bool) previewImageMode {
 	switch requested {
@@ -319,40 +334,88 @@ func renderClippedPreviewNativeImage(source *previewNativeImageSource, mode prev
 		return "", false
 	}
 
-	data, err := cropPreviewImageRows(source.Image.Data, clipTopRows, visibleRows, source.Rows)
+	key := previewNativeImageClipKey{
+		Mode:        mode,
+		Width:       source.Width,
+		TotalRows:   source.Rows,
+		ClipTopRows: clipTopRows,
+		VisibleRows: visibleRows,
+	}
+	if source.clippedRenders != nil {
+		if rendered, ok := source.clippedRenders[key]; ok {
+			return rendered, rendered != ""
+		}
+	}
+
+	data, pixelWidth, pixelHeight, err := source.cropPreviewImageRows(clipTopRows, visibleRows)
 	if err != nil || len(data) == 0 {
 		return "", false
 	}
 
+	rendered := ""
 	switch mode {
 	case previewImageModeIterm2:
-		rendered := strings.TrimRight(iterm2.RenderInlineImageOnly(data, source.Width, visibleRows), "\n")
-		return rendered, rendered != ""
+		rendered = strings.TrimRight(iterm2.RenderInlineImageOnly(data, source.Width, visibleRows), "\n")
 	case previewImageModeKitty:
-		rendered, err := kittyimg.RenderInline(data, source.Width, visibleRows)
+		renderedKitty, err := kittyimg.RenderInlinePNG(data, pixelWidth, pixelHeight, source.Width, visibleRows)
 		if err != nil {
 			return "", false
 		}
-		rendered = strings.TrimRight(rendered, "\n")
-		return rendered, rendered != ""
+		rendered = strings.TrimRight(renderedKitty, "\n")
 	default:
 		return "", false
 	}
+	if rendered == "" {
+		return "", false
+	}
+	if source.clippedRenders == nil {
+		source.clippedRenders = make(map[previewNativeImageClipKey]string)
+	}
+	source.clippedRenders[key] = rendered
+	return rendered, true
 }
 
 func cropPreviewImageRows(imageData []byte, clipTopRows, visibleRows, totalRows int) ([]byte, error) {
-	if totalRows < 1 || visibleRows < 1 {
-		return nil, fmt.Errorf("invalid crop rows")
-	}
-	img, _, err := image.Decode(bytes.NewReader(imageData))
+	img, _, err := decodePreviewNativeImage(bytes.NewReader(imageData))
 	if err != nil {
 		return nil, err
+	}
+	data, _, _, err := cropPreviewImageRowsFromImage(img, clipTopRows, visibleRows, totalRows)
+	return data, err
+}
+
+func (source *previewNativeImageSource) cropPreviewImageRows(clipTopRows, visibleRows int) ([]byte, int, int, error) {
+	img, err := source.decodedPreviewImage()
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return cropPreviewImageRowsFromImage(img, clipTopRows, visibleRows, source.Rows)
+}
+
+func (source *previewNativeImageSource) decodedPreviewImage() (image.Image, error) {
+	if source == nil || len(source.Image.Data) == 0 {
+		return nil, fmt.Errorf("empty image data")
+	}
+	if source.decodeAttempted {
+		return source.decodedImage, source.decodeErr
+	}
+	source.decodeAttempted = true
+	source.decodedImage, _, source.decodeErr = decodePreviewNativeImage(bytes.NewReader(source.Image.Data))
+	return source.decodedImage, source.decodeErr
+}
+
+func cropPreviewImageRowsFromImage(img image.Image, clipTopRows, visibleRows, totalRows int) ([]byte, int, int, error) {
+	if totalRows < 1 || visibleRows < 1 {
+		return nil, 0, 0, fmt.Errorf("invalid crop rows")
+	}
+	if img == nil {
+		return nil, 0, 0, fmt.Errorf("missing image")
 	}
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 	if width <= 0 || height <= 0 {
-		return nil, fmt.Errorf("invalid image dimensions")
+		return nil, 0, 0, fmt.Errorf("invalid image dimensions")
 	}
 
 	if clipTopRows < 0 {
@@ -377,7 +440,7 @@ func cropPreviewImageRows(imageData []byte, clipTopRows, visibleRows, totalRows 
 		y1 = bounds.Max.Y
 	}
 	if y0 >= y1 {
-		return nil, fmt.Errorf("empty image crop")
+		return nil, 0, 0, fmt.Errorf("empty image crop")
 	}
 
 	cropped := image.NewRGBA(image.Rect(0, 0, width, y1-y0))
@@ -385,9 +448,9 @@ func cropPreviewImageRows(imageData []byte, clipTopRows, visibleRows, totalRows 
 
 	var out bytes.Buffer
 	if err := png.Encode(&out, cropped); err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
-	return out.Bytes(), nil
+	return out.Bytes(), width, y1 - y0, nil
 }
 
 func minInt(a, b int) int {

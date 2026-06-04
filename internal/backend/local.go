@@ -493,6 +493,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		return
 	}
 	b.tracef("ProcessEmailsIncremental completed: folder=%s generation=%d elapsed=%s", req.Folder, req.Generation, time.Since(start).Round(10*time.Millisecond))
+	b.refreshSentThreadContextFolders(ctx, req)
 
 	b.sendProgress(models.ProgressInfo{
 		Phase:   "finalizing",
@@ -671,12 +672,79 @@ func (b *LocalBackend) primeCachedFoldersFromCache() error {
 	return nil
 }
 
+func (b *LocalBackend) sentThreadContextFolders(currentFolder string) []string {
+	if isSentThreadContextFolder(currentFolder) {
+		return nil
+	}
+
+	b.foldersMu.RLock()
+	folders := append([]string(nil), b.cachedFolders...)
+	b.foldersMu.RUnlock()
+
+	if len(folders) == 0 && b != nil && b.cache != nil {
+		if cached, err := b.cache.GetCachedFolderList(); err == nil {
+			folders = cached
+		} else {
+			logger.Debug("Failed to load cached folder list for sent thread context: %v", err)
+		}
+	}
+
+	seen := make(map[string]bool, len(folders))
+	out := make([]string, 0, len(folders))
+	for _, folder := range folders {
+		folder = strings.TrimSpace(folder)
+		if folder == "" || folder == currentFolder || seen[folder] || !isSentThreadContextFolder(folder) {
+			continue
+		}
+		seen[folder] = true
+		out = append(out, folder)
+	}
+	return out
+}
+
+func isSentThreadContextFolder(folder string) bool {
+	name := strings.ToLower(strings.TrimSpace(folder))
+	if name == "" {
+		return false
+	}
+	for _, candidate := range []string{
+		"sent",
+		"sent mail",
+		"sent items",
+		"sent messages",
+		"[gmail]/sent mail",
+		"[google mail]/sent mail",
+	} {
+		if name == candidate {
+			return true
+		}
+	}
+	return strings.HasSuffix(name, "/sent") ||
+		strings.HasSuffix(name, ".sent") ||
+		strings.HasSuffix(name, "/sent mail") ||
+		strings.HasSuffix(name, ".sent mail") ||
+		strings.HasSuffix(name, "/sent items") ||
+		strings.HasSuffix(name, ".sent items")
+}
+
+func (b *LocalBackend) refreshSentThreadContextFolders(ctx context.Context, req folderLoadRequest) {
+	for _, folder := range b.sentThreadContextFolders(req.Folder) {
+		b.tracef("starting sent thread context sync: active=%s sent=%s generation=%d", req.Folder, folder, req.Generation)
+		if err := b.mailSource.ProcessEmailsIncremental(ctx, folder); err != nil {
+			logger.Warn("Failed to refresh sent thread context folder %s: %v", folder, err)
+			continue
+		}
+		b.tracef("sent thread context sync completed: active=%s sent=%s generation=%d", req.Folder, folder, req.Generation)
+	}
+}
+
 func (b *LocalBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
 	return b.mailSource.GetFolderStatus(context.Background(), folders)
 }
 
 func (b *LocalBackend) GetTimelineEmails(folder string) ([]*models.EmailData, error) {
-	emails, err := b.cache.GetEmailsSortedByDate(folder)
+	contextFolders := b.sentThreadContextFolders(folder)
+	emails, err := b.cache.GetTimelineEmailsWithThreadContext(folder, contextFolders)
 	if err != nil {
 		return nil, err
 	}
