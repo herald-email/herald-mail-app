@@ -325,6 +325,66 @@ func skipEscapeSeqBytes(s string, start int) int {
 	}
 }
 
+// OSC8TargetAtVisibleColumn returns the OSC 8 hyperlink target covering the
+// zero-based visible terminal column in line.
+func OSC8TargetAtVisibleColumn(line string, column int) (string, bool) {
+	if column < 0 {
+		return "", false
+	}
+	activeTarget := ""
+	visibleColumn := 0
+	for i := 0; i < len(line); {
+		if line[i] == '\033' {
+			if target, end, ok := parseOSC8Target(line, i); ok {
+				activeTarget = target
+				i = end
+				continue
+			}
+			i = skipEscapeSeqBytes(line, i)
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		if size <= 0 {
+			break
+		}
+		width := xansi.StringWidth(string(r))
+		if width > 0 {
+			if column >= visibleColumn && column < visibleColumn+width {
+				return activeTarget, activeTarget != ""
+			}
+			visibleColumn += width
+		}
+		i += size
+	}
+	return "", false
+}
+
+func parseOSC8Target(s string, start int) (string, int, bool) {
+	if start < 0 || start+4 > len(s) || !strings.HasPrefix(s[start:], "\033]8;") {
+		return "", start, false
+	}
+	end := skipEscapeSeqBytes(s, start)
+	payload := s[start+2 : end]
+	switch {
+	case strings.HasSuffix(payload, "\a"):
+		payload = payload[:len(payload)-1]
+	case strings.HasSuffix(payload, "\033\\"):
+		payload = payload[:len(payload)-2]
+	}
+	if !strings.HasPrefix(payload, "8;") {
+		return "", start, false
+	}
+	rest := payload[2:]
+	separator := strings.IndexByte(rest, ';')
+	if separator < 0 {
+		return "", start, false
+	}
+	return rest[separator+1:], end, true
+}
+
 func collapseLabelURLReferenceLines(body string) string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	lines := strings.Split(body, "\n")

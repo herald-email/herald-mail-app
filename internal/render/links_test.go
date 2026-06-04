@@ -54,6 +54,36 @@ func TestLinkifyWrappedLines(t *testing.T) {
 	}
 }
 
+func TestOSC8TargetAtVisibleColumn(t *testing.T) {
+	line := "see " + TerminalHyperlink("example", "https://example.com/path") + " today"
+
+	for _, col := range []int{4, 7, 10} {
+		got, ok := OSC8TargetAtVisibleColumn(line, col)
+		if !ok || got != "https://example.com/path" {
+			t.Fatalf("column %d target=%q ok=%v, want example target", col, got, ok)
+		}
+	}
+	for _, col := range []int{0, 3, 11, 12} {
+		if got, ok := OSC8TargetAtVisibleColumn(line, col); ok {
+			t.Fatalf("column %d unexpectedly hit target %q", col, got)
+		}
+	}
+}
+
+func TestOSC8TargetAtVisibleColumnHandlesWideRunes(t *testing.T) {
+	line := "a " + TerminalHyperlink("界", "https://wide.example") + " z"
+
+	for _, col := range []int{2, 3} {
+		got, ok := OSC8TargetAtVisibleColumn(line, col)
+		if !ok || got != "https://wide.example" {
+			t.Fatalf("column %d target=%q ok=%v, want wide target", col, got, ok)
+		}
+	}
+	if got, ok := OSC8TargetAtVisibleColumn(line, 4); ok {
+		t.Fatalf("column after wide rune unexpectedly hit target %q", got)
+	}
+}
+
 func TestRenderEmailBodyLines_MarkdownLinksUseAnchorText(t *testing.T) {
 	longURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?utm_source=email&o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
 	sanitizedURL := "https://taskpad.mail.example/en/emails/team/onboarding/day0/creator-mobile?o=eyJmaXJzdF9uYW1lIjoiUm93YW4iLCJ3b3Jrc3BhY2VfaW52aXRlX2NvZGUiOiJrczRBQ1hDUDJTQmxPV0l3TkRka1lqVTROak14WldSbFpEQmpOemhtTnpnek5tTXhOekJrT0EiLCJ1bnN1YnNjcmliZV9saW5rIjoiZXhhbXBsZSJ9&s=-DM3t6fB_3TyPkavY9d1vRxPgY_VQR6z9k1KfuJjjFY"
