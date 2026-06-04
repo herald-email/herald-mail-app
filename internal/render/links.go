@@ -122,6 +122,13 @@ func renderLiteralSignatureLines(lines []string, width int) []string {
 			out = append(out, "")
 			continue
 		}
+		if len(markdownLinkTargets(line)) > 0 {
+			rendered := renderMarkdownEmailBodyLines(line, width)
+			if len(rendered) > 0 {
+				out = append(out, rendered...)
+				continue
+			}
+		}
 		linked := LinkifyURLs(line)
 		if xansi.StringWidth(linked) <= width {
 			out = append(out, linked)

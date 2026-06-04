@@ -117,6 +117,36 @@ func TestBuildInlineImages_CIDSubstitution(t *testing.T) {
 	}
 }
 
+func TestMarkdownToHTMLAndPlainPreservesComposeSignatureLineBreaks(t *testing.T) {
+	body := strings.Join([]string{
+		"Quick note:",
+		"",
+		"-- ",
+		"Cheers, Anton",
+		"Sent with Herald · https://herald-mail.app",
+	}, "\n")
+
+	html, plain := MarkdownToHTMLAndPlain(body)
+
+	for _, want := range []string{
+		"--<br",
+		"Cheers, Anton<br",
+		"Sent with Herald",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("HTML output should preserve signature line break marker %q, got:\n%s", want, html)
+		}
+	}
+	for _, want := range []string{
+		"-- \nCheers, Anton",
+		"Cheers, Anton\nSent with Herald",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("plain output should preserve signature line break %q, got:\n%s", want, plain)
+		}
+	}
+}
+
 func TestMimeTypeFromExt(t *testing.T) {
 	cases := []struct {
 		ext      string

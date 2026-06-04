@@ -81,6 +81,53 @@ func TestLocalBackendUsesVirtualMailLabForSendDraftAndReply(t *testing.T) {
 	}
 }
 
+func TestLocalBackendSendComposePreservesSignatureLineBreaksInVirtualMailLab(t *testing.T) {
+	lab := testmail.Start(t)
+	alice := lab.Account(testmail.DefaultAliceAddress)
+	bob := lab.Account(testmail.DefaultBobAddress)
+	cfg := alice.Config(filepath.Join(t.TempDir(), "alice-cache.db"))
+
+	b, err := NewLocal(cfg, "", nil)
+	if err != nil {
+		t.Fatalf("NewLocal: %v", err)
+	}
+	defer b.Close()
+
+	body := strings.Join([]string{
+		"Release smoke:",
+		"",
+		"-- ",
+		"Cheers, Anton",
+		"Sent with Herald · https://herald-mail.app",
+	}, "\n")
+	if err := b.SendCompose(ComposeSendRequest{
+		From:         alice.Address,
+		To:           bob.Address,
+		Subject:      "Virtual signature line breaks",
+		MarkdownBody: body,
+	}); err != nil {
+		t.Fatalf("SendCompose: %v", err)
+	}
+	lab.WaitForSubject(bob.Address, "INBOX", "Virtual signature line breaks")
+
+	captured := lab.CapturedSMTP()
+	if len(captured) != 1 {
+		t.Fatalf("captured SMTP count = %d, want 1", len(captured))
+	}
+	raw := string(captured[0].Data)
+	normalizedRaw := strings.ReplaceAll(raw, "\r\n", "\n")
+	for _, want := range []string{
+		"--<br>",
+		"Cheers, Anton<br>",
+		"-- \nCheers, Anton",
+		"Cheers, Anton\nSent with Herald",
+	} {
+		if !strings.Contains(normalizedRaw, want) {
+			t.Fatalf("outgoing MIME missing preserved signature line %q:\n%s", want, raw)
+		}
+	}
+}
+
 func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 	names := []testmail.ScenarioName{
 		testmail.ScenarioPlainThread,

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -210,5 +211,35 @@ func TestBuildPreviewDocument_AnchorWrappedRemoteImageRemainsVisible(t *testing.
 	plain := strings.Join(blockTexts(doc.Blocks), "\n")
 	if strings.Contains(plain, "[](https://example.test)") || strings.Contains(plain, "[https://example.test](https://example.test)") {
 		t.Fatalf("expected image link instead of empty/plain anchor link, got %#v", doc.Blocks)
+	}
+}
+
+func TestBuildPreviewDocument_RendersHTMLSignatureLinkWithoutMarkdownSyntax(t *testing.T) {
+	body := &models.EmailBody{
+		TextHTML: `<p>test<br>--<br>Cheers, Anton<br>Sent with Herald · <a href="https://herald-mail.app">herald-mail.app</a></p>`,
+	}
+
+	doc := buildPreviewDocument(body, nil)
+	layout := layoutPreviewDocument(doc, previewLayoutOptions{
+		InnerWidth:    100,
+		AvailableRows: 20,
+		ImageMode:     previewImageModePlaceholder,
+	})
+
+	var renderedRows []string
+	for _, row := range layout.Rows {
+		renderedRows = append(renderedRows, row.Content)
+	}
+	rendered := strings.Join(renderedRows, "\n")
+	visible := ansi.Strip(rendered)
+
+	if strings.Contains(visible, "[herald-mail.app]") || strings.Contains(visible, "](https://herald-mail.app)") {
+		t.Fatalf("expected received HTML signature link syntax to be rendered away, got:\n%s", visible)
+	}
+	if !strings.Contains(visible, "Sent with Herald · herald-mail.app") {
+		t.Fatalf("expected received HTML signature link label to remain visible, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;https://herald-mail.app\x1b\\") {
+		t.Fatalf("expected received HTML signature link target to survive as OSC 8, got raw:\n%q", rendered)
 	}
 }

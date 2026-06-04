@@ -259,6 +259,25 @@ func TestRenderEmailBodyLines_PreservesSignatureBlockAfterBody(t *testing.T) {
 	}
 }
 
+func TestRenderEmailBodyLines_RendersMarkdownLinksInsideSignatureBlock(t *testing.T) {
+	lines := RenderEmailBodyLines("test\n\n-- \nCheers, Anton\nSent with Herald · [herald-mail.app](https://herald-mail.app)", 100)
+	rendered := strings.Join(lines, "\n")
+	visible := ansi.Strip(rendered)
+
+	if strings.Contains(visible, "[herald-mail.app]") || strings.Contains(visible, "](https://herald-mail.app)") {
+		t.Fatalf("expected signature markdown link syntax to be rendered away, got:\n%s", visible)
+	}
+	if !strings.Contains(visible, "Sent with Herald · herald-mail.app") {
+		t.Fatalf("expected signature link label to remain visible, got:\n%s", visible)
+	}
+	if !strings.Contains(rendered, "\x1b]8;;https://herald-mail.app\x1b\\") {
+		t.Fatalf("expected signature link target to survive as OSC 8, got raw:\n%q", rendered)
+	}
+	if len(lines) < 3 || ansi.Strip(lines[2]) != "-- " {
+		t.Fatalf("expected signature delimiter to retain its trailing space, got lines:\n%q", lines)
+	}
+}
+
 func TestRenderEmailBodyLines_NakedLongURLUsesShortLabel(t *testing.T) {
 	longURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?utm_source=email&token=abcdefghijklmnopqrstuvwxyz0123456789"
 	sanitizedURL := "https://example.com/path/to/a/very/long/resource/name/that/would/otherwise/wrap/badly?token=abcdefghijklmnopqrstuvwxyz0123456789"

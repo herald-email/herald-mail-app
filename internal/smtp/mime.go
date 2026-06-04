@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 // InlineImage holds a resolved inline image to embed in the outgoing email.
@@ -154,13 +155,39 @@ func BuildDraftMessage(from, to, cc, bcc, subject, body string) ([]byte, error) 
 // rather than raw Markdown syntax (e.g. **bold** → bold).
 func MarkdownToHTMLAndPlain(md string) (htmlOut, plain string) {
 	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(md), &buf); err != nil {
+	markdown := goldmark.New(goldmark.WithRendererOptions(goldmarkhtml.WithHardWraps()))
+	if err := markdown.Convert([]byte(md), &buf); err != nil {
 		// goldmark should never fail on valid UTF-8, but fall back gracefully
 		return "", md
 	}
 	htmlOut = buf.String()
 	plain = stripHTMLTags(htmlOut)
+	plain = restorePlainSignatureDelimiter(md, plain)
 	return
+}
+
+func restorePlainSignatureDelimiter(md, plain string) string {
+	if !hasStandardSignatureDelimiterLine(md) {
+		return plain
+	}
+	lines := strings.Split(plain, "\n")
+	for i, line := range lines {
+		if line == "--" {
+			lines[i] = "-- "
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func hasStandardSignatureDelimiterLine(s string) bool {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	for _, line := range strings.Split(s, "\n") {
+		if line == "-- " {
+			return true
+		}
+	}
+	return false
 }
 
 // stripHTMLTags removes all HTML tags and decodes common entities to produce
