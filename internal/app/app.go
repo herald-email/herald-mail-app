@@ -2627,6 +2627,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarStatus = "Saved RSVP " + msg.Status
 		return m, nil
 
+	case CalendarEditContactSuggestionsMsg:
+		if !m.calendarEdit.Active || m.calendarEdit.Field != calendarEditFieldAttendees {
+			return m, nil
+		}
+		if msg.Query != m.calendarEdit.ContactQuery {
+			return m, nil
+		}
+		m.calendarEdit.ContactSuggestions = msg.Contacts
+		m.calendarEdit.ContactCursor = 0
+		m.calendarEdit.ContactLoading = false
+		return m, nil
+
 	case CalendarInvitationSavedMsg:
 		m.calendarInvitation.Saving = false
 		if msg.Err != nil {
@@ -3453,6 +3465,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Compose screen gets its own key handler
 	if m.activeTab == tabCompose {
 		return m.handleComposeKey(msg)
+	}
+
+	if m.activeTab == tabCalendar && (m.calendarEdit.Active || m.calendarDelete.Active) {
+		return m.handleCalendarKey(msg)
 	}
 
 	if normalized := m.normalizeShortcutKeyForActiveScope(key); normalized != "" && normalized != key {

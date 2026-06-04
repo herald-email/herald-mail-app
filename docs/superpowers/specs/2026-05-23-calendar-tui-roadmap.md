@@ -72,7 +72,7 @@ Timezone support should be visible, not hidden in a settings corner. Users sched
 
 - [x] Every event detail view shows the event's canonical timezone and the user's local rendering when they differ.
 - [x] Event editing includes a primary timezone field near start/end time, not buried under advanced options.
-- [ ] Users can add secondary display timezones such as `Europe/London` and `Asia/Tokyo`.
+- [x] Users can add secondary display timezones such as `Europe/London` and `Asia/Tokyo` through a searchable Display TZ picker while keeping manual timezone entry available.
 - [x] The edit preview flags date-crossing cases, such as a Tuesday meeting becoming Wednesday in Tokyo.
 - [x] Timezone changes update start/end interpretation clearly so users do not accidentally shift an event by changing display timezone.
 - [x] The UI distinguishes timezone display from event mutation: viewing another timezone is safe, saving a new event timezone is explicit.

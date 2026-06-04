@@ -671,6 +671,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Provider-backed Event Create opens from Calendar, scopes new events to the selected calendar, and writes through Google Calendar/CalDAV before adding cached rows
 - [x] Provider-backed Event Delete requires confirmation, writes through Google Calendar/CalDAV before invalidating cached rows, and is available from Calendar browse/detail/edit contexts
 - [x] Event Create/Edit supports different start and end timezones for travel events and renders HTML/Markdown notes in the live preview
+- [x] Event Create/Edit uses cursor-aware modal fields plus keyboard pickers for timezones, attendees, recurrence, reminders, and date selection without stealing text-entry shortcuts
 - [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [x] Provider mutation conflicts and unsupported recurrence scopes fail visibly without rewriting cached event rows
 - [x] Event Edit can mutate attendee lists and this-event recurrence rules through the existing provider save-through flow
