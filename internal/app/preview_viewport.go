@@ -204,7 +204,7 @@ func remoteImagePlaceholderLine(remote previewRemoteImage, state previewRemoteIm
 		text = fmt.Sprintf("image: %s (reveal failed; press o to retry)", label)
 	}
 	if remote.URL != "" {
-		text = render.TerminalHyperlink(text, remote.URL)
+		text = render.TerminalHyperlink(text, render.SanitizePreviewURLTarget(remote.URL))
 	}
 	return truncateVisual(text, innerWidth)
 }

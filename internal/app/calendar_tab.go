@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -93,15 +95,41 @@ const (
 )
 
 type calendarEventEditState struct {
-	Active bool
-	Create bool
-	Ref    models.EventRef
-	Base   models.CalendarEvent
-	Draft  models.CalendarEventEditDraft
-	Field  calendarEditField
-	Dirty  bool
-	Saving bool
-	Error  string
+	Active             bool
+	Create             bool
+	Ref                models.EventRef
+	Base               models.CalendarEvent
+	Draft              models.CalendarEventEditDraft
+	Field              calendarEditField
+	Dirty              bool
+	Saving             bool
+	Error              string
+	Inputs             map[calendarEditField]textinput.Model
+	DescriptionInput   textarea.Model
+	PickerMode         calendarEditPickerMode
+	PickerField        calendarEditField
+	PickerQuery        string
+	PickerCursor       int
+	DatePickerDate     time.Time
+	ContactSuggestions []models.ContactData
+	ContactCursor      int
+	ContactQuery       string
+	ContactLoading     bool
+}
+
+type calendarEditPickerMode string
+
+const (
+	calendarEditPickerNone       calendarEditPickerMode = ""
+	calendarEditPickerTimezone   calendarEditPickerMode = "timezone"
+	calendarEditPickerRecurrence calendarEditPickerMode = "recurrence"
+	calendarEditPickerReminder   calendarEditPickerMode = "reminder"
+	calendarEditPickerDate       calendarEditPickerMode = "date"
+)
+
+type CalendarEditContactSuggestionsMsg struct {
+	Query    string
+	Contacts []models.ContactData
 }
 
 type calendarEventDeleteState struct {
@@ -954,6 +982,7 @@ func (m *Model) openCalendarEdit() {
 		Draft:  draft,
 		Field:  calendarEditFieldTitle,
 	}
+	m.initializeCalendarEditControls()
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
 	m.calendarMeetingPrep = nil
@@ -1000,6 +1029,7 @@ func (m *Model) openCalendarCreate() {
 		Draft:  draft,
 		Field:  calendarEditFieldTitle,
 	}
+	m.initializeCalendarEditControls()
 	m.calendarDelete = calendarEventDeleteState{}
 	m.calendarMeetingPrepOpen = false
 	m.calendarMeetingPrepLoading = false
@@ -1071,6 +1101,106 @@ func calendarCreateTimeZone(start time.Time) string {
 		}
 	}
 	return time.Local.String()
+}
+
+func (m *Model) initializeCalendarEditControls() {
+	inputs := make(map[calendarEditField]textinput.Model)
+	for _, field := range calendarEditTextFields() {
+		input := textinput.New()
+		input.CharLimit = 0
+		input.SetValue(m.calendarEditFieldValueFromDraft(field))
+		input.CursorEnd()
+		inputs[field] = input
+	}
+	description := textarea.New()
+	description.CharLimit = 0
+	description.SetWidth(80)
+	description.SetHeight(5)
+	description.SetValue(m.calendarEdit.Draft.Description)
+	m.calendarEdit.Inputs = inputs
+	m.calendarEdit.DescriptionInput = description
+	m.focusCalendarEditField(m.calendarEdit.Field)
+}
+
+func calendarEditTextFields() []calendarEditField {
+	return []calendarEditField{
+		calendarEditFieldTitle,
+		calendarEditFieldLocation,
+		calendarEditFieldStart,
+		calendarEditFieldStartTimeZone,
+		calendarEditFieldEnd,
+		calendarEditFieldEndTimeZone,
+		calendarEditFieldAlternateTimeZones,
+		calendarEditFieldAttendees,
+		calendarEditFieldRecurrence,
+		calendarEditFieldReminders,
+	}
+}
+
+func (m *Model) ensureCalendarEditControls() {
+	if !m.calendarEdit.Active {
+		return
+	}
+	if m.calendarEdit.Inputs == nil {
+		m.initializeCalendarEditControls()
+		return
+	}
+	for _, field := range calendarEditTextFields() {
+		if _, ok := m.calendarEdit.Inputs[field]; !ok {
+			input := textinput.New()
+			input.CharLimit = 0
+			input.SetValue(m.calendarEditFieldValueFromDraft(field))
+			input.CursorEnd()
+			m.calendarEdit.Inputs[field] = input
+		}
+	}
+}
+
+func (m *Model) focusCalendarEditField(field calendarEditField) {
+	m.ensureCalendarEditControls()
+	for key, input := range m.calendarEdit.Inputs {
+		input.Blur()
+		m.calendarEdit.Inputs[key] = input
+	}
+	m.calendarEdit.DescriptionInput.Blur()
+	m.calendarEdit.Field = field
+	if field == calendarEditFieldDescription {
+		m.calendarEdit.DescriptionInput.Focus()
+		return
+	}
+	if input, ok := m.calendarEdit.Inputs[field]; ok {
+		input.Focus()
+		m.calendarEdit.Inputs[field] = input
+	}
+}
+
+func (m *Model) calendarEditFieldValueFromDraft(field calendarEditField) string {
+	switch field {
+	case calendarEditFieldTitle:
+		return m.calendarEdit.Draft.Title
+	case calendarEditFieldLocation:
+		return m.calendarEdit.Draft.Location
+	case calendarEditFieldStart:
+		return m.calendarEdit.Draft.StartText
+	case calendarEditFieldStartTimeZone:
+		return m.calendarEdit.Draft.StartTimeZone
+	case calendarEditFieldEnd:
+		return m.calendarEdit.Draft.EndText
+	case calendarEditFieldEndTimeZone:
+		return m.calendarEdit.Draft.EndTimeZone
+	case calendarEditFieldAlternateTimeZones:
+		return strings.Join(m.calendarEdit.Draft.AlternateTimeZones, ", ")
+	case calendarEditFieldAttendees:
+		return m.calendarEdit.Draft.AttendeesText
+	case calendarEditFieldRecurrence:
+		return m.calendarEdit.Draft.RecurrenceText
+	case calendarEditFieldReminders:
+		return m.calendarEdit.Draft.RemindersText
+	case calendarEditFieldDescription:
+		return m.calendarEdit.Draft.Description
+	default:
+		return ""
+	}
 }
 
 func (m *Model) openCalendarMeetingPrep() tea.Cmd {
@@ -1338,6 +1468,34 @@ func (m *Model) saveCalendarRSVPStatus(status string) tea.Cmd {
 }
 
 func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.ensureCalendarEditControls()
+	if m.calendarEdit.PickerMode == calendarEditPickerNone {
+		m.focusCalendarEditField(m.calendarEdit.Field)
+	}
+	if m.calendarEdit.PickerMode != calendarEditPickerNone {
+		return m.handleCalendarEditPickerKey(msg)
+	}
+	if m.calendarEdit.Field == calendarEditFieldAttendees && len(m.calendarEdit.ContactSuggestions) > 0 {
+		switch shortcutKey(msg) {
+		case "up":
+			if m.calendarEdit.ContactCursor > 0 {
+				m.calendarEdit.ContactCursor--
+			}
+			return m, nil
+		case "down":
+			if m.calendarEdit.ContactCursor < len(m.calendarEdit.ContactSuggestions)-1 {
+				m.calendarEdit.ContactCursor++
+			}
+			return m, nil
+		case "enter":
+			m.acceptCalendarEditContactSuggestion()
+			return m, nil
+		case "esc":
+			m.calendarEdit.ContactSuggestions = nil
+			m.calendarEdit.ContactCursor = 0
+			return m, nil
+		}
+	}
 	key := shortcutKey(msg)
 	switch key {
 	case "ctrl+s":
@@ -1359,15 +1517,18 @@ func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case "shift+tab":
 		m.moveCalendarEditField(-1)
 		return m, nil
-	case "up":
-		m.moveCalendarEditField(-1)
-		return m, nil
-	case "down":
-		m.moveCalendarEditField(1)
+	case "enter":
+		if m.openCalendarEditPickerForField() {
+			return m, nil
+		}
+		if m.calendarEdit.Field == calendarEditFieldAllDay {
+			m.calendarEdit.Draft.AllDay = !m.calendarEdit.Draft.AllDay
+			m.calendarEdit.Dirty = true
+			m.calendarEdit.Error = ""
+		}
 		return m, nil
 	case "backspace":
-		m.backspaceCalendarEditField()
-		return m, nil
+		return m.updateCalendarEditFocusedControl(msg)
 	case "ctrl+u":
 		m.setCalendarEditFieldValue("")
 		return m, nil
@@ -1377,15 +1538,294 @@ func (m *Model) handleCalendarEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.calendarEdit.Dirty = true
 			m.calendarEdit.Error = ""
 		} else {
-			m.appendCalendarEditFieldValue(" ")
+			return m.updateCalendarEditFocusedControl(msg)
 		}
 		return m, nil
 	}
-	if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt) == 0 {
-		m.appendCalendarEditFieldValue(msg.Text)
+	if m.calendarEdit.Field == calendarEditFieldAllDay || m.calendarEdit.Field == calendarEditFieldCalendar {
 		return m, nil
 	}
+	if msg.Mod&tea.ModCtrl == 0 {
+		return m.updateCalendarEditFocusedControl(msg)
+	}
 	return m, nil
+}
+
+func (m *Model) updateCalendarEditFocusedControl(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.ensureCalendarEditControls()
+	if m.calendarEdit.Field == calendarEditFieldDescription {
+		var cmd tea.Cmd
+		m.calendarEdit.DescriptionInput, cmd = m.calendarEdit.DescriptionInput.Update(msg)
+		m.calendarEdit.Draft.Description = m.calendarEdit.DescriptionInput.Value()
+		m.calendarEdit.Dirty = true
+		m.calendarEdit.Error = ""
+		return m, cmd
+	}
+	input, ok := m.calendarEdit.Inputs[m.calendarEdit.Field]
+	if !ok {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	input, cmd = input.Update(msg)
+	m.calendarEdit.Inputs[m.calendarEdit.Field] = input
+	m.setCalendarEditDraftFieldValue(m.calendarEdit.Field, input.Value())
+	if m.calendarEdit.Field == calendarEditFieldAttendees {
+		return m, tea.Batch(cmd, m.searchCalendarEditContactsCmd(calendarEditCurrentAttendeeToken(input.Value())))
+	}
+	return m, cmd
+}
+
+func (m *Model) openCalendarEditPickerForField() bool {
+	m.calendarEdit.PickerField = m.calendarEdit.Field
+	m.calendarEdit.PickerQuery = ""
+	m.calendarEdit.PickerCursor = 0
+	switch m.calendarEdit.Field {
+	case calendarEditFieldStartTimeZone, calendarEditFieldEndTimeZone, calendarEditFieldAlternateTimeZones:
+		m.calendarEdit.PickerMode = calendarEditPickerTimezone
+		return true
+	case calendarEditFieldRecurrence:
+		m.calendarEdit.PickerMode = calendarEditPickerRecurrence
+		return true
+	case calendarEditFieldReminders:
+		m.calendarEdit.PickerMode = calendarEditPickerReminder
+		return true
+	case calendarEditFieldStart, calendarEditFieldEnd:
+		m.calendarEdit.PickerMode = calendarEditPickerDate
+		m.calendarEdit.DatePickerDate = m.calendarEditDateForField(m.calendarEdit.Field)
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *Model) handleCalendarEditPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := shortcutKey(msg)
+	switch {
+	case key == "esc":
+		m.closeCalendarEditPicker()
+		return m, nil
+	case key == "enter":
+		m.applyCalendarEditPickerSelection()
+		return m, nil
+	case key == "backspace":
+		if m.calendarEdit.PickerQuery != "" {
+			runes := []rune(m.calendarEdit.PickerQuery)
+			m.calendarEdit.PickerQuery = string(runes[:len(runes)-1])
+			m.calendarEdit.PickerCursor = 0
+		}
+		return m, nil
+	case key == "up" || key == "k":
+		m.moveCalendarEditPickerCursor(-1)
+		return m, nil
+	case key == "down" || key == "j":
+		m.moveCalendarEditPickerCursor(1)
+		return m, nil
+	case m.calendarEdit.PickerMode == calendarEditPickerDate && (key == "left" || key == "h"):
+		m.calendarEdit.DatePickerDate = m.calendarEdit.DatePickerDate.AddDate(0, 0, -1)
+		return m, nil
+	case m.calendarEdit.PickerMode == calendarEditPickerDate && (key == "right" || key == "l"):
+		m.calendarEdit.DatePickerDate = m.calendarEdit.DatePickerDate.AddDate(0, 0, 1)
+		return m, nil
+	}
+	if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt) == 0 && m.calendarEdit.PickerMode == calendarEditPickerTimezone {
+		m.calendarEdit.PickerQuery += msg.Text
+		m.calendarEdit.PickerCursor = 0
+	}
+	return m, nil
+}
+
+func (m *Model) closeCalendarEditPicker() {
+	m.calendarEdit.PickerMode = calendarEditPickerNone
+	m.calendarEdit.PickerField = 0
+	m.calendarEdit.PickerQuery = ""
+	m.calendarEdit.PickerCursor = 0
+}
+
+func (m *Model) moveCalendarEditPickerCursor(delta int) {
+	if m.calendarEdit.PickerMode == calendarEditPickerDate {
+		m.calendarEdit.DatePickerDate = m.calendarEdit.DatePickerDate.AddDate(0, 0, delta*7)
+		return
+	}
+	count := len(m.calendarEditPickerOptions())
+	if count == 0 {
+		return
+	}
+	m.calendarEdit.PickerCursor += delta
+	if m.calendarEdit.PickerCursor < 0 {
+		m.calendarEdit.PickerCursor = count - 1
+	}
+	if m.calendarEdit.PickerCursor >= count {
+		m.calendarEdit.PickerCursor = 0
+	}
+}
+
+func (m *Model) applyCalendarEditPickerSelection() {
+	field := m.calendarEdit.PickerField
+	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerTimezone:
+		options := m.calendarEditPickerOptions()
+		if len(options) == 0 {
+			m.closeCalendarEditPicker()
+			return
+		}
+		if m.calendarEdit.PickerCursor >= len(options) {
+			m.calendarEdit.PickerCursor = len(options) - 1
+		}
+		timezone := options[m.calendarEdit.PickerCursor]
+		if field == calendarEditFieldAlternateTimeZones {
+			m.toggleCalendarEditAlternateTimeZone(timezone)
+		} else {
+			m.setCalendarEditFieldValueFor(field, timezone)
+		}
+	case calendarEditPickerRecurrence:
+		options := calendarEditRecurrencePickerOptions(m.calendarEdit.Draft.StartText)
+		if len(options) > 0 {
+			if m.calendarEdit.PickerCursor >= len(options) {
+				m.calendarEdit.PickerCursor = len(options) - 1
+			}
+			m.setCalendarEditFieldValueFor(calendarEditFieldRecurrence, options[m.calendarEdit.PickerCursor].Value)
+		}
+	case calendarEditPickerReminder:
+		options := calendarEditReminderPickerOptions()
+		if len(options) > 0 {
+			if m.calendarEdit.PickerCursor >= len(options) {
+				m.calendarEdit.PickerCursor = len(options) - 1
+			}
+			value := options[m.calendarEdit.PickerCursor].Value
+			if value == "" {
+				m.setCalendarEditFieldValueFor(calendarEditFieldReminders, "")
+			} else {
+				m.toggleCalendarEditReminder(value)
+			}
+		}
+	case calendarEditPickerDate:
+		m.applyCalendarEditDatePicker(field)
+	}
+	m.closeCalendarEditPicker()
+}
+
+func (m *Model) calendarEditPickerOptions() []string {
+	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerTimezone:
+		return calendarEditFilterTimezones(m.calendarEdit.PickerQuery, calendarEditTimeZoneOptions(m.calendarEdit))
+	case calendarEditPickerRecurrence:
+		return calendarEditPickerLabels(calendarEditRecurrencePickerOptions(m.calendarEdit.Draft.StartText))
+	case calendarEditPickerReminder:
+		return calendarEditPickerLabels(calendarEditReminderPickerOptions())
+	default:
+		return nil
+	}
+}
+
+func (m *Model) setCalendarEditFieldValueFor(field calendarEditField, value string) {
+	previous := m.calendarEdit.Field
+	m.calendarEdit.Field = field
+	m.setCalendarEditFieldValue(value)
+	m.calendarEdit.Field = previous
+}
+
+func (m *Model) toggleCalendarEditAlternateTimeZone(timezone string) {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" {
+		return
+	}
+	current := append([]string(nil), m.calendarEdit.Draft.AlternateTimeZones...)
+	for i, value := range current {
+		if value == timezone {
+			current = append(current[:i], current[i+1:]...)
+			m.calendarEdit.Draft.AlternateTimeZones = current
+			m.setCalendarEditFieldValueFor(calendarEditFieldAlternateTimeZones, strings.Join(current, ", "))
+			return
+		}
+	}
+	current = append(current, timezone)
+	m.calendarEdit.Draft.AlternateTimeZones = current
+	m.setCalendarEditFieldValueFor(calendarEditFieldAlternateTimeZones, strings.Join(current, ", "))
+}
+
+func (m *Model) toggleCalendarEditReminder(value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	current := splitCalendarEditSemicolon(m.calendarEdit.Draft.RemindersText)
+	for i, existing := range current {
+		if existing == value {
+			current = append(current[:i], current[i+1:]...)
+			m.setCalendarEditFieldValueFor(calendarEditFieldReminders, strings.Join(current, "; "))
+			return
+		}
+	}
+	current = append(current, value)
+	m.setCalendarEditFieldValueFor(calendarEditFieldReminders, strings.Join(current, "; "))
+}
+
+func (m *Model) calendarEditDateForField(field calendarEditField) time.Time {
+	value := m.calendarEdit.Draft.StartText
+	if field == calendarEditFieldEnd {
+		value = m.calendarEdit.Draft.EndText
+	}
+	if parsed, err := time.Parse(models.CalendarEventEditTimeLayout, strings.TrimSpace(value)); err == nil {
+		return parsed
+	}
+	fallback := m.calendarDefaultCreateStart()
+	if field == calendarEditFieldEnd {
+		fallback = fallback.Add(30 * time.Minute)
+	}
+	return fallback
+}
+
+func (m *Model) applyCalendarEditDatePicker(field calendarEditField) {
+	value := m.calendarEdit.Draft.StartText
+	if field == calendarEditFieldEnd {
+		value = m.calendarEdit.Draft.EndText
+	}
+	parsed, err := time.Parse(models.CalendarEventEditTimeLayout, strings.TrimSpace(value))
+	if err != nil {
+		parsed = m.calendarEditDateForField(field)
+	}
+	selected := m.calendarEdit.DatePickerDate
+	updated := time.Date(selected.Year(), selected.Month(), selected.Day(), parsed.Hour(), parsed.Minute(), 0, 0, parsed.Location())
+	m.setCalendarEditFieldValueFor(field, updated.Format(models.CalendarEventEditTimeLayout))
+}
+
+func (m *Model) searchCalendarEditContactsCmd(query string) tea.Cmd {
+	query = strings.TrimSpace(query)
+	m.calendarEdit.ContactQuery = query
+	m.calendarEdit.ContactSuggestions = nil
+	m.calendarEdit.ContactCursor = 0
+	if len([]rune(query)) < 2 {
+		m.calendarEdit.ContactLoading = false
+		return nil
+	}
+	m.calendarEdit.ContactLoading = true
+	return func() tea.Msg {
+		contacts, err := m.backend.SearchContacts(query)
+		if err != nil {
+			return CalendarEditContactSuggestionsMsg{Query: query}
+		}
+		if len(contacts) > 6 {
+			contacts = contacts[:6]
+		}
+		return CalendarEditContactSuggestionsMsg{Query: query, Contacts: contacts}
+	}
+}
+
+func (m *Model) acceptCalendarEditContactSuggestion() {
+	if len(m.calendarEdit.ContactSuggestions) == 0 {
+		return
+	}
+	if m.calendarEdit.ContactCursor < 0 || m.calendarEdit.ContactCursor >= len(m.calendarEdit.ContactSuggestions) {
+		m.calendarEdit.ContactCursor = 0
+	}
+	contact := m.calendarEdit.ContactSuggestions[m.calendarEdit.ContactCursor]
+	label := calendarEditContactLabel(contact)
+	value := replaceCalendarEditCurrentAttendeeToken(m.calendarEdit.Draft.AttendeesText, label)
+	m.setCalendarEditFieldValueFor(calendarEditFieldAttendees, value)
+	m.calendarEdit.ContactSuggestions = nil
+	m.calendarEdit.ContactCursor = 0
+	m.calendarEdit.ContactQuery = ""
+	m.calendarEdit.ContactLoading = false
 }
 
 func (m *Model) handleCalendarDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -1418,7 +1858,7 @@ func (m *Model) moveCalendarEditField(delta int) {
 	if idx >= len(calendarEditFields) {
 		idx = 0
 	}
-	m.calendarEdit.Field = calendarEditFields[idx]
+	m.focusCalendarEditField(calendarEditFields[idx])
 }
 
 func (m *Model) appendCalendarEditFieldValue(value string) {
@@ -1470,7 +1910,21 @@ func (m *Model) calendarEditFieldValue() string {
 }
 
 func (m *Model) setCalendarEditFieldValue(value string) {
-	switch m.calendarEdit.Field {
+	field := m.calendarEdit.Field
+	m.setCalendarEditDraftFieldValue(field, value)
+	if field == calendarEditFieldDescription {
+		m.calendarEdit.DescriptionInput.SetValue(value)
+		return
+	}
+	if input, ok := m.calendarEdit.Inputs[field]; ok {
+		input.SetValue(value)
+		input.CursorEnd()
+		m.calendarEdit.Inputs[field] = input
+	}
+}
+
+func (m *Model) setCalendarEditDraftFieldValue(field calendarEditField, value string) {
+	switch field {
 	case calendarEditFieldCalendar:
 		return
 	case calendarEditFieldTitle:
@@ -1523,6 +1977,152 @@ func splitCalendarEditCSV(value string) []string {
 		}
 	}
 	return out
+}
+
+func splitCalendarEditSemicolon(value string) []string {
+	parts := strings.Split(value, ";")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+type calendarEditPickerOption struct {
+	Label string
+	Value string
+}
+
+func calendarEditPickerLabels(options []calendarEditPickerOption) []string {
+	labels := make([]string, 0, len(options))
+	for _, option := range options {
+		labels = append(labels, option.Label)
+	}
+	return labels
+}
+
+func calendarEditRecurrencePickerOptions(startText string) []calendarEditPickerOption {
+	weekly := "RRULE:FREQ=WEEKLY"
+	weeklyLabel := "Weekly"
+	if parsed, err := time.Parse(models.CalendarEventEditTimeLayout, strings.TrimSpace(startText)); err == nil {
+		day := strings.ToUpper(parsed.Weekday().String()[:2])
+		weekly = "RRULE:FREQ=WEEKLY;BYDAY=" + day
+		weeklyLabel = "Weekly on " + parsed.Weekday().String()
+	}
+	return []calendarEditPickerOption{
+		{Label: "None", Value: ""},
+		{Label: "Daily", Value: "RRULE:FREQ=DAILY"},
+		{Label: weeklyLabel, Value: weekly},
+		{Label: "Weekdays", Value: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"},
+		{Label: "Monthly", Value: "RRULE:FREQ=MONTHLY"},
+		{Label: "Yearly", Value: "RRULE:FREQ=YEARLY"},
+	}
+}
+
+func calendarEditReminderPickerOptions() []calendarEditPickerOption {
+	return []calendarEditPickerOption{
+		{Label: "None", Value: ""},
+		{Label: "Popup 10 minutes before", Value: "popup 10m"},
+		{Label: "Popup 30 minutes before", Value: "popup 30m"},
+		{Label: "Email 1 hour before", Value: "email 1h"},
+		{Label: "Popup 1 day before", Value: "popup 1d"},
+	}
+}
+
+func calendarEditTimeZoneOptions(state calendarEventEditState) []string {
+	seen := make(map[string]bool)
+	add := func(values ...string) []string {
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			out = append(out, value)
+		}
+		return out
+	}
+	options := add(
+		state.Draft.StartTimeZone,
+		state.Draft.EndTimeZone,
+		state.Draft.TimeZone,
+		state.Base.CanonicalStartTimeZone(),
+		state.Base.CanonicalEndTimeZone(),
+		time.Local.String(),
+		"Local",
+		"UTC",
+		"America/Los_Angeles",
+		"America/Denver",
+		"America/Chicago",
+		"America/New_York",
+		"America/Sao_Paulo",
+		"Europe/London",
+		"Europe/Paris",
+		"Europe/Berlin",
+		"Europe/Madrid",
+		"Asia/Dubai",
+		"Asia/Kolkata",
+		"Asia/Singapore",
+		"Asia/Tokyo",
+		"Australia/Sydney",
+	)
+	for _, timezone := range state.Draft.AlternateTimeZones {
+		options = append(options, add(timezone)...)
+	}
+	return options
+}
+
+func calendarEditFilterTimezones(query string, options []string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return options
+	}
+	filtered := make([]string, 0, len(options))
+	for _, option := range options {
+		if strings.Contains(strings.ToLower(option), query) {
+			filtered = append(filtered, option)
+		}
+	}
+	return filtered
+}
+
+func calendarEditCurrentAttendeeToken(value string) string {
+	value = strings.TrimRight(value, " ;,")
+	last := strings.LastIndexAny(value, ";,")
+	if last >= 0 {
+		return strings.TrimSpace(value[last+1:])
+	}
+	return strings.TrimSpace(value)
+}
+
+func replaceCalendarEditCurrentAttendeeToken(existing, replacement string) string {
+	existing = strings.TrimRight(existing, " ")
+	last := strings.LastIndexAny(existing, ";,")
+	if last >= 0 {
+		prefix := strings.TrimRight(existing[:last+1], " ")
+		sep := "; "
+		if strings.HasSuffix(prefix, ",") {
+			sep = " "
+		}
+		return prefix + sep + replacement
+	}
+	return replacement
+}
+
+func calendarEditContactLabel(contact models.ContactData) string {
+	name := strings.TrimSpace(contact.DisplayName)
+	email := strings.TrimSpace(contact.Email)
+	if name == "" {
+		return email
+	}
+	if email == "" {
+		return name
+	}
+	return fmt.Sprintf("%s <%s>", name, email)
 }
 
 func parseCalendarEditBool(value string) bool {
@@ -2522,8 +3122,11 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	header := []string{
 		m.theme.Text.Primary.Style().Bold(true).Render(calendarFit(title, width)),
 		m.theme.Text.Dim.Style().Render(calendarFit(subtitle, width)),
-		"",
 	}
+	if hint := m.calendarEditFocusedFieldHint(); hint != "" {
+		header = append(header, m.theme.Severity.Info.Style().Render(calendarFit(hint, width)))
+	}
+	header = append(header, "")
 
 	leftW := width
 	rightW := 0
@@ -2549,6 +3152,14 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	fields = append(fields, m.renderCalendarEditField("Attendees", calendarEditFieldAttendees, state.Draft.AttendeesText, leftW))
 	fields = append(fields, m.renderCalendarEditField("Recurrence", calendarEditFieldRecurrence, state.Draft.RecurrenceText, leftW))
 	fields = append(fields, m.renderCalendarEditField("Reminders", calendarEditFieldReminders, state.Draft.RemindersText, leftW))
+	if suggestions := m.renderCalendarEditContactSuggestions(leftW); suggestions != "" {
+		fields = append(fields, "")
+		fields = append(fields, suggestions)
+	}
+	if picker := m.renderCalendarEditPicker(leftW); picker != "" {
+		fields = append(fields, "")
+		fields = append(fields, picker)
+	}
 	fields = append(fields, "")
 	fields = append(fields, m.renderCalendarEditSectionTitle("Description", leftW))
 	fields = append(fields, m.renderCalendarEditField("Notes", calendarEditFieldDescription, calendarEditSingleLine(calendarRenderedNotes(state.Draft.Description)), leftW))
@@ -2573,12 +3184,42 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	lines := append(header, strings.Split(body, "\n")...)
 	lines = append(lines, "")
 	lines = append(lines, m.renderCalendarEditValidationStatus(width))
+	hint := m.calendarEditFooterHint(state)
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(hint, width)))
+	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+}
+
+func (m *Model) calendarEditFooterHint(state calendarEventEditState) string {
 	hint := "tab: next field  space: toggle all day  ctrl+s: save  esc: cancel"
 	if !state.Create {
 		hint = "tab: next field  space: toggle all day  ctrl+s: save  ctrl+d: delete  esc: cancel"
 	}
-	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit(hint, width)))
-	return fitPanelContentHeight(strings.Join(lines, "\n"), height)
+	if action := m.calendarEditFocusedFieldHint(); action != "" {
+		hint = action + "  |  " + hint
+	}
+	return hint
+}
+
+func (m *Model) calendarEditFocusedFieldHint() string {
+	if m.calendarEdit.PickerMode != calendarEditPickerNone {
+		return ""
+	}
+	switch m.calendarEdit.Field {
+	case calendarEditFieldStart, calendarEditFieldEnd:
+		return "enter: open mini calendar"
+	case calendarEditFieldStartTimeZone, calendarEditFieldEndTimeZone, calendarEditFieldAlternateTimeZones:
+		return "enter: open timezone picker"
+	case calendarEditFieldAttendees:
+		return "type 2+ letters for contacts; enter accepts highlighted contact"
+	case calendarEditFieldRecurrence:
+		return "enter: open recurrence choices"
+	case calendarEditFieldReminders:
+		return "enter: open reminder choices"
+	case calendarEditFieldAllDay:
+		return "space/enter: toggle all day"
+	default:
+		return ""
+	}
 }
 
 func (m *Model) renderCalendarEditPreview(width int) string {
@@ -2901,7 +3542,17 @@ func (m *Model) renderCalendarEditField(label string, field calendarEditField, v
 	if m.calendarEdit.Field == field {
 		prefix = "> "
 	}
-	value = calendarEditSingleLine(value)
+	if m.calendarEdit.Field == field {
+		if field == calendarEditFieldDescription {
+			value = calendarEditSingleLine(m.calendarEdit.DescriptionInput.Value())
+		} else if input, ok := m.calendarEdit.Inputs[field]; ok {
+			value = input.View()
+		} else {
+			value = calendarEditSingleLine(value)
+		}
+	} else {
+		value = calendarEditSingleLine(value)
+	}
 	if strings.TrimSpace(value) == "" {
 		value = "--"
 	}
@@ -2942,6 +3593,118 @@ func (m *Model) renderCalendarEditField(label string, field calendarEditField, v
 		borderStyle.Render("│") +
 		valueStyle.Render(cell) +
 		borderStyle.Render("│")
+}
+
+func (m *Model) renderCalendarEditPicker(width int) string {
+	if m.calendarEdit.PickerMode == calendarEditPickerNone {
+		return ""
+	}
+	if m.calendarEdit.PickerMode == calendarEditPickerDate {
+		return m.renderCalendarEditDatePicker(width)
+	}
+	options := m.calendarEditPickerOptions()
+	title := "Picker"
+	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerTimezone:
+		title = "Timezone picker"
+	case calendarEditPickerRecurrence:
+		title = "Recurrence picker"
+	case calendarEditPickerReminder:
+		title = "Reminder picker"
+	}
+	lines := []string{m.theme.Metadata.Label.Style().Render(calendarFit(title, width))}
+	if m.calendarEdit.PickerMode == calendarEditPickerTimezone {
+		query := m.calendarEdit.PickerQuery
+		if strings.TrimSpace(query) == "" {
+			query = "type to search"
+		}
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Search: "+query, width)))
+	}
+	if len(options) == 0 {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("No matches", width)))
+		return strings.Join(lines, "\n")
+	}
+	start := m.calendarEdit.PickerCursor - 3
+	if start < 0 {
+		start = 0
+	}
+	end := min(len(options), start+7)
+	if end-start < 7 && end == len(options) {
+		start = max(0, end-7)
+	}
+	for i := start; i < end; i++ {
+		prefix := "  "
+		style := m.theme.Text.Primary.Style()
+		if i == m.calendarEdit.PickerCursor {
+			prefix = "> "
+			style = m.theme.Focus.SelectionActive.Style()
+		}
+		lines = append(lines, style.Render(calendarFit(prefix+options[i], width)))
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("up/down: move  enter: apply  esc: cancel", width)))
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderCalendarEditDatePicker(width int) string {
+	selected := m.calendarEdit.DatePickerDate
+	if selected.IsZero() {
+		selected = m.calendarEditDateForField(m.calendarEdit.PickerField)
+	}
+	monthStart := time.Date(selected.Year(), selected.Month(), 1, 0, 0, 0, 0, selected.Location())
+	weekdayOffset := int(monthStart.Weekday())
+	lines := []string{
+		m.theme.Metadata.Label.Style().Render(calendarFit("Mini calendar", width)),
+		m.theme.Text.Dim.Style().Render(calendarFit(selected.Format("January 2006")+"  selected "+selected.Format("2006-01-02"), width)),
+		m.theme.Text.Dim.Style().Render(calendarFit("Su Mo Tu We Th Fr Sa", width)),
+	}
+	daysInMonth := time.Date(selected.Year(), selected.Month()+1, 0, 0, 0, 0, 0, selected.Location()).Day()
+	day := 1
+	for row := 0; row < 6 && day <= daysInMonth; row++ {
+		var cells []string
+		for col := 0; col < 7; col++ {
+			if row == 0 && col < weekdayOffset || day > daysInMonth {
+				cells = append(cells, "  ")
+				continue
+			}
+			cell := fmt.Sprintf("%2d", day)
+			if day == selected.Day() {
+				cell = "[" + strings.TrimSpace(cell) + "]"
+			}
+			cells = append(cells, cell)
+			day++
+		}
+		lines = append(lines, m.theme.Text.Primary.Style().Render(calendarFit(strings.Join(cells, " "), width)))
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("left/right: day  up/down: week  enter: apply  esc: cancel", width)))
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderCalendarEditContactSuggestions(width int) string {
+	if m.calendarEdit.Field != calendarEditFieldAttendees {
+		return ""
+	}
+	if !m.calendarEdit.ContactLoading && len(m.calendarEdit.ContactSuggestions) == 0 {
+		return ""
+	}
+	lines := []string{m.theme.Metadata.Label.Style().Render(calendarFit("Contact suggestions", width))}
+	if m.calendarEdit.ContactLoading {
+		lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("Searching contacts...", width)))
+	}
+	if len(m.calendarEdit.ContactSuggestions) == 0 {
+		return strings.Join(lines, "\n")
+	}
+	for i, contact := range m.calendarEdit.ContactSuggestions {
+		label := calendarEditContactLabel(contact)
+		prefix := "  "
+		style := m.theme.Text.Primary.Style()
+		if i == m.calendarEdit.ContactCursor {
+			prefix = "> "
+			style = m.theme.Focus.SelectionActive.Style()
+		}
+		lines = append(lines, style.Render(calendarFit(prefix+label, width)))
+	}
+	lines = append(lines, m.theme.Text.Dim.Style().Render(calendarFit("up/down: move  enter: insert  esc: close", width)))
+	return strings.Join(lines, "\n")
 }
 
 func (m *Model) renderCalendarEditSectionTitle(label string, width int) string {

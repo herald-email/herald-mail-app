@@ -349,7 +349,10 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
 	}
 	headerLines := renderPreviewHeaderLinesWithTheme(m.theme, email, headerBody, category, bodyMatchesSelected && previewHasUnsubscribe(m.timeline.body), loadTag, innerW, headerActive)
-	for _, line := range headerLines {
+	headerRows := selectableRowsFromRendered(headerLines)
+	renderedHeaderLines := renderPreviewSelectableRows(m.theme, headerRows, previewSelectionTimeline, m.previewSelection, 0)
+	selectionRowOffset := len(headerRows)
+	for _, line := range renderedHeaderLines {
 		sb.WriteString(line + "\n")
 	}
 
@@ -377,9 +380,14 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 		if maxBodyLines < 1 {
 			maxBodyLines = 1
 		}
+		renderedThreadLines := make([]string, 0, len(threadContextLines))
 		for _, line := range threadContextLines {
-			sb.WriteString(dimStyle.Render(line) + "\n")
+			renderedThreadLines = append(renderedThreadLines, dimStyle.Render(line))
 		}
+		for _, line := range renderPreviewSelectableLines(m.theme, renderedThreadLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset) {
+			sb.WriteString(line + "\n")
+		}
+		selectionRowOffset += len(threadContextLines)
 	}
 	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
@@ -390,11 +398,13 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 			label := splitInlineImageHint(nImg, imageMode)
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
 			bodyChromeLines++
+			selectionRowOffset++
 		}
 		if nRemote := m.timelineRemoteImageCount(); nRemote > 0 {
 			label := splitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable())
 			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
 			bodyChromeLines++
+			selectionRowOffset++
 		}
 
 		// Show downloadable attachments
@@ -413,11 +423,13 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 				sb.WriteString(attachStyle.Render(label) + "\n")
 			}
 			bodyChromeLines++
+			selectionRowOffset++
 		}
 
 		for _, line := range m.renderCalendarInvitationPrompt(innerW) {
 			sb.WriteString(line + "\n")
 			bodyChromeLines++
+			selectionRowOffset++
 		}
 
 		// Save-path prompt
@@ -426,14 +438,17 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 			if m.timeline.attachmentSaveWarning != "" {
 				sb.WriteString(promptStyle.Render(truncate(m.timeline.attachmentSaveWarning, innerW)) + "\n")
 				bodyChromeLines++
+				selectionRowOffset++
 			}
 			sb.WriteString(promptStyle.Render("Save to: ") + m.timeline.attachmentSaveInput.View() + "\n")
 			bodyChromeLines++
+			selectionRowOffset++
 		}
 		if len(m.timeline.body.Attachments) > 0 {
 			sb.WriteString(previewAttachmentDivider(innerW) + "\n")
 			sb.WriteString("\n")
 			bodyChromeLines += 2
+			selectionRowOffset += 2
 		}
 
 		visibleLines := maxBodyLines - bodyChromeLines
@@ -444,11 +459,15 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 		documentStartLine = strings.Count(sb.String(), "\n")
 		layout := m.timelinePreviewDocumentLayout(innerW, visibleLines)
 		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, visibleLines)
-		if m.previewSelection.activeOn(previewSelectionTimeline) {
+		if m.previewSelection.activeOn(previewSelectionTimeline) && !m.previewSelection.Mouse {
 			m.previewSelection.ensureCursorVisible(&m.timeline.bodyScrollOffset, visibleLines, layout.TotalRows)
 		}
 		viewport := renderPreviewDocumentViewportWithSelection(m.theme, layout, m.timeline.bodyScrollOffset, visibleLines,
 			m.previewSelection, previewSelectionTimeline)
+		if m.previewSelection.activeOn(previewSelectionTimeline) && m.previewSelection.Mouse {
+			viewportLines := strings.Split(viewport.Content, "\n")
+			viewport.Content = strings.Join(renderPreviewSelectableLines(m.theme, viewportLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset), "\n")
+		}
 		sb.WriteString(viewport.Content)
 		nativeOverlays = viewport.NativeOverlays
 		m.timeline.bodyWrappedLines = previewLayoutPlainRows(layout)
@@ -537,13 +556,15 @@ func (m *Model) renderFullScreenEmail() string {
 		loadTag = previewLoadTag(m.timeline.previewLoad, email.MessageID)
 	}
 	headerLines := renderPreviewHeaderLinesWithLoad(email, headerBody, category, previewHasUnsubscribe(headerBody), loadTag, innerW, true)
-	for _, line := range headerLines {
+	headerRows := selectableRowsFromRendered(headerLines)
+	selectionRowOffset := len(headerRows)
+	for _, line := range renderPreviewSelectableRows(m.theme, headerRows, previewSelectionTimeline, m.previewSelection, 0) {
 		sb.WriteString(line + "\n")
 	}
 	bodyStartRow := len(headerLines) + 1
 	promptLines := m.renderCalendarInvitationPrompt(innerW)
 	if len(promptLines) > 0 {
-		for _, line := range promptLines {
+		for _, line := range renderPreviewSelectableLines(m.theme, promptLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset) {
 			sb.WriteString(line + "\n")
 		}
 		maxBodyLines -= len(promptLines)
@@ -551,6 +572,7 @@ func (m *Model) renderFullScreenEmail() string {
 			maxBodyLines = 1
 		}
 		bodyStartRow += len(promptLines)
+		selectionRowOffset += len(promptLines)
 	}
 
 	dimStyle := m.theme.Text.Muted.Style()
@@ -560,10 +582,15 @@ func (m *Model) renderFullScreenEmail() string {
 		if maxBodyLines < 1 {
 			maxBodyLines = 1
 		}
+		renderedThreadLines := make([]string, 0, len(threadContextLines))
 		for _, line := range threadContextLines {
-			sb.WriteString(dimStyle.Render(line) + "\n")
+			renderedThreadLines = append(renderedThreadLines, dimStyle.Render(line))
+		}
+		for _, line := range renderPreviewSelectableLines(m.theme, renderedThreadLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset) {
+			sb.WriteString(line + "\n")
 		}
 		bodyStartRow += len(threadContextLines)
+		selectionRowOffset += len(threadContextLines)
 	}
 
 	if m.timeline.bodyLoading {
@@ -571,11 +598,15 @@ func (m *Model) renderFullScreenEmail() string {
 	} else if m.timeline.body != nil {
 		layout := m.timelinePreviewDocumentLayout(innerW, maxBodyLines)
 		m.timeline.bodyScrollOffset = clampPreviewScrollOffset(m.timeline.bodyScrollOffset, layout.TotalRows, maxBodyLines)
-		if m.previewSelection.activeOn(previewSelectionTimeline) {
+		if m.previewSelection.activeOn(previewSelectionTimeline) && !m.previewSelection.Mouse {
 			m.previewSelection.ensureCursorVisible(&m.timeline.bodyScrollOffset, maxBodyLines, layout.TotalRows)
 		}
 		viewport := renderPreviewDocumentViewportWithSelection(m.theme, layout, m.timeline.bodyScrollOffset, maxBodyLines,
 			m.previewSelection, previewSelectionTimeline)
+		if m.previewSelection.activeOn(previewSelectionTimeline) && m.previewSelection.Mouse {
+			viewportLines := strings.Split(viewport.Content, "\n")
+			viewport.Content = strings.Join(renderPreviewSelectableLines(m.theme, viewportLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset), "\n")
+		}
 		sb.WriteString(viewport.Content)
 		nativeImageTail = renderNativeImageOverlayTail(viewport.NativeOverlays, bodyStartRow, 1)
 

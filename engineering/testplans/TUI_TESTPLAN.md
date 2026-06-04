@@ -738,6 +738,27 @@ Check these states during every applicable lane:
 - Visual mode shows a visible anchor/cursor/highlight and does not appear as a dead mode.
 - Prompt editor and Settings text fields preserve literal printable input unless their active field mode owns a Vim command.
 
+### TC-14I — Preview mouse text selection
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode, open a Timeline split preview whose loaded body exposes `From:`, `To:`, `Cc:`, `Date:`, `Subj:`, `Tags:`, and `Actions:` rows.
+2. Drag with the mouse across visible preview header text, including at least one email address, then press `y`.
+3. Drag from a visible header row into body text, then press `y`.
+4. Press `z`, repeat the same drag/copy checks in full-screen preview, then exit full-screen.
+5. Open Contacts, open a contact detail, then open a recent email inline and repeat visible header/body drag selection and `y` copy.
+6. Press `Esc` after a selection and confirm it clears the selection before closing the preview surface.
+7. Repeat at `50x15`, confirm the minimum-size guard appears, then resize larger and repeat one selection.
+
+**Expect:**
+- Drag selection highlights visible rendered text in read-only preview content without requiring terminal-native mouse-capture release.
+- Selected ranges can include visible header rows, email addresses, and body rows; hidden, truncated, or off-screen content is not copied.
+- `y` copies the highlighted range, `yy` copies the current visible/selectable row where supported, and `Y` copies all visible/selectable preview text where supported.
+- Preview wheel scrolling, Timeline visual mode, Contacts navigation, Contacts search typing, Compose typing, and `m` mouse-capture release/restore remain intact.
+- At `50x15`, the minimum-size guard appears and recovery restores normal selectable previews.
+
 ### TC-14H — Modifier-aware key hint layers
 
 **Lane:** A, B
@@ -1864,11 +1885,16 @@ Check these states during every applicable lane:
 2. Press `3` or `F4` to open Calendar, then press `Enter` to open full Event Detail.
 3. Press `e` to open Event Edit, change title, location, start/end, and event timezone fields, then capture the edit view.
 4. Confirm the preview shows local time, event timezone, at least one alternate timezone, and a visible date-crossing note when applicable.
-5. Press `Esc` to cancel once, then reopen Event Edit and press `Ctrl+S` to save.
-6. Confirm the updated cached event appears in the Calendar list/detail without requiring a provider fetch.
+5. Type shortcut-looking text such as `1234 hjkl` into the title/location fields, move the cursor with left/right arrows, insert text in the middle, and confirm the editor keeps focus without switching tabs or moving calendar ranges.
+6. Open the timezone picker from Start TZ, End TZ, and Display TZs; search, scroll with up/down, apply one endpoint timezone, and toggle at least one display timezone.
+7. Press `Esc` to cancel once, then reopen Event Edit and press `Ctrl+S` to save.
+8. Confirm the updated cached event appears in the Calendar list/detail without requiring a provider fetch.
 
 **Expect:**
 - Event Edit uses Herald's form/settings pattern with focused fields, validation rows, compact controls, and a live timezone preview.
+- Focused text fields show cursor-aware editing; printable digits, letters, arrows, and `h/j/k/l` stay inside the active field unless a picker is open.
+- Picker-backed fields show a visible contextual hint such as `enter: open timezone picker`, so the Enter action is discoverable before the user tries it.
+- Timezone picker rows are searchable and selectable for Start TZ, End TZ, and Display TZs while manual timezone text remains accepted.
 - The primary event timezone field is near the start/end fields and saving a timezone is explicit; alternate display timezones are preview-only.
 - Unsaved changes, validation errors, cancel, and cache-backed save success are visible to the user.
 - The edit boundary writes through the configured mutation backend when available, keeps provider/cache state scoped by EventRef, and does not expose provider IDs, raw ETags, CalDAV URLs, OAuth details, or daemon/MCP internals in the TUI.
@@ -1910,18 +1936,23 @@ This case covers the provider-backed event creation and deletion slice plus the 
 1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one writable calendar collection.
 2. Press `3` or `F4` to open Calendar, then press `Ctrl+N` to open Create Event.
 3. Confirm Create Event shows Calendar, Title, Location, Start, End, Start TZ, End TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
-4. Fill title/start/end fields and press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success.
-5. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
-6. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
-7. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
-8. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
-9. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
-10. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
+4. Fill title/start/end fields, move the cursor within the fields, and verify digits, arrows, and `h/j/k/l` do not switch tabs or move the calendar range while Create Event is active.
+5. Use the timezone picker, attendee contact autocomplete, recurrence dropdown, reminder multi-select, and mini calendar picker; confirm each selection updates the draft while manual text entry still works.
+6. Press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success.
+7. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
+8. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
+9. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
+10. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
+11. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
+12. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
 
 **Expect:**
 - Create, update, and delete use provider-backed mutation boundaries first and update or invalidate cached rows only after success.
 - Delete always requires confirmation in the Calendar TUI and never runs from a text-entry surface.
 - Event Edit/Create follows the Screen 06 structure closely enough that the color side-by-side comparison can be reviewed without relying on prose.
+- Event Edit/Create owns text input modally: tab switching, calendar range movement, and browse navigation do not fire while editing fields or picker search.
+- Event Edit/Create shows contextual Enter hints for date, timezone, recurrence, reminder, and contact-selection fields.
+- Timezone, attendee, recurrence, reminder, and mini calendar pickers are keyboard-selectable, searchable where relevant, and reversible with `Esc`; text fallbacks remain parseable for advanced values.
 - Start and end timezones can differ for travel events; Google Calendar, CalDAV, cache, daemon, and MCP preserve those endpoint-specific zones.
 - HTML and Markdown notes render in the edit preview with readable paragraphs/lists/links rather than raw provider markup.
 - Daemon and MCP create/update/delete tools route through the same scoped mutation semantics as the TUI.
@@ -2348,12 +2379,14 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 2. Open Timeline and search for `Example: Link rendering stress preview`.
 3. Open the Taskpad demo email preview.
 4. Capture plain text and ANSI output at `220x50`.
-5. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
+5. With mouse capture enabled, click the visible `Display in your browser` link label, then repeat with Ctrl held.
+6. Resize to `80x24`, scroll to the link section, and capture plain text and ANSI output again.
 
 **Expect:**
 - Visible preview text shows readable labels such as `Display in your browser` and `Taskpad logo`.
 - Long destination fragments such as `eyJmaXJ`, `_next/static/media`, and `abcdefghijklmnopqrstuvwxyz0123456789` do not appear in visible preview text.
 - ANSI captures include OSC 8 hyperlink sequences for the hidden destination URLs.
+- Clicking or Ctrl-clicking the visible link opens the OSC 8 target through the terminal or the local fallback without first pressing `m`, and ordinary mouse navigation remains enabled afterward.
 - The preview panel and hint bar still fit at both sizes, with no link text bleeding past panel borders.
 
 ### TC-49A — Shared HTML Markdown previews across surfaces
@@ -2390,14 +2423,16 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 6. In Timeline sender/domain grouping, click a grouped row and wheel over the list and preview regions.
 7. Open Calendar, click a mini-month day, click an agenda/day/week/3-day event, then double-click the same selected event to open detail.
 8. Click a Calendar rail checkbox to hide a calendar, restart with the same config, and confirm the visible-calendar selection is restored from `calendar.selected_calendars`.
-9. Click the sidebar when visible, then press `m` in Timeline and Calendar to release mouse capture and press `m` again to restore it.
-10. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
+9. Drag-select visible text in Timeline preview, Contacts detail/inline email preview, and full-screen preview; then click/wheel outside the selected preview text and confirm normal mouse navigation still works.
+10. Click the sidebar when visible, then press `m` in Timeline, Contacts browse/preview, and Calendar to release mouse capture and press `m` again to restore it.
+11. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
 
 **Expect:**
 - Mouse click and wheel behavior matches the equivalent keyboard actions and never changes hidden state outside the clicked region.
 - Timeline thread-root mouse clicks use two-step semantics: select/update preview first, then fold/unfold only when the top thread email is already selected.
 - Preview wheel events scroll the body without moving the underlying list cursor.
 - List wheel events move the focused list cursor and refresh an open preview when applicable.
+- Preview drag selection is confined to visible read-only preview text and does not steal list clicks, wheel scrolling, Contacts search input, or Compose text entry.
 - Calendar mouse clicks match keyboard parity: mini-month clicks move the active date/range, event clicks select rows without leaking provider IDs, double-clicking the same selected event opens detail, and rail checkbox clicks show/hide calendars.
 - Calendar rail visibility persists in YAML as selected calendar keys and does not expose provider URLs, OAuth tokens, sync tokens, ETags, or event IDs.
 - The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.

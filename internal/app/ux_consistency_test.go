@@ -572,7 +572,8 @@ func TestRenderKeyHints_ShowsContactsPreviewControls(t *testing.T) {
 	m.contactPreviewBody = &models.EmailBody{TextPlain: "hello world"}
 
 	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(strings.ToLower(hints), "back to contact") {
+	lowerHints := strings.ToLower(hints)
+	if !strings.Contains(lowerHints, "v: cursor") || !strings.Contains(lowerHints, "drag: select") {
 		t.Fatalf("expected contacts preview controls, got %q", hints)
 	}
 	if strings.Contains(hints, "nav emails") {

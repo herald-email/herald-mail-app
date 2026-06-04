@@ -544,14 +544,22 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		} else if m.contactSearchMode == "semantic" {
 			hints = fmt.Sprintf("? %s  │  esc: clear search  │  q: quit", m.contactSearch)
 		} else if m.contactPreviewEmail != nil {
-			if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionContacts); len(selectionHints) > 0 {
+			if m.mouseSelectionMode {
+				hints = joinHintSegments("[mouse] select mode - m: restore TUI", "esc: back to contact", "q: quit")
+			} else if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionContacts); len(selectionHints) > 0 {
 				segments := append(selectionHints, "q: quit")
 				hints = joinHintSegments(segments...)
 			} else {
-				hints = joinHintSegments("v: cursor", "j/k: scroll", "yy: copy line", "Y: copy all", problemReportShortcutHint, "esc: back to contact", "q: quit")
+				hints = joinHintSegments("v: cursor", "j/k: scroll", "drag: select", "y: copy selection", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to contact", "q: quit")
 			}
 		} else if m.contactFocusPanel == 1 {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+			if m.mouseSelectionMode {
+				hints = joinHintSegments("[mouse] select mode - m: restore TUI", "tab: list panel", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+			} else if m.previewSelection.activeOn(previewSelectionContacts) {
+				hints = joinHintSegments("drag: extend selection", "y: copy selection", "esc: clear selection", "m: mouse mode", "q: quit")
+			} else {
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: list panel", "drag: select", m.movementHint("contacts", "nav emails"), "e: enrich", "enter: open email", "m: mouse mode", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+			}
 		} else {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: detail panel", m.movementHint("contacts", "nav"), "enter: detail", m.commandHint("contacts", CommandHelpSearch, "search"), "?: semantic", "e: enrich", "esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		}

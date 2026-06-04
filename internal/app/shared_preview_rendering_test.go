@@ -51,6 +51,9 @@ func assertRichHTMLPreview(t *testing.T, rendered string) {
 			t.Fatalf("preview leaked %q:\n%s", bad, visible)
 		}
 	}
+	if strings.Contains(rendered, "utm_source=email") {
+		t.Fatalf("preview raw output leaked tracker param:\n%q", rendered)
+	}
 }
 
 func TestTimelineSplitPreviewPrefersSharedHTMLMarkdownRendering(t *testing.T) {

@@ -23,6 +23,7 @@ type calendarAgendaStubBackend struct {
 	collections           []models.CalendarCollection
 	cachedCollections     []models.CalendarCollection
 	refreshCollections    []models.CalendarCollection
+	contactResults        []models.ContactData
 	crossResults          []models.CrossSourceSearchResult
 	meetingPrep           *models.CalendarMeetingPrep
 	meetingPrepCalls      []models.EventRef
@@ -32,6 +33,7 @@ type calendarAgendaStubBackend struct {
 	aiSummaryCalls        []models.EventRef
 	getCalls              int
 	searchCalls           []string
+	contactSearchCalls    []string
 	crossSearchCalls      []string
 	savedEvents           []models.CalendarEvent
 	createdEvents         []models.CalendarEvent
@@ -160,6 +162,19 @@ func (b *calendarAgendaStubBackend) SearchCalendarEvents(query string, start, en
 		}
 		if query != "" && strings.Contains(haystack, query) {
 			out = append(out, event)
+		}
+	}
+	return out, nil
+}
+
+func (b *calendarAgendaStubBackend) SearchContacts(query string) ([]models.ContactData, error) {
+	b.contactSearchCalls = append(b.contactSearchCalls, query)
+	query = strings.ToLower(strings.TrimSpace(query))
+	out := make([]models.ContactData, 0, len(b.contactResults))
+	for _, contact := range b.contactResults {
+		haystack := strings.ToLower(strings.Join([]string{contact.DisplayName, contact.Email, contact.Company}, " "))
+		if query == "" || strings.Contains(haystack, query) {
+			out = append(out, contact)
 		}
 	}
 	return out, nil
@@ -2934,6 +2949,165 @@ func TestCalendarEventCreateOpensBlankDraftAndSavesThroughCreate(t *testing.T) {
 	}
 }
 
+func TestCalendarEventCreateEditorOwnsShortcutLookingText(t *testing.T) {
+	for _, input := range []string{"1", "2", "3", "4", "h", "j", "k", "l"} {
+		t.Run(input, func(t *testing.T) {
+			m, _ := newCalendarCreateUXModelForTest(t)
+
+			model, _ := m.handleKeyMsg(keyRunes(input))
+			m = model.(*Model)
+			if m.activeTab != tabCalendar {
+				t.Fatalf("input %q changed active tab to %d, want Calendar", input, m.activeTab)
+			}
+			if !m.calendarEdit.Active || !m.calendarEdit.Create {
+				t.Fatalf("input %q closed create editor: %#v", input, m.calendarEdit)
+			}
+			if got := m.calendarEdit.Draft.Title; got != input {
+				t.Fatalf("title after %q = %q, want literal text", input, got)
+			}
+		})
+	}
+}
+
+func TestCalendarEventEditTextInputsSupportCursorInsertion(t *testing.T) {
+	m, _ := newCalendarCreateUXModelForTest(t)
+
+	model, _ := m.handleKeyMsg(keyRunes("Alpha Beta"))
+	m = model.(*Model)
+	for range []int{0, 1, 2, 3} {
+		model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyLeft})
+		m = model.(*Model)
+	}
+	model, _ = m.handleKeyMsg(keyRunes("X"))
+	m = model.(*Model)
+
+	if got := m.calendarEdit.Draft.Title; got != "Alpha XBeta" {
+		t.Fatalf("title after cursor insertion = %q, want Alpha XBeta", got)
+	}
+	rendered := ansi.Strip(m.renderCalendarEventEdit(100, 30))
+	if !strings.Contains(rendered, "Alpha XBeta") {
+		t.Fatalf("rendered edit form missing cursor-edited title:\n%s", rendered)
+	}
+}
+
+func TestCalendarEventEditShowsEnterPickerHintForPickerFields(t *testing.T) {
+	m, _ := newCalendarCreateUXModelForTest(t)
+
+	cases := []struct {
+		name  string
+		field calendarEditField
+		want  string
+	}{
+		{name: "start date", field: calendarEditFieldStart, want: "enter: open mini calendar"},
+		{name: "start timezone", field: calendarEditFieldStartTimeZone, want: "enter: open timezone picker"},
+		{name: "display timezones", field: calendarEditFieldAlternateTimeZones, want: "enter: open timezone picker"},
+		{name: "recurrence", field: calendarEditFieldRecurrence, want: "enter: open recurrence choices"},
+		{name: "reminders", field: calendarEditFieldReminders, want: "enter: open reminder choices"},
+		{name: "attendees", field: calendarEditFieldAttendees, want: "type 2+ letters for contacts"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m.calendarEdit.Field = tc.field
+			rendered := ansi.Strip(m.renderCalendarEventEdit(120, 36))
+			if !strings.Contains(rendered, tc.want) {
+				t.Fatalf("rendered edit form missing hint %q:\n%s", tc.want, rendered)
+			}
+		})
+	}
+}
+
+func TestCalendarEventEditTimezonePickerSearchSelectsEndpointAndDisplayZones(t *testing.T) {
+	m, _ := newCalendarCreateUXModelForTest(t)
+	m.calendarEdit.Field = calendarEditFieldStartTimeZone
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("timezone picker open returned command %T, want local picker", cmd)
+	}
+	model, _ = m.handleKeyMsg(keyRunes("Tokyo"))
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if got := m.calendarEdit.Draft.StartTimeZone; got != "Asia/Tokyo" {
+		t.Fatalf("start timezone = %q, want Asia/Tokyo", got)
+	}
+
+	m.calendarEdit.Field = calendarEditFieldAlternateTimeZones
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(keyRunes("Sydney"))
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if !stringSliceContains(m.calendarEdit.Draft.AlternateTimeZones, "Australia/Sydney") {
+		t.Fatalf("display timezones = %#v, want Australia/Sydney", m.calendarEdit.Draft.AlternateTimeZones)
+	}
+}
+
+func TestCalendarEventEditAttendeeAutocompleteAcceptsContact(t *testing.T) {
+	m, b := newCalendarCreateUXModelForTest(t)
+	b.contactResults = []models.ContactData{{DisplayName: "Rae Stone", Email: "rae@example.com", Company: "Herald"}}
+	m.calendarEdit.Field = calendarEditFieldAttendees
+
+	model, cmd := m.handleKeyMsg(keyRunes("Rae"))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.contactSearchCalls) == 0 {
+		t.Fatal("attendee typing did not search contacts")
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if got := m.calendarEdit.Draft.AttendeesText; !strings.Contains(got, "Rae Stone <rae@example.com>") {
+		t.Fatalf("attendees text = %q, want accepted contact", got)
+	}
+}
+
+func TestCalendarEventEditRecurrenceAndReminderPickersUpdateParseableDraft(t *testing.T) {
+	m, _ := newCalendarCreateUXModelForTest(t)
+	m.calendarEdit.Field = calendarEditFieldRecurrence
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if got := m.calendarEdit.Draft.RecurrenceText; got != "RRULE:FREQ=DAILY" {
+		t.Fatalf("recurrence text = %q, want daily RRULE", got)
+	}
+
+	m.calendarEdit.Field = calendarEditFieldReminders
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if got := m.calendarEdit.Draft.RemindersText; got != "popup 10m" {
+		t.Fatalf("reminders text = %q, want popup 10m", got)
+	}
+}
+
+func TestCalendarEventEditMiniCalendarUpdatesDateAndPreservesTime(t *testing.T) {
+	m, _ := newCalendarCreateUXModelForTest(t)
+	m.calendarEdit.Field = calendarEditFieldStart
+	m.calendarEdit.Draft.StartText = "2026-05-31 13:00"
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = model.(*Model)
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if got := m.calendarEdit.Draft.StartText; got != "2026-06-07 13:00" {
+		t.Fatalf("start text = %q, want date picker to move one week and preserve time", got)
+	}
+}
+
 func TestCalendarEventDeleteRequiresConfirmationAndRemovesEvent(t *testing.T) {
 	rich := richCalendarEventForTest()
 	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}}
@@ -2976,6 +3150,41 @@ func TestCalendarEventDeleteRequiresConfirmationAndRemovesEvent(t *testing.T) {
 	if len(m.calendarEvents) != 0 {
 		t.Fatalf("calendarEvents = %d, want deleted event removed", len(m.calendarEvents))
 	}
+}
+
+func newCalendarCreateUXModelForTest(t *testing.T) (*Model, *calendarAgendaStubBackend) {
+	t.Helper()
+	collection := models.CalendarCollection{Ref: models.CollectionRef{
+		SourceID:     "demo-calendar",
+		AccountID:    "default",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "work",
+		DisplayName:  "Work",
+	}}
+	b := &calendarAgendaStubBackend{available: true, collections: []models.CalendarCollection{collection}}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.setCalendarCollections([]models.CalendarCollection{collection})
+	pinCalendarFixtureNowForTest(m)
+	model, _ := m.handleKeyMsg(keyCtrl('n'))
+	m = model.(*Model)
+	if !m.calendarEdit.Active || !m.calendarEdit.Create {
+		t.Fatalf("failed to open create editor: %#v", m.calendarEdit)
+	}
+	return m, b
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCalendarEditShortcutDoesNotStealTextEntry(t *testing.T) {

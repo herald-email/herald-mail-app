@@ -240,6 +240,10 @@ type ProblemReportMsg struct {
 	Err  error
 }
 
+type terminalLinkOpenMsg struct {
+	Err error
+}
+
 // TimelineForwardBodyMsg carries a body fetch result for Timeline forwarding.
 type TimelineForwardBodyMsg struct {
 	Email     *models.EmailData
@@ -887,9 +891,10 @@ type Model struct {
 
 	// Local inline-image preview links. Disabled for SSH sessions, where
 	// localhost would point at the server instead of the user's browser.
-	localImageLinks   bool
-	previewImageMode  previewImageMode
-	imagePreviewLinks *imagePreviewServer
+	localImageLinks             bool
+	terminalLinkBrowserFallback bool
+	previewImageMode            previewImageMode
+	imagePreviewLinks           *imagePreviewServer
 
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
@@ -1086,39 +1091,40 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 			searchInput:         searchInput,
 			attachmentSaveInput: attachmentSaveInput,
 		},
-		calendarFocus:             calendarFocusMain,
-		calendarHiddenCollections: make(map[string]bool),
-		classifyCh:                make(chan ClassifyProgressMsg, 50),
-		syncAccumulator:           newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
-		syncSourceGenerations:     make(map[models.SourceID]int64),
-		mailer:                    mailer,
-		fromAddress:               fromAddress,
-		composeTo:                 composeTo,
-		composeCC:                 composeCC,
-		composeBCC:                composeBCC,
-		composeSubject:            composeSubject,
-		composeBody:               composeBody,
-		suggestionIdx:             -1,
-		composeAIPanel:            true,
-		composeAIInput:            composeAIInput,
-		composeAIResponse:         composeAIResponse,
-		attachmentCompletionIdx:   -1,
-		localImageLinks:           true,
-		previewImageMode:          previewImageModeAuto,
-		imagePreviewLinks:         newImagePreviewServer(),
-		theme:                     theme,
-		baseStyle:                 baseStyle,
-		headerStyle:               headerStyle,
-		loadingStyle:              loadingStyle,
-		progressStyle:             progressStyle,
-		activeTableStyle:          activeStyle,
-		inactiveTableStyle:        inactiveStyle,
-		deletionRequestCh:         deletionRequestCh,
-		deletionResultCh:          deletionResultCh,
-		ruleRequestCh:             ruleRequestCh,
-		ruleResultCh:              ruleResultCh,
-		attachmentPathInput:       attachmentPathInput,
-		keyboard:                  NewKeyboardResolver(nil),
+		calendarFocus:               calendarFocusMain,
+		calendarHiddenCollections:   make(map[string]bool),
+		classifyCh:                  make(chan ClassifyProgressMsg, 50),
+		syncAccumulator:             newSyncAccumulator(defaultSyncFlushCount, defaultSyncFlushDelay),
+		syncSourceGenerations:       make(map[models.SourceID]int64),
+		mailer:                      mailer,
+		fromAddress:                 fromAddress,
+		composeTo:                   composeTo,
+		composeCC:                   composeCC,
+		composeBCC:                  composeBCC,
+		composeSubject:              composeSubject,
+		composeBody:                 composeBody,
+		suggestionIdx:               -1,
+		composeAIPanel:              true,
+		composeAIInput:              composeAIInput,
+		composeAIResponse:           composeAIResponse,
+		attachmentCompletionIdx:     -1,
+		localImageLinks:             true,
+		terminalLinkBrowserFallback: true,
+		previewImageMode:            previewImageModeAuto,
+		imagePreviewLinks:           newImagePreviewServer(),
+		theme:                       theme,
+		baseStyle:                   baseStyle,
+		headerStyle:                 headerStyle,
+		loadingStyle:                loadingStyle,
+		progressStyle:               progressStyle,
+		activeTableStyle:            activeStyle,
+		inactiveTableStyle:          inactiveStyle,
+		deletionRequestCh:           deletionRequestCh,
+		deletionResultCh:            deletionResultCh,
+		ruleRequestCh:               ruleRequestCh,
+		ruleResultCh:                ruleResultCh,
+		attachmentPathInput:         attachmentPathInput,
+		keyboard:                    NewKeyboardResolver(nil),
 	}
 
 	m.syncAccountsFromBackend()
@@ -1723,6 +1729,10 @@ func (m *Model) SetLocalImageLinksEnabled(enabled bool) {
 	}
 }
 
+func (m *Model) SetTerminalLinkBrowserFallbackEnabled(enabled bool) {
+	m.terminalLinkBrowserFallback = enabled
+}
+
 func (m *Model) SetPreviewImageMode(mode PreviewImageMode) {
 	m.previewImageMode = previewImageMode(mode)
 	m.clearTimelinePreviewDocumentCache()
@@ -1944,6 +1954,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.statusMessage = "Problem report written: " + msg.Path
 			logger.Info("Problem report written: %s", msg.Path)
+		}
+		return m, nil
+
+	case terminalLinkOpenMsg:
+		if msg.Err != nil {
+			m.statusMessage = "Open link failed: " + msg.Err.Error()
+		} else {
+			m.statusMessage = "Opened link in browser"
 		}
 		return m, nil
 
@@ -2638,6 +2656,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.calendarDetailOpen = true
 		m.calendarDetailLoading = false
 		m.calendarStatus = "Saved RSVP " + msg.Status
+		return m, nil
+
+	case CalendarEditContactSuggestionsMsg:
+		if !m.calendarEdit.Active || m.calendarEdit.Field != calendarEditFieldAttendees {
+			return m, nil
+		}
+		if msg.Query != m.calendarEdit.ContactQuery {
+			return m, nil
+		}
+		m.calendarEdit.ContactSuggestions = msg.Contacts
+		m.calendarEdit.ContactCursor = 0
+		m.calendarEdit.ContactLoading = false
 		return m, nil
 
 	case CalendarInvitationSavedMsg:
@@ -3426,10 +3456,14 @@ func (m *Model) buildView(content string) tea.View {
 		content = m.theme.RenderScreen(content, m.windowWidth, m.windowHeight)
 	}
 	v := newHeraldView(content)
-	if !m.mouseSelectionMode {
+	if !m.mouseSelectionMode && !m.shouldReleaseMouseForTerminalLinks(content) {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v
+}
+
+func (m *Model) shouldReleaseMouseForTerminalLinks(content string) bool {
+	return m.activeHintMods.Contains(tea.ModCtrl) && strings.Contains(content, "\033]8;;")
 }
 
 // handleKeyMsg handles keyboard input
@@ -3466,6 +3500,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Compose screen gets its own key handler
 	if m.activeTab == tabCompose {
 		return m.handleComposeKey(msg)
+	}
+
+	if m.activeTab == tabCalendar && (m.calendarEdit.Active || m.calendarDelete.Active) {
+		return m.handleCalendarKey(msg)
 	}
 
 	if normalized := m.normalizeShortcutKeyForActiveScope(key); normalized != "" && normalized != key {

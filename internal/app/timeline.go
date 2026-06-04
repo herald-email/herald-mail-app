@@ -1377,12 +1377,14 @@ func (m *Model) clearTimelineQuickReply() {
 }
 
 func (m *Model) clearTimelineFullScreen() {
+	m.clearPreviewSelection()
 	m.timeline.fullScreen = false
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
 }
 
 func (m *Model) clearTimelinePreview() {
+	m.clearPreviewSelection()
 	m.revokeImagePreviews()
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
@@ -2630,7 +2632,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timelineRemoteRevealAvailable() {
 			segments = append(segments, m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images"))
 		}
-		segments = append(segments, "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, "z: full-screen", "drag: select", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {

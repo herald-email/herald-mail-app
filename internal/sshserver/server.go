@@ -207,6 +207,7 @@ func newSessionModel(s ssh.Session, opts sshServerOptions) (tea.Model, []tea.Pro
 	}
 	m := app.New(b, opts.Mailer, configuredEmailAddress(opts.Config), opts.Classifier, false)
 	m.SetLocalImageLinksEnabled(false)
+	m.SetTerminalLinkBrowserFallbackEnabled(false)
 	m.SetPreviewImageMode(opts.ImageMode)
 	m.SetConfigPath(opts.ResolvedConfig)
 	m.SetConfig(opts.Config)

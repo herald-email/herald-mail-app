@@ -231,8 +231,13 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		// router handles it before Contacts sees this branch.
 		return m, nil
 	case "esc":
+		if m.previewSelection.activeOn(previewSelectionContacts) {
+			m.clearPreviewSelection()
+			return m, nil
+		}
 		// Close inline email preview first, then detail, then search
 		if m.contactPreviewEmail != nil {
+			m.clearPreviewSelection()
 			m.contactPreviewEmail = nil
 			m.contactPreviewBody = nil
 			m.contactPreviewLoading = false
@@ -251,6 +256,13 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		if m.contactDetail != nil {
 			m.contactFocusPanel = 1 - m.contactFocusPanel
 		}
+	case "m":
+		return m, m.toggleMouseCaptureMode()
+	case "y", "Y":
+		if cmd, handled := m.handlePreviewCopyKey(previewSelectionContacts, key); handled {
+			return m, cmd
+		}
+		return m, nil
 	case "j", "down":
 		if m.contactFocusPanel == 0 {
 			if m.contactsIdx < len(m.contactsFiltered)-1 {
@@ -284,6 +296,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			// Open selected email inline in the contact detail panel
 			if len(m.contactDetailEmails) > 0 && m.contactDetailIdx < len(m.contactDetailEmails) {
 				email := m.contactDetailEmails[m.contactDetailIdx]
+				m.clearPreviewSelection()
 				m.contactPreviewEmail = email
 				m.contactPreviewBody = nil
 				m.contactPreviewLoading = true
@@ -483,9 +496,13 @@ func (m *Model) renderContactsTab(width, height int) string {
 	leftPanel := makePanel(leftBorderColor, leftW).Render(leftSb.String())
 
 	// --- Right panel: contact detail ---
+	rightRows := m.contactsRightPanelSelectableRows(rightW, contentH)
+	rightLines := renderPreviewSelectableRows(m.theme, rightRows, previewSelectionContacts, m.previewSelection, 0)
 	var rightSb strings.Builder
 
-	if m.contactPreviewEmail != nil {
+	if m.previewSelection.activeOn(previewSelectionContacts) && m.previewSelection.Mouse {
+		rightSb.WriteString(strings.Join(rightLines, "\n"))
+	} else if m.contactPreviewEmail != nil {
 		// Inline email preview within the Contacts tab
 		email := m.contactPreviewEmail
 		rightInnerW := rightW - 4

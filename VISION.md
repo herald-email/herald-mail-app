@@ -68,7 +68,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Daemon server (`herald serve`, Ollama-style)
 - [x] Source installs use the canonical Go module path and `cmd/herald` package so `go install github.com/herald-email/herald-mail-app/cmd/herald@latest` creates a `herald` binary.
 - [x] Email rendering package (`internal/render` — independent, testable component)
-- [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc.)
+- [x] Link tracker sanitization (strip UTM, fbclid, mc_cid, etc. from visible labels, terminal hyperlink targets, and opt-in remote image reveal URLs)
 - [ ] Link display modes (full URL, title-only clickable, sanitized)
 - [ ] Native app client (Phase 3)
 
@@ -671,6 +671,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] Provider-backed Event Create opens from Calendar, scopes new events to the selected calendar, and writes through Google Calendar/CalDAV before adding cached rows
 - [x] Provider-backed Event Delete requires confirmation, writes through Google Calendar/CalDAV before invalidating cached rows, and is available from Calendar browse/detail/edit contexts
 - [x] Event Create/Edit supports different start and end timezones for travel events and renders HTML/Markdown notes in the live preview
+- [x] Event Create/Edit uses cursor-aware modal fields plus keyboard pickers for timezones, attendees, recurrence, reminders, and date selection without stealing text-entry shortcuts
 - [x] RSVP response changes write through Google Calendar/CalDAV before updating cached attendee state
 - [x] Provider mutation conflicts and unsupported recurrence scopes fail visibly without rewriting cached event rows
 - [x] Event Edit can mutate attendee lists and this-event recurrence rules through the existing provider save-through flow
@@ -774,6 +775,7 @@ Bubble Tea's alt-screen captures input and mouse events, so Herald needs explici
 - [x] `Esc` cancels preview cursor/selection mode before closing the enclosing preview
 - [x] `yy` copies current line; `Y` copies entire visible body
 - [x] Contacts inline previews and Compose original-message previews share the same visible selection behavior as Timeline split and full-screen previews
+- [x] Read-only Timeline and Contacts email previews support in-app mouse drag selection across visible header rows, email addresses, and body text; `y` copies the highlighted range.
 
 ---
 
