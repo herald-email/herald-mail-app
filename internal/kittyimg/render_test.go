@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
 	"strings"
 	"testing"
 )
@@ -63,6 +64,35 @@ func TestRenderInlineTranscodesToPNGAndChunks(t *testing.T) {
 	}
 	if strings.Count(rendered, "\x1b_G") < 2 {
 		t.Fatalf("expected large image to be chunked across multiple Kitty commands")
+	}
+}
+
+func TestRenderInlinePNGUsesKnownDimensions(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 17, 9))
+	for y := 0; y < 9; y++ {
+		for x := 0; x < 17; x++ {
+			img.Set(x, y, color.RGBA{R: 120, G: uint8(x), B: uint8(y), A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+
+	rendered, err := RenderInlinePNG(buf.Bytes(), 17, 9, 6, 3)
+	if err != nil {
+		t.Fatalf("RenderInlinePNG returned error: %v", err)
+	}
+	if !strings.HasPrefix(rendered, "\x1b_G") {
+		t.Fatalf("rendered output should start with Kitty escape, got %q", rendered[:min(len(rendered), 20)])
+	}
+	for _, want := range []string{"a=T", "f=100", "s=17", "v=9", "c=6", "r=3"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered output missing %q controls: %q", want, rendered[:min(len(rendered), 180)])
+		}
+	}
+	if strings.HasSuffix(rendered, "\n") {
+		t.Fatalf("rendered output should not end with newline: %q", rendered[len(rendered)-min(len(rendered), 20):])
 	}
 }
 
