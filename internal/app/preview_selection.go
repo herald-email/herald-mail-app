@@ -935,7 +935,7 @@ func (m *Model) timelinePreviewBodyChromeRows(innerW int) []previewSelectableRow
 		lines = append(lines, truncate(splitInlineImageHint(nImg, imageMode), innerW))
 	}
 	if nRemote := m.timelineRemoteImageCount(); nRemote > 0 {
-		lines = append(lines, truncate(splitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable()), innerW))
+		lines = append(lines, m.renderSplitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable(), innerW))
 	}
 	for _, att := range m.timeline.body.Attachments {
 		sizeStr := fmt.Sprintf("%.1f KB", float64(att.Size)/1024)

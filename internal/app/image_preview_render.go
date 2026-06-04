@@ -66,6 +66,11 @@ func splitRemoteImageHint(count int, mode previewImageMode, canReveal bool) stri
 	}
 }
 
+func (m *Model) renderSplitRemoteImageHint(count int, mode previewImageMode, canReveal bool, innerW int) string {
+	label := truncate(splitRemoteImageHint(count, mode, canReveal), innerW)
+	return m.theme.Severity.Warning.Style().Bold(true).Render(label)
+}
+
 func (m *Model) renderInlineImagesForPreview(scopeKey string, images []models.InlineImage, descs map[string]string, innerW, availableRows int) (string, int) {
 	if len(images) == 0 || availableRows <= 0 {
 		return "", 0

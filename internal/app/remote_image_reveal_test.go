@@ -130,6 +130,38 @@ func TestTimelinePreviewORevealsDemoRemoteImage(t *testing.T) {
 	}
 }
 
+func TestTimelineSplitPreviewRemoteImageHintUsesAccentStyle(t *testing.T) {
+	m := makeTimelineRemoteImageRevealModel(t, panelPreview, false)
+	defer m.cleanup()
+	m.timeline.previewWidth = 90
+
+	hint := splitRemoteImageHint(1, previewImageModeLinks, true)
+	rendered := m.renderEmailPreview()
+	plain := ansi.Strip(rendered)
+	if !strings.Contains(plain, hint) {
+		t.Fatalf("expected split preview to keep remote image hint text %q, got:\n%s", hint, plain)
+	}
+	styledHint := m.theme.Severity.Warning.Style().Bold(true).Render(hint)
+	if !strings.Contains(rendered, styledHint) {
+		t.Fatalf("expected split preview remote image hint to use warning accent style, got raw:\n%q", rendered)
+	}
+
+	rows := m.timelinePreviewBodyChromeRows(86)
+	foundRow := false
+	for _, row := range rows {
+		if row.Plain != hint {
+			continue
+		}
+		foundRow = true
+		if row.Rendered != styledHint {
+			t.Fatalf("selectable remote image hint row rendered = %q, want %q", row.Rendered, styledHint)
+		}
+	}
+	if !foundRow {
+		t.Fatalf("selectable preview chrome rows missing remote image hint %q: %#v", hint, rows)
+	}
+}
+
 func TestTimelinePreviewORevealsDemoRemoteImageFromTimelineFocus(t *testing.T) {
 	m := makeTimelineRemoteImageRevealModel(t, panelTimeline, false)
 	defer m.cleanup()

@@ -401,8 +401,7 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 			selectionRowOffset++
 		}
 		if nRemote := m.timelineRemoteImageCount(); nRemote > 0 {
-			label := splitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable())
-			sb.WriteString(dimStyle.Render(truncate(label, innerW)) + "\n")
+			sb.WriteString(m.renderSplitRemoteImageHint(nRemote, imageMode, m.timelineRemoteRevealAvailable(), innerW) + "\n")
 			bodyChromeLines++
 			selectionRowOffset++
 		}
