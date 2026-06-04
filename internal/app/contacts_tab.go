@@ -12,7 +12,6 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/contacts"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
-	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
 
 // --- Contacts tab ---
@@ -184,8 +183,13 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		// router handles it before Contacts sees this branch.
 		return m, nil
 	case "esc":
+		if m.previewSelection.activeOn(previewSelectionContacts) {
+			m.clearPreviewSelection()
+			return m, nil
+		}
 		// Close inline email preview first, then detail, then search
 		if m.contactPreviewEmail != nil {
+			m.clearPreviewSelection()
 			m.contactPreviewEmail = nil
 			m.contactPreviewBody = nil
 			m.contactPreviewLoading = false
@@ -202,6 +206,25 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		if m.contactDetail != nil {
 			m.contactFocusPanel = 1 - m.contactFocusPanel
 		}
+	case "m":
+		return m, m.toggleMouseCaptureMode()
+	case "y":
+		if m.previewSelection.activeOn(previewSelectionContacts) {
+			selected := m.activePreviewSelectionPlainText()
+			m.clearPreviewSelection()
+			if strings.TrimSpace(selected) != "" {
+				return m, copyToClipboard(selected)
+			}
+		}
+		return m, nil
+	case "Y":
+		if m.contactPreviewEmail != nil || (m.contactFocusPanel == 1 && m.contactDetail != nil) {
+			if text := m.activePreviewSelectionAllPlainText(previewSelectionContacts); strings.TrimSpace(text) != "" {
+				m.clearPreviewSelection()
+				return m, copyToClipboard(text)
+			}
+		}
+		return m, nil
 	case "j", "down":
 		if m.contactFocusPanel == 0 {
 			if m.contactsIdx < len(m.contactsFiltered)-1 {
@@ -235,6 +258,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			// Open selected email inline in the contact detail panel
 			if len(m.contactDetailEmails) > 0 && m.contactDetailIdx < len(m.contactDetailEmails) {
 				email := m.contactDetailEmails[m.contactDetailIdx]
+				m.clearPreviewSelection()
 				m.contactPreviewEmail = email
 				m.contactPreviewBody = nil
 				m.contactPreviewLoading = true
@@ -432,111 +456,10 @@ func (m *Model) renderContactsTab(width, height int) string {
 	leftPanel := makePanel(leftBorderColor, leftW).Render(leftSb.String())
 
 	// --- Right panel: contact detail ---
+	rightRows := m.contactsRightPanelSelectableRows(rightW, contentH)
+	rightLines := renderPreviewSelectableRows(m.theme, rightRows, previewSelectionContacts, m.previewSelection, 0)
 	var rightSb strings.Builder
-
-	if m.contactPreviewEmail != nil {
-		// Inline email preview within the Contacts tab
-		email := m.contactPreviewEmail
-		rightInnerW := rightW - 4
-		if rightInnerW < 10 {
-			rightInnerW = 10
-		}
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
-		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Chrome.TitleBar.ForegroundColor())
-		rightSb.WriteString(boldStyle.Render(truncate("From: "+sanitizeText(email.Sender), rightInnerW)) + "\n")
-		rightSb.WriteString(dimStyle.Render(truncate("Date: "+email.Date.Format("Mon, 02 Jan 2006 15:04"), rightInnerW)) + "\n")
-		rightSb.WriteString(boldStyle.Render(truncate("Subj: "+sanitizeText(email.Subject), rightInnerW)) + "\n")
-		rightSb.WriteString(strings.Repeat("─", rightInnerW) + "\n")
-		if m.contactPreviewLoading {
-			rightSb.WriteString(dimStyle.Render("Loading…"))
-		} else if m.contactPreviewBody != nil {
-			body := stripInvisibleChars(emailrender.EmailBodyMarkdown(m.contactPreviewBody))
-			if body == "" {
-				body = "(No text content)"
-			}
-			lines := renderEmailBodyLines(body, rightInnerW)
-			maxLines := contentH - 6 // header(4) + hint(1) + margin
-			if maxLines < 1 {
-				maxLines = 1
-			}
-			if len(lines) > maxLines {
-				lines = lines[:maxLines]
-			}
-			rightSb.WriteString(strings.Join(lines, "\n"))
-			// Pad to push hint to bottom
-			for i := len(lines); i < maxLines; i++ {
-				rightSb.WriteString("\n")
-			}
-		}
-		rightSb.WriteString("\n" + dimStyle.Render(" Esc: back to contact"))
-	} else if m.contactDetail == nil {
-		rightSb.WriteString(lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor()).
-			Render("  Select a contact and press Enter"))
-	} else {
-		c := m.contactDetail
-		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Chrome.TitleBar.ForegroundColor())
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
-		normalStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor())
-
-		displayName := c.DisplayName
-		if displayName == "" {
-			displayName = c.Email
-		}
-		rightSb.WriteString(boldStyle.Render(displayName) + "\n")
-		rightSb.WriteString(dimStyle.Render(c.Email) + "\n")
-		if c.Company != "" {
-			rightSb.WriteString(normalStyle.Render("Company: "+c.Company) + "\n")
-		}
-		if len(c.Topics) > 0 {
-			rightSb.WriteString(normalStyle.Render("Topics: "+strings.Join(c.Topics, ", ")) + "\n")
-		}
-
-		firstStr := "—"
-		lastStr := "—"
-		if !c.FirstSeen.IsZero() {
-			firstStr = c.FirstSeen.Format("2006-01-02")
-		}
-		if !c.LastSeen.IsZero() {
-			lastStr = c.LastSeen.Format("2006-01-02")
-		}
-		stats := fmt.Sprintf("First seen: %s  Last seen: %s  Received: %d  Sent: %d",
-			firstStr, lastStr, c.EmailCount, c.SentCount)
-		rightSb.WriteString(dimStyle.Render(stats) + "\n")
-
-		if c.EnrichedAt != nil {
-			rightSb.WriteString(dimStyle.Render("Enriched: "+c.EnrichedAt.Format("2006-01-02")) + "\n")
-		}
-
-		rightSb.WriteString("\n")
-		rightSb.WriteString(boldStyle.Render("Recent Emails") + "\n")
-
-		if len(m.contactDetailEmails) == 0 {
-			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
-		} else {
-			rightInnerW := rightW - 4
-			if rightInnerW < 1 {
-				rightInnerW = 1
-			}
-			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) = maxSubjW+14.
-			maxSubjW := rightInnerW - 14
-			if maxSubjW < 10 {
-				maxSubjW = 10
-			}
-			for i, e := range m.contactDetailEmails {
-				subj := ansi.Truncate(e.Subject, maxSubjW, "…")
-				subjPad := strings.Repeat(" ", maxSubjW-ansi.StringWidth(subj))
-				line := "  " + subj + subjPad + "  " + e.Date.Format("2006-01-02")
-				rowStyle := normalStyle
-				if m.contactFocusPanel == 1 && i == m.contactDetailIdx {
-					rowStyle = lipgloss.NewStyle().
-						Foreground(m.theme.Chrome.TabActive.ForegroundColor()).
-						Background(activeColor).
-						Bold(true)
-				}
-				rightSb.WriteString(rowStyle.Render(line) + "\n")
-			}
-		}
-	}
+	rightSb.WriteString(strings.Join(rightLines, "\n"))
 
 	rightPanel := makePanel(rightBorderColor, rightW).Render(rightSb.String())
 

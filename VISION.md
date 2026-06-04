@@ -771,6 +771,7 @@ Bubble Tea's alt-screen captures all input, so the terminal's native mouse selec
 - [x] `y` yanks selected lines to system clipboard (`pbcopy` / `xclip`)
 - [x] `Esc` cancels visual mode
 - [x] `yy` copies current line; `Y` copies entire visible body
+- [x] Read-only Timeline and Contacts email previews support in-app mouse drag selection across visible header rows, email addresses, and body text; `y` copies the highlighted range.
 
 ---
 

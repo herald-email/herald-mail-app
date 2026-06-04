@@ -657,6 +657,7 @@ type Model struct {
 	helpScrollOffset          int
 	helpSearchActive          bool
 	helpSearch                string
+	previewSelection          previewSelectionState
 	keyEventTypes             bool
 	activeHintMods            tea.KeyMod
 	modifierHintMods          tea.KeyMod

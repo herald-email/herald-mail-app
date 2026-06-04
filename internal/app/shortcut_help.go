@@ -693,8 +693,21 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 func (m *Model) contactsShortcutHelpSection() shortcutHelpSection {
 	if m.contactPreviewEmail != nil {
 		return shortcutHelpSection{"Contacts Preview", []shortcutHelpEntry{
+			{"Mouse drag", "select visible header, address, and body text"},
+			{"y", "copy the active preview text selection"},
+			{"m", "release or restore terminal mouse capture"},
 			{"Esc", "back to the selected contact"},
 			{"Tab", "switch contact panes when preview is closed"},
+		}}
+	}
+	if m.contactFocusPanel == 1 && m.contactDetail != nil {
+		return shortcutHelpSection{"Contacts Detail", []shortcutHelpEntry{
+			{"Mouse drag", "select visible contact detail or recent-email text"},
+			{"y", "copy the active detail text selection"},
+			{"m", "release or restore terminal mouse capture"},
+			{"Enter", "open selected email preview"},
+			{"Tab", "switch between list and detail panes"},
+			{"Esc", "return to the contacts list"},
 		}}
 	}
 	return shortcutHelpSection{"Contacts", []shortcutHelpEntry{

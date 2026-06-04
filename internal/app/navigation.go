@@ -56,6 +56,7 @@ func (m *Model) switchToCompose() tea.Cmd {
 func (m *Model) switchToContacts() tea.Cmd {
 	cmds := m.composeExitCmds()
 	m.finishTimelineRangeSelection()
+	m.clearPreviewSelection()
 	m.activeTab = tabContacts
 	m.clearComposeReturn()
 	m.contactFocusPanel = 0

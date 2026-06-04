@@ -28,6 +28,18 @@ func (r mouseRect) contains(x, y int) bool {
 
 func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	switch msg.(type) {
+	case tea.MouseMotionMsg:
+		if m.previewSelection.Dragging {
+			mouse := msg.Mouse()
+			return m.handlePreviewMouseSelectionMotion(mouse, false)
+		}
+		return m, nil, false
+	case tea.MouseReleaseMsg:
+		if m.previewSelection.Dragging {
+			mouse := msg.Mouse()
+			return m.handlePreviewMouseSelectionMotion(mouse, true)
+		}
+		return m, nil, false
 	case tea.MouseClickMsg, tea.MouseWheelMsg:
 	default:
 		return m, nil, false
@@ -36,11 +48,12 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	if m.windowWidth > 0 && (m.windowWidth < minTermWidth || m.windowHeight < minTermHeight) {
 		return m, nil, true
 	}
+	if m.timeline.fullScreen {
+		rect := mouseRect{x: -2, y: -1, w: m.windowWidth + 2, h: m.windowHeight + 1}
+		return m.handleTimelinePreviewMouse(mouse, rect)
+	}
 	if cmd, handled := m.handleMouseTabClick(mouse); handled {
 		return m, cmd, true
-	}
-	if m.timeline.fullScreen {
-		return m.handleTimelinePreviewMouse(mouse)
 	}
 	if m.showLogs {
 		return m, nil, false
@@ -62,6 +75,8 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	switch m.activeTab {
 	case tabTimeline:
 		return m.handleTimelineMouse(mouse, plan, top)
+	case tabContacts:
+		return m.handleContactsMouse(mouse, plan, top)
 	case tabCalendar:
 		return m.handleCalendarMouse(mouse, plan, top)
 	}
@@ -249,9 +264,16 @@ func (m *Model) scrollTimelinePreview(direction int) {
 	}
 }
 
-func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse) (tea.Model, tea.Cmd, bool) {
+func (m *Model) handleTimelinePreviewMouse(msg tea.Mouse, rect mouseRect) (tea.Model, tea.Cmd, bool) {
 	if !mouseIsWheel(msg) {
 		m.setFocusedPanel(panelPreview)
+		if msg.Button == tea.MouseLeft {
+			row, col := previewContentPointForMouse(rect, msg)
+			rows := m.previewRowsForSelectionSurface(previewSelectionTimeline)
+			if m.beginPreviewMouseSelection(previewSelectionTimeline, row, col, rows) {
+				return m, nil, true
+			}
+		}
 		return m, nil, true
 	}
 	m.setFocusedPanel(panelPreview)
@@ -300,8 +322,86 @@ func (m *Model) handleTimelineMouse(msg tea.Mouse, plan LayoutPlan, top int) (te
 			h: m.mousePanelHeight(),
 		}
 		if previewRect.contains(msg.X, msg.Y) {
-			return m.handleTimelinePreviewMouse(msg)
+			return m.handleTimelinePreviewMouse(msg, previewRect)
 		}
+	}
+	return m, nil, false
+}
+
+func previewContentPointForMouse(rect mouseRect, msg tea.Mouse) (int, int) {
+	return msg.Y - (rect.y + 1), msg.X - (rect.x + 2)
+}
+
+func previewFullScreenContentPointForMouse(msg tea.Mouse) (int, int) {
+	return msg.Y, msg.X
+}
+
+func (m *Model) handlePreviewMouseSelectionMotion(msg tea.Mouse, release bool) (tea.Model, tea.Cmd, bool) {
+	surface := m.previewSelection.Surface
+	rows := m.previewRowsForSelectionSurface(surface)
+	row, col := 0, 0
+	switch surface {
+	case previewSelectionTimeline:
+		if m.timeline.fullScreen {
+			row, col = previewFullScreenContentPointForMouse(msg)
+		} else {
+			plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+			top := m.mouseContentTop()
+			rect := m.timelinePreviewMouseRect(plan, top)
+			row, col = previewContentPointForMouse(rect, msg)
+		}
+	case previewSelectionContacts:
+		plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
+		rect := m.contactsDetailMouseRect(plan, m.mouseContentTop())
+		row, col = previewContentPointForMouse(rect, msg)
+	default:
+		return m, nil, false
+	}
+	if release {
+		return m, nil, m.finishPreviewMouseSelection(surface, row, col, rows)
+	}
+	return m, nil, m.updatePreviewMouseSelection(surface, row, col, rows)
+}
+
+func (m *Model) timelinePreviewMouseRect(plan LayoutPlan, top int) mouseRect {
+	x := 0
+	if plan.SidebarVisible {
+		x += sidebarContentWidth + 2 + panelGapWidth
+	}
+	tableRect := mouseRect{x: x, y: top, w: m.timelineTable.Width() + 2, h: m.mousePanelHeight()}
+	return mouseRect{
+		x: tableRect.x + tableRect.w + panelGapWidth,
+		y: top,
+		w: m.timeline.previewWidth,
+		h: m.mousePanelHeight(),
+	}
+}
+
+func (m *Model) contactsDetailMouseRect(plan LayoutPlan, top int) mouseRect {
+	return mouseRect{
+		x: plan.Contacts.ListWidth + panelGapWidth,
+		y: top,
+		w: plan.Contacts.DetailWidth,
+		h: m.mousePanelHeight(),
+	}
+}
+
+func (m *Model) handleContactsMouse(msg tea.Mouse, plan LayoutPlan, top int) (tea.Model, tea.Cmd, bool) {
+	rect := m.contactsDetailMouseRect(plan, top)
+	if !rect.contains(msg.X, msg.Y) {
+		return m, nil, false
+	}
+	m.contactFocusPanel = 1
+	if mouseIsWheel(msg) {
+		return m, nil, true
+	}
+	if msg.Button == tea.MouseLeft {
+		row, col := previewContentPointForMouse(rect, msg)
+		rows := m.previewRowsForSelectionSurface(previewSelectionContacts)
+		if m.beginPreviewMouseSelection(previewSelectionContacts, row, col, rows) {
+			return m, nil, true
+		}
+		return m, nil, true
 	}
 	return m, nil, false
 }

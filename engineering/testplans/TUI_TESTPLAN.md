@@ -738,6 +738,27 @@ Check these states during every applicable lane:
 - Visual mode shows a visible anchor/cursor/highlight and does not appear as a dead mode.
 - Prompt editor and Settings text fields preserve literal printable input unless their active field mode owns a Vim command.
 
+### TC-14I — Preview mouse text selection
+
+**Lane:** A, B
+**Sizes:** `220x50`, `120x40`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch demo mode, open a Timeline split preview whose loaded body exposes `From:`, `To:`, `Cc:`, `Date:`, `Subj:`, `Tags:`, and `Actions:` rows.
+2. Drag with the mouse across visible preview header text, including at least one email address, then press `y`.
+3. Drag from a visible header row into body text, then press `y`.
+4. Press `z`, repeat the same drag/copy checks in full-screen preview, then exit full-screen.
+5. Open Contacts, open a contact detail, then open a recent email inline and repeat visible header/body drag selection and `y` copy.
+6. Press `Esc` after a selection and confirm it clears the selection before closing the preview surface.
+7. Repeat at `50x15`, confirm the minimum-size guard appears, then resize larger and repeat one selection.
+
+**Expect:**
+- Drag selection highlights visible rendered text in read-only preview content without requiring terminal-native mouse-capture release.
+- Selected ranges can include visible header rows, email addresses, and body rows; hidden, truncated, or off-screen content is not copied.
+- `y` copies the highlighted range, `yy` copies the current visible/selectable row where supported, and `Y` copies all visible/selectable preview text where supported.
+- Preview wheel scrolling, Timeline visual mode, Contacts navigation, Contacts search typing, Compose typing, and `m` mouse-capture release/restore remain intact.
+- At `50x15`, the minimum-size guard appears and recovery restores normal selectable previews.
+
 ### TC-14H — Modifier-aware key hint layers
 
 **Lane:** A, B
@@ -2368,14 +2389,16 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 6. In Timeline sender/domain grouping, click a grouped row and wheel over the list and preview regions.
 7. Open Calendar, click a mini-month day, click an agenda/day/week/3-day event, then double-click the same selected event to open detail.
 8. Click a Calendar rail checkbox to hide a calendar, restart with the same config, and confirm the visible-calendar selection is restored from `calendar.selected_calendars`.
-9. Click the sidebar when visible, then press `m` in Timeline and Calendar to release mouse capture and press `m` again to restore it.
-10. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
+9. Drag-select visible text in Timeline preview, Contacts detail/inline email preview, and full-screen preview; then click/wheel outside the selected preview text and confirm normal mouse navigation still works.
+10. Click the sidebar when visible, then press `m` in Timeline, Contacts browse/preview, and Calendar to release mouse capture and press `m` again to restore it.
+11. Resize to `50x15`, capture the minimum-size guard, then recover to a larger size.
 
 **Expect:**
 - Mouse click and wheel behavior matches the equivalent keyboard actions and never changes hidden state outside the clicked region.
 - Timeline thread-root mouse clicks use two-step semantics: select/update preview first, then fold/unfold only when the top thread email is already selected.
 - Preview wheel events scroll the body without moving the underlying list cursor.
 - List wheel events move the focused list cursor and refresh an open preview when applicable.
+- Preview drag selection is confined to visible read-only preview text and does not steal list clicks, wheel scrolling, Contacts search input, or Compose text entry.
 - Calendar mouse clicks match keyboard parity: mini-month clicks move the active date/range, event clicks select rows without leaking provider IDs, double-clicking the same selected event opens detail, and rail checkbox clicks show/hide calendars.
 - Calendar rail visibility persists in YAML as selected calendar keys and does not expose provider URLs, OAuth tokens, sync tokens, ETags, or event IDs.
 - The `m` toggle releases and restores TUI mouse capture while keeping visual/copy modes coherent.
