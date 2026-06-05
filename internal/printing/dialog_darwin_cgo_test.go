@@ -103,6 +103,7 @@ func TestMacOSPrintSaveV050RemoteNewsletterSmoke(t *testing.T) {
 	}{
 		{name: "v050-original-visual-remote", mode: ModeOriginalVisual, theme: ThemeOriginal},
 		{name: "v050-rendered-markdown-swiss-remote", mode: ModeRenderedMarkdown, theme: ThemeSwiss},
+		{name: "v050-rendered-markdown-academic-remote", mode: ModeRenderedMarkdown, theme: ThemeAcademic},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

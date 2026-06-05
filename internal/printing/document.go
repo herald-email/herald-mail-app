@@ -30,7 +30,7 @@ func BuildHTMLDocument(req Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	bodyHTML = sanitizePrintableHTML(bodyHTML, req.Body, req.AllowRemoteImages)
+	bodyHTML = sanitizePrintableHTML(bodyHTML, req.Body, req.AllowRemoteImages, req.Mode == ModeRenderedMarkdown)
 
 	var b strings.Builder
 	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
@@ -201,8 +201,10 @@ dl div { display: contents; }
 dt { color: var(--print-dim); font-weight: 650; }
 dd { margin: 0; overflow-wrap: anywhere; }
 .message-body { overflow-wrap: anywhere; }
-.message-body img { max-width: min(100%, 560px); max-height: 520px; width: auto; height: auto; object-fit: contain; }
+.message-body img { max-width: min(100%, 560px); max-height: min(520px, 68vh); width: auto; height: auto; object-fit: contain; }
 body:not([data-print-theme="original"]) .message-body img { display: block; margin: 0.6em 0 0.35em; }
+body:not([data-print-theme="original"]) .print-image-frame { display: block; margin: 0.75em 0 0.5em; break-inside: avoid; page-break-inside: avoid; }
+body:not([data-print-theme="original"]) .print-image-frame img { margin: 0; }
 pre, code { font-family: var(--print-mono-font); }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--print-code-bg); padding: 10px 12px; }
 code { background: var(--print-code-bg); padding: 0 3px; }
@@ -217,7 +219,11 @@ a { color: var(--print-accent); }
 .attachments ul { list-style: none; margin: 0; padding: 0; }
 .attachments li { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--print-soft-rule); }
 .attachment-name { font-weight: 650; flex: 1; }
-@media print { .email-print { padding: 0; } a { color: inherit; text-decoration: none; } }
+@media print {
+  .email-print { padding: 0; }
+  a { color: inherit; text-decoration: none; }
+  body:not([data-print-theme="original"]) .print-image-frame { break-inside: avoid-page; page-break-inside: avoid; }
+}
 </style>`
 }
 
@@ -291,11 +297,11 @@ body[data-print-theme="swiss"] h2 { text-transform: uppercase; letter-spacing: 0
 	}
 }
 
-func sanitizePrintableHTML(fragment string, body *models.EmailBody, allowRemoteImages bool) string {
-	return sanitizePrintableHTMLFragment(fragment, inlineImageDataURIs(body), allowRemoteImages)
+func sanitizePrintableHTML(fragment string, body *models.EmailBody, allowRemoteImages bool, normalizeMarkdownImages bool) string {
+	return sanitizePrintableHTMLFragment(fragment, inlineImageDataURIs(body), allowRemoteImages, normalizeMarkdownImages)
 }
 
-func sanitizePrintableHTMLFragment(fragment string, images map[string]string, allowRemoteImages bool) string {
+func sanitizePrintableHTMLFragment(fragment string, images map[string]string, allowRemoteImages bool, normalizeMarkdownImages bool) string {
 	doc, err := html.Parse(strings.NewReader("<!doctype html><html><body>" + fragment + "</body></html>"))
 	if err != nil {
 		return `<pre style="white-space:pre-wrap">` + escaped(fragment) + `</pre>`
@@ -305,6 +311,9 @@ func sanitizePrintableHTMLFragment(fragment string, images map[string]string, al
 		body = doc
 	}
 	sanitizeNode(body, images, allowRemoteImages)
+	if normalizeMarkdownImages {
+		wrapStandalonePrintImages(body)
+	}
 	return renderChildren(body)
 }
 
@@ -345,6 +354,91 @@ func sanitizeNode(n *html.Node, images map[string]string, allowRemoteImages bool
 		sanitizeNode(c, images, allowRemoteImages)
 		c = next
 	}
+}
+
+func wrapStandalonePrintImages(n *html.Node) {
+	if n == nil {
+		return
+	}
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		switch {
+		case isStandaloneImageParagraph(c):
+			c.Data = "figure"
+			c.Attr = withClass(c.Attr, "print-image-frame")
+		case c.Type == html.ElementNode && strings.EqualFold(c.Data, "img"):
+			figure := &html.Node{
+				Type: html.ElementNode,
+				Data: "figure",
+				Attr: []html.Attribute{{Key: "class", Val: "print-image-frame"}},
+			}
+			n.InsertBefore(figure, c)
+			n.RemoveChild(c)
+			figure.AppendChild(c)
+		default:
+			wrapStandalonePrintImages(c)
+		}
+		c = next
+	}
+}
+
+func isStandaloneImageParagraph(n *html.Node) bool {
+	if n == nil || n.Type != html.ElementNode || !strings.EqualFold(n.Data, "p") {
+		return false
+	}
+	var content *html.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
+			continue
+		}
+		if content != nil {
+			return false
+		}
+		content = c
+	}
+	return isImageLikeContent(content)
+}
+
+func isImageLikeContent(n *html.Node) bool {
+	if n == nil || n.Type != html.ElementNode {
+		return false
+	}
+	if strings.EqualFold(n.Data, "img") {
+		return true
+	}
+	if !strings.EqualFold(n.Data, "a") {
+		return false
+	}
+	var content *html.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
+			continue
+		}
+		if content != nil {
+			return false
+		}
+		content = c
+	}
+	return content != nil && content.Type == html.ElementNode && strings.EqualFold(content.Data, "img")
+}
+
+func withClass(attrs []html.Attribute, className string) []html.Attribute {
+	for i := range attrs {
+		if strings.EqualFold(attrs[i].Key, "class") {
+			classes := strings.Fields(attrs[i].Val)
+			for _, existing := range classes {
+				if existing == className {
+					attrs[i].Key = "class"
+					return attrs
+				}
+			}
+			classes = append(classes, className)
+			attrs[i].Key = "class"
+			attrs[i].Val = strings.Join(classes, " ")
+			return attrs
+		}
+	}
+	return append(attrs, html.Attribute{Key: "class", Val: className})
 }
 
 func shouldDropPrintNode(n *html.Node) bool {

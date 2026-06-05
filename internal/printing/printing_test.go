@@ -159,12 +159,35 @@ func TestBuildHTMLDocumentRenderedMarkdownPreservesImageSizingHints(t *testing.T
 		`width="96"`,
 		`height="48"`,
 		`style="max-width:96px;height:auto"`,
-		`max-height: 520px`,
+		`max-height: min(520px, 68vh)`,
 		`body:not([data-print-theme="original"]) .message-body img { display: block;`,
+		`class="print-image-frame"`,
+		`break-inside: avoid`,
+		`page-break-inside: avoid`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("rendered Markdown print HTML missing image sizing fragment %q:\n%s", want, html)
 		}
+	}
+}
+
+func TestBuildHTMLDocumentOriginalVisualDoesNotWrapSenderImagesInPrintFrames(t *testing.T) {
+	body := samplePrintBody()
+	body.TextHTML = `<p><img alt="Sender layout image" src="https://example.test/layout.png" width="96" height="48"></p>`
+	html, err := BuildHTMLDocument(Request{
+		Email:             samplePrintEmail(),
+		Body:              body,
+		Mode:              ModeOriginalVisual,
+		AllowRemoteImages: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildHTMLDocument error: %v", err)
+	}
+	if strings.Contains(html, `class="print-image-frame"`) {
+		t.Fatalf("original visual print HTML should preserve sender image structure:\n%s", html)
+	}
+	if !strings.Contains(html, `<p><img`) {
+		t.Fatalf("original visual print HTML did not preserve paragraph image structure:\n%s", html)
 	}
 }
 
