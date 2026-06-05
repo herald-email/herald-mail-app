@@ -70,14 +70,6 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Release Archive',
-          items: [
-            { label: "What's New in v0.6", slug: 'whats-new-in-v0-6' },
-            { label: "What's New in v0.5", slug: 'whats-new-in-v0-5' },
-            { label: "What's New in v0.4", slug: 'whats-new-in-v0-4' },
-          ],
-        },
-        {
           label: 'Using Herald',
           items: [
             { label: 'Global UI', slug: 'using-herald/global-ui' },
@@ -129,6 +121,15 @@ export default defineConfig({
           items: [
             { label: 'Local OAuth Builds', slug: 'development/local-oauth-builds' },
             { label: 'Regenerate Screenshots', slug: 'development/regenerate-screenshots' },
+          ],
+        },
+        {
+          label: 'Release Archive',
+          items: [
+            { label: "What's New in v0.6", slug: 'whats-new-in-v0-6' },
+            { label: "What's New in v0.5", slug: 'whats-new-in-v0-5' },
+            { label: "What's New in v0.4", slug: 'whats-new-in-v0-4' },
+            { label: "What's New in v0.1", slug: 'whats-new-in-v0-1' },
           ],
         },
       ],
