@@ -129,6 +129,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders
 - [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)
+- [x] macOS preview printing (`p`) opens the standard print dialog for the loaded email in Original Visual mode or a themed Rendered Markdown mode while preserving remote-image privacy
 - [x] Actions: delete, archive, reply, forward
 - [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline previews
 - [x] Offline cache policy controls whether previews keep lightweight body text only, non-attachment body data, or full attachment data for offline work

@@ -12,6 +12,10 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 		return model, cmd, true
 	}
 
+	if model, cmd, handled := m.handlePreviewPrintChooserKey(msg); handled {
+		return model, cmd, true
+	}
+
 	if m.showProblemReport {
 		switch shortcutKey(msg) {
 		case "esc", "q":

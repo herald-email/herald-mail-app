@@ -1031,6 +1031,30 @@ Check these states during every applicable lane:
 - Plain-text clipboard payloads are exact and ANSI-free; HTML-derived selections include rich HTML where supported; image-copy fallback is explicit and bounded.
 - Preview-selection shortcuts do not fire from editable text-entry surfaces.
 
+### TC-17B — macOS preview print chooser
+
+**Lane:** A, G
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode on macOS and open a loaded Timeline split preview for `Example: Rich HTML rendering showcase`.
+2. Press `p`, confirm the compact chooser offers `1 Original Visual`, `2 Markdown Swiss`, `3 Markdown GitHub`, `4 Markdown Manuscript`, `5 Markdown Academic`, and `Esc cancel`.
+3. Press `Esc`, confirm the chooser closes without changing the selected message, scroll offset, preview copy mode, or remote-image reveal state.
+4. Reopen the chooser, press `1`, and verify the standard macOS print dialog opens for the original visual document; cancel the dialog.
+5. Reopen the chooser, press each Markdown theme key (`2` through `5`) and verify the standard macOS print dialog opens for the rendered Markdown document with the selected theme; cancel each dialog.
+6. Repeat chooser open/cancel in Timeline full-screen preview and Contacts inline preview.
+7. In an SSH session or unsupported build, press `p` from a loaded preview and confirm Herald reports printing is unsupported instead of opening host-local UI.
+8. Type literal `p` in Compose body, Timeline search, Contacts search, Settings fields, prompt editor, and rule editor fields.
+
+**Expect:**
+- The chooser appears only when a read-only preview body is loaded and remains discoverable through `?` help and bottom hints when room allows.
+- Original Visual mode uses sender HTML/plain content; Rendered Markdown modes use Herald's Markdown-derived reading representation with the selected print theme.
+- Remote image URLs are not fetched by printing, and remote `<img src=http...>` resources are not emitted into the printable document.
+- Local CID inline images with bytes can appear in Original Visual and Rendered Markdown printable documents as embedded data URIs.
+- Markdown image syntax from remote-image newsletters, including the demo v0.5 newsletter, appears as blocked-image placeholders with sanitized source links rather than empty image tags or remote loads.
+- Non-macOS, non-cgo, and SSH surfaces return bounded unsupported status without mutating preview or mailbox state.
+- `p` remains literal text in editable text-entry surfaces.
+
 ### TC-18 — Logs and chat resilience
 
 **Lane:** A, B, C  

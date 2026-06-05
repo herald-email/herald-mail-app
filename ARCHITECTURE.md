@@ -51,6 +51,7 @@ cmd/herald-mcp-server  → compatibility wrapper for `herald mcp`
 | `internal/config` | YAML config load/validate plus onboarding-readiness checks such as vendor presets and empty-config detection |
 | `internal/smtp` | SMTP send (TLS-first, STARTTLS fallback) |
 | `internal/render` | Email body rendering: shared HTML-to-Markdown conversion, ANSI-aware text wrapping, URL linkification, and preview URL target sanitization for visible labels plus OSC 8 hyperlink targets. No TUI dependency — usable from MCP, daemon, SSH |
+| `internal/printing` | Preview print document generation plus platform printing boundary: builds privacy-preserving printable HTML for Original Visual and themed Rendered Markdown modes, opens the macOS standard print dialog on local Darwin/cgo builds, and returns unsupported results for remote/unsupported platforms |
 | `internal/mcpserver` | Shared MCP stdio server implementation used by `herald mcp` and the legacy `herald-mcp-server` wrapper |
 | `internal/sshserver` | Shared SSH server implementation used by `herald ssh` and the legacy `herald-ssh-server` wrapper |
 | `internal/logger` | File-based logger with TUI callback; writes `herald_*.log` under the platform user log/state directory and masks private mailbox/config data unless `-unsafe-logs` is explicitly enabled |
@@ -151,6 +152,10 @@ Timeline previews keep image bytes local to the TUI process. Split and full-scre
 ### Preview selection and clipboard payloads
 
 Read-only email preview selection is a TUI-layer reader mode over the shared preview document. Preview rows carry copy metadata such as plain text, HTML fragments, and image identity so the cursor/highlight renderer does not need to scrape ANSI output; clipboard writes go through an internal payload writer that always supports plain text and can add HTML or image data on platforms that expose richer clipboard APIs.
+
+### Preview printing
+
+Read-only preview printing is a local platform action over the same `EmailData` and `EmailBody` source used by Timeline and Contacts previews, not a scrape of rendered terminal rows. The TUI asks `internal/printing` to build a temporary privacy-preserving HTML document in Original Visual or a selected Rendered Markdown theme; local macOS+cgo builds hand that document to a hidden same-binary helper that opens the standard AppKit print panel, while SSH and unsupported platforms return a bounded unsupported result without opening host-local UI.
 
 **Interactive-before-background priority**
 

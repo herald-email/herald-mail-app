@@ -29,6 +29,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/mcpserver"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/notifications"
+	"github.com/herald-email/herald-mail-app/internal/printing"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 	"github.com/herald-email/herald-mail-app/internal/sshserver"
 	buildversion "github.com/herald-email/herald-mail-app/internal/version"
@@ -586,6 +587,12 @@ func tryConnectDaemon(cfg *config.Config) backend.Backend {
 }
 
 func Main() {
+	if handled, code, err := printing.HandleHelper(os.Args[1:]); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(code)
+	}
 	cmd, args := rootCommandFromArgs(os.Args)
 	switch cmd {
 	case rootCommandServe:
