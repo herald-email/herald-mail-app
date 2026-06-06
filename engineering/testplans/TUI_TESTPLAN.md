@@ -1203,8 +1203,9 @@ Check these states during every applicable lane:
 - Chat distinguishes email-backed memory, Obsidian-backed memory, research-backed memory, and inference when those sources are present.
 - Compose Radar shows at most three source-backed nudges and stays hidden or quiet when there is no high-confidence memory.
 - Compose Radar nudges carry typed conflict, callback, open-loop, relationship-context, research-update, and draft-risk metadata plus source evidence, action-state, and configured dismissal scope for later explicit actions.
+- Compose Radar exposes explicit local actions for source inspection, inserting a bounded phrase, dismissal, marking resolved, saving for review, and recording research intent without sending mail, writing Obsidian, or calling external research.
 - Compose Radar re-ranks after recipient, subject, or body changes with a short debounce, and stale refreshes never replace the latest draft context.
-- Compose Radar does not change To, Subject, Body, attachments, preserved reply context, or AI review state without an explicit user action.
+- Compose Radar does not change To, Subject, Body, attachments, preserved reply context, or AI review state without an explicit user action; the insert action is the only local draft mutation in v1.
 - Low-confidence memories may appear in chat/search results but do not become Compose Radar warnings.
 - Missing local AI, no Sent cache, no memory directory, or missing source evidence leaves Compose usable and shows a bounded unavailable or empty state.
 

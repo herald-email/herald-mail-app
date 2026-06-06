@@ -483,6 +483,20 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.composeAILoading = true
 		m.refreshComposeLayout()
 		return m, m.aiSubjectCmd()
+	case "alt+o":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionSource)
+	case "alt+i":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionInsert)
+	case "alt+d":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionDismiss)
+	case "alt+r":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionResolve)
+	case "alt+s":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionSave)
+	case "alt+p":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionResearchPerson)
+	case "alt+c":
+		return m, m.performComposeMemoryRadarAction(composeMemoryActionResearchCompany)
 	case "tab":
 		// If a subject hint is pending, Tab accepts it
 		if m.composeAISubjectHint != "" {

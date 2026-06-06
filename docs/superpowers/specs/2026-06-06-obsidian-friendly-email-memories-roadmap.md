@@ -78,7 +78,7 @@ Compose Radar is the flagship interaction because it catches context at the mome
 - [x] Re-rank nudges when recipient, subject, or draft body changes, with debounce and stale-result protection.
 - [x] Show at most three nudges by default.
 - [x] Support nudge types: conflict, callback, open loop, relationship context, research update, and draft risk.
-- [ ] Provide actions: open source, insert phrase, dismiss, mark resolved, save memory, research person/company.
+- [x] Provide explicit local actions: open source, insert phrase, dismiss, mark resolved, save memory, research person/company intent.
 - [x] Keep Compose Radar read-only in v1 so it never mutates drafts silently.
 - [x] Keep the panel hidden or collapsed when no high-confidence nudge exists.
 
@@ -172,7 +172,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] **M2: Memory-aware chat tools** - add read-only Gollem tools for contact history, company tracks, related replies, open loops, and reply-prep context.
 - [x] Track lifecycle assembly derives active, waiting, stale, resolved, backlog, and done track views from immutable source-backed memories.
 - [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
-- [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
+- [x] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
 - [x] Compose Radar nudges carry typed conflict/callback/open-loop/relationship/research/draft-risk states plus action-state and dismissal-scope metadata.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
@@ -190,7 +190,7 @@ The first implementation should make one narrow scenario feel excellent instead 
 - [x] Use shipped defaults for destination folders, Obsidian output profile, prompt templates, update cadence, and confidence thresholds before exposing advanced tuning.
 - [x] Detect "already replied", "awaiting response", "deadline", "timeline mismatch", and "relationship callback" nudges.
 - [x] Show nudges only in reply Compose and only when evidence is strong.
-- [ ] Let the user open the source email or Obsidian note from each nudge.
+- [x] Let the user inspect the source email, Obsidian note, research URL, or compact evidence pointer from each nudge.
 - [x] Write no Obsidian changes until sync preview is approved.
 - [x] Treat uncertain claims as chat/search suggestions, not Compose warnings.
 
