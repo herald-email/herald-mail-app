@@ -194,7 +194,7 @@ Check these states during every applicable lane:
 - Key hints always match the normalized visible focus.
 - Key hints must not silently drop primary actions at `80x24`; if a primary action cannot fit in the bottom chrome, it must remain discoverable in `?` help and the bottom chrome must still advertise `?: help`.
 - Visible bottom chrome must be compared against the actual shortcuts available for the active pane. Missing primary actions are first-class bugs, not harmless copy drift.
-- Timeline protected hints must stay visible whenever contextually valid: `c: compose`, `r: all`, `R: sender`, `f: forward`, `d: delete`, `D: delete now`, `a: archive`, panel `Tab`, and `?: help`.
+- Timeline Default protected hints must stay visible whenever contextually valid without listing every legacy alias: `Ctrl+N: compose`, `Ctrl+R: reply`, `Ctrl+Shift+R: reply all` where space/context allows, `Ctrl+F: forward`, `Del: delete`, `Shift+Del: delete now`, `A: archive`, pane `F6`/`Shift+F6`, and `?: help`. Legacy `c/r/R/f/d/D/a/e`, Backspace variants, and `Tab` variants must still work for at least one release and remain discoverable in `?` help/docs.
 - `?` opens context-sensitive shortcut help from every major tab, pane, and overlay where Herald owns key routing.
 - While `?` help is open, the bottom hint bar belongs to help and must not continue advertising shortcuts from the underlying tab, pane, or overlay.
 - Keyboard layouts with physical-key reporting can use Herald-owned browse shortcuts from the same physical keys as the advertised Latin shortcuts; printable fallback aliases cover Cyrillic and direct Japanese kana layouts when `BaseCode` is unavailable, while search and Compose text inputs still receive the actual native characters.
@@ -700,10 +700,10 @@ Check these states during every applicable lane:
 **Sizes:** `220x50`, `120x40`, `80x24`
 
 **Steps:**
-1. Open Timeline and press `c` to open Compose.
+1. Open Timeline and press `Ctrl+N` to open Compose, then repeat with legacy `c`.
 2. Type `q123?/` into the focused address field, then tab to the body and type `q123?/` again.
 3. Type at least one macOS Option-generated character such as `™` or `¬` where available.
-4. Press `Esc`, confirm Timeline returns, then verify `1` and `2` switch Timeline/Contacts in browse contexts, while `3` switches Calendar only when Calendar is advertised.
+4. Press `Esc`, confirm Timeline returns, then verify `1` and `2` switch Timeline/Contacts in browse contexts, while `3` switches Calendar only when Calendar is advertised; repeat with `Alt+1`, `Alt+2`, and `Alt+3` where the terminal reports Alt-number keys.
 5. Return to Timeline and confirm `F1`, `F2`, and `F3` remain legacy mail tab aliases; `F4` opens Calendar only when Calendar is advertised.
 6. Open Timeline search with `/`, type `q?/` into the query, and press `Ctrl+C` only after confirming the query text is editable.
 7. Open Settings with `S`, choose each keyboard profile (Default, Vim, Emacs, Custom), verify the Custom Keymap path field appears only when Custom YAML is selected, and verify invalid custom keymap paths or unknown command IDs are reported without replacing the active working map.
@@ -713,9 +713,9 @@ Check these states during every applicable lane:
 - Plain `q`, digits, `?`, `/`, and Option-generated text remain in Compose text fields and do not quit, search, or switch tabs.
 - `Esc` from Compose returns to the Timeline state that opened it after local Compose transient state is dismissed.
 - `1/2` are the advertised mail tab keys in browse contexts; `3` joins the advertised tab keys only when Calendar is available, and `F1/F2/F3` remain supported as legacy mail aliases.
-- Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings.
+- Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings, and Default bottom hints show preferred keys without listing legacy aliases.
 - A Custom keymap that remaps tab switching, Compose, reply, forward, archive, delete, re-classify, sidebar, logs, or chat shows the remapped primary keys in the bottom hint bar, title-row tabs, and `?` shortcut help.
-- Timeline `c` opens blank Compose; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
+- Timeline `Ctrl+N` opens blank Compose, with `c` still accepted as a legacy alias; `Ctrl+R` replies sender-only in Timeline while refresh remains available in non-mail contexts; `Ctrl+Shift+R` replies all; `Ctrl+F` forwards; `A` archives; `Alt+A` opens the account switcher; `T` re-classifies; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
 - Settings shows the Custom Keymap path field only for Custom YAML, while persisting `keyboard.profile` and any configured `keyboard.custom_keymap` without losing unrelated config fields.
 - Custom keymaps that extend Default keep Compose insert-first until `fields.compose.default_mode` opts into a modal field mode.

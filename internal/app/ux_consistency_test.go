@@ -101,8 +101,13 @@ func TestRenderKeyHints_ShowAttachmentNavigationWhenMultipleAttachments(t *testi
 	}
 
 	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "[") || !strings.Contains(hints, "]") {
-		t.Fatalf("expected attachment navigation hints for multi-attachment preview, got %q", hints)
+	requireHintSegments(t, hints, "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+	if strings.Contains(hints, "[") || strings.Contains(hints, "]") {
+		t.Fatalf("expected calm Default preview hints to omit attachment navigation aliases, got %q", hints)
+	}
+	help := m.timelineShortcutHelpSection()
+	if !shortcutHelpSectionsContain([]shortcutHelpSection{help}, "[ / ]", "navigate attachments") {
+		t.Fatalf("expected shortcut help to document attachment navigation, got %#v", help)
 	}
 }
 
@@ -371,7 +376,12 @@ func TestRenderKeyHints_TimelinePreviewFocusKeepsMessageActions(t *testing.T) {
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "*: star", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive", "T: re-classify")
+	requireHintSegments(t, hints, "Esc: close", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+	for _, legacy := range []string{"r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+		if strings.Contains(hints, legacy) {
+			t.Fatalf("Default preview hints should omit legacy alias %q, got:\n%s", legacy, hints)
+		}
+	}
 }
 
 func TestRenderKeyHints_TimelineSearchPreviewFocusKeepsMessageActions(t *testing.T) {
@@ -390,7 +400,12 @@ func TestRenderKeyHints_TimelineSearchPreviewFocusKeepsMessageActions(t *testing
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "*: star", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive", "T: re-classify")
+	requireHintSegments(t, hints, "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", "A: archive", "T: re-classify")
+	for _, legacy := range []string{"r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+		if strings.Contains(hints, legacy) {
+			t.Fatalf("Default search preview hints should omit legacy alias %q, got:\n%s", legacy, hints)
+		}
+	}
 }
 
 func TestRenderKeyHints_TimelinePreviewActionsStayVisibleAt80Cols(t *testing.T) {
@@ -410,7 +425,7 @@ func TestRenderKeyHints_TimelinePreviewActionsStayVisibleAt80Cols(t *testing.T) 
 
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
-	requireHintSegments(t, stripANSI(hints), "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive")
+	requireHintSegments(t, stripANSI(hints), "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
 }
 
 func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T) {
@@ -421,7 +436,7 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 	}{
 		{
 			name: "list",
-			want: []string{"?: help", "tab: panels", "c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"},
+			want: []string{"?: help", "Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"},
 		},
 		{
 			name: "list with preview open",
@@ -431,7 +446,7 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 				m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
 				m.setFocusedPanel(panelTimeline)
 			},
-			want: []string{"?: help", "tab: panels", "c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"},
+			want: []string{"?: help", "Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"},
 		},
 		{
 			name: "preview focus",
@@ -441,7 +456,7 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 				m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
 				m.setFocusedPanel(panelPreview)
 			},
-			want: []string{"?: help", "tab: panels", "c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"},
+			want: []string{"?: help", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy"},
 		},
 		{
 			name: "search results",
@@ -455,21 +470,21 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 				m.setFocusedPanel(panelTimeline)
 				m.updateTimelineTable()
 			},
-			want: []string{"?: help", "c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"},
+			want: []string{"?: help", "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete"},
 		},
 		{
 			name: "selected messages",
 			setup: func(m *Model) {
 				m.toggleTimelineSelection()
 			},
-			want: []string{"?: help", "c: compose", "d: delete selected", "D: delete now", "a: archive selected"},
+			want: []string{"?: help", "Del: delete selected", "Shift+Del: delete now", "A: archive selected"},
 		},
 		{
 			name: "chat filter",
 			setup: func(m *Model) {
 				m.timeline.chatFilterMode = true
 			},
-			want: []string{"?: help", "c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"},
+			want: []string{"?: help", "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete"},
 		},
 	}
 

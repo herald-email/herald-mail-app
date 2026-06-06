@@ -383,7 +383,7 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | ---------------------------------- | ------------------------------------------------------------------------------------------- |
 | `1` / `2` / `3`                    | Timeline / Contacts / Calendar tabs in browse contexts                                      |
 | `F1` / `F2` / `F3` / `F4`          | Timeline / Contacts / Contacts legacy / Calendar aliases                                    |
-| `c`                                | Open a new Compose screen from Timeline                                                     |
+| `Ctrl+N` (`c` legacy)              | Open a new Compose screen from Timeline                                                     |
 | `Ctrl+X`                           | Open the Compose body in `$VISUAL` or `$EDITOR`                                             |
 | `h` / `j` / `k` / `l`              | Navigate left / down / up / right where the active pane supports it                         |
 | `Enter`                            | Open email preview                                                                          |
@@ -391,12 +391,12 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `Shift+Up` / `Shift+Down`          | Extend Timeline range selection when supported by the terminal                              |
 | `V`, then `j` / `k`                | Fallback Timeline range selection without shifted-arrow support                             |
 | `Escape`                           | Close preview / picker, or return from Compose to its originating Timeline screen           |
-| `d` / `Backspace`                  | Delete selected/current target after confirmation                                           |
-| `D` / `Shift+Backspace`            | Delete selected/current target immediately, without confirmation                            |
-| `a`                                | Archive current message immediately; bulk archive still asks for confirmation               |
-| `r` / `R`                          | Reply all / reply sender-only                                                               |
-| `f`                                | Forward                                                                                     |
-| `T`                                | Re-classify the current message with AI (`A` remains a legacy alias)                        |
+| `Delete` (`d` / `Backspace` legacy) | Delete selected/current target after confirmation                                          |
+| `Shift+Delete` (`D` / `Shift+Backspace` legacy) | Delete selected/current target immediately, without confirmation                  |
+| `A` (`E` legacy alias)             | Archive current message immediately; bulk archive still asks for confirmation               |
+| `Ctrl+R` / `Ctrl+Shift+R`          | Reply sender-only / reply all                                                               |
+| `Ctrl+F`                           | Forward                                                                                     |
+| `T`                                | Re-classify the current message with AI in Default                                          |
 | `Ctrl+Q`                           | Quick reply picker (in preview)                                                             |
 | `u`                                | Unsubscribe                                                                                 |
 | `H`                                | Hide future mail from the current sender                                                    |
@@ -407,9 +407,11 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `B`                                | Toggle folder sidebar                                                                       |
 | `g`                                | Toggle the AI chat panel                                                                    |
 | `L`                                | Toggle logs                                                                                 |
-| `Ctrl+R`                           | Refresh current folder                                                                      |
-| `/`                                | Contextual search; in mailbox search type `? query` for semantic search when available      |
+| `Ctrl+R` outside Timeline mail contexts | Refresh current folder                                                                  |
+| `/` / `Ctrl+K`                     | Contextual search; in mailbox search type `? query` for semantic search when available      |
 | `?`                                | Open context-sensitive shortcut help outside editable text fields                            |
+| `F6` / `Shift+F6`                  | Cycle pane focus forward/backward (`Tab` / `Shift+Tab` remain aliases)                      |
+| `Alt+A`                            | Open the account switcher in Default browse contexts when multiple accounts exist           |
 | `q`                                | Quit in browse contexts only                                                                |
 | `Ctrl+C`                           | Quit from any state, including text inputs                                                  |
 
@@ -421,7 +423,7 @@ keyboard:
   custom_keymap: ~/.config/herald/keymaps/work.yaml
 ```
 
-Custom keymap files extend a built-in profile and bind keys to Herald command IDs. Add `fields.compose.default_mode: normal` when a custom map should opt Compose into Vim-style field modes; otherwise Compose, search, prompt, settings, and editor-like text fields keep literal printable input, including `?`, `/`, and macOS Option-generated characters.
+Custom keymap files extend a built-in profile and bind keys to Herald command IDs. Default shows preferred GUI-mail-style shortcuts in the bottom hint bar while keeping legacy aliases active; Vim keeps terminal-oriented primaries. Add `fields.compose.default_mode: normal` when a custom map should opt Compose into Vim-style field modes; otherwise Compose, search, prompt, settings, and editor-like text fields keep literal printable input, including `?`, `/`, and macOS Option-generated characters.
 
 ---
 

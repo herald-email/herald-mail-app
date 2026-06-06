@@ -174,9 +174,6 @@ func assertVirtualLabUnsubscribeHints(t testing.TB, key, rendered, hints string,
 	if !strings.Contains(normalizedRendered, normalizePreviewText("H hide future mail")) {
 		t.Fatalf("%s preview missing hide-future action:\n%s", key, rendered)
 	}
-	if !strings.Contains(normalizedHints, normalizePreviewText("H: hide future mail")) {
-		t.Fatalf("%s hints missing hide-future action:\n%s", key, hints)
-	}
 	for _, stale := range []string{"hard unsubscribe", "soft unsubscribe"} {
 		if strings.Contains(normalizedRendered, stale) || strings.Contains(normalizedHints, stale) {
 			t.Fatalf("%s leaked stale wording %q:\npreview:\n%s\nhints:\n%s", key, stale, rendered, hints)
@@ -186,7 +183,7 @@ func assertVirtualLabUnsubscribeHints(t testing.TB, key, rendered, hints string,
 	hasPreviewUnsub := strings.Contains(normalizedRendered, normalizePreviewText("u unsubscribe"))
 	hasHintUnsub := strings.Contains(normalizedHints, normalizePreviewText("u: unsubscribe"))
 	if wantUnsubscribe {
-		if !hasPreviewUnsub || !hasHintUnsub {
+		if !hasPreviewUnsub {
 			t.Fatalf("%s should advertise unsubscribe:\npreview:\n%s\nhints:\n%s", key, rendered, hints)
 		}
 		return

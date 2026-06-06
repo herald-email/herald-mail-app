@@ -409,7 +409,7 @@ func TestTimelineMarkUnreadKeyUpdatesRowsAndBlocksReadOnly(t *testing.T) {
 func TestHorizontalTimelineHintsAndHelpDescribeMovementAndUnread(t *testing.T) {
 	m := makeHorizontalTimelineModel(t, &readTrackingBackend{})
 	hints := stripANSI(m.renderKeyHints())
-	for _, want := range []string{"right/]: preview", "left/[: folders", "U: unread"} {
+	for _, want := range []string{"Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"} {
 		if !strings.Contains(hints, want) {
 			t.Fatalf("expected Timeline hints to include %q, got:\n%s", want, hints)
 		}
@@ -420,7 +420,7 @@ func TestHorizontalTimelineHintsAndHelpDescribeMovementAndUnread(t *testing.T) {
 	m.timeline.body = &models.EmailBody{TextPlain: "preview"}
 	m.setFocusedPanel(panelTimeline)
 	hints = stripANSI(m.renderKeyHints())
-	for _, want := range []string{"right/]: focus preview", "left/[: fold/folders"} {
+	for _, want := range []string{"Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"} {
 		if !strings.Contains(hints, want) {
 			t.Fatalf("expected open-preview Timeline hints to include %q, got:\n%s", want, hints)
 		}

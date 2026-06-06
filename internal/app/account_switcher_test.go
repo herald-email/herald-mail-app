@@ -198,10 +198,10 @@ func TestMultiAccountSidebarStatusAndSwitcherRenderAccountIdentity(t *testing.T)
 		t.Fatalf("status missing active account: %q", status)
 	}
 
-	model, _ := m.handleKeyMsg(keyRunes("A"))
+	model, _ := m.handleKeyMsg(shortcutKeyPressMsg("alt+A"))
 	updated := model.(*Model)
 	if !updated.showAccountSwitcher {
-		t.Fatal("expected A to open account switcher")
+		t.Fatal("expected Alt+A to open account switcher")
 	}
 	overlay := stripANSI(updated.renderAccountSwitcherOverlayView())
 	for _, want := range []string{"Accounts", "Work Mail", "Personal", "needs sign-in"} {
@@ -373,7 +373,7 @@ func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T
 	m.accountSelectedFolders["work-mail"] = "Clients"
 	m.accountSelectedFolders["personal-mail"] = "Travel"
 
-	model, _ := m.handleKeyMsg(keyRunes("A"))
+	model, _ := m.handleKeyMsg(shortcutKeyPressMsg("alt+A"))
 	opened := model.(*Model)
 	model, _ = opened.handleKeyMsg(keyRunes("j"))
 	selected := model.(*Model)
@@ -558,7 +558,7 @@ func TestAllAccountsRailAndSwitcherEntrySwitchUnifiedScope(t *testing.T) {
 		t.Fatalf("title missing All Accounts scope: %q", title)
 	}
 
-	model, _ := m.handleKeyMsg(keyRunes("A"))
+	model, _ := m.handleKeyMsg(shortcutKeyPressMsg("alt+A"))
 	opened := model.(*Model)
 	overlay := stripANSI(opened.renderAccountSwitcherOverlayView())
 	if !strings.Contains(overlay, "All Accounts") {

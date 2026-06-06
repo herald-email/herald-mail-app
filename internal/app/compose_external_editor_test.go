@@ -41,12 +41,12 @@ func TestComposeCtrlXStartsExternalEditorAndKeepsDraftUntilReturn(t *testing.T) 
 	}
 }
 
-func TestRenderKeyHints_ComposeAdvertisesExternalEditor(t *testing.T) {
+func TestShortcutHelp_ComposeAdvertisesExternalEditor(t *testing.T) {
 	m := newComposeExternalEditorTestModel(t)
 
-	hints := m.renderKeyHints()
-	if !strings.Contains(hints, "ctrl+x: editor") {
-		t.Fatalf("expected hints to include external editor shortcut, got %q", hints)
+	help := m.shortcutHelpSections()
+	if !shortcutHelpSectionsContain(help, "Ctrl+X", "external editor") {
+		t.Fatalf("expected shortcut help to include external editor shortcut, got %#v", help)
 	}
 }
 

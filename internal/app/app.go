@@ -3597,10 +3597,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "d":
+	case "d", "delete":
 		return m, m.confirmDeleteSelected()
 
-	case "D":
+	case "D", "shift+delete":
 		return m, m.deleteSelectedImmediately()
 
 	case "backspace":
@@ -3650,7 +3650,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		return m, m.openSettingsPanel()
 
-	case "a", "e":
+	case "a", "e", "E":
 		if m.activeTab == tabTimeline {
 			m.finishTimelineRangeSelection()
 		}
@@ -3703,13 +3703,13 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		return m.handleEscKey()
 
-	case "tab", "ctrl+i":
+	case "tab", "ctrl+i", "f6":
 		if m.canInteractWithVisibleData() {
 			m.cyclePanel(true)
 		}
 		return m, nil
 
-	case "shift+tab":
+	case "shift+tab", "shift+f6":
 		if m.canInteractWithVisibleData() {
 			m.cyclePanel(false)
 		}

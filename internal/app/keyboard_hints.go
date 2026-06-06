@@ -40,6 +40,13 @@ func (m *Model) commandHelpKey(scope, command string) string {
 	return displayShortcutKey(m.commandKey(scope, command), keyDisplayHelp)
 }
 
+func (m *Model) usesDefaultKeyboardProfile() bool {
+	if m == nil || m.keyboard == nil {
+		return true
+	}
+	return m.keyboard.Profile() == keyboardProfileDefault
+}
+
 func (m *Model) movementHint(scope, desc string) string {
 	down, up := m.verticalKeys(scope)
 	return fmt.Sprintf("↑/%s ↓/%s: %s", up, down, desc)
@@ -72,6 +79,9 @@ func (m *Model) leftFocusHint(scope, desc string) string {
 	if key == "" {
 		key = "h"
 	}
+	if key == "left" {
+		return fmt.Sprintf("left: %s", desc)
+	}
 	return fmt.Sprintf("%s/left: %s", key, desc)
 }
 
@@ -79,6 +89,9 @@ func (m *Model) previewFocusHint(scope string) string {
 	key := displayShortcutKey(m.commandKey(scope, CommandPaneRight), keyDisplayHint)
 	if key == "" {
 		key = "l"
+	}
+	if key == "right" {
+		return "right/]: focus preview"
 	}
 	return fmt.Sprintf("%s/right/]: focus preview", key)
 }
@@ -88,6 +101,9 @@ func (m *Model) foldersFocusHint(scope string) string {
 	if key == "" {
 		key = "h"
 	}
+	if key == "left" {
+		return "left/[: folders"
+	}
 	return fmt.Sprintf("%s/left/[: folders", key)
 }
 
@@ -95,6 +111,9 @@ func (m *Model) timelineOpenPreviewHint() string {
 	key := displayShortcutKey(m.commandKey("timeline", CommandPaneRight), keyDisplayHint)
 	if key == "" {
 		key = "l"
+	}
+	if key == "right" {
+		return "right/]: preview"
 	}
 	return fmt.Sprintf("%s/right/]: preview", key)
 }
@@ -129,9 +148,9 @@ func (m *Model) primaryTabHelpKey() string {
 
 func (m *Model) primaryTabHelpDescription() string {
 	if m != nil && m.calendarAvailable {
-		return "switch tabs; F2/F3 open Contacts; F4 opens Calendar"
+		return "switch tabs; Alt+1/2/3 and F1-F4 remain aliases"
 	}
-	return "switch tabs; F2 and F3 open Contacts"
+	return "switch tabs; Alt+1/2 and F1-F3 remain aliases"
 }
 
 func (m *Model) primaryTabKeys(style keyDisplayStyle) []string {
@@ -204,6 +223,8 @@ func displayHelpKeyPart(part string) string {
 		return "Tab"
 	case "backspace":
 		return "Backspace"
+	case "delete":
+		return "Del"
 	case "shift":
 		return "Shift"
 	case "pgup":

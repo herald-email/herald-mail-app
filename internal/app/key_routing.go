@@ -306,7 +306,7 @@ func (m *Model) toggleChat() tea.Cmd {
 
 func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	switch shortcutKey(msg) {
-	case "1":
+	case "1", "alt+1":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 0 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[0])
 			return model, cmd, true
@@ -315,7 +315,7 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 			return m, m.switchToTimeline(), true
 		}
 		return m, nil, true
-	case "2":
+	case "2", "alt+2":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 1 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
@@ -327,7 +327,7 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 			return m, m.loadContacts(), true
 		}
 		return m, nil, true
-	case "3":
+	case "3", "alt+3":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
 			return model, cmd, true

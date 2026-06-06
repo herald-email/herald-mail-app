@@ -612,11 +612,12 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		{m.primaryTabHelpKey(), m.primaryTabHelpDescription()},
 	}
 	if m.hasMultipleAccounts() {
-		globalEntries = append(globalEntries, shortcutHelpEntry{"A", "open account switcher"})
+		globalEntries = append(globalEntries, m.commandHelpEntry(keyboardScopeGlobal, CommandAccountSwitcher, "open account switcher"))
 	}
 	globalEntries = append(globalEntries,
 		shortcutHelpEntry{m.commandHelpKey(keyboardScopeGlobal, CommandSidebarToggle) + " / " + m.commandHelpKey(keyboardScopeGlobal, CommandLogsToggle), "toggle sidebar or logs"},
 		m.commandHelpEntry(keyboardScopeGlobal, CommandChatToggle, "toggle the AI chat panel"),
+		m.commandHelpEntry(keyboardScopeGlobal, CommandAppSettings, "open settings"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandAppRefresh, "refresh the current folder outside text-entry fields"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandAppQuit, "quit Herald"),
 	)
@@ -654,15 +655,20 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	default:
 		sections = append(sections, m.timelineShortcutHelpSection())
 	}
+	if m.usesDefaultKeyboardProfile() {
+		sections = append(sections, m.defaultLegacyShortcutHelpSection())
+	}
 	return sections
 }
 
 func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 	entries := []shortcutHelpEntry{
 		{"Tab", "move to the next Compose field"},
-		{"Ctrl+S", "send the current message"},
+		{"Ctrl+Enter", "send the current message"},
+		{"Ctrl+S", "send fallback for terminals that do not report Ctrl+Enter"},
 		{"Ctrl+P", "toggle Markdown preview"},
 		{"Ctrl+A", "attach a file"},
+		{"Ctrl+X", "open the draft body in an external editor"},
 		{"Ctrl+Alt+C/B", "show and focus CC or BCC"},
 		{"Ctrl+K", "focus the inline AI instruction field"},
 		{"Ctrl+J", "suggest a subject from the draft"},
@@ -792,7 +798,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		return shortcutHelpSection{"Timeline Preview", entries}
 	}
 	return shortcutHelpSection{"Timeline", []shortcutHelpEntry{
-		{"h/j/k/l or arrows", "navigate messages and threads"},
+		{"arrows; h/j/k/l legacy", "navigate messages and threads"},
 		{"l / Right / ]", "preview the highlighted message, or focus an already-open preview"},
 		{"h / Left / [", "fold an expanded thread, or close preview and focus folders"},
 		m.commandHelpEntry("timeline", CommandComposeNew, "open a blank Compose screen"),
@@ -813,6 +819,19 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		{"* / " + m.commandHelpKey("timeline", CommandMailReclassify), "star or re-classify"},
 		m.commandHelpEntry("timeline", CommandHelpSearch, "start Timeline search; type ? query for semantic search"),
 		{"Ctrl+D / Ctrl+U", "half-page down or up"},
-		{"Tab", "switch visible panels"},
+		{"F6 / Shift+F6", "switch visible panels; Tab and Shift+Tab remain aliases"},
+	}}
+}
+
+func (m *Model) defaultLegacyShortcutHelpSection() shortcutHelpSection {
+	return shortcutHelpSection{"Default Legacy Aliases", []shortcutHelpEntry{
+		{"c", "legacy alias for Ctrl+N new message"},
+		{"R / r", "legacy aliases for Ctrl+R reply sender and Ctrl+Shift+R reply all"},
+		{"f / F", "legacy alias for Ctrl+F forward in Timeline"},
+		{"d / Backspace", "legacy aliases for Delete confirmed delete"},
+		{"D / Shift+Backspace", "legacy aliases for Shift+Delete immediate delete"},
+		{"a / e / E", "legacy aliases for A archive when not editing a draft"},
+		{"Tab / Shift+Tab", "legacy aliases for F6 / Shift+F6 pane focus"},
+		{"h/j/k/l", "legacy navigation aliases; Vim keeps them as primaries"},
 	}}
 }

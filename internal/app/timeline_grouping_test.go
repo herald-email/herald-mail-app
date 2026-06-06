@@ -159,8 +159,8 @@ func TestTimelineGroupingSwitchClosesPreviewAndKeepsSelectionByMessageID(t *test
 func TestTimelineGroupingHintsAndHelpAdvertiseGroupSwitch(t *testing.T) {
 	m := newTimelineGroupingModel(t)
 	hints := stripANSI(m.rawKeyHintsForWidth(120, m.chromeState(m.buildLayoutPlan(120, 40))))
-	if !strings.Contains(hints, "G: group") {
-		t.Fatalf("expected Timeline hints to advertise grouping, got %q", hints)
+	if strings.Contains(hints, "G: group") {
+		t.Fatalf("expected calm Default Timeline hints to omit grouping, got %q", hints)
 	}
 
 	help := pressQuestion(m)

@@ -21,20 +21,35 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		key     string
 		command string
 	}{
-		{name: "vim right", scope: "timeline", mode: "normal", key: "l", command: CommandPaneRight},
-		{name: "vim left", scope: "timeline", mode: "normal", key: "h", command: CommandPaneLeft},
-		{name: "new compose", scope: "timeline", mode: "normal", key: "c", command: CommandComposeNew},
-		{name: "reply all primary", scope: "timeline", mode: "normal", key: "r", command: CommandMailReplyAll},
-		{name: "reply sender primary", scope: "timeline", mode: "normal", key: "R", command: CommandMailReplySender},
-		{name: "forward primary", scope: "timeline", mode: "normal", key: "f", command: CommandMailForward},
+		{name: "arrow right primary", scope: "timeline", mode: "normal", key: "right", command: CommandPaneRight},
+		{name: "vim right legacy", scope: "timeline", mode: "normal", key: "l", command: CommandPaneRight},
+		{name: "new compose primary", scope: "timeline", mode: "normal", key: "ctrl+n", command: CommandComposeNew},
+		{name: "new compose legacy", scope: "timeline", mode: "normal", key: "c", command: CommandComposeNew},
+		{name: "reply sender primary", scope: "timeline", mode: "normal", key: "ctrl+r", command: CommandMailReplySender},
+		{name: "reply sender legacy", scope: "timeline", mode: "normal", key: "R", command: CommandMailReplySender},
+		{name: "reply all primary", scope: "timeline", mode: "normal", key: "ctrl+shift+r", command: CommandMailReplyAll},
+		{name: "reply all terminal shifted alias", scope: "timeline", mode: "normal", key: "ctrl+R", command: CommandMailReplyAll},
+		{name: "reply all legacy", scope: "timeline", mode: "normal", key: "r", command: CommandMailReplyAll},
+		{name: "forward primary", scope: "timeline", mode: "normal", key: "ctrl+f", command: CommandMailForward},
+		{name: "forward legacy", scope: "timeline", mode: "normal", key: "f", command: CommandMailForward},
 		{name: "forward legacy", scope: "timeline", mode: "normal", key: "F", command: CommandMailForward},
-		{name: "archive primary", scope: "timeline", mode: "normal", key: "a", command: CommandMailArchiveCurrent},
+		{name: "archive primary", scope: "timeline", mode: "normal", key: "A", command: CommandMailArchiveCurrent},
+		{name: "archive legacy", scope: "timeline", mode: "normal", key: "a", command: CommandMailArchiveCurrent},
 		{name: "archive legacy", scope: "timeline", mode: "normal", key: "e", command: CommandMailArchiveCurrent},
-		{name: "delete confirm primary", scope: "timeline", mode: "normal", key: "d", command: CommandMailDeleteConfirm},
+		{name: "delete confirm primary", scope: "timeline", mode: "normal", key: "delete", command: CommandMailDeleteConfirm},
+		{name: "delete confirm legacy", scope: "timeline", mode: "normal", key: "d", command: CommandMailDeleteConfirm},
 		{name: "delete confirm backspace", scope: "timeline", mode: "normal", key: "backspace", command: CommandMailDeleteConfirm},
-		{name: "delete immediate primary", scope: "timeline", mode: "normal", key: "D", command: CommandMailDeleteImmediate},
+		{name: "delete immediate primary", scope: "timeline", mode: "normal", key: "shift+delete", command: CommandMailDeleteImmediate},
+		{name: "delete immediate legacy", scope: "timeline", mode: "normal", key: "D", command: CommandMailDeleteImmediate},
 		{name: "delete immediate shift backspace", scope: "timeline", mode: "normal", key: "shift+backspace", command: CommandMailDeleteImmediate},
 		{name: "classify relocated", scope: "timeline", mode: "normal", key: "T", command: CommandMailReclassify},
+		{name: "search ctrl+k alias", scope: "timeline", mode: "normal", key: "ctrl+k", command: CommandHelpSearch},
+		{name: "pane next primary", scope: "global", mode: "normal", key: "f6", command: CommandPaneNext},
+		{name: "pane prev primary", scope: "global", mode: "normal", key: "shift+f6", command: CommandPanePrev},
+		{name: "pane next legacy", scope: "global", mode: "normal", key: "tab", command: CommandPaneNext},
+		{name: "account switcher primary", scope: "global", mode: "normal", key: "alt+A", command: CommandAccountSwitcher},
+		{name: "alt timeline tab alias", scope: "global", mode: "normal", key: "alt+1", command: CommandTabTimeline},
+		{name: "compose send primary", scope: "compose", mode: "normal", key: "ctrl+enter", command: CommandComposeSend},
 		{name: "sort cycle primary", scope: "timeline", mode: "normal", key: "O", command: CommandTimelineSortCycle},
 		{name: "sidebar primary", scope: "global", mode: "normal", key: "B", command: CommandSidebarToggle},
 		{name: "logs primary", scope: "global", mode: "normal", key: "L", command: CommandLogsToggle},
@@ -54,6 +69,38 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 				t.Fatalf("Resolve(%q,%q,%q) = %q, want %q", tc.scope, tc.mode, tc.key, got, tc.command)
 			}
 		})
+	}
+}
+
+func TestVimKeyboardProfilePreservesTerminalPrimaries(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Keyboard.Profile = keyboardProfileVim
+	resolver := NewKeyboardResolver(cfg)
+
+	for _, tc := range []struct {
+		key     string
+		command string
+	}{
+		{"h", CommandPaneLeft},
+		{"j", CommandPaneDown},
+		{"k", CommandPaneUp},
+		{"l", CommandPaneRight},
+		{"c", CommandComposeNew},
+		{"r", CommandMailReplyAll},
+		{"R", CommandMailReplySender},
+		{"f", CommandMailForward},
+		{"a", CommandMailArchiveCurrent},
+		{"d", CommandMailDeleteConfirm},
+		{"D", CommandMailDeleteImmediate},
+		{"A", CommandMailReclassify},
+	} {
+		got, ok := resolver.Resolve("timeline", keyboardModeNormal, tc.key)
+		if !ok || got != tc.command {
+			t.Fatalf("vim Resolve(%q) = %q, %v; want %q, true", tc.key, got, ok, tc.command)
+		}
+		if primary := resolver.PrimaryKey("timeline", keyboardModeNormal, tc.command); primary != tc.key {
+			t.Fatalf("vim PrimaryKey(%s) = %q, want %q", tc.command, primary, tc.key)
+		}
 	}
 }
 
@@ -199,21 +246,26 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 
 	hints := stripANSI(m.renderKeyHints())
 	helpEntries := m.shortcutHelpSections()
+	requireHintSegments(t, hints, "Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search")
+	for _, legacy := range []string{"c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+		if strings.Contains(hints, legacy) {
+			t.Fatalf("Default bottom hints should omit legacy alias %q, got:\n%s", legacy, hints)
+		}
+	}
 	for _, tc := range []struct {
 		scope   string
 		command string
-		hint    string
 		help    string
 	}{
-		{scope: "timeline", command: CommandComposeNew, hint: "compose", help: "open a blank Compose"},
-		{scope: "timeline", command: CommandMailReplyAll, hint: "all", help: "reply all"},
-		{scope: "timeline", command: CommandMailReplySender, hint: "sender", help: "reply sender"},
-		{scope: "timeline", command: CommandMailForward, hint: "forward", help: "forward highlighted"},
-		{scope: "timeline", command: CommandMailDeleteConfirm, hint: "delete", help: "after confirmation"},
-		{scope: "timeline", command: CommandMailDeleteImmediate, hint: "delete now", help: "immediately"},
-		{scope: "timeline", command: CommandMailArchiveCurrent, hint: "archive", help: "after confirmation"},
-		{scope: "timeline", command: CommandTimelineSortCycle, hint: "sort", help: "cycle Timeline sorting"},
-		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, hint: "sidebar", help: "toggle sidebar"},
+		{scope: "timeline", command: CommandComposeNew, help: "open a blank Compose"},
+		{scope: "timeline", command: CommandMailReplyAll, help: "reply all"},
+		{scope: "timeline", command: CommandMailReplySender, help: "reply sender"},
+		{scope: "timeline", command: CommandMailForward, help: "forward highlighted"},
+		{scope: "timeline", command: CommandMailDeleteConfirm, help: "after confirmation"},
+		{scope: "timeline", command: CommandMailDeleteImmediate, help: "immediately"},
+		{scope: "timeline", command: CommandMailArchiveCurrent, help: "after confirmation"},
+		{scope: "timeline", command: CommandTimelineSortCycle, help: "cycle Timeline sorting"},
+		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, help: "toggle sidebar"},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
 			key := m.commandKey(tc.scope, tc.command)
@@ -223,9 +275,6 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 			got, ok := m.keyboard.Resolve(tc.scope, keyboardModeNormal, key)
 			if !ok || got != tc.command {
 				t.Fatalf("Resolve(%q, %q) = %q, %v; want %q, true", tc.scope, key, got, ok, tc.command)
-			}
-			if !strings.Contains(hints, displayShortcutKey(key, keyDisplayHint)+": "+tc.hint) {
-				t.Fatalf("bottom hints missing %q for %s:\n%s", key+": "+tc.hint, tc.command, hints)
 			}
 			if !shortcutHelpSectionsContain(helpEntries, displayShortcutKey(key, keyDisplayHelp), tc.help) {
 				t.Fatalf("shortcut help missing key %q or help containing %q for %s: %#v", key, tc.help, tc.command, helpEntries)

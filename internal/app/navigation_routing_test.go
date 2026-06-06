@@ -662,18 +662,20 @@ func TestRenderKeyHints_FollowsNormalizedVisiblePanels(t *testing.T) {
 	if strings.Contains(hints, "space: expand") {
 		t.Fatalf("expected hidden sidebar hints to disappear, got %q", hints)
 	}
-	if !strings.Contains(hints, "sender") {
+	if !strings.Contains(hints, "Ctrl+R: reply") {
 		t.Fatalf("expected timeline hints to stay on a visible panel after focus normalization, got %q", hints)
 	}
 }
 
 func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T) {
 	tests := []struct {
-		name  string
-		model func() *Model
+		name     string
+		model    func() *Model
+		wantTabs bool
 	}{
 		{
-			name: "timeline list",
+			name:     "timeline list",
+			wantTabs: false,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabTimeline
@@ -683,7 +685,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "timeline chat filter",
+			name:     "timeline chat filter",
+			wantTabs: true,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabTimeline
@@ -694,7 +697,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "timeline read-only diagnostic",
+			name:     "timeline read-only diagnostic",
+			wantTabs: true,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabTimeline
@@ -705,7 +709,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "compose",
+			name:     "compose",
+			wantTabs: false,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabCompose
@@ -713,7 +718,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "contacts list",
+			name:     "contacts list",
+			wantTabs: true,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabContacts
@@ -722,7 +728,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "contacts detail",
+			name:     "contacts detail",
+			wantTabs: true,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabContacts
@@ -731,7 +738,8 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 			},
 		},
 		{
-			name: "sidebar",
+			name:     "sidebar",
+			wantTabs: true,
 			model: func() *Model {
 				m := makeSizedModel(t, 120, 40)
 				m.activeTab = tabTimeline
@@ -745,8 +753,11 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hints := stripANSI(tc.model().renderKeyHints())
-			if !strings.Contains(hints, "1-2: tabs") {
+			if tc.wantTabs && !strings.Contains(hints, "1-2: tabs") {
 				t.Fatalf("expected primary numbered tab hint, got %q", hints)
+			}
+			if !tc.wantTabs && strings.Contains(hints, "1-2: tabs") {
+				t.Fatalf("expected calm Timeline list hint to omit tab switcher, got %q", hints)
 			}
 			for _, stale := range []string{"1-3: tabs", "F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {
 				if strings.Contains(hints, stale) {
@@ -764,8 +775,12 @@ func TestRenderKeyHints_TimelineListAdvertisesPanelSwitching(t *testing.T) {
 	m.updateTimelineTable()
 
 	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "tab/shift+tab: panels") {
-		t.Fatalf("expected Timeline list hints to advertise panel switching, got %q", hints)
+	if strings.Contains(hints, "tab/shift+tab: panels") {
+		t.Fatalf("expected calm Default Timeline list hints to omit legacy panel aliases, got %q", hints)
+	}
+	help := m.timelineShortcutHelpSection()
+	if !shortcutHelpSectionsContain([]shortcutHelpSection{help}, "F6 / Shift+F6", "switch visible panels") {
+		t.Fatalf("expected shortcut help to advertise F6 panel switching, got %#v", help)
 	}
 }
 

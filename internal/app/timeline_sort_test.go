@@ -228,8 +228,8 @@ func TestTimelineSortPreservesStarredPinningWithinModes(t *testing.T) {
 func TestTimelineSortHintsAndHelpAdvertiseSortCycle(t *testing.T) {
 	m := newTimelineSortModel(t)
 	hints := stripANSI(m.rawKeyHintsForWidth(120, m.chromeState(m.buildLayoutPlan(120, 40))))
-	if !strings.Contains(hints, "O: sort") {
-		t.Fatalf("expected Timeline hints to advertise sorting, got %q", hints)
+	if strings.Contains(hints, "O: sort") {
+		t.Fatalf("expected calm Default Timeline hints to omit sorting, got %q", hints)
 	}
 
 	help := pressQuestion(m)

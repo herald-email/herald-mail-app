@@ -2,7 +2,7 @@
 
 ## Summary
 
-Herald owns a central command catalog for keyboard routing, bottom hints, shortcut help, safety metadata, and profile defaults. The default profile keeps text-entry surfaces insert-first while making browse navigation Vim-compatible: `h/j/k/l` move left/down/up/right, `/` searches the active context, `r` replies all, `R` replies sender-only, `f` forwards, `a` archives the current message, and `D` deletes after confirmation.
+Herald owns a central command catalog for keyboard routing, bottom hints, shortcut help, safety metadata, and profile defaults. The Default profile keeps text-entry surfaces insert-first and uses calmer GUI-mail-style preferred shortcuts: `Ctrl+N` new message, `Ctrl+R` reply sender, `Ctrl+Shift+R` reply all, `Ctrl+F` forward, `Delete` confirmed delete, `Shift+Delete` immediate delete, `A` archive, `/` or `Ctrl+K` search, and `F6`/`Shift+F6` pane focus. Legacy terminal/Vim aliases remain active for at least one release and the Vim profile preserves terminal-oriented primaries.
 
 ## User-Visible Behavior
 
@@ -11,7 +11,8 @@ Herald owns a central command catalog for keyboard routing, bottom hints, shortc
 - [x] Custom bindings map keys only to predefined command IDs; unknown command IDs are validation errors.
 - [x] Text-entry surfaces preserve literal printable input, including `?`, `/`, and macOS Option-generated characters.
 - [x] Vim profile Compose fields use a minimal modal wrapper with normal/insert/visual modes and `i`/`a`/`A`.
-- [x] Legacy aliases remain where they do not conflict with text entry or `h/j/k/l` navigation.
+- [x] Legacy aliases remain where they do not conflict with text entry; Default bottom hints show preferred keys only, while `?` help and docs list legacy aliases.
+- [x] Default assigns `A` to archive; account switching moves to `Alt+A` in Default browse contexts and re-classify stays on `T`.
 
 ## Configuration
 
@@ -40,7 +41,7 @@ fields:
 
 ## Implementation Contract
 
-- [x] Command IDs are stable API-like strings such as `mail.reply_all`, `mail.archive_current`, `pane.left`, `compose.new`, and `help.search`.
+- [x] Command IDs are stable API-like strings such as `mail.reply_all`, `mail.archive_current`, `pane.left`, `pane.next`, `account.switcher`, `compose.new`, and `help.search`.
 - [x] Routing precedence is overlay scope, focused field mode, focused pane scope, then global scope.
 - [x] Help and bottom hints advertise the resolved profile and primary remap consistently.
 - [x] Bounded multi-key sequences such as `yy` are supported with visible pending-key state and timeout.

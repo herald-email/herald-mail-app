@@ -545,7 +545,12 @@ func TestRenderKeyHints_TimelineSelectionActionsStayVisibleAt80Cols(t *testing.T
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
 	stripped := stripANSI(hints)
-	requireHintSegments(t, stripped, "space: select", "V: range", "d: delete selected", "D: delete now", "a: archive selected")
+	requireHintSegments(t, stripped, "Del: delete selected", "Shift+Del: delete now", "A: archive selected")
+	for _, legacy := range []string{"d: delete selected", "D: delete now", "a: archive selected"} {
+		if strings.Contains(stripped, legacy) {
+			t.Fatalf("Default bottom hints should omit legacy alias %q, got:\n%s", legacy, stripped)
+		}
+	}
 }
 
 func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {
@@ -559,7 +564,7 @@ func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {
 	m = timelineKeyPress(t, m, keyRunes("V"))
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "j/k: extend range", "V/Esc: done", "d: delete selected", "D: delete now")
+	requireHintSegments(t, hints, "down/up: extend range", "V/Esc: done", "Del: delete selected", "Shift+Del: delete now")
 	status := stripANSI(m.renderStatusBar())
 	if !strings.Contains(status, "range select") || !strings.Contains(status, "1 message selected") {
 		t.Fatalf("expected range status and selected count, got %q", status)
@@ -583,7 +588,7 @@ func TestRenderKeyHints_TimelineShiftRangeModeShowsMomentaryActions(t *testing.T
 	m = timelineKeyPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "shift+↑/↓: extend range", "plain ↑/↓: done", "d: delete selected", "D: delete now")
+	requireHintSegments(t, hints, "shift+↑/↓: extend range", "plain ↑/↓: done", "Del: delete selected", "Shift+Del: delete now")
 	if strings.Contains(hints, "j/k: extend range") {
 		t.Fatalf("shift range should not advertise plain j/k extension, got %q", hints)
 	}

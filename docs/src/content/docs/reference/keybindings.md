@@ -11,18 +11,19 @@ This reference lists user-facing keys backed by Herald's current key handlers an
 | --- | --- |
 | `q` | Quit Herald from browse contexts. In Compose and search inputs, plain `q` is text. |
 | `ctrl+c` | Quit Herald from any state, including text inputs and overlays. |
-| `1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
-| `2` | Switch/load Contacts in browse contexts, or choose quick reply 2 when quick reply picker is open. |
-| `3` | Switch/load Calendar in browse contexts, or choose quick reply 3 when quick reply picker is open. |
+| `1` / `Alt+1` | Switch to Timeline in browse contexts, or choose quick reply 1 when quick reply picker is open. |
+| `2` / `Alt+2` | Switch/load Contacts in browse contexts, or choose quick reply 2 when quick reply picker is open. |
+| `3` / `Alt+3` | Switch/load Calendar in browse contexts, or choose quick reply 3 when quick reply picker is open. |
 | `F1` / `F2` / `F3` / `F4` | Aliases for Timeline / Contacts / Contacts legacy / Calendar. |
-| `tab` / `ctrl+i` | Cycle focus forward, except in search where it can run server search. |
-| `shift+tab` | Cycle focus backward where supported. |
-| `h` / `j` / `k` / `l` | Navigate left / down / up / right where the active pane supports it. |
+| `F6` (`tab` / `ctrl+i` legacy) | Cycle focus forward, except in search where `ctrl+i` can run server search. |
+| `Shift+F6` (`shift+tab` legacy) | Cycle focus backward where supported. |
+| `h` / `j` / `k` / `l` | Vim-profile and legacy Default navigation aliases where the active pane supports them. |
 | `B` | Toggle folder sidebar. |
 | `g` | Toggle the AI chat panel outside text-entry fields. |
 | `L` | Toggle log viewer. |
-| `ctrl+r` | Refresh the current folder. |
+| `ctrl+r` | Refresh the current folder outside Timeline reply contexts. |
 | `S` | Open settings. |
+| `Alt+A` | Open the account switcher in Default browse contexts when multiple accounts exist. |
 | `?` | Open context-sensitive shortcut help in browse and non-text contexts. When help is open, `/` searches help and `?`, `esc`, or `q` closes it. |
 | `esc` | Close or unwind the active transient state. |
 
@@ -64,16 +65,16 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `G` | Cycle Timeline grouping between thread, sender, and domain views. |
 | `shift+up` / `shift+down` | Extend Timeline selection range when supported by the terminal; plain movement finishes the range and keeps selection. |
 | `V`, then `j` / `k` | Use fallback Timeline range selection without shifted-arrow support; press `V` or `esc` when done. |
-| `/` | Open Timeline search. |
-| `c` | Open a blank Compose screen for a new message. |
+| `/` / `ctrl+k` | Open Timeline search. |
+| `ctrl+n` (`c` legacy) | Open a blank Compose screen for a new message. |
 | `*` | Toggle star on current email. |
-| `r` | Reply all to current email in Compose. |
-| `R` | Reply sender-only to current email in Compose. |
-| `f` | Forward current email in Compose. |
-| `d` / `backspace` | Delete current/selected target after confirmation. |
-| `D` / `shift+backspace` | Delete current/selected target immediately, without confirmation. |
-| `a` | Archive the current message immediately; bulk archive still confirms. |
-| `T` | Re-classify current email with AI; `A` remains a legacy alias. |
+| `ctrl+r` (`R` legacy) | Reply sender-only to current email in Compose. |
+| `ctrl+shift+r` (`r` legacy) | Reply all to current email in Compose. |
+| `ctrl+f` (`f` / `F` legacy) | Forward current email in Compose. |
+| `delete` (`d` / `backspace` legacy) | Delete current/selected target after confirmation. |
+| `shift+delete` (`D` / `shift+backspace` legacy) | Delete current/selected target immediately, without confirmation. |
+| `A` (`a` / `e` / `E` legacy) | Archive the current message immediately; bulk archive still confirms. |
+| `T` | Re-classify current email with AI in Default; `A` re-classify is kept only by Vim/legacy-style profiles where feasible. |
 | `ctrl+d` / `ctrl+u` | Scroll half a page down / up in scrollable list or preview contexts. |
 | `ctrl+q` | Open quick reply picker. |
 | `z` | Toggle full-screen reader when preview is open. |
@@ -116,13 +117,14 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | --- | --- |
 | Plain text and punctuation | Insert text into the focused Compose field, including literal `?`, `/`, and macOS Option-generated characters. |
 | `tab` | Move through To, CC, BCC, Subject, and Body; accept subject hint when visible. |
-| `ctrl+s` | Send message. |
+| `ctrl+enter` | Send message. |
+| `ctrl+s` | Send fallback for terminals that do not report `ctrl+enter`. |
 | `ctrl+p` | Toggle Markdown preview. |
 | `ctrl+x` | Open the Compose body in `$VISUAL` or `$EDITOR`, then read it back on save and exit. |
 | `ctrl+a` | Open outgoing attachment path prompt. |
 | `ctrl+k` | Focus the inline Compose AI prompt. |
 | `ctrl+j` | Generate AI subject suggestion. |
-| `ctrl+enter` | Accept AI response into body. |
+| `ctrl+enter` | Accept AI response into body while AI review owns focus. |
 | `esc` | Dismiss subject hint, AI panel, or compose status; then return to the screen that opened Compose. |
 | `up` / `down` | Move autocomplete selection when suggestions are visible. |
 | `enter` / `tab` | Accept autocomplete suggestion when visible. |
@@ -134,9 +136,9 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | --- | --- |
 | `G` | Cycle Timeline into sender or domain grouping. |
 | `space` | Select the highlighted Timeline group or message. |
-| `d` / `backspace` | Delete highlighted/selected mail after confirmation. |
-| `D` / `shift+backspace` | Delete highlighted/selected mail immediately, without confirmation. |
-| `a` / `e` | Archive highlighted/selected mail. |
+| `delete` (`d` / `backspace` legacy) | Delete highlighted/selected mail after confirmation. |
+| `shift+delete` (`D` / `shift+backspace` legacy) | Delete highlighted/selected mail immediately, without confirmation. |
+| `A` (`a` / `e` / `E` legacy) | Archive highlighted/selected mail. |
 | `S` then `Sync & Cleanup` | Open automation-rule, custom-prompt, and cleanup-rule managers. |
 
 ## Calendar
@@ -181,7 +183,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 ## Keyboard Profiles
 
-Herald resolves browse shortcuts through the active keyboard profile. Text-entry surfaces keep printable text literal in the default profile; Vim and Custom profiles can use the modal Compose field adapter.
+Herald resolves browse shortcuts through the active keyboard profile. Text-entry surfaces keep printable text literal in the Default profile; Vim and Custom profiles can use the modal Compose field adapter. Default bottom hints show preferred GUI-mail-style keys only, while legacy aliases remain active for at least one release and are listed here and in `?` help.
 
 ```yaml
 keyboard:
@@ -204,6 +206,8 @@ fields:
   compose:
     default_mode: normal # insert | normal | visual
 ```
+
+Default exposes command IDs for custom keymaps including `pane.next`, `pane.prev`, `account.switcher`, `compose.send`, `compose.attach`, and `compose.preview`. `Ctrl+,` is intentionally not bound to Settings by default because many terminals do not report it reliably, but custom keymaps may bind it when their terminal does.
 
 ## Overlays
 

@@ -5,5 +5,4 @@
 [90m└──────────────────────────┘[m
 [7m [m[7mINBOX  │  AI: off  │  Group: Thread  │  Sort: When ↓  │  0 emails[m[7m [m[7m                                                     [m
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ?: help  │  1-2: tabs  │  tab/shift+tab: panels  │  c: compose  │  S: settings  │  h/left/[: folders
- l/right/]: preview  │  G: group  │  O: sort  │  ↑/k ↓/j: navigate  │  ctrl+d/u: half-page  │  space: select
+ ?: help  │  Enter: open  │  Ctrl+N: new  │  Ctrl+R: reply  │  Del: delete  │  /: search

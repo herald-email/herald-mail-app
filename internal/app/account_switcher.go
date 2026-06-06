@@ -221,7 +221,14 @@ func (m *Model) handleAccountSwitcherKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		}
 		return m, nil, true
 	}
-	if key == "A" && m.accountSwitcherShortcutAvailable() {
+	if m.keyboard != nil {
+		if command, ok := m.keyboard.Resolve(keyboardScopeGlobal, keyboardModeNormal, key); !ok || command != CommandAccountSwitcher {
+			return m, nil, false
+		}
+	} else if key != "alt+A" {
+		return m, nil, false
+	}
+	if m.accountSwitcherShortcutAvailable() {
 		m.syncAccountsFromBackend()
 		for i, account := range m.accountSwitcherAccounts() {
 			if account.SourceID == m.activeSourceID {

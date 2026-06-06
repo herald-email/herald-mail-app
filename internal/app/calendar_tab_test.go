@@ -326,8 +326,8 @@ func TestCalendarTabHiddenForMailOnlyBackend(t *testing.T) {
 	if strings.Contains(rendered, "Calendar") {
 		t.Fatalf("mail-only tab bar should not advertise Calendar:\n%s", rendered)
 	}
-	if got := stripANSI(m.renderKeyHints()); !strings.Contains(got, "1-2: tabs") || strings.Contains(got, "1-3: tabs") {
-		t.Fatalf("mail-only hints = %q, want 1-2 tabs only", got)
+	if got := stripANSI(m.renderKeyHints()); strings.Contains(got, "1-3: tabs") || strings.Contains(got, "Calendar") {
+		t.Fatalf("mail-only hints should not advertise hidden Calendar tab, got %q", got)
 	}
 
 	model, _, handled := m.handleTabKey(keyRune('3'))

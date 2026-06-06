@@ -89,7 +89,13 @@ func TestComposeBlankView_FillsTerminalHeight(t *testing.T) {
 					len(lines), tc.width, tc.height, tc.height, stripANSI(rendered))
 			}
 			bottomRows := strings.Join(lines[len(lines)-4:], "\n")
-			if !strings.Contains(bottomRows, primaryTabShortcutHint) || strings.TrimSpace(lines[len(lines)-1]) == "" {
+			for _, hint := range []string{"Ctrl+Enter: send", "Ctrl+S: send fallback", "Ctrl+A: attach", "Ctrl+P: preview", "Esc: back"} {
+				if !strings.Contains(bottomRows, hint) {
+					t.Fatalf("expected bottom rows to contain Compose key hint %q at %dx%d, got:\n%s",
+						hint, tc.width, tc.height, bottomRows)
+				}
+			}
+			if strings.TrimSpace(lines[len(lines)-1]) == "" {
 				t.Fatalf("expected bottom rows to contain key hints at %dx%d, got:\n%s",
 					tc.width, tc.height, bottomRows)
 			}
@@ -270,6 +276,27 @@ func TestComposeCtrlKFocusesInlineAIInstruction(t *testing.T) {
 	}
 	if updated.composeField != composeFieldBody {
 		t.Fatalf("Ctrl+K should not change compose field, got %d", updated.composeField)
+	}
+}
+
+func TestDefaultComposeHintStaysCalmWhenAIInstructionFocused(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	m.activeTab = tabCompose
+	m.classifier = &stubClassifier{}
+	m.composeAIPanel = true
+	m.composeAIInput.Focus()
+	m.updateTableDimensions(80, 24)
+
+	hints := stripANSI(m.renderKeyHints())
+	for _, want := range []string{"Ctrl+Enter: send", "Ctrl+S: send fallback", "Ctrl+A: attach", "Ctrl+P: preview", "Esc: back"} {
+		if !strings.Contains(hints, want) {
+			t.Fatalf("expected calm Compose hint %q with AI instruction focused, got:\n%s", want, hints)
+		}
+	}
+	for _, old := range []string{"ctrl+t: translate", "ctrl+y: style", "ctrl+f: fix"} {
+		if strings.Contains(hints, old) {
+			t.Fatalf("AI instruction focus should not take over the Default Compose footer with %q, got:\n%s", old, hints)
+		}
 	}
 }
 

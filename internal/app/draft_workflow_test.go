@@ -460,7 +460,7 @@ func TestRenderKeyHints_DraftPreviewPrioritizesEditAndDiscard(t *testing.T) {
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "E: edit draft", "ctrl+s: send draft", "d: discard draft", "D: delete now")
+	requireHintSegments(t, hints, "E: edit draft", "Ctrl+S: send draft", "Del: discard draft", "Shift+Del: delete now")
 	if strings.Contains(hints, "R: sender") || strings.Contains(hints, "f: forward") {
 		t.Fatalf("draft preview hints should prioritize draft workflow, got %q", hints)
 	}

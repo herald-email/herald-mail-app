@@ -36,8 +36,13 @@ const (
 	CommandPaneRight = "pane.right"
 	CommandPaneUp    = "pane.up"
 	CommandPaneDown  = "pane.down"
+	CommandPaneNext  = "pane.next"
+	CommandPanePrev  = "pane.prev"
 
-	CommandComposeNew = "compose.new"
+	CommandComposeNew     = "compose.new"
+	CommandComposeSend    = "compose.send"
+	CommandComposeAttach  = "compose.attach"
+	CommandComposePreview = "compose.preview"
 
 	CommandMailReplyAll        = "mail.reply_all"
 	CommandMailReplySender     = "mail.reply_sender"
@@ -48,10 +53,11 @@ const (
 	CommandMailReclassify      = "mail.reclassify"
 	CommandMailHideFuture      = "mail.hide_future"
 
-	CommandHelpOpen   = "help.open"
-	CommandHelpSearch = "help.search"
-	CommandLogsToggle = "logs.toggle"
-	CommandChatToggle = "chat.toggle"
+	CommandHelpOpen        = "help.open"
+	CommandHelpSearch      = "help.search"
+	CommandLogsToggle      = "logs.toggle"
+	CommandChatToggle      = "chat.toggle"
+	CommandAccountSwitcher = "account.switcher"
 
 	CommandSidebarToggle = "sidebar.toggle"
 
@@ -100,8 +106,13 @@ var commandCatalog = map[string]struct{}{
 	CommandPaneRight: {},
 	CommandPaneUp:    {},
 	CommandPaneDown:  {},
+	CommandPaneNext:  {},
+	CommandPanePrev:  {},
 
-	CommandComposeNew: {},
+	CommandComposeNew:     {},
+	CommandComposeSend:    {},
+	CommandComposeAttach:  {},
+	CommandComposePreview: {},
 
 	CommandMailReplyAll:        {},
 	CommandMailReplySender:     {},
@@ -112,10 +123,11 @@ var commandCatalog = map[string]struct{}{
 	CommandMailReclassify:      {},
 	CommandMailHideFuture:      {},
 
-	CommandHelpOpen:   {},
-	CommandHelpSearch: {},
-	CommandLogsToggle: {},
-	CommandChatToggle: {},
+	CommandHelpOpen:        {},
+	CommandHelpSearch:      {},
+	CommandLogsToggle:      {},
+	CommandChatToggle:      {},
+	CommandAccountSwitcher: {},
 
 	CommandSidebarToggle: {},
 
@@ -305,10 +317,19 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add(keyboardScopeGlobal, keyboardModeNormal, "1", CommandTabTimeline)
 	add(keyboardScopeGlobal, keyboardModeNormal, "2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "3", CommandTabCalendar)
+	add(keyboardScopeGlobal, keyboardModeNormal, "alt+1", CommandTabTimeline)
+	add(keyboardScopeGlobal, keyboardModeNormal, "alt+2", CommandTabContacts)
+	add(keyboardScopeGlobal, keyboardModeNormal, "alt+3", CommandTabCalendar)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f1", CommandTabTimeline)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f3", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f4", CommandTabCalendar)
+	add(keyboardScopeGlobal, keyboardModeNormal, "f6", CommandPaneNext)
+	add(keyboardScopeGlobal, keyboardModeNormal, "shift+f6", CommandPanePrev)
+	add(keyboardScopeGlobal, keyboardModeNormal, "tab", CommandPaneNext)
+	add(keyboardScopeGlobal, keyboardModeNormal, "ctrl+i", CommandPaneNext)
+	add(keyboardScopeGlobal, keyboardModeNormal, "shift+tab", CommandPanePrev)
+	add(keyboardScopeGlobal, keyboardModeNormal, "alt+A", CommandAccountSwitcher)
 
 	add("timeline", keyboardModeNormal, "h", CommandPaneLeft)
 	add("timeline", keyboardModeNormal, "j", CommandPaneDown)
@@ -330,13 +351,13 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "D", CommandMailDeleteImmediate)
 	add("timeline", keyboardModeNormal, "shift+backspace", CommandMailDeleteImmediate)
 	add("timeline", keyboardModeNormal, "T", CommandMailReclassify)
-	add("timeline", keyboardModeNormal, "A", CommandMailReclassify)
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
 	add("timeline", keyboardModeNormal, "G", CommandTimelineGroupCycle)
 	add("timeline", keyboardModeNormal, "O", CommandTimelineSortCycle)
 	add("timeline", keyboardModeNormal, "o", CommandPreviewRevealRemoteImages)
 	add("timeline", keyboardModeNormal, "p", CommandPreviewPrint)
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
+	add("timeline", keyboardModeNormal, "ctrl+k", CommandHelpSearch)
 
 	for _, scope := range []string{"cleanup", "contacts", "calendar"} {
 		add(scope, keyboardModeNormal, "h", CommandPaneLeft)
@@ -357,8 +378,12 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("cleanup", keyboardModeNormal, "D", CommandMailDeleteImmediate)
 	add("cleanup", keyboardModeNormal, "shift+backspace", CommandMailDeleteImmediate)
 	add("cleanup", keyboardModeNormal, "T", CommandMailReclassify)
-	add("cleanup", keyboardModeNormal, "A", CommandMailReclassify)
 	add("cleanup", keyboardModeNormal, "H", CommandMailHideFuture)
+
+	add("compose", keyboardModeNormal, "ctrl+enter", CommandComposeSend)
+	add("compose", keyboardModeNormal, "ctrl+s", CommandComposeSend)
+	add("compose", keyboardModeNormal, "ctrl+a", CommandComposeAttach)
+	add("compose", keyboardModeNormal, "ctrl+p", CommandComposePreview)
 
 	add("field", keyboardModeNormal, "i", CommandFieldInsert)
 	add("field", keyboardModeNormal, "a", CommandFieldAppend)
@@ -366,6 +391,30 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("field", keyboardModeNormal, "v", CommandFieldVisual)
 
 	switch profile {
+	case keyboardProfileDefault:
+		prefer("timeline", keyboardModeNormal, "up", CommandPaneUp)
+		prefer("timeline", keyboardModeNormal, "down", CommandPaneDown)
+		prefer("timeline", keyboardModeNormal, "left", CommandPaneLeft)
+		prefer("timeline", keyboardModeNormal, "right", CommandPaneRight)
+		for _, scope := range []string{"cleanup", "contacts", "calendar"} {
+			prefer(scope, keyboardModeNormal, "up", CommandPaneUp)
+			prefer(scope, keyboardModeNormal, "down", CommandPaneDown)
+			prefer(scope, keyboardModeNormal, "left", CommandPaneLeft)
+			prefer(scope, keyboardModeNormal, "right", CommandPaneRight)
+		}
+		prefer(keyboardScopeGlobal, keyboardModeNormal, "f6", CommandPaneNext)
+		prefer(keyboardScopeGlobal, keyboardModeNormal, "shift+f6", CommandPanePrev)
+		prefer(keyboardScopeGlobal, keyboardModeNormal, "alt+A", CommandAccountSwitcher)
+		prefer("timeline", keyboardModeNormal, "ctrl+n", CommandComposeNew)
+		prefer("timeline", keyboardModeNormal, "ctrl+r", CommandMailReplySender)
+		add("timeline", keyboardModeNormal, "ctrl+R", CommandMailReplyAll)
+		prefer("timeline", keyboardModeNormal, "ctrl+shift+r", CommandMailReplyAll)
+		add("timeline", keyboardModeNormal, "ctrl+shift+R", CommandMailReplyAll)
+		prefer("timeline", keyboardModeNormal, "ctrl+f", CommandMailForward)
+		prefer("timeline", keyboardModeNormal, "A", CommandMailArchiveCurrent)
+		prefer("timeline", keyboardModeNormal, "delete", CommandMailDeleteConfirm)
+		prefer("timeline", keyboardModeNormal, "shift+delete", CommandMailDeleteImmediate)
+		prefer("compose", keyboardModeNormal, "ctrl+enter", CommandComposeSend)
 	case keyboardProfileEmacs:
 		for _, scope := range []string{"timeline", "cleanup", "contacts"} {
 			prefer(scope, keyboardModeNormal, "ctrl+f", CommandPaneRight)
@@ -373,9 +422,17 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 			prefer(scope, keyboardModeNormal, "ctrl+n", CommandPaneDown)
 			prefer(scope, keyboardModeNormal, "ctrl+p", CommandPaneUp)
 		}
-	case keyboardProfileVim, keyboardProfileCustom, keyboardProfileDefault:
-		// The default profile intentionally uses Vim-like movement because it
-		// is the coherent remap requested for browsing mail.
+	case keyboardProfileVim, keyboardProfileCustom:
+		add("timeline", keyboardModeNormal, "A", CommandMailReclassify)
+		add("cleanup", keyboardModeNormal, "A", CommandMailReclassify)
+		prefer("timeline", keyboardModeNormal, "c", CommandComposeNew)
+		prefer("timeline", keyboardModeNormal, "r", CommandMailReplyAll)
+		prefer("timeline", keyboardModeNormal, "R", CommandMailReplySender)
+		prefer("timeline", keyboardModeNormal, "f", CommandMailForward)
+		prefer("timeline", keyboardModeNormal, "a", CommandMailArchiveCurrent)
+		prefer("timeline", keyboardModeNormal, "d", CommandMailDeleteConfirm)
+		prefer("timeline", keyboardModeNormal, "D", CommandMailDeleteImmediate)
+		prefer("timeline", keyboardModeNormal, "A", CommandMailReclassify)
 	}
 
 	return bindings, primaryKeys
@@ -479,8 +536,18 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "k"
 	case CommandPaneDown:
 		return "j"
+	case CommandPaneNext:
+		return "tab"
+	case CommandPanePrev:
+		return "shift+tab"
 	case CommandComposeNew:
 		return "c"
+	case CommandComposeSend:
+		return "ctrl+enter"
+	case CommandComposeAttach:
+		return "ctrl+a"
+	case CommandComposePreview:
+		return "ctrl+p"
 	case CommandMailReplyAll:
 		return "r"
 	case CommandMailReplySender:
@@ -501,6 +568,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "/"
 	case CommandHelpOpen:
 		return "?"
+	case CommandAccountSwitcher:
+		return "alt+A"
 	}
 	return ""
 }
@@ -509,18 +578,46 @@ func shortcutKeyPressMsg(key string) tea.KeyPressMsg {
 	switch key {
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "ctrl+n":
+		return tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}
 	case "ctrl+r":
 		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	case "ctrl+R", "ctrl+shift+r", "ctrl+shift+R":
+		return tea.KeyPressMsg{Code: 'R', BaseCode: 'r', Mod: tea.ModCtrl | tea.ModShift}
+	case "ctrl+f":
+		return tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl}
+	case "ctrl+k":
+		return tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl}
+	case "ctrl+enter":
+		return tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl}
+	case "ctrl+a":
+		return tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}
+	case "ctrl+p":
+		return tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}
 	case "ctrl+d":
 		return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
 	case "ctrl+u":
 		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "alt+1":
+		return tea.KeyPressMsg{Code: '1', Mod: tea.ModAlt}
+	case "alt+2":
+		return tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt}
+	case "alt+3":
+		return tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt}
+	case "alt+A":
+		return tea.KeyPressMsg{Code: 'A', BaseCode: 'a', Mod: tea.ModAlt | tea.ModShift}
 	case "f1":
 		return tea.KeyPressMsg{Code: tea.KeyF1}
 	case "f2":
 		return tea.KeyPressMsg{Code: tea.KeyF2}
 	case "f3":
 		return tea.KeyPressMsg{Code: tea.KeyF3}
+	case "f4":
+		return tea.KeyPressMsg{Code: tea.KeyF4}
+	case "f6":
+		return tea.KeyPressMsg{Code: tea.KeyF6}
+	case "shift+f6":
+		return tea.KeyPressMsg{Code: tea.KeyF6, Mod: tea.ModShift}
 	case "up":
 		return tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
@@ -539,6 +636,10 @@ func shortcutKeyPressMsg(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyBackspace}
 	case "shift+backspace":
 		return tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModShift}
+	case "delete":
+		return tea.KeyPressMsg{Code: tea.KeyDelete}
+	case "shift+delete":
+		return tea.KeyPressMsg{Code: tea.KeyDelete, Mod: tea.ModShift}
 	}
 	runes := []rune(key)
 	msg := tea.KeyPressMsg{Text: key}

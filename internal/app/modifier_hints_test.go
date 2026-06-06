@@ -28,7 +28,7 @@ func TestModifierHintPressReleaseSwitchesShiftLayer(t *testing.T) {
 	m = model.(*Model)
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "shift+tab: prev panel", "shift+↑/↓: range", "G: group", "R: sender", "D: delete now")
+	requireHintSegments(t, hints, "Shift+F6: previous panel", "Shift+Del: delete now", "Ctrl+Shift+R: reply all", "S: settings")
 	if strings.Contains(hints, "ctrl+c: quit") {
 		t.Fatalf("shift layer should not advertise ctrl actions, got:\n%s", hints)
 	}
@@ -37,8 +37,8 @@ func TestModifierHintPressReleaseSwitchesShiftLayer(t *testing.T) {
 	m = model.(*Model)
 
 	hints = stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "?: help", "c: compose", "r: all")
-	if strings.Contains(hints, "shift+tab: prev panel") {
+	requireHintSegments(t, hints, "?: help", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete")
+	if strings.Contains(hints, "Shift+F6: previous panel") {
 		t.Fatalf("shift layer should clear after release, got:\n%s", hints)
 	}
 }
@@ -53,7 +53,7 @@ func TestModifierHintFallbackExpiresAfterModifiedKeypress(t *testing.T) {
 	}
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "ctrl+c: quit", "ctrl+r: refresh", "ctrl+d/u: half-page")
+	requireHintSegments(t, hints, "Ctrl+N: new", "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Ctrl+K: search")
 
 	m.modifierHintFallbackToken = 42
 	model, _ = m.Update(modifierHintExpiredMsg{Token: 42})
@@ -63,7 +63,7 @@ func TestModifierHintFallbackExpiresAfterModifiedKeypress(t *testing.T) {
 	if strings.Contains(hints, "ctrl+d/u: half-page") {
 		t.Fatalf("ctrl fallback should clear after expiry, got:\n%s", hints)
 	}
-	requireHintSegments(t, hints, "?: help", "c: compose")
+	requireHintSegments(t, hints, "?: help", "Ctrl+N: new", "Ctrl+R: reply")
 }
 
 func TestModifierHintAltLayerKeepsDefaultHintsWithNotice(t *testing.T) {
@@ -73,7 +73,7 @@ func TestModifierHintAltLayerKeepsDefaultHintsWithNotice(t *testing.T) {
 	m = model.(*Model)
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "alt: no actions here", "?: help", "c: compose")
+	requireHintSegments(t, hints, "Alt+1/2/3: tabs", "?: help", "Ctrl+N: new")
 }
 
 func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
@@ -83,8 +83,8 @@ func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
 	m = model.(*Model)
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "ctrl+c: quit", "ctrl+r: refresh")
-	if strings.Contains(hints, "alt: no actions here") || strings.Contains(hints, "shift+↑/↓: range") {
+	requireHintSegments(t, hints, "Ctrl+N: new", "Ctrl+R: reply")
+	if strings.Contains(hints, "Alt+1/2/3: tabs") || strings.Contains(hints, "Shift+Del: delete now") {
 		t.Fatalf("ctrl should win over alt and shift layers, got:\n%s", hints)
 	}
 
@@ -92,8 +92,8 @@ func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
 	m = model.(*Model)
 
 	hints = stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "alt: no actions here")
-	if strings.Contains(hints, "shift+↑/↓: range") {
+	requireHintSegments(t, hints, "Alt+1/2/3: tabs")
+	if strings.Contains(hints, "Shift+Del: delete now") {
 		t.Fatalf("alt should win over shift layer, got:\n%s", hints)
 	}
 }

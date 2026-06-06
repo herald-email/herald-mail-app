@@ -122,6 +122,13 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "?: semantic", "esc: clear"}
 	}
 	if m.activeTab == tabTimeline {
+		if m.usesDefaultKeyboardProfile() {
+			segments := []string{"Shift+F6: previous panel", "Shift+Del: delete now", "Ctrl+Shift+R: reply all", "S: settings"}
+			if chrome.FocusedPanel == panelPreview {
+				segments = append(segments, "Y: copy all", "H: hide future mail")
+			}
+			return segments
+		}
 		segments := []string{"shift+tab: prev panel", "shift+↑/↓: range", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
 			segments = append(segments, "R: sender", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
@@ -136,7 +143,7 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 
 func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabCompose {
-		segments := []string{"ctrl+s: send", "ctrl+p: preview", "ctrl+x: editor", "ctrl+a: attach", "ctrl+alt+c/b: CC/BCC", "ctrl+k: AI prompt", "ctrl+j: subject", "ctrl+c: quit"}
+		segments := []string{"Ctrl+Enter: send", "ctrl+s: send fallback", "ctrl+p: preview", "ctrl+x: editor", "ctrl+a: attach", "ctrl+alt+c/b: CC/BCC", "ctrl+k: AI prompt", "ctrl+j: subject", "ctrl+c: quit"}
 		if m.composeAIPanel && m.classifier == nil {
 			segments = append([]string{"AI disabled"}, segments...)
 		} else if m.composeAIPanel {
@@ -151,6 +158,16 @@ func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 		return []string{"ctrl+i: server search", "ctrl+c: quit"}
 	}
 	if m.activeTab == tabTimeline {
+		if m.usesDefaultKeyboardProfile() {
+			segments := []string{"Ctrl+N: new", "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Ctrl+K: search", "ctrl+c: quit", "ctrl+d/u: half-page"}
+			if m.timeline.quickRepliesReady || m.timeline.quickReplyOpen || chrome.FocusedPanel == panelPreview {
+				segments = append(segments, "ctrl+q: quick reply")
+			}
+			if m.currentTimelineDraftEmail() != nil {
+				segments = append(segments, "ctrl+s: send draft")
+			}
+			return segments
+		}
 		segments := []string{"ctrl+c: quit", "ctrl+r: refresh", "ctrl+d/u: half-page"}
 		if m.timeline.quickRepliesReady || m.timeline.quickReplyOpen || chrome.FocusedPanel == panelPreview {
 			segments = append(segments, "ctrl+q: quick reply")
@@ -184,6 +201,13 @@ func (m *Model) altModifierHintSegments(chrome ChromeState, defaultHints string)
 	}
 	if m.showSettings {
 		return []string{"alt+enter: newline in text fields", defaultHints}
+	}
+	if m.usesDefaultKeyboardProfile() {
+		segments := []string{"Alt+1/2/3: tabs"}
+		if m.hasMultipleAccounts() {
+			segments = append(segments, "Alt+A: accounts")
+		}
+		return append(segments, defaultHints)
 	}
 	return []string{"alt: no actions here", defaultHints}
 }

@@ -316,6 +316,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// When AI panel prompt is focused, route keystrokes to it
 	if m.composeAIPanel && m.composeAIInput.Focused() {
+		if shortcutKey(msg) == "ctrl+enter" {
+			return m, m.sendCompose()
+		}
 		if msg.String() == "enter" {
 			instruction := strings.TrimSpace(m.composeAIInput.Value())
 			if instruction == "" {
@@ -405,6 +408,8 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch shortcutKey(msg) {
+	case "ctrl+enter":
+		return m, m.sendCompose()
 	case "ctrl+s":
 		return m, m.sendCompose()
 	case "ctrl+p":
@@ -477,9 +482,6 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.composeAILoading = true
 		m.refreshComposeLayout()
 		return m, m.aiSubjectCmd()
-	case "ctrl+enter":
-		m.acceptComposeAIResponse()
-		return m, nil
 	case "tab":
 		// If a subject hint is pending, Tab accepts it
 		if m.composeAISubjectHint != "" {

@@ -533,6 +533,8 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if m.activeTab == tabCompose {
 		if m.composeAIReviewActive() {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: original/suggestion", "ctrl+enter: accept", "esc: discard", "ctrl+z: undo", "ctrl+alt+c/b: CC/BCC")
+		} else if m.usesDefaultKeyboardProfile() && !m.composeAIFocusOwnsHints() {
+			hints = joinHintSegments("Ctrl+Enter: send", "Ctrl+S: send fallback", "Ctrl+A: attach", "Ctrl+P: preview", "Esc: back")
 		} else if m.composeAIPanel {
 			if m.classifier == nil {
 				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+alt+c/b: CC/BCC", "ctrl+x: editor", "ctrl+s: send", "ctrl+p: preview", "AI disabled", "esc: back", "ctrl+c: quit")
@@ -540,10 +542,18 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+alt+c/b: CC/BCC", "ctrl+x: editor", "ctrl+k: AI prompt", "ctrl+t: translate", "ctrl+y: style", "ctrl+f: fix", "ctrl+n/e: length", "ctrl+z: undo", "esc: AI/back")
 			}
 		} else {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+alt+c/b: CC/BCC", "ctrl+x: editor", "ctrl+s: send", "ctrl+p: preview", "ctrl+a: attach", "ctrl+k: AI prompt", "esc: back", "ctrl+c: quit")
+			if m.usesDefaultKeyboardProfile() {
+				hints = joinHintSegments("Ctrl+Enter: send", "Ctrl+S: send fallback", "Ctrl+A: attach", "Ctrl+P: preview", "Esc: back")
+			} else {
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+alt+c/b: CC/BCC", "ctrl+x: editor", "ctrl+s: send", "ctrl+p: preview", "ctrl+a: attach", "ctrl+k: AI prompt", "esc: back", "ctrl+c: quit")
+			}
 		}
 		if m.composePreserved != nil {
-			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "ctrl+p: preview", "esc: back", "ctrl+c: quit")
+			if m.usesDefaultKeyboardProfile() {
+				hints = joinHintSegments("Ctrl+Enter: send", "Ctrl+S: send fallback", "Ctrl+A: attach", "Ctrl+P: preview", "Esc: back")
+			} else {
+				hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: next field", "ctrl+x: editor", "ctrl+o: preserve mode", "ctrl+s: send", "ctrl+p: preview", "esc: back", "ctrl+c: quit")
+			}
 			if m.composeField == composeFieldOriginalMessage {
 				if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionComposeOriginal); len(selectionHints) > 0 {
 					segments := append([]string{m.primaryTabShortcutHint()}, selectionHints...)
@@ -677,6 +687,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		!m.pendingDeleteConfirm &&
 		!m.pendingUnsubscribe &&
 		!m.problemReportShortcutTextEntryActive() &&
+		!m.suppressProblemReportHintForDefaultTimeline() &&
 		!strings.Contains(hints, problemReportShortcutHint) {
 		hints = joinHintSegments(hints, problemReportShortcutHint)
 	}
@@ -695,6 +706,14 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		hints = joinHintSegments(hints, mouseHint)
 	}
 	return hints
+}
+
+func (m *Model) composeAIFocusOwnsHints() bool {
+	return m.composeAIPanel && (m.composeAIResponse.Focused() || m.composeAILoading || m.composeAIDiff != "")
+}
+
+func (m *Model) suppressProblemReportHintForDefaultTimeline() bool {
+	return m.activeTab == tabTimeline && m.usesDefaultKeyboardProfile()
 }
 
 func previewActionHintText(hasUnsubscribe bool) string {

@@ -370,16 +370,26 @@ func TestShortcutHelpTimelineDraftPreviewIncludesDraftActions(t *testing.T) {
 	m.timeline.body = &models.EmailBody{TextPlain: "draft body"}
 	m.focusedPanel = panelPreview
 
-	updated := pressQuestion(m)
-
-	rendered := stripANSI(updated.View().Content)
-	for _, want := range []string{"Timeline Draft", "c", "open a blank Compose", "E", "Ctrl+S", "send draft", "D", "discard draft"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected draft preview help to include %q, got:\n%s", want, rendered)
+	sections := m.shortcutHelpSections()
+	for _, want := range []struct {
+		key  string
+		desc string
+	}{
+		{"Ctrl+N", "open a blank Compose"},
+		{"E / Ctrl+S", "send draft"},
+		{"Del", "discard draft"},
+		{"Shift+Del", "delete draft immediately"},
+	} {
+		if !shortcutHelpSectionsContain(sections, want.key, want.desc) {
+			t.Fatalf("expected draft preview help to include %q / %q, got %#v", want.key, want.desc, sections)
 		}
 	}
-	if strings.Contains(rendered, "reply or forward") {
-		t.Fatalf("draft preview help should not advertise normal reply/forward actions, got:\n%s", rendered)
+	for _, section := range sections {
+		for _, entry := range section.Entries {
+			if strings.Contains(entry.Desc, "reply or forward") {
+				t.Fatalf("draft preview help should not advertise normal reply/forward actions, got %#v", sections)
+			}
+		}
 	}
 }
 
@@ -474,8 +484,13 @@ func TestRenderKeyHintsAdvertisesSettingsAt80Cols(t *testing.T) {
 
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
-	if !strings.Contains(stripANSI(hints), "S: settings") {
-		t.Fatalf("expected key hints to advertise S settings, got:\n%s", stripANSI(hints))
+	stripped := stripANSI(hints)
+	if strings.Contains(stripped, "S: settings") {
+		t.Fatalf("expected calm Default key hints to omit S settings, got:\n%s", stripped)
+	}
+	help := m.shortcutHelpSections()
+	if !shortcutHelpSectionsContain(help, "S", "settings") {
+		t.Fatalf("expected shortcut help to advertise S settings, got %#v", help)
 	}
 }
 

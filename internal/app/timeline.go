@@ -2623,6 +2623,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if selectionHints := previewSelectionHintSegments(m.previewSelection, previewSelectionTimeline); len(selectionHints) > 0 {
 			return joinHintSegments(selectionHints...), true
 		}
+		if m.usesDefaultKeyboardProfile() && (m.timeline.selectedEmail == nil || !m.timeline.selectedEmail.IsDraft) {
+			return joinHintSegments("Esc: close", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy"), true
+		}
 		segments := []string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
 		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"))
@@ -2648,6 +2651,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
+		if m.usesDefaultKeyboardProfile() {
+			return joinHintSegments("Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"), true
+		}
 		segments := append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, m.timelineMessageActionHintSegments()...)
 		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "U: unread")
 		if m.timelinePrintAvailableFromTimeline() {
@@ -2663,6 +2669,12 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
 		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
+	}
+	if m.usesDefaultKeyboardProfile() && m.currentTimelineRowEmail() != nil {
+		return joinHintSegments("Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"), true
+	}
+	if m.usesDefaultKeyboardProfile() && chrome.FocusedPanel == panelTimeline {
+		return joinHintSegments("Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search"), true
 	}
 	segments := []string{m.primaryTabShortcutHint(), m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 	if m.hasMultipleAccounts() {
@@ -2705,6 +2717,12 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 }
 
 func (m *Model) timelinePanelSwitchHint() string {
+	if m.usesDefaultKeyboardProfile() {
+		if m.windowWidth > 0 && m.windowWidth <= 80 {
+			return "F6: panels"
+		}
+		return "F6/Shift+F6: panels"
+	}
 	if m.windowWidth > 0 && m.windowWidth <= 80 {
 		return "tab: panels"
 	}
@@ -2730,6 +2748,26 @@ func (m *Model) timelineMessageActionHintSegments() []string {
 }
 
 func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
+	if m.usesDefaultKeyboardProfile() {
+		if m.timelineSelectedCount() > 0 {
+			segments := []string{"Del: delete selected", "Shift+Del: delete now"}
+			if len(m.selectedTimelineArchiveEmails()) > 0 {
+				segments = append(segments, "A: archive selected")
+			}
+			return segments
+		}
+		if m.currentTimelineDraftEmail() != nil {
+			segments := []string{"E: edit draft", "Ctrl+S: send draft"}
+			if m.currentTimelineFocusedDraftEmail() != nil {
+				segments = append(segments, "Del: discard draft")
+			} else {
+				segments = append(segments, "Del: delete")
+			}
+			segments = append(segments, "Shift+Del: delete now")
+			return segments
+		}
+		return []string{"Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", "A: archive"}
+	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{
 			m.commandHint("timeline", CommandMailDeleteConfirm, "delete selected"),
@@ -3339,7 +3377,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				return m, m.startTimelineDraft(email), true
 			}
 		}
-		return m, nil, true
+		return m, nil, false
 	case "ctrl+s":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
@@ -3357,7 +3395,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "F", "f":
+	case "F", "f", "ctrl+f":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
@@ -3367,7 +3405,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "c":
+	case "c", "ctrl+n":
 		if m.canInteractWithVisibleData() {
 			return m, m.openBlankComposeFromCurrent(), true
 		}
@@ -3390,7 +3428,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, m.closeTimelinePreviewOrFocusFolders(), true
 		}
 		return m, nil, true
-	case "/":
+	case "/", "ctrl+k":
 		if !m.loading && !m.timeline.searchMode {
 			cmd := m.timelineNativeImageClearCmd()
 			m.openTimelineSearch()
@@ -3516,13 +3554,14 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, m.closeTimelinePreviewOrFocusFolders(), true
 		}
 		return m, nil, true
-	case "r", "R":
+	case "r", "R", "ctrl+r", "ctrl+R", "ctrl+shift+r", "ctrl+shift+R":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
 		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
-				return m, m.startTimelineReply(email, key == "r"), true
+				replyAll := key == "r" || key == "ctrl+R" || key == "ctrl+shift+r" || key == "ctrl+shift+R"
+				return m, m.startTimelineReply(email, replyAll), true
 			}
 		}
 		return m, nil, true
