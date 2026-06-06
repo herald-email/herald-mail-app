@@ -9,6 +9,68 @@ Herald talks to mail providers through provider-specific mail sources. Gmail OAu
 
 Choose the narrowest supported path that matches your account. Gmail users should start with Gmail OAuth and use Gmail IMAP with an App Password only as a fallback. Proton Mail users should run Proton Mail Bridge and use Bridge-generated credentials; other providers can use standard IMAP/SMTP settings or an IMAP preset. First-run setup validates the selected provider access immediately after account details; in-app account settings validate before saving or applying account changes.
 
+## Choose A Provider Path
+
+Use these decision cards first, then check the detailed provider and calendar matrices below when you need exact transports, hosts, or credential types. Mail setup and calendar setup are both first-class choices: Gmail OAuth can cover Google mail and optional Google Calendar together, while standalone calendars can be added later from Settings.
+
+### Gmail OAuth (recommended)
+
+- Choose this if: you use Gmail or Google Workspace and installed Herald with Homebrew or another release binary.
+- You need: browser consent for Google access, with Mail enabled and optional Google Calendar access.
+- Expected setup time: a few minutes.
+- Common failure: a source build is missing OAuth defaults, or the browser grant was cancelled or expired.
+- Where to fix it: [Local OAuth Builds](/development/local-oauth-builds/) for source-build credentials, or [Gmail Setup](/gmail-setup/) for the Gmail flow.
+
+### Gmail With An App Password (fallback)
+
+- Choose this if: you use Gmail but cannot use the browser OAuth path.
+- You need: 2-Step Verification enabled on the Google account and a Google App Password for Herald.
+- Expected setup time: a few minutes after the App Password exists.
+- Common failure: the App Password was copied incorrectly, IMAP is blocked, or a Google Workspace admin requires OAuth.
+- Where to fix it: [Gmail Setup](/gmail-setup/) and the Google account or Workspace admin settings.
+
+### Proton Mail Bridge
+
+- Choose this if: you use Proton Mail and Proton Mail Bridge is running locally.
+- You need: Bridge-generated IMAP and SMTP username/password values, plus the local Bridge host and ports.
+- Expected setup time: a few minutes after Bridge is installed and signed in.
+- Common failure: Bridge is not running, the wrong Bridge password was copied, or the local Bridge ports changed.
+- Where to fix it: Proton Mail Bridge, then Herald's Proton preset or [Custom IMAP](/custom-imap/) fields.
+
+### Fastmail, iCloud, Outlook, Or Another IMAP Preset
+
+- Choose this if: your provider appears in Herald's account chooser and you want Herald to prefill common host and port values.
+- You need: the provider username and password, app password, or app-specific password required by that provider.
+- Expected setup time: one or two minutes once the provider credential is ready.
+- Common failure: the provider requires an app-specific password or has IMAP/SMTP access disabled.
+- Where to fix it: the provider account settings, then Herald's provider preset or [Custom IMAP](/custom-imap/).
+
+### Custom IMAP
+
+- Choose this if: your mail provider is not a preset or you need custom IMAP/SMTP host, port, or credential values.
+- You need: IMAP and SMTP host names, ports, encryption expectations, username, and provider-specific password.
+- Expected setup time: a few minutes if the provider's mail settings are available.
+- Common failure: wrong SSL/TLS port, wrong SMTP auth setting, or a provider that requires app-password setup first.
+- Where to fix it: [Custom IMAP](/custom-imap/) and your provider's mail client setup documentation.
+
+### Google Calendar OAuth
+
+- Choose this if: you want Google Calendar in Herald, either alongside Gmail OAuth or as a standalone calendar source.
+- You need: browser consent for Google Calendar access.
+- Expected setup time: a few minutes.
+- Common failure: a source build is missing OAuth defaults, or the browser grant did not include the selected calendar access.
+- Where to fix it: [Local OAuth Builds](/development/local-oauth-builds/) for source-build credentials, or `Settings > Accounts` to retry the Google Calendar source.
+
+### Fastmail, iCloud, Yahoo, Or Custom CalDAV
+
+- Choose this if: you want to add a non-Google calendar that supports CalDAV.
+- You need: the CalDAV URL, username, and provider-specific app password or app-generated password.
+- Expected setup time: a few minutes after the provider credential exists.
+- Common failure: the calendar URL is wrong, the provider password is not an app password, or the selected calendar is read-only.
+- Where to fix it: the provider-specific calendar references below, then `Settings > Accounts > Add account > Add Calendar`.
+
+Microsoft Calendar and Proton Calendar are not basic CalDAV presets in Herald. Microsoft Calendar work uses Microsoft Graph/OAuth or read-only ICS subscription paths when supported, and Proton Calendar uses ICS import, export, and subscription flows rather than a username/password CalDAV preset.
+
 ## Provider Matrix
 
 | Provider path | Read transport | Send transport | Credential type |
