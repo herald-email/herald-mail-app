@@ -2637,6 +2637,34 @@ func TestNewSettings_OpenAIConfigPrefillsEmbeddingProviderAndModel(t *testing.T)
 	}
 }
 
+func TestNewSettings_OpenAIChatWithOllamaEmbeddingsUsesAdvancedManualPreset(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "openai"
+	existing.OpenAI.APIKey = "sk-test"
+	existing.OpenAI.BaseURL = defaultOpenAIBaseURL
+	existing.OpenAI.Model = "gpt-5-mini"
+	existing.OpenAI.EmbeddingModel = defaultOpenAIEmbed
+	existing.Ollama.Host = defaultOllamaHost
+	existing.Ollama.EmbeddingModel = "nomic-embed-text"
+	existing.Semantic.Provider = config.EmbeddingProviderOllama
+	existing.Semantic.Model = "nomic-embed-text"
+
+	s := NewSettings(SettingsModePanel, existing)
+
+	if s.aiSetupPreset != aiSetupPresetAdvancedManual {
+		t.Fatalf("aiSetupPreset = %q, want advanced manual for mixed chat/embedding roles", s.aiSetupPreset)
+	}
+	if s.aiProvider != "openai" {
+		t.Fatalf("chat aiProvider = %q, want openai", s.aiProvider)
+	}
+	if s.embeddingProvider != config.EmbeddingProviderOllama {
+		t.Fatalf("embeddingProvider = %q, want %q", s.embeddingProvider, config.EmbeddingProviderOllama)
+	}
+	if s.embedModel != "nomic-embed-text" {
+		t.Fatalf("embedModel = %q, want nomic-embed-text", s.embedModel)
+	}
+}
+
 func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
 	s.aiProvider = "openai"
@@ -2662,6 +2690,38 @@ func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
 	}
 	if cfg.Semantic.Model != "text-embedding-3-large" {
 		t.Errorf("Semantic.Model = %q, want text-embedding-3-large", cfg.Semantic.Model)
+	}
+}
+
+func TestBuildConfig_AdvancedManualEmbeddingRolePreservesChatProvider(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.aiSetupPreset = aiSetupPresetAdvancedManual
+	s.aiProvider = "openai"
+	s.openAIAPIKey = "sk-test"
+	s.openAIBaseURL = "https://openai-compatible.example/v1"
+	s.openAIModel = "gpt-5-mini"
+	s.openAIEmbeddingModel = defaultOpenAIEmbed
+	s.embeddingProvider = config.EmbeddingProviderOllama
+	s.ollamaHost = defaultOllamaHost
+	s.embedModel = "nomic-embed-text"
+	s.embedModelChoice = "nomic-embed-text"
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != "openai" {
+		t.Fatalf("AI.Provider = %q, want openai chat role", cfg.AI.Provider)
+	}
+	if cfg.OpenAI.APIKey != "sk-test" || cfg.OpenAI.BaseURL != "https://openai-compatible.example/v1" {
+		t.Fatalf("OpenAI vendor settings were not preserved: %#v", cfg.OpenAI)
+	}
+	if cfg.Semantic.Provider != config.EmbeddingProviderOllama {
+		t.Fatalf("Semantic.Provider = %q, want %q", cfg.Semantic.Provider, config.EmbeddingProviderOllama)
+	}
+	if cfg.Semantic.Model != "nomic-embed-text" {
+		t.Fatalf("Semantic.Model = %q, want nomic-embed-text", cfg.Semantic.Model)
+	}
+	if got := cfg.EffectiveEmbeddingIdentity(); got != "ollama:nomic-embed-text" {
+		t.Fatalf("EffectiveEmbeddingIdentity() = %q, want ollama:nomic-embed-text", got)
 	}
 }
 

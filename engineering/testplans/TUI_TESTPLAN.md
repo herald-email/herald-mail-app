@@ -2344,19 +2344,23 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 **Steps:**
 1. Complete or mock a successful account validation so the first-run preferences step opens.
 2. Capture the compact Advanced settings review with Theme, AI, Keyboard, Offline Cache, Signature, `Enter Herald`, and `Customize setup`.
-3. Choose `Customize setup`, capture the default Ollama AI step, then select custom Ollama and capture the chat and embedding model selectors.
-4. Select `OpenAI / compatible`, capture the OpenAI model fields and the Embeddings group, then choose `OpenAI / compatible` and `Ollama local` in the `Embedding Provider` selector.
-5. Attempt to save Ollama settings with one missing chat model and one missing embedding model.
-6. Repeat with both models installed or mocked as installed.
-7. Continue through customized first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
-8. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
-9. Simulate an existing saved Ollama config whose model is no longer installed.
+3. Choose `Customize setup`, capture the compact `AI Setup` preset chooser, then select `Ollama local default` and capture the generated chat and embedding defaults.
+4. Select `Advanced manual config`, capture separate `Chat Role` and `Embedding Role` selectors plus the Ollama and OpenAI-compatible vendor fields.
+5. In advanced manual config, configure OpenAI-compatible chat while switching embeddings between `OpenAI / compatible` and `Ollama local` without re-entering the OpenAI key/base URL.
+6. Attempt to save Ollama settings with one missing chat model and one missing embedding model.
+7. Repeat with both models installed or mocked as installed.
+8. Continue through customized first-run preferences and capture the offline-cache, keyboard, theme, and signature steps.
+9. Launch the in-app Settings panel and open `AI` and `Sync & Cleanup`.
+10. Simulate an existing saved Ollama config whose model is no longer installed.
 
 **Expect:**
-- The default Ollama step names `gemma3:4b` and `nomic-embed-text-v2-moe`, warns that the recommended defaults are comfortable with at least 16GB RAM, and says 8GB can work more slowly.
+- The compact AI setup chooser offers `Ollama local default`, `OpenAI default`, `Claude API default`, `OpenAI-compatible endpoint`, `AI disabled`, and `Advanced manual config` without forcing one provider through a serial wizard.
+- Presets populate sensible chat and embedding assignments, while advanced manual config lets users configure vendors separately from the roles that use them.
+- The default Ollama preset names `gemma3:4b` and `nomic-embed-text-v2-moe`, warns that the recommended defaults are comfortable with at least 16GB RAM, and says 8GB can work more slowly.
 - Custom Ollama setup offers curated chat options including `gemma3:4b`, `qwen3.5:0.8b`, `llama3.2:1b`, `llama3.2:3b`, and a freeform custom model name, with downgrade guidance that flags `llama3.x` as weaker for translation.
 - Custom Ollama setup offers curated embedding options including `nomic-embed-text-v2-moe`, `nomic-embed-text`, `all-minilm`, `mxbai-embed-large`, `bge-m3`, and a freeform custom model name.
 - OpenAI-compatible setup defaults the chat model to `gpt-5.4-mini`, exposes an `OpenAI Embedding Model` default of `text-embedding-3-small`, and lets the user choose external OpenAI-compatible or local Ollama embeddings.
+- Save appears on the last useful AI configuration screen when the terminal has room, rather than as a standalone AI-only screen.
 - Missing first-run Ollama models block the final save, leave the config path missing or unchanged, and show exact `ollama pull <model>` commands in the setup chrome.
 - Installed or mocked-installed Ollama models allow first-run setup to continue and save normally.
 - A previously saved but now unavailable Ollama config does not block cached/offline startup; the status chip shows `AI down`, AI actions are disabled, Settings > AI shows install commands, and Save Disabled writes AI-off config.

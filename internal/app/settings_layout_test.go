@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func renderSettingsRawViewForTest(t *testing.T, s *Settings, width, height int) string {
@@ -22,6 +23,20 @@ func renderSettingsRawViewForTest(t *testing.T, s *Settings, width, height int) 
 func renderSettingsViewForTest(t *testing.T, s *Settings, width, height int) string {
 	t.Helper()
 	return ansi.Strip(renderSettingsRawViewForTest(t, s, width, height))
+}
+
+func renderSettingsViewContainingForTest(t *testing.T, s *Settings, width, height int, target string) string {
+	t.Helper()
+	var last string
+	for i := 0; i < 20 && s.form.State != huh.StateCompleted; i++ {
+		last = renderSettingsViewForTest(t, s, width, height)
+		if strings.Contains(last, target) {
+			return last
+		}
+		s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
+	}
+	t.Fatalf("settings view containing %q not reached, last view:\n%s", target, last)
+	return ""
 }
 
 func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
@@ -431,8 +446,8 @@ func TestSettingsPanelAICategorySkipsAccountValidation(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	if !strings.Contains(rendered, "AI Provider") {
-		t.Fatalf("expected AI category to show AI provider without account fields, got:\n%s", rendered)
+	if !strings.Contains(rendered, "AI Setup") {
+		t.Fatalf("expected AI category to show compact AI setup presets without account fields, got:\n%s", rendered)
 	}
 	for _, notWant := range []string{"Email address", "Password", "IMAP Host", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
@@ -905,13 +920,17 @@ func TestSettingsPanelSignatureFieldKeepsFooterAt80x24(t *testing.T) {
 }
 
 func TestSettingsPanelAICustomModelGuidanceKeepsBottomBorderAt80x24(t *testing.T) {
-	s := NewSettings(SettingsModePanel, nil)
+	existing := &config.Config{}
+	existing.AI.Provider = "ollama"
+	existing.Ollama.Host = defaultOllamaHost
+	existing.Ollama.Model = "llama3.2:3b"
+	existing.Ollama.EmbeddingModel = "nomic-embed-text"
+	existing.Semantic.Provider = config.EmbeddingProviderOllama
+	existing.Semantic.Model = "nomic-embed-text"
+	s := NewSettings(SettingsModePanel, existing)
 	s = openSettingsPanelCategoryForTest(t, s, "AI")
-	s.aiProvider = aiProviderOllamaCustom
-	s.buildForm()
-	s.form.NextGroup()
 
-	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	rendered := renderSettingsViewContainingForTest(t, s, 80, 24, "Model recommendations")
 
 	for _, want := range []string{"Model recommendations", "gemma3:4b", "translation"} {
 		if !strings.Contains(rendered, want) {
@@ -1015,14 +1034,80 @@ func TestSettingsWizard_AIProviderChoicesIncludeDefaultCustomAndDisabled(t *test
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
 	for _, want := range []string{
-		"Ollama (local default)",
-		"Ollama (local custom)",
-		"Claude API",
-		"OpenAI / compatible",
-		"AI features disabled",
+		"AI Setup",
+		"Ollama local default",
+		"OpenAI default",
+		"Claude API default",
+		"OpenAI-compatible endpoint",
+		"AI disabled",
+		"Advanced manual config",
 	} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected AI provider choices to include %q, got:\n%s", want, rendered)
+			t.Fatalf("expected compact AI setup choices to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSettingsWizardFirstRunCustomizedAIStartsWithCompactSetupPreset(t *testing.T) {
+	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
+	s.firstRunCustomizePreferences = true
+	s.buildForm()
+
+	rendered := renderSettingsViewForTest(t, s, 100, 32)
+
+	for _, want := range []string{
+		"AI Setup",
+		"Ollama local default",
+		"OpenAI default",
+		"Claude API default",
+		"OpenAI-compatible endpoint",
+		"AI disabled",
+		"Advanced manual config",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run custom AI presets to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Chat Role", "Embedding Role", "Ollama Host"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("compact AI setup chooser should not immediately show advanced field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelAIAdvancedManualShowsRoleSelectorsAndInlineSave(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s = openSettingsPanelCategoryForTest(t, s, "AI")
+	s.aiSetupPreset = aiSetupPresetAdvancedManual
+	s.aiProvider = "openai"
+	s.embeddingProvider = config.EmbeddingProviderOllama
+	s.buildForm()
+	s.form.NextGroup()
+
+	roleView := renderSettingsViewForTest(t, s, 120, 40)
+	if !strings.Contains(roleView, "Chat Role") || !strings.Contains(roleView, "Embedding Role") {
+		t.Fatalf("advanced manual should show role selectors before provider details, got:\n%s", roleView)
+	}
+	if strings.Contains(roleView, "OpenAI API Key") {
+		t.Fatalf("advanced manual should not show provider details before role selectors, got:\n%s", roleView)
+	}
+	s.form.NextGroup()
+	chatView := renderSettingsViewForTest(t, s, 120, 40)
+	s.form.NextGroup()
+	embeddingView := renderSettingsViewForTest(t, s, 120, 40)
+	rendered := strings.Join([]string{roleView, chatView, embeddingView}, "\n")
+
+	for _, want := range []string{
+		"Chat Role",
+		"OpenAI / compatible",
+		"Embedding Role",
+		"Ollama local",
+		"OpenAI API Key",
+		"Ollama Host",
+		"Save changes",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected advanced manual AI settings to include %q, got:\n%s", want, rendered)
 		}
 	}
 }
@@ -1043,13 +1128,12 @@ func TestSettingsWizard_OllamaDefaultDoesNotAskForCustomValues(t *testing.T) {
 
 func TestSettingsWizard_OllamaDefaultWarnsAboutMemoryAndShowsSafeDefaults(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
-	s.aiProvider = "ollama-default"
+	s.aiSetupPreset = aiSetupPresetOllamaDefault
+	s.aiProvider = aiProviderOllamaDefault
+	s.applyAISetupPreset()
 	s.buildForm()
-	s.form.NextGroup()
-	s.form.NextGroup()
-	s.form.NextGroup()
 
-	rendered := renderSettingsViewForTest(t, s, 100, 32)
+	rendered := renderSettingsViewContainingForTest(t, s, 100, 32, "Default chat")
 	for _, want := range []string{
 		"gemma3:4b",
 		"nomic-embed-text-v2-moe",
@@ -1068,13 +1152,12 @@ func TestSettingsWizard_OllamaDefaultWarnsAboutMemoryAndShowsSafeDefaults(t *tes
 
 func TestSettingsWizard_CustomOllamaShowsCuratedChatAndEmbeddingChoices(t *testing.T) {
 	s := NewSettings(SettingsModeWizard, nil)
-	s.aiProvider = "ollama-custom"
+	s.aiSetupPreset = aiSetupPresetOllamaCustom
+	s.aiProvider = aiProviderOllamaCustom
+	s.applyAISetupPreset()
 	s.buildForm()
-	s.form.NextGroup()
-	s.form.NextGroup()
-	s.form.NextGroup()
 
-	rendered := renderSettingsViewForTest(t, s, 120, 40)
+	rendered := renderSettingsViewContainingForTest(t, s, 120, 40, "Model recommendations")
 	for _, want := range []string{
 		"Chat Model",
 		"gemma3:4b",

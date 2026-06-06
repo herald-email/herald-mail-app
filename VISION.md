@@ -58,6 +58,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Obsidian-friendly email memories with source-backed tracks, contact/company/thread dossiers, Compose Radar nudges, and Markdown vault sync
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
+- [x] Compact AI setup presets with separate chat and embedding role assignments in first-run customization and Settings > AI
 - [x] Compose AI assistant baseline (rewrite, tone/length adjustments, subject suggestion, accept into draft)
 - [x] Quick replies (canned + AI-generated contextual options)
 - [x] Contact book
