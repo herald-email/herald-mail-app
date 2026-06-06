@@ -2,7 +2,10 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -298,6 +301,85 @@ func TestLocalBackendCalendarAgendaRefreshesCachedRowsWhenSyncTTLAllows(t *testi
 	}
 	if _, err := store.GetCalendarEventByRef(staleEvent.Ref); err == nil {
 		t.Fatal("stale reminder event remained cached after provider refresh")
+	}
+}
+
+func TestLocalBackendCalendarCollectionSyncContinuesAfterCollectionEventFailure(t *testing.T) {
+	var requestedEvents []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/calendar/v3/users/me/calendarList":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{"id": "calendar-a", "summary": "Calendar A", "backgroundColor": "#3367d6", "accessRole": "owner"},
+					{"id": "calendar-b", "summary": "Calendar B", "backgroundColor": "#63da38", "accessRole": "owner"},
+					{"id": "calendar-c", "summary": "Calendar C", "backgroundColor": "#f4b400", "accessRole": "freeBusyReader"},
+					{
+						"id":              "primary",
+						"summary":         "My primary calendar",
+						"backgroundColor": "#d93025",
+						"accessRole":      "owner",
+						"primary":         true,
+						"notificationSettings": map[string]any{
+							"notifications": []map[string]string{{"type": "eventCreation", "method": "email"}},
+						},
+					},
+					{"id": "calendar-d", "summary": "Calendar D", "backgroundColor": "#ab47bc", "accessRole": "owner"},
+				},
+			})
+		case strings.HasPrefix(r.URL.Path, "/calendar/v3/calendars/") && strings.HasSuffix(r.URL.Path, "/events"):
+			calendarID := strings.TrimPrefix(r.URL.Path, "/calendar/v3/calendars/")
+			calendarID = strings.TrimSuffix(calendarID, "/events")
+			requestedEvents = append(requestedEvents, calendarID)
+			if calendarID == "primary" {
+				http.Error(w, "primary event sync failed", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items":         []map[string]any{},
+				"nextSyncToken": "sync-" + calendarID,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	source := config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "local-token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	}
+	b := &LocalBackend{cache: store, cfg: &config.Config{Sources: []config.SourceConfig{source}}}
+
+	collections, err := b.ListCalendarCollections()
+	if err != nil {
+		t.Fatalf("ListCalendarCollections: %v", err)
+	}
+	gotIDs := make([]string, 0, len(collections))
+	for _, collection := range collections {
+		gotIDs = append(gotIDs, collection.Ref.CollectionID)
+	}
+	sort.Strings(gotIDs)
+	wantIDs := []string{"calendar-a", "calendar-b", "calendar-c", "calendar-d", "primary"}
+	if strings.Join(gotIDs, ",") != strings.Join(wantIDs, ",") {
+		t.Fatalf("cached collection IDs = %v, want %v", gotIDs, wantIDs)
+	}
+	if !containsString(requestedEvents, "calendar-d") {
+		t.Fatalf("event sync stopped before calendar-d; requested events = %v", requestedEvents)
 	}
 }
 

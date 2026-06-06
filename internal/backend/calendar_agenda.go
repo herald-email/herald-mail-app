@@ -11,6 +11,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/calendar"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -591,10 +592,17 @@ func (b *LocalBackend) syncConfiguredCalendarSources(ctx context.Context) error 
 		}
 		service := calendar.NewEventService(b.cache, opened.Calendar)
 		for _, collection := range collections {
-			if _, err := service.SyncCollectionNoCache(ctx, collection.Ref); err != nil {
+			if stored, err := b.cache.GetCalendarCollection(collection.Ref); err == nil && stored.SyncToken != "" {
+				collection.SyncToken = stored.SyncToken
+			}
+			if err := b.cache.PutCalendarCollection(collection); err != nil {
 				service.Close()
 				_ = opened.Close()
-				return fmt.Errorf("calendar source %s failed to sync collection %s: %w", source.ID, collection.Ref.CollectionID, err)
+				return err
+			}
+			if _, err := service.SyncCollectionNoCache(ctx, collection.Ref); err != nil {
+				logger.Warn("calendar source %s skipped event sync for collection %s: %v", source.ID, collection.Ref.CollectionID, err)
+				continue
 			}
 			if stored, err := b.cache.GetCalendarCollection(collection.Ref); err == nil && stored.SyncToken != "" {
 				collection.SyncToken = stored.SyncToken
