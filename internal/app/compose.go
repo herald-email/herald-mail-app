@@ -201,6 +201,7 @@ func (m *Model) composeAdditionalRows(tableHeight int) int {
 	if m.composeAISubjectHint != "" {
 		rows++
 	}
+	rows += m.composeMemoryRadarRows(tableHeight)
 	if m.attachmentInputActive {
 		rows++
 	}
@@ -1499,6 +1500,10 @@ func (m *Model) renderComposeView() string {
 		hint := hintStyle.Render("✨ "+hintText) +
 			"  " + dimStyle.Render("Tab: accept  Esc: dismiss")
 		sb.WriteString(hint + "\n")
+	}
+
+	if radar := m.renderComposeMemoryRadar(plan.Compose.BodyInnerWidth); radar != "" {
+		sb.WriteString(radar + "\n")
 	}
 
 	// Body

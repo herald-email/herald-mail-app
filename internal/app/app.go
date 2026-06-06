@@ -23,6 +23,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/deeplink"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/notifications"
 	"github.com/herald-email/herald-mail-app/internal/printing"
@@ -195,6 +196,13 @@ type TimelineLoadedMsg struct {
 type ComposeStatusMsg struct {
 	Message string
 	Err     error
+}
+
+// ComposeMemoryRadarMsg carries source-backed memory context for the active draft.
+type ComposeMemoryRadarMsg struct {
+	Token int
+	Prep  memory.ReplyPrep
+	Err   error
 }
 
 // ClassifyProgressMsg carries a single classification result
@@ -742,6 +750,10 @@ type Model struct {
 	composePreview                bool   // show glamour markdown preview
 	composeAttachments            []models.ComposeAttachment
 	composePreserved              *composePreservedContext
+	composeMemoryToken            int
+	composeMemoryLoading          bool
+	composeMemoryPrep             memory.ReplyPrep
+	composeMemoryError            string
 	composeReturnSet              bool
 	composeReturnTab              int
 	composeReturnPanel            int
@@ -2775,6 +2787,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.composeAIThread = false
 			m.clearComposeExitPrompt()
 			m.resetComposeAIBar()
+			m.resetComposeMemoryRadar()
 			m.statusMessage = msg.Message
 			// Delete the auto-saved draft (if any) since the email was sent
 			var cmds []tea.Cmd
@@ -2801,6 +2814,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
+		return m, nil
+
+	case ComposeMemoryRadarMsg:
+		if msg.Token != m.composeMemoryToken {
+			return m, nil
+		}
+		m.composeMemoryLoading = false
+		m.composeMemoryPrep = msg.Prep
+		m.composeMemoryError = ""
+		if msg.Err != nil {
+			m.composeMemoryError = msg.Err.Error()
+		}
+		m.refreshComposeLayout()
 		return m, nil
 
 	case composeExternalEditorFinishedMsg:

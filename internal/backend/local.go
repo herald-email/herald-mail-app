@@ -17,6 +17,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/filesafe"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
@@ -62,6 +63,9 @@ type LocalBackend struct {
 
 	messageService   *MessageService
 	messageServiceMu sync.Mutex
+	memoryService    *memory.Service
+	memoryRefresh    sync.Once
+	memoryRefreshErr error
 
 	calendarSyncMu   sync.Mutex
 	calendarLastSync map[models.SourceID]time.Time
@@ -258,6 +262,14 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 		Source:        mailSource,
 		StoragePolicy: b.currentCacheStoragePolicy,
 	})
+	if cfg.Memories.Enabled {
+		service, err := memory.NewService(cfg.Memories, localMemoryEmailSource{cache: c})
+		if err != nil {
+			logger.Warn("Herald Memories unavailable: %v", err)
+		} else {
+			b.memoryService = service
+		}
+	}
 	go b.fanoutProgressLoop()
 	go b.loadWorker()
 	return b, nil
@@ -1564,6 +1576,80 @@ func (b *LocalBackend) GetContactEmails(contactEmail string, limit int) ([]*mode
 
 func (b *LocalBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
 	return b.cache.UpsertContacts(addrs, direction)
+}
+
+// --- Herald Memories ---
+
+type localMemoryEmailSource struct {
+	cache *cache.Cache
+}
+
+func (s localMemoryEmailSource) MemoryEmails(folder string, limit int) ([]memory.EmailSnapshot, error) {
+	if s.cache == nil {
+		return nil, nil
+	}
+	emails, err := s.cache.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(emails) > limit {
+		emails = emails[:limit]
+	}
+	out := make([]memory.EmailSnapshot, 0, len(emails))
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		body, err := s.cache.GetBodyText(email.MessageID)
+		if err != nil {
+			body = ""
+		}
+		out = append(out, memory.EmailSnapshot{
+			Email:    email,
+			BodyText: body,
+		})
+	}
+	return out, nil
+}
+
+func (b *LocalBackend) SearchMemories(ctx context.Context, query memory.Query) ([]memory.Memory, error) {
+	if b == nil || b.memoryService == nil {
+		return nil, nil
+	}
+	b.ensureMemoryRefresh(ctx)
+	if b.memoryRefreshErr != nil {
+		logger.Warn("Herald Memories refresh failed before search: %v", b.memoryRefreshErr)
+	}
+	return b.memoryService.Search(ctx, query)
+}
+
+func (b *LocalBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	if b == nil || b.memoryService == nil {
+		return memory.ReplyPrep{
+			Query:       query,
+			GeneratedAt: time.Now(),
+		}, nil
+	}
+	b.ensureMemoryRefresh(ctx)
+	if b.memoryRefreshErr != nil {
+		logger.Warn("Herald Memories refresh failed before reply context: %v", b.memoryRefreshErr)
+	}
+	return b.memoryService.BuildReplyPrep(ctx, query)
+}
+
+func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context) {
+	b.memoryRefresh.Do(func() {
+		if b.memoryService == nil {
+			return
+		}
+		result, err := b.memoryService.Refresh(ctx)
+		b.memoryRefreshErr = err
+		if err != nil {
+			logger.Warn("Herald Memories refresh failed: %v", err)
+			return
+		}
+		logger.Info("Herald Memories refresh: scanned=%d extracted=%d written=%d skipped=%d", result.ScannedEmails, result.Extracted, result.Written, result.Skipped)
+	})
 }
 
 // --- Unsubscribed senders ---

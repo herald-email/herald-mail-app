@@ -164,6 +164,19 @@ The replacement boundary should live in an `internal/agent` package with a small
 - [ ] Agent requests publish concise progress states such as `searching`, `reading`, `summarizing`, and `draft edit ready` so the chat drawer does not appear stuck during slow local or remote provider calls.
 - [x] The first implementation does not add memory, autonomous daily summaries, calendar mutations, delete/archive, send mail, or MCP mirroring.
 
+### Herald Memories foundation
+
+Herald Memories is a local-first relationship memory layer behind the backend and agent boundaries. Immutable records live in the configured memory directory, while chat and Compose consume read-only retrieval APIs and Obsidian remains an export/preview adapter rather than the only source of truth.
+
+- [x] `internal/memory` owns memory settings, immutable file storage, deterministic cached-mail extraction, retrieval, reply-prep nudges, and Obsidian generated-section rendering.
+- [x] `internal/config` applies memory defaults for `~/.herald/memories`, source folders, destinations, confidence thresholds, prompt templates, update rules, and Obsidian frontmatter/link/tag modes without invalidating existing configs.
+- [x] `LocalBackend` exposes read-only memory search and reply-prep methods that refresh once from cached Inbox and Sent rows, skip existing immutable records, and fail quiet when memory setup is unavailable.
+- [x] `DemoBackend` serves deterministic job-search memory fixtures without writing to the user's memory directory.
+- [x] `internal/agent` adds read-only Gollem tools for `search_memories`, `get_contact_history`, `get_company_tracks`, `get_open_loops`, and `get_reply_memory_context`.
+- [x] Compose Radar renders the reply-prep nudges inside Compose without mutating draft fields, sending mail, changing attachments, or bypassing the existing Compose AI review path.
+- [ ] Memory extraction does not yet use semantic embeddings, classifications, calendar events, Contacts enrichment, Obsidian note ingestion, or external research.
+- [ ] Deletion and cache cleanup do not yet append source-missing/stale memory records for dependent evidence.
+
 ### Inline image preview safety
 
 Timeline previews keep image bytes local to the TUI process. Split and full-screen previews render bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. Native raster overlays carry row geometry so Herald can crop and re-encode the visible image slice when a scroll position or split-preview panel boundary shows only part of the image; if cropping cannot be done safely, the overlay is suppressed rather than allowed to overflow. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs render as readable placeholders and OSC 8 links by default; known tracker query params are stripped from placeholder hyperlink targets and the opt-in fetch URL while non-tracker params are preserved. Pressing `o` in the current Timeline preview fetches only the current message's remote images with bounded, no-cookie, no-referrer HTTP(S) requests, blocks local/private/link-local destinations and unsafe redirects, keeps bytes in memory only, and then sends revealed images through the same renderer/fallback path as MIME inline images.

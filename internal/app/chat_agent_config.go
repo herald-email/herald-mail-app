@@ -21,10 +21,19 @@ func (m *Model) applyChatAgentConfig(cfg *config.Config) {
 	}
 	runnerOptions := agent.RunnerOptionsForProviderConfig(providerCfg)
 	if m.backend != nil {
-		m.chatAgent = agent.NewGollemRunnerWithEmailToolsAndOptions(model, m.backend, agent.EmailToolOptions{
+		emailOptions := agent.EmailToolOptions{
 			MaxResults:      20,
 			MaxContextChars: 1200,
-		}, runnerOptions...)
+		}
+		if memorySource, ok := m.backend.(agent.MemoryToolSource); ok {
+			m.chatAgent = agent.NewGollemRunnerWithEmailAndMemoryToolsAndOptions(model, m.backend, emailOptions, memorySource, agent.MemoryToolOptions{
+				MaxResults:      12,
+				ChatMinScore:    cfg.Memories.Thresholds.ChatRetrieval,
+				ComposeMinScore: cfg.Memories.Thresholds.ComposeRadar,
+			}, runnerOptions...)
+			return
+		}
+		m.chatAgent = agent.NewGollemRunnerWithEmailToolsAndOptions(model, m.backend, emailOptions, runnerOptions...)
 		return
 	}
 	m.chatAgent = agent.NewGollemRunner(model, runnerOptions...)

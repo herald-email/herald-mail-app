@@ -47,6 +47,7 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 	m.composePreserved = nil
 	m.composeAIThread = false
 	m.resetComposeAIBar()
+	m.resetComposeMemoryRadar()
 	m.attachmentInputActive = false
 	m.attachmentPathInput.SetValue("")
 	m.clearAttachmentCompletions()

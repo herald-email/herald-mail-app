@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"gopkg.in/yaml.v3"
 )
@@ -168,6 +169,7 @@ type Config struct {
 	} `yaml:"keyboard,omitempty"`
 	Calendar    CalendarConfig    `yaml:"calendar,omitempty"`
 	Theme       ThemeConfig       `yaml:"theme,omitempty"`
+	Memories    memory.Settings   `yaml:"memories,omitempty"`
 	Sources     []SourceConfig    `yaml:"sources,omitempty"`
 	Credentials CredentialsConfig `yaml:"credentials"`
 	Server      ServerConfig      `yaml:"server"`
@@ -417,6 +419,15 @@ func (c *Config) EffectiveEmbeddingIdentity() string {
 		return EmbeddingProviderOllama + ":" + defaultOllamaEmbeddingModel
 	}
 	return c.EffectiveEmbeddingProvider() + ":" + c.EffectiveEmbeddingModel()
+}
+
+func (c *Config) EffectiveMemoryDirectory() (string, error) {
+	if c == nil {
+		return memory.ExpandDirectory(memory.DefaultDirectory)
+	}
+	settings := c.Memories
+	settings.ApplyDefaults()
+	return memory.ExpandDirectory(settings.Directory)
 }
 
 func (c Config) NormalizedSources() []SourceConfig {
@@ -837,6 +848,7 @@ func (c *Config) applyDefaults() {
 	if c.Theme.Overrides == nil {
 		c.Theme.Overrides = make(map[string]ThemeOverride)
 	}
+	c.Memories.ApplyDefaults()
 
 	// Daemon defaults
 	if c.Daemon.Port == 0 {

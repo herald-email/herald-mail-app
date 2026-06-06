@@ -1184,6 +1184,46 @@ Check these states during every applicable lane:
 - The legacy direct Ollama chat loop, chat tool registry, and `<filter>` parser are absent from the chat panel path.
 - At `50x15`, the minimum-size guard appears instead of clipped chat chrome, and resizing larger restores the chat layout.
 
+### TC-18E — Herald Memories chat and Compose Radar
+
+**Lane:** A, B, G
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start demo or virtual-lab data that includes a job-search thread with Inbox and Sent messages.
+2. Open chat and ask what should be remembered before replying to the job-search contact.
+3. Confirm the answer cites memory evidence from email or Obsidian paths and does not claim facts without sources.
+4. Open a reply Compose screen for the same thread.
+5. Capture the Compose screen before typing, type body text, and capture again.
+6. At `50x15`, confirm the minimum-size guard or compact recovery path appears rather than an overlapping Radar panel.
+
+**Expect:**
+- Memory chat tools are read-only and cannot send, delete, archive, mutate calendar events, or write Obsidian notes.
+- Chat distinguishes email-backed memory, Obsidian-backed memory, research-backed memory, and inference when those sources are present.
+- Compose Radar shows at most three source-backed nudges and stays hidden or quiet when there is no high-confidence memory.
+- Compose Radar does not change To, Subject, Body, attachments, preserved reply context, or AI review state without an explicit user action.
+- Low-confidence memories may appear in chat/search results but do not become Compose Radar warnings.
+- Missing local AI, no Sent cache, no memory directory, or missing source evidence leaves Compose usable and shows a bounded unavailable or empty state.
+
+### TC-18F — Obsidian-friendly memory settings and preview
+
+**Lane:** A, B, G
+**Sizes:** `220x50`, `80x24`
+
+**Steps:**
+1. Launch with a config that omits `memories`.
+2. Open Settings and inspect the memory defaults when the section is available, or inspect the saved/effective config through a focused config test.
+3. Configure a temp vault path with existing People and Job search notes that include user-authored text outside Herald markers.
+4. Generate an Obsidian sync preview for memory records.
+5. Toggle frontmatter mode between minimal YAML and no visible YAML, then regenerate the preview.
+
+**Expect:**
+- Effective memory storage defaults to `~/.herald/memories` and remains append-only.
+- Defaults target `People/`, `Job search/`, `Scheduled Task Artifacts/`, and a configurable memory inbox with minimal Obsidian frontmatter plus conservative links/tags.
+- The Obsidian-friendly toggle can hide YAML headers while preserving generated-section metadata inside Herald markers.
+- Sync preview shows the destination path, generated section, frontmatter/link/tag mode, and source evidence before any write.
+- Applying a generated-section update preserves user-authored content outside stable Herald markers.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

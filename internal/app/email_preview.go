@@ -1097,7 +1097,7 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
 	m.resetFieldKeyMode()
-	return m, nil
+	return m, m.startComposeMemoryRadar()
 }
 
 // renderQuickReplyPicker renders the quick reply picker overlay appended to the preview panel.

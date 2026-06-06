@@ -69,6 +69,16 @@ func NewGollemRunnerWithEmailToolsAndOptions(model core.Model, source EmailToolS
 	return newGollemRunner(model, service.GollemTools(), opts...)
 }
 
+func NewGollemRunnerWithEmailAndMemoryToolsAndOptions(model core.Model, emailSource EmailToolSource, emailOptions EmailToolOptions, memorySource MemoryToolSource, memoryOptions MemoryToolOptions, opts ...core.AgentOption[ChatResult]) *GollemRunner {
+	emailService := NewEmailToolService(emailSource, emailOptions)
+	tools := append([]core.Tool{}, emailService.GollemTools()...)
+	if memorySource != nil {
+		memoryService := NewMemoryToolService(memorySource, memoryOptions)
+		tools = append(tools, memoryService.GollemTools()...)
+	}
+	return newGollemRunner(model, tools, opts...)
+}
+
 func RunnerOptionsForProviderConfig(cfg ProviderConfig) []core.AgentOption[ChatResult] {
 	if strings.ToLower(strings.TrimSpace(cfg.Provider)) != ProviderOpenAI {
 		return nil
@@ -197,6 +207,8 @@ func systemPrompt() string {
 		"Return concise, source-grounded answers for the user.",
 		"Default to 2-5 short sentences or at most 5 bullets unless the user asks for detail.",
 		"Do not send email, delete email, archive email, or mutate calendar events.",
+		"When answering from Herald Memories, cite source evidence and distinguish email, Obsidian, public research, and inference.",
+		"No evidence means no factual memory answer.",
 		"When no UI action is needed, return only a helpful reply.",
 	}, "\n")
 }

@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 )
@@ -1009,6 +1011,155 @@ func (d *DemoBackend) SearchContacts(query string) ([]models.ContactData, error)
 
 func (d *DemoBackend) UpsertContacts(addrs []models.ContactAddr, direction string) error {
 	return nil
+}
+
+// --- Herald Memories ---
+
+func (d *DemoBackend) SearchMemories(ctx context.Context, query memory.Query) ([]memory.Memory, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	memories := seedDemoMemories()
+	out := make([]memory.Memory, 0, len(memories))
+	for _, mem := range memories {
+		if memory.MemoryMatches(mem, query) {
+			out = append(out, mem)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if query.Limit > 0 && len(out) > query.Limit {
+		out = out[:query.Limit]
+	}
+	return out, nil
+}
+
+func (d *DemoBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	if err := ctx.Err(); err != nil {
+		return memory.ReplyPrep{}, err
+	}
+	matches, err := d.SearchMemories(ctx, memory.Query{
+		People:               memory.CompactStrings([]string{query.Recipient}),
+		Domain:               demoMemoryDomain(query.Recipient),
+		Topic:                query.Subject,
+		MinConfidence:        0.35,
+		Limit:                12,
+		IncludeLowConfidence: true,
+	})
+	if err != nil {
+		return memory.ReplyPrep{}, err
+	}
+	if strings.TrimSpace(query.Subject) != "" {
+		byTopic, err := d.SearchMemories(ctx, memory.Query{
+			Topic:                query.Subject,
+			MinConfidence:        0.35,
+			Limit:                12,
+			IncludeLowConfidence: true,
+		})
+		if err != nil {
+			return memory.ReplyPrep{}, err
+		}
+		matches = mergeDemoMemoryMatches(matches, byTopic, 12)
+	}
+	return memory.BuildReplyPrepFromMemories(query, matches, memory.DefaultSettings()), nil
+}
+
+func mergeDemoMemoryMatches(primary, secondary []memory.Memory, limit int) []memory.Memory {
+	if limit <= 0 {
+		limit = 12
+	}
+	seen := make(map[string]bool, len(primary)+len(secondary))
+	out := make([]memory.Memory, 0, len(primary)+len(secondary))
+	for _, mem := range append(primary, secondary...) {
+		if mem.ID == "" || seen[mem.ID] {
+			continue
+		}
+		seen[mem.ID] = true
+		out = append(out, mem)
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+func seedDemoMemories() []memory.Memory {
+	now := time.Now().Add(-2 * time.Hour)
+	return []memory.Memory{
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-sergey-open-question",
+			Kind:           memory.KindOpenQuestion,
+			Claim:          "Sergey asked whether the take-home follow-up is still on track.",
+			Summary:        "Sergey asked whether the take-home follow-up is still on track.",
+			Topic:          "Senior engineer interview",
+			People:         []string{"sergey@example.com", "Sergey"},
+			Company:        "Example",
+			Domain:         "example.com",
+			Status:         memory.StatusWaiting,
+			Confidence:     0.92,
+			LastActivityAt: now,
+			ObsidianTarget: "Job search/active/Example/Memory.md",
+			Tags:           []string{"#herald/memory"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceEmail,
+				MessageID:  "demo-sergey-followup",
+				Folder:     "INBOX",
+				Date:       now,
+				Snippet:    "Are we still on track for the take-home follow-up?",
+			}},
+		}, now),
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-sergey-last-reply",
+			Kind:           memory.KindLastUserReply,
+			Claim:          "You last told Sergey you would send availability by Friday.",
+			Summary:        "You last told Sergey you would send availability by Friday.",
+			Topic:          "Senior engineer interview",
+			People:         []string{"sergey@example.com", "Sergey"},
+			Company:        "Example",
+			Domain:         "example.com",
+			Status:         memory.StatusWaiting,
+			Confidence:     0.89,
+			LastActivityAt: now.Add(-24 * time.Hour),
+			ObsidianTarget: "Job search/active/Example/Memory.md",
+			Tags:           []string{"#herald/memory"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceSentEmail,
+				MessageID:  "demo-sergey-sent-availability",
+				Folder:     "Sent",
+				Date:       now.Add(-24 * time.Hour),
+				Snippet:    "I will send my availability by Friday.",
+			}},
+		}, now),
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-cobalt-open-loop",
+			Kind:           memory.KindOpenQuestion,
+			Claim:          "Mina asked whether the Cobalt Works interview schedule still works.",
+			Summary:        "Mina asked whether the Cobalt Works interview schedule still works.",
+			Topic:          "Example: Thread with Cobalt Works",
+			People:         []string{"Mina Park <mina@cobalt-works.example>", "mina@cobalt-works.example", "Mina Park"},
+			Company:        "Cobalt Works",
+			Domain:         "cobalt-works.example",
+			Status:         memory.StatusWaiting,
+			Confidence:     0.93,
+			LastActivityAt: now.Add(-30 * time.Minute),
+			ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+			Tags:           []string{"#herald/memory"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceEmail,
+				MessageID:  "demo-example-thread-with-cobalt-works@demo.local",
+				Folder:     "INBOX",
+				Date:       now.Add(-30 * time.Minute),
+				Snippet:    "Does the interview schedule still work for you?",
+			}},
+		}, now),
+	}
+}
+
+func demoMemoryDomain(recipient string) string {
+	if at := strings.LastIndex(recipient, "@"); at >= 0 {
+		return strings.Trim(strings.ToLower(recipient[at+1:]), " >")
+	}
+	return ""
 }
 
 // --- Cleanup rules ---

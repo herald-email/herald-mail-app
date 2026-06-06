@@ -68,6 +68,7 @@ func TestSystemPromptKeepsUIChatBriefAndReadOnly(t *testing.T) {
 		"Herald's UI chat agent",
 		"Default to 2-5 short sentences",
 		"Do not send email, delete email, archive email, or mutate calendar events",
+		"No evidence means no factual memory answer",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, prompt)

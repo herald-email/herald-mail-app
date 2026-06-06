@@ -2003,6 +2003,7 @@ func (m *Model) openTimelineForwardCompose(email *models.EmailData, body *models
 	m.replyContextEmail = nil
 	m.composeAIThread = false
 	m.resetComposeAIBar()
+	m.resetComposeMemoryRadar()
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindForward, email, body, composeStatus)
 	m.composeField = composeFieldTo
 	m.composeTo.Focus()
@@ -2035,6 +2036,7 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.statusMessage = ""
 	m.composePreserved = newComposePreservedContext(models.PreservedMessageKindReply, email, body, composeStatus)
 	m.resetComposeAIBar()
+	m.resetComposeMemoryRadar()
 	m.composeField = composeFieldBody
 	m.composeTo.Blur()
 	m.composeSubject.Blur()
@@ -2295,7 +2297,7 @@ func (m *Model) startTimelineReply(email *models.EmailData, replyAll bool) tea.C
 	}
 	if m.timelineBodyLoadedFor(email) {
 		m.openTimelineReplyCompose(email, m.timeline.body, "", replyAll)
-		return nil
+		return m.startComposeMemoryRadar()
 	}
 	m.timeline.replyRequestID++
 	requestID := m.timeline.replyRequestID
@@ -3202,7 +3204,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
 		}
 		m.openTimelineReplyCompose(email, body, composeStatus, msg.ReplyAll)
-		return m, nil, true
+		return m, m.startComposeMemoryRadar(), true
 
 	case TimelineDraftBodyMsg:
 		if msg.RequestID != m.timeline.draftRequestID || msg.MessageID != m.timeline.draftPendingMessage {

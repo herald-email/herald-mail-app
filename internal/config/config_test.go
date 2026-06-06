@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/herald-email/herald-mail-app/internal/memory"
 )
 
 func minimalOAuthConfig() *Config {
@@ -747,6 +749,84 @@ func TestDefaultOllamaModel(t *testing.T) {
 	c.applyDefaults()
 	if c.Ollama.Model != "gemma3:4b" {
 		t.Errorf("expected default Ollama model %q, got %q", "gemma3:4b", c.Ollama.Model)
+	}
+}
+
+func TestMemoryDefaultsUseHeraldDirectoryAndObsidianProfile(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	c := &Config{}
+	c.applyDefaults()
+
+	if !c.Memories.Enabled {
+		t.Fatal("memories should default enabled for cached local mail")
+	}
+	if c.Memories.Directory != memory.DefaultDirectory {
+		t.Fatalf("memory directory = %q, want %q", c.Memories.Directory, memory.DefaultDirectory)
+	}
+	effective, err := c.EffectiveMemoryDirectory()
+	if err != nil {
+		t.Fatalf("EffectiveMemoryDirectory: %v", err)
+	}
+	if want := filepath.Join(home, ".herald", "memories"); effective != want {
+		t.Fatalf("effective memory directory = %q, want %q", effective, want)
+	}
+	if c.Memories.Obsidian.FrontmatterMode != memory.FrontmatterMinimal ||
+		c.Memories.Obsidian.LinkMode != memory.LinkModeWiki ||
+		c.Memories.Obsidian.TagMode != memory.TagModeConservative {
+		t.Fatalf("obsidian defaults = %#v", c.Memories.Obsidian)
+	}
+	if c.Memories.Destinations.People != "People" || c.Memories.Destinations.DailyBriefing != "Scheduled Task Artifacts" {
+		t.Fatalf("memory destinations = %#v", c.Memories.Destinations)
+	}
+}
+
+func TestLoadMemoryConfigPreservesExplicitToggles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	data := []byte(`
+credentials:
+  username: user@example.com
+  password: secret
+server:
+  host: imap.example.com
+  port: 993
+smtp:
+  host: smtp.example.com
+  port: 587
+memories:
+  enabled: false
+  directory: /tmp/herald-memory-test
+  sources:
+    folders: [INBOX]
+    contacts: false
+  obsidian:
+    yaml_headers: false
+    link_mode: markdown
+    tag_mode: workflow
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Memories.Enabled {
+		t.Fatal("explicit memories.enabled false should be preserved")
+	}
+	if loaded.Memories.Sources.Contacts {
+		t.Fatal("explicit memories.sources.contacts false should be preserved")
+	}
+	if loaded.Memories.Directory != "/tmp/herald-memory-test" {
+		t.Fatalf("directory = %q", loaded.Memories.Directory)
+	}
+	if loaded.Memories.Obsidian.FrontmatterMode != memory.FrontmatterNone ||
+		loaded.Memories.Obsidian.YAMLHeaders ||
+		loaded.Memories.Obsidian.LinkMode != memory.LinkModeMarkdown ||
+		loaded.Memories.Obsidian.TagMode != memory.TagModeWorkflow {
+		t.Fatalf("obsidian toggles = %#v", loaded.Memories.Obsidian)
 	}
 }
 
