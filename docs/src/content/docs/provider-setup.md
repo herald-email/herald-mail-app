@@ -67,11 +67,11 @@ Use these decision cards first, then check the detailed provider and calendar ma
 - You need: the CalDAV URL, username, and provider-specific app password or app-generated password.
 - Expected setup time: a few minutes after the provider credential exists.
 - Common failure: the calendar URL is wrong, the provider password is not an app password, or the selected calendar is read-only.
-- Where to fix it: the provider-specific calendar references below, then `Settings > Accounts > Add account > Add Calendar`.
+- Where to fix it: the provider-specific calendar references below, then `Settings > Accounts > Add calendar only`.
 
 Microsoft Calendar and Proton Calendar are not basic CalDAV presets in Herald. Microsoft Calendar work uses Microsoft Graph/OAuth or read-only ICS subscription paths when supported, and Proton Calendar uses ICS import, export, and subscription flows rather than a username/password CalDAV preset.
 
-## Provider Matrix
+## Mail Source Matrix
 
 | Provider path | Read transport | Send transport | Credential type |
 | --- | --- | --- | --- |
@@ -83,7 +83,7 @@ Microsoft Calendar and Proton Calendar are not basic CalDAV presets in Herald. M
 | Outlook | `outlook.office365.com:993` | `smtp.office365.com:587` | Provider-supported IMAP credential |
 | Custom IMAP | Your provider value | Your provider value | Provider-specific |
 
-## Calendar Provider Matrix
+## Calendar Source Matrix
 
 Herald can add standalone calendar sources from `Settings > Accounts > Add calendar only`. Google Calendar uses Herald's supported OAuth path, while CalDAV providers use a URL, username, and provider-specific password. Gmail OAuth can also add Gmail and Google Calendar together from `Settings > Accounts > Add account`.
 

@@ -102,15 +102,13 @@ herald -help
 herald -debug
 herald -verbose
 herald -config custom.yaml
-herald -experimental
 herald --demo
 ```
 
 Use `./bin/herald --demo` instead when trying a source checkout before real
-setup. `-experimental` remains available for future feature flags, but Gmail
-OAuth no longer requires it. `-debug` and `-verbose` both enable DEBUG-level
-file logging. Herald does not write logs to the terminal because that would
-corrupt the TUI.
+setup, and `./bin/herald` when launching that checkout against real accounts.
+`-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not
+write logs to the terminal because that would corrupt the TUI.
 
 ## Example config
 

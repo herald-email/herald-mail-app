@@ -45,7 +45,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Cache hygiene invalidation for legacy/incomplete rows with no server UID
 - [x] Config-specific SQLite cache paths persisted in YAML so separate account configs do not share one working-directory database
 - [x] IMAP IDLE (real push; currently polling only)
-- [x] Timeline grouped cleanup replaces the retired Cleanup tab for sender/domain browse workflows
+- [x] Timeline grouped cleanup replaces the retired top-level cleanup browse surface for sender/domain workflows
 - [x] Hide Future Mail sender rule (`h` key; auto-moves future emails to a local folder)
 - [x] Custom classification prompts (user-defined categories + data extraction)
 - [x] Classification actions (notify, command, webhook, move, archive, delete)
@@ -105,16 +105,17 @@ A native desktop client (macOS-first via SwiftUI; cross-platform alternative via
 
 The TUI uses a title-row tab strip beside the `Herald` title, a collapsible folder sidebar on the left, and a main content area whose layout changes per top-level view.
 
-- [x] Mouse navigation supports top tabs, sidebars, Timeline/Contacts rows, and preview wheel scrolling while preserving keyboard parity
+- [x] Mouse navigation supports top tabs, sidebars, Timeline/Contacts/Calendar rows, and preview wheel scrolling while preserving keyboard parity
 - [x] Keyboard layouts with physical-key reporting prefer layout-correct printable characters for Latin/ASCII shortcuts, while Cyrillic and direct Japanese kana physical fallback aliases remain available when terminals do not report `BaseCode`
 - [x] Default keyboard profile uses calmer GUI-mail-style preferred shortcuts while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
 - [x] Delete shortcuts use a safe/fast split: `Delete` asks for confirmation, while `Shift+Delete` deletes immediately in browse contexts; `d`/`D` and Backspace variants remain legacy aliases
 
 ### Tabs (top-level navigation)
-Keyboard (`1`-`2` as the primary visible shortcuts, with `F1`-`F2` supported as legacy function aliases and `F3` as a temporary Contacts alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
+Keyboard (`1`-`3` as the primary visible shortcuts, with `F1`-`F2` supported as function aliases, `F3` as a temporary Contacts alias, and `F4` as a Calendar alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
 
 - [x] `1` — Timeline: chronological email list with body preview split
 - [x] `2` — Contacts: contact book with list+detail panels, keyword and semantic search, LLM enrichment
+- [x] `3` — Calendar: source-backed schedule workspace with rail, schedule views, search, detail, RSVP, and provider-backed create/edit/delete flows
 - [x] `F3` — Contacts legacy alias while existing muscle memory sunsets
 
 ### Timeline View
@@ -799,14 +800,14 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### First-run wizard
 - [x] Detected on startup when the config file is missing or empty / whitespace-only
-- [x] Herald-styled setup shell with recommended, supported, and experimental account messaging and the same minimum-size guard used by the main TUI
+- [x] Herald-styled setup shell with recommended, supported, and fallback account messaging and the same minimum-size guard used by the main TUI
 - [x] Step 1 — Account Type chooser remains first: Gmail OAuth, Standard IMAP, Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook are visible before provider details
 - [x] Step 2 — Provider express paths: Gmail OAuth opens a compact Google account step with optional email identity, Mail enabled, and Google Calendar enabled by default; credential providers keep editable host/port fields where relevant
 - [x] Connection gate: Google OAuth verifies selected Google access through one browser flow; credential-based providers use generic `Verify access` copy while retaining protocol-aware validation internally
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth is available by default as a browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials to run OAuth
 - [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations using the Gmail API `gmail.modify` OAuth scope
-- [x] `Settings > Accounts` and first-run setup validate required read/send access before saving or applying account changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
+- [x] `Settings > Accounts` and first-run setup validate selected mail/calendar provider access before saving or applying account changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates Gmail API read/send capability before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
 - [x] Step 3 — Enter or customize: after account validation, first-run shows a compact Advanced settings review with AI off/deferred, cache set to message bodies without attachments, keyboard Default, theme Inherited/Default, and empty signature, then offers `Enter Herald` with `Customize setup`
@@ -834,7 +835,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] `Settings > Accounts` can disconnect configured accounts/sources and purge their local cache without deleting provider-side mail or calendars
 - [ ] Account reorder remains planned after add/remove/account detail management
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
-- [x] `Settings > Accounts` saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
+- [x] `Settings > Accounts` saves validate selected mail/calendar provider access before replacing the active config/backend/source graph; failed validation leaves the previous account active and shows a compact error modal
 - [x] Passwords always hidden; "reveal" button toggles visibility
 
 ---

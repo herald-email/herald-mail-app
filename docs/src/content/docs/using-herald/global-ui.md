@@ -20,7 +20,7 @@ Herald is keyboard-first, but it is not keyboard-only. You can click tabs and ro
 | Folder sidebar | IMAP folder tree with unread and total counts. | Visible mainly on Timeline when the terminal is wide enough. |
 | Calendar rail | Mini month, calendar source groups, colored swatches, enabled state, counts, and filter scope. | Visible on Calendar when the terminal is wide enough. |
 | Main panels | The active view content. | Timeline can split into list/preview layouts; Contacts uses list/detail panels. |
-| Chat panel | Right-side AI chat input and transcript. | Opens with `c` when AI is configured and the terminal is wide enough. |
+| Chat panel | Right-side AI chat input and transcript. | Opens with `g` when AI is configured and the terminal is wide enough; `c` remains a legacy alias outside Timeline text and Compose contexts. |
 | Status bar | Folder breadcrumb, AI chip, search/grouping state, deletion progress, sync countdown, demo/dry-run/log flags. | Confirmation prompts temporarily replace normal status. |
 | Key hints | The currently valid keys for the focused tab, panel, or overlay. | Hints wrap to at most two lines. |
 | Compact overlays | Scrollable or form-based modals opened with `?`, `S`, Settings Sync & Cleanup launchers, or rule preview actions. | They stay centered over the current screen at supported sizes; at very small sizes Herald shows the minimum-size guard. |

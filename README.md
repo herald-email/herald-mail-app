@@ -99,7 +99,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 
 | Feature                                                                                   | Status |
 | ----------------------------------------------------------------------------------------- | ------ |
-| macOS Homebrew install + demo-first onboarding                                           | ✅     |
+| macOS Homebrew install + demo-first, source-aware onboarding                              | ✅     |
 | Standard IMAP + Gmail IMAP App Password setup                                             | ✅     |
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook                                | ✅     |
 | Gmail OAuth onboarding through the Gmail API mail source                                  | ✅     |
@@ -132,7 +132,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 ### Prerequisites
 
 - Demo mode requires no mailbox, calendar account, Ollama, or API key.
-- Real account setup needs a mail account and SMTP settings or a supported OAuth path when you are ready to leave demo mode.
+- Real account setup needs a supported OAuth path or mail/calendar provider credentials such as IMAP/SMTP, CalDAV, or app-password details when you are ready to leave demo mode.
 - No AI runtime is required for the core app. Configure Ollama only if you want local AI features, or opt into an external provider explicitly.
 - Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. Common OSC 8-capable terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for current compatibility. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe text placeholders or local `open image` links when available.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.

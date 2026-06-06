@@ -18,9 +18,9 @@ If your terminal does not support inline graphics, Herald falls back to safe pla
 
 ## Does Herald support multiple accounts?
 
-Not in a single Herald session yet. Today, each running Herald instance uses one config file, one IMAP/SMTP account, and its own cache path.
+Yes. Current Herald configs can use `sources[]` entries for multiple mail and calendar sources, and Settings > Accounts can list configured accounts, add mail accounts, add calendar-only sources, and pair supported mail providers with calendars.
 
-You can work around this by running multiple Herald instances with different configs:
+You can still run separate Herald instances with different configs when you want hard separation between mailboxes:
 
 ```sh
 herald -config ~/.herald/personal.yaml

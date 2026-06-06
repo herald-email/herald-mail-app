@@ -3,7 +3,7 @@ title: Settings
 description: Edit Herald account, server, AI, sync, cleanup, keyboard, theme, and OAuth settings from the TUI.
 ---
 
-Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
+Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
 
 ## Overview
 
@@ -15,6 +15,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | --- | --- |
 | Settings menu | `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
 | Accounts | Configured mail and calendar sources, `Add account`, `Add calendar only`, provider credentials, OAuth, IMAP, SMTP, CalDAV, and disconnect actions. |
+| Calendar | Week start, visible calendar selections, and calendar-specific preferences. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
@@ -123,7 +124,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 3. Confirm you are using Homebrew/a release binary with OAuth defaults, a source build made with `.herald-dev.env` or exported Google OAuth variables, or a shell that has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported. See [Local OAuth Builds](/development/local-oauth-builds/) for source-build options.
 4. In the OAuth wait overlay, press `enter` to open the browser.
 5. Complete provider consent.
-6. Wait for Herald to validate IMAP and SMTP. First-run setup then continues to optional preferences; in-app account settings save token data and return to the app after validation succeeds.
+6. Wait for Herald to validate the selected mail and calendar access. First-run setup then continues to optional preferences; in-app account settings save token data and return to the app after validation succeeds.
 
 ## States
 
@@ -134,10 +135,10 @@ Theme settings stay local-first while separating quick selection from deeper edi
 | Category mode | Settings shows only the selected category's fields plus save/cancel controls. `Esc` returns to the menu first; the next menu-level `Esc` exits. |
 | Overlay mode | Settings appears over the current screen at supported sizes; at `80x24` it fits inside the viewport, and at `50x15` the standard minimum-size guard appears instead of a clipped form. |
 | First-run mode | Account details are validated before optional preference steps, and wizard completion is required before the main mailbox opens. |
-| Account validation | Account settings are held in memory while Herald checks IMAP/SMTP or calendar-source access before saving or applying them. |
+| Account validation | Account settings are held in memory while Herald checks the selected mail and calendar provider access before saving or applying them. |
 | OAuth waiting | Herald shows authorization URL state, waits for callback, and lets `Esc`/`q` cancel without saving settings. |
 | OAuth cancelled or timed out | Herald shows a clear error, keeps previous settings active, and does not write token data. |
-| OAuth saved | Token data is written to config only after OAuth, IMAP, SMTP validation, and final setup save succeed. |
+| OAuth saved | Token data is written to config only after OAuth, selected provider validation, and final setup save succeed. |
 | AI model changed | Herald may reset embeddings so stale vectors do not mix with a new embedding model. |
 | Offline cache reclaim pending | Herald shows the current policy, before/after byte estimate, and note that preview text, headers, and attachment metadata stay cached before it accepts `y` to proceed. |
 | Offline cache reclaimed | Herald reports rows pruned, bytes removed, and whether SQLite compaction completed. |
