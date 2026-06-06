@@ -55,7 +55,7 @@ The memory layer should be built from small, understandable objects with clear e
 
 - [x] `Memory` stores the claim, kind, confidence, freshness, source refs, and optional Obsidian target.
 - [x] `Memory` exposes inspectable details: generated summary, normalized source quote/snippet, source count, extraction prompt version, confidence, last updated time, and stale/revalidated state.
-- [ ] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, and evidence refs.
+- [x] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, memory IDs, and evidence refs.
 - [x] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
 - [ ] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
 - [ ] `Evidence` can point to email messages, sent replies, notes, calendar events, attachments, and research URLs without copying full private content.
@@ -170,6 +170,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] **M0: Product examples, defaults, and test fixtures** - create realistic demo scenarios plus default memory profiles, prompt templates, and update-rule examples for job-search threads, conflicting timelines, open loops, callbacks, and sent-reply resolution.
 - [x] **M1: Local email memories MVP** - extract last contact, last user reply, open questions, commitments, deadlines, people, company, topic, evidence, prompt version, confidence, and stale state from cached Inbox plus Sent messages.
 - [x] **M2: Memory-aware chat tools** - add read-only Gollem tools for contact history, company tracks, related replies, open loops, and reply-prep context.
+- [x] Track lifecycle assembly derives active, waiting, stale, resolved, backlog, and done track views from immutable source-backed memories.
 - [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
@@ -209,7 +210,7 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 
 - [x] Update `engineering/testplans/TUI_TESTPLAN.md` with memory chat, Compose Radar, Contacts dossier, and Obsidian sync cases before implementation.
 - [x] Unit-test memory extraction on synthetic inbound and sent messages.
-- [ ] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
+- [x] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
 - [ ] Unit-test evidence validation, deletion propagation, and stale-memory behavior.
 - [x] Unit-test Obsidian Markdown generation with frontmatter and generated-section preservation.
 - [x] App-level tests prove Compose Radar retrieval does not mutate draft content without user action.

@@ -287,6 +287,49 @@ func TestBuildPersonDossierFromSourceBackedMemories(t *testing.T) {
 	}
 }
 
+func TestBuildTracksFromMemoriesDerivesLifecycleStatuses(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UpdateRules.StaleAfterDays = 30
+	now := testTime()
+	memories := []Memory{
+		lifecycleMemory("Active proposal", KindTrackStatus, StatusActive, now.Add(-2*24*time.Hour), ""),
+		lifecycleMemory("Waiting for recruiter answer", KindOpenQuestion, StatusWaiting, now.Add(-3*24*time.Hour), ""),
+		lifecycleMemory("Old interview loop", KindTrackStatus, StatusActive, now.Add(-60*24*time.Hour), ""),
+		lifecycleMemory("Resolved take-home", KindTrackStatus, StatusResolved, now.Add(-4*24*time.Hour), ""),
+		lifecycleMemory("Backlog company", KindTrackStatus, StatusActive, now.Add(-5*24*time.Hour), "Job search/backlog/Backlog Co/Memory.md"),
+		lifecycleMemory("Done company", KindTrackStatus, StatusActive, now.Add(-90*24*time.Hour), "Job search/done/Done Co/Memory.md"),
+	}
+
+	tracks := BuildTracksFromMemories(memories, settings, now)
+	byTopic := tracksByTopic(tracks)
+
+	for topic, want := range map[string]string{
+		"Active proposal":              StatusActive,
+		"Waiting for recruiter answer": StatusWaiting,
+		"Old interview loop":           StatusStale,
+		"Resolved take-home":           StatusResolved,
+		"Backlog company":              StatusBacklog,
+		"Done company":                 StatusDone,
+	} {
+		track := byTopic[topic]
+		if track.ID == "" {
+			t.Fatalf("missing track for %q in %#v", topic, tracks)
+		}
+		if track.Status != want {
+			t.Fatalf("track %q status = %q, want %q", topic, track.Status, want)
+		}
+		if len(track.Claims) == 0 || len(track.MemoryIDs) == 0 || len(track.Evidence) == 0 {
+			t.Fatalf("track %q lost claims, memory IDs, or evidence: %#v", topic, track)
+		}
+	}
+	if len(byTopic["Waiting for recruiter answer"].OpenLoops) == 0 {
+		t.Fatalf("waiting track missing open loop: %#v", byTopic["Waiting for recruiter answer"])
+	}
+	if byTopic["Done company"].Status != StatusDone {
+		t.Fatalf("done track should remain done instead of becoming stale: %#v", byTopic["Done company"])
+	}
+}
+
 func TestObsidianPreviewPreservesUserSectionsAndCanHideYAML(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Obsidian.YAMLHeaders = false
@@ -339,6 +382,25 @@ func testMemoryWithKind(claim, kind string, confidence float64) Memory {
 			Snippet:    claim,
 		}},
 	}, testTime())
+}
+
+func lifecycleMemory(topic, kind, status string, activity time.Time, target string) Memory {
+	memory := testMemoryWithKind(topic+" claim", kind, 0.90)
+	memory.Topic = topic
+	memory.Summary = topic + " summary"
+	memory.Status = status
+	memory.LastActivityAt = activity
+	memory.ObsidianTarget = target
+	memory.Evidence[0].Date = activity
+	return PrepareMemoryForAppend(memory, activity)
+}
+
+func tracksByTopic(tracks []Track) map[string]Track {
+	out := make(map[string]Track, len(tracks))
+	for _, track := range tracks {
+		out[track.Topic] = track
+	}
+	return out
 }
 
 func hasMemoryKind(memories []Memory, kind string) bool {

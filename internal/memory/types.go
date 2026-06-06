@@ -27,6 +27,8 @@ const (
 	StatusWaiting       = "waiting"
 	StatusResolved      = "resolved"
 	StatusStale         = "stale"
+	StatusBacklog       = "backlog"
+	StatusDone          = "done"
 	StatusConflict      = "conflict"
 	StatusSourceMissing = "source_missing"
 
@@ -101,6 +103,7 @@ type Track struct {
 	Domain         string     `json:"domain,omitempty" yaml:"domain,omitempty"`
 	Status         string     `json:"status" yaml:"status"`
 	OpenLoops      []string   `json:"open_loops,omitempty" yaml:"open_loops,omitempty"`
+	Claims         []string   `json:"claims,omitempty" yaml:"claims,omitempty"`
 	Commitments    []string   `json:"commitments,omitempty" yaml:"commitments,omitempty"`
 	LastActivityAt time.Time  `json:"last_activity_at,omitempty" yaml:"last_activity_at,omitempty"`
 	MemoryIDs      []string   `json:"memory_ids,omitempty" yaml:"memory_ids,omitempty"`

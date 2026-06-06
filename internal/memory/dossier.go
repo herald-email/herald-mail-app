@@ -124,70 +124,18 @@ func dossierMemoriesByKind(memories []Memory, limit int, kinds ...string) []Memo
 }
 
 func dossierTracks(memories []Memory, limit int) []Track {
-	tracksByKey := make(map[string]*Track)
-	order := make([]string, 0)
-	for _, memory := range memories {
-		if !dossierTrackMemory(memory) {
+	tracks := BuildTracksFromMemories(memories, Settings{}, time.Time{})
+	out := make([]Track, 0, len(tracks))
+	for _, track := range tracks {
+		if track.Status == StatusResolved || track.Status == StatusDone || track.Status == StatusSourceMissing {
 			continue
 		}
-		key := strings.Join([]string{
-			normalizeComparable(memory.Topic),
-			normalizeComparable(memory.Company),
-			normalizeComparable(memory.Domain),
-		}, "|")
-		if key == "||" {
-			key = memory.ID
-		}
-		track := tracksByKey[key]
-		if track == nil {
-			track = &Track{
-				ID:             "track_" + strings.TrimPrefix(firstNonEmpty(memory.ID, DeterministicID(memory)), "mem_"),
-				Topic:          firstNonEmpty(memory.Topic, memory.Company, memory.Domain, "Relationship"),
-				People:         append([]string(nil), memory.People...),
-				Company:        memory.Company,
-				Domain:         memory.Domain,
-				Status:         firstNonEmpty(memory.Status, StatusActive),
-				LastActivityAt: memory.LastActivityAt,
-			}
-			tracksByKey[key] = track
-			order = append(order, key)
-		}
-		track.MemoryIDs = CompactStrings(append(track.MemoryIDs, memory.ID))
-		track.Evidence = append(track.Evidence, memory.Evidence...)
-		if memory.LastActivityAt.After(track.LastActivityAt) || track.LastActivityAt.IsZero() {
-			track.LastActivityAt = memory.LastActivityAt
-			track.Status = firstNonEmpty(memory.Status, track.Status)
-		}
-		switch memory.Kind {
-		case KindOpenQuestion, KindDeadline:
-			track.OpenLoops = CompactStrings(append(track.OpenLoops, memorySummary(memory)))
-		case KindCommitment:
-			track.Commitments = CompactStrings(append(track.Commitments, memorySummary(memory)))
-		}
-	}
-	out := make([]Track, 0, len(order))
-	for _, key := range order {
-		track := tracksByKey[key]
-		track.People = CompactStrings(track.People)
-		track.Evidence = compactTrackEvidence(track.Evidence)
-		out = append(out, *track)
+		out = append(out, track)
 		if limit > 0 && len(out) >= limit {
 			break
 		}
 	}
 	return out
-}
-
-func dossierTrackMemory(memory Memory) bool {
-	if memory.Status == StatusResolved || memory.Status == StatusSourceMissing {
-		return false
-	}
-	switch memory.Kind {
-	case KindTrackStatus, KindOpenQuestion, KindDeadline, KindCommitment:
-		return true
-	default:
-		return memory.Status == StatusActive || memory.Status == StatusWaiting || memory.Status == StatusStale
-	}
 }
 
 func dossierVaultLinks(memories []Memory, limit int) []string {

@@ -173,6 +173,7 @@ Herald Memories is a local-first relationship memory layer behind the backend an
 - [x] `LocalBackend` exposes read-only memory search and reply-prep methods that refresh once from cached Inbox and Sent rows, skip existing immutable records, and fail quiet when memory setup is unavailable.
 - [x] `DemoBackend` serves deterministic job-search memory fixtures without writing to the user's memory directory.
 - [x] `internal/agent` adds read-only Gollem tools for `search_memories`, `get_contact_history`, `get_company_tracks`, `get_open_loops`, and `get_reply_memory_context`.
+- [x] `internal/memory` derives read-only track lifecycle views from immutable memory records, grouping by topic/company/domain and preserving claims, commitments, open loops, memory IDs, latest activity, and source evidence for active, waiting, stale, resolved, backlog, and done states.
 - [x] Compose Radar renders the reply-prep nudges inside Compose without mutating draft fields, sending mail, changing attachments, or bypassing the existing Compose AI review path.
 - [x] Compose Radar schedules debounced refreshes when reply recipient, subject, or draft body context changes and ignores stale debounce/result messages.
 - [x] Contacts detail renders a read-only Herald Memories person dossier assembled from immutable memory records, including relationship summary, active tracks, open loops, vault links, and compact evidence labels.

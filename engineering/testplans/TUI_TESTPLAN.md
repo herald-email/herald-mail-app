@@ -1251,6 +1251,21 @@ Check these states during every applicable lane:
 - Recent email navigation and inline preview still work after the dossier appears.
 - Contacts without matching memories keep the existing detail layout without a noisy empty dossier block.
 
+### TC-18H — Herald Memories track lifecycle assembly
+
+**Lane:** G
+**Sizes:** code-focused
+
+**Steps:**
+1. Build deterministic memory records for active, waiting, stale, resolved, backlog, and done job/work threads.
+2. Run the focused memory lifecycle tests.
+3. Confirm generated track views remain read-only and do not append or rewrite memory records.
+
+**Expect:**
+- Tracks group memories by topic plus company/domain and preserve people, claims, commitments, open loops, memory IDs, latest activity, and compact source evidence.
+- Waiting tracks prefer unresolved open loops, stale tracks are derived from stale records or configured age, and backlog/done tracks can be inferred from configured Obsidian job-search paths.
+- Resolved, backlog, and done tracks remain available for dossiers and daily diffs instead of disappearing.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A
