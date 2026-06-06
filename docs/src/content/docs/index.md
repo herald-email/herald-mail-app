@@ -77,4 +77,4 @@ npm install
 npm run dev
 ```
 
-Use `npm run build` to verify the docs compile.
+From the repository root, run `make docs-copy-drift` before publishing docs copy. It catches retired setup and tab-navigation wording while preserving explicit release archive exceptions. Then use `npm run build` from `docs/` to verify the docs compile.

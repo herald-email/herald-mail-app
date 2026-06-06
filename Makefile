@@ -25,7 +25,7 @@ endif
 endif
 GO_LDFLAGS := -s -w $(VERSION_LDFLAGS) $(GOOGLE_OAUTH_LDFLAGS) $(EXTRA_LDFLAGS)
 
-.PHONY: build build-ssh build-mcp build-release-local docs-media run clean test deps fmt vet install-hooks
+.PHONY: build build-ssh build-mcp build-release-local docs-media docs-copy-drift run clean test deps fmt vet install-hooks
 
 # Build the application
 build:
@@ -57,6 +57,10 @@ build-release-local:
 # Regenerate documentation screenshots and demo GIFs.
 docs-media: build build-mcp
 	demos/generate-doc-media.sh
+
+# Check authored docs for stale product-copy drift.
+docs-copy-drift:
+	scripts/check-docs-copy-drift.sh
 
 # Run the application
 run:
