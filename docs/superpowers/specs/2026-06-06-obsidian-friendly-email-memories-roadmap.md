@@ -67,7 +67,7 @@ Herald Memories should appear where context changes user behavior: chat, Compose
 - [x] Chat gains memory-aware read-only tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [x] Compose gains Compose Radar, a compact panel that shows at most three relevant nudges while writing.
 - [x] Contacts gains read-only person dossiers with relationship summary, recent messages, active tracks, open loops, linked notes, and source evidence.
-- [ ] Job-search company dossiers mirror the Obsidian `Job search/{active,backlog,done}/{Company}/` structure.
+- [x] Job-search company dossiers mirror the Obsidian `Job search/{active,backlog,done}/{Company}/` structure.
 - [ ] Daily briefing output becomes a diff over changed tracks, stale loops, and newly resolved questions.
 
 ## Compose Radar
@@ -177,6 +177,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] Compose Radar nudges carry typed conflict/callback/open-loop/relationship/research/draft-risk states plus action-state and dismissal-scope metadata.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
+- [x] Company dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section for company/domain-backed tracks, open loops, vault links, and evidence.
 - [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [ ] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
 - [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.

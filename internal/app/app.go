@@ -453,10 +453,11 @@ type ContactDetailLoadedMsg struct{ Emails []*models.EmailData }
 
 // ContactMemoryDossierMsg carries a read-only Herald Memories dossier for a contact.
 type ContactMemoryDossierMsg struct {
-	Token   int
-	Email   string
-	Dossier memory.Dossier
-	Err     error
+	Token          int
+	Email          string
+	Dossier        memory.Dossier
+	CompanyDossier memory.Dossier
+	Err            error
 }
 
 type AppleContactsImportedMsg struct{ Count int }
@@ -880,10 +881,11 @@ type Model struct {
 	contactDetailIdx    int
 	contactFocusPanel   int // 0 = list, 1 = detail
 
-	contactMemoryDossier memory.Dossier
-	contactMemoryLoading bool
-	contactMemoryError   string
-	contactMemoryToken   int
+	contactMemoryDossier        memory.Dossier
+	contactCompanyMemoryDossier memory.Dossier
+	contactMemoryLoading        bool
+	contactMemoryError          string
+	contactMemoryToken          int
 
 	// Inline email preview within Contacts tab
 	contactPreviewEmail   *models.EmailData
@@ -3404,6 +3406,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.contactMemoryLoading = false
 		m.contactMemoryDossier = msg.Dossier
+		m.contactCompanyMemoryDossier = msg.CompanyDossier
 		m.contactMemoryError = ""
 		if msg.Err != nil {
 			m.contactMemoryError = msg.Err.Error()

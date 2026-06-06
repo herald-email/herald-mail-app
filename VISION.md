@@ -275,7 +275,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [ ] Add Compose Radar actions for open source, dismiss, insert, resolve, save memory, and research person/company
 - [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence
-- [ ] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
+- [x] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research placeholders
 - [x] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior
 - [ ] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and `Scheduled Task Artifacts/` folders while preserving user edits
 - [ ] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default

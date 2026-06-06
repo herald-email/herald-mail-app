@@ -440,6 +440,45 @@ func TestBuildPersonDossierFromSourceBackedMemories(t *testing.T) {
 	}
 }
 
+func TestBuildCompanyDossierMirrorsJobSearchVaultTracks(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Thresholds.Dossier = 0.55
+	now := testTime()
+	active := lifecycleMemory("Cobalt Works interview", KindTrackStatus, StatusWaiting, now.Add(-1*time.Hour), "Job search/active/Cobalt Works/Memory.md")
+	active.Company = "Cobalt Works"
+	active.Domain = "cobalt-works.example"
+	backlog := lifecycleMemory("Cobalt Works recruiter intro", KindTrackStatus, StatusActive, now.Add(-5*24*time.Hour), "Job search/backlog/Cobalt Works/Memory.md")
+	backlog.Company = "Cobalt Works"
+	backlog.Domain = "cobalt-works.example"
+	done := lifecycleMemory("Cobalt Works 2025 loop", KindTrackStatus, StatusDone, now.Add(-90*24*time.Hour), "Job search/done/Cobalt Works/Memory.md")
+	done.Company = "Cobalt Works"
+	done.Domain = "cobalt-works.example"
+	lowConfidence := lifecycleMemory("Cobalt Works rumor", KindRelationshipContext, StatusActive, now, "Job search/active/Cobalt Works/Rumor.md")
+	lowConfidence.Company = "Cobalt Works"
+	lowConfidence.Confidence = 0.20
+
+	dossier := BuildCompanyDossier("Cobalt Works", []Memory{lowConfidence, done, backlog, active}, settings, now)
+
+	if dossier.Kind != DossierKindCompany || dossier.Subject != "Cobalt Works" {
+		t.Fatalf("dossier identity = %#v", dossier)
+	}
+	if len(dossier.ActiveTracks) == 0 || dossier.ActiveTracks[0].Company != "Cobalt Works" {
+		t.Fatalf("active tracks = %#v", dossier.ActiveTracks)
+	}
+	for _, want := range []string{
+		"Job search/active/Cobalt Works/Memory.md",
+		"Job search/backlog/Cobalt Works/Memory.md",
+		"Job search/done/Cobalt Works/Memory.md",
+	} {
+		if !containsString(dossier.VaultLinks, want) {
+			t.Fatalf("vault links = %#v, missing %q", dossier.VaultLinks, want)
+		}
+	}
+	if strings.Contains(dossier.RelationshipSummary, "rumor") {
+		t.Fatalf("low-confidence memory leaked into company dossier: %#v", dossier)
+	}
+}
+
 func TestBuildTracksFromMemoriesDerivesLifecycleStatuses(t *testing.T) {
 	settings := DefaultSettings()
 	settings.UpdateRules.StaleAfterDays = 30

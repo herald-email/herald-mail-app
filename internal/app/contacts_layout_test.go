@@ -310,6 +310,9 @@ func TestContactsDetailShowsHeraldMemoryDossier(t *testing.T) {
 		"Open loop: Mina asked whether",
 		"Job search/active/Cobalt Works/Memory.md",
 		"demo-example-thread-with-cobalt-works@demo.local",
+		"Company: Cobalt Works",
+		"Company track: Example: Thread with Cobalt Works",
+		"Company vault: Job search/active/Cobalt Works/Memory.md",
 	} {
 		if !strings.Contains(stripped, want) {
 			t.Fatalf("expected %q in contact dossier render:\n%s", want, stripped)

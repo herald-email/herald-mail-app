@@ -1248,6 +1248,7 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The contact detail includes a bounded `Herald Memories` section with relationship summary, active track status, open loop, vault link, and source evidence labels when matching memories exist.
+- When the contact has company or domain-backed job-search memories, the detail also includes a bounded company dossier line with company track status, Obsidian job-search path, and source evidence.
 - The dossier is read-only and does not write memory records, Obsidian notes, drafts, calendar events, or contact enrichment fields.
 - Recent email navigation and inline preview still work after the dossier appears.
 - Contacts without matching memories keep the existing detail layout without a noisy empty dossier block.

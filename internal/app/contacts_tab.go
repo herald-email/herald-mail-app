@@ -51,6 +51,7 @@ type contactMemorySource interface {
 func (m *Model) resetContactMemoryDossier() {
 	m.contactMemoryToken++
 	m.contactMemoryDossier = memory.Dossier{}
+	m.contactCompanyMemoryDossier = memory.Dossier{}
 	m.contactMemoryLoading = false
 	m.contactMemoryError = ""
 }
@@ -73,16 +74,25 @@ func (m *Model) loadContactMemoryDossier(contact models.ContactData) tea.Cmd {
 	m.contactMemoryToken++
 	token := m.contactMemoryToken
 	m.contactMemoryDossier = memory.Dossier{}
+	m.contactCompanyMemoryDossier = memory.Dossier{}
 	m.contactMemoryLoading = true
 	m.contactMemoryError = ""
 	return func() tea.Msg {
-		memories, err := searchContactDossierMemories(context.Background(), source, contact, settings)
-		dossier := memory.BuildPersonDossier(contactDossierSubject(contact), memories, settings, time.Now())
+		ctx := context.Background()
+		memories, err := searchContactDossierMemories(ctx, source, contact, settings)
+		companyMemories, companyErr := searchContactCompanyDossierMemories(ctx, source, contact, settings)
+		if err == nil {
+			err = companyErr
+		}
+		now := time.Now()
+		dossier := memory.BuildPersonDossier(contactDossierSubject(contact), memories, settings, now)
+		companyDossier := memory.BuildCompanyDossier(contactCompanyDossierSubject(contact), companyMemories, settings, now)
 		return ContactMemoryDossierMsg{
-			Token:   token,
-			Email:   contact.Email,
-			Dossier: dossier,
-			Err:     err,
+			Token:          token,
+			Email:          contact.Email,
+			Dossier:        dossier,
+			CompanyDossier: companyDossier,
+			Err:            err,
 		}
 	}
 }
@@ -145,8 +155,62 @@ func searchContactDossierMemories(ctx context.Context, source contactMemorySourc
 	return out, nil
 }
 
+func searchContactCompanyDossierMemories(ctx context.Context, source contactMemorySource, contact models.ContactData, settings memory.Settings) ([]memory.Memory, error) {
+	minConfidence := settings.Thresholds.Dossier
+	limit := 12
+	queries := []memory.Query{}
+	if strings.TrimSpace(contact.Company) != "" {
+		queries = append(queries, memory.Query{
+			Company:       contact.Company,
+			MinConfidence: minConfidence,
+			Limit:         limit,
+		})
+	}
+	if domain := contactEmailDomain(contact.Email); domain != "" {
+		queries = append(queries, memory.Query{
+			Domain:        domain,
+			MinConfidence: minConfidence,
+			Limit:         limit,
+		})
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]bool)
+	out := make([]memory.Memory, 0)
+	for _, query := range queries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		results, err := source.SearchMemories(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range results {
+			key := strings.TrimSpace(item.ID)
+			if key == "" {
+				key = memory.DeterministicID(item)
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, item)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func contactDossierSubject(contact models.ContactData) string {
 	return firstNonEmptyString(contact.DisplayName, contact.Email, contact.Company)
+}
+
+func contactCompanyDossierSubject(contact models.ContactData) string {
+	return firstNonEmptyString(contact.Company, contactEmailDomain(contact.Email))
 }
 
 func contactEmailDomain(email string) string {
@@ -738,11 +802,11 @@ func (m *Model) renderContactsTab(width, height int) string {
 func contactMemoryDossierMaxLines(contentH int) int {
 	switch {
 	case contentH >= 24:
-		return 6
+		return 10
 	case contentH >= 17:
-		return 4
+		return 5
 	case contentH >= 13:
-		return 2
+		return 3
 	default:
 		return 0
 	}
@@ -768,7 +832,8 @@ func (m *Model) contactMemoryDossierLines(width, maxLines int) []string {
 		}
 	}
 	dossier := m.contactMemoryDossier
-	if !contactMemoryDossierHasContent(dossier) {
+	companyDossier := m.contactCompanyMemoryDossier
+	if !contactMemoryDossierHasContent(dossier) && !contactMemoryDossierHasContent(companyDossier) {
 		return nil
 	}
 	lines := []string{boldStyle.Render(truncateVisual("Herald Memories", width))}
@@ -786,6 +851,20 @@ func (m *Model) contactMemoryDossierLines(width, maxLines int) []string {
 	}
 	if len(dossier.Evidence) > 0 {
 		lines = append(lines, dimStyle.Render(truncateVisual("  Evidence: "+nudgeEvidenceLabel(dossier.Evidence[0]), width)))
+	}
+	if contactMemoryDossierHasContent(companyDossier) {
+		if companyDossier.Subject != "" {
+			lines = append(lines, normalStyle.Render(truncateVisual("  Company: "+companyDossier.Subject, width)))
+		}
+		if len(companyDossier.ActiveTracks) > 0 {
+			lines = append(lines, dimStyle.Render(truncateVisual("  Company track: "+contactTrackLine(companyDossier.ActiveTracks[0]), width)))
+		}
+		if len(companyDossier.VaultLinks) > 0 {
+			lines = append(lines, dimStyle.Render(truncateVisual("  Company vault: "+companyDossier.VaultLinks[0], width)))
+		}
+		if len(companyDossier.Evidence) > 0 {
+			lines = append(lines, dimStyle.Render(truncateVisual("  Company evidence: "+nudgeEvidenceLabel(companyDossier.Evidence[0]), width)))
+		}
 	}
 	if len(lines) > maxLines {
 		return lines[:maxLines]

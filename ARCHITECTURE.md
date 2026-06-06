@@ -179,6 +179,7 @@ Herald Memories is a local-first relationship memory layer behind the backend an
 - [x] Compose Radar schedules debounced refreshes when reply recipient, subject, or draft body context changes and ignores stale debounce/result messages.
 - [x] Compose Radar nudges are typed read-only memory projections with source evidence, why-it-matters copy, action-state defaults, and configured dismissal-scope metadata; low-confidence and source-missing memories remain below the nudge layer.
 - [x] Contacts detail renders a read-only Herald Memories person dossier assembled from immutable memory records, including relationship summary, active tracks, open loops, vault links, and compact evidence labels.
+- [x] Contacts detail renders a read-only Herald Memories company dossier when a contact has company/domain-backed memory records, mirroring job-search active/backlog/done vault links through track lifecycle metadata.
 - [x] `Settings > Memories` reads aggregate memory counts from the immutable store as a bounded, read-only status check; unavailable stores never block editing configuration.
 - [x] Memory extraction snapshots reuse cached message body text, scoped thread headers, AI classifications, Contacts enrichment, and body/embedding-cache presence signals before fetching any additional message bodies.
 - [ ] Memory extraction does not yet ingest calendar events, Obsidian note bodies, or external research.
