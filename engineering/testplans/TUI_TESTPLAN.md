@@ -1212,15 +1212,21 @@ Check these states during every applicable lane:
 
 **Steps:**
 1. Launch with a config that omits `memories`.
-2. Open Settings and inspect the memory defaults when the section is available, or inspect the saved/effective config through a focused config test.
-3. Configure a temp vault path with existing People and Job search notes that include user-authored text outside Herald markers.
-4. Generate an Obsidian sync preview for memory records.
-5. Toggle frontmatter mode between minimal YAML and no visible YAML, then regenerate the preview.
+2. Open `Settings > Memories` and inspect the effective defaults.
+3. Change the memory directory, included folders, Obsidian vault path, frontmatter mode, YAML header toggle, link mode, tag mode, update cadence, and confidence thresholds, then save.
+4. Reopen `Settings > Memories` and confirm the saved values round-trip without losing unrelated settings.
+5. Inspect the prompt-template summary and confirm exposed prompts are named/versioned while privacy and no-mutation guardrails are not editable in the form.
+6. Configure a temp vault path with existing People and Job search notes that include user-authored text outside Herald markers.
+7. Generate an Obsidian sync preview for memory records.
+8. Toggle frontmatter mode between minimal YAML and no visible YAML, then regenerate the preview.
 
 **Expect:**
+- The Settings top-level menu includes `Memories`, and that category does not show unrelated account, AI, keyboard, theme, or signature fields.
+- `Settings > Memories` summarizes enabled state, immutable local store, current directory, vault path, source folders, prompt-template count, safe external research state, and the configured memory thresholds.
 - Effective memory storage defaults to `~/.herald/memories` and remains append-only.
 - Defaults target `People/`, `Job search/`, `Scheduled Task Artifacts/`, and a configurable memory inbox with minimal Obsidian frontmatter plus conservative links/tags.
 - The Obsidian-friendly toggle can hide YAML headers while preserving generated-section metadata inside Herald markers.
+- Saving from `Settings > Memories` persists only the `memories` config subtree and returns to the Settings menu.
 - Sync preview shows the destination path, generated section, frontmatter/link/tag mode, and source evidence before any write.
 - Applying a generated-section update preserves user-authored content outside stable Herald markers.
 

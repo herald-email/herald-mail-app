@@ -8,6 +8,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 )
 
 func renderSettingsRawViewForTest(t *testing.T, s *Settings, width, height int) string {
@@ -37,6 +38,20 @@ func renderSettingsViewContainingForTest(t *testing.T, s *Settings, width, heigh
 	}
 	t.Fatalf("settings view containing %q not reached, last view:\n%s", target, last)
 	return ""
+}
+
+func assertSettingsPanelCanReachText(t *testing.T, s *Settings, want string) *Settings {
+	t.Helper()
+	for i := 0; i < 36; i++ {
+		rendered := renderSettingsViewForTest(t, s, 120, 42)
+		normalized := strings.Join(strings.Fields(rendered), " ")
+		if strings.Contains(normalized, want) {
+			return s
+		}
+		s = updateSettingsForTest(t, s, huh.NextField())
+	}
+	t.Fatalf("expected settings form to reach %q while tabbing through fields", want)
+	return s
 }
 
 func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
@@ -412,7 +427,7 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 
 	rendered := renderSettingsViewForTest(t, s, 80, 24)
 
-	for _, want := range []string{"Accounts", "AI", "Sync & Cleanup", "Keyboard", "Theme Selection", "Theme Editor", "Signature"} {
+	for _, want := range []string{"Accounts", "AI", "Sync & Cleanup", "Memories", "Keyboard", "Theme Selection", "Theme Editor", "Signature"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected settings menu to include %q, got:\n%s", want, rendered)
 		}
@@ -420,6 +435,49 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 	for _, notWant := range []string{"Account Type", "Email address", "AI Provider", "Keyboard Profile", "Email Signature"} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("expected settings menu not to show category form field %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Memories = memory.DefaultSettings()
+	cfg.Memories.Directory = memory.DefaultDirectory
+	cfg.Memories.Obsidian.VaultPath = "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Life organizer"
+
+	s := NewSettings(SettingsModePanel, cfg)
+	s = openSettingsPanelCategoryForTest(t, s, "Memories")
+
+	rendered := renderSettingsViewForTest(t, s, 120, 42)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	for _, want := range []string{
+		"Herald Memories",
+		"Memory directory",
+		memory.DefaultDirectory,
+		"Source folders",
+		"Obsidian-friendly output",
+		"Show YAML headers",
+		"6 exposed templates",
+	} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected Memories settings to include %q, got:\n%s", want, rendered)
+		}
+	}
+	for _, want := range []string{
+		"Frontmatter mode",
+		"Link mode",
+		"Tag mode",
+		"Update cadence",
+		"Low-confidence memories",
+		"Chat retrieval threshold",
+		"Prompt templates",
+		"People destination",
+	} {
+		s = assertSettingsPanelCanReachText(t, s, want)
+	}
+	for _, notWant := range []string{"Email address", "AI Provider", "Keyboard Profile", "Email Signature"} {
+		if strings.Contains(normalized, notWant) {
+			t.Fatalf("expected Memories settings to skip unrelated field %q, got:\n%s", notWant, rendered)
 		}
 	}
 }

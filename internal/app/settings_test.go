@@ -11,6 +11,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -2113,6 +2114,105 @@ func TestSettingsPanelSyncCleanupUsesCompactOfflineCachePolicyLabels(t *testing.
 	}
 }
 
+func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
+	existing := &config.Config{}
+	existing.Compose.Signature.Text = "-- \nExisting"
+	existing.AI.Provider = agent.ProviderOpenAI
+	existing.OpenAI.Model = "gpt-5-mini"
+	existing.Memories = memory.DefaultSettings()
+	existing.Memories.Prompts = []memory.PromptTemplate{
+		{Name: "custom_memory_extraction", Version: "custom-v1", Template: "keep me"},
+	}
+	existing.Memories.Research.ExternalOptIn = true
+
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionMemories
+	s.memoryEnabled = false
+	s.memoryDirectory = "/tmp/herald-memories"
+	s.memorySourceFolders = "INBOX, Sent, Jobs, Sent"
+	s.memoryObsidianEnabled = true
+	s.memoryVaultPath = "/tmp/Life organizer"
+	s.memoryFrontmatterMode = memory.FrontmatterNone
+	s.memoryYAMLHeaders = false
+	s.memoryLinkMode = memory.LinkModeMarkdown
+	s.memoryTagMode = memory.TagModeWorkflow
+	s.memoryUpdateCadence = "daily_briefing"
+	s.memoryLowConfidenceDisposition = memory.LowConfidenceReview
+	s.memoryChatThresholdStr = "0.42"
+	s.memoryDossierThresholdStr = "0.57"
+	s.memoryObsidianThresholdStr = "0.73"
+	s.memoryComposeThresholdStr = "0.81"
+	s.memoryMatchThresholdStr = "0.88"
+	s.memoryStaleAfterDaysStr = "60"
+	s.memoryPeopleDestination = "People/Work"
+	s.memoryCompaniesDestination = "Job search/active"
+	s.memoryJobSearchDestination = "Job search/interviews"
+	s.memoryProjectsDestination = "Projects/Herald"
+	s.memoryThreadsDestination = "Threads"
+	s.memoryResearchDestination = "Research/People"
+	s.memoryDailyDestination = "Scheduled Task Artifacts/Memory"
+	s.memoryInboxDestination = "Memory Inbox"
+
+	cfg := s.buildConfig()
+	if cfg.Compose.Signature.Text != "-- \nExisting" {
+		t.Fatalf("signature changed while saving memories: %q", cfg.Compose.Signature.Text)
+	}
+	if cfg.AI.Provider != agent.ProviderOpenAI || cfg.OpenAI.Model != "gpt-5-mini" {
+		t.Fatalf("AI settings changed while saving memories: provider=%q model=%q", cfg.AI.Provider, cfg.OpenAI.Model)
+	}
+
+	mem := cfg.Memories
+	if mem.Enabled {
+		t.Fatal("memories enabled = true, want false")
+	}
+	if !mem.Immutable {
+		t.Fatal("memories should keep immutable storage contract")
+	}
+	if mem.Directory != "/tmp/herald-memories" {
+		t.Fatalf("directory=%q", mem.Directory)
+	}
+	if got := strings.Join(mem.Sources.Folders, ","); got != "INBOX,Sent,Jobs" {
+		t.Fatalf("source folders=%q", got)
+	}
+	if !mem.Obsidian.Enabled || mem.Obsidian.VaultPath != "/tmp/Life organizer" {
+		t.Fatalf("obsidian settings=%#v", mem.Obsidian)
+	}
+	if mem.Obsidian.FrontmatterMode != memory.FrontmatterNone || mem.Obsidian.YAMLHeaders {
+		t.Fatalf("frontmatter settings=%#v", mem.Obsidian)
+	}
+	if mem.Obsidian.LinkMode != memory.LinkModeMarkdown || mem.Obsidian.TagMode != memory.TagModeWorkflow {
+		t.Fatalf("obsidian link/tag=%#v", mem.Obsidian)
+	}
+	if mem.UpdateRules.Cadence != "daily_briefing" ||
+		mem.UpdateRules.LowConfidenceDisposition != memory.LowConfidenceReview ||
+		mem.UpdateRules.StaleAfterDays != 60 ||
+		mem.UpdateRules.MatchThreshold != 0.88 {
+		t.Fatalf("update rules=%#v", mem.UpdateRules)
+	}
+	if mem.Thresholds.ChatRetrieval != 0.42 ||
+		mem.Thresholds.Dossier != 0.57 ||
+		mem.Thresholds.ObsidianWrite != 0.73 ||
+		mem.Thresholds.ComposeRadar != 0.81 ||
+		mem.Thresholds.Match != 0.88 {
+		t.Fatalf("thresholds=%#v", mem.Thresholds)
+	}
+	if mem.Destinations.People != "People/Work" ||
+		mem.Destinations.Companies != "Job search/active" ||
+		mem.Destinations.JobSearch != "Job search/interviews" ||
+		mem.Destinations.Projects != "Projects/Herald" ||
+		mem.Destinations.Research != "Research/People" ||
+		mem.Destinations.DailyBriefing != "Scheduled Task Artifacts/Memory" ||
+		mem.Destinations.Inbox != "Memory Inbox" {
+		t.Fatalf("destinations=%#v", mem.Destinations)
+	}
+	if len(mem.Prompts) != 1 || mem.Prompts[0].Name != "custom_memory_extraction" {
+		t.Fatalf("prompt templates not preserved: %#v", mem.Prompts)
+	}
+	if !mem.Research.ExternalOptIn {
+		t.Fatal("research opt-in should be preserved, not reset by settings save")
+	}
+}
+
 func TestSettingsPanelCalendarWeekStartOption(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
 	menu := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
@@ -2492,11 +2592,12 @@ func openSettingsPanelCategoryForTest(t *testing.T, s *Settings, label string) *
 		"Accounts":        0,
 		"AI":              1,
 		"Sync & Cleanup":  2,
-		"Calendar":        3,
-		"Keyboard":        4,
-		"Theme Selection": 5,
-		"Theme Editor":    6,
-		"Signature":       7,
+		"Memories":        3,
+		"Calendar":        4,
+		"Keyboard":        5,
+		"Theme Selection": 6,
+		"Theme Editor":    7,
+		"Signature":       8,
 	}
 	downCount, ok := steps[label]
 	if !ok {

@@ -109,8 +109,10 @@ The feature should be tweakable without making users design a memory system from
 - [x] Let users set update cadence: manual only, on compose open, after sync, daily briefing, or background when idle.
 - [x] Let users set confidence thresholds for chat retrieval, dossier inclusion, Obsidian writes, and Compose Radar nudges separately.
 - [x] Let users choose whether low-confidence memories are hidden, shown only in chat, or saved to a review queue.
-- [ ] Ship with safe defaults: local extraction enabled only for cached mail, Obsidian writes previewed before first save, external research opt-in, and private body text never sent to web research by default.
-- [ ] Provide a Settings screen section that summarizes memory status, configured vault path, last run, pending writes, failed writes, and stale/review-needed memories.
+- [x] Surface the shipped safe defaults in Settings: immutable local records, configured cached-mail sources, external research opt-in, and private body text never sent to web research by default.
+- [x] Provide a Settings screen section that summarizes memory status, configured vault path, prompt template count, update rules, and confidence thresholds.
+- [ ] Add stale/review-needed memory counts to Settings once store telemetry is available to the panel.
+- [ ] Extend the Settings screen section with last run, pending writes, failed writes, and approved write-flow state once Obsidian writes exist.
 
 ## Prompt Surface
 
