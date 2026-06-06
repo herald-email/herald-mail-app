@@ -55,6 +55,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Legacy chat tool calling exists today, but is scheduled for Gollem replacement rather than expansion
 - [x] Legacy filtered timeline from chat results exists today, but is scheduled for typed Gollem Timeline intents
 - [ ] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents
+- [ ] Obsidian-friendly email memories with source-backed tracks, contact/company/thread dossiers, Compose Radar nudges, and Markdown vault sync
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
 - [x] Compose AI assistant baseline (rewrite, tone/length adjustments, subject suggestion, accept into draft)
@@ -245,6 +246,23 @@ Gollem is the chat-agent framework. Ollama/local, Anthropic, Kimi, and Fireworks
 - [ ] Config selects one Gollem chat provider and model for UI chat without changing the existing embedding provider contract
 - [ ] Ollama remains supported for local chat through Gollem only; the old direct Ollama chat loop is removed when replacement is ready
 - [ ] Provider-specific quirks are isolated in the Gollem provider factory, not scattered through Bubble Tea update logic
+
+---
+
+## Obsidian-Friendly Memories
+
+Herald Memories turns important email history into local, source-backed tracks that can be used in chat, Contacts, and Compose without locking the user into Herald. The product wedge is "Obsidian-friendly email memories": machine-readable enough for retrieval, human-readable enough to live as editable Markdown in an existing vault.
+
+- [ ] Add a dedicated roadmap spec for Obsidian-friendly email memories at `docs/superpowers/specs/2026-06-06-obsidian-friendly-email-memories-roadmap.md`
+- [ ] Treat the Gollem chat-agent replacement as the required foundation before adding memory-aware chat tools
+- [ ] Build local email memories from cached Inbox, Sent, thread headers, contacts, body snippets, classifications, and semantic embeddings
+- [ ] Store every memory with evidence pointers to email message refs, folders, dates, snippets, note paths, or research URLs
+- [ ] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
+- [ ] Add Compose Radar as a compact compose context panel with at most three source-backed nudges for conflicts, callbacks, open loops, relationship context, and research updates
+- [ ] Add Contact and Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
+- [ ] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and `Scheduled Task Artifacts/` folders while preserving user edits
+- [ ] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default
+- [ ] Add a daily memory briefing that updates track status, open questions, and stale threads as a diff rather than a full inbox recap
 
 ---
 
