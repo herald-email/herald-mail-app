@@ -9,7 +9,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Herald Docs',
-      description: 'User and integration documentation for Herald, the terminal email client for power users.',
+      description: 'User and integration documentation for Herald, the GUI-like terminal mail and calendar workspace.',
       favicon: '/favicon.ico',
       customCss: ['/src/styles/theme-gallery.css'],
       head: [
@@ -61,6 +61,7 @@ export default defineConfig({
             { label: 'Overview', slug: '' },
             { label: "What's New", slug: 'whats-new-in-v0-6' },
             { label: 'Install and run', slug: 'getting-started' },
+            { label: 'First 5 Minutes', slug: 'first-5-minutes' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
             { label: 'Run without email', slug: 'demo-mode' },

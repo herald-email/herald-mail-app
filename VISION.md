@@ -129,6 +129,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Horizontal reading movement: right arrow / `]` opens preview, then moves into it; left arrow moves preview focus back to the list, then folds threads or closes preview and focuses folders
 - [x] Intentional unread affordance: `U` marks the current Timeline message unread after inspection
 - [x] Full-screen preview (`z`)
+- [x] macOS preview printing (`p`) opens the standard print dialog for the loaded email in Original Visual mode or a themed Rendered Markdown mode while preserving remote-image privacy
 - [x] Actions: delete, archive, reply, forward
 - [x] Preview load telemetry shows the last body load duration/source and logs timing for Timeline previews
 - [x] Offline cache policy controls whether previews keep lightweight body text only, non-attachment body data, or full attachment data for offline work
@@ -670,7 +671,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] AI Summary view opens from Calendar Event Detail and summarizes the selected event, cached related mail, and cached nearby events without provider fetches or mutations
 - [x] Local/cache-backed Event Edit form with explicit save/cancel state and timezone preview
 - [x] Provider-backed Event Edit saves write through Google Calendar/CalDAV before updating cache, and provider failures keep unsaved edits visible
-- [x] Provider-backed Event Create opens from Calendar on a writable collection, falls back from a read-only browse/filter selection to an available writable calendar, and writes through Google Calendar/CalDAV before adding cached rows
+- [x] Provider-backed Event Create opens from Calendar on a writable collection, lets the Calendar field choose any writable configured calendar with current-account calendars listed first, falls back from read-only browse/filter selections, and writes through Google Calendar/CalDAV before adding cached rows
 - [x] Provider-backed Event Delete requires confirmation, writes through Google Calendar/CalDAV before invalidating cached rows, and is available from Calendar browse/detail/edit contexts
 - [x] Event Create/Edit supports different start and end timezones for travel events and renders HTML/Markdown notes in the live preview
 - [x] Event Create/Edit uses cursor-aware modal fields plus keyboard pickers for timezones, attendees, recurrence, reminders, and date selection without stealing text-entry shortcuts

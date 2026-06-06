@@ -128,6 +128,7 @@ Open `http://localhost:7681`. The `-W` flag is required for keyboard input.
 
 ## What to read next
 
+- [First 5 Minutes](/first-5-minutes/) for a short demo-mode loop before the full manual.
 - [Demo Mode](/demo-mode/) if you want to explore without credentials.
 - [Provider Setup](/provider-setup/) for provider presets and authentication choices.
 - [Timeline](/using-herald/timeline/) for the default inbox workflow.

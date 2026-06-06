@@ -122,6 +122,7 @@ type calendarEditPickerMode string
 
 const (
 	calendarEditPickerNone       calendarEditPickerMode = ""
+	calendarEditPickerCalendar   calendarEditPickerMode = "calendar"
 	calendarEditPickerTimezone   calendarEditPickerMode = "timezone"
 	calendarEditPickerRecurrence calendarEditPickerMode = "recurrence"
 	calendarEditPickerReminder   calendarEditPickerMode = "reminder"
@@ -1683,6 +1684,17 @@ func (m *Model) openCalendarEditPickerForField() bool {
 	m.calendarEdit.PickerQuery = ""
 	m.calendarEdit.PickerCursor = 0
 	switch m.calendarEdit.Field {
+	case calendarEditFieldCalendar:
+		if !m.calendarEdit.Create {
+			return false
+		}
+		choices := m.calendarEditCalendarCollections()
+		if len(choices) == 0 {
+			return false
+		}
+		m.calendarEdit.PickerMode = calendarEditPickerCalendar
+		m.calendarEdit.PickerCursor = m.calendarEditCalendarPickerCursor(choices)
+		return true
 	case calendarEditFieldStartTimeZone, calendarEditFieldEndTimeZone, calendarEditFieldAlternateTimeZones:
 		m.calendarEdit.PickerMode = calendarEditPickerTimezone
 		return true
@@ -1765,6 +1777,8 @@ func (m *Model) moveCalendarEditPickerCursor(delta int) {
 func (m *Model) applyCalendarEditPickerSelection() {
 	field := m.calendarEdit.PickerField
 	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerCalendar:
+		m.applyCalendarEditCalendarSelection()
 	case calendarEditPickerTimezone:
 		options := m.calendarEditPickerOptions()
 		if len(options) == 0 {
@@ -1809,6 +1823,8 @@ func (m *Model) applyCalendarEditPickerSelection() {
 
 func (m *Model) calendarEditPickerOptions() []string {
 	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerCalendar:
+		return calendarEditCalendarPickerLabels(m.calendarEditCalendarCollections())
 	case calendarEditPickerTimezone:
 		return calendarEditFilterTimezones(m.calendarEdit.PickerQuery, calendarEditTimeZoneOptions(m.calendarEdit))
 	case calendarEditPickerRecurrence:
@@ -2062,12 +2078,107 @@ func (m *Model) setCalendarEditDraftFieldValue(field calendarEditField, value st
 
 func (m *Model) calendarEditCalendarLabel() string {
 	ref := m.calendarEdit.Draft.Ref.WithDefaults()
-	for _, collection := range m.calendarCollections {
+	collections := m.calendarCollections
+	if len(collections) == 0 {
+		collections = m.mergeCalendarCollections(nil)
+	}
+	accountLabels := calendarInvitationAccountLabels(collections)
+	for _, collection := range collections {
 		if calendarCollectionRefKey(collection.Ref) == calendarEventRefCollectionKey(ref) {
-			return calendarCollectionDisplayName(collection)
+			return calendarInvitationCollectionChoiceLabel(collection, accountLabels[calendarInvitationCollectionScopeKey(collection)])
 		}
 	}
 	return calendarHumanLabel(firstNonEmptyString(ref.CalendarID, string(ref.AccountID), string(ref.SourceID), "calendar"))
+}
+
+func (m *Model) calendarEditCalendarCollections() []models.CalendarCollection {
+	collections := m.calendarCollections
+	if len(collections) == 0 {
+		collections = m.mergeCalendarCollections(nil)
+	}
+	writable := writableCalendarCollectionsForMutation(collections)
+	if len(writable) <= 1 {
+		return writable
+	}
+	preferredAccountID := m.calendarEditPreferredCalendarAccountID(writable)
+	current := make([]models.CalendarCollection, 0, len(writable))
+	other := make([]models.CalendarCollection, 0, len(writable))
+	for _, collection := range writable {
+		accountID := models.NormalizeAccountID(collection.Ref.AccountID)
+		if preferredAccountID != "" && accountID == preferredAccountID {
+			current = append(current, collection)
+			continue
+		}
+		other = append(other, collection)
+	}
+	return append(current, other...)
+}
+
+func (m *Model) calendarEditPreferredCalendarAccountID(collections []models.CalendarCollection) models.AccountID {
+	if strings.TrimSpace(string(m.activeAccountID)) != "" {
+		active := models.NormalizeAccountID(m.activeAccountID)
+		if active != models.AccountID("all") {
+			return active
+		}
+	}
+	ref := m.calendarEdit.Draft.Ref.WithDefaults()
+	if ref.AccountID != "" && ref.AccountID != models.AccountID("all") {
+		return ref.AccountID
+	}
+	if len(collections) > 0 {
+		return models.NormalizeAccountID(collections[0].Ref.AccountID)
+	}
+	return ""
+}
+
+func (m *Model) calendarEditCalendarPickerCursor(collections []models.CalendarCollection) int {
+	ref := m.calendarEdit.Draft.Ref.WithDefaults()
+	key := calendarEventRefCollectionKey(ref)
+	for i, collection := range collections {
+		if calendarCollectionRefKey(collection.Ref) == key {
+			return i
+		}
+	}
+	return 0
+}
+
+func calendarEditCalendarPickerLabels(collections []models.CalendarCollection) []string {
+	accountLabels := calendarInvitationAccountLabels(collections)
+	labels := make([]string, 0, len(collections))
+	for _, collection := range collections {
+		labels = append(labels, calendarInvitationCollectionChoiceLabel(collection, accountLabels[calendarInvitationCollectionScopeKey(collection)]))
+	}
+	return labels
+}
+
+func (m *Model) applyCalendarEditCalendarSelection() {
+	collections := m.calendarEditCalendarCollections()
+	if len(collections) == 0 {
+		return
+	}
+	if m.calendarEdit.PickerCursor < 0 {
+		m.calendarEdit.PickerCursor = 0
+	}
+	if m.calendarEdit.PickerCursor >= len(collections) {
+		m.calendarEdit.PickerCursor = len(collections) - 1
+	}
+	collection := collections[m.calendarEdit.PickerCursor]
+	ref := m.calendarEdit.Draft.Ref
+	ref.SourceID = models.NormalizeSourceID(collection.Ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(collection.Ref.AccountID)
+	ref.CalendarID = collection.Ref.CollectionID
+	ref.InstanceID = ""
+	ref.ETag = ""
+	ref.LocalID = ""
+	if strings.TrimSpace(ref.EventID) == "" {
+		ref.EventID = firstNonEmptyString(m.calendarEdit.Ref.EventID, m.calendarEdit.Base.Ref.EventID, fmt.Sprintf("herald-%d", time.Now().UnixNano()))
+	}
+	m.calendarEdit.Draft.Ref = ref
+	m.calendarEdit.Ref = ref
+	m.calendarEdit.Dirty = true
+	m.calendarEdit.Error = ""
+	accountLabels := calendarInvitationAccountLabels(collections)
+	m.calendarStatus = "Creating event in " + calendarInvitationCollectionChoiceLabel(collection, accountLabels[calendarInvitationCollectionScopeKey(collection)])
 }
 
 func splitCalendarEditCSV(value string) []string {
@@ -3240,6 +3351,12 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 	var fields []string
 	fields = append(fields, m.renderCalendarEditSectionTitle("Event", leftW))
 	fields = append(fields, m.renderCalendarEditField("Calendar", calendarEditFieldCalendar, m.calendarEditCalendarLabel(), leftW))
+	if state.PickerMode == calendarEditPickerCalendar {
+		if picker := m.renderCalendarEditPicker(leftW); picker != "" {
+			fields = append(fields, "")
+			fields = append(fields, picker)
+		}
+	}
 	fields = append(fields, m.renderCalendarEditField("Title", calendarEditFieldTitle, state.Draft.Title, leftW))
 	fields = append(fields, m.renderCalendarEditField("Location", calendarEditFieldLocation, state.Draft.Location, leftW))
 	fields = append(fields, "")
@@ -3259,7 +3376,7 @@ func (m *Model) renderCalendarEventEdit(width, height int) string {
 		fields = append(fields, "")
 		fields = append(fields, suggestions)
 	}
-	if picker := m.renderCalendarEditPicker(leftW); picker != "" {
+	if picker := m.renderCalendarEditPicker(leftW); picker != "" && state.PickerMode != calendarEditPickerCalendar {
 		fields = append(fields, "")
 		fields = append(fields, picker)
 	}
@@ -3311,6 +3428,10 @@ func (m *Model) calendarEditFocusedFieldHint() string {
 		return ""
 	}
 	switch m.calendarEdit.Field {
+	case calendarEditFieldCalendar:
+		if m.calendarEdit.Create {
+			return "enter: choose calendar"
+		}
 	case calendarEditFieldStart, calendarEditFieldEnd:
 		return "enter: open mini calendar"
 	case calendarEditFieldStartTimeZone, calendarEditFieldEndTimeZone, calendarEditFieldAlternateTimeZones:
@@ -3326,6 +3447,7 @@ func (m *Model) calendarEditFocusedFieldHint() string {
 	default:
 		return ""
 	}
+	return ""
 }
 
 func (m *Model) renderCalendarEditPreview(width int) string {
@@ -3711,6 +3833,8 @@ func (m *Model) renderCalendarEditPicker(width int) string {
 	options := m.calendarEditPickerOptions()
 	title := "Picker"
 	switch m.calendarEdit.PickerMode {
+	case calendarEditPickerCalendar:
+		title = "Calendar picker"
 	case calendarEditPickerTimezone:
 		title = "Timezone picker"
 	case calendarEditPickerRecurrence:
