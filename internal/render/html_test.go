@@ -39,6 +39,32 @@ func TestHTMLToMarkdownKeepsAnchorWrappedRemoteImages(t *testing.T) {
 	}
 }
 
+func TestHTMLToMarkdownWithCIDImagesKeepsCIDImagesForPrintPreview(t *testing.T) {
+	got := HTMLToMarkdownWithCIDImages(`<p>Before</p><img alt="Inline chart" src="cid:chart-001@example.test"><p>After</p>`)
+	for _, want := range []string{"Before", "![Inline chart](cid:chart-001@example.test)", "After"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected CID image markdown %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestHTMLToMarkdownWithCIDImagesPreservesImageSizingHintsForPrint(t *testing.T) {
+	got := HTMLToMarkdownWithCIDImages(`<p>
+		<img alt="App icon" src="https://example.test/icon.png" width="96" height="48" style="max-width:96px;height:auto">
+	</p>`)
+	for _, want := range []string{
+		`<img src="https://example.test/icon.png"`,
+		`alt="App icon"`,
+		`width="96"`,
+		`height="48"`,
+		`style="max-width:96px;height:auto"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected printable image sizing fragment %q, got:\n%s", want, got)
+		}
+	}
+}
+
 func TestHTMLToMarkdownKeepsPunctuationTightAfterInlineFormatting(t *testing.T) {
 	got := HTMLToMarkdown(`<p><strong>Budget alert</strong> for <em>Project Orion</em>.</p>`)
 	if want := "**Budget alert** for *Project Orion*."; got != want {

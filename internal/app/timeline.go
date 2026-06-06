@@ -1386,6 +1386,7 @@ func (m *Model) clearTimelineFullScreen() {
 func (m *Model) clearTimelinePreview() {
 	m.clearPreviewSelection()
 	m.revokeImagePreviews()
+	m.previewPrintPending = false
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
@@ -2561,11 +2562,17 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				if m.timelineRemoteRevealAvailable() {
 					revealHint = m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images")
 				}
-				return joinHintSegments(append(
+				previewSegments := append(
 					[]string{"tab: back to results", m.commandHint("timeline", CommandComposeNew, "compose")},
-					append(m.timelineMessageActionHintSegments(),
-						m.movementHint("timeline", "scroll"), revealHint, "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...,
-				)...), true
+					append(m.timelineMessageActionHintSegments(), m.movementHint("timeline", "scroll"), revealHint)...,
+				)
+				if m.timelinePrintablePreviewLoaded() {
+					if printHint := m.previewPrintHint("timeline"); printHint != "" {
+						previewSegments = append(previewSegments, printHint)
+					}
+				}
+				previewSegments = append(previewSegments, "z: full-screen", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to results", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+				return joinHintSegments(previewSegments...), true
 			}
 			return joinHintSegments(append(
 				[]string{fmt.Sprintf("%d results", len(m.timeline.threadRowMap)), m.commandHint("timeline", CommandComposeNew, "compose"), m.commandHint("timeline", CommandTimelineGroupCycle, "group")},
@@ -2632,11 +2639,24 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if m.timelineRemoteRevealAvailable() {
 			segments = append(segments, m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images"))
 		}
+		if m.timelinePrintAvailableFromTimeline() {
+			if printHint := m.previewPrintHint("timeline"); printHint != "" {
+				segments = append(segments, printHint)
+			}
+		}
 		segments = append(segments, "z: full-screen", "drag: select", "v: cursor", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timeline.selectedEmail != nil {
-		return joinHintSegments(append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, append(m.timelineMessageActionHintSegments(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "U: unread", m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))...)...), true
+		segments := append([]string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}, m.timelineMessageActionHintSegments()...)
+		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), "V: range", "U: unread")
+		if m.timelinePrintAvailableFromTimeline() {
+			if printHint := m.previewPrintHint("timeline"); printHint != "" {
+				segments = append(segments, printHint)
+			}
+		}
+		segments = append(segments, m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		return joinHintSegments(segments...), true
 	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
@@ -2878,7 +2898,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					}
 					openInviteAfterLoad = false
 				}
-				if len(cmds) > 0 {
+				if len(cmds) > 0 && !m.previewPrintPending {
 					m.timeline.bodyWrappedLines = nil
 					m.clearTimelinePreviewDocumentCache()
 					return m, tea.Batch(cmds...), true
@@ -2897,6 +2917,20 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.calendarInvitation.OpenAfterLoad = false
 			if cmd := m.openCalendarInvitationPrompt(); cmd != nil {
 				cmds = append(cmds, cmd)
+			}
+		}
+		if m.previewPrintPending {
+			m.previewPrintPending = false
+			if msg.Err != nil || m.timeline.body == nil {
+				m.statusMessage = "Print unavailable: preview failed to load"
+			} else {
+				model, cmd, _ := m.openPreviewPrintChooser(previewPrintSurfaceTimeline)
+				if next, ok := model.(*Model); ok {
+					m = next
+				}
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
 			}
 		}
 		m.timeline.bodyWrappedLines = nil
@@ -3415,6 +3449,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			return m, m.revealTimelineRemoteImages(), true
 		}
 		return m, nil, true
+	case "p":
+		if m.timeline.fullScreen || m.focusedPanel == panelPreview || m.focusedPanel == panelTimeline || m.timeline.selectedEmail != nil {
+			return m.openTimelinePrintChooserOrLoad()
+		}
+		return m, nil, false
 	case "s":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true

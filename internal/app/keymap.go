@@ -59,6 +59,7 @@ const (
 	CommandTimelineSortCycle  = "timeline.sort_cycle"
 
 	CommandPreviewRevealRemoteImages = "preview.reveal_remote_images"
+	CommandPreviewPrint              = "preview.print"
 
 	CommandFieldInsert        = "field.insert"
 	CommandFieldAppend        = "field.append"
@@ -121,6 +122,7 @@ var commandCatalog = map[string]struct{}{
 	CommandTimelineGroupCycle:        {},
 	CommandTimelineSortCycle:         {},
 	CommandPreviewRevealRemoteImages: {},
+	CommandPreviewPrint:              {},
 
 	CommandFieldInsert:        {},
 	CommandFieldAppend:        {},
@@ -333,6 +335,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "G", CommandTimelineGroupCycle)
 	add("timeline", keyboardModeNormal, "O", CommandTimelineSortCycle)
 	add("timeline", keyboardModeNormal, "o", CommandPreviewRevealRemoteImages)
+	add("timeline", keyboardModeNormal, "p", CommandPreviewPrint)
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
 
 	for _, scope := range []string{"cleanup", "contacts", "calendar"} {
@@ -346,6 +349,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 		add(scope, keyboardModeNormal, "right", CommandPaneRight)
 		add(scope, keyboardModeNormal, "/", CommandHelpSearch)
 	}
+	add("contacts", keyboardModeNormal, "p", CommandPreviewPrint)
 	add("cleanup", keyboardModeNormal, "a", CommandMailArchiveCurrent)
 	add("cleanup", keyboardModeNormal, "e", CommandMailArchiveCurrent)
 	add("cleanup", keyboardModeNormal, "d", CommandMailDeleteConfirm)
@@ -461,6 +465,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "O"
 	case CommandPreviewRevealRemoteImages:
 		return remoteImageRevealCommandKey
+	case CommandPreviewPrint:
+		return "p"
 	case CommandLogsToggle:
 		return "L"
 	case CommandChatToggle:

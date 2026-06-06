@@ -142,8 +142,11 @@ type ThemeLogRoles struct {
 }
 
 type ThemeOverlayRoles struct {
-	CompactBorder ThemeStyle
-	DemoKeyBadge  ThemeStyle
+	CompactBorder  ThemeStyle
+	DemoKeyBadge   ThemeStyle
+	PrintKeyBadge  ThemeStyle
+	PrintToggleOn  ThemeStyle
+	PrintToggleOff ThemeStyle
 }
 
 type ThemeSetupRoles struct {
@@ -265,8 +268,11 @@ var inheritedTheme = Theme{
 		Debug: ThemeStyle{Foreground: lipgloss.Color("8")},
 	},
 	Overlay: ThemeOverlayRoles{
-		CompactBorder: ThemeStyle{Foreground: lipgloss.Color("62")},
-		DemoKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+		CompactBorder:  ThemeStyle{Foreground: lipgloss.Color("62")},
+		DemoKeyBadge:   ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+		PrintKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("220"), Bold: true},
+		PrintToggleOn:  ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("28"), Bold: true},
+		PrintToggleOff: ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("166"), Bold: true},
 	},
 	Setup: ThemeSetupRoles{
 		Title:        ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
@@ -367,8 +373,11 @@ var heraldDarkTheme = Theme{
 		Debug: ThemeStyle{Foreground: lipgloss.Color("241")},
 	},
 	Overlay: ThemeOverlayRoles{
-		CompactBorder: ThemeStyle{Foreground: lipgloss.Color("62")},
-		DemoKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+		CompactBorder:  ThemeStyle{Foreground: lipgloss.Color("62")},
+		DemoKeyBadge:   ThemeStyle{Foreground: lipgloss.Color("230"), Background: lipgloss.Color("238"), Bold: true},
+		PrintKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("220"), Bold: true},
+		PrintToggleOn:  ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("28"), Bold: true},
+		PrintToggleOff: ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("166"), Bold: true},
 	},
 	Setup: ThemeSetupRoles{
 		Title:        ThemeStyle{Foreground: lipgloss.Color("205"), Bold: true},
@@ -469,8 +478,11 @@ var heraldLightTheme = Theme{
 		Debug: ThemeStyle{Foreground: lipgloss.Color("246")},
 	},
 	Overlay: ThemeOverlayRoles{
-		CompactBorder: ThemeStyle{Foreground: lipgloss.Color("61")},
-		DemoKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("229"), Bold: true},
+		CompactBorder:  ThemeStyle{Foreground: lipgloss.Color("61")},
+		DemoKeyBadge:   ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("229"), Bold: true},
+		PrintKeyBadge:  ThemeStyle{Foreground: lipgloss.Color("235"), Background: lipgloss.Color("220"), Bold: true},
+		PrintToggleOn:  ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("28"), Bold: true},
+		PrintToggleOff: ThemeStyle{Foreground: lipgloss.Color("255"), Background: lipgloss.Color("166"), Bold: true},
 	},
 	Setup: ThemeSetupRoles{
 		Title:        ThemeStyle{Foreground: lipgloss.Color("25"), Bold: true},
@@ -624,8 +636,11 @@ func terminalTheme(p terminalThemePalette) Theme {
 			Debug: themeStyle(p.Dim, ""),
 		},
 		Overlay: ThemeOverlayRoles{
-			CompactBorder: themeStyle(p.FocusedBorder, ""),
-			DemoKeyBadge:  themeStyle(p.Text, p.SurfaceStrong, "bold"),
+			CompactBorder:  themeStyle(p.FocusedBorder, ""),
+			DemoKeyBadge:   themeStyle(p.Text, p.SurfaceStrong, "bold"),
+			PrintKeyBadge:  themeStyle(p.SurfaceStrong, p.Warning, "bold"),
+			PrintToggleOn:  themeStyle(p.SelectionFG, p.Success, "bold"),
+			PrintToggleOff: themeStyle(p.SelectionFG, p.Warning, "bold"),
 		},
 		Setup: ThemeSetupRoles{
 			Title:        themeStyle(p.Accent, "", "bold"),
@@ -1112,6 +1127,9 @@ func themeRoleMap(t *Theme) map[string]*ThemeStyle {
 		"logs.debug":                 &t.Logs.Debug,
 		"overlay.compact_border":     &t.Overlay.CompactBorder,
 		"overlay.demo_key_badge":     &t.Overlay.DemoKeyBadge,
+		"overlay.print_key_badge":    &t.Overlay.PrintKeyBadge,
+		"overlay.print_toggle_on":    &t.Overlay.PrintToggleOn,
+		"overlay.print_toggle_off":   &t.Overlay.PrintToggleOff,
 		"setup.title":                &t.Setup.Title,
 		"setup.spinner":              &t.Setup.Spinner,
 		"setup.border":               &t.Setup.Border,

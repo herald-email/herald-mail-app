@@ -3,7 +3,7 @@
 > [!NOTE]
 > Herald v0.6.2-beta.1 is the current beta: Gmail OAuth now uses Herald's Gmail API mail source, Calendar supports provider-backed create/edit/delete/RSVP and invitation import, previews gained safer images plus richer copy, and demo media covers the new workflows.
 
-**Fast terminal email for power users.** AI classification, semantic search, bulk cleanup, quick replies, and an MCP server for AI agents — all from your terminal.
+**Email and calendar in your terminal, without turning setup into a project.** Herald gives you a GUI-like, terminal-native workspace with mouse-friendly controls, full keyboard flow, and context help when you press `?`. Try demo mode before connecting an inbox; keep AI optional and local-first when you want classification, semantic search, quick replies, or chat; and use MCP or SSH when your terminal workflow wants to reach further.
 
 ![Herald overview](assets/demo/overview.gif)
 

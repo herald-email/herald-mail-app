@@ -2,6 +2,8 @@ package render
 
 import (
 	"fmt"
+	htmlstd "html"
+	"strconv"
 	"strings"
 
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -23,10 +25,35 @@ func EmailBodyMarkdown(body *models.EmailBody) string {
 	return strings.TrimSpace(NormalizeEmailTextArtifacts(body.TextPlain))
 }
 
+func EmailBodyMarkdownWithCIDImages(body *models.EmailBody) string {
+	if body == nil {
+		return ""
+	}
+	if strings.TrimSpace(body.TextHTML) != "" {
+		if markdown := strings.TrimSpace(HTMLToMarkdownWithCIDImages(body.TextHTML)); markdown != "" {
+			return markdown
+		}
+	}
+	return strings.TrimSpace(NormalizeEmailTextArtifacts(body.TextPlain))
+}
+
 // HTMLToMarkdown converts an HTML string to Markdown suitable for Herald's
 // terminal email previews. It intentionally keeps remote images as Markdown
 // image links so the terminal renderer can expose readable, safe OSC 8 links.
 func HTMLToMarkdown(htmlStr string) string {
+	return htmlToMarkdown(htmlStr, htmlMarkdownOptions{})
+}
+
+func HTMLToMarkdownWithCIDImages(htmlStr string) string {
+	return htmlToMarkdown(htmlStr, htmlMarkdownOptions{keepCIDImages: true, preserveImageSizing: true})
+}
+
+type htmlMarkdownOptions struct {
+	keepCIDImages       bool
+	preserveImageSizing bool
+}
+
+func htmlToMarkdown(htmlStr string, opts htmlMarkdownOptions) string {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
 	if err != nil {
 		return html.UnescapeString(stripHTMLTags(htmlStr))
@@ -184,13 +211,19 @@ func HTMLToMarkdown(htmlStr string) string {
 					}
 				}
 				lowerSrc := strings.ToLower(src)
-				if strings.HasPrefix(lowerSrc, "http://") || strings.HasPrefix(lowerSrc, "https://") {
+				if strings.HasPrefix(lowerSrc, "http://") || strings.HasPrefix(lowerSrc, "https://") || (opts.keepCIDImages && strings.HasPrefix(lowerSrc, "cid:")) {
 					label := alt
 					if label == "" {
 						label = title
 					}
 					if label == "" {
 						label = "image"
+					}
+					if opts.preserveImageSizing {
+						if imageHTML, ok := printableMarkdownImageHTML(src, label, n.Attr); ok {
+							writeText(imageHTML)
+							return
+						}
 					}
 					writeText(fmt.Sprintf("![%s](%s)", escapeMarkdownLabel(label), src))
 				}
@@ -315,6 +348,148 @@ func HTMLToMarkdown(htmlStr string) string {
 		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
 	}
 	return strings.TrimSpace(NormalizeEmailTextArtifacts(result))
+}
+
+func printableMarkdownImageHTML(src, alt string, attrs []html.Attribute) (string, bool) {
+	width, height, style := imageSizingHints(attrs)
+	if width == "" && height == "" && style == "" {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteString(`<img src="`)
+	b.WriteString(htmlstd.EscapeString(src))
+	b.WriteString(`" alt="`)
+	b.WriteString(htmlstd.EscapeString(alt))
+	b.WriteString(`"`)
+	if width != "" {
+		b.WriteString(` width="`)
+		b.WriteString(width)
+		b.WriteString(`"`)
+	}
+	if height != "" {
+		b.WriteString(` height="`)
+		b.WriteString(height)
+		b.WriteString(`"`)
+	}
+	if style != "" {
+		b.WriteString(` style="`)
+		b.WriteString(htmlstd.EscapeString(style))
+		b.WriteString(`"`)
+	}
+	b.WriteString(`>`)
+	return b.String(), true
+}
+
+func imageSizingHints(attrs []html.Attribute) (string, string, string) {
+	var width, height, style string
+	for _, attr := range attrs {
+		key := strings.ToLower(strings.TrimSpace(attr.Key))
+		val := strings.TrimSpace(attr.Val)
+		switch key {
+		case "width":
+			if clean, ok := cleanHTMLImageDimension(val); ok {
+				width = clean
+			}
+		case "height":
+			if clean, ok := cleanHTMLImageDimension(val); ok {
+				height = clean
+			}
+		case "style":
+			style = cleanImageSizingStyle(val)
+		}
+	}
+	return width, height, style
+}
+
+func cleanImageSizingStyle(style string) string {
+	var out []string
+	for _, rawDecl := range strings.Split(style, ";") {
+		parts := strings.SplitN(rawDecl, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(parts[0]))
+		val := strings.TrimSpace(parts[1])
+		switch key {
+		case "width", "max-width", "max-height":
+			if clean, ok := cleanCSSImageDimension(val); ok {
+				out = append(out, key+":"+clean)
+			}
+		case "height":
+			if strings.EqualFold(strings.TrimSpace(stripCSSImportant(val)), "auto") {
+				out = append(out, "height:auto")
+				continue
+			}
+			if clean, ok := cleanCSSImageDimension(val); ok {
+				out = append(out, "height:"+clean)
+			}
+		}
+	}
+	return strings.Join(out, ";")
+}
+
+func cleanHTMLImageDimension(raw string) (string, bool) {
+	val := stripCSSImportant(raw)
+	if strings.HasSuffix(val, "%") {
+		n, ok := parseImageDimensionNumber(strings.TrimSuffix(val, "%"), 100)
+		if !ok {
+			return "", false
+		}
+		return formatDimensionNumber(n) + "%", true
+	}
+	val = strings.TrimSuffix(val, "px")
+	n, ok := parseImageDimensionNumber(val, 2400)
+	if !ok {
+		return "", false
+	}
+	return formatDimensionNumber(n), true
+}
+
+func cleanCSSImageDimension(raw string) (string, bool) {
+	val := stripCSSImportant(raw)
+	if strings.HasSuffix(val, "%") {
+		n, ok := parseImageDimensionNumber(strings.TrimSuffix(val, "%"), 100)
+		if !ok {
+			return "", false
+		}
+		return formatDimensionNumber(n) + "%", true
+	}
+	if strings.HasSuffix(val, "px") {
+		n, ok := parseImageDimensionNumber(strings.TrimSuffix(val, "px"), 2400)
+		if !ok {
+			return "", false
+		}
+		return formatDimensionNumber(n) + "px", true
+	}
+	n, ok := parseImageDimensionNumber(val, 2400)
+	if !ok {
+		return "", false
+	}
+	return formatDimensionNumber(n) + "px", true
+}
+
+func stripCSSImportant(raw string) string {
+	val := strings.ToLower(strings.TrimSpace(raw))
+	val = strings.ReplaceAll(val, "!important", "")
+	return strings.Join(strings.Fields(val), "")
+}
+
+func parseImageDimensionNumber(raw string, max float64) (float64, bool) {
+	if raw == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(raw, 64)
+	if err != nil || n <= 0 || n > max {
+		return 0, false
+	}
+	return n, true
+}
+
+func formatDimensionNumber(n float64) string {
+	s := strconv.FormatFloat(n, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	return s
 }
 
 func markdownTableCell(cell string) string {

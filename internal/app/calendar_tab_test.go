@@ -2998,6 +2998,7 @@ func TestCalendarEventEditShowsEnterPickerHintForPickerFields(t *testing.T) {
 		field calendarEditField
 		want  string
 	}{
+		{name: "calendar", field: calendarEditFieldCalendar, want: "enter: choose calendar"},
 		{name: "start date", field: calendarEditFieldStart, want: "enter: open mini calendar"},
 		{name: "start timezone", field: calendarEditFieldStartTimeZone, want: "enter: open timezone picker"},
 		{name: "display timezones", field: calendarEditFieldAlternateTimeZones, want: "enter: open timezone picker"},
@@ -3105,6 +3106,124 @@ func TestCalendarEventEditMiniCalendarUpdatesDateAndPreservesTime(t *testing.T) 
 	m = model.(*Model)
 	if got := m.calendarEdit.Draft.StartText; got != "2026-06-07 13:00" {
 		t.Fatalf("start text = %q, want date picker to move one week and preserve time", got)
+	}
+}
+
+func TestCalendarEventCreateCalendarPickerOrdersCurrentAccountAndSelectsCrossAccount(t *testing.T) {
+	collections := calendarCreatePickerCollectionsForTest()
+	b := &calendarAgendaStubBackend{available: true, collections: collections}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 42})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.activeSourceID = "work-mail"
+	m.activeAccountID = "work"
+	m.setCalendarCollections(collections)
+	pinCalendarFixtureNowForTest(m)
+
+	model, cmd := m.handleKeyMsg(keyRunes("n"))
+	m = model.(*Model)
+	if cmd != nil || !m.calendarEdit.Active || !m.calendarEdit.Create {
+		t.Fatalf("create setup cmd=%T edit=%#v", cmd, m.calendarEdit)
+	}
+	m.focusCalendarEditField(calendarEditFieldCalendar)
+	model, cmd = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("calendar picker open returned command %T, want local picker", cmd)
+	}
+	if got := m.calendarEdit.PickerMode; got != calendarEditPickerCalendar {
+		t.Fatalf("picker mode=%q, want calendar", got)
+	}
+	rendered := ansi.Strip(m.renderCalendarEventEdit(140, 42))
+	for _, forbidden := range []string{"Holidays in United States"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("calendar picker exposed read-only calendar %q:\n%s", forbidden, rendered)
+		}
+	}
+	workIdx := strings.Index(rendered, "Primary calendar (work@example.com)")
+	teamIdx := strings.Index(rendered, "Team (work@example.com)")
+	familyIdx := strings.Index(rendered, "Family (personal@example.com)")
+	if workIdx < 0 || teamIdx < 0 || familyIdx < 0 {
+		t.Fatalf("picker missing account-disambiguated calendar labels:\n%s", rendered)
+	}
+	if !(workIdx < familyIdx && teamIdx < familyIdx) {
+		t.Fatalf("current-account calendars should be listed before other accounts:\n%s", rendered)
+	}
+
+	for range []int{0, 1} {
+		model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+		m = model.(*Model)
+	}
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if m.calendarEdit.PickerMode != calendarEditPickerNone {
+		t.Fatalf("picker stayed open after selection: %q", m.calendarEdit.PickerMode)
+	}
+	if got := m.calendarEdit.Draft.Ref.CalendarID; got != "family" {
+		t.Fatalf("draft calendar=%q, want family", got)
+	}
+	if got := m.calendarEdit.Draft.Ref.AccountID; got != models.AccountID("personal") {
+		t.Fatalf("draft account=%q, want personal", got)
+	}
+	if got := m.calendarEdit.Draft.Ref.SourceID; got != models.SourceID("personal-calendar") {
+		t.Fatalf("draft source=%q, want personal-calendar", got)
+	}
+	if got := m.calendarEdit.Draft.Ref.LocalID; got != "" {
+		t.Fatalf("draft local id=%q, want cleared for selected calendar", got)
+	}
+
+	m.calendarEdit.Draft.Title = "Family planning block"
+	m.calendarEdit.Draft.StartText = "2026-05-31 13:00"
+	m.calendarEdit.Draft.EndText = "2026-05-31 13:30"
+	model, cmd = m.handleKeyMsg(keyCtrl('s'))
+	m = model.(*Model)
+	for _, msg := range calendarImmediateMessagesForTest(cmd) {
+		model, _ = m.Update(msg)
+		m = model.(*Model)
+	}
+	if len(b.createdEvents) != 1 {
+		t.Fatalf("createdEvents=%d, want 1", len(b.createdEvents))
+	}
+	createdRef := b.createdEvents[0].Ref.WithDefaults()
+	if createdRef.SourceID != "personal-calendar" || createdRef.AccountID != "personal" || createdRef.CalendarID != "family" {
+		t.Fatalf("created ref=%#v, want personal family calendar", createdRef)
+	}
+	if !strings.Contains(createdRef.LocalID, "personal-calendar:personal:family") {
+		t.Fatalf("created local id=%q, want selected calendar scope", createdRef.LocalID)
+	}
+}
+
+func TestCalendarEventEditCalendarFieldDoesNotOpenMovePicker(t *testing.T) {
+	rich := richCalendarEventForTest()
+	collections := calendarCreatePickerCollectionsForTest()
+	b := &calendarAgendaStubBackend{available: true, events: []models.CalendarEvent{rich}, collections: collections}
+	m := New(b, nil, "", nil, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(*Model)
+	m.loading = false
+	m.activeTab = tabCalendar
+	m.calendarAvailable = true
+	m.calendarEvents = b.events
+	m.calendarDetail = &rich
+	m.calendarDetailOpen = true
+	m.setCalendarCollections(collections)
+
+	model, _ := m.handleKeyMsg(keyRunes("e"))
+	m = model.(*Model)
+	m.focusCalendarEditField(calendarEditFieldCalendar)
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("edit calendar enter returned command %T, want no move picker", cmd)
+	}
+	if m.calendarEdit.PickerMode != calendarEditPickerNone {
+		t.Fatalf("edit calendar field opened picker mode %q, want none", m.calendarEdit.PickerMode)
+	}
+	if m.calendarEdit.Draft.Ref.CalendarID != rich.Ref.WithDefaults().CalendarID {
+		t.Fatalf("edit draft calendar changed to %q, want original %q", m.calendarEdit.Draft.Ref.CalendarID, rich.Ref.WithDefaults().CalendarID)
 	}
 }
 
@@ -3453,6 +3572,61 @@ func newCalendarCreateUXModelForTest(t *testing.T) (*Model, *calendarAgendaStubB
 		t.Fatalf("failed to open create editor: %#v", m.calendarEdit)
 	}
 	return m, b
+}
+
+func calendarCreatePickerCollectionsForTest() []models.CalendarCollection {
+	return []models.CalendarCollection{
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "work-calendar",
+				AccountID:    "work",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "primary",
+				DisplayName:  "work@example.com",
+			},
+			AccessRole: "owner",
+		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "work-calendar",
+				AccountID:    "work",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "team",
+				DisplayName:  "Team",
+			},
+			AccessRole: "writer",
+		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "work-calendar",
+				AccountID:    "work",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "holiday-us",
+				DisplayName:  "Holidays in United States",
+			},
+			AccessRole: "reader",
+		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "personal-calendar",
+				AccountID:    "personal",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "family",
+				DisplayName:  "Family",
+			},
+			AccessRole: "owner",
+		},
+		{
+			Ref: models.CollectionRef{
+				SourceID:     "personal-calendar",
+				AccountID:    "personal",
+				Kind:         models.SourceKindCalendar,
+				CollectionID: "primary",
+				DisplayName:  "personal@example.com",
+			},
+			AccessRole: "owner",
+		},
+	}
 }
 
 func stringSliceContains(values []string, want string) bool {

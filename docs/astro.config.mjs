@@ -9,7 +9,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Herald Docs',
-      description: 'User and integration documentation for Herald, the terminal email client for power users.',
+      description: 'User and integration documentation for Herald, the GUI-like terminal mail and calendar workspace.',
       favicon: '/favicon.ico',
       customCss: ['/src/styles/theme-gallery.css'],
       head: [
