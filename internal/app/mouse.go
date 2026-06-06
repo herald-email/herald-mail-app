@@ -586,7 +586,7 @@ func (m *Model) calendarMousePanelWidths(plan LayoutPlan) (int, int, int) {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	railW := 32
 	if contentW < 118 {

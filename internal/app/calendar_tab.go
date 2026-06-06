@@ -2758,7 +2758,7 @@ func (m *Model) renderCalendarSplitView(mainFn, detailFn func(int, int) string, 
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -2951,7 +2951,7 @@ func (m *Model) renderCalendarDetailFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -2970,7 +2970,7 @@ func (m *Model) renderCalendarEditFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -2987,7 +2987,7 @@ func (m *Model) renderCalendarDeleteFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -3011,7 +3011,7 @@ func (m *Model) renderCalendarMeetingPrepFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -3028,7 +3028,7 @@ func (m *Model) renderCalendarTravelBufferFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {
@@ -3045,7 +3045,7 @@ func (m *Model) renderCalendarAISummaryFullView() string {
 		contentW = 80
 	}
 	if plan.ChatVisible {
-		contentW -= chatPanelWidth + 2 + panelGapWidth
+		contentW -= m.chatLayoutDeduction(m.windowWidth)
 	}
 	contentH := calendarPanelOuterHeight(plan)
 	if contentH < 4 {

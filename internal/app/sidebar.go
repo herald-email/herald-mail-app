@@ -627,8 +627,12 @@ func (m *Model) sidebarItemMatchesCurrentFolder(item sidebarItem) bool {
 // sidebarContentWidth is the fixed display width of sidebar content (excluding border)
 const sidebarContentWidth = 26
 
-// chatPanelWidth is the fixed display width of the chat panel content (excluding border)
-const chatPanelWidth = 36
+// Chat panel widths are content widths, excluding the border.
+const (
+	chatPanelMinWidth = 36
+	chatPanelMaxWidth = 72
+	chatMainMinWidth  = 48
+)
 
 // renderSidebar renders the folder tree sidebar content (without border)
 func (m *Model) renderSidebar() string {

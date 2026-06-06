@@ -166,7 +166,7 @@ func chatAgentBoundedText(value string, limit int) string {
 
 // renderChatPanel renders the chat panel content (without border)
 func (m *Model) renderChatPanel() string {
-	w := chatPanelWidth
+	w := m.effectiveChatPanelWidth(m.windowWidth)
 	contentHeight := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
 	if contentHeight < 5 {
 		contentHeight = 5

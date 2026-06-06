@@ -126,6 +126,30 @@ func TestSubmitChatIgnoresEmptyInputWithAgentRunner(t *testing.T) {
 	}
 }
 
+func TestRenderChatPanelUsesEffectiveWidthForWrappingAndInput(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.showChat = true
+	m.chatMessages = []ai.ChatMessage{{
+		Role:    "assistant",
+		Content: strings.Repeat("wide response ", 12),
+	}}
+	m.chatWrappedWidth = chatPanelMinWidth
+	m.chatInput.SetValue("follow up")
+
+	rendered := stripANSI(m.renderChatPanel())
+
+	if got, want := m.chatWrappedWidth, chatPanelMaxWidth; got != want {
+		t.Fatalf("chat wrap width = %d, want effective width %d", got, want)
+	}
+	minInputWidth := chatPanelMinWidth - len(m.chatInput.Prompt)
+	if got := m.chatInput.Width(); got <= minInputWidth {
+		t.Fatalf("chat input width = %d, want wider than fixed-width baseline %d", got, minInputWidth)
+	}
+	if !strings.Contains(rendered, strings.Repeat("─", chatPanelMaxWidth)) {
+		t.Fatalf("rendered chat panel did not use effective divider width %d:\n%s", chatPanelMaxWidth, rendered)
+	}
+}
+
 func TestChatAgentResponseErrorAppendsBoundedAssistantMessage(t *testing.T) {
 	m := &Model{}
 	m.chatMessages = append(m.chatMessages, ai.ChatMessage{Role: "user", Content: "hello"})

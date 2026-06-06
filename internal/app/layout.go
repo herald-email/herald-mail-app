@@ -170,8 +170,39 @@ func (m *Model) canRenderChat(width int) bool {
 	if width <= 0 {
 		return true
 	}
-	chatOuter := chatPanelWidth + 2
-	return width-chatOuter >= 48
+	return width-m.effectiveChatOuterWidth(width)-panelGapWidth >= chatMainMinWidth
+}
+
+func (m *Model) effectiveChatPanelWidth(width int) int {
+	if width <= 0 {
+		return chatPanelMinWidth
+	}
+	maxWidthForMain := width - chatMainMinWidth - 2 - panelGapWidth
+	if maxWidthForMain < chatPanelMinWidth {
+		return chatPanelMinWidth
+	}
+	desired := width / 3
+	if desired < chatPanelMinWidth+8 {
+		desired = chatPanelMinWidth
+	}
+	if desired > chatPanelMaxWidth {
+		desired = chatPanelMaxWidth
+	}
+	if desired > maxWidthForMain {
+		desired = maxWidthForMain
+	}
+	if desired < chatPanelMinWidth {
+		return chatPanelMinWidth
+	}
+	return desired
+}
+
+func (m *Model) effectiveChatOuterWidth(width int) int {
+	return m.effectiveChatPanelWidth(width) + 2
+}
+
+func (m *Model) chatLayoutDeduction(width int) int {
+	return m.effectiveChatOuterWidth(width) + panelGapWidth
 }
 
 func (m *Model) chromeState(plan LayoutPlan) ChromeState {
@@ -392,15 +423,17 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	if plan.SidebarVisible {
 		contentWidth -= sidebarContentWidth + 2 + panelGapWidth
 	}
+	chatDeduction := 0
 	if plan.ChatVisible {
-		contentWidth -= chatPanelWidth + 2 + panelGapWidth
+		chatDeduction = m.chatLayoutDeduction(width)
+		contentWidth -= chatDeduction
 	}
 
 	// Compose: label width + bordered field.
 	const composeLabelW = 10
 	composeWidth := width
 	if plan.ChatVisible {
-		composeWidth -= chatPanelWidth + 2 + panelGapWidth
+		composeWidth -= chatDeduction
 	}
 	fieldOuter := clamp(composeWidth-composeLabelW, 12)
 	plan.Compose = ComposeLayoutPlan{
@@ -412,7 +445,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	// Contacts: two bordered panels plus separator.
 	contactsWidth := width
 	if plan.ChatVisible {
-		contactsWidth -= chatPanelWidth + 2 + panelGapWidth
+		contactsWidth -= chatDeduction
 	}
 	contactsAvailable := clamp(contactsWidth-panelGapWidth, 20)
 	leftPreferred := contactsAvailable * 35 / 100
@@ -422,7 +455,7 @@ func (m *Model) buildLayoutPlan(width, height int) LayoutPlan {
 	// Timeline: table inner width plus optional preview outer width.
 	timelineWidth := width
 	if plan.ChatVisible {
-		timelineWidth -= chatPanelWidth + 2 + panelGapWidth
+		timelineWidth -= chatDeduction
 	}
 	if plan.SidebarVisible {
 		timelineWidth -= sidebarContentWidth + 2 + panelGapWidth
