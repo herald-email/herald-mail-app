@@ -1202,6 +1202,7 @@ Check these states during every applicable lane:
 - Memory chat tools are read-only and cannot send, delete, archive, mutate calendar events, or write Obsidian notes.
 - Chat distinguishes email-backed memory, Obsidian-backed memory, research-backed memory, and inference when those sources are present.
 - Compose Radar shows at most three source-backed nudges and stays hidden or quiet when there is no high-confidence memory.
+- Compose Radar nudges carry typed conflict, callback, open-loop, relationship-context, research-update, and draft-risk metadata plus source evidence, action-state, and configured dismissal scope for later explicit actions.
 - Compose Radar re-ranks after recipient, subject, or body changes with a short debounce, and stale refreshes never replace the latest draft context.
 - Compose Radar does not change To, Subject, Body, attachments, preserved reply context, or AI review state without an explicit user action.
 - Low-confidence memories may appear in chat/search results but do not become Compose Radar warnings.

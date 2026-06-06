@@ -57,7 +57,7 @@ The memory layer should be built from small, understandable objects with clear e
 - [x] `Memory` exposes inspectable details: generated summary, normalized source quote/snippet, source count, extraction prompt version, confidence, last updated time, and stale/revalidated state.
 - [x] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, memory IDs, and evidence refs.
 - [x] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
-- [ ] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
+- [x] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
 - [ ] `Evidence` can point to email messages, sent replies, notes, calendar events, attachments, and research URLs without copying full private content.
 
 ## Primary Surfaces
@@ -77,10 +77,10 @@ Compose Radar is the flagship interaction because it catches context at the mome
 - [x] Trigger retrieval when Compose opens for a reply or quick reply with known recipients.
 - [x] Re-rank nudges when recipient, subject, or draft body changes, with debounce and stale-result protection.
 - [x] Show at most three nudges by default.
-- [ ] Support nudge types: conflict, callback, open loop, relationship context, research update, and draft risk.
+- [x] Support nudge types: conflict, callback, open loop, relationship context, research update, and draft risk.
 - [ ] Provide actions: open source, insert phrase, dismiss, mark resolved, save memory, research person/company.
 - [x] Keep Compose Radar read-only in v1 so it never mutates drafts silently.
-- [ ] Keep the panel hidden or collapsed when no high-confidence nudge exists.
+- [x] Keep the panel hidden or collapsed when no high-confidence nudge exists.
 
 ## Obsidian Sync
 
@@ -174,6 +174,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
+- [x] Compose Radar nudges carry typed conflict/callback/open-loop/relationship/research/draft-risk states plus action-state and dismissal-scope metadata.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
@@ -186,11 +187,11 @@ The first implementation should make one narrow scenario feel excellent instead 
 
 - [ ] Focus on job-search threads in `Job search/active` plus related Inbox and Sent messages.
 - [x] Use shipped defaults for destination folders, Obsidian output profile, prompt templates, update cadence, and confidence thresholds before exposing advanced tuning.
-- [ ] Detect "already replied", "awaiting response", "deadline", "timeline mismatch", and "relationship callback" nudges.
+- [x] Detect "already replied", "awaiting response", "deadline", "timeline mismatch", and "relationship callback" nudges.
 - [x] Show nudges only in reply Compose and only when evidence is strong.
 - [ ] Let the user open the source email or Obsidian note from each nudge.
 - [x] Write no Obsidian changes until sync preview is approved.
-- [ ] Treat uncertain claims as chat/search suggestions, not Compose warnings.
+- [x] Treat uncertain claims as chat/search suggestions, not Compose warnings.
 
 ## Error Handling And Safety
 

@@ -42,6 +42,24 @@ const (
 	SourceCalendar  = "calendar"
 
 	PromptVersionHeuristicV1 = "memory-heuristic-v1"
+
+	NudgeTypeConflict            = "conflict"
+	NudgeTypeCallback            = "callback"
+	NudgeTypeOpenLoop            = "open_loop"
+	NudgeTypeRelationshipContext = "relationship_context"
+	NudgeTypeResearchUpdate      = "research_update"
+	NudgeTypeDraftRisk           = "draft_risk"
+
+	NudgeActionNew       = "new"
+	NudgeActionDismissed = "dismissed"
+	NudgeActionInserted  = "inserted"
+	NudgeActionResolved  = "resolved"
+	NudgeActionSaved     = "saved"
+
+	NudgeDismissDraft     = "draft"
+	NudgeDismissThread    = "thread"
+	NudgeDismissPerson    = "person"
+	NudgeDismissPermanent = "permanent"
 )
 
 // Evidence is a normalized source pointer. It intentionally stores only a
@@ -126,14 +144,15 @@ type Dossier struct {
 }
 
 type Nudge struct {
-	ID          string     `json:"id" yaml:"id"`
-	Type        string     `json:"type" yaml:"type"`
-	Message     string     `json:"message" yaml:"message"`
-	Why         string     `json:"why,omitempty" yaml:"why,omitempty"`
-	Confidence  float64    `json:"confidence" yaml:"confidence"`
-	MemoryIDs   []string   `json:"memory_ids,omitempty" yaml:"memory_ids,omitempty"`
-	Evidence    []Evidence `json:"evidence,omitempty" yaml:"evidence,omitempty"`
-	ActionState string     `json:"action_state,omitempty" yaml:"action_state,omitempty"`
+	ID             string     `json:"id" yaml:"id"`
+	Type           string     `json:"type" yaml:"type"`
+	Message        string     `json:"message" yaml:"message"`
+	Why            string     `json:"why,omitempty" yaml:"why,omitempty"`
+	Confidence     float64    `json:"confidence" yaml:"confidence"`
+	MemoryIDs      []string   `json:"memory_ids,omitempty" yaml:"memory_ids,omitempty"`
+	Evidence       []Evidence `json:"evidence,omitempty" yaml:"evidence,omitempty"`
+	ActionState    string     `json:"action_state,omitempty" yaml:"action_state,omitempty"`
+	DismissalScope string     `json:"dismissal_scope,omitempty" yaml:"dismissal_scope,omitempty"`
 }
 
 type EmailSnapshot struct {

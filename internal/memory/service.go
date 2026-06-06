@@ -163,7 +163,7 @@ func BuildReplyPrepFromMemories(q ReplyPrepQuery, memories []Memory, settings Se
 	if len(memories) > q.Limit {
 		memories = memories[:q.Limit]
 	}
-	nudges := nudgesFromMemories(memories, settings.Thresholds.ComposeRadar)
+	nudges := nudgesFromMemories(memories, settings)
 	return ReplyPrep{
 		Query:       q,
 		Memories:    memories,
@@ -173,10 +173,13 @@ func BuildReplyPrepFromMemories(q ReplyPrepQuery, memories []Memory, settings Se
 	}
 }
 
-func nudgesFromMemories(memories []Memory, threshold float64) []Nudge {
+func nudgesFromMemories(memories []Memory, settings Settings) []Nudge {
+	settings.ApplyDefaults()
+	threshold := settings.Thresholds.ComposeRadar
 	if threshold <= 0 {
 		threshold = 0.75
 	}
+	dismissScope := normalizeNudgeDismissScope(settings.UpdateRules.DismissalScope)
 	var nudges []Nudge
 	for _, memory := range memories {
 		if memory.Confidence < threshold || memory.Status == StatusSourceMissing {
@@ -187,14 +190,15 @@ func nudgesFromMemories(memories []Memory, threshold float64) []Nudge {
 			continue
 		}
 		nudges = append(nudges, Nudge{
-			ID:          nudgeID(memory.ID, nudgeType),
-			Type:        nudgeType,
-			Message:     message,
-			Why:         why,
-			Confidence:  memory.Confidence,
-			MemoryIDs:   []string{memory.ID},
-			Evidence:    memory.Evidence,
-			ActionState: "new",
+			ID:             nudgeID(memory.ID, nudgeType),
+			Type:           nudgeType,
+			Message:        message,
+			Why:            why,
+			Confidence:     memory.Confidence,
+			MemoryIDs:      []string{memory.ID},
+			Evidence:       memory.Evidence,
+			ActionState:    NudgeActionNew,
+			DismissalScope: dismissScope,
 		})
 		if len(nudges) >= 3 {
 			break
@@ -205,24 +209,43 @@ func nudgesFromMemories(memories []Memory, threshold float64) []Nudge {
 
 func nudgeText(memory Memory) (string, string, string) {
 	summary := firstNonEmpty(memory.Summary, memory.Claim)
+	if memory.Status == StatusConflict {
+		return NudgeTypeConflict, "Conflict: " + summary, "Source-backed memories may disagree; clarify before sending."
+	}
 	switch memory.Kind {
 	case KindOpenQuestion:
-		return "open_loop", "Open question: " + summary, "This thread may still need a response."
-	case KindDeadline:
-		return "deadline", "Deadline context: " + summary, "Date-sensitive context can change the reply."
-	case KindCommitment:
-		return "commitment", "Commitment: " + summary, "A previous commitment may need acknowledgement."
+		return NudgeTypeOpenLoop, "Open question: " + summary, "This thread may still need a response."
+	case KindDeadline, KindCommitment:
+		return NudgeTypeDraftRisk, "Draft risk: " + summary, "A commitment or date-sensitive detail could affect the reply."
 	case KindLastUserReply:
-		return "related_reply", summary, "Your previous reply may affect tone or follow-up."
+		return NudgeTypeCallback, "Already replied: " + summary, "Your previous reply may affect whether to follow up or wait."
 	case KindTrackStatus:
 		if memory.Status == StatusWaiting {
-			return "callback", summary, "The active track may be waiting on someone."
+			return NudgeTypeCallback, summary, "The active track may be waiting on someone."
 		}
-		return "relationship_context", summary, "Recent track status may matter."
+		if memory.Status == StatusStale {
+			return NudgeTypeCallback, summary, "This track may be stale enough to ask for an update."
+		}
+		return NudgeTypeRelationshipContext, summary, "Recent track status may matter."
 	case KindRelationshipContext, KindLastContact:
-		return "relationship_context", summary, "Recent relationship context may matter."
+		return NudgeTypeRelationshipContext, summary, "Recent relationship context may matter."
+	case KindResearchNote:
+		return NudgeTypeResearchUpdate, "Research update: " + summary, "Recent public research may change how you frame the reply."
 	default:
 		return "", "", ""
+	}
+}
+
+func normalizeNudgeDismissScope(scope string) string {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case NudgeDismissDraft:
+		return NudgeDismissDraft
+	case NudgeDismissPerson:
+		return NudgeDismissPerson
+	case NudgeDismissPermanent:
+		return NudgeDismissPermanent
+	default:
+		return NudgeDismissThread
 	}
 }
 

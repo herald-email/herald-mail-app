@@ -224,6 +224,9 @@ func TestReplyPrepPromotesOnlyHighConfidenceNudges(t *testing.T) {
 	if prep.Nudges[0].Evidence[0].MessageID == "" {
 		t.Fatalf("nudge missing source evidence: %#v", prep.Nudges[0])
 	}
+	if prep.Nudges[0].ActionState != NudgeActionNew || prep.Nudges[0].DismissalScope != NudgeDismissThread {
+		t.Fatalf("nudge state/scope = %#v", prep.Nudges[0])
+	}
 }
 
 func TestReplyPrepIncludesTopicFallbackForSentReplies(t *testing.T) {
@@ -246,8 +249,44 @@ func TestReplyPrepIncludesTopicFallbackForSentReplies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildReplyPrep: %v", err)
 	}
-	if len(prep.Nudges) != 1 || prep.Nudges[0].Type != "related_reply" {
+	if len(prep.Nudges) != 1 || prep.Nudges[0].Type != NudgeTypeCallback {
 		t.Fatalf("prep should include topic-matched sent reply, got %#v", prep)
+	}
+}
+
+func TestNudgesFromMemoriesUseTypedContractAndDismissalScope(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UpdateRules.DismissalScope = NudgeDismissDraft
+	cases := []struct {
+		name string
+		mem  Memory
+		want string
+	}{
+		{name: "conflict", mem: memoryWithStatus("Timeline mismatch", KindTrackStatus, StatusConflict), want: NudgeTypeConflict},
+		{name: "callback", mem: testMemoryWithKind("You already replied yesterday.", KindLastUserReply, 0.92), want: NudgeTypeCallback},
+		{name: "open loop", mem: testMemoryWithKind("Sergey asked for availability.", KindOpenQuestion, 0.92), want: NudgeTypeOpenLoop},
+		{name: "relationship", mem: testMemoryWithKind("Sergey prefers concise updates.", KindRelationshipContext, 0.92), want: NudgeTypeRelationshipContext},
+		{name: "research", mem: testMemoryWithKind("Cobalt Works announced a hiring pause.", KindResearchNote, 0.92), want: NudgeTypeResearchUpdate},
+		{name: "draft risk", mem: testMemoryWithKind("Follow up by Friday.", KindDeadline, 0.92), want: NudgeTypeDraftRisk},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			nudges := nudgesFromMemories([]Memory{tc.mem}, settings)
+			if len(nudges) != 1 {
+				t.Fatalf("nudges = %#v, want one nudge", nudges)
+			}
+			nudge := nudges[0]
+			if nudge.Type != tc.want {
+				t.Fatalf("nudge type = %q, want %q", nudge.Type, tc.want)
+			}
+			if nudge.Message == "" || nudge.Why == "" || len(nudge.Evidence) == 0 || len(nudge.MemoryIDs) == 0 {
+				t.Fatalf("nudge missing source-backed contract fields: %#v", nudge)
+			}
+			if nudge.ActionState != NudgeActionNew || nudge.DismissalScope != NudgeDismissDraft {
+				t.Fatalf("nudge state/scope = %#v", nudge)
+			}
+		})
 	}
 }
 
@@ -393,6 +432,12 @@ func lifecycleMemory(topic, kind, status string, activity time.Time, target stri
 	memory.ObsidianTarget = target
 	memory.Evidence[0].Date = activity
 	return PrepareMemoryForAppend(memory, activity)
+}
+
+func memoryWithStatus(claim, kind, status string) Memory {
+	memory := testMemoryWithKind(claim, kind, 0.92)
+	memory.Status = status
+	return memory
 }
 
 func tracksByTopic(tracks []Track) map[string]Track {
