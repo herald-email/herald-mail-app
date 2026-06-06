@@ -196,6 +196,35 @@ func TestChromeHeightBudget_ChatLongAnswerStaysInsideMainView(t *testing.T) {
 	}
 }
 
+func TestChromeHeightBudget_ChatWaitingRowStaysInsideMainView(t *testing.T) {
+	m := makeSizedModel(t, 120, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.chatWaiting = true
+	m.chatMessages = []ai.ChatMessage{
+		{Role: "user", Content: "find newsletter emails"},
+		{Role: "assistant", Content: strings.Repeat("Scanning sender history, unread state, and thread context. ", 40)},
+	}
+	m.updateTimelineTable()
+	m.updateTableDimensions(120, 24)
+
+	rendered := m.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected waiting chat view to fill 120x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	assertFitsWidth(t, 120, rendered)
+	stripped := stripANSI(rendered)
+	if !strings.Contains(stripped, "Thinking...") {
+		t.Fatalf("expected waiting row to remain visible after long history, got:\n%s", stripped)
+	}
+	if strings.Contains(stripped, "> Ask about your emails") {
+		t.Fatalf("waiting chat should reserve the input row for Thinking..., got:\n%s", stripped)
+	}
+}
+
 func TestChromeHeightBudget_CalendarModeSwitchingFillsBottomChrome(t *testing.T) {
 	for _, size := range []struct {
 		width  int
