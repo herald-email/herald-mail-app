@@ -1,9 +1,11 @@
 ---
 title: Herald Docs
-description: Complete end-user manual for Herald, the terminal email client and inbox cleanup tool.
+description: End-user manual for Herald, the GUI-like terminal mail and calendar workspace with low-friction setup.
 ---
 
-Herald is a keyboard-first and mouse-friendly terminal email client, inbox cleanup tool, and calendar workspace. It combines a chronological Timeline, transient Markdown Compose, Contacts, Calendar, local caching, optional AI classification, semantic search, quick replies, chat over your mailbox, and integration surfaces for MCP and SSH mode.
+Herald is a GUI-like, terminal-native mail and calendar workspace built to keep setup from becoming a project. Try demo mode before connecting an inbox, click or scroll when that is comfortable, use keys when faster, press `?` for context help, and keep AI optional and local-first for classification, semantic search, quick replies, or chat.
+
+It combines a chronological Timeline, transient Markdown Compose, Contacts, Calendar, local caching, bulk cleanup, hardened preview links, and integration surfaces for MCP and SSH mode.
 
 This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
 
