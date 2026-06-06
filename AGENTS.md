@@ -233,7 +233,7 @@ Go 1.25+ required. `go-sqlite3` requires CGO (`gcc`/`clang` must be present).
 | `esc` | Close email preview (Timeline) |
 | `up`/`k`, `down`/`j` | Navigate |
 | `B` / `f` | Toggle folder sidebar |
-| `l` / `L` | Toggle real-time log viewer overlay |
+| `L` | Toggle real-time log viewer overlay |
 | `g` / `c` | Toggle AI chat panel outside Timeline text/compose contexts |
 | `t` | Run AI classification on current folder |
 | `T` / `A` | Re-classify the focused email |

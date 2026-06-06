@@ -138,8 +138,9 @@ func associatedTextShortcutKey(msg tea.KeyPressMsg) (string, bool) {
 	if !associatedTextShouldWin(key.Text) {
 		return "", false
 	}
+	text := shortcutTextWithShift(key.Text, key.Mod.Contains(tea.ModShift))
 	parts := shortcutModifierParts(key.Mod)
-	parts = append(parts, key.Text)
+	parts = append(parts, text)
 	return strings.Join(parts, "+"), true
 }
 
@@ -168,12 +169,40 @@ func associatedTextShouldWin(text string) bool {
 
 func fallbackShortcutBase(key tea.Key, rendered string) (string, bool) {
 	if key.Text != "" {
-		return key.Text, true
+		return shortcutTextWithShift(key.Text, key.Mod.Contains(tea.ModShift)), true
 	}
 	if key.Code >= 0x20 && key.Code <= 0x7e {
+		if key.Mod.Contains(tea.ModShift) {
+			if shifted, ok := shiftedPhysicalShortcutKeys[key.Code]; ok {
+				return string(shifted), true
+			}
+			if key.Code >= 'a' && key.Code <= 'z' {
+				return strings.ToUpper(string(key.Code)), true
+			}
+		}
 		return string(key.Code), true
 	}
 	return rendered, !strings.Contains(rendered, "+")
+}
+
+func shortcutTextWithShift(text string, shifted bool) string {
+	if !shifted {
+		return text
+	}
+	r, size := utf8.DecodeRuneInString(text)
+	if r == utf8.RuneError || size != len(text) {
+		return text
+	}
+	if mapped, ok := printablePhysicalShortcutAliases[r]; ok {
+		r = mapped
+	}
+	if shifted, ok := shiftedPhysicalShortcutKeys[r]; ok {
+		return string(shifted)
+	}
+	if r >= 'a' && r <= 'z' {
+		return strings.ToUpper(string(r))
+	}
+	return text
 }
 
 func physicalShortcutKey(msg tea.KeyPressMsg) (string, bool) {

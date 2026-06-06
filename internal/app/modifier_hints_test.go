@@ -76,6 +76,20 @@ func TestModifierHintAltLayerKeepsDefaultHintsWithNotice(t *testing.T) {
 	requireHintSegments(t, hints, "Alt+1/2/3: tabs", "?: help", "Ctrl+N: new")
 }
 
+func TestModifierHintAltLayerDoesNotAdvertiseAltLForLogs(t *testing.T) {
+	m := modifierHintTimelineModel(t)
+	m.showLogs = true
+
+	model, _ := m.Update(altKey('x'))
+	m = model.(*Model)
+
+	hints := stripANSI(m.renderKeyHints())
+	requireHintSegments(t, hints, "L: close logs", "esc: close logs")
+	if strings.Contains(hints, "alt+l") {
+		t.Fatalf("alt layer should not advertise removed alt+l log shortcut, got:\n%s", hints)
+	}
+}
+
 func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
 	m := modifierHintTimelineModel(t)
 

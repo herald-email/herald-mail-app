@@ -197,7 +197,7 @@ func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 
 func (m *Model) altModifierHintSegments(chrome ChromeState, defaultHints string) []string {
 	if m.showLogs {
-		return []string{"alt+l: close logs", "esc: close logs"}
+		return []string{"L: close logs", "esc: close logs"}
 	}
 	if m.showSettings {
 		return []string{"alt+enter: newline in text fields", defaultHints}

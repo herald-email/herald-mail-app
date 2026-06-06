@@ -549,6 +549,55 @@ func TestComposeAltPrintableKeysStayTextSafe(t *testing.T) {
 	}
 }
 
+func TestLowercaseLStaysTextInComposePromptAndEditorSurfaces(t *testing.T) {
+	t.Run("compose", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeTo.Blur()
+		m.composeBody.Focus()
+
+		model, _ := m.handleKeyMsg(keyRune('l'))
+		updated := model.(*Model)
+
+		if updated.showLogs {
+			t.Fatal("lowercase l should not open logs from Compose")
+		}
+		if got := updated.composeBody.Value(); got != "l" {
+			t.Fatalf("compose body value=%q, want lowercase l", got)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabTimeline
+		m.openTimelineSearch()
+
+		model, _ := m.handleKeyMsg(keyRune('l'))
+		updated := model.(*Model)
+
+		if updated.showLogs {
+			t.Fatal("lowercase l should not open logs from Timeline search")
+		}
+		if got := updated.timeline.searchInput.Value(); got != "l" {
+			t.Fatalf("timeline search value=%q, want lowercase l", got)
+		}
+	})
+
+	t.Run("editor", func(t *testing.T) {
+		editor := NewPromptEditor(nil, 140, 40)
+		if cmd := editor.Init(); cmd != nil {
+			_ = cmd()
+		}
+
+		updated, _ := editor.Update(keyRune('l'))
+
+		if got := updated.name; got != "l" {
+			t.Fatalf("prompt editor name=%q, want lowercase l", got)
+		}
+	})
+}
+
 func TestTimelineSearchPlainQIsTextAndCtrlCQuits(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
@@ -918,6 +967,107 @@ func TestLogOverlayToggleWorksWhileSyncingWithVisibleData(t *testing.T) {
 
 	if !updated.showLogs {
 		t.Fatal("expected L to toggle log overlay while syncing with visible data")
+	}
+
+	m.showLogs = false
+	model, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: 'l', Mod: tea.ModShift})
+	updated = model.(*Model)
+
+	if !updated.showLogs {
+		t.Fatal("expected shifted terminal l to toggle log overlay as uppercase L")
+	}
+
+	updated.showLogs = false
+	model, _ = updated.handleKeyMsg(tea.KeyPressMsg{Text: "l", Code: 'l', Mod: tea.ModShift})
+	updated = model.(*Model)
+
+	if !updated.showLogs {
+		t.Fatal("expected shifted terminal l with associated text to toggle log overlay as uppercase L")
+	}
+}
+
+func TestPlainLowercaseLDoesNotToggleLogsFromCatchAllFallback(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = 99
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+
+	model, _ := m.handleKeyMsg(keyRune('l'))
+	updated := model.(*Model)
+
+	if updated.showLogs {
+		t.Fatal("lowercase l should not toggle log overlay from the catch-all fallback")
+	}
+
+	model, _ = updated.handleKeyMsg(keyRune('L'))
+	updated = model.(*Model)
+
+	if !updated.showLogs {
+		t.Fatal("uppercase L should still toggle log overlay from the catch-all fallback")
+	}
+}
+
+func TestLogOverlayCloseIgnoresLowercaseL(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.showLogs = true
+
+	model, _, handled := m.handleLogsOverlayKey(keyRune('l'))
+	updated := model.(*Model)
+
+	if !handled {
+		t.Fatal("expected log overlay to handle lowercase l as log viewer input")
+	}
+	if !updated.showLogs {
+		t.Fatal("lowercase l should not close the log overlay")
+	}
+
+	model, _, handled = updated.handleLogsOverlayKey(altKey('l'))
+	updated = model.(*Model)
+
+	if !handled {
+		t.Fatal("expected log overlay to handle alt+l as log viewer input")
+	}
+	if !updated.showLogs {
+		t.Fatal("alt+l should not close the log overlay")
+	}
+}
+
+func TestLogOverlayStillClosesWithUppercaseLAndEscape(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.showLogs = true
+
+	model, _, handled := m.handleLogsOverlayKey(keyRune('L'))
+	updated := model.(*Model)
+
+	if !handled {
+		t.Fatal("expected uppercase L to close the log overlay")
+	}
+	if updated.showLogs {
+		t.Fatal("expected uppercase L to close the log overlay")
+	}
+
+	updated.showLogs = true
+	model, _, handled = updated.handleLogsOverlayKey(tea.KeyPressMsg{Text: "l", Code: 'l', Mod: tea.ModShift})
+	updated = model.(*Model)
+
+	if !handled {
+		t.Fatal("expected shifted terminal l with associated text to close the log overlay")
+	}
+	if updated.showLogs {
+		t.Fatal("expected shifted terminal l with associated text to close the log overlay")
+	}
+
+	updated.showLogs = true
+	model, _, handled = updated.handleLogsOverlayKey(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated = model.(*Model)
+
+	if !handled {
+		t.Fatal("expected Esc to close the log overlay")
+	}
+	if updated.showLogs {
+		t.Fatal("expected Esc to close the log overlay")
 	}
 }
 

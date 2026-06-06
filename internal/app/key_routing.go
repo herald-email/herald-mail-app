@@ -194,7 +194,7 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 		return m, nil, false
 	}
 	switch shortcutKey(msg) {
-	case "l", "L", "alt+l", "alt+L", "esc":
+	case "L", "esc":
 		m.showLogs = false
 		return m, nil, true
 	case "q":

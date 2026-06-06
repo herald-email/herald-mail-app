@@ -3715,7 +3715,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "l", "L":
+	case "L":
 		return m, m.toggleLogs()
 
 	case "g", "c":
