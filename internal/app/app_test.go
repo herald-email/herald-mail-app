@@ -360,6 +360,37 @@ func TestAccountSettingsValidationFailureKeepsPreviousConfig(t *testing.T) {
 	}
 }
 
+func TestOAuthErrorShowsVisibleAccountMismatchMessage(t *testing.T) {
+	m := New(&stubBackend{}, nil, "work@example.test", nil, false)
+	m.windowWidth = 100
+	m.windowHeight = 30
+	err := errors.New(`authenticated Google account "wrong@example.test" does not match configured source email "work@example.test"`)
+
+	updatedModel, _ := m.Update(OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)})
+	updated := updatedModel.(*Model)
+	if updated.accountValidation == nil {
+		t.Fatal("expected OAuth error to open the account validation overlay")
+	}
+	if updated.accountValidation.Checking {
+		t.Fatal("expected OAuth error overlay to be a completed failure state")
+	}
+	message := updated.accountValidation.Message
+	for _, want := range []string{"OAuth failed", "wrong@example.test", "work@example.test", "Settings were not saved"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("expected visible OAuth mismatch message to include %q, got %q", want, message)
+		}
+	}
+	if updated.statusMessage != "OAuth authorization failed. Settings were not saved." {
+		t.Fatalf("statusMessage = %q, want OAuth failure status", updated.statusMessage)
+	}
+	rendered := stripANSI(updated.renderAccountValidationPanel())
+	for _, want := range []string{"Account settings not saved", "wrong@example.test", "work@example.test", "Enter/Esc/q: close"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered overlay to include %q, got:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
 	oldValidate := validateAccountConfig
 	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {

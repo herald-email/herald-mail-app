@@ -6,8 +6,10 @@ package oauth
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +26,8 @@ import (
 )
 
 const (
+	ScopeOpenID               = "openid"
+	ScopeEmail                = "email"
 	ScopeGmailModify          = "https://www.googleapis.com/auth/gmail.modify"
 	ScopeCalendarListReadonly = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 	ScopeCalendarEvents       = "https://www.googleapis.com/auth/calendar.events"
@@ -31,7 +35,12 @@ const (
 
 // Scopes is the default browser OAuth scope set for new Gmail API mail setup.
 // Provider-aware callers should prefer ScopesForSources.
-var Scopes = []string{ScopeGmailModify}
+var Scopes = []string{ScopeOpenID, ScopeEmail, ScopeGmailModify}
+
+var (
+	ErrAuthenticatedEmailUnavailable = errors.New("authenticated Google email is unavailable")
+	ErrAuthenticatedEmailUnverified  = errors.New("authenticated Google email is not verified")
+)
 
 // ScopesForSources returns the minimum Google OAuth scopes needed for the
 // configured Google-backed sources. Gmail OAuth uses the Gmail API mail scope;
@@ -49,6 +58,9 @@ func ScopesForSources(sources []config.SourceConfig) []string {
 		}
 		out = append(out, scope)
 	}
+	add(ScopeOpenID)
+	add(ScopeEmail)
+	addedProviderScope := false
 	for _, source := range sources {
 		kind := strings.TrimSpace(source.Kind)
 		provider := strings.ToLower(strings.TrimSpace(source.Provider))
@@ -56,11 +68,13 @@ func ScopesForSources(sources []config.SourceConfig) []string {
 		case kind == "calendar" && provider == "google_calendar":
 			add(ScopeCalendarListReadonly)
 			add(ScopeCalendarEvents)
+			addedProviderScope = true
 		case (kind == "" || kind == "mail") && (provider == "gmail" || provider == "gmail_api"):
 			add(ScopeGmailModify)
+			addedProviderScope = true
 		}
 	}
-	if len(out) == 0 {
+	if !addedProviderScope {
 		return append([]string(nil), Scopes...)
 	}
 	return out
@@ -233,6 +247,56 @@ func ExchangeCode(ctx context.Context, code, redirectURI string) (*oauth2.Token,
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
 	return token, nil
+}
+
+// AuthenticatedEmailFromToken extracts the Google account email returned by
+// the OAuth token endpoint when the flow includes the OpenID Connect email
+// scope. The token came from Google's TLS-protected exchange response; this
+// helper decodes the claim so app code can compare it to configured source
+// identity before persisting tokens.
+func AuthenticatedEmailFromToken(token *oauth2.Token) (string, error) {
+	if token == nil {
+		return "", ErrAuthenticatedEmailUnavailable
+	}
+	idToken, ok := token.Extra("id_token").(string)
+	if !ok || strings.TrimSpace(idToken) == "" {
+		return "", ErrAuthenticatedEmailUnavailable
+	}
+	return authenticatedEmailFromIDToken(idToken)
+}
+
+func authenticatedEmailFromIDToken(idToken string) (string, error) {
+	parts := strings.Split(idToken, ".")
+	if len(parts) < 2 {
+		return "", ErrAuthenticatedEmailUnavailable
+	}
+	payload, err := decodeJWTPart(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrAuthenticatedEmailUnavailable, err)
+	}
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified *bool  `json:"email_verified"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrAuthenticatedEmailUnavailable, err)
+	}
+	email := strings.TrimSpace(claims.Email)
+	if email == "" {
+		return "", ErrAuthenticatedEmailUnavailable
+	}
+	if claims.EmailVerified != nil && !*claims.EmailVerified {
+		return "", ErrAuthenticatedEmailUnverified
+	}
+	return email, nil
+}
+
+func decodeJWTPart(part string) ([]byte, error) {
+	payload, err := base64.RawURLEncoding.DecodeString(part)
+	if err == nil {
+		return payload, nil
+	}
+	return base64.URLEncoding.DecodeString(part)
 }
 
 // RefreshIfNeeded checks whether the stored access token is expired (or close

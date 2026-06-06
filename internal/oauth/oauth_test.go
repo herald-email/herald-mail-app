@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"golang.org/x/oauth2"
 )
 
 // TestRefreshIfNeeded_NonExpired verifies that when the stored access token
@@ -74,12 +77,13 @@ func TestStartFlow_ReturnsGoogleURL(t *testing.T) {
 	if !strings.Contains(authURL, "login_hint=test%40example.com") {
 		t.Errorf("expected login_hint in URL, got: %q", authURL)
 	}
-	assertAuthURLScopes(t, authURL, []string{ScopeGmailModify})
+	assertAuthURLScopes(t, authURL, []string{ScopeOpenID, ScopeEmail, ScopeGmailModify})
 }
 
-func TestDefaultGoogleOAuthScopesUseGmailModifyOnly(t *testing.T) {
-	if !equalStringSlices(Scopes, []string{ScopeGmailModify}) {
-		t.Fatalf("Scopes = %#v, want only %#v", Scopes, []string{ScopeGmailModify})
+func TestDefaultGoogleOAuthScopesIncludeIdentityAndGmailModify(t *testing.T) {
+	want := []string{ScopeOpenID, ScopeEmail, ScopeGmailModify}
+	if !equalStringSlices(Scopes, want) {
+		t.Fatalf("Scopes = %#v, want %#v", Scopes, want)
 	}
 }
 
@@ -95,7 +99,7 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 				Kind:     "mail",
 				Provider: "gmail",
 			}},
-			want: []string{ScopeGmailModify},
+			want: []string{ScopeOpenID, ScopeEmail, ScopeGmailModify},
 		},
 		{
 			name: "gmail api alias keeps api scope",
@@ -103,7 +107,7 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 				Kind:     "mail",
 				Provider: "gmail_api",
 			}},
-			want: []string{ScopeGmailModify},
+			want: []string{ScopeOpenID, ScopeEmail, ScopeGmailModify},
 		},
 		{
 			name: "calendar source only",
@@ -111,7 +115,7 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 				Kind:     "calendar",
 				Provider: "google_calendar",
 			}},
-			want: []string{ScopeCalendarListReadonly, ScopeCalendarEvents},
+			want: []string{ScopeOpenID, ScopeEmail, ScopeCalendarListReadonly, ScopeCalendarEvents},
 		},
 		{
 			name: "gmail api mail plus calendar",
@@ -119,7 +123,15 @@ func TestGoogleOAuthScopesAreProviderAware(t *testing.T) {
 				{Kind: "mail", Provider: "gmail"},
 				{Kind: "calendar", Provider: "google_calendar"},
 			},
-			want: []string{ScopeGmailModify, ScopeCalendarListReadonly, ScopeCalendarEvents},
+			want: []string{ScopeOpenID, ScopeEmail, ScopeGmailModify, ScopeCalendarListReadonly, ScopeCalendarEvents},
+		},
+		{
+			name: "non-google source falls back to default gmail oauth set",
+			sources: []config.SourceConfig{{
+				Kind:     "mail",
+				Provider: "imap",
+			}},
+			want: []string{ScopeOpenID, ScopeEmail, ScopeGmailModify},
 		},
 	}
 	for _, tt := range tests {
@@ -153,6 +165,39 @@ func equalStringSlices(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func TestAuthenticatedEmailFromTokenDecodesIDToken(t *testing.T) {
+	token := (&oauth2.Token{AccessToken: "access"}).WithExtra(map[string]interface{}{
+		"id_token": idTokenForTest("work@example.test", true),
+	})
+	got, err := AuthenticatedEmailFromToken(token)
+	if err != nil {
+		t.Fatalf("AuthenticatedEmailFromToken returned error: %v", err)
+	}
+	if got != "work@example.test" {
+		t.Fatalf("AuthenticatedEmailFromToken = %q, want work@example.test", got)
+	}
+}
+
+func TestAuthenticatedEmailFromTokenRejectsUnverifiedEmail(t *testing.T) {
+	token := (&oauth2.Token{AccessToken: "access"}).WithExtra(map[string]interface{}{
+		"id_token": idTokenForTest("work@example.test", false),
+	})
+	if _, err := AuthenticatedEmailFromToken(token); err != ErrAuthenticatedEmailUnverified {
+		t.Fatalf("AuthenticatedEmailFromToken err = %v, want %v", err, ErrAuthenticatedEmailUnverified)
+	}
+}
+
+func idTokenForTest(email string, verified bool) string {
+	segment := func(v string) string {
+		return base64.RawURLEncoding.EncodeToString([]byte(v))
+	}
+	return strings.Join([]string{
+		segment(`{"alg":"none"}`),
+		segment(fmt.Sprintf(`{"email":%q,"email_verified":%t}`, email, verified)),
+		"signature",
+	}, ".")
 }
 
 func TestStartFlow_AuthorizeRedirectsToGoogleURL(t *testing.T) {

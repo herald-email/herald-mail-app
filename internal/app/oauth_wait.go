@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -76,8 +77,9 @@ var (
 	ErrOAuthCancelled = errors.New("OAuth authorization cancelled")
 	ErrOAuthTimeout   = errors.New("OAuth authorization timed out")
 
-	oauthWaitTimeout    = 5 * time.Minute
-	exchangeOAuthCodeFn = oauth.ExchangeCode
+	oauthWaitTimeout           = 5 * time.Minute
+	exchangeOAuthCodeFn        = oauth.ExchangeCode
+	authenticatedGoogleEmailFn = oauth.AuthenticatedEmailFromToken
 )
 
 // NewOAuthWaitModel creates an OAuthWaitModel. It calls oauth.StartFlow to begin the
@@ -213,7 +215,19 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
 		}
 
-		applyGoogleOAuthToken(m.cfg, m.email, token, m.sourceIDs)
+		authenticatedEmail, err := authenticatedGoogleEmailFn(token)
+		if err != nil {
+			m.err = err
+			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
+		}
+		if err := validateGoogleOAuthAccount(m.cfg, m.email, authenticatedEmail, m.sourceIDs); err != nil {
+			m.err = err
+			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
+		}
+		if err := applyGoogleOAuthToken(m.cfg, authenticatedEmail, token, m.sourceIDs); err != nil {
+			m.err = err
+			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }
+		}
 
 		cfg := m.cfg
 		return m, func() tea.Msg {
@@ -231,34 +245,70 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func applyGoogleOAuthToken(cfg *config.Config, email string, token *oauth2.Token, sourceIDs []models.SourceID) {
-	if cfg == nil || token == nil {
-		return
+func validateGoogleOAuthAccount(cfg *config.Config, configuredEmail, authenticatedEmail string, sourceIDs []models.SourceID) error {
+	authenticatedEmail = strings.TrimSpace(authenticatedEmail)
+	if authenticatedEmail == "" {
+		return fmt.Errorf("authenticated Google account email was empty")
 	}
-	email = strings.TrimSpace(email)
-	cfg.Gmail.Email = email
-	cfg.Gmail.AccessToken = token.AccessToken
-	cfg.Gmail.RefreshToken = token.RefreshToken
-	if !token.Expiry.IsZero() {
-		cfg.Gmail.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
-	}
-
-	targets := make(map[models.SourceID]bool, len(sourceIDs))
-	for _, id := range sourceIDs {
-		normalized := models.NormalizeSourceID(id, "")
-		if normalized != "" {
-			targets[normalized] = true
+	for _, expected := range expectedGoogleOAuthEmails(cfg, configuredEmail, sourceIDs) {
+		if !sameEmailAddress(expected, authenticatedEmail) {
+			return fmt.Errorf("authenticated Google account %q does not match configured source email %q", authenticatedEmail, expected)
 		}
 	}
-	targetAll := len(targets) == 0
-	for i := range cfg.Sources {
-		source := cfg.Sources[i]
+	return nil
+}
+
+func expectedGoogleOAuthEmails(cfg *config.Config, configuredEmail string, sourceIDs []models.SourceID) []string {
+	seen := make(map[string]bool)
+	var emails []string
+	add := func(email string) {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			return
+		}
+		key := strings.ToLower(email)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		emails = append(emails, email)
+	}
+	add(configuredEmail)
+	if cfg == nil {
+		return emails
+	}
+	targets := googleOAuthTargetSourceIDs(sourceIDs)
+	for _, source := range cfg.Sources {
 		if !settingsSourceUsesGoogleOAuth(source) {
 			continue
 		}
-		if !targetAll && !targets[settingsSourceIDForSource(source)] {
+		if len(targets) > 0 && !targets[settingsSourceIDForSource(source)] {
 			continue
 		}
+		if len(targets) == 0 && strings.TrimSpace(configuredEmail) != "" && !sameEmailAddress(source.Google.Email, configuredEmail) {
+			continue
+		}
+		add(source.Google.Email)
+	}
+	return emails
+}
+
+func applyGoogleOAuthToken(cfg *config.Config, email string, token *oauth2.Token, sourceIDs []models.SourceID) error {
+	if cfg == nil || token == nil {
+		return nil
+	}
+	email = strings.TrimSpace(email)
+	if len(cfg.Sources) == 0 {
+		applyTokenToLegacyGmail(cfg, email, token)
+		return nil
+	}
+
+	targetIndexes := googleOAuthTokenTargetIndexes(cfg, email, sourceIDs)
+	if len(targetIndexes) == 0 {
+		return fmt.Errorf("Google OAuth target source was not found")
+	}
+	targetedFirstMail := firstMailSourceWasTargeted(cfg, targetIndexes)
+	for _, i := range targetIndexes {
 		if strings.TrimSpace(cfg.Sources[i].Google.Email) == "" {
 			cfg.Sources[i].Google.Email = email
 		}
@@ -268,6 +318,105 @@ func applyGoogleOAuthToken(cfg *config.Config, email string, token *oauth2.Token
 			cfg.Sources[i].Google.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
 		}
 	}
+	if targetedFirstMail {
+		syncLegacyGmailFromFirstMailSource(cfg)
+	}
+	return nil
+}
+
+func applyTokenToLegacyGmail(cfg *config.Config, email string, token *oauth2.Token) {
+	cfg.Gmail.Email = email
+	cfg.Gmail.AccessToken = token.AccessToken
+	cfg.Gmail.RefreshToken = token.RefreshToken
+	if !token.Expiry.IsZero() {
+		cfg.Gmail.TokenExpiry = token.Expiry.UTC().Format(time.RFC3339)
+	}
+}
+
+func googleOAuthTokenTargetIndexes(cfg *config.Config, email string, sourceIDs []models.SourceID) []int {
+	if cfg == nil {
+		return nil
+	}
+	targets := make(map[models.SourceID]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		normalized := models.NormalizeSourceID(id, "")
+		if normalized != "" {
+			targets[normalized] = true
+		}
+	}
+	var googleIndexes []int
+	var indexes []int
+	for i := range cfg.Sources {
+		source := cfg.Sources[i]
+		if !settingsSourceUsesGoogleOAuth(source) {
+			continue
+		}
+		googleIndexes = append(googleIndexes, i)
+		if len(targets) > 0 {
+			if targets[settingsSourceIDForSource(source)] {
+				indexes = append(indexes, i)
+			}
+			continue
+		}
+		if strings.TrimSpace(email) != "" && sameEmailAddress(source.Google.Email, email) {
+			indexes = append(indexes, i)
+		}
+	}
+	if len(indexes) > 0 {
+		return indexes
+	}
+	if len(targets) == 0 && len(googleIndexes) == 1 {
+		return googleIndexes
+	}
+	return nil
+}
+
+func googleOAuthTargetSourceIDs(sourceIDs []models.SourceID) map[models.SourceID]bool {
+	targets := make(map[models.SourceID]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		normalized := models.NormalizeSourceID(id, "")
+		if normalized != "" {
+			targets[normalized] = true
+		}
+	}
+	return targets
+}
+
+func firstMailSourceWasTargeted(cfg *config.Config, targetIndexes []int) bool {
+	if cfg == nil {
+		return false
+	}
+	targets := make(map[int]bool, len(targetIndexes))
+	for _, i := range targetIndexes {
+		targets[i] = true
+	}
+	for i, source := range cfg.Sources {
+		if strings.TrimSpace(source.Kind) != "" && strings.TrimSpace(source.Kind) != string(models.SourceKindMail) {
+			continue
+		}
+		return targets[i]
+	}
+	return false
+}
+
+func syncLegacyGmailFromFirstMailSource(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	for _, source := range cfg.Sources {
+		if strings.TrimSpace(source.Kind) != "" && strings.TrimSpace(source.Kind) != string(models.SourceKindMail) {
+			continue
+		}
+		cfg.Gmail.Email = source.Google.Email
+		cfg.Gmail.AccessToken = source.Google.AccessToken
+		cfg.Gmail.RefreshToken = source.Google.RefreshToken
+		cfg.Gmail.TokenExpiry = source.Google.TokenExpiry
+		return
+	}
+}
+
+func sameEmailAddress(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
 // View implements tea.Model.

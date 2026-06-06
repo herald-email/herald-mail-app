@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -228,11 +229,7 @@ func TestOAuthWaitModel_TimeoutExplainsBrowserConsentPath(t *testing.T) {
 func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
 	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
-		return &oauth2.Token{
-			AccessToken:  "access-token",
-			RefreshToken: "refresh-token",
-			Expiry:       time.Now().Add(time.Hour),
-		}, nil
+		return googleOAuthTokenForTest("test@gmail.com")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
 
@@ -263,14 +260,172 @@ func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
 	}
 }
 
+func TestOAuthWaitModel_CodeSuccessWithoutSourceIDsDoesNotFanOutGoogleTokens(t *testing.T) {
+	originalExchange := exchangeOAuthCodeFn
+	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+		return googleOAuthTokenForTest("work@example.test")
+	}
+	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
+
+	cfg := &config.Config{}
+	cfg.Gmail.Email = "work@example.test"
+	cfg.Gmail.AccessToken = "work-old-access"
+	cfg.Gmail.RefreshToken = "work-old-refresh"
+	cfg.Sources = []config.SourceConfig{
+		{
+			ID:        "work-mail",
+			Kind:      "mail",
+			Provider:  "gmail",
+			AccountID: "work",
+			Google:    config.GoogleConfig{Email: "work@example.test", AccessToken: "work-old-access", RefreshToken: "work-old-refresh"},
+		},
+		{
+			ID:        "work-calendar",
+			Kind:      "calendar",
+			Provider:  "google_calendar",
+			AccountID: "work",
+			Google:    config.GoogleConfig{Email: "work@example.test", AccessToken: "work-cal-old-access", RefreshToken: "work-cal-old-refresh"},
+		},
+		{
+			ID:        "personal-mail",
+			Kind:      "mail",
+			Provider:  "gmail",
+			AccountID: "personal",
+			Google:    config.GoogleConfig{Email: "me@example.test", AccessToken: "personal-old-access", RefreshToken: "personal-old-refresh"},
+		},
+		{
+			ID:        "personal-calendar",
+			Kind:      "calendar",
+			Provider:  "google_calendar",
+			AccountID: "personal",
+			Google:    config.GoogleConfig{Email: "me@example.test", AccessToken: "personal-cal-old-access", RefreshToken: "personal-cal-old-refresh"},
+		},
+	}
+	m := &OAuthWaitModel{
+		email:       "work@example.test",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	_, cmd := m.Update(oauthCodeReceivedMsg{result: oauth.Result{Code: "code"}})
+	if cmd == nil {
+		t.Fatal("expected OAuthDoneMsg command")
+	}
+	if _, ok := cmd().(OAuthDoneMsg); !ok {
+		t.Fatalf("expected OAuthDoneMsg, got %T", cmd())
+	}
+
+	if cfg.Sources[0].Google.RefreshToken != "refresh-token" || cfg.Sources[1].Google.RefreshToken != "refresh-token" {
+		t.Fatalf("work account sources were not updated together: %#v %#v", cfg.Sources[0].Google, cfg.Sources[1].Google)
+	}
+	if cfg.Sources[2].Google.RefreshToken != "personal-old-refresh" || cfg.Sources[2].Google.AccessToken != "personal-old-access" {
+		t.Fatalf("personal mail source was overwritten: %#v", cfg.Sources[2].Google)
+	}
+	if cfg.Sources[3].Google.RefreshToken != "personal-cal-old-refresh" || cfg.Sources[3].Google.AccessToken != "personal-cal-old-access" {
+		t.Fatalf("personal calendar source was overwritten: %#v", cfg.Sources[3].Google)
+	}
+}
+
+func TestOAuthWaitModel_CodeSuccessForSecondAccountDoesNotOverwriteLegacyGmail(t *testing.T) {
+	originalExchange := exchangeOAuthCodeFn
+	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+		return googleOAuthTokenForTest("me@example.test")
+	}
+	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
+
+	cfg := &config.Config{}
+	cfg.Gmail.Email = "work@example.test"
+	cfg.Gmail.AccessToken = "work-old-access"
+	cfg.Gmail.RefreshToken = "work-old-refresh"
+	cfg.Sources = []config.SourceConfig{
+		{
+			ID:        "work-mail",
+			Kind:      "mail",
+			Provider:  "gmail",
+			AccountID: "work",
+			Google:    config.GoogleConfig{Email: "work@example.test", AccessToken: "work-old-access", RefreshToken: "work-old-refresh"},
+		},
+		{
+			ID:        "personal-mail",
+			Kind:      "mail",
+			Provider:  "gmail",
+			AccountID: "personal",
+			Google:    config.GoogleConfig{Email: "me@example.test", AccessToken: "personal-old-access", RefreshToken: "personal-old-refresh"},
+		},
+	}
+	m := &OAuthWaitModel{
+		email:       "me@example.test",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		sourceIDs:   []models.SourceID{"personal-mail"},
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	_, cmd := m.Update(oauthCodeReceivedMsg{result: oauth.Result{Code: "code"}})
+	if cmd == nil {
+		t.Fatal("expected OAuthDoneMsg command")
+	}
+	if _, ok := cmd().(OAuthDoneMsg); !ok {
+		t.Fatalf("expected OAuthDoneMsg, got %T", cmd())
+	}
+
+	if cfg.Sources[1].Google.RefreshToken != "refresh-token" {
+		t.Fatalf("personal source token = %q, want refreshed token", cfg.Sources[1].Google.RefreshToken)
+	}
+	if cfg.Gmail.RefreshToken != "work-old-refresh" || cfg.Gmail.AccessToken != "work-old-access" || cfg.Gmail.Email != "work@example.test" {
+		t.Fatalf("legacy gmail config was overwritten by second account: %#v", cfg.Gmail)
+	}
+}
+
+func TestOAuthWaitModel_CodeSuccessRejectsAuthenticatedEmailMismatch(t *testing.T) {
+	originalExchange := exchangeOAuthCodeFn
+	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+		return googleOAuthTokenForTest("wrong@example.test")
+	}
+	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:        "work-calendar",
+		Kind:      "calendar",
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google:    config.GoogleConfig{Email: "work@example.test", AccessToken: "old-access", RefreshToken: "old-refresh"},
+	}}}
+	m := &OAuthWaitModel{
+		email:       "work@example.test",
+		authURL:     "https://accounts.google.com/o/oauth2/auth?test=1",
+		redirectURI: "http://localhost:12345/callback",
+		codeCh:      make(chan oauth.Result, 1),
+		cfg:         cfg,
+		sourceIDs:   []models.SourceID{"work-calendar"},
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+	}
+
+	_, cmd := m.Update(oauthCodeReceivedMsg{result: oauth.Result{Code: "code"}})
+	if cmd == nil {
+		t.Fatal("expected OAuthErrorMsg command")
+	}
+	msg, ok := cmd().(OAuthErrorMsg)
+	if !ok {
+		t.Fatalf("expected OAuthErrorMsg, got %T", cmd())
+	}
+	if !strings.Contains(msg.UserMessage, "wrong@example.test") || !strings.Contains(msg.UserMessage, "work@example.test") {
+		t.Fatalf("mismatch message should name authenticated and configured email, got %q", msg.UserMessage)
+	}
+	if cfg.Sources[0].Google.RefreshToken != "old-refresh" || cfg.Sources[0].Google.AccessToken != "old-access" {
+		t.Fatalf("mismatched account must not update source tokens: %#v", cfg.Sources[0].Google)
+	}
+}
+
 func TestOAuthWaitModel_CodeSuccessAppliesTokensToTargetGoogleSources(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
 	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
-		return &oauth2.Token{
-			AccessToken:  "access-token",
-			RefreshToken: "refresh-token",
-			Expiry:       time.Now().Add(time.Hour),
-		}, nil
+		return googleOAuthTokenForTest("work@example.test")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
 
@@ -314,6 +469,26 @@ func TestOAuthWaitModel_CodeSuccessAppliesTokensToTargetGoogleSources(t *testing
 	if cfg.Sources[1].Google.RefreshToken != "" || cfg.Sources[1].Google.AccessToken != "" {
 		t.Fatalf("untargeted calendar source was overwritten: %#v", cfg.Sources[1].Google)
 	}
+}
+
+func googleOAuthTokenForTest(email string) (*oauth2.Token, error) {
+	token := &oauth2.Token{
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+	return token.WithExtra(map[string]interface{}{"id_token": googleIDTokenForTest(email)}), nil
+}
+
+func googleIDTokenForTest(email string) string {
+	segment := func(v string) string {
+		return base64.RawURLEncoding.EncodeToString([]byte(v))
+	}
+	return strings.Join([]string{
+		segment(`{"alg":"none"}`),
+		segment(fmt.Sprintf(`{"email":%q,"email_verified":true}`, email)),
+		"signature",
+	}, ".")
 }
 
 // TestOAuthWaitModel_ViewContainsCopyURL verifies that View() renders a short copy URL.
