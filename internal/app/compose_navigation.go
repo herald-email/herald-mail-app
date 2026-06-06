@@ -159,6 +159,7 @@ func (m *Model) discardComposeExitDraft() tea.Cmd {
 }
 
 func (m *Model) finishComposeExit(targetTab, targetPanel int, loadTarget bool, cmds ...tea.Cmd) tea.Cmd {
+	nativeImageClearCmd := m.timelineNativeImageClearCmd()
 	m.activeTab = targetTab
 	m.clearComposeReturn()
 	switch targetTab {
@@ -199,6 +200,9 @@ func (m *Model) finishComposeExit(targetTab, targetPanel int, loadTarget bool, c
 	}
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
+	}
+	if nativeImageClearCmd != nil {
+		cmds = append([]tea.Cmd{nativeImageClearCmd}, cmds...)
 	}
 	return tea.Batch(cmds...)
 }

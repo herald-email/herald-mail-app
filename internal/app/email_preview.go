@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/kittyimg"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -688,6 +689,9 @@ func (m *Model) timelineFullScreenDocumentLayout() previewDocumentLayout {
 func (m *Model) timelineNativeImageClearCmd() tea.Cmd {
 	if !m.timelineNativeImageClearNeeded() {
 		return nil
+	}
+	if m.currentPreviewImageMode() == previewImageModeKitty {
+		return tea.Sequence(tea.Raw(kittyimg.DeleteVisiblePlacements()), tea.ClearScreen)
 	}
 	return tea.ClearScreen
 }

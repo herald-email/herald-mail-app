@@ -3,13 +3,16 @@ package app
 import (
 	"io"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/kittyimg"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -262,6 +265,43 @@ func TestTimelineSplitPreview_ItermEscRequestsNativeImageClear(t *testing.T) {
 	}
 }
 
+func TestTimelineSplitPreview_KittyTabSwitchDeletesVisiblePlacements(t *testing.T) {
+	clearTerminalImageEnv(t)
+	t.Setenv("TERM", "xterm-ghostty")
+	m := makeSizedModel(t, 100, 30)
+	defer m.cleanup()
+	m.SetLocalImageLinksEnabled(true)
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	m.calendarAvailable = true
+	email := testImageEmail()
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+
+	if got := m.currentPreviewImageMode(); got != previewImageModeKitty {
+		t.Fatalf("preview image mode = %q, want kitty", got)
+	}
+
+	model, cmd, handled := m.handleTabKey(keyRune('3'))
+	if !handled {
+		t.Fatal("calendar tab key should be handled")
+	}
+	updated := model.(*Model)
+	if updated.activeTab != tabCalendar {
+		t.Fatalf("active tab = %d, want Calendar", updated.activeTab)
+	}
+	messages := collectCommandMessagesForTest(cmd)
+	if !cmdMessagesContainRawString(messages, kittyimg.DeleteVisiblePlacements()) {
+		t.Fatalf("switching away from a Kitty preview should delete visible image placements; command messages: %#v", messages)
+	}
+}
+
 func TestTimelineFullScreen_ItermUsesSafeLandscapeRasterBox(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	m := makeSizedModel(t, 120, 32)
@@ -322,6 +362,48 @@ func TestTimelineFullScreen_RendersCIDImageInDocumentOrder(t *testing.T) {
 	if before == -1 || image == -1 || after == -1 || !(before < image && image < after) {
 		t.Fatalf("CID image should be in document order, got:\n%s", rendered)
 	}
+}
+
+func collectCommandMessagesForTest(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	return collectCommandMessageForTest(cmd())
+}
+
+func collectCommandMessageForTest(msg tea.Msg) []tea.Msg {
+	if msg == nil {
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var messages []tea.Msg
+		for _, child := range batch {
+			messages = append(messages, collectCommandMessagesForTest(child)...)
+		}
+		return messages
+	}
+	value := reflect.ValueOf(msg)
+	if value.Kind() == reflect.Slice && value.Type().Elem() == reflect.TypeOf((tea.Cmd)(nil)) {
+		var messages []tea.Msg
+		for i := 0; i < value.Len(); i++ {
+			child, ok := value.Index(i).Interface().(tea.Cmd)
+			if ok {
+				messages = append(messages, collectCommandMessagesForTest(child)...)
+			}
+		}
+		return messages
+	}
+	return []tea.Msg{msg}
+}
+
+func cmdMessagesContainRawString(messages []tea.Msg, want string) bool {
+	for _, msg := range messages {
+		raw, ok := msg.(tea.RawMsg)
+		if ok && raw.Msg == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTimelineFullScreen_DocumentRowsDriveScrollIndicator(t *testing.T) {
