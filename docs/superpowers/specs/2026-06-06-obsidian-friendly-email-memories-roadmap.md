@@ -53,6 +53,7 @@ The memory layer should be built from small, understandable objects with clear e
 | `Evidence` | A normalized source pointer | Source type, stable ID or path, date, and snippet summary |
 
 - [ ] `Memory` stores the claim, kind, confidence, freshness, source refs, and optional Obsidian target.
+- [ ] `Memory` exposes inspectable details: generated summary, normalized source quote/snippet, source count, extraction prompt version, confidence, last updated time, and stale/revalidated state.
 - [ ] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, and evidence refs.
 - [ ] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
 - [ ] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
@@ -85,12 +86,56 @@ Compose Radar is the flagship interaction because it catches context at the mome
 Obsidian sync is a product boundary, not just export. Herald should write Markdown that users can read and edit, preserve user-written sections, and avoid duplicating canonical notes.
 
 - [ ] Add a settings entry for the Obsidian vault path and optional target folders.
+- [ ] Let users configure where each memory type goes: people notes, company/job notes, project notes, daily briefing notes, research notes, and an optional catch-all memory inbox.
+- [ ] Add an Obsidian output profile toggle with sensible defaults for YAML frontmatter, Dataview-friendly fields, tags, wiki links, backlinks, and plain-Markdown fallback.
+- [ ] Let users choose frontmatter mode: full YAML, minimal YAML, generated-section metadata only, or no visible YAML for cleaner human notes.
+- [ ] Let users choose link mode: Obsidian wiki links, standard Markdown links, plain paths, or no generated links.
+- [ ] Let users choose tag mode: no tags, conservative tags, workflow tags such as `#herald/memory` and `#job-search`, or custom tag templates.
 - [ ] Support generated sections inside existing people and company notes using stable markers.
 - [ ] Preserve user-edited content outside generated sections.
 - [ ] Use frontmatter for machine-readable fields such as `last_contact`, `status`, `company`, `source`, `memory_updated`, and `herald_memory_id`.
 - [ ] Use note links to canonical notes rather than copying long summaries across multiple files.
 - [ ] Offer a sync preview before first write and before destructive section rewrites.
 - [ ] Keep daily briefing output under a configured `Scheduled Task Artifacts/` path when enabled.
+
+## Configuration And Defaults
+
+The feature should be tweakable without making users design a memory system from scratch. Defaults should work for a typical local-first user, while advanced settings allow power users to steer storage, prompts, update cadence, and privacy boundaries.
+
+- [ ] Provide a default memory profile that stores people memories under `People/`, job/company memories under `Job search/`, daily diffs under `Scheduled Task Artifacts/`, uncategorized items under a configurable memory inbox, and uses minimal Obsidian frontmatter plus conservative links/tags.
+- [ ] Let users choose included sources: Inbox, Sent, Archive/All Mail, selected folders, selected accounts, Contacts, Calendar, Obsidian, and explicit research notes.
+- [ ] Let users set per-memory-type destinations for people, companies, threads, job search, projects, research notes, and daily briefing output.
+- [ ] Let users set update cadence: manual only, on compose open, after sync, daily briefing, or background when idle.
+- [ ] Let users set confidence thresholds for chat retrieval, dossier inclusion, Obsidian writes, and Compose Radar nudges separately.
+- [ ] Let users choose whether low-confidence memories are hidden, shown only in chat, or saved to a review queue.
+- [ ] Ship with safe defaults: local extraction enabled only for cached mail, Obsidian writes previewed before first save, external research opt-in, and private body text never sent to web research by default.
+- [ ] Provide a Settings screen section that summarizes memory status, configured vault path, last run, pending writes, failed writes, and stale/review-needed memories.
+
+## Prompt Surface
+
+Some memory behavior should be editable because the quality bar depends on user taste and workflow. Herald should expose prompts carefully as versioned templates with safe variables, not as a raw prompt-editing trap for every internal instruction.
+
+- [ ] Expose prompt templates for memory extraction, track status updates, Compose Radar nudge generation, dossier summarization, Obsidian section formatting, and research-note summarization.
+- [ ] Keep high-risk guardrail prompts internal, including privacy policy, external research boundaries, evidence requirements, and no-mutation rules.
+- [ ] Version every exposed prompt template so existing memories can report which prompt generated or updated them.
+- [ ] Let users reset any exposed prompt to the shipped default.
+- [ ] Let users test a prompt against a demo fixture or selected source message before saving it.
+- [ ] Restrict prompt variables to bounded snapshots such as source snippets, evidence metadata, current draft excerpt, configured vault targets, and user-written style preferences.
+- [ ] Show clear warnings when a custom prompt would weaken evidence discipline, request private-data export, or increase Compose Radar noise.
+
+## Update Rules
+
+Memory updates need predictable rules because stale or overwritten memory is worse than no memory. The default should be conservative: append evidence, update generated sections safely, and ask before overwriting user-authored content.
+
+- [ ] New evidence updates an existing memory when it matches the same source thread, person/company, topic, and memory kind above a configurable match threshold.
+- [ ] Conflicting evidence creates a conflict state instead of silently replacing the older memory.
+- [ ] User-authored Obsidian sections are never rewritten; only Herald-managed sections between stable markers are updated automatically.
+- [ ] Resolved open loops move to a resolved state with a source pointer and optional archive note instead of disappearing.
+- [ ] Stale memories remain visible with a stale label until revalidated, dismissed, archived, or forgotten.
+- [ ] Dismissed Compose Radar nudges store dismissal scope and do not reappear unless new evidence materially changes the situation.
+- [ ] Deleted or missing source emails mark dependent memories as source-missing and block them from high-confidence Compose Radar nudges.
+- [ ] Manual user corrections override generated memory text while keeping source evidence and edit history.
+- [ ] Daily briefing updates are diffs: changed tracks, newly resolved loops, newly stale loops, failed syncs, and review-needed memories.
 
 ## Research Mode
 
@@ -119,21 +164,22 @@ The implementation should add a memory service behind the backend/agent boundary
 
 The roadmap is ordered so the feature becomes useful before it becomes broad. The first slices should focus on job-search and work-related threads because they have high value, clear statuses, and existing Obsidian folder conventions.
 
-- [ ] **M0: Product examples and test fixtures** - create realistic demo scenarios for job-search threads, conflicting timelines, open loops, callbacks, and sent-reply resolution.
-- [ ] **M1: Local email memories MVP** - extract last contact, last user reply, open questions, commitments, deadlines, people, company, topic, and evidence from cached Inbox plus Sent messages.
+- [ ] **M0: Product examples, defaults, and test fixtures** - create realistic demo scenarios plus default memory profiles, prompt templates, and update-rule examples for job-search threads, conflicting timelines, open loops, callbacks, and sent-reply resolution.
+- [ ] **M1: Local email memories MVP** - extract last contact, last user reply, open questions, commitments, deadlines, people, company, topic, evidence, prompt version, confidence, and stale state from cached Inbox plus Sent messages.
 - [ ] **M2: Memory-aware chat tools** - add read-only Gollem tools for contact history, company tracks, related replies, open loops, and reply-prep context.
-- [ ] **M3: Obsidian sync preview** - configure vault path, detect People and Job Search folders, generate Markdown sections, and preview writes before saving.
+- [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [ ] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
-- [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, retention settings, and deletion propagation.
+- [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
 
 ## First Shippable Slice
 
 The first implementation should make one narrow scenario feel excellent instead of trying to remember every mailbox. Job-search Compose Radar is the recommended slice because it uses Inbox, Sent, Contacts, and Obsidian notes in a way users can immediately judge.
 
 - [ ] Focus on job-search threads in `Job search/active` plus related Inbox and Sent messages.
+- [ ] Use shipped defaults for destination folders, Obsidian output profile, prompt templates, update cadence, and confidence thresholds before exposing advanced tuning.
 - [ ] Detect "already replied", "awaiting response", "deadline", "timeline mismatch", and "relationship callback" nudges.
 - [ ] Show nudges only in reply Compose and only when evidence is strong.
 - [ ] Let the user open the source email or Obsidian note from each nudge.
