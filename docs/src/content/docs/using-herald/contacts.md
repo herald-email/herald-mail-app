@@ -7,7 +7,7 @@ Contacts turns the senders and imported address book data Herald knows about int
 
 ## Overview
 
-Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup through the native Contacts.framework API. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
+Press `2` to open Contacts. Herald loads contacts from the backend and, on macOS, can import Apple Contacts at startup through the native Contacts.framework API. Contacts can be searched by keyword or semantic similarity when AI/embeddings are available.
 
 ## Screen Anatomy
 
@@ -50,7 +50,7 @@ Press `3` to open Contacts. Herald loads contacts from the backend and, on macOS
 
 ### Open a Contact Detail
 
-1. Press `3`.
+1. Press `2`.
 2. Move through contacts with `j`/`k`.
 3. Press `enter`.
 4. Review contact metadata and recent messages.

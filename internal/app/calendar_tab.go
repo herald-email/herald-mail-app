@@ -2478,10 +2478,10 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.toggleFocusedCalendarCollection()
 		}
 		return m, nil
-	case "n":
+	case "n", "ctrl+n":
 		m.openCalendarCreate()
 		return m, nil
-	case "D":
+	case "D", "delete":
 		m.openCalendarDelete()
 		return m, nil
 	case "ctrl+d", "pgdown":
@@ -4033,7 +4033,7 @@ func (m *Model) renderCalendarDayAgenda(width, height int) string {
 		DayCount:     1,
 		Events:       m.calendarEventsForDay(day),
 		EmptyMessage: "No events on this day",
-		EmptyHint:    "h/l: previous/next day",
+		EmptyHint:    "←/→: previous/next day",
 	})
 }
 
@@ -4420,7 +4420,7 @@ func (m *Model) renderCalendarThreeDayLanes(width, height int) string {
 		DayCount:     3,
 		Events:       m.calendarEventsForThreeDay(start),
 		EmptyMessage: "No events in this 3-day window",
-		EmptyHint:    "h/l: slide 3-day window",
+		EmptyHint:    "←/→: slide 3-day window",
 	})
 }
 

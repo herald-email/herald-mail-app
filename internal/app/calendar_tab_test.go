@@ -1703,7 +1703,7 @@ func TestCalendarDayAgendaSwitchesFromAgendaAndRendersDrawer(t *testing.T) {
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Day Agenda", "Sun May 24", "Design review", "Daily standup", "Day Drawer", "Herald planning room", "Local", "Event TZ", "h/l: day", "a: agenda"} {
+	for _, want := range []string{"Day Agenda", "Sun May 24", "Design review", "Daily standup", "Day Drawer", "Herald planning room", "Local", "Event TZ", "←/→: day", "a: Agenda"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("day agenda missing %q:\n%s", want, rendered)
 		}
@@ -1795,7 +1795,7 @@ func TestCalendarWeekGridSwitchesFromAgendaAndRendersInspector(t *testing.T) {
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"Week Time-Grid", "Mon May 18", "Sun May 24", "Design review", "Daily standup", "Week Inspector", "Herald planning room", "Local", "Event TZ", "h/l: week", "d: day", "a: agenda"} {
+	for _, want := range []string{"Week Time-Grid", "Mon May 18", "Sun May 24", "Design review", "Daily standup", "Week Inspector", "Herald planning room", "Local", "Event TZ", "←/→: week", "d: Day", "a: Agenda"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("week grid missing %q:\n%s", want, rendered)
 		}
@@ -2391,7 +2391,7 @@ func TestCalendarThreeDayCommandSwitchesFromAgendaAndRendersPanel(t *testing.T) 
 	}
 
 	rendered := stripANSI(m.renderMainView())
-	for _, want := range []string{"3-Day Command", "Sun May 24", "Mon May 25", "Tue May 26", "Design review", "Weekly planning", "Command Panel", "Next Up", "Open Slots", "Conflicts", "Mode", "read-only", "h/l: 3-day", "w: week", "d: day", "a: agenda"} {
+	for _, want := range []string{"3-Day Command", "Sun May 24", "Mon May 25", "Tue May 26", "Design review", "Weekly planning", "Command Panel", "Next Up", "Open Slots", "Conflicts", "Mode", "read-only", "←/→: 3-Day", "w: Week", "d: Day", "a: Agenda"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("3-day command missing %q:\n%s", want, rendered)
 		}
@@ -3278,6 +3278,69 @@ func TestCalendarEventCreateFallsBackFromReadOnlySelectionToWritableCalendar(t *
 	}
 	if strings.Contains(m.calendarStatus, "read-only") {
 		t.Fatalf("calendarStatus = %q, should not block on read-only selection when writable calendars exist", m.calendarStatus)
+	}
+}
+
+func TestCalendarDefaultCtrlNOpensCreateAndEmacsCtrlNMovesSelection(t *testing.T) {
+	writable := models.CalendarCollection{
+		Ref: models.CollectionRef{
+			SourceID:     "google-calendar",
+			AccountID:    "work",
+			Kind:         models.SourceKindCalendar,
+			CollectionID: "primary",
+			DisplayName:  "Work",
+		},
+		AccessRole: "owner",
+	}
+	makeCalendarModel := func(cfg *config.Config) *Model {
+		b := &calendarAgendaStubBackend{available: true, events: testCalendarEvents(), collections: []models.CalendarCollection{writable}}
+		m := New(b, nil, "", nil, false)
+		if cfg != nil {
+			m.SetConfig(cfg)
+		}
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+		m = updated.(*Model)
+		m.loading = false
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.setCalendarCollections([]models.CalendarCollection{writable})
+		m.setCalendarEventsForDisplay(testCalendarEvents())
+		m.calendarCursor = 0
+		m.calendarDetail = m.selectedCalendarEvent()
+		return m
+	}
+
+	defaultModel := makeCalendarModel(&config.Config{})
+	if hints := stripANSI(defaultModel.renderKeyHints()); !strings.Contains(hints, "ctrl+n/n: new") {
+		t.Fatalf("default calendar hints should advertise ctrl+n/n new event, got:\n%s", hints)
+	}
+	model, cmd := defaultModel.handleKeyMsg(keyCtrl('n'))
+	defaultModel = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("default ctrl+n create returned command %T, want none", cmd)
+	}
+	if !defaultModel.calendarEdit.Active || !defaultModel.calendarEdit.Create {
+		t.Fatalf("default ctrl+n should open Create Event, active=%v create=%v", defaultModel.calendarEdit.Active, defaultModel.calendarEdit.Create)
+	}
+
+	emacsCfg := &config.Config{}
+	emacsCfg.Keyboard.Profile = "emacs"
+	emacsModel := makeCalendarModel(emacsCfg)
+	model, cmd = emacsModel.handleKeyMsg(keyCtrl('n'))
+	emacsModel = model.(*Model)
+	if cmd != nil {
+		t.Fatalf("emacs ctrl+n returned command %T, want none", cmd)
+	}
+	if emacsModel.calendarEdit.Active {
+		t.Fatal("emacs ctrl+n should move selection, not open Create Event")
+	}
+	if emacsModel.calendarCursor != 1 {
+		t.Fatalf("emacs ctrl+n calendarCursor = %d, want 1", emacsModel.calendarCursor)
+	}
+	hints := stripANSI(emacsModel.renderKeyHints())
+	requireHintSegments(t, hints, "n: new", "↑/ctrl+p ↓/ctrl+n: events")
+	if strings.Contains(hints, "ctrl+n/n: new") {
+		t.Fatalf("emacs calendar hints should not advertise ctrl+n as new event:\n%s", hints)
 	}
 }
 

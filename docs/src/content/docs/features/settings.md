@@ -3,7 +3,7 @@ title: Settings
 description: Edit Herald account, server, AI, sync, cleanup, keyboard, theme, and OAuth settings from the TUI.
 ---
 
-Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
+Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
 
 ## Overview
 
@@ -13,8 +13,8 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 
 | Area | What it shows |
 | --- | --- |
-| Settings menu | `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
-| Account setup | Vendor, username, password/app password, IMAP, SMTP, and provider-specific options. |
+| Settings menu | `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
+| Accounts | Configured mail and calendar sources, `Add account`, `Add calendar only`, provider credentials, OAuth, IMAP, SMTP, CalDAV, and disconnect actions. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
@@ -50,10 +50,19 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 ### Open and Save Settings
 
 1. Press `S`.
-2. Choose `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, or `Signature`.
+2. Choose `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, or `Signature`.
 3. Update the fields in that category.
 4. Save the category.
 5. Herald writes config, applies runtime changes that can be applied immediately, and returns to the settings menu.
+
+### Add Mail or Calendar Sources
+
+1. Press `S`.
+2. Choose `Accounts`.
+3. Choose `Add account` to add a mail source, or choose `Add calendar only` for a standalone calendar.
+4. For Gmail OAuth, leave `Include Google Calendar` enabled when you want Gmail and Google Calendar added through one browser consent flow.
+5. For standalone calendars, choose Google Calendar OAuth or a CalDAV provider such as Fastmail, iCloud, Yahoo, or Custom CalDAV.
+6. Save after Herald validates the selected source. Mail saves validate read/send access; calendar saves validate by listing calendars before writing config.
 
 ### Reclaim Offline Cache Storage
 
@@ -109,7 +118,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 
 ### Start OAuth
 
-1. Choose an OAuth-capable provider path.
+1. Choose an OAuth-capable provider path from `Settings > Accounts`.
 2. In first-run onboarding or the in-app settings overlay, choose the OAuth path directly.
 3. Confirm you are using Homebrew/a release binary with OAuth defaults, a source build made with `.herald-dev.env` or exported Google OAuth variables, or a shell that has `HERALD_GOOGLE_CLIENT_ID` and `HERALD_GOOGLE_CLIENT_SECRET` exported. See [Local OAuth Builds](/development/local-oauth-builds/) for source-build options.
 4. In the OAuth wait overlay, press `enter` to open the browser.
@@ -125,7 +134,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 | Category mode | Settings shows only the selected category's fields plus save/cancel controls. `Esc` returns to the menu first; the next menu-level `Esc` exits. |
 | Overlay mode | Settings appears over the current screen at supported sizes; at `80x24` it fits inside the viewport, and at `50x15` the standard minimum-size guard appears instead of a clipped form. |
 | First-run mode | Account details are validated before optional preference steps, and wizard completion is required before the main mailbox opens. |
-| Account validation | Account settings are held in memory while Herald checks IMAP and SMTP before saving or applying them. |
+| Account validation | Account settings are held in memory while Herald checks IMAP/SMTP or calendar-source access before saving or applying them. |
 | OAuth waiting | Herald shows authorization URL state, waits for callback, and lets `Esc`/`q` cancel without saving settings. |
 | OAuth cancelled or timed out | Herald shows a clear error, keeps previous settings active, and does not write token data. |
 | OAuth saved | Token data is written to config only after OAuth, IMAP, SMTP validation, and final setup save succeed. |

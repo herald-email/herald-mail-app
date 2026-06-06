@@ -139,7 +139,7 @@ Raw HTML in event descriptions makes the current detail and inspector surfaces f
 
 Screen `06` covers the calendar mutation surface after the read-only calendar views are credible. The create/edit/delete workflow should look like a terminal-native calendar form while proving provider-first writes, cache-after-success updates, and visible failure states.
 
-- [x] Open Create Event from Calendar with `Ctrl+N`, scoped to the selected calendar rail collection when available, with the Calendar field opening a writable-calendar picker that lists current-account calendars first while still allowing other configured accounts.
+- [x] Open Create Event from Calendar with `Ctrl+N`/`n` in the default profile and `n` in the Emacs profile, scoped to the selected calendar rail collection when available, with the Calendar field opening a writable-calendar picker that lists current-account calendars first while still allowing other configured accounts.
 - [x] Render Create/Edit Event with Calendar, title, location, start/end, event timezone, display timezones, all-day, attendees, recurrence, reminders, notes, preview, timezone preview, conflict check, and recurrence preview sections.
 - [x] Create/Edit Event fields are cursor-aware and modal, so printable shortcut-looking text, arrows, and `h/j/k/l` edit the active field instead of switching tabs or moving Calendar browse ranges.
 - [x] Create/Edit Event provides keyboard picker submodes for create-calendar target selection, timezone selection, attendee contact autocomplete, recurrence presets, reminder presets, and mini calendar date selection while preserving manual text fallbacks where fields are textual.

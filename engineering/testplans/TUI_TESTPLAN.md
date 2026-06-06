@@ -1763,7 +1763,7 @@ Check these states during every applicable lane:
 - The selected event detail shows title, time range, location, status, calendar/source, and notes in a structured read-only surface.
 - `Enter` opens a full Event Detail view and `Esc` returns to the same selected agenda row.
 - `S` opens Settings from Calendar, Settings hints replace the Calendar hints while the overlay is open, and closing Settings preserves the active Calendar view and selected event.
-- Calendar hints are read-only and do not advertise RSVP, edit, create, or provider mutation actions.
+- Calendar hints are context-aware: `Tab`/`Shift+Tab` cycle panes, arrows label range movement before legacy `h`/`l` aliases, and provider-backed actions appear only where they are available.
 - Timeline, Contacts, Compose, account switching, chat, settings, SSH, and MCP behavior remain unchanged.
 - At `50x15`, the minimum-size guard appears instead of clipped calendar chrome, and resizing larger restores the agenda or detail state cleanly.
 
@@ -1788,7 +1788,7 @@ Check these states during every applicable lane:
 - The drawer shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between days without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Day Agenda state.
-- Hints advertise `d: day`, `a: agenda`, and `h/l: day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- Hints advertise `d: Day`, `a: Agenda`, and `←/→: day` only in Calendar contexts; `h`/`l` still work as aliases and pane cycling stays on `Tab`/`Shift+Tab`.
 - At `50x15`, the minimum-size guard appears instead of clipped Day Agenda chrome, and resizing larger restores the Day Agenda or detail state cleanly.
 
 ### TC-38F — Calendar week time-grid
@@ -1816,7 +1816,7 @@ Check these states during every applicable lane:
 - The inspector shows title, local time, event timezone, location, status, calendar/source, mode, and notes for the selected event.
 - `h/l` and left/right move between weeks without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the Week Time-Grid state.
-- Hints advertise `w: week`, `d: day`, `a: agenda`, and `h/l: week` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- Hints advertise `w: Week`, `d: Day`, `a: Agenda`, and `←/→: week` only in Calendar contexts; `h`/`l` still work as aliases and pane cycling stays on `Tab`/`Shift+Tab`.
 - At `50x15`, the minimum-size guard appears instead of clipped Week Time-Grid chrome, and resizing larger restores the Week Time-Grid or detail state cleanly.
 
 ### TC-38G — Calendar 3-Day Command view
@@ -1839,7 +1839,7 @@ Check these states during every applicable lane:
 - The command panel shows the selected event, next-up event, open-slot summary, conflict summary, mode, and notes where available.
 - `h/l` and left/right slide the three-day window without invoking mail navigation or mutation behavior.
 - `Enter` opens the existing full Event Detail reader and `Esc` returns to the 3-Day Command state.
-- Hints advertise `t: 3-day`, `w: week`, `d: day`, `a: agenda`, and `h/l: 3-day` only in Calendar contexts, and no RSVP, edit, create, or provider mutation keys appear.
+- Hints advertise `t: 3-Day`, `w: Week`, `d: Day`, `a: Agenda`, and `←/→: 3-Day` only in Calendar contexts; `h`/`l` still work as aliases and pane cycling stays on `Tab`/`Shift+Tab`.
 - At `50x15`, the minimum-size guard appears instead of clipped 3-Day chrome, and resizing larger restores the 3-Day Command or detail state cleanly.
 
 ### TC-38H — Calendar full Event Detail and timezone foundation
@@ -1964,7 +1964,7 @@ This case covers the provider-backed event creation and deletion slice plus the 
 
 **Steps:**
 1. Launch demo mode or a deterministic provider-backed calendar fixture with at least one writable calendar collection and one read-only subscribed Google calendar such as `Holidays in United States`.
-2. Press `3` or `F4` to open Calendar, select the read-only calendar in the rail, then press `n`; confirm Create Event opens on an available writable calendar rather than targeting the read-only collection.
+2. Press `3` or `F4` to open Calendar, select the read-only calendar in the rail, then press `Ctrl+N` or `n` in the default profile; confirm Create Event opens on an available writable calendar rather than targeting the read-only collection. Repeat in the Emacs profile and confirm `n` opens Create Event while `Ctrl+N` keeps moving down.
 3. Repeat with a fixture that has no writable calendar collections; press `n` and confirm Create Event does not open and the status explains that a writable calendar source is required.
 4. Confirm Create Event shows Calendar, Title, Location, Start, End, Start TZ, End TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
 5. Focus the Calendar field, press `Enter`, and confirm the writable-calendar picker opens with the active account's calendars listed before calendars from other configured accounts; select a non-current-account writable calendar and confirm the draft preview updates to that calendar.
@@ -1974,7 +1974,7 @@ This case covers the provider-backed event creation and deletion slice plus the 
 9. Press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success and carries the selected calendar's source-scoped ref.
 10. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
 11. Force a Google Calendar authorization or missing-write-scope error, press `Ctrl+S`, and confirm Event Create/Edit stays open with unsaved values plus an `r: reconnect` action.
-12. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
+12. Press `Delete` or `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
 13. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
 14. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
 15. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
@@ -1985,6 +1985,7 @@ This case covers the provider-backed event creation and deletion slice plus the 
 - Read-only calendar collections remain visible for browsing/filtering; Create Event automatically uses an available writable calendar, and update/delete/RSVP mutations still reject known read-only targets.
 - Google Calendar authorization or missing-write-scope failures keep the draft open and expose a reconnect action without leaking raw provider details.
 - Delete always requires confirmation in the Calendar TUI and never runs from a text-entry surface.
+- Default Calendar hints advertise `Ctrl+N/n` for create, Emacs Calendar hints advertise `n` for create while preserving `Ctrl+N` movement, and pane cycling remains `Tab`/`Shift+Tab`.
 - Event Edit/Create follows the Screen 06 structure closely enough that the color side-by-side comparison can be reviewed without relying on prose.
 - Event Edit/Create owns text input modally: tab switching, calendar range movement, and browse navigation do not fire while editing fields or picker search.
 - Event Create shows a contextual Enter hint for the Calendar field, lists only writable create targets, orders current-account calendars first, and allows choosing writable calendars from other accounts.
@@ -2340,7 +2341,7 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 
 **Steps:**
 1. Launch Herald with a working demo or test config and open Settings with `S`.
-2. Open `Account setup`, change the account to failing IMAP or SMTP values, and save.
+2. Open `Accounts`, change the account to failing IMAP or SMTP values, and save.
 3. Capture the error modal and then dismiss it.
 4. Confirm the previous account view remains active and the original config file contents are unchanged.
 

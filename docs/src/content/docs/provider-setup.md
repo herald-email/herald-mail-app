@@ -85,7 +85,7 @@ Microsoft Calendar and Proton Calendar are not basic CalDAV presets in Herald. M
 
 ## Calendar Provider Matrix
 
-Herald can add standalone calendar sources from `Settings > Accounts > Add account > Add Calendar`. Google Calendar uses Herald's supported OAuth path, while CalDAV providers use a URL, username, and provider-specific password.
+Herald can add standalone calendar sources from `Settings > Accounts > Add calendar only`. Google Calendar uses Herald's supported OAuth path, while CalDAV providers use a URL, username, and provider-specific password. Gmail OAuth can also add Gmail and Google Calendar together from `Settings > Accounts > Add account`.
 
 | Provider path | Calendar URL or API | Credential type |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ Microsoft Calendar is not shown as a CalDAV preset because the live integration 
 
 ### Google Calendar OAuth
 
-1. Open `Settings > Accounts > Add account > Add Calendar`.
+1. Open `Settings > Accounts > Add calendar only`.
 2. Choose `Google Calendar`.
 3. Enter the Google Calendar identity if you want Google to preselect an account.
 4. Complete browser authorization and return to Herald.
@@ -146,7 +146,7 @@ Source-built Google Calendar OAuth uses the same local build options as Gmail OA
 
 ### CalDAV calendars
 
-1. Open `Settings > Accounts > Add account > Add Calendar`.
+1. Open `Settings > Accounts > Add calendar only`.
 2. Choose Fastmail, iCloud, Yahoo, or Custom CalDAV.
 3. Use the prefilled CalDAV URL or enter your provider's value.
 4. Enter the provider username and app password or app-specific password shown in that provider's help.

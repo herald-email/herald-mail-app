@@ -52,7 +52,7 @@ make build
 ./bin/herald --demo --open 'herald://mail/search?folder=INBOX&q=invoice'
 ```
 
-Press `3` for Calendar, `n` to create an event, `e` to edit one, `/` to search events, and `i` from an email preview containing an invitation to create or update a calendar event.
+Press `3` for Calendar, `Ctrl+N` or `n` to create an event in the default profile, `e` to edit one, `/` to search events, and `i` from an email preview containing an invitation to create or update a calendar event. Emacs-profile users keep `Ctrl+N` for movement and use `n` to create events.
 
 ## Previous Release
 

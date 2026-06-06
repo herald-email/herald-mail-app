@@ -203,7 +203,7 @@ func TestChromeHeightBudget_CalendarModeSwitchingFillsBottomChrome(t *testing.T)
 			assertFitsWidth(t, size.width, rendered)
 			if size.width >= 120 {
 				hints := stripANSI(m.renderKeyHints())
-				requireHintSegments(t, hints, "h/l: week", "d: day", "a: agenda", "enter: detail")
+				requireHintSegments(t, hints, "←/→: week", "d: Day", "a: Agenda", "enter: detail")
 			}
 		})
 	}

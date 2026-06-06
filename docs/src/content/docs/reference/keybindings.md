@@ -149,8 +149,7 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `tab` / `shift+tab` | Cycle focus between calendar rail, main schedule/list, and detail or command panel. |
 | `j` / `down` | Move to the next visible event or result. |
 | `k` / `up` | Move to the previous visible event or result. |
-| `h` / `left` | Move to the previous day, week, or 3-day range. |
-| `l` / `right` | Move to the next day, week, or 3-day range. |
+| `left` / `right` | Move to the previous or next day, week, or 3-day range; `h`/`l` remain aliases. |
 | `w` | Switch to Week Time-Grid. |
 | `d` | Switch to Day Agenda. |
 | `t` | Switch to 3-Day Command. |
@@ -158,11 +157,13 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 | `/` | Open Calendar Search. |
 | `x` | Open cross-source mail-and-calendar search when available. |
 | `enter` | Open full event detail for the selected event. |
-| `n` | Open Event Create on a writable calendar source. |
+| `ctrl+n` / `n` | Open Event Create on a writable calendar source in the default profile. |
+| `n` | Open Event Create in the Emacs profile; `ctrl+n` keeps moving down. |
 | `e` | Open Event Edit for the selected event when the source supports it. |
-| `D` | Delete the selected event after confirmation when the source supports deletion. |
+| `delete` / `D` | Delete the selected event after confirmation when the source supports deletion. |
 | `space` | Show or hide the focused calendar when the rail is focused. |
 | `p` | Show or hide past rows in Agenda when past rows are hidden. |
+| `m` | Release or restore Herald mouse capture for terminal-native text selection. |
 | `esc` | Return from detail/search/edit to the previous Calendar view. |
 
 ## Contacts

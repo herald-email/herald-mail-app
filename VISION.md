@@ -686,7 +686,7 @@ Calendar sources extend Herald's source platform beyond mail while keeping provi
 - [x] CalDAV account setup offers provider-specific guidance for Fastmail, iCloud, and Yahoo app-password flows while keeping Proton Calendar and Microsoft Calendar out of the basic CalDAV preset list.
 - [x] Calendar screens `01` through `04` match the reference mockups closely enough to require side-by-side real-app Sonokai Signal screenshots in implementation reports.
 - [x] Calendar Week, Day, 3-Day, Agenda, Search, and invitation picker surfaces share an Apple Calendar-style multi-account calendar rail with colored calendar toggles.
-- [x] Calendar range headers clearly state the active day, week, 3-day window, or agenda range and advertise `h/l` plus arrow movement.
+- [x] Calendar range headers clearly state the active day, week, 3-day window, or agenda range and advertise arrow movement first while preserving `h/l` aliases.
 - [x] Calendar Agenda uses whole calendar-month windows, and Week uses Monday-Sunday windows, instead of rolling ranges from the current day.
 - [x] Calendar Agenda hides events before the current local day by default, while exposing a reversible show-past affordance and preserving whole-month range navigation.
 - [x] Calendar date-only and all-day provider events render on their intended local calendar dates, with exclusive all-day end dates kept out of the following day.
@@ -806,7 +806,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Gmail setup copy links directly to Google docs for IMAP access, third-party client setup, and App Password generation
 - [x] Gmail OAuth is available by default as a browser-based path; Homebrew/release binaries include OAuth defaults, while source builds require configured Google OAuth credentials to run OAuth
 - [x] Gmail OAuth writes and normalizes `provider: gmail` to the Gmail API mail source for core mail operations using the Gmail API `gmail.modify` OAuth scope
-- [x] Account setup validates required read/send access before saving or applying first-run or account-settings changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
+- [x] `Settings > Accounts` and first-run setup validate required read/send access before saving or applying account changes; normal startup for existing configs still opens cached/offline data when live connectivity is unavailable
 - [x] Gmail OAuth setup treats browser consent as a candidate config, validates Gmail API read/send capability before saving, and makes Google cancel/timeout states explicit
 - [x] Back navigation: `Esc` and `Shift+Tab` can return to previous first-run wizard screens without being blocked by required-field validation on the current screen
 - [x] Step 3 — Enter or customize: after account validation, first-run shows a compact Advanced settings review with AI off/deferred, cache set to message bodies without attachments, keyboard Default, theme Inherited/Default, and empty signature, then offers `Enter Herald` with `Customize setup`
@@ -819,7 +819,7 @@ First-run experience and ongoing configuration should not require the user to ed
 
 ### In-app settings panel
 - [x] Accessible from the TUI with `S` key as a compact centered overlay over the current screen; it fits at `80x24` and falls back to the minimum-size guard at `50x15`
-- [x] Top-level category menu for `Account setup`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
+- [x] Top-level category menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] AI settings expose curated Ollama chat and embedding model recommendations, including downgrade guidance for constrained machines and a translation-quality warning for `llama3.x` choices
 - [x] AI settings warn when a previously configured Ollama model is no longer installed or reachable, disable AI actions, show install commands, and offer a Save Disabled action without blocking cached/offline startup
@@ -834,7 +834,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] `Settings > Accounts` can disconnect configured accounts/sources and purge their local cache without deleting provider-side mail or calendars
 - [ ] Account reorder remains planned after add/remove/account detail management
 - [x] Category saves write the config, apply supported runtime updates, and return to the settings menu; menu hints say `enter open` and `esc exit`, and `Esc` unwinds filter/category state before exiting without saving unsaved edits
-- [x] Account setup saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
+- [x] `Settings > Accounts` saves validate IMAP and SMTP before replacing the active config/backend/SMTP client; failed validation leaves the previous account active and shows a compact error modal
 - [x] Passwords always hidden; "reveal" button toggles visibility
 
 ---

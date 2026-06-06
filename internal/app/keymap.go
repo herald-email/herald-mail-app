@@ -416,7 +416,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 		prefer("timeline", keyboardModeNormal, "shift+delete", CommandMailDeleteImmediate)
 		prefer("compose", keyboardModeNormal, "ctrl+enter", CommandComposeSend)
 	case keyboardProfileEmacs:
-		for _, scope := range []string{"timeline", "cleanup", "contacts"} {
+		for _, scope := range []string{"timeline", "cleanup", "contacts", "calendar"} {
 			prefer(scope, keyboardModeNormal, "ctrl+f", CommandPaneRight)
 			prefer(scope, keyboardModeNormal, "ctrl+b", CommandPaneLeft)
 			prefer(scope, keyboardModeNormal, "ctrl+n", CommandPaneDown)

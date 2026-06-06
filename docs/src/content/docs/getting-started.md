@@ -79,6 +79,8 @@ Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, 
 
 The wizard recommends Gmail OAuth for Google accounts and can fill IMAP presets for common alternatives, including Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
 
+To explore safely before connecting accounts, run `herald --demo`, press or click `3 Calendar`, and try Week, Day, 3-Day, Agenda, Search, Event Detail, and the demo invitation import flow.
+
 <!-- HERALD_SCREENSHOT id="getting-started-main-tui" page="getting-started" alt="Herald main interface after initial sync" state="demo mode, 120x40, Timeline tab active" desc="Shows the first usable Herald interface with tab bar, folder sidebar, Timeline list, status bar, and key hints." capture="tmux demo 120x40; ./bin/herald --demo; press 1" -->
 
 ![Herald main interface after initial sync](/screenshots/getting-started-main-tui.png)
@@ -135,4 +137,5 @@ Open `http://localhost:7681`. The `-W` flag is required for keyboard input.
 - [Demo Mode](/demo-mode/) if you want to explore without credentials.
 - [Provider Setup](/provider-setup/) for provider presets and authentication choices.
 - [Timeline](/using-herald/timeline/) for the default inbox workflow.
+- [Calendar](/using-herald/calendar/) for the schedule workspace, demo calendar, and invitation import flow.
 - [All Keybindings](/reference/keybindings/) for a compact command table.

@@ -23,6 +23,18 @@ Use `-theme` with demo mode to try a built-in palette or local YAML theme withou
 
 ![Demo mode Timeline with synthetic messages](/screenshots/demo-mode-timeline.png)
 
+## Calendar demo path
+
+Use Calendar in demo mode when you want to try the schedule workspace without connecting a real calendar:
+
+1. Run `./bin/herald --demo`.
+2. Press or click `3 Calendar`.
+3. Try `w` Week, `d` Day, `t` 3-Day, `a` Agenda, `/` Search, and `enter` Event Detail.
+4. Create, edit, and delete demo events where the selected demo calendar is writable.
+5. Return to Timeline, open the demo invitation email, and press `i` from the preview to import the `.ics` invitation into a demo calendar.
+
+Calendar mouse actions also work in demo mode: click mini-month days, click events, double-click the selected event for detail, click rail swatches or checkboxes, scroll calendar lists, and press `m` when you want terminal-native text selection.
+
 ## Image rendering demo
 
 Demo mode includes a `Step 5: View inline images in full screen` Herald Image Lab email with embedded Creative Commons inline images. To test raster image rendering, run Herald in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself and force the Kitty graphics path:
