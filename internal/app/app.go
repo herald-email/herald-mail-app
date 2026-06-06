@@ -205,6 +205,12 @@ type ComposeMemoryRadarMsg struct {
 	Err   error
 }
 
+// ComposeMemoryRadarDebounceMsg fires after Compose Radar's context refresh debounce.
+type ComposeMemoryRadarDebounceMsg struct {
+	Token     int
+	Signature string
+}
+
 // ClassifyProgressMsg carries a single classification result
 type ClassifyProgressMsg struct {
 	MessageRef models.MessageRef
@@ -762,6 +768,7 @@ type Model struct {
 	composeMemoryLoading          bool
 	composeMemoryPrep             memory.ReplyPrep
 	composeMemoryError            string
+	composeMemoryDebounceToken    int
 	composeReturnSet              bool
 	composeReturnTab              int
 	composeReturnPanel            int
@@ -2841,6 +2848,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshComposeLayout()
 		return m, nil
+
+	case ComposeMemoryRadarDebounceMsg:
+		if msg.Token != m.composeMemoryDebounceToken || msg.Signature != m.composeMemoryRadarSignature() {
+			return m, nil
+		}
+		return m, m.startComposeMemoryRadar()
 
 	case composeExternalEditorFinishedMsg:
 		m.applyComposeExternalEditorResult(msg)

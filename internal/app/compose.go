@@ -515,8 +515,13 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.composeField {
 	case composeFieldTo:
+		before := m.composeMemoryRadarSignature()
 		m.composeTo, cmd = m.composeTo.Update(msg)
-		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeTo.Value())))
+		cmds := []tea.Cmd{cmd, m.searchContactsCmd(currentComposeToken(m.composeTo.Value()))}
+		if m.composeMemoryRadarContextChanged(before) {
+			cmds = append(cmds, m.scheduleComposeMemoryRadarRefresh())
+		}
+		return m, tea.Batch(cmds...)
 	case composeFieldCC:
 		m.composeCC, cmd = m.composeCC.Update(msg)
 		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeCC.Value())))
@@ -524,11 +529,19 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.composeBCC, cmd = m.composeBCC.Update(msg)
 		return m, tea.Batch(cmd, m.searchContactsCmd(currentComposeToken(m.composeBCC.Value())))
 	case composeFieldSubject:
+		before := m.composeMemoryRadarSignature()
 		m.composeSubject, cmd = m.composeSubject.Update(msg)
+		if m.composeMemoryRadarContextChanged(before) {
+			return m, tea.Batch(cmd, m.scheduleComposeMemoryRadarRefresh())
+		}
 	case composeFieldBody:
+		before := m.composeMemoryRadarSignature()
 		m.composeBody, cmd = m.composeBody.Update(msg)
 		if msg.Key().Mod.Contains(tea.ModAlt) && msg.Key().Text != "" {
 			cmd = nil
+		}
+		if m.composeMemoryRadarContextChanged(before) {
+			return m, tea.Batch(cmd, m.scheduleComposeMemoryRadarRefresh())
 		}
 	}
 	return m, cmd

@@ -265,11 +265,12 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Add deterministic cached-mail extraction for last contact, last user reply, open questions, commitments, deadlines, and job/work track status from Inbox and Sent body snippets
 - [x] Add read-only Gollem memory tools for memory search, contact history, company tracks, open loops, and reply-prep context
 - [x] Add Compose Radar v1 as a compact source-backed reply context panel with at most three high-confidence nudges and no draft mutation
+- [x] Refresh Compose Radar after reply recipient, subject, or body changes with debounce and stale-result protection
 - [x] Add Obsidian preview/merge rendering that preserves user-authored note sections and supports minimal YAML, hidden YAML, link, and tag modes
 - [ ] Build local email memories from cached Inbox, Sent, thread headers, contacts, body snippets, classifications, and semantic embeddings
 - [x] Store every memory with evidence pointers to email message refs, folders, dates, snippets, note paths, or research URLs
 - [x] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
-- [ ] Add Compose Radar as a compact compose context panel with at most three source-backed nudges for conflicts, callbacks, open loops, relationship context, and research updates
+- [ ] Add Compose Radar actions and richer nudge types for conflicts, callbacks, open loops, relationship context, research updates, open source, dismiss, insert, and resolve
 - [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence
 - [ ] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
 - [x] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior

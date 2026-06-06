@@ -1195,12 +1195,14 @@ Check these states during every applicable lane:
 3. Confirm the answer cites memory evidence from email or Obsidian paths and does not claim facts without sources.
 4. Open a reply Compose screen for the same thread.
 5. Capture the Compose screen before typing, type body text, and capture again.
-6. At `50x15`, confirm the minimum-size guard or compact recovery path appears rather than an overlapping Radar panel.
+6. Change the recipient or subject, then type more body text before the first refresh can complete.
+7. At `50x15`, confirm the minimum-size guard or compact recovery path appears rather than an overlapping Radar panel.
 
 **Expect:**
 - Memory chat tools are read-only and cannot send, delete, archive, mutate calendar events, or write Obsidian notes.
 - Chat distinguishes email-backed memory, Obsidian-backed memory, research-backed memory, and inference when those sources are present.
 - Compose Radar shows at most three source-backed nudges and stays hidden or quiet when there is no high-confidence memory.
+- Compose Radar re-ranks after recipient, subject, or body changes with a short debounce, and stale refreshes never replace the latest draft context.
 - Compose Radar does not change To, Subject, Body, attachments, preserved reply context, or AI review state without an explicit user action.
 - Low-confidence memories may appear in chat/search results but do not become Compose Radar warnings.
 - Missing local AI, no Sent cache, no memory directory, or missing source evidence leaves Compose usable and shows a bounded unavailable or empty state.

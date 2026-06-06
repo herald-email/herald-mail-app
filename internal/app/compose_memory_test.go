@@ -13,9 +13,11 @@ type memoryStubBackend struct {
 	stubBackend
 	prep      memory.ReplyPrep
 	lastQuery memory.ReplyPrepQuery
+	calls     int
 }
 
 func (b *memoryStubBackend) BuildReplyMemoryContext(_ context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	b.calls++
 	b.lastQuery = query
 	return b.prep, nil
 }
@@ -66,6 +68,99 @@ func TestComposeMemoryRadarLoadsWithoutMutatingDraft(t *testing.T) {
 	}
 	if backend.lastQuery.Recipient != "sergey@example.com" || backend.lastQuery.Subject != "Senior engineer interview" {
 		t.Fatalf("radar query = %#v", backend.lastQuery)
+	}
+}
+
+func TestComposeMemoryRadarDebounceIgnoresStaleDraftContext(t *testing.T) {
+	backend := &memoryStubBackend{}
+	m := New(backend, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCompose
+	m.composeTo.SetValue("sergey@example.com")
+	m.composeSubject.SetValue("Senior engineer interview")
+	m.composeBody.SetValue("old body")
+	m.replyContextEmail = mockEmails()[0]
+
+	m.composeMemoryDebounceToken++
+	stale := ComposeMemoryRadarDebounceMsg{
+		Token:     m.composeMemoryDebounceToken,
+		Signature: m.composeMemoryRadarSignature(),
+	}
+	m.composeBody.SetValue("new body")
+
+	updatedModel, cmd := m.Update(stale)
+	updated := updatedModel.(*Model)
+	if cmd != nil {
+		t.Fatal("stale debounce should not start a memory refresh command")
+	}
+	if backend.calls != 0 || updated.composeMemoryLoading {
+		t.Fatalf("stale debounce started radar: calls=%d loading=%v", backend.calls, updated.composeMemoryLoading)
+	}
+
+	cmd = updated.scheduleComposeMemoryRadarRefresh()
+	if cmd == nil {
+		t.Fatal("expected current debounce command for reply compose")
+	}
+	current := ComposeMemoryRadarDebounceMsg{
+		Token:     updated.composeMemoryDebounceToken,
+		Signature: updated.composeMemoryRadarSignature(),
+	}
+	updatedModel, cmd = updated.Update(current)
+	updated = updatedModel.(*Model)
+	if cmd == nil {
+		t.Fatal("current debounce should start Compose Radar refresh")
+	}
+	raw := cmd()
+	msg, ok := raw.(ComposeMemoryRadarMsg)
+	if !ok {
+		t.Fatalf("radar command returned %T", raw)
+	}
+	updatedModel, _ = updated.Update(msg)
+	updated = updatedModel.(*Model)
+
+	if backend.calls != 1 {
+		t.Fatalf("BuildReplyMemoryContext calls = %d, want 1", backend.calls)
+	}
+	if backend.lastQuery.DraftExcerpt != "new body" {
+		t.Fatalf("draft excerpt = %q, want latest body", backend.lastQuery.DraftExcerpt)
+	}
+	if updated.composeTo.Value() != "sergey@example.com" || updated.composeSubject.Value() != "Senior engineer interview" || updated.composeBody.Value() != "new body" {
+		t.Fatalf("debounced radar mutated draft fields")
+	}
+}
+
+func TestComposeBodyEditSchedulesMemoryRadarRefreshForRepliesOnly(t *testing.T) {
+	backend := &memoryStubBackend{}
+	m := New(backend, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabCompose
+	m.composeField = composeFieldBody
+	m.composeBody.Focus()
+	m.composeTo.SetValue("sergey@example.com")
+	m.composeSubject.SetValue("Senior engineer interview")
+	m.composeBody.SetValue("Thanks")
+	m.composeBody.CursorEnd()
+	m.replyContextEmail = mockEmails()[0]
+
+	beforeToken := m.composeMemoryDebounceToken
+	model, cmd := m.handleComposeKey(keyRunes("!"))
+	updated := model.(*Model)
+	if cmd == nil {
+		t.Fatal("body edit should return a batched command with radar debounce")
+	}
+	if updated.composeMemoryDebounceToken == beforeToken {
+		t.Fatal("body edit did not schedule Compose Radar debounce")
+	}
+	if updated.composeBody.Value() != "Thanks!" {
+		t.Fatalf("body edit value = %q", updated.composeBody.Value())
+	}
+
+	updated.replyContextEmail = nil
+	beforeToken = updated.composeMemoryDebounceToken
+	model, _ = updated.handleComposeKey(keyRunes("?"))
+	updated = model.(*Model)
+	if updated.composeMemoryDebounceToken != beforeToken {
+		t.Fatal("new compose without reply context should not schedule Compose Radar debounce")
 	}
 }
 

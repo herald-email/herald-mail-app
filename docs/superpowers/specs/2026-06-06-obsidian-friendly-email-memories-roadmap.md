@@ -75,7 +75,7 @@ Herald Memories should appear where context changes user behavior: chat, Compose
 Compose Radar is the flagship interaction because it catches context at the moment of reply. It should be quiet, bounded, and useful enough that users trust it instead of treating it as another AI panel.
 
 - [x] Trigger retrieval when Compose opens for a reply or quick reply with known recipients.
-- [ ] Re-rank nudges when recipient, subject, or draft body changes, with debounce and stale-result protection.
+- [x] Re-rank nudges when recipient, subject, or draft body changes, with debounce and stale-result protection.
 - [x] Show at most three nudges by default.
 - [ ] Support nudge types: conflict, callback, open loop, relationship context, research update, and draft risk.
 - [ ] Provide actions: open source, insert phrase, dismiss, mark resolved, save memory, research person/company.
@@ -172,6 +172,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] **M2: Memory-aware chat tools** - add read-only Gollem tools for contact history, company tracks, related replies, open loops, and reply-prep context.
 - [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
+- [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."

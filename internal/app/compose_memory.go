@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/memory"
 )
+
+const composeMemoryRadarDebounce = 350 * time.Millisecond
 
 type composeMemoryBackend interface {
 	BuildReplyMemoryContext(context.Context, memory.ReplyPrepQuery) (memory.ReplyPrep, error)
@@ -15,6 +18,7 @@ type composeMemoryBackend interface {
 
 func (m *Model) resetComposeMemoryRadar() {
 	m.composeMemoryToken++
+	m.composeMemoryDebounceToken++
 	m.composeMemoryLoading = false
 	m.composeMemoryPrep = memory.ReplyPrep{}
 	m.composeMemoryError = ""
@@ -22,7 +26,7 @@ func (m *Model) resetComposeMemoryRadar() {
 
 func (m *Model) startComposeMemoryRadar() tea.Cmd {
 	source, ok := m.backend.(composeMemoryBackend)
-	if !ok || source == nil || m.activeTab != tabCompose {
+	if !ok || source == nil || !m.composeMemoryRadarEligible() {
 		m.resetComposeMemoryRadar()
 		return nil
 	}
@@ -49,6 +53,39 @@ func (m *Model) startComposeMemoryRadar() tea.Cmd {
 		prep, err := source.BuildReplyMemoryContext(context.Background(), query)
 		return ComposeMemoryRadarMsg{Token: token, Prep: prep, Err: err}
 	}
+}
+
+func (m *Model) composeMemoryRadarEligible() bool {
+	return m.activeTab == tabCompose && m.replyContextEmail != nil
+}
+
+func (m *Model) composeMemoryRadarSignature() string {
+	messageID := ""
+	if m.replyContextEmail != nil {
+		messageID = m.replyContextEmail.MessageID
+	}
+	return strings.Join([]string{
+		strings.TrimSpace(m.composeTo.Value()),
+		strings.TrimSpace(m.composeSubject.Value()),
+		chatAgentBoundedText(m.composeBody.Value(), 1000),
+		messageID,
+	}, "\x1f")
+}
+
+func (m *Model) scheduleComposeMemoryRadarRefresh() tea.Cmd {
+	if !m.composeMemoryRadarEligible() {
+		return nil
+	}
+	m.composeMemoryDebounceToken++
+	token := m.composeMemoryDebounceToken
+	signature := m.composeMemoryRadarSignature()
+	return tea.Tick(composeMemoryRadarDebounce, func(_ time.Time) tea.Msg {
+		return ComposeMemoryRadarDebounceMsg{Token: token, Signature: signature}
+	})
+}
+
+func (m *Model) composeMemoryRadarContextChanged(before string) bool {
+	return m.composeMemoryRadarEligible() && before != m.composeMemoryRadarSignature()
 }
 
 func (m *Model) composeMemoryRadarRows(tableHeight int) int {
