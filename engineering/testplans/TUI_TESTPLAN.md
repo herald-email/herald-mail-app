@@ -284,6 +284,7 @@ Check these states during every applicable lane:
 - Browse-number aliases keep working but are not the primary tab hint.
 - Compose is not shown as a top-level tab.
 - No stale status fragments from previous tabs.
+- Profile-owned tab shortcuts route through the keyboard command catalog: a Custom keymap that remaps `tab.timeline` and `tab.contacts` changes the title row, bottom hints, shortcut help, and actual tab switching together.
 
 ### TC-02A — Layout-independent physical-key shortcuts
 

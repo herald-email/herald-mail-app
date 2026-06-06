@@ -175,9 +175,10 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 	}
 
 	key = shortcutKey(msg)
+	command, hasCommand := m.scopedCommand("contacts", key)
 	if m.contactPreviewEmail != nil {
-		switch key {
-		case "esc":
+		switch {
+		case key == "esc":
 			if m.previewSelection.activeOn(previewSelectionContacts) {
 				m.clearPreviewSelection()
 				return m, nil
@@ -188,52 +189,52 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.contactPreviewScroll = 0
 			m.clearPreviewSelection()
 			return m, nil
-		case "v":
+		case key == "v":
 			m.togglePreviewSelectionForSurface(previewSelectionContacts)
 			return m, nil
-		case "left", "h":
+		case hasCommand && command == CommandPaneLeft:
 			if m.previewSelection.activeOn(previewSelectionContacts) {
 				m.moveActivePreviewSelection(0, -1)
 			}
 			return m, nil
-		case "right", "l":
+		case hasCommand && command == CommandPaneRight:
 			if m.previewSelection.activeOn(previewSelectionContacts) {
 				m.moveActivePreviewSelection(0, 1)
 			}
 			return m, nil
-		case "up", "k":
+		case hasCommand && command == CommandPaneUp:
 			if m.previewSelection.activeOn(previewSelectionContacts) {
 				m.moveActivePreviewSelection(-1, 0)
 			} else if m.contactPreviewScroll > 0 {
 				m.contactPreviewScroll--
 			}
 			return m, nil
-		case "down", "j":
+		case hasCommand && command == CommandPaneDown:
 			if m.previewSelection.activeOn(previewSelectionContacts) {
 				m.moveActivePreviewSelection(1, 0)
 			} else {
 				m.contactPreviewScroll++
 			}
 			return m, nil
-		case "y", "Y":
+		case key == "y" || key == "Y":
 			if cmd, handled := m.handlePreviewCopyKey(previewSelectionContacts, key); handled {
 				return m, cmd
 			}
 			return m, nil
-		case "p":
+		case hasCommand && command == CommandPreviewPrint:
 			model, cmd, _ := m.openPreviewPrintChooser(previewPrintSurfaceContacts)
 			return model.(*Model), cmd
 		}
 	}
-	switch key {
-	case "/":
+	switch {
+	case hasCommand && command == CommandHelpSearch:
 		m.contactSearchMode = "keyword"
 		m.contactSearch = ""
-	case "?":
+	case key == "?":
 		// Plain ? is reserved for global shortcut help; the app-level key
 		// router handles it before Contacts sees this branch.
 		return m, nil
-	case "esc":
+	case key == "esc":
 		if m.previewSelection.activeOn(previewSelectionContacts) {
 			m.clearPreviewSelection()
 			return m, nil
@@ -255,18 +256,18 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		m.contactDetail = nil
 		m.contactDetailEmails = nil
 		m.contactFocusPanel = 0
-	case "tab":
+	case key == "tab":
 		if m.contactDetail != nil {
 			m.contactFocusPanel = 1 - m.contactFocusPanel
 		}
-	case "m":
+	case key == "m":
 		return m, m.toggleMouseCaptureMode()
-	case "y", "Y":
+	case key == "y" || key == "Y":
 		if cmd, handled := m.handlePreviewCopyKey(previewSelectionContacts, key); handled {
 			return m, cmd
 		}
 		return m, nil
-	case "j", "down":
+	case hasCommand && command == CommandPaneDown:
 		if m.contactFocusPanel == 0 {
 			if m.contactsIdx < len(m.contactsFiltered)-1 {
 				m.contactsIdx++
@@ -276,7 +277,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.contactDetailIdx++
 			}
 		}
-	case "k", "up":
+	case hasCommand && command == CommandPaneUp:
 		if m.contactFocusPanel == 0 {
 			if m.contactsIdx > 0 {
 				m.contactsIdx--
@@ -286,7 +287,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.contactDetailIdx--
 			}
 		}
-	case "enter":
+	case key == "enter":
 		if m.contactFocusPanel == 0 {
 			if len(m.contactsFiltered) > 0 && m.contactsIdx < len(m.contactsFiltered) {
 				c := m.contactsFiltered[m.contactsIdx]
@@ -308,7 +309,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				return m, m.loadEmailBodyForRefCmd(email.MessageRef())
 			}
 		}
-	case "e":
+	case key == "e":
 		var target *models.ContactData
 		if m.contactFocusPanel == 1 && m.contactDetail != nil {
 			target = m.contactDetail

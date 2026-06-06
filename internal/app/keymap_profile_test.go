@@ -187,6 +187,175 @@ bindings:
 	}
 }
 
+func TestCustomKeymapRoutesTimelineMailActionsByCommand(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  timeline:
+    normal:
+      x: mail.archive_current
+      z: mail.delete_confirm
+      G: mail.reclassify
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+	m.keyboard = resolver
+
+	model, _ := m.handleKeyMsg(keyRunes("x"))
+	updated := model.(*Model)
+	if !updated.pendingDeleteConfirm || !updated.pendingArchive {
+		t.Fatalf("custom archive command did not open archive confirmation: confirm=%v archive=%v desc=%q", updated.pendingDeleteConfirm, updated.pendingArchive, updated.pendingDeleteDesc)
+	}
+
+	updated.pendingDeleteConfirm = false
+	updated.pendingArchive = false
+	updated.pendingDeleteDesc = ""
+	model, _ = updated.handleKeyMsg(keyRunes("z"))
+	updated = model.(*Model)
+	if !updated.pendingDeleteConfirm || updated.pendingArchive {
+		t.Fatalf("custom delete command did not open delete confirmation: confirm=%v archive=%v desc=%q", updated.pendingDeleteConfirm, updated.pendingArchive, updated.pendingDeleteDesc)
+	}
+
+	updated.pendingDeleteConfirm = false
+	updated.pendingDeleteDesc = ""
+	model, _ = updated.handleKeyMsg(keyRunes("G"))
+	updated = model.(*Model)
+	if updated.statusMessage != "No AI configured" {
+		t.Fatalf("custom reclassify command status = %q, want no-AI status", updated.statusMessage)
+	}
+}
+
+func TestCustomKeymapRoutesGlobalCommandsFromContacts(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabContacts
+	m.contactsList = []models.ContactData{{Email: "mara@forgepoint.example", DisplayName: "Mara Vale"}}
+	m.contactsFiltered = m.contactsList
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  global:
+    normal:
+      7: tab.timeline
+      o: logs.toggle
+      b: sidebar.toggle
+      s: app.settings
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+	m.keyboard = resolver
+
+	model, _ := m.handleKeyMsg(keyRunes("7"))
+	updated := model.(*Model)
+	if updated.activeTab != tabTimeline {
+		t.Fatalf("custom global tab command from Contacts activeTab=%d, want Timeline", updated.activeTab)
+	}
+
+	updated.activeTab = tabContacts
+	model, _ = updated.handleKeyMsg(keyRunes("o"))
+	updated = model.(*Model)
+	if !updated.showLogs {
+		t.Fatal("custom global logs command from Contacts did not open logs")
+	}
+
+	model, _ = updated.handleKeyMsg(keyRunes("o"))
+	updated = model.(*Model)
+	if updated.showLogs {
+		t.Fatal("custom global logs command from Contacts did not close logs")
+	}
+
+	shown := updated.showSidebar
+	model, _ = updated.handleKeyMsg(keyRunes("b"))
+	updated = model.(*Model)
+	if updated.showSidebar == shown {
+		t.Fatal("custom global sidebar command from Contacts did not toggle sidebar")
+	}
+
+	model, _ = updated.handleKeyMsg(keyRunes("s"))
+	updated = model.(*Model)
+	if !updated.showSettings || updated.settingsPanel == nil {
+		t.Fatal("custom global settings command from Contacts did not open Settings")
+	}
+}
+
+func TestCustomKeymapRoutesContactsAndCalendarCommands(t *testing.T) {
+	resolver := NewKeyboardResolver(&config.Config{})
+	if err := resolver.ApplyCustomKeymap([]byte(`
+extends: default
+bindings:
+  contacts:
+    normal:
+      n: pane.down
+      p: pane.up
+      ;: help.search
+  calendar:
+    normal:
+      n: pane.down
+      p: pane.up
+      ';': help.search
+`)); err != nil {
+		t.Fatalf("ApplyCustomKeymap failed: %v", err)
+	}
+
+	t.Run("contacts", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.keyboard = resolver
+		m.activeTab = tabContacts
+		m.contactsList = []models.ContactData{
+			{Email: "mara@forgepoint.example", DisplayName: "Mara Vale"},
+			{Email: "niko@forgepoint.example", DisplayName: "Niko Park"},
+		}
+		m.contactsFiltered = m.contactsList
+
+		model, _ := m.handleKeyMsg(keyRunes("n"))
+		updated := model.(*Model)
+		if updated.contactsIdx != 1 {
+			t.Fatalf("custom Contacts down contactsIdx=%d, want 1", updated.contactsIdx)
+		}
+		model, _ = updated.handleKeyMsg(keyRunes("p"))
+		updated = model.(*Model)
+		if updated.contactsIdx != 0 {
+			t.Fatalf("custom Contacts up contactsIdx=%d, want 0", updated.contactsIdx)
+		}
+		model, _ = updated.handleKeyMsg(keyRunes(";"))
+		updated = model.(*Model)
+		if updated.contactSearchMode != "keyword" {
+			t.Fatalf("custom Contacts search mode=%q, want keyword", updated.contactSearchMode)
+		}
+	})
+
+	t.Run("calendar", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.keyboard = resolver
+		m.activeTab = tabCalendar
+		m.calendarAvailable = true
+		m.calendarEvents = testCalendarEvents()
+		m.calendarView = calendarViewAgenda
+		m.calendarDetail = m.selectedCalendarEvent()
+
+		model, _ := m.handleKeyMsg(keyRunes("n"))
+		updated := model.(*Model)
+		if updated.calendarCursor != 1 {
+			t.Fatalf("custom Calendar down cursor=%d, want 1", updated.calendarCursor)
+		}
+		model, _ = updated.handleKeyMsg(keyRunes("p"))
+		updated = model.(*Model)
+		if updated.calendarCursor != 0 {
+			t.Fatalf("custom Calendar up cursor=%d, want 0", updated.calendarCursor)
+		}
+		model, _ = updated.handleKeyMsg(keyRunes(";"))
+		updated = model.(*Model)
+		if updated.calendarView != calendarViewSearch {
+			t.Fatalf("custom Calendar search view=%q, want search", updated.calendarView)
+		}
+	})
+}
+
 func TestCustomKeymapBottomHintsUseResolvedTimelineKeys(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline

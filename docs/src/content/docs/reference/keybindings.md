@@ -186,6 +186,8 @@ These actions work when the terminal sends mouse events to Herald. OSC 8 link cl
 
 Herald resolves browse shortcuts through the active keyboard profile. Text-entry surfaces keep printable text literal in the Default profile; Vim and Custom profiles can use the modal Compose field adapter. Default bottom hints show preferred GUI-mail-style keys only, while legacy aliases remain active for at least one release and are listed here and in `?` help.
 
+Profile-owned browse scopes include the `global`, `timeline`, `contacts`, `calendar`, and `compose` command IDs exposed by the keymap catalog. Literal text-entry fields, editor-style inputs, and fixed confirmation controls keep their local keys so custom browse shortcuts do not steal typed message text, search queries, file paths, prompt text, or yes/no confirmation choices.
+
 ```yaml
 keyboard:
   profile: default # default | vim | emacs | custom

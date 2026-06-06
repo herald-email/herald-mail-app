@@ -3,8 +3,12 @@ package cli
 import (
 	"bytes"
 	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func TestRegisterTUIFlagsParsesDemoKeys(t *testing.T) {
@@ -39,6 +43,43 @@ func TestDemoMultiAccountFlagImpliesDemoMode(t *testing.T) {
 func TestPlainLaunchDoesNotRunDemoMode(t *testing.T) {
 	if shouldRunDemo(false, false) {
 		t.Fatal("plain launch should not start demo mode")
+	}
+}
+
+func TestApplyDemoConfigOverridesLoadsKeyboardPreferences(t *testing.T) {
+	dir := t.TempDir()
+	keymapPath := filepath.Join(dir, "custom-keys.yaml")
+	configPath := filepath.Join(dir, "conf.yaml")
+	if err := os.WriteFile(configPath, []byte(`
+credentials:
+  username: demo@example.test
+  password: demo-password
+server:
+  host: 127.0.0.1
+  port: 1143
+smtp:
+  host: 127.0.0.1
+  port: 1025
+keyboard:
+  profile: custom
+  custom_keymap: `+keymapPath+`
+compose:
+  signature:
+    text: "Demo signature"
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg := &config.Config{}
+	gotPath := applyDemoConfigOverrides(cfg, configPath)
+	if gotPath != configPath {
+		t.Fatalf("demo config path = %q, want %q", gotPath, configPath)
+	}
+	if cfg.Keyboard.Profile != "custom" || cfg.Keyboard.CustomKeymap != keymapPath {
+		t.Fatalf("keyboard overrides = %#v", cfg.Keyboard)
+	}
+	if cfg.Compose.Signature.Text != "Demo signature" {
+		t.Fatalf("compose signature = %q, want demo signature", cfg.Compose.Signature.Text)
 	}
 }
 

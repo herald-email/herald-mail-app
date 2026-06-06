@@ -362,7 +362,7 @@ func newWizardPreferencesSettings(existing *config.Config, configPath string, ex
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool, openDeepLink string) {
+func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool, openDeepLink string, configPath string) {
 	if err := logger.Init(false, logger.WithUnsafeLogs(unsafeLogs)); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -378,6 +378,7 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMul
 	cfg.Sync.Background = false
 	cfg.Semantic.Enabled = false
 	cfg.AI.Provider = "disabled"
+	demoConfigPath := applyDemoConfigOverrides(cfg, configPath)
 	logger.Info("Demo resource policy: offline fixtures only; no IMAP, SMTP, Ollama, or external HTTP connections are opened on startup")
 	logger.Info("Demo resource policy: sync listeners and background semantic indexing disabled; localhost image links start only while previewing embedded MIME images")
 
@@ -403,7 +404,7 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMul
 	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, dryRun)
 	model.SetPreviewImageMode(imageMode)
 	model.SetDemoKeyOverlay(demoKeys)
-	model.SetConfigPath("demo-config.yaml")
+	model.SetConfigPath(demoConfigPath)
 	model.SetConfig(cfg)
 	if strings.TrimSpace(openDeepLink) != "" {
 		if err := model.SetInitialDeepLink(openDeepLink); err != nil {
@@ -808,7 +809,7 @@ func runTUI() {
 
 	// Demo mode: skip all real IMAP setup
 	if shouldRunDemo(*opts.demo, *opts.demoMulti) {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs, *opts.openDeepLink)
+		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs, *opts.openDeepLink, *opts.configPath)
 		return
 	}
 
@@ -1021,6 +1022,37 @@ func runTUI() {
 	}
 
 	logger.Info("Application finished successfully")
+}
+
+func applyDemoConfigOverrides(cfg *config.Config, configPath string) string {
+	const demoConfigPath = "demo-config.yaml"
+	if cfg == nil {
+		return demoConfigPath
+	}
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" || configPath == "~/.herald/conf.yaml" {
+		return demoConfigPath
+	}
+	resolved, err := config.ExpandPath(configPath)
+	if err != nil {
+		logger.Warn("Demo config path failed: %v", err)
+		return demoConfigPath
+	}
+	loaded, err := config.Load(resolved)
+	if err != nil {
+		logger.Warn("Demo config failed to load; using demo defaults: %v", err)
+		return demoConfigPath
+	}
+	cfg.Keyboard = loaded.Keyboard
+	cfg.Theme = loaded.Theme
+	cfg.Calendar = loaded.Calendar
+	cfg.Compose = loaded.Compose
+	cfg.Notifications = loaded.Notifications
+	if strings.TrimSpace(loaded.Vendor) != "" {
+		cfg.Vendor = loaded.Vendor
+	}
+	logger.Info("Demo loaded user preferences from %s", resolved)
+	return resolved
 }
 
 func configuredEmailAddress(cfg *config.Config) string {

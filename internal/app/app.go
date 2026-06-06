@@ -3530,19 +3530,14 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleCalendarKey(msg)
 	}
 
-	if normalized := m.normalizeShortcutKeyForActiveScope(key); normalized != "" && normalized != key {
-		key = normalized
-		msg = shortcutKeyPressMsg(normalized)
+	if model, cmd, handled := m.handleBrowseGlobalProfileCommand(msg); handled {
+		return model, cmd
 	}
 
-	// Contacts tab gets its own key handler (except for global keys handled below)
+	// Contacts tab gets its own key handler after profile-owned global commands
+	// have had a chance to route through the active keyboard catalog.
 	if m.activeTab == tabContacts {
-		if m.contactSearchMode != "" {
-			return m.handleContactsKey(msg)
-		}
-		if !isGlobalContactsKey(key) {
-			return m.handleContactsKey(msg)
-		}
+		return m.handleContactsKey(msg)
 	}
 
 	if model, cmd, handled := m.handleTabKey(msg); handled {
@@ -3589,29 +3584,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case "A", "T":
 		// Re-classify the currently focused single email with AI.
-		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil
-		}
-		if !m.loading && m.classifier != nil {
-			var target *models.EmailData
-			if m.activeTab == tabTimeline {
-				cursor := m.timelineTable.Cursor()
-				if cursor < len(m.timeline.threadRowMap) {
-					ref := m.timeline.threadRowMap[cursor]
-					if ref.kind == rowKindThread {
-						target = ref.group.emails[0]
-					} else {
-						target = ref.group.emails[ref.emailIdx]
-					}
-				}
-			}
-			if target != nil {
-				return m, m.reclassifyEmailCmd(target)
-			}
-		} else if m.classifier == nil {
-			m.statusMessage = "No AI configured"
-		}
-		return m, nil
+		return m, m.reclassifyFocusedTimelineEmail()
 
 	case "W":
 		m.statusMessage = "Cleanup tools moved to Settings > Sync & Cleanup."
@@ -3629,29 +3602,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openSettingsPanel()
 
 	case "a", "e", "E":
-		if m.activeTab == tabTimeline {
-			m.finishTimelineRangeSelection()
-		}
-		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil
-		}
-		if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
-			if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 && len(m.selectedTimelineArchiveEmails()) == 0 {
-				m.statusMessage = "Selected drafts cannot be archived"
-				return m, nil
-			}
-			desc := m.buildArchiveDesc()
-			if desc != "" {
-				m.pendingDeleteConfirm = true
-				m.pendingDeleteDesc = desc
-				m.pendingArchive = true
-				m.pendingDeleteAction = func() tea.Cmd {
-					m.deleting = true
-					return m.archiveSelected()
-				}
-			}
-		}
-		return m, nil
+		return m, m.confirmArchiveSelected()
 
 	case "u":
 		if m.timelineIsReadOnlyDiagnostic() {
@@ -3729,27 +3680,56 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) normalizeShortcutKeyForActiveScope(key string) string {
-	if m == nil || m.keyboard == nil || key == "" {
-		return key
+func (m *Model) confirmArchiveSelected() tea.Cmd {
+	if m.activeTab == tabTimeline {
+		m.finishTimelineRangeSelection()
 	}
-	scope := keyboardScopeGlobal
-	switch m.activeTab {
-	case tabTimeline:
-		scope = "timeline"
-	case tabContacts:
-		scope = "contacts"
-	case tabCalendar:
-		scope = "calendar"
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
 	}
-	command, ok := m.keyboard.Resolve(scope, keyboardModeNormal, key)
-	if !ok {
-		return key
+	if !m.loading && !m.deleting && !m.pendingDeleteConfirm {
+		if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 && len(m.selectedTimelineArchiveEmails()) == 0 {
+			m.statusMessage = "Selected drafts cannot be archived"
+			return nil
+		}
+		desc := m.buildArchiveDesc()
+		if desc != "" {
+			m.pendingDeleteConfirm = true
+			m.pendingDeleteDesc = desc
+			m.pendingArchive = true
+			m.pendingDeleteAction = func() tea.Cmd {
+				m.deleting = true
+				return m.archiveSelected()
+			}
+		}
 	}
-	if canonical := canonicalKeyForCommand(scope, command); canonical != "" {
-		return canonical
+	return nil
+}
+
+func (m *Model) reclassifyFocusedTimelineEmail() tea.Cmd {
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
 	}
-	return key
+	if !m.loading && m.classifier != nil {
+		var target *models.EmailData
+		if m.activeTab == tabTimeline {
+			cursor := m.timelineTable.Cursor()
+			if cursor < len(m.timeline.threadRowMap) {
+				ref := m.timeline.threadRowMap[cursor]
+				if ref.kind == rowKindThread {
+					target = ref.group.emails[0]
+				} else {
+					target = ref.group.emails[ref.emailIdx]
+				}
+			}
+		}
+		if target != nil {
+			return m.reclassifyEmailCmd(target)
+		}
+	} else if m.classifier == nil {
+		m.statusMessage = "No AI configured"
+	}
+	return nil
 }
 
 // renderLoadingView renders the loading screen

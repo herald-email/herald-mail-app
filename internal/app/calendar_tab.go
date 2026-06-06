@@ -839,25 +839,26 @@ func (m *Model) clearCrossSourceSearch() {
 
 func (m *Model) handleCalendarSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
-	switch key {
-	case "j", "down":
+	command, hasCommand := m.scopedCommand("calendar", key)
+	switch {
+	case hasCommand && command == CommandPaneDown:
 		if m.calendarSearchCursor < len(m.calendarSearchResults)-1 {
 			m.calendarSearchCursor++
 			m.calendarDetail = m.selectedCalendarEvent()
 		}
 		return m, nil
-	case "k", "up":
+	case hasCommand && command == CommandPaneUp:
 		if m.calendarSearchCursor > 0 {
 			m.calendarSearchCursor--
 			m.calendarDetail = m.selectedCalendarEvent()
 		}
 		return m, nil
-	case "enter":
+	case key == "enter":
 		return m, m.openCalendarDetail()
-	case "esc":
+	case key == "esc":
 		m.clearCalendarSearch()
 		return m, nil
-	case "backspace":
+	case key == "backspace":
 		runes := []rune(m.calendarSearchQuery)
 		if len(runes) > 0 {
 			m.calendarSearchQuery = string(runes[:len(runes)-1])
@@ -866,7 +867,7 @@ func (m *Model) handleCalendarSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 			return m, m.loadCalendarSearch()
 		}
 		return m, nil
-	case "ctrl+u":
+	case key == "ctrl+u":
 		m.calendarSearchQuery = ""
 		m.calendarSearchResults = nil
 		m.calendarSearchCursor = 0
@@ -874,7 +875,7 @@ func (m *Model) handleCalendarSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		m.calendarDetail = nil
 		m.calendarStatus = "Type to search cached calendar events"
 		return m, nil
-	case "ctrl+r":
+	case key == "ctrl+r":
 		m.calendarSearchLoading = true
 		m.calendarStatus = "Searching cached calendar events..."
 		return m, m.loadCalendarSearch()
@@ -910,20 +911,21 @@ func (m *Model) selectCrossSourceSearchResult() {
 
 func (m *Model) handleCrossSourceSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
-	switch key {
-	case "j", "down":
+	command, hasCommand := m.scopedCommand("calendar", key)
+	switch {
+	case hasCommand && command == CommandPaneDown:
 		if m.crossSourceSearchCursor < len(m.crossSourceSearchResults)-1 {
 			m.crossSourceSearchCursor++
 			m.selectCrossSourceSearchResult()
 		}
 		return m, nil
-	case "k", "up":
+	case hasCommand && command == CommandPaneUp:
 		if m.crossSourceSearchCursor > 0 {
 			m.crossSourceSearchCursor--
 			m.selectCrossSourceSearchResult()
 		}
 		return m, nil
-	case "enter":
+	case key == "enter":
 		if result := m.selectedCrossSourceSearchResult(); result != nil && result.Event != nil {
 			return m, m.openCalendarDetail()
 		}
@@ -931,10 +933,10 @@ func (m *Model) handleCrossSourceSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.
 			m.calendarStatus = "Mail results are shown read-only in this cross-source slice"
 		}
 		return m, nil
-	case "esc":
+	case key == "esc":
 		m.clearCrossSourceSearch()
 		return m, nil
-	case "backspace":
+	case key == "backspace":
 		runes := []rune(m.crossSourceSearchQuery)
 		if len(runes) > 0 {
 			m.crossSourceSearchQuery = string(runes[:len(runes)-1])
@@ -944,7 +946,7 @@ func (m *Model) handleCrossSourceSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.
 			return m, m.loadCrossSourceSearch()
 		}
 		return m, nil
-	case "ctrl+u":
+	case key == "ctrl+u":
 		m.crossSourceSearchQuery = ""
 		m.crossSourceSearchResults = nil
 		m.crossSourceSearchCursor = 0
@@ -952,7 +954,7 @@ func (m *Model) handleCrossSourceSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.
 		m.calendarDetail = nil
 		m.calendarStatus = "Type to search cached mail and calendar events"
 		return m, nil
-	case "ctrl+r":
+	case key == "ctrl+r":
 		m.crossSourceSearchLoading = true
 		m.calendarStatus = "Searching cached mail and calendar events..."
 		return m, m.loadCrossSourceSearch()
@@ -2433,6 +2435,7 @@ func removeCalendarEventByLocalID(events []models.CalendarEvent, localID string)
 
 func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := shortcutKey(msg)
+	command, hasCommand := m.scopedCommand("calendar", key)
 	if m.calendarDelete.Active {
 		return m.handleCalendarDeleteKey(msg)
 	}
@@ -2456,6 +2459,57 @@ func (m *Model) handleCalendarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.calendarAISummaryOpen {
 		return m.handleCalendarAISummaryKey(msg)
+	}
+	if hasCommand {
+		switch command {
+		case CommandHelpSearch:
+			if !m.calendarDetailOpen {
+				m.openCalendarSearch()
+			}
+			return m, nil
+		case CommandPaneDown:
+			if !m.calendarDetailOpen {
+				if m.calendarFocus == calendarFocusRail {
+					m.moveCalendarRailSelection(1)
+				} else if m.calendarView == calendarViewDay {
+					m.moveCalendarDaySelection(1)
+				} else if m.calendarView == calendarViewWeek {
+					m.moveCalendarWeekSelection(1)
+				} else if m.calendarView == calendarViewThreeDay {
+					m.moveCalendarThreeDaySelection(1)
+				} else if m.calendarCursor < len(m.calendarEvents)-1 {
+					m.calendarCursor++
+					m.calendarDetail = m.selectedCalendarEvent()
+				}
+			}
+			return m, nil
+		case CommandPaneUp:
+			if !m.calendarDetailOpen {
+				if m.calendarFocus == calendarFocusRail {
+					m.moveCalendarRailSelection(-1)
+				} else if m.calendarView == calendarViewDay {
+					m.moveCalendarDaySelection(-1)
+				} else if m.calendarView == calendarViewWeek {
+					m.moveCalendarWeekSelection(-1)
+				} else if m.calendarView == calendarViewThreeDay {
+					m.moveCalendarThreeDaySelection(-1)
+				} else if m.calendarCursor > 0 {
+					m.calendarCursor--
+					m.calendarDetail = m.selectedCalendarEvent()
+				}
+			}
+			return m, nil
+		case CommandPaneLeft:
+			if !m.calendarDetailOpen {
+				m.moveCalendarRange(-1)
+			}
+			return m, nil
+		case CommandPaneRight:
+			if !m.calendarDetailOpen {
+				m.moveCalendarRange(1)
+			}
+			return m, nil
+		}
 	}
 	switch key {
 	case "q":

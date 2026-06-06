@@ -191,6 +191,22 @@ func (r *KeyboardResolver) Resolve(scope, mode, key string) (string, bool) {
 	return "", false
 }
 
+func (r *KeyboardResolver) ResolveScoped(scope, mode, key string) (string, bool) {
+	if r == nil {
+		r = NewKeyboardResolver(nil)
+	}
+	scope = strings.ToLower(strings.TrimSpace(scope))
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	key = strings.TrimSpace(key)
+	if scope == "" || key == "" {
+		return "", false
+	}
+	if mode == "" {
+		mode = keyboardModeNormal
+	}
+	return r.lookup(scope, mode, key)
+}
+
 func (r *KeyboardResolver) lookup(scope, mode, key string) (string, bool) {
 	if r == nil || r.bindings == nil {
 		return "", false

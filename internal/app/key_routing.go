@@ -198,11 +198,13 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 	if !m.showLogs {
 		return m, nil, false
 	}
-	switch shortcutKey(msg) {
-	case "L", "esc":
+	key := shortcutKey(msg)
+	command, hasCommand := m.scopedCommand(keyboardScopeGlobal, key)
+	switch {
+	case key == "L" || key == "esc" || hasCommand && command == CommandLogsToggle:
 		m.showLogs = false
 		return m, nil, true
-	case "q":
+	case key == "q":
 		m.cleanup()
 		return m, tea.Quit, true
 	}
@@ -254,6 +256,95 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 		return m, nil, m.calendarAvailable
 	}
 	return m, nil, false
+}
+
+func (m *Model) handleBrowseGlobalProfileCommand(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if !m.shouldRouteBrowseProfileCommands() {
+		return m, nil, false
+	}
+	key := shortcutKey(msg)
+	scope := m.activeKeyboardScope()
+	if scope != keyboardScopeGlobal {
+		if _, ok := m.scopedCommand(scope, key); ok {
+			return m, nil, false
+		}
+	}
+	command, ok := m.scopedCommand(keyboardScopeGlobal, key)
+	if !ok {
+		return m, nil, false
+	}
+	switch command {
+	case CommandAppQuit:
+		m.cleanup()
+		return m, tea.Quit, true
+	case CommandAppRefresh:
+		return m, m.refreshCurrentFolder(), true
+	case CommandAppSettings:
+		return m, m.openSettingsPanel(), true
+	case CommandHelpOpen:
+		m.showHelp = true
+		m.helpScrollOffset = 0
+		m.helpSearchActive = false
+		m.helpSearch = ""
+		return m, nil, true
+	case CommandTabTimeline, CommandTabContacts, CommandTabCalendar:
+		return m.performTabCommand(command)
+	case CommandSidebarToggle:
+		return m, m.toggleSidebar(), true
+	case CommandLogsToggle:
+		return m, m.toggleLogs(), true
+	case CommandChatToggle:
+		return m, m.toggleChat(), true
+	case CommandPaneNext:
+		if m.canInteractWithVisibleData() {
+			m.cyclePanel(true)
+		}
+		return m, nil, true
+	case CommandPanePrev:
+		if m.canInteractWithVisibleData() {
+			m.cyclePanel(false)
+		}
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+func (m *Model) shouldRouteBrowseProfileCommands() bool {
+	if m.activeTab == tabCompose {
+		return false
+	}
+	if m.contactSearchMode != "" {
+		return false
+	}
+	if m.activeTab == tabCalendar {
+		if m.calendarEdit.Active || m.calendarDelete.Active {
+			return false
+		}
+		if (m.calendarView == calendarViewSearch || m.calendarView == calendarViewCrossSearch) && !m.calendarDetailOpen {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Model) activeKeyboardScope() string {
+	switch m.activeTab {
+	case tabTimeline:
+		return "timeline"
+	case tabContacts:
+		return "contacts"
+	case tabCalendar:
+		return "calendar"
+	default:
+		return keyboardScopeGlobal
+	}
+}
+
+func (m *Model) scopedCommand(scope, key string) (string, bool) {
+	if m == nil || m.keyboard == nil {
+		return "", false
+	}
+	return m.keyboard.ResolveScoped(scope, keyboardModeNormal, key)
 }
 
 func (m *Model) toggleSidebar() tea.Cmd {
@@ -310,40 +401,23 @@ func (m *Model) toggleChat() tea.Cmd {
 }
 
 func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
-	switch shortcutKey(msg) {
+	key := shortcutKey(msg)
+	switch key {
 	case "1", "alt+1":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 0 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[0])
 			return model, cmd, true
 		}
-		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
-			return m, m.switchToTimeline(), true
-		}
-		return m, nil, true
 	case "2", "alt+2":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 1 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[1])
 			return model, cmd, true
 		}
-		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
-			return m, m.switchToContacts(), true
-		}
-		if m.canInteractWithVisibleData() {
-			return m, m.loadContacts(), true
-		}
-		return m, nil, true
 	case "3", "alt+3":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 2 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[2])
 			return model, cmd, true
 		}
-		if m.calendarAvailable && m.canInteractWithVisibleData() && m.activeTab != tabCalendar {
-			return m, m.switchToCalendar(), true
-		}
-		if m.calendarAvailable {
-			return m, m.loadCalendarAgenda(), true
-		}
-		return m, nil, false
 	case "4":
 		if m.timeline.quickReplyOpen && len(m.timeline.quickReplies) > 3 {
 			model, cmd := m.openQuickReply(m.timeline.quickReplies[3])
@@ -374,6 +448,36 @@ func (m *Model) handleTabKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 			return model, cmd, true
 		}
 		return m, nil, true
+	}
+	if command, ok := m.scopedCommand(keyboardScopeGlobal, key); ok {
+		return m.performTabCommand(command)
+	}
+	return m, nil, false
+}
+
+func (m *Model) performTabCommand(command string) (tea.Model, tea.Cmd, bool) {
+	switch command {
+	case CommandTabTimeline:
+		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
+			return m, m.switchToTimeline(), true
+		}
+		return m, nil, true
+	case CommandTabContacts:
+		if m.canInteractWithVisibleData() && m.activeTab != tabContacts {
+			return m, m.switchToContacts(), true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.loadContacts(), true
+		}
+		return m, nil, true
+	case CommandTabCalendar:
+		if m.calendarAvailable && m.canInteractWithVisibleData() && m.activeTab != tabCalendar {
+			return m, m.switchToCalendar(), true
+		}
+		if m.calendarAvailable {
+			return m, m.loadCalendarAgenda(), true
+		}
+		return m, nil, false
 	}
 	return m, nil, false
 }
@@ -456,14 +560,6 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
-}
-
-func isGlobalContactsKey(key string) bool {
-	switch key {
-	case "1", "2", "3", "q", "ctrl+c", "ctrl+r", "B", "L", "S":
-		return true
-	}
-	return false
 }
 
 func (m *Model) isComposeReplyForwardSubject(subject string, prefix string) string {

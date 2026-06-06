@@ -3278,6 +3278,11 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	}
+	if command, ok := m.scopedCommand("timeline", key); ok {
+		if model, cmd, handled := m.handleTimelineResolvedCommand(command, key); handled {
+			return model, cmd, true
+		}
+	}
 	switch key {
 	case " ", "space":
 		if m.focusedPanel != panelTimeline {
@@ -3650,6 +3655,183 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	}
+	return m, nil, false
+}
+
+func (m *Model) handleTimelineResolvedCommand(command, key string) (tea.Model, tea.Cmd, bool) {
+	switch command {
+	case CommandTimelineGroupCycle:
+		if m.timeline.quickReplyOpen {
+			return m, nil, false
+		}
+		if m.canInteractWithVisibleData() {
+			cmd := m.timelineNativeImageClearCmd()
+			m.cycleTimelineGrouping()
+			return m, cmd, true
+		}
+		return m, nil, true
+	case CommandTimelineSortCycle:
+		if m.timeline.quickReplyOpen {
+			return m, nil, false
+		}
+		if m.canInteractWithVisibleData() {
+			m.cycleTimelineSort()
+		}
+		return m, nil, true
+	case CommandMailDeleteConfirm:
+		return m, m.confirmDeleteSelected(), true
+	case CommandMailDeleteImmediate:
+		return m, m.deleteSelectedImmediately(), true
+	case CommandMailArchiveCurrent:
+		return m, m.confirmArchiveSelected(), true
+	case CommandMailReclassify:
+		return m, m.reclassifyFocusedTimelineEmail(), true
+	case CommandMailHideFuture:
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.timeline.selectedEmail != nil {
+			return m, createHideFutureMailCmd(m.backend, m.timeline.selectedEmail.Sender), true
+		}
+		return m, nil, true
+	case CommandMailForward:
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			if email := m.currentTimelineRowEmail(); email != nil {
+				return m, m.startTimelineForward(email), true
+			}
+		}
+		return m, nil, true
+	case CommandComposeNew:
+		if m.canInteractWithVisibleData() {
+			return m, m.openBlankComposeFromCurrent(), true
+		}
+		return m, nil, true
+	case CommandPaneRight:
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.moveActivePreviewSelection(0, 1)
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.previewCurrentTimelineRow(), true
+		}
+		return m, nil, true
+	case CommandPaneLeft:
+		if m.previewSelection.activeOn(previewSelectionTimeline) {
+			m.moveActivePreviewSelection(0, -1)
+			return m, nil, true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.closeTimelinePreviewOrFocusFolders(), true
+		}
+		return m, nil, true
+	case CommandHelpSearch:
+		if !m.loading && !m.timeline.searchMode {
+			cmd := m.timelineNativeImageClearCmd()
+			m.openTimelineSearch()
+			return m, cmd, true
+		}
+		return m, nil, true
+	case CommandPreviewRevealRemoteImages:
+		if m.timelineRemoteRevealAvailable() {
+			return m, m.revealTimelineRemoteImages(), true
+		}
+		return m, nil, true
+	case CommandPreviewPrint:
+		if m.timeline.fullScreen || m.focusedPanel == panelPreview || m.focusedPanel == panelTimeline || m.timeline.selectedEmail != nil {
+			return m.openTimelinePrintChooserOrLoad()
+		}
+		return m, nil, false
+	case CommandMailReplyAll, CommandMailReplySender:
+		if m.timelineIsReadOnlyDiagnostic() {
+			return m, nil, true
+		}
+		if !m.loading {
+			if email := m.currentTimelineRowEmail(); email != nil {
+				return m, m.startTimelineReply(email, command == CommandMailReplyAll), true
+			}
+		}
+		return m, nil, true
+	case CommandPaneUp:
+		if m.canInteractWithVisibleData() {
+			if m.timeline.rangeMode && m.focusedPanel == panelTimeline {
+				if !m.timeline.rangeShiftMode {
+					return m, m.extendTimelineRangeSelection(-1, false), true
+				}
+				m.finishTimelineRangeSelection()
+			}
+			if m.timeline.quickReplyOpen {
+				if m.timeline.quickReplyIdx > 0 {
+					m.timeline.quickReplyIdx--
+				}
+				return m, nil, true
+			}
+			if m.timeline.fullScreen {
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(-1, 0)
+				} else if m.timeline.bodyScrollOffset > 0 {
+					m.timeline.bodyScrollOffset--
+				}
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
+			}
+			if m.focusedPanel == panelPreview {
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(-1, 0)
+				} else if m.timeline.bodyScrollOffset > 0 {
+					m.timeline.bodyScrollOffset--
+				}
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
+			}
+			if m.focusedPanel == panelSidebar {
+				model, cmd := m.handleNavigation(-1)
+				return model, cmd, true
+			}
+			m.timelineTable.MoveUp(1)
+			return m, m.maybeUpdatePreview(), true
+		}
+		return m, nil, true
+	case CommandPaneDown:
+		if m.canInteractWithVisibleData() {
+			if m.timeline.rangeMode && m.focusedPanel == panelTimeline {
+				if !m.timeline.rangeShiftMode {
+					return m, m.extendTimelineRangeSelection(1, false), true
+				}
+				m.finishTimelineRangeSelection()
+			}
+			if m.timeline.quickReplyOpen {
+				if m.timeline.quickReplyIdx < len(m.timeline.quickReplies)-1 {
+					m.timeline.quickReplyIdx++
+				}
+				return m, nil, true
+			}
+			if m.timeline.fullScreen {
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(1, 0)
+				} else {
+					m.timeline.bodyScrollOffset++
+				}
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
+			}
+			if m.focusedPanel == panelPreview {
+				if m.previewSelection.activeOn(previewSelectionTimeline) {
+					m.moveActivePreviewSelection(1, 0)
+				} else {
+					m.timeline.bodyScrollOffset++
+				}
+				return m, m.timelineIterm2NativeImageRepaintCmd(), true
+			}
+			if m.focusedPanel == panelSidebar {
+				model, cmd := m.handleNavigation(1)
+				return model, cmd, true
+			}
+			m.timelineTable.MoveDown(1)
+			return m, m.maybeUpdatePreview(), true
+		}
+		return m, nil, true
+	}
+	_ = key
 	return m, nil, false
 }
 

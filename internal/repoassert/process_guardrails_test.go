@@ -20,11 +20,22 @@ func TestAgentGuidanceIncludesProcessGuardrails(t *testing.T) {
 			"No silent scope substitution",
 			"Superpowers throttle",
 			"Verification surface",
+			"Keyboard profile routing",
 		} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s missing guardrail %q", path, want)
 			}
 		}
+	}
+}
+
+func TestKeyboardProfilesDoNotUseCanonicalShortcutNormalizationBridge(t *testing.T) {
+	data, err := os.ReadFile(repoPath(t, "internal", "app", "app.go"))
+	if err != nil {
+		t.Fatalf("read app.go: %v", err)
+	}
+	if strings.Contains(string(data), "normalizeShortcutKeyForActiveScope") {
+		t.Fatal("keyboard profiles should route command IDs directly; do not restore normalizeShortcutKeyForActiveScope")
 	}
 }
 

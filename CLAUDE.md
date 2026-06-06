@@ -262,6 +262,7 @@ Use these guardrails to keep Herald work fast, realistic, and bounded:
 - **No silent scope substitution**: Do not replace requested behavior with a safer or adjacent slice without saying so. If the requested behavior is unsafe, impossible, or too risky, explain the constraint and name the narrower slice before implementation.
 - **Superpowers throttle**: Use full Superpowers ceremony for bugs, large features, releases, review feedback, and risky TUI/rendering work. For small or already-understood tasks, use micro-mode: name the relevant rule once, then act. Do not stack multiple process skills unless each one changes the next action.
 - **Verification surface**: Every durable report should say which surface proved the change: `demo`, `virtual lab`, `live config`, `tmux`, `ttyd`, `SSH`, `MCP`, or `daemon`. Prefer the virtual mail lab for deterministic realistic mail before falling back to private live mailboxes.
+- **Keyboard profile routing**: Profile-owned browse shortcuts must use stable command IDs in `internal/app/keymap.go` and resolver-backed routing/hint metadata. Do not add new browse actions through direct `shortcutKey(msg)` / `msg.String()` branches unless the branch is an explicit literal text-entry, editor, or fixed modal-confirmation exception; update shortcut help and profile tests with the command.
 
 #### Large feature workflow
 1. **Update [TUI_TESTPLAN.md](engineering/testplans/TUI_TESTPLAN.md) first** — add or update the relevant TC-xx test case(s) before writing any implementation code. This defines the acceptance criteria.
