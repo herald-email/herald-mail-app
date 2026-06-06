@@ -55,6 +55,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Chat tool calling (Ollama tool API + MCP tools in-process)
 - [x] Filtered timeline from chat results
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
+- [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
 - [x] Compose AI assistant baseline (rewrite, tone/length adjustments, subject suggestion, accept into draft)
 - [x] Quick replies (canned + AI-generated contextual options)
 - [x] Contact book
@@ -508,12 +509,12 @@ Search is layered: fast local metadata search first, full-text body search next,
 
 ### Semantic search
 - [x] `?` prefix in search bar triggers semantic mode
-- [x] Local embeddings via Ollama (`nomic-embed-text-v2-moe` default, with smaller curated downgrade options available)
+- [x] Embeddings via local Ollama or OpenAI-compatible providers, with `nomic-embed-text-v2-moe` as the local default and `text-embedding-3-small` as the OpenAI-compatible default
 - [x] Vectors stored in SQLite (`email_embeddings` table)
 - [x] Cosine similarity ranking
 - [x] `semantic_search_emails` MCP tool
 - [x] Similarity score badge (`87%`) per result row
-- [x] Embeddings are invalidated automatically when the configured embedding model changes
+- [x] Embeddings are invalidated automatically when the configured embedding provider or model changes
 - [x] Semantic search shows an explicit unavailable or deferred message when embeddings cannot run
 - [x] Hybrid ranking (keyword + semantic merged)
 - [x] Semantic expansion is bounded by a configured similarity threshold and result cap
@@ -823,6 +824,7 @@ First-run experience and ongoing configuration should not require the user to ed
 - [x] Top-level category menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` so users can change one settings area without stepping through unrelated fields
 - [x] Editable fields for ALL config sections: credentials, server, SMTP, AI, sync (basic fields only done)
 - [x] AI settings expose curated Ollama chat and embedding model recommendations, including downgrade guidance for constrained machines and a translation-quality warning for `llama3.x` choices
+- [x] AI settings expose OpenAI-compatible embedding provider and model controls, including external embeddings for Claude/OpenAI chat and optional local Ollama embeddings for external chat
 - [x] AI settings warn when a previously configured Ollama model is no longer installed or reachable, disable AI actions, show install commands, and offer a Save Disabled action without blocking cached/offline startup
 - [x] Sync & Cleanup includes an explicit reclaim action for preview-cache storage with a before/after byte estimate and confirmation before pruning
 - [x] Sync & Cleanup defaults to message bodies without attachments and keeps Offline Cache policy labels compact

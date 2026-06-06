@@ -182,8 +182,7 @@ func RequiresOllamaModelValidation(previous, candidate *config.Config) bool {
 		return true
 	}
 	return strings.TrimRight(ollamaHost(previous), "/") != strings.TrimRight(ollamaHost(candidate), "/") ||
-		modelValue(previous.Ollama.Model, defaultOllamaModel) != modelValue(candidate.Ollama.Model, defaultOllamaModel) ||
-		effectiveEmbeddingModel(previous) != effectiveEmbeddingModel(candidate)
+		strings.Join(requiredModelNames(previous), "\x00") != strings.Join(requiredModelNames(candidate), "\x00")
 }
 
 func OllamaConfigured(cfg *config.Config) bool {
@@ -191,25 +190,48 @@ func OllamaConfigured(cfg *config.Config) bool {
 		return false
 	}
 	provider := strings.TrimSpace(cfg.AI.Provider)
-	if provider != "" && provider != "ollama" {
+	if provider == "disabled" {
 		return false
 	}
-	return strings.TrimSpace(cfg.Ollama.Host) != ""
+	return strings.TrimSpace(cfg.Ollama.Host) != "" && (usesOllamaChat(cfg) || cfg.EffectiveEmbeddingProvider() == config.EmbeddingProviderOllama)
 }
 
 func requiredModels(cfg *config.Config) []MissingModel {
 	if cfg == nil {
 		return nil
 	}
-	chat := modelValue(cfg.Ollama.Model, defaultOllamaModel)
-	embed := effectiveEmbeddingModel(cfg)
-	if chat == embed {
+	var required []MissingModel
+	if usesOllamaChat(cfg) {
+		required = append(required, MissingModel{Role: "chat/classification", Name: modelValue(cfg.Ollama.Model, defaultOllamaModel)})
+	}
+	if cfg.EffectiveEmbeddingProvider() == config.EmbeddingProviderOllama {
+		required = append(required, MissingModel{Role: "embedding", Name: effectiveEmbeddingModel(cfg)})
+	}
+	if len(required) == 2 && required[0].Name == required[1].Name {
+		chat := required[0].Name
 		return []MissingModel{{Role: "chat/classification and embedding", Name: chat}}
 	}
-	return []MissingModel{
-		{Role: "chat/classification", Name: chat},
-		{Role: "embedding", Name: embed},
+	return required
+}
+
+func requiredModelNames(cfg *config.Config) []string {
+	required := requiredModels(cfg)
+	names := make([]string, 0, len(required))
+	for _, model := range required {
+		if name := strings.TrimSpace(model.Name); name != "" {
+			names = append(names, name)
+		}
 	}
+	sort.Strings(names)
+	return dedupeStrings(names)
+}
+
+func usesOllamaChat(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	provider := strings.TrimSpace(cfg.AI.Provider)
+	return provider == "" || provider == "ollama"
 }
 
 func ollamaHost(cfg *config.Config) string {

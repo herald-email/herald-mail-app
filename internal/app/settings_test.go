@@ -2605,6 +2605,82 @@ func TestBuildConfig_OllamaDefaultWritesPreconfiguredValues(t *testing.T) {
 	if cfg.Ollama.EmbeddingModel != defaultEmbeddingModel {
 		t.Errorf("Ollama.EmbeddingModel = %q, want %q", cfg.Ollama.EmbeddingModel, defaultEmbeddingModel)
 	}
+	if cfg.Semantic.Provider != config.EmbeddingProviderOllama {
+		t.Errorf("Semantic.Provider = %q, want %q", cfg.Semantic.Provider, config.EmbeddingProviderOllama)
+	}
+}
+
+func TestNewSettings_OpenAIConfigPrefillsEmbeddingProviderAndModel(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "openai"
+	existing.OpenAI.APIKey = "sk-test"
+	existing.OpenAI.BaseURL = "https://openai-compatible.example/v1"
+	existing.OpenAI.Model = "gpt-5.4-nano"
+	existing.OpenAI.EmbeddingModel = "text-embedding-3-large"
+	existing.Semantic.Provider = config.EmbeddingProviderOpenAI
+	existing.Semantic.Model = "text-embedding-3-large"
+
+	s := NewSettings(SettingsModePanel, existing)
+
+	if s.aiProvider != "openai" {
+		t.Fatalf("aiProvider = %q, want openai", s.aiProvider)
+	}
+	if s.openAIModel != "gpt-5.4-nano" {
+		t.Errorf("openAIModel = %q, want gpt-5.4-nano", s.openAIModel)
+	}
+	if s.embeddingProvider != config.EmbeddingProviderOpenAI {
+		t.Errorf("embeddingProvider = %q, want %q", s.embeddingProvider, config.EmbeddingProviderOpenAI)
+	}
+	if s.openAIEmbeddingModel != "text-embedding-3-large" {
+		t.Errorf("openAIEmbeddingModel = %q, want text-embedding-3-large", s.openAIEmbeddingModel)
+	}
+}
+
+func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "openai"
+	s.openAIAPIKey = "sk-test"
+	s.openAIBaseURL = "https://openai-compatible.example/v1"
+	s.openAIModel = "gpt-5.4-mini"
+	s.embeddingProvider = config.EmbeddingProviderOpenAI
+	s.openAIEmbeddingModel = "text-embedding-3-large"
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != "openai" {
+		t.Errorf("AI.Provider = %q, want openai", cfg.AI.Provider)
+	}
+	if cfg.OpenAI.Model != "gpt-5.4-mini" {
+		t.Errorf("OpenAI.Model = %q, want gpt-5.4-mini", cfg.OpenAI.Model)
+	}
+	if cfg.OpenAI.EmbeddingModel != "text-embedding-3-large" {
+		t.Errorf("OpenAI.EmbeddingModel = %q, want text-embedding-3-large", cfg.OpenAI.EmbeddingModel)
+	}
+	if cfg.Semantic.Provider != config.EmbeddingProviderOpenAI {
+		t.Errorf("Semantic.Provider = %q, want %q", cfg.Semantic.Provider, config.EmbeddingProviderOpenAI)
+	}
+	if cfg.Semantic.Model != "text-embedding-3-large" {
+		t.Errorf("Semantic.Model = %q, want text-embedding-3-large", cfg.Semantic.Model)
+	}
+}
+
+func TestSettings_OpenAISelectionDefaultsToOpenAIEmbeddings(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "disabled"
+	s := NewSettings(SettingsModePanel, existing)
+	s.aiProvider = "openai"
+	s.syncExternalAIDefaults()
+
+	if s.embeddingProvider != config.EmbeddingProviderOpenAI {
+		t.Fatalf("embeddingProvider = %q, want %q", s.embeddingProvider, config.EmbeddingProviderOpenAI)
+	}
+
+	s.embeddingProvider = config.EmbeddingProviderOllama
+	s.lastAIProvider = "openai"
+	s.syncExternalAIDefaults()
+	if s.embeddingProvider != config.EmbeddingProviderOllama {
+		t.Fatalf("explicit Ollama embedding choice should be preserved, got %q", s.embeddingProvider)
+	}
 }
 
 func TestBuildConfig_AIDisabledClearsAIBackends(t *testing.T) {

@@ -55,6 +55,34 @@ func TestValidateOllamaModelsAcceptsBareNameWhenLatestTagIsInstalled(t *testing.
 	}
 }
 
+func TestValidateOllamaModelsChecksOnlyLocalEmbeddingForExternalChat(t *testing.T) {
+	server := ollamaTagsServer(t, http.StatusOK, `{"models":[{"name":"nomic-embed-text"}]}`)
+	cfg := ollamaConfig(server.URL, "missing-chat", "nomic-embed-text")
+	cfg.AI.Provider = "openai"
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.Semantic.Provider = config.EmbeddingProviderOllama
+
+	result := ValidateOllamaModels(context.Background(), cfg)
+
+	if err := result.Err(); err != nil {
+		t.Fatalf("external chat with local embeddings should validate only embedding model: %v", err)
+	}
+}
+
+func TestValidateOllamaModelsChecksOnlyLocalChatForExternalEmbeddings(t *testing.T) {
+	server := ollamaTagsServer(t, http.StatusOK, `{"models":[{"name":"llama3.2:1b"}]}`)
+	cfg := ollamaConfig(server.URL, "llama3.2:1b", "missing-embed")
+	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
+	cfg.Semantic.Model = "text-embedding-3-small"
+	cfg.OpenAI.APIKey = "sk-test"
+
+	result := ValidateOllamaModels(context.Background(), cfg)
+
+	if err := result.Err(); err != nil {
+		t.Fatalf("local chat with external embeddings should validate only chat model: %v", err)
+	}
+}
+
 func TestValidateOllamaModelsReturnsReachabilityError(t *testing.T) {
 	server := ollamaTagsServer(t, http.StatusInternalServerError, `{"error":"offline"}`)
 

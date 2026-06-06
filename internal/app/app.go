@@ -1244,14 +1244,16 @@ func aiRuntimeConfigChanged(previous, next *config.Config) bool {
 		previous.Claude.Model != next.Claude.Model ||
 		previous.OpenAI.APIKey != next.OpenAI.APIKey ||
 		previous.OpenAI.BaseURL != next.OpenAI.BaseURL ||
-		previous.OpenAI.Model != next.OpenAI.Model
+		previous.OpenAI.Model != next.OpenAI.Model ||
+		previous.OpenAI.EmbeddingModel != next.OpenAI.EmbeddingModel ||
+		previous.EffectiveEmbeddingProvider() != next.EffectiveEmbeddingProvider()
 }
 
 func aiEmbeddingConfigChanged(previous, next *config.Config) bool {
 	if previous == nil || next == nil {
 		return previous != next
 	}
-	return previous.EffectiveEmbeddingModel() != next.EffectiveEmbeddingModel()
+	return previous.EffectiveEmbeddingIdentity() != next.EffectiveEmbeddingIdentity()
 }
 
 func (m *Model) syncBackendAIClient(classifier ai.AIClient) {
@@ -1799,10 +1801,10 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 	previousCfg := m.cfg
-	previousEmbeddingModel := ""
+	previousEmbeddingIdentity := ""
 	previousCachePolicy := config.CacheStoragePolicyNoAttachments
 	if m.cfg != nil {
-		previousEmbeddingModel = m.cfg.EffectiveEmbeddingModel()
+		previousEmbeddingIdentity = m.cfg.EffectiveEmbeddingIdentity()
 		previousCachePolicy = config.NormalizeCacheStoragePolicy(m.cfg.Cache.StoragePolicy)
 	}
 	m.SetConfig(msg.Config)
@@ -1824,12 +1826,12 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 	if err := m.refreshAIClientForConfig(previousCfg, m.cfg); err != nil {
 		m.statusMessage = fmt.Sprintf("Settings saved, but AI reload failed: %v", err)
 	}
-	if previousEmbeddingModel != "" && previousEmbeddingModel != m.cfg.EffectiveEmbeddingModel() {
+	if previousEmbeddingIdentity != "" && previousEmbeddingIdentity != m.cfg.EffectiveEmbeddingIdentity() {
 		type embeddingModelEnsurer interface {
 			EnsureEmbeddingModel(string) (bool, error)
 		}
 		if manager, ok := m.backend.(embeddingModelEnsurer); ok {
-			invalidated, err := manager.EnsureEmbeddingModel(m.cfg.EffectiveEmbeddingModel())
+			invalidated, err := manager.EnsureEmbeddingModel(m.cfg.EffectiveEmbeddingIdentity())
 			if err != nil {
 				m.statusMessage = fmt.Sprintf("Settings saved, but embedding reset failed: %v", err)
 			} else if invalidated {

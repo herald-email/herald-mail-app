@@ -8,6 +8,7 @@ import "github.com/herald-email/herald-mail-app/internal/config"
 // IMPORTANT: This function returns a true nil interface value when no AI is
 // configured, NOT a typed nil pointer. Callers must check: if client == nil { ... }
 func NewFromConfig(cfg *config.Config) (AIClient, error) {
+	embeddingProvider := cfg.EffectiveEmbeddingProvider()
 	embeddingModel := cfg.EffectiveEmbeddingModel()
 	wrapLocal := func(client AIClient) AIClient {
 		if client == nil {
@@ -29,6 +30,34 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 			PauseBackgroundWhileInteractive: false,
 		})
 	}
+	newOllamaEmbedding := func() AIClient {
+		if cfg.Ollama.Host == "" {
+			return nil
+		}
+		ollama := New(cfg.Ollama.Host, cfg.Ollama.Model)
+		if embeddingModel != "" {
+			ollama.SetEmbeddingModel(embeddingModel)
+		}
+		return wrapLocal(ollama)
+	}
+	newOpenAIEmbedding := func() AIClient {
+		if cfg.OpenAI.APIKey == "" {
+			return nil
+		}
+		openai := NewOpenAICompatClient(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL, cfg.OpenAI.Model)
+		if embeddingModel != "" {
+			openai.SetEmbeddingModel(embeddingModel)
+		}
+		return wrapExternal(openai)
+	}
+	embeddingClient := func() AIClient {
+		switch embeddingProvider {
+		case config.EmbeddingProviderOpenAI:
+			return newOpenAIEmbedding()
+		default:
+			return newOllamaEmbedding()
+		}
+	}
 
 	switch cfg.AI.Provider {
 	case "disabled":
@@ -39,13 +68,8 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 			return nil, nil
 		}
 		claude := wrapExternal(NewClaudeClient(cfg.Claude.APIKey, cfg.Claude.Model))
-		// If Ollama is also configured, use it for embedding only.
-		if cfg.Ollama.Host != "" {
-			ollama := New(cfg.Ollama.Host, cfg.Ollama.Model)
-			if embeddingModel != "" {
-				ollama.SetEmbeddingModel(embeddingModel)
-			}
-			return NewCompositeClient(claude, wrapLocal(ollama)), nil
+		if embedding := embeddingClient(); embedding != nil {
+			return NewCompositeClient(claude, embedding), nil
 		}
 		return claude, nil
 
@@ -53,14 +77,15 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 		if cfg.OpenAI.APIKey == "" {
 			return nil, nil
 		}
-		openai := wrapExternal(NewOpenAICompatClient(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL, cfg.OpenAI.Model))
-		// If Ollama is also configured, use it for embedding only.
-		if cfg.Ollama.Host != "" {
-			ollama := New(cfg.Ollama.Host, cfg.Ollama.Model)
-			if embeddingModel != "" {
-				ollama.SetEmbeddingModel(embeddingModel)
+		openaiBase := NewOpenAICompatClient(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL, cfg.OpenAI.Model)
+		if embeddingProvider == config.EmbeddingProviderOpenAI && embeddingModel != "" {
+			openaiBase.SetEmbeddingModel(embeddingModel)
+		}
+		openai := wrapExternal(openaiBase)
+		if embeddingProvider != config.EmbeddingProviderOpenAI {
+			if embedding := embeddingClient(); embedding != nil {
+				return NewCompositeClient(openai, embedding), nil
 			}
-			return NewCompositeClient(openai, wrapLocal(ollama)), nil
 		}
 		return openai, nil
 
@@ -69,9 +94,15 @@ func NewFromConfig(cfg *config.Config) (AIClient, error) {
 			return nil, nil
 		}
 		c := New(cfg.Ollama.Host, cfg.Ollama.Model)
-		if embeddingModel != "" {
+		if embeddingProvider == config.EmbeddingProviderOllama && embeddingModel != "" {
 			c.SetEmbeddingModel(embeddingModel)
 		}
-		return wrapLocal(c), nil
+		ollama := wrapLocal(c)
+		if embeddingProvider != config.EmbeddingProviderOllama {
+			if embedding := embeddingClient(); embedding != nil {
+				return NewCompositeClient(ollama, embedding), nil
+			}
+		}
+		return ollama, nil
 	}
 }

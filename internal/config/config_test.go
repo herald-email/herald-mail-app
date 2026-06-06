@@ -759,6 +759,54 @@ func TestDefaultEmbeddingModel(t *testing.T) {
 	if c.Semantic.Model != "nomic-embed-text-v2-moe" {
 		t.Errorf("expected semantic model to follow default embedding model, got %q", c.Semantic.Model)
 	}
+	if c.Semantic.Provider != EmbeddingProviderOllama {
+		t.Errorf("expected semantic provider to default to %q, got %q", EmbeddingProviderOllama, c.Semantic.Provider)
+	}
+	if got := c.EffectiveEmbeddingIdentity(); got != "ollama:nomic-embed-text-v2-moe" {
+		t.Errorf("EffectiveEmbeddingIdentity() = %q, want ollama:nomic-embed-text-v2-moe", got)
+	}
+}
+
+func TestDefaultOpenAIModelsAndEmbeddingProvider(t *testing.T) {
+	c := &Config{}
+	c.AI.Provider = "openai"
+	c.OpenAI.APIKey = "sk-test"
+	c.applyDefaults()
+
+	if c.OpenAI.Model != "gpt-5.4-mini" {
+		t.Errorf("expected default OpenAI model %q, got %q", "gpt-5.4-mini", c.OpenAI.Model)
+	}
+	if c.OpenAI.EmbeddingModel != "text-embedding-3-small" {
+		t.Errorf("expected default OpenAI embedding model %q, got %q", "text-embedding-3-small", c.OpenAI.EmbeddingModel)
+	}
+	if c.Semantic.Provider != EmbeddingProviderOpenAI {
+		t.Errorf("expected semantic provider to follow OpenAI provider, got %q", c.Semantic.Provider)
+	}
+	if c.Semantic.Model != "text-embedding-3-small" {
+		t.Errorf("expected semantic model to follow OpenAI embedding model, got %q", c.Semantic.Model)
+	}
+	if got := c.EffectiveEmbeddingIdentity(); got != "openai:text-embedding-3-small" {
+		t.Errorf("EffectiveEmbeddingIdentity() = %q, want openai:text-embedding-3-small", got)
+	}
+}
+
+func TestEffectiveEmbeddingModelMigratesOldOpenAIDefaultFromOllama(t *testing.T) {
+	c := &Config{}
+	c.AI.Provider = "openai"
+	c.OpenAI.APIKey = "sk-test"
+	c.OpenAI.EmbeddingModel = "text-embedding-3-large"
+	c.Semantic.Model = "nomic-embed-text-v2-moe"
+	c.applyDefaults()
+
+	if got := c.EffectiveEmbeddingProvider(); got != EmbeddingProviderOpenAI {
+		t.Fatalf("EffectiveEmbeddingProvider() = %q, want %q", got, EmbeddingProviderOpenAI)
+	}
+	if got := c.EffectiveEmbeddingModel(); got != "text-embedding-3-large" {
+		t.Fatalf("EffectiveEmbeddingModel() = %q, want text-embedding-3-large", got)
+	}
+	if got := c.EffectiveEmbeddingIdentity(); got != "openai:text-embedding-3-large" {
+		t.Fatalf("EffectiveEmbeddingIdentity() = %q, want openai:text-embedding-3-large", got)
+	}
 }
 
 func TestDefaultOllamaModelNotOverridden(t *testing.T) {

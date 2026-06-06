@@ -301,7 +301,7 @@ func Run(commandName string, args []string) error {
 		return fmt.Errorf("failed to open cache: %w", err)
 	}
 	defer c.Close()
-	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingModel()); err != nil {
+	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingIdentity()); err != nil {
 		return fmt.Errorf("failed to initialize embedding model state: %w", err)
 	}
 

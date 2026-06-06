@@ -1,8 +1,12 @@
 package ai
 
 import (
-	"github.com/herald-email/herald-mail-app/internal/config"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 func TestNewFromConfigOllama(t *testing.T) {
@@ -91,7 +95,7 @@ func TestNewFromConfigOpenAI(t *testing.T) {
 	cfg.AI.Provider = "openai"
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = "https://api.openai.com/v1"
-	cfg.OpenAI.Model = "gpt-4o"
+	cfg.OpenAI.Model = "gpt-5.4-mini"
 
 	client, err := NewFromConfig(cfg)
 	if err != nil {
@@ -99,6 +103,89 @@ func TestNewFromConfigOpenAI(t *testing.T) {
 	}
 	if _, ok := client.(*ManagedClient); !ok {
 		t.Errorf("expected *ManagedClient, got %T", client)
+	}
+}
+
+func TestNewFromConfigOpenAIUsesConfiguredEmbeddingModel(t *testing.T) {
+	var gotModel string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/embeddings" {
+			http.NotFound(w, r)
+			return
+		}
+		var req openAIEmbedRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		gotModel = req.Model
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(openAIEmbedOKResponse([]float32{0.1, 0.2}))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	cfg.AI.Provider = "openai"
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = srv.URL
+	cfg.OpenAI.Model = "gpt-5.4-mini"
+	cfg.OpenAI.EmbeddingModel = "text-embedding-3-large"
+	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
+	cfg.Semantic.Model = "text-embedding-3-large"
+
+	client, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Embed("hello"); err != nil {
+		t.Fatal(err)
+	}
+	if gotModel != "text-embedding-3-large" {
+		t.Fatalf("embedding model = %q, want text-embedding-3-large", gotModel)
+	}
+}
+
+func TestNewFromConfigClaudeCanUseOpenAIEmbeddingProvider(t *testing.T) {
+	var gotModel string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/embeddings" {
+			http.NotFound(w, r)
+			return
+		}
+		var req openAIEmbedRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		gotModel = req.Model
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(openAIEmbedOKResponse([]float32{0.1, 0.2}))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	cfg.AI.Provider = "claude"
+	cfg.Claude.APIKey = "sk-ant-test"
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = srv.URL
+	cfg.OpenAI.EmbeddingModel = "text-embedding-3-small"
+	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
+	cfg.Semantic.Model = "text-embedding-3-small"
+
+	client, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := client.(*CompositeClient); !ok {
+		t.Fatalf("expected *CompositeClient, got %T", client)
+	}
+	if _, err := client.Embed("hello"); err != nil {
+		t.Fatal(err)
+	}
+	if gotModel != "text-embedding-3-small" {
+		t.Fatalf("embedding model = %q, want text-embedding-3-small", gotModel)
 	}
 }
 

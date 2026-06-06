@@ -193,9 +193,13 @@ func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
 	m := New(backend, nil, "", classifier, false)
 	m.cfg = &config.Config{}
 	m.cfg.Ollama.EmbeddingModel = "nomic-embed-text"
+	m.cfg.Semantic.Provider = config.EmbeddingProviderOllama
+	m.cfg.Semantic.Model = "nomic-embed-text"
 
 	next := &config.Config{}
 	next.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+	next.Semantic.Provider = config.EmbeddingProviderOllama
+	next.Semantic.Model = "nomic-embed-text-v2-moe"
 
 	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next})
 	updated := updatedModel.(*Model)
@@ -203,11 +207,48 @@ func TestSettingsSaved_EmbeddingModelChangeInvalidatesCache(t *testing.T) {
 	if !backend.ensureCalled {
 		t.Fatal("expected backend embedding invalidation to run")
 	}
-	if backend.ensuredModel != "nomic-embed-text-v2-moe" {
+	if backend.ensuredModel != "ollama:nomic-embed-text-v2-moe" {
 		t.Fatalf("EnsureEmbeddingModel called with %q", backend.ensuredModel)
 	}
 	if classifier.lastEmbeddingModel != "nomic-embed-text-v2-moe" {
 		t.Fatalf("SetEmbeddingModel called with %q", classifier.lastEmbeddingModel)
+	}
+	if updated.statusMessage != "Settings saved. Embeddings reset for the new model." {
+		t.Fatalf("statusMessage = %q", updated.statusMessage)
+	}
+}
+
+func TestSettingsSaved_EmbeddingProviderChangeInvalidatesCache(t *testing.T) {
+	backend := &stubBackend{ensureResult: true}
+	classifier := &stubClassifier{}
+	m := New(backend, nil, "", classifier, false)
+	m.cfg = &config.Config{}
+	m.cfg.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+	m.cfg.Semantic.Provider = config.EmbeddingProviderOllama
+	m.cfg.Semantic.Model = "nomic-embed-text-v2-moe"
+
+	next := &config.Config{}
+	next.AI.Provider = "openai"
+	next.OpenAI.APIKey = "sk-test"
+	next.OpenAI.BaseURL = "https://openai-compatible.example/v1"
+	next.OpenAI.EmbeddingModel = "text-embedding-3-small"
+	next.Semantic.Provider = config.EmbeddingProviderOpenAI
+	next.Semantic.Model = "text-embedding-3-small"
+
+	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next})
+	updated := updatedModel.(*Model)
+
+	if !backend.ensureCalled {
+		t.Fatal("expected backend embedding invalidation to run")
+	}
+	if backend.ensuredModel != "openai:text-embedding-3-small" {
+		t.Fatalf("EnsureEmbeddingModel called with %q", backend.ensuredModel)
+	}
+	if classifier.lastEmbeddingModel != "" {
+		t.Fatalf("provider switch should rebuild the classifier, got SetEmbeddingModel(%q) on the old client", classifier.lastEmbeddingModel)
+	}
+	if updated.classifier == nil || updated.classifier == classifier {
+		t.Fatalf("provider switch should install a rebuilt AI client, got %T", updated.classifier)
 	}
 	if updated.statusMessage != "Settings saved. Embeddings reset for the new model." {
 		t.Fatalf("statusMessage = %q", updated.statusMessage)

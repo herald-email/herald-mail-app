@@ -51,6 +51,9 @@ const (
 	defaultOllamaHost     = "http://localhost:11434"
 	defaultOllamaModel    = "gemma3:4b"
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
+	defaultOpenAIBaseURL  = "https://api.openai.com/v1"
+	defaultOpenAIModel    = "gpt-5.4-mini"
+	defaultOpenAIEmbed    = "text-embedding-3-small"
 	customModelChoice     = "custom"
 
 	settingsPanelSectionMenu           settingsPanelSection = ""
@@ -165,6 +168,7 @@ type Settings struct {
 	accountDeletePending          bool
 	aiModelWarning                *aicheck.Result
 	disableAIFromWarning          bool
+	lastAIProvider                string
 
 	// form field backing variables — account
 	provider string
@@ -178,19 +182,21 @@ type Settings struct {
 	editGmailAdvanced bool
 
 	// form field backing variables — AI provider
-	aiProvider        string
-	claudeAPIKey      string
-	claudeModel       string
-	openAIAPIKey      string
-	openAIBaseURL     string
-	openAIModel       string
-	ollamaHost        string
-	ollamaModel       string
-	ollamaModelChoice string
-	ollamaModelCustom string
-	embedModel        string
-	embedModelChoice  string
-	embedModelCustom  string
+	aiProvider           string
+	claudeAPIKey         string
+	claudeModel          string
+	openAIAPIKey         string
+	openAIBaseURL        string
+	openAIModel          string
+	openAIEmbeddingModel string
+	embeddingProvider    string
+	ollamaHost           string
+	ollamaModel          string
+	ollamaModelChoice    string
+	ollamaModelCustom    string
+	embedModel           string
+	embedModelChoice     string
+	embedModelCustom     string
 
 	// form field backing variables — sync & cleanup
 	syncPollStr                string
@@ -397,12 +403,20 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.aiProvider = existing.AI.Provider
 		s.ollamaHost = existing.Ollama.Host
 		s.ollamaModel = existing.Ollama.Model
-		s.embedModel = existing.EffectiveEmbeddingModel()
+		s.embeddingProvider = existing.EffectiveEmbeddingProvider()
+		s.embedModel = existing.Ollama.EmbeddingModel
+		if s.embedModel == "" && s.embeddingProvider == config.EmbeddingProviderOllama {
+			s.embedModel = existing.EffectiveEmbeddingModel()
+		}
 		s.claudeAPIKey = existing.Claude.APIKey
 		s.claudeModel = existing.Claude.Model
 		s.openAIAPIKey = existing.OpenAI.APIKey
 		s.openAIBaseURL = existing.OpenAI.BaseURL
 		s.openAIModel = existing.OpenAI.Model
+		s.openAIEmbeddingModel = existing.OpenAI.EmbeddingModel
+		if s.openAIEmbeddingModel == "" && s.embeddingProvider == config.EmbeddingProviderOpenAI {
+			s.openAIEmbeddingModel = existing.EffectiveEmbeddingModel()
+		}
 
 		// Sync & cleanup fields
 		s.syncPollStr = strconv.Itoa(existing.Sync.PollIntervalMinutes)
@@ -437,17 +451,21 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.firstRunOtherProvider = s.provider != "gmail-oauth"
 	}
 	s.normalizeAIProvider()
+	s.lastAIProvider = s.aiProvider
+	_ = s.syncExternalAIDefaults()
 	if s.firstRunAccountOnly && s.provider == "gmail-oauth" {
 		s.alsoAddCalendar = true
 		s.calendarProvider = "google_calendar"
 		if existing == nil || strings.TrimSpace(existing.AI.Provider) == "" {
 			s.aiProvider = aiProviderDisabled
 			s.syncAIDefaults()
+			_ = s.syncExternalAIDefaults()
 		}
 	}
 	if s.firstRunPreferencesOnly && (existing == nil || strings.TrimSpace(existing.AI.Provider) == "") {
 		s.aiProvider = aiProviderDisabled
 		s.syncAIDefaults()
+		_ = s.syncExternalAIDefaults()
 	}
 	if s.syncPollStr == "" {
 		s.syncPollStr = "5" // default only on first run; 0 is valid (IDLE-only mode)
@@ -873,9 +891,52 @@ func (s *Settings) buildForm() {
 	// Group 3c — OpenAI settings (shown only when provider = openai)
 	openAIGroup := huh.NewGroup(
 		huh.NewInput().Title("OpenAI API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
-		huh.NewInput().Title("OpenAI Base URL").Inline(true).Placeholder("https://api.openai.com/v1").Value(&s.openAIBaseURL),
-		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder("gpt-4o").Value(&s.openAIModel),
+		huh.NewInput().Title("OpenAI Base URL").Inline(true).Placeholder(defaultOpenAIBaseURL).Value(&s.openAIBaseURL),
+		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder(defaultOpenAIModel).Value(&s.openAIModel),
 	).WithHideFunc(func() bool { return s.aiProvider != "openai" })
+
+	externalEmbeddingGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Embedding Provider").
+			Options(
+				huh.NewOption("OpenAI / compatible", config.EmbeddingProviderOpenAI),
+				huh.NewOption("Ollama local", config.EmbeddingProviderOllama),
+			).
+			Value(&s.embeddingProvider),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Embedding API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
+			func() bool {
+				return s.aiProvider == "openai" || s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOpenAI
+			},
+		),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Embedding Base URL").Inline(true).Placeholder(defaultOpenAIBaseURL).Value(&s.openAIBaseURL),
+			func() bool {
+				return s.aiProvider == "openai" || s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOpenAI
+			},
+		),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("OpenAI Embedding Model").Inline(true).Placeholder(defaultOpenAIEmbed).Value(&s.openAIEmbeddingModel),
+			func() bool { return s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOpenAI },
+		),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Ollama Host").Inline(true).Value(&s.ollamaHost).Placeholder(defaultOllamaHost),
+			func() bool { return s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOllama },
+		),
+		hideSettingsFieldWhen(
+			huh.NewSelect[string]().
+				Title("Ollama Embedding Model").
+				Options(ollamaEmbeddingModelOptions()...).
+				Value(&s.embedModelChoice),
+			func() bool { return s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOllama },
+		),
+		hideSettingsFieldWhen(
+			huh.NewInput().Title("Custom Ollama Embedding Model").Inline(true).Value(&s.embedModelCustom).Placeholder(defaultEmbeddingModel),
+			func() bool {
+				return s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOllama || s.embedModelChoice != customModelChoice
+			},
+		),
+	).Title("Embeddings").WithHideFunc(func() bool { return s.aiProvider != "claude" && s.aiProvider != "openai" })
 
 	offlineCacheSelect := func() huh.Field {
 		return huh.NewSelect[string]().
@@ -1360,6 +1421,7 @@ func (s *Settings) buildForm() {
 		ollamaGroup,
 		claudeGroup,
 		openAIGroup,
+		externalEmbeddingGroup,
 		wizardCacheGroup,
 		keyboardGroup,
 		wizardThemeGroup,
@@ -1401,6 +1463,7 @@ func (s *Settings) buildForm() {
 				ollamaGroup,
 				claudeGroup,
 				openAIGroup,
+				externalEmbeddingGroup,
 				saveGroup.Title("AI"),
 			}
 			if s.hasAIModelWarning() {
@@ -1467,6 +1530,7 @@ func (s *Settings) buildForm() {
 				ollamaGroup,
 				claudeGroup,
 				openAIGroup,
+				externalEmbeddingGroup,
 				wizardCacheGroup,
 				keyboardGroup,
 				wizardThemeGroup,
@@ -2817,8 +2881,14 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (s *Settings) View() tea.View {
+	s.syncAIDefaults()
+	aiDefaultsChanged := s.syncExternalAIDefaults()
 	currentFormView := s.form.View()
 	if s.ensureProviderDefaults() || s.needsPresetFieldRefresh(currentFormView) {
+		s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
+		currentFormView = s.form.View()
+	}
+	if aiDefaultsChanged {
 		s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
 		currentFormView = s.form.View()
 	}
@@ -2826,7 +2896,6 @@ func (s *Settings) View() tea.View {
 		s.refreshFirstRunProviderDetailGroup()
 		currentFormView = s.form.View()
 	}
-	s.syncAIDefaults()
 	formView := strings.TrimRight(currentFormView, "\n")
 
 	if s.mode == SettingsModePanel {
@@ -3026,6 +3095,7 @@ func settingsLooksLikeFooterHint(text string) bool {
 func (s *Settings) buildConfig() *config.Config {
 	s.ensureProviderDefaults()
 	s.syncAIDefaults()
+	_ = s.syncExternalAIDefaults()
 	// Shallow copy preserves all non-pointer fields; pointer/slice fields that
 	// this form does not modify are left pointing at the same underlying data
 	// (safe because we never mutate them — we only overwrite scalar fields below).
@@ -3076,23 +3146,35 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.Ollama.Host = s.ollamaHost
 	cfg.Ollama.Model = s.ollamaModel
 	cfg.Ollama.EmbeddingModel = s.embedModel
-	cfg.Semantic.Model = s.embedModel
 	cfg.Claude.APIKey = s.claudeAPIKey
 	cfg.Claude.Model = s.claudeModel
 	cfg.OpenAI.APIKey = s.openAIAPIKey
 	cfg.OpenAI.BaseURL = s.openAIBaseURL
 	cfg.OpenAI.Model = s.openAIModel
+	cfg.OpenAI.EmbeddingModel = s.openAIEmbeddingModel
+	cfg.Semantic.Provider = s.effectiveSettingsEmbeddingProvider()
+	switch cfg.Semantic.Provider {
+	case config.EmbeddingProviderOpenAI:
+		cfg.Semantic.Model = strings.TrimSpace(firstNonEmptyString(s.openAIEmbeddingModel, defaultOpenAIEmbed))
+	default:
+		cfg.Semantic.Model = strings.TrimSpace(firstNonEmptyString(s.embedModel, defaultEmbeddingModel))
+	}
 
 	switch s.aiProvider {
 	case aiProviderOllamaDefault:
 		cfg.Ollama.Host = defaultOllamaHost
 		cfg.Ollama.Model = defaultOllamaModel
 		cfg.Ollama.EmbeddingModel = defaultEmbeddingModel
+		cfg.Semantic.Provider = config.EmbeddingProviderOllama
 		cfg.Semantic.Model = defaultEmbeddingModel
+	case aiProviderOllamaCustom:
+		cfg.Semantic.Provider = config.EmbeddingProviderOllama
+		cfg.Semantic.Model = strings.TrimSpace(firstNonEmptyString(cfg.Ollama.EmbeddingModel, defaultEmbeddingModel))
 	case aiProviderDisabled:
 		cfg.Ollama.Host = ""
 		cfg.Ollama.Model = ""
 		cfg.Ollama.EmbeddingModel = ""
+		cfg.Semantic.Provider = ""
 		cfg.Semantic.Model = ""
 		cfg.Claude.APIKey = ""
 		cfg.OpenAI.APIKey = ""
@@ -3720,6 +3802,87 @@ func (s *Settings) syncAIDefaults() {
 	s.embedModel = selectedModelValue(s.embedModelChoice, s.embedModelCustom, s.embedModel, defaultEmbeddingModel)
 }
 
+func (s *Settings) syncExternalAIDefaults() bool {
+	before := []string{
+		s.openAIBaseURL,
+		s.openAIModel,
+		s.openAIEmbeddingModel,
+		s.embeddingProvider,
+		s.ollamaHost,
+		s.embedModel,
+		s.embedModelChoice,
+		s.lastAIProvider,
+	}
+	if s.openAIBaseURL == "" {
+		s.openAIBaseURL = defaultOpenAIBaseURL
+	}
+	if s.openAIModel == "" {
+		s.openAIModel = defaultOpenAIModel
+	}
+	if s.openAIEmbeddingModel == "" {
+		s.openAIEmbeddingModel = defaultOpenAIEmbed
+	}
+	if s.embeddingProvider == "" {
+		if s.aiProvider == "openai" {
+			s.embeddingProvider = config.EmbeddingProviderOpenAI
+		} else {
+			s.embeddingProvider = config.EmbeddingProviderOllama
+		}
+	} else {
+		s.embeddingProvider = config.NormalizeEmbeddingProvider(s.embeddingProvider)
+	}
+	if s.lastAIProvider != "" && s.lastAIProvider != s.aiProvider {
+		if s.aiProvider == "openai" && s.embeddingProvider == config.EmbeddingProviderOllama {
+			s.embeddingProvider = config.EmbeddingProviderOpenAI
+		}
+		if s.aiProvider == aiProviderOllamaDefault || s.aiProvider == aiProviderOllamaCustom {
+			s.embeddingProvider = config.EmbeddingProviderOllama
+		}
+		s.lastAIProvider = s.aiProvider
+	} else if s.lastAIProvider == "" {
+		s.lastAIProvider = s.aiProvider
+	}
+	if s.effectiveSettingsEmbeddingProvider() == config.EmbeddingProviderOllama {
+		if s.ollamaHost == "" {
+			s.ollamaHost = defaultOllamaHost
+		}
+		if s.embedModel == "" {
+			s.embedModel = defaultEmbeddingModel
+		}
+		if s.embedModelChoice == "" {
+			s.syncAIModelChoicesFromValues()
+		}
+		s.embedModel = selectedModelValue(s.embedModelChoice, s.embedModelCustom, s.embedModel, defaultEmbeddingModel)
+	}
+	after := []string{
+		s.openAIBaseURL,
+		s.openAIModel,
+		s.openAIEmbeddingModel,
+		s.embeddingProvider,
+		s.ollamaHost,
+		s.embedModel,
+		s.embedModelChoice,
+		s.lastAIProvider,
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Settings) effectiveSettingsEmbeddingProvider() string {
+	provider := strings.TrimSpace(s.embeddingProvider)
+	if provider != "" {
+		return config.NormalizeEmbeddingProvider(provider)
+	}
+	if s.aiProvider == "openai" {
+		return config.EmbeddingProviderOpenAI
+	}
+	return config.EmbeddingProviderOllama
+}
+
 func (s *Settings) ensureProviderDefaults() bool {
 	before := []string{s.imapHost, s.imapPort, s.smtpHost, s.smtpPort}
 	s.syncProviderDefaults("", s.provider)
@@ -3755,6 +3918,11 @@ func (s *Settings) visibleSettingsGroupTarget(view string) string {
 		"Google address",
 		"IMAP Host>",
 		"AI Provider",
+		"OpenAI API Key",
+		"OpenAI Model",
+		"Embedding Provider",
+		"OpenAI Embedding Model",
+		"Ollama Embedding Model",
 		"Offline Cache",
 		"Sync & Cleanup",
 		"Keyboard Profile",

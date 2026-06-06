@@ -15,34 +15,40 @@ import (
 // OpenAICompatClient implements AIClient using OpenAI-compatible APIs.
 // Works with OpenAI, LM Studio, llama.cpp, and any /v1/chat/completions endpoint.
 type OpenAICompatClient struct {
-	apiKey  string
-	baseURL string
-	model   string
-	client  *http.Client
+	apiKey         string
+	baseURL        string
+	model          string
+	embeddingModel string
+	client         *http.Client
 }
 
 // NewOpenAICompatClient creates an OpenAICompatClient.
 // baseURL defaults to "https://api.openai.com/v1" if empty.
-// model defaults to "gpt-4o" if empty.
+// model defaults to "gpt-5.4-mini" if empty.
 func NewOpenAICompatClient(apiKey, baseURL, model string) *OpenAICompatClient {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
 	if model == "" {
-		model = "gpt-4o"
+		model = "gpt-5.4-mini"
 	}
 	return &OpenAICompatClient{
-		apiKey:  apiKey,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		model:   model,
-		client:  &http.Client{Timeout: 60 * time.Second},
+		apiKey:         apiKey,
+		baseURL:        strings.TrimRight(baseURL, "/"),
+		model:          model,
+		embeddingModel: "text-embedding-3-small",
+		client:         &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
-// SetEmbeddingModel is a no-op; OpenAI uses "text-embedding-3-small" hardcoded.
-func (c *OpenAICompatClient) SetEmbeddingModel(_ string) {}
+// SetEmbeddingModel overrides the embedding model for /v1/embeddings.
+func (c *OpenAICompatClient) SetEmbeddingModel(model string) {
+	if trimmed := strings.TrimSpace(model); trimmed != "" {
+		c.embeddingModel = trimmed
+	}
+}
 
-// HasVisionModel returns true (OpenAI gpt-4o supports vision).
+// HasVisionModel returns true for current OpenAI-compatible multimodal models.
 func (c *OpenAICompatClient) HasVisionModel() bool { return true }
 
 type openAIMessage struct {
@@ -275,10 +281,14 @@ func (c *OpenAICompatClient) ChatWithTools(messages []ChatMessage, tools []Tool)
 	return strings.TrimSpace(msg.Content), nil, nil
 }
 
-// Embed returns a float32 embedding using /v1/embeddings with text-embedding-3-small.
+// Embed returns a float32 embedding using /v1/embeddings.
 func (c *OpenAICompatClient) Embed(text string) ([]float32, error) {
+	model := strings.TrimSpace(c.embeddingModel)
+	if model == "" {
+		model = "text-embedding-3-small"
+	}
 	respBody, err := c.doPost(context.Background(), "/embeddings", openAIEmbedRequest{
-		Model: "text-embedding-3-small",
+		Model: model,
 		Input: text,
 	})
 	if err != nil {

@@ -179,8 +179,9 @@ type Config struct {
 	} `yaml:"sync"`
 	Notifications NotificationConfig `yaml:"notifications,omitempty"`
 	Semantic      struct {
-		Enabled   bool    `yaml:"enabled"`    // default: true when Ollama configured
-		Model     string  `yaml:"model"`      // default: configured Ollama embedding model
+		Enabled   bool    `yaml:"enabled"`    // default: true when AI is configured
+		Provider  string  `yaml:"provider"`   // ollama | openai; default: inferred from AI provider
+		Model     string  `yaml:"model"`      // default: provider embedding model
 		BatchSize int     `yaml:"batch_size"` // default: 20
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
@@ -226,9 +227,10 @@ type Config struct {
 	} `yaml:"claude"`
 
 	OpenAI struct {
-		APIKey  string `yaml:"api_key"`
-		BaseURL string `yaml:"base_url"` // default: "https://api.openai.com/v1"
-		Model   string `yaml:"model"`    // default: "gpt-4o"
+		APIKey         string `yaml:"api_key"`
+		BaseURL        string `yaml:"base_url"`        // default: "https://api.openai.com/v1"
+		Model          string `yaml:"model"`           // default: "gpt-5.4-mini"
+		EmbeddingModel string `yaml:"embedding_model"` // default: "text-embedding-3-small"
 	} `yaml:"openai"`
 
 	AI struct {
@@ -279,6 +281,12 @@ const (
 
 	CalendarWeekStartMonday = "monday"
 	CalendarWeekStartSunday = "sunday"
+
+	EmbeddingProviderOllama = "ollama"
+	EmbeddingProviderOpenAI = "openai"
+
+	defaultOllamaEmbeddingModel = "nomic-embed-text-v2-moe"
+	defaultOpenAIEmbeddingModel = "text-embedding-3-small"
 )
 
 func NormalizeCacheStoragePolicy(policy string) string {
@@ -334,14 +342,72 @@ func (c *Config) IsGmailOAuth() bool {
 	return c.Gmail.RefreshToken != ""
 }
 
-// EffectiveEmbeddingModel returns the configured embedding model, preferring
-// semantic.model when it is explicitly set and otherwise falling back to the
-// Ollama embedding model.
-func (c *Config) EffectiveEmbeddingModel() string {
-	if strings.TrimSpace(c.Semantic.Model) != "" {
-		return strings.TrimSpace(c.Semantic.Model)
+// NormalizeEmbeddingProvider returns a supported embedding provider name.
+func NormalizeEmbeddingProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case EmbeddingProviderOpenAI, "openai-compatible", "openai_compatible":
+		return EmbeddingProviderOpenAI
+	default:
+		return EmbeddingProviderOllama
 	}
-	return strings.TrimSpace(c.Ollama.EmbeddingModel)
+}
+
+// EffectiveEmbeddingProvider returns the embedding provider used for semantic
+// search. A blank semantic.provider follows the active AI provider for OpenAI
+// configs and otherwise preserves the local Ollama default.
+func (c *Config) EffectiveEmbeddingProvider() string {
+	if c == nil {
+		return EmbeddingProviderOllama
+	}
+	if strings.TrimSpace(c.Semantic.Provider) != "" {
+		return NormalizeEmbeddingProvider(c.Semantic.Provider)
+	}
+	if strings.TrimSpace(c.AI.Provider) == EmbeddingProviderOpenAI {
+		return EmbeddingProviderOpenAI
+	}
+	return EmbeddingProviderOllama
+}
+
+// EffectiveEmbeddingModel returns the configured embedding model for the
+// effective provider. Legacy OpenAI configs saved before semantic.provider
+// existed may carry the old Ollama default in semantic.model; when OpenAI is
+// the effective provider, that old local default migrates to openai.embedding_model.
+func (c *Config) EffectiveEmbeddingModel() string {
+	if c == nil {
+		return defaultOllamaEmbeddingModel
+	}
+	provider := c.EffectiveEmbeddingProvider()
+	model := strings.TrimSpace(c.Semantic.Model)
+	switch provider {
+	case EmbeddingProviderOpenAI:
+		if model != "" &&
+			model != defaultOllamaEmbeddingModel &&
+			model != strings.TrimSpace(c.Ollama.EmbeddingModel) {
+			return model
+		}
+		if trimmed := strings.TrimSpace(c.OpenAI.EmbeddingModel); trimmed != "" {
+			return trimmed
+		}
+		return defaultOpenAIEmbeddingModel
+	default:
+		if model != "" {
+			return model
+		}
+		if trimmed := strings.TrimSpace(c.Ollama.EmbeddingModel); trimmed != "" {
+			return trimmed
+		}
+		return defaultOllamaEmbeddingModel
+	}
+}
+
+// EffectiveEmbeddingIdentity is the cache-visible embedding identity. It
+// includes the provider so identical model strings from different vendors do
+// not accidentally share semantic vectors.
+func (c *Config) EffectiveEmbeddingIdentity() string {
+	if c == nil {
+		return EmbeddingProviderOllama + ":" + defaultOllamaEmbeddingModel
+	}
+	return c.EffectiveEmbeddingProvider() + ":" + c.EffectiveEmbeddingModel()
 }
 
 func (c Config) NormalizedSources() []SourceConfig {
@@ -687,10 +753,24 @@ func (c *Config) applyDefaults() {
 		c.Ollama.Model = "gemma3:4b"
 	}
 	if c.Ollama.EmbeddingModel == "" {
-		c.Ollama.EmbeddingModel = "nomic-embed-text-v2-moe"
+		c.Ollama.EmbeddingModel = defaultOllamaEmbeddingModel
+	}
+	if c.OpenAI.BaseURL == "" {
+		c.OpenAI.BaseURL = "https://api.openai.com/v1"
+	}
+	if c.OpenAI.Model == "" {
+		c.OpenAI.Model = "gpt-5.4-mini"
+	}
+	if c.OpenAI.EmbeddingModel == "" {
+		c.OpenAI.EmbeddingModel = defaultOpenAIEmbeddingModel
+	}
+	if c.Semantic.Provider == "" {
+		c.Semantic.Provider = c.EffectiveEmbeddingProvider()
+	} else {
+		c.Semantic.Provider = NormalizeEmbeddingProvider(c.Semantic.Provider)
 	}
 	if c.Semantic.Model == "" {
-		c.Semantic.Model = c.Ollama.EmbeddingModel
+		c.Semantic.Model = c.EffectiveEmbeddingModel()
 	}
 	if c.Sync.Interval == 0 {
 		c.Sync.Interval = 60
@@ -732,12 +812,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Claude.Model == "" {
 		c.Claude.Model = "claude-sonnet-4-6"
-	}
-	if c.OpenAI.BaseURL == "" {
-		c.OpenAI.BaseURL = "https://api.openai.com/v1"
-	}
-	if c.OpenAI.Model == "" {
-		c.OpenAI.Model = "gpt-4o"
 	}
 	if c.Keyboard.Profile == "" {
 		c.Keyboard.Profile = "default"

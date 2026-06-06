@@ -210,7 +210,7 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cache: %w", err)
 	}
-	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingModel()); err != nil {
+	if _, err := c.EnsureEmbeddingModel(cfg.EffectiveEmbeddingIdentity()); err != nil {
 		_ = c.Close()
 		return nil, fmt.Errorf("failed to initialize embedding model state: %w", err)
 	}

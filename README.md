@@ -110,8 +110,8 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Mouse navigation — clickable tabs, folder/list/calendar rows, scrollable previews, and OSC 8 links | ✅     |
 | Bulk cleanup — Timeline sender/domain grouping plus dry-run cleanup rule previews         | ✅     |
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
-| AI classification via Ollama (`gemma3:4b` default, custom models supported)               | ✅     |
-| Semantic search with `nomic-embed-text-v2-moe` default + chunked body embeddings          | ✅     |
+| AI classification via Ollama, Claude, or OpenAI-compatible providers                      | ✅     |
+| Semantic search with local or OpenAI-compatible chunked body embeddings                   | ✅     |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
 | Contact book with LLM enrichment and native Apple Contacts import                         | ✅     |
 | Compose + reply + forward with Markdown preview, preserved context, and external editor   | ✅     |
@@ -276,6 +276,14 @@ ollama:
     host: "http://localhost:11434"
     model: "gemma3:4b" # for classification, chat, quick replies
     embedding_model: "nomic-embed-text-v2-moe" # for semantic search
+openai:
+    api_key: "sk-..."
+    base_url: "https://api.openai.com/v1" # or an OpenAI-compatible vendor endpoint
+    model: "gpt-5.4-mini"
+    embedding_model: "text-embedding-3-small"
+semantic:
+    provider: "openai" # or "ollama"
+    model: "text-embedding-3-small"
 ```
 
 Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `icloud`, `outlook`

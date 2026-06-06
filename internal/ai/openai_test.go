@@ -55,16 +55,28 @@ func TestOpenAICompatClientChat(t *testing.T) {
 
 func TestOpenAICompatClientEmbed(t *testing.T) {
 	expected := []float32{0.1, 0.2, 0.3}
+	var gotModel string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req openAIEmbedRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		gotModel = req.Model
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(openAIEmbedOKResponse(expected))
 	}))
 	defer srv.Close()
 
 	c := newTestOpenAIClient(srv.URL)
+	c.SetEmbeddingModel("text-embedding-3-large")
 	vec, err := c.Embed("test text")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if gotModel != "text-embedding-3-large" {
+		t.Fatalf("embedding model = %q, want text-embedding-3-large", gotModel)
 	}
 	if len(vec) != len(expected) {
 		t.Fatalf("expected %d floats, got %d", len(expected), len(vec))
@@ -105,7 +117,10 @@ func TestOpenAICompatClientDefaultsApplied(t *testing.T) {
 	if c.baseURL != "https://api.openai.com/v1" {
 		t.Errorf("unexpected baseURL: %q", c.baseURL)
 	}
-	if c.model != "gpt-4o" {
+	if c.model != "gpt-5.4-mini" {
 		t.Errorf("unexpected model: %q", c.model)
+	}
+	if c.embeddingModel != "text-embedding-3-small" {
+		t.Errorf("unexpected embeddingModel: %q", c.embeddingModel)
 	}
 }
