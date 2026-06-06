@@ -12,13 +12,20 @@
 > [!IMPORTANT]
 > AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys. When AI is enabled, Ollama is the local default; external providers are opt-in. Semantic search, classification, chat, and AI draft help require configured AI.
 
-Herald is keyboard-first, but it is not keyboard-only. Press `?` in browse and
-non-text contexts to open context-sensitive shortcut help; editable Compose
-fields keep literal `?` for writing. In modern
-terminals you can click the top tabs, folder/sidebar rows, Timeline and
-Contacts rows, and use the mouse wheel or trackpad to scroll lists and email previews.
+## GUI instincts work here
+
+Herald is keyboard-first, but it is not keyboard-only. You can click tabs and rows, scroll previews, and use visible hints while you learn. The keyboard is there when you want speed.
+
+In modern terminals you can click the top tabs, folder/sidebar rows, Timeline
+rows, Contacts rows, Calendar mini-month days and events, and calendar checkboxes or swatches where supported. Use the mouse wheel or trackpad to scroll lists and previews.
 Email links render as OSC 8 hyperlinks when your terminal supports them, so
-readable labels like `Display in your browser` still open the real URL.
+readable labels like `Display in your browser` still open the real URL. Press
+`m` in Timeline or Calendar to release mouse capture for terminal-native text
+selection, then press `m` again to restore Herald's clickable and scrollable
+navigation.
+
+Press `?` in browse and non-text contexts to open context-sensitive shortcut
+help; editable Compose fields keep literal `?` for writing.
 
 ![Mouse navigation and clickable email links in Herald](assets/demo/mouse-navigation-links.png)
 
@@ -83,7 +90,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Reading-first Timeline with split/full previews and range selection                       | ✅     |
 | Terminal inline images via Kitty/Ghostty and iTerm2 full-screen previews                  | ✅     |
 | Opt-in remote image reveal, sanitized preview links, and rich preview copy                | ✅     |
-| Mouse navigation — clickable tabs, folder/list rows, scrollable previews, and OSC 8 links | ✅     |
+| Mouse navigation — clickable tabs, folder/list/calendar rows, scrollable previews, and OSC 8 links | ✅     |
 | Bulk cleanup — Timeline sender/domain grouping plus dry-run cleanup rule previews         | ✅     |
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
 | AI classification via Ollama (`gemma3:4b` default, custom models supported)               | ✅     |
@@ -256,17 +263,20 @@ Known server presets (auto-fill IMAP/SMTP): `gmail`, `protonmail`, `fastmail`, `
 
 Keyboard controls remain complete, but mouse users get the comfortable path too:
 
-| Mouse action                         | Result                                             |
-| ------------------------------------ | -------------------------------------------------- |
-| Click a top tab                      | Switches to Timeline, Contacts, or Calendar        |
-| Click a folder/sidebar row           | Selects and opens that folder                      |
-| Click a Timeline row                 | Opens the email preview for that message or thread |
-| Scroll over Timeline or Calendar rows | Moves through the list in small steps             |
-| Scroll over an email preview         | Scrolls the message body                           |
-| Click an OSC 8 email link            | Opens the target URL through your terminal         |
+| Mouse action                              | Result                                             |
+| ----------------------------------------- | -------------------------------------------------- |
+| Click a top tab                           | Switches to Timeline, Contacts, or Calendar        |
+| Click a folder/sidebar row                | Selects and opens that folder                      |
+| Click a Timeline row                      | Opens the email preview for that message or thread |
+| Click a Calendar mini-month day           | Selects that day or visible range                  |
+| Click a Calendar event                    | Selects the event; double-click opens detail       |
+| Click a Calendar checkbox or color swatch | Shows or hides that calendar where supported       |
+| Scroll over Timeline or Calendar rows     | Moves through the list in small steps              |
+| Scroll over an email preview              | Scrolls the message body                           |
+| Click an OSC 8 email link                 | Opens the target URL through your terminal         |
 
-Press `m` in Timeline when you want terminal-native mouse text selection, then
-press `m` again to restore Herald's mouse capture.
+Press `m` in Timeline or Calendar when you want terminal-native mouse text
+selection, then press `m` again to restore Herald's mouse capture.
 
 ---
 

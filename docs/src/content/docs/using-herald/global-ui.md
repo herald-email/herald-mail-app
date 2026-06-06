@@ -9,6 +9,8 @@ Global UI covers the parts of Herald that stay consistent while you move between
 
 Herald is a Bubble Tea terminal app with a persistent title-row tab strip, optional folder or calendar rail, main content panels, optional chat panel, bottom status bar, context-sensitive key hints, and compact centered overlays for help, settings, and cleanup configuration. Browsing happens in Timeline, Contacts, or Calendar; cleanup review is a Timeline grouping mode, and Compose is a transient writing screen launched from Timeline.
 
+Herald is keyboard-first, but it is not keyboard-only. You can click tabs and rows, scroll previews, and use visible hints while you learn; the keyboard remains complete when you want speed.
+
 ## Screen Anatomy
 
 | Area | What it shows | Notes |
@@ -57,9 +59,13 @@ Mouse controls are convenience shortcuts over the same model as keyboard focus a
 | Click a Timeline row | Timeline table | Selects the row and opens the split preview. |
 | Scroll over Timeline rows | Timeline table | Moves the Timeline cursor by small steps and refreshes the open preview. |
 | Scroll over an email preview | Timeline preview | Scrolls the message body. |
+| Click a Calendar mini-month day | Calendar rail | Selects that day or visible range. |
+| Click a Calendar event | Calendar views | Selects the event; double-click opens the full detail view. |
+| Click a Calendar checkbox or swatch | Calendar rail | Shows or hides that calendar where supported and persists the visible-calendar selection. |
+| Scroll over Calendar rows or events | Calendar views | Moves through the visible calendar list or event stack in small steps. |
 | Click an OSC 8 email link | Terminal-supported email preview links | Opens the original URL through the terminal. |
 
-Press `m` in Timeline to temporarily release Herald's mouse capture for terminal-native text selection. Press `m` again to restore Herald's clickable and scrollable navigation.
+Press `m` in Timeline or Calendar to temporarily release Herald's mouse capture for terminal-native text selection. Press `m` again to restore Herald's clickable and scrollable navigation.
 
 ![Mouse navigation and clickable email links in Herald](/screenshots/mouse-navigation-links.png)
 

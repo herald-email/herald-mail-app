@@ -53,9 +53,11 @@ The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail s
 
 ![Herald first-run wizard entry screen](/screenshots/overview-first-launch.png)
 
-## Mouse-friendly terminal controls
+## GUI instincts work here
 
-Herald's keyboard model stays complete, but you can also click and scroll the main TUI. Top tabs, folder rows, Timeline rows, and Calendar rows respond to clicks; Timeline lists, Calendar lists, and message previews respond to wheel or trackpad scrolling. Email links render as OSC 8 terminal hyperlinks when supported, so readable labels and shortened URLs still open the original target.
+Herald is keyboard-first, but it is not keyboard-only. You can click tabs and rows, scroll previews, and use visible hints while you learn. The keyboard is there when you want speed.
+
+Top tabs, folder rows, Timeline rows, Calendar mini-month days and events, and calendar checkboxes or swatches respond to clicks where supported. You can scroll lists and previews with the mouse wheel or trackpad, including Timeline lists, Calendar lists, and message previews. Email links render as OSC 8 terminal hyperlinks when supported, so readable labels and shortened URLs still open the original target. Press `m` in Timeline or Calendar to release mouse capture for terminal-native text selection, then press `m` again to restore Herald's clickable and scrollable navigation.
 
 <!-- HERALD_SCREENSHOT id="mouse-navigation-links" page="overview" alt="Mouse navigation and clickable email links in Herald" state="demo mode, 120x40, Timeline preview with OSC 8 links" desc="Shows clickable tabs, a selected Timeline row, a scrollable email preview, and OSC 8-rendered links." capture="tmux demo 120x40; ./bin/herald --demo; search Link rendering stress; open preview; focus preview; scroll to links" -->
 
