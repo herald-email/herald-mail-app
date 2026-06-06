@@ -3,7 +3,7 @@ title: Chat Panel
 description: Ask mailbox questions through Herald's right-side AI chat panel.
 ---
 
-The chat panel lets you ask questions about the currently loaded mailbox context. Configured AI routes chat through the Gollem UI chat-agent path with read-only email tools and typed Timeline, summary, and Compose review intents.
+The chat panel lets you ask questions about the currently loaded mailbox context. Configured AI routes chat through the Gollem UI chat-agent path with read-only email and memory tools plus typed Timeline, summary, and Compose review intents.
 
 ## Overview
 
@@ -16,6 +16,7 @@ Press `g` from the main UI to open chat. The legacy `c` alias still works outsid
 | Chat title | Right-side panel title. |
 | History | User and assistant messages from the current chat session. |
 | Tool-derived answers | Assistant responses that may summarize read-only search, context, people, or sender-stat tool output. |
+| Memory-aware answers | Source-backed contact history, company tracks, open loops, related replies, and reply-prep context when Herald Memories are available. |
 | Input | One-line chat input. |
 | Waiting state | Chat stops accepting new submit actions while the assistant is responding. |
 | Timeline filter | Assistant can return typed results that narrow Timeline to matching message IDs or route through existing Timeline search. |
@@ -75,6 +76,8 @@ Press `g` from the main UI to open chat. The legacy `c` alias still works outsid
 
 Chat sends the user's question, current folder, and bounded UI context to the configured AI backend. Read-only tools can search cached email metadata and fetch bounded body snippets by message ID; external providers receive the chat prompt and any tool results needed to answer. The first Gollem iteration cannot send, delete, archive, or mutate calendar events.
 
+Memory tools read local Herald Memories only. They can distinguish email-backed, Obsidian-backed, research-backed, and inferred context when those sources are present.
+
 ## Troubleshooting
 
 If `c` does not open chat, widen the terminal or wait until loading completes.
@@ -96,6 +99,7 @@ If a filter hides too much, press `esc` in Timeline to clear the filter.
 ## Related Pages
 
 - [AI Features](/features/ai/)
+- [Herald Memories](/features/memories/)
 - [Timeline](/using-herald/timeline/)
 - [Search](/features/search/)
 - [Privacy and Security](/security-privacy/)

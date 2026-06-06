@@ -3,7 +3,7 @@ title: AI Features
 description: Configure and use classification, embeddings, semantic search, quick replies, chat, compose assist, and enrichment.
 ---
 
-AI in Herald is optional. When enabled, it powers classification tags, semantic search, mailbox chat, quick replies, Compose rewriting, subject suggestions, image descriptions, custom prompts, and contact enrichment.
+AI in Herald is optional. When enabled, it powers classification tags, semantic search, mailbox chat, quick replies, Compose rewriting, subject suggestions, image descriptions, custom prompts, contact enrichment, and Herald Memories extraction.
 
 ## Overview
 
@@ -92,6 +92,7 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 | AI search | Semantic search is running. |
 | AI chat | Chat request/tool loop is running. |
 | AI defer | Scheduler has deferred a task. |
+| AI memory | Herald Memories extraction or refresh is running through the managed AI scheduler. |
 | AI down | Provider is unavailable or failed recently. |
 | External provider | Selected message/draft/search context may leave the machine for the requested feature. |
 | Model changed | Herald can invalidate stale embeddings tied to a previous embedding model. |
@@ -99,6 +100,8 @@ The default AI path is Ollama on a local host. Herald can also be configured for
 ## Data And Privacy
 
 AI features send only the context needed for the requested action, but that context can include sender, subject, body snippets, full body text, contact metadata, folder summaries, or tool results. Ollama keeps requests local to the configured Ollama host. Claude and OpenAI-compatible providers receive prompts through their APIs. Semantic embeddings are stored in SQLite and tied to the configured embedding model.
+
+Herald Memories stores compact source-backed records locally and uses the managed AI scheduler so interactive reply prep can run ahead of background extraction.
 
 ## Troubleshooting
 
@@ -128,6 +131,7 @@ If Compose AI says "Write something first", add body text or open Compose from a
 
 - [Search](/features/search/)
 - [Chat Panel](/features/chat/)
+- [Herald Memories](/features/memories/)
 - [Compose](/using-herald/compose/)
 - [Rules and Automation](/features/rules-automation/)
 - [Privacy and Security](/security-privacy/)

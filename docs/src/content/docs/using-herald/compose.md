@@ -23,6 +23,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 | Attachment path prompt | One-line path input opened by `ctrl+a`. |
 | Autocomplete dropdown | Up to several contact suggestions with selected row and hidden-count note when compressed. |
 | AI assistant panel | Custom prompt input, quick rewrite actions, generated response, and accept behavior. |
+| Compose Radar | Source-backed Herald Memories nudges for reply drafts when matching high-confidence context exists. |
 | Compose status | Validation errors, send state, AI messages, attachment errors, and draft status. |
 
 <!-- HERALD_SCREENSHOT id="compose-main-fields" page="compose" alt="Compose screen with empty message fields" state="demo mode, 120x40, Compose launched from Timeline" desc="Shows To, CC, BCC, Subject, Body, status area, and Compose key hints." capture="tmux demo 120x40; ./bin/herald --demo; press c" -->
@@ -95,6 +96,13 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 4. Review the AI response.
 5. Press `ctrl+enter` to accept it into the body, or `esc` to close the panel.
 
+### Review Compose Radar
+
+1. Reply to a memory-backed thread from Timeline.
+2. Read the compact Compose Radar nudges.
+3. Open source evidence or insert a bounded phrase only when useful.
+4. Continue writing; Radar does not silently change the draft.
+
 ### Reply or Forward From Timeline
 
 1. In Timeline, select a message.
@@ -114,6 +122,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 | Autocomplete compact | Suggestions collapse to a single line when vertical space is tight. |
 | AI unavailable | The Compose AI toolbar shows a configuration warning; `ctrl+k` and `ctrl+j` report no AI backend configured. |
 | AI loading | The assistant waits for provider output and then displays a response. |
+| Compose Radar hidden | No high-confidence memory matched the reply, or the relevant source evidence is missing. |
 | Draft saved | Compose auto-saves drafts about every 30 seconds when there is content. |
 | Compose-safe global actions | Plain `q`, letters, and digits stay in the draft. Use `F1-F3` for Timeline/Contacts switching, with `Alt+1/2`, `Alt+L`, `Alt+C`, `Alt+F`, and `Alt+R` as secondary global actions while writing. |
 | Return to origin | `esc` returns from Compose to the Timeline list, preview, or search state that opened it after local Compose transient state is dismissed. |
@@ -122,7 +131,7 @@ Press `c` from Timeline to open a blank Compose screen. Compose sends through th
 
 ## Data And Privacy
 
-Compose reads contacts for autocomplete and writes drafts through Herald's backend. Sending uses SMTP credentials from config and sends the full message, recipients, Markdown-derived bodies, and attachments to the SMTP server. AI assistance sends draft text and optional reply context to the configured AI backend. Attached files are read from local disk when added or sent.
+Compose reads contacts for autocomplete and writes drafts through Herald's backend. Sending uses SMTP credentials from config and sends the full message, recipients, Markdown-derived bodies, and attachments to the SMTP server. AI assistance sends draft text and optional reply context to the configured AI backend. Compose Radar reads local Herald Memories and does not send, write Obsidian notes, or mutate drafts without an explicit action. Attached files are read from local disk when added or sent.
 
 ## Troubleshooting
 
@@ -159,5 +168,6 @@ If a send error occurs after attaching files, verify the file still exists and t
 - [Timeline](/using-herald/timeline/)
 - [Attachments](/features/attachments/)
 - [AI Features](/features/ai/)
+- [Herald Memories](/features/memories/)
 - [Settings](/features/settings/)
 - [Config Reference](/reference/config/)

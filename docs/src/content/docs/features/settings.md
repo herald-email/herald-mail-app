@@ -3,7 +3,7 @@ title: Settings
 description: Edit Herald account, server, AI, sync, cleanup, keyboard, theme, and OAuth settings from the TUI.
 ---
 
-Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
+Settings is a compact centered overlay opened from the main TUI. It starts with a top-level menu for `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Memories`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature`, so you can adjust one area without stepping through unrelated fields while the current Herald screen remains visible behind it.
 
 ## Overview
 
@@ -13,13 +13,14 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 
 | Area | What it shows |
 | --- | --- |
-| Settings menu | `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
+| Settings menu | `Accounts`, `Calendar`, `AI`, `Sync & Cleanup`, `Memories`, `Keyboard`, `Theme Selection`, `Theme Editor`, and `Signature` category choices. |
 | Accounts | Configured mail and calendar sources, `Add account`, `Add calendar only`, provider credentials, OAuth, IMAP, SMTP, CalDAV, and disconnect actions. |
 | Calendar | Week start, visible calendar selections, and calendar-specific preferences. |
 | IMAP fields | Host, port, and related server settings. |
 | SMTP fields | Host, port, and send settings. |
 | AI | Ollama local/custom, Claude, OpenAI-compatible, disabled, chat/classification model, and embedding model fields. |
 | Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, automation-rule launcher, custom-prompt launcher, and cleanup-rule manager launcher. |
+| Memories | Memory directory, included sources, vault path, destinations, Obsidian output modes, update rules, prompt templates, confidence thresholds, research safety, and read-only store counts. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
 | Theme Selection | App theme selection and local YAML install. |
 | Theme Editor | Semantic role color editing, live preview, reset controls, and custom theme creation. |
@@ -94,6 +95,13 @@ The `Offline Cache` selector controls how much fetched preview data Herald keeps
 5. Save.
 6. Watch the AI status chip after returning to the main UI.
 
+### Configure Herald Memories
+
+1. Press `S`.
+2. Choose `Memories`.
+3. Review the default local directory, source folders, Obsidian vault path, destination folders, frontmatter/link/tag modes, prompt templates, update cadence, and thresholds.
+4. Save changes or return to the menu with `Esc`.
+
 ### Change Keyboard Profile
 
 1. Press `S`.
@@ -140,6 +148,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 | OAuth cancelled or timed out | Herald shows a clear error, keeps previous settings active, and does not write token data. |
 | OAuth saved | Token data is written to config only after OAuth, selected provider validation, and final setup save succeed. |
 | AI model changed | Herald may reset embeddings so stale vectors do not mix with a new embedding model. |
+| Memories unavailable | Settings still opens; memory counts show zero or a bounded unavailable state when the store cannot be read. |
 | Offline cache reclaim pending | Herald shows the current policy, before/after byte estimate, and note that preview text, headers, and attachment metadata stay cached before it accepts `y` to proceed. |
 | Offline cache reclaimed | Herald reports rows pruned, bytes removed, and whether SQLite compaction completed. |
 | Config permission warning | Startup warns if group/other users can read the config file. |
@@ -147,7 +156,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 
 ## Data And Privacy
 
-Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, cleanup automation entrypoints, and cache path values. Account settings are validated before they replace the active account; failed validation leaves the previous config, backend, and SMTP client active. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
+Settings reads and writes credentials, app passwords, OAuth tokens, server hosts, SMTP settings, AI provider keys, model names, sync options, cleanup schedule, cleanup automation entrypoints, cache path values, and Herald Memories configuration. Account settings are validated before they replace the active account; failed validation leaves the previous config, backend, and SMTP client active. OAuth refresh tokens and external AI keys should be treated as credentials. Offline-cache reclaim removes only preview binary payloads that the current cache policy disallows; preview text, headers, unsubscribe data, and attachment metadata remain available.
 
 ## Troubleshooting
 
@@ -177,6 +186,7 @@ Use `./bin/herald --demo -theme jade-signal` to preview a theme for one session 
 - [Provider Setup](/provider-setup/)
 - [Local OAuth Builds](/development/local-oauth-builds/)
 - [AI Features](/features/ai/)
+- [Herald Memories](/features/memories/)
 - [Themes](/themes/)
 - [Sync and Status](/features/sync-status/)
 - [Config Reference](/reference/config/)

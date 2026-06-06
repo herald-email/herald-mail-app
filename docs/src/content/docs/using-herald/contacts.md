@@ -14,7 +14,7 @@ Press `2` to open Contacts. Herald loads contacts from the backend and, on macOS
 | Area | What it shows |
 | --- | --- |
 | Contact list panel | Contact count and rows for known contacts. Wide terminals show Name, Email, Company, and Count; narrower terminals reduce columns. |
-| Detail panel | Selected contact identity, company/topics when available, and recent email list. |
+| Detail panel | Selected contact identity, company/topics when available, Herald Memories dossiers when available, and recent email list. |
 | Recent email list | Up to 20 recent messages for the selected contact. |
 | Inline preview | Body preview for the selected recent email. |
 | Keyword search | `/` prompt and filtered contact list. |
@@ -77,6 +77,12 @@ Press `2` to open Contacts. Herald loads contacts from the backend and, on macOS
 3. Wait for status to report enrichment progress or completion.
 4. Review new company/topic details when available.
 
+### Review Memory Dossiers
+
+1. Open a contact detail.
+2. Read the Herald Memories section when it appears.
+3. Use the source evidence labels and recent emails to verify the relationship summary, active tracks, open loops, and company status.
+
 ## States
 
 | State | What happens |
@@ -86,13 +92,14 @@ Press `2` to open Contacts. Herald loads contacts from the backend and, on macOS
 | Keyword search | Search filters local contact fields while typing. |
 | Semantic search | Search uses embeddings/AI availability; if unavailable, results may stay empty or status reports unavailable. |
 | Detail loading | Recent emails load after `enter` on a contact. |
+| Memory dossier | A bounded source-backed person or company dossier appears when matching local memories exist. |
 | Inline preview loading | Body fetch starts for the selected recent email. |
 | AI unavailable | `e` cannot enrich contact metadata. |
 | Narrow terminal | Contact columns compress; detail remains accessible through `tab` when open. |
 
 ## Data And Privacy
 
-Contacts reads and stores sender addresses, display names, company/topic metadata, message counts, recent email references, and optional embeddings. On macOS, read-only Apple Contacts import can add address book contacts through the backend using Contacts.framework. Enrichment sends selected contact and email-derived context to the configured AI backend.
+Contacts reads and stores sender addresses, display names, company/topic metadata, message counts, recent email references, and optional embeddings. On macOS, read-only Apple Contacts import can add address book contacts through the backend using Contacts.framework. Enrichment sends selected contact and email-derived context to the configured AI backend. Herald Memories dossiers read local memory records and source evidence without writing contact fields.
 
 ## Troubleshooting
 
@@ -121,4 +128,5 @@ If inline preview seems stale, close with `esc`, move to the message again, and 
 - [Compose](/using-herald/compose/)
 - [Search](/features/search/)
 - [AI Features](/features/ai/)
+- [Herald Memories](/features/memories/)
 - [Sync and Status](/features/sync-status/)

@@ -234,7 +234,7 @@ The first implementation should avoid autonomous behavior and broad private-data
 - [x] No whole-mailbox unbounded summarization.
 - [x] No automatic rewrite of user-authored Obsidian sections.
 - [x] No replacement for the existing scheduled task system until the daily memory briefing has proven value.
-- [ ] No MCP or daemon memory API until the UI-only path is stable.
+- [x] No MCP or daemon memory API until the UI-only path is stable.
 
 ## Execution Handoff
 
@@ -244,4 +244,4 @@ When this roadmap moves into implementation planning, start with the job-search 
 - [x] First plan should explicitly name the memory storage tables, backend methods, extraction jobs, and fixture data it introduces.
 - [x] First plan should include degradation behavior for no AI, slow AI, no Obsidian vault, no Sent cache, and missing source evidence.
 - [x] First plan should keep Compose Radar insertion inside existing Compose review/accept mechanics.
-- [ ] First plan should update public docs only after demo fixtures can show the feature without private mailbox data.
+- [x] First plan should update public docs only after demo fixtures can show the feature without private mailbox data.

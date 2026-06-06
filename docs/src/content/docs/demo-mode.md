@@ -14,8 +14,8 @@ make build
 Demo mode is useful for trying the interface, recording demos, and testing
 visual changes without touching real accounts. It skips real IMAP, SMTP, and
 calendar setup. Demo AI features are deterministic and run offline, so
-classification, semantic search, chat, and quick replies can be exercised
-without Ollama.
+classification, semantic search, chat, quick replies, and Herald Memories
+examples can be exercised without Ollama.
 Presentation tapes can add `--demo-keys` to show a compact keypress overlay without changing normal app key routing.
 
 ## Connect real accounts when ready

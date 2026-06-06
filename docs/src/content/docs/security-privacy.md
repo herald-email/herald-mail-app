@@ -23,6 +23,8 @@ chmod 600 ~/.herald/conf.yaml
 
 SQLite cache paths are stored in the config. By default, generated cache files live under the current user's `~/.herald/cached/` directory and are written to YAML as absolute paths.
 
+Herald Memories are local immutable records under `~/.herald/memories` by default. They store compact claims, evidence pointers, bounded snippets, prompt version, confidence, freshness, and optional Obsidian target metadata.
+
 ## Logs
 
 Herald writes logs to files only, never to the terminal. Default locations:
@@ -43,9 +45,13 @@ If you configure Claude or an OpenAI-compatible provider, prompts and relevant e
 
 Semantic search stores embeddings in the local SQLite cache. Embeddings are tied to the configured embedding model so Herald can invalidate stale vectors when the model changes.
 
+Research Mode is explicit. By default, external research queries use public identifiers such as person name, company, domain, role, or URL, and do not include private email bodies, private note text, attachments, or full thread summaries.
+
 ## MCP behavior
 
 The MCP server runs over stdio. It exposes cached email data to whatever AI client you connect it to. Configure it only in clients you trust, and remember that the client may include returned email data in its own model requests.
+
+The current UI-first Herald Memories release does not expose a memory API through MCP or the daemon.
 
 ## Deletion and archive
 

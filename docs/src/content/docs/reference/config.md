@@ -41,6 +41,18 @@ ai:
   agent:
     provider: ollama
     model: "gemma3:4b"
+memories:
+  enabled: true
+  directory: "~/.herald/memories"
+  sources:
+    folders: ["INBOX", "Sent"]
+    contacts: true
+  obsidian:
+    vault_path: ""
+    frontmatter_mode: minimal
+    yaml_headers: true
+    link_mode: wiki
+    tag_mode: conservative
 ```
 
 ## Fields
@@ -111,10 +123,36 @@ ai:
 | `ai.agent.api_key` | Optional provider API key for remote Gollem chat-agent providers. Treat as credential. |
 | `ai.agent.base_url` | Optional provider base URL. Ollama defaults to `ollama.host`; OpenAI defaults to `openai.base_url`; Kimi and Fireworks use built-in OpenAI-compatible defaults when empty. |
 | `ai.agent.reasoning_effort` | Optional OpenAI chat-agent reasoning effort: `low`, `medium`, `high`, or `xhigh`. Default `low` for interactive chat speed. |
+| `memories.enabled` | Enables Herald Memories. Default `true`. |
+| `memories.directory` | Local immutable memory record directory. Default `~/.herald/memories`. |
+| `memories.sources.folders` | Mail folders used for cached-mail extraction. Default `INBOX` and `Sent`. |
+| `memories.sources.contacts` | Includes contact enrichment metadata when available. Default `true`. |
+| `memories.sources.calendar` | Reserved source toggle for calendar-backed memory ingestion. Default `false`. |
+| `memories.sources.obsidian` | Reserved source toggle for Obsidian note ingestion. Default `false`. |
+| `memories.sources.research_notes` | Includes explicit saved research notes in memory views when present. |
+| `memories.destinations.people` | Obsidian people note folder. Default `People`. |
+| `memories.destinations.companies` | Obsidian company/job note folder. Default `Job search/active`. |
+| `memories.destinations.daily_briefing` | Daily memory briefing folder. Default `Scheduled Task Artifacts`. |
+| `memories.thresholds.chat_retrieval` | Minimum confidence for chat retrieval. Default `0.35`. |
+| `memories.thresholds.dossier` | Minimum confidence for dossier inclusion. Default `0.55`. |
+| `memories.thresholds.obsidian_write` | Minimum confidence for Obsidian sync. Default `0.70`. |
+| `memories.thresholds.compose_radar` | Minimum confidence for Compose Radar nudges. Default `0.75`. |
+| `memories.update_rules.cadence` | Memory update cadence such as manual, compose open, after sync, daily briefing, or idle background. Default `manual`. |
+| `memories.update_rules.retention_days` | Optional retention window for dismissals and controls; `0` means no automatic expiry. |
+| `memories.obsidian.vault_path` | Optional Obsidian vault path for preview/apply sync. |
+| `memories.obsidian.frontmatter_mode` | `full`, `minimal`, `generated_section`, or `none`. Default `minimal`. |
+| `memories.obsidian.yaml_headers` | Shows YAML headers when true. Can be disabled for cleaner notes. |
+| `memories.obsidian.link_mode` | `wiki`, `markdown`, `path`, or `none`. Default `wiki`. |
+| `memories.obsidian.tag_mode` | `none`, `conservative`, `workflow`, or `custom`. Default `conservative`. |
+| `memories.research.enabled` | Enables explicit Research Mode planning. Default `false`. |
+| `memories.research.external_opt_in` | Allows external public research only after explicit opt-in. Default `false`. |
+| `memories.research.private_bodies_allowed` | Allows private body/note context in research only when enabled and requested. Default `false`. |
 
 Existing Ollama configs are checked at startup without blocking cached/offline mail. If a configured local model is unavailable, Herald shows `AI down`, disables AI actions, and lists the relevant `ollama pull <model>` commands in Settings > AI.
 
 The Gollem chat-agent config is UI-only in the first iteration and is the only chat runtime when AI is configured. It can search and summarize mail through read-only tools, project typed Timeline results, and propose Compose edits through the existing review flow; it cannot send, delete, archive, or mutate calendar events. Set `ai.provider: disabled` to disable chat and the other in-memory AI actions.
+
+Herald Memories are UI-first in the current release. They are available inside Herald chat, Compose, Contacts, Timeline preview, Settings, and local Markdown sync, but are not exposed as MCP or daemon memory APIs.
 
 ## Provider Presets
 
