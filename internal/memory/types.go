@@ -85,6 +85,10 @@ type MemoryDetails struct {
 	SourceQuote      string    `json:"source_quote,omitempty" yaml:"source_quote,omitempty"`
 	SourceCount      int       `json:"source_count,omitempty" yaml:"source_count,omitempty"`
 	ExtractionPrompt string    `json:"extraction_prompt,omitempty" yaml:"extraction_prompt,omitempty"`
+	Classification   string    `json:"classification,omitempty" yaml:"classification,omitempty"`
+	ContactCompany   string    `json:"contact_company,omitempty" yaml:"contact_company,omitempty"`
+	ContactTopics    []string  `json:"contact_topics,omitempty" yaml:"contact_topics,omitempty"`
+	SourceSignals    []string  `json:"source_signals,omitempty" yaml:"source_signals,omitempty"`
 	LastValidatedAt  time.Time `json:"last_validated_at,omitempty" yaml:"last_validated_at,omitempty"`
 	ReviewReason     string    `json:"review_reason,omitempty" yaml:"review_reason,omitempty"`
 }
@@ -157,9 +161,15 @@ type Nudge struct {
 }
 
 type EmailSnapshot struct {
-	Email     *models.EmailData
-	BodyText  string
-	Direction string
+	Email              *models.EmailData
+	BodyText           string
+	Direction          string
+	Classification     string
+	ContactDisplayName string
+	ContactCompany     string
+	ContactTopics      []string
+	HasBodyCache       bool
+	HasEmbedding       bool
 }
 
 type Query struct {
@@ -217,6 +227,8 @@ func PrepareMemoryForAppend(m Memory, now time.Time) Memory {
 	m.People = CompactStrings(m.People)
 	m.Tags = CompactStrings(m.Tags)
 	m.Links = CompactStrings(m.Links)
+	m.Details.ContactTopics = CompactStrings(m.Details.ContactTopics)
+	m.Details.SourceSignals = CompactStrings(m.Details.SourceSignals)
 	m.Evidence = NormalizeEvidenceList(m.Evidence)
 	if strings.TrimSpace(m.ID) == "" {
 		m.ID = DeterministicID(m)
@@ -351,6 +363,10 @@ func bounded(value string, limit int) string {
 	}
 	runes := []rune(value)
 	return string(runes[:limit]) + "..."
+}
+
+func BoundSnapshotBodyText(value string) string {
+	return bounded(value, 4000)
 }
 
 func latestEvidenceDate(evidence []Evidence, fallback time.Time) time.Time {

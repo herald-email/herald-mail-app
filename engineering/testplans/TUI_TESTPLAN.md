@@ -1282,6 +1282,22 @@ Check these states during every applicable lane:
 - Invalid evidence is rejected with source-type-specific errors before an immutable memory record is written.
 - Evidence snippets are normalized and bounded so memory records remain compact source pointers, not a second raw-mail or attachment archive.
 
+### TC-18J — Herald Memories cache-source enrichment
+
+**Lane:** G
+**Sizes:** code-focused
+
+**Steps:**
+1. Seed cached Inbox and Sent messages with scoped thread headers, cached body text, AI classifications, contact enrichment fields, and embedding rows.
+2. Read memory source snapshots from the local cache.
+3. Run focused backend and memory extraction tests.
+
+**Expect:**
+- Memory source snapshots include bounded cached body text, direction, message scope, classification category, contact display name, contact company/topics, body-cache presence, and embedding-cache presence.
+- Extracted memories prefer contact-enriched people/company values over raw sender-domain guesses when available.
+- Classification and embedding/cache signals adjust tags, review metadata, and confidence without copying full private email bodies into immutable memory records.
+- The refresh path reuses cached bodies and embedding metadata before fetching any additional message body from IMAP.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

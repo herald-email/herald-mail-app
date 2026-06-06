@@ -47,9 +47,9 @@ func (e Extractor) extractEmailMemories(item EmailSnapshot, settings Settings) [
 	email := item.Email
 	body := strings.TrimSpace(item.BodyText)
 	snippet := bounded(firstUsefulSentence(body, email.Subject), 280)
-	person := senderIdentity(email.Sender)
+	person, people := peopleForSnapshot(item)
 	domain := domainFromSender(email.Sender)
-	company := companyFromDomain(domain)
+	company := companyForSnapshot(item)
 	topic := normalizeSubject(email.Subject)
 	evidence := emailEvidence(email, item.Direction, snippet)
 	target := defaultTargetFor(settings, person, company, topic)
@@ -58,71 +58,62 @@ func (e Extractor) extractEmailMemories(item EmailSnapshot, settings Settings) [
 	switch item.Direction {
 	case directionSent:
 		claim := fmt.Sprintf("You last replied about %q on %s.", topic, email.Date.Format("2006-01-02"))
+		details := detailsForSnapshot(item, claim, snippet)
 		memories = append(memories, Memory{
 			Kind:           KindLastUserReply,
 			Claim:          claim,
 			Summary:        claim,
 			Topic:          topic,
-			People:         []string{person},
+			People:         people,
 			Company:        company,
 			Domain:         domain,
 			Status:         StatusResolved,
-			Confidence:     0.86,
+			Confidence:     confidenceFromSnapshot(0.86, item),
 			LastActivityAt: email.Date,
 			Evidence:       []Evidence{evidence},
 			ObsidianTarget: target,
-			Tags:           tagsForMemory(KindLastUserReply, settings),
-			Details: MemoryDetails{
-				GeneratedSummary: claim,
-				SourceQuote:      snippet,
-				ExtractionPrompt: PromptVersionHeuristicV1,
-			},
+			Tags:           tagsForSnapshot(KindLastUserReply, settings, item),
+			Details:        details,
 		})
 	default:
 		claim := fmt.Sprintf("%s last contacted you about %q on %s.", person, topic, email.Date.Format("2006-01-02"))
+		details := detailsForSnapshot(item, claim, snippet)
 		memories = append(memories, Memory{
 			Kind:           KindLastContact,
 			Claim:          claim,
 			Summary:        claim,
 			Topic:          topic,
-			People:         []string{person},
+			People:         people,
 			Company:        company,
 			Domain:         domain,
 			Status:         StatusActive,
-			Confidence:     0.82,
+			Confidence:     confidenceFromSnapshot(0.82, item),
 			LastActivityAt: email.Date,
 			Evidence:       []Evidence{evidence},
 			ObsidianTarget: target,
-			Tags:           tagsForMemory(KindLastContact, settings),
-			Details: MemoryDetails{
-				GeneratedSummary: claim,
-				SourceQuote:      snippet,
-				ExtractionPrompt: PromptVersionHeuristicV1,
-			},
+			Tags:           tagsForSnapshot(KindLastContact, settings, item),
+			Details:        details,
 		})
 	}
 
 	for _, question := range questionsFromText(body) {
 		claim := fmt.Sprintf("Open question in %q: %s", topic, question)
+		details := detailsForSnapshot(item, question, question)
 		memories = append(memories, Memory{
 			Kind:           KindOpenQuestion,
 			Claim:          claim,
 			Summary:        question,
 			Topic:          topic,
-			People:         []string{person},
+			People:         people,
 			Company:        company,
 			Domain:         domain,
 			Status:         StatusWaiting,
-			Confidence:     0.78,
+			Confidence:     confidenceFromSnapshot(0.78, item),
 			LastActivityAt: email.Date,
 			Evidence:       []Evidence{emailEvidence(email, item.Direction, question)},
 			ObsidianTarget: target,
-			Tags:           tagsForMemory(KindOpenQuestion, settings),
-			Details: MemoryDetails{
-				GeneratedSummary: question,
-				SourceQuote:      question,
-				ExtractionPrompt: PromptVersionHeuristicV1,
-			},
+			Tags:           tagsForSnapshot(KindOpenQuestion, settings, item),
+			Details:        details,
 		})
 		break
 	}
@@ -135,25 +126,22 @@ func (e Extractor) extractEmailMemories(item EmailSnapshot, settings Settings) [
 			confidence = 0.77
 		}
 		claim := fmt.Sprintf("%s in %q: %s", memoryKindTitle(kind), topic, commitment)
+		details := detailsForSnapshot(item, commitment, commitment)
 		memories = append(memories, Memory{
 			Kind:           kind,
 			Claim:          claim,
 			Summary:        commitment,
 			Topic:          topic,
-			People:         []string{person},
+			People:         people,
 			Company:        company,
 			Domain:         domain,
 			Status:         StatusActive,
-			Confidence:     confidence,
+			Confidence:     confidenceFromSnapshot(confidence, item),
 			LastActivityAt: email.Date,
 			Evidence:       []Evidence{emailEvidence(email, item.Direction, commitment)},
 			ObsidianTarget: target,
-			Tags:           tagsForMemory(kind, settings),
-			Details: MemoryDetails{
-				GeneratedSummary: commitment,
-				SourceQuote:      commitment,
-				ExtractionPrompt: PromptVersionHeuristicV1,
-			},
+			Tags:           tagsForSnapshot(kind, settings, item),
+			Details:        details,
 		})
 	}
 	return memories
@@ -191,11 +179,12 @@ func (e Extractor) extractTrackMemories(emails []EmailSnapshot, settings Setting
 			summary = "Latest inbound message may need your response."
 		}
 		email := latest.Email
-		person := senderIdentity(email.Sender)
+		person, _ := peopleForSnapshot(latest)
 		domain := domainFromSender(email.Sender)
-		company := companyFromDomain(domain)
+		company := companyForSnapshot(latest)
 		topic := normalizeSubject(email.Subject)
 		claim := fmt.Sprintf("Track %q is %s: %s", topic, status, summary)
+		evidence := evidenceFromThread(thread, 4)
 		memories = append(memories, Memory{
 			Kind:           KindTrackStatus,
 			Claim:          claim,
@@ -205,14 +194,19 @@ func (e Extractor) extractTrackMemories(emails []EmailSnapshot, settings Setting
 			Company:        company,
 			Domain:         domain,
 			Status:         status,
-			Confidence:     0.72,
+			Confidence:     confidenceFromThread(0.72, thread),
 			LastActivityAt: email.Date,
-			Evidence:       evidenceFromThread(thread, 4),
+			Evidence:       evidence,
 			ObsidianTarget: defaultTargetFor(settings, person, company, topic),
-			Tags:           tagsForMemory(KindTrackStatus, settings),
+			Tags:           tagsForSnapshot(KindTrackStatus, settings, latest),
 			Details: MemoryDetails{
 				GeneratedSummary: summary,
+				SourceCount:      len(evidence),
 				ExtractionPrompt: PromptVersionHeuristicV1,
+				Classification:   dominantClassification(thread),
+				ContactCompany:   company,
+				ContactTopics:    topicsFromThread(thread),
+				SourceSignals:    signalsFromThread(thread),
 			},
 		})
 	}
@@ -255,7 +249,11 @@ func normalizeSourceEmails(emails []EmailSnapshot) []EmailSnapshot {
 		if item.Email == nil {
 			continue
 		}
-		item.BodyText = strings.TrimSpace(item.BodyText)
+		item.BodyText = BoundSnapshotBodyText(item.BodyText)
+		item.ContactTopics = CompactStrings(item.ContactTopics)
+		if item.BodyText != "" {
+			item.HasBodyCache = true
+		}
 		out = append(out, item)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -342,6 +340,18 @@ func senderIdentity(sender string) string {
 	return sender
 }
 
+func peopleForSnapshot(item EmailSnapshot) (string, []string) {
+	if item.Email == nil {
+		return "Unknown contact", []string{"Unknown contact"}
+	}
+	raw := senderIdentity(item.Email.Sender)
+	display := strings.TrimSpace(item.ContactDisplayName)
+	if display == "" || strings.EqualFold(display, raw) {
+		return raw, []string{raw}
+	}
+	return display, CompactStrings([]string{display, raw})
+}
+
 func domainFromSender(sender string) string {
 	if match := emailAddrPattern.FindString(sender); match != "" {
 		parts := strings.Split(match, "@")
@@ -354,6 +364,16 @@ func domainFromSender(sender string) string {
 		return strings.ToLower(strings.Trim(parts[len(parts)-1], " <>"))
 	}
 	return ""
+}
+
+func companyForSnapshot(item EmailSnapshot) string {
+	if company := strings.TrimSpace(item.ContactCompany); company != "" {
+		return company
+	}
+	if item.Email == nil {
+		return ""
+	}
+	return companyFromDomain(domainFromSender(item.Email.Sender))
 }
 
 func companyFromDomain(domain string) string {
@@ -390,6 +410,120 @@ func normalizeSubject(subject string) string {
 	return subject
 }
 
+func detailsForSnapshot(item EmailSnapshot, generated, quote string) MemoryDetails {
+	details := MemoryDetails{
+		GeneratedSummary: generated,
+		SourceQuote:      bounded(quote, 300),
+		ExtractionPrompt: PromptVersionHeuristicV1,
+		Classification:   strings.TrimSpace(item.Classification),
+		ContactCompany:   strings.TrimSpace(item.ContactCompany),
+		ContactTopics:    CompactStrings(item.ContactTopics),
+		SourceSignals:    sourceSignalsForSnapshot(item),
+	}
+	if !item.HasBodyCache {
+		details.ReviewReason = "No cached body text was available; this memory uses headers and source metadata."
+	}
+	if containsAnyFold(item.Classification, "newsletter", "subscription", "promotion", "unnecessary", "spam") {
+		details.ReviewReason = "Classification suggests lower relationship value; keep below warning surfaces unless other evidence strengthens it."
+	}
+	return details
+}
+
+func confidenceFromSnapshot(base float64, item EmailSnapshot) float64 {
+	confidence := base
+	if item.HasBodyCache {
+		confidence += 0.03
+	} else {
+		confidence -= 0.06
+	}
+	if item.HasEmbedding {
+		confidence += 0.02
+	}
+	if strings.TrimSpace(item.ContactDisplayName) != "" || strings.TrimSpace(item.ContactCompany) != "" || len(item.ContactTopics) > 0 {
+		confidence += 0.03
+	}
+	switch {
+	case containsAnyFold(item.Classification, "important", "job", "work", "interview", "personal"):
+		confidence += 0.03
+	case containsAnyFold(item.Classification, "newsletter", "subscription", "promotion", "unnecessary", "spam"):
+		confidence -= 0.08
+	}
+	return clampConfidence(confidence)
+}
+
+func confidenceFromThread(base float64, thread []EmailSnapshot) float64 {
+	if len(thread) == 0 {
+		return clampConfidence(base)
+	}
+	total := 0.0
+	for _, item := range thread {
+		total += confidenceFromSnapshot(base, item)
+	}
+	return clampConfidence(total / float64(len(thread)))
+}
+
+func clampConfidence(value float64) float64 {
+	if value < 0.10 {
+		return 0.10
+	}
+	if value > 0.99 {
+		return 0.99
+	}
+	return value
+}
+
+func sourceSignalsForSnapshot(item EmailSnapshot) []string {
+	signals := []string{}
+	if item.HasBodyCache {
+		signals = append(signals, "cached_body")
+	}
+	if item.HasEmbedding {
+		signals = append(signals, "semantic_embedding")
+	}
+	if classification := strings.TrimSpace(item.Classification); classification != "" {
+		signals = append(signals, "classification:"+classification)
+	}
+	if strings.TrimSpace(item.ContactDisplayName) != "" || strings.TrimSpace(item.ContactCompany) != "" || len(item.ContactTopics) > 0 {
+		signals = append(signals, "contact_enrichment")
+	}
+	if item.Email != nil && strings.TrimSpace(threadKey(item.Email)) != "" {
+		signals = append(signals, "thread_headers")
+	}
+	return CompactStrings(signals)
+}
+
+func signalsFromThread(thread []EmailSnapshot) []string {
+	var signals []string
+	for _, item := range thread {
+		signals = append(signals, sourceSignalsForSnapshot(item)...)
+	}
+	return CompactStrings(signals)
+}
+
+func dominantClassification(thread []EmailSnapshot) string {
+	counts := make(map[string]int)
+	var best string
+	for _, item := range thread {
+		classification := strings.TrimSpace(item.Classification)
+		if classification == "" {
+			continue
+		}
+		counts[classification]++
+		if best == "" || counts[classification] > counts[best] {
+			best = classification
+		}
+	}
+	return best
+}
+
+func topicsFromThread(thread []EmailSnapshot) []string {
+	var topics []string
+	for _, item := range thread {
+		topics = append(topics, item.ContactTopics...)
+	}
+	return CompactStrings(topics)
+}
+
 func threadKey(email *models.EmailData) string {
 	if email == nil {
 		return ""
@@ -405,7 +539,14 @@ func isMemoryWorthyThread(thread []EmailSnapshot) bool {
 		if item.Email == nil {
 			continue
 		}
-		text := strings.Join([]string{item.Email.Subject, item.BodyText, item.Email.Sender}, " ")
+		text := strings.Join([]string{
+			item.Email.Subject,
+			item.BodyText,
+			item.Email.Sender,
+			item.Classification,
+			item.ContactCompany,
+			strings.Join(item.ContactTopics, " "),
+		}, " ")
 		if containsAnyFold(text, "job", "interview", "recruiter", "offer", "application", "resume", "cv", "follow up", "deadline", "project", "proposal", "contract", "intro", "sergey") {
 			return true
 		}
@@ -417,7 +558,8 @@ func peopleFromThread(thread []EmailSnapshot) []string {
 	people := make([]string, 0, len(thread))
 	for _, item := range thread {
 		if item.Email != nil {
-			people = append(people, senderIdentity(item.Email.Sender))
+			_, itemPeople := peopleForSnapshot(item)
+			people = append(people, itemPeople...)
 		}
 	}
 	return CompactStrings(people)
@@ -491,6 +633,44 @@ func tagsForMemory(kind string, settings Settings) []string {
 			return nil
 		}
 	}
+}
+
+func tagsForSnapshot(kind string, settings Settings, item EmailSnapshot) []string {
+	tags := tagsForMemory(kind, settings)
+	if tag := classificationTag(settings, item.Classification); tag != "" {
+		tags = append(tags, tag)
+	}
+	if item.HasEmbedding && NormalizeTagMode(settings.Obsidian.TagMode) == TagModeWorkflow {
+		tags = append(tags, "#herald/semantic")
+	}
+	return CompactStrings(tags)
+}
+
+func classificationTag(settings Settings, classification string) string {
+	classification = strings.TrimSpace(classification)
+	if classification == "" || NormalizeTagMode(settings.Obsidian.TagMode) == TagModeNone {
+		return ""
+	}
+	return "#herald/classification-" + classificationSlug(classification)
+}
+
+func classificationSlug(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func memoryKindTitle(kind string) string {

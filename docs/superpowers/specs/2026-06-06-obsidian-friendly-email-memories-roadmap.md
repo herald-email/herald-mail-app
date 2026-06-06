@@ -157,7 +157,7 @@ The implementation should add a memory service behind the backend/agent boundary
 
 - [x] Add memory storage and retrieval behind backend-facing methods rather than direct SQLite access from Bubble Tea.
 - [ ] Add extraction jobs that run through the existing AI scheduler with interactive-before-background priority.
-- [ ] Reuse existing body-cache and embedding data before fetching additional message bodies.
+- [x] Reuse existing body-cache, classification, contact-enrichment, thread-header, and embedding-cache signals before fetching additional message bodies.
 - [x] Add memory-aware Gollem tools after the Gollem chat-agent runner is in place.
 - [ ] Keep external research as a separate opt-in capability from local memory extraction.
 - [x] Keep Obsidian sync as an export/sync adapter so the local memory index remains usable without Obsidian.
@@ -211,6 +211,7 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 
 - [x] Update `engineering/testplans/TUI_TESTPLAN.md` with memory chat, Compose Radar, Contacts dossier, and Obsidian sync cases before implementation.
 - [x] Unit-test memory extraction on synthetic inbound and sent messages.
+- [x] Unit-test cache-backed extraction metadata for classifications, contacts, body-cache presence, and embedding-cache presence.
 - [x] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
 - [x] Unit-test evidence source-type validation and snippet bounding for email, sent replies, notes, calendar events, attachments, and research URLs.
 - [ ] Unit-test deletion propagation and stale-memory behavior.

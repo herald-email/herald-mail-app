@@ -2658,6 +2658,38 @@ func (c *Cache) StoreEmbeddingByRef(ref models.MessageRef, embedding []float32, 
 	return err
 }
 
+// HasEmbeddingByRef reports whether a message already has whole-message or chunk
+// embeddings cached. It is metadata-only so memory extraction can reuse semantic
+// cache state without loading vector payloads.
+func (c *Cache) HasEmbeddingByRef(ref models.MessageRef) (bool, error) {
+	ref = ref.WithDefaults()
+	localID := strings.TrimSpace(ref.LocalID)
+	messageID := strings.TrimSpace(ref.MessageID)
+	var exists bool
+	err := c.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM email_embedding_chunks
+			WHERE (local_id != '' AND local_id = ?) OR message_id = ?
+			LIMIT 1
+		)`, localID, messageID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+	err = c.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM email_embeddings
+			WHERE (local_id != '' AND local_id = ?) OR message_id = ?
+			LIMIT 1
+		)`, localID, messageID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 // GetAllEmbeddings returns all embeddings for emails in a folder as message_id → vector
 func (c *Cache) GetAllEmbeddings(folder string) (map[string][]float32, error) {
 	rows, err := c.db.Query(`

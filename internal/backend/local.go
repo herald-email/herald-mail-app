@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -1592,6 +1593,10 @@ func (s localMemoryEmailSource) MemoryEmails(folder string, limit int) ([]memory
 	if err != nil {
 		return nil, err
 	}
+	classifications, err := s.cache.GetClassifications(folder)
+	if err != nil {
+		classifications = map[string]string{}
+	}
 	if limit > 0 && len(emails) > limit {
 		emails = emails[:limit]
 	}
@@ -1600,16 +1605,73 @@ func (s localMemoryEmailSource) MemoryEmails(folder string, limit int) ([]memory
 		if email == nil {
 			continue
 		}
-		body, err := s.cache.GetBodyText(email.MessageID)
+		ref := email.MessageRef()
+		body, err := s.cache.GetBodyTextByRef(ref)
 		if err != nil {
 			body = ""
 		}
-		out = append(out, memory.EmailSnapshot{
-			Email:    email,
-			BodyText: body,
-		})
+		hasEmbedding, err := s.cache.HasEmbeddingByRef(ref)
+		if err != nil {
+			hasEmbedding = false
+		}
+		var contact *models.ContactData
+		if address := localMemorySenderAddress(email.Sender); address != "" {
+			contact, _ = s.cache.GetContactByEmail(address)
+		}
+		snapshot := memory.EmailSnapshot{
+			Email:          email,
+			BodyText:       memory.BoundSnapshotBodyText(body),
+			Direction:      localMemoryDirection(email),
+			Classification: localMemoryClassification(email, classifications),
+			HasBodyCache:   strings.TrimSpace(body) != "",
+			HasEmbedding:   hasEmbedding,
+		}
+		if contact != nil {
+			snapshot.ContactDisplayName = contact.DisplayName
+			snapshot.ContactCompany = contact.Company
+			snapshot.ContactTopics = contact.Topics
+		}
+		out = append(out, snapshot)
 	}
 	return out, nil
+}
+
+func localMemoryClassification(email *models.EmailData, classifications map[string]string) string {
+	if email == nil {
+		return ""
+	}
+	if category := strings.TrimSpace(classifications[email.LocalID]); category != "" {
+		return category
+	}
+	return strings.TrimSpace(classifications[email.MessageID])
+}
+
+func localMemoryDirection(email *models.EmailData) string {
+	if email == nil {
+		return "inbound"
+	}
+	folder := strings.ToLower(email.Folder)
+	if email.IsDraft || strings.Contains(folder, "sent") || strings.Contains(folder, "draft") || strings.Contains(folder, "outbox") {
+		return "sent"
+	}
+	return "inbound"
+}
+
+func localMemorySenderAddress(sender string) string {
+	parsed, err := mail.ParseAddress(sender)
+	if err == nil && parsed != nil {
+		return strings.ToLower(strings.TrimSpace(parsed.Address))
+	}
+	if at := strings.Index(sender, "@"); at >= 0 {
+		fields := strings.Fields(strings.Trim(sender, "<>"))
+		for _, field := range fields {
+			field = strings.Trim(field, "<>,")
+			if strings.Contains(field, "@") {
+				return strings.ToLower(field)
+			}
+		}
+	}
+	return ""
 }
 
 func (b *LocalBackend) SearchMemories(ctx context.Context, query memory.Query) ([]memory.Memory, error) {

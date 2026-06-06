@@ -264,6 +264,61 @@ func TestExtractorBuildsJobSearchMemoriesFromInboxAndSent(t *testing.T) {
 	}
 }
 
+func TestExtractorUsesCachedSourceMetadata(t *testing.T) {
+	email := &models.EmailData{
+		MessageID:        "metadata-1",
+		Sender:           "Sergey <sergey@example.com>",
+		Subject:          "Interview loop",
+		ProviderThreadID: "thread-metadata",
+		Folder:           "INBOX",
+		Date:             testTime(),
+	}
+	extractor := Extractor{Now: testTime, Settings: DefaultSettings()}
+	memories := extractor.Extract([]EmailSnapshot{{
+		Email:              email,
+		BodyText:           "Can you send availability by Friday?",
+		Classification:     "important",
+		ContactDisplayName: "Sergey Petrov",
+		ContactCompany:     "Cobalt Systems",
+		ContactTopics:      []string{"interview", "platform"},
+		HasBodyCache:       true,
+		HasEmbedding:       true,
+	}})
+	var lastContact Memory
+	for _, memory := range memories {
+		if memory.Kind == KindLastContact {
+			lastContact = memory
+			break
+		}
+	}
+	if lastContact.ID == "" {
+		t.Fatalf("missing last-contact memory: %#v", memories)
+	}
+	if !containsString(lastContact.People, "Sergey Petrov") || !containsString(lastContact.People, "sergey@example.com") {
+		t.Fatalf("people = %#v, want display name and email", lastContact.People)
+	}
+	if lastContact.Company != "Cobalt Systems" {
+		t.Fatalf("company = %q, want contact enrichment", lastContact.Company)
+	}
+	if lastContact.Details.Classification != "important" || !containsString(lastContact.Details.ContactTopics, "interview") {
+		t.Fatalf("details = %#v", lastContact.Details)
+	}
+	for _, signal := range []string{"cached_body", "semantic_embedding", "classification:important", "contact_enrichment", "thread_headers"} {
+		if !containsString(lastContact.Details.SourceSignals, signal) {
+			t.Fatalf("source signals = %#v, missing %q", lastContact.Details.SourceSignals, signal)
+		}
+	}
+	if !containsString(lastContact.Tags, "#herald/classification-important") {
+		t.Fatalf("tags = %#v, want classification tag", lastContact.Tags)
+	}
+	if lastContact.Confidence <= 0.82 {
+		t.Fatalf("confidence = %v, want metadata boost over base", lastContact.Confidence)
+	}
+	if len([]rune(lastContact.Evidence[0].Snippet)) > 300 {
+		t.Fatalf("evidence snippet was not bounded")
+	}
+}
+
 func TestReplyPrepPromotesOnlyHighConfidenceNudges(t *testing.T) {
 	settings := DefaultSettings()
 	memories := []Memory{
@@ -526,6 +581,15 @@ func tracksByTopic(tracks []Track) map[string]Track {
 func hasMemoryKind(memories []Memory, kind string) bool {
 	for _, memory := range memories {
 		if memory.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
 			return true
 		}
 	}
