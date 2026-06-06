@@ -3,13 +3,17 @@ title: Getting Started
 description: Install Herald, run it for the first time, and understand the generated config.
 ---
 
-This page covers the shortest route to a usable Herald session. For every visible screen after launch, continue with [Global UI](/using-herald/global-ui/) and the tab pages.
+This page covers the shortest route to a usable Herald session: install Herald,
+run demo mode, learn the UI safely with fake mail and demo calendar data, then
+connect real accounts when you are ready. For every visible screen after launch,
+continue with [Global UI](/using-herald/global-ui/) and the tab pages.
 
 ## Requirements
 
-- An IMAP account and SMTP settings, unless you run demo mode
+- Demo mode requires no mailbox, calendar account, Ollama, or API key
+- Real account setup needs a mail account and SMTP settings or a supported OAuth path when you are ready to leave demo mode
 - No AI runtime is required for the core app. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys.
-- Optional: Ollama for local semantic search, classification, chat, quick replies, and AI draft help. External AI providers are opt-in.
+- Optional after setup: Ollama for local semantic search, classification, chat, quick replies, and AI draft help. External AI providers are opt-in.
 - Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. Common OSC 8-capable terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for current compatibility. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe placeholders or local `open image` links when available.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support
 
@@ -18,6 +22,9 @@ This page covers the shortest route to a usable Herald session. For every visibl
 ```sh
 brew tap herald-email/herald
 brew install herald
+herald --demo
+
+# When you are ready to connect real accounts:
 herald
 ```
 
@@ -51,7 +58,7 @@ Nightly builds are short-lived GitHub Actions artifacts for testing the latest s
 
 ```sh
 go install github.com/herald-email/herald-mail-app/cmd/herald@latest
-herald
+herald --demo
 ```
 
 That command installs the primary CLI binary as `herald`; its `mcp` and `ssh`
@@ -62,7 +69,7 @@ local checkout:
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
-./bin/herald
+./bin/herald --demo
 ```
 
 If you need Gmail OAuth or Google Calendar OAuth from a source checkout, prepare local OAuth defaults before building or export runtime credentials. See [Local OAuth Builds](/development/local-oauth-builds/) for `.herald-dev.env`, runtime variables, and release-style local builds.
@@ -75,7 +82,10 @@ make run
 
 ## First launch
 
-Herald uses `~/.herald/conf.yaml` by default. If that file is missing or empty, Herald opens a first-run setup wizard.
+Run `herald --demo` first to explore a fake inbox and demo calendar without
+touching real mail, calendar accounts, Ollama, or API keys. Herald uses
+`~/.herald/conf.yaml` by default; when you run `herald` without `--demo`, a
+missing or empty config opens the first-run setup wizard.
 
 The wizard recommends Gmail OAuth for Google accounts and can fill IMAP presets for common alternatives, including Gmail App Password, Proton Mail Bridge, Fastmail, iCloud, and Outlook. See [First-run Wizard](/first-run-wizard/) for the screen-by-screen details.
 
@@ -96,7 +106,11 @@ herald -experimental
 herald --demo
 ```
 
-Use `./bin/herald` instead when running from a source checkout. `-experimental` remains available for future feature flags, but Gmail OAuth no longer requires it. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
+Use `./bin/herald --demo` instead when trying a source checkout before real
+setup. `-experimental` remains available for future feature flags, but Gmail
+OAuth no longer requires it. `-debug` and `-verbose` both enable DEBUG-level
+file logging. Herald does not write logs to the terminal because that would
+corrupt the TUI.
 
 ## Example config
 
@@ -126,7 +140,7 @@ Herald can run in a browser tab through `ttyd`:
 
 ```sh
 brew install ttyd
-ttyd -W herald
+ttyd -W herald --demo
 ```
 
 Open `http://localhost:7681`. The `-W` flag is required for keyboard input.
@@ -134,8 +148,8 @@ Open `http://localhost:7681`. The `-W` flag is required for keyboard input.
 ## What to read next
 
 - [First 5 Minutes](/first-5-minutes/) for a short demo-mode loop before the full manual.
-- [Demo Mode](/demo-mode/) if you want to explore without credentials.
-- [Provider Setup](/provider-setup/) for provider presets and authentication choices.
+- [Demo Mode](/demo-mode/) for the safe fake inbox and demo calendar.
+- [Provider Setup](/provider-setup/) when you are ready to connect real accounts.
 - [Timeline](/using-herald/timeline/) for the default inbox workflow.
 - [Calendar](/using-herald/calendar/) for the schedule workspace, demo calendar, and invitation import flow.
 - [All Keybindings](/reference/keybindings/) for a compact command table.

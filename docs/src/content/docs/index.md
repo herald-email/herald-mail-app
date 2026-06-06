@@ -7,7 +7,9 @@ Herald is a GUI-like, terminal-native mail and calendar workspace built to keep 
 
 It combines a chronological Timeline, transient Markdown Compose, Contacts, Calendar, local caching, bulk cleanup, hardened preview links, and integration surfaces for MCP and SSH mode.
 
-This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
+This manual is organized around the screens you use every day. Start with demo
+mode if you are new, then connect real accounts when you are ready and use the
+tab pages for precise behavior, controls, states, and privacy notes.
 
 ## AI is optional
 
@@ -18,28 +20,40 @@ AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and sett
 ```sh
 brew tap herald-email/herald
 brew install herald
-herald
+herald --demo
 ```
 
 On macOS, Homebrew is the default install path and includes release binaries
-with Google OAuth defaults built in for Gmail and Google Calendar setup.
+with Google OAuth defaults built in for Gmail and Google Calendar setup. Try a
+fake inbox and demo calendar first. No mailbox, calendar account, Ollama, or API
+key required.
+
+When you are ready to connect real accounts, run:
+
+```sh
+herald
+```
 
 For source installs or development:
 
 ```sh
 go install github.com/herald-email/herald-mail-app/cmd/herald@latest
-herald
+herald --demo
 
 # Or build from a checkout:
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
-./bin/herald
+./bin/herald --demo
 ```
 
 Source-built OAuth flows need local Google OAuth defaults or runtime variables. See [Local OAuth Builds](/development/local-oauth-builds/) before using Gmail OAuth or Google Calendar OAuth from a checkout.
 
-On first launch, Herald opens the setup wizard if `~/.herald/conf.yaml` is missing or empty. Choose Gmail OAuth, Gmail IMAP with an App Password, another IMAP provider path, or standard IMAP, decide whether to configure AI, and save the generated config.
+After you learn the UI safely with fake mail and demo calendar data, run
+`herald` or `./bin/herald` without `--demo`. Herald opens the setup wizard if
+`~/.herald/conf.yaml` is missing or empty. Choose Gmail OAuth, Gmail IMAP with
+an App Password, another IMAP provider path, or standard IMAP, decide whether to
+configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 

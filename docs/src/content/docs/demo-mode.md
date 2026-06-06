@@ -3,15 +3,30 @@ title: Demo Mode
 description: Run Herald with synthetic mail, no IMAP account, and no credentials.
 ---
 
-Demo mode starts Herald with synthetic data. It is useful for trying the interface, recording demos, and testing visual changes without touching a real inbox.
+Demo mode starts Herald with synthetic data. Try a fake inbox and demo calendar
+first. No mailbox, calendar account, Ollama, or API key required.
 
 ```sh
 make build
 ./bin/herald --demo
 ```
 
-Demo mode skips real IMAP setup, uses a fake account, and does not require SMTP credentials. Demo AI features are deterministic and run offline, so classification, semantic search, chat, and quick replies can be exercised without Ollama.
+Demo mode is useful for trying the interface, recording demos, and testing
+visual changes without touching real accounts. It skips real IMAP, SMTP, and
+calendar setup. Demo AI features are deterministic and run offline, so
+classification, semantic search, chat, and quick replies can be exercised
+without Ollama.
 Presentation tapes can add `--demo-keys` to show a compact keypress overlay without changing normal app key routing.
+
+## Connect real accounts when ready
+
+After you learn the UI safely with fake mail and demo calendar data, run
+`herald` or `./bin/herald` without `--demo` to open the setup wizard. See
+[Getting Started](/getting-started/) for install commands and
+[Provider Setup](/provider-setup/) for Gmail OAuth, IMAP presets, SMTP, and
+calendar source options.
+
+## Theme trial
 
 Use `-theme` with demo mode to try a built-in palette or local YAML theme without saving config:
 

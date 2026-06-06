@@ -5,6 +5,18 @@
 
 **Email and calendar in your terminal, without turning setup into a project.** Herald gives you a GUI-like, terminal-native workspace with mouse-friendly controls, full keyboard flow, and context help when you press `?`. Try demo mode before connecting an inbox; keep AI optional and local-first when you want classification, semantic search, quick replies, or chat; and use MCP or SSH when your terminal workflow wants to reach further.
 
+Try a fake inbox and demo calendar first. No mailbox, calendar account, Ollama,
+or API key required.
+
+```bash
+brew tap herald-email/herald
+brew install herald
+herald --demo
+```
+
+When you are ready to connect real accounts, run `herald` without `--demo` to
+open the setup wizard.
+
 ![Herald overview](assets/demo/overview.gif)
 
 ![Herald themed guided tour with keypress overlay](assets/demo/guided-tour-dark-pastel.gif)
@@ -59,7 +71,9 @@ HERALD_THEME_SCREENSHOT_VIEW=preview scripts/regenerate-theme-screenshots.sh jad
 
 ## Try The Demo First
 
-Curious, but not ready to connect your inbox? Run Herald with a fictional mailbox, seeded contacts, attachments, threads, and deterministic demo AI:
+Curious, but not ready to connect your inbox? Run Herald with a fictional
+mailbox, demo calendar data, seeded contacts, attachments, threads, and
+deterministic demo AI:
 
 ```bash
 herald --demo
@@ -67,7 +81,10 @@ herald --demo
 ./bin/herald --demo
 ```
 
-Demo mode does not open IMAP or SMTP, does not read your mailbox, and does not send anything to Ollama. Your real email is never loaded or shared.
+Demo mode does not touch real mail, calendar accounts, Ollama, or API keys.
+Learn the Timeline, Contacts, Calendar, Compose, search, and cleanup flows
+safely with fake data, then run `herald` when you are ready to connect real
+accounts.
 For presentation captures, add `--demo-keys` to show a compact overlay of the keys being pressed.
 
 To test terminal image rendering, run demo mode in a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself, then open the `Step 5: View inline images in full screen` Herald Image Lab email:
@@ -82,7 +99,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 
 | Feature                                                                                   | Status |
 | ----------------------------------------------------------------------------------------- | ------ |
-| macOS Homebrew install + IMAP-first onboarding                                            | ✅     |
+| macOS Homebrew install + demo-first onboarding                                           | ✅     |
 | Standard IMAP + Gmail IMAP App Password setup                                             | ✅     |
 | IMAP presets: ProtonMail Bridge, Fastmail, iCloud, Outlook                                | ✅     |
 | Gmail OAuth onboarding through the Gmail API mail source                                  | ✅     |
@@ -114,7 +131,8 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 
 ### Prerequisites
 
-- An IMAP account and SMTP settings, unless you run demo mode.
+- Demo mode requires no mailbox, calendar account, Ollama, or API key.
+- Real account setup needs a mail account and SMTP settings or a supported OAuth path when you are ready to leave demo mode.
 - No AI runtime is required for the core app. Configure Ollama only if you want local AI features, or opt into an external provider explicitly.
 - Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. Common OSC 8-capable terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for current compatibility. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe text placeholders or local `open image` links when available.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.
@@ -125,7 +143,10 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 brew tap herald-email/herald
 brew install herald
 
-# First launch shows setup wizard
+# First launch the safe demo
+herald --demo
+
+# Then connect real accounts when ready
 herald
 ```
 
@@ -182,13 +203,15 @@ Nightly artifacts expire after 14 days. Use Homebrew or beta releases for normal
 ```bash
 # Install the primary CLI from source (Go 1.25+ required)
 go install github.com/herald-email/herald-mail-app/cmd/herald@latest
+herald --demo
 
 # Or build from a checkout
 git clone https://github.com/herald-email/herald-mail-app.git
 cd herald-mail-app
 make build
+./bin/herald --demo
 
-# Run (first launch shows setup wizard)
+# Connect real accounts when ready
 ./bin/herald
 ```
 
@@ -451,17 +474,17 @@ Herald can run in a browser tab via [ttyd](https://github.com/nicholasgasior/tty
 
 ```bash
 brew install ttyd
-ttyd -W ./bin/herald
+ttyd -W ./bin/herald --demo
 ```
 
-Open [http://localhost:7681](http://localhost:7681). The `-W` flag makes the terminal writable (required for keyboard input). All key bindings work as in a normal terminal.
+Open [http://localhost:7681](http://localhost:7681). The `-W` flag makes the terminal writable (required for keyboard input). All key bindings work as in a normal terminal. Drop `--demo` when you are ready to connect real accounts through the browser terminal.
 
 Options:
 
 ```bash
-ttyd -W -p 8080 ./bin/herald                  # Custom port
-ttyd -W -c user:pass ./bin/herald              # Basic auth
-ttyd -W ./bin/herald --demo                    # Demo mode (no IMAP needed)
+ttyd -W -p 8080 ./bin/herald --demo           # Custom port
+ttyd -W -c user:pass ./bin/herald --demo       # Basic auth
+ttyd -W ./bin/herald                           # Real account setup when ready
 ```
 
 ---
