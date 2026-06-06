@@ -13,11 +13,11 @@ Herald should turn important email history into local, source-backed memory that
 
 This feature is a local relationship intelligence layer, not an autonomous assistant that reads everything and acts silently. Herald should feel like a careful email memory system that can chat, nudge, and prepare dossiers while keeping the user in control.
 
-- [ ] Name the capability "Herald Memories" in product copy.
-- [ ] Use "Obsidian-friendly email memories" as the power-user wedge for local-first and PKM users.
-- [ ] Position Compose Radar as the signature interaction: small, source-backed context nudges while writing.
-- [ ] Position dossiers as living people, company, and thread notes rather than generated reports.
-- [ ] Prefer "source-backed" and "editable Markdown" over vague "AI remembers" language.
+- [x] Name the capability "Herald Memories" in product copy.
+- [x] Use "Obsidian-friendly email memories" as the power-user wedge for local-first and PKM users.
+- [x] Position Compose Radar as the signature interaction: small, source-backed context nudges while writing.
+- [x] Position dossiers as living people, company, and thread notes rather than generated reports.
+- [x] Prefer "source-backed" and "editable Markdown" over vague "AI remembers" language.
 
 ## Current Context
 
@@ -35,11 +35,11 @@ Herald already has most of the raw ingredients: cached email metadata, body cach
 
 The target users are people who use email as an operating layer for work, job search, consulting, recruiting, family administration, and founder/customer conversations. The feature should solve recall and continuity problems at the moment they read, chat, and compose.
 
-- [ ] As a user composing a reply, I can see relevant context from related threads before I send.
-- [ ] As a user researching a person or company, I can combine my private relationship history with explicit public research.
-- [ ] As a user reviewing job-search state, I can ask what is active, stale, waiting, rejected, or ready for follow-up.
-- [ ] As a user maintaining Obsidian notes, I can let Herald update concise memory sections without overwriting my hand-written notes.
-- [ ] As a privacy-conscious user, I can inspect, dismiss, correct, forget, or export memories.
+- [x] As a user composing a reply, I can see relevant context from related threads before I send.
+- [x] As a user researching a person or company, I can combine my private relationship history with explicit public research.
+- [x] As a user reviewing job-search state, I can ask what is active, stale, waiting, rejected, or ready for follow-up.
+- [x] As a user maintaining Obsidian notes, I can let Herald update concise memory sections without overwriting my hand-written notes.
+- [x] As a privacy-conscious user, I can inspect, dismiss, correct, forget, or export memories.
 
 ## Core Objects
 
@@ -119,25 +119,25 @@ The feature should be tweakable without making users design a memory system from
 Some memory behavior should be editable because the quality bar depends on user taste and workflow. Herald should expose prompts carefully as versioned templates with safe variables, not as a raw prompt-editing trap for every internal instruction.
 
 - [x] Expose prompt templates for memory extraction, track status updates, Compose Radar nudge generation, dossier summarization, Obsidian section formatting, and research-note summarization.
-- [ ] Keep high-risk guardrail prompts internal, including privacy policy, external research boundaries, evidence requirements, and no-mutation rules.
+- [x] Keep high-risk guardrail prompts internal, including privacy policy, external research boundaries, evidence requirements, and no-mutation rules.
 - [x] Version every exposed prompt template so existing memories can report which prompt generated or updated them.
-- [ ] Let users reset any exposed prompt to the shipped default.
-- [ ] Let users test a prompt against a demo fixture or selected source message before saving it.
-- [ ] Restrict prompt variables to bounded snapshots such as source snippets, evidence metadata, current draft excerpt, configured vault targets, and user-written style preferences.
-- [ ] Show clear warnings when a custom prompt would weaken evidence discipline, request private-data export, or increase Compose Radar noise.
+- [x] Let users reset any exposed prompt to the shipped default.
+- [x] Let users test a prompt against a demo fixture or selected source message before saving it.
+- [x] Restrict prompt variables to bounded snapshots such as source snippets, evidence metadata, current draft excerpt, configured vault targets, and user-written style preferences.
+- [x] Show clear warnings when a custom prompt would weaken evidence discipline, request private-data export, or increase Compose Radar noise.
 
 ## Update Rules
 
 Memory updates need predictable rules because stale or overwritten memory is worse than no memory. The default should be conservative: append evidence, update generated sections safely, and ask before overwriting user-authored content.
 
-- [ ] New evidence updates an existing memory when it matches the same source thread, person/company, topic, and memory kind above a configurable match threshold.
-- [ ] Conflicting evidence creates a conflict state instead of silently replacing the older memory.
+- [x] New evidence updates an existing memory when it matches the same source thread, person/company, topic, and memory kind above a configurable match threshold.
+- [x] Conflicting evidence creates a conflict state instead of silently replacing the older memory.
 - [x] User-authored Obsidian sections are never rewritten; only Herald-managed sections between stable markers are updated automatically.
-- [ ] Resolved open loops move to a resolved state with a source pointer and optional archive note instead of disappearing.
-- [ ] Stale memories remain visible with a stale label until revalidated, dismissed, archived, or forgotten.
-- [ ] Dismissed Compose Radar nudges store dismissal scope and do not reappear unless new evidence materially changes the situation.
-- [ ] Deleted or missing source emails mark dependent memories as source-missing and block them from high-confidence Compose Radar nudges.
-- [ ] Manual user corrections override generated memory text while keeping source evidence and edit history.
+- [x] Resolved open loops move to a resolved state with a source pointer and optional archive note instead of disappearing.
+- [x] Stale memories remain visible with a stale label until revalidated, dismissed, archived, or forgotten.
+- [x] Dismissed Compose Radar nudges store dismissal scope and do not reappear unless new evidence materially changes the situation.
+- [x] Deleted or missing source emails mark dependent memories as source-missing and block them from high-confidence Compose Radar nudges.
+- [x] Manual user corrections override generated memory text while keeping source evidence and edit history.
 - [x] Daily briefing updates are diffs: changed tracks, newly resolved loops, newly stale loops, failed syncs, and review-needed memories.
 
 ## Research Mode
@@ -161,7 +161,7 @@ The implementation should add a memory service behind the backend/agent boundary
 - [x] Add memory-aware Gollem tools after the Gollem chat-agent runner is in place.
 - [x] Keep external research as a separate opt-in capability from local memory extraction.
 - [x] Keep Obsidian sync as an export/sync adapter so the local memory index remains usable without Obsidian.
-- [ ] Ensure deletion, archive, and cache cleanup can mark memories stale or remove evidence links when source messages disappear.
+- [x] Ensure deletion, archive, and cache cleanup can mark memories stale or remove evidence links when source messages disappear.
 
 ## Roadmap
 
@@ -180,13 +180,13 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] Company dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section for company/domain-backed tracks, open loops, vault links, and evidence.
 - [x] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [x] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
-- [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
+- [x] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
 
 ## First Shippable Slice
 
 The first implementation should make one narrow scenario feel excellent instead of trying to remember every mailbox. Job-search Compose Radar is the recommended slice because it uses Inbox, Sent, Contacts, and Obsidian notes in a way users can immediately judge.
 
-- [ ] Focus on job-search threads in `Job search/active` plus related Inbox and Sent messages.
+- [x] Focus on job-search threads in `Job search/active` plus related Inbox and Sent messages.
 - [x] Use shipped defaults for destination folders, Obsidian output profile, prompt templates, update cadence, and confidence thresholds before exposing advanced tuning.
 - [x] Detect "already replied", "awaiting response", "deadline", "timeline mismatch", and "relationship callback" nudges.
 - [x] Show nudges only in reply Compose and only when evidence is strong.
@@ -203,8 +203,8 @@ Memory features can become creepy or noisy if they overclaim. The system should 
 - [x] Provider or local-model failure leaves Compose usable and shows a concise memory-unavailable state.
 - [x] Obsidian write conflicts show a preview and never overwrite user sections silently.
 - [x] External research failure keeps local dossiers usable.
-- [ ] Deleted or missing source emails mark dependent memories stale until revalidated.
-- [ ] User-dismissed nudges respect dismissal scope: this draft, this thread, this person, or permanently.
+- [x] Deleted or missing source emails mark dependent memories stale until revalidated.
+- [x] User-dismissed nudges respect dismissal scope: this draft, this thread, this person, or permanently.
 
 ## Testing And Verification
 
@@ -216,7 +216,7 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 - [x] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
 - [x] Unit-test evidence source-type validation and snippet bounding for email, sent replies, notes, calendar events, attachments, and research URLs.
 - [x] Unit-test daily briefing diff generation, configured Obsidian destination paths, failed syncs, and bounded non-recap rendering.
-- [ ] Unit-test deletion propagation and stale-memory behavior.
+- [x] Unit-test deletion propagation and stale-memory behavior.
 - [x] Unit-test Obsidian Markdown generation with frontmatter and generated-section preservation.
 - [x] App-level tests prove Compose Radar retrieval does not mutate draft content without user action.
 - [x] Snapshot or tmux tests cover Compose Radar at `220x50`, `80x24`, and `50x15`.

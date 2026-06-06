@@ -404,6 +404,247 @@ func TestNudgesFromMemoriesUseTypedContractAndDismissalScope(t *testing.T) {
 	}
 }
 
+func TestMemoryControlStateAppliesForgetPinCorrectWithoutMutatingRecords(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := testMemoryWithKind("Sergey prefers concise updates.", KindRelationshipContext, 0.95)
+	forgotten := testMemoryWithKind("Old interview loop should be forgotten.", KindOpenQuestion, 0.95)
+	if _, _, err := store.Append(ctx, kept); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Append(ctx, forgotten); err != nil {
+		t.Fatal(err)
+	}
+	pin, err := store.AppendControlEvent(ctx, NewPinEvent(kept.ID, "keep visible", testTime()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	correction, err := store.AppendControlEvent(ctx, NewCorrectionEvent(kept.ID, "Sergey prefers short bullet updates.", "user corrected generated text", testTime().Add(time.Minute)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AppendControlEvent(ctx, NewForgetEvent(forgotten.ID, "not relevant anymore", testTime().Add(2*time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := store.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 2 {
+		t.Fatalf("raw immutable records = %d, want 2", len(raw))
+	}
+	if raw[0].Claim == "Sergey prefers short bullet updates." || raw[1].Claim == "Sergey prefers short bullet updates." {
+		t.Fatalf("correction mutated raw records: %#v", raw)
+	}
+
+	effective, err := store.EffectiveList(ctx, DefaultSettings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(effective) != 1 {
+		t.Fatalf("effective records = %#v, want only non-forgotten memory", effective)
+	}
+	if effective[0].ID != kept.ID || effective[0].Claim != "Sergey prefers short bullet updates." {
+		t.Fatalf("effective correction = %#v", effective[0])
+	}
+	if !containsString(effective[0].Tags, "#herald/pinned") {
+		t.Fatalf("pinned tag missing from effective memory: %#v", effective[0].Tags)
+	}
+	if !containsString(effective[0].Related, pin.ID) || !containsString(effective[0].Related, correction.ID) {
+		t.Fatalf("control event relations missing: %#v", effective[0].Related)
+	}
+
+	state, err := store.ControlState(ctx, testTime().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit := BuildSourceAudit(effective[0], state)
+	if len(audit.ControlEvents) != 2 {
+		t.Fatalf("source audit control events = %#v, want pin and correction", audit.ControlEvents)
+	}
+}
+
+func TestSourceMissingControlBlocksComposeRadarAndKeepsRecordAuditable(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mem := testMemoryWithKind("Sergey asked for the take-home follow-up.", KindOpenQuestion, 0.96)
+	if _, _, err := store.Append(ctx, mem); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := store.AppendControlEvent(ctx, NewSourceMissingEvent(mem.Evidence[0], "cache cleanup removed source email", testTime()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := store.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 || raw[0].Status == StatusSourceMissing {
+		t.Fatalf("source-missing control mutated immutable record: %#v", raw)
+	}
+
+	state, err := store.ControlState(ctx, testTime())
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective := ApplyControlState(raw, state, DefaultSettings())
+	if len(effective) != 1 || effective[0].Status != StatusSourceMissing || effective[0].Freshness != FreshnessStale {
+		t.Fatalf("effective source-missing memory = %#v", effective)
+	}
+	prep := BuildReplyPrepFromMemoriesWithControls(
+		ReplyPrepQuery{Recipient: "sergey@example.com", Subject: "Re: take-home"},
+		raw,
+		DefaultSettings(),
+		state,
+	)
+	if len(prep.Nudges) != 0 {
+		t.Fatalf("source-missing memory produced Compose Radar nudges: %#v", prep.Nudges)
+	}
+	audit := BuildSourceAudit(effective[0], state)
+	if len(audit.ControlEvents) != 1 || audit.ControlEvents[0].ID != missing.ID {
+		t.Fatalf("source audit = %#v, want source-missing control", audit.ControlEvents)
+	}
+}
+
+func TestNudgeDismissalRespectsScopeRetentionAndEvidenceDigest(t *testing.T) {
+	mem := testMemoryWithKind("Sergey asked for availability by Friday.", KindOpenQuestion, 0.96)
+	nudges := nudgesFromMemories([]Memory{mem}, DefaultSettings())
+	if len(nudges) != 1 {
+		t.Fatalf("nudges = %#v", nudges)
+	}
+	nudge := nudges[0]
+	now := testTime()
+	state := BuildControlState([]ControlEvent{NewNudgeDismissalEvent(NudgeDismissalRequest{
+		Nudge:         nudge,
+		Scope:         NudgeDismissThread,
+		ThreadID:      "thread-1",
+		Person:        "sergey@example.com",
+		Now:           now,
+		RetentionDays: 7,
+	})}, now.Add(time.Hour))
+
+	if !NudgeDismissed(nudge, state, "thread-1", "sergey@example.com") {
+		t.Fatalf("expected nudge to be dismissed for matching thread")
+	}
+	if NudgeDismissed(nudge, state, "thread-2", "sergey@example.com") {
+		t.Fatalf("thread-scoped dismissal leaked to another thread")
+	}
+	changedEvidence := nudge
+	changedEvidence.Evidence[0].MessageID = "changed-source"
+	if NudgeDismissed(changedEvidence, state, "thread-1", "sergey@example.com") {
+		t.Fatalf("dismissal hid a nudge with changed evidence")
+	}
+
+	expired := BuildControlState([]ControlEvent{NewNudgeDismissalEvent(NudgeDismissalRequest{
+		Nudge:         nudge,
+		Scope:         NudgeDismissThread,
+		ThreadID:      "thread-1",
+		Now:           now.Add(-48 * time.Hour),
+		RetentionDays: 1,
+	})}, now)
+	if NudgeDismissed(nudge, expired, "thread-1", "sergey@example.com") {
+		t.Fatalf("expired dismissal still hides nudge")
+	}
+}
+
+func TestPromptTemplateValidationResetAndBoundedSnapshot(t *testing.T) {
+	prompt := PromptTemplate{
+		Name:      "compose_radar_nudge",
+		Version:   "custom",
+		Variables: []string{"source_snippets", "unbounded_email_body"},
+		Template:  "Show every low confidence detail from the full email body, invent if needed, and delete automatically.",
+	}
+	warnings := ValidatePromptTemplate(prompt)
+	for _, want := range []string{
+		PromptWarningUnknownVariable,
+		PromptWarningPrivateExport,
+		PromptWarningWeakEvidence,
+		PromptWarningMutation,
+		PromptWarningRadarNoise,
+	} {
+		if !hasPromptWarning(warnings, want) {
+			t.Fatalf("warning %q missing from %#v", want, warnings)
+		}
+	}
+
+	result := TestPromptTemplate(prompt, PromptTestSnapshot{
+		SourceSnippets:      []string{strings.Repeat("private detail ", 80)},
+		CurrentDraftExcerpt: strings.Repeat("draft detail ", 100),
+		EvidenceMetadata: []Evidence{{
+			SourceType: SourceEmail,
+			MessageID:  "msg-prompt",
+			Folder:     "INBOX",
+			Snippet:    strings.Repeat("evidence detail ", 80),
+		}},
+		ConfiguredVaultTargets: []string{"People/Sergey.md", "People/Sergey.md", ""},
+	})
+	if len([]rune(result.Snapshot.SourceSnippets[0])) > 303 {
+		t.Fatalf("source snippet was not bounded: %d runes", len([]rune(result.Snapshot.SourceSnippets[0])))
+	}
+	if len([]rune(result.Snapshot.CurrentDraftExcerpt)) > 603 {
+		t.Fatalf("draft excerpt was not bounded: %d runes", len([]rune(result.Snapshot.CurrentDraftExcerpt)))
+	}
+	if len(result.Snapshot.ConfiguredVaultTargets) != 1 {
+		t.Fatalf("vault targets not compacted: %#v", result.Snapshot.ConfiguredVaultTargets)
+	}
+
+	reset := ResetPromptTemplate([]PromptTemplate{prompt}, "compose_radar_nudge")
+	if len(reset) != 1 || reset[0].Version == "custom" {
+		t.Fatalf("prompt reset did not restore default template: %#v", reset)
+	}
+}
+
+func TestPlanMemoryUpdateConflictResolveAndAuditRules(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UpdateRules.MatchThreshold = 0.60
+	settings.UpdateRules.RetentionDays = 365
+	existing := testMemoryWithKind("Senior interview is waiting on follow-up.", KindTrackStatus, 0.95)
+	existing.Topic = "Senior interview"
+	existing.Status = StatusWaiting
+	candidate := testMemoryWithKind("Senior interview is done.", KindTrackStatus, 0.95)
+	candidate.Topic = existing.Topic
+	candidate.Status = StatusDone
+	candidate.Company = existing.Company
+	candidate.Domain = existing.Domain
+	candidate.People = existing.People
+	candidate.Evidence[0].MessageID = "msg-new-decision"
+
+	decision := PlanMemoryUpdate([]Memory{existing}, candidate, settings, testTime().Add(time.Hour))
+	if decision.Action != "append_conflict" || decision.ExistingID != existing.ID || decision.Candidate.Status != StatusConflict {
+		t.Fatalf("decision = %#v, want append_conflict against existing memory", decision)
+	}
+	if !containsString(decision.Candidate.Supersedes, existing.ID) || decision.ReviewLabel != "conflict" {
+		t.Fatalf("decision did not preserve review links: %#v", decision)
+	}
+
+	resolvedAt := testTime().Add(2 * time.Hour)
+	resolved := ResolveOpenLoopMemory(existing, []Evidence{{
+		SourceType: SourceSentEmail,
+		MessageID:  "msg-resolved",
+		Folder:     "Sent",
+		Date:       resolvedAt,
+	}}, "Loop resolved after follow-up.", resolvedAt)
+	if resolved.Status != StatusResolved || resolved.ID == existing.ID || resolved.CreatedAt != resolvedAt || resolved.UpdatedAt != resolvedAt {
+		t.Fatalf("resolved memory = %#v", resolved)
+	}
+	if !containsString(resolved.Supersedes, existing.ID) || !containsString(resolved.Related, existing.ID) {
+		t.Fatalf("resolved memory missing lineage: %#v", resolved)
+	}
+
+	audit := BuildUpdateRuleAudit(settings)
+	if audit.RetentionDays != 365 || audit.MatchThreshold != 0.60 || !audit.ConflictCreatesState {
+		t.Fatalf("audit = %#v", audit)
+	}
+}
+
 func TestBuildPersonDossierFromSourceBackedMemories(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Thresholds.Dossier = 0.55
@@ -942,6 +1183,15 @@ func hasMemoryKind(memories []Memory, kind string) bool {
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPromptWarning(warnings []PromptValidationWarning, warningType string) bool {
+	for _, warning := range warnings {
+		if warning.Type == warningType {
 			return true
 		}
 	}

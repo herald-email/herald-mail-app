@@ -152,7 +152,7 @@ func (s *FileStore) PlanObsidianSync(ctx context.Context, settings Settings, app
 	if s == nil {
 		return ObsidianSyncPlan{}, fmt.Errorf("memory store is nil")
 	}
-	memories, err := s.List(ctx)
+	memories, err := s.EffectiveList(ctx, settings)
 	if err != nil {
 		return ObsidianSyncPlan{}, err
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -75,6 +76,93 @@ func TestLocalBackendDeleteCachedEmailRemovesScopedRowAndPreview(t *testing.T) {
 	}
 	if b.validIDsByFolder["INBOX"][email.MessageID] {
 		t.Fatalf("valid ID set still contains deleted message")
+	}
+}
+
+func TestLocalBackendDeleteCachedEmailMarksMemorySourceMissing(t *testing.T) {
+	c, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	email := &models.EmailData{
+		SourceID:  models.DefaultMailSourceID,
+		AccountID: models.DefaultAccountID,
+		LocalID:   "mail:default-mail:default:INBOX:msg-source",
+		MessageID: "msg-source",
+		UID:       71,
+		Sender:    "sergey@example.com",
+		Subject:   "Take-home follow-up",
+		Date:      time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC),
+		Folder:    "INBOX",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+	store, err := memory.NewFileStoreWithClock(t.TempDir(), func() time.Time {
+		return time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatalf("NewFileStoreWithClock: %v", err)
+	}
+	settings := memory.DefaultSettings()
+	settings.Directory = store.Root()
+	mem := memory.PrepareMemoryForAppend(memory.Memory{
+		Kind:       memory.KindOpenQuestion,
+		Claim:      "Sergey asked for a take-home follow-up.",
+		Summary:    "Sergey asked for a take-home follow-up.",
+		Topic:      "Take-home follow-up",
+		People:     []string{"sergey@example.com"},
+		Status:     memory.StatusWaiting,
+		Confidence: 0.95,
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			SourceID:   string(models.DefaultMailSourceID),
+			AccountID:  string(models.DefaultAccountID),
+			ID:         email.LocalID,
+			MessageID:  email.MessageID,
+			LocalID:    email.LocalID,
+			Folder:     email.Folder,
+			Date:       email.Date,
+		}},
+	}, time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC))
+	if _, _, err := store.Append(context.Background(), mem); err != nil {
+		t.Fatalf("Append memory: %v", err)
+	}
+
+	b := &LocalBackend{
+		cache:         c,
+		memoryService: memory.NewServiceWithStore(settings, store, nil),
+		bodyCache:     map[string]*models.EmailBody{"INBOX:71": {TextPlain: "cached body"}},
+		validIDsByFolder: map[string]map[string]bool{
+			"INBOX": {email.MessageID: true},
+		},
+	}
+	if err := b.DeleteCachedEmail(email.MessageRef()); err != nil {
+		t.Fatalf("DeleteCachedEmail: %v", err)
+	}
+
+	raw, err := store.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 || raw[0].Status == memory.StatusSourceMissing {
+		t.Fatalf("source-missing propagation mutated immutable record: %#v", raw)
+	}
+	effective, err := store.EffectiveList(context.Background(), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(effective) != 1 || effective[0].Status != memory.StatusSourceMissing || effective[0].Freshness != memory.FreshnessStale {
+		t.Fatalf("effective memory = %#v, want source_missing/stale", effective)
+	}
+	events, err := store.ReadControlEvents(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Action != memory.ControlSourceMissing || events[0].SourceReference.MessageID != email.MessageID {
+		t.Fatalf("control events = %#v", events)
 	}
 }
 

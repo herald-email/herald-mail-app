@@ -180,7 +180,7 @@ func (s *FileStore) Stats(ctx context.Context, settings Settings) (StoreStats, e
 	if s != nil {
 		stats.Root = s.root
 	}
-	memories, err := s.List(ctx)
+	memories, err := s.EffectiveList(ctx, settings)
 	if err != nil {
 		return stats, err
 	}
@@ -198,7 +198,7 @@ func (s *FileStore) Stats(ctx context.Context, settings Settings) (StoreStats, e
 }
 
 func (s *FileStore) Search(ctx context.Context, q Query) ([]Memory, error) {
-	memories, err := s.List(ctx)
+	memories, err := s.EffectiveList(ctx, Settings{})
 	if err != nil {
 		return nil, err
 	}

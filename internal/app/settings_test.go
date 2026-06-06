@@ -2145,6 +2145,7 @@ func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
 	s.memoryComposeThresholdStr = "0.81"
 	s.memoryMatchThresholdStr = "0.88"
 	s.memoryStaleAfterDaysStr = "60"
+	s.memoryRetentionDaysStr = "365"
 	s.memoryPeopleDestination = "People/Work"
 	s.memoryCompaniesDestination = "Job search/active"
 	s.memoryJobSearchDestination = "Job search/interviews"
@@ -2187,6 +2188,7 @@ func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
 	if mem.UpdateRules.Cadence != "daily_briefing" ||
 		mem.UpdateRules.LowConfidenceDisposition != memory.LowConfidenceReview ||
 		mem.UpdateRules.StaleAfterDays != 60 ||
+		mem.UpdateRules.RetentionDays != 365 ||
 		mem.UpdateRules.MatchThreshold != 0.88 {
 		t.Fatalf("update rules=%#v", mem.UpdateRules)
 	}

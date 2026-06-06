@@ -241,6 +241,7 @@ type Settings struct {
 	memoryComposeThresholdStr      string
 	memoryMatchThresholdStr        string
 	memoryStaleAfterDaysStr        string
+	memoryRetentionDaysStr         string
 	memoryPeopleDestination        string
 	memoryCompaniesDestination     string
 	memoryJobSearchDestination     string
@@ -591,6 +592,7 @@ func (s *Settings) syncMemoryFieldsFromConfig(settings memory.Settings) {
 	s.memoryComposeThresholdStr = settingsFormatFloat(settings.Thresholds.ComposeRadar)
 	s.memoryMatchThresholdStr = settingsFormatFloat(settings.Thresholds.Match)
 	s.memoryStaleAfterDaysStr = strconv.Itoa(settings.UpdateRules.StaleAfterDays)
+	s.memoryRetentionDaysStr = strconv.Itoa(settings.UpdateRules.RetentionDays)
 	s.memoryPeopleDestination = settings.Destinations.People
 	s.memoryCompaniesDestination = settings.Destinations.Companies
 	s.memoryJobSearchDestination = settings.Destinations.JobSearch
@@ -619,6 +621,14 @@ func settingsParseFloatOr(value string, fallback float64) float64 {
 func settingsParsePositiveIntOr(value string, fallback int) int {
 	parsed, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func settingsParseNonNegativeIntOr(value string, fallback int) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 0 {
 		return fallback
 	}
 	return parsed
@@ -663,6 +673,16 @@ func settingsPositiveIntValidator(label string) func(string) error {
 	}
 }
 
+func settingsNonNegativeIntValidator(label string) func(string) error {
+	return func(value string) error {
+		parsed, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || parsed < 0 {
+			return fmt.Errorf("%s must be zero or a positive integer", label)
+		}
+		return nil
+	}
+}
+
 func settingsMemoryUpdateCadence(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "compose_open", "after_sync", "daily_briefing", "background_idle":
@@ -694,6 +714,17 @@ func settingsMaybeUnset(value string) string {
 		return "(not set)"
 	}
 	return value
+}
+
+func settingsMemoryRetentionLabel(value string) string {
+	days := settingsParseNonNegativeIntOr(firstNonEmptyString(value, "0"), 0)
+	if days == 0 {
+		return "forever"
+	}
+	if days == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", days)
 }
 
 func settingsMemoryFrontmatterOptions() []huh.Option[string] {
@@ -881,10 +912,11 @@ func (s *Settings) memoryStatusDescription() string {
 			memory.NormalizeLinkMode(s.memoryLinkMode),
 			memory.NormalizeTagMode(s.memoryTagMode),
 		),
-		fmt.Sprintf("Update rules: %s / low confidence %s / stale after %s days",
+		fmt.Sprintf("Update rules: %s / low confidence %s / stale after %s days / retention %s",
 			settingsMemoryUpdateCadence(s.memoryUpdateCadence),
 			settingsMemoryLowConfidenceDisposition(s.memoryLowConfidenceDisposition),
 			strings.TrimSpace(firstNonEmptyString(s.memoryStaleAfterDaysStr, "45")),
+			settingsMemoryRetentionLabel(s.memoryRetentionDaysStr),
 		),
 		fmt.Sprintf("Thresholds: chat %s / dossier %s / write %s / compose %s / match %s",
 			firstNonEmptyString(s.memoryChatThresholdStr, "0.35"),
@@ -1525,6 +1557,7 @@ func (s *Settings) buildForm() {
 				&s.memoryComposeThresholdStr,
 				&s.memoryMatchThresholdStr,
 				&s.memoryStaleAfterDaysStr,
+				&s.memoryRetentionDaysStr,
 			}).
 			Affirmative("On").
 			Negative("Off").
@@ -1612,6 +1645,12 @@ func (s *Settings) buildForm() {
 			Placeholder("45").
 			Value(&s.memoryStaleAfterDaysStr).
 			Validate(settingsPositiveIntValidator("Stale after days")),
+		huh.NewInput().
+			Title("Retention days").
+			Inline(true).
+			Placeholder("0").
+			Value(&s.memoryRetentionDaysStr).
+			Validate(settingsNonNegativeIntValidator("Retention days")),
 		huh.NewSelect[string]().
 			Title("Prompt templates").
 			DescriptionFunc(func() string {
@@ -3938,6 +3977,7 @@ func (s *Settings) buildMemorySettingsConfig(existing memory.Settings) memory.Se
 	settings.UpdateRules.Cadence = settingsMemoryUpdateCadence(s.memoryUpdateCadence)
 	settings.UpdateRules.MatchThreshold = settings.Thresholds.Match
 	settings.UpdateRules.StaleAfterDays = settingsParsePositiveIntOr(s.memoryStaleAfterDaysStr, settings.UpdateRules.StaleAfterDays)
+	settings.UpdateRules.RetentionDays = settingsParseNonNegativeIntOr(s.memoryRetentionDaysStr, settings.UpdateRules.RetentionDays)
 	settings.UpdateRules.LowConfidenceDisposition = settingsMemoryLowConfidenceDisposition(s.memoryLowConfidenceDisposition)
 
 	settings.Obsidian.Enabled = s.memoryObsidianEnabled

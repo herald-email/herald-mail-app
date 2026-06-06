@@ -625,15 +625,34 @@ func (b *LocalBackend) GetEmailsBySender(folder string) (map[string][]*models.Em
 }
 
 func (b *LocalBackend) DeleteSenderEmails(sender, folder string) error {
-	return b.mailSource.DeleteSenderEmails(context.Background(), sender, folder)
+	matched := b.cachedEmailsMatching(folder, func(email *models.EmailData) bool {
+		return email != nil && strings.EqualFold(strings.TrimSpace(email.Sender), strings.TrimSpace(sender))
+	})
+	err := b.mailSource.DeleteSenderEmails(context.Background(), sender, folder)
+	if err == nil {
+		b.markMemorySourcesMissingForEmails(matched, "sender delete removed source email")
+	}
+	return err
 }
 
 func (b *LocalBackend) DeleteDomainEmails(domain, folder string) error {
-	return b.mailSource.DeleteDomainEmails(context.Background(), domain, folder)
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	matched := b.cachedEmailsMatching(folder, func(email *models.EmailData) bool {
+		return email != nil && strings.Contains(strings.ToLower(email.Sender), "@"+domain)
+	})
+	err := b.mailSource.DeleteDomainEmails(context.Background(), domain, folder)
+	if err == nil {
+		b.markMemorySourcesMissingForEmails(matched, "domain delete removed source email")
+	}
+	return err
 }
 
 func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
-	return b.mailSource.DeleteEmail(context.Background(), messageID, folder)
+	err := b.mailSource.DeleteEmail(context.Background(), messageID, folder)
+	if err == nil {
+		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: folder}, "delete removed source email")
+	}
+	return err
 }
 
 func (b *LocalBackend) ListFolders() ([]string, error) {
@@ -879,6 +898,7 @@ func (b *LocalBackend) DeleteCachedEmail(ref models.MessageRef) error {
 	if err != nil {
 		return err
 	}
+	b.markMemoryMessageSourceMissing(ref, "cache cleanup removed source email")
 	b.bodyCacheMu.Lock()
 	b.bodyCache = nil
 	b.bodyCacheMu.Unlock()
@@ -1108,11 +1128,22 @@ func (b *LocalBackend) Close() error {
 }
 
 func (b *LocalBackend) ArchiveEmail(messageID, folder string) error {
-	return b.mailSource.ArchiveEmail(context.Background(), messageID, folder)
+	err := b.mailSource.ArchiveEmail(context.Background(), messageID, folder)
+	if err == nil {
+		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: folder}, "archive moved source email from original folder")
+	}
+	return err
 }
 
 func (b *LocalBackend) ArchiveSenderEmails(sender, folder string) error {
-	return b.mailSource.ArchiveSenderEmails(context.Background(), sender, folder)
+	matched := b.cachedEmailsMatching(folder, func(email *models.EmailData) bool {
+		return email != nil && strings.EqualFold(strings.TrimSpace(email.Sender), strings.TrimSpace(sender))
+	})
+	err := b.mailSource.ArchiveSenderEmails(context.Background(), sender, folder)
+	if err == nil {
+		b.markMemorySourcesMissingForEmails(matched, "sender archive moved source email from original folder")
+	}
+	return err
 }
 
 func (b *LocalBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
@@ -1443,7 +1474,11 @@ func (b *LocalBackend) StopPolling() {
 }
 
 func (b *LocalBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
-	return b.mailSource.MoveEmail(context.Background(), messageID, fromFolder, toFolder)
+	err := b.mailSource.MoveEmail(context.Background(), messageID, fromFolder, toFolder)
+	if err == nil {
+		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: fromFolder}, "move removed source email from original folder")
+	}
+	return err
 }
 
 func (b *LocalBackend) SaveRule(r *models.Rule) error {
@@ -1699,6 +1734,16 @@ func (b *LocalBackend) BuildReplyMemoryContext(ctx context.Context, query memory
 	return b.memoryService.BuildReplyPrep(ctx, query)
 }
 
+func (b *LocalBackend) DismissMemoryNudge(ctx context.Context, req memory.NudgeDismissalRequest) error {
+	if b == nil || b.memoryService == nil {
+		return nil
+	}
+	if _, err := b.memoryService.DismissNudge(ctx, req); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context) {
 	b.memoryRefresh.Do(func() {
 		if b.memoryService == nil {
@@ -1712,6 +1757,57 @@ func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context) {
 		}
 		logger.Info("Herald Memories refresh: scanned=%d extracted=%d written=%d skipped=%d", result.ScannedEmails, result.Extracted, result.Written, result.Skipped)
 	})
+}
+
+func (b *LocalBackend) cachedEmailsMatching(folder string, match func(*models.EmailData) bool) []*models.EmailData {
+	if b == nil || b.cache == nil || match == nil {
+		return nil
+	}
+	emails, err := b.cache.GetTimelineEmailsWithThreadContext(folder, nil)
+	if err != nil {
+		return nil
+	}
+	out := make([]*models.EmailData, 0, len(emails))
+	for _, email := range emails {
+		if match(email) {
+			out = append(out, email)
+		}
+	}
+	return out
+}
+
+func (b *LocalBackend) markMemorySourcesMissingForEmails(emails []*models.EmailData, reason string) {
+	for _, email := range emails {
+		if email != nil {
+			b.markMemoryMessageSourceMissing(email.MessageRef(), reason)
+		}
+	}
+}
+
+func (b *LocalBackend) markMemoryMessageSourceMissing(ref models.MessageRef, reason string) {
+	if b == nil || b.memoryService == nil {
+		return
+	}
+	evidence := memory.Evidence{
+		SourceType: memorySourceTypeForFolder(ref.Folder),
+		SourceID:   string(ref.SourceID),
+		AccountID:  string(ref.AccountID),
+		ID:         firstNonEmptyString(ref.LocalID, ref.MessageID),
+		MessageID:  ref.MessageID,
+		LocalID:    ref.LocalID,
+		Folder:     ref.Folder,
+	}
+	if _, err := b.memoryService.MarkSourceMissing(context.Background(), evidence, reason); err != nil {
+		logger.Warn("Herald Memories source-missing propagation failed for %s: %v", ref.MessageID, err)
+	}
+}
+
+func memorySourceTypeForFolder(folder string) string {
+	folder = strings.ToLower(strings.TrimSpace(folder))
+	if strings.Contains(folder, "sent") {
+		return memory.SourceSentEmail
+	}
+	return memory.SourceEmail
 }
 
 // --- Unsubscribed senders ---

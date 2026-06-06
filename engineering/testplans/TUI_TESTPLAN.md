@@ -1320,6 +1320,26 @@ Check these states during every applicable lane:
 - Evidence appears as compact source labels only; raw body snippets and attachment contents do not appear in the briefing.
 - Building the briefing reads immutable memory records and mutable sync state but does not append memory records, write Obsidian notes, send mail, or replace the existing scheduled-task system.
 
+### TC-18L — Herald Memories hardening and privacy controls
+
+**Lane:** G
+**Sizes:** code-focused
+
+**Steps:**
+1. Seed immutable memories with source-backed job-search evidence plus a high-confidence Compose Radar candidate.
+2. Append control events for correction, pin, forget, source-missing evidence, and nudge dismissal at draft, thread, person, and permanent scopes.
+3. Validate prompt templates with allowed bounded variables, reset an edited prompt to the shipped default, and run a prompt test against a bounded fixture snapshot.
+4. Simulate cache deletion for a referenced message through `LocalBackend.DeleteCachedEmail`.
+5. Run focused memory and backend hardening tests.
+
+**Expect:**
+- Corrections override generated claim text in effective memory views while audit history preserves the original memory ID, source evidence, editor note, and timestamp.
+- Forget controls remove a memory from effective retrieval without deleting the immutable record from disk; pin controls remain visible in audit state.
+- Source-missing controls mark dependent memories stale/source-missing and prevent them from becoming high-confidence Compose Radar nudges.
+- Dismissed nudges do not reappear within the configured scope unless source evidence changes materially.
+- Prompt validation accepts only bounded snapshot variables, warns on private-data export or weakened evidence/no-mutation language, supports reset to defaults, and uses demo/source snapshots for tests.
+- Retention and update-rule audits are inspectable without mutating email, Obsidian, calendar, draft, or external research surfaces.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

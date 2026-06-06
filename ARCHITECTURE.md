@@ -187,7 +187,7 @@ Herald Memories is a local-first relationship memory layer behind the backend an
 - [x] `internal/memory` keeps Research Mode separate from local extraction: it builds public-identifier queries, blocks private-body export by default, and saves sourced research notes as explicit immutable memories.
 - [x] `internal/memory` builds daily briefing diffs over immutable records and Obsidian sync state, writing no mail or scheduled-task mutations while targeting the configured `Scheduled Task Artifacts/` destination.
 - [ ] Memory extraction does not yet ingest calendar events, Obsidian note bodies, or external research.
-- [ ] Deletion and cache cleanup do not yet append source-missing/stale memory records for dependent evidence.
+- [x] Deletion and cache cleanup append source-missing/stale memory control events for dependent evidence so missing sources cannot power high-confidence Compose Radar nudges.
 
 ### Inline image preview safety
 

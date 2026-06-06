@@ -150,13 +150,22 @@ func (s *Service) BuildReplyPrep(ctx context.Context, q ReplyPrepQuery) (ReplyPr
 		}
 		memories = mergeMemoryMatches(memories, byTopic, q.Limit)
 	}
-	prep := BuildReplyPrepFromMemories(q, memories, s.settings)
+	controls, err := s.store.ControlState(ctx, s.now())
+	if err != nil {
+		return ReplyPrep{}, err
+	}
+	prep := BuildReplyPrepFromMemoriesWithControls(q, memories, s.settings, controls)
 	prep.GeneratedAt = s.now()
 	return prep, nil
 }
 
 func BuildReplyPrepFromMemories(q ReplyPrepQuery, memories []Memory, settings Settings) ReplyPrep {
+	return BuildReplyPrepFromMemoriesWithControls(q, memories, settings, ControlState{})
+}
+
+func BuildReplyPrepFromMemoriesWithControls(q ReplyPrepQuery, memories []Memory, settings Settings, controls ControlState) ReplyPrep {
 	settings.ApplyDefaults()
+	memories = ApplyControlState(memories, controls, settings)
 	if q.Limit <= 0 {
 		q.Limit = 8
 	}
@@ -164,6 +173,9 @@ func BuildReplyPrepFromMemories(q ReplyPrepQuery, memories []Memory, settings Se
 		memories = memories[:q.Limit]
 	}
 	nudges := nudgesFromMemories(memories, settings)
+	if len(controls.Dismissals) > 0 {
+		nudges = filterDismissedNudges(nudges, controls, q)
+	}
 	return ReplyPrep{
 		Query:       q,
 		Memories:    memories,
@@ -171,6 +183,26 @@ func BuildReplyPrepFromMemories(q ReplyPrepQuery, memories []Memory, settings Se
 		Sources:     compactEvidence(memories),
 		GeneratedAt: time.Now(),
 	}
+}
+
+func (s *Service) DismissNudge(ctx context.Context, req NudgeDismissalRequest) (ControlEvent, error) {
+	if s == nil || s.store == nil {
+		return ControlEvent{}, fmt.Errorf("memory service is not configured")
+	}
+	if req.RetentionDays == 0 {
+		req.RetentionDays = s.settings.UpdateRules.RetentionDays
+	}
+	if req.Now.IsZero() {
+		req.Now = s.now()
+	}
+	return s.store.AppendControlEvent(ctx, NewNudgeDismissalEvent(req))
+}
+
+func (s *Service) MarkSourceMissing(ctx context.Context, evidence Evidence, reason string) (ControlEvent, error) {
+	if s == nil || s.store == nil {
+		return ControlEvent{}, fmt.Errorf("memory service is not configured")
+	}
+	return s.store.AppendControlEvent(ctx, NewSourceMissingEvent(evidence, reason, s.now()))
 }
 
 func nudgesFromMemories(memories []Memory, settings Settings) []Nudge {
@@ -205,6 +237,19 @@ func nudgesFromMemories(memories []Memory, settings Settings) []Nudge {
 		}
 	}
 	return nudges
+}
+
+func filterDismissedNudges(nudges []Nudge, controls ControlState, q ReplyPrepQuery) []Nudge {
+	out := nudges[:0:0]
+	person := strings.TrimSpace(q.Recipient)
+	threadID := firstNonEmpty(q.MessageID, q.Subject)
+	for _, nudge := range nudges {
+		if NudgeDismissed(nudge, controls, threadID, person) {
+			continue
+		}
+		out = append(out, nudge)
+	}
+	return out
 }
 
 func nudgeText(memory Memory) (string, string, string) {

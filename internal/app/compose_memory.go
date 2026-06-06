@@ -29,6 +29,10 @@ type composeMemoryBackend interface {
 	BuildReplyMemoryContext(context.Context, memory.ReplyPrepQuery) (memory.ReplyPrep, error)
 }
 
+type composeMemoryDismissBackend interface {
+	DismissMemoryNudge(context.Context, memory.NudgeDismissalRequest) error
+}
+
 func (m *Model) resetComposeMemoryRadar() {
 	m.composeMemoryToken++
 	m.composeMemoryDebounceToken++
@@ -180,9 +184,12 @@ func (m *Model) performComposeMemoryRadarAction(action string) tea.Cmd {
 			return m.scheduleComposeMemoryRadarRefresh()
 		}
 	case composeMemoryActionDismiss:
+		dismissed := *nudge
 		nudge.ActionState = memory.NudgeActionDismissed
 		m.composeMemoryPrep.Nudges = append([]memory.Nudge{}, m.composeMemoryPrep.Nudges[1:]...)
 		m.composeStatus = "Radar nudge dismissed for this draft"
+		m.refreshComposeLayout()
+		return m.persistComposeMemoryDismissal(dismissed)
 	case composeMemoryActionResolve:
 		nudge.ActionState = memory.NudgeActionResolved
 		m.composeStatus = "Radar nudge marked resolved locally"
@@ -200,6 +207,23 @@ func (m *Model) performComposeMemoryRadarAction(action string) tea.Cmd {
 	}
 	m.refreshComposeLayout()
 	return nil
+}
+
+func (m *Model) persistComposeMemoryDismissal(nudge memory.Nudge) tea.Cmd {
+	source, ok := m.backend.(composeMemoryDismissBackend)
+	if !ok || source == nil {
+		return nil
+	}
+	query := m.composeMemoryPrep.Query
+	return func() tea.Msg {
+		_ = source.DismissMemoryNudge(context.Background(), memory.NudgeDismissalRequest{
+			Nudge:    nudge,
+			Scope:    nudge.DismissalScope,
+			ThreadID: firstNonEmptyString(query.MessageID, query.Subject),
+			Person:   query.Recipient,
+		})
+		return nil
+	}
 }
 
 func nudgeLine(nudge memory.Nudge) string {

@@ -473,7 +473,6 @@ func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
 		memory.DefaultDirectory,
 		"Source folders",
 		"Obsidian-friendly output",
-		"Show YAML headers",
 		"6 exposed templates",
 	} {
 		if !strings.Contains(normalized, want) {
@@ -481,12 +480,14 @@ func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
+		"Show YAML headers",
 		"Frontmatter mode",
 		"Link mode",
 		"Tag mode",
 		"Update cadence",
 		"Low-confidence memories",
 		"Chat retrieval threshold",
+		"Retention days",
 		"Prompt templates",
 		"People destination",
 	} {

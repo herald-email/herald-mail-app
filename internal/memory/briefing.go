@@ -128,7 +128,7 @@ func (s *FileStore) BuildDailyBriefing(ctx context.Context, settings Settings, q
 	if s == nil {
 		return DailyBriefingDiff{}, fmt.Errorf("memory store is nil")
 	}
-	memories, err := s.List(ctx)
+	memories, err := s.EffectiveList(ctx, settings)
 	if err != nil {
 		return DailyBriefingDiff{}, err
 	}

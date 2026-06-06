@@ -78,6 +78,7 @@ type UpdateRuleSettings struct {
 	MatchThreshold           float64 `yaml:"match_threshold,omitempty" json:"match_threshold,omitempty"`
 	ConflictCreatesState     bool    `yaml:"conflict_creates_state,omitempty" json:"conflict_creates_state,omitempty"`
 	StaleAfterDays           int     `yaml:"stale_after_days,omitempty" json:"stale_after_days,omitempty"`
+	RetentionDays            int     `yaml:"retention_days,omitempty" json:"retention_days,omitempty"`
 	LowConfidenceDisposition string  `yaml:"low_confidence_disposition,omitempty" json:"low_confidence_disposition,omitempty"`
 	DismissalScope           string  `yaml:"dismissal_scope,omitempty" json:"dismissal_scope,omitempty"`
 
@@ -210,6 +211,7 @@ func (u *UpdateRuleSettings) UnmarshalYAML(value *yaml.Node) error {
 		MatchThreshold           float64 `yaml:"match_threshold"`
 		ConflictCreatesState     *bool   `yaml:"conflict_creates_state"`
 		StaleAfterDays           int     `yaml:"stale_after_days"`
+		RetentionDays            int     `yaml:"retention_days"`
 		LowConfidenceDisposition string  `yaml:"low_confidence_disposition"`
 		DismissalScope           string  `yaml:"dismissal_scope"`
 	}
@@ -224,6 +226,7 @@ func (u *UpdateRuleSettings) UnmarshalYAML(value *yaml.Node) error {
 		u.conflictCreatesStateSet = true
 	}
 	u.StaleAfterDays = decoded.StaleAfterDays
+	u.RetentionDays = decoded.RetentionDays
 	u.LowConfidenceDisposition = decoded.LowConfidenceDisposition
 	u.DismissalScope = decoded.DismissalScope
 	return nil
